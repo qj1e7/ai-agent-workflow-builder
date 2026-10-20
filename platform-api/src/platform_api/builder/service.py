@@ -43,6 +43,11 @@ def _view(row: Mapping[str, Any]) -> UseCaseView:
 
 
 class Builder:
+    """Use cases are team-wide on purpose: the Portal is one team's shared tool with two roles,
+    so every signed-in user sees the team's use cases and runs, and Approvers need that context.
+    Per-team scoping comes with Entra ID, if more teams join. Any Operator may run a team use
+    case, because a teammate covering a shift is the normal case."""
+
     def __init__(self, db: Database, runs: RunStarter, public_base_url: str) -> None:
         self._db = db
         self._runs = runs

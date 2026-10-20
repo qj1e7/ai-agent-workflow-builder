@@ -1,10 +1,9 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from platform_api.app import create_app
-
-LOCAL = {"AUTH_MODE": "dev", "PUBLIC_BASE_URL": "http://localhost:8000"}
-ALICE = {"X-Dev-User": "alice"}
+from platform_api.app import create_app, readiness_of
+from platform_api.db import Database
+from tests.support import LOCAL_ENV as LOCAL
 
 ROUTES = {
     ("GET", "/healthz"),
@@ -53,13 +52,19 @@ def test_events_route_documents_both_content_types(client: TestClient):
 
 
 def test_step_route_refuses_a_bad_step_name(client: TestClient):
+    client.app.state.orchestrator = None  # type: ignore[union-attr]
     r = client.post(
         "/internal/v1/runs/run_1/steps/delete_everything",
-        headers={"X-Step-Key": "k", "X-N8N-Execution": "1"},
+        headers={"X-Step-Key": LOCAL["STEP_KEY"], "X-N8N-Execution": "1"},
     )
     assert r.status_code == 422
 
 
-def test_unimplemented_routes_answer_501(client: TestClient):
-    assert client.get("/api/v1/runs/run_1", headers=ALICE).status_code == 501
-    assert client.get("/healthz/ready").status_code == 501
+@pytest.mark.anyio
+async def test_readiness_is_not_ready_before_bootstrap(db: Database):
+    readiness = await readiness_of(db, True)
+    assert readiness.ready is False
+    assert [(c.name, c.ok) for c in readiness.checks] == [
+        ("activity_log", True),
+        ("workflows", False),
+    ]

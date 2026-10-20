@@ -19,7 +19,7 @@ from platform_api.builder.models import (
 from platform_api.builder.service import Builder
 from platform_api.builder.templates import TEMPLATES, ParamErrors, UnknownTemplate
 from platform_api.builder.views import template_view
-from platform_api.shared import UseCaseId
+from platform_api.shared import Principal, Role, UseCaseId
 
 __all__ = [
     "BlockView",
@@ -44,6 +44,17 @@ def current_builder(request: Request) -> Builder:
 
 CurrentBuilder = Annotated[Builder, Depends(current_builder)]
 
+
+def require_operator(principal: CurrentPrincipal) -> Principal:
+    if Role.OPERATOR not in principal.roles:
+        raise HTTPException(
+            403, "Only an Operator can build use cases or start runs. Ask an Operator on the team."
+        )
+    return principal
+
+
+Operator = Annotated[Principal, Depends(require_operator)]
+
 router = APIRouter(prefix="/api/v1", tags=["builder"])
 
 NOT_FOUND: dict[int | str, dict[str, Any]] = {404: {"description": "No such use case"}}
@@ -56,7 +67,7 @@ def list_templates(principal: CurrentPrincipal) -> TemplateList:
 
 @router.post("/use-cases", status_code=201)
 async def create_use_case(
-    body: CreateUseCase, principal: CurrentPrincipal, builder: CurrentBuilder
+    body: CreateUseCase, principal: Operator, builder: CurrentBuilder
 ) -> UseCaseCreated:
     match await builder.create_use_case(principal, body):
         case UseCaseCreated() as created:
@@ -98,7 +109,7 @@ async def get_use_case(
 @router.post("/use-cases/{use_case_id}/runs", status_code=201, responses=NOT_FOUND)
 async def start_run(
     use_case_id: str,
-    principal: CurrentPrincipal,
+    principal: Operator,
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
     builder: CurrentBuilder,
     response: Response,
