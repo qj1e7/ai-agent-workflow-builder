@@ -6,13 +6,12 @@ the agent as the actor, so the `data` shapes are shared with `events.py`.
 This mirrors `agent_runtime.contract`, which platform-api must not import.
 """
 
-from collections.abc import Mapping
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import Field, TypeAdapter
 
-from platform_api.wire import Json, WireModel
+from platform_api.wire import WireModel
 
 
 class AgentRef(WireModel):
@@ -44,7 +43,7 @@ class AgentStepStartedData(WireModel):
 
 class AgentStepFinishedData(WireModel):
     step: str
-    result: Mapping[str, Json]
+    result: dict[str, Any]
 
 
 class AgentFailedData(WireModel):

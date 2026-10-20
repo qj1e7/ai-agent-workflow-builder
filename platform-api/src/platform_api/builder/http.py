@@ -1,4 +1,3 @@
-from collections.abc import Mapping
 from datetime import datetime
 from typing import Annotated, Literal
 
@@ -40,7 +39,7 @@ class CreateUseCase(WireModel):
     template: str
     name: str
     instruction: str
-    params: Mapping[str, str]
+    params: dict[str, str]
 
 
 class UseCaseCreated(WireModel):
@@ -54,7 +53,7 @@ class UseCaseView(WireModel):
     template: str
     name: str
     instruction: str
-    params: Mapping[str, str]
+    params: dict[str, str]
     owner: UserId
     created_at: datetime
 

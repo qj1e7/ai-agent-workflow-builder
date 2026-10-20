@@ -4,13 +4,12 @@ The event shapes come from run monitoring, which ingests them. The task
 shapes are here because orchestration is the only caller of `POST /v1/tasks`.
 """
 
-from collections.abc import Mapping
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import Field, TypeAdapter
 
 from platform_api.monitoring import AgentEvent
-from platform_api.wire import Json, WireModel
+from platform_api.wire import WireModel
 
 
 class ReleaseCheckInputs(WireModel):
@@ -22,18 +21,29 @@ class CarryForward(WireModel):
     last_known_tag: str | None = None
 
 
+class Callback(WireModel):
+    url: str = Field(
+        description="Where the agent posts each event. It names only the run and the task."
+    )
+    token: str = Field(
+        description="Sent back as the X-Callback-Token header, never in the URL. The handler "
+        "must compare it in constant time, bind it to this run_id and task_id, and give it "
+        "an expiry."
+    )
+
+
 class TaskRequest(WireModel):
     task_id: str
     run_id: str
     instruction: str
     inputs: ReleaseCheckInputs
     carry_forward: CarryForward
-    callback_url: str
+    callback: Callback
 
 
 class ProposedIntentIn(WireModel):
     kind: str
-    fields: Mapping[str, Json]
+    fields: dict[str, Any]
     reason: str
 
 

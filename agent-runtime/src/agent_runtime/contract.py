@@ -1,18 +1,15 @@
 """Agent API wire contract, the agent hub contract.
 
-An agent takes a task, posts events to the callback URL it was given, and
+An agent takes a task, posts events to the callback it was given, and
 returns proposed writes as data. It knows nothing about runs, n8n, Jira or
 approvals. platform-api parses these shapes with its own models and never
 imports this package.
 """
 
-from collections.abc import Mapping, Sequence
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
-
-type Json = str | int | float | bool | None | Mapping[str, Json] | Sequence[Json]
 
 
 class WireModel(BaseModel):
@@ -48,7 +45,7 @@ class AgentStepStartedData(WireModel):
 
 class AgentStepFinishedData(WireModel):
     step: str
-    result: Mapping[str, Json]
+    result: dict[str, Any]
 
 
 class AgentFailedData(WireModel):
@@ -122,18 +119,29 @@ class CarryForward(WireModel):
     last_known_tag: str | None = None
 
 
+class Callback(WireModel):
+    url: str = Field(
+        description="Where the agent posts each event. It names only the run and the task."
+    )
+    token: str = Field(
+        description="Sent back as the X-Callback-Token header, never in the URL. The handler "
+        "must compare it in constant time, bind it to this run_id and task_id, and give it "
+        "an expiry."
+    )
+
+
 class TaskRequest(WireModel):
     task_id: str
     run_id: str
     instruction: str
     inputs: ReleaseCheckInputs
     carry_forward: CarryForward
-    callback_url: str
+    callback: Callback
 
 
 class ProposedIntent(WireModel):
     kind: str
-    fields: Mapping[str, Json]
+    fields: dict[str, Any]
     reason: str
 
 

@@ -1,6 +1,5 @@
 """The wire kernel: the base model and closed sets every context's HTTP surface shares."""
 
-from collections.abc import Mapping, Sequence
 from datetime import datetime
 from typing import Literal, NoReturn
 
@@ -8,8 +7,6 @@ from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict
 
 from platform_api.shared import UserId
-
-type Json = str | int | float | bool | None | Mapping[str, Json] | Sequence[Json]
 
 
 class WireModel(BaseModel):
