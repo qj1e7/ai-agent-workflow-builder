@@ -5,7 +5,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
 # Its own project name, so tearing it down never touches a stack that scripts/up.sh started.
-project="wab-e2e"
+project="${E2E_PROJECT:-wab-e2e}"
 suites="${E2E_SUITES:-api ui}"
 out="e2e/out"
 compose=(docker compose -p "$project" -f deploy/compose.yaml -f deploy/compose.e2e.yaml)

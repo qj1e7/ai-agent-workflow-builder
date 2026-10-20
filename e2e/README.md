@@ -16,6 +16,7 @@ The browser suite needs Node on the host for `npm ci` in `portal/`, which the sc
 
 | Setting | Effect |
 |---|---|
+| `E2E_PROJECT=<name>` | Use another compose project name, so two stacks can run side by side. Give each its own host ports in `deploy/.env`. The default is `wab-e2e`. |
 | `E2E_SUITES="api"` or `"ui"` | Run one suite. The default is `api ui`. `ui` alone on a fresh stack also takes the empty first screen shot, which the full run skips because the API tests have already made runs. |
 | `KEEP=1` | Leave the stack running afterwards, for debugging. |
 | `E2E_WAIT_SECONDS=90` | Longest any single wait may take. The failure message names the state the run was stuck in. |
