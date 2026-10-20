@@ -1,12 +1,55 @@
+import hmac
 from datetime import datetime
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, TypedDict
 
-from fastapi import APIRouter, Header, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from pydantic import Field, TypeAdapter
 
 from platform_api.auth import CurrentPrincipal
-from platform_api.orchestration.approvals import Refusal, Verdict
-from platform_api.shared import ApprovalId, Digest, ProposalId, RunId, UserId
+from platform_api.orchestration.approvals import (
+    ApprovalRequest,
+    Approved,
+    Decision,
+    Declined,
+    Refusal,
+    Verdict,
+)
+from platform_api.orchestration.dispatch import TeamsStub
+from platform_api.orchestration.runs import (
+    Acting,
+    AwaitingApproval,
+    Failed,
+    Pending,
+    Proposed,
+    Rejected,
+    Succeeded,
+    Working,
+)
+from platform_api.orchestration.runs import StepName as DomainStep
+from platform_api.orchestration.service import (
+    Decided,
+    DecisionRace,
+    DecisionRefused,
+    NotFound,
+    NotRetryable,
+    Orchestrator,
+    Retried,
+    RunDetail,
+    approval_link,
+    steps_view,
+)
+from platform_api.orchestration.service import RetryLater as RetryLaterError
+from platform_api.orchestration.write_actions import MockJiraConnector, Proposal
+from platform_api.shared import (
+    ApprovalId,
+    Digest,
+    N8nExecutionId,
+    Principal,
+    ProposalId,
+    Role,
+    RunId,
+    UserId,
+)
 from platform_api.wire import (
     ApprovalStepView,
     FailureReason,
@@ -15,7 +58,6 @@ from platform_api.wire import (
     StepName,
     StepOutcome,
     WireModel,
-    not_implemented,
 )
 
 
@@ -214,24 +256,216 @@ router = APIRouter()
 StepKey = Annotated[str, Header(alias="X-Step-Key")]
 
 
+def current_orchestrator(request: Request) -> Orchestrator:
+    orchestrator: Orchestrator = request.app.state.orchestrator
+    return orchestrator
+
+
+def current_teams_stub(request: Request) -> TeamsStub:
+    stub: TeamsStub = request.app.state.teams_stub
+    return stub
+
+
+def current_mock_jira(request: Request) -> MockJiraConnector:
+    jira: MockJiraConnector = request.app.state.mock_jira
+    return jira
+
+
+def check_step_key(request: Request, step_key: StepKey) -> None:
+    expected: str = request.app.state.step_key
+    if not hmac.compare_digest(step_key.encode(), expected.encode()):
+        raise HTTPException(status_code=401, detail="Bad step key")
+
+
+def require_operator(principal: CurrentPrincipal) -> Principal:
+    if Role.OPERATOR not in principal.roles:
+        raise HTTPException(
+            status_code=403, detail="Only an Operator can do this. Ask an Operator on the team."
+        )
+    return principal
+
+
+CurrentOrchestrator = Annotated[Orchestrator, Depends(current_orchestrator)]
+Operator = Annotated[Principal, Depends(require_operator)]
+
+
+def proposal_view(proposal: Proposal) -> ProposalView:
+    return ProposalView(
+        proposal_id=proposal.id,
+        digest=proposal.digest,
+        actions=[
+            WriteActionView(
+                connector=a.connector,
+                operation=a.operation,
+                target=dict(a.target),
+                fields=dict(a.fields),
+            )
+            for a in proposal.actions
+        ],
+    )
+
+
+def approval_ref(request: ApprovalRequest, decisions: tuple[Decision, ...]) -> ApprovalRef:
+    return ApprovalRef(
+        approval_id=request.id,
+        link=approval_link(request.id),
+        steps=steps_view(request, decisions),
+    )
+
+
+class RunBaseFields(TypedDict):
+    run_id: RunId
+    use_case_id: str
+    use_case_name: str
+    use_case_version: int
+    started_by: UserId
+    started_at: datetime
+    updated_at: datetime
+    last_seq: int
+    events_url: str
+
+
+def run_view(detail: RunDetail) -> RunView:
+    record = detail.record
+    base = RunBaseFields(
+        run_id=record.run_id,
+        use_case_id=record.spec.use_case_id,
+        use_case_name=record.spec.use_case_name,
+        use_case_version=record.spec.use_case_version,
+        started_by=record.started_by,
+        started_at=record.started_at,
+        updated_at=record.updated_at,
+        last_seq=detail.last_seq,
+        events_url=f"/api/v1/runs/{record.run_id}/events",
+    )
+    state = record.state
+    match state:
+        case Pending():
+            return PendingView(**base)
+        case Working():
+            return WorkingView(**base, n8n_execution_id=state.execution, attempt=state.attempt)
+        case Proposed():
+            assert detail.proposal is not None
+            return ProposedView(**base, proposal=proposal_view(detail.proposal))
+        case AwaitingApproval():
+            assert detail.proposal is not None and detail.approval is not None
+            return AwaitingApprovalView(
+                **base,
+                proposal=proposal_view(detail.proposal),
+                approval=approval_ref(detail.approval, detail.decisions),
+            )
+        case Acting():
+            assert detail.proposal is not None and detail.approval is not None
+            return ActingView(
+                **base,
+                proposal=proposal_view(detail.proposal),
+                approval=approval_ref(detail.approval, detail.decisions),
+            )
+        case Succeeded():
+            return SucceededView(
+                **base,
+                outcome=state.outcome.value,
+                written=[
+                    WriteDoneView(
+                        connector=w.connector,
+                        operation=w.operation,
+                        external_reference=w.external_reference,
+                        approved_by=list(w.approved_by),
+                    )
+                    for w in state.written
+                ],
+            )
+        case Rejected():
+            assert detail.proposal is not None and detail.approval is not None
+            return RejectedView(
+                **base,
+                proposal=proposal_view(detail.proposal),
+                approval=approval_ref(detail.approval, detail.decisions),
+                rejected_by=state.by,
+                step=state.step,
+            )
+        case Failed():
+            return FailedView(
+                **base,
+                stage=state.stage.value,
+                reason=state.failure.reason.value,
+                retryable=state.failure.retryable,
+                message=state.failure.message,
+            )
+
+
+REFUSAL_MESSAGES: dict[Refusal, str] = {
+    Refusal.OWN_WORK: "You started this run, so another Approver must decide.",
+    Refusal.NOT_AN_APPROVER: "Only an Approver can decide.",
+    Refusal.NOT_OPEN: "This approval is already decided.",
+    Refusal.WRONG_STEP: "This is not the step that is open now.",
+    Refusal.DECIDED_EARLIER_STEP: (
+        "You decided an earlier step. Another Approver must decide this one."
+    ),
+    Refusal.NOT_ELIGIBLE: "You are not one of the people who can decide this step.",
+    Refusal.STALE_DIGEST: "The proposal changed since you saw it. Reload the page and look again.",
+    Refusal.INVALID_DECISIONS: "The recorded decisions are inconsistent. Ask a maintainer.",
+}
+
+
+def _decision_out(decided: Decided) -> DecisionOut:
+    match decided.status:
+        case Approved():
+            status = "approved"
+        case Declined():
+            status = "declined"
+        case _:
+            status = "open"
+    d = decided.decision
+    return DecisionOut(
+        status=status, decision=DecisionView(step=d.step_index, by=d.by, verdict=d.verdict, at=d.at)
+    )
+
+
 @router.get("/api/v1/runs", tags=["orchestration"])
-def list_runs(principal: CurrentPrincipal) -> RunList:
-    not_implemented()
+async def list_runs(principal: CurrentPrincipal, orchestrator: CurrentOrchestrator) -> RunList:
+    return RunList(runs=[run_view(d) for d in await orchestrator.list_runs()])
 
 
 @router.get("/api/v1/runs/{run_id}", tags=["orchestration"])
-def get_run(run_id: RunId, principal: CurrentPrincipal) -> RunView:
-    not_implemented()
+async def get_run(
+    run_id: RunId, principal: CurrentPrincipal, orchestrator: CurrentOrchestrator
+) -> RunView:
+    detail = await orchestrator.get_run(run_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="No such run")
+    return run_view(detail)
 
 
 @router.post("/api/v1/runs/{run_id}/retry", status_code=202, tags=["orchestration"])
-def retry_run(run_id: RunId, principal: CurrentPrincipal) -> RetryAccepted:
-    not_implemented()
+async def retry_run(
+    run_id: RunId, principal: Operator, orchestrator: CurrentOrchestrator
+) -> RetryAccepted:
+    match await orchestrator.retry(run_id, principal):
+        case Retried(state):
+            return RetryAccepted(state="acting" if isinstance(state, Acting) else "pending")
+        case NotRetryable(detail):
+            raise HTTPException(status_code=409, detail=detail)
+        case NotFound():
+            raise HTTPException(status_code=404, detail="No such run")
 
 
 @router.get("/api/v1/approvals/{approval_id}", tags=["orchestration"])
-def get_approval(approval_id: ApprovalId, principal: CurrentPrincipal) -> ApprovalView:
-    not_implemented()
+async def get_approval(
+    approval_id: ApprovalId, principal: CurrentPrincipal, orchestrator: CurrentOrchestrator
+) -> ApprovalView:
+    detail = await orchestrator.get_approval(approval_id, principal)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="No such approval")
+    return ApprovalView(
+        approval_id=detail.request.id,
+        run_id=detail.request.run_id,
+        digest=detail.request.digest,
+        actions=proposal_view(detail.proposal).actions,
+        steps=steps_view(detail.request, detail.decisions),
+        you_can_decide=detail.why_not is None,
+        why_not=detail.why_not,
+    )
 
 
 @router.post(
@@ -244,8 +478,30 @@ def get_approval(approval_id: ApprovalId, principal: CurrentPrincipal) -> Approv
         409: {"description": "Another Approver decided this step first"},
     },
 )
-def decide(approval_id: ApprovalId, body: DecisionIn, principal: CurrentPrincipal) -> DecisionOut:
-    not_implemented()
+async def decide(
+    approval_id: ApprovalId,
+    body: DecisionIn,
+    principal: CurrentPrincipal,
+    orchestrator: CurrentOrchestrator,
+    response: Response,
+) -> DecisionOut:
+    result = await orchestrator.decide(approval_id, principal, body.step, body.verdict, body.digest)
+    match result:
+        case Decided() as decided:
+            if decided.repeated:
+                response.status_code = 200
+            return _decision_out(decided)
+        case DecisionRefused(reason):
+            raise HTTPException(
+                status_code=403,
+                detail=RefusalOut(refusal=reason, message=REFUSAL_MESSAGES[reason]).model_dump(
+                    mode="json"
+                ),
+            )
+        case DecisionRace():
+            raise HTTPException(status_code=409, detail="Another Approver decided this step first")
+        case NotFound():
+            raise HTTPException(status_code=404, detail="No such approval")
 
 
 @router.post(
@@ -253,13 +509,22 @@ def decide(approval_id: ApprovalId, body: DecisionIn, principal: CurrentPrincipa
     tags=["internal"],
     responses={503: {"model": RetryLater, "description": "Try the same step again later"}},
 )
-def run_step(
+async def run_step(
     run_id: RunId,
     step: StepName,
     step_key: StepKey,
     n8n_execution: Annotated[str, Header(alias="X-N8N-Execution")],
+    request: Request,
+    orchestrator: CurrentOrchestrator,
 ) -> StepResponseOut:
-    not_implemented()
+    check_step_key(request, step_key)
+    try:
+        reply = await orchestrator.on_step(run_id, DomainStep(step), N8nExecutionId(n8n_execution))
+    except RetryLaterError as error:
+        raise HTTPException(
+            status_code=503, detail=RetryLater(detail=str(error)).model_dump(mode="json")
+        ) from error
+    return StepResponseOut(proceed=reply.proceed, outcome=reply.outcome, detail=reply.detail)
 
 
 @router.post(
@@ -268,15 +533,50 @@ def run_step(
     tags=["internal"],
     response_class=Response,
 )
-def report_workflow_failure(body: WorkflowFailureIn, step_key: StepKey) -> None:
-    not_implemented()
+async def report_workflow_failure(
+    body: WorkflowFailureIn, step_key: StepKey, request: Request, orchestrator: CurrentOrchestrator
+) -> None:
+    check_step_key(request, step_key)
+    await orchestrator.on_workflow_failure(
+        N8nExecutionId(body.execution_id), body.workflow, body.last_node, body.message
+    )
 
 
 @router.get("/api/v1/teams-stub/messages", tags=["stubs"])
-def list_teams_stub_messages(principal: CurrentPrincipal) -> TeamsStubMessages:
-    not_implemented()
+async def list_teams_stub_messages(
+    principal: CurrentPrincipal, stub: Annotated[TeamsStub, Depends(current_teams_stub)]
+) -> TeamsStubMessages:
+    return TeamsStubMessages(
+        messages=[
+            TeamsStubMessage(
+                id=m.id,
+                ts=m.ts,
+                channel=m.channel,
+                text=m.text,
+                link=m.link,
+                run_id=m.run_id,
+                approval_id=m.approval_id,
+            )
+            for m in await stub.messages()
+        ]
+    )
 
 
 @router.get("/api/v1/mock-jira/tickets", tags=["stubs"])
-def list_mock_jira_tickets(principal: CurrentPrincipal) -> MockJiraTickets:
-    not_implemented()
+async def list_mock_jira_tickets(
+    principal: CurrentPrincipal, jira: Annotated[MockJiraConnector, Depends(current_mock_jira)]
+) -> MockJiraTickets:
+    return MockJiraTickets(
+        tickets=[
+            MockJiraTicket(
+                key=t.key,
+                project=t.project,
+                title=t.title,
+                body=t.body,
+                created_at=t.created_at,
+                run_id=t.run_id,
+                proposal_id=t.proposal_id,
+            )
+            for t in await jira.tickets()
+        ]
+    )

@@ -8,6 +8,7 @@ from platform_api.builder import Builder
 from platform_api.db import Database
 from platform_api.orchestration import RunSpec, RunStarted
 from platform_api.shared import Principal, RunId, UseCaseId
+from tests.support import LOCAL_ENV
 
 pytestmark = pytest.mark.anyio
 
@@ -34,7 +35,7 @@ class SecondCallRepeats:
 
 @pytest.fixture
 async def client(db: Database) -> AsyncIterator[httpx.AsyncClient]:
-    app = create_app({"AUTH_MODE": "dev", "PUBLIC_BASE_URL": "http://localhost:8000"})
+    app = create_app(LOCAL_ENV)
     app.state.builder = Builder(db, SecondCallRepeats(), "http://localhost:8000")
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
