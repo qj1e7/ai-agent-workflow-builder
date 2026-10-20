@@ -98,7 +98,7 @@ class ReleaseChecker:
         last_known_tag: str | None,
         emit: Callable[[Draft], None],
     ) -> TaskOutput | TaskError:
-        if rejection := _reject_unusable(inputs, last_known_tag):
+        if rejection := _reject_unusable(last_known_tag):
             emit(_failed(None, rejection, "the task could not be read."))
             return rejection
         start = CheckerState(inputs=inputs, last_known_tag=last_known_tag)
@@ -245,15 +245,7 @@ def _stop_on_error(next_node: str) -> Callable[[CheckerState], str]:
     return route
 
 
-def _reject_unusable(inputs: ReleaseCheckInputs, last_known_tag: str | None) -> TaskError | None:
-    try:
-        re.compile(inputs.tag_pattern)
-    except re.error as bad_pattern:
-        return TaskError(
-            type="InvalidTask",
-            message=f"The tag pattern cannot be used: {bad_pattern}",
-            retryable=False,
-        )
+def _reject_unusable(last_known_tag: str | None) -> TaskError | None:
     if last_known_tag and family_of(last_known_tag) is None:
         return TaskError(
             type="InvalidTask", message=f"{last_known_tag!r} is not a version tag", retryable=False

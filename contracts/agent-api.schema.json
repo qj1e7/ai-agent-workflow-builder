@@ -539,8 +539,7 @@
           "$ref": "#/$defs/RepoName"
         },
         "tag_pattern": {
-          "title": "Tag Pattern",
-          "type": "string"
+          "$ref": "#/$defs/TagPattern"
         }
       },
       "required": [
@@ -566,6 +565,10 @@
       },
       "title": "RoomAddressee",
       "type": "object"
+    },
+    "TagPattern": {
+      "description": "Which release tags count. Only a pattern from a fixed list is accepted, never one the caller writes. Allowed values: `^\\d+\\.\\d+\\.\\d+$`.",
+      "type": "string"
     },
     "TaskError": {
       "additionalProperties": false,
