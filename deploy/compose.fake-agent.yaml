@@ -1,0 +1,9 @@
+# Replaces agent-runtime with a stand-in that replays contracts/fixtures/agent/.
+services:
+  agent-runtime:
+    build: !override
+      context: ./fake-agent
+    image: wab/fake-agent:dev
+    environment: !override {}
+    volumes:
+      - ../contracts/fixtures/agent:/fixtures:ro
