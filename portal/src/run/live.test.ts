@@ -102,7 +102,7 @@ describe('createLiveView against the demo platform', () => {
     expect(view().room.agents.map((seat) => seat.id)).toEqual(['room_lead'])
 
     // The demo is paced so the room never catches up (the schedule in src/mock/timeline.test.ts): the pause
-    // lands at 17.3 s and Bob's recorded decision at 32.2 s, and the honest counter rises between the two.
+    // lands at 17.7 s and Bob's recorded decision at 32.6 s, and the honest counter rises between the two.
     await tick(18 * SECOND)
     expect(view().room.phase.name).toBe('awaiting_approval')
     expect(view().frame.waiting).not.toBeNull()
@@ -132,7 +132,7 @@ describe('createLiveView against the demo platform', () => {
     unsubscribe()
   })
 
-  it('plays the paced demo on time: the chips land by 10.5 s, the pause by 18 s, the decision at 32 s and Done under 40 s', async () => {
+  it('plays the paced demo on time: the chips land by 10.5 s, the pause by 18 s, the decision at 32.6 s and Done under 40 s', async () => {
     const { beatStarts, unsubscribe } = open()
     await tick(45 * SECOND)
     // Measured with the store under fake timers. Each story beat starts when its event lands, since the
@@ -142,19 +142,19 @@ describe('createLiveView against the demo platform', () => {
       [5, 2470],
       [6, 5345],
       [7, 6345],
-      [8, 7745],
-      [9, 8645],
-      [10, 10045],
-      [11, 13370],
-      [12, 15945],
-      [15, 17345],
-      [17, 18945],
-      [18, 32166],
-      [21, 33966],
-      [23, 36166],
+      [8, 7945],
+      [9, 8845],
+      [10, 10445],
+      [11, 13770],
+      [12, 16345],
+      [15, 17745],
+      [17, 19345],
+      [18, 32566],
+      [21, 34366],
+      [23, 36566],
     ])
     const findingBeat = beatStarts.get(9) ?? Number.NaN
-    expect(findingBeat + 1400 - 250, 'the chips are at rest 250 ms before the finding beat ends').toBeLessThanOrEqual(10_500)
+    expect(findingBeat + 1600 - 250, 'the chips are at rest 250 ms before the finding beat ends').toBeLessThanOrEqual(10_500)
     expect(beatStarts.get(15), 'the pause').toBeLessThanOrEqual(18_000)
     expect(beatStarts.get(23), 'Done').toBeLessThan(40_000)
     unsubscribe()

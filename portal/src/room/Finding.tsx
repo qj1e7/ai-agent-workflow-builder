@@ -7,7 +7,7 @@ import { useBeatAnimation, type AnimationPlan } from './hooks'
 import { EASE_MOVE, slideToward } from './motion'
 import styles from './Finding.module.css'
 
-/** The chips slide in from the agent that brought them, one after another, once the token has landed. */
+/** The chips slide in from the agent that brought them, one after another, as the token comes in to land. */
 export interface Land {
   readonly key: string
   readonly fromMs: number
@@ -24,6 +24,8 @@ export interface Fold {
 
 export const CHIP_STAGGER_MS = 60
 export const CHIP_HOLD_MS = 250
+/** The chips set off while the token is still on its way, so the slide is long enough for the eye to follow. */
+export const CHIP_SLIDE_START_SHARE = 0.75
 /** The chips start folding this long before the ticket lands, so they are gone as it appears. */
 export const CHIP_FOLD_LEAD_MS = 250
 const FOLD_MS = 500
