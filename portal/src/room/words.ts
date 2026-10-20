@@ -64,10 +64,23 @@ export function doorName(door: DoorWords): string {
   return connectorLabel(door.key)
 }
 
+/** What goes through a write door, without the door's own name: "Create Jira ticket" on the Jira door is "Create ticket". */
 export function writeDoorAction(door: DoorWords, ticket: Ticket | null): string | null {
-  if (door.label) return door.label
+  if (door.label) {
+    if (door.key === null || door.key === 'teams') return door.label
+    const name = connectorLabel(door.key)
+    return door.label
+      .replace(new RegExp(`\\b${name}\\b`, 'i'), ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  }
   const line = ticket?.lines.find((candidate) => candidate.connector === door.key)
   return line ? operationLabel(line.operation) : null
+}
+
+/** The write door's one line under its name: the action, then its state. */
+export function writeDoorLine(action: string | null, status: StatusWords): StatusWords {
+  return action ? { text: `${action}. ${status.text}`, tone: status.tone } : status
 }
 
 export function readDoorStatus(trips: readonly Trip[], key: string): StatusWords {
@@ -79,25 +92,33 @@ export function readDoorStatus(trips: readonly Trip[], key: string): StatusWords
 export function writeDoorStatus(checker: Checker | null, approvedBy: readonly string[], written: boolean): StatusWords {
   switch (checker) {
     case 'allowed':
-      return { text: approvedBy.length > 0 ? `Allowed. Approved by ${approvedBy.join(' and ')}.` : 'Allowed', tone: 'done' }
+      return { text: approvedBy.length > 0 ? `Allowed. Approved by ${approvedBy.join(' and ')}.` : 'Allowed.', tone: 'done' }
     case 'blocked':
-      return { text: 'Blocked by the safety checker', tone: 'fail' }
+      return { text: 'Blocked by the safety checker.', tone: 'fail' }
     default:
-      if (written) return { text: 'Locked again', tone: 'quiet' }
+      if (written) return { text: 'Locked again.', tone: 'quiet' }
       if (approvedBy.length > 0) return { text: `Approved by ${approvedBy.join(' and ')}. Not written yet.`, tone: 'done' }
-      return { text: 'Locked until an Approver says yes', tone: 'quiet' }
+      return { text: 'Locked until an Approver says yes.', tone: 'quiet' }
   }
 }
 
-export function checkerStatus(checker: Checker | null): StatusWords {
+/** The checker's own word beside its name. Null while locked: the door line already says so. */
+export function checkerStatus(checker: Checker | null): StatusWords | null {
   switch (checker) {
     case 'allowed':
       return { text: 'Allowed', tone: 'done' }
     case 'blocked':
       return { text: 'Blocked', tone: 'fail' }
     default:
-      return { text: 'Locked', tone: 'quiet' }
+      return null
   }
+}
+
+/** The proposal's action line split at its first ': ' into the action and the title, when both halves have words. */
+export function splitActionLine(line: string): { readonly action: string | null; readonly title: string } {
+  const colon = line.indexOf(': ')
+  if (colon < 1 || colon + 2 >= line.length) return { action: null, title: line }
+  return { action: line.slice(0, colon), title: line.slice(colon + 2) }
 }
 
 export function teamsStatus(post: TeamsPost | null): StatusWords {
