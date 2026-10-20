@@ -49,7 +49,7 @@ export function standingOf(steps: readonly ApprovalStepView[], nameOf: (id: stri
       : null
   return {
     kind: 'waiting',
-    headline: 'Waiting for a decision',
+    headline: 'Waiting for an Approver',
     detail: [earlier, next].filter((part) => part !== null).join(' ') || null,
   }
 }
