@@ -1,6 +1,6 @@
 import type { Ms, RunTime, WallTime } from './brand'
 import { beatMsOf, floorMsOf, isStory } from './kinds'
-import { isSettled } from './room'
+import { isSettled, openStep, type OpenStep } from './room'
 import type { TapeReader } from './tape'
 import type { Origin } from './tape'
 
@@ -9,7 +9,7 @@ export const TARGET_LAG_MS: Ms = 4_000
 /** More queued choreography than this snaps to the end state. Above the demo's three-message burst, which director.test.ts pins. */
 export const SNAP_DEBT_MS: Ms = 20_000
 /** An unshown live event older than this on the wall clock means the tab was throttled: snap. */
-export const STALE_MS: Ms = (SNAP_DEBT_MS + 2_000) as Ms
+export const STALE_MS: Ms = SNAP_DEBT_MS + 2_000
 /** A gap longer than this between events is a wait: a fixed segment on the scrubber, a hold in replay. */
 export const LONG_GAP_MS: Ms = 30_000
 /** Replay compresses a long wait to this, while the waiting counter rolls through the real duration. */
@@ -222,6 +222,18 @@ export function sceneTime(d: Director, s: Stage): RunTime {
   }
   if (d.mode.is === 'live' && d.shown === s.tape.length && !settled(s)) return s.runNow
   return eventAt(s.tape, d.shown) ?? s.runNow
+}
+
+/**
+ * How long the shown frame's open step has waited. Following live while the room catches up on a step the
+ * head still holds open, the wait is ongoing and runs to now, so the seat never reads 0 s under a scrubber
+ * that reads minutes. In replay, paused, or once the head has decided the step, the wait is the shown frame's own.
+ */
+export function waitElapsed(d: Director, s: Stage, open: OpenStep): Ms {
+  const head = atEdge(d) && !settled(s) ? openStep(s.tape.frame(s.tape.length)) : null
+  const ongoing = head !== null && head.index === open.index && head.state.since === open.state.since
+  const now = ongoing ? s.runNow : sceneTime(d, s)
+  return Math.max(0, now - open.state.since)
 }
 
 export type FrameLabel = 'live' | 'replay' | 'finished'

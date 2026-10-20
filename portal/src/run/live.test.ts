@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ApprovalView, MockJiraTicket, RunView } from '../api/types'
 import { createDemoPlatform, type DemoPlatformHandle } from '../mock'
+import { formatDuration } from '../ui/format'
 import { runId } from './brand'
 import { createClock } from './clock'
 import { createLiveView, type LiveView, type LiveViewStore } from './live'
@@ -86,6 +87,36 @@ describe('createLiveView against the demo platform', () => {
     expect(view().frame.label).toBe('finished')
     expect(view().connection.is).toBe('settled')
     expect(view().transport.settled).toBe(true)
+    unsubscribe()
+  })
+
+  it('counts the live wait while the room catches up on an open approval, and the shown frame\'s own wait in replay and after a seek', async () => {
+    const { view, unsubscribe } = open()
+    await tick(18 * SECOND)
+    expect(view().room.phase.name).toBe('awaiting_approval')
+    expect(view().frame.shown, 'the room is still catching up').toBeLessThan(view().frame.head)
+    const edge = view().transport.edge
+    if (!edge?.waitingSince) throw new Error('no live edge')
+    const liveWait = view().frame.waiting?.elapsedMs ?? 0
+    expect(liveWait).toBe(edge.now - edge.waitingSince)
+    expect(liveWait).toBeGreaterThan(60 * SECOND)
+    expect(view().describe()).toContain(`for ${formatDuration(liveWait)}.`)
+
+    await tick(80 * SECOND)
+    expect(view().transport.settled).toBe(true)
+    view().transport.seek(15)
+    expect(view().frame.mode).toBe('replay')
+    const sought = view().frame
+    expect(sought.waiting?.elapsedMs).toBe(sought.sceneTime - (sought.waiting?.since ?? 0))
+    expect(sought.waiting?.elapsedMs).toBeLessThan(60 * SECOND)
+
+    view().transport.restart()
+    while (view().room.phase.name !== 'awaiting_approval') await tick(100)
+    const replayed = view().frame
+    expect(replayed.mode).toBe('replay')
+    expect(replayed.waiting?.elapsedMs).toBe(replayed.sceneTime - (replayed.waiting?.since ?? 0))
+    expect(replayed.waiting?.elapsedMs).toBeLessThan(60 * SECOND)
+    expect(view().describe()).toContain(`for ${formatDuration(replayed.waiting?.elapsedMs ?? 0)}.`)
     unsubscribe()
   })
 

@@ -1,9 +1,9 @@
 import { formatDuration } from '../ui/format'
-import type { RunTime } from './brand'
+import type { Ms } from './brand'
 import { openStep, ticketLife, type RoomState } from './room'
 
-/** The room's state in words for a screen reader, since the drawn room is aria-hidden. */
-export function describeRoom(room: RoomState, sceneTime: RunTime): string {
+/** The room's state in words for a screen reader, since the drawn room is aria-hidden. waitedMs is the frame's open wait, the number the seat shows. */
+export function describeRoom(room: RoomState, waitedMs: Ms | null): string {
   const names = [...room.agents.map((seat) => seat.display), ...(room.starter ? [room.starter.display] : [])]
   const sentences: string[] = []
   if (room.phase.name === 'empty') return 'The room is empty. The run has not started.'
@@ -20,7 +20,7 @@ export function describeRoom(room: RoomState, sceneTime: RunTime): string {
       sentences.push('A write has been proposed and lies on the table.')
       break
     case 'awaiting_approval':
-      if (open) sentences.push(`Waiting for an Approver (${open.label}) for ${formatDuration(sceneTime - open.state.since)}.`)
+      if (open && waitedMs !== null) sentences.push(`Waiting for an Approver (${open.label}) for ${formatDuration(waitedMs)}.`)
       else sentences.push('Waiting for an Approver.')
       break
     case 'acting':

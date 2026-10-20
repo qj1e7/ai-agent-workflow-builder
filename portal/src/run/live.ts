@@ -13,6 +13,7 @@ import {
   sceneTime,
   settled as isSettledStage,
   startDirector,
+  waitElapsed,
   wakeAt,
   type Cue,
   type Director,
@@ -259,6 +260,7 @@ export function createLiveView(o: { runId: RunId; env: LiveViewEnv; whenFinished
     const startedAt = room.startedAt ?? (tape.length > 0 ? tape.event(1).at : now)
     const latest = tape.latestAt() ?? now
     const end = settled ? latest : Math.max(s.runNow, latest)
+    const waiting = open ? { since: open.state.since, elapsedMs: waitElapsed(d, s, open) } : null
     const frame: Frame = {
       mode: d.mode.is,
       shown: d.shown,
@@ -267,7 +269,7 @@ export function createLiveView(o: { runId: RunId; env: LiveViewEnv; whenFinished
       beat: beatView(d),
       label: labelOf(d, s),
       sceneTime: now,
-      waiting: open ? { since: open.state.since, elapsedMs: Math.max(0, now - open.state.since) } : null,
+      waiting,
       elapsed: { at: Math.max(0, now - startedAt), total: Math.max(0, end - startedAt) },
     }
     const marks = tape.marks()
@@ -288,7 +290,7 @@ export function createLiveView(o: { runId: RunId; env: LiveViewEnv; whenFinished
       layout: (width, expectedWrites = []) => layoutRoom(floorPlanOf(room, expectedWrites), width),
       track: (width) => layoutScrubber({ marks, width, edge: transport.edge }),
       spine: (blocks) => spineStations(room, blocks),
-      describe: () => describeRoom(room, now),
+      describe: () => describeRoom(room, waiting?.elapsedMs ?? null),
     }
   }
 
