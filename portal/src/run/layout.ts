@@ -124,25 +124,25 @@ export const ROOM_METRICS: Readonly<Record<RoomSize, Metrics>> = {
   wide: {
     minWidth: 640,
     wall: 12,
-    pad: 20,
+    pad: 16,
     gap: 8,
-    rowGap: 14,
+    rowGap: 12,
     lane: 20,
     avatar: 56,
     seatW: 128,
-    seatH: 98,
-    band: 124,
+    seatH: 100,
+    band: 120,
     cardMaxW: 320,
     tail: 8,
-    doorCol: 128,
-    doorLabelH: 38,
-    doorOpeningH: 68,
+    doorCol: 156,
+    doorLabelH: 48,
+    doorOpeningH: 60,
     doorsShown: 3,
     tableMinH: 160,
     ticketW: 300,
-    ticketH: 112,
-    teamsW: 144,
-    teamsH: 60,
+    ticketH: 108,
+    teamsW: 168,
+    teamsH: 56,
     teamsOpeningW: 56,
   },
   compact: {
@@ -159,8 +159,8 @@ export const ROOM_METRICS: Readonly<Record<RoomSize, Metrics>> = {
     cardMaxW: 0,
     tail: 0,
     doorCol: 80,
-    doorLabelH: 34,
-    doorOpeningH: 56,
+    doorLabelH: 36,
+    doorOpeningH: 52,
     doorsShown: 2,
     tableMinH: 116,
     ticketW: 168,
@@ -329,22 +329,31 @@ function allowed(a: LayoutBox, b: LayoutBox): boolean {
   return false
 }
 
-/** Solid boxes a route crosses, other than the boxes its two ends live in. */
+/**
+ * Solid boxes a route crosses, other than the boxes its two ends live in. A seat's name and status
+ * (the box below its avatar) count even for the seat the route starts or ends at.
+ */
 export function routeCrossings(layout: RoomLayout, from: Anchor, to: Anchor): readonly LayoutBox[] {
   const path = layout.route(from, to)
   const start = layout.point(from)
   const end = layout.point(to)
   const own = (b: LayoutBox) => pointIn(start, b, 1) || pointIn(end, b, 1)
+  const crosses = (b: Box) => {
+    for (let i = 1; i < path.length; i += 1) if (segmentCrosses(path[i - 1] as Point, path[i] as Point, b, 0)) return true
+    return false
+  }
   const crossed: LayoutBox[] = []
   for (const b of layout.boxes) {
-    if (!solid(b.who.role) || own(b)) continue
-    if (b.who.role === 'table') continue
-    for (let i = 1; i < path.length; i += 1) {
-      if (segmentCrosses(path[i - 1] as Point, path[i] as Point, b, 0)) {
-        crossed.push(b)
-        break
-      }
+    if (!solid(b.who.role) || b.who.role === 'table') continue
+    if (own(b)) {
+      if (b.who.role !== 'seat' && b.who.role !== 'overflow') continue
+      const seat = b.who.role === 'seat' ? layout.seats.get(b.who.key) : layout.overflow.find((o) => o.row === (b.who as { row: 'agents' | 'people' }).row)?.seat
+      if (!seat) continue
+      const label: Box = { x: b.x, y: seat.avatar.y + seat.avatar.h, w: b.w, h: b.y + b.h - (seat.avatar.y + seat.avatar.h) }
+      if (crosses(label)) crossed.push(b)
+      continue
     }
+    if (crosses(b)) crossed.push(b)
   }
   return crossed
 }
@@ -492,13 +501,31 @@ export function layoutRoom(plan: FloorPlan, width: number): RoomLayout {
     }
   }
 
-  /** The lane a zone exits into. Doors exit sideways into their wall lane, rows exit vertically into the gutters. */
-  function exitOf(a: Anchor, p: Point): Point[] {
+  function seatBoxOf(a: Anchor): Box | null {
+    const key = seatKeyOf(a)
+    if (!key) return null
+    const shown = seats.get(key)
+    if (shown) return shown.box
+    return overflowFor(key)?.seat.box ?? null
+  }
+
+  /**
+   * The lane a zone exits into. A seat leaves sideways through the gutter beside it (towards the other end),
+   * so a path never crosses its own name and status; doors exit into their wall lane.
+   */
+  function exitOf(a: Anchor, p: Point, towards: Point): Point[] {
     switch (zoneOf(a)) {
       case 'agents':
-        return [{ x: p.x, y: lanes.top }]
-      case 'people':
-        return [{ x: p.x, y: lanes.bottom }]
+      case 'people': {
+        const lane = zoneOf(a) === 'agents' ? lanes.top : lanes.bottom
+        const seat = seatBoxOf(a)
+        if (!seat) return [{ x: p.x, y: lane }]
+        const gutter = towards.x >= p.x ? seat.x + seat.w + m.gap / 2 : seat.x - m.gap / 2
+        return [
+          { x: gutter, y: p.y },
+          { x: gutter, y: lane },
+        ]
+      }
       case 'read':
         return [{ x: lanes.left, y: p.y }]
       case 'write':
@@ -516,9 +543,9 @@ export function layoutRoom(plan: FloorPlan, width: number): RoomLayout {
     const za = zoneOf(from)
     const zb = zoneOf(to)
     if (za === 'table' && zb === 'table') return [a, b]
-    const out = exitOf(from, a)
-    const back = exitOf(to, b).reverse()
-    const first = out[0] ?? a
+    const out = exitOf(from, a, b)
+    const back = exitOf(to, b, a).reverse()
+    const first = out[out.length - 1] ?? a
     const last = back[0] ?? b
     const middleWay: Point[] = []
     const horizontal = (p: Point, q: Point) => p.y === q.y

@@ -181,7 +181,7 @@ export function rehearse(name: RecordingName, o: { start: Start }): Rehearsal {
       return sceneTime(director, stage(now))
     },
     get atEdge() {
-      return atEdge(director, stage(now))
+      return atEdge(director)
     },
     get label() {
       return labelOf(director, stage(now))

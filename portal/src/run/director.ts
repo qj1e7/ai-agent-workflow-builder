@@ -192,8 +192,9 @@ export function direct(d: Director, cue: Cue, s: Stage): Director {
   }
 }
 
-export function atEdge(d: Director, s: Stage): boolean {
-  return d.mode.is === 'live' && d.shown === s.tape.length && d.beat === null
+/** Following live: the viewer has not paused or scrubbed, even if beats are still catching up. */
+export function atEdge(d: Director): boolean {
+  return d.mode.is === 'live'
 }
 
 /** When the shell should send the next 'tick'. One timer, ever. null means nothing will change on its own. */
@@ -205,7 +206,7 @@ export function wakeAt(d: Director, s: Stage): WallTime | null {
   } else if (d.mode.is === 'replay' && s.tape.length > 0) {
     candidates.push(s.wall)
   }
-  if (atEdge(d, s) && s.tape.length > 0 && !settled(s)) {
+  if (atEdge(d) && s.tape.length > 0 && !settled(s)) {
     const untilNextSecond = COUNTER_TICK_MS - (((s.runNow % COUNTER_TICK_MS) + COUNTER_TICK_MS) % COUNTER_TICK_MS)
     candidates.push(s.wall + (untilNextSecond === 0 ? COUNTER_TICK_MS : untilNextSecond))
   }
@@ -226,7 +227,6 @@ export function sceneTime(d: Director, s: Stage): RunTime {
 export type FrameLabel = 'live' | 'replay' | 'finished'
 
 export function labelOf(d: Director, s: Stage): FrameLabel {
-  if (settled(s) && d.mode.is === 'live' && d.shown === s.tape.length) return 'finished'
-  if (d.mode.is === 'live' && d.shown === s.tape.length) return 'live'
-  return 'replay'
+  if (d.mode.is !== 'live') return 'replay'
+  return settled(s) && d.shown === s.tape.length ? 'finished' : 'live'
 }
