@@ -1,0 +1,8 @@
+apikey
+apikey_resp.json
+cj
+*.pid
+package-lock.json
+node_modules/
+n8n-data/
+.venv/

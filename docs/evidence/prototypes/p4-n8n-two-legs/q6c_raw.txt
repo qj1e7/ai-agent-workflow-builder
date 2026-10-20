@@ -1,0 +1,59 @@
+11:38:34.383 PUT 200
+## after PUT while active poll every 0.5s for 8 s
+11:38:34.489 POST work -> 202 P-1
+11:38:35.037 POST work -> 202 P-2
+11:38:35.580 POST work -> 202 P-3
+11:38:36.124 POST work -> 202 P-4
+11:38:36.657 POST work -> 202 P-5
+11:38:37.200 POST work -> 202 P-6
+11:38:37.745 POST work -> 202 P-7
+11:38:38.288 POST work -> 202 P-8
+11:38:38.829 POST work -> 202 P-9
+11:38:39.371 POST work -> 202 P-10
+11:38:39.915 POST work -> 202 P-11
+11:38:40.460 POST work -> 202 P-12
+11:38:40.983 POST work -> 202 P-13
+11:38:41.521 POST work -> 202 P-14
+11:38:42.049 POST work -> 202 P-15
+--- stub log (which URL did step A1 hit and when)
+11:38:34.491 /step/a1 {'run_id': 'P-1'}
+11:38:35.039 /step/a1v2 {'run_id': 'P-2'}
+11:38:35.582 /step/a1v2 {'run_id': 'P-3'}
+11:38:36.126 /step/a1v2 {'run_id': 'P-4'}
+11:38:36.659 /step/a1v2 {'run_id': 'P-5'}
+11:38:37.202 /step/a1v2 {'run_id': 'P-6'}
+11:38:37.747 /step/a1v2 {'run_id': 'P-7'}
+11:38:38.291 /step/a1v2 {'run_id': 'P-8'}
+11:38:38.831 /step/a1v2 {'run_id': 'P-9'}
+11:38:39.374 /step/a1v2 {'run_id': 'P-10'}
+11:38:39.917 /step/a1v2 {'run_id': 'P-11'}
+11:38:40.462 /step/a1v2 {'run_id': 'P-12'}
+11:38:40.984 /step/a1v2 {'run_id': 'P-13'}
+11:38:41.524 /step/a1v2 {'run_id': 'P-14'}
+11:38:42.050 /step/a1v2 {'run_id': 'P-15'}
+11:38:42.593 deactivate 200
+## after deactivate poll every 0.5s for 6 s
+11:38:43.004 POST work -> 202 D-1
+11:38:43.514 POST work -> 404 404 not registered
+11:38:44.032 POST work -> 404 404 not registered
+11:38:44.546 POST work -> 404 404 not registered
+11:38:45.073 POST work -> 404 404 not registered
+11:38:45.596 POST work -> 404 404 not registered
+11:38:46.105 POST work -> 404 404 not registered
+11:38:46.627 POST work -> 404 404 not registered
+11:38:47.149 POST work -> 404 404 not registered
+11:38:47.671 POST work -> 404 404 not registered
+11:38:48.190 POST work -> 404 404 not registered
+11:38:48.700 activate 200
+## after activate poll every 0.5s for 6 s
+11:38:48.756 POST work -> 404 404 not registered
+11:38:49.303 POST work -> 202 E-2
+11:38:49.846 POST work -> 202 E-3
+11:38:50.396 POST work -> 202 E-4
+11:38:50.936 POST work -> 202 E-5
+11:38:51.478 POST work -> 202 E-6
+11:38:52.019 POST work -> 202 E-7
+11:38:52.643 POST work -> 202 E-8
+11:38:53.177 POST work -> 202 E-9
+11:38:53.723 POST work -> 202 E-10
+11:38:54.268 POST work -> 202 E-11
