@@ -183,7 +183,7 @@ export const ROOM_METRICS: Readonly<Record<RoomSize, Metrics>> = {
     tableW: 432,
     ticketW: 360,
     ticketH: 120,
-    teamsW: 232,
+    teamsW: 212,
     teamsH: 56,
     teamsOpeningW: 72,
     teamsLabelH: 40,
