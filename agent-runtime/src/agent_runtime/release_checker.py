@@ -231,7 +231,8 @@ class ReleaseChecker:
             write(
                 _to_room(
                     "reported to the room that no release matches.",
-                    "No release matches the tag pattern. I have nothing to propose.",
+                    "No release has a plain version number I can compare. "
+                    "I have nothing to propose.",
                 )
             )
             output = _nothing("No releases match the pattern", None)
