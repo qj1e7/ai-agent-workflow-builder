@@ -661,6 +661,14 @@ The build followed this design except where the table below says otherwise. Each
 | Bootstrap waits on n8n's `/healthz/readiness`, deletes older API keys by label before creating one, and recreates the step key credential on every run | n8n 2.42.6 makes API key labels unique and never returns a credential's value. `/healthz` answered before n8n could take requests | #8 |
 | Refusals (403) and retry-later answers (503) return the declared body at the top level, not inside `detail` | The contract promised it, and the end-to-end run found the gap | #10 |
 | The test client uses `httpx`, not its successor `httpx2` | A security bot flagged `httpx2` as a possible typosquat. Adopting it is the team's dependency decision | #6 |
+| An approval decision's summary names the step in words: "Bob approved the request (Team approver).", or "step 1 of 2 (label)" for two steps | The live view showed "step 0", which means nothing to support staff | #10 |
+| The run page is the agent room, not a plain event list. Agents sit in seats, reads and writes are doors with the safety checker at the write door, the proposed ticket sits on a table, and a transport scrubs the run. The plain list stays underneath as the minutes | A blind bakeoff of three directions picked it (8.10 against 7.48), because the live view is the demo moment | #12 |
+| The Portal opens on the latest run, live. A fresh install opens on the room set from the release-check template, with a one-click run of the template's own example | The first screen is the first impression, and an empty page explained nothing | #12 |
+| The Portal has a demo mode, `PORTAL_MODE=demo`, that runs an in-memory platform behind the same typed client and says "Demo data" on every page | The UI can be built, tested and shown without the stack, and 52 browser specs run against it | #12 |
+| Speech in the room is only `agent_message` text, word for word. Every other event's `summary` plays as a caption | Agents' words come from the backend, so approved wording lives in one place | #12 |
+| The Teams stub card shows its run and where its approval stands, read from existing routes | Several runs produced identical cards | #12 |
+| nginx does not forward the browser's `Host` header to platform-api | Host-header injection risk, found by Semgrep. platform-api builds links from `PUBLIC_BASE_URL` | #12 |
+| `PUBLIC_BASE_URL` follows `PORTAL_HOST_PORT`, and `scripts/e2e.sh` runs as its own compose project, `wab-e2e` | A test teardown must never delete a dev stack's volumes | #13 |
 
 ## Open questions and risks
 
