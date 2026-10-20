@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi.testclient import TestClient
 
 from platform_api.app import create_app
@@ -15,7 +17,7 @@ def env_for(postgres: PostgresUrls) -> dict[str, str]:
     }
 
 
-def workflows_check(body: dict) -> dict:  # type: ignore[type-arg]
+def workflows_check(body: dict[str, Any]) -> dict[str, Any]:
     return next(c for c in body["checks"] if c["name"] == "workflows")
 
 
