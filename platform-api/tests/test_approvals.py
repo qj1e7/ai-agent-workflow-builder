@@ -10,7 +10,9 @@ from platform_api.orchestration.approvals import (
     ApprovalStep,
     Approved,
     Decision,
+    DecisionFault,
     Declined,
+    Invalid,
     OneOf,
     Open,
     Recorded,
@@ -56,8 +58,17 @@ def decision(
     by: UserId,
     verdict: Verdict = Verdict.APPROVE,
     approval_id: ApprovalId = APPROVAL,
+    seen: Digest = DIGEST,
+    at: datetime = NOW,
 ) -> Decision:
-    return Decision(approval_id, step, by, verdict, DIGEST, NOW)
+    return Decision(approval_id, step, by, verdict, seen, at)
+
+
+STALE = decision(0, BOB, seen=Digest("sha256:old"))
+CONFLICT_A = decision(0, BOB)
+CONFLICT_B = decision(0, CAROL, Verdict.DECLINE, at=LATER)
+BY_A_PARTY = decision(0, ALICE)
+TWICE = (decision(0, BOB), decision(1, BOB))
 
 
 def test_policy_rejects_no_steps():
@@ -99,6 +110,42 @@ def test_policy_rejects_no_steps():
             (decision(0, BOB, approval_id=ApprovalId("apr_other")),),
             Open(0),
             id="a decision on another approval does not count",
+        ),
+        pytest.param(
+            ONE_STEP,
+            (STALE,),
+            Invalid(DecisionFault.STALE_DIGEST),
+            id="a stored decision with another digest never counts",
+        ),
+        pytest.param(
+            ONE_STEP,
+            (CONFLICT_A, CONFLICT_B),
+            Invalid(DecisionFault.CONFLICTING_DECISIONS),
+            id="two different decisions on one step, approve first",
+        ),
+        pytest.param(
+            ONE_STEP,
+            (CONFLICT_B, CONFLICT_A),
+            Invalid(DecisionFault.CONFLICTING_DECISIONS),
+            id="two different decisions on one step, decline first",
+        ),
+        pytest.param(
+            ONE_STEP,
+            (CONFLICT_A, CONFLICT_A),
+            Approved((BOB,)),
+            id="an identical duplicate counts once",
+        ),
+        pytest.param(
+            ONE_STEP,
+            (BY_A_PARTY,),
+            Invalid(DecisionFault.OWN_WORK),
+            id="a decision by a party to the run never counts",
+        ),
+        pytest.param(
+            TWO_STEPS,
+            TWICE,
+            Invalid(DecisionFault.SAME_PERSON_TWICE),
+            id="one person on two steps never counts",
         ),
     ],
 )
@@ -252,6 +299,16 @@ def approver(user: UserId) -> Principal:
             Digest("sha256:old"),
             Refused(Refusal.STALE_DIGEST),
             id="the approver saw different actions",
+        ),
+        pytest.param(
+            ONE_STEP,
+            (BY_A_PARTY,),
+            approver(BOB),
+            0,
+            Verdict.APPROVE,
+            DIGEST,
+            Refused(Refusal.INVALID_DECISIONS),
+            id="nobody can decide on top of invalid stored decisions",
         ),
     ],
 )

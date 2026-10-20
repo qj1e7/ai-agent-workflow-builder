@@ -75,22 +75,48 @@ class Declined:
     step: int
 
 
-type ApprovalStatus = Open | Approved | Declined
+class DecisionFault(Enum):
+    CONFLICTING_DECISIONS = "conflicting_decisions"
+    STALE_DIGEST = "stale_digest"
+    OWN_WORK = "own_work"
+    SAME_PERSON_TWICE = "same_person_twice"
 
 
-def _by_step(request: ApprovalRequest, decisions: Iterable[Decision]) -> dict[int, Decision]:
-    recorded: dict[int, Decision] = {}
-    for decision in decisions:
-        if decision.approval_id == request.id:
-            recorded.setdefault(decision.step_index, decision)
-    return recorded
+@dataclass(frozen=True)
+class Invalid:
+    fault: DecisionFault
+
+
+type ApprovalStatus = Open | Approved | Declined | Invalid
+
+
+def _recorded(request: ApprovalRequest, decisions: Iterable[Decision]) -> frozenset[Decision]:
+    return frozenset(d for d in decisions if d.approval_id == request.id)
+
+
+def _fault(request: ApprovalRequest, recorded: frozenset[Decision]) -> DecisionFault | None:
+    steps = [d.step_index for d in recorded]
+    if len(set(steps)) < len(steps):
+        return DecisionFault.CONFLICTING_DECISIONS
+    if any(d.seen_digest != request.digest for d in recorded):
+        return DecisionFault.STALE_DIGEST
+    if any(d.by in request.parties for d in recorded):
+        return DecisionFault.OWN_WORK
+    deciders = [d.by for d in recorded]
+    if len(set(deciders)) < len(deciders):
+        return DecisionFault.SAME_PERSON_TWICE
+    return None
 
 
 def approval_status(request: ApprovalRequest, decisions: Iterable[Decision]) -> ApprovalStatus:
-    recorded = _by_step(request, decisions)
+    recorded = _recorded(request, decisions)
+    fault = _fault(request, recorded)
+    if fault is not None:
+        return Invalid(fault)
+    by_step = {d.step_index: d for d in recorded}
     approvers: list[UserId] = []
     for index in range(len(request.policy.steps)):
-        decision = recorded.get(index)
+        decision = by_step.get(index)
         if decision is None:
             return Open(index)
         if decision.verdict is Verdict.DECLINE:
@@ -100,6 +126,7 @@ def approval_status(request: ApprovalRequest, decisions: Iterable[Decision]) -> 
 
 
 class Refusal(Enum):
+    INVALID_DECISIONS = "invalid_decisions"
     NOT_OPEN = "not_open"
     WRONG_STEP = "wrong_step"
     NOT_AN_APPROVER = "not_an_approver"
@@ -141,11 +168,17 @@ def decide(
     seen_digest: Digest,
     now: datetime,
 ) -> Recorded | AlreadyRecorded | Refused:
-    recorded = _by_step(request, decisions)
-    earlier = recorded.get(step_index)
-    if earlier is not None and earlier.by == principal.user_id and earlier.verdict is verdict:
-        return AlreadyRecorded(earlier)
-    status = approval_status(request, recorded.values())
+    recorded = _recorded(request, decisions)
+    for earlier in recorded:
+        if (
+            earlier.step_index == step_index
+            and earlier.by == principal.user_id
+            and earlier.verdict is verdict
+        ):
+            return AlreadyRecorded(earlier)
+    status = approval_status(request, recorded)
+    if isinstance(status, Invalid):
+        return Refused(Refusal.INVALID_DECISIONS)
     if not isinstance(status, Open):
         return Refused(Refusal.NOT_OPEN)
     if step_index != status.next_step:
@@ -154,7 +187,7 @@ def decide(
         return Refused(Refusal.NOT_AN_APPROVER)
     if principal.user_id in request.parties:
         return Refused(Refusal.OWN_WORK)
-    if any(decision.by == principal.user_id for decision in recorded.values()):
+    if any(decision.by == principal.user_id for decision in recorded):
         return Refused(Refusal.DECIDED_EARLIER_STEP)
     if not _eligible(request.policy.steps[step_index], principal.user_id):
         return Refused(Refusal.NOT_ELIGIBLE)

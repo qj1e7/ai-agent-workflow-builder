@@ -8,6 +8,7 @@ from platform_api.orchestration.approvals import (
     ApprovalRequest,
     Approved,
     Decision,
+    Invalid,
     approval_status,
 )
 from platform_api.orchestration.runs import Acting
@@ -90,6 +91,7 @@ type Registry = Mapping[str, Set[str]]
 class DenyReason(Enum):
     RUN_MISMATCH = "run_mismatch"
     NOT_APPROVED = "not_approved"
+    INVALID_DECISIONS = "invalid_decisions"
     DIGEST_MISMATCH = "digest_mismatch"
     UNREGISTERED_ACTION = "unregistered_action"
 
@@ -134,6 +136,8 @@ def check(
     if not same_run:
         return Deny(DenyReason.RUN_MISMATCH)
     status = approval_status(request, decisions)
+    if isinstance(status, Invalid):
+        return Deny(DenyReason.INVALID_DECISIONS)
     if not isinstance(status, Approved):
         return Deny(DenyReason.NOT_APPROVED)
     if digest(proposal.actions) != request.digest:
