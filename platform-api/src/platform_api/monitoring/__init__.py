@@ -4,6 +4,7 @@ from platform_api.monitoring.agent_events import (
     AgentRef,
     agent_event_adapter,
 )
+from platform_api.monitoring.callbacks import Callback, callback_for, verify_callback
 from platform_api.monitoring.events import (
     PLATFORM,
     SAFETY_CHECKER,
@@ -33,6 +34,7 @@ from platform_api.monitoring.events import (
     agent_actor,
     user_actor,
 )
+from platform_api.monitoring.log import ActivityLog, NotificationHub
 
 __all__ = [
     "PLATFORM",
@@ -40,15 +42,18 @@ __all__ = [
     "WORKFLOW",
     "ActionLine",
     "ActivityEvent",
+    "ActivityLog",
     "Actor",
     "AgentEvent",
     "AgentEventPost",
     "AgentRef",
+    "Callback",
     "ApprovalAnnounceFailedData",
     "ApprovalAnnouncedData",
     "ApprovalDecidedData",
     "ApprovalRequestedData",
     "LegDispatchedData",
+    "NotificationHub",
     "PendingEvent",
     "RunCreatedData",
     "RunFailedData",
@@ -65,5 +70,7 @@ __all__ = [
     "activity_events_adapter",
     "agent_actor",
     "agent_event_adapter",
+    "callback_for",
     "user_actor",
+    "verify_callback",
 ]
