@@ -79,10 +79,17 @@ export interface Transport {
   reconnect(this: void): void
 }
 
-/** Everything the room, spine, caption, Minutes and transport render. Identity changes only when something did. */
-export interface LiveView {
-  readonly connection: Connection
+/** What the room needs to draw a frame. A LiveView is one; a room set from a template with no feed behind it is another. */
+export interface RoomView {
   readonly room: RoomState
+  readonly frame: Pick<Frame, 'beat' | 'waiting'>
+  layout(width: number, expectedWrites?: readonly ExpectedWrite[]): RoomLayout
+  describe(): string
+}
+
+/** Everything the room, spine, caption, Minutes and transport render. Identity changes only when something did. */
+export interface LiveView extends RoomView {
+  readonly connection: Connection
   readonly frame: Frame
   /** Up to the shown frame; the component filters technical entries unless details are on. */
   readonly minutes: readonly MinutesEntry[]

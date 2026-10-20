@@ -1,5 +1,5 @@
 import { useMemo, useRef, type ReactNode } from 'react'
-import type { ExpectedWrite, LiveView, Move, Point, RoomLayout, RoomState, SeatKey } from '../run'
+import type { ExpectedWrite, Move, Point, RoomLayout, RoomState, RoomView, SeatKey } from '../run'
 import { agentSeatKey, layoutOf, stamps as stampsOf, stepSeatKey, ticketLife } from '../run'
 import { Avatar } from '../ui/Avatar'
 import { agentIdentity } from '../ui/agents'
@@ -14,7 +14,7 @@ import { agentStatus, approvedBy, checkerStatus, doorName, readDoorStatus, stepN
 import styles from './Room.module.css'
 
 interface RoomProps {
-  view: LiveView
+  view: RoomView
   /** The measured width of the room's container. The page measures it, so it also knows when the room is compact. */
   width: number
   expectedWrites: readonly ExpectedWrite[]
@@ -27,7 +27,7 @@ interface RoomProps {
 const LIGHT = { wide: 260, compact: 140 } as const
 const CUT_IN: Keyframe[] = [{ opacity: 0.35 }, { opacity: 1 }]
 
-function beatOf(view: LiveView) {
+function beatOf(view: RoomView) {
   const beat = view.frame.beat
   return beat?.type === 'event' ? beat : null
 }

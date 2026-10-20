@@ -1,5 +1,7 @@
 export { createLiveView, useLiveView } from './live'
-export type { BeatView, Frame, LiveView, LiveViewEnv, LiveViewStore, Transport, UseLiveViewOptions, WhenFinished } from './live'
+export type { BeatView, Frame, LiveView, LiveViewEnv, LiveViewStore, RoomView, Transport, UseLiveViewOptions, WhenFinished } from './live'
+export { expectedWritesOf, stageSet } from './stage'
+export type { StageSet } from './stage'
 export { createClock } from './clock'
 export type { Clock } from './clock'
 export { runId, agentId, doorKey, userId } from './brand'
