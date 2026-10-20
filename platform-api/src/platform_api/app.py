@@ -1,4 +1,6 @@
-from typing import Literal
+import os
+from collections.abc import Mapping
+from typing import Any, Literal
 
 from fastapi import FastAPI
 
@@ -24,9 +26,10 @@ class Readiness(WireModel):
     checks: list[ReadinessCheck]
 
 
-def create_app() -> FastAPI:
+def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
+    config = auth.auth_config(os.environ if env is None else env)
     app = FastAPI(title="AI workflow builder platform API", version="0.1.0")
-    app.include_router(auth.router)
+    app.state.authenticator = auth.authenticator_for(config)
     app.include_router(builder_http.router)
     app.include_router(orchestration_http.router)
     app.include_router(monitoring_http.router)
@@ -43,4 +46,27 @@ def create_app() -> FastAPI:
     def ready() -> Readiness:
         not_implemented()
 
+    match config:
+        case auth.DevAuth():
+            app.include_router(auth.dev_router)
+            _document_dev_header(app)
     return app
+
+
+def _document_dev_header(app: FastAPI) -> None:
+    def openapi() -> dict[str, Any]:
+        if app.openapi_schema is None:
+            schema = FastAPI.openapi(app)
+            schema.setdefault("components", {})["securitySchemes"] = {
+                "DevUser": {
+                    "type": "apiKey",
+                    "in": "header",
+                    "name": auth.DEV_USER_HEADER,
+                    "description": "Local sign-in stub. One of the ids from GET /api/v1/dev/users.",
+                }
+            }
+            schema["security"] = [{"DevUser": []}]
+            app.openapi_schema = schema
+        return app.openapi_schema
+
+    app.openapi = openapi
