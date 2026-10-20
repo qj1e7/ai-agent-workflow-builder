@@ -1,5 +1,7 @@
+import templates from '@contracts/fixtures/builder/templates.json'
 import { describe, expect, it } from 'vitest'
 import type { BlockView } from '../api/types'
+import { userId } from './brand'
 import type { RoomView } from './live'
 import type { ExpectedWrite } from './room'
 import { stageSet } from './stage'
@@ -11,18 +13,55 @@ const RELEASE_CHECK: readonly BlockView[] = [
   { key: 'create_ticket', name: 'Create Jira ticket', description: '', kind: 'write_action' },
 ]
 
+const FIXTURE_TEMPLATE = (templates.templates[0]?.blocks ?? []) as BlockView[]
+
 const doorsDrawn = (view: RoomView, expected?: readonly ExpectedWrite[]) =>
   view.layout(900, expected).doors.map((door) => ({ side: door.side, key: door.key, label: door.label }))
 
 describe('stageSet', () => {
-  it('seats the host alone, present, in the centre seat', () => {
-    const { view } = stageSet(RELEASE_CHECK, TEST_REGISTRY)
+  it('seats the host alone when no block names an agent and no starter is given, with the Approver seat a ghost', () => {
+    const { view, ghosts } = stageSet(RELEASE_CHECK, TEST_REGISTRY)
     expect(view.room.agents).toEqual([{ id: 'room_lead', display: 'Room lead', role: 'host', slot: 0, status: 'present' }])
     expect(view.room.phase).toEqual({ name: 'empty' })
     expect(view.room.starter).toBeNull()
     expect(view.room.ticket).toBeNull()
     expect(view.room.light).toBeNull()
     expect(view.frame).toEqual({ beat: null, waiting: null, spedUp: false })
+    expect(ghosts).toEqual(new Set(['step:0']))
+  })
+
+  it("seats the cast the fixture template names as ghosts: the Release checker, the starter and one Approver's seat", () => {
+    const starter = { id: userId('alice'), display: 'Alice' }
+    const { view, ghosts, words } = stageSet(FIXTURE_TEMPLATE, TEST_REGISTRY, { starter })
+    expect(view.room.agents).toEqual([
+      { id: 'room_lead', display: 'Room lead', role: 'host', slot: 0, status: 'present' },
+      { id: 'release_checker', display: 'Release checker', role: 'specialist', slot: 1, status: 'present' },
+    ])
+    expect(view.room.starter).toEqual(starter)
+    expect(view.room.approval).toEqual({
+      id: 'stage',
+      link: '',
+      steps: [{ index: 0, label: 'Approver', state: { is: 'waiting' } }],
+      teams: { is: 'not_posted' },
+    })
+    expect(ghosts).toEqual(new Set(['agent:release_checker', 'starter', 'step:0']))
+    expect([...view.layout(1440).seats.keys()]).toEqual(['agent:room_lead', 'agent:release_checker', 'starter', 'step:0'])
+    expect(words).toBe('The room is set. GitHub is read only. Jira stays locked until an Approver says yes.')
+    expect(view.describe()).toBe(words)
+  })
+
+  it('seats a named agent once, never the host, and leaves the Approver seat out without an approval block', () => {
+    const blocks: readonly BlockView[] = [
+      { key: 'a', name: 'Read GitHub releases', description: 'The Release checker reads them.', kind: 'agent' },
+      { key: 'b', name: 'Compare releases', description: 'The release checker compares them and the Room lead decides.', kind: 'agent' },
+    ]
+    const { view, ghosts } = stageSet(blocks, TEST_REGISTRY)
+    expect(view.room.agents.map((seat) => [seat.id, seat.slot])).toEqual([
+      ['room_lead', 0],
+      ['release_checker', 1],
+    ])
+    expect(view.room.approval).toBeNull()
+    expect(ghosts).toEqual(new Set(['agent:release_checker']))
   })
 
   it('draws the Teams door, the GitHub read door and the seeded Jira write door', () => {

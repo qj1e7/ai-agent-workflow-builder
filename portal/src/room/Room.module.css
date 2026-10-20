@@ -438,6 +438,31 @@
   font-weight: 620;
 }
 
+/* A seat the stage invented: outline and name only, in the muted ink, with the whole box still reserved. */
+.ghostAvatar {
+  display: inline-grid;
+  place-items: center;
+  border: 2px dashed var(--muted);
+  color: var(--muted);
+  opacity: 0.5;
+}
+
+.ghostAgent {
+  border-radius: 30%;
+}
+
+.ghostPerson {
+  border-radius: 50%;
+}
+
+.seat_ghost .name {
+  color: var(--muted);
+}
+
+.stage_wide .seat_ghost .name {
+  font-size: var(--text-14);
+}
+
 .overflowAvatar {
   display: grid;
   place-items: center;

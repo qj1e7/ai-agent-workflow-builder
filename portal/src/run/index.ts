@@ -1,7 +1,7 @@
 export { createLiveView, useLiveView } from './live'
 export type { BeatView, Frame, LiveView, LiveViewEnv, LiveViewStore, RoomView, Transport, UseLiveViewOptions, WhenFinished } from './live'
 export { expectedWritesOf, stageSet } from './stage'
-export type { StageSet } from './stage'
+export type { StageOptions, StageSet } from './stage'
 export { createClock } from './clock'
 export type { Clock } from './clock'
 export { runId, agentId, doorKey, userId, runTime } from './brand'
@@ -17,7 +17,7 @@ export { beatMsOf, isStory } from './kinds'
 export type { BeatEvent } from './kinds'
 export { statusOf } from './status'
 export type { Status } from './status'
-export { openStep, ticketLife, stamps, isSettled, agentSeatKey, stepSeatKey, seatKeyOf } from './room'
+export { openStep, ticketLife, stamps, isSettled, agentSeatKey, stepSeatKey, seatKeyOf, agentNamedIn } from './room'
 export type {
   AgentRef,
   AgentRegistry,
