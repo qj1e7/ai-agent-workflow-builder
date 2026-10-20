@@ -29,8 +29,10 @@ export function ActionCard({ view }: ActionCardProps) {
         The run is waiting for an Approver. Nothing has been written.
       </h2>
       <p className={styles['counter']}>
-        <IconClock size={18} />
-        {frame.waiting ? `Waiting ${formatDuration(frame.waiting.elapsedMs)}` : 'Waiting'}
+        <span className={styles['counterWords']}>
+          <IconClock size={18} />
+          {frame.waiting ? `Waiting ${formatDuration(frame.waiting.elapsedMs, { noWrap: true })}` : 'Waiting'}
+        </span>
         {frame.spedUp ? (
           <span className={styles['spedUp']}>
             <IconFastForward size={12} />
