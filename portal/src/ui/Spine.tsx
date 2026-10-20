@@ -28,6 +28,8 @@ interface SpineProps {
   orientation: 'horizontal' | 'vertical'
   compact?: boolean
   showDescriptions?: boolean
+  /** Off for a plan that has no run yet, so the builder does not say "Not reached" under every block. */
+  showState?: boolean
   label?: string
 }
 
@@ -48,7 +50,7 @@ const stateIcon: Record<SpineState['kind'], Icon> = {
   not_needed: IconDash,
 }
 
-export function Spine({ blocks, orientation, compact = false, showDescriptions = false, label = 'Steps in this run' }: SpineProps) {
+export function Spine({ blocks, orientation, compact = false, showDescriptions = false, showState = true, label = 'Steps in this run' }: SpineProps) {
   const className = cx(styles['spine'], styles[orientation], compact && styles['compact'])
   return (
     <ol className={className} aria-label={label}>
@@ -59,19 +61,21 @@ export function Spine({ blocks, orientation, compact = false, showDescriptions =
         return (
           <li
             key={block.key}
-            className={cx(styles['station'], styles[block.state.kind])}
+            className={cx(styles['station'], showState && styles[block.state.kind])}
             data-connector={connectorDone ? 'done' : 'open'}
-            aria-current={isCurrent(block.state) ? 'step' : undefined}
+            aria-current={showState && isCurrent(block.state) ? 'step' : undefined}
           >
             <span className={styles['node']} aria-hidden="true">
               <Kind size={compact ? 16 : 18} />
             </span>
             <span className={styles['text']}>
               <span className={styles['name']}>{block.name}</span>
-              <span className={styles['state']}>
-                <State size={16} />
-                {spineStateWords(block.state)}
-              </span>
+              {showState ? (
+                <span className={styles['state']}>
+                  <State size={16} />
+                  {spineStateWords(block.state)}
+                </span>
+              ) : null}
               {showDescriptions && block.description ? <span className={styles['description']}>{block.description}</span> : null}
             </span>
           </li>
