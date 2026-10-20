@@ -31,8 +31,6 @@ _READ_AFTER = f"""
 
 
 class NotificationHub:
-    """One LISTEN connection per process. Each subscriber gets a flag that is set on NOTIFY."""
-
     def __init__(self, db: Database, *, reconnect_delay: float = 1.0) -> None:
         self._db = db
         self._reconnect_delay = reconnect_delay
@@ -122,8 +120,8 @@ class ActivityLog:
     async def append(
         self, uow: UnitOfWork, run_id: RunId, events: Iterable[PendingEvent]
     ) -> list[ActivityEvent]:
-        """Runs on the caller's transaction. Appends to one run serialize on an advisory lock,
-        which the commit releases, so seq order is commit order and readers never see a gap."""
+        """Appends to one run serialize on an advisory lock, which the commit releases, so seq
+        order is commit order and readers never see a gap."""
         await uow.conn.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (run_id,))
         seq = await self.last_seq(uow, run_id)
         stored: list[ActivityEvent] = []
@@ -172,8 +170,6 @@ class ActivityLog:
         return [activity_event_adapter.validate_python(row) for row in rows]
 
     async def subscribe(self, run_id: RunId, after: int) -> AsyncIterator[ActivityEvent]:
-        """The backlog after `after`, then every new event in seq order, for as long as the
-        caller iterates."""
         cursor = after
         async with self._hub.wakeups(run_id) as wakeup:
             while True:

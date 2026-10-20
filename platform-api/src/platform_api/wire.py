@@ -1,8 +1,8 @@
 from datetime import datetime
-from typing import Literal, NoReturn
+from typing import Annotated, Literal, NoReturn
 
 from fastapi import HTTPException
-from pydantic import BaseModel, ConfigDict
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
 from platform_api.shared import UserId
 
@@ -58,3 +58,15 @@ class ApprovalStepView(WireModel):
     status: ApprovalStepStatus
     decided_by: UserId | None = None
     decided_at: datetime | None = None
+
+
+REPO_PATTERN = r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$"
+
+
+def _not_a_dot_segment(repo: str) -> str:
+    if repo.split("/")[-1] in {".", ".."}:
+        raise ValueError("repo must not be . or ..")
+    return repo
+
+
+type RepoName = Annotated[str, Field(pattern=REPO_PATTERN), AfterValidator(_not_a_dot_segment)]

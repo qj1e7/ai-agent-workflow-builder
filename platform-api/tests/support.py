@@ -1,5 +1,3 @@
-"""Shared fixtures for the orchestration tests: a run spec and the fixture stories."""
-
 import json
 import os
 from datetime import UTC, datetime

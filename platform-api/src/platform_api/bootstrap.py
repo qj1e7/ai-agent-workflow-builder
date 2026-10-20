@@ -1,17 +1,9 @@
-"""The one-shot bootstrap: migrations, the n8n owner and key, the step key, the workflows.
-
-It ends by writing `orchestration.engine_status`, which `GET /healthz/ready` reads. A rerun
-converges: it replaces the API key and the credential, updates the workflows in place and
-prints what it changed. It never prints a secret.
-"""
-
 import hashlib
 import json
 import os
 import sys
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass
-from typing import Any
 
 import httpx
 import psycopg
@@ -35,8 +27,6 @@ from platform_api.settings import BootstrapSettings, bootstrap_settings_from_env
 API_KEY_LABEL = "platform-bootstrap"
 CREDENTIAL_NAME = "X-Step-Key"
 STEP_KEY_HEADER = "X-Step-Key"
-# The credential is recreated on every run, so its id is left out of the content hash.
-ROTATES = "<rotates each bootstrap>"
 
 type Say = Callable[[str], None]
 
@@ -143,9 +133,8 @@ def _load(
     previous: Mapping[str, str],
     say: Say,
 ) -> tuple[str, str]:
-    """Load one workflow and return n8n's id for it with its content hash."""
     body = render(definition, values)
-    digest = content_hash(render(definition, {**values, "STEP_KEY_CREDENTIAL_ID": ROTATES}))
+    digest = content_hash_without_credential(definition, values)
     result = client.upsert_workflow(body)
     if result.created:
         change = "created"
@@ -157,8 +146,11 @@ def _load(
     return result.id, digest
 
 
-def content_hash(body: dict[str, Any]) -> str:
-    canonical = json.dumps(body, sort_keys=True, separators=(",", ":"))
+def content_hash_without_credential(
+    definition: WorkflowDefinition, values: Mapping[str, str]
+) -> str:
+    masked = render(definition, {**values, "STEP_KEY_CREDENTIAL_ID": "<masked>"})
+    canonical = json.dumps(masked, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 

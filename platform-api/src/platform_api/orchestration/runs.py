@@ -1,10 +1,3 @@
-"""The run lifecycle as a typestate, its deadlines, and the referee for n8n's step calls.
-
-Each state is a frozen dataclass and each transition is a method on the state it leaves,
-so a transition that the lifecycle does not allow is a type error. Every transition returns
-`Moved(state, events)`, and the store saves the two together.
-"""
-
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
@@ -357,7 +350,6 @@ class Working:
 
     @property
     def task_id(self) -> TaskId:
-        """One task per attempt, so an n8n retry of the step reuses the agent's stored result."""
         return TaskId(f"{self.run_id}/work/{self.attempt}")
 
     def retry_step(self) -> Moved[Working]:
@@ -596,7 +588,6 @@ ASK_APPROVAL = frozenset({StepName.ASK_APPROVAL})
 WRITE_ACTION = frozenset({StepName.WRITE_ACTION})
 
 REFEREE_TABLE: tuple[RefereeRow, ...] = (
-    # The first matching row wins.
     RefereeRow(frozenset(StepName), (Failed, Rejected), ANY_CALLER, RowVerdict.REPLAY_FALSE),
     RefereeRow(RUN_AGENTS, (Pending,), CLAIM_OR_UNCLAIMED, RowVerdict.BEGIN),
     RefereeRow(RUN_AGENTS, (Pending,), OTHER, RowVerdict.SUPERSEDE),
@@ -641,22 +632,26 @@ REFEREE_TABLE: tuple[RefereeRow, ...] = (
 )
 
 
+def _first_matching_row(state: RunState, step: StepName, caller: Caller) -> RefereeRow:
+    for row in REFEREE_TABLE:
+        if row.matches(state, step, caller):
+            return row
+    raise AssertionError(f"the referee table has no row for {step} in {type(state).__name__}")
+
+
 def referee(state: RunState, step: StepName, execution: N8nExecutionId) -> Verdict:
     caller = caller_of(state, execution)
-    for row in REFEREE_TABLE:
-        if not row.matches(state, step, caller):
-            continue
-        match row.verdict:
-            case RowVerdict.BEGIN:
-                return Begin()
-            case RowVerdict.REPLAY_TRUE:
-                return Replay(True)
-            case RowVerdict.REPLAY_FALSE:
-                return Replay(False)
-            case RowVerdict.SUPERSEDE:
-                holder = holder_of(state)
-                assert holder is not None
-                return Supersede(holder)
-            case RowVerdict.REFUSE:
-                return Refuse(fails_run=caller is Caller.CLAIMANT)
-    raise AssertionError(f"the referee table has no row for {step} in {type(state).__name__}")
+    row = _first_matching_row(state, step, caller)
+    match row.verdict:
+        case RowVerdict.BEGIN:
+            return Begin()
+        case RowVerdict.REPLAY_TRUE:
+            return Replay(True)
+        case RowVerdict.REPLAY_FALSE:
+            return Replay(False)
+        case RowVerdict.SUPERSEDE:
+            holder = holder_of(state)
+            assert holder is not None
+            return Supersede(holder)
+        case RowVerdict.REFUSE:
+            return Refuse(fails_run=caller is Caller.CLAIMANT)

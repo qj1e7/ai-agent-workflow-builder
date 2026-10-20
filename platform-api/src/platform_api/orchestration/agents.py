@@ -1,24 +1,11 @@
-"""The Agent API as platform-api sees it: the task request it sends, and the parsed reply."""
-
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal, Protocol
 
 import httpx
-from pydantic import AfterValidator, Field, TypeAdapter
+from pydantic import Field, TypeAdapter
 
 from platform_api.monitoring import AgentEvent
-from platform_api.wire import WireModel
-
-REPO_PATTERN = r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$"
-
-
-def _not_a_dot_segment(repo: str) -> str:
-    if repo.split("/")[-1] in {".", ".."}:
-        raise ValueError("repo must not be . or ..")
-    return repo
-
-
-type RepoName = Annotated[str, Field(pattern=REPO_PATTERN), AfterValidator(_not_a_dot_segment)]
+from platform_api.wire import RepoName, WireModel
 
 
 class ReleaseCheckInputs(WireModel):
@@ -101,15 +88,11 @@ class AgentCards(WireModel):
 
 @dataclass(frozen=True)
 class AgentUnavailable:
-    """The agent runtime did not answer. The step answers 503 and n8n tries again."""
-
     detail: str
 
 
 @dataclass(frozen=True)
 class AgentRejected:
-    """The agent runtime refused the request itself, so a retry would not help."""
-
     detail: str
 
 

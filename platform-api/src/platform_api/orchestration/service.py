@@ -1,9 +1,3 @@
-"""The Orchestrator: orchestration's public interface.
-
-Each method loads the run, asks a pure policy (`referee`, `decide`, `check`), writes the new
-state and its events in one transaction, and leaves outside calls to the outbox.
-"""
-
 import asyncio
 import contextlib
 import logging
@@ -149,8 +143,7 @@ class StepReply:
     detail: str
 
 
-class RetryLater(Exception):
-    """The step could not finish for a reason that may clear. n8n tries again after its wait."""
+class RetryLater(Exception): ...
 
 
 @dataclass(frozen=True)
@@ -357,7 +350,6 @@ class Orchestrator:
     async def _admit(
         self, uow: UnitOfWork, run_id: RunId, step: StepName, execution: N8nExecutionId
     ) -> RunRecord | StepReply:
-        """Load the run under lock and apply the referee. A StepReply means n8n gets it as is."""
         record = await self._store.load_run(uow, run_id, lock=True)
         if record is None:
             return StepReply(False, "refused", f"Unknown run {run_id}")
@@ -938,7 +930,6 @@ class Orchestrator:
 
 
 def state_name(state: RunState) -> str:
-    """The wire name of a state, as the Portal shows it."""
     return STATE_NAMES[type(state)]
 
 

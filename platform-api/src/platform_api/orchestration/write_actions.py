@@ -168,14 +168,11 @@ def describe(action: WriteAction) -> ActionLine:
     )
 
 
-class WriteFailed(Exception):
-    """The connector did not complete the write. The run fails as WriteFailed, retryable."""
+class WriteFailed(Exception): ...
 
 
 @dataclass(frozen=True)
 class WriteKey:
-    """Names one action of one proposal. Its text is the idempotency key a connector sees."""
-
     run_id: RunId
     proposal_id: ProposalId
     index: int
@@ -192,9 +189,7 @@ class WriteConnector(Protocol):
     @property
     def operations(self) -> frozenset[str]: ...
 
-    async def execute(self, action: WriteAction, key: WriteKey) -> str:
-        """Do the write at most once per key and return the external reference."""
-        ...
+    async def execute(self, action: WriteAction, key: WriteKey) -> str: ...
 
 
 def registry_of(connectors: Iterable[WriteConnector]) -> Registry:
@@ -202,8 +197,6 @@ def registry_of(connectors: Iterable[WriteConnector]) -> Registry:
 
 
 class MockJiraConnector:
-    """A Jira that lives in our own database. One ticket per idempotency key, whatever happens."""
-
     name = "jira"
     operations = frozenset({"create_ticket"})
 
@@ -296,9 +289,6 @@ class InFlight:
 
 
 class WriteGateway:
-    """The only code that holds write connectors. It runs an AuthorizedWrite at most once per
-    action: a `started` row marks a call in flight and a `done` row keeps its reference."""
-
     def __init__(
         self,
         db: Database,

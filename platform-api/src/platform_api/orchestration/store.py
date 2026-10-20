@@ -1,5 +1,3 @@
-"""Orchestration's tables. Every method runs on the caller's unit of work."""
-
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime
@@ -68,12 +66,10 @@ class RunRecord:
     carry_forward: str | None
 
 
-class Stale(Exception):
-    """The run moved under us. The caller's result is dropped."""
+class Stale(Exception): ...
 
 
-class DecisionConflict(Exception):
-    """Another Approver's decision on this step was recorded first."""
+class DecisionConflict(Exception): ...
 
 
 @dataclass(frozen=True)
@@ -175,7 +171,6 @@ class Store:
         retried_by: UserId | None = None,
         carry_forward: str | None = None,
     ) -> RunRecord:
-        """Compare-and-swap on `version`. Raises Stale when the row moved since it was read."""
         name, data = dump_state(state)
         new_retried = record.retried_by + ((retried_by,) if retried_by else ())
         new_carry = carry_forward if carry_forward is not None else record.carry_forward

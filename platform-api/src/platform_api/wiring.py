@@ -1,5 +1,3 @@
-"""Builds the three contexts' services from settings and hangs them on the app."""
-
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime
@@ -85,8 +83,6 @@ async def build(settings: Settings) -> Services:
 
 
 class Runner:
-    """Runs the orchestrator's tick loop for the life of the app."""
-
     def __init__(self, services: Services) -> None:
         self._services = services
         self._stop = asyncio.Event()

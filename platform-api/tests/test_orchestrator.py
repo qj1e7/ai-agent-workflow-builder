@@ -1,5 +1,3 @@
-"""The Orchestrator against real PostgreSQL, driven step by step as n8n would drive it."""
-
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -54,8 +52,6 @@ WRITE_ACTION = StepName.WRITE_ACTION
 
 @dataclass
 class RecordingEngine:
-    """Hands out execution ids and remembers every leg it was asked to start."""
-
     legs: list[tuple[str, Leg, RunId]] = field(default_factory=list)
     next_execution: int = 41
     down: bool = False
@@ -71,8 +67,6 @@ class RecordingEngine:
 
 @dataclass
 class FakeAgent:
-    """Replays the contract fixtures, and remembers each request it was sent."""
-
     mode: str = "finished"
     requests: list[TaskRequest] = field(default_factory=list)
 
@@ -100,7 +94,6 @@ class Harness:
         self.clock["now"] = self.clock["now"] + delta
 
     def new_orchestrator(self) -> Orchestrator:
-        """A second instance over the same database, as after a restart."""
         return Orchestrator(
             self.db,
             self.log,
