@@ -68,6 +68,8 @@ export interface Stage {
   readonly tape: TapeReader
   readonly wall: WallTime
   readonly runNow: RunTime
+  /** How much faster runNow moves than the wall: 1 everywhere real, the demo's squeeze inside a long wait. */
+  readonly rate: number
 }
 
 export function startDirector(start: Start): Director {
@@ -106,6 +108,26 @@ function eventAt(tape: TapeReader, cursor: number): RunTime | null {
 
 export function settled(s: Stage): boolean {
   return s.tape.length > 0 && isSettled(s.tape.frame(s.tape.length))
+}
+
+/**
+ * The run's own now at the live edge: never before the last event, so a run clock that lags the platform
+ * cannot show a counter at zero under a request that has already been posted. The last event, not the
+ * latest timestamp on the tape, because an agent's clock can stamp its events hours ahead.
+ */
+export function liveNow(s: Stage): RunTime {
+  const last = eventAt(s.tape, s.tape.length)
+  return last !== null && last > s.runNow ? last : s.runNow
+}
+
+/** Following live with more story choreography queued than the room may trail by: the transport says Catching up. */
+export function catchingUp(d: Director, s: Stage): boolean {
+  return atEdge(d) && !settled(s) && queuedDebt(s.tape, d.shown) > TARGET_LAG_MS
+}
+
+/** A replay's compressed wait is still rolling: the counters move faster than the wall. */
+export function holding(d: Director, s: Stage): boolean {
+  return d.beat?.type === 'hold' && beatRunning(d, s.wall)
 }
 
 function snap(d: Director, s: Stage): Director {
@@ -220,7 +242,7 @@ export function sceneTime(d: Director, s: Stage): RunTime {
     const progress = (s.wall - d.beat.startedAt) / d.beat.durationMs
     return Math.round(d.beat.from + (d.beat.to - d.beat.from) * progress) as RunTime
   }
-  if (d.mode.is === 'live' && d.shown === s.tape.length && !settled(s)) return s.runNow
+  if (d.mode.is === 'live' && d.shown === s.tape.length && !settled(s)) return liveNow(s)
   return eventAt(s.tape, d.shown) ?? s.runNow
 }
 
@@ -232,7 +254,7 @@ export function sceneTime(d: Director, s: Stage): RunTime {
 export function waitElapsed(d: Director, s: Stage, open: OpenStep): Ms {
   const head = atEdge(d) && !settled(s) ? openStep(s.tape.frame(s.tape.length)) : null
   const ongoing = head !== null && head.index === open.index && head.state.since === open.state.since
-  const now = ongoing ? s.runNow : sceneTime(d, s)
+  const now = ongoing ? liveNow(s) : sceneTime(d, s)
   return Math.max(0, now - open.state.since)
 }
 

@@ -29,10 +29,24 @@ export function stepName(step: ApprovalStep): string {
   return step.label
 }
 
-export function stepStatus(step: ApprovalStep, waitedMs: number | null): StatusWords {
+export interface WaitWords {
+  readonly ms: number
+  /** The counter moves faster than the wall, so the seat says so and drops the seconds. */
+  readonly spedUp: boolean
+  /** The compact seat has no room for the marker; its duration never breaks inside itself. */
+  readonly compact: boolean
+}
+
+function waitingWords({ ms, spedUp, compact }: WaitWords): string {
+  if (compact) return `Waiting ${formatDuration(ms, { noWrap: true })}`
+  if (spedUp) return `Waiting ${formatDuration(ms, { coarse: true })} (sped up)`
+  return `Waiting ${formatDuration(ms)}`
+}
+
+export function stepStatus(step: ApprovalStep, wait: WaitWords | null): StatusWords {
   switch (step.state.is) {
     case 'open':
-      return { text: waitedMs === null ? 'Waiting' : `Waiting ${formatDuration(waitedMs)}`, tone: 'wait' }
+      return { text: wait === null ? 'Waiting' : waitingWords(wait), tone: 'wait' }
     case 'waiting':
       return { text: `After step ${step.index}`, tone: 'quiet' }
     case 'approved':

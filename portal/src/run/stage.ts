@@ -64,7 +64,7 @@ export function stageSet(blocks: readonly BlockView[], registry: AgentRegistry):
   return {
     view: {
       room,
-      frame: { beat: null, waiting: null },
+      frame: { beat: null, waiting: null, spedUp: false },
       layout: (width, expected = expectedWrites) => layoutRoom(floorPlanOf(room, expected), width),
       describe: () => words,
     },

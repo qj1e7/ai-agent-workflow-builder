@@ -10,6 +10,13 @@ describe('formatDuration', () => {
     expect(formatClock(12_400)).toBe('0:12')
     expect(formatClock(386_000)).toBe('6:26')
   })
+
+  it('drops the seconds when asked for a coarse wait, and joins with non-breaking spaces when asked not to wrap', () => {
+    expect(formatDuration(373_000, { coarse: true })).toBe('6 min')
+    expect(formatDuration(42_000, { coarse: true })).toBe('42 s')
+    expect(formatDuration(3_900_000, { coarse: true })).toBe('1 h 5 min')
+    expect(formatDuration(373_000, { noWrap: true })).toBe('6 min 13 s')
+  })
 })
 
 describe('formatRelative', () => {

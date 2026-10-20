@@ -214,6 +214,11 @@
   color: var(--lead);
 }
 
+.statusSpedUp {
+  background: var(--wait-tint);
+  color: var(--wait);
+}
+
 .statusCatchingUp,
 .statusReplay {
   background: var(--line-soft);

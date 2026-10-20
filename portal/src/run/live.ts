@@ -8,8 +8,11 @@ import { createClock, type Clock } from './clock'
 import { describeRoom } from './describe'
 import {
   atEdge,
+  catchingUp,
   direct,
+  holding,
   labelOf,
+  liveNow,
   sceneTime,
   settled as isSettledStage,
   startDirector,
@@ -59,7 +62,11 @@ export interface Frame {
   readonly sceneTime: RunTime
   /** Present while the shown frame waits for an Approver. Honest in every mode. */
   readonly waiting: { readonly since: RunTime; readonly elapsedMs: Ms } | null
-  /** "0:12 of 6:26": at = sceneTime - startedAt; total = (settled ? last event : runNow) - startedAt. */
+  /** The counters move faster than the wall: the demo's squeezed wait at the live edge, or a replay's compressed hold. */
+  readonly spedUp: boolean
+  /** Following live with more story choreography queued than the room may trail by. */
+  readonly catchingUp: boolean
+  /** "0:12 of 6:26". at is the run's own time while live, the shown frame's otherwise; total is the run's whole length so far. */
   readonly elapsed: { readonly at: Ms; readonly total: Ms }
 }
 
@@ -83,7 +90,7 @@ export interface Transport {
 /** What the room needs to draw a frame. A LiveView is one; a room set from a template with no feed behind it is another. */
 export interface RoomView {
   readonly room: RoomState
-  readonly frame: Pick<Frame, 'beat' | 'waiting'>
+  readonly frame: Pick<Frame, 'beat' | 'waiting' | 'spedUp'>
   layout(width: number, expectedWrites?: readonly ExpectedWrite[]): RoomLayout
   describe(): string
 }
@@ -136,7 +143,7 @@ export function createLiveView(o: { runId: RunId; env: LiveViewEnv; whenFinished
   let held: Cue[] = []
   let cancelHold: (() => void) | null = null
 
-  const stage = (): Stage => ({ tape, wall: clock.wall(), runNow: clock.runNow() })
+  const stage = (): Stage => ({ tape, wall: clock.wall(), runNow: clock.runNow(), rate: clock.rate() })
 
   function reschedule(): void {
     cancelTimer?.()
@@ -261,16 +268,19 @@ export function createLiveView(o: { runId: RunId; env: LiveViewEnv; whenFinished
     const latest = tape.latestAt() ?? now
     const end = settled ? latest : Math.max(s.runNow, latest)
     const waiting = open ? { since: open.state.since, elapsedMs: waitElapsed(d, s, open) } : null
+    const label = labelOf(d, s)
     const frame: Frame = {
       mode: d.mode.is,
       shown: d.shown,
       head: tape.length,
       take: d.take,
       beat: beatView(d),
-      label: labelOf(d, s),
+      label,
       sceneTime: now,
       waiting,
-      elapsed: { at: Math.max(0, now - startedAt), total: Math.max(0, end - startedAt) },
+      spedUp: (edge && !settled && s.rate > 1) || holding(d, s),
+      catchingUp: catchingUp(d, s),
+      elapsed: { at: Math.max(0, (label === 'live' ? liveNow(s) : now) - startedAt), total: Math.max(0, end - startedAt) },
     }
     const marks = tape.marks()
     const transport: Transport = {

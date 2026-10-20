@@ -40,6 +40,22 @@
   color: var(--wait);
 }
 
+.spedUp {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: var(--space-1);
+  padding: 2px 8px;
+  border: 1px solid var(--wait-line);
+  border-radius: var(--radius-pill);
+  background: var(--wait-tint);
+  color: var(--wait);
+  font-size: var(--text-12);
+  font-weight: 620;
+  letter-spacing: 0;
+  line-height: 1.4;
+}
+
 .who {
   color: var(--muted);
   font-size: var(--text-14);

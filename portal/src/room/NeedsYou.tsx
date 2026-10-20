@@ -8,7 +8,7 @@ import { agentIdentity } from '../ui/agents'
 import { Button, ButtonAnchor, ButtonLink } from '../ui/Button'
 import { InlineMessage, Skeleton } from '../ui/Feedback'
 import { formatDuration } from '../ui/format'
-import { IconClock, IconReplay, IconShield } from '../ui/icons'
+import { IconClock, IconFastForward, IconReplay, IconShield } from '../ui/icons'
 import { STATUS_PAGES } from './registry'
 import styles from './NeedsYou.module.css'
 
@@ -31,6 +31,12 @@ export function ActionCard({ view }: ActionCardProps) {
       <p className={styles['counter']}>
         <IconClock size={18} />
         {frame.waiting ? `Waiting ${formatDuration(frame.waiting.elapsedMs)}` : 'Waiting'}
+        {frame.spedUp ? (
+          <span className={styles['spedUp']}>
+            <IconFastForward size={12} />
+            Sped up
+          </span>
+        ) : null}
       </p>
       <p className={styles['who']}>
         {open.label}.{starter ? ` Anyone except ${starter}.` : ''}

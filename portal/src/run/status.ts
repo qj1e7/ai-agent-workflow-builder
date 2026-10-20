@@ -1,6 +1,6 @@
 import type { LiveView } from './live'
 
-export type Status = 'live' | 'catching_up' | 'replay' | 'done' | 'declined' | 'stopped'
+export type Status = 'live' | 'sped_up' | 'catching_up' | 'replay' | 'done' | 'declined' | 'stopped'
 
 export function statusOf(view: Pick<LiveView, 'frame' | 'room' | 'transport'>): Status {
   const { frame, room, transport } = view
@@ -9,6 +9,7 @@ export function statusOf(view: Pick<LiveView, 'frame' | 'room' | 'transport'>): 
     if (room.phase.name === 'rejected') return 'declined'
     return 'done'
   }
-  if (frame.label === 'live') return frame.shown < frame.head ? 'catching_up' : 'live'
-  return 'replay'
+  if (frame.catchingUp) return 'catching_up'
+  if (frame.spedUp) return 'sped_up'
+  return frame.label === 'live' ? 'live' : 'replay'
 }
