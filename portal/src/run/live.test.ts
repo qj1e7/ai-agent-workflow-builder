@@ -59,13 +59,14 @@ describe('createLiveView against the demo platform', () => {
     expect(view().room.phase.name).toBe('pending')
     expect(view().room.agents.map((seat) => seat.id)).toEqual(['room_lead'])
 
-    // Each message holds for its reading time, so the pause lands after 17 s of live play, and the demo's
-    // squeezed wait brings Bob's decision at about 20.7 s: the honest counter rises between the two.
+    // Each message holds for its reading time, so the pause lands at 17.2 s of live play, and the demo's
+    // squeezed wait brings Bob's decision at 23.8 s: the honest counter rises between the two.
     await tick(18 * SECOND)
     expect(view().room.phase.name).toBe('awaiting_approval')
     expect(view().frame.waiting).not.toBeNull()
     const firstWait = view().frame.waiting?.elapsedMs ?? 0
-    await tick(2 * SECOND)
+    await tick(4 * SECOND)
+    expect(view().room.phase.name).toBe('awaiting_approval')
     const laterWait = view().frame.waiting?.elapsedMs ?? 0
     expect(laterWait).toBeGreaterThan(firstWait)
     expect(view().frame.label).toBe('live')
@@ -77,6 +78,8 @@ describe('createLiveView against the demo platform', () => {
     const beats = seen.flatMap((snapshot) => (snapshot.frame.beat?.type === 'event' ? [snapshot.frame.beat.seq] : []))
     expect([...new Set(beats)]).toEqual([4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 17])
 
+    await tick(2 * SECOND)
+    expect(view().room.approval?.steps[0]?.state).toMatchObject({ is: 'approved', by: { id: 'bob', display: 'Bob' } })
     await tick(60 * SECOND)
     expect(view().room.phase).toEqual({ name: 'succeeded', outcome: 'written' })
     expect(view().room.ticket?.lines[0]?.reference).toBe('MOCK-142')

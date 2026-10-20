@@ -3,10 +3,14 @@ import { fixtures } from './fixtures'
 import { replay, squeezeGap, Timeline } from './timeline'
 
 describe('squeezeGap', () => {
-  it('keeps short gaps at real speed and shrinks a long one by sixty beyond four seconds', () => {
+  it('keeps short gaps at real speed and shrinks a long one by forty beyond four seconds', () => {
     expect(squeezeGap(2500)).toBe(2500)
     expect(squeezeGap(4000)).toBe(4000)
-    expect(squeezeGap(64_000)).toBe(5000)
+    expect(squeezeGap(44_000)).toBe(5000)
+  })
+
+  it("replays the demo's 372.8 s wait for the decision in 13.2 s", () => {
+    expect(squeezeGap(372_800)).toBe(13_220)
   })
 })
 
@@ -20,10 +24,10 @@ describe('the replay clock', () => {
     expect(timeline.recordedAt(start + 3000)).toBe(start + 3000)
   })
 
-  it('runs sixty times faster through the squeezed wait and lands on the recorded time of the decision', () => {
+  it('runs forty times faster through the squeezed wait and lands on the recorded time of the decision', () => {
     const at17 = start + 10_612
     expect(timeline.recordedAt(at17 + 4000)).toBe(requestedTs + 4000)
-    expect(timeline.recordedAt(at17 + 5000)).toBe(requestedTs + 4000 + 60_000)
+    expect(timeline.recordedAt(at17 + 5000)).toBe(requestedTs + 4000 + 40_000)
     const decision = timeline.emitted(Infinity).find((event) => event.seq === 18)
     const decidedAt = at17 + squeezeGap(Date.parse(decision?.ts ?? '') - requestedTs)
     expect(timeline.recordedAt(decidedAt)).toBeCloseTo(Date.parse(decision?.ts ?? ''), -1)
