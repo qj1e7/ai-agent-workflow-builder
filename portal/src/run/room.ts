@@ -171,7 +171,7 @@ export interface RoomState {
   /** Set by a step that finished with a list; cleared by the proposal that takes the table and by a retry of the work leg. */
   readonly finding: Finding | null
   readonly ticket: Ticket | null
-  /** Set by agent_message; cleared whenever the phase changes. */
+  /** Set by agent_message; cleared when the phase changes or a step starts or finishes. */
   readonly speech: Speech | null
   readonly caption: Caption | null
   readonly light: Light | null
@@ -327,11 +327,11 @@ function decide(room: RoomState, e: EventOf<'approval_decided'>): RoomState {
  * changes only cursor and caption. Never throws on server data; parseEvent already checked shapes.
  */
 export function applyEvent(room: RoomState, e: RunEvent, registry: AgentRegistry): Fold {
-  const story = ruleOf(e).tier === 'story'
+  const rule = ruleOf(e)
   const base: RoomState = {
     ...room,
     cursor: e.seq,
-    caption: story ? { seq: e.seq, summary: e.summary, actor: e.actor } : room.caption,
+    caption: rule.tier === 'story' && rule.caption ? { seq: e.seq, summary: e.summary, actor: e.actor } : room.caption,
   }
   const folded = step(base, e, registry)
   const phaseChanged = folded.room.phase.name !== room.phase.name
@@ -375,7 +375,7 @@ function step(room: RoomState, e: RunEvent, registry: AgentRegistry): Fold {
 
     case 'agent_step_started': {
       const agent = actorRef(e.actor)
-      let next = withStatus(seatAgent(room, agent, 'specialist', registry), agent.id, 'working')
+      let next: RoomState = { ...withStatus(seatAgent(room, agent, 'specialist', registry), agent.id, 'working'), speech: null }
       if (next.phase.name === 'pending') next = { ...next, phase: { name: 'working' } }
       const door = registry.lookup(agent.id).readDoor
       next = { ...next, light: { on: agentAnchor(agent.id), tone: 'act' } }
@@ -393,7 +393,7 @@ function step(room: RoomState, e: RunEvent, registry: AgentRegistry): Fold {
       const trip = done.trips.find((candidate) => candidate.agent === agent.id && candidate.step === e.data.step)
       const items = findingItems(e.data.result)
       const finding: Finding | null = items.length > 0 ? { agent: agent.id, step: e.data.step, from: trip?.door ?? null, items } : done.finding
-      const next = { ...done, finding }
+      const next: RoomState = { ...done, finding, speech: null }
       if (!trip) return { room: next, move: { type: 'focus', who: agentAnchor(agent.id) } }
       return {
         room: { ...next, trips: replaceTrip(next.trips, { ...trip, state: 'back' }) },
