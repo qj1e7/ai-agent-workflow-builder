@@ -41,6 +41,8 @@ export type BeatView =
       readonly key: string
       readonly seq: number
       readonly move: Move | null
+      /** The frame this beat moves away from, for a move whose subject the target frame no longer holds. */
+      readonly before: RoomState
       readonly durationMs: Ms
       readonly entry: 'continuous' | 'cut'
     }
@@ -68,13 +70,13 @@ export interface Transport {
   readonly playing: boolean
   readonly marks: readonly TimelineMark[]
   readonly edge: { readonly now: RunTime; readonly waitingSince: RunTime | null } | null
-  play(): void
-  pause(): void
-  restart(): void
-  seek(cursor: number): void
-  backToLive(): void
+  play(this: void): void
+  pause(this: void): void
+  restart(this: void): void
+  seek(this: void, cursor: number): void
+  backToLive(this: void): void
   /** Call after a successful POST /runs/{id}/retry, so the feed reconnects now instead of at its next check. */
-  reconnect(): void
+  reconnect(this: void): void
 }
 
 /** Everything the room, spine, caption, Minutes and transport render. Identity changes only when something did. */
@@ -208,6 +210,7 @@ export function createLiveView(o: { runId: RunId; env: LiveViewEnv; whenFinished
       key: `${d.take}:${d.beat.seq}`,
       seq: d.beat.seq,
       move: tape.move(d.beat.seq),
+      before: tape.frame(d.beat.seq - 1),
       durationMs: d.beat.durationMs,
       entry: d.beat.entry,
     }
@@ -219,7 +222,7 @@ export function createLiveView(o: { runId: RunId; env: LiveViewEnv; whenFinished
     const room = tape.frame(d.shown)
     const now = sceneTime(d, s)
     const settled = isSettledStage(s)
-    const edge = atEdge(d, s)
+    const edge = atEdge(d)
     const open = openStep(room)
     const startedAt = room.startedAt ?? (tape.length > 0 ? tape.event(1).at : now)
     const end = settled ? tape.event(tape.length).at : s.runNow

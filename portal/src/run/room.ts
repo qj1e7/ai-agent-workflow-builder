@@ -219,10 +219,11 @@ function lowestFreeSlot(agents: readonly AgentSeat[]): number {
   return slot
 }
 
-function seatAgent(room: RoomState, ref: AgentRef, role: AgentRole, registry: AgentRegistry): RoomState {
+/** Seats an agent if it is not seated. A re-join (`rejoin`) also brings it back to present, so attempt 2 starts clean. */
+function seatAgent(room: RoomState, ref: AgentRef, role: AgentRole, registry: AgentRegistry, rejoin = false): RoomState {
   const seated = room.agents.find((seat) => seat.id === ref.id)
   if (seated) {
-    if (seated.status === 'present') return room
+    if (!rejoin || seated.status === 'present') return room
     return { ...room, agents: room.agents.map((seat) => (seat.id === ref.id ? { ...seat, status: 'present' } : seat)) }
   }
   const slot = role === 'host' ? 0 : lowestFreeSlot(room.agents)
@@ -347,7 +348,7 @@ function step(room: RoomState, e: RunEvent, registry: AgentRegistry): Fold {
     case 'agent_joined': {
       const guest: AgentRef = { id: agentId(e.data.agent.id), display: e.data.agent.display }
       let next = seatAgent(room, registry.host, 'host', registry)
-      next = seatAgent(next, guest, 'specialist', registry)
+      next = seatAgent(next, guest, 'specialist', registry, true)
       return {
         room: {
           ...next,
