@@ -7,12 +7,16 @@ export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>
 /** backlog: happened before we were watching, fold silently. live: arrived while watching, animate. */
 export type Origin = 'backlog' | 'live'
 
+export type ClosedReason = 'signed_out' | 'forbidden' | 'not_found' | 'rejected'
+
 export type Connection =
   | { readonly is: 'connecting' }
   | { readonly is: 'live' }
   | { readonly is: 'reconnecting'; readonly attempt: number; readonly inMs: Ms }
   /** run_succeeded or run_rejected was yielded. The feed made no further requests and has returned. */
   | { readonly is: 'settled' }
+  /** The server refused the run with a 4xx. Asking again would get the same answer, so the feed has returned. */
+  | { readonly is: 'closed'; readonly status: number; readonly reason: ClosedReason }
 
 type Events = readonly [RunEvent, ...RunEvent[]]
 
@@ -76,6 +80,23 @@ interface Wait {
 
 const connection = (c: Connection): FeedItem => ({ type: 'connection', connection: c })
 
+/** A 4xx answer. Thrown through the request helpers so one catch can end the feed. */
+class Refusal extends Error {
+  readonly status: number
+  constructor(status: number) {
+    super(`the server refused the run with ${status}`)
+    this.status = status
+  }
+}
+
+const REASONS: Readonly<Record<number, ClosedReason>> = { 401: 'signed_out', 403: 'forbidden', 404: 'not_found' }
+
+function checkStatus(res: Response, what: string): void {
+  if (res.ok) return
+  if (res.status >= 400 && res.status < 500) throw new Refusal(res.status)
+  throw new Error(`${what} answered ${res.status}`)
+}
+
 function contiguous(events: readonly RunEvent[], from: number): boolean {
   return events.every((event, i) => event.seq === from + 1 + i)
 }
@@ -133,7 +154,7 @@ const eventsUrl = (o: FeedOptions) => `/api/v1/runs/${o.runId}/events`
 
 async function fetchPage(o: FeedOptions, after: number): Promise<Page> {
   const res = await o.fetch(`${eventsUrl(o)}?after=${after}`, { headers: { Accept: 'application/json' }, signal: o.signal })
-  if (!res.ok) throw new Error(`the events page answered ${res.status}`)
+  checkStatus(res, 'the events page')
   const raw: unknown = await res.json()
   const page = parsePage(raw, o.runId)
   if (!page.ok) throw new Error(page.problem)
@@ -170,7 +191,8 @@ async function* follow(o: FeedOptions, state: FeedState): AsyncGenerator<FeedIte
       headers: { Accept: 'text/event-stream', 'Last-Event-ID': String(state.last) },
       signal: socket.signal,
     })
-    if (!res.ok || !res.body) throw new Error(`the events stream answered ${res.status}`)
+    checkStatus(res, 'the events stream')
+    if (!res.body) throw new Error('the events stream has no body')
     yield connection({ is: 'live' })
     heard()
     const parser = createSseParser()
@@ -226,8 +248,12 @@ export async function* runFeed(o: FeedOptions): AsyncGenerator<FeedItem> {
       // A dead socket is not the server's failure, so its reconnect starts the ladder again.
       if (end === 'silent') state.attempt = 0
       wait = end === 'closed' && state.lastKind === 'run_failed' ? { attempt: 0, inMs: IDLE_RECHECK_MS } : failed()
-    } catch {
+    } catch (error) {
       if (o.signal.aborted) return
+      if (error instanceof Refusal) {
+        yield connection({ is: 'closed', status: error.status, reason: REASONS[error.status] ?? 'rejected' })
+        return
+      }
       wait = failed()
     }
     if (o.signal.aborted) return

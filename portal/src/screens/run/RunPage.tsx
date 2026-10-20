@@ -16,7 +16,8 @@ import { Transport } from '../../room/Transport'
 import { useBlocks } from '../../room/useBlocks'
 import { ROOM_METRICS } from '../../run'
 import { agentIdentity } from '../../ui/agents'
-import { InlineMessage } from '../../ui/Feedback'
+import { ButtonLink } from '../../ui/Button'
+import { EmptyState, InlineMessage } from '../../ui/Feedback'
 import { formatDayAndTime } from '../../ui/format'
 import { PageHeader } from '../../ui/PageHeader'
 import { Spine } from '../../ui/Spine'
@@ -38,6 +39,18 @@ export function RunPage() {
   const title = run.data?.use_case_name ?? 'Run'
   const startedBy = run.data ? nameOf(run.data.started_by) : null
   const needsYou = room.phase.name === 'failed' ? <TroubleshooterPanel runId={runId} view={view} /> : room.phase.name === 'awaiting_approval' ? <ActionCard view={view} /> : null
+  const closed = view.connection.is === 'closed' ? view.connection : null
+
+  if (closed) {
+    return (
+      <div className="page">
+        <PageHeader title="No run to show" />
+        <EmptyState title={closed.reason === 'signed_out' ? 'Sign in first' : 'This run is not here'} action={<ButtonLink to="/">Back to the runs</ButtonLink>}>
+          {closed.reason === 'signed_out' ? 'Sign in as one of the demo users, then open the run again.' : 'This run does not exist, or you cannot see it.'}
+        </EmptyState>
+      </div>
+    )
+  }
 
   return (
     <div className="page">
