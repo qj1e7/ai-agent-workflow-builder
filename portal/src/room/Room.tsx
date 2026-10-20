@@ -5,7 +5,7 @@ import { Avatar } from '../ui/Avatar'
 import { agentIdentity } from '../ui/agents'
 import { cx } from '../ui/cx'
 import { IconPerson, IconUnlock, IconX } from '../ui/icons'
-import { CHIP_FOLD_LEAD_MS, CHIP_HOLD_MS, FindingChips } from './Finding'
+import { CHIP_FOLD_LEAD_MS, CHIP_HOLD_MS, CHIP_SLIDE_START_SHARE, FindingChips } from './Finding'
 import { FloorPlan } from './FloorPlan'
 import { useBeatAnimation, useReducedMotion } from './hooks'
 import { APPEAR_MS, EASE_OVERSHOOT, POP, TRAVEL_SHARE, travelAlong, walkAlong } from './motion'
@@ -364,7 +364,7 @@ export function Room({ view, width, expectedWrites, label, opening = false, ghos
     if (room.finding && !room.ticket) {
       const land =
         beat && beat.before.finding !== room.finding
-          ? { key: beat.key, fromMs: travelMs, byMs: beat.durationMs - CHIP_HOLD_MS, agentAt: point({ at: 'agent', id: room.finding.agent }) }
+          ? { key: beat.key, fromMs: Math.round(travelMs * CHIP_SLIDE_START_SHARE), byMs: beat.durationMs - CHIP_HOLD_MS, agentAt: point({ at: 'agent', id: room.finding.agent }) }
           : null
       return <FindingChips finding={room.finding} spot={spot} size={layout.size} land={land} fold={null} motion={motion} />
     }
