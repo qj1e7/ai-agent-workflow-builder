@@ -27,7 +27,7 @@ The first run writes `deploy/.env` with random dev secrets and builds the images
 | platform-api, with its OpenAPI page | http://localhost:8000/docs |
 | n8n editor | http://localhost:5678 (sign in with `N8N_OWNER_EMAIL` and `N8N_OWNER_PASSWORD` from `deploy/.env`) |
 
-`scripts/up.sh` prints these addresses when it is done, Portal first. Open the Portal as `localhost`, not by a machine name or an IP address. Run now needs a page that the browser treats as secure, and a plain `http://` address with another host name is not.
+`scripts/up.sh` prints these addresses when it is done, Portal first.
 
 If a port is already taken on your machine, change it in `deploy/.env` and run `scripts/up.sh` again. The settings are `PORTAL_HOST_PORT`, `PLATFORM_API_HOST_PORT` (try `18000` when 8000 is taken) and `N8N_HOST_PORT`.
 
