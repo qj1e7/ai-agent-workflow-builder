@@ -71,6 +71,20 @@
   font-weight: 640;
 }
 
+.schedule {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  color: var(--muted);
+  font-size: var(--text-14);
+}
+
+.schedule svg {
+  flex: none;
+  margin-top: 3px;
+}
+
 .matched {
   display: grid;
   gap: var(--space-2);
