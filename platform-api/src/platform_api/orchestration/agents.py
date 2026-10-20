@@ -1,13 +1,28 @@
-from typing import Annotated, Any, Literal
+"""The Agent API as platform-api sees it: the task request it sends, and the parsed reply."""
 
-from pydantic import Field, TypeAdapter
+from dataclasses import dataclass
+from typing import Annotated, Any, Literal, Protocol
+
+import httpx
+from pydantic import AfterValidator, Field, TypeAdapter
 
 from platform_api.monitoring import AgentEvent
 from platform_api.wire import WireModel
 
+REPO_PATTERN = r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$"
+
+
+def _not_a_dot_segment(repo: str) -> str:
+    if repo.split("/")[-1] in {".", ".."}:
+        raise ValueError("repo must not be . or ..")
+    return repo
+
+
+type RepoName = Annotated[str, Field(pattern=REPO_PATTERN), AfterValidator(_not_a_dot_segment)]
+
 
 class ReleaseCheckInputs(WireModel):
-    repo: str
+    repo: RepoName
     tag_pattern: str
 
 
@@ -82,3 +97,60 @@ class AgentCard(WireModel):
 
 class AgentCards(WireModel):
     agents: list[AgentCard]
+
+
+@dataclass(frozen=True)
+class AgentUnavailable:
+    """The agent runtime did not answer. The step answers 503 and n8n tries again."""
+
+    detail: str
+
+
+@dataclass(frozen=True)
+class AgentRejected:
+    """The agent runtime refused the request itself, so a retry would not help."""
+
+    detail: str
+
+
+type AgentReply = TaskFinished | TaskFailed | AgentUnavailable | AgentRejected
+
+
+class AgentRuntime(Protocol):
+    async def run_task(self, request: TaskRequest) -> AgentReply: ...
+
+
+AGENT_KEY_HEADER = "X-Agent-Key"
+AGENT_TIMEOUT_SECONDS = 60.0
+
+
+class HttpAgentRuntime:
+    def __init__(self, base_url: str, api_key: str, client: httpx.AsyncClient | None = None):
+        self._base_url = base_url.rstrip("/")
+        self._api_key = api_key
+        self._client = client or httpx.AsyncClient(timeout=AGENT_TIMEOUT_SECONDS)
+
+    async def run_task(self, request: TaskRequest) -> AgentReply:
+        try:
+            response = await self._client.post(
+                f"{self._base_url}/v1/tasks",
+                json=request.model_dump(mode="json"),
+                headers={AGENT_KEY_HEADER: self._api_key},
+                timeout=AGENT_TIMEOUT_SECONDS,
+            )
+        except httpx.HTTPError as error:
+            return AgentUnavailable(f"The agent runtime did not answer: {error!r}")
+        if response.status_code >= 500:
+            return AgentUnavailable(f"The agent runtime answered {response.status_code}")
+        if response.status_code >= 400:
+            return AgentRejected(
+                f"The agent runtime refused the task ({response.status_code}): "
+                f"{response.text[:200]}"
+            )
+        try:
+            return task_result_adapter.validate_json(response.content)
+        except ValueError as error:
+            return AgentRejected(f"The agent runtime's reply did not parse: {error}")
+
+    async def close(self) -> None:
+        await self._client.aclose()

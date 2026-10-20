@@ -30,7 +30,15 @@ from platform_api.monitoring import (
     WriteActionProposedData,
     agent_actor,
 )
-from platform_api.shared import ApprovalId, Digest, N8nExecutionId, ProposalId, RunId, UserId
+from platform_api.shared import (
+    ApprovalId,
+    Digest,
+    N8nExecutionId,
+    ProposalId,
+    RunId,
+    TaskId,
+    UserId,
+)
 from platform_api.wire import ApprovalStepView, StepOutcome
 
 
@@ -345,6 +353,12 @@ class Working:
     attempt: int
     try_number: int
     deadline_at: datetime
+    callback_expires_at: datetime
+
+    @property
+    def task_id(self) -> TaskId:
+        """One task per attempt, so an n8n retry of the step reuses the agent's stored result."""
+        return TaskId(f"{self.run_id}/work/{self.attempt}")
 
     def retry_step(self) -> Moved[Working]:
         next_try = self.try_number + 1
@@ -430,10 +444,15 @@ class Pending:
         return replace(self, claimant=execution)
 
     def begin_work(self, execution: N8nExecutionId, now: datetime) -> Moved[Working]:
-        return Moved(
-            Working(self.run_id, execution, self.attempt, 1, deadline(Working, now)),
-            (_step_started(StepName.RUN_AGENTS, execution, 1),),
+        working = Working(
+            self.run_id,
+            execution,
+            self.attempt,
+            1,
+            deadline(Working, now),
+            now + CALLBACK_LIFETIME,
         )
+        return Moved(working, (_step_started(StepName.RUN_AGENTS, execution, 1),))
 
     def fail(self, failure: Failure) -> Moved[Failed]:
         return Moved(
@@ -446,6 +465,8 @@ type RunState = (
     Pending | Working | Proposed | AwaitingApproval | Acting | Succeeded | Rejected | Failed
 )
 type ActiveState = Pending | Working | Proposed | Acting
+
+CALLBACK_LIFETIME = timedelta(hours=2)
 
 DEADLINES: Mapping[type[ActiveState], timedelta] = {
     Pending: timedelta(minutes=4),

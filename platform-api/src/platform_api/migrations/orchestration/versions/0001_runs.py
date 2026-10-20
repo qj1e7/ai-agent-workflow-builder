@@ -19,7 +19,7 @@ def upgrade() -> None:
             state_data jsonb NOT NULL,
             deadline_at timestamptz,
             retried_by jsonb NOT NULL DEFAULT '[]'::jsonb,
-            carry_forward jsonb,
+            carry_forward text,
             UNIQUE (use_case_id, idempotency_key)
         );
         CREATE INDEX runs_deadline ON orchestration.runs (deadline_at)
