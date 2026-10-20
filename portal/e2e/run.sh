@@ -1,5 +1,5 @@
 #!/bin/sh
-# Builds the Portal image, serves it in demo mode on a throwaway network and runs the Playwright specs against it.
+# Builds the Portal image, serves it in demo mode and runs the Playwright specs in the same network namespace, so the page is at http://localhost:8080, a secure context.
 set -eu
 
 PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.55.1-noble@sha256:2f29369043d81d6d69a815ceb80760f55e85f5020371ad06a4d996f18503ad1c
@@ -33,7 +33,9 @@ if [ -z "$ready" ]; then
 fi
 
 mkdir -p "$portal_dir/e2e/out"
-docker run --rm --network "$network" --ipc=host \
-  -e CI="${CI:-}" -e BASE_URL=http://portal:8080 \
+# A full run starts from empty evidence folders, so nothing stale survives. A filtered run (arguments given) keeps the rest.
+docker run --rm --network "container:$server" --ipc=host \
+  -e CI="${CI:-}" -e E2E_STRICT="${E2E_STRICT:-}" -e BASE_URL=http://localhost:8080 \
   -v "$portal_dir:/work:ro" -v "$portal_dir/e2e/out:/work/e2e/out" \
-  -w /work "$PLAYWRIGHT_IMAGE" npx playwright test "$@"
+  -w /work "$PLAYWRIGHT_IMAGE" \
+  sh -c 'if [ "$#" -eq 0 ]; then rm -rf e2e/out/shots e2e/out/axe e2e/out/video; fi; exec npx playwright test "$@"' sh "$@"
