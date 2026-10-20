@@ -29,4 +29,5 @@ ENV PATH=/opt/venv/bin:$PATH \
 RUN useradd --system --uid 10001 --no-create-home app
 COPY --from=build /opt/venv /opt/venv
 USER app
-CMD ["python", "-c", "import agent_runtime"]
+EXPOSE 8100
+CMD ["uvicorn", "agent_runtime.api:create_app", "--factory", "--host", "0.0.0.0", "--port", "8100"]
