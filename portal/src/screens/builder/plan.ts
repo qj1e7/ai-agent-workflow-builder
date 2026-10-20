@@ -1,4 +1,4 @@
-import type { CreateUseCase, TemplateView } from '../../api/types'
+import type { CreateUseCase, ParamSpec, TemplateView } from '../../api/types'
 import type { SpineBlock } from '../../ui/Spine'
 
 export const EXAMPLE_TASK =
@@ -17,6 +17,17 @@ export function planBlocks(template: TemplateView): SpineBlock[] {
     description: block.description,
     state: { kind: 'not_reached' },
   }))
+}
+
+/** Details the template fixes. The platform refuses any other value, so the Operator never types them. */
+const FIXED_PARAMS: ReadonlySet<string> = new Set(['tag_pattern'])
+
+export function editableParams(template: TemplateView): ParamSpec[] {
+  return template.params.filter((param) => !FIXED_PARAMS.has(param.name))
+}
+
+export function fixedParams(template: TemplateView): ParamSpec[] {
+  return template.params.filter((param) => FIXED_PARAMS.has(param.name))
 }
 
 export function exampleParams(template: TemplateView): Record<string, string> {
@@ -38,7 +49,7 @@ export function draftProblems(template: TemplateView, draft: UseCaseDraft): Draf
   return {
     name: empty(draft.name) ? 'Give the use case a name.' : null,
     params: Object.fromEntries(
-      template.params.filter((param) => empty(draft.params[param.name])).map((param) => [param.name, FILL_IN_WORDS]),
+      editableParams(template).filter((param) => empty(draft.params[param.name])).map((param) => [param.name, FILL_IN_WORDS]),
     ),
   }
 }
