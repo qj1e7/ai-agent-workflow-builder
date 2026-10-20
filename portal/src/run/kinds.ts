@@ -6,14 +6,15 @@ export type KindRule =
   | { readonly tier: 'technical' }
   /**
    * One beat. beatMs is the choreographed duration (replay and calm live play). floorMs is the shortest
-   * live catch-up may squeeze it to, so every state stays perceivable.
+   * live catch-up may squeeze it to, so every state stays perceivable. caption false keeps the event in
+   * the Minutes but out of the live caption, for a step that starts and ends within a second.
    */
-  | { readonly tier: 'story'; readonly beatMs: Ms; readonly floorMs: Ms }
+  | { readonly tier: 'story'; readonly beatMs: Ms; readonly floorMs: Ms; readonly caption: boolean }
 
 type StoryRule = Extract<KindRule, { tier: 'story' }>
 
 const technical: KindRule = { tier: 'technical' }
-const story = (beatMs: Ms, floorMs: Ms): StoryRule => ({ tier: 'story', beatMs, floorMs })
+const story = (beatMs: Ms, floorMs: Ms, caption = true): StoryRule => ({ tier: 'story', beatMs, floorMs, caption })
 
 /**
  * Durations follow DESIGN.md motion rules: crossfade 180, arrivals and hand-offs 700 to 1000, the stamp
@@ -27,7 +28,7 @@ export const KINDS = {
   step_finished: technical,
   step_retried: technical,
   agent_joined: story(1000, 400),
-  agent_step_started: story(900, 300),
+  agent_step_started: story(900, 300, false),
   agent_step_finished: story(1400, 400),
   agent_failed: story(1200, 700),
   agent_message: story(2200, 1200),

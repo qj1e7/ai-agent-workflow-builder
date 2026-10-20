@@ -83,23 +83,35 @@ describe('applyEvent on the recordings', () => {
     expect(writeDoor(room).checker).toBe('locked')
   })
 
-  it('puts only agent_message text in an agent mouth and the latest story summary in the caption', () => {
-    const { room } = fold(slice('success', 1, 9))
+  it('puts only agent_message text in an agent mouth and the latest captioned story summary in the caption', () => {
+    const { room } = fold(slice('success', 1, 5))
     expect(room.speech?.text).toBe(
       'Please check langchain-ai/langgraph for releases newer than 1.2.14.',
     )
     expect(room.speech?.speaker).toBe(ROOM_LEAD)
     expect(room.speech?.to).toEqual({ kind: 'agent', id: CHECKER, display: 'Release checker' })
-    expect(room.caption?.summary).toBe('Release checker found 2 new releases: 1.2.16, 1.2.15.')
+    expect(fold(slice('success', 1, 9)).room.caption?.summary).toBe('Release checker found 2 new releases: 1.2.16, 1.2.15.')
     expect(fold(slice('success', 1, 4)).room.speech).toBeNull()
   })
 
-  it('keeps speech through a step change but clears it when the phase changes', () => {
-    const afterMessage = fold(slice('success', 1, 10)).room
-    expect(afterMessage.speech?.speaker).toBe(CHECKER)
+  it('keeps a step start out of the caption, so the ask stays up while the step runs', () => {
+    const asked = fold(slice('success', 1, 5)).room
+    const fetching = fold(slice('success', 1, 6)).room
+    expect(fetching.caption).toEqual(asked.caption)
+    expect(fold(slice('success', 1, 7)).room.caption?.summary).toBe('Release checker fetched 30 releases. The latest is 1.2.16.')
+  })
+
+  it('clears speech when a step starts or finishes, when the phase changes, and otherwise keeps it', () => {
+    expect(fold(slice('success', 1, 5)).room.speech?.speaker).toBe(ROOM_LEAD)
+    expect(fold(slice('success', 1, 6)).room.speech).toBeNull()
+    expect(fold(slice('success', 1, 10)).room.speech?.speaker).toBe(CHECKER)
     const afterProposal = fold(slice('success', 1, 12)).room
     expect(afterProposal.phase.name).toBe('proposed')
     expect(afterProposal.speech).toBeNull()
+    const third = fold(slice('failure', 1, 9)).room
+    expect(third.speech?.text).toMatch(/^GitHub answered 503 Service Unavailable \(try 3/)
+    expect(fold(slice('failure', 1, 10)).room.speech, 'the agent failing keeps its last words up').toEqual(third.speech)
+    expect(fold(slice('failure', 1, 12)).room.speech, 'the run failing clears them').toBeNull()
   })
 
   it.each(['success', 'failure', 'rejected'] as const)('%s: plumbing changes nothing visible', (name) => {
