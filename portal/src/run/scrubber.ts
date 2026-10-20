@@ -75,7 +75,7 @@ export function layoutScrubber({ marks, width, edge }: ScrubberInput): ScrubberL
       x: positions[i] as number,
       w: G,
       fill: G,
-      lasted: since !== null ? (marks[i + 1] as TimelineMark).at - since : gap,
+      lasted: Math.max(0, since !== null ? (marks[i + 1] as TimelineMark).at - since : gap),
       tone: since !== null ? 'person' : 'quiet',
       live: false,
     })
