@@ -1,9 +1,10 @@
 import json
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
-from typing import cast
+from typing import Any, cast
 
 import httpx
 import pytest
@@ -124,6 +125,72 @@ def test_the_same_task_id_returns_the_stored_result_without_running_again():
     assert second.json() == first.json()
     assert len(source.calls) == 1
     assert len(posts.requests) == 8
+
+
+def with_change(change: Callable[[dict[str, Any]], None]) -> dict[str, Any]:
+    body = request_body()
+    change(body)
+    return body
+
+
+@pytest.mark.parametrize(
+    "changed",
+    [
+        with_change(lambda b: b.update(instruction="Check it twice.")),
+        with_change(lambda b: b.update(run_id="run_other")),
+        with_change(lambda b: b["inputs"].update(repo="langchain-ai/langchain")),
+        with_change(lambda b: b["carry_forward"].update(last_known_tag="1.2.15")),
+        with_change(lambda b: b["carry_forward"].update(last_known_tag=None)),
+        with_change(lambda b: b["callback"].update(token="another-token")),
+        with_change(lambda b: b["callback"].update(url=ORIGIN + "/elsewhere")),
+    ],
+    ids=["instruction", "run id", "repo", "last tag", "no last tag", "token", "callback url"],
+)
+def test_the_same_task_id_with_a_different_body_gets_409_and_does_not_run(
+    changed: dict[str, Any],
+):
+    source, posts = FakeSource(langgraph_tags()), Posts()
+    client = make_app(source, posts)
+    first = client.post("/v1/tasks", json=request_body())
+    second = client.post("/v1/tasks", json=changed)
+    assert second.status_code == 409
+    assert len(source.calls) == 1
+    assert len(posts.requests) == 8
+    assert client.post("/v1/tasks", json=request_body()).json() == first.json()
+
+
+def test_the_same_body_with_its_keys_in_another_order_is_the_same_request():
+    source = FakeSource(langgraph_tags())
+    client = make_app(source, Posts())
+    body = request_body()
+    first = client.post("/v1/tasks", json=body)
+    reordered = dict(reversed(list(body.items())))
+    second = client.post("/v1/tasks", json=reordered)
+    assert second.status_code == 200
+    assert second.json() == first.json()
+    assert len(source.calls) == 1
+
+
+def test_two_bodies_for_one_task_id_at_once_run_only_the_first():
+    started = threading.Event()
+    source = FakeSource(langgraph_tags())
+    fetch = source.fetch
+
+    def slow_fetch(repo: str):
+        started.set()
+        time.sleep(0.3)
+        return fetch(repo)
+
+    source.fetch = slow_fetch
+    client = make_app(source, Posts())
+    other = with_change(lambda b: b.update(instruction="Something else."))
+    with ThreadPoolExecutor(2) as pool:
+        first = pool.submit(client.post, "/v1/tasks", json=request_body())
+        started.wait(2)
+        second = pool.submit(client.post, "/v1/tasks", json=other)
+        assert first.result().status_code == 200
+        assert second.result().status_code == 409
+    assert len(source.calls) == 1
 
 
 def test_a_failed_task_id_is_stored_too():
@@ -340,8 +407,10 @@ def test_several_origins_can_be_allowed():
     client = TestClient(
         create_app(Settings.from_env(env), make_runtime()), headers={"X-Agent-Key": KEY}
     )
-    for url in (ORIGIN + RUN_PATH, "https://hooks.example" + RUN_PATH):
-        assert client.post("/v1/tasks", json=body_with_callback(url)).status_code == 200
+    for number, url in enumerate((ORIGIN + RUN_PATH, "https://hooks.example" + RUN_PATH)):
+        body = body_with_callback(url)
+        body["task_id"] = f"task-{number}"
+        assert client.post("/v1/tasks", json=body).status_code == 200
 
 
 def without_key(client: TestClient) -> TestClient:

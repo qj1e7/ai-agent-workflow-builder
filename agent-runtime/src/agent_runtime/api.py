@@ -1,3 +1,4 @@
+import hashlib
 import hmac
 import logging
 import os
@@ -151,20 +152,32 @@ def build_runtime(settings: Settings) -> Runtime:
     )
 
 
+class TaskIdReused(Exception):
+    pass
+
+
+def fingerprint(request: TaskRequest) -> str:
+    return hashlib.sha256(request.model_dump_json().encode()).hexdigest()
+
+
 # In memory: results are lost on restart and the dict grows with every task id.
 class TaskStore:
     def __init__(self) -> None:
-        self._results: dict[str, TaskResult] = {}
+        self._results: dict[str, tuple[str, TaskResult]] = {}
         self._locks: dict[str, threading.Lock] = {}
         self._guard = threading.Lock()
 
-    def run_once(self, task_id: str, run: Callable[[], TaskResult]) -> TaskResult:
+    def run_once(self, request: TaskRequest, run: Callable[[], TaskResult]) -> TaskResult:
+        digest = fingerprint(request)
         with self._guard:
-            lock = self._locks.setdefault(task_id, threading.Lock())
+            lock = self._locks.setdefault(request.task_id, threading.Lock())
         with lock:
-            if task_id not in self._results:
-                self._results[task_id] = run()
-            return self._results[task_id]
+            if request.task_id not in self._results:
+                self._results[request.task_id] = (digest, run())
+            stored_digest, result = self._results[request.task_id]
+            if stored_digest != digest:
+                raise TaskIdReused(request.task_id)
+            return result
 
 
 def create_app(settings: Settings | None = None, runtime: Runtime | None = None) -> FastAPI:
@@ -188,7 +201,12 @@ def create_app(settings: Settings | None = None, runtime: Runtime | None = None)
             events = EventLog(active.clock, active.callbacks.sink_for(body))
             return run_task(body, active.lead, active.checker, events)
 
-        return store.run_once(body.task_id, run)
+        try:
+            return store.run_once(body, run)
+        except TaskIdReused as reused:
+            raise HTTPException(
+                status_code=409, detail="task_id was already used with a different request"
+            ) from reused
 
     @app.get("/v1/agents")
     def list_agents() -> AgentCards:
