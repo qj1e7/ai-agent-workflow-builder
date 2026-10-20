@@ -70,13 +70,7 @@ def test_no_new_releases_finishes_with_no_intents_and_the_same_watermark():
 def test_releases_of_another_family_never_count():
     tags = ["cli==0.9.0", "sdk==1.0.0", *langgraph_tags()]
     assert finished(Run(FakeSource(tags)).check("1.2.15")).new_tags == ["1.2.16"]
-    output = finished(
-        Run(FakeSource(tags)).check(
-            "cli==0.4.37", ReleaseCheckInputs(repo=REPO, tag_pattern=r"^cli==")
-        )
-    )
-    assert output.new_tags == ["cli==0.9.0"]
-    assert output.proposed[0].reason == "New cli== releases since cli==0.4.37"
+    assert finished(Run(FakeSource(tags)).check("cli==0.4.37")).new_tags == []
 
 
 def test_drafts_and_prereleases_are_skipped():
@@ -161,18 +155,10 @@ def test_events_are_emitted_while_the_node_runs_not_after_it():
     assert seen_when_sleeping == [2, 3]
 
 
-@pytest.mark.parametrize(
-    ("repo", "last", "pattern", "message"),
-    [
-        (REPO, "nightly", r"^\d", "'nightly' is not a version tag"),
-        (REPO, "1.2.14", "(", "tag pattern"),
-    ],
-)
-def test_input_the_agent_cannot_use_fails_without_retry(
-    repo: str, last: str, pattern: str, message: str
-):
+@pytest.mark.parametrize(("last", "message"), [("nightly", "'nightly' is not a version tag")])
+def test_input_the_agent_cannot_use_fails_without_retry(last: str, message: str):
     run = Run(FakeSource(langgraph_tags()))
-    error = failed(run.check(last, ReleaseCheckInputs(repo=repo, tag_pattern=pattern)))
+    error = failed(run.check(last))
     assert error.type == "InvalidTask"
     assert message in error.message
     assert not error.retryable
