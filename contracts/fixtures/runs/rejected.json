@@ -338,7 +338,7 @@
       "id": "bob",
       "display": "Bob"
     },
-    "summary": "Bob declined step 0 (Team approver).",
+    "summary": "Bob declined the request (Team approver).",
     "kind": "approval_decided",
     "data": {
       "approval_id": "apr_01JBA",

@@ -338,7 +338,7 @@
       "id": "bob",
       "display": "Bob"
     },
-    "summary": "Bob approved step 0 (Team approver).",
+    "summary": "Bob approved the request (Team approver).",
     "kind": "approval_decided",
     "data": {
       "approval_id": "apr_01JB8",
