@@ -14,7 +14,7 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
-    "httpx2>=0.1",
+    "httpx>=0.28,<0.29",
     "pyright>=1.1.414",
     "pytest>=8.4",
     "ruff>=0.14",
@@ -22,6 +22,7 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecated"]
 
 [tool.pyright]
 include = ["src", "tests"]
