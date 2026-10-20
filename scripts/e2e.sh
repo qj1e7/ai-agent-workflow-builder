@@ -5,13 +5,12 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
 out="e2e/out"
-compose=(docker compose -f deploy/compose.yaml -f deploy/compose.e2e.yaml)
+compose=(docker compose -p wab -f deploy/compose.yaml -f deploy/compose.e2e.yaml)
 mkdir -p "$out"
 rm -f "$out/e2e.log" "$out/compose.log"
 
 if [ ! -f deploy/.env ]; then
-  echo "FAIL: deploy/.env is missing. Generate the dev secrets first (see deploy/README.md)." >&2
-  exit 2
+  deploy/make-env.sh
 fi
 
 collect_and_stop() {
