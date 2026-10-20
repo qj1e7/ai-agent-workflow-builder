@@ -1,11 +1,6 @@
 import type { ActivityEvent } from '../api/types'
 
 export const REAL_TIME_GAP_MS = 4000
-/**
- * The demo's recorded wait between the approval request and Bob's decision is 372.8 s; at 40 it replays in
- * 4 + 368.8 / 40 = 13.2 s, so the approval pause stays on screen for about six seconds after the room's
- * reading-held speech has caught up to it.
- */
 const SQUEEZE_FACTOR = 40
 
 export interface Entry {

@@ -27,7 +27,7 @@ interface SpineProps {
   blocks: readonly SpineBlock[]
   orientation: 'horizontal' | 'vertical'
   compact?: boolean
-  /** Horizontal only: name and state on one line beside the node, about 36 px tall, for a page that must fit under the fold. */
+  /** Horizontal only: name and state on one line beside the node. */
   dense?: boolean
   showDescriptions?: boolean
   /** Off for a plan that has no run yet, so the builder does not say "Not reached" under every block. */

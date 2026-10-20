@@ -78,7 +78,7 @@ export interface Lanes {
   readonly bottom: number
   readonly left: number
   readonly right: number
-  /** The clear corridor around each centre line. Always wider than the token plus 8 px. */
+  /** The clear corridor around each centre line. At least the token plus 8 px. */
   readonly width: number
 }
 
@@ -99,7 +99,6 @@ export interface RoomLayout {
   readonly seats: ReadonlyMap<SeatKey, SeatBox>
   readonly overflow: readonly OverflowSeat[]
   readonly doors: readonly DoorBox[]
-  /** One slot per shown agent seat, inside the band, with the tail over that seat's avatar. */
   readonly speech: ReadonlyMap<SeatKey, SpeechSlot>
   /** Every drawn thing, flat, so the no-collision property is one loop over pairs. */
   readonly boxes: readonly LayoutBox[]
@@ -479,7 +478,7 @@ function pointIn(p: Point, b: Box, pad: number): boolean {
  * - no two of seats, overflow seats, doors, checkers, table and the Teams door overlap
  * - all of them sit inside the floor; the speech band holds only speech cards; the table holds only the ticket
  * - adding an agent or a step never moves an already shown seat (until that seat itself goes to overflow)
- * - every lane is wider than the token plus 8 px and no solid box reaches into it
+ * - every lane is at least the token plus 8 px and no solid box reaches into it
  */
 export function layoutRoom(plan: FloorPlan, width: number): RoomLayout {
   const size: RoomSize = width >= ROOM_METRICS.wide.minWidth ? 'wide' : 'compact'

@@ -42,7 +42,6 @@ export interface Rehearsal {
   /** Appends recording[from..to] at this wall time and cues 'grew'. */
   arrive(wall: number, from: number, to: number, origin?: Origin): void
   arriveSynthetic(wall: number, raw: Record<string, unknown>, origin?: Origin): void
-  /** Appends any events as one page at this wall time, so the director sees them all at once. */
   arriveEvents(wall: number, events: readonly RunEvent[], origin?: Origin): void
   cue(wall: number, cue: Cue): void
   /** A tick that fires late, with the wakes due before it skipped, as a throttled background tab does. */

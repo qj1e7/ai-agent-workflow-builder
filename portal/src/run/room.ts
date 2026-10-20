@@ -653,7 +653,6 @@ export interface FloorPlan {
   readonly doors: readonly PlanDoor[]
 }
 
-/** A write door the template promises: the block's name, and the connector its words name when they name one. */
 export interface ExpectedWrite {
   readonly label: string
   readonly key: DoorKey | null

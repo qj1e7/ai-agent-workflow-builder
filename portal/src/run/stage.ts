@@ -5,7 +5,6 @@ import { layoutRoom } from './layout'
 import type { RoomView } from './live'
 import { EMPTY_ROOM, floorPlanOf, type AgentRegistry, type Door, type ExpectedWrite, type RoomState } from './room'
 
-/** One write door per write_action block, named after the connector its words name when they name one. */
 export function expectedWritesOf(blocks: readonly BlockView[] | undefined): ExpectedWrite[] {
   return (blocks ?? [])
     .filter((block) => block.kind === 'write_action')

@@ -44,14 +44,12 @@ export function stepStatus(step: ApprovalStep, waitedMs: number | null): StatusW
 
 type DoorWords = Pick<DoorBox, 'side' | 'key' | 'label'>
 
-/** A door is named after its connector as soon as one is known, else after the block it was seeded from. */
 export function doorName(door: DoorWords): string {
   if (door.side === 'teams' || door.key === 'teams') return 'Teams'
   if (door.key === null) return door.label ?? (door.side === 'read' ? 'Reads' : 'Write')
   return connectorLabel(door.key)
 }
 
-/** The write door's second line: what goes through it. The seeded block's name, or the proposal's operation when nobody seeded the door. */
 export function writeDoorAction(door: DoorWords, ticket: Ticket | null): string | null {
   if (door.label) return door.label
   const line = ticket?.lines.find((candidate) => candidate.connector === door.key)
