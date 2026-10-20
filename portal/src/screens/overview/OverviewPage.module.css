@@ -66,8 +66,13 @@
   margin-top: 1px;
 }
 
+/* Two lines keep the latest entry above the fold at the pause. The clamp is visual: the whole summary stays in the text node for a screen reader. */
 .soFarSummary {
   min-width: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow-wrap: anywhere;
 }
 

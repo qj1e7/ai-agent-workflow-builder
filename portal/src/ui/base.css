@@ -151,6 +151,41 @@ main[tabindex='-1']:focus {
   font-weight: 560;
 }
 
+/* One disclosure for technical details on every page: a button with aria-expanded, or a details summary. */
+.disclosure {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-14);
+  font-weight: 600;
+  list-style: none;
+  cursor: pointer;
+}
+
+.disclosure::-webkit-details-marker {
+  display: none;
+}
+
+.disclosure::after {
+  content: '';
+  width: 7px;
+  height: 7px;
+  margin: -3px 0 0 var(--space-2);
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.disclosure[aria-expanded='true']::after,
+details[open] > .disclosure::after {
+  margin-top: 3px;
+  transform: rotate(225deg);
+}
+
 /* The latest entry of a story list: So far on the overview and Minutes on the run page share it. */
 .story-latest {
   position: relative;
