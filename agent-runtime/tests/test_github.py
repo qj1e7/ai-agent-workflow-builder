@@ -78,3 +78,23 @@ def test_a_refusal_is_rejected_not_retried(status: int):
 def test_an_unexpected_body_is_unavailable(body: object):
     with pytest.raises(SourceUnavailable):
         source(answering(200, body)).fetch("o/r")
+
+
+def test_path_segments_are_url_encoded():
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=[])
+
+    source(httpx.MockTransport(handler)).fetch("a/b?x#y%2f")
+    assert seen[0].url.raw_path.startswith(b"/repos/a/b%3Fx%23y%252f/releases")
+
+
+@pytest.mark.parametrize("repo", ["../x", "a/..", "a/.", "a", "/b", ""])
+def test_dot_segments_are_never_sent(repo: str):
+    seen: list[httpx.Request] = []
+    transport = httpx.MockTransport(lambda r: seen.append(r) or httpx.Response(200, json=[]))
+    with pytest.raises(SourceRejected):
+        source(transport).fetch(repo)
+    assert seen == []

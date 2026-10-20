@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, TypeAdapter
 
 
 class WireModel(BaseModel):
@@ -102,8 +102,20 @@ class AgentEventPost(WireModel):
     event: AgentEvent
 
 
+REPO_PATTERN = r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$"
+
+
+def _not_a_dot_segment(repo: str) -> str:
+    if repo.split("/")[-1] in {".", ".."}:
+        raise ValueError("repo must not be . or ..")
+    return repo
+
+
+type RepoName = Annotated[str, Field(pattern=REPO_PATTERN), AfterValidator(_not_a_dot_segment)]
+
+
 class ReleaseCheckInputs(WireModel):
-    repo: str
+    repo: RepoName
     tag_pattern: str
 
 

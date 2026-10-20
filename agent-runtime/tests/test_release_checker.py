@@ -166,8 +166,6 @@ def test_events_are_emitted_while_the_node_runs_not_after_it():
     [
         (REPO, "nightly", r"^\d", "'nightly' is not a version tag"),
         (REPO, "1.2.14", "(", "tag pattern"),
-        ("../../admin", "1.2.14", r"^\d", "is not an owner/name repo"),
-        ("just-a-name", "1.2.14", r"^\d", "is not an owner/name repo"),
     ],
 )
 def test_input_the_agent_cannot_use_fails_without_retry(

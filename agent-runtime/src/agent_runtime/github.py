@@ -1,3 +1,5 @@
+from urllib.parse import quote
+
 import httpx
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
@@ -32,9 +34,13 @@ class GitHubReleaseSource:
             self._headers["Authorization"] = f"Bearer {token}"
 
     def fetch(self, repo: str) -> list[Release]:
+        parts = repo.split("/", 1)
+        if len(parts) != 2 or any(part in {"", ".", ".."} for part in parts):
+            raise SourceRejected(400)
+        owner, name = (quote(part, safe="") for part in parts)
         try:
             response = self._client.get(
-                f"{self._base_url}/repos/{repo}/releases",
+                f"{self._base_url}/repos/{owner}/{name}/releases",
                 params={"per_page": PAGE_SIZE},
                 headers=self._headers,
             )
