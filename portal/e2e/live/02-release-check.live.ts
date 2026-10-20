@@ -53,6 +53,8 @@ test('alice starts a release check, bob approves it, and one MOCK ticket is writ
   await expect(page).toHaveURL(/\/teams$/)
   const card = page.locator('article', { has: page.locator(`a[href$="/approvals/${approvalId}"]`) })
   await expect(card, 'the card shows the backend message').toContainText(message?.text ?? '')
+  await expect(card, 'the card says which run it belongs to').toContainText(/Run started by Alice, /)
+  await expect(card, 'the card says the approval is still waiting').toContainText('Waiting for a decision')
   await shot(page, info, 'success-06-teams-card')
   await page.locator(`a[href$="/approvals/${approvalId}"]`).click()
   await expect(page).toHaveURL(new RegExp(`/approvals/${approvalId}$`))
@@ -101,6 +103,13 @@ test('alice starts a release check, bob approves it, and one MOCK ticket is writ
   await expect(page.getByText(key, { exact: true }), 'mock Jira lists the ticket once').toHaveCount(1)
   await expect(page.getByText(title).first()).toBeVisible()
   await shot(page, info, 'success-11-jira-ticket')
+
+  await page.getByRole('link', { name: 'Teams', exact: true }).first().click()
+  await expect(
+    page.locator('article', { has: page.locator(`a[href$="/approvals/${approvalId}"]`) }),
+    'the Teams card now says who approved',
+  ).toContainText('Approved by Bob')
+  await shot(page, info, 'success-12-teams-card-approved')
 
   assertClean(watch)
   await mkdir(path.join(OUT, 'video'), { recursive: true })

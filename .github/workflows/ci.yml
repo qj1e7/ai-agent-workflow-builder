@@ -175,16 +175,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
-        with:
-          node-version-file: portal/.nvmrc
-          cache: npm
-          cache-dependency-path: portal/package-lock.json
-
-      - name: Install the Portal dependencies for the browser suite
-        working-directory: portal
-        run: npm ci --ignore-scripts
-
       - name: Run the API tests, then the browser suite, against the whole stack
         run: scripts/e2e.sh
 
