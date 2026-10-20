@@ -151,6 +151,26 @@ main[tabindex='-1']:focus {
   font-weight: 560;
 }
 
+/* The latest entry of a story list: So far on the overview and Minutes on the run page share it. */
+.story-latest {
+  position: relative;
+}
+
+.story-latest::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: -10px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--lead);
+}
+
+.story-latest .story-summary {
+  font-weight: 600;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

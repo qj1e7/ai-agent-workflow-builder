@@ -36,6 +36,7 @@ export function Minutes({ entries, technical, onTechnical }: MinutesProps) {
   const rows = shown.map((entry, index) => ({
     entry,
     divider: entry.attempt !== (shown[index - 1]?.attempt ?? 1),
+    latest: index === shown.length - 1,
   }));
   return (
     <section className={styles["minutes"]} aria-labelledby="minutes-title">
@@ -57,7 +58,7 @@ export function Minutes({ entries, technical, onTechnical }: MinutesProps) {
       ) : null}
       <div role="log" aria-label="Minutes of the run">
         <ol className={styles["log"]}>
-          {rows.map(({ entry, divider }) => {
+          {rows.map(({ entry, divider, latest }) => {
             return (
               <Fragment key={entry.seq}>
                 {divider ? (
@@ -72,11 +73,15 @@ export function Minutes({ entries, technical, onTechnical }: MinutesProps) {
                   className={cx(
                     styles["entry"],
                     entry.tier === "technical" && styles["technical"],
+                    latest && "story-latest",
                   )}
+                  aria-current={latest ? "true" : undefined}
                 >
                   <ActorAvatar actor={entry.actor} size={24} />
                   <div className={styles["body"]}>
-                    <p className={styles["summary"]}>{entry.summary}</p>
+                    <p className={cx(styles["summary"], "story-summary")}>
+                      {entry.summary}
+                    </p>
                     {entry.quote ? (
                       <blockquote className={styles["quote"]}>
                         {entry.quote}

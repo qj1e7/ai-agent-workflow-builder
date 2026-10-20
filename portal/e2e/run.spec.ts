@@ -13,6 +13,7 @@ test('the success run page shows the run from work to written ticket', async ({ 
 
   await advanceUntil(page, transportSays(page, 'Done'))
   await expect(page.getByText('Written as MOCK-142').first()).toBeVisible()
+  await expect(page.getByRole('log').locator('li').last(), 'the latest Minutes entry is marked').toHaveAttribute('aria-current', 'true')
   await record(page, info, 'run-success')
 
   const slider = page.getByRole('slider', { name: 'Position in the run' })

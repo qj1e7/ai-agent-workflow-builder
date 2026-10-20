@@ -18,6 +18,10 @@ test('the overview shows each stage of the live success run', async ({ page }, i
 
   await advanceUntil(page, transportSays(page, 'Done'))
   await expect(page.getByText('Written as MOCK-142').first()).toBeVisible()
+  const soFar = page.getByRole('region', { name: 'So far' }).locator('li')
+  const times = await soFar.locator('time').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('datetime') ?? ''))
+  expect(times, 'So far reads oldest first').toEqual([...times].sort())
+  await expect(soFar.last(), 'the latest So far entry is marked').toHaveAttribute('aria-current', 'true')
   await record(page, info, 'overview-success')
 
   await page.locator('#earlier-title').evaluate((heading) => heading.scrollIntoView({ block: 'start' }))
