@@ -17,8 +17,14 @@ import {
   type Start,
 } from './director'
 import { recording, synthetic, type RecordingName } from './recordings'
-import { openStep, type AgentRegistry, type Move, type RoomState } from './room'
+import { agentNamedIn, openStep, type AgentRef, type AgentRegistry, type Move, type RoomState } from './room'
 import { createTape, type Origin } from './tape'
+
+const KNOWN: readonly AgentRef[] = [
+  { id: agentId('room_lead'), display: 'Room lead' },
+  { id: agentId('release_checker'), display: 'Release checker' },
+  { id: agentId('troubleshooter'), display: 'AI troubleshooter' },
+]
 
 /** The registry the tests fold with: the same three known agents as src/ui/agents.ts. */
 export const TEST_REGISTRY: AgentRegistry = {
@@ -30,6 +36,7 @@ export const TEST_REGISTRY: AgentRegistry = {
     if (id === 'troubleshooter') return { display: 'AI troubleshooter', readDoor: null }
     return { display: id, readDoor: null }
   },
+  named: (words) => agentNamedIn(words, KNOWN),
 }
 
 /** A clock whose run time stands still at runNow, for a scripted feed with no platform behind it. */

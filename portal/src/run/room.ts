@@ -16,6 +16,14 @@ export interface AgentRegistry {
   readonly host: AgentRef
   readonly troubleshooter: AgentRef
   lookup(id: AgentId): { readonly display: string; readonly readDoor: DoorKey | null }
+  /** The known agent whose display name appears in the words as whole words, case-insensitive. */
+  named(words: string): AgentRef | null
+}
+
+/** The first of the agents whose display name the words contain as whole words, case-insensitive. */
+export function agentNamedIn(words: string, agents: readonly AgentRef[]): AgentRef | null {
+  const lower = words.toLowerCase()
+  return agents.find((agent) => new RegExp(`\\b${agent.display.toLowerCase()}\\b`).test(lower)) ?? null
 }
 
 export interface UserRef {
