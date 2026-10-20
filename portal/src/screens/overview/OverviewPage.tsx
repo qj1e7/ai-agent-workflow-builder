@@ -18,6 +18,7 @@ import { useBlocks } from '../../room/useBlocks'
 import { ROOM_METRICS, type LiveView, type WhenFinished } from '../../run'
 import { agentIdentity } from '../../ui/agents'
 import { ButtonLink } from '../../ui/Button'
+import { cx } from '../../ui/cx'
 import { EmptyState, InlineMessage, Skeleton } from '../../ui/Feedback'
 import { formatDayAndTime, formatRelative, formatTime } from '../../ui/format'
 import { Spine, type SpineBlock } from '../../ui/Spine'
@@ -123,9 +124,9 @@ function Hero({ run }: { run: RunView }) {
   )
 }
 
-/** The last few story summaries, newest first, so the rail tells the story the room is showing. */
+/** The last few story summaries, oldest first with the latest marked, in the same order as the run page's Minutes. */
 function SoFar({ view }: { view: LiveView }) {
-  const recent = view.minutes.filter((entry) => entry.tier === 'story').slice(-SO_FAR).reverse()
+  const recent = view.minutes.filter((entry) => entry.tier === 'story').slice(-SO_FAR)
   return (
     <section className={styles['soFar']} aria-labelledby="so-far-title">
       <h2 id="so-far-title" className={styles['soFarTitle']}>
@@ -135,10 +136,10 @@ function SoFar({ view }: { view: LiveView }) {
         <p className="muted">Nothing has happened yet.</p>
       ) : (
         <ol className={styles['soFarList']}>
-          {recent.map((entry) => (
-            <li key={entry.seq} className={styles['soFarEntry']}>
+          {recent.map((entry, index) => (
+            <li key={entry.seq} className={cx(styles['soFarEntry'], index === recent.length - 1 && 'story-latest')} aria-current={index === recent.length - 1 ? 'true' : undefined}>
               <ActorAvatar actor={entry.actor} size={20} />
-              <span className={styles['soFarSummary']}>{entry.summary}</span>
+              <span className={cx(styles['soFarSummary'], 'story-summary')}>{entry.summary}</span>
               <time className={styles['soFarTime']} dateTime={new Date(entry.at).toISOString()}>
                 {clockTime(entry.at)}
               </time>
