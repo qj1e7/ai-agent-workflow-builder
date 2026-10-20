@@ -1,0 +1,45 @@
+.spine {
+  margin-bottom: var(--space-5);
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.stageColumn {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.speechSlot {
+  min-width: 0;
+}
+
+.rail {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.minutes {
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+}
+
+@media (max-width: 1099px) {
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 759px) {
+  .minutes {
+    padding: var(--space-4);
+  }
+}
