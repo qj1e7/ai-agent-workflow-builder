@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import TypeAdapter
 
-from agent_runtime.api import create_app
+from agent_runtime.api import Settings, create_app
 from agent_runtime.contract import (
     AgentCards,
     AgentEventPost,
@@ -49,6 +49,8 @@ def test_callback_token_travels_in_a_header_not_the_url():
 
 
 def test_app_serves_the_cards_and_health():
-    client = TestClient(create_app())
+    client = TestClient(
+        create_app(Settings.from_env({"AGENT_API_KEY": "test-agent-key-not-a-secret"}))
+    )
     assert client.get("/healthz").json() == {"status": "ok"}
     assert client.get("/v1/agents").json() == load("agent-cards.json")
