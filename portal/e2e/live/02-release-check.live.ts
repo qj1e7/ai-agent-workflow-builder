@@ -9,6 +9,8 @@ const VIEWPORT = { width: 1440, height: 900 }
 const PHONE = { width: 390, height: 844 }
 
 const approvalLink = (page: Page) => page.locator('a[href*="/approvals/apr_"]').first()
+/** The backend finishes its work in seconds; the room tells the story at reading pace, so the page shows a state well after the backend reaches it. */
+const ROOM_CATCH_UP_MS = 30_000
 
 test('alice starts a release check, bob approves it, and one MOCK ticket is written', async ({ browser, backend }, info) => {
   const ticketsBefore = await backend.tickets()
@@ -31,7 +33,7 @@ test('alice starts a release check, bob approves it, and one MOCK ticket is writ
   await shot(page, info, 'success-04-run-page')
 
   await backend.waitForState(runId, ['awaiting_approval'])
-  await expect(approvalLink(page), 'the run page offers the approval page').toBeVisible()
+  await expect(approvalLink(page), 'the run page offers the approval page').toBeVisible({ timeout: ROOM_CATCH_UP_MS })
   expect((await backend.tickets()).filter((ticket) => ticket.run_id === runId), 'nothing is written while the run waits').toEqual([])
   await shot(page, info, 'success-05-run-awaiting-approval')
 
