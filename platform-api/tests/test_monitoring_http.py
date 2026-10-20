@@ -2,7 +2,6 @@ import asyncio
 import json
 from collections.abc import AsyncIterator, Mapping
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Any
 
 import anyio
@@ -26,11 +25,10 @@ from platform_api.monitoring import (
 from platform_api.settings import Settings
 from platform_api.shared import RunId, TaskId
 from tests.conftest import PostgresUrls
-from tests.support import LOCAL_ENV
+from tests.support import FIXTURES, LOCAL_ENV
 
 pytestmark = pytest.mark.anyio
 
-FIXTURES = Path(__file__).resolve().parents[2] / "contracts" / "fixtures"
 LOCAL = {**LOCAL_ENV, "CALLBACK_SIGNING_KEY": "test-signing-key"}
 ALICE = {"X-Dev-User": "alice"}
 KEY = "test-signing-key"

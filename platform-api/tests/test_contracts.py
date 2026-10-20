@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 from typing import Any, TypeAliasType, get_args
 
 import pytest
@@ -23,9 +22,7 @@ from platform_api.orchestration.http import (
     run_view_adapter,
 )
 from platform_api.orchestration.write_actions import DenyReason
-
-CONTRACTS = Path(__file__).resolve().parents[2] / "contracts"
-FIXTURES = CONTRACTS / "fixtures"
+from tests.support import FIXTURES
 
 pytestmark = pytest.mark.skipif(
     not FIXTURES.exists(), reason="contracts/ is not in the test image. CI runs this on the host."

@@ -105,24 +105,22 @@ uv run lint-imports   # platform-api only
 uv run pytest
 ```
 
-CI runs the tests inside the Docker image. To do the same, and to build the image that ships, run these from the repo root:
+The platform-api tests need a PostgreSQL to migrate. On the host they start a throwaway `postgres:17` container by themselves. Set `PLATFORM_TEST_DATABASE_URL` to a superuser URL of an empty cluster to use one you run yourself. CI does that with a service container. The tests skip when neither is there, so a green run with skips is not a pass.
+
+CI runs the tests inside the Docker image. To do the same, and to build the image that ships, run these from the repo root. The image holds no `contracts/` folder, so mount it and name it:
 
 ```sh
 docker build --target test --tag platform-api:test platform-api
-docker run --rm platform-api:test
+docker run --rm --network host \
+  --env PLATFORM_TEST_DATABASE_URL=postgresql://postgres:test@127.0.0.1:5432/postgres \
+  --env CONTRACT_FIXTURES=/contracts/fixtures --volume "$PWD/contracts:/contracts:ro" \
+  platform-api:test
 docker build --target runtime --tag platform-api:runtime platform-api
 ```
 
-Use `agent-runtime` in place of `platform-api` for the other project.
+Use `agent-runtime` in place of `platform-api` for the other project. It needs no database.
 
-To run the runtime image, give it the dev sign-in settings. It refuses to start without them:
-
-```sh
-docker run --rm -p 8000:8000 -e AUTH_MODE=dev -e PUBLIC_BASE_URL=http://localhost:8000 platform-api:runtime
-curl localhost:8000/healthz
-```
-
-The agent runtime needs no settings yet. It listens on 8100.
+To run the whole stack, see `deploy/README.md`. platform-api refuses to start without its settings; `deploy/.env.example` lists them.
 
 To fix formatting, run `uv run ruff format .`. After you change a dependency, run `uv lock` and commit the new `uv.lock`.
 
