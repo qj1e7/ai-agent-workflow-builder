@@ -262,7 +262,7 @@ describe('applyEvent on synthetic events', () => {
       seq: 16,
       ts: '2026-11-03T02:20:00Z',
       actor: { kind: 'user', id: 'bob', display: 'Bob' },
-      summary: 'Bob approved step 0 (Team approver).',
+      summary: 'Bob approved the request (Team approver).',
       kind: 'approval_decided',
       data: { approval_id: 'apr_x', step: 0, verdict: 'approve', by: 'bob' },
     })
