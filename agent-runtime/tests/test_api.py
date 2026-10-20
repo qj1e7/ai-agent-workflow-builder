@@ -2,6 +2,8 @@ import json
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
+from typing import cast
 
 import httpx
 import pytest
@@ -24,7 +26,8 @@ from agent_runtime.summary import ModelSummarizer, TemplateSummarizer
 from tests.fakes import FakeClock, FakeSource, langgraph_tags
 
 KEY = "test-agent-key-not-a-secret"
-BASE_ENV = {"AGENT_API_KEY": KEY}
+ORIGIN = "http://platform-api:8000"
+BASE_ENV = {"AGENT_API_KEY": KEY, "CALLBACK_ALLOWED_ORIGINS": ORIGIN}
 SETTINGS = Settings.from_env(BASE_ENV)
 
 
@@ -41,12 +44,19 @@ class Posts:
         return httpx.Response(self.status)
 
 
-def make_app(source: FakeSource, posts: Posts) -> TestClient:
+def make_runtime(source: FakeSource | None = None, posts: Posts | None = None) -> Runtime:
     clock = FakeClock()
-    callbacks = HttpCallbacks(client=httpx.Client(transport=httpx.MockTransport(posts)))
-    checker = ReleaseChecker(source, TemplateSummarizer(), sleep=clock.sleep)
-    runtime = Runtime(checker=checker, lead=FixedRoomLead(), clock=clock, callbacks=callbacks)
-    return TestClient(create_app(SETTINGS, runtime), headers={"X-Agent-Key": KEY})
+    callbacks = HttpCallbacks(transport=httpx.MockTransport(posts or Posts()))
+    checker = ReleaseChecker(
+        source or FakeSource(langgraph_tags()), TemplateSummarizer(), sleep=clock.sleep
+    )
+    return Runtime(checker=checker, lead=FixedRoomLead(), clock=clock, callbacks=callbacks)
+
+
+def make_app(source: FakeSource, posts: Posts) -> TestClient:
+    return TestClient(
+        create_app(SETTINGS, make_runtime(source, posts)), headers={"X-Agent-Key": KEY}
+    )
 
 
 def request_body(run_id: str = "run_01JB8") -> dict[str, object]:
@@ -190,6 +200,148 @@ def test_settings_read_the_environment():
 )
 def test_a_model_is_used_only_when_one_is_named(env: dict[str, str], expected: type):
     assert isinstance(build_summarizer(Settings.from_env({**BASE_ENV, **env})), expected)
+
+
+def body_with_callback(url: str) -> dict[str, object]:
+    body = request_body()
+    cast(dict[str, object], body["callback"])["url"] = url
+    return body
+
+
+RUN_PATH = "/internal/v1/runs/run_01JB8/agent-events?task=run_01JB8/work/1/1"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://platform-api:8000" + RUN_PATH,
+        "HTTP://PLATFORM-API:8000" + RUN_PATH,
+        "http://platform-api:8000",
+        "http://@platform-api:8000" + RUN_PATH,
+    ],
+    ids=["allowed origin", "same origin in capitals", "bare origin", "empty userinfo"],
+)
+def test_a_callback_at_an_allowed_origin_runs(url: str):
+    source = FakeSource(langgraph_tags())
+    client = make_app(source, Posts())
+    assert client.post("/v1/tasks", json=body_with_callback(url)).status_code == 200
+    assert len(source.calls) == 1
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://evil:8000" + RUN_PATH,
+        "http://platform-api.evil.com:8000" + RUN_PATH,
+        "http://platform-api.:8000" + RUN_PATH,
+        "http://169.254.169.254:8000" + RUN_PATH,
+        "http://platform-api:8001" + RUN_PATH,
+        "http://platform-api" + RUN_PATH,
+        "http://platform-api:80" + RUN_PATH,
+        "https://platform-api:8000" + RUN_PATH,
+        "ftp://platform-api:8000" + RUN_PATH,
+        "http://user:pw@platform-api:8000" + RUN_PATH,
+        "http://platform-api:8000@evil" + RUN_PATH,
+        "http://platform-api:8000\\@evil" + RUN_PATH,
+        "http://evil/?http://platform-api:8000",
+        "http://evil#@platform-api:8000",
+        "//platform-api:8000" + RUN_PATH,
+        RUN_PATH,
+        "",
+        "not a url",
+    ],
+    ids=[
+        "different host",
+        "host as a prefix of another",
+        "trailing dot host",
+        "metadata address",
+        "different port",
+        "no port",
+        "other explicit port",
+        "different scheme",
+        "other scheme",
+        "userinfo",
+        "userinfo that hides the real host",
+        "backslash that hides the real host",
+        "allowed origin in the query",
+        "allowed origin in the fragment",
+        "no scheme",
+        "relative path",
+        "empty",
+        "garbage",
+    ],
+)
+def test_a_callback_outside_the_allowed_origins_gets_422_and_nothing_runs(url: str):
+    source, posts = FakeSource(langgraph_tags()), Posts()
+    client = make_app(source, posts)
+    response = client.post("/v1/tasks", json=body_with_callback(url))
+    assert response.status_code == 422
+    assert source.calls == []
+    assert posts.requests == []
+
+
+def test_a_refused_callback_leaves_nothing_stored_for_the_task_id():
+    source = FakeSource(langgraph_tags())
+    client = make_app(source, Posts())
+    assert client.post("/v1/tasks", json=body_with_callback("http://evil/")).status_code == 422
+    assert client.post("/v1/tasks", json=request_body()).status_code == 200
+    assert len(source.calls) == 1
+
+
+def test_a_redirect_from_the_callback_is_never_followed():
+    seen: list[httpx.Request] = []
+
+    def redirect(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(302, headers={"Location": "http://169.254.169.254/latest/meta-data"})
+
+    callbacks = HttpCallbacks(transport=httpx.MockTransport(redirect))
+    runtime = replace(make_runtime(), callbacks=callbacks)
+    client = TestClient(create_app(SETTINGS, runtime), headers={"X-Agent-Key": KEY})
+    response = client.post("/v1/tasks", json=request_body())
+    assert response.status_code == 200
+    assert response.json()["status"] == "finished"
+    assert {request.url.host for request in seen} == {"platform-api"}
+    assert len(seen) == 8
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        None,
+        "",
+        "  ",
+        ",",
+        " , ",
+        "platform-api:8000",
+        "http://",
+        "ftp://x",
+        "http://x/path",
+        "http://x?q=1",
+        "http://u@x",
+        "*",
+    ],
+)
+def test_the_app_refuses_to_start_without_usable_callback_origins(
+    raw: str | None, monkeypatch: pytest.MonkeyPatch
+):
+    env = {"AGENT_API_KEY": KEY}
+    if raw is not None:
+        env["CALLBACK_ALLOWED_ORIGINS"] = raw
+    with pytest.raises(SettingsError, match="CALLBACK_ALLOWED_ORIGINS"):
+        Settings.from_env(env)
+    monkeypatch.setattr("os.environ", env)
+    with pytest.raises(SettingsError, match="CALLBACK_ALLOWED_ORIGINS"):
+        create_app()
+
+
+def test_several_origins_can_be_allowed():
+    env = {**BASE_ENV, "CALLBACK_ALLOWED_ORIGINS": f" {ORIGIN}/ , https://hooks.example "}
+    client = TestClient(
+        create_app(Settings.from_env(env), make_runtime()), headers={"X-Agent-Key": KEY}
+    )
+    for url in (ORIGIN + RUN_PATH, "https://hooks.example" + RUN_PATH):
+        assert client.post("/v1/tasks", json=body_with_callback(url)).status_code == 200
 
 
 def without_key(client: TestClient) -> TestClient:
