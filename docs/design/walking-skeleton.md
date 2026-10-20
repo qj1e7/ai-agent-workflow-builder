@@ -641,7 +641,26 @@ What was left out of the other designs, and why:
 
 ## Implementation reconciliation
 
-Empty until implementation starts.
+The build followed this design except where the table below says otherwise. Each row was accepted in review by the session that ran the build, and each is still open for the team to accept or reject in the PR named in the row. A row that weakens a safety rule would need an ADR. None of them does.
+
+| Change from the design | Why | PR |
+|---|---|---|
+| `approval_status` has a fourth outcome, `Invalid(fault)`, for a stale digest, two decisions on one step, an approver who is a party, or one person on two steps. `decide()` refuses it and `check()` denies it | The fold reads stored rows, and `check()` must not trust that only `decide()` wrote them. Found by a security review | #5 |
+| `UnboundIntent` names every unbound kind, not only the first | A failure message can name them all | #5 |
+| Every activity event carries a plain-English `summary`. A new kind, `agent_message`, shows agents talking | The live view never builds English from data, and the agent room needs speech | #6 |
+| `step_finished` adds the outcomes `approval_opened`, `written`, `failed` and `replayed`. `write_action_denied` adds `out_of_order` | The live view and the troubleshooter need to tell these apart | #6 |
+| The run view is one shape per state, not one shape with optional fields | Each state shows only what exists in it | #6 |
+| Agent event models live in run monitoring, and shared wire types in `wire.py` | The callback route belongs to monitoring, and the import rules forbid monitoring importing orchestration | #6 |
+| `AUTH_MODE` must be set, and dev mode refuses to start unless the public base URL is local | The dev sign-in must never reach a shared deployment. Found by a security review | #6 |
+| The Agent API needs `X-Agent-Key`, takes the callback as `{url, token}`, sends the token in a header, accepts callbacks only at allowed origins, binds a `task_id` to its request body (409 on a different body), validates the repo name and accepts only vetted tag patterns | The agent holds a GitHub token, so it must not act for an unknown caller or post anywhere. Found by security reviews | #6, #7 |
+| The task id is `{run_id}/work/{attempt}`, and the callback token is derived per task and stored | A retry after a failure must really rerun, while an n8n retry of the same step reuses the stored result | #8 |
+| `last_seen_tag` is a template parameter. The watermark is read from the newest succeeded run, falling back to that parameter | It moves only on success, with no write across contexts | #8 |
+| Retry needs the Operator role, and so do saving a use case and starting a run. Any Operator may run any team use case | A teammate covering a shift is the normal case. Found by a security review | #8 |
+| Use cases and runs are visible to the whole team | The Portal is one team's tool. Scoping per team comes with Entra ID | #8 |
+| A superseded step call records no event | The design lists none, and the live view has nothing to show for it | #8 |
+| Bootstrap waits on n8n's `/healthz/readiness`, deletes older API keys by label before creating one, and recreates the step key credential on every run | n8n 2.42.6 makes API key labels unique and never returns a credential's value. `/healthz` answered before n8n could take requests | #8 |
+| Refusals (403) and retry-later answers (503) return the declared body at the top level, not inside `detail` | The contract promised it, and the end-to-end run found the gap | #10 |
+| The test client uses `httpx`, not its successor `httpx2` | A security bot flagged `httpx2` as a possible typosquat. Adopting it is the team's dependency decision | #6 |
 
 ## Open questions and risks
 
