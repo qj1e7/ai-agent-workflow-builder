@@ -181,10 +181,10 @@ export const ROOM_METRICS: Readonly<Record<RoomSize, Metrics>> = {
     pad: 10,
     gap: 4,
     lane: 28,
-    token: 20,
+    token: 18,
     avatar: 40,
-    seatW: 88,
-    labelInset: 4,
+    seatW: 96,
+    labelInset: 8,
     labelGap: 3,
     nameLine: 15,
     nameLines: 2,
@@ -198,16 +198,16 @@ export const ROOM_METRICS: Readonly<Record<RoomSize, Metrics>> = {
     doorOpeningH: 56,
     checkerH: 24,
     doorsShown: 2,
-    tableMinH: 130,
+    tableMinH: 142,
     ticketW: 168,
-    ticketH: 118,
+    ticketH: 130,
     teamsW: 96,
     teamsH: 50,
     teamsOpeningW: 40,
   },
 }
 
-export function seatHeight(m: Metrics): number {
+function seatHeight(m: Metrics): number {
   return m.avatar + 2 * m.labelGap + m.nameLines * m.nameLine + m.statusLines * m.statusLine
 }
 
@@ -423,7 +423,8 @@ export function laneViolations(layout: RoomLayout): readonly LaneViolation[] {
 }
 
 /**
- * Solid boxes a route crosses, other than the boxes its two ends live in. A seat's name and status
+ * Solid boxes a token on a route would touch, other than the boxes its two ends live in. The token is
+ * as wide as the layout says, so a box within half a token of the path counts. A seat's name and status
  * (the box below its avatar) count even for the seat the route starts or ends at.
  */
 export function routeCrossings(layout: RoomLayout, from: Anchor, to: Anchor): readonly LayoutBox[] {
@@ -432,20 +433,20 @@ export function routeCrossings(layout: RoomLayout, from: Anchor, to: Anchor): re
   const end = layout.point(to)
   const own = (b: LayoutBox) => pointIn(start, b, 1) || pointIn(end, b, 1)
   const crosses = (b: Box) => {
-    for (let i = 1; i < path.length; i += 1) if (segmentCrosses(path[i - 1] as Point, path[i] as Point, b, 0)) return true
+    for (let i = 1; i < path.length; i += 1) if (segmentCrosses(path[i - 1] as Point, path[i] as Point, b, layout.token / 2)) return true
     return false
   }
   const crossed: LayoutBox[] = []
   for (const b of layout.boxes) {
     if (!solid(b.who.role) || b.who.role === 'table') continue
-    if (own(b)) {
-      if (b.who.role !== 'seat' && b.who.role !== 'overflow') continue
+    if (b.who.role === 'seat' || b.who.role === 'overflow') {
+      // A seat's words and its avatar are what a token must not touch; the gutter beside them is the token's.
       const seat = b.who.role === 'seat' ? layout.seats.get(b.who.key) : layout.overflow.find((o) => o.row === (b.who as { row: 'agents' | 'people' }).row)?.seat
       if (!seat) continue
-      if (crosses(seat.label)) crossed.push(b)
+      if (crosses(seat.label) || (!own(b) && crosses(seat.avatar))) crossed.push(b)
       continue
     }
-    if (crosses(b)) crossed.push(b)
+    if (!own(b) && crosses(b)) crossed.push(b)
   }
   return crossed
 }

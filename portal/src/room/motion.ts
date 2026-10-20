@@ -3,7 +3,6 @@ import type { Point } from '../run'
 export const EASE_MOVE = 'cubic-bezier(0.65, 0, 0.35, 1)'
 export const EASE_OVERSHOOT = 'cubic-bezier(0.3, 1.4, 0.5, 1)'
 
-/** A piece landing in place: fade and scale from 0.92. */
 export const APPEAR_MS = 220
 export const APPEAR: Keyframe[] = [
   { transform: 'scale(0.92)', opacity: 0 },
