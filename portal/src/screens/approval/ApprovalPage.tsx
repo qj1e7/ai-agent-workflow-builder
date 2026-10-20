@@ -293,7 +293,7 @@ function Fingerprint({ digest, show }: { digest: string; show: boolean }) {
 function TechnicalDetails({ view, sentDigest, panel }: { view: ApprovalView; sentDigest: string | null; panel: DecisionPanel }) {
   return (
     <details className={styles['details']}>
-      <summary>Technical details</summary>
+      <summary className="disclosure">Technical details</summary>
       <dl>
         <div>
           <dt>Approval</dt>
