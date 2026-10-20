@@ -1,11 +1,49 @@
-"""Sign-in for local mode: `AUTH_MODE=dev` reads `X-Dev-User`. Entra ID replaces it later."""
+"""Sign-in, behind the Authenticator port. Only dev mode exists so far, and it fails closed."""
 
-from typing import Annotated
+from collections.abc import Mapping
+from dataclasses import dataclass
+from typing import Annotated, Protocol
+from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from platform_api.shared import Principal, Role, UserId
 from platform_api.wire import WireModel
+
+LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1"})
+
+
+class ConfigError(Exception):
+    pass
+
+
+@dataclass(frozen=True)
+class DevAuth:
+    public_base_url: str
+
+
+type AuthConfig = DevAuth
+
+
+def auth_config(env: Mapping[str, str]) -> AuthConfig:
+    mode = env.get("AUTH_MODE")
+    if mode is None:
+        raise ConfigError("AUTH_MODE is not set. Set AUTH_MODE=dev for local mode.")
+    if mode != "dev":
+        raise ConfigError(f"AUTH_MODE={mode!r} is not supported. Only 'dev' exists so far.")
+    base_url = env.get("PUBLIC_BASE_URL")
+    if base_url is None:
+        raise ConfigError("PUBLIC_BASE_URL is not set. Dev mode needs it to prove it is local.")
+    if urlsplit(base_url).hostname not in LOCAL_HOSTS:
+        raise ConfigError(
+            f"AUTH_MODE=dev only runs on localhost or 127.0.0.1, not {base_url!r}. "
+            "The dev sign-in stub must never reach a shared deployment."
+        )
+    return DevAuth(base_url)
+
+
+class Authenticator(Protocol):
+    def __call__(self, request: Request) -> Principal: ...
 
 
 class DevUser(WireModel):
@@ -26,23 +64,33 @@ DEV_USERS = DevUsers(
     ]
 )
 
-
-def dev_user(user_id: str) -> DevUser | None:
-    return next((user for user in DEV_USERS.users if user.id == user_id), None)
+DEV_USER_HEADER = "X-Dev-User"
 
 
-def current_principal(x_dev_user: Annotated[str, Header(alias="X-Dev-User")]) -> Principal:
-    user = dev_user(x_dev_user)
+def dev_authenticator(request: Request) -> Principal:
+    user_id = request.headers.get(DEV_USER_HEADER)
+    user = next((user for user in DEV_USERS.users if user.id == user_id), None)
     if user is None:
-        raise HTTPException(status_code=401, detail="Unknown dev user")
+        raise HTTPException(status_code=401, detail=f"Unknown or missing {DEV_USER_HEADER}")
     return Principal(user.id, frozenset(user.roles))
+
+
+def authenticator_for(config: AuthConfig) -> Authenticator:
+    match config:
+        case DevAuth():
+            return dev_authenticator
+
+
+def current_principal(request: Request) -> Principal:
+    authenticator: Authenticator = request.app.state.authenticator
+    return authenticator(request)
 
 
 CurrentPrincipal = Annotated[Principal, Depends(current_principal)]
 
-router = APIRouter(tags=["dev"])
+dev_router = APIRouter(tags=["dev"])
 
 
-@router.get("/api/v1/dev/users")
+@dev_router.get("/api/v1/dev/users")
 def list_dev_users() -> DevUsers:
     return DEV_USERS
