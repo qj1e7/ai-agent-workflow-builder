@@ -1,6 +1,5 @@
 import type { LiveView } from './live'
 
-/** What the transport says about the playback, and the outcome once a settled run is fully shown. */
 export type Status = 'live' | 'catching_up' | 'replay' | 'done' | 'declined' | 'stopped'
 
 export function statusOf(view: Pick<LiveView, 'frame' | 'room' | 'transport'>): Status {

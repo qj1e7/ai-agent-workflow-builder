@@ -21,7 +21,7 @@ export interface TravelOptions {
 
 /**
  * Keyframes that walk an element along a polyline that ends where the element rests, using transform only.
- * fadeIn lifts the first fifth of the way; fadeOut drops the last fifth, so a token vanishes as it lands.
+ * fadeIn lifts over the first 12 percent of the way; fadeOut drops over the last 12 percent, so a token vanishes as it lands.
  */
 export function travelAlong(path: readonly Point[], extra: TravelOptions = {}): Keyframe[] {
   const end = path[path.length - 1]
@@ -57,7 +57,6 @@ export function travelAlong(path: readonly Point[], extra: TravelOptions = {}): 
   return frames.sort((a, b) => (a.offset as number) - (b.offset as number))
 }
 
-/** A seat tile walking into place as itself: translucent while it moves, solid as it lands. */
 export function walkAlong(path: readonly Point[]): Keyframe[] {
   const frames = travelAlong(path, { fadeOut: true })
   return frames.map((frame, i) => ({ ...frame, opacity: i === frames.length - 1 ? 1 : 0.7 }))

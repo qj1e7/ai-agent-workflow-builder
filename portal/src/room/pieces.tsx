@@ -75,11 +75,9 @@ export function placeAt(box: Box): { left: number; top: number; width: number; h
 /** How a seat comes to be where it is during a beat. */
 export type Entrance =
   | { readonly kind: 'rest' }
-  /** Scales and fades into place, after the token that brought it has landed. */
   | { readonly kind: 'appear'; readonly key: string; readonly delayMs: number }
   /** The avatar tile travels into its seat as itself; the words appear once it lands. A ghost may sit under it meanwhile. */
   | { readonly kind: 'walk'; readonly key: string; readonly keyframes: Keyframe[]; readonly durationMs: number; readonly ghost: ReactNode | null }
-  /** Fades out in place while a token carries its agent away. */
   | { readonly kind: 'fade'; readonly key: string; readonly durationMs: number }
 
 export const REST: Entrance = { kind: 'rest' }
@@ -335,7 +333,6 @@ export function Token({ at, size, what, travel, motion, parked }: TokenProps) {
 interface SpeechCardProps {
   speech: Speech
   speakerName: string
-  /** The layout's slot in the speech band, with the tail over the speaker's avatar. */
   card: Box
   tailX: number
 }

@@ -72,7 +72,6 @@
   background: var(--ink);
 }
 
-/* Dense: node, name and state in one row, and the connector a flexible item after the words instead of a line under them. */
 .dense .station {
   display: flex;
   align-items: center;

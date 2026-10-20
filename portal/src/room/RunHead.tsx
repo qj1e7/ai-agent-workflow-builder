@@ -10,7 +10,6 @@ interface RunHeadProps {
   titleId?: string
 }
 
-/** The run's name, who started it and its state: one row at desktop widths so the stage fits under it, stacked on the phone. */
 export function RunHead({ title, lede, state, titleId }: RunHeadProps) {
   return (
     <header className={styles['head']}>

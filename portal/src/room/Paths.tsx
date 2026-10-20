@@ -58,7 +58,6 @@ export function beatRoute(beat: BeatView | null, room: RoomState, layout: RoomLa
   }
 }
 
-/** The path a seat tile walks as itself during an arrival or a decision, when the layout allows it. */
 export function beatWalk(beat: BeatView | null, room: RoomState, layout: RoomLayout): readonly Point[] | null {
   const move = beat?.type === 'event' ? beat.move : null
   if (!move || (move.type !== 'arrive' && move.type !== 'decide')) return null

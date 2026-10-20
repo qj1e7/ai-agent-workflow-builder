@@ -33,7 +33,6 @@ interface CaptionLineProps extends HTMLAttributes<HTMLParagraphElement> {
   children: ReactNode
 }
 
-/** One line under the room: who or what, then the words. */
 export function CaptionLine({ leading, children, ...rest }: CaptionLineProps) {
   return (
     <p {...rest} className={styles['caption']}>

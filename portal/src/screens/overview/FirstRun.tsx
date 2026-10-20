@@ -18,7 +18,6 @@ import styles from './FirstRun.module.css'
 const TITLE = 'Start the first run'
 const NO_TEMPLATE = 'No ready-made task is available yet.'
 
-/** The overview before any run: the room set from the first template, and one click that starts a real run. */
 export function FirstRun() {
   const templates = useTemplates()
   const template = templates.data?.[0]

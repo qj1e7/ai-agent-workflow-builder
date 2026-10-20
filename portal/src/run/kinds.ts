@@ -46,7 +46,7 @@ export const KINDS = {
 
 export const READING = { baseMs: 1200, perCharMs: 25, maxMs: 4000 } as const
 
-/** How long a message stays readable. Catch-up never squeezes speech below this; it saves its time on travel and technical beats. */
+/** Catch-up never squeezes speech below this. */
 export function readingMsOf(text: string): Ms {
   return Math.min(READING.maxMs, READING.baseMs + READING.perCharMs * text.length)
 }

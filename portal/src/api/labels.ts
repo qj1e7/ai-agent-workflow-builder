@@ -101,7 +101,7 @@ export function connectorLabel(connector: string): string {
   return connectorNames[connector] ?? humanise(connector)
 }
 
-/** The connector whose label appears as a whole word in the words, case-insensitive. "Create Jira ticket" names jira. */
+/** The connector whose label appears as a whole word, case-insensitive. */
 export function connectorNamedIn(words: string): string | null {
   const lower = words.toLowerCase()
   for (const [connector, label] of Object.entries(connectorNames)) {
