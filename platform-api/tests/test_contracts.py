@@ -1,9 +1,3 @@
-"""Every committed fixture parses with platform-api's models, and the stories hang together.
-
-The fixtures live at the repository root, outside the Docker build context, so
-CI runs this file on the host in the contracts step.
-"""
-
 import json
 from pathlib import Path
 from typing import Any, TypeAliasType, get_args

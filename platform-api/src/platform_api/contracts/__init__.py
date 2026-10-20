@@ -1,5 +1,3 @@
-"""Writes the generated contract files that platform-api owns. CI fails on any drift."""
-
 import json
 import shutil
 from pathlib import Path

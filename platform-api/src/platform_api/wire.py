@@ -1,5 +1,3 @@
-"""The wire kernel: the base model and closed sets every context's HTTP surface shares."""
-
 from datetime import datetime
 from typing import Literal, NoReturn
 

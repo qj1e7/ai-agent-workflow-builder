@@ -1,11 +1,3 @@
-"""Agent API wire contract, the agent hub contract.
-
-An agent takes a task, posts events to the callback it was given, and
-returns proposed writes as data. It knows nothing about runs, n8n, Jira or
-approvals. platform-api parses these shapes with its own models and never
-imports this package.
-"""
-
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
@@ -192,9 +184,7 @@ class Health(WireModel):
     status: Literal["ok"] = "ok"
 
 
-class AgentApi(WireModel):
-    """Every shape that crosses the Agent API, for the one schema document."""
-
+class AgentApiSchema(WireModel):
     task_request: TaskRequest
     task_result: TaskResult
     callback: AgentEventPost

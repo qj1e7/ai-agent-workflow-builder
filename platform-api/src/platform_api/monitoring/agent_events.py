@@ -1,11 +1,3 @@
-"""The agent's side of the Agent API event contract, as platform-api parses it.
-
-Agents post these to the callback URL while they run and return the full list
-in their final reply. Run monitoring turns each one into an activity event with
-the agent as the actor, so the `data` shapes are shared with `events.py`.
-This mirrors `agent_runtime.contract`, which platform-api must not import.
-"""
-
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
@@ -104,7 +96,5 @@ agent_event_adapter: TypeAdapter[AgentEvent] = TypeAdapter(AgentEvent)
 
 
 class AgentEventPost(WireModel):
-    """Body of the callback POST, one event per post."""
-
     task_id: str
     event: AgentEvent

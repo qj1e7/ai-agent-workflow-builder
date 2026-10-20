@@ -1,9 +1,3 @@
-"""Writes the Agent API schema and example payloads. CI fails on any drift.
-
-The example events must match the agent events in platform-api's run fixtures.
-platform-api's contract test checks that.
-"""
-
 import json
 import shutil
 import sys
@@ -13,7 +7,7 @@ from pathlib import Path
 from agent_runtime.api import AGENT_CARDS
 from agent_runtime.contract import (
     AgentAddressee,
-    AgentApi,
+    AgentApiSchema,
     AgentEvent,
     AgentEventPost,
     AgentFailedData,
@@ -247,7 +241,7 @@ def _write_json(path: Path, value: object, sort_keys: bool = False) -> None:
 
 def write_all(root: Path) -> list[Path]:
     schema = root / "agent-api.schema.json"
-    _write_json(schema, AgentApi.model_json_schema(), sort_keys=True)
+    _write_json(schema, AgentApiSchema.model_json_schema(), sort_keys=True)
     written = [schema]
     agent_dir = root / "fixtures" / "agent"
     shutil.rmtree(agent_dir, ignore_errors=True)

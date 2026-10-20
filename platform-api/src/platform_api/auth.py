@@ -1,5 +1,3 @@
-"""Sign-in, behind the Authenticator port. Only dev mode exists so far, and it fails closed."""
-
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Annotated, Protocol
