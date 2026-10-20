@@ -175,6 +175,16 @@ describe('layoutRoom over every participant count', () => {
     expect(layoutRoom(plan(2, 1, 1, 1, 1), 1440).table.w).toBe(432)
   })
 
+  it("seats the starter and the demo's one Approver side by side from the narrowest wide width", () => {
+    for (const width of [640, 650, 660]) {
+      const layout = layoutRoom(plan(2, 1, 1, 1, 1), width)
+      expect(layout.size, `at ${width}`).toBe('wide')
+      expect(layout.seats.has('starter'), `starter at ${width}`).toBe(true)
+      expect(layout.seats.has(stepSeatKey(0)), `step 0 at ${width}`).toBe(true)
+      expect(layout.overflow, `overflow at ${width}`).toEqual([])
+    }
+  })
+
   it("puts the Teams door's label in the bottom 40 px of its box, left of the opening", () => {
     const layout = layoutRoom(plan(2, 1, 1, 1, 1), 1440)
     const teams = layout.doors.find((door) => door.side === 'teams')
