@@ -36,7 +36,7 @@ describe('the API client against the demo platform', () => {
 
   it('sends the dev user and gets typed answers back', async () => {
     const client = clientFor('bob')
-    await vi.advanceTimersByTimeAsync(11_000)
+    await vi.advanceTimersByTimeAsync(19_000)
     const approval = unwrap(
       await client.GET('/api/v1/approvals/{approval_id}', { params: { path: { approval_id: 'apr_01JB8' } } }),
     )
@@ -46,14 +46,14 @@ describe('the API client against the demo platform', () => {
 
   it('reads a page of events as JSON', async () => {
     const client = clientFor('alice')
-    await vi.advanceTimersByTimeAsync(11_000)
+    await vi.advanceTimersByTimeAsync(19_000)
     const page = await fetchEventPage(client, 'run_01JB8', 15)
     expect(page.events.map((event) => event.seq)).toEqual([16, 17])
   })
 
   it('turns a refusal into an ApiError that refusalOf can read', async () => {
     const client = clientFor('alice')
-    await vi.advanceTimersByTimeAsync(11_000)
+    await vi.advanceTimersByTimeAsync(19_000)
     const attempt = async () =>
       unwrap(
         await client.POST('/api/v1/approvals/{approval_id}/decisions', {

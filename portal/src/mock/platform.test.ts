@@ -1,12 +1,15 @@
+import teamsStub from '@contracts/fixtures/stubs/teams-messages.json'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ActivityEvent, ApprovalView, DecisionOut, RunView } from '../api/types'
 import { fixtures } from './fixtures'
 import { createDemoPlatform, type DemoPlatformHandle } from './index'
-import { squeezeGap } from './timeline'
 
 const START = Date.parse('2026-11-27T02:00:00Z')
 const ORIGIN = 'http://portal.test/api/v1'
 const SECOND = 1000
+// The success run's pace, from the schedule in timeline.test.ts: the pause lands at 17.3 s and Bob's recorded decision at 32.2 s.
+const PAUSE_MS = 17_345
+const DECIDED_MS = 32_166
 
 let demo: DemoPlatformHandle
 
@@ -71,15 +74,15 @@ describe('the live success run', () => {
     const runId = 'run_01JB8'
     expect((await runView(runId)).state).toBe('pending')
 
-    await vi.advanceTimersByTimeAsync(9 * SECOND)
+    await vi.advanceTimersByTimeAsync(PAUSE_MS - 500)
+    expect((await runView(runId)).state).toBe('proposed')
+    await vi.advanceTimersByTimeAsync(500)
     expect((await runView(runId)).state).toBe('awaiting_approval')
 
-    const sixMinutes = Date.parse('2026-11-03T02:20:23.447Z') - Date.parse('2026-11-03T02:14:10.612Z')
-    const decidedAt = 10.612 * SECOND + squeezeGap(sixMinutes)
-    await vi.advanceTimersByTimeAsync(decidedAt - 9 * SECOND - 500)
+    await vi.advanceTimersByTimeAsync(DECIDED_MS - PAUSE_MS - 500)
     expect((await runView(runId)).state).toBe('awaiting_approval')
 
-    await vi.advanceTimersByTimeAsync(1000)
+    await vi.advanceTimersByTimeAsync(500)
     expect((await runView(runId)).state).toBe('acting')
 
     await vi.advanceTimersByTimeAsync(4 * SECOND)
@@ -88,13 +91,22 @@ describe('the live success run', () => {
     expect(done.state === 'succeeded' && done.written[0]?.external_reference).toBe('MOCK-142')
   })
 
-  it('reports recorded time through now(), so the waiting counter shows the real six minutes', async () => {
-    await vi.advanceTimersByTimeAsync(10.7 * SECOND)
+  it('reports recorded time and its rate through now, so the waiting counter shows the real six minutes and says it is sped up', async () => {
+    await vi.advanceTimersByTimeAsync(18 * SECOND)
     const requested = (await eventsOf('run_01JB8')).find((event) => event.kind === 'approval_requested')
+    expect(demo.now.rate('run_01JB8')).toBe(1)
     await vi.advanceTimersByTimeAsync(8 * SECOND)
-    const waited = demo.now('run_01JB8') - Date.parse(requested?.ts ?? '')
+    const waited = demo.now.now('run_01JB8') - Date.parse(requested?.ts ?? '')
     expect(waited).toBeGreaterThan(60 * SECOND)
     expect(waited).toBeLessThan(6 * 60 * SECOND)
+    expect(demo.now.rate('run_01JB8')).toBe(40)
+    expect(demo.now.rate('run_01JB9'), 'a finished run is never sped up').toBe(1)
+  })
+
+  it('posts the Teams message in the platform words, once the request is announced', async () => {
+    await vi.advanceTimersByTimeAsync(20 * SECOND)
+    const { messages } = await get<{ messages: { run_id: string; text: string }[] }>('/teams-stub/messages')
+    expect(messages.find((message) => message.run_id === 'run_01JB8')?.text).toBe(teamsStub.messages[0]?.text)
   })
 
   it('lists the finished failure and rejected runs beside it, newest first', async () => {
@@ -141,7 +153,7 @@ describe('event feed', () => {
     expect(response.headers.get('Content-Type')).toBe('text/event-stream')
 
     await vi.advanceTimersByTimeAsync(3 * SECOND)
-    expect(seqsIn(chunks)).toEqual([1, 2, 3, 4, 5, 6])
+    expect(seqsIn(chunks)).toEqual([1, 2, 3, 4, 5])
     expect(chunks.join('')).toMatch(/^id: 1\nevent: activity\ndata: \{.*"kind":"run_created".*\}\n\n/)
 
     await vi.advanceTimersByTimeAsync(40 * SECOND)
@@ -262,7 +274,7 @@ describe('approvals on a run started from a use case', () => {
   })
 
   it('lets a real decision replace the recorded one on the live run', async () => {
-    await vi.advanceTimersByTimeAsync(11 * SECOND)
+    await vi.advanceTimersByTimeAsync(18 * SECOND)
     const approval = await get<ApprovalView>('/approvals/apr_01JB8', 'bob')
     await call('POST', '/approvals/apr_01JB8/decisions', { user: 'bob', body: decision(approval, 'decline') })
     await vi.advanceTimersByTimeAsync(60 * SECOND)
@@ -292,7 +304,7 @@ describe('starting and retrying runs', () => {
     expect(events.at(-1)).toMatchObject({ seq: 13, kind: 'run_retried', summary: 'Alice retried the run.' })
     expect((await runView('run_01JB9')).state).toBe('pending')
 
-    await vi.advanceTimersByTimeAsync(20 * SECOND)
+    await vi.advanceTimersByTimeAsync(22 * SECOND)
     const replayed = await eventsOf('run_01JB9', 12)
     expect(replayed.map((event) => event.seq)).toEqual(Array.from({ length: 17 }, (_, index) => index + 13))
     expect(replayed.find((event) => event.kind === 'leg_dispatched')?.data).toEqual({ leg: 'work', attempt: 2 })

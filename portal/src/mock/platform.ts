@@ -68,6 +68,10 @@ export class DemoPlatform {
     return this.run(runId)?.timeline.recordedAt(wall) ?? wall
   }
 
+  clockRate(runId: string, wall: number): number {
+    return this.run(runId)?.timeline.rateAt(wall) ?? 1
+  }
+
   run(runId: string): Run | undefined {
     return this.runs.find((candidate) => candidate.id === runId)
   }
@@ -200,7 +204,7 @@ export class DemoPlatform {
             id: `tm_${record.approval_id.slice('apr_'.length)}`,
             ts: event.ts,
             channel: event.data.channel,
-            text: `Approval needed: ${run.meta.useCaseName} wants to create a Jira ticket in ${String(action.target['project'])} titled "${String(action.fields['title'])}". Open the approval page to decide.`,
+            text: `A run of ${run.meta.useCaseName} needs an Approver. It would create a Jira ticket in ${String(action.target['project'])} titled "${String(action.fields['title'])}". Open the approval page to decide.`,
             link: event.data.link,
             run_id: run.id,
             approval_id: record.approval_id,
