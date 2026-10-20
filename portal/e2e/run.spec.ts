@@ -1,8 +1,7 @@
 import { advance, advanceUntil, openFrozen } from './support/clock'
+import { transportSays, waitingForApprover } from './support/flows'
 import { record } from './support/record'
 import { expect, test } from './support/test'
-
-const waitingForApprover = (page: import('@playwright/test').Page) => page.getByRole('heading', { name: /waiting for an Approver/ })
 
 test('the success run page shows the run from work to written ticket', async ({ page }, info) => {
   await openFrozen(page, '/runs/run_01JB8')
@@ -12,7 +11,7 @@ test('the success run page shows the run from work to written ticket', async ({ 
   await advanceUntil(page, waitingForApprover(page))
   await record(page, info, 'run-pause')
 
-  await advanceUntil(page, page.getByText('Finished', { exact: true }))
+  await advanceUntil(page, transportSays(page, 'Done'))
   await expect(page.getByText('Written as MOCK-142').first()).toBeVisible()
   await record(page, info, 'run-success')
 
@@ -44,7 +43,7 @@ test('the failed run page explains the stop and recovers after Retry run', async
 
 test('the rejected run page shows that nothing was written', async ({ page }, info) => {
   await openFrozen(page, '/runs/run_01JBA')
-  await advanceUntil(page, page.getByText('Finished', { exact: true }))
+  await advanceUntil(page, transportSays(page, 'Declined'))
   await expect(page.getByText('Declined', { exact: true }).first()).toBeVisible()
   await record(page, info, 'run-rejected')
 })

@@ -1,8 +1,8 @@
 import { useRef, type ChangeEvent, type KeyboardEvent } from 'react'
-import type { LiveView } from '../run'
+import { statusOf, type LiveView, type Status } from '../run'
 import { cx } from '../ui/cx'
 import { formatClock, formatDuration } from '../ui/format'
-import { IconCheck, IconDot, IconPause, IconPlay, IconReplay, IconWave, type Icon } from '../ui/icons'
+import { IconAlert, IconCheck, IconDot, IconPause, IconPlay, IconReplay, IconWave, IconX, type Icon } from '../ui/icons'
 import { useWidth } from './hooks'
 import styles from './Transport.module.css'
 
@@ -10,12 +10,13 @@ interface TransportProps {
   view: LiveView
 }
 
-type Status = 'live' | 'replay' | 'finished'
-
 const STATUS: Record<Status, { readonly words: string; readonly icon: Icon; readonly className: string | undefined }> = {
   live: { words: 'Live', icon: IconWave, className: styles['statusLive'] },
+  catching_up: { words: 'Catching up', icon: IconWave, className: styles['statusCatchingUp'] },
   replay: { words: 'Replay', icon: IconDot, className: styles['statusReplay'] },
-  finished: { words: 'Finished', icon: IconCheck, className: styles['statusFinished'] },
+  done: { words: 'Done', icon: IconCheck, className: styles['statusDone'] },
+  declined: { words: 'Declined', icon: IconX, className: styles['statusDeclined'] },
+  stopped: { words: 'Stopped', icon: IconAlert, className: styles['statusStopped'] },
 }
 
 export function Transport({ view }: TransportProps) {
@@ -54,8 +55,7 @@ export function Transport({ view }: TransportProps) {
     else transport.play()
   }
 
-  const status: Status = transport.settled && transport.atEdge ? 'finished' : frame.label
-  const { words, icon: Mark, className } = STATUS[status]
+  const { words, icon: Mark, className } = STATUS[statusOf(view)]
   // Behind on a run that is still going: the one case where there is somewhere to go back to.
   const behind = !transport.settled && !transport.atEdge
 
