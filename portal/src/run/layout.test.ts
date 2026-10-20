@@ -94,10 +94,10 @@ describe('layoutRoom over every participant count', () => {
     expect(hiddenStep).toBe(stepSeatKey(9))
   })
 
-  it('places a speech slot inside the room above every shown agent, with the tail over its avatar', () => {
-    for (const width of [640, 960, 1440]) {
+  it('places a speech slot inside the band above every shown agent at every size, with the tail over its avatar', () => {
+    for (const width of [320, 358, 390, 640, 960, 1440]) {
       const layout = layoutRoom(plan(5, 1, 1, 1), width)
-      expect(layout.speechBand).not.toBeNull()
+      expect(inside(layout.speechBand, layout.floor), `band at ${width}`).toBe(true)
       for (const [key, seat] of layout.seats) {
         const slot = layout.speech.get(key)
         if (!key.startsWith('agent:')) {
@@ -105,14 +105,24 @@ describe('layoutRoom over every participant count', () => {
           continue
         }
         expect(slot, `${key} has no speech slot at ${width}`).toBeDefined()
-        if (!slot || !layout.speechBand) continue
-        expect(inside(slot.card, layout.speechBand)).toBe(true)
+        if (!slot) continue
+        expect(inside(slot.card, layout.speechBand), `${key} leaves the band at ${width}`).toBe(true)
         expect(slot.tailX).toBeGreaterThanOrEqual(seat.avatar.x)
         expect(slot.tailX).toBeLessThanOrEqual(seat.avatar.x + seat.avatar.w)
       }
     }
-    expect(layoutRoom(plan(5, 1, 1, 1), 390).speechBand).toBeNull()
-    expect(layoutRoom(plan(5, 1, 1, 1), 390).speech.size).toBe(0)
+  })
+
+  it('reserves a 104 px band above the agents row at every compact width, so an empty band is the floor and speech never shifts the room', () => {
+    for (const width of [320, 358, 390]) {
+      const layout = layoutRoom(plan(1, 1, 1, 1), width)
+      expect(layout.size).toBe('compact')
+      expect(layout.speechBand.h, `at ${width}`).toBe(104)
+      expect(layout.speechBand.y).toBe(layout.floor.y)
+      const slot = layout.speech.get('agent:a0')
+      expect(slot?.card.h, `card at ${width}`).toBe(92)
+      for (const seat of layout.seats.values()) expect(seat.box.y).toBeGreaterThanOrEqual(layout.speechBand.y + layout.speechBand.h)
+    }
   })
 
   it('routes every hand-off through the lanes without crossing a label', () => {

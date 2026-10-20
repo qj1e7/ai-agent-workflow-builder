@@ -783,35 +783,25 @@
 
 /* speech */
 
+/* 1 + 7 + 16 + 2 + 3 lines of 21.6 + 8 + 1 = 100, the card the layout cuts from the 116 px band after its tail and gap. */
 .speech {
+  position: absolute;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  padding: 7px 14px 8px;
   border: 1px solid var(--line);
   border-radius: var(--radius-object);
   background: var(--surface);
   box-shadow: var(--paper-shadow);
   text-align: left;
+  pointer-events: none;
   animation: fadeIn 180ms var(--ease-out) both;
 }
 
-/* 1 + 7 + 16 + 2 + 3 lines of 21.6 + 8 + 1 = 100, the card the layout cuts from the 116 px band after its tail and gap. */
-.speechRoom {
-  position: absolute;
-  padding: 7px 14px 8px;
-  pointer-events: none;
-}
-
-/* The frame and a three-line card are both 92 px (1 + 6 + 16 + 2 + 3 lines of 19.6 + 7 + 1), so speech comes and goes without a shift. */
-.speechSlotFrame {
-  min-height: 92px;
-  min-width: 0;
-}
-
-.speechSlot {
-  position: relative;
-  min-height: 92px;
-  padding: 6px 14px 7px;
+/* 1 + 6 + 16 + 2 + 3 lines of 18.9 + 7 + 1 = 89.7, inside the 92 px card the layout cuts from the 104 px compact band. */
+.stage_compact .speech {
+  padding: 6px 12px 7px;
 }
 
 .speechHead {
@@ -848,10 +838,9 @@
   -webkit-line-clamp: 3;
 }
 
-.speechSlot .speechText {
+.stage_compact .speechText {
   font-size: var(--text-14);
-  line-height: 1.4;
-  -webkit-line-clamp: 4;
+  line-height: 1.35;
 }
 
 .speechTail {

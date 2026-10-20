@@ -344,10 +344,10 @@ export function Room({ view, width, expectedWrites, label, opening = false }: Ro
   })()
 
   const speech = (() => {
-    if (compact || !room.speech) return null
+    if (!room.speech) return null
     const slot = layout.speech.get(agentSeatKey(room.speech.speaker))
     if (!slot) return null
-    return <SpeechCard speech={room.speech} speakerName={agentIdentity(room.speech.speaker).name} card={slot.card} tailX={slot.tailX} variant="room" />
+    return <SpeechCard speech={room.speech} speakerName={agentIdentity(room.speech.speaker).name} card={slot.card} tailX={slot.tailX} />
   })()
 
   const tableNote = !room.ticket ? (

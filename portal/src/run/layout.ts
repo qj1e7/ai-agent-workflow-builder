@@ -90,7 +90,8 @@ export interface RoomLayout {
   /** The side of every travelling token: a chip, a dot, a glyph. */
   readonly token: number
   readonly floor: Box
-  readonly speechBand: Box | null
+  /** The strip above the agents row where speech is drawn, at every size. Empty, it reads as the room's floor. */
+  readonly speechBand: Box
   readonly table: Box
   readonly ticketSpot: Box
   readonly tableEdge: Box
@@ -98,7 +99,7 @@ export interface RoomLayout {
   readonly seats: ReadonlyMap<SeatKey, SeatBox>
   readonly overflow: readonly OverflowSeat[]
   readonly doors: readonly DoorBox[]
-  /** Wide: one slot per shown agent seat. Compact: empty; speech renders in a fixed slot below the room. */
+  /** One slot per shown agent seat, inside the band, with the tail over that seat's avatar. */
   readonly speech: ReadonlyMap<SeatKey, SpeechSlot>
   /** Every drawn thing, flat, so the no-collision property is one loop over pairs. */
   readonly boxes: readonly LayoutBox[]
@@ -133,6 +134,7 @@ export interface Metrics {
   readonly statusLine: number
   readonly statusLines: number
   readonly band: number
+  /** The speech card's width, clamped to the floor less its padding. Infinity fills that space. */
   readonly cardMaxW: number
   readonly tail: number
   readonly doorCol: number
@@ -202,9 +204,9 @@ export const ROOM_METRICS: Readonly<Record<RoomSize, Metrics>> = {
     nameLines: 2,
     statusLine: 15,
     statusLines: 2,
-    band: 0,
-    cardMaxW: 0,
-    tail: 0,
+    band: 104,
+    cardMaxW: Number.POSITIVE_INFINITY,
+    tail: 8,
     doorCol: 76,
     doorLabelH: 46,
     doorOpeningH: 56,
@@ -497,7 +499,7 @@ export function layoutRoom(plan: FloorPlan, width: number): RoomLayout {
   const floorH = peopleTop + seatH + m.pad - m.wall
   const height = floorH + 2 * m.wall
   const floor = box(floorX, m.wall, floorW, floorH)
-  const speechBand = m.band > 0 ? box(floor.x, bandTop, floor.w, m.band) : null
+  const speechBand = box(floor.x, bandTop, floor.w, m.band)
   const middle = box(floor.x, middleTop, floor.w, middleH)
 
   const teams = teamsDoor(floor, m)
@@ -541,17 +543,15 @@ export function layoutRoom(plan: FloorPlan, width: number): RoomLayout {
   boxes.push({ ...tableEdge, who: { role: 'table_edge' } })
 
   const speech = new Map<SeatKey, SpeechSlot>()
-  if (speechBand) {
-    boxes.push({ ...speechBand, who: { role: 'speech_band' } })
-    const cardW = Math.min(m.cardMaxW, floor.w - 2 * m.pad)
-    const cardH = speechBand.h - m.tail - m.gap
-    for (const seat of agents.shown) {
-      const avatarCx = seat.x + m.seatW / 2
-      const x = Math.max(floor.x + m.pad, Math.min(floor.x + floor.w - m.pad - cardW, avatarCx - cardW / 2))
-      const card = box(x, speechBand.y + m.gap, cardW, cardH)
-      speech.set(seat.key, { card, tailX: avatarCx })
-      boxes.push({ ...card, who: { role: 'speech', key: seat.key } })
-    }
+  boxes.push({ ...speechBand, who: { role: 'speech_band' } })
+  const cardW = Math.min(m.cardMaxW, floor.w - 2 * m.pad)
+  const cardH = speechBand.h - m.tail - m.gap
+  for (const seat of agents.shown) {
+    const avatarCx = seat.x + m.seatW / 2
+    const x = Math.max(floor.x + m.pad, Math.min(floor.x + floor.w - m.pad - cardW, avatarCx - cardW / 2))
+    const card = box(x, speechBand.y + m.gap, cardW, cardH)
+    speech.set(seat.key, { card, tailX: avatarCx })
+    boxes.push({ ...card, who: { role: 'speech', key: seat.key } })
   }
 
   const lanes: Lanes = {
