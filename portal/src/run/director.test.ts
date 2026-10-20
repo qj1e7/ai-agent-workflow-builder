@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { beatMsOf, floorMsOf } from './kinds'
+import { beatMsOf, floorMsOf, readingMsOf } from './kinds'
 import { REPLAY_HOLD_MS, SNAP_DEBT_MS, STALE_MS, TARGET_LAG_MS } from './director'
-import { recording, slice } from './recordings'
+import { recording, renumber, slice, synthetic } from './recordings'
 import { rehearse } from './testing'
 
 const SUCCESS = recording('success')
@@ -36,17 +36,55 @@ describe('live play', () => {
   it('plays a burst faster, in order, never under a floor, and drains to natural pace', () => {
     const show = rehearse('success', { start: 'edge' })
     show.arrive(0, 1, 3, 'backlog')
-    show.arrive(0, 4, 11)
+    show.arrive(0, 4, 10)
     const beats = show.runUntilIdle()
-    expect(beats.map((b) => b.seq)).toEqual([4, 5, 6, 7, 8, 9, 10, 11])
+    expect(beats.map((b) => b.seq)).toEqual([4, 5, 6, 7, 8, 9, 10])
     for (const b of beats) expect(b.durationMs).toBeGreaterThanOrEqual(floorMsOf(SUCCESS[b.seq - 1]!))
-    const debt = [4, 5, 6, 7, 8, 9, 10, 11].reduce((total, seq) => total + beat(seq), 0)
+    const debt = [4, 5, 6, 7, 8, 9, 10].reduce((total, seq) => total + beat(seq), 0)
     expect(debt).toBeLessThanOrEqual(SNAP_DEBT_MS)
     const rate = debt / TARGET_LAG_MS
-    expect(beats[0]?.durationMs).toBe(Math.max(500, Math.round(1000 / rate)))
-    expect(beats.at(-1)?.durationMs).toBe(beat(11))
+    expect(beats[0]?.durationMs).toBe(Math.max(400, Math.round(1000 / rate)))
+    expect(beats.at(-1)?.durationMs).toBe(beat(10))
     const last = beats.at(-1)!
-    expect(last.startedAt + last.durationMs).toBeLessThan(8_500)
+    expect(last.startedAt + last.durationMs, 'catch-up finishes sooner than the queued choreography').toBeLessThan(debt)
+  })
+
+  it('holds a message for its reading time in live catch-up, and squeezes an arrival to its floor', () => {
+    const show = rehearse('success', { start: 'edge' })
+    show.arrive(0, 1, 3, 'backlog')
+    const text = 'Two releases are newer than 1.2.14, so I suggest one ticket.'
+    expect(text).toHaveLength(60)
+    const short = synthetic('success', {
+      seq: 5,
+      ts: '2026-11-03T02:14:02.510Z',
+      actor: { kind: 'agent', id: 'release_checker', display: 'Release checker' },
+      summary: 'Release checker reported 2 new releases.',
+      kind: 'agent_message',
+      data: { speaker: { id: 'release_checker', display: 'Release checker' }, addressee: { kind: 'room' }, text },
+    })
+    const burst = [...slice('success', 4, 4), short, ...slice('success', 6, 10), ...renumber(slice('success', 12, 12), 11)]
+    const debt = burst.reduce((total, event) => total + beatMsOf(event), 0)
+    expect(debt, 'about twelve seconds queued, under the snap').toBeGreaterThan(12_000)
+    expect(debt).toBeLessThan(SNAP_DEBT_MS)
+    show.arriveEvents(0, burst)
+    const beats = show.runUntilIdle()
+    expect(beats.map((b) => b.seq)).toEqual([4, 5, 6, 7, 8, 9, 10, 11])
+    expect(beats[0], 'the arrival is squeezed to its floor').toMatchObject({ kind: 'agent_joined', durationMs: 400 })
+    expect(beats[1]?.durationMs, 'a 60-character message holds for 1200 + 25 per character').toBe(1200 + 25 * 60)
+    expect(readingMsOf(text)).toBe(2700)
+  })
+
+  it("plays the demo's live arrivals without a snap and holds the finding line for its reading time", () => {
+    const show = rehearse('success', { start: 'edge' })
+    show.arrive(0, 1, 3, 'backlog')
+    for (const event of SUCCESS.filter((e) => e.seq >= 4 && e.seq <= 17)) show.arrive(event.at - at(1), event.seq, event.seq)
+    const beats = show.runUntilIdle()
+    expect(beats.map((b) => b.seq)).toEqual([4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 17])
+    expect(beats.every((b) => b.entry === 'continuous'), 'nothing was skipped').toBe(true)
+    const finding = beats.find((b) => b.seq === 10)
+    const line = SUCCESS[9]!
+    expect(finding?.durationMs).toBeGreaterThanOrEqual(line.kind === 'agent_message' ? readingMsOf(line.data.text) : Number.NaN)
+    expect(finding?.durationMs).toBeGreaterThanOrEqual(2_500)
   })
 
   it('snaps to the last story event as a cut when far behind', () => {

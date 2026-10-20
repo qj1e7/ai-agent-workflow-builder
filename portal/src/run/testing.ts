@@ -42,6 +42,8 @@ export interface Rehearsal {
   /** Appends recording[from..to] at this wall time and cues 'grew'. */
   arrive(wall: number, from: number, to: number, origin?: Origin): void
   arriveSynthetic(wall: number, raw: Record<string, unknown>, origin?: Origin): void
+  /** Appends any events as one page at this wall time, so the director sees them all at once. */
+  arriveEvents(wall: number, events: readonly RunEvent[], origin?: Origin): void
   cue(wall: number, cue: Cue): void
   /** A tick that fires late, with the wakes due before it skipped, as a throttled background tab does. */
   lateTick(wall: number): void
@@ -151,16 +153,21 @@ export function rehearse(name: RecordingName, o: { start: Start }): Rehearsal {
     return newBeats()
   }
 
+  function arriveEvents(wall: number, arrived: readonly RunEvent[], origin: Origin): void {
+    advanceTo(wall)
+    tape.append(arrived, origin, now as WallTime)
+    cue(now, { type: 'grew', origin })
+  }
+
   return {
     arrive(wall, from, to, origin = 'live') {
-      advanceTo(wall)
-      tape.append(events.filter((e) => e.seq >= from && e.seq <= to), origin, now as WallTime)
-      cue(now, { type: 'grew', origin })
+      arriveEvents(wall, events.filter((e) => e.seq >= from && e.seq <= to), origin)
     },
     arriveSynthetic(wall, raw, origin = 'live') {
-      advanceTo(wall)
-      tape.append([synthetic(name, raw)], origin, now as WallTime)
-      cue(now, { type: 'grew', origin })
+      arriveEvents(wall, [synthetic(name, raw)], origin)
+    },
+    arriveEvents(wall, arrived, origin = 'live') {
+      arriveEvents(wall, arrived, origin)
     },
     cue,
     lateTick: (wall) => applyCue(wall, { type: 'tick' }),
