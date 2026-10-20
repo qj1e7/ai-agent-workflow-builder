@@ -34,6 +34,8 @@ export interface SeatBox {
   /** Avatar, name and status line together. Collision checks use this. */
   readonly box: Box
   readonly avatar: Box
+  /** Where the name and status may be drawn: inset from the seat box so a token in the gutter never touches a word. */
+  readonly label: Box
 }
 
 export interface OverflowSeat {
@@ -53,9 +55,11 @@ export interface DoorBox {
   readonly labelBox: Box
   /** The gap in the wall. For side doors a y-range on the wall's x; for the Teams door an x-range on the floor's bottom. */
   readonly opening: Box
-  /** Inside the room, in front of the opening: where a request token parks and where people step in. */
+  /** Inside the room, in front of the opening: where a request token parks and where a token passes through. */
   readonly approach: Point
-  /** Write doors only: where the safety checker stands, inside the door. */
+  /** Just outside the wall, through the opening: where a token goes when it leaves the room. */
+  readonly outside: Point
+  /** Write doors only: the row at the top of the opening where the safety checker stands. A token passes below it. */
   readonly checker: Box | null
   /** Doors this slot stands for beyond capacity. */
   readonly hidden: readonly (DoorKey | null)[]
@@ -68,11 +72,23 @@ export interface SpeechSlot {
   readonly tailX: number
 }
 
+export interface Lanes {
+  /** Centre lines: y of the two row lanes, x of the two wall lanes. */
+  readonly top: number
+  readonly bottom: number
+  readonly left: number
+  readonly right: number
+  /** The clear corridor around each centre line. Always wider than the token plus 8 px. */
+  readonly width: number
+}
+
 export interface RoomLayout {
   readonly size: RoomSize
   readonly width: number
   readonly height: number
   readonly wall: number
+  /** The side of every travelling token: a chip, a dot, a glyph. */
+  readonly token: number
   readonly floor: Box
   readonly speechBand: Box | null
   readonly table: Box
@@ -86,11 +102,10 @@ export interface RoomLayout {
   readonly speech: ReadonlyMap<SeatKey, SpeechSlot>
   /** Every drawn thing, flat, so the no-collision property is one loop over pairs. */
   readonly boxes: readonly LayoutBox[]
-  /** Horizontal travel lanes (y) and wall-side lanes (x) that routes use. */
-  readonly lanes: { readonly top: number; readonly bottom: number; readonly left: number; readonly right: number }
+  readonly lanes: Lanes
   /** Pixel position of any anchor. Total: a hidden seat answers with its overflow seat. */
   point(a: Anchor): Point
-  /** Orthogonal polyline from one anchor to another through the lanes, so a travelling object never crosses a label. */
+  /** Orthogonal polyline from one anchor to another through the lanes, so a travelling token never crosses a label. */
   route(from: Anchor, to: Anchor): readonly Point[]
 }
 
@@ -99,17 +114,26 @@ export interface Metrics {
   readonly wall: number
   readonly pad: number
   readonly gap: number
-  readonly rowGap: number
+  /** Width of every lane: the gutters between rows and the corridors beside the door columns. */
   readonly lane: number
+  readonly token: number
   readonly avatar: number
   readonly seatW: number
-  readonly seatH: number
+  /** The label (name and status) stays this far inside the seat box on each side. */
+  readonly labelInset: number
+  readonly labelGap: number
+  readonly nameLine: number
+  readonly nameLines: number
+  readonly statusLine: number
+  readonly statusLines: number
   readonly band: number
   readonly cardMaxW: number
   readonly tail: number
   readonly doorCol: number
   readonly doorLabelH: number
   readonly doorOpeningH: number
+  /** The safety checker's row at the top of a write door's opening. */
+  readonly checkerH: number
   readonly doorsShown: number
   readonly tableMinH: number
   readonly ticketW: number
@@ -124,24 +148,30 @@ export const ROOM_METRICS: Readonly<Record<RoomSize, Metrics>> = {
   wide: {
     minWidth: 640,
     wall: 12,
-    pad: 16,
+    pad: 12,
     gap: 8,
-    rowGap: 12,
-    lane: 20,
+    lane: 32,
+    token: 24,
     avatar: 56,
-    seatW: 128,
-    seatH: 100,
-    band: 120,
+    seatW: 152,
+    labelInset: 12,
+    labelGap: 3,
+    nameLine: 17,
+    nameLines: 1,
+    statusLine: 16,
+    statusLines: 1,
+    band: 112,
     cardMaxW: 320,
     tail: 8,
     doorCol: 156,
     doorLabelH: 48,
-    doorOpeningH: 60,
+    doorOpeningH: 64,
+    checkerH: 28,
     doorsShown: 3,
-    tableMinH: 160,
+    tableMinH: 136,
     ticketW: 300,
     ticketH: 108,
-    teamsW: 168,
+    teamsW: 200,
     teamsH: 56,
     teamsOpeningW: 56,
   },
@@ -150,25 +180,35 @@ export const ROOM_METRICS: Readonly<Record<RoomSize, Metrics>> = {
     wall: 8,
     pad: 10,
     gap: 4,
-    rowGap: 10,
-    lane: 12,
+    lane: 28,
+    token: 20,
     avatar: 40,
-    seatW: 80,
-    seatH: 94,
+    seatW: 88,
+    labelInset: 4,
+    labelGap: 3,
+    nameLine: 15,
+    nameLines: 2,
+    statusLine: 15,
+    statusLines: 2,
     band: 0,
     cardMaxW: 0,
     tail: 0,
-    doorCol: 80,
-    doorLabelH: 36,
-    doorOpeningH: 52,
+    doorCol: 76,
+    doorLabelH: 46,
+    doorOpeningH: 56,
+    checkerH: 24,
     doorsShown: 2,
-    tableMinH: 116,
+    tableMinH: 130,
     ticketW: 168,
-    ticketH: 96,
+    ticketH: 118,
     teamsW: 96,
     teamsH: 50,
     teamsOpeningW: 40,
   },
+}
+
+export function seatHeight(m: Metrics): number {
+  return m.avatar + 2 * m.labelGap + m.nameLines * m.nameLine + m.statusLines * m.statusLine
 }
 
 const box = (x: number, y: number, w: number, h: number): Box => ({ x, y, w, h })
@@ -223,7 +263,13 @@ function peopleRow(plan: FloorPlan, span: Box, y: number, m: Metrics): Row {
 }
 
 function seatBox(x: number, y: number, m: Metrics): SeatBox {
-  return { box: box(x, y, m.seatW, m.seatH), avatar: box(x + (m.seatW - m.avatar) / 2, y, m.avatar, m.avatar) }
+  const h = seatHeight(m)
+  const labelTop = y + m.avatar + m.labelGap
+  return {
+    box: box(x, y, m.seatW, h),
+    avatar: box(x + (m.seatW - m.avatar) / 2, y, m.avatar, m.avatar),
+    label: box(x + m.labelInset, labelTop, m.seatW - 2 * m.labelInset, y + h - labelTop),
+  }
 }
 
 function wallDoors(doors: readonly PlanDoor[], side: 'read' | 'write', floor: Box, middle: Box, m: Metrics): DoorBox[] {
@@ -233,26 +279,30 @@ function wallDoors(doors: readonly PlanDoor[], side: 'read' | 'write', floor: Bo
   const doorH = m.doorLabelH + m.doorOpeningH
   const top = middle.y + Math.round((middle.h - stack(shownCount, m)) / 2)
   const x = side === 'read' ? floor.x : floor.x + floor.w - m.doorCol
+  const wallX = side === 'read' ? floor.x : floor.x + floor.w
   const result: DoorBox[] = []
   for (let i = 0; i < shownCount; i += 1) {
     const last = i === shownCount - 1 && mine.length > shownCount
     const door = mine[i] as PlanDoor
     const y = top + i * (doorH + m.gap)
-    const whole = box(x, y, m.doorCol, doorH)
-    const opening = box(side === 'read' ? floor.x : floor.x + floor.w, y + m.doorLabelH, 0, m.doorOpeningH)
-    const approachX = side === 'read' ? floor.x + Math.round(m.doorCol * 0.36) : floor.x + floor.w - Math.round(m.doorCol * 0.36)
-    const approach = { x: approachX, y: opening.y + opening.h / 2 }
+    const opening = box(wallX, y + m.doorLabelH, 0, m.doorOpeningH)
     const inset = Math.round(m.doorCol * 0.08)
-    const checker = side === 'write' ? box(x + inset, opening.y, m.doorCol - 2 * inset, m.doorOpeningH) : null
-    const key = last ? null : door.key === 'teams' ? null : door.key
+    const checker = side === 'write' ? box(x + inset, opening.y, m.doorCol - 2 * inset, m.checkerH) : null
+    // A token passes the write door below the checker's row, centred in what is left of the opening.
+    const corridorTop = checker ? checker.y + checker.h + (m.gap > 4 ? m.gap / 2 : 4) : opening.y
+    const approachY = corridorTop + (opening.y + opening.h - corridorTop) / 2
+    const depth = Math.round(m.doorCol * 0.36)
+    const approach = { x: side === 'read' ? wallX + depth : wallX - depth, y: approachY }
+    const outside = { x: side === 'read' ? wallX - m.wall - m.token : wallX + m.wall + m.token, y: approachY }
     result.push({
       side,
-      key: last ? (door.key === 'teams' ? null : door.key) : key,
+      key: last ? (door.key === 'teams' ? null : door.key) : door.key === 'teams' ? null : door.key,
       label: door.label,
-      box: whole,
+      box: box(x, y, m.doorCol, doorH),
       labelBox: box(x, y, m.doorCol, m.doorLabelH),
       opening,
       approach,
+      outside,
       checker,
       hidden: last ? mine.slice(i).map((d) => (d.key === 'teams' ? null : d.key)) : [],
     })
@@ -263,16 +313,17 @@ function wallDoors(doors: readonly PlanDoor[], side: 'read' | 'write', floor: Bo
 function teamsDoor(floor: Box, m: Metrics): DoorBox {
   const x = floor.x + floor.w - m.pad - m.teamsW
   const y = floor.y + floor.h - m.teamsH
-  const whole = box(x, y, m.teamsW, m.teamsH)
   const opening = box(x + m.teamsW - m.teamsOpeningW, floor.y + floor.h, m.teamsOpeningW, 0)
+  const approach = { x: opening.x + opening.w / 2, y: y + Math.round(m.teamsH * 0.3) }
   return {
     side: 'teams',
     key: 'teams',
     label: null,
-    box: whole,
+    box: box(x, y, m.teamsW, m.teamsH),
     labelBox: box(x, y, m.teamsW - m.teamsOpeningW - m.gap, m.teamsH),
     opening,
-    approach: { x: opening.x + opening.w / 2, y: y + Math.round(m.teamsH * 0.3) },
+    approach,
+    outside: { x: approach.x, y: floor.y + floor.h + m.wall + m.token },
     checker: null,
     hidden: [],
   }
@@ -329,6 +380,48 @@ function allowed(a: LayoutBox, b: LayoutBox): boolean {
   return false
 }
 
+export interface LaneViolation {
+  readonly lane: 'top' | 'bottom' | 'left' | 'right' | 'door'
+  readonly corridor: Box
+  readonly box: Box
+}
+
+/**
+ * Solid boxes that reach into a lane: the two row lanes across the floor, the two wall lanes between the
+ * door columns and the table, and every door's corridor from its lane to the wall. Exported for the tests.
+ */
+export function laneViolations(layout: RoomLayout): readonly LaneViolation[] {
+  const { lanes, floor, token } = layout
+  const half = lanes.width / 2
+  const corridors: { lane: LaneViolation['lane']; corridor: Box }[] = [
+    { lane: 'top', corridor: box(floor.x, lanes.top - half, floor.w, lanes.width) },
+    { lane: 'bottom', corridor: box(floor.x, lanes.bottom - half, floor.w, lanes.width) },
+    { lane: 'left', corridor: box(lanes.left - half, lanes.top - half, lanes.width, lanes.bottom - lanes.top + lanes.width) },
+    { lane: 'right', corridor: box(lanes.right - half, lanes.top - half, lanes.width, lanes.bottom - lanes.top + lanes.width) },
+  ]
+  const solids = layout.boxes.filter((b) => solid(b.who.role))
+  const bad: LaneViolation[] = []
+  for (const { lane, corridor } of corridors) {
+    for (const b of solids) if (intersects(corridor, b)) bad.push({ lane, corridor, box: b })
+  }
+  const clear = token + 8
+  for (const door of layout.doors) {
+    const corridor =
+      door.side === 'teams'
+        ? box(door.approach.x - clear / 2, lanes.bottom, clear, door.approach.y - lanes.bottom)
+        : door.side === 'read'
+          ? box(floor.x, door.approach.y - clear / 2, lanes.left - floor.x, clear)
+          : box(lanes.right, door.approach.y - clear / 2, floor.x + floor.w - lanes.right, clear)
+    const walls = [door.labelBox, ...(door.checker ? [door.checker] : [])]
+    for (const b of walls) if (intersects(corridor, b)) bad.push({ lane: 'door', corridor, box: b })
+    for (const b of solids) {
+      if (b.who.role === 'door' || b.who.role === 'checker') continue
+      if (intersects(corridor, b)) bad.push({ lane: 'door', corridor, box: b })
+    }
+  }
+  return bad
+}
+
 /**
  * Solid boxes a route crosses, other than the boxes its two ends live in. A seat's name and status
  * (the box below its avatar) count even for the seat the route starts or ends at.
@@ -349,8 +442,7 @@ export function routeCrossings(layout: RoomLayout, from: Anchor, to: Anchor): re
       if (b.who.role !== 'seat' && b.who.role !== 'overflow') continue
       const seat = b.who.role === 'seat' ? layout.seats.get(b.who.key) : layout.overflow.find((o) => o.row === (b.who as { row: 'agents' | 'people' }).row)?.seat
       if (!seat) continue
-      const label: Box = { x: b.x, y: seat.avatar.y + seat.avatar.h, w: b.w, h: b.y + b.h - (seat.avatar.y + seat.avatar.h) }
-      if (crosses(label)) crossed.push(b)
+      if (crosses(seat.label)) crossed.push(b)
       continue
     }
     if (crosses(b)) crossed.push(b)
@@ -369,22 +461,24 @@ function pointIn(p: Point, b: Box, pad: number): boolean {
  * - no two of seats, overflow seats, doors, checkers, table and the Teams door overlap
  * - all of them sit inside the floor; the speech band holds only speech cards; the table holds only the ticket
  * - adding an agent or a step never moves an already shown seat (until that seat itself goes to overflow)
+ * - every lane is wider than the token plus 8 px and no solid box reaches into it
  */
 export function layoutRoom(plan: FloorPlan, width: number): RoomLayout {
   const size: RoomSize = width >= ROOM_METRICS.wide.minWidth ? 'wide' : 'compact'
   const m = ROOM_METRICS[size]
+  const seatH = seatHeight(m)
   const floorX = m.wall
   const floorW = width - 2 * m.wall
   const readCount = plan.doors.filter((door) => door.side === 'read').length
   const writeCount = plan.doors.filter((door) => door.side === 'write').length
-  const doorsOnAWall = Math.min(m.doorsShown, Math.max(2, readCount, writeCount))
+  const doorsOnAWall = Math.min(m.doorsShown, Math.max(1, readCount, writeCount))
   const middleH = Math.max(m.tableMinH, stack(doorsOnAWall, m))
 
   const bandTop = m.wall
   const agentsTop = bandTop + m.band
-  const middleTop = agentsTop + m.seatH + m.rowGap
-  const peopleTop = middleTop + middleH + m.rowGap
-  const floorH = peopleTop + m.seatH + m.pad - m.wall
+  const middleTop = agentsTop + seatH + m.lane
+  const peopleTop = middleTop + middleH + m.lane
+  const floorH = peopleTop + seatH + m.pad - m.wall
   const height = floorH + 2 * m.wall
   const floor = box(floorX, m.wall, floorW, floorH)
   const speechBand = m.band > 0 ? box(floor.x, bandTop, floor.w, m.band) : null
@@ -404,7 +498,7 @@ export function layoutRoom(plan: FloorPlan, width: number): RoomLayout {
   const tableEdge = box(table.x + table.w - edgeW - m.gap, ticketSpot.y, edgeW, ticketH)
 
   const agents = agentsRow(plan, floor, agentsTop, m)
-  const peopleSpan = box(floor.x + m.pad, peopleTop, teams.box.x - m.gap - (floor.x + m.pad), m.seatH)
+  const peopleSpan = box(floor.x + m.pad, peopleTop, teams.box.x - m.gap - (floor.x + m.pad), seatH)
   const people = peopleRow(plan, peopleSpan, peopleTop, m)
 
   const seats = new Map<SeatKey, SeatBox>()
@@ -445,11 +539,12 @@ export function layoutRoom(plan: FloorPlan, width: number): RoomLayout {
     }
   }
 
-  const lanes = {
-    top: agentsTop + m.seatH + m.rowGap / 2,
-    bottom: middleTop + middleH + m.rowGap / 2,
+  const lanes: Lanes = {
+    top: agentsTop + seatH + m.lane / 2,
+    bottom: middleTop + middleH + m.lane / 2,
     left: floor.x + m.doorCol + m.lane / 2,
     right: floor.x + floor.w - m.doorCol - m.lane / 2,
+    width: m.lane,
   }
 
   const overflowFor = (key: SeatKey) => overflow.find((seat) => seat.hidden.includes(key))
@@ -509,9 +604,14 @@ export function layoutRoom(plan: FloorPlan, width: number): RoomLayout {
     return overflowFor(key)?.seat.box ?? null
   }
 
+  const rowBoxes = (y: number): Box[] => [...seats.values(), ...overflow.map((o) => o.seat)].map((s) => s.box).filter((b) => b.y === y)
+  const neighbourOn = (seat: Box, side: 'left' | 'right') =>
+    rowBoxes(seat.y).some((other) => other !== seat && (side === 'left' ? other.x + other.w <= seat.x + m.gap + 1 && other.x + other.w >= seat.x - m.gap - 1 : other.x >= seat.x + seat.w - m.gap - 1 && other.x <= seat.x + seat.w + m.gap + 1))
+
   /**
-   * The lane a zone exits into. A seat leaves sideways through the gutter beside it (towards the other end),
-   * so a path never crosses its own name and status; doors exit into their wall lane.
+   * The lane a zone exits into. A seat leaves sideways through a gutter beside it, so a path never crosses its
+   * own name and status: the gutter towards the destination, unless only that side has a neighbour. Doors exit
+   * into their wall lane.
    */
   function exitOf(a: Anchor, p: Point, towards: Point): Point[] {
     switch (zoneOf(a)) {
@@ -520,7 +620,10 @@ export function layoutRoom(plan: FloorPlan, width: number): RoomLayout {
         const lane = zoneOf(a) === 'agents' ? lanes.top : lanes.bottom
         const seat = seatBoxOf(a)
         if (!seat) return [{ x: p.x, y: lane }]
-        const gutter = towards.x >= p.x ? seat.x + seat.w + m.gap / 2 : seat.x - m.gap / 2
+        let side: 'left' | 'right' = towards.x >= p.x ? 'right' : 'left'
+        const other = side === 'right' ? 'left' : 'right'
+        if (neighbourOn(seat, side) && !neighbourOn(seat, other)) side = other
+        const gutter = side === 'right' ? seat.x + seat.w + m.gap / 2 : seat.x - m.gap / 2
         return [
           { x: gutter, y: p.y },
           { x: gutter, y: lane },
@@ -537,12 +640,30 @@ export function layoutRoom(plan: FloorPlan, width: number): RoomLayout {
     }
   }
 
+  /** Two shown seats in one row with no shown seat between them: a token walks straight across at avatar height. */
+  function adjacentSeats(from: Anchor, to: Anchor): boolean {
+    const a = seatBoxOf(from)
+    const b = seatBoxOf(to)
+    if (!a || !b || a.y !== b.y || a === b) return false
+    const [left, right] = a.x < b.x ? [a, b] : [b, a]
+    return !rowBoxes(a.y).some((other) => other !== a && other !== b && other.x > left.x && other.x < right.x)
+  }
+
+  /** The ticket card's edge facing the lane the route uses, so a token starts and ends beside the card, never on it. */
+  function ticketEdge(laneSide: Point): Point {
+    const c = centre(ticketSpot)
+    if (laneSide.y === lanes.top) return { x: c.x, y: ticketSpot.y }
+    if (laneSide.y === lanes.bottom) return { x: c.x, y: ticketSpot.y + ticketSpot.h }
+    return laneSide.x < c.x ? { x: ticketSpot.x, y: c.y } : { x: ticketSpot.x + ticketSpot.w, y: c.y }
+  }
+
   function route(from: Anchor, to: Anchor): readonly Point[] {
     const a = point(from)
     const b = point(to)
     const za = zoneOf(from)
     const zb = zoneOf(to)
     if (za === 'table' && zb === 'table') return [a, b]
+    if (adjacentSeats(from, to)) return [a, b]
     const out = exitOf(from, a, b)
     const back = exitOf(to, b, a).reverse()
     const first = out[out.length - 1] ?? a
@@ -551,13 +672,11 @@ export function layoutRoom(plan: FloorPlan, width: number): RoomLayout {
     const horizontal = (p: Point, q: Point) => p.y === q.y
     const vertical = (p: Point, q: Point) => p.x === q.x
     if (za === 'table' || zb === 'table') {
-      const tableSide = za === 'table' ? a : b
       const laneSide = za === 'table' ? last : first
+      const edge = ticketEdge(laneSide)
       const corner: Point =
-        laneSide.y === lanes.top || laneSide.y === lanes.bottom
-          ? { x: tableSide.x, y: laneSide.y }
-          : { x: laneSide.x, y: tableSide.y }
-      return za === 'table' ? [a, corner, ...back, b] : [a, ...out, corner, b]
+        laneSide.y === lanes.top || laneSide.y === lanes.bottom ? { x: edge.x, y: laneSide.y } : { x: laneSide.x, y: edge.y }
+      return za === 'table' ? [edge, corner, ...back, b] : [a, ...out, corner, edge]
     }
     if (!horizontal(first, last) && !vertical(first, last)) {
       const onRow = (p: Point) => p.y === lanes.top || p.y === lanes.bottom
@@ -579,6 +698,7 @@ export function layoutRoom(plan: FloorPlan, width: number): RoomLayout {
     width,
     height,
     wall: m.wall,
+    token: m.token,
     floor,
     speechBand,
     table,
