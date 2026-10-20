@@ -12,6 +12,7 @@ import {
   draftProblems,
   editableParams,
   exampleParams,
+  fieldWords,
   fixedParams,
   hasProblems,
   planBlocks,
@@ -157,14 +158,16 @@ function PlanForm({ template, task, runNow }: { template: TemplateView; task: st
       {editableParams(template).map((param) => {
         const id = `${formId}-${param.name}`
         const problem = attempted ? (problems.params[param.name] ?? null) : null
+        const { label, help } = fieldWords(param.description)
+        const described = [help ? `${id}-help` : null, problem ? `${id}-problem` : null].filter((each) => each !== null).join(' ')
         return (
-          <Field key={param.name} id={id} label={param.description} problem={problem}>
+          <Field key={param.name} id={id} label={label} help={help} problem={problem}>
             <input
               id={id}
               value={params[param.name] ?? ''}
               onChange={onParam(param.name)}
               aria-invalid={problem ? true : undefined}
-              aria-describedby={problem ? `${id}-problem` : undefined}
+              aria-describedby={described || undefined}
               autoComplete="off"
               spellCheck={false}
             />
@@ -227,15 +230,21 @@ function RunError({ message }: { message: string | null }) {
 interface FieldProps {
   id: string
   label: string
+  help?: string | null
   problem: string | null
   children: ReactNode
 }
 
-function Field({ id, label, problem, children }: FieldProps) {
+function Field({ id, label, help = null, problem, children }: FieldProps) {
   return (
     <div className={styles['field']}>
       <label htmlFor={id}>{label}</label>
       {children}
+      {help ? (
+        <p id={`${id}-help`} className={styles['help']}>
+          {help}
+        </p>
+      ) : null}
       {problem ? (
         <InlineMessage tone="error" id={`${id}-problem`}>
           {problem}
