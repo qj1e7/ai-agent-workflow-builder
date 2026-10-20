@@ -204,6 +204,17 @@ class NotRetryable:
 
 type RetryResult = Retried | NotRetryable | NotFound
 
+STATE_NAMES: dict[type[RunState], str] = {
+    Pending: "pending",
+    Working: "working",
+    Proposed: "proposed",
+    AwaitingApproval: "awaiting_approval",
+    Acting: "acting",
+    Succeeded: "succeeded",
+    Rejected: "rejected",
+    Failed: "failed",
+}
+
 START_LEG = "start_leg"
 ANNOUNCE = "announce"
 
@@ -363,8 +374,7 @@ class Orchestrator:
         execution: N8nExecutionId,
         fails_run: bool,
     ) -> StepReply:
-        state_name = type(record.state).__name__.lower()
-        detail = f"{step.value} is not allowed while the run is {state_name}"
+        detail = f"{step.value} is not allowed while the run is {state_name(record.state)}"
         events: list[PendingEvent] = []
         if step is StepName.WRITE_ACTION:
             events.append(_denied("out_of_order", detail))
@@ -701,7 +711,7 @@ class Orchestrator:
                 return NotFound()
             state = record.state
             if not isinstance(state, Failed):
-                return NotRetryable(f"The run is {type(state).__name__.lower()}, not failed")
+                return NotRetryable(f"The run is {state_name(state)}, not failed")
             if not state.failure.retryable:
                 return NotRetryable(
                     f"{state.failure.reason.value} cannot be retried. Start a new run"
@@ -889,10 +899,10 @@ class Orchestrator:
                 case Pending() | Working() | Proposed() | Acting() as state:
                     if state.deadline_at > now:
                         return
-                    waited = type(state).__name__.lower()
                     failure = Failure(
                         FailureReason.TIMED_OUT,
-                        f"The workflow engine did not come back while the run was {waited}",
+                        "The workflow engine did not come back while the run was "
+                        f"{state_name(state)}",
                         retryable=True,
                     )
                     await self._commit(uow, record, fail(state, failure))
@@ -928,6 +938,11 @@ class Orchestrator:
             {"workflow": record.spec.workflow, "leg": leg.value, "attempt": attempt},
             next_at,
         )
+
+
+def state_name(state: RunState) -> str:
+    """The wire name of a state, as the Portal shows it."""
+    return STATE_NAMES[type(state)]
 
 
 def _active(state: RunState) -> Pending | Working | Proposed | Acting:

@@ -1,7 +1,6 @@
 import json
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from pathlib import Path
 
 import anyio
 import pytest
@@ -22,10 +21,10 @@ from platform_api.monitoring import (
 from platform_api.settings import Context
 from platform_api.shared import RunId, TaskId
 from tests.conftest import PostgresUrls
+from tests.support import FIXTURES
 
 pytestmark = pytest.mark.anyio
 
-FIXTURES = Path(__file__).resolve().parents[2] / "contracts" / "fixtures"
 RUN = RunId("run_01TEST")
 
 

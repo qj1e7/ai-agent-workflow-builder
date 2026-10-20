@@ -1,6 +1,7 @@
 """Shared fixtures for the orchestration tests: a run spec and the fixture stories."""
 
 import json
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -23,7 +24,8 @@ LOCAL_ENV = {
 }
 
 CONTRACTS = Path(__file__).resolve().parents[2] / "contracts"
-FIXTURES = CONTRACTS / "fixtures"
+FIXTURES = Path(os.environ.get("CONTRACT_FIXTURES") or CONTRACTS / "fixtures")
+"""The test image has no contracts/ folder, so CI mounts it and names it here."""
 
 ALICE = Principal(UserId("alice"), frozenset({Role.OPERATOR, Role.APPROVER}), "Alice")
 BOB = Principal(UserId("bob"), frozenset({Role.APPROVER}), "Bob")
