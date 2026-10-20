@@ -1,9 +1,10 @@
-import { connectorNamedIn } from '../api/labels'
 import type { BlockView } from '../api/types'
-import { doorKey, type ExpectedWrite, type LiveView, type Station } from '../run'
+import type { LiveView, Station } from '../run'
 import { formatDuration } from '../ui/format'
 import type { SpineBlock } from '../ui/Spine'
 import type { SpineState } from '../ui/spineState'
+
+export { expectedWritesOf } from '../run'
 
 function stateOf(station: Station, sceneTime: number): SpineState {
   const state = station.state
@@ -29,13 +30,4 @@ export function spineBlocks(view: LiveView, blocks: readonly BlockView[] | undef
     state: stateOf(station, view.frame.sceneTime),
     description: station.block.description,
   }))
-}
-
-export function expectedWritesOf(blocks: readonly BlockView[] | undefined): ExpectedWrite[] {
-  return (blocks ?? [])
-    .filter((block) => block.kind === 'write_action')
-    .map((block) => {
-      const connector = connectorNamedIn(block.name)
-      return { label: block.name, key: connector ? doorKey(connector) : null }
-    })
 }
