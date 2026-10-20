@@ -12,7 +12,7 @@ test('the overview shows each stage of the live success run', async ({ page }, i
   await advanceUntil(page, page.getByText('Waiting for an Approver', { exact: true }).first())
   await record(page, info, 'overview-pause')
 
-  await advanceUntil(page, page.getByText('Approved, being written'))
+  await advanceUntil(page, page.locator('[data-ticket="approved"]'))
   await record(page, info, 'overview-writing')
 
   await advanceUntil(page, page.getByText('Finished', { exact: true }))

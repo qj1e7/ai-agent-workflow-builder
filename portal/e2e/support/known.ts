@@ -15,12 +15,6 @@ interface Known {
 // Delete an entry when the app is fixed, so the guard goes back to failing on it.
 const KNOWN: readonly Known[] = [
   {
-    check: 'small-text',
-    scope: /^(desktop|phone)\/run-failure$/,
-    found: /^"[123]" at 11px in text$/,
-    why: 'The step numbers on the room paths (src/room/Paths.tsx) are drawn at 11px, under the 12px minimum.',
-  },
-  {
     check: 'tab-order',
     scope: /^desktop\/overview$/,
     found: /^"Position in the run" .* then "Open the full run" /,
