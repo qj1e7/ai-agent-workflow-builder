@@ -225,7 +225,8 @@ export function createLiveView(o: { runId: RunId; env: LiveViewEnv; whenFinished
     const edge = atEdge(d)
     const open = openStep(room)
     const startedAt = room.startedAt ?? (tape.length > 0 ? tape.event(1).at : now)
-    const end = settled ? tape.event(tape.length).at : s.runNow
+    const latest = tape.latestAt() ?? now
+    const end = settled ? latest : Math.max(s.runNow, latest)
     const frame: Frame = {
       mode: d.mode.is,
       shown: d.shown,

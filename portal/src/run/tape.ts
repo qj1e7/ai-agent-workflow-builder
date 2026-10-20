@@ -41,6 +41,8 @@ export interface TapeReader {
   /** 1..length. The move into frame(seq); null for technical events. */
   move(seq: number): Move | null
   arrival(seq: number): Arrival
+  /** The latest timestamp on the tape. Event times need not grow with seq when two clocks stamp them. */
+  latestAt(): RunTime | null
   /** Append-only arrays; a slice of the first n is a stable snapshot. */
   marks(): readonly TimelineMark[]
   minutes(): readonly MinutesEntry[]
@@ -62,6 +64,7 @@ export function createTape(registry: AgentRegistry): Tape {
   const arrivals: Arrival[] = []
   const marks: TimelineMark[] = []
   const minutes: MinutesEntry[] = []
+  let latest: RunTime | null = null
 
   function at(seq: number): number {
     if (seq < 1 || seq > events.length) throw new RangeError(`seq ${seq} is not on the tape (1..${events.length})`)
@@ -80,6 +83,7 @@ export function createTape(registry: AgentRegistry): Tape {
     },
     move: (seq) => moves[at(seq)] ?? null,
     arrival: (seq) => arrivals[at(seq)] as Arrival,
+    latestAt: () => latest,
     marks: () => marks,
     minutes: () => minutes,
     append(incoming, origin, wall) {
@@ -89,6 +93,7 @@ export function createTape(registry: AgentRegistry): Tape {
         const { room, move } = applyEvent(previous, event, registry)
         const tier = ruleOf(event).tier
         events.push(event)
+        latest = latest === null || event.at > latest ? event.at : latest
         frames.push(room)
         moves.push(move)
         arrivals.push({ at: wall, origin })
