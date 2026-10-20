@@ -10,8 +10,10 @@ from platform_api.builder import Builder
 from platform_api.db import Database
 from platform_api.monitoring import ActivityLog, callback_for
 from platform_api.orchestration.agents import HttpAgentRuntime
-from platform_api.orchestration.dispatch import N8nWebhooks, TeamsStub, webhook_path
+from platform_api.orchestration.dispatch import N8nWebhooks, TeamsStub
+from platform_api.orchestration.runs import Leg
 from platform_api.orchestration.service import Orchestrator
+from platform_api.orchestration.workflows import load_all
 from platform_api.orchestration.write_actions import MockJiraConnector, WriteGateway
 from platform_api.settings import Settings
 from platform_api.shared import RunId, TaskId
@@ -57,10 +59,15 @@ async def build(settings: Settings) -> Services:
         )
         return callback.url, callback.token
 
+    definitions = {d.name: d for d in load_all()}
+
+    def path_for(workflow: str, leg: Leg) -> str:
+        return definitions[workflow].webhook_path(leg)
+
     orchestrator = Orchestrator(
         db,
         activity,
-        N8nWebhooks(settings.n8n_base_url, webhook_path),
+        N8nWebhooks(settings.n8n_base_url, path_for),
         teams,
         HttpAgentRuntime(settings.agent_runtime_url, settings.agent_api_key),
         WriteGateway(db, [jira]),
