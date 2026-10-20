@@ -19,32 +19,18 @@ from platform_api.monitoring.agent_events import (
     AgentStepStartedData,
 )
 from platform_api.shared import ApprovalId, ProposalId, RunId, UserId
-from platform_api.wire import WireModel
+from platform_api.wire import (
+    ApprovalStepView,
+    FailureReason,
+    FailureStage,
+    Leg,
+    RunOutcome,
+    StepName,
+    StepOutcome,
+    WireModel,
+)
 
 type ActorKind = Literal["user", "platform", "workflow", "agent", "safety_checker"]
-type Leg = Literal["work", "act"]
-type StepName = Literal["run_agents", "ask_approval", "write_action"]
-type StepOutcome = Literal[
-    "proposed",
-    "nothing_to_write",
-    "approval_opened",
-    "written",
-    "failed",
-    "superseded",
-    "refused",
-    "replayed",
-]
-type FailureReason = Literal[
-    "AgentError",
-    "WorkflowNodeError",
-    "TimedOut",
-    "DispatchFailed",
-    "WriteFailed",
-    "SafetyDenied",
-    "UnboundIntent",
-    "OutOfOrderStep",
-]
-type FailureStage = Literal["pending", "working", "proposed", "acting"]
 type DeniedReason = Literal[
     "run_mismatch",
     "not_approved",
@@ -53,23 +39,13 @@ type DeniedReason = Literal[
     "unregistered_action",
     "out_of_order",
 ]
-type ApprovalStepStatus = Literal["waiting", "open", "approved", "declined"]
 type WireVerdict = Literal["approve", "decline"]
-type RunOutcome = Literal["written", "nothing_to_write"]
 
 
 class Actor(WireModel):
     kind: ActorKind
     id: str
     display: str
-
-
-class ApprovalStepView(WireModel):
-    index: int
-    label: str
-    status: ApprovalStepStatus
-    decided_by: UserId | None = None
-    decided_at: datetime | None = None
 
 
 class ActionLine(WireModel):
