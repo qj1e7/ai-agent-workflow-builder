@@ -23,6 +23,7 @@ from platform_api.orchestration.write_actions import (
     bind,
     check,
     digest,
+    intent,
 )
 from platform_api.shared import ApprovalId, Digest, ProposalId, RunId, UserId
 
@@ -77,6 +78,17 @@ def decline(step: int, by: UserId) -> Decision:
 
 
 ACTING = Acting(RUN, PROPOSAL, APPROVAL, 1, None, NOW)
+
+
+def test_a_ticket_is_put_in_words_from_its_project_and_title():
+    assert intent(TICKET) == (
+        'create a Jira ticket in MOCK titled "New LangGraph releases: 1.2.16, 1.2.15"'
+    )
+
+
+def test_an_unknown_action_is_put_in_words_from_its_operation_and_connector():
+    other = WriteAction(connector="confluence", operation="update_page", target={}, fields={})
+    assert intent(other) == "update_page on confluence"
 
 
 def test_digest_matches_the_golden_vector():

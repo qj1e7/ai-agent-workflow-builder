@@ -356,7 +356,7 @@
       "id": "platform",
       "display": "Platform"
     },
-    "summary": "The run was rejected by Bob. Nothing was written.",
+    "summary": "Bob declined the request. Nothing was written.",
     "kind": "run_rejected",
     "data": {
       "by": "bob",

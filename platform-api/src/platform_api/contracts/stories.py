@@ -501,7 +501,7 @@ def rejected_events() -> Timeline:
         RunRejected,
         251.92,
         PLATFORM,
-        "The run was rejected by Bob. Nothing was written.",
+        "Bob declined the request. Nothing was written.",
         RunRejectedData(by=BOB, step=0),
     )
     return tl
@@ -668,8 +668,8 @@ def teams_messages(tl: Timeline) -> TeamsStubMessages:
                 id="tm_01JB8",
                 ts=announced.ts,
                 channel=CHANNEL,
-                text=f"Approval needed: {USE_CASE_NAME} wants to create a Jira ticket in MOCK "
-                f'titled "{TICKET_TITLE}". Open the approval page to decide.',
+                text=f"An Approver is needed for {USE_CASE_NAME}. The run would create a Jira "
+                f'ticket in MOCK titled "{TICKET_TITLE}". Open the approval page to decide.',
                 link=SUCCESS.approval_link,
                 run_id=SUCCESS.run_id,
                 approval_id=SUCCESS.approval_id,
