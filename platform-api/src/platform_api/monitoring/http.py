@@ -67,6 +67,6 @@ def ingest_agent_event(
     run_id: RunId,
     body: AgentEventPost,
     task: Annotated[str, Query()],
-    sig: Annotated[str, Query()],
+    callback_token: Annotated[str, Header(alias="X-Callback-Token")],
 ) -> None:
     not_implemented()

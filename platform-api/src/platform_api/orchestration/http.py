@@ -1,6 +1,5 @@
-from collections.abc import Mapping
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Header, Response
 from pydantic import Field, TypeAdapter
@@ -12,7 +11,6 @@ from platform_api.wire import (
     ApprovalStepView,
     FailureReason,
     FailureStage,
-    Json,
     RunOutcome,
     StepName,
     StepOutcome,
@@ -24,8 +22,8 @@ from platform_api.wire import (
 class WriteActionView(WireModel):
     connector: str
     operation: str
-    target: Mapping[str, Json]
-    fields: Mapping[str, Json]
+    target: dict[str, Any]
+    fields: dict[str, Any]
 
 
 class ProposalView(WireModel):
