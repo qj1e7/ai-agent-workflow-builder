@@ -10,7 +10,9 @@ import {
   NO_MATCH_WORDS,
   createBody,
   draftProblems,
+  editableParams,
   exampleParams,
+  fixedParams,
   hasProblems,
   planBlocks,
 } from './plan'
@@ -148,7 +150,7 @@ function PlanForm({ template, task, runNow }: { template: TemplateView; task: st
           autoComplete="off"
         />
       </Field>
-      {template.params.map((param) => {
+      {editableParams(template).map((param) => {
         const id = `${formId}-${param.name}`
         const problem = attempted ? (problems.params[param.name] ?? null) : null
         return (
@@ -194,10 +196,18 @@ function PlanForm({ template, task, runNow }: { template: TemplateView; task: st
             <dt>Plan</dt>
             <dd>{template.key}</dd>
           </div>
-          {template.params.map((param) => (
+          {editableParams(template).map((param) => (
             <div key={param.name}>
               <dt>{param.description}</dt>
               <dd>{param.name}</dd>
+            </div>
+          ))}
+          {fixedParams(template).map((param) => (
+            <div key={param.name}>
+              <dt>{param.description}, set by the plan and not editable</dt>
+              <dd>
+                <code>{param.example}</code>
+              </dd>
             </div>
           ))}
         </dl>

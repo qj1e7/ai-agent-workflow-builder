@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TemplateView } from '../../api/types'
-import { createBody, draftProblems, exampleParams, hasProblems, planBlocks } from './plan'
+import { createBody, draftProblems, editableParams, exampleParams, fixedParams, hasProblems, planBlocks } from './plan'
 
 const releaseCheck: TemplateView = {
   key: 'release_check',
@@ -13,6 +13,7 @@ const releaseCheck: TemplateView = {
   ],
   params: [
     { name: 'repo', description: 'GitHub repository, owner/name', example: 'langchain-ai/langgraph' },
+    { name: 'tag_pattern', description: 'Regular expression a release tag must match', example: '^\\d+\\.\\d+\\.\\d+$' },
     { name: 'ticket_project', description: 'Jira project key', example: 'MOCK' },
   ],
 }
@@ -26,7 +27,18 @@ describe('the plan shown for a template', () => {
   })
 
   it('prefills each detail with its example', () => {
-    expect(exampleParams(releaseCheck)).toEqual({ repo: 'langchain-ai/langgraph', ticket_project: 'MOCK' })
+    expect(exampleParams(releaseCheck)).toEqual({
+      repo: 'langchain-ai/langgraph',
+      tag_pattern: '^\\d+\\.\\d+\\.\\d+$',
+      ticket_project: 'MOCK',
+    })
+  })
+})
+
+describe('which details the Operator fills in', () => {
+  it('offers the repository and the Jira project, and keeps the release tag pattern out of the form', () => {
+    expect(editableParams(releaseCheck).map((param) => param.name)).toEqual(['repo', 'ticket_project'])
+    expect(fixedParams(releaseCheck).map((param) => param.name)).toEqual(['tag_pattern'])
   })
 })
 
@@ -38,7 +50,7 @@ describe('checking the details before saving', () => {
   })
 
   it('names the field that is empty, next to its own name in the template', () => {
-    const problems = draftProblems(releaseCheck, { name: '  ', params: { repo: '', ticket_project: 'MOCK' } })
+    const problems = draftProblems(releaseCheck, { name: '  ', params: { repo: '', tag_pattern: '', ticket_project: 'MOCK' } })
     expect(problems.name).toBe('Give the use case a name.')
     expect(Object.keys(problems.params)).toEqual(['repo'])
     expect(hasProblems(problems)).toBe(true)
@@ -47,11 +59,11 @@ describe('checking the details before saving', () => {
 
 describe('what is sent when the use case is saved', () => {
   it('sends the template key, the trimmed name and task, and every detail by its name', () => {
-    expect(createBody(releaseCheck, '  Check for new releases.  ', { name: ' LangGraph releases ', params: { repo: ' a/b ', ticket_project: 'MOCK' } })).toEqual({
+    expect(createBody(releaseCheck, '  Check for new releases.  ', { name: ' LangGraph releases ', params: { repo: ' a/b ', tag_pattern: ' ^x$ ', ticket_project: 'MOCK' } })).toEqual({
       template: 'release_check',
       name: 'LangGraph releases',
       instruction: 'Check for new releases.',
-      params: { repo: 'a/b', ticket_project: 'MOCK' },
+      params: { repo: 'a/b', tag_pattern: '^x$', ticket_project: 'MOCK' },
     })
   })
 })
