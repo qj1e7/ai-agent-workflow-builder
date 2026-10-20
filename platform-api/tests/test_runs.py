@@ -4,6 +4,7 @@ import pytest
 
 from platform_api.monitoring import ActionLine, user_actor
 from platform_api.orchestration.runs import (
+    CALLBACK_LIFETIME,
     DEADLINES,
     LEG_STEPS,
     REFEREE_TABLE,
@@ -53,7 +54,7 @@ TICKET = WriteDone("jira", "create_ticket", "MOCK-1", (UserId("bob"),))
 
 PENDING_UNCLAIMED = Pending(RUN, 1, None, NOW)
 PENDING = Pending(RUN, 1, HOLDER, NOW)
-WORKING = Working(RUN, HOLDER, 1, 1, NOW)
+WORKING = Working(RUN, HOLDER, 1, 1, NOW, NOW)
 PROPOSED = Proposed(RUN, PROPOSAL, HOLDER, 1, NOW)
 AWAITING = AwaitingApproval(RUN, PROPOSAL, APPROVAL)
 ACTING_UNCLAIMED = Acting(RUN, PROPOSAL, APPROVAL, 1, None, NOW)
@@ -141,7 +142,10 @@ def test_start_emits_created_then_dispatched():
 
 def test_pending_begins_work_with_the_working_deadline():
     moved = PENDING_UNCLAIMED.begin_work(HOLDER, NOW)
-    assert moved.state == Working(RUN, HOLDER, 1, 1, NOW + DEADLINES[Working])
+    assert moved.state == Working(
+        RUN, HOLDER, 1, 1, NOW + DEADLINES[Working], NOW + CALLBACK_LIFETIME
+    )
+    assert moved.state.task_id == "run_1/work/1"
     assert kinds(moved.events) == ["step_started"]
     assert moved.events[0].data.model_dump() == {
         "step": "run_agents",
@@ -152,7 +156,8 @@ def test_pending_begins_work_with_the_working_deadline():
 
 def test_working_retries_the_step_on_the_same_execution():
     moved = WORKING.retry_step()
-    assert moved.state == Working(RUN, HOLDER, 1, 2, NOW)
+    assert moved.state == Working(RUN, HOLDER, 1, 2, NOW, NOW)
+    assert moved.state.task_id == WORKING.task_id
     assert kinds(moved.events) == ["step_retried"]
     assert moved.events[0].data.model_dump()["try_number"] == 2
 
@@ -230,7 +235,11 @@ def test_failing_keeps_where_to_resume(state, stage, resume):
 
 def test_retry_after_a_work_leg_failure_starts_the_work_leg_again():
     moved = FAILED.retry(ALICE, LATER)
+    assert isinstance(moved.state, Pending)
     assert moved.state == Pending(RUN, 2, None, LATER + DEADLINES[Pending])
+    fresh = moved.state.begin_work(OTHER, LATER).state
+    assert fresh.task_id == "run_1/work/2"
+    assert fresh.task_id != WORKING.task_id
     assert kinds(moved.events) == ["run_retried", "leg_dispatched"]
     assert moved.events[0].actor == ALICE
     assert moved.events[1].data.model_dump() == {"leg": "work", "attempt": 2}
