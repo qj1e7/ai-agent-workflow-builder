@@ -1,11 +1,10 @@
 import success from '@contracts/fixtures/runs/success.json'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FetchLike } from '../stream/feed'
-import { runId, runTime, wallTime } from './brand'
-import type { Clock } from './clock'
+import { runId } from './brand'
 import { createLiveView, type LiveView } from './live'
 import { layoutScrubber, SCRUB } from './scrubber'
-import { TEST_REGISTRY } from './testing'
+import { fixedClock, TEST_REGISTRY } from './testing'
 
 /**
  * The fake agent stamps its events with the recording's times while the platform stamps its own with
@@ -39,21 +38,8 @@ function scriptedFetch(events: readonly Raw[]): FetchLike {
   }
 }
 
-function clockAt(runNow: number): Clock {
-  return {
-    wall: () => wallTime(Date.now()),
-    runNow: () => runTime(runNow),
-    after(ms, fn) {
-      const handle = setTimeout(fn, ms)
-      return () => clearTimeout(handle)
-    },
-    epochNow: () => Date.now(),
-    setOffset: () => undefined,
-  }
-}
-
 async function open(events: readonly Raw[], runNow: number): Promise<{ view(this: void): LiveView; close(this: void): void }> {
-  const store = createLiveView({ runId: RUN, env: { fetch: scriptedFetch(events), clock: clockAt(runNow), registry: TEST_REGISTRY }, whenFinished: 'rest' })
+  const store = createLiveView({ runId: RUN, env: { fetch: scriptedFetch(events), clock: fixedClock(runNow), registry: TEST_REGISTRY }, whenFinished: 'rest' })
   const close = store.subscribe(() => undefined)
   await vi.advanceTimersByTimeAsync(0)
   return { view: () => store.getSnapshot(), close }

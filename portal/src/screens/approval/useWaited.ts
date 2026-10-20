@@ -13,5 +13,5 @@ function useSecondTick(): void {
 export function useWaited(runId: string, sinceIso: string): number {
   const clock = useRunClock()
   useSecondTick()
-  return waitedMs(clock(runId), sinceIso)
+  return waitedMs(clock.now(runId), sinceIso)
 }

@@ -22,7 +22,7 @@ export function createClock(runClock: RunClock, runId: RunId): Clock {
   let offset = 0
   return {
     wall: () => Date.now() as WallTime,
-    runNow: () => (runClock(runId) + offset) as RunTime,
+    runNow: () => (runClock.now(runId) + offset) as RunTime,
     after(ms, fn) {
       const handle = setTimeout(fn, Math.max(0, ms))
       return () => clearTimeout(handle)

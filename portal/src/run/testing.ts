@@ -1,5 +1,6 @@
 import type { RunEvent } from '../stream/parse'
-import { agentId, doorKey, type Ms, type RunTime, type WallTime } from './brand'
+import { agentId, doorKey, runTime, wallTime, type Ms, type RunTime, type WallTime } from './brand'
+import type { Clock } from './clock'
 import {
   direct,
   labelOf,
@@ -28,6 +29,20 @@ export const TEST_REGISTRY: AgentRegistry = {
     if (id === 'troubleshooter') return { display: 'AI troubleshooter', readDoor: null }
     return { display: id, readDoor: null }
   },
+}
+
+/** A clock whose run time stands still at runNow, for a scripted feed with no platform behind it. */
+export function fixedClock(runNow: number): Clock {
+  return {
+    wall: () => wallTime(Date.now()),
+    runNow: () => runTime(runNow),
+    after(ms, fn) {
+      const handle = setTimeout(fn, ms)
+      return () => clearTimeout(handle)
+    },
+    epochNow: () => Date.now(),
+    setOffset: () => undefined,
+  }
 }
 
 export interface PlayedBeat {

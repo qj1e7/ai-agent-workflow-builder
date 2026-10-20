@@ -1,5 +1,11 @@
-import type { EventKind, RunEvent } from '../stream/parse'
+import type { DataOf, EventKind } from '../stream/parse'
 import type { Ms } from './brand'
+
+/**
+ * The two fields a rule reads. A parsed RunEvent and a wire ActivityEvent both carry them, so one
+ * table paces the room and the demo platform's recording alike.
+ */
+export type BeatEvent = { [K in EventKind]: { readonly kind: K; readonly data: DataOf<K> } }[EventKind] | { readonly kind: 'opaque' }
 
 export type KindRule =
   /** Workflow plumbing and anything unreadable. Folded silently, no beat, no caption. Minutes only with technical details. */
@@ -52,7 +58,7 @@ export function readingMsOf(text: string): Ms {
   return Math.min(READING.maxMs, READING.baseMs + READING.perCharMs * text.length)
 }
 
-export function ruleOf(e: RunEvent): KindRule {
+export function ruleOf(e: BeatEvent): KindRule {
   if (e.kind === 'opaque') return technical
   if (e.kind === 'agent_message') {
     const reading = readingMsOf(e.data.text)
@@ -61,17 +67,17 @@ export function ruleOf(e: RunEvent): KindRule {
   return KINDS[e.kind]
 }
 
-export function isStory(e: RunEvent): boolean {
+export function isStory(e: BeatEvent): boolean {
   return ruleOf(e).tier === 'story'
 }
 
 /** The choreographed length of an event's beat, or 0 for a technical event. */
-export function beatMsOf(e: RunEvent): Ms {
+export function beatMsOf(e: BeatEvent): Ms {
   const rule = ruleOf(e)
   return rule.tier === 'story' ? rule.beatMs : 0
 }
 
-export function floorMsOf(e: RunEvent): Ms {
+export function floorMsOf(e: BeatEvent): Ms {
   const rule = ruleOf(e)
   return rule.tier === 'story' ? rule.floorMs : 0
 }

@@ -70,7 +70,7 @@ function WaitingRun({ run }: { run: RunViewOf<'awaiting_approval'> }) {
       <div className={styles['what']}>
         <h2>{run.use_case_name}</h2>
         <p className="muted">
-          Started by {starter} {atWords(run.started_at, clock(run.run_id))}.{' '}
+          Started by {starter} {atWords(run.started_at, clock.now(run.run_id))}.{' '}
           {step ? `${step.label}: anyone except ${starter} can decide.` : null}
         </p>
       </div>

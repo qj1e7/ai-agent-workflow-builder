@@ -152,7 +152,7 @@ function EarlierRuns({ runs }: { runs: readonly RunView[] }) {
                 <span className={styles['rowName']}>{run.use_case_name}</span>
                 <StatusPill state={run.state} />
                 <span className={styles['rowMeta']}>
-                  Started by {nameOf(run.started_by)}, {formatRelative(run.started_at, clock(run.run_id)).toLowerCase()}
+                  Started by {nameOf(run.started_by)}, {formatRelative(run.started_at, clock.now(run.run_id)).toLowerCase()}
                   <span className="visually-hidden"> on {formatDayAndTime(run.started_at)}</span>
                 </span>
                 <span className={styles['dots']} aria-label={dots.map((dot) => `${dot.name}: ${dot.words}`).join('. ')}>

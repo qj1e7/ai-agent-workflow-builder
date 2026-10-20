@@ -105,7 +105,7 @@ function ApprovalContent({ view }: { view: ApprovalView }) {
   const run = useRun(view.run_id, { poll: true }).data
   const decide = useDecide(view.approval_id)
   const state = decisionState(view, users?.find((user) => user.id === userId), attemptOf(decide))
-  const now = clock(view.run_id)
+  const now = clock.now(view.run_id)
   const status = ticketStatus(state.panel, run)
   const lede = run ? `${run.use_case_name}, started by ${nameOf(run.started_by)} ${atWords(run.started_at, now)}.` : null
 
