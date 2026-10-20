@@ -1,4 +1,5 @@
 import type { Locator, Page } from '@playwright/test'
+import { setTimeout as delay } from 'node:timers/promises'
 
 export const START = Date.parse('2026-11-27T10:14:00+08:00')
 const LOADED_AT = START + 3_000
@@ -46,16 +47,22 @@ export async function advanceUntil(page: Page, ready: Locator, { stepMs = 250, l
   await settle(page)
 }
 
+const PUMP_EVERY_MS = 10
+
 // axe schedules its own work with setTimeout, so on a frozen page it needs the clock to creep forward while it runs.
+// The clock belongs to the whole browser context, so the work must not open or close another page in it.
 export async function pumpWhile<T>(page: Page, work: Promise<T>): Promise<T> {
-  let finished = false
+  let settled = false
   const guarded = work.finally(() => {
-    finished = true
+    settled = true
   })
-  guarded.catch(() => undefined)
-  while (!finished) {
+  const done = guarded.then(
+    () => undefined,
+    () => undefined,
+  )
+  while (!settled) {
     await page.clock.runFor(1)
-    await page.waitForTimeout(10)
+    await Promise.race([done, delay(PUMP_EVERY_MS)])
   }
   return guarded
 }
