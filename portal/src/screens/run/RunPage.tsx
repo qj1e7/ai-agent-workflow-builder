@@ -35,6 +35,8 @@ export function RunPage() {
   const width = useWidth(roomRef)
   const compact = width > 0 && width < ROOM_METRICS.wide.minWidth
   const { room } = view
+  // The pill follows the room's own phase, the same source as the caption and the spine. The REST view
+  // only speaks before the first frame has folded.
   const state: RunState | undefined = room.phase.name === 'empty' ? run.data?.state : room.phase.name
   const title = run.data?.use_case_name ?? 'Run'
   const startedBy = run.data ? nameOf(run.data.started_by) : null
@@ -53,13 +55,19 @@ export function RunPage() {
   }
 
   return (
-    <div className="page">
-      <PageHeader title={title} aside={state ? <StatusPill state={state} /> : null}>
-        {run.data && startedBy ? `Started by ${startedBy} on ${formatDayAndTime(run.data.started_at)}.` : 'Loading the run.'}
-      </PageHeader>
+    <div className={`page ${styles['page']}`}>
+      <header className={styles['head']}>
+        <h1 className={styles['title']}>{title}</h1>
+        <p className={styles['lede']}>{run.data && startedBy ? `Started by ${startedBy} on ${formatDayAndTime(run.data.started_at)}.` : 'Loading the run.'}</p>
+        {state ? (
+          <div className={styles['pill']}>
+            <StatusPill state={state} />
+          </div>
+        ) : null}
+      </header>
       {run.isError ? <InlineMessage tone="error">{errorWords(run.error)}</InlineMessage> : null}
       <div className={styles['spine']}>
-        {blocks ? <Spine blocks={spineBlocks(view, blocks)} orientation={compact ? 'vertical' : 'horizontal'} compact={compact} /> : null}
+        {blocks ? <Spine blocks={spineBlocks(view, blocks)} orientation={compact ? 'vertical' : 'horizontal'} compact /> : null}
       </div>
       <div className={styles['columns']}>
         <div className={styles['stageColumn']}>
