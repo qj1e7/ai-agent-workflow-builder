@@ -89,10 +89,12 @@ describe('live play', () => {
 
   it('snaps to the last story event as a cut when far behind', () => {
     const show = rehearse('success', { start: 'edge' })
-    show.arrive(0, 1, 13)
+    const queued = SUCCESS.filter((e) => e.seq <= 18).reduce((total, e) => total + beatMsOf(e), 0)
+    expect(queued).toBeGreaterThan(SNAP_DEBT_MS)
+    show.arrive(0, 1, 18)
     const beats = show.runUntilIdle()
-    expect(beats.map((b) => [b.seq, b.durationMs, b.entry])).toEqual([[12, 1400, 'cut']])
-    expect(show.director.shown).toBe(13)
+    expect(beats.map((b) => [b.seq, b.durationMs, b.entry])).toEqual([[18, 1800, 'cut']])
+    expect(show.director.shown).toBe(18)
   })
 
   it('snaps when the oldest unshown live event went stale, as in a throttled background tab', () => {
