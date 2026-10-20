@@ -1,0 +1,231 @@
+[
+  {
+    "run_id": "run_01JB9",
+    "seq": 1,
+    "ts": "2026-11-04T02:14:00Z",
+    "actor": {
+      "kind": "user",
+      "id": "alice",
+      "display": "Alice"
+    },
+    "summary": "Alice started a run of LangGraph releases.",
+    "kind": "run_created",
+    "data": {
+      "use_case_id": "uc_01JB7",
+      "use_case_version": 1,
+      "started_by": "alice"
+    }
+  },
+  {
+    "run_id": "run_01JB9",
+    "seq": 2,
+    "ts": "2026-11-04T02:14:00.180000Z",
+    "actor": {
+      "kind": "platform",
+      "id": "platform",
+      "display": "Platform"
+    },
+    "summary": "The work leg was sent to the workflow engine (attempt 1).",
+    "kind": "leg_dispatched",
+    "data": {
+      "leg": "work",
+      "attempt": 1
+    }
+  },
+  {
+    "run_id": "run_01JB9",
+    "seq": 3,
+    "ts": "2026-11-04T02:14:02.100000Z",
+    "actor": {
+      "kind": "workflow",
+      "id": "n8n",
+      "display": "Workflow engine"
+    },
+    "summary": "Workflow step run_agents started (n8n execution 43).",
+    "kind": "step_started",
+    "data": {
+      "step": "run_agents",
+      "n8n_execution_id": "43",
+      "try_number": 1
+    }
+  },
+  {
+    "run_id": "run_01JB9",
+    "seq": 4,
+    "ts": "2026-11-04T02:14:02.370000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "room_lead",
+      "display": "Room lead"
+    },
+    "summary": "Room lead brought in Release checker to read the GitHub releases.",
+    "kind": "agent_joined",
+    "data": {
+      "agent": {
+        "id": "release_checker",
+        "display": "Release checker"
+      },
+      "reason": "The task asks about releases of a GitHub repo."
+    }
+  },
+  {
+    "run_id": "run_01JB9",
+    "seq": 5,
+    "ts": "2026-11-04T02:14:02.490000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "room_lead",
+      "display": "Room lead"
+    },
+    "summary": "Room lead asked Release checker to look for releases newer than 1.2.14.",
+    "kind": "agent_message",
+    "data": {
+      "speaker": {
+        "id": "room_lead",
+        "display": "Room lead"
+      },
+      "addressee": {
+        "kind": "agent",
+        "id": "release_checker",
+        "display": "Release checker"
+      },
+      "text": "Please check langchain-ai/langgraph for releases newer than 1.2.14 that match the plain version pattern."
+    }
+  },
+  {
+    "run_id": "run_01JB9",
+    "seq": 6,
+    "ts": "2026-11-04T02:14:02.620000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker is fetching releases from langchain-ai/langgraph.",
+    "kind": "agent_step_started",
+    "data": {
+      "step": "fetch_releases"
+    }
+  },
+  {
+    "run_id": "run_01JB9",
+    "seq": 7,
+    "ts": "2026-11-04T02:14:04.702000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker reported that GitHub answered 503 (try 1 of 3).",
+    "kind": "agent_message",
+    "data": {
+      "speaker": {
+        "id": "release_checker",
+        "display": "Release checker"
+      },
+      "addressee": {
+        "kind": "room"
+      },
+      "text": "GitHub answered 503 Service Unavailable (try 1 of 3). Waiting 2 s before trying again."
+    }
+  },
+  {
+    "run_id": "run_01JB9",
+    "seq": 8,
+    "ts": "2026-11-04T02:14:08.811000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker reported that GitHub answered 503 (try 2 of 3).",
+    "kind": "agent_message",
+    "data": {
+      "speaker": {
+        "id": "release_checker",
+        "display": "Release checker"
+      },
+      "addressee": {
+        "kind": "room"
+      },
+      "text": "GitHub answered 503 Service Unavailable (try 2 of 3). Waiting 2 s before trying again."
+    }
+  },
+  {
+    "run_id": "run_01JB9",
+    "seq": 9,
+    "ts": "2026-11-04T02:14:12.934000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker reported that GitHub answered 503 (try 3 of 3).",
+    "kind": "agent_message",
+    "data": {
+      "speaker": {
+        "id": "release_checker",
+        "display": "Release checker"
+      },
+      "addressee": {
+        "kind": "room"
+      },
+      "text": "GitHub answered 503 Service Unavailable (try 3 of 3). I am giving up."
+    }
+  },
+  {
+    "run_id": "run_01JB9",
+    "seq": 10,
+    "ts": "2026-11-04T02:14:12.961000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker failed: GitHub was unavailable.",
+    "kind": "agent_failed",
+    "data": {
+      "step": "fetch_releases",
+      "error_type": "UpstreamUnavailable",
+      "message": "GitHub returned 503 Service Unavailable three times",
+      "retryable": true
+    }
+  },
+  {
+    "run_id": "run_01JB9",
+    "seq": 11,
+    "ts": "2026-11-04T02:14:13.020000Z",
+    "actor": {
+      "kind": "workflow",
+      "id": "n8n",
+      "display": "Workflow engine"
+    },
+    "summary": "Workflow step run_agents finished with a failure.",
+    "kind": "step_finished",
+    "data": {
+      "step": "run_agents",
+      "n8n_execution_id": "43",
+      "try_number": 1,
+      "outcome": "failed",
+      "detail": "Release checker failed: GitHub returned 503 Service Unavailable three times"
+    }
+  },
+  {
+    "run_id": "run_01JB9",
+    "seq": 12,
+    "ts": "2026-11-04T02:14:13.031000Z",
+    "actor": {
+      "kind": "platform",
+      "id": "platform",
+      "display": "Platform"
+    },
+    "summary": "The run failed while the agents were working. GitHub was unavailable. You can retry.",
+    "kind": "run_failed",
+    "data": {
+      "stage": "working",
+      "reason": "AgentError",
+      "retryable": true,
+      "message": "Release checker failed: GitHub returned 503 Service Unavailable three times"
+    }
+  }
+]

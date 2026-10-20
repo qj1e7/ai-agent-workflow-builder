@@ -1,0 +1,437 @@
+[
+  {
+    "run_id": "run_01JB8",
+    "seq": 1,
+    "ts": "2026-11-03T02:14:00Z",
+    "actor": {
+      "kind": "user",
+      "id": "alice",
+      "display": "Alice"
+    },
+    "summary": "Alice started a run of LangGraph releases.",
+    "kind": "run_created",
+    "data": {
+      "use_case_id": "uc_01JB7",
+      "use_case_version": 1,
+      "started_by": "alice"
+    }
+  },
+  {
+    "run_id": "run_01JB8",
+    "seq": 2,
+    "ts": "2026-11-03T02:14:00.180000Z",
+    "actor": {
+      "kind": "platform",
+      "id": "platform",
+      "display": "Platform"
+    },
+    "summary": "The work leg was sent to the workflow engine (attempt 1).",
+    "kind": "leg_dispatched",
+    "data": {
+      "leg": "work",
+      "attempt": 1
+    }
+  },
+  {
+    "run_id": "run_01JB8",
+    "seq": 3,
+    "ts": "2026-11-03T02:14:02.100000Z",
+    "actor": {
+      "kind": "workflow",
+      "id": "n8n",
+      "display": "Workflow engine"
+    },
+    "summary": "Workflow step run_agents started (n8n execution 41).",
+    "kind": "step_started",
+    "data": {
+      "step": "run_agents",
+      "n8n_execution_id": "41",
+      "try_number": 1
+    }
+  },
+  {
+    "run_id": "run_01JB8",
+    "seq": 4,
+    "ts": "2026-11-03T02:14:02.390000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "room_lead",
+      "display": "Room lead"
+    },
+    "summary": "Room lead brought in Release checker to read the GitHub releases.",
+    "kind": "agent_joined",
+    "data": {
+      "agent": {
+        "id": "release_checker",
+        "display": "Release checker"
+      },
+      "reason": "The task asks about releases of a GitHub repo."
+    }
+  },
+  {
+    "run_id": "run_01JB8",
+    "seq": 5,
+    "ts": "2026-11-03T02:14:02.510000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "room_lead",
+      "display": "Room lead"
+    },
+    "summary": "Room lead asked Release checker to look for releases newer than 1.2.14.",
+    "kind": "agent_message",
+    "data": {
+      "speaker": {
+        "id": "room_lead",
+        "display": "Room lead"
+      },
+      "addressee": {
+        "kind": "agent",
+        "id": "release_checker",
+        "display": "Release checker"
+      },
+      "text": "Please check langchain-ai/langgraph for releases newer than 1.2.14 that match the plain version pattern."
+    }
+  },
+  {
+    "run_id": "run_01JB8",
+    "seq": 6,
+    "ts": "2026-11-03T02:14:02.640000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker is fetching releases from langchain-ai/langgraph.",
+    "kind": "agent_step_started",
+    "data": {
+      "step": "fetch_releases"
+    }
+  },
+  {
+    "run_id": "run_01JB8",
+    "seq": 7,
+    "ts": "2026-11-03T02:14:04.873000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker fetched 30 releases. The latest is 1.2.16.",
+    "kind": "agent_step_finished",
+    "data": {
+      "step": "fetch_releases",
+      "result": {
+        "release_count": 30,
+        "latest": "1.2.16"
+      }
+    }
+  },
+  {
+    "run_id": "run_01JB8",
+    "seq": 8,
+    "ts": "2026-11-03T02:14:04.901000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker is comparing them with the last known tag 1.2.14.",
+    "kind": "agent_step_started",
+    "data": {
+      "step": "find_new"
+    }
+  },
+  {
+    "run_id": "run_01JB8",
+    "seq": 9,
+    "ts": "2026-11-03T02:14:04.955000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker found 2 new releases: 1.2.16, 1.2.15.",
+    "kind": "agent_step_finished",
+    "data": {
+      "step": "find_new",
+      "result": {
+        "new_count": 2,
+        "tags": [
+          "1.2.16",
+          "1.2.15"
+        ]
+      }
+    }
+  },
+  {
+    "run_id": "run_01JB8",
+    "seq": 10,
+    "ts": "2026-11-03T02:14:05.120000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker reported 2 new releases to the room and suggested one ticket.",
+    "kind": "agent_message",
+    "data": {
+      "speaker": {
+        "id": "release_checker",
+        "display": "Release checker"
+      },
+      "addressee": {
+        "kind": "room"
+      },
+      "text": "Two releases are newer than 1.2.14: 1.2.16 and 1.2.15. I suggest one ticket so the team reviews both."
+    }
+  },
+  {
+    "run_id": "run_01JB8",
+    "seq": 11,
+    "ts": "2026-11-03T02:14:05.301000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "room_lead",
+      "display": "Room lead"
+    },
+    "summary": "Room lead agreed and will propose the ticket for approval.",
+    "kind": "agent_message",
+    "data": {
+      "speaker": {
+        "id": "room_lead",
+        "display": "Room lead"
+      },
+      "addressee": {
+        "kind": "agent",
+        "id": "release_checker",
+        "display": "Release checker"
+      },
+      "text": "Agreed. I will propose the ticket. The platform asks an Approver before anything is written."
+    }
+  },
+  {
+    "run_id": "run_01JB8",
+    "seq": 12,
+    "ts": "2026-11-03T02:14:05.844000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "room_lead",
+      "display": "Room lead"
+    },
+    "summary": "The agents proposed 1 write action: create a Jira ticket in MOCK.",
+    "kind": "write_action_proposed",
+    "data": {
+      "proposal_id": "prp_01JB8",
+      "digest": "sha256:0be2129632d1283e015efcae22757aa3e182793e0153503bdd30dc0327a42576",
+      "actions": [
+        {
+          "connector": "jira",
+          "operation": "create_ticket",
+          "line": "Create Jira ticket in MOCK: New LangGraph releases: 1.2.16, 1.2.15"
+        }
+      ]
+    }
+  },
+  {
+    "run_id": "run_01JB8",
+    "seq": 13,
+    "ts": "2026-11-03T02:14:05.902000Z",
+    "actor": {
+      "kind": "workflow",
+      "id": "n8n",
+      "display": "Workflow engine"
+    },
+    "summary": "Workflow step run_agents finished: 2 new releases: 1.2.16, 1.2.15.",
+    "kind": "step_finished",
+    "data": {
+      "step": "run_agents",
+      "n8n_execution_id": "41",
+      "try_number": 1,
+      "outcome": "proposed",
+      "detail": "2 new releases: 1.2.16, 1.2.15"
+    }
+  },
+  {
+    "run_id": "run_01JB8",
+    "seq": 14,
+    "ts": "2026-11-03T02:14:08.217000Z",
+    "actor": {
+      "kind": "workflow",
+      "id": "n8n",
+      "display": "Workflow engine"
+    },
+    "summary": "Workflow step ask_approval started (n8n execution 41).",
+    "kind": "step_started",
+    "data": {
+      "step": "ask_approval",
+      "n8n_execution_id": "41",
+      "try_number": 1
+    }
+  },
+  {
+    "run_id": "run_01JB8",
+    "seq": 15,
+    "ts": "2026-11-03T02:14:08.244000Z",
+    "actor": {
+      "kind": "platform",
+      "id": "platform",
+      "display": "Platform"
+    },
+    "summary": "Approval requested. Waiting for the Team approver.",
+    "kind": "approval_requested",
+    "data": {
+      "approval_id": "apr_01JB8",
+      "steps": [
+        {
+          "index": 0,
+          "label": "Team approver",
+          "status": "open",
+          "decided_by": null,
+          "decided_at": null
+        }
+      ],
+      "link": "/approvals/apr_01JB8"
+    }
+  },
+  {
+    "run_id": "run_01JB8",
+    "seq": 16,
+    "ts": "2026-11-03T02:14:08.260000Z",
+    "actor": {
+      "kind": "workflow",
+      "id": "n8n",
+      "display": "Workflow engine"
+    },
+    "summary": "Workflow step ask_approval finished. The work leg ends here.",
+    "kind": "step_finished",
+    "data": {
+      "step": "ask_approval",
+      "n8n_execution_id": "41",
+      "try_number": 1,
+      "outcome": "approval_opened",
+      "detail": "Approval apr_01JB8 opened"
+    }
+  },
+  {
+    "run_id": "run_01JB8",
+    "seq": 17,
+    "ts": "2026-11-03T02:14:10.612000Z",
+    "actor": {
+      "kind": "platform",
+      "id": "platform",
+      "display": "Platform"
+    },
+    "summary": "The approval request was posted to the Teams channel CODESparks Ops.",
+    "kind": "approval_announced",
+    "data": {
+      "approval_id": "apr_01JB8",
+      "channel": "CODESparks Ops",
+      "link": "/approvals/apr_01JB8"
+    }
+  },
+  {
+    "run_id": "run_01JB8",
+    "seq": 18,
+    "ts": "2026-11-03T02:20:23.447000Z",
+    "actor": {
+      "kind": "user",
+      "id": "bob",
+      "display": "Bob"
+    },
+    "summary": "Bob approved step 0 (Team approver).",
+    "kind": "approval_decided",
+    "data": {
+      "approval_id": "apr_01JB8",
+      "step": 0,
+      "verdict": "approve",
+      "by": "bob"
+    }
+  },
+  {
+    "run_id": "run_01JB8",
+    "seq": 19,
+    "ts": "2026-11-03T02:20:23.610000Z",
+    "actor": {
+      "kind": "platform",
+      "id": "platform",
+      "display": "Platform"
+    },
+    "summary": "The act leg was sent to the workflow engine (attempt 1).",
+    "kind": "leg_dispatched",
+    "data": {
+      "leg": "act",
+      "attempt": 1
+    }
+  },
+  {
+    "run_id": "run_01JB8",
+    "seq": 20,
+    "ts": "2026-11-03T02:20:25.902000Z",
+    "actor": {
+      "kind": "workflow",
+      "id": "n8n",
+      "display": "Workflow engine"
+    },
+    "summary": "Workflow step write_action started (n8n execution 42).",
+    "kind": "step_started",
+    "data": {
+      "step": "write_action",
+      "n8n_execution_id": "42",
+      "try_number": 1
+    }
+  },
+  {
+    "run_id": "run_01JB8",
+    "seq": 21,
+    "ts": "2026-11-03T02:20:26.344000Z",
+    "actor": {
+      "kind": "platform",
+      "id": "platform",
+      "display": "Platform"
+    },
+    "summary": "Jira ticket MOCK-142 was created, approved by Bob.",
+    "kind": "write_action_done",
+    "data": {
+      "connector": "jira",
+      "operation": "create_ticket",
+      "external_reference": "MOCK-142",
+      "approved_by": [
+        "bob"
+      ]
+    }
+  },
+  {
+    "run_id": "run_01JB8",
+    "seq": 22,
+    "ts": "2026-11-03T02:20:26.371000Z",
+    "actor": {
+      "kind": "workflow",
+      "id": "n8n",
+      "display": "Workflow engine"
+    },
+    "summary": "Workflow step write_action finished: created MOCK-142.",
+    "kind": "step_finished",
+    "data": {
+      "step": "write_action",
+      "n8n_execution_id": "42",
+      "try_number": 1,
+      "outcome": "written",
+      "detail": "Created MOCK-142"
+    }
+  },
+  {
+    "run_id": "run_01JB8",
+    "seq": 23,
+    "ts": "2026-11-03T02:20:26.380000Z",
+    "actor": {
+      "kind": "platform",
+      "id": "platform",
+      "display": "Platform"
+    },
+    "summary": "The run succeeded. 1 write action was done.",
+    "kind": "run_succeeded",
+    "data": {
+      "outcome": "written"
+    }
+  }
+]

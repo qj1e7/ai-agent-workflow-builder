@@ -1,0 +1,23 @@
+{
+  "run_id": "run_01JB8",
+  "use_case_id": "uc_01JB7",
+  "use_case_name": "LangGraph releases",
+  "use_case_version": 1,
+  "started_by": "alice",
+  "started_at": "2026-11-03T02:14:00Z",
+  "updated_at": "2026-11-03T02:20:26.380000Z",
+  "last_seq": 23,
+  "events_url": "/api/v1/runs/run_01JB8/events",
+  "state": "succeeded",
+  "outcome": "written",
+  "written": [
+    {
+      "connector": "jira",
+      "operation": "create_ticket",
+      "external_reference": "MOCK-142",
+      "approved_by": [
+        "bob"
+      ]
+    }
+  ]
+}
