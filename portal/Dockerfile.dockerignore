@@ -1,0 +1,9 @@
+*
+!portal
+!contracts
+portal/node_modules
+portal/dist
+portal/e2e/out
+portal/test-results
+portal/src/api/schema.d.ts
+**/*.tsbuildinfo
