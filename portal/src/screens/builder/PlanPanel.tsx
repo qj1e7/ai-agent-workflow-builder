@@ -66,6 +66,10 @@ function Outcome({ result, task, runNow }: { result: SuggestOut; task: string; r
       <div className={styles['template']}>
         <p className={styles['templateName']}>{result.template.name}</p>
         <p className="muted">{result.template.description}</p>
+        <p className={styles['schedule']}>
+          <IconPlay size={14} />
+          Runs when you choose Run now. A weekly schedule is not built yet.
+        </p>
       </div>
       <Spine blocks={planBlocks(result.template)} orientation="vertical" showDescriptions showState={false} label="Steps in this plan" />
       {result.matched_terms.length > 0 ? <MatchedTerms terms={result.matched_terms} /> : null}
