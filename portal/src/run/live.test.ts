@@ -92,14 +92,14 @@ describe('createLiveView against the demo platform', () => {
 
   it('counts the live wait while the room catches up on an open approval, and the shown frame\'s own wait in replay and after a seek', async () => {
     const { view, unsubscribe } = open()
-    await tick(18 * SECOND)
-    expect(view().room.phase.name).toBe('awaiting_approval')
+    while (view().room.phase.name !== 'awaiting_approval') await tick(100)
     expect(view().frame.shown, 'the room is still catching up').toBeLessThan(view().frame.head)
     const edge = view().transport.edge
     if (!edge?.waitingSince) throw new Error('no live edge')
     const liveWait = view().frame.waiting?.elapsedMs ?? 0
     expect(liveWait).toBe(edge.now - edge.waitingSince)
-    expect(liveWait).toBeGreaterThan(60 * SECOND)
+    const shown = view().frame
+    expect(liveWait, 'the live wait, not the shown frame\'s own').toBeGreaterThan(shown.sceneTime - (shown.waiting?.since ?? 0))
     expect(view().describe()).toContain(`for ${formatDuration(liveWait)}.`)
 
     await tick(80 * SECOND)

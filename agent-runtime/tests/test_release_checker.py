@@ -67,6 +67,28 @@ def test_no_new_releases_finishes_with_no_intents_and_the_same_watermark():
     assert output.summary == "No new releases since 1.2.16"
 
 
+@pytest.mark.parametrize(
+    ("last", "said"),
+    [
+        ("1.2.15", "One release is newer than 1.2.15: 1.2.16. I suggest a ticket for it."),
+        (
+            "1.2.14",
+            "Two releases are newer than 1.2.14: 1.2.16 and 1.2.15. I suggest one ticket for both.",
+        ),
+        (
+            "1.2.13",
+            "Three releases are newer than 1.2.13: 1.2.16, 1.2.15 and 1.2.14. "
+            "I suggest one ticket for all.",
+        ),
+        ("1.2.16", "Nothing is newer than 1.2.16. I have nothing to propose."),
+    ],
+)
+def test_the_finding_is_said_in_one_plain_sentence_pair(last: str, said: str):
+    run = Run(FakeSource(langgraph_tags()))
+    finished(run.check(last))
+    assert run.messages()[-1] == said
+
+
 def test_releases_of_another_family_never_count():
     tags = ["cli==0.9.0", "sdk==1.0.0", *langgraph_tags()]
     assert finished(Run(FakeSource(tags)).check("1.2.15")).new_tags == ["1.2.16"]

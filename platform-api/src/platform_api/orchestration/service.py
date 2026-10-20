@@ -102,6 +102,7 @@ from platform_api.orchestration.write_actions import (
     check,
     describe,
     digest,
+    intent,
 )
 from platform_api.shared import (
     ApprovalId,
@@ -521,7 +522,7 @@ class Orchestrator:
                 run_id=run_id,
                 approval_id=request.id,
                 use_case_name=record.spec.use_case_name,
-                summary="; ".join(describe(a).line for a in proposal.actions),
+                actions=tuple(intent(a) for a in proposal.actions),
                 link=link,
             )
             await self._store.enqueue(
@@ -532,7 +533,7 @@ class Orchestrator:
                     "run_id": notice.run_id,
                     "approval_id": notice.approval_id,
                     "use_case_name": notice.use_case_name,
-                    "summary": notice.summary,
+                    "actions": list(notice.actions),
                     "link": notice.link,
                 },
                 uow.now,
@@ -815,7 +816,7 @@ class Orchestrator:
             run_id=RunId(row.payload["run_id"]),
             approval_id=ApprovalId(row.payload["approval_id"]),
             use_case_name=row.payload["use_case_name"],
-            summary=row.payload["summary"],
+            actions=tuple(row.payload["actions"]),
             link=row.payload["link"],
         )
         await self._channel.announce(notice)
