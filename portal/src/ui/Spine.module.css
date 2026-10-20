@@ -72,6 +72,31 @@
   background: var(--ink);
 }
 
+/* Dense: node, name and state in one row, and the connector a flexible item after the words instead of a line under them. */
+.dense .station {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 36px;
+  padding-right: 0;
+}
+
+.dense .station::before {
+  position: static;
+  order: 3;
+  flex: 1;
+  min-width: var(--space-4);
+  height: var(--rail);
+  margin-right: var(--space-2);
+}
+
+.dense .text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--space-3);
+}
+
 .node {
   position: relative;
   display: grid;

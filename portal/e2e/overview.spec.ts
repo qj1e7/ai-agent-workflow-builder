@@ -1,10 +1,12 @@
 import { advance, advanceUntil, openFrozen } from './support/clock'
 import { transportSays } from './support/flows'
+import { expectFitsTheFold } from './support/fold'
 import { record } from './support/record'
 import { expect, test } from './support/test'
 
 test('the overview shows each stage of the live success run', async ({ page }, info) => {
   await openFrozen(page, '/')
+  if (info.project.name === 'desktop') await expectFitsTheFold(page, 'earlier-title')
   await record(page, info, 'overview-load')
 
   await advance(page, 4_000)
