@@ -86,7 +86,7 @@ describe('applyEvent on the recordings', () => {
   it('puts only agent_message text in an agent mouth and the latest story summary in the caption', () => {
     const { room } = fold(slice('success', 1, 9))
     expect(room.speech?.text).toBe(
-      'Please check langchain-ai/langgraph for releases newer than 1.2.14 that match the plain version pattern.',
+      'Please check langchain-ai/langgraph for releases newer than 1.2.14.',
     )
     expect(room.speech?.speaker).toBe(ROOM_LEAD)
     expect(room.speech?.to).toEqual({ kind: 'agent', id: CHECKER, display: 'Release checker' })
