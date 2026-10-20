@@ -1,8 +1,22 @@
+import AxeBuilder from '@axe-core/playwright'
+import type { Page } from '@playwright/test'
+import { mkdir, writeFile } from 'node:fs/promises'
+import path from 'node:path'
+import { blockingViolations } from '../support/axe'
+import { outOfVisualOrder, walkTabs, withoutVisibleFocus } from '../support/keyboard'
 import { expect, test } from './support/test'
-import { shot } from './support/ui'
+import { OUT, shot } from './support/ui'
 
 const PHONE = { width: 390, height: 844 }
 const IN_THE_ROOM = ['Room lead', 'GitHub', 'Jira', 'Teams']
+
+/** Runs axe on the page as it is, saves the whole result under e2e/out/live/axe, and fails on a serious or critical violation. */
+async function expectAccessible(page: Page, name: string): Promise<void> {
+  const axe = await new AxeBuilder({ page }).analyze()
+  await mkdir(path.join(OUT, 'axe'), { recursive: true })
+  await writeFile(path.join(OUT, 'axe', `${name}.json`), JSON.stringify(axe, null, 2))
+  expect(blockingViolations(axe), `${name}: serious or critical accessibility violations`).toEqual([])
+}
 
 test('a fresh Portal opens on a set room, and one click starts a real run that stops at the approval gate', async ({ page, browser, backend }, info) => {
   test.skip((await backend.runs()).length > 0, 'the stack already has runs, so there is no first screen to see')
@@ -18,13 +32,24 @@ test('a fresh Portal opens on a set room, and one click starts a real run that s
     await expect(stage.getByText(name, { exact: true }).first(), `the set room shows ${name}`).toBeVisible()
   }
   await shot(page, info, '00-first-screen-empty')
+  await expectAccessible(page, '00-first-screen-empty')
 
   const phone = await browser.newContext({ viewport: PHONE, isMobile: true, hasTouch: true, locale: 'en-SG', timezoneId: 'Asia/Singapore' })
   const phonePage = await phone.newPage()
   await phonePage.goto('/')
   await expect(phonePage.getByRole('button', { name: 'Run the example' })).toBeVisible()
   await shot(phonePage, info, '00-first-screen-empty-phone')
+  await expectAccessible(phonePage, '00-first-screen-empty-phone')
   await phone.close()
+
+  const walk = await walkTabs(page)
+  const labels = walk.stops.map((stop) => stop.label)
+  const runStop = labels.indexOf('Run the example')
+  const describeStop = labels.indexOf('Describe your own task')
+  expect(runStop, `Tab reaches Run the example; stops: ${labels.join(', ')}`).toBeGreaterThanOrEqual(0)
+  expect(describeStop, 'Tab reaches Describe your own task after Run the example').toBeGreaterThan(runStop)
+  expect(withoutVisibleFocus(walk.stops), 'stops whose focus ring is missing or the same as at rest').toEqual([])
+  expect(outOfVisualOrder(walk.stops), 'Tab moves that go against the visual order').toEqual([])
 
   const ticketsBefore = (await backend.tickets()).length
   await runTheExample.click()
