@@ -52,3 +52,7 @@ The specs run inside the server's network namespace, so the page is at `http://l
 ## Known findings
 
 `support/known.ts` lists what the app still gets wrong. A listed finding is printed as `KNOWN FINDING ...` and does not fail the run. Run with `E2E_STRICT=1 npm run e2e` to make them fail. Delete an entry when the app is fixed.
+
+## The live suite
+
+`npm run e2e` runs against the demo mock. The specs in `e2e/live/` run against the real stack instead, so they are not part of `npm run e2e`. Run them with `scripts/e2e.sh` from the repository root. See "The browser suite" in [../../e2e/README.md](../../e2e/README.md).

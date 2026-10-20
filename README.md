@@ -23,13 +23,15 @@ The first run writes `deploy/.env` with random dev secrets and builds the images
 
 | What | Where |
 |---|---|
+| Portal, the page a person opens | http://localhost:8080 |
 | platform-api, with its OpenAPI page | http://localhost:8000/docs |
 | n8n editor | http://localhost:5678 (sign in with `N8N_OWNER_EMAIL` and `N8N_OWNER_PASSWORD` from `deploy/.env`) |
-| Portal | http://localhost:8080, once it is built |
 
-If port 8000 is already taken on your machine, set `PLATFORM_API_HOST_PORT=18000` in `deploy/.env` and run `scripts/up.sh` again.
+`scripts/up.sh` prints these addresses when it is done, Portal first. Open the Portal as `localhost`, not by a machine name or an IP address. Run now needs a page that the browser treats as secure, and a plain `http://` address with another host name is not.
 
-There is no sign-in yet. Send the header `X-Dev-User` with one of the dev users: `alice` (Operator and Approver), `bob` (Approver) or `carol` (Operator). An Approver can never approve a run they started, so start runs as `alice` and approve them as `bob`.
+If a port is already taken on your machine, change it in `deploy/.env` and run `scripts/up.sh` again. The settings are `PORTAL_HOST_PORT`, `PLATFORM_API_HOST_PORT` (try `18000` when 8000 is taken) and `N8N_HOST_PORT`.
+
+There is no sign-in yet. In the Portal, pick the user from the menu at the top right. For plain API calls, send the header `X-Dev-User` with one of the dev users: `alice` (Operator and Approver), `bob` (Approver) or `carol` (Operator). An Approver can never approve a run they started, so start runs as `alice` and approve them as `bob`.
 
 The agent runtime reads the real GitHub API. Put a `GITHUB_TOKEN` in `deploy/.env` if you hit GitHub's rate limit.
 
@@ -39,4 +41,4 @@ To stop everything and delete its data:
 scripts/down.sh
 ```
 
-`scripts/e2e.sh` runs the end to end tests against the whole stack with a fake GitHub, and tears it down afterwards. See [e2e/README.md](e2e/README.md).
+`scripts/e2e.sh` runs the end to end tests against the whole stack with a fake GitHub, first the API tests and then the same product in a real browser through the Portal. It tears everything down afterwards. See [e2e/README.md](e2e/README.md).
