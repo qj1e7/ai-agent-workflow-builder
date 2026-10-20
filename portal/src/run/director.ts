@@ -8,8 +8,12 @@ import type { Origin } from './tape'
 export const TARGET_LAG_MS: Ms = 4_000
 /** More queued choreography than this snaps to the end state instead of playing it all faster. */
 export const SNAP_DEBT_MS: Ms = 14_000
-/** An unshown live event older than this on the wall clock means the tab was throttled: snap. */
-export const STALE_MS: Ms = 8_000
+/**
+ * An unshown live event older than this on the wall clock means the tab was throttled: snap. It exceeds
+ * SNAP_DEBT_MS because a queue never holds more choreography than that in front of an event, and speech
+ * beats play no faster than their reading time, so only a clock jump can age an event past it.
+ */
+export const STALE_MS: Ms = 16_000
 /** A gap longer than this between events is a wait: a fixed segment on the scrubber, a hold in replay. */
 export const LONG_GAP_MS: Ms = 30_000
 /** Replay compresses a long wait to this, while the waiting counter rolls through the real duration. */

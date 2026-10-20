@@ -58,11 +58,13 @@ describe('createLiveView against the demo platform', () => {
     expect(view().room.phase.name).toBe('pending')
     expect(view().room.agents.map((seat) => seat.id)).toEqual(['room_lead'])
 
-    await tick(14 * SECOND)
+    // Each message holds for its reading time, so the pause lands after 17 s of live play, and the demo's
+    // squeezed wait brings Bob's decision at about 20.7 s: the honest counter rises between the two.
+    await tick(18 * SECOND)
     expect(view().room.phase.name).toBe('awaiting_approval')
     expect(view().frame.waiting).not.toBeNull()
     const firstWait = view().frame.waiting?.elapsedMs ?? 0
-    await tick(3 * SECOND)
+    await tick(2 * SECOND)
     const laterWait = view().frame.waiting?.elapsedMs ?? 0
     expect(laterWait).toBeGreaterThan(firstWait)
     expect(view().frame.label).toBe('live')

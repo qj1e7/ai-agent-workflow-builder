@@ -26,16 +26,16 @@ export const KINDS = {
   step_started: technical,
   step_finished: technical,
   step_retried: technical,
-  agent_joined: story(1000, 500),
-  agent_step_started: story(900, 400),
-  agent_step_finished: story(900, 400),
+  agent_joined: story(1000, 400),
+  agent_step_started: story(900, 300),
+  agent_step_finished: story(900, 300),
   agent_failed: story(1200, 700),
   agent_message: story(2200, 1200),
-  write_action_proposed: story(1400, 800),
+  write_action_proposed: story(1400, 600),
   approval_requested: story(1600, 900),
-  approval_announced: story(1000, 500),
+  approval_announced: story(1000, 400),
   approval_announce_failed: story(1200, 700),
-  approval_decided: story(1800, 1100),
+  approval_decided: story(1800, 900),
   write_action_denied: story(1400, 800),
   write_action_done: story(2200, 1400),
   run_succeeded: story(1200, 600),
@@ -44,13 +44,18 @@ export const KINDS = {
   run_retried: story(1200, 600),
 } as const satisfies Record<EventKind, KindRule>
 
-const READING = { baseMs: 1200, perCharMs: 15, maxMs: 3200 } as const
+export const READING = { baseMs: 1200, perCharMs: 25, maxMs: 4000 } as const
+
+/** How long a message stays readable. Catch-up never squeezes speech below this; it saves its time on travel and technical beats. */
+export function readingMsOf(text: string): Ms {
+  return Math.min(READING.maxMs, READING.baseMs + READING.perCharMs * text.length)
+}
 
 export function ruleOf(e: RunEvent): KindRule {
   if (e.kind === 'opaque') return technical
   if (e.kind === 'agent_message') {
-    const reading = Math.min(READING.maxMs, READING.baseMs + READING.perCharMs * e.data.text.length)
-    return story(Math.max(KINDS.agent_message.beatMs, reading), KINDS.agent_message.floorMs)
+    const reading = readingMsOf(e.data.text)
+    return story(Math.max(KINDS.agent_message.beatMs, reading), reading)
   }
   return KINDS[e.kind]
 }
