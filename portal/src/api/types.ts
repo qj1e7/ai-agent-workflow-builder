@@ -1,0 +1,52 @@
+import type { components } from './schema'
+
+type Schemas = components['schemas']
+
+export type ActivityEvent = Schemas['ActivityEvent']
+export type ActivityKind = ActivityEvent['kind']
+export type EventOf<K extends ActivityKind> = Extract<ActivityEvent, { kind: K }>
+export type Actor = Schemas['Actor']
+export type ActorKind = Schemas['ActorKind']
+export type Addressee = Schemas['Addressee']
+export type EventPage = Schemas['EventPage']
+
+export type RunView = Schemas['RunView']
+export type RunState = RunView['state']
+export type RunViewOf<S extends RunState> = Extract<RunView, { state: S }>
+export type RunList = Schemas['RunList']
+export type RunStarted = Schemas['RunStarted']
+export type RetryAccepted = Schemas['RetryAccepted']
+export type FailureReason = Schemas['FailureReason']
+export type FailureStage = Schemas['FailureStage']
+export type RunOutcome = Schemas['RunOutcome']
+export type Leg = Schemas['Leg']
+export type StepName = Schemas['StepName']
+
+export type ApprovalView = Schemas['ApprovalView']
+export type ApprovalRef = Schemas['ApprovalRef']
+export type ApprovalStepView = Schemas['ApprovalStepView']
+export type ApprovalStepStatus = Schemas['ApprovalStepStatus']
+export type DecisionIn = Schemas['DecisionIn']
+export type DecisionOut = Schemas['DecisionOut']
+export type DecisionView = Schemas['DecisionView']
+export type Verdict = Schemas['Verdict']
+export type Refusal = Schemas['Refusal']
+export type RefusalOut = Schemas['RefusalOut']
+export type ProposalView = Schemas['ProposalView']
+export type WriteActionView = Schemas['WriteActionView']
+export type WriteDoneView = Schemas['WriteDoneView']
+
+export type UseCaseView = Schemas['UseCaseView']
+export type CreateUseCase = Schemas['CreateUseCase']
+export type TemplateView = Schemas['TemplateView']
+export type BlockView = Schemas['BlockView']
+export type BlockKind = Schemas['BlockKind']
+export type ParamSpec = Schemas['ParamSpec']
+export type SuggestOut = Schemas['SuggestOut']
+
+export type DevUser = Schemas['DevUser']
+export type Role = Schemas['Role']
+export type TeamsStubMessage = Schemas['TeamsStubMessage']
+export type MockJiraTicket = Schemas['MockJiraTicket']
+export type TroubleshootingOut = Schemas['TroubleshootingOut']
+export type Advice = Schemas['Advice']
