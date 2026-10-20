@@ -45,7 +45,7 @@ class EventLog:
         self._sink = sink
         self.events: list[AgentEvent] = []
 
-    def add(self, draft: Draft) -> AgentEvent:
+    def add(self, draft: Draft) -> None:
         event = agent_event_adapter.validate_python(
             {
                 "kind": _KIND[type(draft.data)],
@@ -58,4 +58,3 @@ class EventLog:
         )
         self.events.append(event)
         self._sink(event)
-        return event

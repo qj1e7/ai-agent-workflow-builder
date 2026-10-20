@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime, timedelta
 
 from agent_runtime.release_checker import Release, SourceUnavailable
@@ -21,9 +21,9 @@ class FakeClock:
 
 
 class FakeSource:
-    def __init__(self, tags: list[str], failures: list[int | None] | None = None) -> None:
+    def __init__(self, tags: list[str], failures: Sequence[int | None] = ()) -> None:
         self.releases = [Release(tag=tag) for tag in tags]
-        self.failures = list(failures or [])
+        self.failures = list(failures)
         self.calls: list[str] = []
 
     def fetch(self, repo: str) -> list[Release]:
