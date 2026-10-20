@@ -1,9 +1,3 @@
-"""The n8n workflow files, read once into a model shared by the lint, bootstrap and the fake engine.
-
-A file is a plain n8n export with `${PLACEHOLDER}` strings that bootstrap fills in. The lint
-checks the design's seven rules on the files in CI and again on what n8n hands back.
-"""
-
 import json
 import re
 from collections.abc import Iterable, Mapping
@@ -53,8 +47,6 @@ class NodeType(Enum):
 
 ALLOWED_NODE_TYPES = frozenset(t.value for t in NodeType)
 
-# The run state each step runs in, and the state each leg's dispatch lands in. Rule 5 sums
-# the budgets per state and compares them with the deadline of that state.
 STEP_STATE: Mapping[StepName, type[ActiveState]] = {
     StepName.RUN_AGENTS: Working,
     StepName.ASK_APPROVAL: Proposed,
@@ -148,7 +140,6 @@ class WorkflowDefinition:
 
 
 def parse(document: Mapping[str, Any]) -> WorkflowDefinition:
-    """Read an n8n workflow document. Only name, nodes, connections and settings matter."""
     nodes: list[Mapping[str, Any]] = list(document.get("nodes", []))
     node_types = {str(n["name"]): str(n["type"]) for n in nodes}
     webhooks = tuple(
@@ -188,7 +179,6 @@ def _http_node(node: Mapping[str, Any]) -> HttpNode:
 
 
 def _chain(connections: Mapping[str, Any], start: str) -> tuple[str, ...]:
-    """Every node downstream of `start`, in connection order, each once."""
     order: list[str] = []
     stack = [start]
     while stack:
@@ -213,7 +203,6 @@ def placeholders(definition: WorkflowDefinition) -> frozenset[str]:
 
 
 def render(definition: WorkflowDefinition, values: Mapping[str, str]) -> dict[str, Any]:
-    """The body for n8n's workflow API, with every placeholder filled in."""
     missing = placeholders(definition) - values.keys()
     if missing:
         raise ValueError(f"{definition.name}: no value for {', '.join(sorted(missing))}")
@@ -252,8 +241,6 @@ class LiveWorkflow:
 
 @dataclass(frozen=True)
 class LiveState:
-    """What n8n reports after bootstrap loads the workflows, keyed by workflow name."""
-
     platform_internal_url: str
     workflows: Mapping[str, LiveWorkflow]
 

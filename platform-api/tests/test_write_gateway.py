@@ -53,8 +53,6 @@ ACTING = Acting(RUN, PRP, APR, 1, None, NOW)
 
 
 class BlockingConnector:
-    """A connector whose calls wait until the test releases them."""
-
     name = "jira"
     operations = frozenset({"create_ticket"})
 

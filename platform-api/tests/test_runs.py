@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from typing import NamedTuple
 
 import pytest
 
@@ -70,34 +71,41 @@ SUPERSEDED = Supersede(HOLDER)
 REFUSED = Refuse(fails_run=False)
 REFUSED_AND_FAILED = Refuse(fails_run=True)
 
-# Every row of the referee table in the design, as (state, caller execution) -> verdict per step.
-# The caller is HOLDER (the claimant) or OTHER (another execution).
-TABLE: list[tuple[str, RunState, N8nExecutionId, Verdict, Verdict, Verdict]] = [
-    # name, state, caller, run_agents, ask_approval, write_action
-    ("failed, any caller", FAILED, OTHER, STOP, STOP, STOP),
-    ("rejected, any caller", REJECTED, OTHER, STOP, STOP, STOP),
-    ("pending unclaimed", PENDING_UNCLAIMED, OTHER, Begin(), REFUSED, REFUSED),
-    ("pending, the claimant", PENDING, HOLDER, Begin(), REFUSED_AND_FAILED, REFUSED_AND_FAILED),
-    ("pending, another execution", PENDING, OTHER, SUPERSEDED, REFUSED, REFUSED),
-    ("working, the claimant", WORKING, HOLDER, Begin(), REFUSED_AND_FAILED, REFUSED_AND_FAILED),
-    ("working, another execution", WORKING, OTHER, SUPERSEDED, SUPERSEDED, REFUSED),
-    ("proposed, the claimant", PROPOSED, HOLDER, GO_ON, Begin(), REFUSED_AND_FAILED),
-    ("proposed, another execution", PROPOSED, OTHER, SUPERSEDED, SUPERSEDED, REFUSED),
-    ("awaiting approval, any caller", AWAITING, HOLDER, STOP, STOP, REFUSED),
-    ("acting unclaimed", ACTING_UNCLAIMED, OTHER, STOP, STOP, Begin()),
-    ("acting, the claimant", ACTING, HOLDER, STOP, STOP, Begin()),
-    ("acting, another execution", ACTING, OTHER, STOP, STOP, SUPERSEDED),
-    ("succeeded after a write", WRITTEN, HOLDER, STOP, STOP, STOP),
-    ("succeeded with nothing written", NOTHING_WRITTEN, HOLDER, STOP, STOP, REFUSED),
+
+class Row(NamedTuple):
+    name: str
+    state: RunState
+    caller: N8nExecutionId
+    run_agents: Verdict
+    ask_approval: Verdict
+    write_action: Verdict
+
+
+TABLE = [
+    Row("failed, any caller", FAILED, OTHER, STOP, STOP, STOP),
+    Row("rejected, any caller", REJECTED, OTHER, STOP, STOP, STOP),
+    Row("pending unclaimed", PENDING_UNCLAIMED, OTHER, Begin(), REFUSED, REFUSED),
+    Row("pending, the claimant", PENDING, HOLDER, Begin(), REFUSED_AND_FAILED, REFUSED_AND_FAILED),
+    Row("pending, another execution", PENDING, OTHER, SUPERSEDED, REFUSED, REFUSED),
+    Row("working, the claimant", WORKING, HOLDER, Begin(), REFUSED_AND_FAILED, REFUSED_AND_FAILED),
+    Row("working, another execution", WORKING, OTHER, SUPERSEDED, SUPERSEDED, REFUSED),
+    Row("proposed, the claimant", PROPOSED, HOLDER, GO_ON, Begin(), REFUSED_AND_FAILED),
+    Row("proposed, another execution", PROPOSED, OTHER, SUPERSEDED, SUPERSEDED, REFUSED),
+    Row("awaiting approval, any caller", AWAITING, HOLDER, STOP, STOP, REFUSED),
+    Row("acting unclaimed", ACTING_UNCLAIMED, OTHER, STOP, STOP, Begin()),
+    Row("acting, the claimant", ACTING, HOLDER, STOP, STOP, Begin()),
+    Row("acting, another execution", ACTING, OTHER, STOP, STOP, SUPERSEDED),
+    Row("succeeded after a write", WRITTEN, HOLDER, STOP, STOP, STOP),
+    Row("succeeded with nothing written", NOTHING_WRITTEN, HOLDER, STOP, STOP, REFUSED),
 ]
 
 
 @pytest.mark.parametrize(
     ("state", "caller", "step", "expected"),
     [
-        pytest.param(state, caller, step, expected, id=f"{name}: {step.value}")
-        for name, state, caller, *verdicts in TABLE
-        for step, expected in zip(StepName, verdicts, strict=True)
+        pytest.param(row.state, row.caller, step, expected, id=f"{row.name}: {step.value}")
+        for row in TABLE
+        for step, expected in zip(StepName, row[3:], strict=True)
     ],
 )
 def test_referee(state: RunState, caller: N8nExecutionId, step: StepName, expected: Verdict):

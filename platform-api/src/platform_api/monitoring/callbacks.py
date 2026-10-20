@@ -16,7 +16,6 @@ class Callback:
 def callback_for(
     key: str, platform_internal_url: str, run_id: RunId, task_id: TaskId, expires_at: datetime
 ) -> Callback:
-    """Deterministic, so a retried task carries the same request body."""
     expires = int(expires_at.timestamp())
     task = quote(task_id, safe="")
     url = f"{platform_internal_url}/internal/v1/runs/{run_id}/agent-events?task={task}"

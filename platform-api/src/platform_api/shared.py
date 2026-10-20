@@ -30,7 +30,6 @@ _CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
 
 def new_id(prefix: str) -> str:
-    """A ULID: 10 time characters then 16 random ones, so ids sort by creation."""
     value = int(time.time() * 1000)
     head = "".join(_CROCKFORD[(value >> (5 * i)) & 31] for i in range(9, -1, -1))
     tail = "".join(secrets.choice(_CROCKFORD) for _ in range(16))

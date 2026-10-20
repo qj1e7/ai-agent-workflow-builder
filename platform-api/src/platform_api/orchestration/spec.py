@@ -1,5 +1,3 @@
-"""What the builder hands to orchestration when a run starts."""
-
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Protocol
@@ -11,8 +9,6 @@ from platform_api.shared import Principal, RunId, UseCaseId, UserId
 
 @dataclass(frozen=True)
 class RunSpec:
-    """A frozen snapshot of one use case version, plus the watermark the run starts from."""
-
     use_case_id: UseCaseId
     use_case_version: int
     use_case_name: str
@@ -37,6 +33,4 @@ class RunStarter(Protocol):
         self, spec: RunSpec, principal: Principal, idempotency_key: str
     ) -> RunStarted: ...
 
-    async def latest_carry_forward(self, use_case_id: UseCaseId) -> str | None:
-        """The last known tag recorded by the newest succeeded run, or None."""
-        ...
+    async def latest_carry_forward(self, use_case_id: UseCaseId) -> str | None: ...

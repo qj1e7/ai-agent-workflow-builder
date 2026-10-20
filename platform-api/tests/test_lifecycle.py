@@ -1,5 +1,3 @@
-"""The design's lifecycle test: whole runs through the committed workflow files, no n8n."""
-
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime, timedelta

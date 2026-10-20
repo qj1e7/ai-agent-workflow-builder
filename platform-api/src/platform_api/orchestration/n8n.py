@@ -1,6 +1,4 @@
-"""A small client for the n8n endpoints bootstrap needs: owner, API keys, credentials, workflows.
-
-The owner and API key calls use n8n's internal `/rest` API with a login cookie, so the pinned
+"""The owner and API key calls use n8n's internal `/rest` API with a login cookie, so the pinned
 n8n version matters. Everything else goes through the public `/api/v1` API with the key.
 """
 
@@ -98,7 +96,6 @@ class N8nClient:
             raise N8nError(f"could not sign in as {email}: HTTP {response.status_code}")
 
     def fresh_api_key(self, label: str) -> int:
-        """Replace every key with this label by a new one, and return how many were removed."""
         listed = self._rest("GET", "/rest/api-keys")
         stale = [item for item in listed["data"]["items"] if item["label"] == label]
         for item in stale:
@@ -132,9 +129,7 @@ class N8nClient:
         return _record(matches[0]) if matches else None
 
     def upsert_workflow(self, body: dict[str, Any]) -> UpsertedWorkflow:
-        """Create and activate a new workflow, or update an existing one in place.
-
-        An update never deactivates, because P4 saw webhooks answer 404 during a
+        """An update never deactivates, because P4 saw webhooks answer 404 during a
         deactivate and activate cycle, while a PUT on an active workflow had no gap.
         """
         existing = self.find_workflow(str(body["name"]))

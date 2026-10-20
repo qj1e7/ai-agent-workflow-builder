@@ -43,11 +43,6 @@ def _view(row: Mapping[str, Any]) -> UseCaseView:
 
 
 class Builder:
-    """Use cases are team-wide on purpose: the Portal is one team's shared tool with two roles,
-    so every signed-in user sees the team's use cases and runs, and Approvers need that context.
-    Per-team scoping comes with Entra ID, if more teams join. Any Operator may run a team use
-    case, because a teammate covering a shift is the normal case."""
-
     def __init__(self, db: Database, runs: RunStarter, public_base_url: str) -> None:
         self._db = db
         self._runs = runs
@@ -84,6 +79,8 @@ class Builder:
         return UseCaseCreated(use_case_id=use_case_id, version=1)
 
     async def list_use_cases(self) -> UseCaseList:
+        """Team-wide by design: one team, two roles, and Approvers need the context.
+        Per-team scoping comes with Entra ID, if more teams join."""
         async with self._db.connection("builder") as conn:
             cursor = await conn.execute(
                 _CURRENT_VERSION + " ORDER BY u.created_at DESC, u.use_case_id DESC"

@@ -1,5 +1,3 @@
-"""A workflow engine for tests that runs the committed workflow files the way n8n would."""
-
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 
@@ -19,8 +17,6 @@ class QueuedLeg:
 
 @dataclass
 class Execution:
-    """What n8n's executions list would show for one leg."""
-
     id: N8nExecutionId
     workflow: str
     leg: Leg
@@ -48,7 +44,6 @@ class FakeWorkflowEngine:
         return execution
 
     async def drain(self) -> None:
-        """Dispatch due outbox rows and run every queued leg to its end, like n8n would."""
         assert self._orchestrator is not None
         while True:
             await self._orchestrator.tick()

@@ -32,8 +32,6 @@ def json(value: object) -> Jsonb:
 
 @dataclass(frozen=True)
 class UnitOfWork:
-    """One open transaction under one context's role, plus the time it started."""
-
     conn: Connection
     now: datetime
 
@@ -77,7 +75,6 @@ class Database:
 
 
 def create_roles_sql(passwords: Mapping[str, str]) -> list[sql.Composed]:
-    """Statements a superuser runs once per cluster. `passwords` is keyed by role name."""
     statements: list[sql.Composed] = []
     for role in (ROLE_OWNER, *ROLES.values()):
         statements.append(

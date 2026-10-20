@@ -1,25 +1,16 @@
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Annotated, Literal
+from typing import Literal
 
-from pydantic import AfterValidator, Field, TypeAdapter, ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from platform_api.orchestration import AnyApprover, ApprovalPolicy, ApprovalStep, Binding
+from platform_api.wire import RepoName
 
-REPO_PATTERN = r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$"
 TAG_PATTERN = r"^\d+\.\d+\.\d+$"
 TICKET_PROJECT_PATTERN = re.compile(r"^[A-Z][A-Z0-9]{0,9}$")
 VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
-
-
-def _not_a_dot_segment(repo: str) -> str:
-    if repo.split("/")[-1] in {".", ".."}:
-        raise ValueError("repo must not be . or ..")
-    return repo
-
-
-type RepoName = Annotated[str, Field(pattern=REPO_PATTERN), AfterValidator(_not_a_dot_segment)]
 
 _repo_name = TypeAdapter(RepoName)
 
@@ -41,8 +32,6 @@ class ParamSpec:
 
 @dataclass(frozen=True)
 class BindingSpec:
-    """An intent kind's write target, filled in from the Operator's params."""
-
     connector: str
     operation: str
     target_from_params: Mapping[str, str]

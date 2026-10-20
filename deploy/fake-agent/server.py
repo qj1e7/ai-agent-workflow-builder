@@ -1,5 +1,3 @@
-"""Stand-in for agent-runtime. Replays the contract fixtures, standard library only."""
-
 import json
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer

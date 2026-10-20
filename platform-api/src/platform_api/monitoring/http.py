@@ -132,7 +132,6 @@ async def troubleshoot(run_id: RunId, principal: CurrentPrincipal, log: Log) -> 
 
 
 def _current_failure(events: Sequence[ActivityEvent]) -> RunFailed | None:
-    """The newest failure, unless the run was retried since, in which case it runs again."""
     for event in reversed(events):
         if isinstance(event, RunFailed):
             return event

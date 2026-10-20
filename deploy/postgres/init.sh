@@ -1,6 +1,5 @@
 #!/bin/sh
-# Runs once, when the data volume is empty. Roles and databases only.
-# Schemas, tables and grants belong to the migrations.
+# Runs once, when the data volume is empty.
 set -eu
 
 psql -v ON_ERROR_STOP=1 --username postgres --dbname postgres \

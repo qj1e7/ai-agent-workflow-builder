@@ -1,6 +1,4 @@
 #!/bin/sh
-# Writes deploy/.env with random dev secrets. Refuses to overwrite without --force,
-# because N8N_ENCRYPTION_KEY must not change while the n8n volume is kept.
 set -eu
 
 here=$(cd "$(dirname "$0")" && pwd)

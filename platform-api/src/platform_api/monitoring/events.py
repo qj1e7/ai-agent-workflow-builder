@@ -286,8 +286,6 @@ activity_events_adapter: TypeAdapter[list[ActivityEvent]] = TypeAdapter(list[Act
 
 @dataclass(frozen=True)
 class PendingEvent:
-    """An event before the log assigns its seq. `ts` of None means the log's transaction time."""
-
     actor: Actor
     kind: str
     summary: str

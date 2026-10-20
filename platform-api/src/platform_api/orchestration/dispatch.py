@@ -1,5 +1,3 @@
-"""The outbox's retry schedule and the two ports it dispatches through."""
-
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -14,8 +12,6 @@ from platform_api.shared import ApprovalId, N8nExecutionId, RunId, new_id
 
 @dataclass(frozen=True)
 class RetryPolicy:
-    """Waits between outbox tries, and the short delay before an Operator's retry starts."""
-
     delays: tuple[timedelta, ...] = (
         timedelta(seconds=2),
         timedelta(seconds=5),
@@ -32,15 +28,13 @@ class RetryPolicy:
 
     @property
     def dispatch_budget(self) -> timedelta:
-        """The longest an outbox row can take before the outbox gives up on it."""
         return sum(self.delays, timedelta()) + self.tick_interval * self.tries
 
 
 RETRY_POLICY = RetryPolicy()
 
 
-class DispatchFailure(Exception):
-    """The engine or channel did not take the call. The outbox tries again later."""
+class DispatchFailure(Exception): ...
 
 
 class WorkflowEngine(Protocol):
@@ -75,8 +69,6 @@ class TeamsMessage:
 
 
 class TeamsStub:
-    """Stands in for Teams: the announcement lands in a table the Portal shows as an inbox."""
-
     def __init__(self, db: Database, channel: str) -> None:
         self._db = db
         self._channel = channel
@@ -129,8 +121,6 @@ class TeamsStub:
 
 
 class N8nWebhooks:
-    """Starts a leg by posting `{run_id}` to the leg's webhook. The 202 carries the execution id."""
-
     def __init__(
         self,
         base_url: str,
