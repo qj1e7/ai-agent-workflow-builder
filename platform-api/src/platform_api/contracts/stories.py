@@ -242,8 +242,7 @@ def room_opens(tl: Timeline, base: float) -> None:
         AgentMessageData(
             speaker=ROOM_LEAD,
             addressee=TO_CHECKER,
-            text=f"Please check {REPO} for releases newer than {LAST_KNOWN_TAG} that match "
-            "the plain version pattern.",
+            text=f"Please check {REPO} for releases newer than {LAST_KNOWN_TAG}.",
         ),
     )
     tl.add(
@@ -289,8 +288,8 @@ def work_leg_to_announcement(tl: Timeline) -> None:
         AgentMessageData(
             speaker=CHECKER,
             addressee=TO_ROOM,
-            text="Two releases are newer than 1.2.14: 1.2.16 and 1.2.15. I suggest one ticket "
-            "so the team reviews both.",
+            text="Two releases are newer than 1.2.14: 1.2.16 and 1.2.15. "
+            "I suggest one ticket for both.",
         ),
     )
     tl.add(
@@ -301,8 +300,7 @@ def work_leg_to_announcement(tl: Timeline) -> None:
         AgentMessageData(
             speaker=ROOM_LEAD,
             addressee=TO_CHECKER,
-            text="Agreed. I will propose the ticket. The platform asks an Approver before "
-            "anything is written.",
+            text="Agreed. I'll draft one ticket for an Approver to check.",
         ),
     )
     tl.add(

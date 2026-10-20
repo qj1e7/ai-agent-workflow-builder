@@ -43,7 +43,7 @@
           "id": "release_checker",
           "display": "Release checker"
         },
-        "text": "Please check langchain-ai/langgraph for releases newer than 1.2.14 that match the plain version pattern."
+        "text": "Please check langchain-ai/langgraph for releases newer than 1.2.14."
       }
     },
     {
