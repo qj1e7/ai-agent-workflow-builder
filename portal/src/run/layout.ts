@@ -136,44 +136,50 @@ export interface Metrics {
   readonly checkerH: number
   readonly doorsShown: number
   readonly tableMinH: number
+  /** The table's width, clamped to the space between the door columns and the lanes. Infinity fills that space. */
+  readonly tableW: number
   readonly ticketW: number
   readonly ticketH: number
   readonly teamsW: number
   readonly teamsH: number
   readonly teamsOpeningW: number
+  /** The Teams door's label box, anchored to the bottom of the Teams door box. */
+  readonly teamsLabelH: number
 }
 
 /** All sizes in CSS px. The room component renders at the measured width, so nothing is scaled. */
 export const ROOM_METRICS: Readonly<Record<RoomSize, Metrics>> = {
   wide: {
     minWidth: 640,
-    wall: 12,
+    wall: 10,
     pad: 12,
     gap: 8,
     lane: 32,
     token: 24,
-    avatar: 56,
-    seatW: 152,
+    avatar: 72,
+    seatW: 184,
     labelInset: 12,
-    labelGap: 3,
-    nameLine: 17,
+    labelGap: 4,
+    nameLine: 20,
     nameLines: 1,
-    statusLine: 16,
+    statusLine: 18,
     statusLines: 1,
-    band: 112,
-    cardMaxW: 320,
+    band: 116,
+    cardMaxW: 440,
     tail: 8,
-    doorCol: 156,
-    doorLabelH: 48,
+    doorCol: 168,
+    doorLabelH: 64,
     doorOpeningH: 64,
     checkerH: 28,
     doorsShown: 3,
-    tableMinH: 136,
-    ticketW: 300,
-    ticketH: 108,
-    teamsW: 200,
+    tableMinH: 140,
+    tableW: 432,
+    ticketW: 360,
+    ticketH: 120,
+    teamsW: 232,
     teamsH: 56,
-    teamsOpeningW: 56,
+    teamsOpeningW: 72,
+    teamsLabelH: 40,
   },
   compact: {
     minWidth: 0,
@@ -199,11 +205,13 @@ export const ROOM_METRICS: Readonly<Record<RoomSize, Metrics>> = {
     checkerH: 24,
     doorsShown: 2,
     tableMinH: 142,
+    tableW: Number.POSITIVE_INFINITY,
     ticketW: 168,
     ticketH: 130,
     teamsW: 96,
     teamsH: 50,
     teamsOpeningW: 40,
+    teamsLabelH: 36,
   },
 }
 
@@ -320,7 +328,7 @@ function teamsDoor(floor: Box, m: Metrics): DoorBox {
     key: 'teams',
     label: null,
     box: box(x, y, m.teamsW, m.teamsH),
-    labelBox: box(x, y, m.teamsW - m.teamsOpeningW - m.gap, m.teamsH),
+    labelBox: box(x, y + m.teamsH - m.teamsLabelH, m.teamsW - m.teamsOpeningW - m.gap, m.teamsLabelH),
     opening,
     approach,
     outside: { x: approach.x, y: floor.y + floor.h + m.wall + m.token },
@@ -490,13 +498,12 @@ export function layoutRoom(plan: FloorPlan, width: number): RoomLayout {
   const writes = wallDoors(plan.doors, 'write', floor, middle, m)
   const doors = [teams, ...reads, ...writes]
 
-  const tableX = floor.x + m.doorCol + m.lane
-  const table = box(tableX, middle.y, floor.w - 2 * (m.doorCol + m.lane), middle.h)
+  const tableW = Math.min(m.tableW, floor.w - 2 * (m.doorCol + m.lane))
+  const table = box(floor.x + (floor.w - tableW) / 2, middle.y, tableW, middle.h)
   const ticketW = Math.min(m.ticketW, table.w - 2 * m.gap)
   const ticketH = Math.min(m.ticketH, table.h - 2 * m.gap)
   const ticketSpot = box(table.x + (table.w - ticketW) / 2, table.y + (table.h - ticketH) / 2, ticketW, ticketH)
-  const edgeW = Math.min(ticketW, Math.max(0, table.w - ticketW / 2 - m.gap))
-  const tableEdge = box(table.x + table.w - edgeW - m.gap, ticketSpot.y, edgeW, ticketH)
+  const tableEdge = box(table.x + table.w - m.gap - ticketW, ticketSpot.y, ticketW, ticketH)
 
   const agents = agentsRow(plan, floor, agentsTop, m)
   const peopleSpan = box(floor.x + m.pad, peopleTop, teams.box.x - m.gap - (floor.x + m.pad), seatH)

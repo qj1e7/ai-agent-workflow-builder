@@ -70,6 +70,8 @@ function Opening({ door, layout, open, index }: { door: DoorBox; layout: RoomLay
 export function FloorPlan({ layout, openDoor, order }: FloorPlanProps) {
   const { width, height, floor, table, wall } = layout
   const inner = 10
+  // A rounded rectangle, not a pill, so the ticket's corners sit inside the table.
+  const tableRadius = Math.min(table.h / 2, 28)
   return (
     <svg className={styles['plan']} width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true" focusable="false">
       <defs>
@@ -86,13 +88,13 @@ export function FloorPlan({ layout, openDoor, order }: FloorPlanProps) {
         <rect x={floor.x} y={floor.y} width={floor.w} height={floor.h} rx={6} fill="url(#room-grid)" />
         <rect x={0.75} y={0.75} width={width - 1.5} height={height - 1.5} rx={18} className={styles['wallEdge']} />
         <rect x={floor.x} y={floor.y} width={floor.w} height={floor.h} rx={6} className={styles['wallEdge']} />
-        <rect x={table.x} y={table.y} width={table.w} height={table.h} rx={Math.min(table.h / 2, 72)} className={styles['table']} />
+        <rect x={table.x} y={table.y} width={table.w} height={table.h} rx={tableRadius} className={styles['table']} />
         <rect
           x={table.x + inner}
           y={table.y + inner}
           width={table.w - 2 * inner}
           height={table.h - 2 * inner}
-          rx={Math.min((table.h - 2 * inner) / 2, 62)}
+          rx={Math.max(0, tableRadius - inner)}
           className={styles['tableInner']}
         />
       </g>

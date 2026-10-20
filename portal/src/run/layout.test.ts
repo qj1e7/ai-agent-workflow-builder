@@ -142,11 +142,36 @@ describe('layoutRoom over every participant count', () => {
     expect(named.doors.find((door) => door.side === 'write')?.box).toEqual(seededDoor?.box)
   })
 
-  it('answers the design metrics: 56 px avatars from 640 and 40 px below, with 12 px floors kept by the component', () => {
-    expect(layoutRoom(plan(1, 0, 0, 0), 640).seats.get('agent:a0')?.avatar.w).toBe(56)
+  it('answers the design metrics: 72 px avatars from 640 and 40 px below, with 12 px floors kept by the component', () => {
+    expect(layoutRoom(plan(1, 0, 0, 0), 640).seats.get('agent:a0')?.avatar.w).toBe(72)
     expect(layoutRoom(plan(1, 0, 0, 0), 639).seats.get('agent:a0')?.avatar.w).toBe(40)
     expect(layoutRoom(plan(1, 0, 0, 0), 639).size).toBe('compact')
     expect(layoutRoom(plan(1, 0, 0, 0), 640).size).toBe('wide')
+  })
+
+  it("makes the demo's stage 588 px tall at every wide width", () => {
+    for (const width of [640, 960, 1100, 1440]) expect(layoutRoom(plan(2, 1, 1, 1, 1), width).height, `at ${width}`).toBe(588)
+  })
+
+  it('frames the ticket with a table at most 432 px wide that still holds the ticket spot and its rejected edge', () => {
+    for (const width of [640, 760, 960, 1100, 1440]) {
+      const layout = layoutRoom(plan(2, 1, 1, 1, 1), width)
+      expect(layout.table.w, `at ${width}`).toBeLessThanOrEqual(432)
+      expect(inside(layout.ticketSpot, layout.table), `ticket spot at ${width}`).toBe(true)
+      expect(inside(layout.tableEdge, layout.table), `table edge at ${width}`).toBe(true)
+      expect(layout.tableEdge.w).toBe(layout.ticketSpot.w)
+      expect(layout.tableEdge.x).toBeGreaterThanOrEqual(layout.ticketSpot.x)
+    }
+    expect(layoutRoom(plan(2, 1, 1, 1, 1), 1440).table.w).toBe(432)
+  })
+
+  it("puts the Teams door's label in the bottom 40 px of its box, left of the opening", () => {
+    const layout = layoutRoom(plan(2, 1, 1, 1, 1), 1440)
+    const teams = layout.doors.find((door) => door.side === 'teams')
+    if (!teams) throw new Error('no Teams door')
+    expect(teams.labelBox.h).toBe(40)
+    expect(teams.labelBox.y + teams.labelBox.h).toBe(teams.box.y + teams.box.h)
+    expect(teams.labelBox.x + teams.labelBox.w).toBeLessThanOrEqual(teams.opening.x)
   })
 
   it('reserves two name lines and two status lines under a compact avatar, so a label wraps instead of truncating', () => {
