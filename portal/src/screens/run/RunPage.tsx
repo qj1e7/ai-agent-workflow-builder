@@ -9,7 +9,6 @@ import { useLiveRoom, useTechnicalDetails, useWidth } from '../../room/hooks'
 import { Legend } from '../../room/Legend'
 import { Minutes } from '../../room/Minutes'
 import { ActionCard, TroubleshooterPanel } from '../../room/NeedsYou'
-import { SpeechSlot } from '../../room/pieces'
 import { Room } from '../../room/Room'
 import { RunHead } from '../../room/RunHead'
 import { expectedWritesOf, spineBlocks } from '../../room/spineBlocks'
@@ -62,7 +61,6 @@ export function RunPage() {
       </div>
       <div className={styles['columns']}>
         <div className={styles['stageColumn']}>
-          {compact ? <SpeechSlot speech={room.speech} /> : null}
           <div ref={roomRef}>
             <Room view={view} width={width} expectedWrites={expectedWritesOf(blocks)} label={`The room for ${title}`} />
           </div>

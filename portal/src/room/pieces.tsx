@@ -335,17 +335,17 @@ export function Token({ at, size, what, travel, motion, parked }: TokenProps) {
 interface SpeechCardProps {
   speech: Speech
   speakerName: string
-  card?: Box
-  tailX?: number
-  variant: 'room' | 'slot'
+  /** The layout's slot in the speech band, with the tail over the speaker's avatar. */
+  card: Box
+  tailX: number
 }
 
-export function SpeechCard({ speech, speakerName, card, tailX, variant }: SpeechCardProps) {
+export function SpeechCard({ speech, speakerName, card, tailX }: SpeechCardProps) {
   const identity = agentIdentity(speech.speaker)
   const to = speech.to.kind === 'agent' ? speech.to.display : 'Everyone'
-  const style = card ? ({ ...placeAt(card), '--hue': identity.hue, '--tail': `${(tailX ?? card.x + card.w / 2) - card.x}px` } as React.CSSProperties) : ({ '--hue': identity.hue } as React.CSSProperties)
+  const style = { ...placeAt(card), '--hue': identity.hue, '--tail': `${tailX - card.x}px` } as React.CSSProperties
   return (
-    <div key={speech.seq} className={cx(styles['speech'], variant === 'slot' ? styles['speechSlot'] : styles['speechRoom'])} style={style} data-speech={speech.seq}>
+    <div key={speech.seq} className={styles['speech']} style={style} data-speech={speech.seq}>
       <div className={styles['speechHead']}>
         <Avatar kind="agent" agentId={speech.speaker} size={16} />
         <span className={styles['speechWho']}>{speakerName}</span>
@@ -353,20 +353,11 @@ export function SpeechCard({ speech, speakerName, card, tailX, variant }: Speech
         <span className={styles['speechTo']}>{to}</span>
       </div>
       <p className={styles['speechText']}>{speech.text}</p>
-      {variant === 'room' ? <span className={styles['speechTail']} aria-hidden="true" /> : null}
+      <span className={styles['speechTail']} aria-hidden="true" />
     </div>
   )
 }
 
 export function EmptySeatAvatar({ size }: { size: number }) {
   return <Avatar kind="empty_seat" size={size} />
-}
-
-/** The compact room's speech, above the room in a slot that keeps its height, so nothing moves when speech comes or goes. */
-export function SpeechSlot({ speech }: { speech: Speech | null }) {
-  return (
-    <div className={styles['speechSlotFrame']} aria-hidden={speech ? undefined : true}>
-      {speech ? <SpeechCard speech={speech} speakerName={agentIdentity(speech.speaker).name} variant="slot" /> : null}
-    </div>
-  )
 }

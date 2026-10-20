@@ -10,13 +10,12 @@ import { useLiveRoom, useReducedMotion, useWidth } from '../../room/hooks'
 import { Legend } from '../../room/Legend'
 import { clockTime } from '../../room/Minutes'
 import { ActionCard, TroubleshooterPanel } from '../../room/NeedsYou'
-import { SpeechSlot } from '../../room/pieces'
 import { Room } from '../../room/Room'
 import { RunHead } from '../../room/RunHead'
 import { expectedWritesOf, spineBlocks } from '../../room/spineBlocks'
 import { Transport } from '../../room/Transport'
 import { useBlocks } from '../../room/useBlocks'
-import { ROOM_METRICS, type LiveView, type WhenFinished } from '../../run'
+import type { LiveView, WhenFinished } from '../../run'
 import { ButtonLink } from '../../ui/Button'
 import { cx } from '../../ui/cx'
 import { EmptyState, InlineMessage, Skeleton } from '../../ui/Feedback'
@@ -80,7 +79,6 @@ function Hero({ run }: { run: RunView }) {
   const mode = usePortalMode()
   const roomRef = useRef<HTMLDivElement>(null)
   const width = useWidth(roomRef)
-  const compact = width > 0 && width < ROOM_METRICS.wide.minWidth
   const { room, frame } = view
   // The pill follows the room's phase, the same source as the caption and the spine; the REST view speaks only before the first frame.
   const state = room.phase.name === 'empty' ? run.state : room.phase.name
@@ -99,7 +97,6 @@ function Hero({ run }: { run: RunView }) {
       />
       <div className={styles['heroBody']}>
         <div className={styles['stageColumn']}>
-          {compact ? <SpeechSlot speech={room.speech} /> : null}
           <div ref={roomRef}>
             <Room view={view} width={width} expectedWrites={expectedWritesOf(blocks)} label={`The room for ${run.use_case_name}`} opening={opening} />
           </div>
