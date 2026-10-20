@@ -15,5 +15,6 @@ Five of us write code with AI agents, and we want one way of working: plan first
 ## Consequences
 
 - One person upgrades pstack each sprint, following `CONTRIBUTING.md`.
+- Claude Code can lock a plugin only to a tag, and a tag can be moved. CI records the commit we reviewed and checks every day that the tag still points at it. Forking pstack-claude would remove this risk, at the cost of syncing the fork ourselves.
 - Copilot cannot lock a plugin version, so a Copilot user can run a newer pstack than the team.
 - pstack's review skills run several models in parallel. Each person runs `setup-pstack` to pick models that fit their own plan.

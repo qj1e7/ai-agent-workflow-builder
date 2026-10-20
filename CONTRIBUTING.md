@@ -79,11 +79,17 @@ One person does this at the start of each sprint.
    gh release list -R michael-denyer/pstack-claude -L 5
    ```
 
-2. Read the release notes for changes to playbooks or skills that we use.
+2. Read the release notes for changes to playbooks or skills that we use. Skim the diff of `plugins/pstack/hooks/` too, because hooks run code on every teammate's machine.
 3. On a new branch, change `"ref"` in `.claude/settings.json` to the new tag.
-4. Open a PR named `chore(ci): upgrade pstack to <version>`. CI checks our playbooks against the new version.
-5. If CI fails, a step that our playbooks quote has changed. Update the quoted text in `.agents/playbooks/` in the same PR.
-6. After the merge, everyone pulls `main` and restarts their tool. Codex users run `codex plugin marketplace remove pstack-claude`, then add it again with the new `--ref`.
+4. Get the commit that the tag points at, and put it in `PSTACK_SHA` in `.github/workflows/pstack-playbooks.yml`:
+
+   ```sh
+   gh api repos/michael-denyer/pstack-claude/commits/<version> --jq .sha
+   ```
+
+5. Open a PR named `chore(ci): upgrade pstack to <version>`. CI checks that the tag points at that commit, and that our playbooks still match the new version.
+6. If the playbook check fails, a step that our playbooks quote has changed. Update the quoted text in `.agents/playbooks/` in the same PR.
+7. After the merge, everyone pulls `main` and restarts their tool. Codex users run `codex plugin marketplace remove pstack-claude`, then add it again with the new `--ref`.
 
 ## Costs and plan limits
 

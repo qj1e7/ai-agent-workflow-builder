@@ -4,17 +4,27 @@ on:
   pull_request:
   push:
     branches: [main]
+  schedule:
+    # Daily, so a moved pstack tag is caught even when nobody opens a PR.
+    - cron: "0 1 * * *"
 
 permissions:
   contents: read
 
+env:
+  # The pstack commit we reviewed. Update it together with "ref" in
+  # .claude/settings.json when you upgrade pstack (see CONTRIBUTING.md).
+  PSTACK_SHA: 046341e3aaf2405083973a37f860d0d2ea98e18a
+
 jobs:
-  check:
+  pstack-playbooks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
 
@@ -25,10 +35,16 @@ jobs:
           echo "Team pstack version: $ref"
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
 
-      - name: Fetch pstack at that version
+      - name: Fetch pstack at that version and check it is the reviewed commit
         env:
           PSTACK_REF: ${{ steps.pin.outputs.ref }}
-        run: git clone --quiet --depth 1 --branch "$PSTACK_REF" https://github.com/michael-denyer/pstack-claude "$RUNNER_TEMP/pstack"
+        run: |
+          git clone --quiet --depth 1 --branch "$PSTACK_REF" https://github.com/michael-denyer/pstack-claude "$RUNNER_TEMP/pstack"
+          actual=$(git -C "$RUNNER_TEMP/pstack" rev-parse HEAD)
+          if [ "$actual" != "$PSTACK_SHA" ]; then
+            echo "::error::pstack $PSTACK_REF points at $actual, not the reviewed commit $PSTACK_SHA. Either the tag moved upstream, or PSTACK_SHA was not updated during an upgrade. Tell the team before anyone trusts this version."
+            exit 1
+          fi
 
       - name: Check team playbooks against it
         run: node "$RUNNER_TEMP/pstack/plugins/pstack/skills/poteto-mode/scripts/check-playbooks.mjs" .
