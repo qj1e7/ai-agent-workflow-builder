@@ -1,3 +1,4 @@
+import hmac
 import logging
 import os
 import threading
@@ -8,7 +9,8 @@ from datetime import UTC, datetime
 from typing import Protocol, Self
 
 import httpx
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.security import APIKeyHeader
 
 from agent_runtime.contract import (
     AgentCard,
@@ -30,6 +32,7 @@ log = logging.getLogger(__name__)
 CALLBACK_TIMEOUT_SECONDS = 2.0
 DEFAULT_GITHUB_API_BASE = "https://api.github.com"
 TOKEN_HEADER = "X-Callback-Token"
+KEY_HEADER = "X-Agent-Key"
 
 AGENT_CARDS = AgentCards(
     agents=[
@@ -53,8 +56,20 @@ def utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+class SettingsError(ValueError):
+    pass
+
+
+def _required(env: Mapping[str, str], name: str) -> str:
+    value = env.get(name, "").strip()
+    if not value:
+        raise SettingsError(f"{name} must be set")
+    return value
+
+
 @dataclass(frozen=True)
 class Settings:
+    agent_api_key: str
     github_api_base: str
     github_token: str | None
     summary_model: str | None
@@ -62,6 +77,7 @@ class Settings:
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> Self:
         return cls(
+            agent_api_key=_required(env, "AGENT_API_KEY"),
             github_api_base=env.get("GITHUB_API_BASE") or DEFAULT_GITHUB_API_BASE,
             github_token=env.get("GITHUB_TOKEN") or None,
             summary_model=env.get("AGENT_SUMMARY_MODEL") or None,
@@ -140,12 +156,19 @@ class TaskStore:
             return self._results[task_id]
 
 
-def create_app(runtime: Runtime | None = None) -> FastAPI:
-    active = runtime or build_runtime(Settings.from_env(os.environ))
+def create_app(settings: Settings | None = None, runtime: Runtime | None = None) -> FastAPI:
+    config = settings or Settings.from_env(os.environ)
+    active = runtime or build_runtime(config)
     store = TaskStore()
     app = FastAPI(title="Agent API", version="0.1.0")
+    expected_key = config.agent_api_key.encode()
+    key_header = APIKeyHeader(name=KEY_HEADER, auto_error=False)
 
-    @app.post("/v1/tasks")
+    def require_key(supplied: str | None = Depends(key_header)) -> None:
+        if not hmac.compare_digest((supplied or "").encode(), expected_key):
+            raise HTTPException(status_code=401, detail="Missing or wrong agent key")
+
+    @app.post("/v1/tasks", dependencies=[Depends(require_key)])
     def post_task(body: TaskRequest) -> TaskResult:
         def run() -> TaskResult:
             events = EventLog(active.clock, active.callbacks.sink_for(body))

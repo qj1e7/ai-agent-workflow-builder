@@ -11,6 +11,7 @@ from agent_runtime.api import (
     HttpCallbacks,
     Runtime,
     Settings,
+    SettingsError,
     build_runtime,
     build_summarizer,
     create_app,
@@ -21,6 +22,10 @@ from agent_runtime.release_checker import ReleaseChecker
 from agent_runtime.room import FixedRoomLead
 from agent_runtime.summary import ModelSummarizer, TemplateSummarizer
 from tests.fakes import FakeClock, FakeSource, langgraph_tags
+
+KEY = "test-agent-key-not-a-secret"
+BASE_ENV = {"AGENT_API_KEY": KEY}
+SETTINGS = Settings.from_env(BASE_ENV)
 
 
 class Posts:
@@ -41,7 +46,7 @@ def make_app(source: FakeSource, posts: Posts) -> TestClient:
     callbacks = HttpCallbacks(client=httpx.Client(transport=httpx.MockTransport(posts)))
     checker = ReleaseChecker(source, TemplateSummarizer(), sleep=clock.sleep)
     runtime = Runtime(checker=checker, lead=FixedRoomLead(), clock=clock, callbacks=callbacks)
-    return TestClient(create_app(runtime))
+    return TestClient(create_app(SETTINGS, runtime), headers={"X-Agent-Key": KEY})
 
 
 def request_body(run_id: str = "run_01JB8") -> dict[str, object]:
@@ -158,7 +163,7 @@ def test_a_malformed_task_is_refused_before_anything_runs():
 
 
 def test_settings_default_to_the_public_api_and_no_model():
-    settings = Settings.from_env({})
+    settings = Settings.from_env(BASE_ENV)
     assert settings.github_api_base == "https://api.github.com"
     assert settings.github_token is None
     assert settings.summary_model is None
@@ -168,6 +173,7 @@ def test_settings_default_to_the_public_api_and_no_model():
 def test_settings_read_the_environment():
     settings = Settings.from_env(
         {
+            **BASE_ENV,
             "GITHUB_API_BASE": "http://mock-github:8200",
             "GITHUB_TOKEN": "ghp_example",
             "AGENT_SUMMARY_MODEL": "openai:gpt-4o-mini",
@@ -183,7 +189,75 @@ def test_settings_read_the_environment():
     [({}, TemplateSummarizer), ({"AGENT_SUMMARY_MODEL": "x:y"}, ModelSummarizer)],
 )
 def test_a_model_is_used_only_when_one_is_named(env: dict[str, str], expected: type):
-    assert isinstance(build_summarizer(Settings.from_env(env)), expected)
+    assert isinstance(build_summarizer(Settings.from_env({**BASE_ENV, **env})), expected)
+
+
+def without_key(client: TestClient) -> TestClient:
+    return TestClient(client.app)
+
+
+@pytest.mark.parametrize(
+    ("headers", "label"),
+    [
+        ({}, "no key"),
+        ({b"X-Agent-Key": b""}, "empty key"),
+        ({b"X-Agent-Key": b"wrong"}, "wrong key"),
+        ({b"X-Agent-Key": KEY.encode() + b"x"}, "key with extra"),
+        ({b"X-Agent-Key": KEY.encode()[:-1]}, "key cut short"),
+        ({b"X-Agent-Key": b"k\xe9y"}, "non ascii key"),
+        ({b"Authorization": b"Bearer " + KEY.encode()}, "key in the wrong header"),
+    ],
+)
+def test_a_task_without_the_right_key_gets_401_and_does_not_run(
+    headers: dict[bytes, bytes], label: str
+):
+    source, posts = FakeSource(langgraph_tags()), Posts()
+    client = without_key(make_app(source, posts))
+    response = client.post("/v1/tasks", json=request_body(), headers=headers)
+    assert response.status_code == 401, label
+    assert source.calls == []
+    assert posts.requests == []
+
+
+def test_the_right_key_runs_the_task():
+    client = without_key(make_app(FakeSource(langgraph_tags()), Posts()))
+    response = client.post("/v1/tasks", json=request_body(), headers={"X-Agent-Key": KEY})
+    assert response.status_code == 200
+
+
+def test_a_bad_key_is_refused_before_the_body_is_read():
+    client = without_key(make_app(FakeSource(langgraph_tags()), Posts()))
+    assert client.post("/v1/tasks", json={}).status_code == 401
+
+
+@pytest.mark.parametrize("path", ["/healthz", "/v1/agents"])
+def test_the_static_endpoints_stay_open(path: str):
+    client = without_key(make_app(FakeSource(langgraph_tags()), Posts()))
+    assert client.get(path).status_code == 200
+
+
+@pytest.mark.parametrize("env", [{}, {"AGENT_API_KEY": ""}, {"AGENT_API_KEY": "   "}])
+def test_the_app_refuses_to_start_without_an_api_key(
+    env: dict[str, str], monkeypatch: pytest.MonkeyPatch
+):
+    with pytest.raises(SettingsError, match="AGENT_API_KEY"):
+        Settings.from_env(env)
+    monkeypatch.delenv("AGENT_API_KEY", raising=False)
+    monkeypatch.setattr("os.environ", env)
+    with pytest.raises(SettingsError, match="AGENT_API_KEY"):
+        create_app()
+
+
+def test_the_task_endpoint_documents_the_key_header():
+    schema = create_app(SETTINGS).openapi()
+    assert schema["components"]["securitySchemes"]["APIKeyHeader"] == {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Agent-Key",
+    }
+    assert schema["paths"]["/v1/tasks"]["post"]["security"] == [{"APIKeyHeader": []}]
+    assert "security" not in schema["paths"]["/healthz"]["get"]
+    assert "security" not in schema["paths"]["/v1/agents"]["get"]
 
 
 def test_langsmith_tracing_is_off_unless_its_variables_are_set(monkeypatch: pytest.MonkeyPatch):
