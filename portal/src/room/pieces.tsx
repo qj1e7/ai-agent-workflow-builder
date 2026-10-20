@@ -361,3 +361,12 @@ export function SpeechCard({ speech, speakerName, card, tailX, variant }: Speech
 export function EmptySeatAvatar({ size }: { size: number }) {
   return <Avatar kind="empty_seat" size={size} />
 }
+
+/** The compact room's speech, above the room in a slot that keeps its height, so nothing moves when speech comes or goes. */
+export function SpeechSlot({ speech }: { speech: Speech | null }) {
+  return (
+    <div className={styles['speechSlotFrame']} aria-hidden={speech ? undefined : true}>
+      {speech ? <SpeechCard speech={speech} speakerName={agentIdentity(speech.speaker).name} variant="slot" /> : null}
+    </div>
+  )
+}

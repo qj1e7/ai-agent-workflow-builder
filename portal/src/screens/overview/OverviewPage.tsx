@@ -10,13 +10,13 @@ import { useLiveRoom, useReducedMotion, useWidth } from '../../room/hooks'
 import { Legend } from '../../room/Legend'
 import { clockTime } from '../../room/Minutes'
 import { ActionCard, TroubleshooterPanel } from '../../room/NeedsYou'
-import { SpeechCard } from '../../room/pieces'
+import { SpeechSlot } from '../../room/pieces'
 import { Room } from '../../room/Room'
+import { RunHead } from '../../room/RunHead'
 import { expectedWritesOf, spineBlocks } from '../../room/spineBlocks'
 import { Transport } from '../../room/Transport'
 import { useBlocks } from '../../room/useBlocks'
 import { ROOM_METRICS, type LiveView, type WhenFinished } from '../../run'
-import { agentIdentity } from '../../ui/agents'
 import { ButtonLink } from '../../ui/Button'
 import { cx } from '../../ui/cx'
 import { EmptyState, InlineMessage, Skeleton } from '../../ui/Feedback'
@@ -91,24 +91,18 @@ function Hero({ run }: { run: RunView }) {
 
   return (
     <section className={styles['hero']} aria-labelledby="hero-title">
-      <header className={styles['heroHead']}>
-        <div className={styles['heroWords']}>
-          <h1 id="hero-title" className={styles['heroTitle']}>
-            {run.use_case_name}
-          </h1>
-          <p className={styles['heroLede']}>
-            Started by {startedBy} at {formatTime(run.started_at)}. {watching}
-            {mode === 'demo' ? ' This is demo data.' : ''}
-          </p>
-        </div>
-        <StatusPill state={state} />
-      </header>
+      <RunHead
+        titleId="hero-title"
+        title={run.use_case_name}
+        lede={`Started by ${startedBy} at ${formatTime(run.started_at)}. ${watching}${mode === 'demo' ? ' This is demo data.' : ''}`}
+        state={state}
+      />
       <div className={styles['heroBody']}>
         <div className={styles['stageColumn']}>
+          {compact ? <SpeechSlot speech={room.speech} /> : null}
           <div ref={roomRef}>
             <Room view={view} width={width} expectedWrites={expectedWritesOf(blocks)} label={`The room for ${run.use_case_name}`} opening={opening} />
           </div>
-          {compact && room.speech ? <SpeechCard speech={room.speech} speakerName={agentIdentity(room.speech.speaker).name} variant="slot" /> : null}
           <Caption room={room} />
           <Transport view={view} />
           <Legend />

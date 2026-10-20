@@ -3,31 +3,6 @@
   gap: var(--space-3);
 }
 
-.heroHead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--space-3) var(--space-5);
-}
-
-.heroWords {
-  display: grid;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-.heroTitle {
-  font-size: 2.25rem;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
-}
-
-.heroLede {
-  max-width: 62ch;
-  color: var(--muted);
-}
-
 .heroBody {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 340px;
@@ -103,10 +78,11 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* 64 px below the legend, so at 1440 by 900 the heading sits below the fold instead of across it. */
 .earlier {
   display: grid;
   gap: var(--space-4);
-  margin-top: var(--space-7);
+  margin-top: var(--space-8);
 }
 
 .rows {
@@ -185,10 +161,6 @@
 }
 
 @media (max-width: 759px) {
-  .heroTitle {
-    font-size: var(--text-28);
-  }
-
   .row {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: var(--space-2) var(--space-3);

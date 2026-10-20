@@ -27,6 +27,8 @@ interface SpineProps {
   blocks: readonly SpineBlock[]
   orientation: 'horizontal' | 'vertical'
   compact?: boolean
+  /** Horizontal only: name and state on one line beside the node, about 36 px tall, for a page that must fit under the fold. */
+  dense?: boolean
   showDescriptions?: boolean
   /** Off for a plan that has no run yet, so the builder does not say "Not reached" under every block. */
   showState?: boolean
@@ -50,8 +52,8 @@ const stateIcon: Record<SpineState['kind'], Icon> = {
   not_needed: IconDash,
 }
 
-export function Spine({ blocks, orientation, compact = false, showDescriptions = false, showState = true, label = 'Steps in this run' }: SpineProps) {
-  const className = cx(styles['spine'], styles[orientation], compact && styles['compact'])
+export function Spine({ blocks, orientation, compact = false, dense = false, showDescriptions = false, showState = true, label = 'Steps in this run' }: SpineProps) {
+  const className = cx(styles['spine'], styles[orientation], compact && styles['compact'], dense && orientation === 'horizontal' && styles['dense'])
   return (
     <ol className={className} aria-label={label}>
       {blocks.map((block, index) => {

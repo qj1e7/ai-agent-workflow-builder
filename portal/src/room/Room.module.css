@@ -802,10 +802,16 @@
   pointer-events: none;
 }
 
+/* The frame and a three-line card are both 92 px (1 + 6 + 16 + 2 + 3 lines of 19.6 + 7 + 1), so speech comes and goes without a shift. */
+.speechSlotFrame {
+  min-height: 92px;
+  min-width: 0;
+}
+
 .speechSlot {
   position: relative;
   min-height: 92px;
-  padding: 10px 14px 12px;
+  padding: 6px 14px 7px;
 }
 
 .speechHead {

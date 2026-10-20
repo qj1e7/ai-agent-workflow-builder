@@ -9,19 +9,18 @@ import { useLiveRoom, useTechnicalDetails, useWidth } from '../../room/hooks'
 import { Legend } from '../../room/Legend'
 import { Minutes } from '../../room/Minutes'
 import { ActionCard, TroubleshooterPanel } from '../../room/NeedsYou'
-import { SpeechCard } from '../../room/pieces'
+import { SpeechSlot } from '../../room/pieces'
 import { Room } from '../../room/Room'
+import { RunHead } from '../../room/RunHead'
 import { expectedWritesOf, spineBlocks } from '../../room/spineBlocks'
 import { Transport } from '../../room/Transport'
 import { useBlocks } from '../../room/useBlocks'
 import { ROOM_METRICS } from '../../run'
-import { agentIdentity } from '../../ui/agents'
 import { ButtonLink } from '../../ui/Button'
 import { InlineMessage } from '../../ui/Feedback'
 import { formatDayAndTime } from '../../ui/format'
 import { PageHeader } from '../../ui/PageHeader'
 import { Spine } from '../../ui/Spine'
-import { StatusPill } from '../../ui/StatusPill'
 import styles from './RunPage.module.css'
 
 export function RunPage() {
@@ -56,29 +55,17 @@ export function RunPage() {
 
   return (
     <div className={`page ${styles['page']}`}>
-      <header className={styles['head']}>
-        <h1 className={styles['title']}>{title}</h1>
-        <p className={styles['lede']}>{run.data && startedBy ? `Started by ${startedBy} on ${formatDayAndTime(run.data.started_at)}.` : 'Loading the run.'}</p>
-        {state ? (
-          <div className={styles['pill']}>
-            <StatusPill state={state} />
-          </div>
-        ) : null}
-      </header>
+      <RunHead title={title} lede={run.data && startedBy ? `Started by ${startedBy} on ${formatDayAndTime(run.data.started_at)}.` : 'Loading the run.'} state={state} />
       {run.isError ? <InlineMessage tone="error">{errorWords(run.error)}</InlineMessage> : null}
       <div className={styles['spine']}>
-        {blocks ? <Spine blocks={spineBlocks(view, blocks)} orientation={compact ? 'vertical' : 'horizontal'} compact /> : null}
+        {blocks ? <Spine blocks={spineBlocks(view, blocks)} orientation={compact ? 'vertical' : 'horizontal'} compact dense={!compact} /> : null}
       </div>
       <div className={styles['columns']}>
         <div className={styles['stageColumn']}>
+          {compact ? <SpeechSlot speech={room.speech} /> : null}
           <div ref={roomRef}>
             <Room view={view} width={width} expectedWrites={expectedWritesOf(blocks)} label={`The room for ${title}`} />
           </div>
-          {compact && room.speech ? (
-            <div className={styles['speechSlot']}>
-              <SpeechCard speech={room.speech} speakerName={agentIdentity(room.speech.speaker).name} variant="slot" />
-            </div>
-          ) : null}
           <Caption room={room} />
           <Transport view={view} />
           <Legend />

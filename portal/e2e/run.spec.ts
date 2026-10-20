@@ -1,10 +1,12 @@
 import { advance, advanceUntil, openFrozen } from './support/clock'
 import { transportSays, waitingForApprover } from './support/flows'
+import { expectFitsTheFold } from './support/fold'
 import { record } from './support/record'
 import { expect, test } from './support/test'
 
 test('the success run page shows the run from work to written ticket', async ({ page }, info) => {
   await openFrozen(page, '/runs/run_01JB8')
+  if (info.project.name === 'desktop') await expectFitsTheFold(page)
   await advance(page, 4_000)
   await record(page, info, 'run-mid-run')
 
