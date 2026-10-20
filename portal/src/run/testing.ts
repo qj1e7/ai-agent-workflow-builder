@@ -5,6 +5,7 @@ import {
   labelOf,
   sceneTime,
   startDirector,
+  waitElapsed,
   wakeAt,
   atEdge,
   type Beat,
@@ -195,7 +196,7 @@ export function rehearse(name: RecordingName, o: { start: Start }): Rehearsal {
     get waiting() {
       const open = openStep(tape.frame(director.shown))
       if (!open) return null
-      return { since: open.state.since, elapsedMs: sceneTime(director, stage(now)) - open.state.since }
+      return { since: open.state.since, elapsedMs: waitElapsed(director, stage(now), open) }
     },
     get nextWake() {
       const wake = wakeAt(director, stage(now))

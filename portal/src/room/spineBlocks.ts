@@ -6,11 +6,12 @@ import type { SpineState } from '../ui/spineState'
 
 export { expectedWritesOf } from '../run'
 
-function stateOf(station: Station, sceneTime: number): SpineState {
+function stateOf(station: Station, frame: LiveView['frame']): SpineState {
   const state = station.state
   switch (state.is) {
     case 'waiting':
-      return { kind: 'waiting', waited: formatDuration(Math.max(0, sceneTime - state.since)) }
+      // The frame's wait is the seat's number; a station waiting on another step counts from scene time.
+      return { kind: 'waiting', waited: formatDuration(frame.waiting?.since === state.since ? frame.waiting.elapsedMs : Math.max(0, frame.sceneTime - state.since)) }
     case 'approved':
       return { kind: 'approved', by: state.by.map((user) => user.display).join(' and ') }
     case 'declined':
@@ -27,7 +28,7 @@ export function spineBlocks(view: LiveView, blocks: readonly BlockView[] | undef
     key: station.block.key,
     name: station.block.name,
     kind: station.block.kind,
-    state: stateOf(station, view.frame.sceneTime),
+    state: stateOf(station, view.frame),
     description: station.block.description,
   }))
 }
