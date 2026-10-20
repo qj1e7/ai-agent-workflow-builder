@@ -16,6 +16,11 @@ const clock = new Intl.DateTimeFormat("en-SG", {
   second: "2-digit",
   hour12: false,
 });
+
+/** The time of day a Minutes entry shows, HH:MM:SS, shared with the overview's So far list. */
+export function clockTime(ms: number): string {
+  return clock.format(new Date(ms));
+}
 const exact = new Intl.DateTimeFormat("en-SG", {
   hour: "2-digit",
   minute: "2-digit",
