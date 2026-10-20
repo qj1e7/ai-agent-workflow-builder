@@ -4,6 +4,7 @@ import { createDemoPlatform, type DemoPlatformHandle } from '../mock'
 import { runId } from './brand'
 import { createClock } from './clock'
 import { createLiveView, type LiveView, type LiveViewStore } from './live'
+import { statusOf } from './status'
 import { TEST_REGISTRY } from './testing'
 
 const START = Date.parse('2026-11-27T02:00:00Z')
@@ -83,6 +84,33 @@ describe('createLiveView against the demo platform', () => {
     expect(view().connection.is).toBe('settled')
     expect(view().transport.settled).toBe(true)
     unsubscribe()
+  })
+
+  it('says the outcome on the transport: Done, Declined, Stopped, and Catching up while behind the live edge', async () => {
+    const live = open()
+    await tick(0)
+    expect(statusOf(live.view())).toBe('live')
+    await tick(8 * SECOND)
+    expect(live.view().frame.shown).toBeLessThan(live.view().frame.head)
+    expect(statusOf(live.view())).toBe('catching_up')
+    await tick(80 * SECOND)
+    expect(live.view().room.phase.name).toBe('succeeded')
+    expect(statusOf(live.view())).toBe('done')
+    live.view().transport.seek(5)
+    expect(statusOf(live.view())).toBe('replay')
+    live.unsubscribe()
+
+    const failed = open(runId('run_01JB9'))
+    await tick(0)
+    expect(failed.view().room.phase.name).toBe('failed')
+    expect(statusOf(failed.view())).toBe('stopped')
+    failed.unsubscribe()
+
+    const rejected = open(runId('run_01JBA'))
+    await tick(0)
+    expect(rejected.view().room.phase.name).toBe('rejected')
+    expect(statusOf(rejected.view())).toBe('declined')
+    rejected.unsubscribe()
   })
 
   it('shows a real decision by Bob and the ticket it writes', async () => {

@@ -1,4 +1,5 @@
 import { collisionSampler, type Collision } from './support/collisions'
+import { transportSays } from './support/flows'
 import { expect, test } from './support/test'
 
 const RUN_LIMIT_MS = 75_000
@@ -11,7 +12,7 @@ test('nothing that travels or speaks covers a room label during the live run', a
   test.skip(labels === 0, 'No [data-room-label] element exists yet, so there is nothing to collide with. Add the data-room-label, data-travel, data-ticket and data-speech attributes to the room, then rerun.')
 
   const sampler = await collisionSampler(page)
-  await expect(page.getByText('Finished', { exact: true }), 'the live run reaches its end').toBeVisible({ timeout: RUN_LIMIT_MS })
+  await expect(transportSays(page, 'Done'), 'the live run reaches its end').toBeVisible({ timeout: RUN_LIMIT_MS })
   const { collisions, samples } = await sampler.stop()
   expect(samples, 'sampled at roughly 10 Hz through the run').toBeGreaterThan(100)
   const worst: Collision[] = collisions.slice(0, 20)

@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { mkdir, stat } from 'node:fs/promises'
+import { transportSays } from './support/flows'
 import { outPath } from './support/record'
 import { assertClean, watchPage } from './support/test'
 
@@ -25,7 +26,7 @@ test('records the overview from load through Bob approving to MOCK-142', async (
   await expect(page.getByText('Waiting for an Approver', { exact: true }).first(), 'the run reaches the approval pause').toBeVisible({ timeout: SUCCESS_LIMIT_MS })
   await expect(page.getByText('Approved by Bob').first(), 'Bob approves').toBeVisible({ timeout: SUCCESS_LIMIT_MS })
   await expect(page.getByText('Written as MOCK-142').first(), 'the ticket is written').toBeVisible({ timeout: SUCCESS_LIMIT_MS })
-  await expect(page.getByText('Finished', { exact: true }), 'the run finishes').toBeVisible({ timeout: SUCCESS_LIMIT_MS })
+  await expect(transportSays(page, 'Done'), 'the run finishes').toBeVisible({ timeout: SUCCESS_LIMIT_MS })
   await page.waitForTimeout(HOLD_ON_SUCCESS_MS)
   assertClean(watch)
 

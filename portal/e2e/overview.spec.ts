@@ -1,4 +1,5 @@
 import { advance, advanceUntil, openFrozen } from './support/clock'
+import { transportSays } from './support/flows'
 import { record } from './support/record'
 import { expect, test } from './support/test'
 
@@ -15,7 +16,7 @@ test('the overview shows each stage of the live success run', async ({ page }, i
   await advanceUntil(page, page.locator('[data-ticket="approved"]'))
   await record(page, info, 'overview-writing')
 
-  await advanceUntil(page, page.getByText('Finished', { exact: true }))
+  await advanceUntil(page, transportSays(page, 'Done'))
   await expect(page.getByText('Written as MOCK-142').first()).toBeVisible()
   await record(page, info, 'overview-success')
 

@@ -214,14 +214,25 @@
   color: var(--lead);
 }
 
-.statusFinished {
+.statusCatchingUp,
+.statusReplay {
+  background: var(--line-soft);
+  color: var(--muted);
+}
+
+.statusDone {
   background: var(--done-tint);
   color: var(--done);
 }
 
-.statusReplay {
+.statusDeclined {
   background: var(--line-soft);
-  color: var(--muted);
+  color: var(--ink);
+}
+
+.statusStopped {
+  background: var(--fail-tint);
+  color: var(--fail);
 }
 
 .backToLive {
