@@ -162,15 +162,23 @@ def test_events_are_emitted_while_the_node_runs_not_after_it():
 
 
 @pytest.mark.parametrize(
-    ("last", "pattern", "message"),
-    [("nightly", r"^\d", "'nightly' is not a version tag"), ("1.2.14", "(", "tag pattern")],
+    ("repo", "last", "pattern", "message"),
+    [
+        (REPO, "nightly", r"^\d", "'nightly' is not a version tag"),
+        (REPO, "1.2.14", "(", "tag pattern"),
+        ("../../admin", "1.2.14", r"^\d", "is not an owner/name repo"),
+        ("just-a-name", "1.2.14", r"^\d", "is not an owner/name repo"),
+    ],
 )
-def test_input_the_agent_cannot_use_fails_without_retry(last: str, pattern: str, message: str):
+def test_input_the_agent_cannot_use_fails_without_retry(
+    repo: str, last: str, pattern: str, message: str
+):
     run = Run(FakeSource(langgraph_tags()))
-    error = failed(run.check(last, ReleaseCheckInputs(repo=REPO, tag_pattern=pattern)))
+    error = failed(run.check(last, ReleaseCheckInputs(repo=repo, tag_pattern=pattern)))
     assert error.type == "InvalidTask"
     assert message in error.message
     assert not error.retryable
+    assert run.source.calls == []
 
 
 def test_the_fetch_step_reports_the_count_and_the_latest_matching_tag():

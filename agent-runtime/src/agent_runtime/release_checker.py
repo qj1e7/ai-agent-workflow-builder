@@ -27,6 +27,7 @@ from agent_runtime.tags import family_of, highest, newer_than
 
 CHECKER = AgentRef(id="release_checker", display="Release checker")
 SOURCE_NAME = "GitHub"
+REPO_NAME = re.compile(r"[\w.-]+/[\w.-]+")
 REPO_NAMES = {"langchain-ai/langgraph": "LangGraph"}
 NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]
 
@@ -246,6 +247,12 @@ def _stop_on_error(next_node: str) -> Callable[[CheckerState], str]:
 
 
 def _reject_unusable(inputs: ReleaseCheckInputs, last_known_tag: str | None) -> TaskError | None:
+    if not REPO_NAME.fullmatch(inputs.repo):
+        return TaskError(
+            type="InvalidTask",
+            message=f"{inputs.repo!r} is not an owner/name repo",
+            retryable=False,
+        )
     try:
         re.compile(inputs.tag_pattern)
     except re.error as bad_pattern:
