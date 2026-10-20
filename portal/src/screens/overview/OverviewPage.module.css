@@ -43,6 +43,7 @@
 
 .rail {
   display: grid;
+  justify-items: start;
   gap: var(--space-5);
   min-width: 0;
   padding: var(--space-5);
@@ -51,12 +52,55 @@
   background: var(--surface);
 }
 
-.fullRun {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 44px;
-  font-weight: 620;
+.rail > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rail > ol,
+.rail > section {
+  justify-self: stretch;
+}
+
+.soFar {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line-soft);
+}
+
+.soFarTitle {
+  font-size: var(--text-16);
+}
+
+.soFarList {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.soFarEntry {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 2px var(--space-2);
+  align-items: start;
+  font-size: var(--text-14);
+  line-height: 1.4;
+}
+
+.soFarEntry > :first-child {
+  margin-top: 1px;
+}
+
+.soFarSummary {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.soFarTime {
+  grid-column: 2;
+  color: var(--muted);
+  font-size: var(--text-12);
+  font-variant-numeric: tabular-nums;
 }
 
 .earlier {

@@ -5,27 +5,33 @@ import { useDisplayName } from '../../api/people'
 import { useRunClock, usePortalMode } from '../../api/context'
 import { useRuns, useTemplates } from '../../api/queries'
 import type { RunView } from '../../api/types'
-import { Caption } from '../../room/Caption'
-import { useLiveRoom, useWidth } from '../../room/hooks'
+import { ActorAvatar, Caption } from '../../room/Caption'
+import { useLiveRoom, useReducedMotion, useWidth } from '../../room/hooks'
 import { Legend } from '../../room/Legend'
+import { clockTime } from '../../room/Minutes'
 import { ActionCard, TroubleshooterPanel } from '../../room/NeedsYou'
 import { SpeechCard } from '../../room/pieces'
 import { Room } from '../../room/Room'
 import { expectedWritesOf, spineBlocks } from '../../room/spineBlocks'
 import { Transport } from '../../room/Transport'
 import { useBlocks } from '../../room/useBlocks'
-import { ROOM_METRICS, type WhenFinished } from '../../run'
+import { ROOM_METRICS, type LiveView, type WhenFinished } from '../../run'
 import { agentIdentity } from '../../ui/agents'
 import { ButtonLink } from '../../ui/Button'
 import { EmptyState, InlineMessage, Skeleton } from '../../ui/Feedback'
 import { formatDayAndTime, formatRelative, formatTime } from '../../ui/format'
-import { IconArrow } from '../../ui/icons'
 import { Spine, type SpineBlock } from '../../ui/Spine'
 import { StatusPill } from '../../ui/StatusPill'
 import { runDots } from './runDots'
 import styles from './OverviewPage.module.css'
 
 const SETTLED = new Set<RunView['state']>(['succeeded', 'rejected', 'failed'])
+/** The plan rises in 500 ms, three doors follow 60 ms apart, the room's contents land at 860 ms: the first beat waits this long. */
+const OPENING_MS = 900
+const SO_FAR = 4
+
+/** The opening plays once per page load, on the first overview the person sees, never on a later navigation. */
+let openedOnce = false
 
 export function OverviewPage() {
   const runs = useRuns({ poll: true })
@@ -61,7 +67,13 @@ export function OverviewPage() {
 function Hero({ run }: { run: RunView }) {
   // Decided once per run: a run that was already finished when the page opened replays, a live one is followed to its end.
   const [whenFinished] = useState<WhenFinished>(() => (SETTLED.has(run.state) ? 'replay' : 'rest'))
-  const view = useLiveRoom(run.run_id, whenFinished)
+  const reduced = useReducedMotion()
+  const [opening] = useState(() => {
+    if (openedOnce || reduced) return false
+    openedOnce = true
+    return true
+  })
+  const view = useLiveRoom(run.run_id, whenFinished, opening ? OPENING_MS : 0)
   const blocks = useBlocks(run)
   const nameOf = useDisplayName()
   const mode = usePortalMode()
@@ -69,6 +81,7 @@ function Hero({ run }: { run: RunView }) {
   const width = useWidth(roomRef)
   const compact = width > 0 && width < ROOM_METRICS.wide.minWidth
   const { room, frame } = view
+  // The pill follows the room's phase, the same source as the caption and the spine; the REST view speaks only before the first frame.
   const state = room.phase.name === 'empty' ? run.state : room.phase.name
   const startedBy = nameOf(run.started_by)
   const watching = frame.label === 'live' ? 'Watching the run as it happens.' : frame.label === 'replay' ? 'Replaying it from the start.' : 'Finished.'
@@ -92,7 +105,7 @@ function Hero({ run }: { run: RunView }) {
       <div className={styles['heroBody']}>
         <div className={styles['stageColumn']}>
           <div ref={roomRef}>
-            <Room view={view} width={width} expectedWrites={expectedWritesOf(blocks)} label={`The room for ${run.use_case_name}`} />
+            <Room view={view} width={width} expectedWrites={expectedWritesOf(blocks)} label={`The room for ${run.use_case_name}`} opening={opening} />
           </div>
           {compact && room.speech ? <SpeechCard speech={room.speech} speakerName={agentIdentity(room.speech.speaker).name} variant="slot" /> : null}
           <Caption room={room} />
@@ -102,12 +115,37 @@ function Hero({ run }: { run: RunView }) {
         <aside className={styles['rail']} aria-label="Where the run is">
           {blocks ? <Spine blocks={spine} orientation="vertical" compact /> : null}
           {needsYou}
-          <Link to={`/runs/${run.run_id}`} className={styles['fullRun']}>
-            Open the full run
-            <IconArrow size={18} />
-          </Link>
+          <SoFar view={view} />
+          <ButtonLink to={`/runs/${run.run_id}`}>Open the full run</ButtonLink>
         </aside>
       </div>
+    </section>
+  )
+}
+
+/** The last few story summaries, newest first, so the rail tells the story the room is showing. */
+function SoFar({ view }: { view: LiveView }) {
+  const recent = view.minutes.filter((entry) => entry.tier === 'story').slice(-SO_FAR).reverse()
+  return (
+    <section className={styles['soFar']} aria-labelledby="so-far-title">
+      <h2 id="so-far-title" className={styles['soFarTitle']}>
+        So far
+      </h2>
+      {recent.length === 0 ? (
+        <p className="muted">Nothing has happened yet.</p>
+      ) : (
+        <ol className={styles['soFarList']}>
+          {recent.map((entry) => (
+            <li key={entry.seq} className={styles['soFarEntry']}>
+              <ActorAvatar actor={entry.actor} size={20} />
+              <span className={styles['soFarSummary']}>{entry.summary}</span>
+              <time className={styles['soFarTime']} dateTime={new Date(entry.at).toISOString()}>
+                {clockTime(entry.at)}
+              </time>
+            </li>
+          ))}
+        </ol>
+      )}
     </section>
   )
 }
