@@ -136,6 +136,15 @@ describe('applyEvent on the recordings', () => {
     })
   })
 
+  it('lays a finding on the table when a step returns a list, keeps it through the talk, and lets the proposal take the table', () => {
+    expect(fold(slice('success', 1, 7)).room.finding, 'a count and a version are not a finding').toBeNull()
+    const found = fold(slice('success', 1, 9)).room
+    expect(found.finding).toEqual({ agent: CHECKER, step: 'find_new', from: GITHUB, items: ['1.2.16', '1.2.15'] })
+    expect(fold(slice('success', 1, 11)).room.finding).toEqual(found.finding)
+    expect(fold(slice('success', 1, 12)).room.finding).toBeNull()
+    expect(fold(slice('success', 1, 12)).room.ticket).not.toBeNull()
+  })
+
   it('numbers the messages sent during an open trip, then turns the trip red on failure', () => {
     const marked = fold(slice('failure', 1, 9))
     expect(marked.room.trips[0]).toMatchObject({ state: 'out', marks: 3 })
@@ -210,6 +219,19 @@ describe('applyEvent on synthetic events', () => {
       [CHECKER, 1],
     ])
     expect(openStep(again)?.index).toBe(0)
+  })
+
+  it('a retry of the work leg clears the table', () => {
+    const found = fold(slice('success', 1, 9)).room
+    const retryWork = synthetic('success', {
+      seq: 10,
+      ts: '2026-11-03T02:15:00Z',
+      actor: { kind: 'user', id: 'alice', display: 'Alice' },
+      summary: 'Alice retried the run.',
+      kind: 'run_retried',
+      data: { leg: 'work', attempt: 2 },
+    })
+    expect(fold([retryWork], found).room.finding).toBeNull()
   })
 
   it('retry of the act leg keeps the ticket and locks the doors again', () => {

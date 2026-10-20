@@ -5,6 +5,7 @@ import { Avatar } from '../ui/Avatar'
 import { agentIdentity } from '../ui/agents'
 import { cx } from '../ui/cx'
 import { IconLock, IconPerson, IconUnlock, IconX } from '../ui/icons'
+import { CHIP_FOLD_LEAD_MS, CHIP_HOLD_MS, FindingChips } from './Finding'
 import { FloorPlan } from './FloorPlan'
 import { useBeatAnimation, useReducedMotion } from './hooks'
 import { APPEAR_MS, EASE_OVERSHOOT, POP, TRAVEL_SHARE, travelAlong, walkAlong } from './motion'
@@ -351,7 +352,21 @@ export function Room({ view, width, expectedWrites, label, opening = false }: Ro
     return <SpeechCard speech={room.speech} speakerName={agentIdentity(room.speech.speaker).name} card={slot.card} tailX={slot.tailX} />
   })()
 
-  const tableNote = !room.ticket ? (
+  const finding = (() => {
+    const spot = layout.ticketSpot
+    if (room.finding && !room.ticket) {
+      const land =
+        beat && beat.before.finding !== room.finding
+          ? { key: beat.key, fromMs: travelMs, byMs: beat.durationMs - CHIP_HOLD_MS, agentAt: point({ at: 'agent', id: room.finding.agent }) }
+          : null
+      return <FindingChips finding={room.finding} spot={spot} size={layout.size} land={land} fold={null} motion={motion} />
+    }
+    const folded = beat && carry?.token === 'ticket' && carry.to.at === 'table' ? beat.before.finding : null
+    if (!beat || !folded || !motion) return null
+    return <FindingChips finding={folded} spot={spot} size={layout.size} land={null} fold={{ key: beat.key, atMs: Math.max(0, travelMs - CHIP_FOLD_LEAD_MS) }} motion={motion} />
+  })()
+
+  const tableNote = !room.ticket && !room.finding ? (
     <p className={cx('plan-voice', styles['tableNote'])} style={{ left: layout.ticketSpot.x, top: layout.ticketSpot.y, width: layout.ticketSpot.w, height: layout.ticketSpot.h }}>
       <span data-room-label="table">{room.phase.name === 'failed' ? 'Nothing was proposed' : room.phase.name === 'succeeded' ? 'Nothing to write' : 'Proposed work lands here'}</span>
     </p>
@@ -377,6 +392,7 @@ export function Room({ view, width, expectedWrites, label, opening = false }: Ro
         <div ref={contentsRef} className={styles['contents']}>
           <Paths layout={layout} room={room} beat={beat} motion={motion} />
           {tableNote}
+          {finding}
           {ticket}
           {agentSeats}
           {leavingSeat}

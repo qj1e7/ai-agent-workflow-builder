@@ -3,6 +3,7 @@ import type { EventOf, RunEvent } from '../stream/parse'
 
 type DeniedReason = EventOf<'write_action_denied'>['data']['reason']
 import { agentId, doorKey, userId, type AgentId, type DoorKey, type RunTime, type Seq, type UserId } from './brand'
+import { findingItems } from './finding'
 import { ruleOf } from './kinds'
 
 /** What the agent registry (src/ui/agents.ts) tells the engine. A port, not an import. */
@@ -96,6 +97,16 @@ export interface Trip {
   readonly state: 'out' | 'back' | 'failed'
 }
 
+/** What a finished step brought back and laid on the table, until a proposal takes the table. */
+export interface Finding {
+  readonly agent: AgentId
+  readonly step: string
+  /** The read door the step's trip went through, or null when the step had no trip. */
+  readonly from: DoorKey | null
+  /** What the step brought back, as its result listed it. One chip each. */
+  readonly items: readonly string[]
+}
+
 export interface TicketLine {
   readonly connector: DoorKey
   readonly operation: string
@@ -157,6 +168,8 @@ export interface RoomState {
   readonly doors: readonly Door[]
   /** Current attempt only. A retry clears them; history stays in the tape. */
   readonly trips: readonly Trip[]
+  /** Set by a step that finished with a list; cleared by the proposal that takes the table and by a retry of the work leg. */
+  readonly finding: Finding | null
   readonly ticket: Ticket | null
   /** Set by agent_message; cleared whenever the phase changes. */
   readonly speech: Speech | null
@@ -194,6 +207,7 @@ export const EMPTY_ROOM: RoomState = {
   approval: null,
   doors: [],
   trips: [],
+  finding: null,
   ticket: null,
   speech: null,
   caption: null,
@@ -375,8 +389,11 @@ function step(room: RoomState, e: RunEvent, registry: AgentRegistry): Fold {
 
     case 'agent_step_finished': {
       const agent = actorRef(e.actor)
-      const next = withStatus(seatAgent(room, agent, 'specialist', registry), agent.id, 'done')
-      const trip = next.trips.find((candidate) => candidate.agent === agent.id && candidate.step === e.data.step)
+      const done = withStatus(seatAgent(room, agent, 'specialist', registry), agent.id, 'done')
+      const trip = done.trips.find((candidate) => candidate.agent === agent.id && candidate.step === e.data.step)
+      const items = findingItems(e.data.result)
+      const finding: Finding | null = items.length > 0 ? { agent: agent.id, step: e.data.step, from: trip?.door ?? null, items } : done.finding
+      const next = { ...done, finding }
       if (!trip) return { room: next, move: { type: 'focus', who: agentAnchor(agent.id) } }
       return {
         room: { ...next, trips: replaceTrip(next.trips, { ...trip, state: 'back' }) },
@@ -442,6 +459,7 @@ function step(room: RoomState, e: RunEvent, registry: AgentRegistry): Fold {
         room: {
           ...next,
           doors,
+          finding: null,
           ticket: { proposalId: e.data.proposal_id, digest: e.data.digest, proposer: proposer.id, lines, denied: null },
           phase: { name: 'proposed' },
           light: { on: TABLE, tone: 'act' },
@@ -577,6 +595,7 @@ function step(room: RoomState, e: RunEvent, registry: AgentRegistry): Fold {
         agents,
         trips: [],
         phase: work ? { name: 'working' } : { name: 'acting' },
+        finding: work ? null : room.finding,
         ticket: work ? null : room.ticket ? { ...room.ticket, denied: null } : null,
         approval: work ? null : room.approval,
         doors: setCheckers(room.doors, 'locked'),

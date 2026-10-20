@@ -28,7 +28,7 @@ export const KINDS = {
   step_retried: technical,
   agent_joined: story(1000, 400),
   agent_step_started: story(900, 300),
-  agent_step_finished: story(900, 300),
+  agent_step_finished: story(1400, 400),
   agent_failed: story(1200, 700),
   agent_message: story(2200, 1200),
   write_action_proposed: story(1400, 600),

@@ -67,6 +67,13 @@ export const IconTicket = drawn(
     <path d="M14 6v12" strokeDasharray="2 2.5" />
   </>,
 )
+export const IconTag = drawn(
+  'IconTag',
+  <>
+    <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h6.6a1.5 1.5 0 0 1 1 .4l7 7a1.5 1.5 0 0 1 0 2.1l-5.6 5.6a1.5 1.5 0 0 1-2.1 0l-7-7a1.5 1.5 0 0 1-.4-1z" />
+    <circle cx="8.5" cy="8.5" r="1.3" />
+  </>,
+)
 export const IconRepo = drawn(
   'IconRepo',
   <>
