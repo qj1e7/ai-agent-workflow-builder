@@ -3,6 +3,7 @@ n8n version matters. Everything else goes through the public `/api/v1` API with 
 """
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -50,35 +51,56 @@ class WorkflowRecord:
 
 
 class N8nClient:
-    def __init__(self, base_url: str, timeout: float = 30) -> None:
-        self._http = httpx.Client(base_url=base_url, timeout=timeout)
+    def __init__(
+        self,
+        base_url: str,
+        timeout: float = 30,
+        transport: httpx.BaseTransport | None = None,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
+        self._http = httpx.Client(base_url=base_url, timeout=timeout, transport=transport)
         self._api_key: str | None = None
+        self._sleep = sleep
 
     def close(self) -> None:
         self._http.close()
 
     def wait_healthy(self, timeout: float = 120) -> None:
+        """n8n's /healthz answers 200 before and while its database is unreachable, and its
+        /rest routes then answer 503, so readiness is the check that matters."""
+        self._until(
+            lambda: self._http.get("/healthz/readiness").status_code == 200,
+            timeout,
+            f"n8n at {self._http.base_url} did not become ready",
+        )
+
+    def _until(self, ready: Callable[[], bool], timeout: float, failure: str) -> None:
         deadline = time.monotonic() + timeout
         while True:
             try:
-                if self._http.get("/healthz").status_code == 200:
+                if ready():
                     return
             except httpx.TransportError:
                 pass
             if time.monotonic() > deadline:
-                raise N8nError(f"n8n at {self._http.base_url} did not become healthy")
-            time.sleep(1)
+                raise N8nError(failure)
+            self._sleep(1)
 
-    def ensure_owner(self, email: str, password: str) -> OwnerOutcome:
-        response = self._http.post(
-            "/rest/owner/setup",
-            json={
-                "email": email,
-                "firstName": "Platform",
-                "lastName": "Bootstrap",
-                "password": password,
-            },
-        )
+    def ensure_owner(self, email: str, password: str, timeout: float = 60) -> OwnerOutcome:
+        body = {
+            "email": email,
+            "firstName": "Platform",
+            "lastName": "Bootstrap",
+            "password": password,
+        }
+        response = self._http.post("/rest/owner/setup", json=body)
+        if response.status_code == 503:
+            self._until(
+                lambda: self._http.get("/healthz/readiness").status_code == 200,
+                timeout,
+                "n8n lost its database and did not get it back",
+            )
+            response = self._http.post("/rest/owner/setup", json=body)
         if response.status_code == 200:
             outcome = OwnerOutcome.CREATED
         elif response.status_code == 400 and _OWNER_EXISTS in response.text:
