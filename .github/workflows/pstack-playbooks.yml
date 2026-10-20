@@ -1,0 +1,34 @@
+name: pstack playbooks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Read the locked pstack version
+        id: pin
+        run: |
+          ref=$(node -p "require('./.claude/settings.json').extraKnownMarketplaces['pstack-claude'].source.ref")
+          echo "Team pstack version: $ref"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch pstack at that version
+        env:
+          PSTACK_REF: ${{ steps.pin.outputs.ref }}
+        run: git clone --quiet --depth 1 --branch "$PSTACK_REF" https://github.com/michael-denyer/pstack-claude "$RUNNER_TEMP/pstack"
+
+      - name: Check team playbooks against it
+        run: node "$RUNNER_TEMP/pstack/plugins/pstack/skills/poteto-mode/scripts/check-playbooks.mjs" .
