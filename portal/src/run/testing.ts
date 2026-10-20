@@ -2,6 +2,7 @@ import type { RunEvent } from '../stream/parse'
 import { agentId, doorKey, runTime, wallTime, type Ms, type RunTime, type WallTime } from './brand'
 import type { Clock } from './clock'
 import {
+  catchingUp,
   direct,
   labelOf,
   sceneTime,
@@ -36,6 +37,7 @@ export function fixedClock(runNow: number): Clock {
   return {
     wall: () => wallTime(Date.now()),
     runNow: () => runTime(runNow),
+    rate: () => 1,
     after(ms, fn) {
       const handle = setTimeout(fn, ms)
       return () => clearTimeout(handle)
@@ -75,6 +77,7 @@ export interface Rehearsal {
   readonly room: RoomState
   readonly sceneTime: RunTime
   readonly atEdge: boolean
+  readonly catchingUp: boolean
   readonly label: FrameLabel
   readonly waiting: { readonly since: RunTime; readonly elapsedMs: Ms } | null
   readonly nextWake: number | null
@@ -96,6 +99,7 @@ export function rehearse(name: RecordingName, o: { start: Start }): Rehearsal {
     tape,
     wall: wall as WallTime,
     runNow: (runNow ?? (tape.length > 0 ? tape.event(tape.length).at : 0)) as RunTime,
+    rate: 1,
   })
 
   function record(): void {
@@ -204,6 +208,9 @@ export function rehearse(name: RecordingName, o: { start: Start }): Rehearsal {
     },
     get atEdge() {
       return atEdge(director)
+    },
+    get catchingUp() {
+      return catchingUp(director, stage(now))
     },
     get label() {
       return labelOf(director, stage(now))

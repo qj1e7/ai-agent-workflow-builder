@@ -113,6 +113,7 @@ describe('createLiveView against the demo platform', () => {
     expect(laterWait).toBeGreaterThan(firstWait)
     expect(view().frame.label).toBe('live')
     expect(view().transport.atEdge).toBe(true)
+    expect(view().frame.elapsed.at, 'live, the transport shows one clock: the run is as long as it has run').toBe(view().frame.elapsed.total)
     expect(view().room.doors.find((door) => door.side === 'write')).toMatchObject({ key: 'jira', checker: 'locked' })
 
     const phases = new Set(seen.map((snapshot) => snapshot.room.phase.name))
@@ -175,7 +176,7 @@ describe('createLiveView against the demo platform', () => {
     close()
   })
 
-  it("counts the shown frame's own wait in replay and after a seek", async () => {
+  it("counts the shown frame's own wait in replay and after a seek, and says Sped up through the replay's compressed wait", async () => {
     const { view, unsubscribe } = open()
     await tick(80 * SECOND)
     expect(view().transport.settled).toBe(true)
@@ -184,14 +185,37 @@ describe('createLiveView against the demo platform', () => {
     const sought = view().frame
     expect(sought.waiting?.elapsedMs).toBe(sought.sceneTime - (sought.waiting?.since ?? 0))
     expect(sought.waiting?.elapsedMs).toBeLessThan(60 * SECOND)
+    expect(sought.elapsed.at, 'behind the end, the transport shows the position of the total').toBeLessThan(sought.elapsed.total)
+    expect(statusOf(view())).toBe('replay')
 
     view().transport.restart()
     while (view().room.phase.name !== 'awaiting_approval') await tick(100)
     const replayed = view().frame
     expect(replayed.mode).toBe('replay')
+    expect(replayed.spedUp).toBe(false)
     expect(replayed.waiting?.elapsedMs).toBe(replayed.sceneTime - (replayed.waiting?.since ?? 0))
     expect(replayed.waiting?.elapsedMs).toBeLessThan(60 * SECOND)
     expect(view().describe()).toContain(`for ${formatDuration(replayed.waiting?.elapsedMs ?? 0)}.`)
+
+    while (view().frame.beat?.type !== 'hold') await tick(100)
+    expect(view().frame.spedUp).toBe(true)
+    expect(statusOf(view())).toBe('sped_up')
+    unsubscribe()
+  })
+
+  it("says Sped up while the demo squeezes the wait for Bob, on the transport and in the frame the seat reads", async () => {
+    const { view, unsubscribe } = open()
+    await tick(20 * SECOND)
+    expect(view().room.phase.name).toBe('awaiting_approval')
+    expect(view().frame.spedUp, 'the head of the wait plays at real speed').toBe(false)
+    expect(statusOf(view())).toBe('live')
+    await tick(6 * SECOND)
+    expect(view().frame.spedUp).toBe(true)
+    expect(statusOf(view())).toBe('sped_up')
+    expect(view().frame.waiting?.elapsedMs ?? 0).toBeGreaterThan(60 * SECOND)
+    await tick(8 * SECOND)
+    expect(view().room.approval?.steps[0]?.state.is).toBe('approved')
+    expect(view().frame.spedUp).toBe(false)
     unsubscribe()
   })
 

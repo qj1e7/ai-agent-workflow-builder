@@ -201,7 +201,7 @@ export function Room({ view, width, expectedWrites, label, opening = false }: Ro
         seat={box}
         avatar={decided ? <Avatar kind="person" name={name} size={box.avatar.w} /> : <EmptySeatAvatar size={box.avatar.w} />}
         name={decided ? name : step.label}
-        words={stepStatus(step, open ? waited : null)}
+        words={stepStatus(step, open && waited !== null ? { ms: waited, spedUp: frame.spedUp, compact } : null)}
         {...(step.state.is === 'declined' ? { statusIcon: IconX } : {})}
         breathing={open}
         lit={lit(key)}

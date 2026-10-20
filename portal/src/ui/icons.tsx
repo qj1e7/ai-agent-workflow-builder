@@ -134,6 +134,7 @@ export const IconPerson = drawn(
   </>,
 )
 export const IconPlay = drawn('IconPlay', <path d="M8 5.5v13l10.5-6.5z" />)
+export const IconFastForward = drawn('IconFastForward', <path d="M3.5 6.5v11L11 12zM12.5 6.5v11L20 12z" />)
 export const IconPause = drawn('IconPause', <path d="M8.5 5.5v13M15.5 5.5v13" />)
 export const IconArrow = drawn('IconArrow', <path d="M5 12h14M13.5 6.5L19 12l-5.5 5.5" />)
 export const IconChevronDown = drawn('IconChevronDown', <path d="M6.5 9.5l5.5 5.5 5.5-5.5" />)

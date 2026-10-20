@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { agentId, doorKey, type Ticket } from '../run'
-import { doorName, writeDoorAction } from './words'
+import { agentId, doorKey, runTime, type ApprovalStep, type Ticket } from '../run'
+import { doorName, stepStatus, writeDoorAction } from './words'
+
+const OPEN: ApprovalStep = { index: 0, label: 'Team approver', state: { is: 'open', since: runTime(0) } }
+
+describe('the open seat', () => {
+  it('counts the wait to the second, says sped up without the seconds at wide, and never breaks inside the duration at compact', () => {
+    expect(stepStatus(OPEN, { ms: 230_000, spedUp: false, compact: false }).text).toBe('Waiting 3 min 50 s')
+    expect(stepStatus(OPEN, { ms: 230_000, spedUp: true, compact: false }).text).toBe('Waiting 3 min (sped up)')
+    expect(stepStatus(OPEN, { ms: 40_000, spedUp: true, compact: false }).text).toBe('Waiting 40 s (sped up)')
+    expect(stepStatus(OPEN, { ms: 230_000, spedUp: true, compact: true }).text).toBe('Waiting 3 min 50 s')
+    expect(stepStatus(OPEN, null)).toEqual({ text: 'Waiting', tone: 'wait' })
+  })
+})
 
 const JIRA = doorKey('jira')
 

@@ -6,6 +6,8 @@ export interface Clock {
   wall(): WallTime
   /** Now on the run's timeline: the server's clock live, the mock's replay clock in demo mode. */
   runNow(): RunTime
+  /** How much faster runNow moves than the wall right now. 1 everywhere real, the demo's squeeze inside a long wait. */
+  rate(): number
   /** Calls fn once after ms of wall time. Returns a cancel. */
   after(ms: Ms, fn: () => void): () => void
   /** Wall epoch ms, for the server clock offset. */
@@ -23,6 +25,7 @@ export function createClock(runClock: RunClock, runId: RunId): Clock {
   return {
     wall: () => Date.now() as WallTime,
     runNow: () => (runClock.now(runId) + offset) as RunTime,
+    rate: () => runClock.rate(runId),
     after(ms, fn) {
       const handle = setTimeout(fn, Math.max(0, ms))
       return () => clearTimeout(handle)

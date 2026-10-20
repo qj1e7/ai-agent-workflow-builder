@@ -22,7 +22,7 @@ describe('stageSet', () => {
     expect(view.room.starter).toBeNull()
     expect(view.room.ticket).toBeNull()
     expect(view.room.light).toBeNull()
-    expect(view.frame).toEqual({ beat: null, waiting: null })
+    expect(view.frame).toEqual({ beat: null, waiting: null, spedUp: false })
   })
 
   it('draws the Teams door, the GitHub read door and the seeded Jira write door', () => {
