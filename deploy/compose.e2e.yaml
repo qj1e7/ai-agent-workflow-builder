@@ -1,0 +1,38 @@
+# Relative paths resolve from deploy/, the directory of the first file.
+services:
+  mock-github:
+    build:
+      context: ../e2e/mock_github
+      target: runtime
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8200/healthz', timeout=2)
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  agent-runtime:
+    environment:
+      GITHUB_API_BASE: http://mock-github:8200
+    depends_on:
+      mock-github:
+        condition: service_healthy
+
+  e2e:
+    profiles: [e2e]
+    build:
+      context: ../e2e
+      additional_contexts:
+        contracts: ../contracts
+    environment:
+      PLATFORM_API_URL: http://platform-api:8000
+      MOCK_GITHUB_URL: http://mock-github:8200
+      E2E_WAIT_SECONDS: ${E2E_WAIT_SECONDS:-90}
+    depends_on:
+      platform-api:
+        condition: service_healthy
+      mock-github:
+        condition: service_healthy
