@@ -50,7 +50,14 @@ def test_callback_token_travels_in_a_header_not_the_url():
 
 def test_app_serves_the_cards_and_health():
     client = TestClient(
-        create_app(Settings.from_env({"AGENT_API_KEY": "test-agent-key-not-a-secret"}))
+        create_app(
+            Settings.from_env(
+                {
+                    "AGENT_API_KEY": "test-agent-key-not-a-secret",
+                    "CALLBACK_ALLOWED_ORIGINS": "http://platform-api:8000",
+                }
+            )
+        )
     )
     assert client.get("/healthz").json() == {"status": "ok"}
     assert client.get("/v1/agents").json() == load("agent-cards.json")

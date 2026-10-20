@@ -23,6 +23,7 @@ from agent_runtime.contract import (
 )
 from agent_runtime.events import Clock, EventLog, EventSink
 from agent_runtime.github import GitHubReleaseSource
+from agent_runtime.origins import Origin, origin_of, parse_origin_list
 from agent_runtime.release_checker import ReleaseChecker
 from agent_runtime.room import FixedRoomLead, RoomLead, run_task
 from agent_runtime.summary import ModelSummarizer, Summarizer, TemplateSummarizer
@@ -70,14 +71,22 @@ def _required(env: Mapping[str, str], name: str) -> str:
 @dataclass(frozen=True)
 class Settings:
     agent_api_key: str
+    callback_allowed_origins: frozenset[Origin]
     github_api_base: str
     github_token: str | None
     summary_model: str | None
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> Self:
+        api_key = _required(env, "AGENT_API_KEY")
+        raw_origins = _required(env, "CALLBACK_ALLOWED_ORIGINS")
+        try:
+            origins = parse_origin_list(raw_origins)
+        except ValueError as bad_origins:
+            raise SettingsError(f"CALLBACK_ALLOWED_ORIGINS: {bad_origins}") from bad_origins
         return cls(
-            agent_api_key=_required(env, "AGENT_API_KEY"),
+            agent_api_key=api_key,
+            callback_allowed_origins=origins,
             github_api_base=env.get("GITHUB_API_BASE") or DEFAULT_GITHUB_API_BASE,
             github_token=env.get("GITHUB_TOKEN") or None,
             summary_model=env.get("AGENT_SUMMARY_MODEL") or None,
@@ -89,8 +98,10 @@ class Callbacks(Protocol):
 
 
 class HttpCallbacks:
-    def __init__(self, client: httpx.Client | None = None) -> None:
-        self._client = client or httpx.Client(timeout=CALLBACK_TIMEOUT_SECONDS)
+    def __init__(self, transport: httpx.BaseTransport | None = None) -> None:
+        self._client = httpx.Client(
+            transport=transport, timeout=CALLBACK_TIMEOUT_SECONDS, follow_redirects=False
+        )
 
     def sink_for(self, request: TaskRequest) -> EventSink:
         def post(event: AgentEvent) -> None:
@@ -170,6 +181,9 @@ def create_app(settings: Settings | None = None, runtime: Runtime | None = None)
 
     @app.post("/v1/tasks", dependencies=[Depends(require_key)])
     def post_task(body: TaskRequest) -> TaskResult:
+        if origin_of(body.callback.url) not in config.callback_allowed_origins:
+            raise HTTPException(status_code=422, detail="callback.url is not at an allowed origin")
+
         def run() -> TaskResult:
             events = EventLog(active.clock, active.callbacks.sink_for(body))
             return run_task(body, active.lead, active.checker, events)
