@@ -44,6 +44,10 @@ jobs:
           uv run ruff check .
           uv run ruff format --check .
 
+      - name: Type check
+        working-directory: ${{ matrix.project }}
+        run: uv run pyright
+
       - name: Check import rules
         if: matrix.project == 'platform-api'
         working-directory: ${{ matrix.project }}
