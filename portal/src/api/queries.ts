@@ -65,13 +65,14 @@ export function useUseCases() {
   })
 }
 
-export function useUseCase(useCaseId: string) {
+export function useUseCase(useCaseId: string, enabled = true) {
   const client = useApiClient()
   const user = useDevUser()
   return useQuery({
     queryKey: keys.useCase(user, useCaseId),
     queryFn: async () =>
       unwrap(await client.GET('/api/v1/use-cases/{use_case_id}', { params: { path: { use_case_id: useCaseId } } })),
+    enabled: enabled && useCaseId !== '',
   })
 }
 
