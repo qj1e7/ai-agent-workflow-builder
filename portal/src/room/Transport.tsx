@@ -2,13 +2,20 @@ import { useRef, type ChangeEvent, type KeyboardEvent } from 'react'
 import type { LiveView } from '../run'
 import { cx } from '../ui/cx'
 import { formatClock, formatDuration } from '../ui/format'
-import { IconCheck, IconPause, IconPlay, IconReplay, IconWave } from '../ui/icons'
-import { Pill } from '../ui/StatusPill'
+import { IconCheck, IconDot, IconPause, IconPlay, IconReplay, IconWave, type Icon } from '../ui/icons'
 import { useWidth } from './hooks'
 import styles from './Transport.module.css'
 
 interface TransportProps {
   view: LiveView
+}
+
+type Status = 'live' | 'replay' | 'finished'
+
+const STATUS: Record<Status, { readonly words: string; readonly icon: Icon; readonly className: string | undefined }> = {
+  live: { words: 'Live', icon: IconWave, className: styles['statusLive'] },
+  replay: { words: 'Replay', icon: IconDot, className: styles['statusReplay'] },
+  finished: { words: 'Finished', icon: IconCheck, className: styles['statusFinished'] },
 }
 
 export function Transport({ view }: TransportProps) {
@@ -47,7 +54,10 @@ export function Transport({ view }: TransportProps) {
     else transport.play()
   }
 
-  const state = transport.settled && transport.atEdge ? 'finished' : frame.label
+  const status: Status = transport.settled && transport.atEdge ? 'finished' : frame.label
+  const { words, icon: Mark, className } = STATUS[status]
+  // Behind on a run that is still going: the one case where there is somewhere to go back to.
+  const behind = !transport.settled && !transport.atEdge
 
   return (
     <div className={styles['transport']}>
@@ -98,24 +108,16 @@ export function Transport({ view }: TransportProps) {
       <span className={styles['elapsed']}>
         {formatClock(frame.elapsed.at)} <span className={styles['of']}>of</span> {formatClock(frame.elapsed.total)}
       </span>
-      {state === 'live' ? (
-        <Pill tone="working" icon={IconWave}>
-          Live
-        </Pill>
-      ) : state === 'finished' ? (
-        <Pill tone="done" icon={IconCheck}>
-          Finished
-        </Pill>
-      ) : transport.settled ? (
-        <Pill tone="neutral" icon={IconReplay}>
-          Replay
-        </Pill>
-      ) : (
+      <span className={cx(styles['status'], className)} role="status">
+        <Mark size={14} />
+        {words}
+      </span>
+      {behind ? (
         <button type="button" className={styles['backToLive']} onClick={transport.backToLive}>
           <IconWave size={16} />
           Back to live
         </button>
-      )}
+      ) : null}
     </div>
   )
 }

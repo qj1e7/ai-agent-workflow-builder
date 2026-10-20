@@ -193,6 +193,37 @@
   font-weight: 400;
 }
 
+/* A word about the playback, not a control: tinted, no border, no button chrome. */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 3px 10px 3px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--line-soft);
+  color: var(--muted);
+  font-size: var(--text-14);
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.statusLive {
+  background: var(--lead-tint);
+  color: var(--lead);
+}
+
+.statusFinished {
+  background: var(--done-tint);
+  color: var(--done);
+}
+
+.statusReplay {
+  background: var(--line-soft);
+  color: var(--muted);
+}
+
 .backToLive {
   display: inline-flex;
   align-items: center;
@@ -202,11 +233,15 @@
   padding: 0 var(--space-4);
   border: 1px solid var(--lead-line);
   border-radius: var(--radius-pill);
-  background: var(--lead-tint);
+  background: var(--surface);
   color: var(--lead);
   font-size: var(--text-14);
   font-weight: 600;
   white-space: nowrap;
+}
+
+.backToLive:hover {
+  background: var(--lead-tint);
 }
 
 @media (max-width: 759px) {
