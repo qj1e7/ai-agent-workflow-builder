@@ -17,57 +17,6 @@
   font-size: var(--text-18);
 }
 
-.switch {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 44px;
-  padding: 0 var(--space-2);
-  border: 0;
-  border-radius: var(--radius-button);
-  background: transparent;
-  color: var(--muted);
-  font-size: var(--text-14);
-  font-weight: 560;
-}
-
-.knob {
-  position: relative;
-  display: inline-block;
-  width: 34px;
-  height: 20px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--mist);
-  transition: background 150ms;
-}
-
-.knob::after {
-  content: '';
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--muted);
-  transition: transform 150ms var(--ease-out), background 150ms;
-}
-
-.switch[aria-checked='true'] {
-  color: var(--ink);
-}
-
-.switch[aria-checked='true'] .knob {
-  border-color: var(--ink);
-  background: var(--ink);
-}
-
-.switch[aria-checked='true'] .knob::after {
-  background: var(--surface);
-  transform: translateX(14px);
-}
-
 .log {
   display: grid;
   gap: var(--space-2);
