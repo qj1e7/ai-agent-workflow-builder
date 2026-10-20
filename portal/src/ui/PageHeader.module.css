@@ -1,0 +1,25 @@
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-5);
+  margin-bottom: var(--space-5);
+}
+
+.words {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.lede {
+  max-width: 62ch;
+  color: var(--muted);
+}
+
+.aside {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
