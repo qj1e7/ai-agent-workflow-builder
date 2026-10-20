@@ -51,8 +51,10 @@ def test_events_route_documents_both_content_types(client: TestClient):
     assert {p["name"] for p in op["parameters"]} >= {"after", "Last-Event-ID"}
 
 
-def test_step_route_refuses_a_bad_step_name(client: TestClient):
-    client.app.state.orchestrator = None  # type: ignore[union-attr]
+def test_step_route_refuses_a_bad_step_name():
+    app = create_app(LOCAL)
+    app.state.orchestrator = None
+    client = TestClient(app)
     r = client.post(
         "/internal/v1/runs/run_1/steps/delete_everything",
         headers={"X-Step-Key": LOCAL["STEP_KEY"], "X-N8N-Execution": "1"},

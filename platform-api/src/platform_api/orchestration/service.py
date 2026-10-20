@@ -7,7 +7,7 @@ state and its events in one transaction, and leaves outside calls to the outbox.
 import asyncio
 import contextlib
 import logging
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Protocol
@@ -21,7 +21,9 @@ from platform_api.monitoring import (
     ApprovalAnnouncedData,
     ApprovalAnnounceFailedData,
     ApprovalDecidedData,
+    DeniedReason,
     PendingEvent,
+    WireVerdict,
     WriteActionDeniedData,
     user_actor,
 )
@@ -96,6 +98,7 @@ from platform_api.orchestration.store import (
 from platform_api.orchestration.write_actions import (
     AuthorizedWrite,
     Deny,
+    DenyReason,
     Proposal,
     ProposedIntent,
     UnboundIntent,
@@ -249,26 +252,32 @@ def steps_view(request: ApprovalRequest, decisions: Iterable[Decision]) -> list[
     return views
 
 
-def _denied(reason: str, detail: str) -> PendingEvent:
+DENIED_ON_THE_WIRE: Mapping[DenyReason, DeniedReason] = {
+    DenyReason.RUN_MISMATCH: "run_mismatch",
+    DenyReason.NOT_APPROVED: "not_approved",
+    DenyReason.INVALID_DECISIONS: "invalid_decisions",
+    DenyReason.DIGEST_MISMATCH: "digest_mismatch",
+    DenyReason.UNREGISTERED_ACTION: "unregistered_action",
+}
+
+
+def _denied(reason: DeniedReason, detail: str) -> PendingEvent:
     return PendingEvent(
         SAFETY_CHECKER,
         "write_action_denied",
         f"The safety checker blocked a write action: {detail}.",
-        WriteActionDeniedData(reason=reason, detail=detail),  # type: ignore[arg-type]
+        WriteActionDeniedData(reason=reason, detail=detail),
     )
 
 
 def _decided(approval_id: ApprovalId, decision: Decision, display: str) -> PendingEvent:
-    word = "approved" if decision.verdict is Verdict.APPROVE else "declined"
+    verdict: WireVerdict = "approve" if decision.verdict is Verdict.APPROVE else "decline"
     return PendingEvent(
         user_actor(decision.by, display),
         "approval_decided",
-        f"{display} {word} step {decision.step_index}.",
+        f"{display} {verdict}d step {decision.step_index}.",
         ApprovalDecidedData(
-            approval_id=approval_id,
-            step=decision.step_index,
-            verdict=decision.verdict.value,  # type: ignore[arg-type]
-            by=decision.by,
+            approval_id=approval_id, step=decision.step_index, verdict=verdict, by=decision.by
         ),
     )
 
@@ -295,8 +304,6 @@ class Orchestrator:
         self._mint_callback = mint_callback
         self._retry = retry_policy
         self._wake = asyncio.Event()
-
-    # Builder's entry points
 
     async def start_run(
         self, spec: RunSpec, principal: Principal, idempotency_key: str
@@ -337,8 +344,6 @@ class Orchestrator:
     async def latest_carry_forward(self, use_case_id: UseCaseId) -> str | None:
         async with self._db.transaction("orchestration") as uow:
             return await self._store.latest_carry_forward(uow, use_case_id)
-
-    # n8n's entry points
 
     async def on_step(self, run_id: RunId, step: StepName, execution: N8nExecutionId) -> StepReply:
         match step:
@@ -563,7 +568,7 @@ class Orchestrator:
                     moved2 = acting.fail(
                         Failure(FailureReason.SAFETY_DENIED, detail, retryable=False)
                     ).preceded_by(
-                        _denied(reason.value, detail),
+                        _denied(DENIED_ON_THE_WIRE[reason], detail),
                         step_finished(StepName.WRITE_ACTION, execution, 1, "refused", detail),
                     )
                     await self._commit(uow, record, moved2)
@@ -621,8 +626,6 @@ class Orchestrator:
                     await self._store.cancel_outbox(uow, run_id)
                 case AwaitingApproval() | Succeeded() | Rejected() | Failed():
                     return
-
-    # The Approver's entry points
 
     async def get_approval(
         self, approval_id: ApprovalId, principal: Principal
@@ -702,8 +705,6 @@ class Orchestrator:
         self.nudge()
         return Decided(status, decision, False)
 
-    # The Operator's entry points
-
     async def retry(self, run_id: RunId, principal: Principal) -> RetryResult:
         async with self._db.transaction("orchestration") as uow:
             record = await self._store.load_run(uow, run_id, lock=True)
@@ -761,8 +762,6 @@ class Orchestrator:
             await self._store.load_decisions(uow, approval_id) if approval_id is not None else ()
         )
         return RunDetail(record, last_seq, proposal, approval, decisions)
-
-    # The outbox and the deadlines
 
     def nudge(self) -> None:
         self._wake.set()
@@ -909,8 +908,6 @@ class Orchestrator:
                     await self._store.cancel_outbox(uow, run_id)
                 case _:
                     return
-
-    # Helpers
 
     async def _commit(
         self,
