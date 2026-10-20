@@ -27,6 +27,7 @@ export type {
   Checker,
   Door,
   ExpectedWrite,
+  Finding,
   Light,
   Move,
   OpenStep,

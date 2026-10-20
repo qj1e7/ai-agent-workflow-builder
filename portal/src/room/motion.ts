@@ -77,6 +77,15 @@ function pointAlong(path: readonly Point[], lengths: readonly number[], total: n
   return path[path.length - 1] as Point
 }
 
+/** Where a chip's slide starts: part of the way from its resting centre towards the agent that brought it, never further than the cap. */
+export function slideToward(from: Point, to: Point, share = 0.35, capPx = 48): Point {
+  const dx = (to.x - from.x) * share
+  const dy = (to.y - from.y) * share
+  const length = Math.hypot(dx, dy)
+  const scale = length > capPx ? capPx / length : 1
+  return { x: dx * scale, y: dy * scale }
+}
+
 export const STAMP: Keyframe[] = [
   { transform: 'rotate(-6deg) scale(1.7)', opacity: 0 },
   { transform: 'rotate(-6deg) scale(1)', opacity: 1 },

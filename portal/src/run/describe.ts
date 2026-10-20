@@ -1,3 +1,4 @@
+import { connectorLabel } from '../api/labels'
 import { formatDuration } from '../ui/format'
 import type { Ms } from './brand'
 import { openStep, ticketLife, type RoomState } from './room'
@@ -35,6 +36,10 @@ export function describeRoom(room: RoomState, waitedMs: Ms | null): string {
     case 'failed':
       sentences.push(room.phase.retryable ? 'The run stopped with a problem. It can be retried.' : 'The run stopped with a problem.')
       break
+  }
+  if (room.finding && !room.ticket) {
+    const from = room.finding.from ? `, from ${connectorLabel(room.finding.from)}` : ''
+    sentences.push(`On the table: ${room.finding.items.join(', ')}${from}.`)
   }
   const life = ticketLife(room)
   const reference = room.ticket?.lines.find((line) => line.reference)?.reference

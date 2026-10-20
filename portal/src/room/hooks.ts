@@ -62,13 +62,16 @@ export interface AnimationPlan {
   readonly options: KeyframeAnimationOptions
 }
 
-export function useBeatAnimation(
-  ref: RefObject<HTMLElement | SVGElement | null>,
+/** A plan, or a function that measures the laid-out element to make one. */
+type PlanOf<E> = AnimationPlan | ((element: E) => AnimationPlan | null)
+
+export function useBeatAnimation<E extends HTMLElement | SVGElement>(
+  ref: RefObject<E | null>,
   key: string | null,
-  plan: AnimationPlan | null,
+  plan: PlanOf<E> | null,
   enabled: boolean,
 ): void {
-  const planRef = useRef<AnimationPlan | null>(null)
+  const planRef = useRef<PlanOf<E> | null>(null)
   useEffect(() => {
     planRef.current = plan
   })
@@ -76,7 +79,9 @@ export function useBeatAnimation(
     const element = ref.current
     const current = planRef.current
     if (!element || !current || key === null || !enabled) return
-    const animation = element.animate(current.keyframes, current.options)
+    const resolved = typeof current === 'function' ? current(element) : current
+    if (!resolved) return
+    const animation = element.animate(resolved.keyframes, resolved.options)
     return () => animation.cancel()
   }, [ref, key, enabled])
 }
