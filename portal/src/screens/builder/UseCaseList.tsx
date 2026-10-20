@@ -4,8 +4,8 @@ import { useUseCases } from '../../api/queries'
 import type { UseCaseView } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { EmptyState, InlineMessage, Skeleton } from '../../ui/Feedback'
-import { formatDayAndTime } from '../../ui/format'
 import { IconPlay, IconReplay } from '../../ui/icons'
+import { formatDayAndTimeSeconds } from './useCaseTime'
 import type { RunNow } from './useRunNow'
 import styles from './UseCaseList.module.css'
 
@@ -67,7 +67,11 @@ function UseCaseRow({ useCase, runNow }: { useCase: UseCaseView; runNow: RunNow 
           </div>
           <div>
             <dt className="plan-voice">Created</dt>
-            <dd>{formatDayAndTime(useCase.created_at)}</dd>
+            <dd>{formatDayAndTimeSeconds(useCase.created_at)}</dd>
+          </div>
+          <div>
+            <dt className="plan-voice">ID</dt>
+            <dd>{useCase.use_case_id}</dd>
           </div>
         </dl>
       </div>
