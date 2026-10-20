@@ -107,7 +107,7 @@ class AuthorizedWrite:
     approval_id: ApprovalId
     approvers: tuple[UserId, ...]
 
-    def __init__(self, *args: object, **kwargs: object) -> None:
+    def __init__(self) -> None:
         raise TypeError("only check() issues an AuthorizedWrite")
 
 

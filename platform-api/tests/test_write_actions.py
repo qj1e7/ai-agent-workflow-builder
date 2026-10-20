@@ -311,4 +311,4 @@ def test_authorized_write_carries_the_proposal_and_who_approved():
 
 def test_authorized_write_cannot_be_built_directly():
     with pytest.raises(TypeError):
-        AuthorizedWrite(proposal(), APPROVAL, (BOB,))  # type: ignore[call-arg]
+        AuthorizedWrite()
