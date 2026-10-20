@@ -1,4 +1,6 @@
+import { analyzeInPage, blockingViolations } from './support/axe'
 import { collisionSampler } from './support/collisions'
+import { pumpWhile, START } from './support/clock'
 import { measureLayout, MIN_TARGET, MIN_TEXT } from './support/layout'
 import { movingAnimations, MOVING } from './support/motion'
 import { outOfVisualOrder } from './support/keyboard'
@@ -62,4 +64,22 @@ test('the tab order check flags a jump back up the page', () => {
   expect(outOfVisualOrder(inOrder)).toEqual([])
   const jumpsBack = [stop('a', 0, 0), stop('c', 100, 0), stop('b', 0, 200)]
   expect(outOfVisualOrder(jumpsBack)).toHaveLength(1)
+})
+
+test('the axe run names a button without a name and reports nothing on a labelled one, on a paused clock', async ({ page }) => {
+  const document = (button: string) =>
+    `<!doctype html><html lang="en"><head><title>Axe guard</title></head><body><main><h1>Axe guard</h1>${button}</main></body></html>`
+  await page.clock.install({ time: START })
+  await page.setContent(document('<button id="unnamed"></button>'))
+  await page.clock.pauseAt(START + 3_000)
+
+  const broken = await pumpWhile(page, analyzeInPage(page))
+  expect(blockingViolations(broken)).toEqual(['button-name (critical): #unnamed'])
+  const again = await pumpWhile(page, analyzeInPage(page))
+  expect(blockingViolations(again), 'a second run on the same page finds the same thing').toEqual(blockingViolations(broken))
+
+  await page.setContent(document('<button id="named">Save</button>'))
+  const clean = await pumpWhile(page, analyzeInPage(page))
+  expect(clean.violations.map((violation) => violation.id)).toEqual([])
+  expect(clean.passes.length, 'the rules did run').toBeGreaterThan(0)
 })
