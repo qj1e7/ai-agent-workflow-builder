@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { agentId, doorKey } from './brand'
-import { collisions, laneViolations, layoutRoom, ROOM_METRICS, routeCrossings, type Box, type RoomLayout } from './layout'
-import { agentSeatKey, stepSeatKey, type Anchor, type FloorPlan, type PlanDoor, type SeatKey } from './room'
+import { collisions, laneViolations, layoutRoom, ROOM_METRICS, routeCrossings, segmentCrosses, type Box, type Point, type RoomLayout } from './layout'
+import { agentSeatKey, seatKeyOf, stepSeatKey, type Anchor, type FloorPlan, type PlanDoor, type SeatKey } from './room'
 
 const WIDTHS = [320, 358, 390, 640, 760, 960, 1100, 1440] as const
 const READ_DOORS = [0, 1, 2, 3, 6] as const
@@ -224,6 +224,77 @@ describe('layoutRoom over every participant count', () => {
       expect(fromHost.at(-1)).toEqual({ x: spot.x + spot.w / 2, y: spot.y })
       expect(layout.point({ at: 'table' })).toEqual({ x: spot.x + spot.w / 2, y: spot.y + spot.h / 2 })
     }
+  })
+
+  it('lets a seat tile walk as itself only straight into a neighbouring seat, or up through the Teams door to the last seat', () => {
+    const host: Anchor = { at: 'agent', id: agentId('a0') }
+    const teams: Anchor = { at: 'teams' }
+    for (const width of [640, 960, 1100, 1440]) {
+      for (const [agents, steps] of [
+        [2, 1],
+        [3, 2],
+        [4, 1],
+      ] as const) {
+        const layout = layoutRoom(plan(agents, steps, 1, 1), width)
+        const where = `at ${width} with ${agents} agents and ${steps} steps`
+        for (const slot of [1, 2]) {
+          if (slot >= agents) continue
+          const guest: Anchor = { at: 'agent', id: agentId(`a${slot}`) }
+          expect(layout.walk(host, guest), `host to slot ${slot} ${where}`).toEqual([layout.point(host), layout.point(guest)])
+        }
+        if (agents === 4 && layout.seats.has('agent:a3')) {
+          expect(layout.walk(host, { at: 'agent', id: agentId('a3') }), `host to a seat two away ${where}`).toBeNull()
+        }
+        const last: Anchor = { at: 'step', index: steps - 1 }
+        const teamsDoor = layout.doors.find((door) => door.side === 'teams')
+        if (!teamsDoor) throw new Error('no Teams door')
+        const { x: cx, y: cy } = layout.point(last)
+        expect(layout.walk(teams, last), `Teams to the last seat ${where}`).toEqual([teamsDoor.outside, { x: teamsDoor.approach.x, y: cy }, { x: cx, y: cy }])
+        if (layout.seats.has('starter') && layout.seats.has(stepSeatKey(steps - 1))) {
+          expect(layout.walk(teams, { at: 'starter' }), `Teams to a seat with another to its right ${where}`).toBeNull()
+        }
+      }
+    }
+  })
+
+  it('never lets a walking tile touch a label or the Safety checker', () => {
+    const avatar = { wide: ROOM_METRICS.wide.avatar, compact: ROOM_METRICS.compact.avatar }
+    let walks = 0
+    for (const width of [390, 640, 960, 1100, 1440]) {
+      for (const [agents, steps] of [
+        [2, 1],
+        [3, 2],
+        [4, 1],
+        [6, 3],
+      ] as const) {
+        const layout = layoutRoom(plan(agents, steps, 1, 1), width)
+        const host: Anchor = { at: 'agent', id: agentId('a0') }
+        const pairs: { from: Anchor; to: Anchor }[] = []
+        for (let slot = 1; slot < agents; slot += 1) pairs.push({ from: host, to: { at: 'agent', id: agentId(`a${slot}`) } })
+        pairs.push({ from: { at: 'teams' }, to: { at: 'starter' } })
+        for (let index = 0; index < steps; index += 1) pairs.push({ from: { at: 'teams' }, to: { at: 'step', index } })
+        for (const { from, to } of pairs) {
+          const path = layout.walk(from, to)
+          if (!path) continue
+          walks += 1
+          const own = seatKeyOf(to)
+          const obstacles: Box[] = []
+          for (const [key, seat] of layout.seats) if (key !== own) obstacles.push(seat.label)
+          for (const seat of layout.overflow) if (!seat.hidden.includes(own as SeatKey)) obstacles.push(seat.seat.label)
+          for (const door of layout.doors) {
+            obstacles.push(door.labelBox)
+            if (door.checker) obstacles.push(door.checker)
+          }
+          for (let i = 1; i < path.length; i += 1) {
+            const a = path[i - 1] as Point
+            const b = path[i] as Point
+            const touched = obstacles.filter((box) => segmentCrosses(a, b, box, avatar[layout.size] / 2))
+            expect(touched, `${nameOf(from)} to ${nameOf(to)} at ${width} with ${agents}/${steps}, segment ${i}`).toEqual([])
+          }
+        }
+      }
+    }
+    expect(walks).toBeGreaterThan(20)
   })
 
   it('lets a token through a write door under the Safety checker, with room to spare', () => {

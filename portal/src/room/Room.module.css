@@ -316,6 +316,13 @@
   border-radius: 30%;
 }
 
+/* The empty seat left under a tile that walks in, at the avatar's spot. */
+.ghost {
+  position: absolute;
+  top: 0;
+  pointer-events: none;
+}
+
 .seat_person .avatarWrap,
 .seat_empty .avatarWrap,
 .seat_overflow .avatarWrap {

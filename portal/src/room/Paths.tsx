@@ -58,9 +58,17 @@ export function beatRoute(beat: BeatView | null, room: RoomState, layout: RoomLa
   }
 }
 
+/** The path a seat tile walks as itself during an arrival or a decision, when the layout allows it. */
+export function beatWalk(beat: BeatView | null, room: RoomState, layout: RoomLayout): readonly Point[] | null {
+  const move = beat?.type === 'event' ? beat.move : null
+  if (!move || (move.type !== 'arrive' && move.type !== 'decide')) return null
+  const route = beatRoute(beat, room, layout)
+  return route ? layout.walk(route.from, route.to) : null
+}
+
 export function Paths({ layout, room, beat, motion }: PathsProps) {
   const route = beatRoute(beat, room, layout)
-  const lingering = route && beat ? layout.route(route.from, route.to) : null
+  const lingering = route && beat ? (beatWalk(beat, room, layout) ?? layout.route(route.from, route.to)) : null
   const lingerMs = beat ? beat.durationMs + 1400 : 0
   return (
     <svg className={styles['paths']} width={layout.width} height={layout.height} viewBox={`0 0 ${layout.width} ${layout.height}`} aria-hidden="true" focusable="false">

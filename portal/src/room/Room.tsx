@@ -7,9 +7,9 @@ import { cx } from '../ui/cx'
 import { IconLock, IconPerson, IconUnlock, IconX } from '../ui/icons'
 import { FloorPlan } from './FloorPlan'
 import { useBeatAnimation, useReducedMotion } from './hooks'
-import { APPEAR_MS, EASE_OVERSHOOT, FADE_OUT, POP, TRAVEL_SHARE, travelAlong } from './motion'
-import { beatRoute, Paths } from './Paths'
-import { Door, EmptySeatAvatar, Seat, SpeechCard, TicketCard, Token, type Appear, type TokenKind, type Travel, type Turn } from './pieces'
+import { APPEAR_MS, EASE_OVERSHOOT, POP, TRAVEL_SHARE, travelAlong, walkAlong } from './motion'
+import { beatRoute, beatWalk, Paths } from './Paths'
+import { Door, EmptySeatAvatar, REST, Seat, SpeechCard, TicketCard, Token, type Appear, type Entrance, type TokenKind, type Travel, type Turn } from './pieces'
 import { agentStatus, approvedBy, checkerStatus, doorName, readDoorStatus, stepName, stepStatus, teamsStatus, ticketWords, writeDoorAction, writeDoorStatus } from './words'
 import styles from './Room.module.css'
 
@@ -71,6 +71,7 @@ export function Room({ view, width, expectedWrites, label, opening = false }: Ro
   const lightSize = LIGHT[layout.size]
   const route = beatRoute(beat, room, layout)
   const beatPath = route ? layout.route(route.from, route.to) : null
+  const walk = beatWalk(beat, room, layout)
   const travelMs = beat ? Math.round(beat.durationMs * TRAVEL_SHARE) : 0
   const lit = (key: SeatKey) => room.light !== null && seatKeyOfLight(room) === key
 
@@ -79,6 +80,12 @@ export function Room({ view, width, expectedWrites, label, opening = false }: Ro
     if (!beat || !fresh) return null
     return { key: beat.key, delayMs: afterTravel ? travelMs : 0 }
   }
+  const entering = (fresh: boolean, afterTravel: boolean): Entrance => {
+    const appear = appearance(fresh, afterTravel)
+    return appear ? { kind: 'appear', ...appear } : REST
+  }
+  const walkingIn = (ghost: ReactNode | null): Entrance | null =>
+    beat && walk ? { kind: 'walk', key: beat.key, keyframes: walkAlong(walk), durationMs: travelMs, ghost } : null
   const freshSeat = (key: SeatKey) => before !== null && !before.seats.has(key) && !before.overflow.some((o) => o.hidden.includes(key))
   const tokens: ReactNode[] = []
   const ride = (key: string, what: TokenKind, path: readonly Point[], o: { fadeIn?: boolean; fadeOut?: boolean; durationMs?: number; delayMs?: number; parked?: boolean }) => {
@@ -105,7 +112,8 @@ export function Room({ view, width, expectedWrites, label, opening = false }: Ro
     const speaker = speak?.who
     const speaking = speaker?.at === 'agent' && speaker.id === seat.id
     const arriving = arrive?.who.at === 'agent' && arrive.who.id === seat.id
-    if (arriving && beatPath) ride(`arrive:${seat.id}`, { kind: 'agent', agentId: seat.id }, beatPath, { fadeIn: true, fadeOut: true })
+    const walkIn = arriving ? walkingIn(null) : null
+    if (arriving && beatPath && !walkIn) ride(`arrive:${seat.id}`, { kind: 'agent', agentId: seat.id }, beatPath, { fadeIn: true, fadeOut: true })
     return (
       <Seat
         key={key}
@@ -117,8 +125,7 @@ export function Room({ view, width, expectedWrites, label, opening = false }: Ro
         breathing={speaking || seat.status === 'working'}
         lit={lit(key)}
         dimmed={dimmed}
-        appear={appearance(freshSeat(key), arriving && beatPath !== null)}
-        fade={null}
+        entrance={walkIn ?? entering(freshSeat(key), arriving && beatPath !== null)}
         motion={motion}
         hue={identity.hue}
       />
@@ -144,8 +151,7 @@ export function Room({ view, width, expectedWrites, label, opening = false }: Ro
         breathing={false}
         lit={false}
         dimmed={false}
-        appear={null}
-        fade={{ key: beat.key, keyframes: FADE_OUT, durationMs: Math.round(beat.durationMs * 0.3) }}
+        entrance={{ kind: 'fade', key: beat.key, durationMs: Math.round(beat.durationMs * 0.3) }}
         motion={motion}
         hue={identity.hue}
       />
@@ -168,8 +174,7 @@ export function Room({ view, width, expectedWrites, label, opening = false }: Ro
         breathing={false}
         lit={lit('starter')}
         dimmed={false}
-        appear={appearance(freshSeat('starter'), false)}
-        fade={null}
+        entrance={entering(freshSeat('starter'), false)}
         motion={motion}
       />
     )
@@ -183,7 +188,8 @@ export function Room({ view, width, expectedWrites, label, opening = false }: Ro
     const open = step.state.is === 'open'
     const deciding = decide?.step === step.index && beat !== null
     const name = stepName(step)
-    if (deciding && beatPath) {
+    const walkIn = deciding ? walkingIn(<EmptySeatAvatar size={box.avatar.w} />) : null
+    if (deciding && beatPath && !walkIn) {
       const teams = layout.doors.find((door) => door.side === 'teams')
       ride(`decide:${step.index}`, { kind: 'person', name }, teams ? [teams.outside, ...beatPath] : beatPath, { fadeOut: true })
     }
@@ -198,8 +204,7 @@ export function Room({ view, width, expectedWrites, label, opening = false }: Ro
         breathing={open}
         lit={lit(key)}
         dimmed={false}
-        appear={appearance(freshSeat(key) || deciding, deciding && beatPath !== null)}
-        fade={null}
+        entrance={walkIn ?? entering(freshSeat(key) || deciding, deciding && beatPath !== null)}
         motion={motion}
       />
     )
@@ -219,8 +224,7 @@ export function Room({ view, width, expectedWrites, label, opening = false }: Ro
         breathing={hiddenOpen}
         lit={false}
         dimmed={false}
-        appear={null}
-        fade={null}
+        entrance={REST}
         motion={motion}
       />
     )
