@@ -1,3 +1,4 @@
+import type { HTMLAttributes, ReactNode } from 'react'
 import type { Actor } from '../api/types'
 import type { RoomState } from '../run'
 import { Avatar } from '../ui/Avatar'
@@ -27,22 +28,31 @@ export function ActorAvatar({ actor, size }: { actor: Actor; size: number }) {
   }
 }
 
+interface CaptionLineProps extends HTMLAttributes<HTMLParagraphElement> {
+  leading: ReactNode
+  children: ReactNode
+}
+
+/** One line under the room: who or what, then the words. */
+export function CaptionLine({ leading, children, ...rest }: CaptionLineProps) {
+  return (
+    <p {...rest} className={styles['caption']}>
+      {leading}
+      <span>{children}</span>
+    </p>
+  )
+}
+
 /** The latest story event's summary, as the room's live region. */
 export function Caption({ room }: { room: RoomState }) {
   const caption = room.caption
-  return (
-    <p className={styles['caption']} aria-live="polite" aria-atomic="true">
-      {caption ? (
-        <>
-          <ActorAvatar actor={caption.actor} size={24} />
-          <span>{caption.summary}</span>
-        </>
-      ) : (
-        <>
-          <IconShield size={18} />
-          <span>Waiting for the run to start.</span>
-        </>
-      )}
-    </p>
+  return caption ? (
+    <CaptionLine leading={<ActorAvatar actor={caption.actor} size={24} />} aria-live="polite" aria-atomic="true">
+      {caption.summary}
+    </CaptionLine>
+  ) : (
+    <CaptionLine leading={<IconShield size={18} />} aria-live="polite" aria-atomic="true">
+      Waiting for the run to start.
+    </CaptionLine>
   )
 }
