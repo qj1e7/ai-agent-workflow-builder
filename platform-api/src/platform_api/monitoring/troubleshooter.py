@@ -1,5 +1,3 @@
-"""The rule-based AI troubleshooter. One row per typed failure reason, no LLM yet."""
-
 from collections.abc import Mapping
 from typing import Literal
 

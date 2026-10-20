@@ -1,11 +1,3 @@
-"""Activity event wire contract.
-
-One envelope for every event the live activity view receives. The `kind` field
-selects the shape of `data`, so a kind cannot carry another kind's data. These
-are wire models only. Domain types stay as frozen dataclasses in their own
-context.
-"""
-
 from datetime import datetime
 from typing import Annotated, Literal
 

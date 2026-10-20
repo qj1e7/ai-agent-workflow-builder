@@ -322,7 +322,6 @@
       },
       "AgentEventPost": {
         "additionalProperties": false,
-        "description": "Body of the callback POST, one event per post.",
         "properties": {
           "event": {
             "$ref": "#/components/schemas/AgentEvent"

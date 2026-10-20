@@ -1,9 +1,3 @@
-"""Every committed Agent API fixture parses with this project's models, and the app serves them.
-
-The fixtures live at the repository root, outside the Docker build context, so
-CI runs this file on the host in the contracts step.
-"""
-
 import json
 from pathlib import Path
 from typing import Any

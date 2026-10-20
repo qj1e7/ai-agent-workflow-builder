@@ -1,10 +1,3 @@
-"""Three recorded runs, built through the wire models so every fixture is valid by construction.
-
-Timestamps are fixed, so regenerating the fixtures is deterministic. The agent
-events here must match the Agent API fixtures that agent-runtime generates.
-A test in `tests/test_contracts.py` checks that.
-"""
-
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import TypedDict

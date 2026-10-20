@@ -741,7 +741,6 @@
     }
   },
   "additionalProperties": false,
-  "description": "Every shape that crosses the Agent API, for the one schema document.",
   "properties": {
     "agent_cards": {
       "$ref": "#/$defs/AgentCards"
@@ -762,6 +761,6 @@
     "callback",
     "agent_cards"
   ],
-  "title": "AgentApi",
+  "title": "AgentApiSchema",
   "type": "object"
 }

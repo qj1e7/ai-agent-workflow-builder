@@ -1,9 +1,3 @@
-"""platform-api's own parse models for the Agent API.
-
-The event shapes come from run monitoring, which ingests them. The task
-shapes are here because orchestration is the only caller of `POST /v1/tasks`.
-"""
-
 from typing import Annotated, Any, Literal
 
 from pydantic import Field, TypeAdapter
