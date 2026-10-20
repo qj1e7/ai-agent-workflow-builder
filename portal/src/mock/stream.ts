@@ -2,6 +2,9 @@ import type { ActivityEvent } from '../api/types'
 import type { Timeline } from './timeline'
 
 const encoder = new TextEncoder()
+/** The real stream sends a comment every 15 s while idle, so the Portal can tell silence from a dead socket. */
+export const KEEP_ALIVE_MS = 15_000
+const keepAlive = encoder.encode(': keep-alive\n\n')
 
 export function frame(event: ActivityEvent): Uint8Array {
   return encoder.encode(`id: ${event.seq}\nevent: activity\ndata: ${JSON.stringify(event)}\n\n`)
@@ -10,6 +13,7 @@ export function frame(event: ActivityEvent): Uint8Array {
 export function streamEvents(timeline: Timeline, after: number, signal: AbortSignal | null): Response {
   let cursor = after
   let timer: ReturnType<typeof setTimeout> | undefined
+  let pulse: ReturnType<typeof setTimeout> | undefined
   let unsubscribe: () => void = () => undefined
   let closed = false
   let controller: ReadableStreamDefaultController<Uint8Array> | undefined
@@ -17,8 +21,19 @@ export function streamEvents(timeline: Timeline, after: number, signal: AbortSig
   function stop(): void {
     closed = true
     clearTimeout(timer)
+    clearTimeout(pulse)
     unsubscribe()
     signal?.removeEventListener('abort', finish)
+  }
+
+  function breathe(): void {
+    clearTimeout(pulse)
+    if (closed) return
+    pulse = setTimeout(() => {
+      if (closed || !controller) return
+      controller.enqueue(keepAlive)
+      breathe()
+    }, KEEP_ALIVE_MS)
   }
 
   function finish(): void {
@@ -38,6 +53,7 @@ export function streamEvents(timeline: Timeline, after: number, signal: AbortSig
     }
     const due = timeline.nextDue(wall)
     if (due !== undefined) timer = setTimeout(flush, due - wall)
+    breathe()
   }
 
   const body = new ReadableStream<Uint8Array>({
