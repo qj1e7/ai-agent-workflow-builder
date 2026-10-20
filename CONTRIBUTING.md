@@ -115,7 +115,18 @@ docker build --target runtime --tag platform-api:runtime platform-api
 
 Use `agent-runtime` in place of `platform-api` for the other project.
 
+To run the runtime image, give it the dev sign-in settings. It refuses to start without them:
+
+```sh
+docker run --rm -p 8000:8000 -e AUTH_MODE=dev -e PUBLIC_BASE_URL=http://localhost:8000 platform-api:runtime
+curl localhost:8000/healthz
+```
+
+The agent runtime needs no settings yet. It listens on 8100.
+
 To fix formatting, run `uv run ruff format .`. After you change a dependency, run `uv lock` and commit the new `uv.lock`.
+
+After you change a wire model, regenerate the files in `contracts/` and commit them. `contracts/README.md` has the commands. CI fails when they are out of date.
 
 For the two scans, run them from the repo root. The image names and digests are in `.github/workflows/ci.yml`.
 
