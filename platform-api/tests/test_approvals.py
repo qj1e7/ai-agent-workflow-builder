@@ -154,7 +154,7 @@ def test_approval_status(policy, decisions, expected):
 
 
 def approver(user: UserId) -> Principal:
-    return Principal(user, APPROVER)
+    return Principal(user, APPROVER, user.title())
 
 
 @pytest.mark.parametrize(
@@ -253,7 +253,7 @@ def approver(user: UserId) -> Principal:
         pytest.param(
             ONE_STEP,
             (),
-            Principal(BOB, frozenset({Role.OPERATOR})),
+            Principal(BOB, frozenset({Role.OPERATOR}), "Bob"),
             0,
             Verdict.APPROVE,
             DIGEST,
