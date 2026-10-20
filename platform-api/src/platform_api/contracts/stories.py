@@ -3,14 +3,10 @@ from datetime import UTC, datetime, timedelta
 from typing import TypedDict
 
 from platform_api.auth import DEV_USERS
-from platform_api.builder.http import (
-    BlockView,
-    ParamSpec,
-    SuggestOut,
-    TemplateList,
-    TemplateView,
-    UseCaseView,
-)
+from platform_api.builder import TEMPLATES as TEMPLATES_BY_KEY
+from platform_api.builder import Builder
+from platform_api.builder.models import TemplateList, UseCaseView
+from platform_api.builder.views import template_view
 from platform_api.monitoring.agent_events import (
     AgentAddressee,
     AgentFailedData,
@@ -626,42 +622,9 @@ OWN_WORK_REFUSAL = RefusalOut(
     refusal=Refusal.OWN_WORK, message="You started this run, so another Approver must decide."
 )
 
-RELEASE_CHECK_TEMPLATE = TemplateView(
-    key="release_check",
-    name="Release check",
-    description="Watch a public GitHub repository and open a ticket when new releases appear.",
-    blocks=[
-        BlockView(
-            key="read_releases",
-            name="Read GitHub releases",
-            description="The Release checker reads the repository's releases.",
-            kind="agent",
-        ),
-        BlockView(
-            key="approval_gate",
-            name="Approval gate",
-            description="An Approver reviews the proposed ticket in Teams before it is written.",
-            kind="approval",
-        ),
-        BlockView(
-            key="create_ticket",
-            name="Create Jira ticket",
-            description="One ticket in the chosen project listing the new releases.",
-            kind="write_action",
-        ),
-    ],
-    params=[
-        ParamSpec(name="repo", description="GitHub repository, owner/name", example=REPO),
-        ParamSpec(
-            name="tag_pattern",
-            description="Regular expression a release tag must match",
-            example=TAG_PATTERN,
-        ),
-        ParamSpec(name="ticket_project", description="Jira project key", example="MOCK"),
-    ],
-)
+RELEASE_CHECK_TEMPLATE = template_view(TEMPLATES_BY_KEY["release_check"])
 
-TEMPLATES = TemplateList(templates=[RELEASE_CHECK_TEMPLATE])
+TEMPLATES = TemplateList(templates=[template_view(t) for t in TEMPLATES_BY_KEY.values()])
 
 USE_CASE = UseCaseView(
     use_case_id=USE_CASE_ID,
@@ -674,7 +637,7 @@ USE_CASE = UseCaseView(
     created_at=datetime(2026, 11, 2, 9, 30, tzinfo=UTC),
 )
 
-SUGGESTION = SuggestOut(template=RELEASE_CHECK_TEMPLATE, matched_terms=["releases", "ticket"])
+SUGGESTION = Builder.suggest(INSTRUCTION)
 
 STEP_RESPONSES = [
     StepResponseOut(proceed=True, outcome="proposed", detail="2 new releases: 1.2.16, 1.2.15"),
