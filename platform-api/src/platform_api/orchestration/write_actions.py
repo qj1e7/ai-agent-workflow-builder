@@ -168,6 +168,13 @@ def describe(action: WriteAction) -> ActionLine:
     )
 
 
+def intent(action: WriteAction) -> str:
+    if action.connector == "jira" and action.operation == "create_ticket":
+        project = action.target.get("project", "?")
+        return f'create a Jira ticket in {project} titled "{action.fields.get("title", "")}"'
+    return f"{action.operation} on {action.connector}"
+
+
 class WriteFailed(Exception): ...
 
 

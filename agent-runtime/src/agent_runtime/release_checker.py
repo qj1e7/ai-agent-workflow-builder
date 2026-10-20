@@ -231,7 +231,8 @@ class ReleaseChecker:
             write(
                 _to_room(
                     "reported to the room that no release matches.",
-                    "No release matches the tag pattern. I have nothing to propose.",
+                    "No release has a plain version number I can compare. "
+                    "I have nothing to propose.",
                 )
             )
             output = _nothing("No releases match the pattern", None)
@@ -336,13 +337,9 @@ def _report_new(last: str, new_tags: list[str]) -> Draft:
     count = len(new_tags)
     verb = "release is" if count == 1 else "releases are"
     suggestion = (
-        "a ticket so the team can review it"
+        "a ticket for it"
         if count == 1
-        else (
-            "one ticket so the team reviews both"
-            if count == 2
-            else "one ticket so the team reviews them all"
-        )
+        else ("one ticket for both" if count == 2 else "one ticket for all")
     )
     return _to_room(
         f"reported {_plural(count, 'new release')} to the room and suggested one ticket.",

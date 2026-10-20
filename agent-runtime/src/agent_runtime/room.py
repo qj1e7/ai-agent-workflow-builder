@@ -17,7 +17,6 @@ from agent_runtime.contract import (
 )
 from agent_runtime.events import Draft, EventLog
 from agent_runtime.release_checker import CHECKER, ReleaseChecker
-from agent_runtime.tags import family_of
 
 log = logging.getLogger(__name__)
 
@@ -59,21 +58,17 @@ class FixedRoomLead:
                 ask_text=f"Please check {repo} for its latest release. There is no last known tag "
                 "yet.",
             )
-        family = family_of(last)
-        kind = "plain version" if family == "" else f"{family} tag"
         return Staffing(
             reason="The task asks about releases of a GitHub repo.",
             ask_summary=f"Room lead asked Release checker to look for releases newer than {last}.",
-            ask_text=f"Please check {repo} for releases newer than {last} that match the "
-            f"{kind} pattern.",
+            ask_text=f"Please check {repo} for releases newer than {last}.",
         )
 
     def reply(self, output: TaskOutput) -> Reply:
         if output.proposed:
             return Reply(
                 summary="Room lead agreed and will propose the ticket for approval.",
-                text="Agreed. I will propose the ticket. The platform asks an Approver before "
-                "anything is written.",
+                text="Agreed. I'll draft one ticket for an Approver to check.",
             )
         return Reply(
             summary="Room lead noted that there is nothing to propose.",

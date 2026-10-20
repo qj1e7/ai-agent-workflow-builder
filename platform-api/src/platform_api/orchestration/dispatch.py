@@ -46,7 +46,7 @@ class ApprovalNotice:
     run_id: RunId
     approval_id: ApprovalId
     use_case_name: str
-    summary: str
+    actions: tuple[str, ...]
     link: str
 
 
@@ -79,7 +79,8 @@ class TeamsStub:
 
     async def announce(self, notice: ApprovalNotice) -> None:
         text = (
-            f"Approval needed: {notice.use_case_name} wants to {notice.summary}. "
+            f"A run of {notice.use_case_name} needs an Approver. "
+            f"It would {' and '.join(notice.actions)}. "
             "Open the approval page to decide."
         )
         async with self._db.transaction("orchestration") as uow:
