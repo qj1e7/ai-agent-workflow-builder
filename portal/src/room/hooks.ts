@@ -2,8 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, typ
 import { runId, useLiveView, type LiveView, type WhenFinished } from '../run'
 import { AGENTS } from './registry'
 
-export function useLiveRoom(id: string, whenFinished: WhenFinished): LiveView {
-  return useLiveView(runId(id), { whenFinished, registry: AGENTS })
+export function useLiveRoom(id: string, whenFinished: WhenFinished, openingMs = 0): LiveView {
+  return useLiveView(runId(id), { whenFinished, registry: AGENTS, openingMs })
 }
 
 /** The element's content width, kept current by a ResizeObserver. 0 until the first measurement. */

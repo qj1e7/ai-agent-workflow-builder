@@ -3,7 +3,7 @@ import { useApiFetch, useRunClock } from '../api/context'
 import { getDevUser } from '../api/session'
 import type { BlockView } from '../api/types'
 import { runFeed, type Connection, type FetchLike } from '../stream/feed'
-import type { Ms, RunId, RunTime } from './brand'
+import type { Ms, RunId, RunTime, WallTime } from './brand'
 import { createClock, type Clock } from './clock'
 import { describeRoom } from './describe'
 import {
@@ -112,7 +112,7 @@ export interface LiveViewStore {
  * The feed starts on the first subscriber and stops on the last, resuming from tape.length, so React
  * StrictMode's subscribe, unsubscribe, subscribe is harmless. `cue` is the only writer of the director.
  */
-export function createLiveView(o: { runId: RunId; env: LiveViewEnv; whenFinished: WhenFinished }): LiveViewStore {
+export function createLiveView(o: { runId: RunId; env: LiveViewEnv; whenFinished: WhenFinished; openingMs?: number }): LiveViewStore {
   const { fetch, clock, registry } = o.env
   const tape = createTape(registry)
   let director = startDirector('edge')
@@ -122,6 +122,11 @@ export function createLiveView(o: { runId: RunId; env: LiveViewEnv; whenFinished
   let opened = false
   const listeners = new Set<() => void>()
   let snapshot: LiveView | null = null
+  // The overview's opening plays for openingMs after the first subscribe. The tape fills and a backlog
+  // snaps underneath, but no beat starts until the hold ends: those cues wait and then play in order.
+  let holdUntil: WallTime = clock.wall()
+  let held: Cue[] = []
+  let cancelHold: (() => void) | null = null
 
   const stage = (): Stage => ({ tape, wall: clock.wall(), runNow: clock.runNow() })
 
@@ -138,7 +143,23 @@ export function createLiveView(o: { runId: RunId; env: LiveViewEnv; whenFinished
     for (const listener of listeners) listener()
   }
 
+  function startsABeat(c: Cue): boolean {
+    return c.type === 'tick' || c.type === 'restart' || (c.type === 'grew' && c.origin === 'live')
+  }
+
   function cue(c: Cue): void {
+    const wait = holdUntil - clock.wall()
+    if (wait > 0 && startsABeat(c)) {
+      held.push(c)
+      cancelHold ??= clock.after(wait, () => {
+        cancelHold = null
+        const queued = held
+        held = []
+        for (const later of queued) cue(later)
+      })
+      publish()
+      return
+    }
     director = direct(director, c, stage())
     reschedule()
     publish()
@@ -173,6 +194,7 @@ export function createLiveView(o: { runId: RunId; env: LiveViewEnv; whenFinished
 
   function start(): void {
     if (feed) return
+    holdUntil = (clock.wall() + (o.openingMs ?? 0)) as WallTime
     void follow()
   }
 
@@ -181,6 +203,9 @@ export function createLiveView(o: { runId: RunId; env: LiveViewEnv; whenFinished
     feed = null
     cancelTimer?.()
     cancelTimer = null
+    cancelHold?.()
+    cancelHold = null
+    held = []
   }
 
   const transportActions = {
@@ -290,13 +315,15 @@ function withDevUser(fetchImpl: typeof fetch): FetchLike {
 export interface UseLiveViewOptions {
   readonly whenFinished: WhenFinished
   readonly registry: AgentRegistry
+  /** How long the overview's opening plays before the first beat. 0 everywhere else. */
+  readonly openingMs?: number
 }
 
 /**
  * The hook. The run page rests on a finished run; the overview replays it once from the start.
  * The store starts its feed on the first subscribe and stops on the last, so no effect is needed.
  */
-export function useLiveView(runId: RunId, { whenFinished, registry }: UseLiveViewOptions): LiveView {
+export function useLiveView(runId: RunId, { whenFinished, registry, openingMs = 0 }: UseLiveViewOptions): LiveView {
   const fetchImpl = useApiFetch()
   const runClock = useRunClock()
   const store = useMemo(
@@ -305,8 +332,9 @@ export function useLiveView(runId: RunId, { whenFinished, registry }: UseLiveVie
         runId,
         env: { fetch: withDevUser(fetchImpl), clock: createClock(runClock, runId), registry },
         whenFinished,
+        openingMs,
       }),
-    [runId, fetchImpl, runClock, registry, whenFinished],
+    [runId, fetchImpl, runClock, registry, whenFinished, openingMs],
   )
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
 }
