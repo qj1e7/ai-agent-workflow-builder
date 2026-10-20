@@ -1,0 +1,23 @@
+{
+  "agents": [
+    {
+      "id": "room_lead",
+      "display": "Room lead",
+      "description": "Reads the task and decides which specialist agents to bring in.",
+      "capabilities": [
+        "plan a task",
+        "bring in specialists",
+        "hand proposals to the platform"
+      ]
+    },
+    {
+      "id": "release_checker",
+      "display": "Release checker",
+      "description": "Reads a public GitHub repository's releases and finds the new ones.",
+      "capabilities": [
+        "read GitHub releases",
+        "compare with the last known tag"
+      ]
+    }
+  ]
+}

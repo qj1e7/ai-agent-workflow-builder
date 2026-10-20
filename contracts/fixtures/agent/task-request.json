@@ -1,0 +1,16 @@
+{
+  "task_id": "run_01JB8/work/1/1",
+  "run_id": "run_01JB8",
+  "instruction": "Check langchain-ai/langgraph for new releases and open a ticket for the team.",
+  "inputs": {
+    "repo": "langchain-ai/langgraph",
+    "tag_pattern": "^\\d+\\.\\d+\\.\\d+$"
+  },
+  "carry_forward": {
+    "last_known_tag": "1.2.14"
+  },
+  "callback": {
+    "url": "http://platform-api:8000/internal/v1/runs/run_01JB8/agent-events?task=run_01JB8/work/1/1",
+    "token": "example-callback-token-not-a-secret"
+  }
+}
