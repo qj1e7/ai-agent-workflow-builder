@@ -72,6 +72,29 @@ export function placeAt(box: Box): { left: number; top: number; width: number; h
   return { left: box.x, top: box.y, width: box.w, height: box.h }
 }
 
+/** How a seat comes to be where it is during a beat. */
+export type Entrance =
+  | { readonly kind: 'rest' }
+  /** Scales and fades into place, after the token that brought it has landed. */
+  | { readonly kind: 'appear'; readonly key: string; readonly delayMs: number }
+  /** The avatar tile travels into its seat as itself; the words appear once it lands. A ghost may sit under it meanwhile. */
+  | { readonly kind: 'walk'; readonly key: string; readonly keyframes: Keyframe[]; readonly durationMs: number; readonly ghost: ReactNode | null }
+  /** Fades out in place while a token carries its agent away. */
+  | { readonly kind: 'fade'; readonly key: string; readonly durationMs: number }
+
+export const REST: Entrance = { kind: 'rest' }
+
+function seatPlan(entrance: Entrance): AnimationPlan | null {
+  switch (entrance.kind) {
+    case 'appear':
+      return appearPlan(entrance)
+    case 'fade':
+      return { keyframes: FADE_OUT, options: { duration: entrance.durationMs, fill: 'both' } }
+    default:
+      return null
+  }
+}
+
 interface SeatProps {
   seat: SeatBox
   avatar: ReactNode
@@ -81,29 +104,40 @@ interface SeatProps {
   breathing: boolean
   lit: boolean
   dimmed: boolean
-  appear: Appear | null
-  /** The seat fades out in place while a token carries its agent away. */
-  fade: Travel | null
+  entrance: Entrance
   motion: boolean
   kind: 'agent' | 'person' | 'empty' | 'overflow'
   hue?: string
 }
 
-export function Seat({ seat, avatar, name, words, statusIcon, breathing, lit, dimmed, appear, fade, motion, kind, hue }: SeatProps) {
+export function Seat({ seat, avatar, name, words, statusIcon, breathing, lit, dimmed, entrance, motion, kind, hue }: SeatProps) {
   const ref = useRef<HTMLDivElement>(null)
-  useBeatAnimation(ref, fade?.key ?? appear?.key ?? null, fade ? planOf(fade) : appearPlan(appear), motion)
+  const wrapRef = useRef<HTMLSpanElement>(null)
+  const labelsRef = useRef<HTMLSpanElement>(null)
+  const ghostRef = useRef<HTMLSpanElement>(null)
+  const walk = entrance.kind === 'walk' ? entrance : null
+  const seatKey = entrance.kind === 'appear' || entrance.kind === 'fade' ? entrance.key : null
+  useBeatAnimation(ref, seatKey, seatPlan(entrance), motion)
+  useBeatAnimation(wrapRef, walk?.key ?? null, walk ? { keyframes: walk.keyframes, options: { duration: walk.durationMs, easing: EASE_MOVE, fill: 'both' } } : null, motion)
+  useBeatAnimation(labelsRef, walk?.key ?? null, walk ? { keyframes: APPEAR, options: { duration: APPEAR_MS, easing: EASE_MOVE, delay: walk.durationMs, fill: 'both' } } : null, motion)
+  useBeatAnimation(ghostRef, walk?.key ?? null, walk ? { keyframes: FADE_OUT, options: { duration: Math.round(walk.durationMs * 0.3), fill: 'both' } } : null, motion)
   return (
     <div
       ref={ref}
       className={cx(styles['seat'], styles[`seat_${kind}`], breathing && styles['breathing'], lit && styles['lit'], dimmed && styles['dimmed'])}
       style={{ ...placeAt(seat.box), '--hue': hue } as React.CSSProperties}
     >
-      <span className={styles['avatarWrap']} style={{ width: seat.avatar.w, height: seat.avatar.h }}>
+      {walk?.ghost && motion ? (
+        <span ref={ghostRef} className={styles['ghost']} style={{ left: seat.avatar.x - seat.box.x, width: seat.avatar.w, height: seat.avatar.h }}>
+          {walk.ghost}
+        </span>
+      ) : null}
+      <span ref={wrapRef} className={styles['avatarWrap']} style={{ width: seat.avatar.w, height: seat.avatar.h }} data-travel={walk ? 'walk' : undefined}>
         {avatar}
         <span className={styles['ring']} aria-hidden="true" />
         <span className={styles['dimmer']} aria-hidden="true" />
       </span>
-      <span className={styles['labels']} style={{ maxWidth: seat.label.w }} data-room-label="seat">
+      <span ref={labelsRef} className={styles['labels']} style={{ maxWidth: seat.label.w }} data-room-label="seat">
         <span className={styles['name']}>{name}</span>
         <StatusLine words={words} {...(statusIcon ? { icon: statusIcon } : {})} />
       </span>

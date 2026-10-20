@@ -107,6 +107,12 @@ export interface RoomLayout {
   point(a: Anchor): Point
   /** Orthogonal polyline from one anchor to another through the lanes, so a travelling token never crosses a label. */
   route(from: Anchor, to: Anchor): readonly Point[]
+  /**
+   * A path a full seat tile can take as itself, without entering a lane or touching a label: straight between two
+   * adjacent seats in one row, or from the Teams door up through its opening to the people row's last seat. null
+   * when the tile would have to pass something, and a token rides the lanes instead.
+   */
+  walk(from: Anchor, to: Anchor): readonly Point[] | null
 }
 
 export interface Metrics {
@@ -337,7 +343,8 @@ function teamsDoor(floor: Box, m: Metrics): DoorBox {
   }
 }
 
-function segmentCrosses(a: Point, b: Point, target: Box, pad: number): boolean {
+/** Whether a box padded on every side meets the bounding box of a segment. Exported for the tests. */
+export function segmentCrosses(a: Point, b: Point, target: Box, pad: number): boolean {
   const left = target.x - pad
   const right = target.x + target.w + pad
   const top = target.y - pad
@@ -657,6 +664,15 @@ export function layoutRoom(plan: FloorPlan, width: number): RoomLayout {
     return !rowBoxes(a.y).some((other) => other !== a && other !== b && other.x > left.x && other.x < right.x)
   }
 
+  function walk(from: Anchor, to: Anchor): readonly Point[] | null {
+    if (adjacentSeats(from, to)) return [point(from), point(to)]
+    if (from.at !== 'teams' || zoneOf(to) !== 'people') return null
+    const seat = seatBoxOf(to)
+    if (!seat || rowBoxes(seat.y).some((other) => other !== seat && other.x > seat.x)) return null
+    const { x: cx, y: cy } = point(to)
+    return [teams.outside, { x: teams.approach.x, y: cy }, { x: cx, y: cy }]
+  }
+
   /** The ticket card's edge facing the lane the route uses, so a token starts and ends beside the card, never on it. */
   function ticketEdge(laneSide: Point): Point {
     const c = centre(ticketSpot)
@@ -720,5 +736,6 @@ export function layoutRoom(plan: FloorPlan, width: number): RoomLayout {
     lanes,
     point,
     route,
+    walk,
   }
 }
