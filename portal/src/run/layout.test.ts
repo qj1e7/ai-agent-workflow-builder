@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { agentId, doorKey } from './brand'
-import { collisions, layoutRoom, routeCrossings, type Box, type RoomLayout } from './layout'
+import { collisions, laneViolations, layoutRoom, ROOM_METRICS, routeCrossings, type Box, type RoomLayout } from './layout'
 import { agentSeatKey, stepSeatKey, type Anchor, type FloorPlan, type PlanDoor, type SeatKey } from './room'
 
 const WIDTHS = [320, 358, 390, 640, 760, 960, 1100, 1440] as const
@@ -25,7 +25,7 @@ function inside(box: Box, floor: Box): boolean {
 }
 
 describe('layoutRoom over every participant count', () => {
-  it('never collides, never leaves the floor, keeps the speech band and table clean', () => {
+  it('never collides, never leaves the floor, keeps the speech band and table clean, keeps every lane wider than the token plus 8 px and clear', () => {
     let checked = 0
     for (const width of WIDTHS) {
       for (let agents = 0; agents <= 30; agents += 1) {
@@ -33,15 +33,19 @@ describe('layoutRoom over every participant count', () => {
           for (const read of READ_DOORS) {
             for (const write of WRITE_DOORS) {
               const layout = layoutRoom(plan(agents, steps, read, write), width)
+              const where = `width ${width}, ${agents} agents, ${steps} steps, ${read} read, ${write} write`
               const bad = collisions(layout)
               if (bad.length > 0) {
-                throw new Error(`${bad.length} collisions at width ${width}, ${agents} agents, ${steps} steps, ${read} read, ${write} write: ${JSON.stringify(bad[0])}`)
+                throw new Error(`${bad.length} collisions at ${where}: ${JSON.stringify(bad[0])}`)
               }
               for (const box of layout.boxes) {
                 if (!inside(box, layout.floor)) {
-                  throw new Error(`${box.who.role} leaves the floor at width ${width}, ${agents} agents, ${steps} steps, ${read} read, ${write} write`)
+                  throw new Error(`${box.who.role} leaves the floor at ${where}`)
                 }
               }
+              if (layout.lanes.width < layout.token + 8) throw new Error(`lane ${layout.lanes.width} px is not wider than the ${layout.token} px token plus 8 at ${where}`)
+              const blocked = laneViolations(layout)
+              if (blocked.length > 0) throw new Error(`${blocked.length} boxes block a lane at ${where}: ${JSON.stringify(blocked[0])}`)
               checked += 1
             }
           }
@@ -143,6 +147,69 @@ describe('layoutRoom over every participant count', () => {
     expect(layoutRoom(plan(1, 0, 0, 0), 639).seats.get('agent:a0')?.avatar.w).toBe(40)
     expect(layoutRoom(plan(1, 0, 0, 0), 639).size).toBe('compact')
     expect(layoutRoom(plan(1, 0, 0, 0), 640).size).toBe('wide')
+  })
+
+  it('reserves two name lines and two status lines under a compact avatar, so a label wraps instead of truncating', () => {
+    const m = ROOM_METRICS.compact
+    expect(m.nameLines).toBe(2)
+    expect(m.statusLines).toBe(2)
+    const seat = layoutRoom(plan(3, 1, 1, 1), 390).seats.get('agent:a1')
+    if (!seat) throw new Error('no seat')
+    expect(seat.box.h - seat.avatar.h).toBeGreaterThanOrEqual(m.nameLines * m.nameLine + m.statusLines * m.statusLine + 2 * m.labelGap)
+    expect(seat.box.w - 2 * m.labelInset).toBeGreaterThanOrEqual(80)
+  })
+
+  it('walks straight between two adjacent seats in one row, at avatar height', () => {
+    for (const width of [390, 640, 1440]) {
+      const layout = layoutRoom(plan(3, 2, 1, 1), width)
+      const host = layout.point({ at: 'agent', id: agentId('a0') })
+      const left = layout.point({ at: 'agent', id: agentId('a1') })
+      const route = layout.route({ at: 'agent', id: agentId('a0') }, { at: 'agent', id: agentId('a1') })
+      expect(route, `at ${width}`).toEqual([host, left])
+      expect(layout.route({ at: 'agent', id: agentId('a2') }, { at: 'agent', id: agentId('a0') })).toEqual([layout.point({ at: 'agent', id: agentId('a2') }), host])
+    }
+  })
+
+  it('goes round through the lane when another seat sits between, and still crosses no label', () => {
+    const layout = layoutRoom(plan(4, 1, 1, 1), 1440)
+    const route = layout.route({ at: 'agent', id: agentId('a0') }, { at: 'agent', id: agentId('a3') })
+    expect(route.length).toBeGreaterThan(2)
+    expect(route.some((p) => p.y === layout.lanes.top)).toBe(true)
+    expect(routeCrossings(layout, { at: 'agent', id: agentId('a0') }, { at: 'agent', id: agentId('a3') })).toEqual([])
+  })
+
+  it('leaves a seat through its outer gutter when the inner one has a neighbour', () => {
+    const layout = layoutRoom(plan(3, 1, 1, 1), 390)
+    const a1 = layout.seats.get('agent:a1')
+    if (!a1) throw new Error('no seat')
+    const route = layout.route({ at: 'agent', id: agentId('a1') }, { at: 'door', key: doorKey('write_0') })
+    const gutterX = route[1]?.x ?? Number.NaN
+    expect(gutterX).toBeLessThan(a1.box.x)
+  })
+
+  it('starts and ends table routes at the ticket card edge, never at its centre', () => {
+    for (const width of [390, 960]) {
+      const layout = layoutRoom(plan(2, 1, 1, 1), width)
+      const spot = layout.ticketSpot
+      const toTeams = layout.route({ at: 'table' }, { at: 'teams' })
+      expect(toTeams[0]).toEqual({ x: spot.x + spot.w / 2, y: spot.y + spot.h })
+      const toJira = layout.route({ at: 'table' }, { at: 'door', key: doorKey('write_0') })
+      expect(toJira[0]).toEqual({ x: spot.x + spot.w, y: spot.y + spot.h / 2 })
+      const fromHost = layout.route({ at: 'agent', id: agentId('a0') }, { at: 'table' })
+      expect(fromHost.at(-1)).toEqual({ x: spot.x + spot.w / 2, y: spot.y })
+      expect(layout.point({ at: 'table' })).toEqual({ x: spot.x + spot.w / 2, y: spot.y + spot.h / 2 })
+    }
+  })
+
+  it('lets a token through a write door under the Safety checker, with room to spare', () => {
+    for (const width of [390, 640, 1440]) {
+      const layout = layoutRoom(plan(2, 1, 1, 1), width)
+      const door = layout.doors.find((candidate) => candidate.side === 'write')
+      if (!door?.checker) throw new Error('no write door')
+      expect(door.checker.y).toBe(door.opening.y)
+      expect(door.approach.y - layout.token / 2, `at ${width}`).toBeGreaterThanOrEqual(door.checker.y + door.checker.h + 4)
+      expect(door.approach.y + layout.token / 2).toBeLessThanOrEqual(door.opening.y + door.opening.h)
+    }
   })
 })
 

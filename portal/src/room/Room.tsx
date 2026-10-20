@@ -1,5 +1,5 @@
-import { useMemo, useRef } from 'react'
-import type { ExpectedWrite, LiveView, Move, Point, RoomLayout, RoomState, SeatBox, SeatKey } from '../run'
+import { useMemo, useRef, type ReactNode } from 'react'
+import type { ExpectedWrite, LiveView, Move, Point, RoomLayout, RoomState, SeatKey } from '../run'
 import { agentSeatKey, layoutOf, stamps as stampsOf, stepSeatKey, ticketLife } from '../run'
 import { Avatar } from '../ui/Avatar'
 import { agentIdentity } from '../ui/agents'
@@ -7,9 +7,9 @@ import { cx } from '../ui/cx'
 import { IconLock, IconPerson, IconUnlock, IconX } from '../ui/icons'
 import { FloorPlan } from './FloorPlan'
 import { useBeatAnimation, useReducedMotion } from './hooks'
-import { EASE_MOVE, EASE_OVERSHOOT, POP, travelAlong } from './motion'
+import { APPEAR_MS, EASE_OVERSHOOT, FADE_OUT, POP, TRAVEL_SHARE, travelAlong } from './motion'
 import { beatRoute, Paths } from './Paths'
-import { Door, EmptySeatAvatar, Seat, SpeechCard, TicketCard, Token, type Travel } from './pieces'
+import { Door, EmptySeatAvatar, Seat, SpeechCard, TicketCard, Token, type Appear, type TokenKind, type Travel, type Turn } from './pieces'
 import { agentStatus, approvedBy, checkerStatus, doorName, readDoorStatus, stepName, stepStatus, teamsStatus, ticketWords, writeDoorStatus } from './words'
 import styles from './Room.module.css'
 
@@ -20,9 +20,12 @@ interface RoomProps {
   expectedWrites: readonly ExpectedWrite[]
   /** The stage's accessible label. The drawn room is aria-hidden; the sentence next to it says the state. */
   label: string
+  /** The overview's first load only: the plan rises, the doors follow, then the first beat. */
+  opening?: boolean
 }
 
-const LIGHT = { wide: 190, compact: 120 } as const
+const LIGHT = { wide: 230, compact: 140 } as const
+const CUT_IN: Keyframe[] = [{ opacity: 0.35 }, { opacity: 1 }]
 
 function beatOf(view: LiveView) {
   const beat = view.frame.beat
@@ -33,19 +36,22 @@ function moveIs<T extends Move['type']>(move: Move | null, type: T): Extract<Mov
   return move && move.type === type ? (move as Extract<Move, { type: T }>) : null
 }
 
-function seatTravel(key: string, from: Point, to: Point, durationMs: number, path: readonly Point[] | null): Travel {
-  const keyframes = path && path.length >= 2 ? travelAlong(path, { fadeIn: true }) : [{ transform: `translate(${from.x - to.x}px, ${from.y - to.y}px)`, opacity: 0 }, { transform: 'translate(0, 0)', opacity: 1 }]
-  return { key, keyframes, durationMs: Math.max(300, Math.round(durationMs * 0.8)), easing: EASE_MOVE }
-}
-
-export function Room({ view, width, expectedWrites, label }: RoomProps) {
+export function Room({ view, width, expectedWrites, label, opening = false }: RoomProps) {
   const reduced = useReducedMotion()
   const motion = !reduced
   const { room, frame } = view
   const layout = useMemo(() => (width > 0 ? view.layout(width, expectedWrites) : null), [view, width, expectedWrites])
   const beat = beatOf(view)
+  const before = useMemo(() => (beat && width > 0 ? layoutOf(beat.before, width, expectedWrites) : null), [beat, width, expectedWrites])
+  const contentsRef = useRef<HTMLDivElement>(null)
+  useBeatAnimation(contentsRef, beat?.entry === 'cut' ? beat.key : null, { keyframes: CUT_IN, options: { duration: 180, fill: 'both' } }, motion)
+
+  if (!layout) {
+    return <div className={styles['frame']} aria-label={label} role="img" />
+  }
+
   const move = beat?.move ?? null
-  const compact = layout?.size === 'compact'
+  const compact = layout.size === 'compact'
   const dimmed = room.phase.name === 'awaiting_approval'
   const life = room.ticket ? ticketLife(room) : null
   const stampList = stampsOf(room)
@@ -56,21 +62,40 @@ export function Room({ view, width, expectedWrites, label }: RoomProps) {
   const leave = moveIs(move, 'leave')
   const decide = moveIs(move, 'decide')
   const fault = moveIs(move, 'fault')
-  const openDoor = deliver ? deliver.door : null
   const approvers = approvedBy(room)
   const waited = frame.waiting?.elapsedMs ?? null
-
-  if (!layout) {
-    return <div className={styles['frame']} aria-label={label} role="img" />
-  }
+  const token = layout.token
 
   const point = (anchor: Parameters<RoomLayout['point']>[0]) => layout.point(anchor)
   const lightPoint = room.light ? point(room.light.on) : null
   const lightSize = LIGHT[layout.size]
   const route = beatRoute(beat, room, layout)
   const beatPath = route ? layout.route(route.from, route.to) : null
-
+  const travelMs = beat ? Math.round(beat.durationMs * TRAVEL_SHARE) : 0
   const lit = (key: SeatKey) => room.light !== null && seatKeyOfLight(room) === key
+
+  /** A seat or door that was not in the frame before this beat lands after the token that brought it, or at once. */
+  const appearance = (fresh: boolean, afterTravel: boolean): Appear | null => {
+    if (!beat || !fresh) return null
+    return { key: beat.key, delayMs: afterTravel ? travelMs : 0 }
+  }
+  const freshSeat = (key: SeatKey) => before !== null && !before.seats.has(key) && !before.overflow.some((o) => o.hidden.includes(key))
+  const tokens: ReactNode[] = []
+  const ride = (key: string, what: TokenKind, path: readonly Point[], o: { fadeIn?: boolean; fadeOut?: boolean; durationMs?: number; delayMs?: number; parked?: boolean }) => {
+    if (!beat || path.length < 2) return
+    const end = path[path.length - 1] as Point
+    tokens.push(
+      <Token
+        key={key}
+        at={end}
+        size={token}
+        what={what}
+        travel={{ key: beat.key, keyframes: travelAlong(path, { fadeIn: o.fadeIn ?? false, fadeOut: o.fadeOut ?? false }), durationMs: o.durationMs ?? travelMs, delayMs: o.delayMs ?? 0 }}
+        motion={motion}
+        parked={o.parked ?? false}
+      />,
+    )
+  }
 
   const agentSeats = room.agents.map((seat) => {
     const key = agentSeatKey(seat.id)
@@ -79,10 +104,8 @@ export function Room({ view, width, expectedWrites, label }: RoomProps) {
     const identity = agentIdentity(seat.id, seat.display)
     const speaker = speak?.who
     const speaking = speaker?.at === 'agent' && speaker.id === seat.id
-    const arriver = arrive?.who
-    const arriving = arriver?.at === 'agent' && arriver.id === seat.id && beat
-    const travel: Travel | null =
-      arriving && beatPath ? seatTravel(beat.key, beatPath[0] as Point, point({ at: 'agent', id: seat.id }), beat.durationMs, beatPath) : null
+    const arriving = arrive?.who.at === 'agent' && arrive.who.id === seat.id
+    if (arriving && beatPath) ride(`arrive:${seat.id}`, { kind: 'agent', agentId: seat.id }, beatPath, { fadeIn: true, fadeOut: true })
     return (
       <Seat
         key={key}
@@ -94,7 +117,8 @@ export function Room({ view, width, expectedWrites, label }: RoomProps) {
         breathing={speaking || seat.status === 'working'}
         lit={lit(key)}
         dimmed={dimmed}
-        travel={travel}
+        appear={appearance(freshSeat(key), arriving && beatPath !== null)}
+        fade={null}
         motion={motion}
         hue={identity.hue}
       />
@@ -103,19 +127,11 @@ export function Room({ view, width, expectedWrites, label }: RoomProps) {
 
   const leavingSeat = (() => {
     const who = leave?.who
-    if (!leave || !beat || !who || who.at !== 'agent') return null
+    if (!leave || !beat || !who || who.at !== 'agent' || !before) return null
     const gone = beat.before.agents.find((seat) => seat.id === who.id)
-    if (!gone) return null
-    const beforeLayout = layoutOf(beat.before, width, expectedWrites)
-    const box = beforeLayout.seats.get(agentSeatKey(gone.id)) ?? fallbackSeat(layout, point({ at: 'table' }))
-    const host = room.agents.find((seat) => seat.role === 'host')
-    const to = host ? point({ at: 'agent', id: host.id }) : point({ at: 'table' })
-    const from = { x: box.avatar.x + box.avatar.w / 2, y: box.avatar.y + box.avatar.h / 2 }
-    const travel: Travel = {
-      key: beat.key,
-      keyframes: [{ transform: 'translate(0, 0)', opacity: 1 }, { transform: `translate(${to.x - from.x}px, ${to.y - from.y}px)`, opacity: 0 }],
-      durationMs: Math.round(beat.durationMs * 0.7),
-    }
+    const box = before.seats.get(agentSeatKey(who.id))
+    if (!gone || !box) return null
+    if (beatPath) ride(`leave:${gone.id}`, { kind: 'agent', agentId: gone.id }, beatPath, { fadeIn: true, fadeOut: true, durationMs: beat.durationMs })
     const identity = agentIdentity(gone.id, gone.display)
     return (
       <Seat
@@ -128,10 +144,10 @@ export function Room({ view, width, expectedWrites, label }: RoomProps) {
         breathing={false}
         lit={false}
         dimmed={false}
-        travel={travel}
+        appear={null}
+        fade={{ key: beat.key, keyframes: FADE_OUT, durationMs: Math.round(beat.durationMs * 0.3) }}
         motion={motion}
         hue={identity.hue}
-        leaving
       />
     )
   })()
@@ -152,7 +168,8 @@ export function Room({ view, width, expectedWrites, label }: RoomProps) {
         breathing={false}
         lit={lit('starter')}
         dimmed={false}
-        travel={null}
+        appear={appearance(freshSeat('starter'), false)}
+        fade={null}
         motion={motion}
       />
     )
@@ -164,10 +181,12 @@ export function Room({ view, width, expectedWrites, label }: RoomProps) {
     if (!box) return null
     const decided = step.state.is === 'approved' || step.state.is === 'declined'
     const open = step.state.is === 'open'
-    const deciding = decide?.step === step.index && beat
-    const travel: Travel | null =
-      deciding && beatPath ? seatTravel(beat.key, beatPath[0] as Point, point({ at: 'step', index: step.index }), beat.durationMs, beatPath) : null
+    const deciding = decide?.step === step.index && beat !== null
     const name = stepName(step)
+    if (deciding && beatPath) {
+      const teams = layout.doors.find((door) => door.side === 'teams')
+      ride(`decide:${step.index}`, { kind: 'person', name }, teams ? [teams.outside, ...beatPath] : beatPath, { fadeOut: true })
+    }
     return (
       <Seat
         key={key}
@@ -179,7 +198,8 @@ export function Room({ view, width, expectedWrites, label }: RoomProps) {
         breathing={open}
         lit={lit(key)}
         dimmed={false}
-        travel={travel}
+        appear={appearance(freshSeat(key) || deciding, deciding && beatPath !== null)}
+        fade={null}
         motion={motion}
       />
     )
@@ -199,34 +219,53 @@ export function Room({ view, width, expectedWrites, label }: RoomProps) {
         breathing={hiddenOpen}
         lit={false}
         dimmed={false}
-        travel={null}
+        appear={null}
+        fade={null}
         motion={motion}
       />
     )
   })
 
+  const doorOrder = [...layout.doors].sort((a, b) => (a.side === b.side ? a.box.y - b.box.y : sideRank[a.side] - sideRank[b.side]))
   const doors = layout.doors.map((door) => {
     const doorKey = door.key !== null && door.key !== 'teams' ? door.key : null
     const state = doorKey ? room.doors.find((d) => d.side !== 'teams' && d.key === doorKey) : null
+    const fresh = before !== null && !before.doors.some((d) => d.side === door.side && d.key === door.key && d.label === door.label)
+    const appear = appearance(fresh, false)
+    const order = doorOrder.indexOf(door)
     if (door.side === 'teams') {
-      return <Door key="teams" door={door} name="Teams" words={teamsStatus(room.approval?.teams ?? null)} checker={null} stateIcon={IconPerson} />
+      return <Door key="teams" door={door} name="Teams" words={teamsStatus(room.approval?.teams ?? null)} checker={null} stateIcon={IconPerson} appear={appear} motion={motion} order={order} />
     }
     if (door.side === 'read') {
       const words = doorKey ? readDoorStatus(room.trips, doorKey) : { text: 'Read only', tone: 'quiet' as const }
-      return <Door key={`read:${doorKey ?? door.box.y}`} door={door} name={doorKey ? doorName({ side: 'read', key: doorKey }) : 'Reads'} words={words} checker={null} stateIcon={words.tone === 'fail' ? IconX : IconUnlock} />
+      return (
+        <Door
+          key={`read:${doorKey ?? door.box.y}`}
+          door={door}
+          name={doorKey ? doorName({ side: 'read', key: doorKey }) : 'Reads'}
+          words={words}
+          checker={null}
+          stateIcon={words.tone === 'fail' ? IconX : IconUnlock}
+          appear={appear}
+          motion={motion}
+          order={order}
+        />
+      )
     }
     const checker = state && state.side === 'write' ? state.checker : 'locked'
     const name = state && state.side === 'write' ? doorName(state) : doorName({ side: 'write', key: null, label: door.label })
     const written = room.ticket?.lines.some((line) => line.reference) ?? false
-    const words = writeDoorStatus(checker, approvers, written)
     return (
       <Door
         key={`write:${door.key ?? door.label ?? door.box.y}`}
         door={door}
         name={name}
-        words={words}
+        words={writeDoorStatus(checker, approvers, written)}
         checker={checkerStatus(checker)}
         stateIcon={checker === 'allowed' ? IconUnlock : checker === 'blocked' ? IconX : IconLock}
+        appear={appear}
+        motion={motion}
+        order={order}
       />
     )
   })
@@ -236,30 +275,27 @@ export function Room({ view, width, expectedWrites, label }: RoomProps) {
     const atEdge = room.phase.name === 'rejected'
     const box = atEdge ? layout.tableEdge : layout.ticketSpot
     const words = ticketWords(room.ticket, life)
-    const rest = { x: box.x + box.w / 2, y: box.y + box.h / 2 }
     let travel: Travel | null = null
+    let appear: Appear | null = null
+    let turn: Turn | null = null
     if (beat && carry?.token === 'ticket' && beatPath) {
-      travel = { key: beat.key, keyframes: travelAlong(beatPath, { fadeIn: carry.from.at === 'agent', tilt: -5 }), durationMs: beat.durationMs }
-    } else if (beat && deliver) {
-      const door = point({ at: 'door', key: deliver.door })
-      const outside = { x: door.x + (door.x > rest.x ? 70 : -70), y: door.y }
-      const dx = door.x - rest.x
-      const dy = door.y - rest.y
-      travel = {
-        key: beat.key,
-        keyframes: [
-          { offset: 0, transform: 'translate(0, 0) scale(1)', opacity: 1 },
-          { offset: 0.3, transform: `translate(${dx}px, ${dy}px) scale(0.6)`, opacity: 1 },
-          { offset: 0.42, transform: `translate(${outside.x - rest.x}px, ${dy}px) scale(0.3)`, opacity: 0 },
-          { offset: 0.58, transform: `translate(${outside.x - rest.x}px, ${dy}px) scale(0.3)`, opacity: 0 },
-          { offset: 0.7, transform: `translate(${dx}px, ${dy}px) scale(0.6)`, opacity: 1 },
-          { offset: 1, transform: 'translate(0, 0) scale(1)', opacity: 1 },
-        ],
-        durationMs: beat.durationMs,
-        easing: EASE_MOVE,
+      if (carry.from.at === 'table' && carry.to.at === 'table_edge') {
+        travel = { key: beat.key, keyframes: travelAlong(beatPath), durationMs: beat.durationMs }
+      } else {
+        ride('ticket', { kind: 'ticket' }, beatPath, { fadeIn: true, fadeOut: true })
+        appear = { key: beat.key, delayMs: travelMs }
       }
+    } else if (beat && deliver && beatPath) {
+      const door = layout.doors.find((candidate) => candidate.key === deliver.door) ?? layout.doors.find((candidate) => candidate.hidden.includes(deliver.door))
+      const out = door ? [...beatPath, door.outside] : beatPath
+      const legMs = Math.round(beat.durationMs * 0.4)
+      ride('ticket:out', { kind: 'ticket' }, out, { durationMs: legMs, fadeIn: true })
+      ride('ticket:back', { kind: 'key' }, [...out].reverse(), { durationMs: legMs, delayMs: Math.round(beat.durationMs * 0.55), fadeOut: true })
+      const previous = beat.before.ticket ? ticketLife(beat.before) : null
+      if (previous && beat.before.ticket) turn = { key: beat.key, atMs: Math.round(beat.durationMs * 0.9), before: ticketWords(beat.before.ticket, previous) }
+    } else if (beat && !beat.before.ticket) {
+      appear = { key: beat.key, delayMs: 0 }
     }
-    const stampKey = beat && decide ? beat.key : null
     return (
       <TicketCard
         box={box}
@@ -268,42 +304,37 @@ export function Room({ view, width, expectedWrites, label }: RoomProps) {
         words={words}
         stamps={stampList}
         travel={travel}
-        stampKey={stampKey}
+        appear={appear}
+        turn={turn}
+        stampKey={beat && decide ? beat.key : null}
+        stampDelayMs={travelMs + APPEAR_MS}
         motion={motion}
         compact={compact}
       />
     )
   })()
 
-  const tokens = (() => {
-    const out: React.ReactNode[] = []
-    for (const trip of room.trips) {
-      if (trip.state !== 'out') continue
-      const at = point({ at: 'door', key: trip.door })
-      const moving = beat && carry?.token === 'request' && carry.to.at === 'door' && carry.to.key === trip.door && carry.from.at === 'agent' && carry.from.id === trip.agent
-      const travel = moving && beatPath ? { key: beat.key, keyframes: travelAlong(beatPath, { fadeIn: true }), durationMs: beat.durationMs } : null
-      out.push(<Token key={`request:${trip.agent}:${trip.step}`} at={at} kind="request" label="Request" travel={travel} motion={motion} parked />)
+  for (const trip of room.trips) {
+    if (trip.state !== 'out') continue
+    const at = point({ at: 'door', key: trip.door })
+    const moving = beat && carry?.token === 'request' && carry.to.at === 'door' && carry.to.key === trip.door && carry.from.at === 'agent' && carry.from.id === trip.agent
+    if (moving && beatPath) {
+      ride(`request:${trip.agent}:${trip.step}`, { kind: 'request' }, beatPath, { fadeIn: true, durationMs: beat.durationMs, parked: true })
+    } else {
+      tokens.push(<Token key={`request:${trip.agent}:${trip.step}`} at={at} size={token} what={{ kind: 'request' }} travel={null} motion={motion} parked />)
     }
-    if (beat && carry?.token === 'request' && carry.to.at === 'agent' && beatPath) {
-      const frames = travelAlong(beatPath, {}).map((frame) => {
-        const offset = typeof frame.offset === 'number' ? frame.offset : 0
-        return offset > 0.75 ? { ...frame, opacity: 1 - (offset - 0.75) / 0.25 } : frame
-      })
-      frames.push({ offset: 1, transform: 'translate(0, 0)', opacity: 0 })
-      out.push(<Token key={`answer:${beat.key}`} at={point(carry.to)} kind="request" label="Answer" travel={{ key: beat.key, keyframes: frames, durationMs: beat.durationMs }} motion={motion} parked={false} />)
-    }
-    if (beat && carry?.token === 'message' && beatPath) {
-      const frames = travelAlong(beatPath, { fadeIn: true })
-      frames.push({ offset: 1, transform: 'translate(0, 0)', opacity: 0 })
-      out.push(<Token key={`message:${beat.key}`} at={point(carry.to)} kind="message" label="Approval request" travel={{ key: beat.key, keyframes: frames, durationMs: beat.durationMs }} motion={motion} parked={false} />)
-    }
-    return out
-  })()
+  }
+  if (beat && carry?.token === 'request' && carry.to.at === 'agent' && beatPath) {
+    ride(`answer:${beat.key}`, { kind: 'request' }, beatPath, { fadeOut: true, durationMs: beat.durationMs })
+  }
+  if (beat && carry?.token === 'message' && beatPath) {
+    const teams = layout.doors.find((door) => door.side === 'teams')
+    ride(`message:${beat.key}`, { kind: 'message' }, teams ? [...beatPath, teams.outside] : beatPath, { fadeIn: true, durationMs: beat.durationMs })
+  }
 
   const faultMark = (() => {
     if (!beat || !fault || fault.at.at === 'door') return null
-    const at = point(fault.at)
-    return <FaultBadge key={beat.key} beatKey={beat.key} at={at} motion={motion} />
+    return <FaultBadge key={beat.key} beatKey={beat.key} at={point(fault.at)} motion={motion} />
   })()
 
   const speech = (() => {
@@ -315,16 +346,19 @@ export function Room({ view, width, expectedWrites, label }: RoomProps) {
 
   const tableNote = !room.ticket ? (
     <p className={cx('plan-voice', styles['tableNote'])} style={{ left: layout.ticketSpot.x, top: layout.ticketSpot.y, width: layout.ticketSpot.w, height: layout.ticketSpot.h }}>
-      {room.phase.name === 'failed' ? 'Nothing was proposed' : room.phase.name === 'succeeded' ? 'Nothing to write' : 'Proposed work lands here'}
+      <span data-room-label="table">{room.phase.name === 'failed' ? 'Nothing was proposed' : room.phase.name === 'succeeded' ? 'Nothing to write' : 'Proposed work lands here'}</span>
     </p>
   ) : null
 
   return (
     <div className={styles['frame']}>
-      <div className={cx(styles['stage'], dimmed && styles['stageDimmed'], styles[`stage_${layout.size}`])} style={{ height: layout.height }} aria-hidden="true">
-        <div className={styles['reveal']} key={`reveal:${frame.take}`}>
-          <FloorPlan layout={layout} openDoor={openDoor} />
-        </div>
+      <div
+        className={cx(styles['stage'], dimmed && styles['stageDimmed'], styles[`stage_${layout.size}`], opening && motion && styles['stageOpening'])}
+        style={{ height: layout.height, '--token': `${token}px` } as React.CSSProperties}
+        aria-hidden="true"
+        data-stage={layout.size}
+      >
+        <FloorPlan layout={layout} openDoor={deliver ? deliver.door : null} order={doorOrder} />
         {lightPoint ? (
           <div
             className={cx(styles['light'], styles[`light_${room.light?.tone ?? 'act'}`])}
@@ -332,18 +366,20 @@ export function Room({ view, width, expectedWrites, label }: RoomProps) {
           />
         ) : null}
         <div className={styles['scrim']} style={{ left: layout.floor.x, top: layout.floor.y, width: layout.floor.w, height: layout.floor.h }} />
-        <Paths layout={layout} room={room} beat={beat} motion={motion} />
-        {tableNote}
-        {doors}
-        {ticket}
-        {agentSeats}
-        {leavingSeat}
-        {starterSeat}
-        {stepSeats}
-        {overflowSeats}
-        {tokens}
-        {faultMark}
-        {speech}
+        <div className={styles['doors']}>{doors}</div>
+        <div ref={contentsRef} className={styles['contents']}>
+          <Paths layout={layout} room={room} beat={beat} motion={motion} />
+          {tableNote}
+          {ticket}
+          {agentSeats}
+          {leavingSeat}
+          {starterSeat}
+          {stepSeats}
+          {overflowSeats}
+          {tokens}
+          {faultMark}
+          {speech}
+        </div>
       </div>
       <p className="visually-hidden" role="img" aria-label={label}>
         {view.describe()}
@@ -352,11 +388,13 @@ export function Room({ view, width, expectedWrites, label }: RoomProps) {
   )
 }
 
+const sideRank = { read: 0, write: 1, teams: 2 } as const
+
 function FaultBadge({ at, beatKey, motion }: { at: Point; beatKey: string; motion: boolean }) {
   const ref = useRef<HTMLSpanElement>(null)
   useBeatAnimation(ref, beatKey, { keyframes: POP, options: { duration: 380, easing: EASE_OVERSHOOT, fill: 'both' } }, motion)
   return (
-    <span ref={ref} className={styles['faultBadge']} style={{ left: at.x, top: at.y }}>
+    <span ref={ref} className={styles['faultBadge']} style={{ left: at.x - 13, top: at.y - 13 }}>
       <IconX size={14} strokeWidth={2.5} />
     </span>
   )
@@ -386,9 +424,3 @@ function nameOfSeat(room: RoomState, key: SeatKey): string | null {
   const seat = room.agents.find((candidate) => agentSeatKey(candidate.id) === key)
   return seat ? agentIdentity(seat.id, seat.display).name : null
 }
-
-function fallbackSeat(layout: RoomLayout, at: Point): SeatBox {
-  const size = layout.size === 'wide' ? 56 : 40
-  return { box: { x: at.x - 64, y: at.y - size / 2, w: 128, h: 96 }, avatar: { x: at.x - size / 2, y: at.y - size / 2, w: size, h: size } }
-}
-

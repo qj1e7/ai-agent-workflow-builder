@@ -74,8 +74,8 @@ export function Paths({ layout, room, beat, motion }: PathsProps) {
             <polyline points={toPoints(path)} className={styles['tripLine']} />
             {marks.map((mark, i) => (
               <g key={i} className={styles['mark']} style={{ transform: `translate(${mark.x}px, ${mark.y}px)` }}>
-                <circle r={9} />
-                <text y={3.5}>{i + 1}</text>
+                <circle r={10} />
+                <text y={4}>{i + 1}</text>
               </g>
             ))}
             {fault ? (

@@ -87,6 +87,8 @@ export function teamsStatus(post: TeamsPost | null): StatusWords {
 export interface TicketWords {
   readonly tag: string
   readonly line: string
+  /** The compact ticket's one status word beside its icon, so the action line keeps every character. */
+  readonly short: string
   readonly tone: StatusWords['tone']
 }
 
@@ -94,17 +96,17 @@ export function ticketWords(ticket: Ticket, life: TicketLife): TicketWords {
   const reference = ticket.lines.find((line) => line.reference)?.reference
   switch (life) {
     case 'draft':
-      return { tag: 'Draft', line: 'Not written yet', tone: 'quiet' }
+      return { tag: 'Draft', line: 'Not written yet', short: 'Not written', tone: 'quiet' }
     case 'waiting':
-      return { tag: 'Draft', line: 'Waiting for an Approver', tone: 'wait' }
+      return { tag: 'Draft', line: 'Waiting for an Approver', short: 'Waiting', tone: 'wait' }
     case 'approved':
-      return { tag: 'Approved', line: 'Approved, being written', tone: 'done' }
+      return { tag: 'Approved', line: 'Approved, being written', short: 'Approved', tone: 'done' }
     case 'written':
-      return { tag: 'Written', line: reference ? `Written as ${reference}` : 'Written', tone: 'done' }
+      return { tag: 'Written', line: reference ? `Written as ${reference}` : 'Written', short: reference ? `Written as ${reference}` : 'Written', tone: 'done' }
     case 'denied':
-      return { tag: 'Blocked', line: 'Blocked by the safety checker', tone: 'fail' }
+      return { tag: 'Blocked', line: 'Blocked by the safety checker', short: 'Blocked', tone: 'fail' }
     case 'declined':
-      return { tag: 'Declined', line: 'Declined, nothing was written', tone: 'fail' }
+      return { tag: 'Declined', line: 'Declined, nothing was written', short: 'Declined', tone: 'fail' }
   }
 }
 
