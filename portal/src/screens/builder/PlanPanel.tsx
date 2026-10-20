@@ -65,7 +65,7 @@ function Outcome({ result, task, runNow }: { result: SuggestOut; task: string; r
         <p className={styles['templateName']}>{result.template.name}</p>
         <p className="muted">{result.template.description}</p>
       </div>
-      <Spine blocks={planBlocks(result.template)} orientation="vertical" showDescriptions label="Steps in this plan" />
+      <Spine blocks={planBlocks(result.template)} orientation="vertical" showDescriptions showState={false} label="Steps in this plan" />
       {result.matched_terms.length > 0 ? <MatchedTerms terms={result.matched_terms} /> : null}
       <PlanForm key={result.template.key} template={result.template} task={task} runNow={runNow} />
     </>
