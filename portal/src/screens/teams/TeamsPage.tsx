@@ -1,17 +1,22 @@
 import { useState } from 'react'
 import { errorWords } from '../../api/errors'
-import { useTeamsMessages } from '../../api/queries'
-import type { TeamsStubMessage } from '../../api/types'
+import { useDisplayName } from '../../api/people'
+import { useApproval, useRuns, useTeamsMessages } from '../../api/queries'
+import type { RunView, TeamsStubMessage } from '../../api/types'
 import { Button, ButtonLink } from '../../ui/Button'
 import { EmptyState, InlineMessage, Skeleton } from '../../ui/Feedback'
 import { formatDayAndTime } from '../../ui/format'
-import { IconChat, IconReplay, PortalMark } from '../../ui/icons'
+import { IconCheck, IconChat, IconClock, IconReplay, IconX, PortalMark, type Icon } from '../../ui/icons'
 import { PageHeader } from '../../ui/PageHeader'
+import { Pill, type PillTone } from '../../ui/StatusPill'
 import { channelsOf, chosenChannel, messagesIn } from './channels'
+import { startedWords } from './startedWords'
+import { standingOf, type StandingKind } from './standing'
 import styles from './TeamsPage.module.css'
 
 export function TeamsPage() {
   const messages = useTeamsMessages({ poll: true })
+  const runs = useRuns({ poll: true })
   const [wanted, setWanted] = useState<string | null>(null)
 
   return (
@@ -21,7 +26,7 @@ export function TeamsPage() {
       </PageHeader>
       <div className={styles['window']}>
         {messages.data ? (
-          <Inbox messages={messages.data} wanted={wanted} onChoose={setWanted} />
+          <Inbox messages={messages.data} runs={runs.data ?? []} wanted={wanted} onChoose={setWanted} />
         ) : (
           <div className={styles['single']}>
             {messages.isError ? (
@@ -43,11 +48,12 @@ export function TeamsPage() {
 
 interface InboxProps {
   messages: readonly TeamsStubMessage[]
+  runs: readonly RunView[]
   wanted: string | null
   onChoose: (channel: string) => void
 }
 
-function Inbox({ messages, wanted, onChoose }: InboxProps) {
+function Inbox({ messages, runs, wanted, onChoose }: InboxProps) {
   const channels = channelsOf(messages)
   const open = chosenChannel(channels, wanted)
 
@@ -97,7 +103,7 @@ function Inbox({ messages, wanted, onChoose }: InboxProps) {
         <ol className={styles['thread']}>
           {messagesIn(messages, open).map((message) => (
             <li key={message.id}>
-              <Message message={message} />
+              <Message message={message} run={runs.find((each) => each.run_id === message.run_id)} />
             </li>
           ))}
         </ol>
@@ -106,7 +112,18 @@ function Inbox({ messages, wanted, onChoose }: InboxProps) {
   )
 }
 
-function Message({ message }: { message: TeamsStubMessage }) {
+const standingLook: Record<StandingKind, { tone: PillTone; icon: Icon }> = {
+  waiting: { tone: 'waiting', icon: IconClock },
+  approved: { tone: 'done', icon: IconCheck },
+  declined: { tone: 'neutral', icon: IconX },
+}
+
+function Message({ message, run }: { message: TeamsStubMessage; run: RunView | undefined }) {
+  const nameOf = useDisplayName()
+  const approval = useApproval(message.approval_id, { poll: true })
+  const standing = approval.data ? standingOf(approval.data.steps, nameOf) : null
+  const look = standing ? standingLook[standing.kind] : null
+
   return (
     <article className={styles['message']}>
       <span className={styles['sender']} aria-hidden="true">
@@ -118,8 +135,33 @@ function Message({ message }: { message: TeamsStubMessage }) {
           <time dateTime={message.ts}>{formatDayAndTime(message.ts)}</time>
         </header>
         <div className={styles['card']}>
+          {run ? (
+            <p className={styles['run']}>
+              <strong>{run.use_case_name}</strong>
+              <span>
+                Run started by {nameOf(run.started_by)}, {startedWords(run.started_at)}
+              </span>
+            </p>
+          ) : null}
           <p>{message.text}</p>
-          <ButtonLink to={message.link}>Open the approval page</ButtonLink>
+          <div className={styles['standing']} aria-live="polite">
+            {standing && look ? (
+              <>
+                <Pill tone={look.tone} icon={look.icon}>
+                  {standing.headline}
+                </Pill>
+                {standing.detail ? <span className={styles['detail']}>{standing.detail}</span> : null}
+              </>
+            ) : approval.isError ? (
+              <span className={styles['detail']}>We could not check where this stands.</span>
+            ) : (
+              <span className={styles['detail']}>Checking where this stands.</span>
+            )}
+          </div>
+          <div className={styles['actions']}>
+            <ButtonLink to={message.link}>Open the approval page</ButtonLink>
+            <ButtonLink to={`/runs/${message.run_id}`}>See the run</ButtonLink>
+          </div>
         </div>
       </div>
     </article>
