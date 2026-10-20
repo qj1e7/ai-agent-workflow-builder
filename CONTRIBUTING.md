@@ -91,6 +91,44 @@ One person does this at the start of each sprint.
 6. If the playbook check fails, a step that our playbooks quote has changed. Update the quoted text in `.agents/playbooks/` in the same PR.
 7. After the merge, everyone pulls `main` and restarts their tool. Codex users run `codex plugin marketplace remove pstack-claude`, then add it again with the new `--ref`.
 
+## Run the checks locally
+
+CI runs the same commands. You need [uv](https://docs.astral.sh/uv/) and Docker. Run the first block in each project folder, `platform-api` and `agent-runtime`.
+
+```sh
+cd platform-api
+uv sync --locked
+uv run ruff check .
+uv run ruff format --check .
+uv run lint-imports   # platform-api only
+uv run pytest
+```
+
+CI runs the tests inside the Docker image. To do the same, and to build the image that ships, run these from the repo root:
+
+```sh
+docker build --target test --tag platform-api:test platform-api
+docker run --rm platform-api:test
+docker build --target runtime --tag platform-api:runtime platform-api
+```
+
+Use `agent-runtime` in place of `platform-api` for the other project.
+
+To fix formatting, run `uv run ruff format .`. After you change a dependency, run `uv lock` and commit the new `uv.lock`.
+
+For the two scans, run them from the repo root. The image names and digests are in `.github/workflows/ci.yml`.
+
+```sh
+docker run --rm --volume "$PWD:/src" --workdir /src "$SEMGREP_IMAGE" \
+  semgrep scan --config p/python --config p/dockerfile --config p/github-actions \
+  --metrics=off --error --exclude docs .
+
+docker run --rm --volume "$PWD:/repo" "$GITLEAKS_IMAGE" \
+  detect --no-git --source /repo --redact --verbose
+```
+
+Set `SEMGREP_IMAGE` and `GITLEAKS_IMAGE` first. Copy their values from the `env` block of `ci.yml`.
+
 ## Costs and plan limits
 
 pstack starts subagents. By default, `arena`, `architect` and `interrogate` run several models in parallel, so they can use up a Claude Pro plan quickly.
