@@ -31,6 +31,8 @@ interface FakeApi {
   readonly hidden: Set<number>
   dateHeader: string | null
   failNext(count: number): void
+  /** The next `count` requests answer this HTTP status with a problem body. */
+  answerNext(status: number, count: number): void
 }
 
 interface Raw {
@@ -42,6 +44,7 @@ const frame = (raw: Raw) => `id: ${raw.seq}\nevent: activity\ndata: ${JSON.strin
 
 function fakeApi(recording: readonly Raw[], emitted: number): FakeApi {
   let failures = 0
+  let answers: { status: number; count: number } | null = null
   const api: FakeApi = {
     requests: [],
     streams: [],
@@ -49,6 +52,7 @@ function fakeApi(recording: readonly Raw[], emitted: number): FakeApi {
     hidden: new Set(),
     dateHeader: null,
     failNext: (count) => void (failures += count),
+    answerNext: (status, count) => void (answers = { status, count }),
     fetch: (input, init) => {
       if (failures > 0) {
         failures -= 1
@@ -59,6 +63,10 @@ function fakeApi(recording: readonly Raw[], emitted: number): FakeApi {
       const after = url.searchParams.get('after')
       const accept = headers.get('Accept')
       api.requests.push({ accept, after: after === null ? null : Number(after), lastEventId: headers.get('Last-Event-ID') })
+      if (answers && answers.count > 0) {
+        answers.count -= 1
+        return Promise.resolve(new Response(JSON.stringify({ message: 'There is no such run.' }), { status: answers.status }))
+      }
       const responseHeaders = api.dateHeader ? { Date: api.dateHeader } : {}
       if (accept === 'text/event-stream') {
         const stream = openStream()
@@ -331,6 +339,55 @@ describe('runFeed', () => {
         { accept: 'application/json', after: 12, lastEventId: null },
         { accept: 'text/event-stream', after: null, lastEventId: '12' },
       ])
+    })
+  })
+
+  describe('a 4xx answer is final', () => {
+    it('closes for good when the events page answers 404, and never asks again', async () => {
+      const api = fakeApi(success, 17)
+      api.answerNext(404, 1)
+      const feed = start(api)
+      expect(await take(feed, 2)).toEqual([
+        connection({ is: 'connecting' }),
+        connection({ is: 'closed', status: 404, reason: 'not_found' }),
+      ])
+      expect(await feed.next()).toEqual({ done: true, value: undefined })
+      expect(vi.getTimerCount()).toBe(0)
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(api.requests).toHaveLength(1)
+    })
+
+    it('closes for good when the stream answers 403 after a good backlog', async () => {
+      const api = fakeApi(success, 17)
+      const feed = start(api)
+      expect(await take(feed, 2)).toMatchObject([connection({ is: 'connecting' }), { type: 'events', origin: 'backlog' }])
+      api.answerNext(403, 1)
+      expect(await next(feed)).toEqual(connection({ is: 'closed', status: 403, reason: 'forbidden' }))
+      expect(await feed.next()).toEqual({ done: true, value: undefined })
+      expect(api.requests).toHaveLength(2)
+    })
+
+    it.each([
+      [401, 'signed_out'],
+      [422, 'rejected'],
+    ] as const)('names the reason for %s as %s', async (status, reason) => {
+      const api = fakeApi(success, 17)
+      api.answerNext(status, 1)
+      const feed = start(api)
+      expect(await take(feed, 2)).toEqual([connection({ is: 'connecting' }), connection({ is: 'closed', status, reason })])
+    })
+
+    it('keeps backing off on a 500, since the server may come back', async () => {
+      const api = fakeApi(success, 17)
+      api.answerNext(500, 1)
+      const feed = start(api)
+      expect(await take(feed, 2)).toEqual([
+        connection({ is: 'connecting' }),
+        connection({ is: 'reconnecting', attempt: 1, inMs: 500 }),
+      ])
+      const back = pull(feed)
+      await vi.advanceTimersByTimeAsync(500)
+      expect(seqs(await back.result)).toEqual(range(1, 17))
     })
   })
 
