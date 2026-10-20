@@ -1,5 +1,6 @@
+import { connectorNamedIn } from '../api/labels'
 import type { BlockView } from '../api/types'
-import type { LiveView, Station } from '../run'
+import { doorKey, type ExpectedWrite, type LiveView, type Station } from '../run'
 import { formatDuration } from '../ui/format'
 import type { SpineBlock } from '../ui/Spine'
 import type { SpineState } from '../ui/spineState'
@@ -30,6 +31,11 @@ export function spineBlocks(view: LiveView, blocks: readonly BlockView[] | undef
   }))
 }
 
-export function expectedWritesOf(blocks: readonly BlockView[] | undefined): { readonly label: string }[] {
-  return (blocks ?? []).filter((block) => block.kind === 'write_action').map((block) => ({ label: block.name }))
+export function expectedWritesOf(blocks: readonly BlockView[] | undefined): ExpectedWrite[] {
+  return (blocks ?? [])
+    .filter((block) => block.kind === 'write_action')
+    .map((block) => {
+      const connector = connectorNamedIn(block.name)
+      return { label: block.name, key: connector ? doorKey(connector) : null }
+    })
 }

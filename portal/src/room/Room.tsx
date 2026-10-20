@@ -10,7 +10,7 @@ import { useBeatAnimation, useReducedMotion } from './hooks'
 import { APPEAR_MS, EASE_OVERSHOOT, FADE_OUT, POP, TRAVEL_SHARE, travelAlong } from './motion'
 import { beatRoute, Paths } from './Paths'
 import { Door, EmptySeatAvatar, Seat, SpeechCard, TicketCard, Token, type Appear, type TokenKind, type Travel, type Turn } from './pieces'
-import { agentStatus, approvedBy, checkerStatus, doorName, readDoorStatus, stepName, stepStatus, teamsStatus, ticketWords, writeDoorStatus } from './words'
+import { agentStatus, approvedBy, checkerStatus, doorName, readDoorStatus, stepName, stepStatus, teamsStatus, ticketWords, writeDoorAction, writeDoorStatus } from './words'
 import styles from './Room.module.css'
 
 interface RoomProps {
@@ -233,8 +233,9 @@ export function Room({ view, width, expectedWrites, label, opening = false }: Ro
     const fresh = before !== null && !before.doors.some((d) => d.side === door.side && d.key === door.key && d.label === door.label)
     const appear = appearance(fresh, false)
     const order = doorOrder.indexOf(door)
+    const name = doorName(door)
     if (door.side === 'teams') {
-      return <Door key="teams" door={door} name="Teams" words={teamsStatus(room.approval?.teams ?? null)} checker={null} stateIcon={IconPerson} appear={appear} motion={motion} order={order} />
+      return <Door key="teams" door={door} name={name} action={null} words={teamsStatus(room.approval?.teams ?? null)} checker={null} stateIcon={IconPerson} appear={appear} motion={motion} order={order} />
     }
     if (door.side === 'read') {
       const words = doorKey ? readDoorStatus(room.trips, doorKey) : { text: 'Read only', tone: 'quiet' as const }
@@ -242,7 +243,8 @@ export function Room({ view, width, expectedWrites, label, opening = false }: Ro
         <Door
           key={`read:${doorKey ?? door.box.y}`}
           door={door}
-          name={doorKey ? doorName({ side: 'read', key: doorKey }) : 'Reads'}
+          name={name}
+          action={null}
           words={words}
           checker={null}
           stateIcon={words.tone === 'fail' ? IconX : IconUnlock}
@@ -253,13 +255,13 @@ export function Room({ view, width, expectedWrites, label, opening = false }: Ro
       )
     }
     const checker = state && state.side === 'write' ? state.checker : 'locked'
-    const name = state && state.side === 'write' ? doorName(state) : doorName({ side: 'write', key: null, label: door.label })
     const written = room.ticket?.lines.some((line) => line.reference) ?? false
     return (
       <Door
         key={`write:${door.key ?? door.label ?? door.box.y}`}
         door={door}
         name={name}
+        action={writeDoorAction(door, room.ticket)}
         words={writeDoorStatus(checker, approvers, written)}
         checker={checkerStatus(checker)}
         stateIcon={checker === 'allowed' ? IconUnlock : checker === 'blocked' ? IconX : IconLock}

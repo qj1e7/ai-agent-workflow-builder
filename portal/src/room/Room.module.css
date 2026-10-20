@@ -475,6 +475,13 @@
   line-height: 18px;
 }
 
+.doorAction {
+  color: var(--ink);
+  font-size: var(--text-14);
+  font-weight: 560;
+  line-height: 16px;
+}
+
 .doorState {
   display: inline-flex;
   align-items: center;
@@ -484,12 +491,14 @@
   font-stretch: 85%;
   font-weight: 560;
   line-height: 14px;
+  text-wrap: balance;
 }
 
 .doorLabelRight .doorState {
   justify-content: flex-end;
 }
 
+.stage_compact .doorAction,
 .stage_compact .doorState {
   display: none;
 }
