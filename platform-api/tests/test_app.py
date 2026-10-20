@@ -3,6 +3,8 @@ from fastapi.testclient import TestClient
 
 from platform_api.app import create_app, readiness_of
 from platform_api.db import Database
+from platform_api.orchestration.approvals import Refusal
+from platform_api.orchestration.service import DecisionRefused, RetryLater
 from tests.support import LOCAL_ENV as LOCAL
 
 ROUTES = {
@@ -70,3 +72,40 @@ async def test_readiness_is_not_ready_before_bootstrap(db: Database):
         ("activity_log", True),
         ("workflows", False),
     ]
+
+
+class RefusingOrchestrator:
+    async def decide(self, *args: object) -> DecisionRefused:
+        return DecisionRefused(Refusal.OWN_WORK)
+
+    async def on_step(self, *args: object) -> None:
+        raise RetryLater("n8n is still starting")
+
+
+@pytest.fixture
+def refusing_client() -> TestClient:
+    app = create_app(LOCAL)
+    app.state.orchestrator = RefusingOrchestrator()
+    return TestClient(app)
+
+
+def test_a_refused_decision_answers_the_documented_refusal_body(refusing_client: TestClient):
+    r = refusing_client.post(
+        "/api/v1/approvals/apr_1/decisions",
+        headers={"X-Dev-User": "alice"},
+        json={"step": 0, "verdict": "approve", "digest": "sha256:" + "0" * 64},
+    )
+    assert r.status_code == 403
+    assert r.json() == {
+        "refusal": "own_work",
+        "message": "You started this run, so another Approver must decide.",
+    }
+
+
+def test_a_step_told_to_retry_answers_the_documented_retry_body(refusing_client: TestClient):
+    r = refusing_client.post(
+        "/internal/v1/runs/run_1/steps/run_agents",
+        headers={"X-Step-Key": LOCAL["STEP_KEY"], "X-N8N-Execution": "1"},
+    )
+    assert r.status_code == 503
+    assert r.json() == {"detail": "n8n is still starting", "retryable": True}
