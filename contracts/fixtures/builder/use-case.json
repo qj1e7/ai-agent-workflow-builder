@@ -1,0 +1,14 @@
+{
+  "use_case_id": "uc_01JB7",
+  "version": 1,
+  "template": "release_check",
+  "name": "LangGraph releases",
+  "instruction": "Check langchain-ai/langgraph for new releases and open a ticket for the team.",
+  "params": {
+    "repo": "langchain-ai/langgraph",
+    "tag_pattern": "^\\d+\\.\\d+\\.\\d+$",
+    "ticket_project": "MOCK"
+  },
+  "owner": "alice",
+  "created_at": "2026-11-02T09:30:00Z"
+}

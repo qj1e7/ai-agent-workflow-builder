@@ -1,0 +1,14 @@
+{
+  "run_id": "run_01JB9",
+  "use_case_id": "uc_01JB7",
+  "use_case_name": "LangGraph releases",
+  "use_case_version": 1,
+  "started_by": "alice",
+  "started_at": "2026-11-04T02:14:00Z",
+  "updated_at": "2026-11-04T02:14:02.620000Z",
+  "last_seq": 6,
+  "events_url": "/api/v1/runs/run_01JB9/events",
+  "state": "working",
+  "n8n_execution_id": "43",
+  "attempt": 1
+}

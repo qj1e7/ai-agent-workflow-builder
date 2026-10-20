@@ -1,0 +1,9 @@
+{
+  "status": "approved",
+  "decision": {
+    "step": 0,
+    "by": "bob",
+    "verdict": "approve",
+    "at": "2026-11-03T02:20:23.447000Z"
+  }
+}

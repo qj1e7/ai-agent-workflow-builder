@@ -1,0 +1,46 @@
+{
+  "templates": [
+    {
+      "key": "release_check",
+      "name": "Release check",
+      "description": "Watch a public GitHub repository and open a ticket when new releases appear.",
+      "blocks": [
+        {
+          "key": "read_releases",
+          "name": "Read GitHub releases",
+          "description": "The Release checker reads the repository's releases.",
+          "kind": "agent"
+        },
+        {
+          "key": "approval_gate",
+          "name": "Approval gate",
+          "description": "An Approver reviews the proposed ticket in Teams before it is written.",
+          "kind": "approval"
+        },
+        {
+          "key": "create_ticket",
+          "name": "Create Jira ticket",
+          "description": "One ticket in the chosen project listing the new releases.",
+          "kind": "write_action"
+        }
+      ],
+      "params": [
+        {
+          "name": "repo",
+          "description": "GitHub repository, owner/name",
+          "example": "langchain-ai/langgraph"
+        },
+        {
+          "name": "tag_pattern",
+          "description": "Regular expression a release tag must match",
+          "example": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        {
+          "name": "ticket_project",
+          "description": "Jira project key",
+          "example": "MOCK"
+        }
+      ]
+    }
+  ]
+}

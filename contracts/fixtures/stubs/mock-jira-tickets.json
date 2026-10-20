@@ -1,0 +1,13 @@
+{
+  "tickets": [
+    {
+      "key": "MOCK-142",
+      "project": "MOCK",
+      "title": "New LangGraph releases: 1.2.16, 1.2.15",
+      "body": "Releases newer than 1.2.14 on langchain-ai/langgraph:\n- 1.2.16\n- 1.2.15\n\nProposed by the AI workflow builder.",
+      "created_at": "2026-11-03T02:20:26.344000Z",
+      "run_id": "run_01JB8",
+      "proposal_id": "prp_01JB8"
+    }
+  ]
+}
