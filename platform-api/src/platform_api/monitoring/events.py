@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, Literal
 
@@ -281,3 +282,28 @@ type ActivityEvent = Annotated[
 
 activity_event_adapter: TypeAdapter[ActivityEvent] = TypeAdapter(ActivityEvent)
 activity_events_adapter: TypeAdapter[list[ActivityEvent]] = TypeAdapter(list[ActivityEvent])
+
+
+@dataclass(frozen=True)
+class PendingEvent:
+    """An event before the log assigns its seq. `ts` of None means the log's transaction time."""
+
+    actor: Actor
+    kind: str
+    summary: str
+    data: WireModel
+    dedupe_key: str | None = None
+    ts: datetime | None = None
+
+
+PLATFORM = Actor(kind="platform", id="platform", display="Platform")
+WORKFLOW = Actor(kind="workflow", id="n8n", display="Workflow engine")
+SAFETY_CHECKER = Actor(kind="safety_checker", id="safety_checker", display="Safety checker")
+
+
+def user_actor(user_id: UserId, display: str) -> Actor:
+    return Actor(kind="user", id=user_id, display=display)
+
+
+def agent_actor(agent_id: str, display: str) -> Actor:
+    return Actor(kind="agent", id=agent_id, display=display)

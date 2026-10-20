@@ -70,7 +70,7 @@ def dev_authenticator(request: Request) -> Principal:
     user = next((user for user in DEV_USERS.users if user.id == user_id), None)
     if user is None:
         raise HTTPException(status_code=401, detail=f"Unknown or missing {DEV_USER_HEADER}")
-    return Principal(user.id, frozenset(user.roles))
+    return Principal(user.id, frozenset(user.roles), user.display)
 
 
 def authenticator_for(config: AuthConfig) -> Authenticator:
