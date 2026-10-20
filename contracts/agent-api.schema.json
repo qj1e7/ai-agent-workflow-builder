@@ -536,8 +536,7 @@
       "additionalProperties": false,
       "properties": {
         "repo": {
-          "title": "Repo",
-          "type": "string"
+          "$ref": "#/$defs/RepoName"
         },
         "tag_pattern": {
           "title": "Tag Pattern",
@@ -550,6 +549,10 @@
       ],
       "title": "ReleaseCheckInputs",
       "type": "object"
+    },
+    "RepoName": {
+      "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$",
+      "type": "string"
     },
     "RoomAddressee": {
       "additionalProperties": false,
