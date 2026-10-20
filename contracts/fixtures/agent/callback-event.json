@@ -1,0 +1,20 @@
+{
+  "task_id": "run_01JB8/work/1/1",
+  "event": {
+    "agent_seq": 1,
+    "ts": "2026-11-03T02:14:02.390000Z",
+    "agent": {
+      "id": "room_lead",
+      "display": "Room lead"
+    },
+    "summary": "Room lead brought in Release checker to read the GitHub releases.",
+    "kind": "agent_joined",
+    "data": {
+      "agent": {
+        "id": "release_checker",
+        "display": "Release checker"
+      },
+      "reason": "The task asks about releases of a GitHub repo."
+    }
+  }
+}

@@ -1,0 +1,139 @@
+{
+  "task_id": "run_01JB9/work/1/1",
+  "status": "failed",
+  "error": {
+    "type": "UpstreamUnavailable",
+    "message": "GitHub returned 503 Service Unavailable three times",
+    "retryable": true
+  },
+  "events": [
+    {
+      "agent_seq": 1,
+      "ts": "2026-11-04T02:14:02.370000Z",
+      "agent": {
+        "id": "room_lead",
+        "display": "Room lead"
+      },
+      "summary": "Room lead brought in Release checker to read the GitHub releases.",
+      "kind": "agent_joined",
+      "data": {
+        "agent": {
+          "id": "release_checker",
+          "display": "Release checker"
+        },
+        "reason": "The task asks about releases of a GitHub repo."
+      }
+    },
+    {
+      "agent_seq": 2,
+      "ts": "2026-11-04T02:14:02.490000Z",
+      "agent": {
+        "id": "room_lead",
+        "display": "Room lead"
+      },
+      "summary": "Room lead asked Release checker to look for releases newer than 1.2.14.",
+      "kind": "agent_message",
+      "data": {
+        "speaker": {
+          "id": "room_lead",
+          "display": "Room lead"
+        },
+        "addressee": {
+          "kind": "agent",
+          "id": "release_checker",
+          "display": "Release checker"
+        },
+        "text": "Please check langchain-ai/langgraph for releases newer than 1.2.14 that match the plain version pattern."
+      }
+    },
+    {
+      "agent_seq": 3,
+      "ts": "2026-11-04T02:14:02.620000Z",
+      "agent": {
+        "id": "release_checker",
+        "display": "Release checker"
+      },
+      "summary": "Release checker is fetching releases from langchain-ai/langgraph.",
+      "kind": "agent_step_started",
+      "data": {
+        "step": "fetch_releases"
+      }
+    },
+    {
+      "agent_seq": 4,
+      "ts": "2026-11-04T02:14:04.702000Z",
+      "agent": {
+        "id": "release_checker",
+        "display": "Release checker"
+      },
+      "summary": "Release checker reported that GitHub answered 503 (try 1 of 3).",
+      "kind": "agent_message",
+      "data": {
+        "speaker": {
+          "id": "release_checker",
+          "display": "Release checker"
+        },
+        "addressee": {
+          "kind": "room"
+        },
+        "text": "GitHub answered 503 Service Unavailable (try 1 of 3). Waiting 2 s before trying again."
+      }
+    },
+    {
+      "agent_seq": 5,
+      "ts": "2026-11-04T02:14:08.811000Z",
+      "agent": {
+        "id": "release_checker",
+        "display": "Release checker"
+      },
+      "summary": "Release checker reported that GitHub answered 503 (try 2 of 3).",
+      "kind": "agent_message",
+      "data": {
+        "speaker": {
+          "id": "release_checker",
+          "display": "Release checker"
+        },
+        "addressee": {
+          "kind": "room"
+        },
+        "text": "GitHub answered 503 Service Unavailable (try 2 of 3). Waiting 2 s before trying again."
+      }
+    },
+    {
+      "agent_seq": 6,
+      "ts": "2026-11-04T02:14:12.934000Z",
+      "agent": {
+        "id": "release_checker",
+        "display": "Release checker"
+      },
+      "summary": "Release checker reported that GitHub answered 503 (try 3 of 3).",
+      "kind": "agent_message",
+      "data": {
+        "speaker": {
+          "id": "release_checker",
+          "display": "Release checker"
+        },
+        "addressee": {
+          "kind": "room"
+        },
+        "text": "GitHub answered 503 Service Unavailable (try 3 of 3). I am giving up."
+      }
+    },
+    {
+      "agent_seq": 7,
+      "ts": "2026-11-04T02:14:12.961000Z",
+      "agent": {
+        "id": "release_checker",
+        "display": "Release checker"
+      },
+      "summary": "Release checker failed: GitHub was unavailable.",
+      "kind": "agent_failed",
+      "data": {
+        "step": "fetch_releases",
+        "error_type": "UpstreamUnavailable",
+        "message": "GitHub returned 503 Service Unavailable three times",
+        "retryable": true
+      }
+    }
+  ]
+}
