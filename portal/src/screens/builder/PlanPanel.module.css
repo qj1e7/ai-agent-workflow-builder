@@ -130,6 +130,11 @@
   font-weight: 600;
 }
 
+.help {
+  color: var(--muted);
+  font-size: var(--text-14);
+}
+
 .field input {
   width: 100%;
   min-height: 44px;

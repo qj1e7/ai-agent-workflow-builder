@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import templates from '@contracts/fixtures/builder/templates.json'
 import type { TemplateView } from '../../api/types'
-import { createBody, draftProblems, editableParams, exampleParams, fixedParams, hasProblems, planBlocks } from './plan'
+import { createBody, draftProblems, editableParams, exampleParams, fieldWords, fixedParams, hasProblems, planBlocks } from './plan'
 
 const releaseCheck: TemplateView = {
   key: 'release_check',
@@ -39,6 +40,29 @@ describe('which details the Operator fills in', () => {
   it('offers the repository and the Jira project, and keeps the release tag pattern out of the form', () => {
     expect(editableParams(releaseCheck).map((param) => param.name)).toEqual(['repo', 'ticket_project'])
     expect(fixedParams(releaseCheck).map((param) => param.name)).toEqual(['tag_pattern'])
+  })
+})
+
+describe('the words around one field', () => {
+  const served = Object.fromEntries((templates.templates[0]?.params ?? []).map((param) => [param.name, fieldWords(param.description)]))
+
+  it('uses a short description as the label alone', () => {
+    expect(served['repo']).toEqual({ label: 'GitHub repository, owner/name', help: null })
+    expect(served['ticket_project']).toEqual({ label: 'Jira project key', help: null })
+  })
+
+  it('moves everything after the first sentence under the field as help', () => {
+    expect(served['last_seen_tag']).toEqual({
+      label: 'The last release tag already handled, for example 1.2.14',
+      help: 'Leave empty to start from the newest release.',
+    })
+  })
+
+  it('keeps every later sentence in the help and does not split inside a version number', () => {
+    expect(fieldWords('Release 1.2.3 is the start. Leave empty for the newest. Ask the team if unsure.')).toEqual({
+      label: 'Release 1.2.3 is the start',
+      help: 'Leave empty for the newest. Ask the team if unsure.',
+    })
   })
 })
 
