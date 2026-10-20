@@ -1,0 +1,64 @@
+/* The same geometry as the hero, so the swap to the live run moves nothing. */
+.hero {
+  composes: hero from './OverviewPage.module.css';
+}
+
+.heroBody {
+  composes: heroBody from './OverviewPage.module.css';
+}
+
+.stageColumn {
+  composes: stageColumn from './OverviewPage.module.css';
+}
+
+.rail {
+  composes: rail from './OverviewPage.module.css';
+}
+
+.fallback {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-4);
+}
+
+.promise {
+  font-size: var(--text-16);
+  line-height: 1.5;
+}
+
+.example {
+  display: grid;
+  gap: var(--space-2);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line-soft);
+}
+
+.exampleTitle {
+  font-size: var(--text-16);
+}
+
+.exampleName {
+  font-weight: 620;
+}
+
+.exampleTask {
+  margin: 0;
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--line);
+  color: var(--muted);
+  font-size: var(--text-14);
+  line-height: 1.5;
+}
+
+/* Both buttons span the rail, so the longer "Starting the run" changes no width. */
+.actions {
+  display: grid;
+  justify-self: stretch;
+  gap: var(--space-2);
+}
+
+@media (max-width: 1099px) {
+  .rail {
+    order: -1;
+  }
+}

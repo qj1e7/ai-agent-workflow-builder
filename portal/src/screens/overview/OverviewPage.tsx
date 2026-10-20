@@ -18,10 +18,11 @@ import { useBlocks } from '../../room/useBlocks'
 import type { LiveView, WhenFinished } from '../../run'
 import { ButtonLink } from '../../ui/Button'
 import { cx } from '../../ui/cx'
-import { EmptyState, InlineMessage, Skeleton } from '../../ui/Feedback'
+import { InlineMessage, Skeleton } from '../../ui/Feedback'
 import { formatDayAndTime, formatRelative, formatTime } from '../../ui/format'
 import { Spine, type SpineBlock } from '../../ui/Spine'
 import { StatusPill } from '../../ui/StatusPill'
+import { FirstRun } from './FirstRun'
 import { runDots } from './runDots'
 import styles from './OverviewPage.module.css'
 
@@ -50,14 +51,7 @@ export function OverviewPage() {
           <Skeleton lines={4} label="Loading the latest run." />
         </>
       ) : null}
-      {runs.data && !latest ? (
-        <>
-          <h1>Runs</h1>
-          <EmptyState title="No runs yet" action={<ButtonLink to="/builder" variant="primary">Open the builder</ButtonLink>}>
-            Describe a task in the builder and run it. The run shows up here as a room.
-          </EmptyState>
-        </>
-      ) : null}
+      {runs.data && !latest ? <FirstRun /> : null}
       {latest ? <Hero key={latest.run_id} run={latest} /> : null}
       {runs.data && runs.data.length > 1 ? <EarlierRuns runs={runs.data.slice(1)} /> : null}
     </div>
