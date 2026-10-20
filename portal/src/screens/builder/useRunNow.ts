@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router'
 import { errorWords } from '../../api/errors'
+import { newIdempotencyKey } from '../../api/idempotency'
 import { useStartRun } from '../../api/queries'
 
 export interface RunNow {
@@ -16,7 +17,7 @@ export function useRunNow(): RunNow {
   return {
     start: (useCaseId) =>
       mutation.mutate(
-        { useCaseId, idempotencyKey: crypto.randomUUID() },
+        { useCaseId, idempotencyKey: newIdempotencyKey() },
         { onSuccess: (started) => void navigate(`/runs/${started.run_id}`) },
       ),
     isStarting: (useCaseId) => mutation.isPending && mutation.variables.useCaseId === useCaseId,
