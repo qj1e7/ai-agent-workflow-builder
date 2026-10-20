@@ -193,7 +193,19 @@ function TicketHead({ words, compact }: { words: TicketWords; compact: boolean }
       {compact ? null : <span className={styles['ticketTag']}>{words.tag}</span>}
       <span className={cx(styles['ticketState'], styles[`tone_${words.tone}`])}>
         <Mark size={12} />
-        {compact ? words.short : words.line}
+        {compact ? (
+          <>
+            {words.short}
+            {words.reference ? (
+              <>
+                {' '}
+                <span className={styles['ticketKey']}>{words.reference}</span>
+              </>
+            ) : null}
+          </>
+        ) : (
+          words.line
+        )}
       </span>
     </>
   )

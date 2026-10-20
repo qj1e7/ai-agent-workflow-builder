@@ -89,6 +89,8 @@ export interface TicketWords {
   readonly line: string
   /** The compact ticket's one status word beside its icon, so the action line keeps every character. */
   readonly short: string
+  /** The external key once written, kept whole on its own at compact widths. */
+  readonly reference: string | null
   readonly tone: StatusWords['tone']
 }
 
@@ -96,17 +98,17 @@ export function ticketWords(ticket: Ticket, life: TicketLife): TicketWords {
   const reference = ticket.lines.find((line) => line.reference)?.reference
   switch (life) {
     case 'draft':
-      return { tag: 'Draft', line: 'Not written yet', short: 'Not written', tone: 'quiet' }
+      return { tag: 'Draft', line: 'Not written yet', short: 'Not written', reference: null, tone: 'quiet' }
     case 'waiting':
-      return { tag: 'Draft', line: 'Waiting for an Approver', short: 'Waiting', tone: 'wait' }
+      return { tag: 'Draft', line: 'Waiting for an Approver', short: 'Waiting', reference: null, tone: 'wait' }
     case 'approved':
-      return { tag: 'Approved', line: 'Approved, being written', short: 'Approved', tone: 'done' }
+      return { tag: 'Approved', line: 'Approved, being written', short: 'Approved', reference: null, tone: 'done' }
     case 'written':
-      return { tag: 'Written', line: reference ? `Written as ${reference}` : 'Written', short: reference ? `Written as ${reference}` : 'Written', tone: 'done' }
+      return { tag: 'Written', line: reference ? `Written as ${reference}` : 'Written', short: 'Written', reference: reference ?? null, tone: 'done' }
     case 'denied':
-      return { tag: 'Blocked', line: 'Blocked by the safety checker', short: 'Blocked', tone: 'fail' }
+      return { tag: 'Blocked', line: 'Blocked by the safety checker', short: 'Blocked', reference: null, tone: 'fail' }
     case 'declined':
-      return { tag: 'Declined', line: 'Declined, nothing was written', short: 'Declined', tone: 'fail' }
+      return { tag: 'Declined', line: 'Declined, nothing was written', short: 'Declined', reference: null, tone: 'fail' }
   }
 }
 

@@ -616,8 +616,24 @@
 }
 
 .ticketCompact .ticketState {
+  display: inline;
   white-space: normal;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+}
+
+.ticketCompact .ticketState > svg {
+  display: inline-block;
+  vertical-align: -2px;
+  margin-right: 4px;
+}
+
+.ticketKey {
+  white-space: nowrap;
+}
+
+.ticketCompact .stamp {
+  right: -6px;
+  bottom: -16px;
 }
 
 .ticketLine {
