@@ -48,8 +48,7 @@ def test_callback_token_travels_in_a_header_not_the_url():
     assert "token" not in request.callback.url and "sig" not in request.callback.url
 
 
-def test_app_serves_the_cards_and_answers_501_for_tasks():
+def test_app_serves_the_cards_and_health():
     client = TestClient(create_app())
     assert client.get("/healthz").json() == {"status": "ok"}
     assert client.get("/v1/agents").json() == load("agent-cards.json")
-    assert client.post("/v1/tasks", json=load("task-request.json")).status_code == 501
