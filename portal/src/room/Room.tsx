@@ -24,7 +24,7 @@ interface RoomProps {
   opening?: boolean
 }
 
-const LIGHT = { wide: 230, compact: 140 } as const
+const LIGHT = { wide: 260, compact: 140 } as const
 const CUT_IN: Keyframe[] = [{ opacity: 0.35 }, { opacity: 1 }]
 
 function beatOf(view: LiveView) {

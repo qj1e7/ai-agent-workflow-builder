@@ -132,7 +132,11 @@ export function Door({ door, name, words, checker, stateIcon: State, appear, mot
   const right = door.side === 'write'
   return (
     <div ref={ref} className={cx(styles['door'], styles[`door_${door.side}`])} style={{ ...placeAt(door.box), '--i': order } as React.CSSProperties}>
-      <div className={cx(styles['doorLabel'], right && styles['doorLabelRight'])} style={{ height: door.labelBox.h, width: door.labelBox.w }} data-room-label="door">
+      <div
+        className={cx(styles['doorLabel'], right && styles['doorLabelRight'])}
+        style={{ left: door.labelBox.x - door.box.x, top: door.labelBox.y - door.box.y, width: door.labelBox.w, height: door.labelBox.h }}
+        data-room-label="door"
+      >
         <span className={styles['doorName']}>
           {right ? null : <Side size={14} />}
           {name}
@@ -306,7 +310,7 @@ export function SpeechCard({ speech, speakerName, card, tailX, variant }: Speech
   return (
     <div key={speech.seq} className={cx(styles['speech'], variant === 'slot' ? styles['speechSlot'] : styles['speechRoom'])} style={style} data-speech={speech.seq}>
       <div className={styles['speechHead']}>
-        <Avatar kind="agent" agentId={speech.speaker} size={18} />
+        <Avatar kind="agent" agentId={speech.speaker} size={16} />
         <span className={styles['speechWho']}>{speakerName}</span>
         <IconArrow size={12} />
         <span className={styles['speechTo']}>{to}</span>
