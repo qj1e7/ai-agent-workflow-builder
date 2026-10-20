@@ -128,11 +128,6 @@ class TeamsStub:
         ]
 
 
-def webhook_path(workflow: str, leg: Leg) -> str:
-    """The lint holds every workflow file to this path shape, so the engine can derive it."""
-    return f"{workflow.replace('_', '-')}/{leg.value}"
-
-
 class N8nWebhooks:
     """Starts a leg by posting `{run_id}` to the leg's webhook. The 202 carries the execution id."""
 
