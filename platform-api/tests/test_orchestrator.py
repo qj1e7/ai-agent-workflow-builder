@@ -216,6 +216,10 @@ async def test_the_whole_success_path_matches_the_recorded_run(h: Harness):
 
     expected = [e["kind"] for e in fixture("runs/success.json")]
     assert await h.kinds(run_id) == expected
+    decided_summary = next(
+        e.summary for e in await h.log.read_after(run_id, 0) if e.kind == "approval_decided"
+    )
+    assert decided_summary == "Bob approved the request (Team approver)."
     assert await h.orchestrator.latest_carry_forward(SPEC.use_case_id) == "1.2.16"
 
 

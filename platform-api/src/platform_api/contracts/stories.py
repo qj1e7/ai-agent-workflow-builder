@@ -376,7 +376,7 @@ def success_events() -> Timeline:
         ApprovalDecided,
         383.447,
         USER_BOB,
-        "Bob approved step 0 (Team approver).",
+        "Bob approved the request (Team approver).",
         ApprovalDecidedData(approval_id=SUCCESS.approval_id, step=0, verdict="approve", by=BOB),
     )
     tl.add(
@@ -496,7 +496,7 @@ def rejected_events() -> Timeline:
         ApprovalDecided,
         251.903,
         USER_BOB,
-        "Bob declined step 0 (Team approver).",
+        "Bob declined the request (Team approver).",
         ApprovalDecidedData(approval_id=REJECTED.approval_id, step=0, verdict="decline", by=BOB),
     )
     tl.add(
