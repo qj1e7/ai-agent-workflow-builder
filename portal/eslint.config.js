@@ -17,6 +17,22 @@ export default tseslint.config(
     },
   },
   {
+    // Screens and components reach the run monitoring engine only through src/run/index.ts.
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/run/**', 'src/stream/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            { regex: '^(\\.\\.?/)+run/(?!index$).', message: 'Import the engine from src/run (its index), not its internals.' },
+            { regex: '^(\\.\\.?/)+stream/', message: 'The stream is private to the run monitoring engine.' },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['eslint.config.js'],
     ...tseslint.configs.disableTypeChecked,
   },
