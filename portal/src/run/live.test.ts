@@ -21,7 +21,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-function open(id = LIVE_RUN, whenFinished: 'rest' | 'replay' = 'rest') {
+function open(id = LIVE_RUN, whenFinished: 'rest' | 'replay' = 'rest', openingMs = 0) {
   const authed: typeof fetch = (input, init) => {
     const headers = new Headers(init?.headers)
     if (!headers.has('X-Dev-User')) headers.set('X-Dev-User', 'alice')
@@ -31,6 +31,7 @@ function open(id = LIVE_RUN, whenFinished: 'rest' | 'replay' = 'rest') {
     runId: id,
     env: { fetch: authed, clock: createClock(demo.now, id), registry: TEST_REGISTRY },
     whenFinished,
+    openingMs,
   })
   const seen: LiveView[] = []
   const unsubscribe = store.subscribe(() => seen.push(store.getSnapshot()))
@@ -120,6 +121,32 @@ describe('createLiveView against the demo platform', () => {
     expect(replay.view().room.phase.name).toBe('failed')
     expect(replay.view().room.agents.map((seat) => seat.id)).toContain('troubleshooter')
     replay.unsubscribe()
+  })
+
+  it('holds the first beat for the opening: a replay restarts only when the hold ends', async () => {
+    const { view, unsubscribe } = open(runId('run_01JB9'), 'replay', 900)
+    await tick(0)
+    expect(view().frame.shown).toBe(view().frame.head)
+    expect(view().frame.beat).toBeNull()
+    await tick(899)
+    expect(view().frame.beat).toBeNull()
+    await tick(2)
+    expect(view().frame.mode).toBe('replay')
+    expect(view().frame.shown).toBe(1)
+    expect(view().frame.beat).toMatchObject({ type: 'event', seq: 1 })
+    unsubscribe()
+  })
+
+  it('holds the first beat for the opening: a live event that lands during the hold plays after it', async () => {
+    const { view, unsubscribe } = open(LIVE_RUN, 'rest', 3000)
+    await tick(2900)
+    expect(view().frame.head).toBeGreaterThanOrEqual(4)
+    expect(view().room.phase.name).toBe('pending')
+    expect(view().frame.beat).toBeNull()
+    await tick(200)
+    expect(view().frame.beat).toMatchObject({ type: 'event', seq: 4 })
+    expect(view().room.agents.map((seat) => seat.id)).toContain('release_checker')
+    unsubscribe()
   })
 
   it('retries a failed run: the troubleshooter leaves and the agents start again', async () => {
