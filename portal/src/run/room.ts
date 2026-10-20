@@ -653,8 +653,10 @@ export interface FloorPlan {
   readonly doors: readonly PlanDoor[]
 }
 
+/** A write door the template promises: the block's name, and the connector its words name when they name one. */
 export interface ExpectedWrite {
   readonly label: string
+  readonly key: DoorKey | null
 }
 
 export function agentSeatKey(id: AgentId): SeatKey {
@@ -680,8 +682,9 @@ export function seatKeyOf(a: Anchor): SeatKey | null {
 
 /**
  * Seats and doors derive from state, so layout tests need no events. Write doors the template promises
- * (`expectedWrites`, one per write_action block) stand locked from the first second; the first proposal
- * that names a connector takes the first seeded door, so the door never jumps.
+ * (`expectedWrites`, one per write_action block) stand locked from the first second, named after their
+ * connector when the block's words name one; the first proposal that names a connector takes the first
+ * seeded door, so the door never jumps.
  */
 export function floorPlanOf(room: RoomState, expectedWrites: readonly ExpectedWrite[] = []): FloorPlan {
   const agents = [...room.agents]
@@ -699,7 +702,7 @@ export function floorPlanOf(room: RoomState, expectedWrites: readonly ExpectedWr
   }
   const count = Math.max(writes.length, expectedWrites.length)
   for (let i = 0; i < count; i += 1) {
-    doors.push({ side: 'write', key: writes[i]?.key ?? null, label: expectedWrites[i]?.label ?? null })
+    doors.push({ side: 'write', key: writes[i]?.key ?? expectedWrites[i]?.key ?? null, label: expectedWrites[i]?.label ?? null })
   }
   return { agents, people, doors }
 }

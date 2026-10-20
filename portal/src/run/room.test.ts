@@ -379,7 +379,7 @@ describe('spineStations', () => {
 
 describe('floorPlanOf', () => {
   it('lists seats by slot, doors by wall, and seeds write doors from the template until a proposal names them', () => {
-    const early = floorPlanOf(fold(slice('success', 1, 6)).room, [{ label: 'Create Jira ticket' }])
+    const early = floorPlanOf(fold(slice('success', 1, 6)).room, [{ label: 'Create a ticket', key: null }])
     expect(early.agents).toEqual([
       { key: 'agent:room_lead', slot: 0 },
       { key: 'agent:release_checker', slot: 1 },
@@ -388,14 +388,22 @@ describe('floorPlanOf', () => {
     expect(early.doors).toEqual([
       { side: 'teams', key: 'teams', label: null },
       { side: 'read', key: GITHUB, label: null },
-      { side: 'write', key: null, label: 'Create Jira ticket' },
+      { side: 'write', key: null, label: 'Create a ticket' },
     ])
-    const proposed = floorPlanOf(fold(slice('success', 1, 17)).room, [{ label: 'Create Jira ticket' }])
-    expect(proposed.doors).toContainEqual({ side: 'write', key: JIRA, label: 'Create Jira ticket' })
+    const proposed = floorPlanOf(fold(slice('success', 1, 17)).room, [{ label: 'Create a ticket', key: null }])
+    expect(proposed.doors).toContainEqual({ side: 'write', key: JIRA, label: 'Create a ticket' })
     expect(proposed.doors.filter((door) => door.side === 'write')).toHaveLength(1)
     expect(proposed.people).toEqual([
       { key: 'starter', slot: 0 },
       { key: 'step:0', slot: 1 },
     ])
+  })
+
+  it('names a seeded write door after the connector its block names, from the first frame', () => {
+    const seed = [{ label: 'Create Jira ticket', key: JIRA }]
+    const early = floorPlanOf(fold(slice('success', 1, 6)).room, seed)
+    expect(early.doors).toContainEqual({ side: 'write', key: JIRA, label: 'Create Jira ticket' })
+    const proposed = floorPlanOf(fold(slice('success', 1, 17)).room, seed)
+    expect(proposed.doors.filter((door) => door.side === 'write')).toEqual([{ side: 'write', key: JIRA, label: 'Create Jira ticket' }])
   })
 })

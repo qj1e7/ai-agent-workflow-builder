@@ -114,6 +114,8 @@ export function Seat({ seat, avatar, name, words, statusIcon, breathing, lit, di
 interface DoorProps {
   door: DoorBox
   name: string
+  /** What goes through a write door, under its name. Read doors and Teams have none. */
+  action: string | null
   words: StatusWords
   checker: StatusWords | null
   stateIcon: Icon
@@ -125,7 +127,7 @@ interface DoorProps {
 
 const sideIcon: Record<DoorBox['side'], Icon> = { read: IconRepo, write: IconTicket, teams: IconChat }
 
-export function Door({ door, name, words, checker, stateIcon: State, appear, motion, order }: DoorProps) {
+export function Door({ door, name, action, words, checker, stateIcon: State, appear, motion, order }: DoorProps) {
   const ref = useRef<HTMLDivElement>(null)
   useBeatAnimation(ref, appear?.key ?? null, appearPlan(appear), motion)
   const Side = sideIcon[door.side]
@@ -142,9 +144,10 @@ export function Door({ door, name, words, checker, stateIcon: State, appear, mot
           {name}
           {right ? <Side size={14} /> : null}
         </span>
+        {action ? <span className={styles['doorAction']}>{action}</span> : null}
         <span className={cx(styles['doorState'], styles[`tone_${words.tone}`])}>
           <State size={11} />
-          {words.text}
+          <span>{words.text}</span>
         </span>
       </div>
       {checker && door.checker ? (
@@ -243,7 +246,7 @@ export function TicketCard({ box, ticket, life, words, stamps, travel, appear, t
       {last ? (
         <span ref={stampRef} className={cx(styles['stamp'], last.verdict === 'approve' ? styles['stampApproved'] : styles['stampDeclined'])}>
           {last.verdict === 'approve' ? <IconCheck size={12} /> : <IconX size={12} />}
-          {last.verdict === 'approve' ? 'Approved' : 'Declined'}, {last.by.display}
+          {last.verdict === 'approve' ? 'Approved' : 'Declined'} by {last.by.display}
         </span>
       ) : null}
     </div>
