@@ -197,7 +197,7 @@ function PlanForm({ template, task, runNow }: { template: TemplateView; task: st
       ) : null}
       {saved ? <RunError message={runNow.errorFor(saved.useCaseId)} /> : null}
       <details className={styles['details']}>
-        <summary>Technical details</summary>
+        <summary className="disclosure">Technical details</summary>
         <dl>
           <div>
             <dt>Plan</dt>
