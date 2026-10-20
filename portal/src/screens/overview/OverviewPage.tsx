@@ -29,7 +29,7 @@ import styles from './OverviewPage.module.css'
 const SETTLED = new Set<RunView['state']>(['succeeded', 'rejected', 'failed'])
 /** The plan rises in 500 ms, three doors follow 60 ms apart, the room's contents land at 860 ms: the first beat waits this long. */
 const OPENING_MS = 900
-const SO_FAR = 4
+const SO_FAR = 3
 
 /** The opening plays once per page load, on the first overview the person sees, never on a later navigation. */
 let openedOnce = false
