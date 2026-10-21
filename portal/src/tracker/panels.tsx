@@ -3,9 +3,10 @@ import { Link } from 'react-router'
 import { errorWords } from '../api/errors'
 import { useLatch } from '../api/latch'
 import { connectorLabel, objectNoun } from '../api/labels'
-import { useRetry, useTroubleshoot } from '../api/queries'
+import { useDevUsers, useRetry, useTroubleshoot } from '../api/queries'
+import { useDevUser } from '../api/session'
 import type { WriteActionView } from '../api/types'
-import { teamsWords, type Gate, type PanelSpot } from '../run'
+import { RETRY_NEEDS_OPERATOR, teamsWords, type Gate, type PanelSpot } from '../run'
 import type { Decision } from '../screens/approval/useDecision'
 import { describeAction } from '../screens/approval/writeAction'
 import { AgentFace } from '../ui/AgentFace'
@@ -144,11 +145,14 @@ interface TroublePanelProps {
   readonly onLeave: () => void
 }
 
-/** Under the break: the AI troubleshooter's likely cause and suggestion, and Retry run when the platform allows it. */
+/** Under the break: the AI troubleshooter's likely cause and suggestion, and Retry run when the platform allows it and the person is an Operator. */
 export function TroublePanel({ runId, spot, atHead, onRetried, onLeave }: TroublePanelProps) {
   const advice = useTroubleshoot(runId, true, spot.attempt)
   const retry = useRetry(runId)
   const latch = useLatch()
+  const userId = useDevUser()
+  const user = useDevUsers().data?.find((candidate) => candidate.id === userId)
+  const offered = spot.retryable && atHead && user !== undefined
   const troubleshooter = agentIdentity('troubleshooter')
   return (
     <Frame tone="bad" label="AI troubleshooter advice" onLeave={onLeave}>
@@ -166,7 +170,13 @@ export function TroublePanel({ runId, spot, atHead, onRetried, onLeave }: Troubl
       ) : (
         <Skeleton lines={2} label="Loading the advice." />
       )}
-      {spot.retryable && atHead ? (
+      {offered && !user.roles.includes('operator') ? (
+        <p className={styles['note']}>
+          <IconLock strokeWidth={2.2} />
+          <span>{RETRY_NEEDS_OPERATOR}</span>
+        </p>
+      ) : null}
+      {offered && user.roles.includes('operator') ? (
         <div className={styles['acts']}>
           <Action
             variant="primary"

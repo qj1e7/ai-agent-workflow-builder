@@ -122,6 +122,9 @@ const WRITE_WORDS: Readonly<Record<Extract<StopCaption, { is: 'write' }>['status
   none_written: 'Nothing written',
 }
 
+/** Under the AI troubleshooter's advice, for anyone who is not an Operator: POST /runs/{id}/retry needs that role. */
+export const RETRY_NEEDS_OPERATOR = 'An Operator can retry this run.'
+
 /** The flag beside a waiting counter that runs faster than the wall. */
 export const SPED_UP_WORDS = 'Sped up'
 

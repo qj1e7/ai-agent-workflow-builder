@@ -29,7 +29,7 @@ The state names and the four projects are listed in `support/states.ts`. A TypeS
 | Spec | What it proves |
 |---|---|
 | `overview.spec.ts` | The overview at each stage of the live success run as Alice, plus the earlier runs list. Then as Bob, who approves in place before the recorded approval, so the run writes MOCK-143. |
-| `run.spec.ts` | The run page for the success, failed and rejected runs, including Instant, technical details and Retry run. |
+| `run.spec.ts` | The run page for the success, failed and rejected runs, including Instant, technical details and Retry run. Only an Operator is offered Retry run. |
 | `builder.spec.ts` | The builder empty, planned and saved. |
 | `approvals.spec.ts` | The approvals list, then the approval page as Alice, Carol and Bob, and after approving. Approve and Decline pressed in one tick send one decision. |
 | `inboxes.spec.ts` | The Teams inbox and the mock Jira after the live run finished. |

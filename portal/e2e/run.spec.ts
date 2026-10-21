@@ -2,6 +2,7 @@ import { advance, advanceUntil, openFrozen } from './support/clock'
 import { headline, lineEnded, status, tracker, waitingForApprover } from './support/flows'
 import { expectFitsTheFold } from './support/fold'
 import { record } from './support/record'
+import { switchUser } from './support/people'
 import { isDesktop } from './support/states'
 import { expect, test } from './support/test'
 
@@ -56,6 +57,21 @@ test('the failed run page explains the stop and recovers after Retry run', async
   await expect(tracker(page).getByText('Attempt 2', { exact: true }), 'the Tracker names the attempt').toBeVisible()
   await expect(advice, 'the advice goes once the run moves on').toHaveCount(0)
   await record(page, info, 'run-after-retry')
+})
+
+test('only an Operator is offered Retry run, and anyone else is told who can', async ({ page }) => {
+  await openFrozen(page, '/runs/run_01JB9')
+  const advice = page.getByRole('region', { name: 'AI troubleshooter advice' })
+  await advanceUntil(page, advice)
+  const retry = advice.getByRole('button', { name: 'Retry run' })
+  await expect(retry, 'Alice is an Operator').toBeVisible()
+
+  await switchUser(page, 'Bob')
+  await expect(retry, 'Bob is an Approver only, and the platform would refuse him').toHaveCount(0)
+  await expect(advice.getByText('An Operator can retry this run.', { exact: true })).toBeVisible()
+
+  await switchUser(page, 'Carol')
+  await expect(retry, 'Carol is an Operator').toBeVisible()
 })
 
 test('the rejected run page shows that nothing was written', async ({ page }, info) => {

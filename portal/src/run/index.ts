@@ -25,7 +25,18 @@ export type {
 } from './track'
 export { ACT_MS } from './choreography'
 export type { Act, BeatPlan, TimedAct } from './choreography'
-export { captionWords, figureWords, headlineWords, parcelShortWords, parcelWords, splitActionLine, SPED_UP_WORDS, stopWords, teamsWords } from './describe'
+export {
+  captionWords,
+  figureWords,
+  headlineWords,
+  parcelShortWords,
+  parcelWords,
+  RETRY_NEEDS_OPERATOR,
+  splitActionLine,
+  SPED_UP_WORDS,
+  stopWords,
+  teamsWords,
+} from './describe'
 export type { Viewer } from './describe'
 export { createClock } from './clock'
 export type { Clock } from './clock'
