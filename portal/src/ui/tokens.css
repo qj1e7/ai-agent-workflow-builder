@@ -25,7 +25,7 @@
   /* An agent's hue draws its accessory, its ring and its name. Its tint is the head and stays light in both themes. */
   --lead: #3e5bd8;
   --lead-tint: #dfe5ff;
-  --checker: #0c7f78;
+  --checker: #0b7d76;
   --checker-tint: #d3f0ec;
   --trouble: #7a4bd6;
   --trouble-tint: #ece3ff;
@@ -35,7 +35,7 @@
   --agent-2-tint: #ddeffb;
   --agent-3: #5c7a12;
   --agent-3-tint: #ebf2d3;
-  --agent-4: #b8560b;
+  --agent-4: #b2520a;
   --agent-4-tint: #ffe7d3;
   --face-ink: #16233a;
   --face-lens: rgba(255, 255, 255, 0.55);
