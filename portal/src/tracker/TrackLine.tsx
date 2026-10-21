@@ -101,7 +101,7 @@ export function TrackLine({ track, plan = null, panel = null, reduced = false, s
             speech={track.speech?.stop === index ? track.speech : null}
             panel={track.panel?.stop === index ? panel : null}
             holds={!still && HOLDS.has(stop.kind)}
-            captions={!still && stop.kind !== 'done'}
+            captions={!still && stop.kind !== 'done' && stop.kind !== 'draft'}
             users={users}
           />
         ))}
@@ -122,7 +122,7 @@ interface StopItemProps {
   readonly speech: Speech | null
   readonly panel: ReactNode
   readonly holds: boolean
-  /** Every stop but Done can hold a caption. On the phone it keeps the caption row, so words that come and go never move the stops below. */
+  /** Every stop but Done and Draft keeps the caption row on the phone, so words that come and go never move the stops below. Draft's only caption, "Not needed", comes at the very end of a run with nothing to write. */
   readonly captions: boolean
   readonly users: readonly DevUser[] | undefined
 }

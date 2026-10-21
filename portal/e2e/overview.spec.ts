@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test'
 import { advance, advanceUntil, openFrozen } from './support/clock'
 import { headline, lineEnded, waitingForApprover } from './support/flows'
 import { expectEndsAboveTheFold, expectFitsTheFold } from './support/fold'
@@ -39,6 +40,22 @@ test('the overview shows each stage of the live success run', async ({ page }, i
   await page.locator('#earlier-title').evaluate((heading) => heading.scrollIntoView({ block: 'start' }))
   await page.waitForTimeout(600)
   await record(page, info, 'overview-earlier-runs', { viewportOnly: true })
+})
+
+/** The height of a stop's words block beyond its name: the block's top padding, plus the caption row when the stop keeps one. */
+async function roomBeyondName(page: Page, stop: string, name: string): Promise<number> {
+  const label = page.locator(`li[data-stop="${stop}"]`).getByText(name, { exact: true })
+  const [labelBox, blockBox] = await Promise.all([label.boundingBox(), label.locator('xpath=..').boundingBox()])
+  if (!labelBox || !blockBox) throw new Error(`the ${stop} stop is not on screen`)
+  return blockBox.height - labelBox.height
+}
+
+test('on the phone the Draft stop keeps no empty caption row, and the stops that can hold a caption keep theirs', async ({ page }, info) => {
+  test.skip(isDesktop(info.project.name), 'the caption rows are reserved only below 760 px')
+  await openFrozen(page, '/')
+  const CAPTION_ROW_PX = 26
+  expect(await roomBeyondName(page, 'draft', 'Draft ticket'), 'no gap under "Draft ticket" before its caption exists').toBeLessThan(CAPTION_ROW_PX)
+  expect(await roomBeyondName(page, 'agent:read_releases', 'Read GitHub releases'), 'the agent stop keeps the row its words arrive in').toBeGreaterThanOrEqual(CAPTION_ROW_PX)
 })
 
 test('an Approver approves in place on the overview, and their decision replaces the recorded one', async ({ page }, info) => {

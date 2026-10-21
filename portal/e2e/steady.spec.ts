@@ -8,10 +8,10 @@ const HOLD_AFTER_MS = 3_000
 const MAX_SHIFT = 0.01
 /**
  * On the phone the template opens each panel inline under its stop, which pushes the stops below it. Over a run the
- * Approval panel opens for 0.0122 or 0.0365 and closes for 0.0365, and the Written panel moves Done by 0.0012. The bar
- * is the larger sum, 0.0742, rounded up.
+ * Approval panel opens for 0.0166 or 0.0496 and closes for 0.0496, and the Written panel moves Done by 0.0070. The bar
+ * is the larger sum, 0.1062, rounded up.
  */
-const MAX_PHONE_SHIFT = 0.08
+const MAX_PHONE_SHIFT = 0.11
 /**
  * The replay forced about 77 layouts when the line was measured on every render, 50 ms apart through the approval
  * hold, and about 27 once it was measured only when a part could move.
