@@ -220,9 +220,10 @@ describe('trackOf on the release check', () => {
     expect(track.panel).toBeNull()
   })
 
-  it('failure seq 12: the run failing opens the trouble panel at the break', () => {
+  it('failure seq 12: the run failing opens the trouble panel at the break, and the subline keeps what broke', () => {
     const track = trackAt('failure', 12)
     expect(track.panel).toEqual({ is: 'trouble', stop: 1, retryable: true, attempt: 1 })
+    expect(track.subline).toBe('Release checker failed: GitHub was unavailable.')
     expect(stop(track, 'agent:read_releases').caption).toEqual({ is: 'stopped', step: 'fetch_releases', errorType: 'UpstreamUnavailable', reason: 'AgentError' })
   })
 
