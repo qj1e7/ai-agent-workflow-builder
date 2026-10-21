@@ -191,7 +191,7 @@ describe('trackOf on the release check', () => {
 
   it('seq 21: MOCK-142 is written at Jira, and the written panel opens there with the title and the approver', () => {
     const track = trackAt('success', 21)
-    expect(track.parcel?.form).toEqual({ is: 'written', references: ['MOCK-142'] })
+    expect(track.parcel?.form).toEqual({ is: 'written', references: { is: 'chips', items: ['MOCK-142'] } })
     expect(stop(track, 'write:jira').caption).toEqual({ is: 'write', status: 'written', references: ['MOCK-142'] })
     expect(track.panel).toEqual({
       is: 'written',
@@ -363,17 +363,45 @@ describe('Phase 2 shapes, with no code change', () => {
     expect(castLayout(figures(trackAt('success', 4), 'agent:read_releases').length).size).toBe('full')
   })
 
-  it('A finding of 312 items keeps all 312 (finding.ts no longer drops lists over 6) and the parcel and stop show one count chip ("312 found"); 4 items show chips; 5 show the count.', () => {
+  it('A finding of 312 items keeps all 312 (finding.ts no longer drops lists over 6). The parcel carries chips for up to two items and the stop for up to three; past that each shows one count chip ("312 found").', () => {
     const tags = Array.from({ length: 312 }, (_, i) => `1.${Math.floor(i / 10)}.${i % 10}`)
-    const room = fold([finished(9, tags)], fold(slice('success', 1, 8)))
-    expect(room.finding?.items).toHaveLength(312)
-    const track = trackOf(scene(room), RELEASE_CHECK)
-    expect(track.parcel?.form).toEqual({ is: 'found', items: { is: 'count', count: 312 } })
-    expect(stop(track, 'agent:read_releases').caption).toEqual({ is: 'found', items: { is: 'count', count: 312 } })
+    expect(fold([finished(9, tags)], fold(slice('success', 1, 8))).finding?.items).toHaveLength(312)
+    const shown = (count: number) => {
+      const track = trackOf(scene(fold([finished(9, tags.slice(0, count))], fold(slice('success', 1, 8)))), RELEASE_CHECK)
+      return { parcel: track.parcel?.form, stop: stop(track, 'agent:read_releases').caption }
+    }
+    const chips = (count: number) => ({ is: 'found', items: { is: 'chips', items: tags.slice(0, count) } })
+    const counted = (count: number) => ({ is: 'found', items: { is: 'count', count } })
+    expect(shown(2)).toEqual({ parcel: chips(2), stop: chips(2) })
+    expect(shown(3)).toEqual({ parcel: counted(3), stop: chips(3) })
+    expect(shown(4)).toEqual({ parcel: counted(4), stop: counted(4) })
+    expect(shown(312)).toEqual({ parcel: counted(312), stop: counted(312) })
+  })
 
-    const shown = (count: number) => trackOf(scene(fold([finished(9, tags.slice(0, count))], fold(slice('success', 1, 8)))), RELEASE_CHECK).parcel?.form
-    expect(shown(4)).toEqual({ is: 'found', items: { is: 'chips', items: tags.slice(0, 4) } })
-    expect(shown(5)).toEqual({ is: 'found', items: { is: 'count', count: 5 } })
+  it('shows two written references as one count on the parcel, and both keys in the written panel', () => {
+    const written = (seq: number, connector: string, operation: string, reference: string) =>
+      event(seq, 'write_action_done', PLATFORM, { connector, operation, external_reference: reference, approved_by: ['bob'] })
+    const room = fold(
+      [
+        proposal(12, [
+          { connector: 'confluence', operation: 'update_page', line: 'Update Confluence page: Releases' },
+          { connector: 'jira', operation: 'create_ticket', line: 'Create Jira ticket in MOCK: Releases' },
+        ]),
+        event(15, 'approval_requested', PLATFORM, {
+          approval_id: 'apr_x',
+          link: '/approvals/apr_x',
+          steps: [{ index: 0, label: 'Team approver', status: 'open', decided_by: null, decided_at: null }],
+        }),
+        decided(18, 0, 'bob', 'Bob'),
+        written(21, 'confluence', 'update_page', 'PAGE-7'),
+        written(22, 'jira', 'create_ticket', 'MOCK-142'),
+        event(23, 'run_succeeded', PLATFORM, { outcome: 'written' }),
+      ],
+      fold(slice('success', 1, 11)),
+    )
+    const track = trackOf(scene(room), RELEASE_CHECK)
+    expect(track.parcel).toMatchObject({ at: keys(track).indexOf('done'), form: { is: 'written', references: { is: 'count', count: 2 } } })
+    expect(track.panel?.is === 'written' && track.panel.lines.map((line) => line.reference)).toEqual(['PAGE-7', 'MOCK-142'])
   })
 })
 

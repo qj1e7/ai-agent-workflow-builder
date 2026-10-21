@@ -6,6 +6,7 @@ import {
   captionWords,
   castLayout,
   figureWords,
+  parcelShortWords,
   parcelWords,
   SPED_UP_WORDS,
   stopWords,
@@ -360,11 +361,12 @@ function ParcelBody({ form }: { form: ParcelForm }) {
     <span className={cx(styles['pbody'], styles[form.is])}>
       <ParcelIcon form={form.is} />
       <span className={styles['txt']}>{form.is === 'found' ? <Chips items={form.items} /> : parcelWords(form)}</span>
+      <span className={styles['short']}>{parcelShortWords(form)}</span>
     </span>
   )
 }
 
-/** On the phone the parcel is a circle with this icon only. At 1440 a finding shows its chips and no icon. */
+/** On the phone the parcel is a circle with this icon only. At 1440 a finding shows its chips and no icon, unless the parcel is compact. */
 function ParcelIcon({ form }: { form: ParcelForm['is'] }) {
   switch (form) {
     case 'request':

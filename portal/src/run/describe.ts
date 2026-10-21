@@ -139,11 +139,25 @@ export function parcelWords(form: ParcelForm): string {
     case 'draft':
       return form.noun === '' ? 'Draft' : `Draft ${form.noun}${form.count > 1 ? 's' : ''}`
     case 'written':
-      return form.references.join(', ')
+      return form.references.is === 'chips' ? form.references.items.join(', ') : `${form.references.count} written`
     case 'declined':
       return 'Not written'
     case 'stopped':
       return 'Stopped'
+  }
+}
+
+/** The parcel's words when its column is too narrow for its full form. */
+export function parcelShortWords(form: ParcelForm): string {
+  switch (form.is) {
+    case 'found':
+      return `${form.items.is === 'chips' ? form.items.items.length : form.items.count} found`
+    case 'draft':
+      return 'Draft'
+    case 'written':
+      return form.references.is === 'chips' ? 'Written' : `${form.references.count} written`
+    default:
+      return parcelWords(form)
   }
 }
 

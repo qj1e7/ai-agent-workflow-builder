@@ -42,10 +42,12 @@ export interface Stop {
   readonly cast: readonly Figure[]
 }
 
-/** Up to CHIP_LIMIT items of up to CHIP_CHARS show as chips; anything else is one count chip. */
+/** A few short items show as chips; anything else is one count chip. */
 export type Items = { readonly is: 'chips'; readonly items: readonly string[] } | { readonly is: 'count'; readonly count: number }
 
-export const CHIP_LIMIT = 4
+/** The parcel is one column wide, so it carries fewer chips than the caption under a stop, which may wrap. */
+export const PARCEL_CHIPS = 2
+export const CAPTION_CHIPS = 3
 export const CHIP_CHARS = 32
 
 export type WriteStatus = 'not_yet' | 'writing' | 'written' | 'blocked' | 'none_written'
@@ -97,7 +99,8 @@ export type ParcelForm =
   | { readonly is: 'found'; readonly items: Items }
   /** noun is '' when the proposal writes more than one kind of thing. */
   | { readonly is: 'draft'; readonly noun: string; readonly count: number }
-  | { readonly is: 'written'; readonly references: readonly string[] }
+  /** One written key as it is; several as their count. The written panel lists every key. */
+  | { readonly is: 'written'; readonly references: Items }
   | { readonly is: 'declined' }
   | { readonly is: 'stopped' }
 
@@ -190,8 +193,8 @@ export function castLayout(count: number): CastLayout {
   return count > 4 ? { size, shown: 3, more: count - 3 } : { size, shown: count, more: 0 }
 }
 
-export function itemsOf(items: readonly string[]): Items {
-  return items.length <= CHIP_LIMIT && items.every((item) => item.length <= CHIP_CHARS) ? { is: 'chips', items } : { is: 'count', count: items.length }
+export function itemsOf(items: readonly string[], limit: number): Items {
+  return items.length <= limit && items.every((item) => item.length <= CHIP_CHARS) ? { is: 'chips', items } : { is: 'count', count: items.length }
 }
 
 /** The line for a use case with nothing done: the first screen. */
@@ -424,7 +427,7 @@ export function trackOf(scene: Scene, blocks: readonly BlockView[]): Track {
       const here = stopped && place(stopped.at) === index ? stopped.step : null
       return { is: 'stopped', step: here?.step ?? null, errorType: here?.errorType ?? null, reason: phase.name === 'failed' ? phase.reason : null }
     }
-    if (room.finding && place({ at: 'agent', id: room.finding.agent }) === index) return { is: 'found', items: itemsOf(room.finding.items) }
+    if (room.finding && place({ at: 'agent', id: room.finding.agent }) === index) return { is: 'found', items: itemsOf(room.finding.items, CAPTION_CHIPS) }
     let running: { readonly step: string; readonly summary: string; readonly seq: number } | null = null
     for (const seat of room.agents) {
       const step = seat.step
@@ -489,9 +492,9 @@ export function trackOf(scene: Scene, blocks: readonly BlockView[]): Track {
     if (breakAt !== null) return { is: 'stopped' }
     if (decliner !== null) return { is: 'declined' }
     const written = stop.kind === 'write' ? references(linesAt(stop.connector)) : stop.kind === 'done' ? references(ticket?.lines ?? []) : []
-    if (written.length > 0) return { is: 'written', references: written }
+    if (written.length > 0) return { is: 'written', references: itemsOf(written, 1) }
     if (ticket) return { is: 'draft', noun: nounOf(ticket.lines.map((candidate) => candidate.operation)), count: ticket.lines.length }
-    if (room.finding) return { is: 'found', items: itemsOf(room.finding.items) }
+    if (room.finding) return { is: 'found', items: itemsOf(room.finding.items, PARCEL_CHIPS) }
     return { is: 'request' }
   }
 

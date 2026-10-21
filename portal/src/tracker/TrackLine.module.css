@@ -24,6 +24,7 @@
 .stop {
   position: relative;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: 92px 120px auto;
   justify-items: center;
   text-align: center;
@@ -75,10 +76,12 @@
   gap: 6px;
 }
 
+/* A long item never pushes its stop wider than its column: the screen-reader words keep it whole. */
 .chip {
-  display: inline-flex;
-  align-items: center;
+  display: inline-block;
+  max-width: 100%;
   height: 26px;
+  overflow: hidden;
   padding: 0 9px;
   border-radius: 8px;
   background: var(--chip-bg);
@@ -86,6 +89,8 @@
   font-size: var(--text-14);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  line-height: 26px;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -466,8 +471,9 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  width: 160px;
+  min-width: min(160px, var(--room, 160px));
   height: 52px;
+  padding: 0 8px;
   border: 2.5px solid var(--ink);
   border-radius: 16px;
   background: var(--surface);
@@ -491,10 +497,43 @@
 
 .pbody .chip {
   height: 28px;
+  line-height: 28px;
 }
 
-.mini {
+.mini,
+.short {
   display: none;
+}
+
+/* The compact form, when the full parcel would not fit its column: the icon and a few words. */
+@media (min-width: 760px) {
+  .narrow .pbody {
+    gap: 6px;
+    min-width: 0;
+    max-width: var(--room);
+    height: 44px;
+    padding: 0 10px;
+    font-size: var(--text-14);
+  }
+
+  .narrow .pbody > svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .narrow .txt {
+    display: none;
+  }
+
+  .narrow .mini {
+    display: inline;
+  }
+
+  .narrow .short {
+    display: inline;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 
 .draft {
@@ -748,6 +787,7 @@
 
   .pbody {
     width: 46px;
+    min-width: 0;
     height: 46px;
     padding: 0;
     border-radius: 50%;

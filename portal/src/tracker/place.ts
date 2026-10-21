@@ -1,5 +1,5 @@
 import type { Track } from '../run'
-import { breakPoint, clampLeft, fillScale, orientationOf, parcelPoint, railBox, type Orientation, type Point } from './geometry'
+import { breakPoint, clampLeft, fillScale, orientationOf, parcelPoint, parcelRoom, railBox, type Orientation, type Point } from './geometry'
 import styles from './TrackLine.module.css'
 
 /** The route keeps this much room under the line for a panel at 1440, as the template does, and grows only past it. */
@@ -83,7 +83,11 @@ export function place(route: HTMLElement, track: Track): Placed {
   const point = track.parcel ? parcelPoint(nodes, o, track.parcel.at, track.parcel.before) : null
   const scale = fillScale(nodes, o, point)
   if (fill) set(fill, 'transform', scaleOf(o, scale))
-  if (parcel && point) set(parcel, 'transform', translate(point, parcel))
+  if (parcel && point && track.parcel) {
+    const column = stops[track.parcel.at]?.offsetWidth
+    fitParcel(parcel, o === 'horizontal' && column !== undefined ? parcelRoom(column, track.parcel.before) : null)
+    set(parcel, 'transform', translate(point, parcel))
+  }
   const snap = track.breakAt === null ? null : breakPoint(nodes, o, track.breakAt)
   if (brk && snap) {
     set(brk, 'left', px(snap.x))
@@ -91,6 +95,16 @@ export function place(route: HTMLElement, track: Track): Placed {
   }
   placeSlots(route, stops, o, track)
   return { o, point, scale }
+}
+
+/** Full size while the parcel fits its room, else the compact form: its icon and a few words. The phone draws a circle. */
+function fitParcel(parcel: HTMLElement, room: number | null): void {
+  const narrow = styles['narrow'] ?? 'narrow'
+  parcel.classList.remove(narrow)
+  if (room === null) return
+  set(parcel, '--room', px(room))
+  const body = parcel.querySelector<HTMLElement>(`${cls('shaker')} > ${cls('pbody')}`)
+  if (body && body.offsetWidth > room) parcel.classList.add(narrow)
 }
 
 /** At 1440 the bubble aims at its speaker and the panel centres on its stop, both kept inside the route. On the phone CSS places both. */

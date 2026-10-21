@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { breakPoint, clampLeft, fillScale, orientationOf, parcelPoint, railBox, type Point } from './geometry'
+import { breakPoint, clampLeft, fillScale, orientationOf, parcelPoint, parcelRoom, railBox, type Point } from './geometry'
 
 /** The release check's six nodes at 1440 (a 203 px column from x 213) and at 390 (stacked from y 240). */
 const ROW: Point[] = [213, 416, 619, 822, 1025, 1228].map((x) => ({ x, y: 437 }))
@@ -13,9 +13,23 @@ describe('the line geometry', () => {
 
   it('puts the parcel on its node, or in front of the barrier', () => {
     expect(parcelPoint(ROW, 'horizontal', 1, false)).toEqual({ x: 416, y: 437 })
-    expect(parcelPoint(ROW, 'horizontal', 3, true)).toEqual({ x: 720, y: 437 })
     expect(parcelPoint(COLUMN, 'vertical', 3, true)).toEqual({ x: 42, y: 462 })
     expect(parcelPoint(ROW, 'horizontal', 9, false)).toBeNull()
+  })
+
+  it.each([
+    [6, 3],
+    [8, 5],
+  ])('at %i stops, waits halfway between the stop before the gate and the gate, clear of that node and of the barrier arm', (count, gate) => {
+    const column = 1216 / count
+    const nodes = Array.from({ length: count }, (_, i) => ({ x: column * (i + 0.5), y: 437 }))
+    const wait = parcelPoint(nodes, 'horizontal', gate, true)
+    expect(wait?.x).toBeCloseTo((nodes[gate]?.x ?? 0) - column / 2)
+    expect(wait?.y).toBe(437)
+    const half = parcelRoom(column, true) / 2
+    expect((wait?.x ?? 0) - half - (nodes[gate - 1]?.x ?? 0), 'clear of the node before, 13 px across its middle').toBeGreaterThanOrEqual(13)
+    expect((nodes[gate]?.x ?? 0) - ((wait?.x ?? 0) + half), 'clear of the arm, 9 px across the gate middle').toBeGreaterThanOrEqual(9)
+    expect(parcelRoom(column, false), 'on its node, the column minus 16 px').toBeCloseTo(column - 16)
   })
 
   it('runs the rail from the first node to the last', () => {

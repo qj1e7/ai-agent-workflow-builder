@@ -12,8 +12,8 @@ export interface Box {
 
 export type Orientation = 'horizontal' | 'vertical'
 
-/** How far in front of the gate's node the parcel waits, so it stands before the barrier. */
-export const GATE_GAP: Readonly<Record<Orientation, number>> = { horizontal: 102, vertical: 46 }
+/** How far above the gate's node the parcel waits on the phone, so it stands before the barrier. */
+const GATE_GAP_VERTICAL = 46
 
 /** Where the break sits past the failed node, at most, along the line. */
 export const BREAK_GAP: Readonly<Record<Orientation, number>> = { horizontal: 112, vertical: 44 }
@@ -30,11 +30,24 @@ function along(o: Orientation, p: Point): number {
   return o === 'horizontal' ? p.x : p.y
 }
 
+/** A parcel on its node stays this much narrower than its column. */
+const PARCEL_INSET = 16
+/** In front of the barrier the parcel stands between two nodes: it clears the node before (13 px) and the arm (9 px) by 4 px. */
+const WAIT_INSET = 34
+
+/** The widest the parcel may be at 1440 before it takes its compact form. */
+export function parcelRoom(column: number, before: boolean): number {
+  return column - (before ? WAIT_INSET : PARCEL_INSET)
+}
+
+/** On its node, or in front of the barrier: at 1440 halfway from the stop before, so the wait point scales with the column. */
 export function parcelPoint(nodes: readonly Point[], o: Orientation, at: number, before: boolean): Point | null {
   const node = nodes[at]
   if (!node) return null
   if (!before) return node
-  return o === 'horizontal' ? { x: node.x - GATE_GAP.horizontal, y: node.y } : { x: node.x, y: node.y - GATE_GAP.vertical }
+  if (o === 'vertical') return { x: node.x, y: node.y - GATE_GAP_VERTICAL }
+  const previous = nodes[at - 1] ?? node
+  return { x: (previous.x + node.x) / 2, y: node.y }
 }
 
 /** From the first node to the last, centred on the line. */

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { RunEvent } from '../stream/parse'
 import { agentId, connectorKey, runTime, userId } from './brand'
-import { captionWords, figureWords, headlineWords, parcelWords, splitActionLine, stopWords, teamsWords } from './describe'
+import { captionWords, figureWords, headlineWords, parcelShortWords, parcelWords, splitActionLine, stopWords, teamsWords } from './describe'
 import { recording, slice, synthetic, type RecordingName } from './recordings'
 import { applyEvent, EMPTY_ROOM, type RoomState } from './room'
 import { RELEASE_CHECK, TEST_REGISTRY } from './testing'
@@ -141,6 +141,15 @@ describe('parcelWords', () => {
     expect(form(21)).toBe('MOCK-142')
     expect(form(19, 'rejected')).toBe('Not written')
     expect(form(10, 'failure')).toBe('Stopped')
+    expect(parcelWords({ is: 'written', references: { is: 'count', count: 2 } }), 'several keys read as a count').toBe('2 written')
+  })
+
+  it('says a few words when the column is too narrow for the full parcel', () => {
+    expect(parcelShortWords({ is: 'found', items: { is: 'chips', items: ['1.2.16', '1.2.15'] } })).toBe('2 found')
+    expect(parcelShortWords({ is: 'draft', noun: 'ticket', count: 1 })).toBe('Draft')
+    expect(parcelShortWords({ is: 'written', references: { is: 'chips', items: ['MOCK-142'] } })).toBe('Written')
+    expect(parcelShortWords({ is: 'written', references: { is: 'count', count: 2 } })).toBe('2 written')
+    expect(parcelShortWords({ is: 'declined' })).toBe('Not written')
   })
 
   it('shows one count chip for a long finding: "312 found"', () => {
