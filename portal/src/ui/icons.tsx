@@ -156,6 +156,21 @@ export const IconMoon = drawn('IconMoon', <path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a
 export const IconDot = drawn('IconDot', <circle cx="12" cy="12" r="4" />)
 export const IconRing = drawn('IconRing', <circle cx="12" cy="12" r="7.5" />)
 export const IconDash = drawn('IconDash', <path d="M7 12h10" />)
+export const IconBox = drawn(
+  'IconBox',
+  <>
+    <path d="M3.5 7.5L12 3.5l8.5 4v9L12 20.5l-8.5-4z" />
+    <path d="M3.5 7.5L12 11.5l8.5-4M12 11.5v9" />
+  </>,
+)
+export const IconDoc = drawn(
+  'IconDoc',
+  <>
+    <path d="M6 3.5h8l4 4v13H6z" />
+    <path d="M14 3.5v4h4M9 12h6M9 16h4" />
+  </>,
+)
+export const IconSpinner = drawn('IconSpinner', <path d="M12 4a8 8 0 1 1-8 8" />)
 
 export const GlyphPlatform = drawn(
   'GlyphPlatform',

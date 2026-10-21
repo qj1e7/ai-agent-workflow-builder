@@ -1,0 +1,339 @@
+import { useEffect, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from 'react'
+import { useDevUsers } from '../api/queries'
+import { displayName } from '../api/people'
+import type { DevUser } from '../api/types'
+import {
+  captionWords,
+  castLayout,
+  figureWords,
+  parcelWords,
+  SPED_UP_WORDS,
+  stopWords,
+  type Figure,
+  type Gate,
+  type Items,
+  type Parcel,
+  type ParcelForm,
+  type Speech,
+  type Stop,
+  type StopKind,
+  type Track,
+} from '../run'
+import { AgentFace } from '../ui/AgentFace'
+import { agentIdentity } from '../ui/agents'
+import { Avatar } from '../ui/Avatar'
+import { cx } from '../ui/cx'
+import { IconBox, IconCheck, IconDash, IconDoc, IconLock, IconPause, IconPerson, IconX } from '../ui/icons'
+import { personTone } from '../ui/personTone'
+import { place } from './place'
+import styles from './TrackLine.module.css'
+
+export interface TrackLineProps {
+  readonly track: Track
+  /** Drawn under track.panel's stop. */
+  readonly panel?: ReactNode
+  readonly label?: string
+}
+
+/**
+ * Draws the shown frame's final state from the Track alone. After each commit, place() hangs the parcel, the fill,
+ * the break and the slots off the measured nodes.
+ */
+export function TrackLine({ track, panel = null, label = 'Where the work is' }: TrackLineProps) {
+  const route = useRef<HTMLElement>(null)
+  const latest = useRef(track)
+  const users = useDevUsers().data
+
+  useLayoutEffect(() => {
+    latest.current = track
+    if (route.current) place(route.current, track)
+  })
+
+  useEffect(() => {
+    const element = route.current
+    if (!element) return
+    const replace = () => place(element, latest.current)
+    const observer = new ResizeObserver(replace)
+    observer.observe(element)
+    void document.fonts.ready.then(replace)
+    return () => observer.disconnect()
+  }, [])
+
+  return (
+    <section ref={route} className={cx(styles['route'], track.cut && styles['cut'])} aria-label={label}>
+      <div className={styles['rail']} aria-hidden="true" />
+      <div className={styles['fill']} aria-hidden="true" />
+      {track.breakAt === null ? null : <BreakMark />}
+      <ol className={styles['stops']}>
+        {track.stops.map((stop, index) => (
+          <StopItem
+            key={stop.key}
+            stop={stop}
+            parcel={track.parcel?.at === index ? track.parcel.form : null}
+            gate={track.gate?.stop === index ? track.gate : null}
+            speech={track.speech?.stop === index ? track.speech : null}
+            panel={track.panel?.stop === index ? panel : null}
+            holds={HOLDS.has(stop.kind)}
+            users={users}
+          />
+        ))}
+      </ol>
+      {track.parcel ? <ParcelMark parcel={track.parcel} /> : null}
+    </section>
+  )
+}
+
+/** Stops someone can stand over. On the phone they keep a cast row from the start, so an arrival never pushes the line down. */
+const HOLDS: ReadonlySet<StopKind> = new Set(['start', 'agent', 'draft', 'gate'])
+
+interface StopItemProps {
+  readonly stop: Stop
+  readonly parcel: ParcelForm | null
+  readonly gate: Gate | null
+  readonly speech: Speech | null
+  readonly panel: ReactNode
+  readonly holds: boolean
+  readonly users: readonly DevUser[] | undefined
+}
+
+function StopItem({ stop, parcel, gate, speech, panel, holds, users }: StopItemProps) {
+  return (
+    <li
+      className={cx(styles['stop'], (stop.state === 'future' || stop.state === 'not_needed') && styles['future'], holds && styles['holds'])}
+      data-stop={stop.key}
+      data-state={stop.state}
+      data-gate={gate?.state}
+      aria-current={stop.state === 'current' ? 'step' : undefined}
+    >
+      <div className={styles['text']}>
+        <span className={styles['label']}>{stop.name}</span>
+        <span className={styles['cap']} aria-hidden="true">
+          <Caption stop={stop} />
+        </span>
+        <span className="visually-hidden">{stopWords(stop, parcel)}</span>
+      </div>
+      <Cast figures={stop.cast} users={users} />
+      <div className={styles['nodeRow']} aria-hidden="true">
+        {gate ? <GateMark gate={gate} /> : null}
+        <span data-node className={cx(styles['node'], stop.state === 'not_needed' && styles['dashed'])}>
+          <NodeFill stop={stop} gate={gate} />
+        </span>
+      </div>
+      {speech ? (
+        <div className={styles['slotAbove']}>
+          <Bubble speech={speech} />
+        </div>
+      ) : null}
+      {panel ? <div className={styles['slotBelow']}>{panel}</div> : null}
+    </li>
+  )
+}
+
+function NodeFill({ stop, gate }: { stop: Stop; gate: Gate | null }) {
+  switch (stop.state) {
+    case 'passed':
+      return <Fill tone="passed" />
+    case 'current':
+      return gate ? null : <Fill tone="passed" />
+    case 'failed':
+      return <Fill tone="failed" />
+    case 'done':
+      return <Fill tone="done" />
+    default:
+      return null
+  }
+}
+
+function Fill({ tone }: { tone: 'passed' | 'failed' | 'done' }) {
+  return <span className={cx(styles['nodeFill'], styles[tone])}>{tone === 'failed' ? <IconX strokeWidth={2.6} /> : <IconCheck strokeWidth={2.6} />}</span>
+}
+
+function Caption({ stop }: { stop: Stop }) {
+  const caption = stop.caption
+  switch (caption.is) {
+    case 'found':
+      return <Chips items={caption.items} />
+    case 'waiting':
+      return (
+        <>
+          <span className={cx(styles['state'], styles['wait'])}>
+            <IconPause strokeWidth={2.2} />
+            <span className={styles['clock']}>{captionWords(caption)}</span>
+          </span>
+          {caption.spedUp ? <span className={styles['tag']}>{SPED_UP_WORDS}</span> : null}
+        </>
+      )
+    case 'approved':
+      return <StateWords tone="ok" words={captionWords(caption)} />
+    case 'declined':
+    case 'stopped':
+      return <StateWords tone="bad" words={captionWords(caption)} />
+    case 'write':
+      if (caption.status === 'written') return <StateWords tone="ok" words={captionWords(caption)} />
+      if (caption.status === 'blocked') return <StateWords tone="bad" words={captionWords(caption)} />
+      return captionWords(caption)
+    default:
+      return captionWords(caption) || null
+  }
+}
+
+function StateWords({ tone, words }: { tone: 'ok' | 'bad'; words: string }) {
+  return (
+    <span className={cx(styles['state'], styles[tone])}>
+      {tone === 'ok' ? <IconCheck strokeWidth={2.2} /> : <IconX strokeWidth={2.2} />}
+      {words}
+    </span>
+  )
+}
+
+function Chips({ items }: { items: Items }) {
+  if (items.is === 'count') return <span className={styles['chip']}>{parcelWords({ is: 'found', items })}</span>
+  return (
+    <>
+      {items.items.map((item) => (
+        <span key={item} className={styles['chip']}>
+          {item}
+        </span>
+      ))}
+    </>
+  )
+}
+
+function Cast({ figures, users }: { figures: readonly Figure[]; users: readonly DevUser[] | undefined }) {
+  const layout = castLayout(figures.length)
+  return (
+    <div className={cx(styles['cast'], layout.size === 'compact' && styles['compact'])}>
+      {figures.slice(0, layout.shown).map((figure) => (
+        <FigureMark key={figure.key} figure={figure} users={users} />
+      ))}
+      {layout.more > 0 ? (
+        <div className={styles['who']}>
+          <span className={cx(styles['av'], styles['more'])}>+{layout.more}</span>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function statusOf(figure: Figure): string {
+  switch (figure.is) {
+    case 'agent':
+      return figure.status
+    case 'person':
+      return figure.verdict === null ? 'started' : figure.verdict === 'approve' ? 'approved' : 'declined'
+    case 'seat':
+      return figure.open ? 'open' : 'locked'
+  }
+}
+
+function FigureMark({ figure, users }: { figure: Figure; users: readonly DevUser[] | undefined }) {
+  const named = figure.is === 'person' && users ? { ...figure, name: displayName(users, figure.id) } : figure
+  const name = named.is === 'seat' ? named.label : named.name
+  const acting = named.is !== 'seat' && named.acting
+  const ring = named.is === 'agent' ? agentIdentity(named.id).hue : 'var(--ink)'
+  return (
+    <div
+      className={cx(styles['who'], acting && styles['acting'])}
+      data-figure={named.key}
+      data-status={statusOf(named)}
+      style={{ '--ring': ring } as CSSProperties}
+    >
+      <span className={styles['av']}>
+        <Face figure={named} name={name} />
+      </span>
+      <span className={styles['nm']} aria-hidden="true">
+        {name}
+      </span>
+      <span className="visually-hidden">{figureWords(named)}</span>
+    </div>
+  )
+}
+
+function Face({ figure, name }: { figure: Figure; name: string }) {
+  switch (figure.is) {
+    case 'agent':
+      return <AgentFace id={figure.id} size={54} />
+    case 'person': {
+      const tone = personTone(name)
+      return (
+        <span className={styles['person']} style={{ background: tone.bg, color: tone.ink }}>
+          {name.trim().charAt(0).toUpperCase()}
+        </span>
+      )
+    }
+    case 'seat':
+      return <span className={cx(styles['seat'], !figure.open && styles['locked'])}>{figure.open ? <IconPerson strokeWidth={2.2} /> : <IconLock strokeWidth={2.2} />}</span>
+  }
+}
+
+/** The boom barrier: the safety checker's shield on the line and a striped arm. */
+function GateMark({ gate }: { gate: Gate }) {
+  return (
+    <>
+      <span className={styles['housing']}>
+        <span className={cx(styles['ring'], styles[`ring_${gate.state}`])} />
+        <Avatar kind="safety_checker" size={28} />
+      </span>
+      <span className={cx(styles['arm'], gate.state === 'open' && styles['open'])}>
+        <span className={cx(styles['stripes'], styles[`stripes_${gate.state}`])} />
+      </span>
+    </>
+  )
+}
+
+function BreakMark() {
+  return (
+    <div className={styles['break']} aria-hidden="true">
+      <svg viewBox="0 0 30 46" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" focusable="false">
+        <path d="M4 23h3l3-8 3 16 3-8" />
+        <path d="M26 23h-3" />
+        <path d="M8 6l4 4M8 40l4-4M22 6l-3 4M22 40l-3-4" />
+      </svg>
+    </div>
+  )
+}
+
+function Bubble({ speech }: { speech: Speech }) {
+  return (
+    <div className={styles['bubble']} style={{ '--who': agentIdentity(speech.speaker).hue } as CSSProperties}>
+      <span className={styles['by']}>{speech.name}</span>
+      <p>{speech.text}</p>
+    </div>
+  )
+}
+
+/** The one moving thing. */
+function ParcelMark({ parcel }: { parcel: Parcel }) {
+  return (
+    <div className={styles['parcel']} data-parcel={parcel.form.is} aria-hidden="true">
+      <ParcelBody form={parcel.form} />
+    </div>
+  )
+}
+
+function ParcelBody({ form }: { form: ParcelForm }) {
+  return (
+    <span className={cx(styles['pbody'], styles[form.is])}>
+      <ParcelIcon form={form.is} />
+      <span className={styles['txt']}>{form.is === 'found' ? <Chips items={form.items} /> : parcelWords(form)}</span>
+    </span>
+  )
+}
+
+/** On the phone the parcel is a circle with this icon only. At 1440 a finding shows its chips and no icon. */
+function ParcelIcon({ form }: { form: ParcelForm['is'] }) {
+  switch (form) {
+    case 'request':
+      return <IconBox strokeWidth={2.2} />
+    case 'found':
+      return <IconBox strokeWidth={2.2} className={styles['mini']} />
+    case 'draft':
+      return <IconDoc strokeWidth={2.2} />
+    case 'written':
+      return <IconCheck strokeWidth={2.2} />
+    case 'declined':
+      return <IconDash strokeWidth={2.2} />
+    case 'stopped':
+      return <IconX strokeWidth={2.2} />
+  }
+}
