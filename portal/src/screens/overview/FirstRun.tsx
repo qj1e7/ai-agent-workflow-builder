@@ -54,7 +54,7 @@ function SetRoom({ template }: { template: TemplateView }) {
       <div className={styles['heroBody']}>
         <div className={styles['stageColumn']}>
           <div ref={roomRef}>
-            <Room view={stage.view} width={width} expectedWrites={stage.expectedWrites} label={`The room, set for ${template.name}`} ghosts={stage.ghosts} />
+            <Room view={stage.view} width={width} expectedWrites={stage.expectedWrites} label={`The room, set for ${template.name}`} outlines={stage.outlines} />
           </div>
           <CaptionLine leading={<IconShield size={18} />}>{stage.words}</CaptionLine>
         </div>

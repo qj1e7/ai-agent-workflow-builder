@@ -438,7 +438,7 @@
   font-weight: 620;
 }
 
-.ghostAvatar {
+.outlineAvatar {
   display: inline-grid;
   place-items: center;
   border: 2px dashed var(--muted);
@@ -446,19 +446,19 @@
   opacity: 0.5;
 }
 
-.ghostAgent {
+.outlineAgent {
   border-radius: 30%;
 }
 
-.ghostPerson {
+.outlinePerson {
   border-radius: 50%;
 }
 
-.seat_ghost .name {
+.seat_outline .name {
   color: var(--muted);
 }
 
-.stage_wide .seat_ghost .name {
+.stage_wide .seat_outline .name {
   font-size: var(--text-14);
 }
 

@@ -106,10 +106,10 @@ interface SeatProps {
   motion: boolean
   kind: 'agent' | 'person' | 'empty' | 'overflow'
   hue?: string
-  ghost?: boolean
+  outline?: boolean
 }
 
-export function Seat({ seat, avatar, name, words, statusIcon, breathing, lit, dimmed, entrance, motion, kind, hue, ghost = false }: SeatProps) {
+export function Seat({ seat, avatar, name, words, statusIcon, breathing, lit, dimmed, entrance, motion, kind, hue, outline = false }: SeatProps) {
   const ref = useRef<HTMLDivElement>(null)
   const wrapRef = useRef<HTMLSpanElement>(null)
   const labelsRef = useRef<HTMLSpanElement>(null)
@@ -123,7 +123,7 @@ export function Seat({ seat, avatar, name, words, statusIcon, breathing, lit, di
   return (
     <div
       ref={ref}
-      className={cx(styles['seat'], styles[`seat_${kind}`], ghost && styles['seat_ghost'], breathing && styles['breathing'], lit && styles['lit'], dimmed && styles['dimmed'])}
+      className={cx(styles['seat'], styles[`seat_${kind}`], outline && styles['seat_outline'], breathing && styles['breathing'], lit && styles['lit'], dimmed && styles['dimmed'])}
       style={{ ...placeAt(seat.box), '--hue': hue } as React.CSSProperties}
     >
       {walk?.ghost && motion ? (
@@ -138,16 +138,16 @@ export function Seat({ seat, avatar, name, words, statusIcon, breathing, lit, di
       </span>
       <span ref={labelsRef} className={styles['labels']} style={{ maxWidth: seat.label.w }} data-room-label="seat">
         <span className={styles['name']}>{name}</span>
-        {ghost ? null : <StatusLine words={words} {...(statusIcon ? { icon: statusIcon } : {})} />}
+        {outline ? null : <StatusLine words={words} {...(statusIcon ? { icon: statusIcon } : {})} />}
       </span>
     </div>
   )
 }
 
-export function GhostAvatar(props: { kind: 'agent'; agentId: string; size: number } | { kind: 'person'; size: number }) {
+export function OutlineAvatar(props: { kind: 'agent'; agentId: string; size: number } | { kind: 'person'; size: number }) {
   const Glyph = props.kind === 'agent' ? agentIdentity(props.agentId).glyph : null
   return (
-    <span className={cx(styles['ghostAvatar'], props.kind === 'agent' ? styles['ghostAgent'] : styles['ghostPerson'])} style={{ width: props.size, height: props.size }} aria-hidden="true">
+    <span className={cx(styles['outlineAvatar'], props.kind === 'agent' ? styles['outlineAgent'] : styles['outlinePerson'])} style={{ width: props.size, height: props.size }} aria-hidden="true">
       {Glyph ? <Glyph size={Math.round(props.size * 0.6)} /> : null}
     </span>
   )
