@@ -41,7 +41,8 @@ export function Minutes({ entries, technical, onTechnical }: MinutesProps) {
         </button>
       </div>
       {shown.length === 0 ? <p className="muted">Nothing has happened yet.</p> : null}
-      <div role="log" aria-label="Minutes of the run">
+      {/* The Tracker's status region announces each summary, so the Minutes stay quiet and are there to read. */}
+      <div role="log" aria-label="Minutes of the run" aria-live="off">
         <ol className={styles['log']}>
           {rows.map(({ entry, divider, latest }) => {
             return (

@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test'
 import { advanceUntil } from './clock'
 
 /** The Tracker's status region: the headline and the subline, read out together. */
-const status = (page: Page) => page.locator('[role="status"][aria-atomic="true"]')
+export const status = (page: Page) => page.locator('[role="status"][aria-atomic="true"]')
 
 export const headline = (page: Page) => status(page).getByRole('heading', { level: 2 })
 

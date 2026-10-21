@@ -1,5 +1,5 @@
 import { advance, advanceUntil, openFrozen } from './support/clock'
-import { headline, lineEnded, tracker, waitingForApprover } from './support/flows'
+import { headline, lineEnded, status, tracker, waitingForApprover } from './support/flows'
 import { expectFitsTheFold } from './support/fold'
 import { record } from './support/record'
 import { isDesktop } from './support/states'
@@ -31,10 +31,13 @@ test('Instant shows the newest state of a run at once', async ({ page }, info) =
   await advance(page, 2_000)
   await advanceUntil(page, page.locator('section[data-at-head="false"]'))
   await expect(tracker(page), 'the view plays a beat behind the newest event').toHaveAttribute('data-speed', '1')
+  await expect(status(page), 'a screen reader hears nothing old while the view plays behind').toHaveAttribute('aria-live', 'off')
+  await expect(page.getByRole('log'), 'the Minutes are for reading, so they never repeat the status region').toHaveAttribute('aria-live', 'off')
 
   await page.getByRole('radio', { name: 'Instant' }).check()
   await expect(tracker(page), 'Instant lands on the newest event without moving the clock').toHaveAttribute('data-at-head', 'true')
   await expect(tracker(page)).toHaveAttribute('data-speed', 'instant')
+  await expect(status(page), 'at the newest event the status region speaks').toHaveAttribute('aria-live', 'polite')
   await record(page, info, 'run-instant')
 })
 

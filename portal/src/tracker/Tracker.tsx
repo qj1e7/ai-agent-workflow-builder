@@ -93,7 +93,8 @@ export function Tracker({ runId, view, template, title, titleTo }: TrackerProps)
         </div>
         <SpeedControl value={view.speed} onChange={setSpeed} />
       </header>
-      <div className={styles['status']} role="status" aria-atomic="true">
+      {/* Speaks only at the newest frame, so a replay or a catch-up never reads out old summaries. */}
+      <div className={styles['status']} role="status" aria-live={view.atHead ? 'polite' : 'off'} aria-atomic="true">
         <div className={styles['head']}>
           <span className={cx(styles['icon'], styles[tone])} aria-hidden="true">
             <ToneMark tone={tone} />
