@@ -169,7 +169,7 @@ jobs:
   e2e:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -192,4 +192,29 @@ jobs:
         with:
           name: portal-live-evidence
           path: portal/e2e/out/live/
+          if-no-files-found: ignore
+
+      # DAST and the load test share this job and its Docker layer cache. A failed e2e run does not hide them.
+      - name: DAST with OWASP ZAP against the whole stack
+        if: ${{ !cancelled() }}
+        run: scripts/dast.sh
+
+      - name: Keep the ZAP reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: zap-reports
+          path: dast/out/
+          if-no-files-found: ignore
+
+      - name: Load test with k6 against the whole stack
+        if: ${{ !cancelled() }}
+        run: scripts/load.sh
+
+      - name: Keep the k6 summary
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: k6-summary
+          path: load/out/
           if-no-files-found: ignore
