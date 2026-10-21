@@ -15,4 +15,10 @@ test('the builder plans a task and saves it as a use case', async ({ page }, inf
   await advanceUntil(page, page.getByText(/^Saved .+, version 1/))
   await expect(page.getByRole('button', { name: 'Run now' }).first()).toBeVisible()
   await record(page, info, 'builder-saved')
+
+  await expect(page.getByLabel(/regular expression/i), 'the release tag pattern is not a field to fill in').toHaveCount(0)
+  await page.getByText('Technical details').click()
+  const fixed = page.locator('dt', { hasText: /regular expression/i })
+  await expect(fixed, 'the pattern is listed under technical details').toBeVisible()
+  await expect(fixed.locator('xpath=following-sibling::dd[1]//code'), 'with its value, read only').toHaveText('^\\d+\\.\\d+\\.\\d+$')
 })
