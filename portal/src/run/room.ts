@@ -155,7 +155,6 @@ export interface RoomState {
   readonly starter: UserRef | null
   /** Join order. A retry of the work leg clears them, so attempt 2 plays its arrivals again. */
   readonly agents: readonly AgentSeat[]
-  /** Where the work is. */
   readonly work: Locus
   readonly approval: Approval | null
   /** Set by a step that finished with a list; cleared by a retry of the work leg. */

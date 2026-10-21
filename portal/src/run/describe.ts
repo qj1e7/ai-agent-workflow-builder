@@ -128,7 +128,6 @@ export function teamsWords(gate: Gate): string | null {
   return gate.teamsFailed ? 'Teams post failed' : null
 }
 
-/** The words on the parcel. */
 export function parcelWords(form: ParcelForm): string {
   switch (form.is) {
     case 'request':

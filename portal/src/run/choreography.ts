@@ -36,7 +36,6 @@ export interface BeatPlan {
 export interface BeatTiming {
   readonly key: string
   readonly entry: 'continuous' | 'cut'
-  /** How long the director plays this beat. */
   readonly durationMs: Ms
   /** The beat's 1x length: the plan is laid out at it, then scaled to durationMs. */
   readonly baseMs: Ms
@@ -91,8 +90,8 @@ function acting(track: Track): { readonly figure: string; readonly stop: StopKey
   return null
 }
 
-function stopKeyAt(track: Track, index: number | null | undefined): StopKey | null {
-  return index === null || index === undefined ? null : (track.stops[index]?.key ?? null)
+function stopKeyAt(track: Track, index: number | null): StopKey | null {
+  return index === null ? null : (track.stops[index]?.key ?? null)
 }
 
 function diff(before: Track, after: Track): Act[] {

@@ -166,7 +166,6 @@ export interface Track {
   readonly parcel: Parcel | null
   /** Null for a use case with no approval. */
   readonly gate: Gate | null
-  /** The stop where the line broke. */
   readonly breakAt: number | null
   /** The rail past the parcel is dashed: the run broke or was declined, so the rest will not happen. */
   readonly cut: boolean
@@ -191,7 +190,6 @@ export function castLayout(count: number): CastLayout {
   return count > 4 ? { size, shown: 3, more: count - 3 } : { size, shown: count, more: 0 }
 }
 
-/** Chips when there are up to CHIP_LIMIT items and every one fits CHIP_CHARS, else one count. */
 export function itemsOf(items: readonly string[]): Items {
   return items.length <= CHIP_LIMIT && items.every((item) => item.length <= CHIP_CHARS) ? { is: 'chips', items } : { is: 'count', count: items.length }
 }

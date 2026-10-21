@@ -34,7 +34,6 @@ export interface Controls {
   setSpeed(this: void, speed: Speed): void
   /** Call after a successful POST /runs/{id}/retry: the feed reconnects now, and the events it brings back play as live. */
   reconnect(this: void): void
-  /** Replays the run from the start. */
   restart(this: void): void
 }
 
