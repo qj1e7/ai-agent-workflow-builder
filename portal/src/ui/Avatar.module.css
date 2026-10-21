@@ -5,22 +5,14 @@
   line-height: 1;
 }
 
-.agent {
-  border-radius: 30%;
-  color: var(--on-status);
-}
-
 .person {
   border-radius: 50%;
-  border: 2px solid var(--ink);
-  background: var(--surface);
-  color: var(--ink);
-  font-weight: 620;
+  font-weight: 800;
 }
 
 .seat {
+  border: 2px dashed var(--amber);
   border-radius: 50%;
-  border: 2px dashed var(--wait-line);
-  background: var(--wait-tint);
-  color: var(--wait);
+  background: var(--amber-soft);
+  color: var(--amber-ink);
 }
