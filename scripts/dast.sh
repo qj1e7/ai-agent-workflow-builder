@@ -46,10 +46,12 @@ stack_seed openapi-public >"$stack_out/openapi-public.json"
 run_zap() {
   local label="$1" rules="$2"
   shift 2
+  # ZAP unpacks its add-ons into its home and temp folders. In memory, they leave nothing behind and need no free disk.
   docker run --rm --name "$zap_name" --network "$network" \
-    --volume "$root/$stack_out:/zap/wrk/out:rw" \
-    "$ZAP_IMAGE" "$@" -c "out/$rules" -z "$zap_options" \
-    -r "out/$label.html" -J "out/$label.json" -w "out/$label.md" >"$stack_out/$label.log" 2>&1
+    --tmpfs /home/zap/.ZAP:rw,exec,uid=1000,gid=1000,size=1g --tmpfs /tmp:rw,exec,size=512m \
+    --volume "$root/$stack_out:/zap/wrk:rw" \
+    "$ZAP_IMAGE" "$@" -c "$rules" -z "$zap_options" \
+    -r "$label.html" -J "$label.json" -w "$label.md" >"$stack_out/$label.log" 2>&1
 }
 
 summary_line() {
@@ -64,9 +66,9 @@ cp dast/zap-rules.conf "$stack_out/rules.conf"
 cat dast/zap-rules.conf dast/zap-rules-via-portal.conf >"$stack_out/rules-via-portal.conf"
 
 set +e
-run_zap api rules.conf zap-api-scan.py -t out/openapi.json -f openapi -O http://platform-api:8000 -T 10
+run_zap api rules.conf zap-api-scan.py -t openapi.json -f openapi -O http://platform-api:8000 -T 10
 api_status=$?
-run_zap api-via-portal rules-via-portal.conf zap-api-scan.py -t out/openapi-public.json -f openapi -O http://portal:8080 -T 10
+run_zap api-via-portal rules-via-portal.conf zap-api-scan.py -t openapi-public.json -f openapi -O http://portal:8080 -T 10
 nginx_status=$?
 run_zap portal rules.conf zap-baseline.py -t http://portal:8080 -m 2 -T 10
 portal_status=$?
