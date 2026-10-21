@@ -21,7 +21,7 @@ export function formatDuration(milliseconds: number, { coarse = false, noWrap = 
     parts.push(`${seconds} s`)
   }
   const words = parts.join(' ')
-  return noWrap ? words.replaceAll(' ', ' ') : words
+  return noWrap ? words.replaceAll(' ', '\u00a0') : words
 }
 
 export function formatClock(ms: number): string {

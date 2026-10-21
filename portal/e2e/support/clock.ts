@@ -53,16 +53,17 @@ const PUMP_EVERY_MS = 10
 // The clock belongs to the whole browser context, so the work must not open or close another page in it.
 export async function pumpWhile<T>(page: Page, work: Promise<T>): Promise<T> {
   let settled = false
-  const guarded = work.finally(() => {
-    settled = true
-  })
-  const done = guarded.then(
-    () => undefined,
-    () => undefined,
+  const done = work.then(
+    () => {
+      settled = true
+    },
+    () => {
+      settled = true
+    },
   )
   while (!settled) {
     await page.clock.runFor(1)
     await Promise.race([done, delay(PUMP_EVERY_MS)])
   }
-  return guarded
+  return work
 }

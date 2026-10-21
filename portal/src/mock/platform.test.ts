@@ -7,7 +7,7 @@ import { createDemoPlatform, type DemoPlatformHandle } from './index'
 const START = Date.parse('2026-11-27T02:00:00Z')
 const ORIGIN = 'http://portal.test/api/v1'
 const SECOND = 1000
-// The success run's pace, from the schedule in timeline.test.ts: the pause lands at 17.3 s and Bob's recorded decision at 32.2 s.
+// The success run's pace, from the schedule in timeline.test.ts: the pause lands at 17.7 s and Bob's recorded decision at 32.6 s.
 const PAUSE_MS = 17_745
 const DECIDED_MS = 32_566
 
