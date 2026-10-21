@@ -8,9 +8,7 @@ import { expect, test } from './support/test'
 import { OUT, shot } from './support/ui'
 
 const PHONE = { width: 390, height: 844 }
-/** The set room names the host, the doors, and the cast the example will fill: the specialist, the Operator and an Approver. */
 const IN_THE_ROOM = ['Room lead', 'Release checker', 'Alice', 'Approver', 'GitHub', 'Jira', 'Teams']
-/** The transport says Live once the room has told the whole story up to the live edge, so the shot shows one consistent moment. */
 const caughtUp = (page: Page) => page.getByRole('status').filter({ hasText: 'Live' })
 
 /** Runs axe on the page as it is, saves the whole result under e2e/out/live/axe, and fails on a serious or critical violation. */

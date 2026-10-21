@@ -9,7 +9,6 @@ const VIEWPORT = { width: 1440, height: 900 }
 const PHONE = { width: 390, height: 844 }
 
 const approvalLink = (page: Page) => page.locator('a[href*="/approvals/apr_"]').first()
-/** The transport says Live once the room has told the whole story up to the live edge. */
 const caughtUp = (page: Page) => page.getByRole('status').filter({ hasText: 'Live' })
 /** The backend finishes its work in seconds; the room tells the story at reading pace, so the page shows a state well after the backend reaches it. */
 const ROOM_CATCH_UP_MS = 30_000
