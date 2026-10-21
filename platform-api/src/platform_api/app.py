@@ -46,7 +46,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
 def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
     settings = settings_from_env(os.environ if env is None else env)
-    app = FastAPI(title="AI workflow builder platform API", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(
+        title="AI workflow builder platform API",
+        version="0.1.0",
+        lifespan=lifespan,
+        # A slash redirect puts the request's Host in an absolute Location.
+        # Behind the Portal's nginx that is the internal name platform-api:8000.
+        redirect_slashes=False,
+    )
     app.state.settings = settings
     app.state.step_key = settings.step_key
     app.state.authenticator = auth.authenticator_for(settings.auth)

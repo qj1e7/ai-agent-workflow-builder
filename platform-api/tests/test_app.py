@@ -61,6 +61,12 @@ def test_every_response_forbids_content_sniffing(
     assert response.headers["x-content-type-options"] == "nosniff"
 
 
+def test_a_trailing_slash_is_not_found_and_never_redirects(client: TestClient):
+    response = client.get("/api/v1/runs/", headers={"X-Dev-User": "alice"}, follow_redirects=False)
+    assert response.status_code == 404
+    assert "location" not in response.headers
+
+
 def test_healthz(client: TestClient):
     assert client.get("/healthz").json() == {"status": "ok"}
 
