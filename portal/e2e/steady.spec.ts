@@ -6,6 +6,11 @@ const RUN_LIMIT_MS = 75_000
 const HOLD_AFTER_MS = 3_000
 /** Google's "good" cumulative layout shift is 0.1. The line should not move on its own at all, so the bar is ten times lower. */
 const MAX_SHIFT = 0.01
+/**
+ * The replay forced about 77 layouts when the line was measured on every render, 50 ms apart through the approval
+ * hold, and about 27 once it was measured only when a part could move.
+ */
+const MAX_FORCED_LAYOUTS_IN_REPLAY = 50
 const TRACE_CATEGORIES = ['devtools.timeline', 'disabled-by-default-devtools.timeline', 'disabled-by-default-devtools.timeline.stack']
 
 interface Shift {
@@ -133,6 +138,7 @@ test('the line holds still through a full 1x run and its replay, and keeps time'
   const report = { project: info.project.name, live, replay }
   console.log(`STEADY ${JSON.stringify(report)}`)
   info.annotations.push({ type: 'steady', description: JSON.stringify(report) })
+  expect(replay.forcedLayouts, 'a replay hold renders every 50 ms, but measures the line only when a part could move').toBeLessThanOrEqual(MAX_FORCED_LAYOUTS_IN_REPLAY)
   if (phone) {
     expect(replay.layoutShift, `the line's own layout shift over the replay: ${replay.shifts.join('; ')}`).toBeLessThanOrEqual(MAX_SHIFT)
   } else {

@@ -1,4 +1,4 @@
-import type { Track } from '../run'
+import type { StopCaption, Track } from '../run'
 import { breakPoint, clampLeft, fillScale, orientationOf, parcelPoint, parcelRoom, railBox, type Orientation, type Point } from './geometry'
 import styles from './TrackLine.module.css'
 
@@ -146,16 +146,53 @@ function placeSlots(route: HTMLElement, stops: readonly HTMLElement[], o: Orient
   else if (need > Math.max(PANEL_ROOM, parseFloat(route.style.paddingBottom) || 0)) set(route, 'padding-bottom', px(need))
 }
 
-/** Calls replace when the route resizes or the web font arrives, until the returned stop is called. */
-export function followLayout(route: HTMLElement, replace: () => void, fontsReady: Promise<unknown> = document.fonts.ready): () => void {
+/** Changes when the caption says something new, not when the waiting counter ticks, so the motion can fade the new words in. */
+export function captionKey(caption: StopCaption): string {
+  switch (caption.is) {
+    case 'waiting':
+      return caption.is
+    case 'write':
+      return `${caption.is}:${caption.status}`
+    default:
+      return JSON.stringify(caption)
+  }
+}
+
+/** Changes when something place() measures or moves could have changed: never for a waiting counter's tick. */
+export function layoutKey(track: Track): string {
+  return JSON.stringify([
+    track.stops.map((stop) => [stop.key, stop.state, captionKey(stop.caption), stop.cast.map((figure) => figure.key)]),
+    track.parcel,
+    track.breakAt,
+    track.gate?.state ?? null,
+    track.speech && [track.speech.seq, track.speech.stop],
+    track.panel && [track.panel.is, track.panel.stop],
+  ])
+}
+
+export interface Follow {
+  /** Watches the panels the last commit drew too: a panel at 1440 hangs below the line, so the route never resizes for it. */
+  rescan(this: void): void
+  stop(this: void): void
+}
+
+/** Calls replace when the route or a panel resizes, or the web font arrives, until stop is called. */
+export function followLayout(route: HTMLElement, replace: () => void, fontsReady: Promise<unknown> = document.fonts.ready): Follow {
   let alive = true
   const observer = new ResizeObserver(replace)
+  const rescan = () => {
+    for (const slot of route.querySelectorAll(cls('slotBelow'))) observer.observe(slot)
+  }
   observer.observe(route)
+  rescan()
   void fontsReady.then(() => {
     if (alive) replace()
   })
-  return () => {
-    alive = false
-    observer.disconnect()
+  return {
+    rescan,
+    stop() {
+      alive = false
+      observer.disconnect()
+    },
   }
 }

@@ -19,7 +19,6 @@ import {
   type ParcelForm,
   type Speech,
   type Stop,
-  type StopCaption,
   type StopKind,
   type Track,
 } from '../run'
@@ -30,7 +29,7 @@ import { cx } from '../ui/cx'
 import { IconBox, IconCheck, IconDash, IconDoc, IconLock, IconPause, IconPerson, IconSpinner, IconX } from '../ui/icons'
 import { personTone } from '../ui/personTone'
 import { createMotion, type Motion } from './motion'
-import { followLayout, place } from './place'
+import { captionKey, followLayout, layoutKey, place, type Follow } from './place'
 import styles from './TrackLine.module.css'
 
 export interface TrackLineProps {
@@ -53,27 +52,35 @@ export interface TrackLineProps {
 export function TrackLine({ track, plan = null, panel = null, reduced = false, still = false, label = 'Where the work is' }: TrackLineProps) {
   const route = useRef<HTMLElement>(null)
   const motion = useRef<Motion | null>(null)
+  const follow = useRef<Follow | null>(null)
+  const placedFor = useRef<string | null>(null)
   const scene = { track, plan, reduced }
   const latest = useRef(scene)
   const users = useDevUsers().data
 
+  // A replay hold renders every 50 ms to move one counter, so the line is measured again only when a part could move.
   useLayoutEffect(() => {
     latest.current = scene
     const element = route.current
-    if (!element) return
+    const key = `${layoutKey(track)}|${plan?.key ?? ''}|${users ? 'named' : ''}`
+    if (!element || key === placedFor.current) return
+    placedFor.current = key
     motion.current ??= createMotion()
     motion.current.update(element, scene, place(element, track))
+    follow.current?.rescan()
   })
 
   useEffect(() => {
     const element = route.current
     if (!element) return
-    const stop = followLayout(element, () => {
+    follow.current = followLayout(element, () => {
       const now = latest.current
       motion.current?.update(element, now, place(element, now.track))
     })
     return () => {
-      stop()
+      follow.current?.stop()
+      follow.current = null
+      placedFor.current = null
       motion.current?.reset()
     }
   }, [])
@@ -179,18 +186,6 @@ function NodeFill({ stop, gate }: { stop: Stop; gate: Gate | null }) {
 
 function Fill({ tone }: { tone: 'passed' | 'failed' | 'done' }) {
   return <span className={cx(styles['nodeFill'], styles[tone])}>{tone === 'failed' ? <IconX strokeWidth={2.6} /> : <IconCheck strokeWidth={2.6} />}</span>
-}
-
-/** Changes when the caption says something new, not when the waiting counter ticks, so the motion can fade the new words in. */
-function captionKey(caption: StopCaption): string {
-  switch (caption.is) {
-    case 'waiting':
-      return caption.is
-    case 'write':
-      return `${caption.is}:${caption.status}`
-    default:
-      return JSON.stringify(caption)
-  }
 }
 
 function Caption({ stop }: { stop: Stop }) {
