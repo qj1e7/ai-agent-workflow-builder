@@ -670,6 +670,12 @@ The build followed this design except where the table below says otherwise. Each
 | The Teams stub card shows its run and where its approval stands, read from existing routes | Several runs produced identical cards | #12 |
 | nginx does not forward the browser's `Host` header to platform-api | Host-header injection risk, found by Semgrep. platform-api builds links from `PUBLIC_BASE_URL` | #12 |
 | `PUBLIC_BASE_URL` follows `PORTAL_HOST_PORT`, and `scripts/e2e.sh` runs as its own compose project, `wab-e2e` | A test teardown must never delete a dev stack's volumes | #13 |
+| The AI troubleshooter is a rule table, one piece of advice per typed failure reason, reading only the activity log. No model runs in it yet | The AI model provider is an open decision, so nothing may require an LLM. A model can sit behind the same route once a provider is chosen | #6, #8 |
+| No LLM and no LangSmith tracing run in the stack. `AGENT_SUMMARY_MODEL` and the `LANGSMITH_*` variables are optional and unset, so agent summaries come from templates | Same open decision. Tracing switches on by setting the variables | #7 |
+| Orchestration's role has SELECT as well as INSERT on `monitoring.run_events` | Appending an event reads the run's last `seq` under an advisory lock, inside orchestration's own transaction, to keep `seq` gapless | #8 |
+| The dev sign-in adapter is named `DevAuth`, not `DevAuthenticator` | Naming only | #6 |
+| There is no `RELEASE_SOURCE` variable. The real agent reads `GITHUB_API_BASE`, the e2e stack points it at mock GitHub, and CI's checks swap the whole agent runtime for `deploy/fake-agent` | A fake at the HTTP edge tests the real agent code; a whole fake agent keeps the per-PR checks fast | #8, #9 |
+| platform-api starts with the image's default `uvicorn` command, and bootstrap runs `python -m platform_api.bootstrap` | No separate `serve` or `bootstrap` entry points were needed | #8 |
 
 ## Open questions and risks
 
