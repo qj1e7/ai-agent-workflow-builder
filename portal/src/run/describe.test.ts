@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { RunEvent } from '../stream/parse'
-import { agentId, connectorKey, runTime, seq, userId } from './brand'
+import { agentId, connectorKey, runTime, userId } from './brand'
 import { captionWords, figureWords, headlineWords, parcelWords, splitActionLine, stopWords, teamsWords } from './describe'
 import { recording, slice, synthetic, type RecordingName } from './recordings'
 import { applyEvent, EMPTY_ROOM, type RoomState } from './room'
@@ -31,7 +31,7 @@ describe('headlineWords on the recordings', () => {
   it('reads the release check from start to written', () => {
     const headline = (at: number, viewer = ALICE) => headlineWords(trackAt('success', at).headline, viewer)
     expect(headline(1)).toBe('Starting')
-    expect(headline(4), 'no step reported yet').toBe('Working')
+    expect(headline(4), 'before any step, the Release checker has just joined').toBe('Looking for new releases')
     expect(headline(6)).toBe('Looking for new releases')
     expect(headline(8)).toBe('Looking for new releases')
     expect(headline(9)).toBe('Found 2 new releases')
@@ -77,8 +77,9 @@ describe('headlineWords on every kind', () => {
     expect(headlineWords({ is: 'nothing_to_write' }, ALICE)).toBe('Nothing to write')
   })
 
-  it('falls back to Working for a step the label table does not know', () => {
-    expect(headlineWords({ is: 'working', step: { seq: seq(6), step: 'read_entra', summary: 'Entra reader is reading.', state: 'running', errorType: null } }, ALICE)).toBe('Working')
+  it('reads Working for an agent the table does not know, and before anyone joins', () => {
+    expect(headlineWords({ is: 'working', agent: agentId('entra_reader') }, ALICE)).toBe('Working')
+    expect(headlineWords({ is: 'working', agent: null }, ALICE)).toBe('Working')
   })
 })
 

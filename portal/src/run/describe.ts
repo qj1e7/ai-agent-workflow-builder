@@ -10,23 +10,25 @@ interface StepLabel {
   readonly source?: string
   /** The caption under the agent stop while the step runs. */
   readonly running: (summary: string) => string
-  /** The headline while the agents work on it. */
-  readonly doing: string
   /** The headline once the step found something. */
   readonly found?: (count: number) => string
 }
 
 const STEP_LABELS: Readonly<Record<string, StepLabel>> = {
-  fetch_releases: { source: 'github', running: () => 'Reading GitHub', doing: 'Looking for new releases' },
+  fetch_releases: { source: 'github', running: () => 'Reading GitHub' },
   find_new: {
     // The summary names the last known tag: "...comparing them with the last known tag 1.2.14."
     running: (summary) => {
       const version = /\d+\.\d+\.\d+/.exec(summary)?.[0]
       return version ? `Comparing with ${version}` : summary
     },
-    doing: 'Looking for new releases',
     found: (count) => `Found ${count} new release${count === 1 ? '' : 's'}`,
   },
+}
+
+/** The headline while a specialist works, keyed by agent id. An agent with no row reads "Working". */
+const DOING: Readonly<Record<string, string>> = {
+  release_checker: 'Looking for new releases',
 }
 
 function labelOf(step: string | null): StepLabel | undefined {
@@ -58,7 +60,7 @@ export function headlineWords(headline: Headline, viewer: Viewer): string {
     case 'starting':
       return 'Starting'
     case 'working':
-      return labelOf(headline.step?.step ?? null)?.doing ?? 'Working'
+      return (headline.agent === null ? undefined : DOING[headline.agent]) ?? 'Working'
     case 'found':
       return labelOf(headline.step)?.found?.(headline.count) ?? `Found ${headline.count}`
     case 'drafting':

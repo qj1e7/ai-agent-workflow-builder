@@ -110,7 +110,9 @@ describe('trackOf on the release check', () => {
   })
 
   it('seq 4: the Room lead brings the Release checker in and acts; the parcel reaches the agent stop', () => {
-    const cast = figures(trackAt('success', 4), 'agent:read_releases')
+    const joined = trackAt('success', 4)
+    expect(joined.headline, 'before any step, the latest specialist to join is working').toEqual({ is: 'working', agent: 'release_checker' })
+    const cast = figures(joined, 'agent:read_releases')
     expect(cast).toEqual([
       { key: 'agent:room_lead', is: 'agent', id: 'room_lead', name: 'Room lead', acting: true, status: 'present' },
       { key: 'agent:release_checker', is: 'agent', id: 'release_checker', name: 'Release checker', acting: false, status: 'present' },
@@ -134,7 +136,7 @@ describe('trackOf on the release check', () => {
       step: 'fetch_releases',
       summary: 'Release checker is fetching releases from langchain-ai/langgraph.',
     })
-    expect(fetching.headline).toMatchObject({ is: 'working', step: { step: 'fetch_releases', state: 'running' } })
+    expect(fetching.headline).toEqual({ is: 'working', agent: 'release_checker' })
     expect(fetching.subline).toBe('Release checker is fetching releases from langchain-ai/langgraph.')
     expect(stop(trackAt('success', 7), 'agent:read_releases').caption, 'a finished step with no list shows nothing').toEqual({ is: 'none' })
     expect(stop(trackAt('success', 8), 'agent:read_releases').caption).toEqual({

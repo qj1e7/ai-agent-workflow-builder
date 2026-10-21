@@ -2,7 +2,7 @@ import { connectorLabel, connectorNamedIn, objectNoun } from '../api/labels'
 import type { BlockView, FailureReason, Verdict } from '../api/types'
 import { connectorKey, type AgentId, type ConnectorKey, type Ms, type RunTime, type Seq, type UserId } from './brand'
 import { splitActionLine } from './describe'
-import { EMPTY_ROOM, openStep, type AgentSeat, type AgentStatus, type AgentStep, type ApprovalStep, type Locus, type RoomState, type TicketLine, type UserRef } from './room'
+import { EMPTY_ROOM, openStep, type AgentSeat, type AgentStatus, type ApprovalStep, type Locus, type RoomState, type TicketLine, type UserRef } from './room'
 
 /** One frame as the Tracker sees it: the folded state plus the two clock facts the gate shows. */
 export interface Scene {
@@ -148,8 +148,8 @@ export type PanelSpot =
 export type Headline =
   | { readonly is: 'not_started' }
   | { readonly is: 'starting' }
-  /** step: the latest step any agent reported, or null before the first. */
-  | { readonly is: 'working'; readonly step: AgentStep | null }
+  /** agent: who reported the latest step, or before any step the latest specialist to join. Null before anyone joins. */
+  | { readonly is: 'working'; readonly agent: AgentId | null }
   | { readonly is: 'found'; readonly step: string; readonly count: number }
   | { readonly is: 'drafting'; readonly noun: string; readonly count: number }
   | { readonly is: 'waiting' }
@@ -505,10 +505,11 @@ export function trackOf(scene: Scene, blocks: readonly BlockView[]): Track {
     )
     switch (phase.name) {
       case 'working': {
-        let latest: AgentStep | null = null
-        for (const seat of room.agents) if (seat.step && (!latest || seat.step.seq > latest.seq)) latest = seat.step
-        if (latest?.state !== 'running' && room.finding) return { is: 'found', step: room.finding.step, count: room.finding.items.length }
-        return { is: 'working', step: latest }
+        let latest: AgentSeat | undefined
+        for (const seat of room.agents) if (seat.step && seat.step.seq > (latest?.step?.seq ?? 0)) latest = seat
+        if (latest?.step?.state !== 'running' && room.finding) return { is: 'found', step: room.finding.step, count: room.finding.items.length }
+        const working = latest ?? room.agents.findLast((seat) => seat.role === 'specialist')
+        return { is: 'working', agent: working?.id ?? null }
       }
       case 'proposed':
         return { is: 'drafting', noun: nounOf((ticket?.lines ?? []).map((candidate) => candidate.operation)), count: ticket?.lines.length ?? 0 }
