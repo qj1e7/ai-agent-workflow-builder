@@ -1,8 +1,8 @@
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 
-from platform_api.auth import CurrentPrincipal
+from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
 from platform_api.builder.models import (
     BlockView,
     CreateUseCase,
@@ -20,6 +20,7 @@ from platform_api.builder.service import Builder
 from platform_api.builder.templates import TEMPLATES, ParamErrors, UnknownTemplate
 from platform_api.builder.views import template_view
 from platform_api.shared import Principal, Role, UseCaseId
+from platform_api.wire import error_response
 
 __all__ = [
     "BlockView",
@@ -57,15 +58,15 @@ Operator = Annotated[Principal, Depends(require_operator)]
 
 router = APIRouter(prefix="/api/v1", tags=["builder"])
 
-NOT_FOUND: dict[int | str, dict[str, Any]] = {404: {"description": "No such use case"}}
+NOT_FOUND = error_response("No such use case")
 
 
-@router.get("/templates")
+@router.get("/templates", responses=SIGNED_IN)
 def list_templates(principal: CurrentPrincipal) -> TemplateList:
     return TemplateList(templates=[template_view(t) for t in TEMPLATES.values()])
 
 
-@router.post("/use-cases", status_code=201)
+@router.post("/use-cases", status_code=201, responses=OPERATORS_ONLY)
 async def create_use_case(
     body: CreateUseCase, principal: Operator, builder: CurrentBuilder
 ) -> UseCaseCreated:
@@ -84,19 +85,19 @@ async def create_use_case(
             )
 
 
-@router.get("/use-cases")
+@router.get("/use-cases", responses=SIGNED_IN)
 async def list_use_cases(principal: CurrentPrincipal, builder: CurrentBuilder) -> UseCaseList:
     return await builder.list_use_cases()
 
 
-@router.post("/use-cases/suggest")
+@router.post("/use-cases/suggest", responses=SIGNED_IN)
 def suggest_template(
     body: SuggestIn, principal: CurrentPrincipal, builder: CurrentBuilder
 ) -> SuggestOut:
     return builder.suggest(body.text)
 
 
-@router.get("/use-cases/{use_case_id}", responses=NOT_FOUND)
+@router.get("/use-cases/{use_case_id}", responses={**SIGNED_IN, 404: NOT_FOUND})
 async def get_use_case(
     use_case_id: str, principal: CurrentPrincipal, builder: CurrentBuilder
 ) -> UseCaseView:
@@ -106,7 +107,15 @@ async def get_use_case(
     return view
 
 
-@router.post("/use-cases/{use_case_id}/runs", status_code=201, responses=NOT_FOUND)
+@router.post(
+    "/use-cases/{use_case_id}/runs",
+    status_code=201,
+    responses={
+        **OPERATORS_ONLY,
+        200: {"model": RunStarted, "description": "This Idempotency-Key started the run before"},
+        404: NOT_FOUND,
+    },
+)
 async def start_run(
     use_case_id: str,
     principal: Operator,
