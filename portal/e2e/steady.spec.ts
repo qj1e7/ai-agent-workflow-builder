@@ -120,7 +120,7 @@ async function untilWritten(page: Page): Promise<void> {
 
 test('the line holds still through a full 1x run and its replay, and keeps time', async ({ page, browser }, info) => {
   test.setTimeout(2 * RUN_LIMIT_MS + 30_000)
-  const phone = info.project.name.startsWith('phone')
+  const phone = (page.viewportSize()?.width ?? 0) < 760
   await page.addInitScript(installProbe)
   await page.goto('/')
 
