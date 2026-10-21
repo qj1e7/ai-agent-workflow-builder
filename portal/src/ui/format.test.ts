@@ -11,6 +11,12 @@ describe('formatDuration', () => {
     expect(formatClock(386_000)).toBe('6:26')
   })
 
+  it('counts a clock past an hour in hours, so a retried run reads 3:00:07 and not 180:07', () => {
+    expect(formatClock(3_599_000)).toBe('59:59')
+    expect(formatClock(3_600_000)).toBe('1:00:00')
+    expect(formatClock(10_807_000)).toBe('3:00:07')
+  })
+
   it('drops the seconds when asked for a coarse wait, and joins with non-breaking spaces when asked not to wrap', () => {
     expect(formatDuration(373_000, { coarse: true })).toBe('6 min')
     expect(formatDuration(42_000, { coarse: true })).toBe('42 s')
