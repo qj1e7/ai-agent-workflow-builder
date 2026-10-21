@@ -1,10 +1,9 @@
 @font-face {
-  font-family: 'Instrument Sans';
+  font-family: 'Atkinson Hyperlegible Next';
   font-style: normal;
   font-display: swap;
-  font-weight: 400 700;
-  font-stretch: 75% 100%;
-  src: url('@fontsource-variable/instrument-sans/files/instrument-sans-latin-standard-normal.woff2') format('woff2');
+  font-weight: 200 800;
+  src: url('@fontsource-variable/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-wght-normal.woff2') format('woff2');
 }
 
 *,
@@ -147,7 +146,6 @@ main[tabindex='-1']:focus {
 }
 
 .plan-voice {
-  font-stretch: 82%;
   font-weight: 560;
 }
 
