@@ -478,7 +478,8 @@ export function trackOf(scene: Scene, blocks: readonly BlockView[]): Track {
     }
     for (const seat of room.agents) {
       if (place(seat.at) !== index) continue
-      figures.push({ key: `agent:${seat.id}`, is: 'agent', id: seat.id, name: seat.display, acting: seat.id === actingId, status: seat.status })
+      // The break, the red node and "Stopped" carry a failure, so the agent that failed keeps no ring.
+      figures.push({ key: `agent:${seat.id}`, is: 'agent', id: seat.id, name: seat.display, acting: seat.id === actingId && seat.status !== 'stopped', status: seat.status })
     }
     if (stop.kind === 'gate') for (const step of steps) figures.push(stepFigure(step, actingId))
     return figures

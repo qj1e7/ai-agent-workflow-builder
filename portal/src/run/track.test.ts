@@ -222,6 +222,13 @@ describe('trackOf on the release check', () => {
     expect(track.panel).toBeNull()
   })
 
+  it.each([10, 12])('failure seq %i: the Release checker stopped, so nobody on the line is acting', (seq) => {
+    const track = trackAt('failure', seq)
+    expect(figures(track, 'agent:read_releases').find((figure) => figure.key === 'agent:release_checker')).toMatchObject({ is: 'agent', status: 'stopped', acting: false })
+    const acting = track.stops.flatMap((candidate) => candidate.cast).filter((figure) => figure.is !== 'seat' && figure.acting)
+    expect(acting.map((figure) => figure.key)).toEqual([])
+  })
+
   it('failure seq 12: the run failing opens the trouble panel at the break, and the subline keeps what broke', () => {
     const track = trackAt('failure', 12)
     expect(track.panel).toEqual({ is: 'trouble', stop: 1, retryable: true, attempt: 1 })
