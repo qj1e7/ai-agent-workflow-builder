@@ -14,7 +14,7 @@ export const RELEASE_CHECK: readonly BlockView[] = [
   { key: 'create_ticket', name: 'Create Jira ticket', description: 'One ticket in the chosen project listing the new releases.', kind: 'write_action' },
 ]
 
-/** The registry the tests fold with: the same host as src/room/registry.ts. */
+/** The registry the tests fold with: the same host as src/tracker/registry.ts. */
 export const TEST_REGISTRY: AgentRegistry = { host: { id: agentId('room_lead'), display: 'Room lead' } }
 
 export function fixedClock(runNow: number): Clock {

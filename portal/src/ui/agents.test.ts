@@ -47,6 +47,11 @@ describe('personTone', () => {
     expect(personTone('Alice')).toEqual(personTone('Alice'))
   })
 
+  it("draws the seeded users in the template's colours: Alice peach (person-1), Bob blue (person-2)", () => {
+    expect(personTone('Alice')).toEqual({ bg: 'var(--person-1-bg)', ink: 'var(--person-1-ink)' })
+    expect(personTone('Bob')).toEqual({ bg: 'var(--person-2-bg)', ink: 'var(--person-2-ink)' })
+  })
+
   it('uses all four tones across many names', () => {
     const seen = new Set(Array.from({ length: 200 }, (_, index) => personTone(`person ${index}`).bg))
     expect(seen.size).toBe(4)
