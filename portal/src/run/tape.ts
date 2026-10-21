@@ -31,8 +31,6 @@ export interface TapeReader {
   /** 0..length. frame(0) is EMPTY_ROOM. O(1): every frame is stored as it is folded. */
   frame(cursor: number): RoomState
   arrival(seq: number): Arrival
-  /** The latest timestamp on the tape. Event times need not grow with seq when two clocks stamp them. */
-  latestAt(): RunTime | null
   /** Append-only; a slice of the first n is a stable snapshot. */
   minutes(): readonly MinutesEntry[]
 }
@@ -51,7 +49,6 @@ export function createTape(registry: AgentRegistry): Tape {
   const frames: RoomState[] = [EMPTY_ROOM]
   const arrivals: Arrival[] = []
   const minutes: MinutesEntry[] = []
-  let latest: RunTime | null = null
 
   function at(seq: number): number {
     if (seq < 1 || seq > events.length) throw new RangeError(`seq ${seq} is not on the tape (1..${events.length})`)
@@ -69,7 +66,6 @@ export function createTape(registry: AgentRegistry): Tape {
       return frame
     },
     arrival: (seq) => arrivals[at(seq)] as Arrival,
-    latestAt: () => latest,
     minutes: () => minutes,
     append(incoming, origin, wall) {
       for (const event of incoming) {
@@ -78,7 +74,6 @@ export function createTape(registry: AgentRegistry): Tape {
         const room = applyEvent(previous, event, registry)
         const tier = ruleOf(event).tier
         events.push(event)
-        latest = latest === null || event.at > latest ? event.at : latest
         frames.push(room)
         arrivals.push({ at: wall, origin })
         minutes.push({

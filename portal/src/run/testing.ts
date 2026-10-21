@@ -1,21 +1,7 @@
 import type { RunEvent } from '../stream/parse'
 import { agentId, connectorKey, runTime, wallTime, type Ms, type RunTime, type WallTime } from './brand'
 import type { Clock } from './clock'
-import {
-  catchingUp,
-  direct,
-  labelOf,
-  sceneTime,
-  startDirector,
-  waitElapsed,
-  wakeAt,
-  atEdge,
-  type Beat,
-  type Cue,
-  type Director,
-  type FrameLabel,
-  type Start,
-} from './director'
+import { atEdge, direct, sceneTime, startDirector, waitElapsed, wakeAt, type Beat, type Cue, type Director, type Speed, type Start } from './director'
 import { recording, synthetic, type RecordingName } from './recordings'
 import { agentNamedIn, openStep, type AgentRef, type AgentRegistry, type RoomState } from './room'
 import { createTape, type Origin } from './tape'
@@ -82,18 +68,16 @@ export interface Rehearsal {
   readonly room: RoomState
   readonly sceneTime: RunTime
   readonly atEdge: boolean
-  readonly catchingUp: boolean
-  readonly label: FrameLabel
   readonly waiting: { readonly since: RunTime; readonly elapsedMs: Ms } | null
   readonly nextWake: number | null
   readonly holds: readonly Extract<Beat, { type: 'hold' }>[]
 }
 
 /** Drives startDirector, createTape, direct and wakeAt with integer times. No timers, no DOM. */
-export function rehearse(name: RecordingName, o: { start: Start }): Rehearsal {
+export function rehearse(name: RecordingName, o: { start: Start; speed?: Speed }): Rehearsal {
   const events = recording(name)
   const tape = createTape(TEST_REGISTRY)
-  let director = startDirector(o.start)
+  let director = startDirector(o.start, o.speed ?? 1)
   let now = 0
   let runNow: number | null = null
   const played: PlayedBeat[] = []
@@ -137,10 +121,7 @@ export function rehearse(name: RecordingName, o: { start: Start }): Rehearsal {
   }
 
   function pending(): boolean {
-    if (director.beat !== null) return true
-    if (director.mode.is === 'paused') return false
-    for (let seq = director.shown + 1; seq <= tape.length; seq += 1) if (seq > director.shown) return true
-    return false
+    return director.beat !== null || director.shown < tape.length
   }
 
   let reported = 0
@@ -212,12 +193,6 @@ export function rehearse(name: RecordingName, o: { start: Start }): Rehearsal {
     },
     get atEdge() {
       return atEdge(director)
-    },
-    get catchingUp() {
-      return catchingUp(director, stage(now))
-    },
-    get label() {
-      return labelOf(director, stage(now))
     },
     get waiting() {
       const open = openStep(tape.frame(director.shown))

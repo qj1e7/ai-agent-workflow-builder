@@ -106,9 +106,7 @@ describe('createLiveView against the demo platform', () => {
     expect(view().room.phase.name).toBe('awaiting_approval')
     const laterWait = view().frame.waiting?.elapsedMs ?? 0
     expect(laterWait).toBeGreaterThan(firstWait)
-    expect(view().frame.label).toBe('live')
     expect(view().transport.atEdge).toBe(true)
-    expect(view().frame.elapsed.at, 'live, the transport shows one clock: the run is as long as it has run').toBe(view().frame.elapsed.total)
 
     const phases = new Set(seen.map((snapshot) => snapshot.room.phase.name))
     expect([...phases]).toEqual(expect.arrayContaining(['pending', 'working', 'proposed', 'awaiting_approval']))
@@ -120,7 +118,7 @@ describe('createLiveView against the demo platform', () => {
     await tick(60 * SECOND)
     expect(view().room.phase).toEqual({ name: 'succeeded', outcome: 'written' })
     expect(view().room.ticket?.lines[0]?.reference).toBe('MOCK-142')
-    expect(view().frame.label).toBe('finished')
+    expect(view().frame.shown).toBe(view().frame.head)
     expect(view().connection.is).toBe('settled')
     expect(view().transport.settled).toBe(true)
     unsubscribe()
@@ -164,17 +162,10 @@ describe('createLiveView against the demo platform', () => {
     close()
   })
 
-  it("counts the shown frame's own wait in replay and after a seek, and says Sped up through the replay's compressed wait", async () => {
+  it("counts the shown frame's own wait in replay, and says Sped up through the replay's compressed wait", async () => {
     const { view, unsubscribe } = open()
     await tick(80 * SECOND)
     expect(view().transport.settled).toBe(true)
-    view().transport.seek(15)
-    expect(view().frame.mode).toBe('replay')
-    const sought = view().frame
-    expect(sought.waiting?.elapsedMs).toBe(sought.sceneTime - (sought.waiting?.since ?? 0))
-    expect(sought.waiting?.elapsedMs).toBeLessThan(60 * SECOND)
-    expect(sought.elapsed.at, 'behind the end, the transport shows the position of the total').toBeLessThan(sought.elapsed.total)
-    expect(sought.label).toBe('replay')
 
     view().transport.restart()
     while (view().room.phase.name !== 'awaiting_approval') await tick(100)
@@ -203,30 +194,27 @@ describe('createLiveView against the demo platform', () => {
     unsubscribe()
   })
 
-  it('ends each recorded run at its outcome, and catches up while behind the live edge', async () => {
+  it('ends each recorded run at its outcome, and trails the live edge while catching up', async () => {
     const behind = await openBurst(at(17) + SECOND)
     expect(behind.view().frame.shown).toBeLessThan(behind.view().frame.head)
-    expect(behind.view().frame.catchingUp).toBe(true)
     behind.close()
 
     const live = open()
-    await tick(8 * SECOND)
-    expect(live.view().frame.catchingUp, 'the paced demo never has to catch up').toBe(false)
-    await tick(80 * SECOND)
+    await tick(88 * SECOND)
     expect(live.view().room.phase.name).toBe('succeeded')
-    expect(live.view().frame.label).toBe('finished')
+    expect(live.view().frame.shown).toBe(live.view().frame.head)
     live.unsubscribe()
 
     const failed = open(runId('run_01JB9'))
     await tick(0)
     expect(failed.view().room.phase.name).toBe('failed')
-    expect(failed.view().frame.label).toBe('finished')
+    expect(failed.view().transport.settled).toBe(true)
     failed.unsubscribe()
 
     const rejected = open(runId('run_01JBA'))
     await tick(0)
     expect(rejected.view().room.phase.name).toBe('rejected')
-    expect(rejected.view().frame.label).toBe('finished')
+    expect(rejected.view().transport.settled).toBe(true)
     rejected.unsubscribe()
   })
 
@@ -254,7 +242,7 @@ describe('createLiveView against the demo platform', () => {
     const rest = open(runId('run_01JB9'), 'rest')
     await tick(0)
     expect(rest.view().room.phase.name).toBe('failed')
-    expect(rest.view().frame.label).toBe('finished')
+    expect(rest.view().frame.shown).toBe(rest.view().frame.head)
     expect(rest.view().frame.beat).toBeNull()
     rest.unsubscribe()
 
@@ -264,7 +252,7 @@ describe('createLiveView against the demo platform', () => {
     expect(replay.view().frame.shown).toBe(1)
     expect(replay.view().frame.beat).toMatchObject({ type: 'event', seq: 1, entry: 'continuous' })
     await tick(40 * SECOND)
-    expect(replay.view().frame.label).toBe('finished')
+    expect(replay.view().frame).toMatchObject({ mode: 'live', shown: replay.view().frame.head })
     expect(replay.view().room.phase.name).toBe('failed')
     expect(replay.view().room.agents.map((seat) => seat.id)).toContain('troubleshooter')
     replay.unsubscribe()

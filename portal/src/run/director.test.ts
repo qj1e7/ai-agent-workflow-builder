@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { beatMsOf, floorMsOf, readingMsOf } from './kinds'
 import { REPLAY_HOLD_MS, SNAP_DEBT_MS, STALE_MS, TARGET_LAG_MS } from './director'
+import { isStory } from './kinds'
 import { recording, renumber, slice, synthetic } from './recordings'
 import { rehearse } from './testing'
 
@@ -118,20 +119,6 @@ describe('live play', () => {
     expect(show.runUntilIdle()).toEqual([])
   })
 
-  it('keeps receiving while paused and folds the rest on play as a replay', () => {
-    const show = rehearse('success', { start: 'edge' })
-    show.arrive(0, 1, 17, 'backlog')
-    show.cue(0, { type: 'pause' })
-    show.arrive(10, 18, 18)
-    expect(show.director.shown).toBe(17)
-    expect(show.director.mode.is).toBe('paused')
-    expect(show.atEdge).toBe(false)
-    show.cue(20, { type: 'play' })
-    const beats = show.runUntilIdle()
-    expect(beats.map((b) => [b.seq, b.durationMs])).toEqual([[18, 1800]])
-    expect(show.director.mode.is).toBe('live')
-  })
-
   it('ends a failure on the run failing and a rejection on the run being rejected', () => {
     const failure = rehearse('failure', { start: 'edge' })
     failure.arrive(0, 1, 3, 'backlog')
@@ -183,17 +170,6 @@ describe('live play', () => {
     expect(show.waiting?.elapsedMs).toBe(at(17) + 60_000 - at(15))
   })
 
-  it('is catching up while more choreography than the target lag is queued, and not once it has drained', () => {
-    const show = rehearse('success', { start: 'edge' })
-    show.arrive(0, 1, 3, 'backlog')
-    expect(show.catchingUp).toBe(false)
-    show.arrive(0, 4, 17)
-    expect(show.catchingUp).toBe(true)
-    show.runUntilIdle()
-    expect(show.catchingUp).toBe(false)
-    expect(show.atEdge).toBe(true)
-  })
-
   it('counts an honest wait and wakes on the next whole second', () => {
     const show = rehearse('success', { start: 'edge' })
     show.arrive(0, 1, 17, 'backlog')
@@ -204,31 +180,14 @@ describe('live play', () => {
     show.setRunNow(wholeSecond + 6 * 60_000 + 13_400)
     expect(show.nextWake).toBe(600)
   })
-
-  it('scrubs back to a stored frame with no beat', () => {
-    const show = rehearse('success', { start: 'edge' })
-    show.arrive(0, 1, 23, 'backlog')
-    show.cue(0, { type: 'seek', cursor: 9 })
-    expect(show.director.shown).toBe(9)
-    expect(show.director.beat).toBeNull()
-    expect(show.room.caption?.summary).toBe('Release checker found 2 new releases: 1.2.16, 1.2.15.')
-    expect(show.atEdge).toBe(false)
-    expect(show.sceneTime).toBe(at(9))
-    show.cue(0, { type: 'go_live' })
-    expect(show.director.shown).toBe(23)
-    expect(show.atEdge).toBe(true)
-  })
 })
 
 describe('replay', () => {
   it('ignores catch-up: every beat at full length, then hands back to live', () => {
-    const show = rehearse('success', { start: 'edge' })
+    const show = rehearse('success', { start: 'beginning' })
     show.arrive(0, 1, 23, 'backlog')
-    show.cue(0, { type: 'seek', cursor: 3 })
-    show.cue(0, { type: 'pause' })
-    show.cue(0, { type: 'play' })
     const beats = show.runUntilIdle()
-    expect(beats[0]).toMatchObject({ seq: 4, durationMs: 1000 })
+    expect(beats[0]).toMatchObject({ seq: 1, durationMs: 900 })
     expect(beats.every((b) => b.durationMs === beatMsOf(SUCCESS[b.seq - 1]!))).toBe(true)
     expect(show.director.mode.is).toBe('live')
     expect(show.director.shown).toBe(23)
@@ -249,8 +208,7 @@ describe('replay', () => {
     expect(beats[index]!.startedAt).toBe(before.startedAt + before.durationMs + REPLAY_HOLD_MS)
     const last = beats.at(-1)!
     expect(last.startedAt + last.durationMs).toBeLessThan(30_000)
-    expect(show.director.mode.is).toBe('live')
-    expect(show.label).toBe('finished')
+    expect(show.director).toMatchObject({ mode: { is: 'live' }, shown: 23, beat: null })
   })
 
   it('restarts from frame 0 with a fresh take', () => {
@@ -266,20 +224,11 @@ describe('replay', () => {
     expect(beats[0]).toMatchObject({ seq: 1, kind: 'run_created' })
   })
 
-  it('a finished run at the edge is labelled finished and does not count', () => {
+  it('a finished run at the edge does not count', () => {
     const show = rehearse('success', { start: 'edge' })
     show.arrive(0, 1, 23, 'backlog')
-    expect(show.label).toBe('finished')
     expect(show.sceneTime).toBe(at(23))
     expect(show.nextWake).toBeNull()
-  })
-
-  it('a live run at the edge is labelled live and behind the edge replay', () => {
-    const show = rehearse('success', { start: 'edge' })
-    show.arrive(0, 1, 17, 'backlog')
-    expect(show.label).toBe('live')
-    show.cue(0, { type: 'seek', cursor: 5 })
-    expect(show.label).toBe('replay')
   })
 })
 
@@ -290,4 +239,124 @@ it('plays the whole rejected recording from the start in under thirty seconds', 
   const last = beats.at(-1)!
   expect(last.startedAt + last.durationMs).toBeLessThan(30_000)
   expect(slice('rejected', 18, 19).map((e) => e.kind)).toEqual(['approval_decided', 'run_rejected'])
+})
+
+const SIXTY_CHARACTERS = 'Two releases are newer than 1.2.14, so I suggest one ticket.'
+
+function message(text: string) {
+  return synthetic('success', {
+    seq: 5,
+    ts: '2026-11-03T02:14:02.510Z',
+    actor: { kind: 'agent', id: 'release_checker', display: 'Release checker' },
+    summary: 'Release checker reported 2 new releases.',
+    kind: 'agent_message',
+    data: { speaker: { id: 'release_checker', display: 'Release checker' }, addressee: { kind: 'room' }, text },
+  })
+}
+
+describe('speed', () => {
+  it('2x halves a calm beat, down to its floor', () => {
+    const show = rehearse('success', { start: 'edge', speed: 2 })
+    show.arrive(0, 1, 3, 'backlog')
+    show.arrive(0, 4, 4)
+    expect(show.runUntilIdle().map((b) => [b.seq, b.durationMs])).toEqual([[4, beat(4) / 2]])
+    show.arrive(5_000, 5, 14, 'backlog')
+    show.arrive(5_000, 15, 15)
+    const [request] = show.runUntilIdle()
+    expect(beat(15) / 2, 'half the approval request is under its floor').toBeLessThan(floorMsOf(SUCCESS[14]!))
+    expect(request).toMatchObject({ seq: 15, durationMs: floorMsOf(SUCCESS[14]!) })
+  })
+
+  it('still holds a 60-character message for 2700 ms at 2x', () => {
+    expect(SIXTY_CHARACTERS).toHaveLength(60)
+    const show = rehearse('success', { start: 'edge', speed: 2 })
+    show.arrive(0, 1, 4, 'backlog')
+    show.arriveEvents(0, [message(SIXTY_CHARACTERS)])
+    expect(show.runUntilIdle().map((b) => [b.seq, b.durationMs])).toEqual([[5, 2700]])
+  })
+
+  it('measures what is owed at the chosen speed: a queue that snaps at 1x plays through at 2x', () => {
+    const queued = SUCCESS.filter((e) => e.seq <= 18).reduce((total, e) => total + beatMsOf(e), 0)
+    expect(queued).toBeGreaterThan(SNAP_DEBT_MS)
+    expect(queued / 2).toBeLessThan(SNAP_DEBT_MS)
+    const show = rehearse('success', { start: 'edge', speed: 2 })
+    show.arrive(0, 1, 18)
+    const beats = show.runUntilIdle()
+    expect(beats.map((b) => b.seq)).toEqual(SUCCESS.filter((e) => e.seq <= 18 && isStory(e)).map((e) => e.seq))
+    expect(beats.every((b) => b.entry === 'continuous')).toBe(true)
+  })
+
+  it('halves the replay hold at 2x while the counter still rolls through the real wait', () => {
+    const show = rehearse('success', { start: 'beginning', speed: 2 })
+    show.arrive(0, 1, 23, 'backlog')
+    while (show.director.beat?.type !== 'hold') if (!show.step()) throw new Error('no hold started')
+    const hold = show.director.beat
+    expect(hold).toMatchObject({ after: 17, from: at(17), to: at(18), durationMs: REPLAY_HOLD_MS / 2 })
+    expect(show.sceneTimeAt(hold.startedAt + REPLAY_HOLD_MS / 4)).toBe(Math.round((at(17) + at(18)) / 2))
+  })
+
+  it('keeps the playing beat when 1x changes to 2x, and paces the next beat at 2x', () => {
+    const show = rehearse('success', { start: 'edge' })
+    show.arrive(0, 1, 5, 'backlog')
+    show.arrive(0, 6, 7)
+    show.cue(100, { type: 'speed', speed: 2 })
+    expect(show.director.beat).toMatchObject({ seq: 6, startedAt: 0, durationMs: beat(6) })
+    expect(show.runUntilIdle().map((b) => [b.seq, b.startedAt, b.durationMs])).toEqual([
+      [6, 0, beat(6)],
+      [7, beat(6), beat(7) / 2],
+    ])
+  })
+})
+
+describe('Instant', () => {
+  it('lands a replay at the head, following live, with a fresh take', () => {
+    const show = rehearse('success', { start: 'beginning' })
+    show.arrive(0, 1, 23, 'backlog')
+    expect(show.director).toMatchObject({ mode: { is: 'replay' }, shown: 1 })
+    const take = show.director.take
+    show.cue(0, { type: 'speed', speed: 'instant' })
+    expect(show.director).toMatchObject({ mode: { is: 'live' }, shown: 23, beat: null, take: take + 1 })
+  })
+
+  it('stays at a live waiting head with the counter running, and its ticks keep the take', () => {
+    const show = rehearse('success', { start: 'edge', speed: 'instant' })
+    show.arrive(0, 1, 17)
+    expect(show.director).toMatchObject({ mode: { is: 'live' }, shown: 17, beat: null })
+    const take = show.director.take
+    show.setRunNow(at(17) + 10_000)
+    expect(show.nextWake, 'the counter ticks').not.toBeNull()
+    show.runUntil(5_000)
+    expect(show.director).toMatchObject({ shown: 17, beat: null, take })
+    expect(show.waiting?.elapsedMs).toBe(at(17) + 10_000 - at(15))
+    show.setRunNow(at(17) + 20_000)
+    expect(show.waiting?.elapsedMs).toBe(at(17) + 20_000 - at(15))
+  })
+
+  it('lands a grew at once, and nothing wakes once the run has settled', () => {
+    const show = rehearse('success', { start: 'edge', speed: 'instant' })
+    show.arrive(0, 1, 17)
+    show.arrive(1_000, 18, 23)
+    expect(show.director).toMatchObject({ mode: { is: 'live' }, shown: 23, beat: null })
+    expect(show.runUntilIdle()).toEqual([])
+    expect(show.nextWake).toBeNull()
+  })
+
+  it('lands a restart at the head instead of replaying', () => {
+    const show = rehearse('success', { start: 'edge', speed: 'instant' })
+    show.arrive(0, 1, 23, 'backlog')
+    show.cue(0, { type: 'restart' })
+    expect(show.director).toMatchObject({ mode: { is: 'live' }, shown: 23, beat: null })
+  })
+
+  it('cuts the playing beat, and back at 1x the next arrival plays a normal beat', () => {
+    const show = rehearse('success', { start: 'edge' })
+    show.arrive(0, 1, 3, 'backlog')
+    show.arrive(0, 4, 4)
+    expect(show.runUntil(0).map((b) => b.seq)).toEqual([4])
+    show.cue(100, { type: 'speed', speed: 'instant' })
+    expect(show.director.beat).toBeNull()
+    show.cue(200, { type: 'speed', speed: 1 })
+    show.arrive(300, 5, 5)
+    expect(show.runUntilIdle().map((b) => [b.seq, b.startedAt, b.durationMs])).toEqual([[5, 300, MESSAGE_5]])
+  })
 })

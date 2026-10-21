@@ -37,27 +37,31 @@ function scriptedFetch(events: readonly Raw[]): FetchLike {
   }
 }
 
-async function open(events: readonly Raw[], runNow: number): Promise<{ view(this: void): LiveView; close(this: void): void }> {
+async function open(events: readonly Raw[], runNow: number): Promise<{ view(this: void): LiveView; seen: LiveView[]; close(this: void): void }> {
   const store = createLiveView({ runId: RUN, env: { fetch: scriptedFetch(events), clock: fixedClock(runNow), registry: TEST_REGISTRY }, whenFinished: 'rest' })
-  const close = store.subscribe(() => undefined)
+  const seen: LiveView[] = []
+  const close = store.subscribe(() => seen.push(store.getSnapshot()))
   await vi.advanceTimersByTimeAsync(0)
-  return { view: () => store.getSnapshot(), close }
+  return { view: () => store.getSnapshot(), seen, close }
 }
 
 beforeEach(() => vi.useFakeTimers({ now: Date.parse('2026-11-03T02:14:00Z') }))
 afterEach(() => vi.useRealTimers())
 
 describe('a run whose event times jump forward and back', () => {
-  it('keeps elapsed time between zero and the total at every frame of the finished run', async () => {
-    const { view, close } = await open(skewed(23), at(23))
+  it('keeps the waiting counter between zero and the real wait in every frame of a replay', async () => {
+    const { view, seen, close } = await open(skewed(23), at(23))
     expect(view().transport.settled).toBe(true)
-    for (let cursor = 0; cursor <= 23; cursor += 1) {
-      view().transport.seek(cursor)
-      const { at: shown, total } = view().frame.elapsed
-      expect(Number.isFinite(shown) && Number.isFinite(total), `finite at frame ${cursor}`).toBe(true)
-      expect(shown, `elapsed at frame ${cursor}`).toBeGreaterThanOrEqual(0)
-      expect(shown, `elapsed within total at frame ${cursor}`).toBeLessThanOrEqual(total)
+    view().transport.restart()
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(view().frame).toMatchObject({ mode: 'live', shown: 23 })
+    const waits = seen.flatMap((snapshot) => (snapshot.frame.waiting ? [snapshot.frame.waiting.elapsedMs] : []))
+    expect(waits.length, 'the replay showed the wait').toBeGreaterThan(0)
+    for (const wait of waits) {
+      expect(wait).toBeGreaterThanOrEqual(0)
+      expect(wait).toBeLessThanOrEqual(at(18) - at(15))
     }
+    expect(seen.every((snapshot) => Number.isFinite(snapshot.frame.sceneTime))).toBe(true)
     close()
   })
 
@@ -66,8 +70,6 @@ describe('a run whose event times jump forward and back', () => {
     const { view, close } = await open(skewed(17), now)
     expect(view().room.phase.name).toBe('awaiting_approval')
     expect(view().frame.waiting).toEqual({ since: at(15), elapsedMs: now - at(15) })
-    expect(view().frame.elapsed.at).toBeGreaterThanOrEqual(0)
-    expect(view().frame.elapsed.at).toBeLessThanOrEqual(view().frame.elapsed.total)
     close()
   })
 })

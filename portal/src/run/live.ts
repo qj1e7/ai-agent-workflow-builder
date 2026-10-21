@@ -7,11 +7,8 @@ import type { Ms, RunId, RunTime, WallTime } from './brand'
 import { createClock, type Clock } from './clock'
 import {
   atEdge,
-  catchingUp,
   direct,
   holding,
-  labelOf,
-  liveNow,
   sceneTime,
   settled as isSettledStage,
   startDirector,
@@ -19,7 +16,6 @@ import {
   wakeAt,
   type Cue,
   type Director,
-  type FrameLabel,
   type Mode,
   type Stage,
 } from './director'
@@ -43,29 +39,19 @@ export interface Frame {
   readonly head: number
   readonly take: number
   readonly beat: BeatView | null
-  readonly label: FrameLabel
   readonly sceneTime: RunTime
   /** Present while the shown frame waits for an Approver. Honest in every mode. */
   readonly waiting: { readonly since: RunTime; readonly elapsedMs: Ms } | null
   /** The counters move faster than the wall: the demo's squeezed wait at the live edge, or a replay's compressed hold. */
   readonly spedUp: boolean
-  /** Following live with more story choreography queued than the room may trail by. */
-  readonly catchingUp: boolean
-  /** "0:12 of 6:26". at is the run's own time while live, the shown frame's otherwise; total is the run's whole length so far. */
-  readonly elapsed: { readonly at: Ms; readonly total: Ms }
 }
 
 export interface Transport {
   /** Showing the newest event and following it. */
   readonly atEdge: boolean
-  /** The run reached a terminal event. A settled run is never labelled live. */
+  /** The run reached a terminal event. */
   readonly settled: boolean
-  readonly playing: boolean
-  play(this: void): void
-  pause(this: void): void
   restart(this: void): void
-  seek(this: void, cursor: number): void
-  backToLive(this: void): void
   /** Call after a successful POST /runs/{id}/retry, so the feed reconnects now instead of at its next check. */
   reconnect(this: void): void
 }
@@ -103,7 +89,7 @@ export interface LiveViewStore {
 export function createLiveView(o: { runId: RunId; env: LiveViewEnv; whenFinished: WhenFinished; openingMs?: number }): LiveViewStore {
   const { fetch, clock, registry } = o.env
   const tape = createTape(registry)
-  let director = startDirector('edge')
+  let director = startDirector('edge', 1)
   let connection: Connection = { is: 'connecting' }
   let cancelTimer: (() => void) | null = null
   let feed: AbortController | null = null
@@ -197,11 +183,7 @@ export function createLiveView(o: { runId: RunId; env: LiveViewEnv; whenFinished
   }
 
   const transportActions = {
-    play: () => cue({ type: 'play' }),
-    pause: () => cue({ type: 'pause' }),
     restart: () => cue({ type: 'restart' }),
-    seek: (cursor: number) => cue({ type: 'seek', cursor }),
-    backToLive: () => cue({ type: 'go_live' }),
     reconnect: () => {
       feed?.abort()
       feed = null
@@ -231,29 +213,20 @@ export function createLiveView(o: { runId: RunId; env: LiveViewEnv; whenFinished
     const s = stage()
     const d = director
     const room = tape.frame(d.shown)
-    const now = sceneTime(d, s)
     const settled = isSettledStage(s)
     const edge = atEdge(d)
     const open = openStep(room)
-    const startedAt = room.startedAt ?? (tape.length > 0 ? tape.event(1).at : now)
-    const latest = tape.latestAt() ?? now
-    const end = settled ? latest : Math.max(s.runNow, latest)
-    const waiting = open ? { since: open.state.since, elapsedMs: waitElapsed(d, s, open) } : null
-    const label = labelOf(d, s)
     const frame: Frame = {
       mode: d.mode.is,
       shown: d.shown,
       head: tape.length,
       take: d.take,
       beat: beatView(d),
-      label,
-      sceneTime: now,
-      waiting,
+      sceneTime: sceneTime(d, s),
+      waiting: open ? { since: open.state.since, elapsedMs: waitElapsed(d, s, open) } : null,
       spedUp: (edge && !settled && s.rate > 1) || holding(d, s),
-      catchingUp: catchingUp(d, s),
-      elapsed: { at: Math.max(0, (label === 'live' ? liveNow(s) : now) - startedAt), total: Math.max(0, end - startedAt) },
     }
-    const transport: Transport = { ...transportActions, atEdge: edge, settled, playing: d.mode.is !== 'paused' }
+    const transport: Transport = { ...transportActions, atEdge: edge, settled }
     return {
       connection,
       room,
