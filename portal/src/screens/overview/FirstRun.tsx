@@ -1,9 +1,10 @@
 import { errorWords } from '../../api/errors'
 import { useTemplates } from '../../api/queries'
 import type { TemplateView } from '../../api/types'
+import { StopList } from '../../room/TrackText'
+import { planTrack } from '../../run'
 import { Button, ButtonLink } from '../../ui/Button'
 import { InlineMessage, Skeleton } from '../../ui/Feedback'
-import { Spine } from '../../ui/Spine'
 import { EXAMPLE_TASK } from '../builder/plan'
 import { useFirstRun } from './useFirstRun'
 import styles from './FirstRun.module.css'
@@ -39,13 +40,7 @@ function SetRoom({ template }: { template: TemplateView }) {
       <h1 id="first-run-title">{TITLE}</h1>
       <div className={styles['heroBody']}>
         <div className={styles['stageColumn']}>
-          <Spine
-            blocks={template.blocks.map((block) => ({ key: block.key, name: block.name, kind: block.kind, state: { kind: 'not_reached' } }))}
-            orientation="vertical"
-            compact
-            showState={false}
-            label={`The steps of ${template.name}`}
-          />
+          <StopList track={planTrack(template.blocks)} label={`The steps of ${template.name}`} />
         </div>
         <aside className={styles['rail']} aria-label="Start here">
           <p className={styles['promise']}>

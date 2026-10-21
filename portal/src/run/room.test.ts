@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { BlockView } from '../api/types'
 import type { RunEvent } from '../stream/parse'
 import { agentId, connectorKey } from './brand'
 import { recording, renumber, slice, synthetic } from './recordings'
-import { applyEvent, EMPTY_ROOM, openStep, spineStations, type RoomState } from './room'
+import { applyEvent, EMPTY_ROOM, openStep, type RoomState } from './room'
 import { TEST_REGISTRY } from './testing'
 
 function fold(events: readonly RunEvent[], from: RoomState = EMPTY_ROOM): RoomState {
@@ -18,12 +17,6 @@ const ROOM_LEAD = agentId('room_lead')
 const CHECKER = agentId('release_checker')
 const JIRA = connectorKey('jira')
 const CONFLUENCE = connectorKey('confluence')
-
-const BLOCKS: readonly BlockView[] = [
-  { key: 'read_releases', name: 'Read GitHub releases', description: '', kind: 'agent' },
-  { key: 'approval_gate', name: 'Approval gate', description: '', kind: 'approval' },
-  { key: 'create_ticket', name: 'Create Jira ticket', description: '', kind: 'write_action' },
-]
 
 function seatOf(room: RoomState, id: string) {
   const seat = room.agents.find((candidate) => candidate.id === id)
@@ -342,14 +335,10 @@ describe('applyEvent on synthetic events', () => {
     const afterDave = fold([dave], afterBob)
     expect(afterDave.phase.name).toBe('acting')
     expect(afterDave.work).toEqual({ at: 'write', connector: JIRA })
-    expect(afterDave.approval?.steps.map((step) => step.state.is)).toEqual(['approved', 'approved'])
-    expect(spineStations(afterDave, BLOCKS)[1]?.state).toEqual({
-      is: 'approved',
-      by: [
-        { id: 'bob', display: 'Bob' },
-        { id: 'dave', display: 'Dave' },
-      ],
-    })
+    expect(afterDave.approval?.steps.map((step) => step.state)).toMatchObject([
+      { is: 'approved', by: { id: 'bob', display: 'Bob' } },
+      { is: 'approved', by: { id: 'dave', display: 'Dave' } },
+    ])
   })
 
   it('accepts a re-sent approval_requested with updated statuses without restarting the open counter', () => {
@@ -396,7 +385,7 @@ describe('applyEvent on synthetic events', () => {
     expect(room.cursor).toBe(18)
   })
 
-  it('shows nothing to write as no ticket, the work at the end, and not-needed blocks', () => {
+  it('shows nothing to write as no ticket and the work at the end', () => {
     const done = synthetic('success', {
       seq: 12,
       ts: '2026-11-03T02:14:06Z',
@@ -408,28 +397,6 @@ describe('applyEvent on synthetic events', () => {
     const room = fold([done], success(11))
     expect(room.ticket).toBeNull()
     expect(room.work).toEqual({ at: 'done' })
-    expect(spineStations(room, BLOCKS).map((station) => station.state.is)).toEqual(['done', 'not_needed', 'not_needed'])
-  })
-})
-
-describe('spineStations', () => {
-  it('follows the recordings', () => {
-    const states = (events: readonly RunEvent[]) => spineStations(fold(events), BLOCKS).map((s) => s.state.is)
-    expect(states(slice('success', 1, 1))).toEqual(['not_reached', 'not_reached', 'not_reached'])
-    expect(states(slice('success', 1, 6))).toEqual(['working', 'not_reached', 'not_reached'])
-    expect(states(slice('success', 1, 12))).toEqual(['done', 'not_reached', 'not_reached'])
-    expect(states(slice('success', 1, 17))).toEqual(['done', 'waiting', 'not_reached'])
-    expect(states(slice('success', 1, 18))).toEqual(['done', 'approved', 'working'])
-    expect(states(slice('success', 1, 20))).toEqual(['done', 'approved', 'working'])
-    expect(states(recording('success'))).toEqual(['done', 'approved', 'done'])
-    expect(states(recording('failure'))).toEqual(['failed', 'not_reached', 'not_reached'])
-    expect(states(recording('rejected'))).toEqual(['done', 'declined', 'not_reached'])
-  })
-
-  it('carries the waiting since and the decider', () => {
-    const paused = spineStations(success(17), BLOCKS)
-    expect(paused[1]?.state).toEqual({ is: 'waiting', since: at(15) })
-    const declined = spineStations(fold(recording('rejected')), BLOCKS)
-    expect(declined[1]?.state).toEqual({ is: 'declined', by: { id: 'bob', display: 'Bob' } })
+    expect(room.phase).toEqual({ name: 'succeeded', outcome: 'nothing_to_write' })
   })
 })

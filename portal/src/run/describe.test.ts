@@ -1,19 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { BlockView } from '../api/types'
 import type { RunEvent } from '../stream/parse'
 import { agentId, connectorKey, runTime, seq, userId } from './brand'
 import { captionWords, figureWords, headlineWords, parcelWords, splitActionLine, stopWords, teamsWords } from './describe'
 import { recording, slice, synthetic, type RecordingName } from './recordings'
 import { applyEvent, EMPTY_ROOM, type RoomState } from './room'
-import { TEST_REGISTRY } from './testing'
+import { RELEASE_CHECK, TEST_REGISTRY } from './testing'
 import { trackOf, type Gate, type Stop, type Track } from './track'
-
-/** contracts/fixtures/builder/templates.json, release_check. */
-const RELEASE_CHECK: readonly BlockView[] = [
-  { key: 'read_releases', name: 'Read GitHub releases', description: "The Release checker reads the repository's releases.", kind: 'agent' },
-  { key: 'approval_gate', name: 'Approval gate', description: 'An Approver reviews the proposed ticket in Teams before it is written.', kind: 'approval' },
-  { key: 'create_ticket', name: 'Create Jira ticket', description: 'One ticket in the chosen project listing the new releases.', kind: 'write_action' },
-]
 
 const ALICE = { canDecide: false }
 const BOB = { canDecide: true }

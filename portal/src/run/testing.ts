@@ -1,3 +1,4 @@
+import type { BlockView } from '../api/types'
 import type { RunEvent } from '../stream/parse'
 import { agentId, runTime, wallTime, type Ms, type RunTime, type WallTime } from './brand'
 import type { Clock } from './clock'
@@ -5,6 +6,13 @@ import { atEdge, direct, sceneTime, startDirector, waitElapsed, wakeAt, type Bea
 import { recording, synthetic, type RecordingName } from './recordings'
 import { openStep, type AgentRegistry, type RoomState } from './room'
 import { createTape, type Origin } from './tape'
+
+/** contracts/fixtures/builder/templates.json, release_check. */
+export const RELEASE_CHECK: readonly BlockView[] = [
+  { key: 'read_releases', name: 'Read GitHub releases', description: "The Release checker reads the repository's releases.", kind: 'agent' },
+  { key: 'approval_gate', name: 'Approval gate', description: 'An Approver reviews the proposed ticket in Teams before it is written.', kind: 'approval' },
+  { key: 'create_ticket', name: 'Create Jira ticket', description: 'One ticket in the chosen project listing the new releases.', kind: 'write_action' },
+]
 
 /** The registry the tests fold with: the same host as src/room/registry.ts. */
 export const TEST_REGISTRY: AgentRegistry = { host: { id: agentId('room_lead'), display: 'Room lead' } }

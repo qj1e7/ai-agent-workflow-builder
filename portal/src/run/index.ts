@@ -1,35 +1,38 @@
 export { createLiveView, useLiveView } from './live'
-export type { BeatView, Frame, LiveView, LiveViewEnv, LiveViewStore, Transport, UseLiveViewOptions, WhenFinished } from './live'
+export type { Controls, LiveView, LiveViewEnv, LiveViewStore, TrackView, UseLiveViewOptions, WhenFinished } from './live'
+export { LONG_GAP_MS } from './director'
+export type { Speed } from './director'
+export { castLayout, planTrack, CHIP_CHARS, CHIP_LIMIT } from './track'
+export type {
+  CastLayout,
+  Figure,
+  Gate,
+  GateState,
+  Headline,
+  Items,
+  PanelSpot,
+  Parcel,
+  ParcelForm,
+  Speech,
+  Stop,
+  StopCaption,
+  StopKey,
+  StopKind,
+  StopState,
+  Track,
+  WriteStatus,
+  WrittenLine,
+} from './track'
+export { ACT_MS } from './choreography'
+export type { Act, BeatPlan, TimedAct } from './choreography'
+export { captionWords, figureWords, headlineWords, parcelWords, splitActionLine, SPED_UP_WORDS, stopWords, teamsWords } from './describe'
+export type { Viewer } from './describe'
 export { createClock } from './clock'
 export type { Clock } from './clock'
-export { runId, agentId, connectorKey, userId, runTime } from './brand'
+export { agentId, connectorKey, runId, runTime, userId } from './brand'
 export type { AgentId, ConnectorKey, Ms, RunId, RunTime, Seq, UserId, WallTime } from './brand'
-export { LONG_GAP_MS } from './director'
 export { beatMsOf, isStory } from './kinds'
 export type { BeatEvent } from './kinds'
-export { splitActionLine } from './describe'
-export { openStep, isSettled } from './room'
-export type {
-  AgentRef,
-  AgentRegistry,
-  AgentSeat,
-  AgentStatus,
-  Approval,
-  ApprovalStep,
-  Finding,
-  Latest,
-  Locus,
-  OpenStep,
-  Phase,
-  RoomState,
-  Speech,
-  Station,
-  StationState,
-  StepState,
-  TeamsPost,
-  Ticket,
-  TicketLine,
-  UserRef,
-} from './room'
+export type { AgentRef, AgentRegistry, AgentStatus, AgentStep } from './room'
 export type { MinutesEntry } from './tape'
 export type { Connection } from '../stream/feed'

@@ -3,7 +3,7 @@ import { runId, useLiveView, type LiveView, type WhenFinished } from '../run'
 import { AGENTS } from './registry'
 
 export function useLiveRoom(id: string, whenFinished: WhenFinished): LiveView {
-  return useLiveView(runId(id), { whenFinished, registry: AGENTS })
+  return useLiveView(runId(id), { whenFinished, registry: AGENTS, speed: 1 })
 }
 
 const REDUCED = '(prefers-reduced-motion: reduce)'

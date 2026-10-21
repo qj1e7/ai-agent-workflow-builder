@@ -1,4 +1,4 @@
-import type { Actor, BlockView, FailureReason, FailureStage, RunOutcome } from '../api/types'
+import type { Actor, FailureReason, FailureStage, RunOutcome } from '../api/types'
 import type { EventOf, RunEvent } from '../stream/parse'
 import { agentId, connectorKey, userId, type AgentId, type ConnectorKey, type RunTime, type Seq, type UserId } from './brand'
 import { findingItems } from './finding'
@@ -452,71 +452,4 @@ export function openStep(room: RoomState): OpenStep | null {
 
 export function isSettled(room: RoomState): boolean {
   return room.phase.name === 'succeeded' || room.phase.name === 'rejected' || room.phase.name === 'failed'
-}
-
-// ---- spine ----
-
-export type StationState =
-  | { readonly is: 'not_reached' }
-  | { readonly is: 'working' }
-  | { readonly is: 'waiting'; readonly since: RunTime }
-  | { readonly is: 'done' }
-  | { readonly is: 'approved'; readonly by: readonly UserRef[] }
-  | { readonly is: 'declined'; readonly by: UserRef }
-  | { readonly is: 'failed' }
-  | { readonly is: 'not_needed' }
-
-export interface Station {
-  readonly block: BlockView
-  readonly state: StationState
-}
-
-function agentStation(room: RoomState): StationState {
-  switch (room.phase.name) {
-    case 'empty':
-    case 'pending':
-      return { is: 'not_reached' }
-    case 'working':
-      return { is: 'working' }
-    case 'failed':
-      return room.phase.stage === 'pending' || room.phase.stage === 'working' ? { is: 'failed' } : { is: 'done' }
-    default:
-      return { is: 'done' }
-  }
-}
-
-function approvalStation(room: RoomState): StationState {
-  if (room.phase.name === 'succeeded' && room.phase.outcome === 'nothing_to_write') return { is: 'not_needed' }
-  const steps = room.approval?.steps ?? []
-  const declined = steps.find((step) => step.state.is === 'declined')?.state
-  if (declined?.is === 'declined') return { is: 'declined', by: declined.by }
-  const open = openStep(room)
-  if (open) return { is: 'waiting', since: open.state.since }
-  if (steps.length > 0 && steps.every((step) => step.state.is === 'approved')) {
-    return { is: 'approved', by: steps.flatMap((step) => (step.state.is === 'approved' ? [step.state.by] : [])) }
-  }
-  return { is: 'not_reached' }
-}
-
-function writeStation(room: RoomState): StationState {
-  if (room.phase.name === 'succeeded' && room.phase.outcome === 'nothing_to_write') return { is: 'not_needed' }
-  if (room.ticket?.denied) return { is: 'failed' }
-  if (room.phase.name === 'failed') return room.phase.stage === 'acting' ? { is: 'failed' } : { is: 'not_reached' }
-  if (room.ticket && room.ticket.lines.length > 0 && room.ticket.lines.every((line) => line.reference)) return { is: 'done' }
-  if (room.phase.name === 'acting') return { is: 'working' }
-  return { is: 'not_reached' }
-}
-
-/** Per-block state for the spine, mapped by block kind: the contract carries no block key on events. */
-export function spineStations(room: RoomState, blocks: readonly BlockView[]): readonly Station[] {
-  return blocks.map((block) => {
-    switch (block.kind) {
-      case 'agent':
-        return { block, state: agentStation(room) }
-      case 'approval':
-        return { block, state: approvalStation(room) }
-      case 'write_action':
-        return { block, state: writeStation(room) }
-    }
-  })
 }

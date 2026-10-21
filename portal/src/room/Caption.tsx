@@ -1,8 +1,6 @@
-import type { HTMLAttributes, ReactNode } from 'react'
 import type { Actor } from '../api/types'
-import type { RoomState } from '../run'
 import { Avatar } from '../ui/Avatar'
-import { GlyphPlatform, IconFlow, IconShield } from '../ui/icons'
+import { GlyphPlatform, IconFlow } from '../ui/icons'
 import styles from './Caption.module.css'
 
 export function ActorAvatar({ actor, size }: { actor: Actor; size: number }) {
@@ -26,32 +24,4 @@ export function ActorAvatar({ actor, size }: { actor: Actor; size: number }) {
         </span>
       )
   }
-}
-
-interface CaptionLineProps extends HTMLAttributes<HTMLParagraphElement> {
-  leading: ReactNode
-  children: ReactNode
-}
-
-export function CaptionLine({ leading, children, ...rest }: CaptionLineProps) {
-  return (
-    <p {...rest} className={styles['caption']}>
-      {leading}
-      <span>{children}</span>
-    </p>
-  )
-}
-
-/** The latest story event's summary, as the run's live region. */
-export function Caption({ room }: { room: RoomState }) {
-  const latest = room.latest
-  return latest ? (
-    <CaptionLine leading={<ActorAvatar actor={latest.actor} size={24} />} aria-live="polite" aria-atomic="true">
-      {latest.summary}
-    </CaptionLine>
-  ) : (
-    <CaptionLine leading={<IconShield size={18} />} aria-live="polite" aria-atomic="true">
-      Waiting for the run to start.
-    </CaptionLine>
-  )
 }
