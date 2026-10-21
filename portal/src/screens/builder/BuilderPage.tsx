@@ -38,10 +38,10 @@ export function BuilderPage() {
     }
   }
 
-  function useExample() {
+  function planExample() {
     setTask(EXAMPLE_TASK)
     setMissing(false)
-    textarea.current?.focus()
+    suggest.mutate(EXAMPLE_TASK)
   }
 
   const describedBy = [helpId, missing ? problemId : null].filter(Boolean).join(' ')
@@ -81,7 +81,7 @@ export function BuilderPage() {
             <Button variant="primary" icon={IconFlow} loading={suggest.isPending} onClick={plan}>
               Plan it
             </Button>
-            <Button onClick={useExample}>Use the example</Button>
+            <Button onClick={planExample}>Plan the example</Button>
           </div>
           {suggest.isError ? <InlineMessage tone="error">{errorWords(suggest.error)}</InlineMessage> : null}
         </section>

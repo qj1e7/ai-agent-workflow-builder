@@ -28,8 +28,7 @@ export async function switchUser(page: Page, name: string): Promise<void> {
 export async function runExampleFromBuilder(page: Page, info: TestInfo, label: string): Promise<string> {
   await openBuilder(page)
   await shot(page, info, `${label}-01-builder-empty`)
-  await page.getByRole('button', { name: 'Use the example' }).click()
-  await page.getByRole('button', { name: 'Plan it' }).click()
+  await page.getByRole('button', { name: 'Plan the example' }).click()
   await expect(page.getByRole('heading', { name: 'Matched your words' })).toBeVisible()
   await shot(page, info, `${label}-02-builder-planned`)
   await page.getByRole('button', { name: 'Save use case' }).click()
