@@ -1,24 +1,27 @@
+import { useMemo } from 'react'
 import { errorWords } from '../../api/errors'
 import { useTemplates } from '../../api/queries'
 import type { TemplateView } from '../../api/types'
-import { StopList } from '../../room/TrackText'
 import { planTrack } from '../../run'
+import { TrackLine } from '../../tracker/TrackLine'
 import { Button, ButtonLink } from '../../ui/Button'
 import { InlineMessage, Skeleton } from '../../ui/Feedback'
-import { EXAMPLE_TASK } from '../builder/plan'
 import { useFirstRun } from './useFirstRun'
 import styles from './FirstRun.module.css'
 
 const TITLE = 'Start the first run'
+const PROMISE = 'Describe a task in plain English. Agents do the work, and nothing is written until a person says yes.'
 const NO_TEMPLATE = 'No ready-made task is available yet.'
 
 export function FirstRun() {
   const templates = useTemplates()
   const template = templates.data?.[0]
-  if (template) return <SetRoom template={template} />
+  if (template) return <Ready template={template} />
   return (
-    <>
-      <h1>{TITLE}</h1>
+    <section className={styles['first']} aria-labelledby="first-run-title">
+      <h1 id="first-run-title" className={styles['title']}>
+        {TITLE}
+      </h1>
       {templates.isPending ? (
         <Skeleton lines={4} label="Loading the example." />
       ) : (
@@ -27,43 +30,29 @@ export function FirstRun() {
           <ButtonLink to="/builder">Describe your own task</ButtonLink>
         </div>
       )}
-    </>
+    </section>
   )
 }
 
-function SetRoom({ template }: { template: TemplateView }) {
+/** Live mode with no runs yet: the example's line with nothing done, one promise, and one way to start. */
+function Ready({ template }: { template: TemplateView }) {
   const { state, start } = useFirstRun(template)
   const starting = state.is === 'starting'
-
+  const track = useMemo(() => planTrack(template.blocks), [template.blocks])
   return (
-    <section className={styles['hero']} aria-labelledby="first-run-title">
-      <h1 id="first-run-title">{TITLE}</h1>
-      <div className={styles['heroBody']}>
-        <div className={styles['stageColumn']}>
-          <StopList track={planTrack(template.blocks)} label={`The steps of ${template.name}`} />
-        </div>
-        <aside className={styles['rail']} aria-label="Start here">
-          <p className={styles['promise']}>
-            Describe a task in plain English. The agents do it while you watch every hand-off. Nothing is written to Jira or anywhere else
-            until a person says yes.
-          </p>
-          <section className={styles['example']} aria-labelledby="first-run-example">
-            <h2 id="first-run-example" className={styles['exampleTitle']}>
-              Example: {template.name}
-            </h2>
-            <blockquote className={styles['exampleTask']}>
-              <p>{EXAMPLE_TASK}</p>
-            </blockquote>
-          </section>
-          <div className={styles['actions']}>
-            <Button variant="primary" loading={starting} onClick={start}>
-              {starting ? 'Starting the run' : 'Run the example'}
-            </Button>
-            <ButtonLink to="/builder">Describe your own task</ButtonLink>
-          </div>
-          {state.is === 'failed' ? <InlineMessage tone="error">{state.message}</InlineMessage> : null}
-        </aside>
+    <section className={styles['first']} aria-labelledby="first-run-title">
+      <h1 id="first-run-title" className={styles['title']}>
+        {TITLE}
+      </h1>
+      <p className={styles['promise']}>{PROMISE}</p>
+      <div className={styles['actions']}>
+        <Button variant="primary" loading={starting} onClick={start}>
+          {starting ? 'Starting the run' : 'Run the example'}
+        </Button>
+        <ButtonLink to="/builder">Describe your own task</ButtonLink>
       </div>
+      {state.is === 'failed' ? <InlineMessage tone="error">{state.message}</InlineMessage> : null}
+      <TrackLine track={track} still label={`Steps in ${template.name}`} />
     </section>
   )
 }

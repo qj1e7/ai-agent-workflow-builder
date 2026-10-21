@@ -38,6 +38,8 @@ export interface TrackLineProps {
   /** Drawn under track.panel's stop. */
   readonly panel?: ReactNode
   readonly reduced?: boolean
+  /** Nothing will move or open: the first screen. The line drops the room it keeps for speech and panels. */
+  readonly still?: boolean
   readonly label?: string
 }
 
@@ -46,7 +48,7 @@ export interface TrackLineProps {
  * the break and the slots off the measured nodes, and the motion plays the beat's acts into that state. A Track with
  * no plan is simply correct.
  */
-export function TrackLine({ track, plan = null, panel = null, reduced = false, label = 'Where the work is' }: TrackLineProps) {
+export function TrackLine({ track, plan = null, panel = null, reduced = false, still = false, label = 'Where the work is' }: TrackLineProps) {
   const route = useRef<HTMLElement>(null)
   const motion = useRef<Motion | null>(null)
   const scene = { track, plan, reduced }
@@ -78,7 +80,7 @@ export function TrackLine({ track, plan = null, panel = null, reduced = false, l
   }, [])
 
   return (
-    <section ref={route} className={cx(styles['route'], track.cut && styles['cut'])} aria-label={label}>
+    <section ref={route} className={cx(styles['route'], track.cut && styles['cut'], still && styles['still'])} aria-label={label}>
       <div className={styles['rail']} aria-hidden="true" />
       <div className={styles['fill']} aria-hidden="true" />
       {track.breakAt === null ? null : <BreakMark />}
@@ -91,7 +93,7 @@ export function TrackLine({ track, plan = null, panel = null, reduced = false, l
             gate={track.gate?.stop === index ? track.gate : null}
             speech={track.speech?.stop === index ? track.speech : null}
             panel={track.panel?.stop === index ? panel : null}
-            holds={HOLDS.has(stop.kind)}
+            holds={!still && HOLDS.has(stop.kind)}
             users={users}
           />
         ))}

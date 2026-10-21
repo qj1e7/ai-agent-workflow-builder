@@ -5,6 +5,14 @@
   padding: 104px 0 280px;
 }
 
+.still {
+  padding: 0 0 var(--space-5);
+}
+
+.still .cast {
+  display: none;
+}
+
 .stops {
   position: relative;
   z-index: 2;
