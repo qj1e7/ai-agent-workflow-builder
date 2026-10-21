@@ -1,11 +1,17 @@
 import type { Browser, Page } from '@playwright/test'
-import { lineEnded } from './support/flows'
+import { headline, lineEnded } from './support/flows'
 import { expect, test } from './support/test'
 
 const RUN_LIMIT_MS = 75_000
 const HOLD_AFTER_MS = 3_000
 /** Google's "good" cumulative layout shift is 0.1. The line should not move on its own at all, so the bar is ten times lower. */
 const MAX_SHIFT = 0.01
+/**
+ * On the phone the template opens each panel inline under its stop, which pushes the stops below it. Over a run the
+ * Approval panel opens for 0.0122 or 0.0365 and closes for 0.0365, and the Written panel moves Done by 0.0012. The bar
+ * is the larger sum, 0.0742, rounded up.
+ */
+const MAX_PHONE_SHIFT = 0.08
 /**
  * The replay forced about 77 layouts when the line was measured on every render, 50 ms apart through the approval
  * hold, and about 27 once it was measured only when a part could move.
@@ -91,14 +97,13 @@ async function measure(browser: Browser, page: Page, play: () => Promise<void>) 
 }
 
 /**
- * On the phone the template lets the status region grow with its words and opens each panel inline under its stop, so
- * both move the line by design. Holding them still, and the status words out of sight, leaves only the line's own rows
- * to measure. Through the CSSOM, which the Content Security Policy allows.
+ * On the phone the template opens each panel inline under its stop, so a panel moves the line by design. Taking the
+ * panels out of the flow leaves the status block and the line's own rows to measure. Through the CSSOM, which the
+ * Content Security Policy allows.
  */
-async function holdStatusAndPanels(page: Page): Promise<void> {
+async function holdPanels(page: Page): Promise<void> {
   await page.evaluate(() => {
     const sheet = document.styleSheets[0]
-    sheet?.insertRule('[role="status"][aria-atomic="true"] { height: 200px; overflow: hidden; visibility: hidden; }', sheet.cssRules.length)
     sheet?.insertRule('[data-stop] > div:has(> [role="region"]) { position: absolute; }', sheet.cssRules.length)
   })
 }
@@ -109,11 +114,8 @@ async function goTo(page: Page, link: string): Promise<void> {
   await page.locator('#main h1').waitFor()
 }
 
-/** By CSS rather than by role, so it still finds the headline while the phone's status words are out of sight. */
-const headlineText = (page: Page) => page.locator('[role="status"][aria-atomic="true"] h2')
-
 async function untilWritten(page: Page): Promise<void> {
-  await expect(headlineText(page), 'the ticket is written').toHaveText('MOCK-142 is in Jira', { timeout: RUN_LIMIT_MS })
+  await expect(headline(page), 'the ticket is written').toHaveText('MOCK-142 is in Jira', { timeout: RUN_LIMIT_MS })
   await expect(lineEnded(page, 'done'), 'the run finishes').toBeVisible({ timeout: RUN_LIMIT_MS })
   await page.waitForTimeout(HOLD_AFTER_MS)
 }
@@ -128,7 +130,7 @@ test('the line holds still through a full 1x run and its replay, and keeps time'
 
   // Back on the overview, the run has finished, so it replays from the start, through the compressed approval wait.
   await goTo(page, 'Jira')
-  if (phone) await holdStatusAndPanels(page)
+  if (phone) await holdPanels(page)
   const replay = await measure(browser, page, async () => {
     await goTo(page, 'Runs')
     await expect(page.locator('li[data-gate="waiting"]'), 'the replay reaches the approval wait').toBeVisible({ timeout: RUN_LIMIT_MS })
@@ -140,7 +142,8 @@ test('the line holds still through a full 1x run and its replay, and keeps time'
   info.annotations.push({ type: 'steady', description: JSON.stringify(report) })
   expect(replay.forcedLayouts, 'a replay hold renders every 50 ms, but measures the line only when a part could move').toBeLessThanOrEqual(MAX_FORCED_LAYOUTS_IN_REPLAY)
   if (phone) {
-    expect(replay.layoutShift, `the line's own layout shift over the replay: ${replay.shifts.join('; ')}`).toBeLessThanOrEqual(MAX_SHIFT)
+    expect(replay.layoutShift, `the status block's and the line's own layout shift over the replay, with the panels held: ${replay.shifts.join('; ')}`).toBeLessThanOrEqual(MAX_SHIFT)
+    expect(live.layoutShift, `layout shift over the whole page on a run: ${live.shifts.join('; ')}`).toBeLessThanOrEqual(MAX_PHONE_SHIFT)
   } else {
     const shifts = [...live.shifts, ...replay.shifts]
     expect(live.layoutShift + replay.layoutShift, `layout shift over the run and its replay: ${shifts.join('; ')}`).toBeLessThanOrEqual(MAX_SHIFT)
