@@ -79,7 +79,6 @@ function Hero({ run }: { run: RunView }) {
   const state = room.phase.name === 'empty' ? run.state : room.phase.name
   const startedBy = nameOf(run.started_by)
   const watching = frame.label === 'live' ? 'Watching the run as it happens.' : frame.label === 'replay' ? 'Replaying it from the start.' : 'Finished.'
-  // On a narrow page the approval card sits above the room, where the Approver's buttons are in reach without scrolling past it.
   const actionCard = room.phase.name === 'awaiting_approval' ? <ActionCard view={view} /> : null
   const trouble = room.phase.name === 'failed' ? <TroubleshooterPanel runId={run.run_id} view={view} /> : null
   const spine: SpineBlock[] = spineBlocks(view, blocks)

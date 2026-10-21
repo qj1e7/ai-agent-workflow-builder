@@ -438,7 +438,6 @@
   font-weight: 620;
 }
 
-/* A seat the stage invented: outline and name only, in the muted ink, with the whole box still reserved. */
 .ghostAvatar {
   display: inline-grid;
   place-items: center;
@@ -507,7 +506,6 @@
   line-height: 18px;
 }
 
-/* Inline, so the icon sits beside the first word and a wrapped line never leaves it alone at the far edge. Two 14 px lines fit under the 18 px name in the 64 px label box. */
 .doorLine {
   display: inline;
   color: var(--muted);
@@ -679,7 +677,6 @@
   bottom: -16px;
 }
 
-/* The 360 by 120 card: 8 + 22 (head) + 4 + 6 + 2 + 15.6 (action) + 2 + 41.6 (two title lines) + 10 = 111. */
 .ticketBody {
   display: grid;
   gap: 2px;

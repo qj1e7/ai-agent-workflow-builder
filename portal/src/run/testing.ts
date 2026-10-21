@@ -39,7 +39,6 @@ export const TEST_REGISTRY: AgentRegistry = {
   named: (words) => agentNamedIn(words, KNOWN),
 }
 
-/** A clock whose run time stands still at runNow, for a scripted feed with no platform behind it. */
 export function fixedClock(runNow: number): Clock {
   return {
     wall: () => wallTime(Date.now()),

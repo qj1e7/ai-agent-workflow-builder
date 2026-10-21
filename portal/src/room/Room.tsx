@@ -23,7 +23,6 @@ interface RoomProps {
   label: string
   /** The overview's first load only: the plan rises, the doors follow, then the first beat. */
   opening?: boolean
-  /** Seats a set stage invented before any run, drawn as outlines. */
   ghosts?: ReadonlySet<SeatKey>
 }
 

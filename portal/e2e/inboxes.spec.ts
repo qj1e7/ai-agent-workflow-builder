@@ -5,7 +5,6 @@ import { record } from './support/record'
 import { expect, test } from './support/test'
 
 test('the Teams inbox and the mock Jira show what the live run did', async ({ page }, info) => {
-  // The live run plays its whole story before Done, about 36 s of page time, so this test needs more than the default budget.
   test.setTimeout(150_000)
   await openFrozen(page, '/')
   await advanceUntil(page, transportSays(page, 'Done'), { stepMs: 1_000 })

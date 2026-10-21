@@ -1,6 +1,5 @@
 import type { Box, RoomSize } from '../run'
 
-/** The sizes the chips are drawn at. The component and the fit check read the same numbers. */
 export const CHIP_TYPE: Readonly<Record<RoomSize, { readonly text: number; readonly line: number; readonly from: number; readonly fromLine: number }>> = {
   wide: { text: 16, line: 20, from: 12, fromLine: 16 },
   compact: { text: 14, line: 18, from: 12, fromLine: 16 },
@@ -8,7 +7,6 @@ export const CHIP_TYPE: Readonly<Record<RoomSize, { readonly text: number; reado
 
 export const CHIP_FRAME = { border: 1, padX: 12, padY: 8, icon: 14, iconGap: 4, gap: 6 } as const
 
-/** Instrument Sans at weight 620 sets digits at about 0.6 em and its widest capital at 0.72 em, so this over-estimates every chip. */
 const EM_PER_CHAR = 0.72
 
 export function chipFootprint(item: string, size: RoomSize): { readonly w: number; readonly h: number } {
@@ -20,7 +18,6 @@ export function chipFootprint(item: string, size: RoomSize): { readonly w: numbe
   }
 }
 
-/** Whether the chips, wrapped into rows no wider than the spot, fit under the From line. The real chips are narrower, so they fit too. */
 export function chipsFit(items: readonly string[], spot: Box, size: RoomSize, withFrom: boolean): boolean {
   const f = CHIP_FRAME
   let rows = 1

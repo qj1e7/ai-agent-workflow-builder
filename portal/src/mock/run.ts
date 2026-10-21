@@ -23,7 +23,6 @@ export class Run {
   readonly timeline: Timeline
   private readonly proposals: ProposalView[]
   private context: RunContext
-  // The approval counts a real decision from the moment it is made, while the room still narrates what came before it.
   private decidedAt = -Infinity
 
   constructor(meta: RunMeta, context: RunContext, timeline: Timeline, proposals: readonly ProposalView[]) {

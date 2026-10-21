@@ -1,10 +1,8 @@
 import type { ActivityEvent } from '../api/types'
 import { beatMsOf, isStory, LONG_GAP_MS } from '../run'
 
-/** A recorded wait (a gap over LONG_GAP_MS) plays at real speed for this long, then SQUEEZE times faster. */
 export const WAIT_HEAD_MS = 4000
 export const SQUEEZE = 40
-/** A recorded gap that is not a wait never takes longer than this on the wall. */
 export const SHORT_GAP_CAP_MS = 1000
 
 export interface Entry {
@@ -107,7 +105,6 @@ export class Timeline {
     return Math.min(next.ts, previous.ts + WAIT_HEAD_MS + (elapsed - WAIT_HEAD_MS) * SQUEEZE)
   }
 
-  /** How much faster than the wall the recorded clock moves now: SQUEEZE inside a wait past its head, else 1. */
   rateAt(wall: number): number {
     const first = this.entries[0]
     if (!first || wall < first.at) return 1

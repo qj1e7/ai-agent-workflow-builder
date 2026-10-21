@@ -12,8 +12,7 @@ export type KindRule =
   | { readonly tier: 'technical' }
   /**
    * One beat. beatMs is the choreographed duration (replay and calm live play). floorMs is the shortest
-   * live catch-up may squeeze it to, so every state stays perceivable. caption false keeps the event in
-   * the Minutes but out of the live caption, for a step that starts and ends within a second.
+   * live catch-up may squeeze it to, so every state stays perceivable.
    */
   | { readonly tier: 'story'; readonly beatMs: Ms; readonly floorMs: Ms; readonly caption: boolean }
 

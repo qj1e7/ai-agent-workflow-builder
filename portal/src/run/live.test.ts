@@ -59,7 +59,6 @@ async function tick(ms: number): Promise<void> {
   await vi.advanceTimersByTimeAsync(ms)
 }
 
-/** A page holding events 1..backlog, then every event up to upTo on the stream at once: a room that must catch up. */
 function burstFetch(backlog: number, upTo: number): FetchLike {
   const encoder = new TextEncoder()
   return (input, init) => {
@@ -101,8 +100,6 @@ describe('createLiveView against the demo platform', () => {
     expect(view().room.phase.name).toBe('pending')
     expect(view().room.agents.map((seat) => seat.id)).toEqual(['room_lead'])
 
-    // The demo is paced so the room never catches up (the schedule in src/mock/timeline.test.ts): the pause
-    // lands at 17.7 s and Bob's recorded decision at 32.6 s, and the honest counter rises between the two.
     await tick(18 * SECOND)
     expect(view().room.phase.name).toBe('awaiting_approval')
     expect(view().frame.waiting).not.toBeNull()
@@ -135,8 +132,6 @@ describe('createLiveView against the demo platform', () => {
   it('plays the paced demo on time: the chips land by 10.5 s, the pause by 18 s, the decision at 32.6 s and Done under 40 s', async () => {
     const { beatStarts, unsubscribe } = open()
     await tick(45 * SECOND)
-    // Measured with the store under fake timers. Each story beat starts when its event lands, since the
-    // demo never queues more than one beat; the wall offsets are the schedule in src/mock/timeline.test.ts.
     expect([...beatStarts]).toEqual([
       [4, 1470],
       [5, 2470],

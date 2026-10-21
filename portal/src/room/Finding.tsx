@@ -7,7 +7,6 @@ import { useBeatAnimation, type AnimationPlan } from './hooks'
 import { EASE_MOVE, slideToward } from './motion'
 import styles from './Finding.module.css'
 
-/** The chips slide in from the agent that brought them, one after another, as the token comes in to land. */
 export interface Land {
   readonly key: string
   readonly fromMs: number
@@ -16,7 +15,6 @@ export interface Land {
   readonly agentAt: Point
 }
 
-/** The chips shrink away under the ticket that takes the table. */
 export interface Fold {
   readonly key: string
   readonly atMs: number
@@ -24,9 +22,7 @@ export interface Fold {
 
 export const CHIP_STAGGER_MS = 60
 export const CHIP_HOLD_MS = 250
-/** The chips set off while the token is still on its way, so the slide is long enough for the eye to follow. */
 export const CHIP_SLIDE_START_SHARE = 0.75
-/** The chips start folding this long before the ticket lands, so they are gone as it appears. */
 export const CHIP_FOLD_LEAD_MS = 250
 const FOLD_MS = 500
 const FOLD: Keyframe[] = [
@@ -88,7 +84,6 @@ function Chip({ item, index, spot, size, land, fold, motion }: ChipProps) {
   )
 }
 
-/** Offsets are relative to the chips' container, which sits at the spot, so the chip's centre in room coordinates needs no measuring of the page. */
 function landPlan(element: HTMLElement, index: number, spot: Box, land: Land): AnimationPlan {
   const centre = { x: spot.x + element.offsetLeft + element.offsetWidth / 2, y: spot.y + element.offsetTop + element.offsetHeight / 2 }
   const start = slideToward(centre, land.agentAt)
