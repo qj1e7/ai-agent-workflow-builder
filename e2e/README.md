@@ -51,14 +51,14 @@ Each test makes its own use case, so order does not matter. Tests count tickets 
 
 | Spec | Proves |
 |---|---|
-| `02-release-check` | Alice opens the builder, plans the example, saves it and starts it with Run now. The run page shows the live room and the run pauses for approval, with nothing written. The Teams card for that approval is on the Teams page. It names the run, says the approval is waiting, and its link opens the approval page. Alice is refused with the backend's own-work message and has no approve button. Bob sees the exact ticket, approves, and the run ends with one ticket `MOCK-<n>` that mock Jira lists once. The Teams card then says the approval was given by Bob. The total ticket count goes up by exactly one. |
-| `03-failure` | With mock-github `unavailable`, a run fails. The AI troubleshooter panel shows the backend's advice and offers Retry run. After mock-github is back and the platform's retry delay has passed, Retry run sends the run to the approval pause. Nothing is written. |
+| `02-release-check` | Alice opens the builder, plans the example, saves it and starts it with Run now. The run page draws the run as a line of stops, and the run pauses at the approval stop with nothing written. Alice sees why she cannot decide and has no Approve button. The Teams card for that approval is on the Teams page. It names the run, says the approval is waiting, and its link opens the approval page, where Alice is refused with the backend's own-work message. Back on the run page, Bob sees the exact ticket at the approval stop and approves it there with one click. The run ends with one ticket `MOCK-<n>` that mock Jira lists once, and the Teams card then says Bob approved it. The total ticket count goes up by exactly one. |
+| `03-failure` | With mock-github `unavailable`, a run fails. The line breaks at the stop where the work was, and the AI troubleshooter's panel under it shows the backend's advice and Retry run. After mock-github is back and the platform's retry delay has passed, Retry run on the run page sends the run to the approval pause. Nothing is written. |
 | `04-plain-http-origin` | Opens the Portal as `http://portal:8080`, a plain HTTP host name that is not localhost, so the browser has no `crypto.randomUUID`. Run now on a saved use case still opens the run page with no page error. `PLAIN_HTTP_URL` changes the address. |
-| `01-first-screen` | On a stack with no runs, the first screen has its heading and a link to the builder. It skips when runs exist. |
+| `01-first-screen` | On a stack with no runs, the first screen shows the example's line of stops, Run the example and Describe your own task, with no serious accessibility finding in either theme. One click starts one run that waits at the approval with nothing written. It skips when runs exist, so run it on a fresh stack with `E2E_SUITES=ui`. |
 
-The specs pick elements by accessible role and name, by the backend's own strings and by URL. They do not read room captions or animation timing.
+The specs pick elements by accessible role and name, by the backend's own strings and by URL. They do not read animation timing.
 
-Evidence lands in `portal/e2e/out/live/` (gitignored). `shots/` has a 1440 by 900 screenshot per step and one 390 by 844 shot of the live room. `video/success-path.webm` records the whole success path.
+Evidence lands in `portal/e2e/out/live/` (gitignored). `shots/` has a 1440 by 900 screenshot per step and 390 by 844 shots of the run page and the first screen. `video/success-path.webm` records the whole success path.
 
 ## Mock GitHub
 
