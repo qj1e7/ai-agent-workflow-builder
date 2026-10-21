@@ -14,7 +14,7 @@ export const keys = {
   useCase: (user: string, useCaseId: string) => ['use-case', user, useCaseId] as const,
   templates: () => ['templates'] as const,
   approval: (user: string, approvalId: string) => ['approval', user, approvalId] as const,
-  troubleshoot: (user: string, runId: string) => ['troubleshoot', user, runId] as const,
+  troubleshoot: (user: string, runId: string, attempt: number) => ['troubleshoot', user, runId, attempt] as const,
   teamsMessages: (user: string) => ['teams-messages', user] as const,
   jiraTickets: (user: string) => ['jira-tickets', user] as const,
 }
@@ -120,7 +120,7 @@ export function useStartRun() {
   })
 }
 
-export function useApproval(approvalId: string, options?: QueryOptions) {
+export function useApproval(approvalId: string, options?: QueryOptions & { enabled?: boolean }) {
   const client = useApiClient()
   const user = useDevUser()
   return useQuery({
@@ -128,6 +128,7 @@ export function useApproval(approvalId: string, options?: QueryOptions) {
     queryFn: async () =>
       unwrap(await client.GET('/api/v1/approvals/{approval_id}', { params: { path: { approval_id: approvalId } } })),
     refetchInterval: pollEvery(options),
+    enabled: options?.enabled ?? true,
   })
 }
 
@@ -164,11 +165,12 @@ export function useRetry(runId: string) {
   })
 }
 
-export function useTroubleshoot(runId: string, enabled: boolean) {
+/** Keyed by attempt, so a second failure never shows the first one's cached advice. */
+export function useTroubleshoot(runId: string, enabled: boolean, attempt: number) {
   const client = useApiClient()
   const user = useDevUser()
   return useQuery({
-    queryKey: keys.troubleshoot(user, runId),
+    queryKey: keys.troubleshoot(user, runId, attempt),
     queryFn: async () =>
       unwrap(await client.GET('/api/v1/runs/{run_id}/troubleshoot', { params: { path: { run_id: runId } } })),
     enabled,

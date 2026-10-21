@@ -4,8 +4,7 @@ import { ApiError } from '../../api/client'
 import { useRunClock } from '../../api/context'
 import { errorWords } from '../../api/errors'
 import { useDisplayName } from '../../api/people'
-import { isConflict, refusalOf, useApproval, useDecide, useDevUsers, useRun } from '../../api/queries'
-import { useDevUser } from '../../api/session'
+import { useApproval, useRun } from '../../api/queries'
 import type { ApprovalView, RunView, Verdict } from '../../api/types'
 import { Button, ButtonLink } from '../../ui/Button'
 import { EmptyState, InlineMessage, Skeleton } from '../../ui/Feedback'
@@ -13,8 +12,9 @@ import { formatDuration, shortDigest } from '../../ui/format'
 import { IconCheck, IconClock, IconCopy, IconDoor, IconLock, IconReplay, IconShield, IconX } from '../../ui/icons'
 import { PageHeader } from '../../ui/PageHeader'
 import { Spine } from '../../ui/Spine'
-import { decisionRequest, decisionState, stepBlocks, type DecisionAttempt, type DecisionPanel } from './decisionState'
+import { decisionState, stepBlocks, type DecisionPanel } from './decisionState'
 import { ticketStatus } from './ticketStatus'
+import { useDecision } from './useDecision'
 import { useWaited } from './useWaited'
 import { atWords } from './waiting'
 import { systemsWritten } from './writeAction'
@@ -85,31 +85,15 @@ function Frame({ title, aside, lede, children }: FrameProps) {
   )
 }
 
-function attemptOf(decide: ReturnType<typeof useDecide>): DecisionAttempt {
-  if (decide.isSuccess) return { kind: 'recorded', sent: decide.variables, out: decide.data }
-  if (!decide.isError) return { kind: 'none' }
-  const refusal = refusalOf(decide.error)
-  if (refusal) return { kind: 'refused', refusal }
-  if (isConflict(decide.error)) return { kind: 'conflict' }
-  return { kind: 'failed', message: errorWords(decide.error) }
-}
-
 function ApprovalContent({ view }: { view: ApprovalView }) {
-  const userId = useDevUser()
-  const users = useDevUsers().data
   const nameOf = useDisplayName()
   const clock = useRunClock()
   const run = useRun(view.run_id, { poll: true }).data
-  const decide = useDecide(view.approval_id)
-  const state = decisionState(view, users?.find((user) => user.id === userId), attemptOf(decide))
+  const decision = useDecision(view.approval_id)
+  const state = decision.state ?? decisionState(view, undefined, { kind: 'none' })
   const now = clock.now(view.run_id)
   const status = ticketStatus(state.panel, run)
   const lede = run ? `${run.use_case_name}, started by ${nameOf(run.started_by)} ${atWords(run.started_at, now)}.` : null
-
-  function send(verdict: Verdict) {
-    const request = decisionRequest(view, state.panel, verdict)
-    if (request) decide.mutate(request)
-  }
 
   return (
     <Frame
@@ -143,9 +127,9 @@ function ApprovalContent({ view }: { view: ApprovalView }) {
             notice={state.notice}
             view={view}
             systems={systemsWritten(view.actions)}
-            sending={decide.isPending ? (decide.variables.verdict) : null}
-            sent={decide.isSuccess ? decide.variables.digest : null}
-            onDecide={send}
+            sending={decision.sending}
+            sent={decision.sent}
+            onDecide={decision.send}
           />
         </section>
       </div>

@@ -1,10 +1,12 @@
-import { useId } from 'react'
+import { useCallback, useId, useRef } from 'react'
 import { Link } from 'react-router'
 import type { BlockView, TemplateView } from '../api/types'
 import { headlineWords, type Headline, type LiveView } from '../run'
+import { useDecision } from '../screens/approval/useDecision'
 import { cx } from '../ui/cx'
 import { Skeleton } from '../ui/Feedback'
 import { IconCheck, IconPause, IconSpinner, IconX } from '../ui/icons'
+import { ApprovalPanel, TroublePanel, WrittenPanel } from './panels'
 import { TrackLine } from './TrackLine'
 import styles from './Tracker.module.css'
 
@@ -50,11 +52,25 @@ export interface TrackerProps {
   readonly titleTo?: string
 }
 
-/** The run view: the use case name, the headline and subline as one status region, and the line. */
-export function Tracker({ view, template, title, titleTo }: TrackerProps) {
+/** The run view: the use case name, the speed, the headline and subline as one status region, and the line with its one panel. */
+export function Tracker({ runId, view, template, title, titleTo }: TrackerProps) {
   const titleId = useId()
+  const headline = useRef<HTMLHeadingElement>(null)
   const { track } = view.track(template?.blocks ?? NO_BLOCKS)
+  const spot = track.panel
+  const decision = useDecision(spot?.is === 'approval' ? spot.approvalId : null)
+  const canDecide = decision.state?.panel.kind === 'can_decide'
   const tone = TONE[track.headline.is]
+  const focusHeadline = useCallback(() => headline.current?.focus(), [])
+
+  const panel =
+    spot?.is === 'approval' ? (
+      <ApprovalPanel decision={decision} gate={track.gate} atHead={view.atHead} onLeave={focusHeadline} />
+    ) : spot?.is === 'trouble' ? (
+      <TroublePanel key={spot.attempt} runId={runId} spot={spot} atHead={view.atHead} onRetried={view.controls.reconnect} onLeave={focusHeadline} />
+    ) : spot?.is === 'written' ? (
+      <WrittenPanel spot={spot} onLeave={focusHeadline} />
+    ) : null
 
   return (
     <section className={styles['tracker']} aria-labelledby={titleId} data-at-head={String(view.atHead)} data-speed={String(view.speed)}>
@@ -72,12 +88,14 @@ export function Tracker({ view, template, title, titleTo }: TrackerProps) {
           <span className={cx(styles['icon'], styles[tone])} aria-hidden="true">
             <ToneMark tone={tone} />
           </span>
-          <h2 className={styles['headline']}>{headlineWords(track.headline, { canDecide: false })}</h2>
+          <h2 ref={headline} tabIndex={-1} className={styles['headline']}>
+            {headlineWords(track.headline, { canDecide })}
+          </h2>
         </div>
         <p className={styles['subline']}>{track.subline}</p>
       </div>
       {template ? (
-        <TrackLine track={track} />
+        <TrackLine track={track} panel={panel} />
       ) : (
         <div className={styles['loading']}>
           <Skeleton lines={3} label="Loading the steps." />
