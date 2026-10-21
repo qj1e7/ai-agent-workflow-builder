@@ -148,6 +148,17 @@ def test_start_emits_created_then_dispatched():
     assert events[1].data.model_dump() == {"leg": "work", "attempt": 1}
 
 
+@pytest.mark.parametrize(
+    "moved_events",
+    [created_events("uc_1", 1, "LangGraph releases", ALICE, 1)[1:], AWAITING.approve(NOW).events],
+)
+def test_dispatched_summary_says_queued_because_the_engine_has_not_been_called_yet(moved_events):
+    [dispatched] = moved_events
+    assert dispatched.kind == "leg_dispatched"
+    assert "queued" in dispatched.summary
+    assert "sent" not in dispatched.summary
+
+
 def test_pending_begins_work_with_the_working_deadline():
     moved = PENDING_UNCLAIMED.begin_work(HOLDER, NOW)
     assert moved.state == Working(

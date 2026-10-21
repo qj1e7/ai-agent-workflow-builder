@@ -1,0 +1,55 @@
+import pytest
+from fastapi.testclient import TestClient
+
+from platform_api.app import create_app
+from tests.support import LOCAL_ENV
+
+SIGNED_OUT = {"/healthz", "/healthz/ready", "/api/v1/dev/users"}
+
+
+@pytest.fixture(scope="module")
+def schema() -> dict[str, object]:
+    return create_app(LOCAL_ENV).openapi()
+
+
+def operations(schema: dict[str, object]):
+    for path, methods in schema["paths"].items():  # type: ignore[attr-defined]
+        for method, operation in methods.items():
+            yield path, method, operation
+
+
+def test_dev_sign_in_is_an_api_key_header_scheme(schema: dict[str, object]):
+    scheme = schema["components"]["securitySchemes"]["DevUser"]  # type: ignore[index]
+    assert (scheme["type"], scheme["in"], scheme["name"]) == ("apiKey", "header", "X-Dev-User")
+    assert "dev" in scheme["description"].lower()
+
+
+def test_dev_sign_in_is_required_on_exactly_the_routes_that_read_it(schema: dict[str, object]):
+    needs = {
+        (path, method)
+        for path, method, op in operations(schema)
+        if op.get("security") == [{"DevUser": []}]
+    }
+    reads = {
+        (path, method)
+        for path, method, _ in operations(schema)
+        if path.startswith("/api/v1/") and path not in SIGNED_OUT
+    }
+    assert needs == reads
+    assert "security" not in schema
+
+
+def test_every_signed_in_route_declares_the_401_it_answers(schema: dict[str, object]):
+    missing = [
+        f"{method.upper()} {path}"
+        for path, method, op in operations(schema)
+        if op.get("security") and "401" not in op["responses"]
+    ]
+    assert missing == []
+
+
+def test_a_signed_in_route_answers_401_without_the_header():
+    client = TestClient(create_app(LOCAL_ENV))
+    response = client.get("/api/v1/runs")
+    assert response.status_code == 401
+    assert set(response.json()) == {"detail"}
