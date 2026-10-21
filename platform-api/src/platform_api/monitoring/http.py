@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
 
-from platform_api.auth import CurrentPrincipal
+from platform_api.auth import SIGNED_IN, CurrentPrincipal
 from platform_api.monitoring.agent_events import AgentEventPost
 from platform_api.monitoring.callbacks import verify_callback
 from platform_api.monitoring.events import ActivityEvent, RunFailed, RunFailedData, RunRetried
@@ -14,7 +14,7 @@ from platform_api.monitoring.log import ActivityLog
 from platform_api.monitoring.troubleshooter import Advice, explain_failure
 from platform_api.settings import Settings
 from platform_api.shared import RunId, TaskId
-from platform_api.wire import WireModel
+from platform_api.wire import WireModel, error_response
 
 KEEP_ALIVE_SECONDS = 15.0
 
@@ -59,13 +59,14 @@ router = APIRouter()
     ),
     response_model=EventPage,
     responses={
+        **SIGNED_IN,
         200: {
             "content": {
                 "text/event-stream": {
                     "schema": {"type": "string", "description": "SSE frames of ActivityEvent"}
                 }
             }
-        }
+        },
     },
 )
 async def run_events(
@@ -118,7 +119,15 @@ async def _frames(
             await task
 
 
-@router.get("/api/v1/runs/{run_id}/troubleshoot", tags=["monitoring"])
+@router.get(
+    "/api/v1/runs/{run_id}/troubleshoot",
+    tags=["monitoring"],
+    responses={
+        **SIGNED_IN,
+        404: error_response("No such run"),
+        409: error_response("The run has not failed, or it was retried since"),
+    },
+)
 async def troubleshoot(run_id: RunId, principal: CurrentPrincipal, log: Log) -> TroubleshootingOut:
     events = await log.read_after(run_id, 0)
     if not events:
@@ -145,6 +154,7 @@ def _current_failure(events: Sequence[ActivityEvent]) -> RunFailed | None:
     status_code=202,
     tags=["internal"],
     response_class=Response,
+    responses={401: error_response("The callback token is not valid for this run and task")},
 )
 async def ingest_agent_event(
     run_id: RunId,
