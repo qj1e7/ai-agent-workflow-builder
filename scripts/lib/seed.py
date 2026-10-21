@@ -1,4 +1,4 @@
-"""Makes one use case and one run that waits at the approval gate, so a scanner or a load test has real ids.
+"""Makes a use case and a run that waits at the approval gate, so a test has real ids.
 
 Runs inside the platform-api container, which has python and reaches the API on localhost:
     docker compose exec -T platform-api python - ids < scripts/lib/seed.py
@@ -6,7 +6,7 @@ Runs inside the platform-api container, which has python and reaches the API on 
 
 `ids` prints {"use_case_id", "run_id", "approval_id"}. `openapi` prints the API's OpenAPI document
 with those ids as the example value of each path parameter, so a scanner calls real resources.
-`openapi-public` does the same but keeps only the /api/ routes, which are the ones the Portal's nginx publishes.
+`openapi-public` keeps only the /api/ routes, the ones the Portal's nginx publishes.
 """
 
 import json
@@ -38,7 +38,9 @@ def seed() -> dict[str, str]:
         {
             "template": "release_check",
             "name": f"scan seed {uuid.uuid4().hex[:8]}",
-            "instruction": "Check langchain-ai/langgraph for new releases and open a ticket for the team.",
+            "instruction": (
+                "Check langchain-ai/langgraph for new releases and open a ticket for the team."
+            ),
             "params": {
                 "repo": "langchain-ai/langgraph",
                 "tag_pattern": r"^\d+\.\d+\.\d+$",
@@ -88,7 +90,9 @@ def main() -> None:
         print(json.dumps(with_examples(call("GET", "/openapi.json"), ids)))
     elif mode == "openapi-public":
         spec = with_examples(call("GET", "/openapi.json"), ids)
-        spec["paths"] = {path: item for path, item in spec["paths"].items() if path.startswith("/api/")}
+        spec["paths"] = {
+            path: item for path, item in spec["paths"].items() if path.startswith("/api/")
+        }
         print(json.dumps(spec))
     else:
         raise SystemExit(f"unknown mode {mode!r}")
