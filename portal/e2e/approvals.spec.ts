@@ -31,3 +31,22 @@ test('the approval page tells each person what they can do', async ({ page }, in
   await advanceUntil(page, page.getByText(/^Approved by Bob/))
   await record(page, info, 'approval-approved')
 })
+
+test('two presses in one tick send one decision, so Bob never reads a clash with himself', async ({ page }) => {
+  await openFrozen(page, '/builder')
+  await startRunFromBuilder(page)
+  await goTo(page, 'Approvals')
+  await page.locator('a[href^="/approvals/apr_demo"]').click()
+  await page.getByRole('heading', { name: 'Approve a write to Jira' }).waitFor()
+  await switchUser(page, 'Bob')
+  await expect(page.getByRole('button', { name: /^Approve and write to/ })).toBeEnabled()
+
+  // Approve, then Decline, in one task: before React can draw the first press.
+  await page.evaluate(() => {
+    for (const button of document.querySelectorAll<HTMLButtonElement>('main button')) {
+      if (/^(Approve and write to|Decline)/.test(button.textContent ?? '')) button.click()
+    }
+  })
+  await advanceUntil(page, page.getByText(/^Approved by Bob/))
+  await expect(page.getByRole('alert'), 'no clash is reported to the person who decided').toHaveCount(0)
+})

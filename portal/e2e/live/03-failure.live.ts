@@ -32,13 +32,22 @@ test('a GitHub outage stops the run, the AI troubleshooter explains it, and a re
 
   await setMockGithubMode('ok')
   await page.waitForTimeout(PLATFORM_RETRY_DELAY_MS + 1_000)
-  await retry.click()
+  const retries: string[] = []
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && request.url().endsWith(`/api/v1/runs/${runId}/retry`)) retries.push(request.url())
+  })
+  // Two presses in one task, before React can draw the first.
+  await retry.evaluate((button: HTMLElement) => {
+    button.click()
+    button.click()
+  })
   await backend.waitToLeave(runId, 'failed')
 
   await backend.waitForState(runId, ['awaiting_approval'])
   await expect(headline(page), 'the retried run reaches the approval pause').toHaveText('Waiting for an Approver', { timeout: CATCH_UP_MS })
   await expectCaughtUp(page)
   await expect(advice, 'the troubleshooter is gone once the run moves on').toHaveCount(0)
+  expect(retries, 'two presses in one tick send one retry').toHaveLength(1)
   expect((await backend.tickets()).filter((ticket) => ticket.run_id === runId), 'nothing is written while the retried run waits').toEqual([])
   await shot(page, info, 'failure-05-retried-awaiting-approval')
 })

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { errorWords } from '../../api/errors'
+import { useLatch } from '../../api/latch'
 import { isConflict, refusalOf, useApproval, useDecide, useDevUsers } from '../../api/queries'
 import { useDevUser } from '../../api/session'
 import type { ApprovalView, Verdict } from '../../api/types'
@@ -30,6 +31,7 @@ export function useDecision(approvalId: string | null): Decision {
   const userId = useDevUser()
   const user = useDevUsers().data?.find((candidate) => candidate.id === userId)
   const [sender, setSender] = useState<Sender | null>(null)
+  const latch = useLatch()
   const own = sentBy(sender, user, approvalId ?? '')
   const view = approvalId === null ? undefined : approval.data
   const state = view ? decisionState(view, user, attemptOf(decide, sender)) : null
@@ -42,9 +44,11 @@ export function useDecision(approvalId: string | null): Decision {
     sent: own && decide.isSuccess ? decide.variables.digest : null,
     send(verdict) {
       const request = view && state ? decisionRequest(view, state.panel, verdict) : null
-      if (!request || approvalId === null || decide.isPending) return
-      setSender({ user: userId, approvalId })
-      decide.mutate(request)
+      if (!request || approvalId === null) return
+      latch.run((settled) => {
+        setSender({ user: userId, approvalId })
+        decide.mutate(request, { onSettled: settled })
+      })
     },
   }
 }

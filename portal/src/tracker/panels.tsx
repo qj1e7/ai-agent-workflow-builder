@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { errorWords } from '../api/errors'
+import { useLatch } from '../api/latch'
 import { connectorLabel, objectNoun } from '../api/labels'
 import { useRetry, useTroubleshoot } from '../api/queries'
 import type { WriteActionView } from '../api/types'
@@ -147,6 +148,7 @@ interface TroublePanelProps {
 export function TroublePanel({ runId, spot, atHead, onRetried, onLeave }: TroublePanelProps) {
   const advice = useTroubleshoot(runId, true, spot.attempt)
   const retry = useRetry(runId)
+  const latch = useLatch()
   const troubleshooter = agentIdentity('troubleshooter')
   return (
     <Frame tone="bad" label="AI troubleshooter advice" onLeave={onLeave}>
@@ -166,7 +168,11 @@ export function TroublePanel({ runId, spot, atHead, onRetried, onLeave }: Troubl
       )}
       {spot.retryable && atHead ? (
         <div className={styles['acts']}>
-          <Action variant="primary" busy={retry.isPending || retry.isSuccess} onPress={() => retry.mutate(undefined, { onSuccess: onRetried })}>
+          <Action
+            variant="primary"
+            busy={retry.isPending || retry.isSuccess}
+            onPress={() => latch.run((settled) => retry.mutate(undefined, { onSuccess: onRetried, onSettled: settled }))}
+          >
             <IconReplay strokeWidth={2.2} />
             Retry run
           </Action>

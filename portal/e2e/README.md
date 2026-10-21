@@ -31,7 +31,7 @@ The state names and the four projects are listed in `support/states.ts`. A TypeS
 | `overview.spec.ts` | The overview at each stage of the live success run as Alice, plus the earlier runs list. Then as Bob, who approves in place before the recorded approval, so the run writes MOCK-143. |
 | `run.spec.ts` | The run page for the success, failed and rejected runs, including Instant, technical details and Retry run. |
 | `builder.spec.ts` | The builder empty, planned and saved. |
-| `approvals.spec.ts` | The approvals list, then the approval page as Alice, Carol and Bob, and after approving. |
+| `approvals.spec.ts` | The approvals list, then the approval page as Alice, Carol and Bob, and after approving. Approve and Decline pressed in one tick send one decision. |
 | `inboxes.spec.ts` | The Teams inbox and the mock Jira after the live run finished. |
 | `reduced-motion.spec.ts` | With reduced motion nothing that moves is running, and the approval pause reads fully. A control run without reduced motion proves the sampler can see movement. |
 | `keyboard.spec.ts` | Tab order and focus rings on the overview and approval page. The user switcher, the speed control and approving in place on the overview by keyboard alone. |
