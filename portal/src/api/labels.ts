@@ -114,6 +114,15 @@ export function operationLabel(operation: string): string {
   return operationNames[operation] ?? humanise(operation)
 }
 
+/**
+ * The thing an operation writes, from the contract's verb_object operation keys: create_ticket gives
+ * ticket, update_page gives page. Empty when the key has no object part.
+ */
+export function objectNoun(operation: string): string {
+  const parts = operation.split('_').filter(Boolean)
+  return parts.length > 1 ? (parts.at(-1) ?? '') : ''
+}
+
 export function rolesLabel(roles: readonly Role[]): string {
   return roles.map((role) => roleLabel[role]).join(' and ')
 }
