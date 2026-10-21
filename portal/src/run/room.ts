@@ -1,8 +1,8 @@
-import type { Actor, BlockView, FailureReason, FailureStage, RunOutcome, Verdict } from '../api/types'
+import type { Actor, BlockView, FailureReason, FailureStage, RunOutcome } from '../api/types'
 import type { EventOf, RunEvent } from '../stream/parse'
 
 type DeniedReason = EventOf<'write_action_denied'>['data']['reason']
-import { agentId, doorKey, userId, type AgentId, type DoorKey, type RunTime, type Seq, type UserId } from './brand'
+import { agentId, connectorKey, userId, type AgentId, type ConnectorKey, type RunTime, type Seq, type UserId } from './brand'
 import { findingItems } from './finding'
 import { ruleOf } from './kinds'
 
@@ -15,7 +15,7 @@ export interface AgentRef {
 export interface AgentRegistry {
   readonly host: AgentRef
   readonly troubleshooter: AgentRef
-  lookup(id: AgentId): { readonly display: string; readonly readDoor: DoorKey | null }
+  lookup(id: AgentId): { readonly display: string; readonly readDoor: ConnectorKey | null }
   /** The known agent whose display name appears in the words as whole words, case-insensitive. */
   named(words: string): AgentRef | null
 }
@@ -48,15 +48,12 @@ export type Phase =
     }
 
 export type AgentRole = 'host' | 'specialist' | 'troubleshooter'
-/** "Speaking" is not stored: it is the current beat's `speak` move. */
 export type AgentStatus = 'present' | 'working' | 'done' | 'stopped'
 
 export interface AgentSeat {
   readonly id: AgentId
   readonly display: string
   readonly role: AgentRole
-  /** 0 is the host's centre seat. Others take the lowest free slot from 1 on arrival and keep it until they leave. */
-  readonly slot: number
   readonly status: AgentStatus
 }
 
@@ -87,33 +84,14 @@ export interface Approval {
   readonly teams: TeamsPost
 }
 
-export type Checker = 'locked' | 'allowed' | 'blocked'
-
-export type Door =
-  | { readonly side: 'read'; readonly key: DoorKey }
-  | { readonly side: 'write'; readonly key: DoorKey; readonly checker: Checker }
-  | { readonly side: 'teams' }
-
-/** A request from an agent to its read door for one agent step. */
-export interface Trip {
-  readonly agent: AgentId
-  readonly step: string
-  readonly door: DoorKey
-  /** Messages the agent sent while the step was open, drawn as 1, 2, 3 on the path. */
-  readonly marks: number
-  readonly state: 'out' | 'back' | 'failed'
-}
-
 export interface Finding {
   readonly agent: AgentId
   readonly step: string
-  /** The read door the step's trip went through, or null when the step had no trip. */
-  readonly from: DoorKey | null
   readonly items: readonly string[]
 }
 
 export interface TicketLine {
-  readonly connector: DoorKey
+  readonly connector: ConnectorKey
   readonly operation: string
   /** The action line from the event, shown verbatim. */
   readonly line: string
@@ -144,21 +122,6 @@ export interface Caption {
   readonly actor: Actor
 }
 
-/** Where a travelling object starts or lands, and where the light can sit. Resolved to pixels by RoomLayout.point(). */
-export type Anchor =
-  | { readonly at: 'agent'; readonly id: AgentId }
-  | { readonly at: 'starter' }
-  | { readonly at: 'step'; readonly index: number }
-  | { readonly at: 'door'; readonly key: DoorKey }
-  | { readonly at: 'teams' }
-  | { readonly at: 'table' }
-  | { readonly at: 'table_edge' }
-
-export interface Light {
-  readonly on: Anchor
-  readonly tone: 'act' | 'wait' | 'fail'
-}
-
 export interface RoomState {
   /** Events folded into this frame; equals the seq of the last one. */
   readonly cursor: number
@@ -169,38 +132,13 @@ export interface RoomState {
   /** Join order. Seats stay when an agent finishes; only the troubleshooter ever leaves. */
   readonly agents: readonly AgentSeat[]
   readonly approval: Approval | null
-  /** The Teams door from the start, read doors as agents with a registry door arrive, write doors as proposals name connectors. */
-  readonly doors: readonly Door[]
-  /** Current attempt only. A retry clears them; history stays in the tape. */
-  readonly trips: readonly Trip[]
-  /** Set by a step that finished with a list; cleared by the proposal that takes the table and by a retry of the work leg. */
+  /** Set by a step that finished with a list; cleared by the proposal and by a retry of the work leg. */
   readonly finding: Finding | null
   readonly ticket: Ticket | null
   /** Set by agent_message; cleared when the phase changes or a step starts or finishes. */
   readonly speech: Speech | null
   readonly caption: Caption | null
-  readonly light: Light | null
 }
-
-/** What changed hands in one event, in domain words, for the beat to animate. */
-export type Move =
-  | { readonly type: 'open_room' }
-  | { readonly type: 'arrive'; readonly who: Anchor }
-  | { readonly type: 'leave'; readonly who: Anchor }
-  /** The light moves and the working ring starts; nothing travels. */
-  | { readonly type: 'focus'; readonly who: Anchor }
-  | { readonly type: 'carry'; readonly token: 'request' | 'message' | 'ticket'; readonly from: Anchor; readonly to: Anchor }
-  | {
-      readonly type: 'speak'
-      readonly who: Anchor
-      /** The numbered mark this message lands on its open trip's path. */
-      readonly mark: { readonly agent: AgentId; readonly step: string; readonly n: number } | null
-    }
-  | { readonly type: 'dim'; readonly to: Anchor }
-  | { readonly type: 'decide'; readonly step: number; readonly verdict: Verdict }
-  | { readonly type: 'deliver'; readonly door: DoorKey; readonly reference: string }
-  | { readonly type: 'fault'; readonly at: Anchor }
-  | { readonly type: 'settle' }
 
 export const EMPTY_ROOM: RoomState = {
   cursor: 0,
@@ -210,46 +148,20 @@ export const EMPTY_ROOM: RoomState = {
   starter: null,
   agents: [],
   approval: null,
-  doors: [],
-  trips: [],
   finding: null,
   ticket: null,
   speech: null,
   caption: null,
-  light: null,
-}
-
-export interface Fold {
-  readonly room: RoomState
-  readonly move: Move | null
-}
-
-const agentAnchor = (id: AgentId): Anchor => ({ at: 'agent', id })
-const doorAnchor = (key: DoorKey): Anchor => ({ at: 'door', key })
-const TABLE: Anchor = { at: 'table' }
-const TABLE_EDGE: Anchor = { at: 'table_edge' }
-const TEAMS: Anchor = { at: 'teams' }
-const STARTER: Anchor = { at: 'starter' }
-
-function lowestFreeSlot(agents: readonly AgentSeat[]): number {
-  const taken = new Set(agents.map((seat) => seat.slot))
-  let slot = 1
-  while (taken.has(slot)) slot += 1
-  return slot
 }
 
 /** Seats an agent if it is not seated. A re-join (`rejoin`) also brings it back to present, so attempt 2 starts clean. */
-function seatAgent(room: RoomState, ref: AgentRef, role: AgentRole, registry: AgentRegistry, rejoin = false): RoomState {
+function seatAgent(room: RoomState, ref: AgentRef, role: AgentRole, rejoin = false): RoomState {
   const seated = room.agents.find((seat) => seat.id === ref.id)
   if (seated) {
     if (!rejoin || seated.status === 'present') return room
     return { ...room, agents: room.agents.map((seat) => (seat.id === ref.id ? { ...seat, status: 'present' } : seat)) }
   }
-  const slot = role === 'host' ? 0 : lowestFreeSlot(room.agents)
-  const seat: AgentSeat = { id: ref.id, display: ref.display, role, slot, status: 'present' }
-  const door = registry.lookup(ref.id).readDoor
-  const doors = door && !room.doors.some((d) => d.side === 'read' && d.key === door) ? [...room.doors, { side: 'read' as const, key: door }] : room.doors
-  return { ...room, agents: [...room.agents, seat], doors }
+  return { ...room, agents: [...room.agents, { id: ref.id, display: ref.display, role, status: 'present' }] }
 }
 
 function withStatus(room: RoomState, id: AgentId, status: AgentStatus): RoomState {
@@ -262,21 +174,6 @@ function actorRef(actor: Actor): AgentRef {
 
 function user(id: string, display: string): UserRef {
   return { id: userId(id), display }
-}
-
-function openTripOf(room: RoomState, agent: AgentId): Trip | undefined {
-  return room.trips.findLast((trip) => trip.agent === agent && trip.state === 'out')
-}
-
-function replaceTrip(trips: readonly Trip[], next: Trip): Trip[] {
-  const index = trips.findIndex((trip) => trip.agent === next.agent && trip.step === next.step)
-  return index < 0 ? [...trips, next] : trips.map((trip, i) => (i === index ? next : trip))
-}
-
-function setCheckers(doors: readonly Door[], checker: Checker, only?: ReadonlySet<DoorKey>): Door[] {
-  return doors.map((door) =>
-    door.side === 'write' && (!only || only.has(door.key)) ? { ...door, checker } : door,
-  )
 }
 
 function stepsFromWire(steps: EventOf<'approval_requested'>['data']['steps'], previous: Approval | null, at: RunTime): ApprovalStep[] {
@@ -305,33 +202,21 @@ function decide(room: RoomState, e: EventOf<'approval_decided'>): RoomState {
   let steps = room.approval.steps.map((step): ApprovalStep =>
     step.index === e.data.step ? { ...step, state: { is: verdict === 'approve' ? 'approved' : 'declined', by, at: e.at } } : step,
   )
-  const decidedAnchor: Anchor = { at: 'step', index: e.data.step }
-  if (verdict === 'decline') {
-    return { ...room, approval: { ...room.approval, steps }, light: { on: decidedAnchor, tone: 'act' } }
-  }
+  if (verdict === 'decline') return { ...room, approval: { ...room.approval, steps } }
   const next = steps.find((step) => step.state.is === 'waiting')
   if (next) {
     steps = steps.map((step) => (step === next ? { ...step, state: { is: 'open', since: e.at } } : step))
-    return {
-      ...room,
-      approval: { ...room.approval, steps },
-      light: { on: { at: 'step', index: next.index }, tone: 'wait' },
-    }
+    return { ...room, approval: { ...room.approval, steps } }
   }
   const allApproved = steps.every((step) => step.state.is === 'approved')
-  return {
-    ...room,
-    approval: { ...room.approval, steps },
-    phase: allApproved ? { name: 'acting' } : room.phase,
-    light: { on: decidedAnchor, tone: 'act' },
-  }
+  return { ...room, approval: { ...room.approval, steps }, phase: allApproved ? { name: 'acting' } : room.phase }
 }
 
 /**
  * The fold. Pure and total: an event the state does not expect (a decision with no approval open)
  * changes only cursor and caption. Never throws on server data; parseEvent already checked shapes.
  */
-export function applyEvent(room: RoomState, e: RunEvent, registry: AgentRegistry): Fold {
+export function applyEvent(room: RoomState, e: RunEvent, registry: AgentRegistry): RoomState {
   const rule = ruleOf(e)
   const base: RoomState = {
     ...room,
@@ -339,284 +224,148 @@ export function applyEvent(room: RoomState, e: RunEvent, registry: AgentRegistry
     caption: rule.tier === 'story' && rule.caption ? { seq: e.seq, summary: e.summary, actor: e.actor } : room.caption,
   }
   const folded = step(base, e, registry)
-  const phaseChanged = folded.room.phase.name !== room.phase.name
-  return phaseChanged && folded.room.speech === room.speech ? { ...folded, room: { ...folded.room, speech: null } } : folded
+  const phaseChanged = folded.phase.name !== room.phase.name
+  return phaseChanged && folded.speech === room.speech ? { ...folded, speech: null } : folded
 }
 
-function step(room: RoomState, e: RunEvent, registry: AgentRegistry): Fold {
+function step(room: RoomState, e: RunEvent, registry: AgentRegistry): RoomState {
   switch (e.kind) {
     case 'opaque':
     case 'leg_dispatched':
     case 'step_started':
     case 'step_finished':
     case 'step_retried':
-      return { room, move: null }
+      return room
 
     case 'run_created': {
-      const started: RoomState = {
-        ...room,
-        startedAt: e.at,
-        phase: { name: 'pending' },
-        starter: user(e.data.started_by, e.actor.display),
-        doors: room.doors.some((door) => door.side === 'teams') ? room.doors : [...room.doors, { side: 'teams' }],
-        light: { on: STARTER, tone: 'act' },
-      }
-      return { room: seatAgent(started, registry.host, 'host', registry), move: { type: 'open_room' } }
+      const started: RoomState = { ...room, startedAt: e.at, phase: { name: 'pending' }, starter: user(e.data.started_by, e.actor.display) }
+      return seatAgent(started, registry.host, 'host')
     }
 
     case 'agent_joined': {
       const guest: AgentRef = { id: agentId(e.data.agent.id), display: e.data.agent.display }
-      let next = seatAgent(room, registry.host, 'host', registry)
-      next = seatAgent(next, guest, 'specialist', registry, true)
-      return {
-        room: {
-          ...next,
-          phase: next.phase.name === 'pending' || next.phase.name === 'empty' ? { name: 'working' } : next.phase,
-          light: { on: agentAnchor(guest.id), tone: 'act' },
-        },
-        move: { type: 'arrive', who: agentAnchor(guest.id) },
-      }
+      const next = seatAgent(seatAgent(room, registry.host, 'host'), guest, 'specialist', true)
+      return { ...next, phase: next.phase.name === 'pending' || next.phase.name === 'empty' ? { name: 'working' } : next.phase }
     }
 
     case 'agent_step_started': {
       const agent = actorRef(e.actor)
-      let next: RoomState = { ...withStatus(seatAgent(room, agent, 'specialist', registry), agent.id, 'working'), speech: null }
-      if (next.phase.name === 'pending') next = { ...next, phase: { name: 'working' } }
-      const door = registry.lookup(agent.id).readDoor
-      next = { ...next, light: { on: agentAnchor(agent.id), tone: 'act' } }
-      if (!door) return { room: next, move: { type: 'focus', who: agentAnchor(agent.id) } }
-      const trip: Trip = { agent: agent.id, step: e.data.step, door, marks: 0, state: 'out' }
-      return {
-        room: { ...next, trips: replaceTrip(next.trips, trip) },
-        move: { type: 'carry', token: 'request', from: agentAnchor(agent.id), to: doorAnchor(door) },
-      }
+      const next: RoomState = { ...withStatus(seatAgent(room, agent, 'specialist'), agent.id, 'working'), speech: null }
+      return next.phase.name === 'pending' ? { ...next, phase: { name: 'working' } } : next
     }
 
     case 'agent_step_finished': {
       const agent = actorRef(e.actor)
-      const done = withStatus(seatAgent(room, agent, 'specialist', registry), agent.id, 'done')
-      const trip = done.trips.find((candidate) => candidate.agent === agent.id && candidate.step === e.data.step)
+      const done = withStatus(seatAgent(room, agent, 'specialist'), agent.id, 'done')
       const items = findingItems(e.data.result)
-      const finding: Finding | null = items.length > 0 ? { agent: agent.id, step: e.data.step, from: trip?.door ?? null, items } : done.finding
-      const next: RoomState = { ...done, finding, speech: null }
-      if (!trip) return { room: next, move: { type: 'focus', who: agentAnchor(agent.id) } }
-      return {
-        room: { ...next, trips: replaceTrip(next.trips, { ...trip, state: 'back' }) },
-        move: { type: 'carry', token: 'request', from: doorAnchor(trip.door), to: agentAnchor(agent.id) },
-      }
+      return { ...done, finding: items.length > 0 ? { agent: agent.id, step: e.data.step, items } : done.finding, speech: null }
     }
 
     case 'agent_failed': {
       const agent = actorRef(e.actor)
-      const next = withStatus(seatAgent(room, agent, 'specialist', registry), agent.id, 'stopped')
-      const trip = e.data.step
-        ? next.trips.find((candidate) => candidate.agent === agent.id && candidate.step === e.data.step)
-        : openTripOf(next, agent.id)
-      const lit: RoomState = { ...next, light: { on: agentAnchor(agent.id), tone: 'fail' } }
-      if (!trip) return { room: lit, move: { type: 'fault', at: agentAnchor(agent.id) } }
-      return {
-        room: { ...lit, trips: replaceTrip(lit.trips, { ...trip, state: 'failed' }) },
-        move: { type: 'fault', at: doorAnchor(trip.door) },
-      }
+      return withStatus(seatAgent(room, agent, 'specialist'), agent.id, 'stopped')
     }
 
     case 'agent_message': {
       const speaker: AgentRef = { id: agentId(e.data.speaker.id), display: e.data.speaker.display }
-      const next = seatAgent(room, speaker, 'specialist', registry)
       const to: Speech['to'] =
         e.data.addressee.kind === 'agent'
           ? { kind: 'agent', id: agentId(e.data.addressee.id), display: e.data.addressee.display }
           : { kind: 'room' }
-      const speech: Speech = { seq: e.seq, speaker: speaker.id, to, text: e.data.text }
-      const trip = openTripOf(next, speaker.id)
-      const marked = trip ? { ...trip, marks: trip.marks + 1 } : null
-      return {
-        room: {
-          ...next,
-          speech,
-          trips: marked ? replaceTrip(next.trips, marked) : next.trips,
-          light: { on: agentAnchor(speaker.id), tone: 'act' },
-        },
-        move: {
-          type: 'speak',
-          who: agentAnchor(speaker.id),
-          mark: marked ? { agent: marked.agent, step: marked.step, n: marked.marks } : null,
-        },
-      }
+      return { ...seatAgent(room, speaker, 'specialist'), speech: { seq: e.seq, speaker: speaker.id, to, text: e.data.text } }
     }
 
     case 'write_action_proposed': {
       const proposer = actorRef(e.actor)
-      const next = seatAgent(room, proposer, 'specialist', registry)
       const lines: TicketLine[] = e.data.actions.map((action) => ({
-        connector: doorKey(action.connector),
+        connector: connectorKey(action.connector),
         operation: action.operation,
         line: action.line,
         reference: null,
       }))
-      const doors = [...next.doors]
-      for (const line of lines) {
-        if (!doors.some((door) => door.side === 'write' && door.key === line.connector)) {
-          doors.push({ side: 'write', key: line.connector, checker: 'locked' })
-        }
-      }
       return {
-        room: {
-          ...next,
-          doors,
-          finding: null,
-          ticket: { proposalId: e.data.proposal_id, digest: e.data.digest, proposer: proposer.id, lines, denied: null },
-          phase: { name: 'proposed' },
-          light: { on: TABLE, tone: 'act' },
-        },
-        move: { type: 'carry', token: 'ticket', from: agentAnchor(proposer.id), to: TABLE },
+        ...seatAgent(room, proposer, 'specialist'),
+        finding: null,
+        ticket: { proposalId: e.data.proposal_id, digest: e.data.digest, proposer: proposer.id, lines, denied: null },
+        phase: { name: 'proposed' },
       }
     }
 
     case 'approval_requested': {
       const steps = stepsFromWire(e.data.steps, room.approval, e.at)
-      const open = steps.find((candidate) => candidate.state.is === 'open')
       const teams = room.approval?.id === e.data.approval_id ? room.approval.teams : { is: 'not_posted' as const }
-      const anchor: Anchor = open ? { at: 'step', index: open.index } : TABLE
-      return {
-        room: {
-          ...room,
-          approval: { id: e.data.approval_id, link: e.data.link, steps, teams },
-          phase: { name: 'awaiting_approval' },
-          light: { on: anchor, tone: 'wait' },
-        },
-        move: { type: 'dim', to: anchor },
-      }
+      return { ...room, approval: { id: e.data.approval_id, link: e.data.link, steps, teams }, phase: { name: 'awaiting_approval' } }
     }
 
-    case 'approval_announced': {
-      if (!room.approval) return { room, move: null }
-      return {
-        room: { ...room, approval: { ...room.approval, teams: { is: 'posted', channel: e.data.channel } } },
-        move: { type: 'carry', token: 'message', from: TABLE, to: TEAMS },
-      }
-    }
+    case 'approval_announced':
+      return room.approval ? { ...room, approval: { ...room.approval, teams: { is: 'posted', channel: e.data.channel } } } : room
 
-    case 'approval_announce_failed': {
-      if (!room.approval) return { room, move: null }
-      return {
-        room: {
-          ...room,
-          approval: { ...room.approval, teams: { is: 'failed', channel: e.data.channel, message: e.data.message } },
-        },
-        move: { type: 'fault', at: TEAMS },
-      }
-    }
+    case 'approval_announce_failed':
+      return room.approval
+        ? { ...room, approval: { ...room.approval, teams: { is: 'failed', channel: e.data.channel, message: e.data.message } } }
+        : room
 
     case 'approval_decided':
-      return { room: decide(room, e), move: { type: 'decide', step: e.data.step, verdict: e.data.verdict } }
+      return decide(room, e)
 
-    case 'write_action_denied': {
-      if (!room.ticket) return { room, move: null }
-      const keys = new Set(room.ticket.lines.map((line) => line.connector))
-      const first = room.ticket.lines[0]?.connector
-      const at: Anchor = first ? doorAnchor(first) : TABLE
-      return {
-        room: {
-          ...room,
-          ticket: { ...room.ticket, denied: { reason: e.data.reason, detail: e.data.detail } },
-          doors: setCheckers(room.doors, 'blocked', keys),
-          light: { on: at, tone: 'fail' },
-        },
-        move: { type: 'fault', at },
-      }
-    }
+    case 'write_action_denied':
+      return room.ticket ? { ...room, ticket: { ...room.ticket, denied: { reason: e.data.reason, detail: e.data.detail } } } : room
 
     case 'write_action_done': {
-      const key = doorKey(e.data.connector)
+      const key = connectorKey(e.data.connector)
       let referenced = false
       const lines = (room.ticket?.lines ?? []).map((line) => {
         if (referenced || line.reference || line.connector !== key || line.operation !== e.data.operation) return line
         referenced = true
         return { ...line, reference: e.data.external_reference }
       })
-      const doors = room.doors.some((door) => door.side === 'write' && door.key === key)
-        ? room.doors
-        : [...room.doors, { side: 'write' as const, key, checker: 'locked' as const }]
       return {
-        room: {
-          ...room,
-          ticket: room.ticket ? { ...room.ticket, lines } : room.ticket,
-          doors: setCheckers(doors, 'allowed', new Set([key])),
-          phase: room.phase.name === 'acting' ? room.phase : { name: 'acting' },
-          light: { on: doorAnchor(key), tone: 'act' },
-        },
-        move: { type: 'deliver', door: key, reference: e.data.external_reference },
+        ...room,
+        ticket: room.ticket ? { ...room.ticket, lines } : room.ticket,
+        phase: room.phase.name === 'acting' ? room.phase : { name: 'acting' },
       }
     }
 
     case 'run_succeeded':
       return {
-        room: {
-          ...room,
-          phase: { name: 'succeeded', outcome: e.data.outcome },
-          agents: room.agents.map((seat) => (seat.status === 'working' ? { ...seat, status: 'done' } : seat)),
-          light: { on: room.ticket ? TABLE : agentAnchor(registry.host.id), tone: 'act' },
-        },
-        move: { type: 'settle' },
+        ...room,
+        phase: { name: 'succeeded', outcome: e.data.outcome },
+        agents: room.agents.map((seat) => (seat.status === 'working' ? { ...seat, status: 'done' } : seat)),
       }
 
     case 'run_rejected': {
       const declined = room.approval?.steps.find((candidate) => candidate.state.is === 'declined')?.state
       const by = declined && declined.is === 'declined' ? declined.by : user(e.data.by, e.data.by)
-      return {
-        room: { ...room, phase: { name: 'rejected', by, step: e.data.step }, light: { on: TABLE_EDGE, tone: 'act' } },
-        move: { type: 'carry', token: 'ticket', from: TABLE, to: TABLE_EDGE },
-      }
+      return { ...room, phase: { name: 'rejected', by, step: e.data.step } }
     }
 
     case 'run_failed': {
       const failed: RoomState = {
         ...room,
-        phase: {
-          name: 'failed',
-          stage: e.data.stage,
-          reason: e.data.reason,
-          retryable: e.data.retryable,
-          message: e.data.message,
-        },
+        phase: { name: 'failed', stage: e.data.stage, reason: e.data.reason, retryable: e.data.retryable, message: e.data.message },
       }
-      const seated = seatAgent(failed, registry.troubleshooter, 'troubleshooter', registry)
-      return {
-        room: { ...seated, light: { on: agentAnchor(registry.troubleshooter.id), tone: 'act' } },
-        move: { type: 'arrive', who: agentAnchor(registry.troubleshooter.id) },
-      }
+      return seatAgent(failed, registry.troubleshooter, 'troubleshooter')
     }
 
     case 'run_retried': {
-      const hadTroubleshooter = room.agents.some((seat) => seat.role === 'troubleshooter')
       const agents = room.agents
         .filter((seat) => seat.role !== 'troubleshooter')
         .map((seat): AgentSeat => (seat.status === 'present' ? seat : { ...seat, status: 'present' }))
       const work = e.data.leg === 'work'
-      const next: RoomState = {
+      return {
         ...room,
         attempt: e.data.attempt,
         agents,
-        trips: [],
         phase: work ? { name: 'working' } : { name: 'acting' },
         finding: work ? null : room.finding,
         ticket: work ? null : room.ticket ? { ...room.ticket, denied: null } : null,
         approval: work ? null : room.approval,
-        doors: setCheckers(room.doors, 'locked'),
-        light: { on: room.starter && e.actor.id === room.starter.id ? STARTER : agentAnchor(registry.host.id), tone: 'act' },
-      }
-      return {
-        room: next,
-        move: hadTroubleshooter
-          ? { type: 'leave', who: agentAnchor(registry.troubleshooter.id) }
-          : { type: 'focus', who: next.light?.on ?? STARTER },
       }
     }
   }
 }
 
-/** The open approval step, if the room is waiting for a person. Dimming, the amber light and every waiting counter read this. */
+/** The open approval step, if the run is waiting for a person. Every waiting counter reads this. */
 export function openStep(room: RoomState): OpenStep | null {
   for (const step of room.approval?.steps ?? []) {
     if (step.state.is === 'open') return { ...step, state: step.state }
@@ -624,110 +373,8 @@ export function openStep(room: RoomState): OpenStep | null {
   return null
 }
 
-export type TicketLife = 'draft' | 'waiting' | 'approved' | 'written' | 'denied' | 'declined'
-
-/** Derived, not stored: stamps come from approval steps, written from line references. */
-export function ticketLife(room: RoomState): TicketLife | null {
-  const { ticket, approval } = room
-  if (!ticket) return null
-  if (ticket.denied) return 'denied'
-  const steps = approval?.steps ?? []
-  if (steps.some((step) => step.state.is === 'declined')) return 'declined'
-  if (ticket.lines.length > 0 && ticket.lines.every((line) => line.reference)) return 'written'
-  if (!approval) return 'draft'
-  if (steps.some((step) => step.state.is === 'open' || step.state.is === 'waiting')) return 'waiting'
-  return 'approved'
-}
-
-export interface Stamp {
-  readonly verdict: Verdict
-  readonly by: UserRef
-}
-
-/** The decided steps in order: the stamps on the ticket. */
-export function stamps(room: RoomState): readonly Stamp[] {
-  return (room.approval?.steps ?? []).flatMap((step): Stamp[] => {
-    if (step.state.is === 'approved') return [{ verdict: 'approve', by: step.state.by }]
-    if (step.state.is === 'declined') return [{ verdict: 'decline', by: step.state.by }]
-    return []
-  })
-}
-
 export function isSettled(room: RoomState): boolean {
   return room.phase.name === 'succeeded' || room.phase.name === 'rejected' || room.phase.name === 'failed'
-}
-
-// ---- floor plan ----
-
-export type SeatKey = `agent:${string}` | 'starter' | `step:${number}`
-
-export interface PlanDoor {
-  readonly side: Door['side']
-  /** null for a write door the template promises but no proposal has named yet, and 'teams' for the Teams door. */
-  readonly key: DoorKey | 'teams' | null
-  /** The template's block name for a seeded write door, otherwise null. */
-  readonly label: string | null
-}
-
-export interface FloorPlan {
-  /** Slot 0 is the host. */
-  readonly agents: readonly { readonly key: SeatKey; readonly slot: number }[]
-  /** Slot 0 the starter, then one seat per approval step in step order. */
-  readonly people: readonly { readonly key: SeatKey; readonly slot: number }[]
-  readonly doors: readonly PlanDoor[]
-}
-
-export interface ExpectedWrite {
-  readonly label: string
-  readonly key: DoorKey | null
-}
-
-export function agentSeatKey(id: AgentId): SeatKey {
-  return `agent:${id}`
-}
-
-export function stepSeatKey(index: number): SeatKey {
-  return `step:${index}`
-}
-
-export function seatKeyOf(a: Anchor): SeatKey | null {
-  switch (a.at) {
-    case 'agent':
-      return agentSeatKey(a.id)
-    case 'starter':
-      return 'starter'
-    case 'step':
-      return stepSeatKey(a.index)
-    default:
-      return null
-  }
-}
-
-/**
- * Seats and doors derive from state, so layout tests need no events. Write doors the template promises
- * (`expectedWrites`, one per write_action block) stand locked from the first second, named after their
- * connector when the block's words name one; the first proposal that names a connector takes the first
- * seeded door, so the door never jumps.
- */
-export function floorPlanOf(room: RoomState, expectedWrites: readonly ExpectedWrite[] = []): FloorPlan {
-  const agents = [...room.agents]
-    .sort((a, b) => a.slot - b.slot)
-    .map((seat) => ({ key: agentSeatKey(seat.id), slot: seat.slot }))
-  const people: FloorPlan['people'] = [
-    ...(room.starter ? [{ key: 'starter' as const, slot: 0 }] : []),
-    ...(room.approval?.steps ?? []).map((step) => ({ key: stepSeatKey(step.index), slot: step.index + 1 })),
-  ]
-  const writes = room.doors.filter((door): door is Extract<Door, { side: 'write' }> => door.side === 'write')
-  const doors: PlanDoor[] = []
-  for (const door of room.doors) {
-    if (door.side === 'teams') doors.push({ side: 'teams', key: 'teams', label: null })
-    else if (door.side === 'read') doors.push({ side: 'read', key: door.key, label: null })
-  }
-  const count = Math.max(writes.length, expectedWrites.length)
-  for (let i = 0; i < count; i += 1) {
-    doors.push({ side: 'write', key: writes[i]?.key ?? expectedWrites[i]?.key ?? null, label: expectedWrites[i]?.label ?? null })
-  }
-  return { agents, people, doors }
 }
 
 // ---- spine ----

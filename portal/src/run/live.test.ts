@@ -3,11 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ApprovalView, MockJiraTicket, RunView } from '../api/types'
 import { createDemoPlatform, type DemoPlatformHandle } from '../mock'
 import type { FetchLike } from '../stream/feed'
-import { formatDuration } from '../ui/format'
 import { runId } from './brand'
 import { createClock } from './clock'
 import { createLiveView, type LiveView, type LiveViewStore } from './live'
-import { statusOf } from './status'
 import { fixedClock, TEST_REGISTRY } from './testing'
 
 const START = Date.parse('2026-11-27T02:00:00Z')
@@ -111,7 +109,6 @@ describe('createLiveView against the demo platform', () => {
     expect(view().frame.label).toBe('live')
     expect(view().transport.atEdge).toBe(true)
     expect(view().frame.elapsed.at, 'live, the transport shows one clock: the run is as long as it has run').toBe(view().frame.elapsed.total)
-    expect(view().room.doors.find((door) => door.side === 'write')).toMatchObject({ key: 'jira', checker: 'locked' })
 
     const phases = new Set(seen.map((snapshot) => snapshot.room.phase.name))
     expect([...phases]).toEqual(expect.arrayContaining(['pending', 'working', 'proposed', 'awaiting_approval']))
@@ -160,14 +157,10 @@ describe('createLiveView against the demo platform', () => {
     const { view, close } = await openBurst(now)
     while (view().room.phase.name !== 'awaiting_approval') await tick(100)
     expect(view().frame.shown, 'the room is still catching up').toBeLessThan(view().frame.head)
-    const edge = view().transport.edge
-    if (!edge?.waitingSince) throw new Error('no live edge')
     const liveWait = view().frame.waiting?.elapsedMs ?? 0
-    expect(liveWait).toBe(edge.now - edge.waitingSince)
     expect(liveWait).toBe(now - at(15))
     const shown = view().frame
     expect(liveWait, "the live wait, not the shown frame's own").toBeGreaterThan(shown.sceneTime - (shown.waiting?.since ?? 0))
-    expect(view().describe()).toContain(`for ${formatDuration(liveWait)}.`)
     close()
   })
 
@@ -181,7 +174,7 @@ describe('createLiveView against the demo platform', () => {
     expect(sought.waiting?.elapsedMs).toBe(sought.sceneTime - (sought.waiting?.since ?? 0))
     expect(sought.waiting?.elapsedMs).toBeLessThan(60 * SECOND)
     expect(sought.elapsed.at, 'behind the end, the transport shows the position of the total').toBeLessThan(sought.elapsed.total)
-    expect(statusOf(view())).toBe('replay')
+    expect(sought.label).toBe('replay')
 
     view().transport.restart()
     while (view().room.phase.name !== 'awaiting_approval') await tick(100)
@@ -190,11 +183,9 @@ describe('createLiveView against the demo platform', () => {
     expect(replayed.spedUp).toBe(false)
     expect(replayed.waiting?.elapsedMs).toBe(replayed.sceneTime - (replayed.waiting?.since ?? 0))
     expect(replayed.waiting?.elapsedMs).toBeLessThan(60 * SECOND)
-    expect(view().describe()).toContain(`for ${formatDuration(replayed.waiting?.elapsedMs ?? 0)}.`)
 
     while (view().frame.beat?.type !== 'hold') await tick(100)
     expect(view().frame.spedUp).toBe(true)
-    expect(statusOf(view())).toBe('sped_up')
     unsubscribe()
   })
 
@@ -203,10 +194,8 @@ describe('createLiveView against the demo platform', () => {
     await tick(20 * SECOND)
     expect(view().room.phase.name).toBe('awaiting_approval')
     expect(view().frame.spedUp, 'the head of the wait plays at real speed').toBe(false)
-    expect(statusOf(view())).toBe('live')
     await tick(6 * SECOND)
     expect(view().frame.spedUp).toBe(true)
-    expect(statusOf(view())).toBe('sped_up')
     expect(view().frame.waiting?.elapsedMs ?? 0).toBeGreaterThan(60 * SECOND)
     await tick(8 * SECOND)
     expect(view().room.approval?.steps[0]?.state.is).toBe('approved')
@@ -214,34 +203,30 @@ describe('createLiveView against the demo platform', () => {
     unsubscribe()
   })
 
-  it('says the outcome on the transport: Done, Declined, Stopped, and Catching up while behind the live edge', async () => {
+  it('ends each recorded run at its outcome, and catches up while behind the live edge', async () => {
     const behind = await openBurst(at(17) + SECOND)
     expect(behind.view().frame.shown).toBeLessThan(behind.view().frame.head)
-    expect(statusOf(behind.view())).toBe('catching_up')
+    expect(behind.view().frame.catchingUp).toBe(true)
     behind.close()
 
     const live = open()
-    await tick(0)
-    expect(statusOf(live.view())).toBe('live')
     await tick(8 * SECOND)
-    expect(statusOf(live.view()), 'the paced demo never has to catch up').toBe('live')
+    expect(live.view().frame.catchingUp, 'the paced demo never has to catch up').toBe(false)
     await tick(80 * SECOND)
     expect(live.view().room.phase.name).toBe('succeeded')
-    expect(statusOf(live.view())).toBe('done')
-    live.view().transport.seek(5)
-    expect(statusOf(live.view())).toBe('replay')
+    expect(live.view().frame.label).toBe('finished')
     live.unsubscribe()
 
     const failed = open(runId('run_01JB9'))
     await tick(0)
     expect(failed.view().room.phase.name).toBe('failed')
-    expect(statusOf(failed.view())).toBe('stopped')
+    expect(failed.view().frame.label).toBe('finished')
     failed.unsubscribe()
 
     const rejected = open(runId('run_01JBA'))
     await tick(0)
     expect(rejected.view().room.phase.name).toBe('rejected')
-    expect(statusOf(rejected.view())).toBe('declined')
+    expect(rejected.view().frame.label).toBe('finished')
     rejected.unsubscribe()
   })
 

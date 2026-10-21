@@ -5,7 +5,6 @@ import type { BlockView } from '../api/types'
 import { runFeed, type Connection, type FetchLike } from '../stream/feed'
 import type { Ms, RunId, RunTime, WallTime } from './brand'
 import { createClock, type Clock } from './clock'
-import { describeRoom } from './describe'
 import {
   atEdge,
   catchingUp,
@@ -24,19 +23,8 @@ import {
   type Mode,
   type Stage,
 } from './director'
-import { layoutRoom, type RoomLayout } from './layout'
-import {
-  floorPlanOf,
-  openStep,
-  spineStations,
-  type AgentRegistry,
-  type ExpectedWrite,
-  type Move,
-  type RoomState,
-  type Station,
-} from './room'
-import { layoutScrubber, type ScrubberLayout } from './scrubber'
-import { createTape, type MinutesEntry, type TimelineMark } from './tape'
+import { openStep, spineStations, type AgentRegistry, type RoomState, type Station } from './room'
+import { createTape, type MinutesEntry } from './tape'
 
 export type BeatView =
   | {
@@ -44,9 +32,6 @@ export type BeatView =
       /** Changes for every played beat, including a replay of the same seq. Components key animations on it. */
       readonly key: string
       readonly seq: number
-      readonly move: Move | null
-      /** The frame this beat moves away from, for a move whose subject the target frame no longer holds. */
-      readonly before: RoomState
       readonly durationMs: Ms
       readonly entry: 'continuous' | 'cut'
     }
@@ -76,8 +61,6 @@ export interface Transport {
   /** The run reached a terminal event. A settled run is never labelled live. */
   readonly settled: boolean
   readonly playing: boolean
-  readonly marks: readonly TimelineMark[]
-  readonly edge: { readonly now: RunTime; readonly waitingSince: RunTime | null } | null
   play(this: void): void
   pause(this: void): void
   restart(this: void): void
@@ -87,26 +70,16 @@ export interface Transport {
   reconnect(this: void): void
 }
 
-/** What the room needs to draw a frame. A LiveView is one; a room set from a template with no feed behind it is another. */
-export interface RoomView {
-  readonly room: RoomState
-  readonly frame: Pick<Frame, 'beat' | 'waiting' | 'spedUp'>
-  layout(width: number, expectedWrites?: readonly ExpectedWrite[]): RoomLayout
-  describe(): string
-}
-
-/** Everything the room, spine, caption, Minutes and transport render. Identity changes only when something did. */
-export interface LiveView extends RoomView {
+/** Everything the spine, caption, Minutes and transport render. Identity changes only when something did. */
+export interface LiveView {
   readonly connection: Connection
+  readonly room: RoomState
   readonly frame: Frame
   /** Up to the shown frame; the component filters technical entries unless details are on. */
   readonly minutes: readonly MinutesEntry[]
   readonly transport: Transport
-  /** Pure helpers bound to this snapshot, so components import nothing from the engine's internals. */
-  layout(width: number, expectedWrites?: readonly ExpectedWrite[]): RoomLayout
-  track(width: number): ScrubberLayout
+  /** Bound to this snapshot, so components import nothing from the engine's internals. */
   spine(blocks: readonly BlockView[]): readonly Station[]
-  describe(): string
 }
 
 export interface LiveViewEnv {
@@ -249,8 +222,6 @@ export function createLiveView(o: { runId: RunId; env: LiveViewEnv; whenFinished
       type: 'event',
       key: `${d.take}:${d.beat.seq}`,
       seq: d.beat.seq,
-      move: tape.move(d.beat.seq),
-      before: tape.frame(d.beat.seq - 1),
       durationMs: d.beat.durationMs,
       entry: d.beat.entry,
     }
@@ -282,25 +253,14 @@ export function createLiveView(o: { runId: RunId; env: LiveViewEnv; whenFinished
       catchingUp: catchingUp(d, s),
       elapsed: { at: Math.max(0, (label === 'live' ? liveNow(s) : now) - startedAt), total: Math.max(0, end - startedAt) },
     }
-    const marks = tape.marks()
-    const transport: Transport = {
-      ...transportActions,
-      atEdge: edge,
-      settled,
-      playing: d.mode.is !== 'paused',
-      marks,
-      edge: edge && !settled ? { now: s.runNow, waitingSince: open?.state.since ?? null } : null,
-    }
+    const transport: Transport = { ...transportActions, atEdge: edge, settled, playing: d.mode.is !== 'paused' }
     return {
       connection,
       room,
       frame,
       minutes: minutesUpTo(d.shown),
       transport,
-      layout: (width, expectedWrites = []) => layoutRoom(floorPlanOf(room, expectedWrites), width),
-      track: (width) => layoutScrubber({ marks, width, edge: transport.edge }),
       spine: (blocks) => spineStations(room, blocks),
-      describe: () => describeRoom(room, waiting?.elapsedMs ?? null),
     }
   }
 

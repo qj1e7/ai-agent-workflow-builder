@@ -5,11 +5,10 @@ import { useRetry, useTroubleshoot } from '../api/queries'
 import type { LiveView } from '../run'
 import { Avatar } from '../ui/Avatar'
 import { agentIdentity } from '../ui/agents'
-import { Button, ButtonAnchor, ButtonLink } from '../ui/Button'
+import { Button, ButtonLink } from '../ui/Button'
 import { InlineMessage, Skeleton } from '../ui/Feedback'
 import { formatDuration } from '../ui/format'
 import { IconClock, IconFastForward, IconReplay, IconShield } from '../ui/icons'
-import { STATUS_PAGES } from './registry'
 import styles from './NeedsYou.module.css'
 
 interface ActionCardProps {
@@ -58,7 +57,7 @@ interface TroubleshooterPanelProps {
   view: LiveView
 }
 
-/** The AI troubleshooter's advice after a failure, with Retry and the read door's status page. */
+/** The AI troubleshooter's advice after a failure, with Retry. */
 export function TroubleshooterPanel({ runId, view }: TroubleshooterPanelProps) {
   const { room } = view
   const failed = room.phase.name === 'failed' ? room.phase : null
@@ -67,9 +66,6 @@ export function TroubleshooterPanel({ runId, view }: TroubleshooterPanelProps) {
   const [retried, setRetried] = useState(false)
   if (!failed) return null
   const stopped = room.agents.find((seat) => seat.status === 'stopped')
-  const door = stopped ? agentIdentity(stopped.id).readDoor : undefined
-  const statusPage = door ? STATUS_PAGES[door] : undefined
-  const failedDoor = room.trips.some((trip) => trip.state === 'failed')
 
   function retryRun() {
     retry.mutate(undefined, {
@@ -113,7 +109,6 @@ export function TroubleshooterPanel({ runId, view }: TroubleshooterPanelProps) {
             {retried ? 'Retrying' : 'Retry run'}
           </Button>
         ) : null}
-        {statusPage && failedDoor ? <ButtonAnchor href={statusPage.href}>{statusPage.label}</ButtonAnchor> : null}
       </div>
       {retry.isError ? <InlineMessage tone="error">{errorWords(retry.error)}</InlineMessage> : null}
     </section>

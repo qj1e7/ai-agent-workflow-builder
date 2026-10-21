@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router'
 import { errorWords } from '../../api/errors'
 import { useDisplayName } from '../../api/people'
@@ -6,33 +6,24 @@ import { useRunClock, usePortalMode } from '../../api/context'
 import { useRuns, useTemplates } from '../../api/queries'
 import type { RunView } from '../../api/types'
 import { ActorAvatar, Caption } from '../../room/Caption'
-import { useLiveRoom, useReducedMotion, useWidth } from '../../room/hooks'
-import { Legend } from '../../room/Legend'
+import { useLiveRoom } from '../../room/hooks'
 import { clockTime } from '../../room/Minutes'
 import { ActionCard, TroubleshooterPanel } from '../../room/NeedsYou'
-import { Room } from '../../room/Room'
-import { RunHead } from '../../room/RunHead'
-import { expectedWritesOf, spineBlocks } from '../../room/spineBlocks'
-import { Transport } from '../../room/Transport'
+import { spineBlocks } from '../../room/spineBlocks'
 import { useBlocks } from '../../room/useBlocks'
-import { ROOM_METRICS, type LiveView, type WhenFinished } from '../../run'
+import type { LiveView, WhenFinished } from '../../run'
 import { ButtonLink } from '../../ui/Button'
 import { cx } from '../../ui/cx'
 import { InlineMessage, Skeleton } from '../../ui/Feedback'
 import { formatDayAndTime, formatRelative, formatTime } from '../../ui/format'
-import { Spine, type SpineBlock } from '../../ui/Spine'
+import { Spine } from '../../ui/Spine'
 import { StatusPill } from '../../ui/StatusPill'
 import { FirstRun } from './FirstRun'
 import { runDots } from './runDots'
 import styles from './OverviewPage.module.css'
 
 const SETTLED = new Set<RunView['state']>(['succeeded', 'rejected', 'failed'])
-/** The plan rises in 500 ms, three doors follow 60 ms apart, the room's contents land at 860 ms: the first beat waits this long. */
-const OPENING_MS = 900
 const SO_FAR = 3
-
-/** The opening plays once per page load, on the first overview the person sees, never on a later navigation. */
-let openedOnce = false
 
 export function OverviewPage() {
   const runs = useRuns({ poll: true })
@@ -61,50 +52,29 @@ export function OverviewPage() {
 function Hero({ run }: { run: RunView }) {
   // Decided once per run: a run that was already finished when the page opened replays, a live one is followed to its end.
   const [whenFinished] = useState<WhenFinished>(() => (SETTLED.has(run.state) ? 'replay' : 'rest'))
-  const reduced = useReducedMotion()
-  const [opening] = useState(() => {
-    if (openedOnce || reduced) return false
-    openedOnce = true
-    return true
-  })
-  const view = useLiveRoom(run.run_id, whenFinished, opening ? OPENING_MS : 0)
+  const view = useLiveRoom(run.run_id, whenFinished)
   const blocks = useBlocks(run)
   const nameOf = useDisplayName()
   const mode = usePortalMode()
-  const roomRef = useRef<HTMLDivElement>(null)
-  const width = useWidth(roomRef)
-  const compact = width > 0 && width < ROOM_METRICS.wide.minWidth
-  const { room, frame } = view
+  const { room } = view
   // The pill follows the room's phase, the same source as the caption and the spine; the REST view speaks only before the first frame.
   const state = room.phase.name === 'empty' ? run.state : room.phase.name
-  const startedBy = nameOf(run.started_by)
-  const watching = frame.label === 'live' ? 'Watching the run as it happens.' : frame.label === 'replay' ? 'Replaying it from the start.' : 'Finished.'
-  const actionCard = room.phase.name === 'awaiting_approval' ? <ActionCard view={view} /> : null
-  const trouble = room.phase.name === 'failed' ? <TroubleshooterPanel runId={run.run_id} view={view} /> : null
-  const spine: SpineBlock[] = spineBlocks(view, blocks)
 
   return (
     <section className={styles['hero']} aria-labelledby="hero-title">
-      <RunHead
-        titleId="hero-title"
-        title={run.use_case_name}
-        lede={`Started by ${startedBy} at ${formatTime(run.started_at)}. ${watching}${mode === 'demo' ? ' This is demo data.' : ''}`}
-        state={state}
-      />
+      <header>
+        <h1 id="hero-title">{run.use_case_name}</h1>
+        <p className="muted">{`Started by ${nameOf(run.started_by)} at ${formatTime(run.started_at)}.${mode === 'demo' ? ' This is demo data.' : ''}`}</p>
+        <StatusPill state={state} />
+      </header>
       <div className={styles['heroBody']}>
         <div className={styles['stageColumn']}>
-          {compact ? actionCard : null}
-          <div ref={roomRef}>
-            <Room view={view} width={width} expectedWrites={expectedWritesOf(blocks)} label={`The room for ${run.use_case_name}`} opening={opening} />
-          </div>
+          {blocks ? <Spine blocks={spineBlocks(view, blocks)} orientation="vertical" compact /> : null}
           <Caption room={room} />
-          <Transport view={view} />
-          <Legend />
         </div>
         <aside className={styles['rail']} aria-label="Where the run is">
-          {blocks ? <Spine blocks={spine} orientation="vertical" compact /> : null}
-          {compact ? null : actionCard}
-          {trouble}
+          {room.phase.name === 'awaiting_approval' ? <ActionCard view={view} /> : null}
+          {room.phase.name === 'failed' ? <TroubleshooterPanel runId={run.run_id} view={view} /> : null}
           <SoFar view={view} />
           <ButtonLink to={`/runs/${run.run_id}`}>Open the full run</ButtonLink>
         </aside>

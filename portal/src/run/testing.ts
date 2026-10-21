@@ -1,5 +1,5 @@
 import type { RunEvent } from '../stream/parse'
-import { agentId, doorKey, runTime, wallTime, type Ms, type RunTime, type WallTime } from './brand'
+import { agentId, connectorKey, runTime, wallTime, type Ms, type RunTime, type WallTime } from './brand'
 import type { Clock } from './clock'
 import {
   catchingUp,
@@ -17,7 +17,7 @@ import {
   type Start,
 } from './director'
 import { recording, synthetic, type RecordingName } from './recordings'
-import { agentNamedIn, openStep, type AgentRef, type AgentRegistry, type Move, type RoomState } from './room'
+import { agentNamedIn, openStep, type AgentRef, type AgentRegistry, type RoomState } from './room'
 import { createTape, type Origin } from './tape'
 
 const KNOWN: readonly AgentRef[] = [
@@ -31,7 +31,7 @@ export const TEST_REGISTRY: AgentRegistry = {
   host: { id: agentId('room_lead'), display: 'Room lead' },
   troubleshooter: { id: agentId('troubleshooter'), display: 'AI troubleshooter' },
   lookup(id) {
-    if (id === 'release_checker') return { display: 'Release checker', readDoor: doorKey('github') }
+    if (id === 'release_checker') return { display: 'Release checker', readDoor: connectorKey('github') }
     if (id === 'room_lead') return { display: 'Room lead', readDoor: null }
     if (id === 'troubleshooter') return { display: 'AI troubleshooter', readDoor: null }
     return { display: id, readDoor: null }
@@ -59,7 +59,6 @@ export interface PlayedBeat {
   readonly startedAt: number
   readonly durationMs: Ms
   readonly entry: 'continuous' | 'cut'
-  readonly move: Move | null
 }
 
 export interface Rehearsal {
@@ -122,7 +121,6 @@ export function rehearse(name: RecordingName, o: { start: Start }): Rehearsal {
       startedAt: beat.startedAt,
       durationMs: beat.durationMs,
       entry: beat.entry,
-      move: tape.move(beat.seq),
     })
   }
 

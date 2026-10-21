@@ -30,7 +30,6 @@ describe('live play', () => {
       [4, 0, 1000, 'continuous'],
       [5, 1000, MESSAGE_5, 'continuous'],
     ])
-    expect(beats[0]?.move).toEqual({ type: 'arrive', who: { at: 'agent', id: 'release_checker' } })
   })
 
   it('plays a burst faster, in order, never under a floor, and drains to natural pace', () => {
@@ -133,24 +132,31 @@ describe('live play', () => {
     expect(show.director.mode.is).toBe('live')
   })
 
-  it('ends a failure on the troubleshooter arriving and a rejection on the ticket reaching the edge', () => {
+  it('ends a failure on the run failing and a rejection on the run being rejected', () => {
     const failure = rehearse('failure', { start: 'edge' })
     failure.arrive(0, 1, 3, 'backlog')
     const failureEvents = recording('failure')
     for (const event of failureEvents.filter((e) => e.seq >= 4)) failure.arrive(event.at - at(1), event.seq, event.seq)
     const failureBeats = failure.runUntilIdle()
-    expect(failureBeats.map((b) => b.seq)).toEqual([4, 5, 6, 7, 8, 9, 10, 12])
-    expect(failureBeats.at(-1)?.move).toEqual({ type: 'arrive', who: { at: 'agent', id: 'troubleshooter' } })
+    expect(failureBeats.map((b) => [b.seq, b.kind])).toEqual([
+      [4, 'agent_joined'],
+      [5, 'agent_message'],
+      [6, 'agent_step_started'],
+      [7, 'agent_message'],
+      [8, 'agent_message'],
+      [9, 'agent_message'],
+      [10, 'agent_failed'],
+      [12, 'run_failed'],
+    ])
 
     const rejected = rehearse('rejected', { start: 'edge' })
     rejected.arrive(0, 1, 17, 'backlog')
     rejected.arrive(0, 18, 19)
     const beats = rejected.runUntilIdle()
-    expect(beats.map((b) => b.move?.type)).toEqual(['decide', 'carry'])
-    expect(beats[1]?.move).toMatchObject({ token: 'ticket', to: { at: 'table_edge' } })
+    expect(beats.map((b) => b.kind)).toEqual(['approval_decided', 'run_rejected'])
   })
 
-  it('walks the troubleshooter out on a retry and the room is working again', () => {
+  it('plays a retry as one beat and the run is working again', () => {
     const show = rehearse('failure', { start: 'edge' })
     show.arrive(0, 1, 12, 'backlog')
     show.arriveSynthetic(0, {
@@ -162,7 +168,7 @@ describe('live play', () => {
       data: { leg: 'work', attempt: 2 },
     })
     const beats = show.runUntilIdle()
-    expect(beats.map((b) => b.move)).toEqual([{ type: 'leave', who: { at: 'agent', id: 'troubleshooter' } }])
+    expect(beats.map((b) => [b.seq, b.kind])).toEqual([[13, 'run_retried']])
     expect(show.room.phase).toEqual({ name: 'working' })
   })
 
@@ -257,7 +263,7 @@ describe('replay', () => {
     expect(show.director.take).toBeGreaterThan(take)
     expect(show.room.phase.name).toBe('pending')
     const beats = show.runUntilIdle()
-    expect(beats[0]?.move).toEqual({ type: 'open_room' })
+    expect(beats[0]).toMatchObject({ seq: 1, kind: 'run_created' })
   })
 
   it('a finished run at the edge is labelled finished and does not count', () => {

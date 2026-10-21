@@ -1,24 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type RefObject } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore, type RefObject } from 'react'
 import { runId, useLiveView, type LiveView, type WhenFinished } from '../run'
 import { AGENTS } from './registry'
 
-export function useLiveRoom(id: string, whenFinished: WhenFinished, openingMs = 0): LiveView {
-  return useLiveView(runId(id), { whenFinished, registry: AGENTS, openingMs })
-}
-
-/** The element's content width, kept current by a ResizeObserver. 0 until the first measurement. */
-export function useWidth(ref: RefObject<HTMLElement | null>): number {
-  const [width, setWidth] = useState(0)
-  useLayoutEffect(() => {
-    const element = ref.current
-    if (!element) return
-    const measure = () => setWidth(Math.round(element.getBoundingClientRect().width))
-    measure()
-    const observer = new ResizeObserver(measure)
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [ref])
-  return width
+export function useLiveRoom(id: string, whenFinished: WhenFinished): LiveView {
+  return useLiveView(runId(id), { whenFinished, registry: AGENTS })
 }
 
 const REDUCED = '(prefers-reduced-motion: reduce)'

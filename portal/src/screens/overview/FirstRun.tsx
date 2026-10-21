@@ -1,18 +1,9 @@
-import { useMemo, useRef } from 'react'
 import { errorWords } from '../../api/errors'
-import { useDisplayName } from '../../api/people'
 import { useTemplates } from '../../api/queries'
-import { useDevUser } from '../../api/session'
 import type { TemplateView } from '../../api/types'
-import { CaptionLine } from '../../room/Caption'
-import { useWidth } from '../../room/hooks'
-import { AGENTS } from '../../room/registry'
-import { Room } from '../../room/Room'
-import { RunHead } from '../../room/RunHead'
-import { stageSet, userId as asUserId } from '../../run'
 import { Button, ButtonLink } from '../../ui/Button'
 import { InlineMessage, Skeleton } from '../../ui/Feedback'
-import { IconShield } from '../../ui/icons'
+import { Spine } from '../../ui/Spine'
 import { EXAMPLE_TASK } from '../builder/plan'
 import { useFirstRun } from './useFirstRun'
 import styles from './FirstRun.module.css'
@@ -40,28 +31,26 @@ export function FirstRun() {
 }
 
 function SetRoom({ template }: { template: TemplateView }) {
-  const user = useDevUser()
-  const userName = useDisplayName()(user)
-  const stage = useMemo(() => stageSet(template.blocks, AGENTS, { starter: { id: asUserId(user), display: userName } }), [template, user, userName])
   const { state, start } = useFirstRun(template)
-  const roomRef = useRef<HTMLDivElement>(null)
-  const width = useWidth(roomRef)
   const starting = state.is === 'starting'
 
   return (
     <section className={styles['hero']} aria-labelledby="first-run-title">
-      <RunHead titleId="first-run-title" title={TITLE} lede="Nothing has run yet." state={undefined} />
+      <h1 id="first-run-title">{TITLE}</h1>
       <div className={styles['heroBody']}>
         <div className={styles['stageColumn']}>
-          <div ref={roomRef}>
-            <Room view={stage.view} width={width} expectedWrites={stage.expectedWrites} label={`The room, set for ${template.name}`} outlines={stage.outlines} />
-          </div>
-          <CaptionLine leading={<IconShield size={18} />}>{stage.words}</CaptionLine>
+          <Spine
+            blocks={template.blocks.map((block) => ({ key: block.key, name: block.name, kind: block.kind, state: { kind: 'not_reached' } }))}
+            orientation="vertical"
+            compact
+            showState={false}
+            label={`The steps of ${template.name}`}
+          />
         </div>
         <aside className={styles['rail']} aria-label="Start here">
           <p className={styles['promise']}>
-            Describe a task in plain English. The agents do it in this room while you watch every hand-off. Nothing is written to Jira or
-            anywhere else until a person says yes.
+            Describe a task in plain English. The agents do it while you watch every hand-off. Nothing is written to Jira or anywhere else
+            until a person says yes.
           </p>
           <section className={styles['example']} aria-labelledby="first-run-example">
             <h2 id="first-run-example" className={styles['exampleTitle']}>

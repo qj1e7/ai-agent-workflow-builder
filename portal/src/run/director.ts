@@ -10,7 +10,7 @@ export const TARGET_LAG_MS: Ms = 4_000
 export const SNAP_DEBT_MS: Ms = 20_000
 /** An unshown live event older than this on the wall clock means the tab was throttled: snap. */
 export const STALE_MS: Ms = SNAP_DEBT_MS + 2_000
-/** A gap longer than this between events is a wait: a fixed segment on the scrubber, a hold in replay. */
+/** A gap longer than this between events is a wait: a hold in replay. The demo platform paces its recording by it too. */
 export const LONG_GAP_MS: Ms = 30_000
 /** Replay compresses a long wait to this, while the waiting counter rolls through the real duration. */
 export const REPLAY_HOLD_MS: Ms = 2_400
@@ -233,7 +233,7 @@ export function wakeAt(d: Director, s: Stage): WallTime | null {
   return candidates.length === 0 ? null : (Math.min(...candidates) as WallTime)
 }
 
-/** The time every counter reads: waiting since, elapsed. One rule, so the seat, spine and scrubber agree. */
+/** The time every counter reads: waiting since, elapsed. One rule, so every counter agrees. */
 export function sceneTime(d: Director, s: Stage): RunTime {
   if (d.mode.is === 'paused') return d.mode.frozenAt
   if (d.beat?.type === 'hold' && s.wall < d.beat.startedAt + d.beat.durationMs) {
@@ -246,8 +246,8 @@ export function sceneTime(d: Director, s: Stage): RunTime {
 
 /**
  * How long the shown frame's open step has waited. Following live while the room catches up on a step the
- * head still holds open, the wait is ongoing and runs to now, so the seat never reads 0 s under a scrubber
- * that reads minutes. In replay, paused, or once the head has decided the step, the wait is the shown frame's own.
+ * head still holds open, the wait is ongoing and runs to now, so the counter never reads 0 s while the run
+ * has waited minutes. In replay, paused, or once the head has decided the step, the wait is the shown frame's own.
  */
 export function waitElapsed(d: Director, s: Stage, open: OpenStep): Ms {
   const head = atEdge(d) && !settled(s) ? openStep(s.tape.frame(s.tape.length)) : null

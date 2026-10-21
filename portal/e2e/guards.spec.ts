@@ -1,5 +1,4 @@
 import { analyzeInPage, blockingViolations } from './support/axe'
-import { collisionSampler } from './support/collisions'
 import { pumpWhile, START } from './support/clock'
 import { measureLayout, MIN_TARGET, MIN_TEXT } from './support/layout'
 import { movingAnimations, MOVING } from './support/motion'
@@ -34,28 +33,6 @@ test('the moving-animation detector sees a running transform animation and ignor
     <div id="b" style="animation: fade 5s linear infinite">fades</div>`)
   const moving = await page.evaluate(movingAnimations, MOVING)
   expect(moving.map((animation) => `${animation.name} on ${animation.target}`)).toEqual(['slide on div#a'])
-})
-
-test('the collision sampler flags a speech card over a label and stays quiet when they are apart', async ({ page }) => {
-  await page.setContent(`
-    <body style="margin:0">
-      <div data-room-label style="position:absolute;left:100px;top:100px;width:100px;height:20px">Jira</div>
-      <div id="speech" data-speech style="position:absolute;left:300px;top:100px;width:100px;height:40px">Hello</div>
-    </body>`)
-  const sampler = await collisionSampler(page)
-  await page.waitForTimeout(400)
-  const quiet = await sampler.stop()
-  expect(quiet.samples).toBeGreaterThan(2)
-  expect(quiet.collisions, 'no overlap while they are apart').toEqual([])
-
-  const again = await collisionSampler(page)
-  await page.locator('#speech').evaluate((el) => {
-    el.style.left = '150px'
-  })
-  await page.waitForTimeout(400)
-  const hit = await again.stop()
-  expect(hit.collisions.length, 'the overlap is reported').toBeGreaterThan(0)
-  expect(hit.collisions[0]?.overlap).toEqual({ width: 50, height: 20 })
 })
 
 test('the tab order check flags a jump back up the page', () => {

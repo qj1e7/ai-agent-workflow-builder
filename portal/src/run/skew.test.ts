@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FetchLike } from '../stream/feed'
 import { runId } from './brand'
 import { createLiveView, type LiveView } from './live'
-import { layoutScrubber, SCRUB } from './scrubber'
 import { fixedClock, TEST_REGISTRY } from './testing'
 
 /**
@@ -45,21 +44,6 @@ async function open(events: readonly Raw[], runNow: number): Promise<{ view(this
   return { view: () => store.getSnapshot(), close }
 }
 
-function expectSaneTrack(view: LiveView, width: number): void {
-  const track = view.track(width)
-  for (const wait of track.waits) {
-    expect(wait.w, 'wait width').toBeGreaterThanOrEqual(0)
-    expect(wait.fill, 'wait fill').toBeGreaterThanOrEqual(0)
-    expect(wait.fill, 'wait fill within width').toBeLessThanOrEqual(wait.w)
-    expect(wait.lasted, 'wait lasted').toBeGreaterThanOrEqual(0)
-    expect(Number.isFinite(wait.x) && Number.isFinite(wait.lasted), 'finite wait').toBe(true)
-  }
-  for (let cursor = 1; cursor <= view.frame.head; cursor += 1) {
-    expect(track.xOf(cursor), `x of ${cursor} never steps back`).toBeGreaterThanOrEqual(track.xOf(cursor - 1))
-    expect(Number.isFinite(track.xOf(cursor))).toBe(true)
-  }
-}
-
 beforeEach(() => vi.useFakeTimers({ now: Date.parse('2026-11-03T02:14:00Z') }))
 afterEach(() => vi.useRealTimers())
 
@@ -73,23 +57,7 @@ describe('a run whose event times jump forward and back', () => {
       expect(Number.isFinite(shown) && Number.isFinite(total), `finite at frame ${cursor}`).toBe(true)
       expect(shown, `elapsed at frame ${cursor}`).toBeGreaterThanOrEqual(0)
       expect(shown, `elapsed within total at frame ${cursor}`).toBeLessThanOrEqual(total)
-      expectSaneTrack(view(), 600)
     }
-    close()
-  })
-
-  it('draws a gap that goes backwards like a tiny gap, never as a wait', async () => {
-    const { view, close } = await open(skewed(23), at(23))
-    const marks = view().transport.marks
-    const track = layoutScrubber({ marks, width: 600, edge: null })
-    const back = marks.findIndex((mark, i) => i > 0 && mark.at < (marks[i - 1]?.at ?? 0))
-    expect(back, 'the skew makes one gap go backwards').toBeGreaterThan(0)
-    const backwards = track.xOf(back + 1) - track.xOf(back)
-    const tiny = track.xOf(9) - track.xOf(8)
-    expect(at(9) - at(8)).toBeLessThan(SCRUB.minTickMs)
-    expect(backwards).toBeGreaterThan(0)
-    expect(Math.abs(backwards - tiny)).toBeLessThanOrEqual(1)
-    expect(track.waits.some((wait) => wait.x === track.xOf(back))).toBe(false)
     close()
   })
 
@@ -100,7 +68,6 @@ describe('a run whose event times jump forward and back', () => {
     expect(view().frame.waiting).toEqual({ since: at(15), elapsedMs: now - at(15) })
     expect(view().frame.elapsed.at).toBeGreaterThanOrEqual(0)
     expect(view().frame.elapsed.at).toBeLessThanOrEqual(view().frame.elapsed.total)
-    expectSaneTrack(view(), 600)
     close()
   })
 })

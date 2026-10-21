@@ -3,7 +3,7 @@ import type { Ms } from './brand'
 
 /**
  * The two fields a rule reads. A parsed RunEvent and a wire ActivityEvent both carry them, so one
- * table paces the room and the demo platform's recording alike.
+ * table paces the run view and the demo platform's recording alike.
  */
 export type BeatEvent = { [K in EventKind]: { readonly kind: K; readonly data: DataOf<K> } }[EventKind] | { readonly kind: 'opaque' }
 

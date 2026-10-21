@@ -4,8 +4,6 @@ import { formatDuration } from '../ui/format'
 import type { SpineBlock } from '../ui/Spine'
 import type { SpineState } from '../ui/spineState'
 
-export { expectedWritesOf } from '../run'
-
 function stateOf(station: Station, frame: LiveView['frame']): SpineState {
   const state = station.state
   switch (state.is) {
