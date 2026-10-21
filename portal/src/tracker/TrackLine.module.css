@@ -62,7 +62,8 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 22px;
+  /* The chip height, so a chip, the "Sped up" tag or plain words all fit the row the caption keeps. */
+  min-height: 26px;
   color: var(--muted);
   font-size: var(--text-14);
   font-variant-numeric: tabular-nums;
@@ -673,7 +674,7 @@
     justify-content: flex-start;
   }
 
-  .cap:empty {
+  .stop:not(.captions) .cap:empty {
     display: none;
   }
 

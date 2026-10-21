@@ -2,7 +2,7 @@ import type { Track } from '../run'
 import { breakPoint, clampLeft, fillScale, orientationOf, parcelPoint, parcelRoom, railBox, type Orientation, type Point } from './geometry'
 import styles from './TrackLine.module.css'
 
-/** The route keeps this much room under the line for a panel at 1440, as the template does, and grows only past it. */
+/** The route keeps this much room under the line for a panel at 1440, as the template does. A longer panel grows it for the life of the view, so closing the panel never pulls the page up. */
 const PANEL_ROOM = 280
 const PANEL_MARGIN = 24
 
@@ -142,5 +142,6 @@ function placeSlots(route: HTMLElement, stops: readonly HTMLElement[], o: Orient
   const list = stops[0]?.parentElement
   const listBottom = list ? list.offsetTop + list.offsetHeight : 0
   const need = panelBottom + PANEL_MARGIN - listBottom
-  set(route, 'padding-bottom', o === 'horizontal' && need > PANEL_ROOM ? px(need) : '')
+  if (o === 'vertical') set(route, 'padding-bottom', '')
+  else if (need > Math.max(PANEL_ROOM, parseFloat(route.style.paddingBottom) || 0)) set(route, 'padding-bottom', px(need))
 }

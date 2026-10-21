@@ -95,6 +95,7 @@ export function TrackLine({ track, plan = null, panel = null, reduced = false, s
             speech={track.speech?.stop === index ? track.speech : null}
             panel={track.panel?.stop === index ? panel : null}
             holds={!still && HOLDS.has(stop.kind)}
+            captions={!still && stop.kind !== 'done'}
             users={users}
           />
         ))}
@@ -115,13 +116,20 @@ interface StopItemProps {
   readonly speech: Speech | null
   readonly panel: ReactNode
   readonly holds: boolean
+  /** Every stop but Done can hold a caption. On the phone it keeps the caption row, so words that come and go never move the stops below. */
+  readonly captions: boolean
   readonly users: readonly DevUser[] | undefined
 }
 
-function StopItem({ stop, parcel, gate, speech, panel, holds, users }: StopItemProps) {
+function StopItem({ stop, parcel, gate, speech, panel, holds, captions, users }: StopItemProps) {
   return (
     <li
-      className={cx(styles['stop'], (stop.state === 'future' || stop.state === 'not_needed') && styles['future'], holds && styles['holds'])}
+      className={cx(
+        styles['stop'],
+        (stop.state === 'future' || stop.state === 'not_needed') && styles['future'],
+        holds && styles['holds'],
+        captions && styles['captions'],
+      )}
       data-stop={stop.key}
       data-state={stop.state}
       data-gate={gate?.state}
