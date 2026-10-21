@@ -33,10 +33,11 @@ export const KINDS = {
   step_finished: technical,
   step_retried: technical,
   agent_joined: story(1000, 400),
-  agent_step_started: story(900, 300, { caption: false }),
+  agent_step_started: story(900, 300),
   agent_step_finished: story(1600, 400),
   agent_failed: story(1200, 700),
-  agent_message: story(2200, 1200),
+  /** The bubble carries the words, so speech leaves the subline alone. */
+  agent_message: story(2200, 1200, { caption: false }),
   write_action_proposed: story(1400, 600),
   approval_requested: story(1600, 900),
   approval_announced: story(1000, 400),
@@ -61,7 +62,7 @@ export function ruleOf(e: BeatEvent): KindRule {
   if (e.kind === 'opaque') return technical
   if (e.kind === 'agent_message') {
     const reading = readingMsOf(e.data.text)
-    return story(Math.max(KINDS.agent_message.beatMs, reading), reading)
+    return story(Math.max(KINDS.agent_message.beatMs, reading), reading, { caption: KINDS.agent_message.caption })
   }
   return KINDS[e.kind]
 }

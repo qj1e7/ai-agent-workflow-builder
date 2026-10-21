@@ -96,7 +96,7 @@ describe('createLiveView against the demo platform', () => {
     await tick(0)
     expect(view().connection.is).toBe('live')
     expect(view().room.phase.name).toBe('pending')
-    expect(view().room.agents.map((seat) => seat.id)).toEqual(['room_lead'])
+    expect(view().room.starter?.id).toBe('alice')
 
     await tick(18 * SECOND)
     expect(view().room.phase.name).toBe('awaiting_approval')
@@ -254,7 +254,7 @@ describe('createLiveView against the demo platform', () => {
     await tick(40 * SECOND)
     expect(replay.view().frame).toMatchObject({ mode: 'live', shown: replay.view().frame.head })
     expect(replay.view().room.phase.name).toBe('failed')
-    expect(replay.view().room.agents.map((seat) => seat.id)).toContain('troubleshooter')
+    expect(replay.view().room.agents.map((seat) => seat.status)).toContain('stopped')
     replay.unsubscribe()
   })
 
@@ -284,7 +284,7 @@ describe('createLiveView against the demo platform', () => {
     unsubscribe()
   })
 
-  it('retries a failed run: the troubleshooter leaves and the agents start again', async () => {
+  it('retries a failed run: the stopped agent is gone and the agents start again', async () => {
     const { view, unsubscribe } = open(runId('run_01JB9'))
     await tick(0)
     expect(view().room.phase.name).toBe('failed')
@@ -293,7 +293,7 @@ describe('createLiveView against the demo platform', () => {
     view().transport.reconnect()
     await tick(5 * SECOND)
     expect(view().room.attempt).toBe(2)
-    expect(view().room.agents.map((seat) => seat.id)).not.toContain('troubleshooter')
+    expect(view().room.agents.map((seat) => seat.status)).not.toContain('stopped')
     expect(['working', 'proposed', 'awaiting_approval']).toContain(view().room.phase.name)
     unsubscribe()
   })

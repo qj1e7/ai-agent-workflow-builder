@@ -42,12 +42,12 @@ export function CaptionLine({ leading, children, ...rest }: CaptionLineProps) {
   )
 }
 
-/** The latest story event's summary, as the room's live region. */
+/** The latest story event's summary, as the run's live region. */
 export function Caption({ room }: { room: RoomState }) {
-  const caption = room.caption
-  return caption ? (
-    <CaptionLine leading={<ActorAvatar actor={caption.actor} size={24} />} aria-live="polite" aria-atomic="true">
-      {caption.summary}
+  const latest = room.latest
+  return latest ? (
+    <CaptionLine leading={<ActorAvatar actor={latest.actor} size={24} />} aria-live="polite" aria-atomic="true">
+      {latest.summary}
     </CaptionLine>
   ) : (
     <CaptionLine leading={<IconShield size={18} />} aria-live="polite" aria-atomic="true">

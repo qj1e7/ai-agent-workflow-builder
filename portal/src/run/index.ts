@@ -8,7 +8,7 @@ export { LONG_GAP_MS } from './director'
 export { beatMsOf, isStory } from './kinds'
 export type { BeatEvent } from './kinds'
 export { splitActionLine } from './describe'
-export { openStep, isSettled, agentNamedIn } from './room'
+export { openStep, isSettled } from './room'
 export type {
   AgentRef,
   AgentRegistry,
@@ -17,6 +17,8 @@ export type {
   Approval,
   ApprovalStep,
   Finding,
+  Latest,
+  Locus,
   OpenStep,
   Phase,
   RoomState,

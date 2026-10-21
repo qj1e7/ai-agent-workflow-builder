@@ -1,29 +1,13 @@
 import type { RunEvent } from '../stream/parse'
-import { agentId, connectorKey, runTime, wallTime, type Ms, type RunTime, type WallTime } from './brand'
+import { agentId, runTime, wallTime, type Ms, type RunTime, type WallTime } from './brand'
 import type { Clock } from './clock'
 import { atEdge, direct, sceneTime, startDirector, waitElapsed, wakeAt, type Beat, type Cue, type Director, type Speed, type Start } from './director'
 import { recording, synthetic, type RecordingName } from './recordings'
-import { agentNamedIn, openStep, type AgentRef, type AgentRegistry, type RoomState } from './room'
+import { openStep, type AgentRegistry, type RoomState } from './room'
 import { createTape, type Origin } from './tape'
 
-const KNOWN: readonly AgentRef[] = [
-  { id: agentId('room_lead'), display: 'Room lead' },
-  { id: agentId('release_checker'), display: 'Release checker' },
-  { id: agentId('troubleshooter'), display: 'AI troubleshooter' },
-]
-
-/** The registry the tests fold with: the same three known agents as src/ui/agents.ts. */
-export const TEST_REGISTRY: AgentRegistry = {
-  host: { id: agentId('room_lead'), display: 'Room lead' },
-  troubleshooter: { id: agentId('troubleshooter'), display: 'AI troubleshooter' },
-  lookup(id) {
-    if (id === 'release_checker') return { display: 'Release checker', readDoor: connectorKey('github') }
-    if (id === 'room_lead') return { display: 'Room lead', readDoor: null }
-    if (id === 'troubleshooter') return { display: 'AI troubleshooter', readDoor: null }
-    return { display: id, readDoor: null }
-  },
-  named: (words) => agentNamedIn(words, KNOWN),
-}
+/** The registry the tests fold with: the same host as src/room/registry.ts. */
+export const TEST_REGISTRY: AgentRegistry = { host: { id: agentId('room_lead'), display: 'Room lead' } }
 
 export function fixedClock(runNow: number): Clock {
   return {
