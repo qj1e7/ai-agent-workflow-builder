@@ -273,6 +273,62 @@ describe('approvals on a run started from a use case', () => {
     expect((await get<{ tickets: unknown[] }>('/mock-jira/tickets')).tickets).toHaveLength(before)
   })
 
+  describe('a decision made before the Teams post lands', () => {
+    async function pausedBeforeThePost() {
+      await vi.advanceTimersByTimeAsync(PAUSE_MS)
+      expect((await runView('run_01JB8')).state).toBe('awaiting_approval')
+      expect((await eventsOf('run_01JB8')).some((event) => event.kind === 'approval_announced')).toBe(false)
+      return get<ApprovalView>('/approvals/apr_01JB8', 'bob')
+    }
+
+    it('is answered with who made it, and the run plays on from there', async () => {
+      const approval = await pausedBeforeThePost()
+      const response = await call('POST', '/approvals/apr_01JB8/decisions', {
+        user: 'bob',
+        body: decision(approval, 'approve'),
+      })
+      expect(response.status).toBe(201)
+      const out = (await response.json()) as DecisionOut
+      expect([out.status, out.decision.by, out.decision.verdict]).toEqual(['approved', 'bob', 'approve'])
+
+      const after = await get<ApprovalView>('/approvals/apr_01JB8', 'bob')
+      expect([after.steps[0]?.status, after.steps[0]?.decided_by, after.you_can_decide]).toEqual([
+        'approved',
+        'bob',
+        false,
+      ])
+
+      await vi.advanceTimersByTimeAsync(10 * SECOND)
+      const events = await eventsOf('run_01JB8')
+      const kinds = events.map((event) => event.kind)
+      expect(events.map((event) => event.seq)).toEqual(Array.from({ length: 23 }, (_, index) => index + 1))
+      expect(kinds.indexOf('approval_announced')).toBeLessThan(kinds.indexOf('approval_decided'))
+      expect(kinds.filter((kind) => kind === 'approval_decided')).toHaveLength(1)
+      expect(kinds.at(-1)).toBe('run_succeeded')
+      const { tickets } = await get<{ tickets: { key: string; run_id: string }[] }>('/mock-jira/tickets')
+      expect(tickets.filter((ticket) => ticket.run_id === 'run_01JB8').map((ticket) => ticket.key)).toEqual([
+        'MOCK-143',
+      ])
+    })
+
+    it('answers a repeat with the recorded decision and a different verdict with 409', async () => {
+      const approval = await pausedBeforeThePost()
+      const path = '/approvals/apr_01JB8/decisions'
+      expect((await call('POST', path, { user: 'bob', body: decision(approval, 'approve') })).status).toBe(201)
+
+      const again = await call('POST', path, { user: 'bob', body: decision(approval, 'approve') })
+      expect(again.status).toBe(200)
+      expect(((await again.json()) as DecisionOut).decision.by).toBe('bob')
+      expect((await call('POST', path, { user: 'bob', body: decision(approval, 'decline') })).status).toBe(409)
+
+      await vi.advanceTimersByTimeAsync(10 * SECOND)
+      const { tickets } = await get<{ tickets: { key: string; run_id: string }[] }>('/mock-jira/tickets')
+      expect(tickets.filter((ticket) => ticket.run_id === 'run_01JB8').map((ticket) => ticket.key)).toEqual([
+        'MOCK-143',
+      ])
+    })
+  })
+
   it('lets a real decision replace the recorded one on the live run', async () => {
     await vi.advanceTimersByTimeAsync(18 * SECOND)
     const approval = await get<ApprovalView>('/approvals/apr_01JB8', 'bob')
