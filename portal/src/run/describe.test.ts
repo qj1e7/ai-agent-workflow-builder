@@ -1,7 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import type { RunEvent } from '../stream/parse'
 import { agentId, connectorKey, runTime, userId } from './brand'
-import { captionWords, figureWords, headlineWords, parcelShortWords, parcelWords, splitActionLine, stopWords, teamsWords } from './describe'
+import {
+  attemptWords,
+  captionWords,
+  CONFLICT_WORDS,
+  createdWords,
+  figureWords,
+  headlineWords,
+  OPEN_APPROVAL_PAGE,
+  parcelShortWords,
+  parcelWords,
+  RETRY_NEEDS_OPERATOR,
+  splitActionLine,
+  stopWords,
+  teamsWords,
+} from './describe'
 import { recording, slice, synthetic, type RecordingName } from './recordings'
 import { applyEvent, EMPTY_ROOM, type RoomState } from './room'
 import { RELEASE_CHECK, TEST_REGISTRY } from './testing'
@@ -211,4 +225,19 @@ it('has every recording read without an empty headline', () => {
       expect(headlineWords(trackAt(name, at).headline, ALICE), `${name} seq ${at}`).not.toBe('')
     }
   }
+})
+
+describe('the panels and the header', () => {
+  it('say when a written key was created and on whose approval', () => {
+    const at = Date.parse('2026-11-03T02:20:26.344Z')
+    expect(createdWords(at, ['Bob', 'Carol'])).toMatch(/^Created at \d\d:\d\d, approved by Bob and Carol$/)
+    expect(createdWords(null, [])).toBe('Created')
+  })
+
+  it('keep the words the approval page shares with the Tracker in one place', () => {
+    expect(CONFLICT_WORDS).toBe('Another Approver decided this step first.')
+    expect(OPEN_APPROVAL_PAGE).toBe('Open the approval page')
+    expect(RETRY_NEEDS_OPERATOR).toBe('An Operator can retry this run.')
+    expect(attemptWords(2)).toBe('Attempt 2')
+  })
 })

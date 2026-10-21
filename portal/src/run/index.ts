@@ -26,9 +26,13 @@ export type {
 export { ACT_MS } from './choreography'
 export type { Act, BeatPlan, TimedAct } from './choreography'
 export {
+  attemptWords,
   captionWords,
+  CONFLICT_WORDS,
+  createdWords,
   figureWords,
   headlineWords,
+  OPEN_APPROVAL_PAGE,
   parcelShortWords,
   parcelWords,
   RETRY_NEEDS_OPERATOR,

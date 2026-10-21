@@ -6,6 +6,7 @@ import { errorWords } from '../../api/errors'
 import { useDisplayName } from '../../api/people'
 import { useApproval, useRun } from '../../api/queries'
 import type { ApprovalView, RunView, Verdict } from '../../api/types'
+import { CONFLICT_WORDS } from '../../run'
 import { Button, ButtonLink } from '../../ui/Button'
 import { EmptyState, InlineMessage, Skeleton } from '../../ui/Feedback'
 import { formatDuration, shortDigest } from '../../ui/format'
@@ -201,7 +202,7 @@ function DecisionBody({ panel, notice, view, systems, sending, sent, onDecide }:
     <div className={styles['body']}>
       {notice ? (
         <InlineMessage tone="error">
-          {notice.kind === 'conflict' ? 'Another Approver decided this step first.' : notice.message}
+          {notice.kind === 'conflict' ? CONFLICT_WORDS : notice.message}
         </InlineMessage>
       ) : null}
       {panel.kind === 'can_decide' ? (

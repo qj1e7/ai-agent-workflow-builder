@@ -1,5 +1,5 @@
 import { Fragment } from 'react'
-import type { MinutesEntry } from '../../run'
+import { attemptWords, type MinutesEntry } from '../../run'
 import { ActorAvatar } from '../../ui/Avatar'
 import { cx } from '../../ui/cx'
 import styles from './Minutes.module.css'
@@ -48,8 +48,8 @@ export function Minutes({ entries, technical, onTechnical }: MinutesProps) {
             return (
               <Fragment key={entry.seq}>
                 {divider ? (
-                  <li className={styles['divider']} aria-label={`Attempt ${entry.attempt}`}>
-                    <span>Attempt {entry.attempt}</span>
+                  <li className={styles['divider']} aria-label={attemptWords(entry.attempt)}>
+                    <span>{attemptWords(entry.attempt)}</span>
                   </li>
                 ) : null}
                 <li

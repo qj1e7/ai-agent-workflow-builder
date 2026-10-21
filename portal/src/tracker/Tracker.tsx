@@ -1,7 +1,7 @@
 import { useCallback, useId, useRef } from 'react'
 import { Link } from 'react-router'
 import type { BlockView, TemplateView } from '../api/types'
-import { headlineWords, type Headline, type LiveView, type Speed } from '../run'
+import { attemptWords, headlineWords, type Headline, type LiveView, type Speed } from '../run'
 import { useDecision } from '../screens/approval/useDecision'
 import { cx } from '../ui/cx'
 import { Skeleton } from '../ui/Feedback'
@@ -89,7 +89,7 @@ export function Tracker({ runId, view, template, title, titleTo }: TrackerProps)
             <h1 id={titleId}>{titleTo ? <Link to={titleTo}>{title}</Link> : title}</h1>
             {template && template.name !== title ? <p className={styles['template']}>{template.name}</p> : null}
           </div>
-          {track.attempt > 1 ? <span className={styles['attempt']}>Attempt {track.attempt}</span> : null}
+          {track.attempt > 1 ? <span className={styles['attempt']}>{attemptWords(track.attempt)}</span> : null}
         </div>
         <SpeedControl value={view.speed} onChange={setSpeed} />
       </header>

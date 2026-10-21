@@ -6,14 +6,13 @@ import { connectorLabel, objectNoun } from '../api/labels'
 import { useDevUsers, useRetry, useTroubleshoot } from '../api/queries'
 import { useDevUser } from '../api/session'
 import type { WriteActionView } from '../api/types'
-import { RETRY_NEEDS_OPERATOR, teamsWords, type Gate, type PanelSpot } from '../run'
+import { CONFLICT_WORDS, createdWords, OPEN_APPROVAL_PAGE, RETRY_NEEDS_OPERATOR, teamsWords, type Gate, type PanelSpot } from '../run'
 import type { Decision } from '../screens/approval/useDecision'
 import { describeAction } from '../screens/approval/writeAction'
 import { AgentFace } from '../ui/AgentFace'
 import { agentIdentity } from '../ui/agents'
 import { cx } from '../ui/cx'
 import { InlineMessage, Skeleton } from '../ui/Feedback'
-import { formatTime } from '../ui/format'
 import { IconCheck, IconDoc, IconLock, IconReplay } from '../ui/icons'
 import styles from './panels.module.css'
 
@@ -69,8 +68,6 @@ function headingOf(action: WriteActionView): string {
 function paragraphs(body: string | null): string[] {
   return body ? body.split(/\n{2,}/) : []
 }
-
-const CONFLICT_WORDS = 'Another Approver decided this step first.'
 
 interface ApprovalPanelProps {
   readonly decision: Decision
@@ -130,7 +127,7 @@ export function ApprovalPanel({ decision, gate, atHead, onLeave }: ApprovalPanel
       ) : null}
       {teams && gate?.link ? (
         <p className={styles['teams']}>
-          {teams}. <Link to={gate.link}>Open the approval page</Link>
+          {teams}. <Link to={gate.link}>{OPEN_APPROVAL_PAGE}</Link>
         </p>
       ) : null}
     </Frame>
@@ -191,15 +188,6 @@ export function TroublePanel({ runId, spot, atHead, onRetried, onLeave }: Troubl
       {retry.isError ? <InlineMessage tone="error">{errorWords(retry.error)}</InlineMessage> : null}
     </Frame>
   )
-}
-
-function names(list: readonly string[]): string {
-  return list.length <= 1 ? (list[0] ?? '') : `${list.slice(0, -1).join(', ')} and ${list.at(-1) ?? ''}`
-}
-
-function createdWords(at: number | null, approvedBy: readonly string[]): string {
-  const created = at === null ? 'Created' : `Created at ${formatTime(new Date(at).toISOString())}`
-  return approvedBy.length > 0 ? `${created}, approved by ${names(approvedBy)}` : created
 }
 
 /** Under the last written stop: each written key, its title, and when and on whose approval it was created. */

@@ -125,6 +125,23 @@ const WRITE_WORDS: Readonly<Record<Extract<StopCaption, { is: 'write' }>['status
 /** Under the AI troubleshooter's advice, for anyone who is not an Operator: POST /runs/{id}/retry needs that role. */
 export const RETRY_NEEDS_OPERATOR = 'An Operator can retry this run.'
 
+/** The approval panel and the approval page, when another Approver decided the step first (a 409). */
+export const CONFLICT_WORDS = 'Another Approver decided this step first.'
+
+/** The link beside "Teams post failed", so a person can still reach an Approver. */
+export const OPEN_APPROVAL_PAGE = 'Open the approval page'
+
+/** The header chip and the Minutes divider once a run was retried. */
+export function attemptWords(attempt: number): string {
+  return `Attempt ${attempt}`
+}
+
+/** Under a written key: "Created at 10:20, approved by Bob". */
+export function createdWords(at: number | null, approvedBy: readonly string[]): string {
+  const created = at === null ? 'Created' : `Created at ${formatTime(new Date(at).toISOString())}`
+  return approvedBy.length > 0 ? `${created}, approved by ${names(approvedBy)}` : created
+}
+
 /** The flag beside a waiting counter that runs faster than the wall. */
 export const SPED_UP_WORDS = 'Sped up'
 
