@@ -16,6 +16,8 @@ const known: Readonly<Record<string, Omit<AgentIdentity, 'id'>>> = {
   troubleshooter: { name: 'AI troubleshooter', glyph: GlyphTrouble, hue: 'var(--trouble)' },
 }
 
+export const KNOWN_AGENT_IDS: readonly string[] = Object.keys(known)
+
 const OTHER_HUES = ['var(--agent-1)', 'var(--agent-2)', 'var(--agent-3)', 'var(--agent-4)'] as const
 
 function stableHash(text: string): number {

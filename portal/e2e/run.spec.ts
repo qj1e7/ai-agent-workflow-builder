@@ -26,9 +26,10 @@ test('the success run page shows the run from work to written ticket', async ({ 
   await expect(slider, 'the scrubber moved off the end of the run').not.toHaveValue((await slider.getAttribute('max')) ?? '')
   await record(page, info, 'run-scrubbed-back')
 
-  await page.getByRole('switch', { name: 'Show technical details' }).click()
+  await page.getByRole('button', { name: 'Technical details' }).click()
   await advance(page, 300, 600)
-  await expect(page.getByRole('switch', { name: 'Show technical details' })).toBeChecked()
+  await expect(page.getByRole('button', { name: 'Technical details' })).toHaveAttribute('aria-expanded', 'true')
+  await expect(page.getByRole('log').getByText(/^seq \d+$/).first(), 'the technical entries show their sequence numbers').toBeVisible()
   await record(page, info, 'run-technical-details')
 })
 

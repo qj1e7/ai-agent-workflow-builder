@@ -12,8 +12,8 @@ describe('where an approval stands', () => {
   it('waits for a decision and names the step that is open', () => {
     expect(standingOf([step(0, 'Team approver', 'open')], nameOf)).toEqual({
       kind: 'waiting',
-      headline: 'Waiting for a decision',
-      detail: 'Waiting for Team approver.',
+      headline: 'Waiting for an Approver',
+      detail: 'Team approver decides.',
     })
   })
 
@@ -23,7 +23,7 @@ describe('where an approval stands', () => {
       nameOf,
     )
     expect(standing.kind).toBe('waiting')
-    expect(standing.detail).toBe('Step 1 of 2 approved by Bob. Waiting for Second approver.')
+    expect(standing.detail).toBe('Step 1 of 2 approved by Bob. Second approver decides.')
   })
 
   it('is approved by the one who approved', () => {
@@ -56,6 +56,6 @@ describe('where an approval stands', () => {
   })
 
   it('still reads as waiting when there are no steps yet', () => {
-    expect(standingOf([], nameOf)).toEqual({ kind: 'waiting', headline: 'Waiting for a decision', detail: null })
+    expect(standingOf([], nameOf)).toEqual({ kind: 'waiting', headline: 'Waiting for an Approver', detail: null })
   })
 })

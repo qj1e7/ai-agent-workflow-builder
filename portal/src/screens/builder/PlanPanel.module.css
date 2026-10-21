@@ -71,6 +71,20 @@
   font-weight: 640;
 }
 
+.schedule {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  color: var(--muted);
+  font-size: var(--text-14);
+}
+
+.schedule svg {
+  flex: none;
+  margin-top: 3px;
+}
+
 .matched {
   display: grid;
   gap: var(--space-2);
@@ -116,6 +130,11 @@
   font-weight: 600;
 }
 
+.help {
+  color: var(--muted);
+  font-size: var(--text-14);
+}
+
 .field input {
   width: 100%;
   min-height: 44px;
@@ -138,39 +157,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-3);
-}
-
-.details summary {
-  list-style: none;
-}
-
-.details summary::-webkit-details-marker {
-  display: none;
-}
-
-.details summary::after {
-  content: '';
-  width: 7px;
-  height: 7px;
-  margin: -3px 0 0 var(--space-2);
-  border-right: 2px solid currentColor;
-  border-bottom: 2px solid currentColor;
-  transform: rotate(45deg);
-}
-
-.details[open] summary::after {
-  margin-top: 3px;
-  transform: rotate(225deg);
-}
-
-.details summary {
-  display: flex;
-  align-items: center;
-  min-height: 44px;
-  color: var(--muted);
-  font-size: var(--text-14);
-  font-weight: 600;
-  cursor: pointer;
 }
 
 .details dl {

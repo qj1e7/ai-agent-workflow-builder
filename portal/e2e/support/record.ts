@@ -1,8 +1,7 @@
-import AxeBuilder from '@axe-core/playwright'
 import { expect, type Page, type TestInfo } from '@playwright/test'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { blockingViolations } from './axe'
+import { analyzeInPage, blockingViolations } from './axe'
 import { pumpWhile } from './clock'
 import { withoutKnown } from './known'
 import { measureLayout, MIN_TARGET, MIN_TEXT } from './layout'
@@ -34,7 +33,7 @@ export async function record(page: Page, info: TestInfo, name: StateName, option
   )
   expect.soft(smallText, `${project}/${name}: visible text smaller than ${MIN_TEXT}px`).toEqual([])
 
-  const axe = await pumpWhile(page, new AxeBuilder({ page }).analyze())
+  const axe = await pumpWhile(page, analyzeInPage(page))
   await mkdir(outPath('axe', project), { recursive: true })
   await writeFile(outPath('axe', project, `${name}.json`), JSON.stringify(axe, null, 2))
   expect.soft(blockingViolations(axe), `${project}/${name}: serious or critical accessibility violations`).toEqual([])

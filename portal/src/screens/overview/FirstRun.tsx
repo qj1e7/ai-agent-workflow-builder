@@ -1,13 +1,15 @@
 import { useMemo, useRef } from 'react'
 import { errorWords } from '../../api/errors'
+import { useDisplayName } from '../../api/people'
 import { useTemplates } from '../../api/queries'
+import { useDevUser } from '../../api/session'
 import type { TemplateView } from '../../api/types'
 import { CaptionLine } from '../../room/Caption'
 import { useWidth } from '../../room/hooks'
 import { AGENTS } from '../../room/registry'
 import { Room } from '../../room/Room'
 import { RunHead } from '../../room/RunHead'
-import { stageSet } from '../../run'
+import { stageSet, userId as asUserId } from '../../run'
 import { Button, ButtonLink } from '../../ui/Button'
 import { InlineMessage, Skeleton } from '../../ui/Feedback'
 import { IconShield } from '../../ui/icons'
@@ -38,7 +40,9 @@ export function FirstRun() {
 }
 
 function SetRoom({ template }: { template: TemplateView }) {
-  const stage = useMemo(() => stageSet(template.blocks, AGENTS), [template])
+  const user = useDevUser()
+  const userName = useDisplayName()(user)
+  const stage = useMemo(() => stageSet(template.blocks, AGENTS, { starter: { id: asUserId(user), display: userName } }), [template, user, userName])
   const { state, start } = useFirstRun(template)
   const roomRef = useRef<HTMLDivElement>(null)
   const width = useWidth(roomRef)
@@ -46,11 +50,11 @@ function SetRoom({ template }: { template: TemplateView }) {
 
   return (
     <section className={styles['hero']} aria-labelledby="first-run-title">
-      <RunHead titleId="first-run-title" title={TITLE} lede="The room is set. Nothing has run yet." state={undefined} />
+      <RunHead titleId="first-run-title" title={TITLE} lede="Nothing has run yet." state={undefined} />
       <div className={styles['heroBody']}>
         <div className={styles['stageColumn']}>
           <div ref={roomRef}>
-            <Room view={stage.view} width={width} expectedWrites={stage.expectedWrites} label={`The room, set for ${template.name}`} />
+            <Room view={stage.view} width={width} expectedWrites={stage.expectedWrites} label={`The room, set for ${template.name}`} outlines={stage.outlines} />
           </div>
           <CaptionLine leading={<IconShield size={18} />}>{stage.words}</CaptionLine>
         </div>
@@ -61,9 +65,8 @@ function SetRoom({ template }: { template: TemplateView }) {
           </p>
           <section className={styles['example']} aria-labelledby="first-run-example">
             <h2 id="first-run-example" className={styles['exampleTitle']}>
-              The example
+              Example: {template.name}
             </h2>
-            <p className={styles['exampleName']}>{template.name}</p>
             <blockquote className={styles['exampleTask']}>
               <p>{EXAMPLE_TASK}</p>
             </blockquote>

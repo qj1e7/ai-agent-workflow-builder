@@ -12,6 +12,7 @@ import {
   draftProblems,
   editableParams,
   exampleParams,
+  fieldWords,
   fixedParams,
   hasProblems,
   planBlocks,
@@ -66,6 +67,10 @@ function Outcome({ result, task, runNow }: { result: SuggestOut; task: string; r
       <div className={styles['template']}>
         <p className={styles['templateName']}>{result.template.name}</p>
         <p className="muted">{result.template.description}</p>
+        <p className={styles['schedule']}>
+          <IconPlay size={14} />
+          Runs when you choose Run now. A weekly schedule is not built yet.
+        </p>
       </div>
       <Spine blocks={planBlocks(result.template)} orientation="vertical" showDescriptions showState={false} label="Steps in this plan" />
       {result.matched_terms.length > 0 ? <MatchedTerms terms={result.matched_terms} /> : null}
@@ -153,14 +158,16 @@ function PlanForm({ template, task, runNow }: { template: TemplateView; task: st
       {editableParams(template).map((param) => {
         const id = `${formId}-${param.name}`
         const problem = attempted ? (problems.params[param.name] ?? null) : null
+        const { label, help } = fieldWords(param.description)
+        const described = [help ? `${id}-help` : null, problem ? `${id}-problem` : null].filter((each) => each !== null).join(' ')
         return (
-          <Field key={param.name} id={id} label={param.description} problem={problem}>
+          <Field key={param.name} id={id} label={label} help={help} problem={problem}>
             <input
               id={id}
               value={params[param.name] ?? ''}
               onChange={onParam(param.name)}
               aria-invalid={problem ? true : undefined}
-              aria-describedby={problem ? `${id}-problem` : undefined}
+              aria-describedby={described || undefined}
               autoComplete="off"
               spellCheck={false}
             />
@@ -190,7 +197,7 @@ function PlanForm({ template, task, runNow }: { template: TemplateView; task: st
       ) : null}
       {saved ? <RunError message={runNow.errorFor(saved.useCaseId)} /> : null}
       <details className={styles['details']}>
-        <summary>Technical details</summary>
+        <summary className="disclosure">Technical details</summary>
         <dl>
           <div>
             <dt>Plan</dt>
@@ -223,15 +230,21 @@ function RunError({ message }: { message: string | null }) {
 interface FieldProps {
   id: string
   label: string
+  help?: string | null
   problem: string | null
   children: ReactNode
 }
 
-function Field({ id, label, problem, children }: FieldProps) {
+function Field({ id, label, help = null, problem, children }: FieldProps) {
   return (
     <div className={styles['field']}>
       <label htmlFor={id}>{label}</label>
       {children}
+      {help ? (
+        <p id={`${id}-help`} className={styles['help']}>
+          {help}
+        </p>
+      ) : null}
       {problem ? (
         <InlineMessage tone="error" id={`${id}-problem`}>
           {problem}

@@ -4,13 +4,14 @@ import { agentSeatKey, layoutOf, stamps as stampsOf, stepSeatKey, ticketLife } f
 import { Avatar } from '../ui/Avatar'
 import { agentIdentity } from '../ui/agents'
 import { cx } from '../ui/cx'
-import { IconLock, IconPerson, IconUnlock, IconX } from '../ui/icons'
+import { IconPerson, IconUnlock, IconX } from '../ui/icons'
+import { CHIP_FOLD_LEAD_MS, CHIP_HOLD_MS, CHIP_SLIDE_START_SHARE, FindingChips } from './Finding'
 import { FloorPlan } from './FloorPlan'
 import { useBeatAnimation, useReducedMotion } from './hooks'
 import { APPEAR_MS, EASE_OVERSHOOT, POP, TRAVEL_SHARE, travelAlong, walkAlong } from './motion'
 import { beatRoute, beatWalk, Paths } from './Paths'
-import { Door, EmptySeatAvatar, REST, Seat, SpeechCard, TicketCard, Token, type Appear, type Entrance, type TokenKind, type Travel, type Turn } from './pieces'
-import { agentStatus, approvedBy, checkerStatus, doorName, readDoorStatus, stepName, stepStatus, teamsStatus, ticketWords, writeDoorAction, writeDoorStatus } from './words'
+import { Door, EmptySeatAvatar, OutlineAvatar, REST, Seat, SpeechCard, TicketCard, Token, type Appear, type Entrance, type TokenKind, type Travel, type Turn } from './pieces'
+import { agentStatus, approvedBy, checkerStatus, doorName, readDoorStatus, stepName, stepStatus, teamsStatus, ticketWords, writeDoorAction, writeDoorLine, writeDoorStatus } from './words'
 import styles from './Room.module.css'
 
 interface RoomProps {
@@ -22,10 +23,12 @@ interface RoomProps {
   label: string
   /** The overview's first load only: the plan rises, the doors follow, then the first beat. */
   opening?: boolean
+  outlines?: ReadonlySet<SeatKey>
 }
 
 const LIGHT = { wide: 260, compact: 140 } as const
 const CUT_IN: Keyframe[] = [{ opacity: 0.35 }, { opacity: 1 }]
+const NO_OUTLINES: ReadonlySet<SeatKey> = new Set()
 
 function beatOf(view: RoomView) {
   const beat = view.frame.beat
@@ -36,7 +39,7 @@ function moveIs<T extends Move['type']>(move: Move | null, type: T): Extract<Mov
   return move && move.type === type ? (move as Extract<Move, { type: T }>) : null
 }
 
-export function Room({ view, width, expectedWrites, label, opening = false }: RoomProps) {
+export function Room({ view, width, expectedWrites, label, opening = false, outlines = NO_OUTLINES }: RoomProps) {
   const reduced = useReducedMotion()
   const motion = !reduced
   const { room, frame } = view
@@ -114,12 +117,13 @@ export function Room({ view, width, expectedWrites, label, opening = false }: Ro
     const arriving = arrive?.who.at === 'agent' && arrive.who.id === seat.id
     const walkIn = arriving ? walkingIn(null) : null
     if (arriving && beatPath && !walkIn) ride(`arrive:${seat.id}`, { kind: 'agent', agentId: seat.id }, beatPath, { fadeIn: true, fadeOut: true })
+    const outline = outlines.has(key)
     return (
       <Seat
         key={key}
         kind="agent"
         seat={box}
-        avatar={<Avatar kind="agent" agentId={seat.id} size={box.avatar.w} />}
+        avatar={outline ? <OutlineAvatar kind="agent" agentId={seat.id} size={box.avatar.w} /> : <Avatar kind="agent" agentId={seat.id} size={box.avatar.w} />}
         name={identity.name}
         words={agentStatus(seat, speaking)}
         breathing={speaking || seat.status === 'working'}
@@ -128,6 +132,7 @@ export function Room({ view, width, expectedWrites, label, opening = false }: Ro
         entrance={walkIn ?? entering(freshSeat(key), arriving && beatPath !== null)}
         motion={motion}
         hue={identity.hue}
+        outline={outline}
       />
     )
   })
@@ -162,12 +167,13 @@ export function Room({ view, width, expectedWrites, label, opening = false }: Ro
     if (!room.starter) return null
     const box = layout.seats.get('starter')
     if (!box) return null
+    const outline = outlines.has('starter')
     return (
       <Seat
         key="starter"
         kind="person"
         seat={box}
-        avatar={<Avatar kind="person" name={room.starter.display} size={box.avatar.w} />}
+        avatar={outline ? <OutlineAvatar kind="person" size={box.avatar.w} /> : <Avatar kind="person" name={room.starter.display} size={box.avatar.w} />}
         name={room.starter.display}
         words={{ text: 'Operator', tone: 'quiet' }}
         statusIcon={IconPerson}
@@ -176,6 +182,7 @@ export function Room({ view, width, expectedWrites, label, opening = false }: Ro
         dimmed={false}
         entrance={entering(freshSeat('starter'), false)}
         motion={motion}
+        outline={outline}
       />
     )
   })()
@@ -193,20 +200,22 @@ export function Room({ view, width, expectedWrites, label, opening = false }: Ro
       const teams = layout.doors.find((door) => door.side === 'teams')
       ride(`decide:${step.index}`, { kind: 'person', name }, teams ? [teams.outside, ...beatPath] : beatPath, { fadeOut: true })
     }
+    const outline = outlines.has(key)
     return (
       <Seat
         key={key}
         kind={decided ? 'person' : 'empty'}
         seat={box}
-        avatar={decided ? <Avatar kind="person" name={name} size={box.avatar.w} /> : <EmptySeatAvatar size={box.avatar.w} />}
+        avatar={outline ? <OutlineAvatar kind="person" size={box.avatar.w} /> : decided ? <Avatar kind="person" name={name} size={box.avatar.w} /> : <EmptySeatAvatar size={box.avatar.w} />}
         name={decided ? name : step.label}
-        words={stepStatus(step, open ? waited : null)}
+        words={stepStatus(step, open && waited !== null ? { ms: waited, spedUp: frame.spedUp, compact } : null)}
         {...(step.state.is === 'declined' ? { statusIcon: IconX } : {})}
         breathing={open}
         lit={lit(key)}
         dimmed={false}
         entrance={walkIn ?? entering(freshSeat(key) || deciding, deciding && beatPath !== null)}
         motion={motion}
+        outline={outline}
       />
     )
   })
@@ -240,7 +249,7 @@ export function Room({ view, width, expectedWrites, label, opening = false }: Ro
     const order = doorOrder.indexOf(door)
     const name = doorName(door)
     if (door.side === 'teams') {
-      return <Door key="teams" door={door} name={name} action={null} words={teamsStatus(room.approval?.teams ?? null)} checker={null} stateIcon={IconPerson} appear={appear} motion={motion} order={order} />
+      return <Door key="teams" door={door} name={name} line={teamsStatus(room.approval?.teams ?? null)} lineIcon={IconPerson} checker={null} appear={appear} motion={motion} order={order} />
     }
     if (door.side === 'read') {
       const words = doorKey ? readDoorStatus(room.trips, doorKey) : { text: 'Read only', tone: 'quiet' as const }
@@ -249,10 +258,9 @@ export function Room({ view, width, expectedWrites, label, opening = false }: Ro
           key={`read:${doorKey ?? door.box.y}`}
           door={door}
           name={name}
-          action={null}
-          words={words}
+          line={words}
+          lineIcon={words.tone === 'fail' ? IconX : IconUnlock}
           checker={null}
-          stateIcon={words.tone === 'fail' ? IconX : IconUnlock}
           appear={appear}
           motion={motion}
           order={order}
@@ -266,10 +274,9 @@ export function Room({ view, width, expectedWrites, label, opening = false }: Ro
         key={`write:${door.key ?? door.label ?? door.box.y}`}
         door={door}
         name={name}
-        action={writeDoorAction(door, room.ticket)}
-        words={writeDoorStatus(checker, approvers, written)}
+        line={writeDoorLine(writeDoorAction(door, room.ticket), writeDoorStatus(checker, approvers, written))}
+        lineIcon={null}
         checker={checkerStatus(checker)}
-        stateIcon={checker === 'allowed' ? IconUnlock : checker === 'blocked' ? IconX : IconLock}
         appear={appear}
         motion={motion}
         order={order}
@@ -351,7 +358,21 @@ export function Room({ view, width, expectedWrites, label, opening = false }: Ro
     return <SpeechCard speech={room.speech} speakerName={agentIdentity(room.speech.speaker).name} card={slot.card} tailX={slot.tailX} />
   })()
 
-  const tableNote = !room.ticket ? (
+  const finding = (() => {
+    const spot = layout.ticketSpot
+    if (room.finding && !room.ticket) {
+      const land =
+        beat && beat.before.finding !== room.finding
+          ? { key: beat.key, fromMs: Math.round(travelMs * CHIP_SLIDE_START_SHARE), byMs: beat.durationMs - CHIP_HOLD_MS, agentAt: point({ at: 'agent', id: room.finding.agent }) }
+          : null
+      return <FindingChips finding={room.finding} spot={spot} size={layout.size} land={land} fold={null} motion={motion} />
+    }
+    const folded = beat && carry?.token === 'ticket' && carry.to.at === 'table' ? beat.before.finding : null
+    if (!beat || !folded || !motion) return null
+    return <FindingChips finding={folded} spot={spot} size={layout.size} land={null} fold={{ key: beat.key, atMs: Math.max(0, travelMs - CHIP_FOLD_LEAD_MS) }} motion={motion} />
+  })()
+
+  const tableNote = !room.ticket && !room.finding ? (
     <p className={cx('plan-voice', styles['tableNote'])} style={{ left: layout.ticketSpot.x, top: layout.ticketSpot.y, width: layout.ticketSpot.w, height: layout.ticketSpot.h }}>
       <span data-room-label="table">{room.phase.name === 'failed' ? 'Nothing was proposed' : room.phase.name === 'succeeded' ? 'Nothing to write' : 'Proposed work lands here'}</span>
     </p>
@@ -377,6 +398,7 @@ export function Room({ view, width, expectedWrites, label, opening = false }: Ro
         <div ref={contentsRef} className={styles['contents']}>
           <Paths layout={layout} room={room} beat={beat} motion={motion} />
           {tableNote}
+          {finding}
           {ticket}
           {agentSeats}
           {leavingSeat}

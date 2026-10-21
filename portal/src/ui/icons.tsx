@@ -67,6 +67,13 @@ export const IconTicket = drawn(
     <path d="M14 6v12" strokeDasharray="2 2.5" />
   </>,
 )
+export const IconTag = drawn(
+  'IconTag',
+  <>
+    <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h6.6a1.5 1.5 0 0 1 1 .4l7 7a1.5 1.5 0 0 1 0 2.1l-5.6 5.6a1.5 1.5 0 0 1-2.1 0l-7-7a1.5 1.5 0 0 1-.4-1z" />
+    <circle cx="8.5" cy="8.5" r="1.3" />
+  </>,
+)
 export const IconRepo = drawn(
   'IconRepo',
   <>
@@ -127,6 +134,7 @@ export const IconPerson = drawn(
   </>,
 )
 export const IconPlay = drawn('IconPlay', <path d="M8 5.5v13l10.5-6.5z" />)
+export const IconFastForward = drawn('IconFastForward', <path d="M3.5 6.5v11L11 12zM12.5 6.5v11L20 12z" />)
 export const IconPause = drawn('IconPause', <path d="M8.5 5.5v13M15.5 5.5v13" />)
 export const IconArrow = drawn('IconArrow', <path d="M5 12h14M13.5 6.5L19 12l-5.5 5.5" />)
 export const IconChevronDown = drawn('IconChevronDown', <path d="M6.5 9.5l5.5 5.5 5.5-5.5" />)

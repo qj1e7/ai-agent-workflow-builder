@@ -1,17 +1,35 @@
-export function formatDuration(milliseconds: number): string {
+export interface DurationOptions {
+  /** Drop the seconds once the duration is a minute or more. */
+  readonly coarse?: boolean
+  /** Join the numbers and units with non-breaking spaces, so a counter breaks only before the duration. */
+  readonly noWrap?: boolean
+}
+
+export function formatDuration(milliseconds: number, { coarse = false, noWrap = false }: DurationOptions = {}): string {
   const total = Math.max(0, Math.floor(milliseconds / 1000))
   const hours = Math.floor(total / 3600)
   const minutes = Math.floor((total % 3600) / 60)
   const seconds = total % 60
-  if (hours > 0) return minutes > 0 ? `${hours} h ${minutes} min` : `${hours} h`
-  if (minutes > 0) return `${minutes} min ${seconds} s`
-  return `${seconds} s`
+  const parts: string[] = []
+  if (hours > 0) {
+    parts.push(`${hours} h`)
+    if (minutes > 0) parts.push(`${minutes} min`)
+  } else if (minutes > 0) {
+    parts.push(`${minutes} min`)
+    if (!coarse) parts.push(`${seconds} s`)
+  } else {
+    parts.push(`${seconds} s`)
+  }
+  const words = parts.join(' ')
+  return noWrap ? words.replaceAll(' ', '\u00a0') : words
 }
 
 export function formatClock(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000))
-  const minutes = Math.floor(total / 60)
-  return `${minutes}:${String(total % 60).padStart(2, '0')}`
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const seconds = String(total % 60).padStart(2, '0')
+  return hours > 0 ? `${hours}:${String(minutes).padStart(2, '0')}:${seconds}` : `${minutes}:${seconds}`
 }
 
 const timeOfDay = new Intl.DateTimeFormat('en-SG', { hour: '2-digit', minute: '2-digit', hour12: false })

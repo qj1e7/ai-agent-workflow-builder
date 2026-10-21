@@ -1,5 +1,11 @@
-import type { EventKind, RunEvent } from '../stream/parse'
+import type { DataOf, EventKind } from '../stream/parse'
 import type { Ms } from './brand'
+
+/**
+ * The two fields a rule reads. A parsed RunEvent and a wire ActivityEvent both carry them, so one
+ * table paces the room and the demo platform's recording alike.
+ */
+export type BeatEvent = { [K in EventKind]: { readonly kind: K; readonly data: DataOf<K> } }[EventKind] | { readonly kind: 'opaque' }
 
 export type KindRule =
   /** Workflow plumbing and anything unreadable. Folded silently, no beat, no caption. Minutes only with technical details. */
@@ -8,12 +14,12 @@ export type KindRule =
    * One beat. beatMs is the choreographed duration (replay and calm live play). floorMs is the shortest
    * live catch-up may squeeze it to, so every state stays perceivable.
    */
-  | { readonly tier: 'story'; readonly beatMs: Ms; readonly floorMs: Ms }
+  | { readonly tier: 'story'; readonly beatMs: Ms; readonly floorMs: Ms; readonly caption: boolean }
 
 type StoryRule = Extract<KindRule, { tier: 'story' }>
 
 const technical: KindRule = { tier: 'technical' }
-const story = (beatMs: Ms, floorMs: Ms): StoryRule => ({ tier: 'story', beatMs, floorMs })
+const story = (beatMs: Ms, floorMs: Ms, { caption = true } = {}): StoryRule => ({ tier: 'story', beatMs, floorMs, caption })
 
 /**
  * Durations follow DESIGN.md motion rules: crossfade 180, arrivals and hand-offs 700 to 1000, the stamp
@@ -27,8 +33,8 @@ export const KINDS = {
   step_finished: technical,
   step_retried: technical,
   agent_joined: story(1000, 400),
-  agent_step_started: story(900, 300),
-  agent_step_finished: story(900, 300),
+  agent_step_started: story(900, 300, { caption: false }),
+  agent_step_finished: story(1600, 400),
   agent_failed: story(1200, 700),
   agent_message: story(2200, 1200),
   write_action_proposed: story(1400, 600),
@@ -51,7 +57,7 @@ export function readingMsOf(text: string): Ms {
   return Math.min(READING.maxMs, READING.baseMs + READING.perCharMs * text.length)
 }
 
-export function ruleOf(e: RunEvent): KindRule {
+export function ruleOf(e: BeatEvent): KindRule {
   if (e.kind === 'opaque') return technical
   if (e.kind === 'agent_message') {
     const reading = readingMsOf(e.data.text)
@@ -60,17 +66,17 @@ export function ruleOf(e: RunEvent): KindRule {
   return KINDS[e.kind]
 }
 
-export function isStory(e: RunEvent): boolean {
+export function isStory(e: BeatEvent): boolean {
   return ruleOf(e).tier === 'story'
 }
 
 /** The choreographed length of an event's beat, or 0 for a technical event. */
-export function beatMsOf(e: RunEvent): Ms {
+export function beatMsOf(e: BeatEvent): Ms {
   const rule = ruleOf(e)
   return rule.tier === 'story' ? rule.beatMs : 0
 }
 
-export function floorMsOf(e: RunEvent): Ms {
+export function floorMsOf(e: BeatEvent): Ms {
   const rule = ruleOf(e)
   return rule.tier === 'story' ? rule.floorMs : 0
 }

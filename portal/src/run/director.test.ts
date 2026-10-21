@@ -166,6 +166,28 @@ describe('live play', () => {
     expect(show.room.phase).toEqual({ name: 'working' })
   })
 
+  it('never counts from before the last event when the run clock lags behind it', () => {
+    const show = rehearse('success', { start: 'edge' })
+    show.arrive(0, 1, 17, 'backlog')
+    show.setRunNow(at(17) - 60_000)
+    expect(show.sceneTime).toBe(at(17))
+    expect(show.waiting?.elapsedMs).toBe(at(17) - at(15))
+    show.setRunNow(at(17) + 60_000)
+    expect(show.sceneTime).toBe(at(17) + 60_000)
+    expect(show.waiting?.elapsedMs).toBe(at(17) + 60_000 - at(15))
+  })
+
+  it('is catching up while more choreography than the target lag is queued, and not once it has drained', () => {
+    const show = rehearse('success', { start: 'edge' })
+    show.arrive(0, 1, 3, 'backlog')
+    expect(show.catchingUp).toBe(false)
+    show.arrive(0, 4, 17)
+    expect(show.catchingUp).toBe(true)
+    show.runUntilIdle()
+    expect(show.catchingUp).toBe(false)
+    expect(show.atEdge).toBe(true)
+  })
+
   it('counts an honest wait and wakes on the next whole second', () => {
     const show = rehearse('success', { start: 'edge' })
     show.arrive(0, 1, 17, 'backlog')

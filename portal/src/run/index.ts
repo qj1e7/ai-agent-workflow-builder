@@ -1,10 +1,10 @@
 export { createLiveView, useLiveView } from './live'
 export type { BeatView, Frame, LiveView, LiveViewEnv, LiveViewStore, RoomView, Transport, UseLiveViewOptions, WhenFinished } from './live'
 export { expectedWritesOf, stageSet } from './stage'
-export type { StageSet } from './stage'
+export type { StageOptions, StageSet } from './stage'
 export { createClock } from './clock'
 export type { Clock } from './clock'
-export { runId, agentId, doorKey, userId } from './brand'
+export { runId, agentId, doorKey, userId, runTime } from './brand'
 export type { AgentId, DoorKey, Ms, RunId, RunTime, Seq, UserId, WallTime } from './brand'
 export { collisions, ROOM_METRICS } from './layout'
 export { layoutOf } from './plan'
@@ -13,9 +13,11 @@ export { SCRUB } from './scrubber'
 export type { ScrubberLayout, WaitSegment } from './scrubber'
 export { LONG_GAP_MS } from './director'
 export type { FrameLabel } from './director'
+export { beatMsOf, isStory } from './kinds'
+export type { BeatEvent } from './kinds'
 export { statusOf } from './status'
 export type { Status } from './status'
-export { openStep, ticketLife, stamps, isSettled, agentSeatKey, stepSeatKey, seatKeyOf } from './room'
+export { openStep, ticketLife, stamps, isSettled, agentSeatKey, stepSeatKey, seatKeyOf, agentNamedIn } from './room'
 export type {
   AgentRef,
   AgentRegistry,
@@ -27,6 +29,7 @@ export type {
   Checker,
   Door,
   ExpectedWrite,
+  Finding,
   Light,
   Move,
   OpenStep,

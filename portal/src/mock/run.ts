@@ -23,6 +23,7 @@ export class Run {
   readonly timeline: Timeline
   private readonly proposals: ProposalView[]
   private context: RunContext
+  private decisionLandsAt = -Infinity
 
   constructor(meta: RunMeta, context: RunContext, timeline: Timeline, proposals: readonly ProposalView[]) {
     this.meta = meta
@@ -41,7 +42,7 @@ export class Run {
   }
 
   approvals(wall: number): ApprovalRecord[] {
-    return foldApprovals(this.id, this.timeline.emitted(wall), this.proposals)
+    return foldApprovals(this.id, this.timeline.emitted(Math.max(wall, this.decisionLandsAt)), this.proposals)
   }
 
   proposalFor(proposalId: string): ProposalView | undefined {
@@ -57,6 +58,7 @@ export class Run {
     const recorded = this.timeline.recordedAt(wall)
     this.timeline.discardPendingDecision(wall)
     const start = Math.max(wall, this.timeline.lastAt)
+    this.decisionLandsAt = start
     const key = verdict === 'approve' ? ticketKey() : 'MOCK-142'
     const tail = decisionTail(verdict, this.context, decider, key, this.timeline.lastSeq + 1)
     this.timeline.append(replay(tail, { wall: start, recorded: recorded + (start - wall) }))

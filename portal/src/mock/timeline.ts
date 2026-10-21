@@ -1,7 +1,9 @@
 import type { ActivityEvent } from '../api/types'
+import { beatMsOf, isStory, LONG_GAP_MS } from '../run'
 
-export const REAL_TIME_GAP_MS = 4000
-const SQUEEZE_FACTOR = 40
+export const WAIT_HEAD_MS = 4000
+export const SQUEEZE = 40
+export const SHORT_GAP_CAP_MS = 1000
 
 export interface Entry {
   readonly at: number
@@ -15,10 +17,6 @@ export interface Anchor {
   readonly recorded: number
 }
 
-export function squeezeGap(gapMs: number): number {
-  return gapMs <= REAL_TIME_GAP_MS ? gapMs : REAL_TIME_GAP_MS + (gapMs - REAL_TIME_GAP_MS) / SQUEEZE_FACTOR
-}
-
 function stamp(event: ActivityEvent, ts: number): ActivityEvent {
   return { ...event, ts: new Date(ts).toISOString() }
 }
@@ -28,15 +26,31 @@ function recordedOffsets(events: readonly ActivityEvent[]): number[] {
   return events.map((event) => Date.parse(event.ts) - first)
 }
 
+/**
+ * The demo's pace: short gaps play at their recorded length capped at a second, a story event never
+ * lands before the previous story event's beat has played, and a long wait plays its head at real speed
+ * and the rest squeezed. Outside a wait the event's recorded time moves with the wall, so the run clock
+ * stays 1:1 and the room never has to catch up.
+ */
 export function replay(events: readonly ActivityEvent[], start: Anchor): Entry[] {
   const offsets = recordedOffsets(events)
-  let at = start.wall
+  let wall = start.wall
+  let ts = start.recorded
+  let lastStory: { readonly wall: number; readonly event: ActivityEvent } | null = null
   return events.map((event, index) => {
-    const offset = offsets[index] ?? 0
-    const gap = index > 0 ? offset - (offsets[index - 1] ?? 0) : 0
-    at += squeezeGap(gap)
-    const ts = start.recorded + offset
-    return { at, ts, squeezed: gap > REAL_TIME_GAP_MS, event: stamp(event, ts) }
+    const gap = index > 0 ? (offsets[index] ?? 0) - (offsets[index - 1] ?? 0) : 0
+    const wait = gap > LONG_GAP_MS
+    if (wait) {
+      wall += Math.round(WAIT_HEAD_MS + (gap - WAIT_HEAD_MS) / SQUEEZE)
+      ts += gap
+    } else {
+      let advance = Math.min(gap, SHORT_GAP_CAP_MS)
+      if (lastStory && isStory(event)) advance = Math.max(advance, lastStory.wall + beatMsOf(lastStory.event) - wall)
+      wall += advance
+      ts += advance
+    }
+    if (isStory(event)) lastStory = { wall, event }
+    return { at: wall, ts, squeezed: wait, event: stamp(event, ts) }
   })
 }
 
@@ -46,6 +60,12 @@ export function finished(events: readonly ActivityEvent[], recordedStart: number
     const ts = recordedStart + (offsets[index] ?? 0)
     return { at: ts, ts, squeezed: false, event: stamp(event, ts) }
   })
+}
+
+interface Place {
+  readonly previous: Entry
+  readonly next: Entry | undefined
+  readonly elapsed: number
 }
 
 /**
@@ -80,13 +100,16 @@ export class Timeline {
     const first = this.entries[0]
     if (!first) return wall
     if (wall < first.at) return first.ts - (first.at - wall)
-    const index = this.entries.findLastIndex((entry) => entry.at <= wall)
-    const previous = this.entries[index] as Entry
-    const next = this.entries[index + 1]
-    const elapsed = wall - previous.at
-    if (!next) return previous.ts + elapsed
-    if (!next.squeezed || elapsed <= REAL_TIME_GAP_MS) return previous.ts + elapsed
-    return Math.min(next.ts, previous.ts + REAL_TIME_GAP_MS + (elapsed - REAL_TIME_GAP_MS) * SQUEEZE_FACTOR)
+    const { previous, next, elapsed } = this.place(wall)
+    if (!next?.squeezed || elapsed <= WAIT_HEAD_MS) return previous.ts + elapsed
+    return Math.min(next.ts, previous.ts + WAIT_HEAD_MS + (elapsed - WAIT_HEAD_MS) * SQUEEZE)
+  }
+
+  rateAt(wall: number): number {
+    const first = this.entries[0]
+    if (!first || wall < first.at) return 1
+    const { next, elapsed } = this.place(wall)
+    return next?.squeezed && elapsed > WAIT_HEAD_MS ? SQUEEZE : 1
   }
 
   append(entries: readonly Entry[]): void {
@@ -104,6 +127,12 @@ export class Timeline {
     return () => {
       this.listeners.delete(listener)
     }
+  }
+
+  private place(wall: number): Place {
+    const index = this.entries.findLastIndex((entry) => entry.at <= wall)
+    const previous = this.entries[index] as Entry
+    return { previous, next: this.entries[index + 1], elapsed: wall - previous.at }
   }
 
   private notify(): void {

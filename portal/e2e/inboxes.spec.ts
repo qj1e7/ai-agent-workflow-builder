@@ -5,14 +5,13 @@ import { record } from './support/record'
 import { expect, test } from './support/test'
 
 test('the Teams inbox and the mock Jira show what the live run did', async ({ page }, info) => {
-  // The live run plays its whole story before Done, about 25 s of page time, so this test needs more than the default budget.
   test.setTimeout(150_000)
   await openFrozen(page, '/')
   await advanceUntil(page, transportSays(page, 'Done'), { stepMs: 1_000 })
 
   await goTo(page, 'Teams')
   await expect(page.getByRole('heading', { name: 'Teams' })).toBeVisible()
-  await expect(page.getByText(/Approval needed/).first()).toBeVisible()
+  await expect(page.getByText(/needs an Approver\. It would create a Jira ticket/).first()).toBeVisible()
   const cards = page.getByRole('article')
   await expect(cards, 'one card for the declined run and one for the live run').toHaveCount(2)
   await expect(cards.filter({ hasText: 'Declined by Bob' }), 'the declined run says who declined').toHaveCount(1)

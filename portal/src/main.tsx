@@ -20,7 +20,7 @@ async function choosePlatform(mode: PortalMode): Promise<Platform> {
   if (mode === 'live') return { fetch: (input, init) => window.fetch(input, init), clock: wallClock }
   const { createDemoPlatform } = await import('./mock')
   const demo = createDemoPlatform()
-  return { fetch: demo.fetch, clock: demo.now }
+  return { fetch: demo.fetch, clock: demo.clock }
 }
 
 const queryClient = new QueryClient({

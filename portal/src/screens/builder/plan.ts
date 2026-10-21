@@ -30,6 +30,19 @@ export function fixedParams(template: TemplateView): ParamSpec[] {
   return template.params.filter((param) => FIXED_PARAMS.has(param.name))
 }
 
+export interface FieldWords {
+  label: string
+  help: string | null
+}
+
+export function fieldWords(description: string): FieldWords {
+  const text = description.trim()
+  const end = text.indexOf('. ')
+  if (end === -1) return { label: text, help: null }
+  const help = text.slice(end + 2).trim()
+  return { label: text.slice(0, end), help: help === '' ? null : help }
+}
+
 export function exampleParams(template: TemplateView): Record<string, string> {
   return Object.fromEntries(template.params.map((param) => [param.name, param.example]))
 }

@@ -53,7 +53,7 @@ export const refusalLabel: Record<Refusal, string> = {
 
 export const approvalStepStatusLabel: Record<ApprovalStepStatus, string> = {
   waiting: 'Waiting for the earlier step',
-  open: 'Waiting for a decision',
+  open: 'Waiting for an Approver',
   approved: 'Approved',
   declined: 'Declined',
 }

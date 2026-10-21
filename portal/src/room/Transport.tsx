@@ -2,7 +2,7 @@ import { useRef, type ChangeEvent, type KeyboardEvent } from 'react'
 import { statusOf, type LiveView, type Status } from '../run'
 import { cx } from '../ui/cx'
 import { formatClock, formatDuration } from '../ui/format'
-import { IconAlert, IconCheck, IconDot, IconPause, IconPlay, IconReplay, IconWave, IconX, type Icon } from '../ui/icons'
+import { IconAlert, IconCheck, IconDot, IconFastForward, IconPause, IconPlay, IconReplay, IconWave, IconX, type Icon } from '../ui/icons'
 import { useWidth } from './hooks'
 import styles from './Transport.module.css'
 
@@ -12,6 +12,7 @@ interface TransportProps {
 
 const STATUS: Record<Status, { readonly words: string; readonly icon: Icon; readonly className: string | undefined }> = {
   live: { words: 'Live', icon: IconWave, className: styles['statusLive'] },
+  sped_up: { words: 'Sped up', icon: IconFastForward, className: styles['statusSpedUp'] },
   catching_up: { words: 'Catching up', icon: IconWave, className: styles['statusCatchingUp'] },
   replay: { words: 'Replay', icon: IconDot, className: styles['statusReplay'] },
   done: { words: 'Done', icon: IconCheck, className: styles['statusDone'] },
@@ -106,7 +107,13 @@ export function Transport({ view }: TransportProps) {
         ) : null}
       </div>
       <span className={styles['elapsed']}>
-        {formatClock(frame.elapsed.at)} <span className={styles['of']}>of</span> {formatClock(frame.elapsed.total)}
+        {formatClock(frame.elapsed.at)}
+        {frame.elapsed.at < frame.elapsed.total ? (
+          <>
+            {' '}
+            <span className={styles['of']}>of</span> {formatClock(frame.elapsed.total)}
+          </>
+        ) : null}
       </span>
       <span className={cx(styles['status'], className)} role="status">
         <Mark size={14} />

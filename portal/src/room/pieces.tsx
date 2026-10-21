@@ -20,7 +20,7 @@ import {
 } from '../ui/icons'
 import { useBeatAnimation, type AnimationPlan } from './hooks'
 import { APPEAR, APPEAR_MS, EASE_MOVE, EASE_OVERSHOOT, FADE_OUT, STAMP } from './motion'
-import type { StatusWords, TicketWords } from './words'
+import { splitActionLine, type StatusWords, type TicketWords } from './words'
 import styles from './Room.module.css'
 
 const toneIcon: Record<StatusWords['tone'], Icon> = {
@@ -106,9 +106,10 @@ interface SeatProps {
   motion: boolean
   kind: 'agent' | 'person' | 'empty' | 'overflow'
   hue?: string
+  outline?: boolean
 }
 
-export function Seat({ seat, avatar, name, words, statusIcon, breathing, lit, dimmed, entrance, motion, kind, hue }: SeatProps) {
+export function Seat({ seat, avatar, name, words, statusIcon, breathing, lit, dimmed, entrance, motion, kind, hue, outline = false }: SeatProps) {
   const ref = useRef<HTMLDivElement>(null)
   const wrapRef = useRef<HTMLSpanElement>(null)
   const labelsRef = useRef<HTMLSpanElement>(null)
@@ -122,7 +123,7 @@ export function Seat({ seat, avatar, name, words, statusIcon, breathing, lit, di
   return (
     <div
       ref={ref}
-      className={cx(styles['seat'], styles[`seat_${kind}`], breathing && styles['breathing'], lit && styles['lit'], dimmed && styles['dimmed'])}
+      className={cx(styles['seat'], styles[`seat_${kind}`], outline && styles['seat_outline'], breathing && styles['breathing'], lit && styles['lit'], dimmed && styles['dimmed'])}
       style={{ ...placeAt(seat.box), '--hue': hue } as React.CSSProperties}
     >
       {walk?.ghost && motion ? (
@@ -137,20 +138,29 @@ export function Seat({ seat, avatar, name, words, statusIcon, breathing, lit, di
       </span>
       <span ref={labelsRef} className={styles['labels']} style={{ maxWidth: seat.label.w }} data-room-label="seat">
         <span className={styles['name']}>{name}</span>
-        <StatusLine words={words} {...(statusIcon ? { icon: statusIcon } : {})} />
+        {outline ? null : <StatusLine words={words} {...(statusIcon ? { icon: statusIcon } : {})} />}
       </span>
     </div>
+  )
+}
+
+export function OutlineAvatar(props: { kind: 'agent'; agentId: string; size: number } | { kind: 'person'; size: number }) {
+  const Glyph = props.kind === 'agent' ? agentIdentity(props.agentId).glyph : null
+  return (
+    <span className={cx(styles['outlineAvatar'], props.kind === 'agent' ? styles['outlineAgent'] : styles['outlinePerson'])} style={{ width: props.size, height: props.size }} aria-hidden="true">
+      {Glyph ? <Glyph size={Math.round(props.size * 0.6)} /> : null}
+    </span>
   )
 }
 
 interface DoorProps {
   door: DoorBox
   name: string
-  /** What goes through a write door, under its name. Read doors and Teams have none. */
-  action: string | null
-  words: StatusWords
+  line: StatusWords
+  /** Drawn inline before the line's first word. A write door's line carries no icon: the checker's shield is beside it. */
+  lineIcon: Icon | null
+  /** The checker's own word, when it has one. The row itself is drawn for every write door. */
   checker: StatusWords | null
-  stateIcon: Icon
   appear: Appear | null
   motion: boolean
   /** Position in the opening's left-to-right stagger. */
@@ -159,7 +169,7 @@ interface DoorProps {
 
 const sideIcon: Record<DoorBox['side'], Icon> = { read: IconRepo, write: IconTicket, teams: IconChat }
 
-export function Door({ door, name, action, words, checker, stateIcon: State, appear, motion, order }: DoorProps) {
+export function Door({ door, name, line, lineIcon: LineIcon, checker, appear, motion, order }: DoorProps) {
   const ref = useRef<HTMLDivElement>(null)
   useBeatAnimation(ref, appear?.key ?? null, appearPlan(appear), motion)
   const Side = sideIcon[door.side]
@@ -176,13 +186,12 @@ export function Door({ door, name, action, words, checker, stateIcon: State, app
           {name}
           {right ? <Side size={14} /> : null}
         </span>
-        {action ? <span className={styles['doorAction']}>{action}</span> : null}
-        <span className={cx(styles['doorState'], styles[`tone_${words.tone}`])}>
-          <State size={11} />
-          <span>{words.text}</span>
+        <span className={cx(styles['doorLine'], styles[`tone_${line.tone}`])}>
+          {LineIcon ? <LineIcon size={11} /> : null}
+          {line.text}
         </span>
       </div>
-      {checker && door.checker ? (
+      {door.checker ? (
         <div
           className={styles['checker']}
           style={{ left: door.checker.x - door.box.x, top: door.checker.y - door.box.y, width: door.checker.w, height: door.checker.h }}
@@ -190,10 +199,12 @@ export function Door({ door, name, action, words, checker, stateIcon: State, app
         >
           <span className={styles['checkerWords']}>
             <span className={styles['checkerName']}>Safety checker</span>
-            <span className={cx(styles['checkerState'], styles[`tone_${checker.tone}`])}>
-              {checker.tone === 'done' ? <IconUnlock size={11} /> : checker.tone === 'fail' ? <IconX size={11} /> : <IconLock size={11} />}
-              {checker.text}
-            </span>
+            {checker ? (
+              <span className={cx(styles['checkerState'], styles[`tone_${checker.tone}`])}>
+                {checker.tone === 'fail' ? <IconX size={11} /> : <IconUnlock size={11} />}
+                {checker.text}
+              </span>
+            ) : null}
           </span>
           <Avatar kind="safety_checker" size={door.checker.h} />
         </div>
@@ -260,7 +271,7 @@ export function TicketCard({ box, ticket, life, words, stamps, travel, appear, t
   useBeatAnimation(beforeRef, turn?.key ?? null, turn ? { keyframes: FADE_OUT, options: { duration: 180, delay: turn.atMs, fill: 'both' } } : null, motion)
   useBeatAnimation(afterRef, turn?.key ?? null, turn ? { keyframes: APPEAR, options: { duration: 180, delay: turn.atMs, fill: 'both' } } : null, motion)
   const last = stamps[stamps.length - 1]
-  const line = ticket.lines[0]
+  const { action, title } = splitActionLine(ticket.lines[0]?.line ?? 'A write action')
   return (
     <div ref={ref} className={cx(styles['ticket'], styles[`ticket_${life}`], compact && styles['ticketCompact'])} style={placeAt(box)} data-ticket={life}>
       <div className={styles['ticketHeadRow']}>
@@ -273,7 +284,10 @@ export function TicketCard({ box, ticket, life, words, stamps, travel, appear, t
           </div>
         ) : null}
       </div>
-      <p className={styles['ticketLine']}>{line?.line ?? 'A write action'}</p>
+      <div className={styles['ticketBody']}>
+        {action ? <p className={styles['ticketAction']}>{action}</p> : null}
+        <p className={styles['ticketLine']}>{title}</p>
+      </div>
       {ticket.lines.length > 1 ? <p className={styles['ticketMore']}>and {ticket.lines.length - 1} more</p> : null}
       {last ? (
         <span ref={stampRef} className={cx(styles['stamp'], last.verdict === 'approve' ? styles['stampApproved'] : styles['stampDeclined'])}>

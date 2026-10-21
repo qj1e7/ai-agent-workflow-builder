@@ -15,7 +15,7 @@ import { RunHead } from '../../room/RunHead'
 import { expectedWritesOf, spineBlocks } from '../../room/spineBlocks'
 import { Transport } from '../../room/Transport'
 import { useBlocks } from '../../room/useBlocks'
-import type { LiveView, WhenFinished } from '../../run'
+import { ROOM_METRICS, type LiveView, type WhenFinished } from '../../run'
 import { ButtonLink } from '../../ui/Button'
 import { cx } from '../../ui/cx'
 import { InlineMessage, Skeleton } from '../../ui/Feedback'
@@ -73,12 +73,14 @@ function Hero({ run }: { run: RunView }) {
   const mode = usePortalMode()
   const roomRef = useRef<HTMLDivElement>(null)
   const width = useWidth(roomRef)
+  const compact = width > 0 && width < ROOM_METRICS.wide.minWidth
   const { room, frame } = view
   // The pill follows the room's phase, the same source as the caption and the spine; the REST view speaks only before the first frame.
   const state = room.phase.name === 'empty' ? run.state : room.phase.name
   const startedBy = nameOf(run.started_by)
   const watching = frame.label === 'live' ? 'Watching the run as it happens.' : frame.label === 'replay' ? 'Replaying it from the start.' : 'Finished.'
-  const needsYou = room.phase.name === 'failed' ? <TroubleshooterPanel runId={run.run_id} view={view} /> : room.phase.name === 'awaiting_approval' ? <ActionCard view={view} /> : null
+  const actionCard = room.phase.name === 'awaiting_approval' ? <ActionCard view={view} /> : null
+  const trouble = room.phase.name === 'failed' ? <TroubleshooterPanel runId={run.run_id} view={view} /> : null
   const spine: SpineBlock[] = spineBlocks(view, blocks)
 
   return (
@@ -91,6 +93,7 @@ function Hero({ run }: { run: RunView }) {
       />
       <div className={styles['heroBody']}>
         <div className={styles['stageColumn']}>
+          {compact ? actionCard : null}
           <div ref={roomRef}>
             <Room view={view} width={width} expectedWrites={expectedWritesOf(blocks)} label={`The room for ${run.use_case_name}`} opening={opening} />
           </div>
@@ -100,7 +103,8 @@ function Hero({ run }: { run: RunView }) {
         </div>
         <aside className={styles['rail']} aria-label="Where the run is">
           {blocks ? <Spine blocks={spine} orientation="vertical" compact /> : null}
-          {needsYou}
+          {compact ? null : actionCard}
+          {trouble}
           <SoFar view={view} />
           <ButtonLink to={`/runs/${run.run_id}`}>Open the full run</ButtonLink>
         </aside>
@@ -152,7 +156,7 @@ function EarlierRuns({ runs }: { runs: readonly RunView[] }) {
                 <span className={styles['rowName']}>{run.use_case_name}</span>
                 <StatusPill state={run.state} />
                 <span className={styles['rowMeta']}>
-                  Started by {nameOf(run.started_by)}, {formatRelative(run.started_at, clock(run.run_id)).toLowerCase()}
+                  Started by {nameOf(run.started_by)}, {formatRelative(run.started_at, clock.now(run.run_id)).toLowerCase()}
                   <span className="visually-hidden"> on {formatDayAndTime(run.started_at)}</span>
                 </span>
                 <span className={styles['dots']} aria-label={dots.map((dot) => `${dot.name}: ${dot.words}`).join('. ')}>

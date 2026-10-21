@@ -42,14 +42,14 @@ export function standingOf(steps: readonly ApprovalStepView[], nameOf: (id: stri
   }
 
   const open = steps.find((step) => step.status === 'open') ?? steps.find((step) => step.status === 'waiting')
-  const next = open ? `Waiting for ${open.label}.` : null
+  const next = open ? `${open.label} decides.` : null
   const earlier =
     approved.length > 0
       ? `Step ${approved.length} of ${steps.length} approved by ${names(approved.map((step) => step.decided_by ?? ''), nameOf)}.`
       : null
   return {
     kind: 'waiting',
-    headline: 'Waiting for a decision',
+    headline: 'Waiting for an Approver',
     detail: [earlier, next].filter((part) => part !== null).join(' ') || null,
   }
 }

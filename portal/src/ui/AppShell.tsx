@@ -4,7 +4,6 @@ import { usePortalMode } from '../api/context'
 import { cx } from './cx'
 import { ErrorBoundary } from './ErrorBoundary'
 import { IconChat, IconFlow, IconReplay, IconShield, IconTicket, IconWave, PortalMark, type Icon } from './icons'
-import { Pill } from './StatusPill'
 import { UserSwitcher } from './UserSwitcher'
 import styles from './AppShell.module.css'
 
@@ -93,9 +92,10 @@ export function AppShell() {
         </nav>
         <div className={styles['tools']}>
           {mode === 'demo' ? (
-            <Pill tone="neutral" icon={IconReplay}>
+            <span className={styles['demo']}>
+              <IconReplay size={16} />
               Demo data
-            </Pill>
+            </span>
           ) : null}
           <UserSwitcher />
         </div>

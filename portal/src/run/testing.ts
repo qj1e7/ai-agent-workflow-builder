@@ -1,6 +1,8 @@
 import type { RunEvent } from '../stream/parse'
-import { agentId, doorKey, type Ms, type RunTime, type WallTime } from './brand'
+import { agentId, doorKey, runTime, wallTime, type Ms, type RunTime, type WallTime } from './brand'
+import type { Clock } from './clock'
 import {
+  catchingUp,
   direct,
   labelOf,
   sceneTime,
@@ -15,8 +17,14 @@ import {
   type Start,
 } from './director'
 import { recording, synthetic, type RecordingName } from './recordings'
-import { openStep, type AgentRegistry, type Move, type RoomState } from './room'
+import { agentNamedIn, openStep, type AgentRef, type AgentRegistry, type Move, type RoomState } from './room'
 import { createTape, type Origin } from './tape'
+
+const KNOWN: readonly AgentRef[] = [
+  { id: agentId('room_lead'), display: 'Room lead' },
+  { id: agentId('release_checker'), display: 'Release checker' },
+  { id: agentId('troubleshooter'), display: 'AI troubleshooter' },
+]
 
 /** The registry the tests fold with: the same three known agents as src/ui/agents.ts. */
 export const TEST_REGISTRY: AgentRegistry = {
@@ -28,6 +36,21 @@ export const TEST_REGISTRY: AgentRegistry = {
     if (id === 'troubleshooter') return { display: 'AI troubleshooter', readDoor: null }
     return { display: id, readDoor: null }
   },
+  named: (words) => agentNamedIn(words, KNOWN),
+}
+
+export function fixedClock(runNow: number): Clock {
+  return {
+    wall: () => wallTime(Date.now()),
+    runNow: () => runTime(runNow),
+    rate: () => 1,
+    after(ms, fn) {
+      const handle = setTimeout(fn, ms)
+      return () => clearTimeout(handle)
+    },
+    epochNow: () => Date.now(),
+    setOffset: () => undefined,
+  }
 }
 
 export interface PlayedBeat {
@@ -60,6 +83,7 @@ export interface Rehearsal {
   readonly room: RoomState
   readonly sceneTime: RunTime
   readonly atEdge: boolean
+  readonly catchingUp: boolean
   readonly label: FrameLabel
   readonly waiting: { readonly since: RunTime; readonly elapsedMs: Ms } | null
   readonly nextWake: number | null
@@ -81,6 +105,7 @@ export function rehearse(name: RecordingName, o: { start: Start }): Rehearsal {
     tape,
     wall: wall as WallTime,
     runNow: (runNow ?? (tape.length > 0 ? tape.event(tape.length).at : 0)) as RunTime,
+    rate: 1,
   })
 
   function record(): void {
@@ -189,6 +214,9 @@ export function rehearse(name: RecordingName, o: { start: Start }): Rehearsal {
     },
     get atEdge() {
       return atEdge(director)
+    },
+    get catchingUp() {
+      return catchingUp(director, stage(now))
     },
     get label() {
       return labelOf(director, stage(now))
