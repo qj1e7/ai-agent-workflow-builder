@@ -71,6 +71,10 @@ Every event has `run_id`, `seq` (gapless from 1 per run), `ts`, `actor {kind, id
 
 platform-api starts only with `AUTH_MODE=dev` and a `PUBLIC_BASE_URL` on `localhost` or `127.0.0.1`. Portal routes then read `X-Dev-User`, one of the ids from `GET /api/v1/dev/users`: `alice` (Operator and Approver), `bob` (Approver), `carol` (Operator). Alice starts the fixture runs, so she is refused with `own_work` when she tries to approve them.
 
+`openapi.json` declares this as the `DevUser` security scheme, an API key sent in the `X-Dev-User` header. Only the routes that read the header carry it. A client that reads the contract sees which routes need a signed-in user, and that the scheme is for local mode only.
+
+Every error the API sends from its own code has the body `{"detail": "..."}`, and each route declares the error statuses it can answer: 401 without a known user, 403 when the user's role does not allow the route, 404 for an unknown id, and 409 when the state of the run or approval does not allow the action. The two other error bodies are the refusal on a decision (`RefusalOut`) and the try-again-later answer of the step route (`RetryLater`). Request validation answers 422 in FastAPI's own shape.
+
 ## The agent callback
 
 The task request gives the agent `callback {url, token}`. The agent posts each event to `url` with the token in the `X-Callback-Token` header, never in the URL, because query strings end up in access logs. The handler must compare the token in constant time, bind it to the run and task, and give it an expiry.
