@@ -6,6 +6,7 @@ import { useDecision } from '../screens/approval/useDecision'
 import { cx } from '../ui/cx'
 import { Skeleton } from '../ui/Feedback'
 import { IconCheck, IconPause, IconSpinner, IconX } from '../ui/icons'
+import { useReducedMotion } from './hooks'
 import { ApprovalPanel, TroublePanel, WrittenPanel } from './panels'
 import { TrackLine } from './TrackLine'
 import styles from './Tracker.module.css'
@@ -54,9 +55,10 @@ export interface TrackerProps {
 
 /** The run view: the use case name, the speed, the headline and subline as one status region, and the line with its one panel. */
 export function Tracker({ runId, view, template, title, titleTo }: TrackerProps) {
+  const reduced = useReducedMotion()
   const titleId = useId()
   const headline = useRef<HTMLHeadingElement>(null)
-  const { track } = view.track(template?.blocks ?? NO_BLOCKS)
+  const { track, plan } = view.track(template?.blocks ?? NO_BLOCKS)
   const spot = track.panel
   const decision = useDecision(spot?.is === 'approval' ? spot.approvalId : null)
   const canDecide = decision.state?.panel.kind === 'can_decide'
@@ -95,7 +97,7 @@ export function Tracker({ runId, view, template, title, titleTo }: TrackerProps)
         <p className={styles['subline']}>{track.subline}</p>
       </div>
       {template ? (
-        <TrackLine track={track} panel={panel} />
+        <TrackLine track={track} plan={plan} reduced={reduced} panel={panel} />
       ) : (
         <div className={styles['loading']}>
           <Skeleton lines={3} label="Loading the steps." />

@@ -9,6 +9,7 @@ import {
   parcelWords,
   SPED_UP_WORDS,
   stopWords,
+  type BeatPlan,
   type Figure,
   type Gate,
   type Items,
@@ -16,6 +17,7 @@ import {
   type ParcelForm,
   type Speech,
   type Stop,
+  type StopCaption,
   type StopKind,
   type Track,
 } from '../run'
@@ -25,38 +27,54 @@ import { Avatar } from '../ui/Avatar'
 import { cx } from '../ui/cx'
 import { IconBox, IconCheck, IconDash, IconDoc, IconLock, IconPause, IconPerson, IconX } from '../ui/icons'
 import { personTone } from '../ui/personTone'
+import { createMotion, type Motion } from './motion'
 import { place } from './place'
 import styles from './TrackLine.module.css'
 
 export interface TrackLineProps {
   readonly track: Track
+  /** The playing beat. Omit for a line that never moves, such as the first screen. */
+  readonly plan?: BeatPlan | null
   /** Drawn under track.panel's stop. */
   readonly panel?: ReactNode
+  readonly reduced?: boolean
   readonly label?: string
 }
 
 /**
  * Draws the shown frame's final state from the Track alone. After each commit, place() hangs the parcel, the fill,
- * the break and the slots off the measured nodes.
+ * the break and the slots off the measured nodes, and the motion plays the beat's acts into that state. A Track with
+ * no plan is simply correct.
  */
-export function TrackLine({ track, panel = null, label = 'Where the work is' }: TrackLineProps) {
+export function TrackLine({ track, plan = null, panel = null, reduced = false, label = 'Where the work is' }: TrackLineProps) {
   const route = useRef<HTMLElement>(null)
-  const latest = useRef(track)
+  const motion = useRef<Motion | null>(null)
+  const scene = { track, plan, reduced }
+  const latest = useRef(scene)
   const users = useDevUsers().data
 
   useLayoutEffect(() => {
-    latest.current = track
-    if (route.current) place(route.current, track)
+    latest.current = scene
+    const element = route.current
+    if (!element) return
+    motion.current ??= createMotion()
+    motion.current.update(element, scene, place(element, track))
   })
 
   useEffect(() => {
     const element = route.current
     if (!element) return
-    const replace = () => place(element, latest.current)
+    const replace = () => {
+      const now = latest.current
+      motion.current?.update(element, now, place(element, now.track))
+    }
     const observer = new ResizeObserver(replace)
     observer.observe(element)
     void document.fonts.ready.then(replace)
-    return () => observer.disconnect()
+    return () => {
+      observer.disconnect()
+      motion.current?.reset()
+    }
   }, [])
 
   return (
@@ -79,6 +97,7 @@ export function TrackLine({ track, panel = null, label = 'Where the work is' }: 
         ))}
       </ol>
       {track.parcel ? <ParcelMark parcel={track.parcel} /> : null}
+      <div className={styles['ghosts']} aria-hidden="true" />
     </section>
   )
 }
@@ -108,7 +127,11 @@ function StopItem({ stop, parcel, gate, speech, panel, holds, users }: StopItemP
       <div className={styles['text']}>
         <span className={styles['label']}>{stop.name}</span>
         <span className={styles['cap']} aria-hidden="true">
-          <Caption stop={stop} />
+          {stop.caption.is === 'none' ? null : (
+            <span key={captionKey(stop.caption)} className={styles['capIn']}>
+              <Caption stop={stop} />
+            </span>
+          )}
         </span>
         <span className="visually-hidden">{stopWords(stop, parcel)}</span>
       </div>
@@ -129,16 +152,17 @@ function StopItem({ stop, parcel, gate, speech, panel, holds, users }: StopItemP
   )
 }
 
+/** Keyed by state, so a change mounts a new fill the motion can pop in at the node's act. */
 function NodeFill({ stop, gate }: { stop: Stop; gate: Gate | null }) {
   switch (stop.state) {
     case 'passed':
-      return <Fill tone="passed" />
+      return <Fill key="passed" tone="passed" />
     case 'current':
-      return gate ? null : <Fill tone="passed" />
+      return gate ? null : <Fill key="passed" tone="passed" />
     case 'failed':
-      return <Fill tone="failed" />
+      return <Fill key="failed" tone="failed" />
     case 'done':
-      return <Fill tone="done" />
+      return <Fill key="done" tone="done" />
     default:
       return null
   }
@@ -146,6 +170,18 @@ function NodeFill({ stop, gate }: { stop: Stop; gate: Gate | null }) {
 
 function Fill({ tone }: { tone: 'passed' | 'failed' | 'done' }) {
   return <span className={cx(styles['nodeFill'], styles[tone])}>{tone === 'failed' ? <IconX strokeWidth={2.6} /> : <IconCheck strokeWidth={2.6} />}</span>
+}
+
+/** Changes when the caption says something new, not when the waiting counter ticks, so the motion can fade the new words in. */
+function captionKey(caption: StopCaption): string {
+  switch (caption.is) {
+    case 'waiting':
+      return caption.is
+    case 'write':
+      return `${caption.is}:${caption.status}`
+    default:
+      return JSON.stringify(caption)
+  }
 }
 
 function Caption({ stop }: { stop: Stop }) {
@@ -266,16 +302,18 @@ function Face({ figure, name }: { figure: Figure; name: string }) {
   }
 }
 
-/** The boom barrier: the safety checker's shield on the line and a striped arm. */
+/** The boom barrier: the safety checker's shield on the line and a striped arm, keyed by state so its colours can crossfade. */
 function GateMark({ gate }: { gate: Gate }) {
   return (
     <>
       <span className={styles['housing']}>
-        <span className={cx(styles['ring'], styles[`ring_${gate.state}`])} />
+        <span className={styles['ringGhost']} />
+        <span key={gate.state} className={cx(styles['ring'], styles[`ring_${gate.state}`])} />
         <Avatar kind="safety_checker" size={28} />
       </span>
       <span className={cx(styles['arm'], gate.state === 'open' && styles['open'])}>
-        <span className={cx(styles['stripes'], styles[`stripes_${gate.state}`])} />
+        <span className={styles['armGhost']} />
+        <span key={gate.state} className={cx(styles['stripes'], styles[`stripes_${gate.state}`])} />
       </span>
     </>
   )
@@ -302,11 +340,15 @@ function Bubble({ speech }: { speech: Speech }) {
   )
 }
 
-/** The one moving thing. */
+/** The one moving thing. Its body is keyed by form, so the motion can fade the old body out while the new one swaps in. */
 function ParcelMark({ parcel }: { parcel: Parcel }) {
+  const form = parcel.form
   return (
-    <div className={styles['parcel']} data-parcel={parcel.form.is} aria-hidden="true">
-      <ParcelBody form={parcel.form} />
+    <div className={styles['parcel']} data-parcel={form.is} aria-hidden="true">
+      <div className={styles['shaker']}>
+        <span className={styles['parcelGhost']} />
+        <ParcelBody key={JSON.stringify(form)} form={form} />
+      </div>
     </div>
   )
 }

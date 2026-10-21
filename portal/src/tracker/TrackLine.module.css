@@ -59,6 +59,14 @@
   font-variant-numeric: tabular-nums;
 }
 
+.capIn {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
 .chip {
   display: inline-flex;
   align-items: center;
@@ -351,11 +359,17 @@
   background: var(--surface);
 }
 
-.ring {
+.ring,
+.ringGhost > * {
   position: absolute;
   inset: 0;
   border: 2.5px solid var(--ink);
   border-radius: 50%;
+}
+
+.ringGhost {
+  position: absolute;
+  inset: 0;
 }
 
 .ring_waiting {
@@ -385,12 +399,18 @@
   transform: rotate(-90deg);
 }
 
-.stripes {
+.stripes,
+.armGhost > * {
   position: absolute;
   inset: 0;
   border-radius: 9px;
   background: repeating-linear-gradient(180deg, var(--a) 0 13px, var(--b) 13px 21px);
   box-shadow: 0 0 0 1.5px var(--a);
+}
+
+.armGhost {
+  position: absolute;
+  inset: 0;
 }
 
 .stripes_idle,
@@ -422,6 +442,15 @@
   left: 0;
   z-index: 5;
   will-change: transform;
+}
+
+.shaker {
+  position: relative;
+}
+
+.parcelGhost > * {
+  position: absolute;
+  inset: 0;
 }
 
 .pbody {
@@ -543,6 +572,13 @@
   transform: translateX(-50%);
 }
 
+.ghosts {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
 /* Phone: the line turns vertical */
 
 @media (max-width: 759px) {
@@ -585,7 +621,8 @@
     padding: 9px 0 0;
   }
 
-  .cap {
+  .cap,
+  .capIn {
     justify-content: flex-start;
   }
 
@@ -691,7 +728,8 @@
     transform-origin: 100% 50%;
   }
 
-  .stripes {
+  .stripes,
+  .armGhost > * {
     border-radius: 8px;
     background: repeating-linear-gradient(90deg, var(--a) 0 11px, var(--b) 11px 18px);
   }
