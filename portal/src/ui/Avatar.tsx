@@ -1,5 +1,6 @@
+import type { Actor } from '../api/types'
 import { AgentFace } from './AgentFace'
-import { IconPerson } from './icons'
+import { GlyphPlatform, IconFlow, IconPerson } from './icons'
 import { personTone } from './personTone'
 import { cx } from './cx'
 import styles from './Avatar.module.css'
@@ -51,6 +52,30 @@ export function Avatar(props: AvatarProps) {
       return (
         <span className={cx(styles['avatar'], styles['seat'])} style={box} aria-hidden="true">
           <IconPerson size={Math.round(size * 0.42)} strokeWidth={2.2} />
+        </span>
+      )
+  }
+}
+
+/** The face for whoever acted: an agent, a person, the safety checker, or a square mark for the workflow and the platform. */
+export function ActorAvatar({ actor, size }: { actor: Actor; size: number }) {
+  switch (actor.kind) {
+    case 'agent':
+      return <Avatar kind="agent" agentId={actor.id} size={size} />
+    case 'user':
+      return <Avatar kind="person" name={actor.display} size={size} />
+    case 'safety_checker':
+      return <Avatar kind="safety_checker" size={size} />
+    case 'workflow':
+      return (
+        <span className={styles['system']} style={{ width: size, height: size }} aria-hidden="true">
+          <IconFlow size={Math.round(size * 0.6)} />
+        </span>
+      )
+    case 'platform':
+      return (
+        <span className={styles['system']} style={{ width: size, height: size }} aria-hidden="true">
+          <GlyphPlatform size={Math.round(size * 0.6)} />
         </span>
       )
   }

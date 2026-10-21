@@ -157,31 +157,6 @@ export const IconDot = drawn('IconDot', <circle cx="12" cy="12" r="4" />)
 export const IconRing = drawn('IconRing', <circle cx="12" cy="12" r="7.5" />)
 export const IconDash = drawn('IconDash', <path d="M7 12h10" />)
 
-export const GlyphLead = drawn(
-  'GlyphLead',
-  <>
-    <circle cx="12" cy="12.5" r="3.6" />
-    <circle cx="12" cy="4.6" r="1.7" />
-    <circle cx="19.2" cy="16.8" r="1.7" />
-    <circle cx="4.8" cy="16.8" r="1.7" />
-  </>,
-)
-export const GlyphChecker = drawn(
-  'GlyphChecker',
-  <>
-    <path d="M3.8 12.4l7.6-7.6H19.2v7.8l-7.6 7.6z" />
-    <circle cx="15.6" cy="8.4" r="1.4" />
-    <path d="M8.6 13.4l2 2 3.6-3.8" />
-  </>,
-)
-export const GlyphTrouble = drawn(
-  'GlyphTrouble',
-  <>
-    <circle cx="10.5" cy="10.5" r="6.2" />
-    <path d="M15 15l5 5" />
-    <path d="M6.6 10.6h1.6l1.1-2.2 2.1 4.4 1.1-2.2h1.5" />
-  </>,
-)
 export const GlyphPlatform = drawn(
   'GlyphPlatform',
   <>

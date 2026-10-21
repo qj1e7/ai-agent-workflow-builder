@@ -1,7 +1,7 @@
 import { Fragment } from 'react'
-import type { MinutesEntry } from '../run'
-import { cx } from '../ui/cx'
-import { ActorAvatar } from './Caption'
+import type { MinutesEntry } from '../../run'
+import { ActorAvatar } from '../../ui/Avatar'
+import { cx } from '../../ui/cx'
 import styles from './Minutes.module.css'
 
 interface MinutesProps {
@@ -17,10 +17,6 @@ const clock = new Intl.DateTimeFormat('en-SG', {
   hour12: false,
 })
 
-/** The time of day a Minutes entry shows, HH:MM:SS, shared with the overview's So far list. */
-export function clockTime(ms: number): string {
-  return clock.format(new Date(ms))
-}
 const exact = new Intl.DateTimeFormat('en-SG', {
   hour: '2-digit',
   minute: '2-digit',
@@ -67,7 +63,7 @@ export function Minutes({ entries, technical, onTechnical }: MinutesProps) {
                       <time dateTime={new Date(entry.at).toISOString()}>{(technical ? exact : clock).format(new Date(entry.at))}</time>
                       {technical ? (
                         <>
-                          <span className={styles['kind']}>{entry.kind}</span>
+                          <span>{entry.kind}</span>
                           <span>seq {entry.seq}</span>
                         </>
                       ) : null}

@@ -1,9 +1,6 @@
-import { GlyphChecker, GlyphLead, GlyphPlatform, GlyphTrouble, type Icon } from './icons'
 import { pickStable } from './pickStable'
 
 export type Accessory = 'headset' | 'magnifier' | 'wrench' | 'none'
-
-export type ReadDoor = 'github'
 
 export interface AgentIdentity {
   readonly id: string
@@ -13,10 +10,6 @@ export interface AgentIdentity {
   readonly hue: string
   /** A CSS colour for the head. It stays light in both themes. */
   readonly tint: string
-  /** Read only by src/room. Delete with it. */
-  readonly glyph: Icon
-  /** Read only by src/room. Delete with it. */
-  readonly readDoor?: ReadDoor
 }
 
 interface Colours {
@@ -30,22 +23,18 @@ const known: Readonly<Record<string, Omit<AgentIdentity, 'id'>>> = {
     accessory: 'headset',
     hue: 'var(--lead)',
     tint: 'var(--lead-tint)',
-    glyph: GlyphLead,
   },
   release_checker: {
     name: 'Release checker',
     accessory: 'magnifier',
     hue: 'var(--checker)',
     tint: 'var(--checker-tint)',
-    glyph: GlyphChecker,
-    readDoor: 'github',
   },
   troubleshooter: {
     name: 'AI troubleshooter',
     accessory: 'wrench',
     hue: 'var(--trouble)',
     tint: 'var(--trouble-tint)',
-    glyph: GlyphTrouble,
   },
 }
 
@@ -75,6 +64,5 @@ export function agentIdentity(id: string, display?: string): AgentIdentity {
     name: display ?? sentenceCase(id),
     accessory: 'none',
     ...pickStable(OTHER_AGENT_COLOURS, id),
-    glyph: GlyphPlatform,
   }
 }

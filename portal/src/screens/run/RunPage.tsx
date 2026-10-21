@@ -2,13 +2,13 @@ import { useParams } from 'react-router'
 import { errorWords } from '../../api/errors'
 import { useRun } from '../../api/queries'
 import type { BlockView } from '../../api/types'
-import { useLiveRoom, useTechnicalDetails } from '../../room/hooks'
-import { Minutes } from '../../room/Minutes'
 import { TrackText } from '../../room/TrackText'
-import { useBlocks } from '../../room/useBlocks'
+import { useLiveRun, useTechnicalDetails } from '../../tracker/hooks'
+import { useBlocks } from '../../tracker/useBlocks'
 import { ButtonLink } from '../../ui/Button'
 import { InlineMessage } from '../../ui/Feedback'
 import { PageHeader } from '../../ui/PageHeader'
+import { Minutes } from './Minutes'
 import styles from './RunPage.module.css'
 
 const NO_BLOCKS: readonly BlockView[] = []
@@ -16,7 +16,7 @@ const NO_BLOCKS: readonly BlockView[] = []
 export function RunPage() {
   const { runId = '' } = useParams()
   const run = useRun(runId)
-  const view = useLiveRoom(runId, 'rest')
+  const view = useLiveRun(runId, 'rest')
   const { track } = view.track(useBlocks(run.data) ?? NO_BLOCKS)
   const [technical, setTechnical] = useTechnicalDetails()
   const closed = view.connection.is === 'closed' ? view.connection : null

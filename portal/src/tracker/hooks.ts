@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState, useSyncExternalStore, type RefObject } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import { runId, useLiveView, type LiveView, type WhenFinished } from '../run'
 import { AGENTS } from './registry'
 
-export function useLiveRoom(id: string, whenFinished: WhenFinished): LiveView {
+export function useLiveRun(id: string, whenFinished: WhenFinished): LiveView {
   return useLiveView(runId(id), { whenFinished, registry: AGENTS, speed: 1 })
 }
 
@@ -39,33 +39,4 @@ export function useTechnicalDetails(): [boolean, (on: boolean) => void] {
     }
   }
   return [on, set]
-}
-
-/** Runs a Web Animation on the element once per key, so a beat animates exactly once and a replay of the same seq animates again. */
-export interface AnimationPlan {
-  readonly keyframes: Keyframe[]
-  readonly options: KeyframeAnimationOptions
-}
-
-type PlanOf<E> = AnimationPlan | ((element: E) => AnimationPlan | null)
-
-export function useBeatAnimation<E extends HTMLElement | SVGElement>(
-  ref: RefObject<E | null>,
-  key: string | null,
-  plan: PlanOf<E> | null,
-  enabled: boolean,
-): void {
-  const planRef = useRef<PlanOf<E> | null>(null)
-  useEffect(() => {
-    planRef.current = plan
-  })
-  useEffect(() => {
-    const element = ref.current
-    const current = planRef.current
-    if (!element || !current || key === null || !enabled) return
-    const resolved = typeof current === 'function' ? current(element) : current
-    if (!resolved) return
-    const animation = element.animate(resolved.keyframes, resolved.options)
-    return () => animation.cancel()
-  }, [ref, key, enabled])
 }
