@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 export interface Ring {
   style: string
@@ -24,9 +24,19 @@ export interface Walk {
 
 const MAX_TABS = 120
 
-// Stamps every tabbable element with an id and its unfocused ring, so the focused ring can be compared with it later.
+// Stamps every tabbable element with an id, its name and its unfocused ring, so the focused ring can be compared with it later.
 async function stampTabbables(page: Page): Promise<number> {
   return page.evaluate(() => {
+    const name = (el: HTMLElement) => {
+      const words = el.getAttribute('aria-label') ?? (el instanceof HTMLInputElement ? el.labels?.[0]?.textContent : null) ?? el.textContent ?? ''
+      return words.trim().replace(/\s+/g, ' ').slice(0, 50) || el.tagName
+    }
+    // Tab enters a radio group once: on the checked radio, or on the first when none is checked.
+    const tabStopOfGroup = (el: HTMLElement) => {
+      if (!(el instanceof HTMLInputElement) || el.type !== 'radio' || el.name === '') return true
+      const group = [...document.querySelectorAll<HTMLInputElement>('input[type=radio]')].filter((radio) => radio.name === el.name)
+      return el === (group.find((radio) => radio.checked) ?? group[0])
+    }
     const ring = (el: Element) => {
       const style = getComputedStyle(el, el instanceof HTMLInputElement && el.type === 'range' ? '::-webkit-slider-thumb' : null)
       const outline = style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0 ? `${style.outlineStyle} ${style.outlineWidth} ${style.outlineColor} +${style.outlineOffset}` : 'none'
@@ -42,9 +52,10 @@ async function stampTabbables(page: Page): Promise<number> {
       return rect.width > 0 && rect.height > 0
     }
     const selector = 'a[href], button:not([disabled]), input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'
-    const found = [...document.querySelectorAll<HTMLElement>(selector)].filter(rendered)
+    const found = [...document.querySelectorAll<HTMLElement>(selector)].filter((el) => rendered(el) && tabStopOfGroup(el))
     found.forEach((el, index) => {
       el.dataset['e2eStop'] = String(index)
+      el.dataset['e2eName'] = name(el)
       el.dataset['e2eRest'] = ring(el)
     })
     return found.length
@@ -71,7 +82,7 @@ function describeFocus(): Omit<Stop, 'id' | 'pixelsChange'> & { id: number | nul
   return {
     id: el.dataset['e2eStop'] === undefined ? -1 : Number(el.dataset['e2eStop']),
     atBody: false,
-    label: (el.getAttribute('aria-label') ?? el.textContent ?? el.tagName).trim().replace(/\s+/g, ' ').slice(0, 50) || el.tagName,
+    label: el.dataset['e2eName'] ?? el.tagName,
     top,
     bottom: top + rect.height,
     left: rect.left + window.scrollX,
@@ -121,7 +132,7 @@ export async function walkTabs(page: Page): Promise<Walk> {
     const noRingInStyles = at.focused.width === 0 || at.focused.style === at.rest.style
     stops.push({ id: at.id, label: at.label, top: at.top, bottom: at.bottom, left: at.left, rest: at.rest, focused: at.focused, pixelsChange: noRingInStyles ? await pixelsChange(page) : null })
   }
-  const labels = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-e2e-stop]')].map((el) => [el.dataset['e2eStop'] ?? '', (el.getAttribute('aria-label') ?? el.textContent ?? el.tagName).trim().replace(/\s+/g, ' ').slice(0, 50)] as const))
+  const labels = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-e2e-stop]')].map((el) => [el.dataset['e2eStop'] ?? '', el.dataset['e2eName'] ?? el.tagName] as const))
   const unreached = labels.filter(([id]) => !seen.has(Number(id)) && Number(id) < total).map(([, label]) => label)
   return { stops, unreached }
 }
@@ -144,15 +155,11 @@ export function withoutVisibleFocus(stops: readonly Stop[]): string[] {
   return stops.filter((stop) => (stop.focused.width === 0 || stop.focused.style === stop.rest.style) && stop.pixelsChange !== true).map((stop) => `"${stop.label}" focused: ${stop.focused.style}, at rest: ${stop.rest.style}`)
 }
 
-/** Presses Tab until the focused element's name matches, so a step is reached the way a keyboard user reaches it. */
-export async function tabTo(page: Page, name: RegExp, limit = MAX_TABS): Promise<string> {
+/** Presses Tab until the target has focus, so a control is reached the way a keyboard user reaches it. */
+export async function tabTo(page: Page, target: Locator, limit = MAX_TABS): Promise<void> {
   for (let press = 0; press < limit; press += 1) {
     await page.keyboard.press('Tab')
-    const label = await page.evaluate(() => {
-      const el = document.activeElement as HTMLElement | null
-      return el ? (el.getAttribute('aria-label') ?? el.textContent ?? '').trim().replace(/\s+/g, ' ') : ''
-    })
-    if (name.test(label)) return label
+    if (await target.evaluate((el) => el === document.activeElement)) return
   }
-  throw new Error(`Tab never reached an element named ${name}`)
+  throw new Error(`Tab never reached the target in ${limit} presses (see the call site in the stack)`)
 }

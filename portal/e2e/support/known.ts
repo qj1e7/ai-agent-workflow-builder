@@ -13,14 +13,7 @@ interface Known {
 
 // Findings the app still has. Each one is reported on every run and stops being excused when E2E_STRICT=1.
 // Delete an entry when the app is fixed, so the guard goes back to failing on it.
-const KNOWN: readonly Known[] = [
-  {
-    check: 'tab-order',
-    scope: /^desktop\/overview$/,
-    found: /^"Position in the run" .* then "Open the full run" /,
-    why: 'On the wide overview Tab finishes the left column before the right rail, so it jumps back up the page to "Open the full run".',
-  },
-]
+const KNOWN: readonly Known[] = []
 
 const strict = Boolean(process.env['E2E_STRICT'])
 

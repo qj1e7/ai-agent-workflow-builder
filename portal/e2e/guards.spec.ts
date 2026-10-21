@@ -2,7 +2,7 @@ import { analyzeInPage, blockingViolations } from './support/axe'
 import { pumpWhile, START } from './support/clock'
 import { measureLayout, MIN_TARGET, MIN_TEXT } from './support/layout'
 import { movingAnimations, MOVING } from './support/motion'
-import { outOfVisualOrder } from './support/keyboard'
+import { outOfVisualOrder, walkTabs } from './support/keyboard'
 import { expect, test } from './support/test'
 
 // These prove the instruments can fail: each one is pointed at a page built to break its rule.
@@ -41,6 +41,22 @@ test('the tab order check flags a jump back up the page', () => {
   expect(outOfVisualOrder(inOrder)).toEqual([])
   const jumpsBack = [stop('a', 0, 0), stop('c', 100, 0), stop('b', 0, 200)]
   expect(outOfVisualOrder(jumpsBack)).toHaveLength(1)
+})
+
+test('the Tab walk enters a radio group once, names inputs by their label, and reports a control Tab cannot reach', async ({ page }) => {
+  await page.setContent(`
+    <body>
+      <fieldset>
+        <label><input type="radio" name="speed" value="1"> 1x</label>
+        <label><input type="radio" name="speed" value="2" checked> 2x</label>
+        <label><input type="radio" name="speed" value="3"> 3x</label>
+      </fieldset>
+      <button>Reached</button>
+      <button tabindex="-1">Skipped</button>
+    </body>`)
+  const walk = await walkTabs(page)
+  expect(walk.stops.map((stop) => stop.label)).toEqual(['2x', 'Reached'])
+  expect(walk.unreached).toEqual(['Skipped'])
 })
 
 test('the axe run names a button without a name and reports nothing on a labelled one, on a paused clock', async ({ page }) => {

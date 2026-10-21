@@ -1,5 +1,5 @@
 import { advanceUntil, openFrozen } from './support/clock'
-import { transportSays } from './support/flows'
+import { lineEnded } from './support/flows'
 import { goTo } from './support/people'
 import { record } from './support/record'
 import { expect, test } from './support/test'
@@ -7,7 +7,7 @@ import { expect, test } from './support/test'
 test('the Teams inbox and the mock Jira show what the live run did', async ({ page }, info) => {
   test.setTimeout(150_000)
   await openFrozen(page, '/')
-  await advanceUntil(page, transportSays(page, 'Done'), { stepMs: 1_000 })
+  await advanceUntil(page, lineEnded(page, 'done'), { stepMs: 1_000 })
 
   await goTo(page, 'Teams')
   await expect(page.getByRole('heading', { name: 'Teams' })).toBeVisible()

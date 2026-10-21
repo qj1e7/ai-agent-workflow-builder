@@ -1,13 +1,13 @@
 import { expect, test } from '@playwright/test'
 import { mkdir, stat } from 'node:fs/promises'
-import { transportSays } from './support/flows'
+import { headline, lineEnded } from './support/flows'
 import { outPath } from './support/record'
 import { assertClean, watchPage } from './support/test'
 
 const SUCCESS_LIMIT_MS = 75_000
 const HOLD_ON_SUCCESS_MS = 4_000
 
-test('records the overview from load through Bob approving to MOCK-142', async ({ browser }) => {
+test("records the overview from load through Bob's recorded approval to MOCK-142", async ({ browser }) => {
   test.setTimeout(SUCCESS_LIMIT_MS + 30_000)
   const size = { width: 1440, height: 900 }
   const context = await browser.newContext({
@@ -23,10 +23,10 @@ test('records the overview from load through Bob approving to MOCK-142', async (
 
   await page.goto('/')
   await page.locator('#main h1').waitFor()
-  await expect(page.getByText('Waiting for an Approver', { exact: true }).first(), 'the run reaches the approval pause').toBeVisible({ timeout: SUCCESS_LIMIT_MS })
-  await expect(page.getByText('Approved by Bob').first(), 'Bob approves').toBeVisible({ timeout: SUCCESS_LIMIT_MS })
-  await expect(page.getByText('Written as MOCK-142').first(), 'the ticket is written').toBeVisible({ timeout: SUCCESS_LIMIT_MS })
-  await expect(transportSays(page, 'Done'), 'the run finishes').toBeVisible({ timeout: SUCCESS_LIMIT_MS })
+  await expect(headline(page), 'the run reaches the approval pause').toHaveText('Waiting for an Approver', { timeout: SUCCESS_LIMIT_MS })
+  await expect(page.locator('[data-figure="person:bob"][data-status="approved"]'), 'Bob approves').toBeVisible({ timeout: SUCCESS_LIMIT_MS })
+  await expect(headline(page), 'the ticket is written').toHaveText('MOCK-142 is in Jira', { timeout: SUCCESS_LIMIT_MS })
+  await expect(lineEnded(page, 'done'), 'the run finishes').toBeVisible({ timeout: SUCCESS_LIMIT_MS })
   await page.waitForTimeout(HOLD_ON_SUCCESS_MS)
   assertClean(watch)
 

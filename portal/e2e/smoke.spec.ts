@@ -56,10 +56,10 @@ test('loads the app font from the same origin', async ({ page }) => {
   })
   await page.goto('/')
   await page.locator('#main').waitFor()
-  await page.evaluate('document.fonts.load(\'16px "Instrument Sans"\')')
+  await page.evaluate('document.fonts.load(\'16px "Atkinson Hyperlegible Next"\')')
   expect(fontRequests.length).toBeGreaterThan(0)
   for (const url of fontRequests) expect(new URL(url).pathname).toMatch(/^\/assets\/.+\.woff2$/)
-  expect(await page.evaluate('document.fonts.check(\'16px "Instrument Sans"\')')).toBe(true)
+  expect(await page.evaluate('document.fonts.check(\'16px "Atkinson Hyperlegible Next"\')')).toBe(true)
 })
 
 test('does not scroll sideways', async ({ page }) => {

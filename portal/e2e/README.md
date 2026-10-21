@@ -7,7 +7,7 @@ cd portal
 npm run e2e
 ```
 
-Docker is the only thing you need. The specs run in a runner image (`e2e/Dockerfile.runner`) that holds the pinned Playwright and the dependencies from `package-lock.json`, so a `portal/node_modules` on your machine is never used. Docker reuses the install until the lockfile changes. A first run takes a few minutes while the images build. After that it takes about two minutes (the specs themselves take about 100 seconds).
+Docker is the only thing you need. The specs run in a runner image (`e2e/Dockerfile.runner`) that holds the pinned Playwright and the dependencies from `package-lock.json`, so a `portal/node_modules` on your machine is never used. Docker reuses the install until the lockfile changes. A first run takes a few minutes while the images build. After that it takes about three minutes.
 
 Pass Playwright arguments to run less, for example `npm run e2e -- keyboard.spec.ts --project=phone`. A run with arguments keeps the evidence already in `e2e/out`. A run without arguments empties the evidence folders first, then checks at the end that every file exists.
 
@@ -17,26 +17,25 @@ Everything lands in `portal/e2e/out`, which git ignores.
 
 | Path | What it holds |
 |---|---|
-| `shots/<project>/<state>.png` | One screenshot per state, for `desktop` (1440 by 900) and `phone` (390 by 844). The name is the full page. Where the page scrolls, `<state>.viewport.png` is the first screen. |
+| `shots/<project>/<state>.png` | One screenshot per state, for `desktop` (1440 by 900) and `phone` (390 by 844) in the light theme, and `desktop-dark` and `phone-dark` in the dark theme. The name is the full page. Where the page scrolls, `<state>.viewport.png` is the first screen. |
 | `axe/<project>/<state>.json` | The full axe-core result for each state. |
-| `video/overview-success.webm` | The overview in real time, from load through Bob approving to MOCK-142. |
+| `video/overview-success.webm` | The overview in real time, from load through Bob's recorded approval to MOCK-142. |
 | `results/` | Playwright's own scratch output. |
 
-The state names are listed in `support/states.ts`. A TypeScript type ties each `record(...)` call to that list, and `inventory.spec.ts` fails the run if a screenshot or axe file is missing.
+The state names and the four projects are listed in `support/states.ts`. A TypeScript type ties each `record(...)` call to that list, and `inventory.spec.ts` fails the run if a screenshot or axe file is missing for any state in any project. The dark projects set the browser's colour scheme to dark, and the Portal follows it. They run only the specs that record states, so guards, keyboard, smoke and the video run in the light theme only.
 
 ## Specs
 
 | Spec | What it proves |
 |---|---|
-| `overview.spec.ts` | The overview at each stage of the live success run, plus the earlier runs list. |
-| `run.spec.ts` | The run page for the success, failed and rejected runs, including scrub back, technical details and Retry run. |
+| `overview.spec.ts` | The overview at each stage of the live success run as Alice, plus the earlier runs list. Then as Bob, who approves in place before the recorded approval, so the run writes MOCK-143. |
+| `run.spec.ts` | The run page for the success, failed and rejected runs, including Instant, technical details and Retry run. |
 | `builder.spec.ts` | The builder empty, planned and saved. |
 | `approvals.spec.ts` | The approvals list, then the approval page as Alice, Carol and Bob, and after approving. |
 | `inboxes.spec.ts` | The Teams inbox and the mock Jira after the live run finished. |
 | `reduced-motion.spec.ts` | With reduced motion nothing that moves is running, and the approval pause reads fully. A control run without reduced motion proves the sampler can see movement. |
-| `keyboard.spec.ts` | Tab order and focus rings on the overview and approval page. The user switcher, the transport and the approve button by keyboard alone. |
+| `keyboard.spec.ts` | Tab order and focus rings on the overview and approval page. The user switcher, the speed control and approving in place on the overview by keyboard alone. |
 | `video.spec.ts` | Records the video. Desktop only. |
-| `travel.spec.ts` | Samples at 10 Hz through the live run and fails when `[data-travel]`, `[data-ticket]` or `[data-speech]` overlaps a `[data-room-label]` by more than 1 px. It skips with a message when no `[data-room-label]` exists. |
 | `guards.spec.ts` | Points each instrument at a page built to break its rule, so a pass means the check can fail. Desktop only. |
 | `smoke.spec.ts` | Serving, security headers, font and demo mode. |
 | `inventory.spec.ts` | Runs last and only when everything else passed. |
@@ -45,7 +44,9 @@ Every screenshot test also runs, on the state it just reached: axe (zero serious
 
 ## How states are reached
 
-In demo mode every full page load restarts the in-memory mock, so the specs reach approval states by in-app navigation and the header's user switcher. The page clock is frozen after load (`support/clock.ts`) and moved with `page.clock.runFor`, so a state does not depend on how fast the machine is. CSS transitions run on the real clock, so each jump is followed by 1.2 seconds of real waiting before the shot. axe schedules work with `setTimeout`, so the clock is nudged by 1 ms while it runs.
+In demo mode every full page load restarts the in-memory mock, so the specs reach approval states by in-app navigation and the header's user switcher. The page clock is frozen after load (`support/clock.ts`) and moved with `page.clock.runFor`, so a state does not depend on how fast the machine is. CSS transitions and the Tracker's Web Animations run on the real clock, so each jump is followed by 1.2 seconds of real waiting before the shot. axe schedules work with `setTimeout`, so the clock is nudged by 1 ms while it runs.
+
+The seeded run reaches the approval about 18 seconds after load, and Bob's recorded approval lands at about 33 seconds and writes MOCK-142. A decision made in the demo before then replaces the recorded one, and the run writes MOCK-143. The specs find each state through the Tracker's own hooks: the status region's headline, `data-stop` and `data-state` on each stop, `data-gate` on the gate, and `data-at-head` and `data-speed` on the Tracker.
 
 The specs run inside the server's network namespace, so the page is at `http://localhost:8080`, which browsers treat as a secure context. Run now works from a plain `http://` host name too. The live suite proves that in `04-plain-http-origin`.
 

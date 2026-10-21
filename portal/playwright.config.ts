@@ -2,6 +2,11 @@ import { defineConfig } from '@playwright/test'
 
 const DESKTOP_ONLY = /(guards|video)\.spec\.ts/
 const AFTER_EVERYTHING = /inventory\.spec\.ts/
+/** The specs that record states. The dark projects run only these, so every state has a shot and an axe result in both themes. */
+const RECORDING = /\/(overview|run|builder|approvals|inboxes|reduced-motion)\.spec\.ts$/
+
+const DESKTOP = { viewport: { width: 1440, height: 900 } }
+const PHONE = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }
 
 export default defineConfig({
   testDir: 'e2e',
@@ -21,12 +26,10 @@ export default defineConfig({
     trace: 'off',
   },
   projects: [
-    { name: 'desktop', testIgnore: AFTER_EVERYTHING, use: { viewport: { width: 1440, height: 900 } } },
-    {
-      name: 'phone',
-      testIgnore: [DESKTOP_ONLY, AFTER_EVERYTHING],
-      use: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
-    },
-    { name: 'inventory', testMatch: AFTER_EVERYTHING, dependencies: ['desktop', 'phone'] },
+    { name: 'desktop', testIgnore: AFTER_EVERYTHING, use: DESKTOP },
+    { name: 'phone', testIgnore: [DESKTOP_ONLY, AFTER_EVERYTHING], use: PHONE },
+    { name: 'desktop-dark', testMatch: RECORDING, use: { ...DESKTOP, colorScheme: 'dark' } },
+    { name: 'phone-dark', testMatch: RECORDING, use: { ...PHONE, colorScheme: 'dark' } },
+    { name: 'inventory', testMatch: AFTER_EVERYTHING, dependencies: ['desktop', 'phone', 'desktop-dark', 'phone-dark'] },
   ],
 })
