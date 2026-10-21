@@ -18,7 +18,9 @@ describe('Avatar', () => {
     for (const props of all) expect(markup(props), props.kind).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i)
   })
 
-  it('draws the faces without an inline style, which the Content Security Policy refuses', () => {
+  // React sets a style through the CSSOM, which style-src 'self' allows, so this is not a policy rule. It keeps a face's
+  // look in its attributes, where the other tests here can read every colour and size.
+  it('draws the faces from attributes alone, with no style attribute', () => {
     for (const props of faces) expect(markup(props), props.kind).not.toContain('style=')
   })
 
