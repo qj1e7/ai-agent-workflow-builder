@@ -1,23 +1,20 @@
 import { useParams } from 'react-router'
 import { errorWords } from '../../api/errors'
 import { useRun } from '../../api/queries'
-import type { BlockView } from '../../api/types'
-import { TrackText } from '../../room/TrackText'
 import { useLiveRun, useTechnicalDetails } from '../../tracker/hooks'
-import { useBlocks } from '../../tracker/useBlocks'
+import { Tracker } from '../../tracker/Tracker'
+import { useRunTemplate } from '../../tracker/useRunTemplate'
 import { ButtonLink } from '../../ui/Button'
 import { InlineMessage } from '../../ui/Feedback'
 import { PageHeader } from '../../ui/PageHeader'
 import { Minutes } from './Minutes'
 import styles from './RunPage.module.css'
 
-const NO_BLOCKS: readonly BlockView[] = []
-
 export function RunPage() {
   const { runId = '' } = useParams()
   const run = useRun(runId)
   const view = useLiveRun(runId, 'rest')
-  const { track } = view.track(useBlocks(run.data) ?? NO_BLOCKS)
+  const template = useRunTemplate(run.data)
   const [technical, setTechnical] = useTechnicalDetails()
   const closed = view.connection.is === 'closed' ? view.connection : null
 
@@ -34,7 +31,7 @@ export function RunPage() {
 
   return (
     <div className={`page ${styles['page']}`}>
-      <TrackText track={track} title={run.data?.use_case_name ?? 'Run'} />
+      <Tracker runId={runId} view={view} template={template} title={run.data?.use_case_name ?? 'Run'} />
       {run.isError ? <InlineMessage tone="error">{errorWords(run.error)}</InlineMessage> : null}
       <div className={styles['minutes']}>
         <Minutes entries={view.minutes} technical={technical} onTechnical={setTechnical} />

@@ -1,47 +1,14 @@
-.hero {
-  display: grid;
-  gap: var(--space-3);
+/* The template's 16 px above the title, so the line and its panel fit above the fold at 1440 by 900. */
+.page {
+  padding-top: var(--space-4);
 }
 
-.heroBody {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
-  gap: var(--space-6);
-  align-items: start;
-}
-
-.stageColumn {
-  display: grid;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-.rail {
-  display: grid;
-  justify-items: start;
-  gap: var(--space-5);
-  min-width: 0;
-  padding: var(--space-5);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-panel);
-  background: var(--surface);
-}
-
-.rail > * {
-  min-width: 0;
-  max-width: 100%;
-}
-
-.rail > ol,
-.rail > section {
-  justify-self: stretch;
-}
-
-/* 64 px below the legend, so at 1440 by 900 the heading sits below the fold instead of across it. */
+/* Under the room the line keeps for its panel, so at 1440 by 900 the heading sits below the fold. */
 .earlier {
   display: grid;
   gap: var(--space-4);
-  margin-top: var(--space-8);
+  max-width: 1216px;
+  margin: var(--space-5) auto 0;
 }
 
 .rows {
@@ -113,12 +80,6 @@
   border-style: dashed;
 }
 
-@media (max-width: 1099px) {
-  .heroBody {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 @media (max-width: 759px) {
   .row {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -127,9 +88,5 @@
 
   .rowMeta {
     grid-column: 1 / -1;
-  }
-
-  .rail {
-    padding: var(--space-4);
   }
 }

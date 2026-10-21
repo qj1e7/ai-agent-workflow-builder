@@ -4,12 +4,11 @@ import { errorWords } from '../../api/errors'
 import { useDisplayName } from '../../api/people'
 import { useRunClock } from '../../api/context'
 import { useRuns, useTemplates } from '../../api/queries'
-import type { BlockView, RunView } from '../../api/types'
-import { TrackText } from '../../room/TrackText'
+import type { RunView } from '../../api/types'
 import { useLiveRun } from '../../tracker/hooks'
-import { useBlocks } from '../../tracker/useBlocks'
+import { Tracker } from '../../tracker/Tracker'
+import { useRunTemplate } from '../../tracker/useRunTemplate'
 import type { WhenFinished } from '../../run'
-import { ButtonLink } from '../../ui/Button'
 import { InlineMessage, Skeleton } from '../../ui/Feedback'
 import { formatDayAndTime, formatRelative } from '../../ui/format'
 import { StatusPill } from '../../ui/StatusPill'
@@ -18,13 +17,12 @@ import { runDots } from './runDots'
 import styles from './OverviewPage.module.css'
 
 const SETTLED = new Set<RunView['state']>(['succeeded', 'rejected', 'failed'])
-const NO_BLOCKS: readonly BlockView[] = []
 
 export function OverviewPage() {
   const runs = useRuns({ poll: true })
   const latest = runs.data?.[0]
   return (
-    <div className="page">
+    <div className={`page ${styles['page']}`}>
       {runs.isError ? (
         <>
           <h1>Runs</h1>
@@ -48,14 +46,8 @@ function Hero({ run }: { run: RunView }) {
   // Decided once per run: a run that was already finished when the page opened replays, a live one is followed to its end.
   const [whenFinished] = useState<WhenFinished>(() => (SETTLED.has(run.state) ? 'replay' : 'rest'))
   const view = useLiveRun(run.run_id, whenFinished)
-  const { track } = view.track(useBlocks(run) ?? NO_BLOCKS)
-
-  return (
-    <section className={styles['hero']} aria-labelledby="hero-title">
-      <TrackText track={track} title={run.use_case_name} titleId="hero-title" />
-      <ButtonLink to={`/runs/${run.run_id}`}>Open the full run</ButtonLink>
-    </section>
-  )
+  const template = useRunTemplate(run)
+  return <Tracker runId={run.run_id} view={view} template={template} title={run.use_case_name} titleTo={`/runs/${run.run_id}`} />
 }
 
 function EarlierRuns({ runs }: { runs: readonly RunView[] }) {
