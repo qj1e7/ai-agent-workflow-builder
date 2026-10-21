@@ -9,6 +9,8 @@ const VIEWPORT = { width: 1440, height: 900 }
 const PHONE = { width: 390, height: 844 }
 
 const approvalLink = (page: Page) => page.locator('a[href*="/approvals/apr_"]').first()
+/** The transport says Live once the room has told the whole story up to the live edge. */
+const caughtUp = (page: Page) => page.getByRole('status').filter({ hasText: 'Live' })
 /** The backend finishes its work in seconds; the room tells the story at reading pace, so the page shows a state well after the backend reaches it. */
 const ROOM_CATCH_UP_MS = 30_000
 
@@ -35,6 +37,7 @@ test('alice starts a release check, bob approves it, and one MOCK ticket is writ
   await backend.waitForState(runId, ['awaiting_approval'])
   await expect(approvalLink(page), 'the run page offers the approval page').toBeVisible({ timeout: ROOM_CATCH_UP_MS })
   expect((await backend.tickets()).filter((ticket) => ticket.run_id === runId), 'nothing is written while the run waits').toEqual([])
+  await expect(caughtUp(page), 'the room has caught up with the backend').toBeVisible({ timeout: ROOM_CATCH_UP_MS })
   await shot(page, info, 'success-05-run-awaiting-approval')
 
   const phone = await browser.newContext({ viewport: PHONE, isMobile: true, hasTouch: true, locale: 'en-SG', timezoneId: 'Asia/Singapore' })
@@ -54,7 +57,7 @@ test('alice starts a release check, bob approves it, and one MOCK ticket is writ
   const card = page.locator('article', { has: page.locator(`a[href$="/approvals/${approvalId}"]`) })
   await expect(card, 'the card shows the backend message').toContainText(message?.text ?? '')
   await expect(card, 'the card says which run it belongs to').toContainText(/Run started by Alice, /)
-  await expect(card, 'the card says the approval is still waiting').toContainText('Waiting for a decision')
+  await expect(card, 'the card says the approval is still waiting').toContainText('Waiting for an Approver')
   await shot(page, info, 'success-06-teams-card')
   await page.locator(`a[href$="/approvals/${approvalId}"]`).click()
   await expect(page).toHaveURL(new RegExp(`/approvals/${approvalId}$`))
