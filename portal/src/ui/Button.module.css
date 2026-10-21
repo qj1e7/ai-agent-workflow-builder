@@ -36,11 +36,11 @@
 
 .primary {
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
 }
 
 .primary:hover:not([aria-disabled='true']) {
-  background: var(--wall);
+  filter: brightness(1.15);
 }
 
 .secondary {
@@ -66,12 +66,12 @@
 }
 
 .approve {
-  background: var(--done);
-  color: #fff;
+  background: var(--green);
+  color: var(--on-status);
 }
 
 .approve:hover:not([aria-disabled='true']) {
-  background: #17613b;
+  background: var(--green-ink);
 }
 
 .spinner {

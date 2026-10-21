@@ -12,7 +12,7 @@
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-button);
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
   font-weight: 600;
   text-decoration: none;
   transform: translateY(-200%);
@@ -104,6 +104,10 @@
   white-space: nowrap;
 }
 
+.demo > svg {
+  flex: none;
+}
+
 .main {
   flex: 1;
   min-width: 0;
@@ -113,9 +117,25 @@
   display: none;
 }
 
-@media (max-width: 759px) {
+@media (max-width: 899px) {
   .header {
     gap: var(--space-3);
+  }
+}
+
+@media (max-width: 759px) {
+  .brand {
+    justify-content: center;
+    min-width: 44px;
+  }
+
+  .brandName {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   .nav {

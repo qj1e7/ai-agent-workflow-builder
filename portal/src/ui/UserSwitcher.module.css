@@ -35,6 +35,13 @@
   font-size: var(--text-12);
 }
 
+.trigger .name {
+  max-width: 18ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .trigger .role {
   display: none;
 }
@@ -62,7 +69,7 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-panel);
   background: var(--surface);
-  box-shadow: 0 12px 28px -14px rgba(21, 34, 42, 0.4);
+  box-shadow: var(--shadow);
 }
 
 .item {
@@ -100,7 +107,13 @@
   font-size: var(--text-14);
 }
 
-@media (min-width: 760px) {
+@media (max-width: 899px) {
+  .trigger .name {
+    max-width: 10ch;
+  }
+}
+
+@media (min-width: 900px) {
   .trigger .role {
     display: block;
   }

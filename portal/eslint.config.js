@@ -33,7 +33,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['eslint.config.js'],
+    files: ['eslint.config.js', 'public/*.js'],
     ...tseslint.configs.disableTypeChecked,
   },
 )

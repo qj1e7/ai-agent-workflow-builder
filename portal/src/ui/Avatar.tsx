@@ -45,7 +45,7 @@ export function Avatar(props: AvatarProps) {
             <path
               d="M8.4 12.1l2.5 2.5 4.7-5"
               fill="none"
-              stroke="#fff"
+              stroke="var(--surface)"
               strokeWidth="1.9"
               strokeLinecap="round"
               strokeLinejoin="round"

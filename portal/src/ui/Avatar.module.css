@@ -7,7 +7,7 @@
 
 .agent {
   border-radius: 30%;
-  color: #fff;
+  color: var(--on-status);
 }
 
 .person {
