@@ -47,7 +47,7 @@ export const KINDS = {
   write_action_done: story(2200, 1400),
   run_succeeded: story(1200, 600),
   run_rejected: story(1200, 600),
-  /** The subline keeps agent_failed's summary, which names what broke. */
+  /** The fold sets the subline only when no agent stopped, since agent_failed's summary already names what broke. */
   run_failed: story(1400, 800, { caption: false }),
   run_retried: story(1200, 600),
 } as const satisfies Record<EventKind, KindRule>

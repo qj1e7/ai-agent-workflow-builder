@@ -100,6 +100,19 @@ describe('applyEvent on the recordings', () => {
     expect(success(11).latest).toEqual(success(9).latest)
   })
 
+  it('keeps what broke in the subline when an agent stopped, and takes the failure itself when none did', () => {
+    expect(failure(12).latest?.summary, 'agent_failed already names what broke').toBe('Release checker failed: GitHub was unavailable.')
+    const failed = synthetic('success', {
+      seq: 19,
+      ts: '2026-11-03T02:20:25Z',
+      actor: { kind: 'platform', id: 'platform', display: 'Platform' },
+      summary: 'The run failed while writing. Jira did not answer.',
+      kind: 'run_failed',
+      data: { stage: 'acting', reason: 'WriteFailed', retryable: true, message: 'Jira did not answer' },
+    })
+    expect(fold([failed], success(18)).latest?.summary, 'not the approval that came before').toBe('The run failed while writing. Jira did not answer.')
+  })
+
   it('puts only agent_message text in an agent mouth', () => {
     expect(success(5).speech).toEqual({ seq: 5, speaker: ROOM_LEAD, text: 'Please check langchain-ai/langgraph for releases newer than 1.2.14.' })
     expect(success(4).speech).toBeNull()

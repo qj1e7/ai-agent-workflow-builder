@@ -425,6 +425,7 @@ function step(room: RoomState, e: RunEvent, registry: AgentRegistry): RoomState 
         ...room,
         work: failedWork(room, e.data.stage),
         phase: { name: 'failed', stage: e.data.stage, reason: e.data.reason, retryable: e.data.retryable, message: e.data.message },
+        latest: room.agents.some((seated) => seated.status === 'stopped') ? room.latest : { seq: e.seq, summary: e.summary, actor: e.actor },
       }
 
     case 'run_retried':
