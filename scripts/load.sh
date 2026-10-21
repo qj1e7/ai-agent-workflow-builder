@@ -41,6 +41,7 @@ seed_ids="$(stack_seed ids)"
   done
 ) >"$stack_out/stats.log" 2>&1 &
 sampler_pid=$!
+disown "$sampler_pid"
 
 # RATE_SCALE multiplies every request rate, to look for the knee. DURATION and SEED_RUNS set the length and the history size.
 set +e
