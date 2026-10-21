@@ -30,7 +30,7 @@ import { cx } from '../ui/cx'
 import { IconBox, IconCheck, IconDash, IconDoc, IconLock, IconPause, IconPerson, IconSpinner, IconX } from '../ui/icons'
 import { personTone } from '../ui/personTone'
 import { createMotion, type Motion } from './motion'
-import { place } from './place'
+import { followLayout, place } from './place'
 import styles from './TrackLine.module.css'
 
 export interface TrackLineProps {
@@ -68,15 +68,12 @@ export function TrackLine({ track, plan = null, panel = null, reduced = false, s
   useEffect(() => {
     const element = route.current
     if (!element) return
-    const replace = () => {
+    const stop = followLayout(element, () => {
       const now = latest.current
       motion.current?.update(element, now, place(element, now.track))
-    }
-    const observer = new ResizeObserver(replace)
-    observer.observe(element)
-    void document.fonts.ready.then(replace)
+    })
     return () => {
-      observer.disconnect()
+      stop()
       motion.current?.reset()
     }
   }, [])

@@ -145,3 +145,17 @@ function placeSlots(route: HTMLElement, stops: readonly HTMLElement[], o: Orient
   if (o === 'vertical') set(route, 'padding-bottom', '')
   else if (need > Math.max(PANEL_ROOM, parseFloat(route.style.paddingBottom) || 0)) set(route, 'padding-bottom', px(need))
 }
+
+/** Calls replace when the route resizes or the web font arrives, until the returned stop is called. */
+export function followLayout(route: HTMLElement, replace: () => void, fontsReady: Promise<unknown> = document.fonts.ready): () => void {
+  let alive = true
+  const observer = new ResizeObserver(replace)
+  observer.observe(route)
+  void fontsReady.then(() => {
+    if (alive) replace()
+  })
+  return () => {
+    alive = false
+    observer.disconnect()
+  }
+}
