@@ -68,7 +68,7 @@ export interface StageSet {
   readonly expectedWrites: readonly ExpectedWrite[]
   /** One plain sentence for the caption and the screen reader: what is set and what stays locked. */
   readonly words: string
-  readonly ghosts: ReadonlySet<SeatKey>
+  readonly outlines: ReadonlySet<SeatKey>
 }
 
 export interface StageOptions {
@@ -87,9 +87,9 @@ export function stageSet(blocks: readonly BlockView[], registry: AgentRegistry, 
     approval: approval ? { id: 'stage', link: '', steps: [{ index: 0, label: 'Approver', state: { is: 'waiting' } }], teams: { is: 'not_posted' } } : null,
     doors,
   }
-  const ghosts = new Set<SeatKey>(specialists.map((seat) => agentSeatKey(seat.id)))
-  if (starter) ghosts.add('starter')
-  if (approval) ghosts.add(stepSeatKey(0))
+  const outlines = new Set<SeatKey>(specialists.map((seat) => agentSeatKey(seat.id)))
+  if (starter) outlines.add('starter')
+  if (approval) outlines.add(stepSeatKey(0))
   const expectedWrites = expectedWritesOf(blocks)
   const words = stageWords(reads, expectedWrites)
   return {
@@ -101,6 +101,6 @@ export function stageSet(blocks: readonly BlockView[], registry: AgentRegistry, 
     },
     expectedWrites,
     words,
-    ghosts,
+    outlines,
   }
 }
