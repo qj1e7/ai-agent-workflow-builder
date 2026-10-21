@@ -35,7 +35,6 @@ export interface FieldWords {
   help: string | null
 }
 
-/** A template describes a detail in one string. Its first sentence names the field and anything after it is help. */
 export function fieldWords(description: string): FieldWords {
   const text = description.trim()
   const end = text.indexOf('. ')

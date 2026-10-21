@@ -5,7 +5,6 @@ import { dispatch } from './routes'
 
 export interface DemoPlatformHandle {
   readonly fetch: typeof fetch
-  /** The recorded time of a run now, and how much faster than the wall it moves while a long wait is squeezed. */
   readonly now: RunClock
 }
 

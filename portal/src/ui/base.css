@@ -151,7 +151,6 @@ main[tabindex='-1']:focus {
   font-weight: 560;
 }
 
-/* One disclosure for technical details on every page: a button with aria-expanded, or a details summary. */
 .disclosure {
   display: inline-flex;
   align-items: center;

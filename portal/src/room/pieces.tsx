@@ -106,7 +106,6 @@ interface SeatProps {
   motion: boolean
   kind: 'agent' | 'person' | 'empty' | 'overflow'
   hue?: string
-  /** A seat the stage invented before any run: an outline and a name, no status line, the same reserved box. */
   ghost?: boolean
 }
 
@@ -145,7 +144,6 @@ export function Seat({ seat, avatar, name, words, statusIcon, breathing, lit, di
   )
 }
 
-/** The outline of a seat the stage invented: an agent's rounded square with its glyph, or a person's circle. */
 export function GhostAvatar(props: { kind: 'agent'; agentId: string; size: number } | { kind: 'person'; size: number }) {
   const Glyph = props.kind === 'agent' ? agentIdentity(props.agentId).glyph : null
   return (
@@ -158,7 +156,6 @@ export function GhostAvatar(props: { kind: 'agent'; agentId: string; size: numbe
 interface DoorProps {
   door: DoorBox
   name: string
-  /** The one line under the name: a read door's standing, or a write door's action and state. */
   line: StatusWords
   /** Drawn inline before the line's first word. A write door's line carries no icon: the checker's shield is beside it. */
   lineIcon: Icon | null

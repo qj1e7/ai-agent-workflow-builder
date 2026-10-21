@@ -26,7 +26,6 @@
   margin-top: 2px;
 }
 
-/* The words stay on one line and only the tag may drop below them, so a counter never reads "Waiting 2 / min 46 s". */
 .counter {
   display: flex;
   flex-wrap: wrap;

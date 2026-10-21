@@ -38,7 +38,6 @@ export function RunPage() {
   const state: RunState | undefined = room.phase.name === 'empty' ? run.data?.state : room.phase.name
   const title = run.data?.use_case_name ?? 'Run'
   const startedBy = run.data ? nameOf(run.data.started_by) : null
-  // On a narrow page the approval card sits above the room, where the Approver's buttons are in reach without scrolling past it.
   const actionCard = room.phase.name === 'awaiting_approval' ? <ActionCard view={view} /> : null
   const trouble = room.phase.name === 'failed' ? <TroubleshooterPanel runId={runId} view={view} /> : null
   const closed = view.connection.is === 'closed' ? view.connection : null

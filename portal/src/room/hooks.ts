@@ -62,7 +62,6 @@ export interface AnimationPlan {
   readonly options: KeyframeAnimationOptions
 }
 
-/** A plan, or a function that measures the laid-out element to make one. */
 type PlanOf<E> = AnimationPlan | ((element: E) => AnimationPlan | null)
 
 export function useBeatAnimation<E extends HTMLElement | SVGElement>(

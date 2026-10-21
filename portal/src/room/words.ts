@@ -31,9 +31,7 @@ export function stepName(step: ApprovalStep): string {
 
 export interface WaitWords {
   readonly ms: number
-  /** The counter moves faster than the wall, so the seat says so and drops the seconds. */
   readonly spedUp: boolean
-  /** The compact seat has no room for the marker; its duration never breaks inside itself. */
   readonly compact: boolean
 }
 
@@ -64,7 +62,6 @@ export function doorName(door: DoorWords): string {
   return connectorLabel(door.key)
 }
 
-/** What goes through a write door, without the door's own name: "Create Jira ticket" on the Jira door is "Create ticket". */
 export function writeDoorAction(door: DoorWords, ticket: Ticket | null): string | null {
   if (door.label) {
     if (door.key === null || door.key === 'teams') return door.label
@@ -78,7 +75,6 @@ export function writeDoorAction(door: DoorWords, ticket: Ticket | null): string 
   return line ? operationLabel(line.operation) : null
 }
 
-/** The write door's one line under its name: the action, then its state. */
 export function writeDoorLine(action: string | null, status: StatusWords): StatusWords {
   return action ? { text: `${action}. ${status.text}`, tone: status.tone } : status
 }
@@ -114,7 +110,6 @@ export function checkerStatus(checker: Checker | null): StatusWords | null {
   }
 }
 
-/** The proposal's action line split at its first ': ' into the action and the title, when both halves have words. */
 export function splitActionLine(line: string): { readonly action: string | null; readonly title: string } {
   const colon = line.indexOf(': ')
   if (colon < 1 || colon + 2 >= line.length) return { action: null, title: line }

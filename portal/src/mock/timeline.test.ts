@@ -5,12 +5,6 @@ import { replay, SHORT_GAP_CAP_MS, SQUEEZE, Timeline, WAIT_HEAD_MS } from './tim
 
 const START = 1_000_000
 
-/**
- * The demo's schedule for the success recording: each seq and the ms after the start at which it lands on
- * the wall. Story events wait for the previous story beat (the ask lands 1000 ms after the join, the
- * proposal 2575 ms after the agreement), a technical gap over a second is capped at one, and the 372.8 s
- * wait for Bob plays in 13.2 s.
- */
 const SCHEDULE: readonly (readonly [seq: number, wall: number])[] = [
   [1, 0],
   [2, 180],

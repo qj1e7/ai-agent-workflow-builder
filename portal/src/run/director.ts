@@ -120,12 +120,10 @@ export function liveNow(s: Stage): RunTime {
   return last !== null && last > s.runNow ? last : s.runNow
 }
 
-/** Following live with more story choreography queued than the room may trail by: the transport says Catching up. */
 export function catchingUp(d: Director, s: Stage): boolean {
   return atEdge(d) && !settled(s) && queuedDebt(s.tape, d.shown) > TARGET_LAG_MS
 }
 
-/** A replay's compressed wait is still rolling: the counters move faster than the wall. */
 export function holding(d: Director, s: Stage): boolean {
   return d.beat?.type === 'hold' && beatRunning(d, s.wall)
 }

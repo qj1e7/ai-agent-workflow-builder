@@ -20,7 +20,6 @@ export interface AgentRegistry {
   named(words: string): AgentRef | null
 }
 
-/** The first of the agents whose display name the words contain as whole words, case-insensitive. */
 export function agentNamedIn(words: string, agents: readonly AgentRef[]): AgentRef | null {
   const lower = words.toLowerCase()
   return agents.find((agent) => new RegExp(`\\b${agent.display.toLowerCase()}\\b`).test(lower)) ?? null
@@ -105,13 +104,11 @@ export interface Trip {
   readonly state: 'out' | 'back' | 'failed'
 }
 
-/** What a finished step brought back and laid on the table, until a proposal takes the table. */
 export interface Finding {
   readonly agent: AgentId
   readonly step: string
   /** The read door the step's trip went through, or null when the step had no trip. */
   readonly from: DoorKey | null
-  /** What the step brought back, as its result listed it. One chip each. */
   readonly items: readonly string[]
 }
 
