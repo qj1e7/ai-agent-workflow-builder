@@ -242,7 +242,7 @@ describe('trackOf on the release check', () => {
   })
 })
 
-describe('trackOf is total and stable', () => {
+describe('trackOf is total', () => {
   it.each(RECORDINGS)('%s: every prefix gives a track, with the release check, and with no blocks', (name) => {
     const events = recording(name)
     for (let to = 0; to <= events.length; to += 1) {
@@ -253,15 +253,6 @@ describe('trackOf is total and stable', () => {
     }
   })
 
-  it.each(RECORDINGS)('%s: the same frame and blocks give a deep-equal track', (name) => {
-    const events = recording(name)
-    for (let to = 0; to <= events.length; to += 1) {
-      for (const blocks of [RELEASE_CHECK, []]) {
-        const room = fold(events.slice(0, to))
-        expect(trackOf(scene(room), blocks)).toEqual(trackOf(scene(room), [...blocks]))
-      }
-    }
-  })
 })
 
 const BASE = Date.parse('2026-11-05T02:00:00Z')
@@ -288,17 +279,39 @@ function finished(seq: number, tags: readonly string[]): RunEvent {
   return event(seq, 'agent_step_finished', agent('release_checker', 'Release checker'), { step: 'find_new', result: { tags } })
 }
 
+const TWO_STEPS = event(15, 'approval_requested', PLATFORM, {
+  approval_id: 'apr_x',
+  link: '/approvals/apr_x',
+  steps: [
+    { index: 0, label: 'Team approver', status: 'open', decided_by: null, decided_at: null },
+    { index: 1, label: 'Security approver', status: 'waiting', decided_by: null, decided_at: null },
+  ],
+})
+
+const CONFLUENCE_AND_JIRA = proposal(12, [
+  { connector: 'confluence', operation: 'update_page', line: 'Update Confluence page: Releases' },
+  { connector: 'jira', operation: 'create_ticket', line: 'Create Jira ticket in MOCK: Releases' },
+])
+
+const READ_ACCESS: readonly BlockView[] = [
+  { key: 'read_access', name: 'Read access lists', description: 'Readers collect who can reach Entra, the admin tools and GitLab.', kind: 'agent' },
+  ...RELEASE_CHECK.slice(1),
+]
+
+const STARTED = event(1, 'run_created', { kind: 'user', id: 'alice', display: 'Alice' }, { use_case_id: 'uc_x', use_case_version: 1, started_by: 'alice' })
+
+const THREE_READERS: readonly RunEvent[] = [
+  STARTED,
+  event(2, 'agent_step_started', agent('entra_reader', 'Entra reader'), { step: 'read_entra' }),
+  event(3, 'agent_step_started', agent('admin_reader', 'Admin reader'), { step: 'read_admin' }),
+  event(4, 'agent_step_finished', agent('admin_reader', 'Admin reader'), { step: 'read_admin', result: {} }),
+  event(5, 'agent_step_started', agent('gitlab_reader', 'GitLab reader'), { step: 'read_gitlab' }),
+  event(6, 'agent_failed', agent('gitlab_reader', 'GitLab reader'), { step: 'read_gitlab', error_type: 'UpstreamUnavailable', message: 'down', retryable: true }),
+]
+
 describe('Phase 2 shapes, with no code change', () => {
-  it('A synthetic two-step approval_requested (labels "Team approver", "Security approver"): two seats at the gate in order, step 1 locked until step 0 is decided, each showing its own label, then its decider; the gate stays waiting until both approve, open after.', () => {
-    const requested = event(15, 'approval_requested', PLATFORM, {
-      approval_id: 'apr_x',
-      link: '/approvals/apr_x',
-      steps: [
-        { index: 0, label: 'Team approver', status: 'open', decided_by: null, decided_at: null },
-        { index: 1, label: 'Security approver', status: 'waiting', decided_by: null, decided_at: null },
-      ],
-    })
-    const asked = fold([requested], fold(slice('success', 1, 14)))
+  it('A synthetic two-step approval_requested (labels "Team approver", "Security approver"): two seats at the gate in order, step 1 locked until step 0 is decided, each showing its own label, then its decider; the gate stays `waiting` until both approve, `open` after.', () => {
+    const asked = fold([TWO_STEPS], fold(slice('success', 1, 14)))
     const seats = (room: RoomState): readonly Figure[] => figures(trackOf(scene(room), RELEASE_CHECK), 'gate')
     expect(seats(asked)).toEqual([
       { key: 'seat:0', is: 'seat', step: 0, label: 'Team approver', open: true },
@@ -322,15 +335,7 @@ describe('Phase 2 shapes, with no code change', () => {
   })
 
   it("A synthetic proposal with a Confluence and a Jira action: two write stops after the gate, in proposal order, the seeded Jira stop keeps its key; with only Jira, the release check's six stops do not change key or position.", () => {
-    const both = fold(
-      [
-        proposal(12, [
-          { connector: 'confluence', operation: 'update_page', line: 'Update Confluence page: Releases' },
-          { connector: 'jira', operation: 'create_ticket', line: 'Create Jira ticket in MOCK: Releases' },
-        ]),
-      ],
-      fold(slice('success', 1, 11)),
-    )
+    const both = fold([CONFLUENCE_AND_JIRA], fold(slice('success', 1, 11)))
     const track = trackOf(scene(both), RELEASE_CHECK)
     expect(keys(track)).toEqual(['start', 'agent:read_releases', 'draft', 'gate', 'write:confluence', 'write:jira', 'done'])
     expect(track.stops.map((candidate) => candidate.name).slice(4, 6)).toEqual(['Confluence', 'Jira'])
@@ -341,19 +346,7 @@ describe('Phase 2 shapes, with no code change', () => {
   })
 
   it('A synthetic stop holding three agents with different statuses (working, done, stopped): three figures, each its own status, and castLayout says compact; the release check\'s two figures say full.', () => {
-    const blocks: readonly BlockView[] = [
-      { key: 'read_access', name: 'Read access lists', description: 'Readers collect who can reach Entra, the admin tools and GitLab.', kind: 'agent' },
-      ...RELEASE_CHECK.slice(1),
-    ]
-    const room = fold([
-      event(1, 'run_created', { kind: 'user', id: 'alice', display: 'Alice' }, { use_case_id: 'uc_x', use_case_version: 1, started_by: 'alice' }),
-      event(2, 'agent_step_started', agent('entra_reader', 'Entra reader'), { step: 'read_entra' }),
-      event(3, 'agent_step_started', agent('admin_reader', 'Admin reader'), { step: 'read_admin' }),
-      event(4, 'agent_step_finished', agent('admin_reader', 'Admin reader'), { step: 'read_admin', result: {} }),
-      event(5, 'agent_step_started', agent('gitlab_reader', 'GitLab reader'), { step: 'read_gitlab' }),
-      event(6, 'agent_failed', agent('gitlab_reader', 'GitLab reader'), { step: 'read_gitlab', error_type: 'UpstreamUnavailable', message: 'down', retryable: true }),
-    ])
-    const cast = figures(trackOf(scene(room), blocks), 'agent:read_access')
+    const cast = figures(trackOf(scene(fold(THREE_READERS)), READ_ACCESS), 'agent:read_access')
     expect(cast.map((figure) => (figure.is === 'agent' ? [figure.id, figure.status] : figure.key))).toEqual([
       ['entra_reader', 'working'],
       ['admin_reader', 'done'],
@@ -430,23 +423,23 @@ describe('trackOf on the edges of the contract', () => {
     expect(track.stops[4]).toMatchObject({ key: 'write:record_it', name: 'Jira' })
   })
 
-  it('stands agents that two agent blocks name at their own blocks, and an unnamed agent at the next free block', () => {
+  it('stands each agent, in join order, at the block that names it while that block is free, else at the next free block', () => {
     const blocks: readonly BlockView[] = [
       { key: 'read_a', name: 'Read A', description: 'The B reader reads B.', kind: 'agent' },
       { key: 'read_b', name: 'Read B', description: 'The A reader reads A.', kind: 'agent' },
       { key: 'read_c', name: 'Read C', description: 'Someone reads C.', kind: 'agent' },
     ]
     const room = fold([
-      event(1, 'run_created', { kind: 'user', id: 'alice', display: 'Alice' }, { use_case_id: 'uc_x', use_case_version: 1, started_by: 'alice' }),
+      STARTED,
       event(2, 'agent_step_started', agent('c_reader', 'C reader'), { step: 'read' }),
       event(3, 'agent_step_started', agent('a_reader', 'A reader'), { step: 'read' }),
       event(4, 'agent_step_started', agent('b_reader', 'B reader'), { step: 'read' }),
     ])
     const track = trackOf(scene(room), blocks)
     expect(['agent:read_a', 'agent:read_b', 'agent:read_c'].map((key) => figures(track, key).map((figure) => figure.key))).toEqual([
-      ['agent:b_reader'],
-      ['agent:a_reader'],
       ['agent:c_reader'],
+      ['agent:a_reader'],
+      ['agent:b_reader'],
     ])
   })
 
@@ -517,5 +510,57 @@ describe('castLayout', () => {
       { size: 'compact', shown: 3, more: 2 },
       { size: 'compact', shown: 3, more: 6 },
     ])
+  })
+})
+
+const ENTRA_AND_GITLAB: readonly BlockView[] = [
+  { key: 'read_entra', name: 'Read Entra', description: 'The Entra reader lists who can sign in.', kind: 'agent' },
+  { key: 'read_gitlab', name: 'Read GitLab', description: 'The GitLab reader lists the project members.', kind: 'agent' },
+  ...RELEASE_CHECK.slice(1),
+]
+
+/** The GitLab reader joins first, then an agent no block names, then the Entra reader, whose block that agent already stands on. */
+const OUT_OF_NAME_ORDER: readonly RunEvent[] = [
+  STARTED,
+  event(2, 'agent_joined', LEAD, { agent: { id: 'gitlab_reader', display: 'GitLab reader' } }),
+  event(3, 'agent_step_started', agent('gitlab_reader', 'GitLab reader'), { step: 'read_gitlab' }),
+  event(4, 'agent_joined', LEAD, { agent: { id: 'admin_reader', display: 'Admin reader' } }),
+  event(5, 'agent_step_started', agent('admin_reader', 'Admin reader'), { step: 'read_admin' }),
+  event(6, 'agent_joined', LEAD, { agent: { id: 'entra_reader', display: 'Entra reader' } }),
+  event(7, 'agent_step_started', agent('entra_reader', 'Entra reader'), { step: 'read_entra' }),
+  event(8, 'agent_step_finished', agent('admin_reader', 'Admin reader'), { step: 'read_admin', result: {} }),
+]
+
+/** The figures an event moves on purpose: whoever acts, whoever is brought in, and whoever speaks. */
+function movedBy(e: RunEvent): ReadonlySet<string> {
+  const keys = new Set([`${e.actor.kind === 'user' ? 'person' : 'agent'}:${e.actor.id}`])
+  if (e.kind === 'agent_joined') keys.add(`agent:${e.data.agent.id}`)
+  if (e.kind === 'agent_message') keys.add(`agent:${e.data.speaker.id}`)
+  return keys
+}
+
+describe('trackOf is stable', () => {
+  const RUNS: readonly (readonly [name: string, events: readonly RunEvent[], blocks: readonly BlockView[]])[] = [
+    ...RECORDINGS.map((name) => [name, recording(name), RELEASE_CHECK] as const),
+    ['a two-step approval', [...slice('success', 1, 14), TWO_STEPS, decided(16, 0, 'bob', 'Bob'), decided(17, 1, 'carol', 'Carol')], RELEASE_CHECK],
+    ['a Confluence and a Jira write', [...slice('success', 1, 11), CONFLUENCE_AND_JIRA], RELEASE_CHECK],
+    ['three readers on one stop', THREE_READERS, READ_ACCESS],
+    ['two agent blocks, joined out of name order', OUT_OF_NAME_ORDER, ENTRA_AND_GITLAB],
+  ]
+
+  it.each(RUNS)('%s: a stop keeps its key and place except where the proposal claims write stops, and a figure leaves its stop only when it acts', (name, events, blocks) => {
+    let before = trackOf(scene(EMPTY_ROOM), blocks)
+    for (const [index, e] of events.entries()) {
+      const now = trackOf(scene(fold(events.slice(0, index + 1))), blocks)
+      if (e.kind !== 'write_action_proposed') expect(keys(now).slice(0, before.stops.length), `${name} seq ${e.seq}: the stops`).toEqual(keys(before))
+      const stopNow = (figure: string) => now.stops.find((candidate) => candidate.cast.some((cast) => cast.key === figure))?.key
+      for (const stopBefore of before.stops) {
+        for (const figure of stopBefore.cast) {
+          const where = stopNow(figure.key)
+          if (where !== undefined && !movedBy(e).has(figure.key)) expect(where, `${name} seq ${e.seq}: ${figure.key}`).toBe(stopBefore.key)
+        }
+      }
+      before = now
+    }
   })
 })

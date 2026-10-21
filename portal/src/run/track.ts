@@ -296,27 +296,23 @@ function namesIn(words: string, name: string): boolean {
 }
 
 /**
- * Each specialist's agent stop: the agent block whose name or description names it as whole words, else the
- * next agent block no one has claimed, in join order; the last agent stop takes the rest. The host has no home.
+ * Each specialist's agent stop, in join order: the agent block whose name or description names it as whole words
+ * while no earlier agent stands there, else the next agent block no one has claimed; the last agent stop takes the
+ * rest. Seats only append within an attempt, so an agent keeps the home it was first given. The host has no home.
  */
 function homesOf(agents: readonly AgentSeat[], line: readonly LineStop[]): ReadonlyMap<AgentId, number> {
   const agentStops = line.flatMap((stop, index) => (stop.kind === 'agent' ? [{ stop, index }] : []))
   const last = agentStops.at(-1)
   const homes = new Map<AgentId, number>()
   if (!last) return homes
-  const specialists = agents.filter((seat) => seat.role === 'specialist')
   const claimed = new Set<number>()
-  for (const seat of specialists) {
-    const named = agentStops.find(({ stop }) => stop.block !== null && namesIn(`${stop.block.name} ${stop.block.description}`, seat.display))
-    if (!named) continue
-    homes.set(seat.id, named.index)
-    claimed.add(named.index)
-  }
-  for (const seat of specialists) {
-    if (homes.has(seat.id)) continue
-    const free = agentStops.find(({ index }) => !claimed.has(index))
-    if (free) claimed.add(free.index)
-    homes.set(seat.id, (free ?? last).index)
+  for (const seat of agents) {
+    if (seat.role !== 'specialist') continue
+    const free = agentStops.filter(({ index }) => !claimed.has(index))
+    const named = free.find(({ stop }) => stop.block !== null && namesIn(`${stop.block.name} ${stop.block.description}`, seat.display))
+    const home = named ?? free[0] ?? last
+    claimed.add(home.index)
+    homes.set(seat.id, home.index)
   }
   return homes
 }
