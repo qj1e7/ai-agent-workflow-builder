@@ -1,0 +1,94 @@
+time="2026-10-21T21:25:18Z" level=info msg="history before the test: 31 runs, all waiting at the approval gate" source=console
+time="2026-10-21T21:25:26Z" level=warning msg="Insufficient VUs, reached 200 active VUs and cannot initialize more" executor=constant-arrival-rate scenario=list_runs
+time="2026-10-21T21:25:26Z" level=warning msg="Insufficient VUs, reached 200 active VUs and cannot initialize more" executor=constant-arrival-rate scenario=get_run
+time="2026-10-21T21:25:42Z" level=warning msg="Insufficient VUs, reached 200 active VUs and cannot initialize more" executor=constant-arrival-rate scenario=list_approvals
+
+
+  █ THRESHOLDS 
+
+    checks
+    ✓ 'rate>0.99' rate=100.00%
+
+    http_req_duration{path:get_run}
+    ✗ 'p(95)<100' p(95)=3.67s
+
+    http_req_duration{path:list_approvals}
+    ✗ 'p(95)<100' p(95)=3.69s
+
+    http_req_duration{path:list_runs}
+    ✗ 'p(95)<250' p(95)=3.79s
+
+    http_req_duration{path:portal_static}
+    ✓ 'p(95)<100' p(95)=338.28µs
+
+    http_req_duration{path:run_events}
+    ✓ 'p(95)<100' p(95)=13.28ms
+
+    http_req_duration{path:start_run}
+    ✗ 'p(95)<500' p(95)=7.2s
+
+    http_req_failed{path:get_run}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{path:list_approvals}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{path:list_runs}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{path:portal_static}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{path:run_events}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{path:start_run}
+    ✓ 'rate<0.01' rate=0.00%
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 16562   489.125607/s
+    checks_succeeded...: 100.00% 16562 out of 16562
+    checks_failed......: 0.00%   0 out of 16562
+
+    ✓ portal page is 200
+    ✓ portal asset is 200
+    ✓ approvals list is 200
+    ✓ events page is 200
+    ✓ get run is 200
+    ✓ start run is 201
+    ✓ list runs is 200
+
+    HTTP
+    http_req_duration..............: avg=949.76ms med=7.53ms   p(90)=3.41s    p(95)=3.61s    p(99)=3.79s    max=7.23s 
+      { expected_response:true }...: avg=949.76ms med=7.53ms   p(90)=3.41s    p(95)=3.61s    p(99)=3.79s    max=7.23s 
+      { path:get_run }.............: avg=2.6s     med=3.04s    p(90)=3.6s     p(95)=3.67s    p(99)=3.73s    max=3.79s 
+      { path:list_approvals }......: avg=2.84s    med=3.18s    p(90)=3.65s    p(95)=3.69s    p(99)=3.74s    max=3.79s 
+      { path:list_runs }...........: avg=2.7s     med=3.14s    p(90)=3.71s    p(95)=3.79s    p(99)=3.85s    max=3.89s 
+      { path:portal_static }.......: avg=190.98µs med=160.33µs p(90)=293.56µs p(95)=338.28µs p(99)=473.66µs max=6.61ms
+      { path:run_events }..........: avg=9.08ms   med=8.41ms   p(90)=11.73ms  p(95)=13.28ms  p(99)=23.44ms  max=55.7ms
+      { path:start_run }...........: avg=5.39s    med=6.24s    p(90)=7.18s    p(95)=7.2s     p(99)=7.22s    max=7.23s 
+    http_req_failed................: 0.00%  0 out of 16595
+      { path:get_run }.............: 0.00%  0 out of 2091
+      { path:list_approvals }......: 0.00%  0 out of 1570
+      { path:list_runs }...........: 0.00%  0 out of 2038
+      { path:portal_static }.......: 0.00%  0 out of 7202
+      { path:run_events }..........: 0.00%  0 out of 3601
+      { path:start_run }...........: 0.00%  0 out of 60
+    http_reqs......................: 16595  490.100196/s
+
+    EXECUTION
+    dropped_iterations.............: 3316   97.93144/s
+    iteration_duration.............: avg=1.21s    med=10.34ms  p(90)=3.5s     p(95)=3.65s    p(99)=3.8s     max=7.23s 
+    iterations.....................: 12961  382.777261/s
+    vus............................: 201    min=0          max=616
+    vus_max........................: 637    min=55         max=637
+
+    NETWORK
+    data_received..................: 1.0 GB 31 MB/s
+    data_sent......................: 1.8 MB 54 kB/s
+
+
+
+time="2026-10-21T21:25:51Z" level=error msg="thresholds on metrics 'http_req_duration{path:get_run}, http_req_duration{path:list_approvals}, http_req_duration{path:list_runs}, http_req_duration{path:start_run}' have been crossed"

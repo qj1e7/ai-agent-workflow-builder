@@ -1,0 +1,2833 @@
+{
+	"@programName": "ZAP",
+	"@version": "2.17.0",
+	"@generated": "Wed, 21 Oct 2026 21:19:22",
+	"created": "2026-10-21T21:19:22.142228467Z",
+	"insights":[
+		{
+			"level": "Low",
+			"reason": "Warning",
+			"site": "",
+			"key": "insight.log.warn",
+			"description": "ZAP warnings logged - see the zap.log file for details",
+			"statistic": "3"
+		},
+		{
+			"level": "Low",
+			"reason": "Exceeded High",
+			"site": "http://portal:8080",
+			"key": "insight.code.4xx",
+			"description": "Percentage of responses with status code 4xx",
+			"statistic": "77"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://portal:8080",
+			"key": "insight.code.2xx",
+			"description": "Percentage of responses with status code 2xx",
+			"statistic": "21"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://portal:8080",
+			"key": "insight.code.3xx",
+			"description": "Percentage of responses with status code 3xx",
+			"statistic": "1"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://portal:8080",
+			"key": "insight.endpoint.ctype.application/json",
+			"description": "Percentage of endpoints with content type application/json",
+			"statistic": "64"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://portal:8080",
+			"key": "insight.endpoint.ctype.text/html",
+			"description": "Percentage of endpoints with content type text/html",
+			"statistic": "35"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://portal:8080",
+			"key": "insight.endpoint.method.GET",
+			"description": "Percentage of endpoints with method GET",
+			"statistic": "67"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://portal:8080",
+			"key": "insight.endpoint.method.POST",
+			"description": "Percentage of endpoints with method POST",
+			"statistic": "32"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://portal:8080",
+			"key": "insight.endpoint.total",
+			"description": "Count of total endpoints",
+			"statistic": "256"
+		}
+	],
+	"site":[ 
+		{
+			"@name": "http://portal:8080",
+			"@host": "portal",
+			"@port": "8080",
+			"@ssl": "false",
+			"alerts": [ 
+				{
+					"pluginid": "100001",
+					"alertRef": "100001",
+					"alert": "Unexpected Content-Type was returned",
+					"name": "Unexpected Content-Type was returned",
+					"riskcode": "1",
+					"confidence": "3",
+					"riskdesc": "Low (High)",
+					"desc": "<p>A Content-Type of text/html was returned by the server.</p><p>This is not one of the types expected to be returned by an API.</p><p>Raised by the 'Alert on Unexpected Content Types' script</p>",
+					"instances":[ 
+						{
+							"id": "17",
+							"uri": "http://portal:8080",
+							"nodeName": "http:\/\/portal:8080",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "1096",
+							"uri": "http://portal:8080?aaa=bbb",
+							"nodeName": "http:\/\/portal:8080 (aaa)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "1092",
+							"uri": "http://portal:8080?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/portal:8080 (class.module.classLoader.DefaultAssertio...)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "1794",
+							"uri": "http://portal:8080/",
+							"nodeName": "http:\/\/portal:8080\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2034",
+							"uri": "http://portal:8080/.DS_Store",
+							"nodeName": "http:\/\/portal:8080\/.DS_Store",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2063",
+							"uri": "http://portal:8080/._darcs",
+							"nodeName": "http:\/\/portal:8080\/._darcs",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2062",
+							"uri": "http://portal:8080/.bzr",
+							"nodeName": "http:\/\/portal:8080\/.bzr",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "1992",
+							"uri": "http://portal:8080/.env",
+							"nodeName": "http:\/\/portal:8080\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2018",
+							"uri": "http://portal:8080/.git/config",
+							"nodeName": "http:\/\/portal:8080\/.git\/config",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2061",
+							"uri": "http://portal:8080/.hg",
+							"nodeName": "http:\/\/portal:8080\/.hg",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "1973",
+							"uri": "http://portal:8080/.htaccess",
+							"nodeName": "http:\/\/portal:8080\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2012",
+							"uri": "http://portal:8080/.idea/WebServers.xml",
+							"nodeName": "http:\/\/portal:8080\/.idea\/WebServers.xml",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2035",
+							"uri": "http://portal:8080/.php_cs.cache",
+							"nodeName": "http:\/\/portal:8080\/.php_cs.cache",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2046",
+							"uri": "http://portal:8080/.ssh/id_dsa",
+							"nodeName": "http:\/\/portal:8080\/.ssh\/id_dsa",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2045",
+							"uri": "http://portal:8080/.ssh/id_rsa",
+							"nodeName": "http:\/\/portal:8080\/.ssh\/id_rsa",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2020",
+							"uri": "http://portal:8080/.svn/entries",
+							"nodeName": "http:\/\/portal:8080\/.svn\/entries",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2021",
+							"uri": "http://portal:8080/.svn/wc.db",
+							"nodeName": "http:\/\/portal:8080\/.svn\/wc.db",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2006",
+							"uri": "http://portal:8080/.zap3313541462398339949",
+							"nodeName": "http:\/\/portal:8080\/.zap3313541462398339949",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "4",
+							"uri": "http://portal:8080/1718587908120181108",
+							"nodeName": "http:\/\/portal:8080\/1718587908120181108",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "5",
+							"uri": "http://portal:8080/568825345315063474",
+							"nodeName": "http:\/\/portal:8080\/568825345315063474",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2064",
+							"uri": "http://portal:8080/BitKeeper",
+							"nodeName": "http:\/\/portal:8080\/BitKeeper",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2049",
+							"uri": "http://portal:8080/CHANGELOG.txt",
+							"nodeName": "http:\/\/portal:8080\/CHANGELOG.txt",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2022",
+							"uri": "http://portal:8080/CVS/root",
+							"nodeName": "http:\/\/portal:8080\/CVS\/root",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2036",
+							"uri": "http://portal:8080/DEADJOE",
+							"nodeName": "http:\/\/portal:8080\/DEADJOE",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2031",
+							"uri": "http://portal:8080/FileZilla.xml",
+							"nodeName": "http:\/\/portal:8080\/FileZilla.xml",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "257",
+							"uri": "http://portal:8080/WEB-INF/applicationContext.xml",
+							"nodeName": "http:\/\/portal:8080\/WEB-INF\/applicationContext.xml",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "283",
+							"uri": "http://portal:8080/WEB-INF/classes/BBeoFm6h/css.class",
+							"nodeName": "http:\/\/portal:8080\/WEB-INF\/classes\/BBeoFm6h\/css.class",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "282",
+							"uri": "http://portal:8080/WEB-INF/classes/BEQnc9_d/js.class",
+							"nodeName": "http:\/\/portal:8080\/WEB-INF\/classes\/BEQnc9_d\/js.class",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "261",
+							"uri": "http://portal:8080/WEB-INF/classes/boot/js.class",
+							"nodeName": "http:\/\/portal:8080\/WEB-INF\/classes\/boot\/js.class",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "281",
+							"uri": "http://portal:8080/WEB-INF/classes/favicon/svg.class",
+							"nodeName": "http:\/\/portal:8080\/WEB-INF\/classes\/favicon\/svg.class",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "255",
+							"uri": "http://portal:8080/WEB-INF/web.xml",
+							"nodeName": "http:\/\/portal:8080\/WEB-INF\/web.xml",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2028",
+							"uri": "http://portal:8080/WS_FTP.INI",
+							"nodeName": "http:\/\/portal:8080\/WS_FTP.INI",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2026",
+							"uri": "http://portal:8080/WS_FTP.ini",
+							"nodeName": "http:\/\/portal:8080\/WS_FTP.ini",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2033",
+							"uri": "http://portal:8080/WinSCP.ini",
+							"nodeName": "http:\/\/portal:8080\/WinSCP.ini",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2060",
+							"uri": "http://portal:8080/_framework/blazor.boot.json",
+							"nodeName": "http:\/\/portal:8080\/_framework\/blazor.boot.json",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2059",
+							"uri": "http://portal:8080/_wpeprivate/config.json",
+							"nodeName": "http:\/\/portal:8080\/_wpeprivate\/config.json",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2047",
+							"uri": "http://portal:8080/adminer.php",
+							"nodeName": "http:\/\/portal:8080\/adminer.php",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "18",
+							"uri": "http://portal:8080/api",
+							"nodeName": "http:\/\/portal:8080\/api",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "288",
+							"uri": "http://portal:8080/api?-s",
+							"nodeName": "http:\/\/portal:8080\/api (-s)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2345",
+							"uri": "http://portal:8080/api-docs",
+							"nodeName": "http:\/\/portal:8080\/api-docs ()({step,verdict,digest})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2038",
+							"uri": "http://portal:8080/app/etc/local.xml",
+							"nodeName": "http:\/\/portal:8080\/app\/etc\/local.xml",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2051",
+							"uri": "http://portal:8080/composer.json",
+							"nodeName": "http:\/\/portal:8080\/composer.json",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2052",
+							"uri": "http://portal:8080/composer.lock",
+							"nodeName": "http:\/\/portal:8080\/composer.lock",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2017",
+							"uri": "http://portal:8080/config/database.yml",
+							"nodeName": "http:\/\/portal:8080\/config\/database.yml",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2015",
+							"uri": "http://portal:8080/config/databases.yml",
+							"nodeName": "http:\/\/portal:8080\/config\/databases.yml",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2024",
+							"uri": "http://portal:8080/core",
+							"nodeName": "http:\/\/portal:8080\/core",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2346",
+							"uri": "http://portal:8080/docs/",
+							"nodeName": "http:\/\/portal:8080\/docs\/ ()({step,verdict,digest})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "1946",
+							"uri": "http://portal:8080/elmah.axd",
+							"nodeName": "http:\/\/portal:8080\/elmah.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2029",
+							"uri": "http://portal:8080/filezilla.xml",
+							"nodeName": "http:\/\/portal:8080\/filezilla.xml",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2057",
+							"uri": "http://portal:8080/i.php",
+							"nodeName": "http:\/\/portal:8080\/i.php",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2044",
+							"uri": "http://portal:8080/id_dsa",
+							"nodeName": "http:\/\/portal:8080\/id_dsa",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2043",
+							"uri": "http://portal:8080/id_rsa",
+							"nodeName": "http:\/\/portal:8080\/id_rsa",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2056",
+							"uri": "http://portal:8080/info.php",
+							"nodeName": "http:\/\/portal:8080\/info.php",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2042",
+							"uri": "http://portal:8080/key.pem",
+							"nodeName": "http:\/\/portal:8080\/key.pem",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2008",
+							"uri": "http://portal:8080/lfm.php",
+							"nodeName": "http:\/\/portal:8080\/lfm.php",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2041",
+							"uri": "http://portal:8080/myserver.key",
+							"nodeName": "http:\/\/portal:8080\/myserver.key",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2343",
+							"uri": "http://portal:8080/openapi.json",
+							"nodeName": "http:\/\/portal:8080\/openapi.json ()({step,verdict,digest})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2351",
+							"uri": "http://portal:8080/openapi.yaml",
+							"nodeName": "http:\/\/portal:8080\/openapi.yaml ()({step,verdict,digest})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2055",
+							"uri": "http://portal:8080/phpinfo.php",
+							"nodeName": "http:\/\/portal:8080\/phpinfo.php",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2040",
+							"uri": "http://portal:8080/privatekey.key",
+							"nodeName": "http:\/\/portal:8080\/privatekey.key",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2054",
+							"uri": "http://portal:8080/server-info",
+							"nodeName": "http:\/\/portal:8080\/server-info",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2023",
+							"uri": "http://portal:8080/server-status",
+							"nodeName": "http:\/\/portal:8080\/server-status",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2039",
+							"uri": "http://portal:8080/server.key",
+							"nodeName": "http:\/\/portal:8080\/server.key",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2025",
+							"uri": "http://portal:8080/sftp-config.json",
+							"nodeName": "http:\/\/portal:8080\/sftp-config.json",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2030",
+							"uri": "http://portal:8080/sitemanager.xml",
+							"nodeName": "http:\/\/portal:8080\/sitemanager.xml",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2050",
+							"uri": "http://portal:8080/sites/default/files/.ht.sqlite",
+							"nodeName": "http:\/\/portal:8080\/sites\/default\/files\/.ht.sqlite",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2037",
+							"uri": "http://portal:8080/sites/default/private/files/backup_migrate/scheduled/test.txt",
+							"nodeName": "http:\/\/portal:8080\/sites\/default\/private\/files\/backup_migrate\/scheduled\/test.txt",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2347",
+							"uri": "http://portal:8080/swagger",
+							"nodeName": "http:\/\/portal:8080\/swagger ()({step,verdict,digest})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2338",
+							"uri": "http://portal:8080/swagger-ui/",
+							"nodeName": "http:\/\/portal:8080\/swagger-ui\/ ()({step,verdict,digest})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2350",
+							"uri": "http://portal:8080/swagger-ui/index.html",
+							"nodeName": "http:\/\/portal:8080\/swagger-ui\/index.html ()({step,verdict,digest})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2341",
+							"uri": "http://portal:8080/swagger.json",
+							"nodeName": "http:\/\/portal:8080\/swagger.json ()({step,verdict,digest})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2353",
+							"uri": "http://portal:8080/swagger.yaml",
+							"nodeName": "http:\/\/portal:8080\/swagger.yaml ()({step,verdict,digest})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2356",
+							"uri": "http://portal:8080/swagger/ui/index.html",
+							"nodeName": "http:\/\/portal:8080\/swagger\/ui\/index.html ()({step,verdict,digest})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2058",
+							"uri": "http://portal:8080/test.php",
+							"nodeName": "http:\/\/portal:8080\/test.php",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "1949",
+							"uri": "http://portal:8080/trace.axd",
+							"nodeName": "http:\/\/portal:8080\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2348",
+							"uri": "http://portal:8080/v2/api-docs",
+							"nodeName": "http:\/\/portal:8080\/v2\/api-docs ()({step,verdict,digest})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2340",
+							"uri": "http://portal:8080/v3/api-docs",
+							"nodeName": "http:\/\/portal:8080\/v3\/api-docs ()({step,verdict,digest})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2048",
+							"uri": "http://portal:8080/vb_test.php",
+							"nodeName": "http:\/\/portal:8080\/vb_test.php",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2053",
+							"uri": "http://portal:8080/vim_settings.xml",
+							"nodeName": "http:\/\/portal:8080\/vim_settings.xml",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2032",
+							"uri": "http://portal:8080/winscp.ini",
+							"nodeName": "http:\/\/portal:8080\/winscp.ini",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2027",
+							"uri": "http://portal:8080/ws_ftp.ini",
+							"nodeName": "http:\/\/portal:8080\/ws_ftp.ini",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "2004",
+							"uri": "http://portal:8080/zap972846004492315622",
+							"nodeName": "http:\/\/portal:8080\/zap972846004492315622",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "1101",
+							"uri": "http://portal:8080",
+							"nodeName": "http:\/\/portal:8080 ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "297",
+							"uri": "http://portal:8080/?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/ (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo g5bq4s0vzkem...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "304",
+							"uri": "http://portal:8080/?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/ (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo g5bq4s0vzkemgp9t6ac2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "305",
+							"uri": "http://portal:8080/api?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo g5bq4s0vzkem...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "309",
+							"uri": "http://portal:8080/api?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo g5bq4s0vzkemgp9t6ac2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "1411",
+							"uri": "http://portal:8080/computeMetadata/v1/",
+							"nodeName": "http:\/\/portal:8080\/computeMetadata\/v1\/ ()({step,verdict,digest})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "1406",
+							"uri": "http://portal:8080/latest/meta-data/",
+							"nodeName": "http:\/\/portal:8080\/latest\/meta-data\/ ()({step,verdict,digest})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "1436",
+							"uri": "http://portal:8080/metadata/instance",
+							"nodeName": "http:\/\/portal:8080\/metadata\/instance ()({step,verdict,digest})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "1440",
+							"uri": "http://portal:8080/metadata/v1",
+							"nodeName": "http:\/\/portal:8080\/metadata\/v1 ()({step,verdict,digest})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "1418",
+							"uri": "http://portal:8080/opc/v1/instance/",
+							"nodeName": "http:\/\/portal:8080\/opc\/v1\/instance\/ ()({step,verdict,digest})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "1425",
+							"uri": "http://portal:8080/opc/v2/instance/",
+							"nodeName": "http:\/\/portal:8080\/opc\/v2\/instance\/ ()({step,verdict,digest})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "1444",
+							"uri": "http://portal:8080/openstack/latest/meta_data.json",
+							"nodeName": "http:\/\/portal:8080\/openstack\/latest\/meta_data.json ()({step,verdict,digest})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						}
+					],
+					"count": "94",
+					"systemic": false,
+					"solution": "",
+					"otherinfo": "",
+					"reference": "",
+					"cweid": "-1",
+					"wascid": "-1",
+					"sourceid": "54"
+				},
+				{
+					"pluginid": "100000",
+					"alertRef": "100000-1",
+					"alert": "A Client Error response code was returned by the server",
+					"name": "A Client Error response code was returned by the server",
+					"riskcode": "0",
+					"confidence": "3",
+					"riskdesc": "Informational (High)",
+					"desc": "<p>A response code of 400 was returned by the server.</p><p>This may indicate that the application is failing to handle unexpected input correctly.</p><p>Raised by the 'Alert on HTTP Response Code Error' script</p>",
+					"instances":[ 
+						{
+							"id": "1095",
+							"uri": "http://portal:8080?aaa=bbb",
+							"nodeName": "http:\/\/portal:8080 (aaa)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "400",
+							"otherinfo": ""
+						},
+						{
+							"id": "1090",
+							"uri": "http://portal:8080?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/portal:8080 (class.module.classLoader.DefaultAssertio...)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "400",
+							"otherinfo": ""
+						},
+						{
+							"id": "2129",
+							"uri": "http://portal:8080/api",
+							"nodeName": "http:\/\/portal:8080\/api",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1098",
+							"uri": "http://portal:8080/api?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/portal:8080\/api (class.module.classLoader.DefaultAssertio...)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1105",
+							"uri": "http://portal:8080/api/",
+							"nodeName": "http:\/\/portal:8080\/api\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1097",
+							"uri": "http://portal:8080/api/?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/portal:8080\/api\/ (class.module.classLoader.DefaultAssertio...)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1995",
+							"uri": "http://portal:8080/api/.env",
+							"nodeName": "http:\/\/portal:8080\/api\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1976",
+							"uri": "http://portal:8080/api/.htaccess",
+							"nodeName": "http:\/\/portal:8080\/api\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "6",
+							"uri": "http://portal:8080/api/9109093326016037205",
+							"nodeName": "http:\/\/portal:8080\/api\/9109093326016037205",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1957",
+							"uri": "http://portal:8080/api/trace.axd",
+							"nodeName": "http:\/\/portal:8080\/api\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "19",
+							"uri": "http://portal:8080/api/v1",
+							"nodeName": "http:\/\/portal:8080\/api\/v1",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1102",
+							"uri": "http://portal:8080/api/v1?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/portal:8080\/api\/v1 (class.module.classLoader.DefaultAssertio...)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1799",
+							"uri": "http://portal:8080/api/v1/",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1988",
+							"uri": "http://portal:8080/api/v1/.env",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1970",
+							"uri": "http://portal:8080/api/v1/.htaccess",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "7",
+							"uri": "http://portal:8080/api/v1/768601881362625605",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/768601881362625605",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "20",
+							"uri": "http://portal:8080/api/v1/approvals",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/approvals",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1103",
+							"uri": "http://portal:8080/api/v1/approvals?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/approvals (class.module.classLoader.DefaultAssertio...)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1800",
+							"uri": "http://portal:8080/api/v1/approvals/",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/approvals\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1997",
+							"uri": "http://portal:8080/api/v1/approvals/.env",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/approvals\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1980",
+							"uri": "http://portal:8080/api/v1/approvals/.htaccess",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/approvals\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "8",
+							"uri": "http://portal:8080/api/v1/approvals/8390748313664098787",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/approvals\/8390748313664098787",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1802",
+							"uri": "http://portal:8080/api/v1/approvals/apr_01M5G59RAYKW250KEHTVHHVWS9/",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/approvals\/apr_01M5G59RAYKW250KEHTVHHVWS9\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1985",
+							"uri": "http://portal:8080/api/v1/approvals/apr_01M5G59RAYKW250KEHTVHHVWS9/.env",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/approvals\/apr_01M5G59RAYKW250KEHTVHHVWS9\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1966",
+							"uri": "http://portal:8080/api/v1/approvals/apr_01M5G59RAYKW250KEHTVHHVWS9/.htaccess",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/approvals\/apr_01M5G59RAYKW250KEHTVHHVWS9\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "9",
+							"uri": "http://portal:8080/api/v1/approvals/apr_01M5G59RAYKW250KEHTVHHVWS9/4344205888198410543",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/approvals\/apr_01M5G59RAYKW250KEHTVHHVWS9\/4344205888198410543",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2005",
+							"uri": "http://portal:8080/api/v1/approvals/apr_01M5G59RAYKW250KEHTVHHVWS9/actuator/health",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/approvals\/apr_01M5G59RAYKW250KEHTVHHVWS9\/actuator\/health",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2357",
+							"uri": "http://portal:8080/api/v1/approvals/apr_01M5G59RAYKW250KEHTVHHVWS9/decisions",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/approvals\/apr_01M5G59RAYKW250KEHTVHHVWS9\/decisions ()({step,verdict,digest})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "1082",
+							"uri": "http://portal:8080/api/v1/approvals/apr_01M5G59RAYKW250KEHTVHHVWS9/decisions?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/approvals\/apr_01M5G59RAYKW250KEHTVHHVWS9\/decisions (class.module.classLoader.DefaultAssertio...)({step,verdict,digest})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "1950",
+							"uri": "http://portal:8080/api/v1/approvals/apr_01M5G59RAYKW250KEHTVHHVWS9/trace.axd",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/approvals\/apr_01M5G59RAYKW250KEHTVHHVWS9\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1959",
+							"uri": "http://portal:8080/api/v1/approvals/trace.axd",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/approvals\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "23",
+							"uri": "http://portal:8080/api/v1/dev",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/dev",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1110",
+							"uri": "http://portal:8080/api/v1/dev?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/dev (class.module.classLoader.DefaultAssertio...)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1804",
+							"uri": "http://portal:8080/api/v1/dev/",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/dev\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1999",
+							"uri": "http://portal:8080/api/v1/dev/.env",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/dev\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1979",
+							"uri": "http://portal:8080/api/v1/dev/.htaccess",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/dev\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "10",
+							"uri": "http://portal:8080/api/v1/dev/2584577209010675331",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/dev\/2584577209010675331",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1961",
+							"uri": "http://portal:8080/api/v1/dev/trace.axd",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/dev\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1803",
+							"uri": "http://portal:8080/api/v1/dev/users/",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/dev\/users\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "26",
+							"uri": "http://portal:8080/api/v1/mock-jira",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/mock-jira",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1111",
+							"uri": "http://portal:8080/api/v1/mock-jira?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/mock-jira (class.module.classLoader.DefaultAssertio...)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1806",
+							"uri": "http://portal:8080/api/v1/mock-jira/",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/mock-jira\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2000",
+							"uri": "http://portal:8080/api/v1/mock-jira/.env",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/mock-jira\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1981",
+							"uri": "http://portal:8080/api/v1/mock-jira/.htaccess",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/mock-jira\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "11",
+							"uri": "http://portal:8080/api/v1/mock-jira/5400738424965306763",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/mock-jira\/5400738424965306763",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1807",
+							"uri": "http://portal:8080/api/v1/mock-jira/tickets/",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/mock-jira\/tickets\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1962",
+							"uri": "http://portal:8080/api/v1/mock-jira/trace.axd",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/mock-jira\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1810",
+							"uri": "http://portal:8080/api/v1/runs/",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2002",
+							"uri": "http://portal:8080/api/v1/runs/.env",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1983",
+							"uri": "http://portal:8080/api/v1/runs/.htaccess",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12",
+							"uri": "http://portal:8080/api/v1/runs/5631331994059383115",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/5631331994059383115",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1809",
+							"uri": "http://portal:8080/api/v1/runs/run_01M5G59R9D4CKY3T2P2DW4KZ3Q/",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/run_01M5G59R9D4CKY3T2P2DW4KZ3Q\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1989",
+							"uri": "http://portal:8080/api/v1/runs/run_01M5G59R9D4CKY3T2P2DW4KZ3Q/.env",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/run_01M5G59R9D4CKY3T2P2DW4KZ3Q\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1967",
+							"uri": "http://portal:8080/api/v1/runs/run_01M5G59R9D4CKY3T2P2DW4KZ3Q/.htaccess",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/run_01M5G59R9D4CKY3T2P2DW4KZ3Q\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "13",
+							"uri": "http://portal:8080/api/v1/runs/run_01M5G59R9D4CKY3T2P2DW4KZ3Q/3578319063078877623",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/run_01M5G59R9D4CKY3T2P2DW4KZ3Q\/3578319063078877623",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "30",
+							"uri": "http://portal:8080/api/v1/runs/run_01M5G59R9D4CKY3T2P2DW4KZ3Q/events?after=c%3A%2FWindows%2Fsystem.ini",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/run_01M5G59R9D4CKY3T2P2DW4KZ3Q\/events (after)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "1808",
+							"uri": "http://portal:8080/api/v1/runs/run_01M5G59R9D4CKY3T2P2DW4KZ3Q/events/",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/run_01M5G59R9D4CKY3T2P2DW4KZ3Q\/events\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2339",
+							"uri": "http://portal:8080/api/v1/runs/run_01M5G59R9D4CKY3T2P2DW4KZ3Q/retry",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/run_01M5G59R9D4CKY3T2P2DW4KZ3Q\/retry",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "1083",
+							"uri": "http://portal:8080/api/v1/runs/run_01M5G59R9D4CKY3T2P2DW4KZ3Q/retry?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/run_01M5G59R9D4CKY3T2P2DW4KZ3Q\/retry (class.module.classLoader.DefaultAssertio...)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "1951",
+							"uri": "http://portal:8080/api/v1/runs/run_01M5G59R9D4CKY3T2P2DW4KZ3Q/trace.axd",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/run_01M5G59R9D4CKY3T2P2DW4KZ3Q\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3",
+							"uri": "http://portal:8080/api/v1/runs/run_01M5G59R9D4CKY3T2P2DW4KZ3Q/troubleshoot",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/run_01M5G59R9D4CKY3T2P2DW4KZ3Q\/troubleshoot",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "409",
+							"otherinfo": ""
+						},
+						{
+							"id": "1120",
+							"uri": "http://portal:8080/api/v1/runs/run_01M5G59R9D4CKY3T2P2DW4KZ3Q/troubleshoot?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/run_01M5G59R9D4CKY3T2P2DW4KZ3Q\/troubleshoot (class.module.classLoader.DefaultAssertio...)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "409",
+							"otherinfo": ""
+						},
+						{
+							"id": "1811",
+							"uri": "http://portal:8080/api/v1/runs/run_01M5G59R9D4CKY3T2P2DW4KZ3Q/troubleshoot/",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/run_01M5G59R9D4CKY3T2P2DW4KZ3Q\/troubleshoot\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1964",
+							"uri": "http://portal:8080/api/v1/runs/trace.axd",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "29",
+							"uri": "http://portal:8080/api/v1/teams-stub",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/teams-stub",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1118",
+							"uri": "http://portal:8080/api/v1/teams-stub?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/teams-stub (class.module.classLoader.DefaultAssertio...)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1813",
+							"uri": "http://portal:8080/api/v1/teams-stub/",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/teams-stub\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2003",
+							"uri": "http://portal:8080/api/v1/teams-stub/.env",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/teams-stub\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1984",
+							"uri": "http://portal:8080/api/v1/teams-stub/.htaccess",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/teams-stub\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "14",
+							"uri": "http://portal:8080/api/v1/teams-stub/7681463897516745129",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/teams-stub\/7681463897516745129",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1814",
+							"uri": "http://portal:8080/api/v1/teams-stub/messages/",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/teams-stub\/messages\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1965",
+							"uri": "http://portal:8080/api/v1/teams-stub/trace.axd",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/teams-stub\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1816",
+							"uri": "http://portal:8080/api/v1/templates/",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/templates\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1948",
+							"uri": "http://portal:8080/api/v1/trace.axd",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1815",
+							"uri": "http://portal:8080/api/v1/use-cases/",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1990",
+							"uri": "http://portal:8080/api/v1/use-cases/.env",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1971",
+							"uri": "http://portal:8080/api/v1/use-cases/.htaccess",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "15",
+							"uri": "http://portal:8080/api/v1/use-cases/5799684620076292362",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases\/5799684620076292362",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2344",
+							"uri": "http://portal:8080/api/v1/use-cases/suggest",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases\/suggest ()({text})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "289",
+							"uri": "http://portal:8080/api/v1/use-cases/suggest?-s",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases\/suggest (-s)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1086",
+							"uri": "http://portal:8080/api/v1/use-cases/suggest?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases\/suggest (class.module.classLoader.DefaultAssertio...)({text})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1954",
+							"uri": "http://portal:8080/api/v1/use-cases/trace.axd",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1817",
+							"uri": "http://portal:8080/api/v1/use-cases/uc_01M5G59R99PYTAWW8BSGADYYDP/",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases\/uc_01M5G59R99PYTAWW8BSGADYYDP\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1987",
+							"uri": "http://portal:8080/api/v1/use-cases/uc_01M5G59R99PYTAWW8BSGADYYDP/.env",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases\/uc_01M5G59R99PYTAWW8BSGADYYDP\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1968",
+							"uri": "http://portal:8080/api/v1/use-cases/uc_01M5G59R99PYTAWW8BSGADYYDP/.htaccess",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases\/uc_01M5G59R99PYTAWW8BSGADYYDP\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "16",
+							"uri": "http://portal:8080/api/v1/use-cases/uc_01M5G59R99PYTAWW8BSGADYYDP/762165479767986309",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases\/uc_01M5G59R99PYTAWW8BSGADYYDP\/762165479767986309",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2352",
+							"uri": "http://portal:8080/api/v1/use-cases/uc_01M5G59R99PYTAWW8BSGADYYDP/runs",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases\/uc_01M5G59R99PYTAWW8BSGADYYDP\/runs",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "1084",
+							"uri": "http://portal:8080/api/v1/use-cases/uc_01M5G59R99PYTAWW8BSGADYYDP/runs?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases\/uc_01M5G59R99PYTAWW8BSGADYYDP\/runs (class.module.classLoader.DefaultAssertio...)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "1953",
+							"uri": "http://portal:8080/api/v1/use-cases/uc_01M5G59R99PYTAWW8BSGADYYDP/trace.axd",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases\/uc_01M5G59R99PYTAWW8BSGADYYDP\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1100",
+							"uri": "http://portal:8080",
+							"nodeName": "http:\/\/portal:8080 ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "295",
+							"uri": "http://portal:8080/?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/ (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo g5bq4s0vzkem...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "303",
+							"uri": "http://portal:8080/?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/ (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo g5bq4s0vzkemgp9t6ac2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "1106",
+							"uri": "http://portal:8080/api",
+							"nodeName": "http:\/\/portal:8080\/api ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1107",
+							"uri": "http://portal:8080/api/v1",
+							"nodeName": "http:\/\/portal:8080\/api\/v1 ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "308",
+							"uri": "http://portal:8080/api/v1?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1 (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo g5bq4s0vzkem...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "319",
+							"uri": "http://portal:8080/api/v1?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1 (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo g5bq4s0vzkemgp9t6ac2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1109",
+							"uri": "http://portal:8080/api/v1/approvals",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/approvals ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "315",
+							"uri": "http://portal:8080/api/v1/approvals?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/approvals (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo g5bq4s0vzkem...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "318",
+							"uri": "http://portal:8080/api/v1/approvals?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/approvals (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo g5bq4s0vzkemgp9t6ac2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1113",
+							"uri": "http://portal:8080/api/v1/approvals/apr_01M5G59RAYKW250KEHTVHHVWS9",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/approvals\/apr_01M5G59RAYKW250KEHTVHHVWS9 ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "311",
+							"uri": "http://portal:8080/api/v1/approvals/apr_01M5G59RAYKW250KEHTVHHVWS9?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/approvals\/apr_01M5G59RAYKW250KEHTVHHVWS9 (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo g5bq4s0vzkem...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "317",
+							"uri": "http://portal:8080/api/v1/approvals/apr_01M5G59RAYKW250KEHTVHHVWS9?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/approvals\/apr_01M5G59RAYKW250KEHTVHHVWS9 (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo g5bq4s0vzkemgp9t6ac2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "1129",
+							"uri": "http://portal:8080/api/v1/approvals/apr_01M5G59RAYKW250KEHTVHHVWS9/decisions",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/approvals\/apr_01M5G59RAYKW250KEHTVHHVWS9\/decisions ()(------44d64150-99d0-46e1-b30c-7ea3f0073b54\r\nContent-Disposition: form-data; name=\"1\"\r\n\r\n{}\r\n------44d64150-99d0-46e1-b30c-7ea3f0073b54\r\nContent-Disposition: form-data; name=\"0\"\r\n\r\n[\"$1:a:a\"]\r\n------44d64150-99d0-46e1-b30c-7ea3f0073b54--\r\n)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "1085",
+							"uri": "http://portal:8080/api/v1/approvals/apr_01M5G59RAYKW250KEHTVHHVWS9/decisions",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/approvals\/apr_01M5G59RAYKW250KEHTVHHVWS9\/decisions ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "2",
+							"uri": "http://portal:8080/api/v1/approvals/apr_01M5G59RAYKW250KEHTVHHVWS9/decisions",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/approvals\/apr_01M5G59RAYKW250KEHTVHHVWS9\/decisions ()({step,verdict,digest})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "21",
+							"uri": "http://portal:8080/api/v1/approvals/apr_01M5G59RAYKW250KEHTVHHVWS9/decisions",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/approvals\/apr_01M5G59RAYKW250KEHTVHHVWS9\/decisions ()({step,verdict,digest})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "296",
+							"uri": "http://portal:8080/api/v1/approvals/apr_01M5G59RAYKW250KEHTVHHVWS9/decisions?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/approvals\/apr_01M5G59RAYKW250KEHTVHHVWS9\/decisions (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo g5bq4s0vzkem...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "312",
+							"uri": "http://portal:8080/api/v1/approvals/apr_01M5G59RAYKW250KEHTVHHVWS9/decisions?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/approvals\/apr_01M5G59RAYKW250KEHTVHHVWS9\/decisions (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo g5bq4s0vzkemgp9t6ac2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "1790",
+							"uri": "http://portal:8080/api/v1/approvals/apr_01M5G59RAYKW250KEHTVHHVWS9/decisions/",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/approvals\/apr_01M5G59RAYKW250KEHTVHHVWS9\/decisions\/ ()({step,verdict,digest})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1115",
+							"uri": "http://portal:8080/api/v1/dev",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/dev ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "320",
+							"uri": "http://portal:8080/api/v1/dev?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/dev (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo g5bq4s0vzkem...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "327",
+							"uri": "http://portal:8080/api/v1/dev?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/dev (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo g5bq4s0vzkemgp9t6ac2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1112",
+							"uri": "http://portal:8080/api/v1/dev/users",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/dev\/users ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "321",
+							"uri": "http://portal:8080/api/v1/dev/users?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/dev\/users (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo g5bq4s0vzkem...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "323",
+							"uri": "http://portal:8080/api/v1/dev/users?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/dev\/users (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo g5bq4s0vzkemgp9t6ac2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "1116",
+							"uri": "http://portal:8080/api/v1/mock-jira",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/mock-jira ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "326",
+							"uri": "http://portal:8080/api/v1/mock-jira?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/mock-jira (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo g5bq4s0vzkem...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "333",
+							"uri": "http://portal:8080/api/v1/mock-jira?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/mock-jira (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo g5bq4s0vzkemgp9t6ac2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1119",
+							"uri": "http://portal:8080/api/v1/mock-jira/tickets",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/mock-jira\/tickets ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "325",
+							"uri": "http://portal:8080/api/v1/mock-jira/tickets?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/mock-jira\/tickets (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo g5bq4s0vzkem...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "331",
+							"uri": "http://portal:8080/api/v1/mock-jira/tickets?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/mock-jira\/tickets (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo g5bq4s0vzkemgp9t6ac2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "1124",
+							"uri": "http://portal:8080/api/v1/runs",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "324",
+							"uri": "http://portal:8080/api/v1/runs?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo g5bq4s0vzkem...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "332",
+							"uri": "http://portal:8080/api/v1/runs?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo g5bq4s0vzkemgp9t6ac2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "1117",
+							"uri": "http://portal:8080/api/v1/runs/run_01M5G59R9D4CKY3T2P2DW4KZ3Q",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/run_01M5G59R9D4CKY3T2P2DW4KZ3Q ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "335",
+							"uri": "http://portal:8080/api/v1/runs/run_01M5G59R9D4CKY3T2P2DW4KZ3Q?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/run_01M5G59R9D4CKY3T2P2DW4KZ3Q (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo g5bq4s0vzkem...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "343",
+							"uri": "http://portal:8080/api/v1/runs/run_01M5G59R9D4CKY3T2P2DW4KZ3Q?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/run_01M5G59R9D4CKY3T2P2DW4KZ3Q (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo g5bq4s0vzkemgp9t6ac2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "330",
+							"uri": "http://portal:8080/api/v1/runs/run_01M5G59R9D4CKY3T2P2DW4KZ3Q/events?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/run_01M5G59R9D4CKY3T2P2DW4KZ3Q\/events (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo g5bq4s0vzkem...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "341",
+							"uri": "http://portal:8080/api/v1/runs/run_01M5G59R9D4CKY3T2P2DW4KZ3Q/events?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/run_01M5G59R9D4CKY3T2P2DW4KZ3Q\/events (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo g5bq4s0vzkemgp9t6ac2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "1123",
+							"uri": "http://portal:8080/api/v1/runs/run_01M5G59R9D4CKY3T2P2DW4KZ3Q/events?after=0",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/run_01M5G59R9D4CKY3T2P2DW4KZ3Q\/events (after)(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "1",
+							"uri": "http://portal:8080/api/v1/runs/run_01M5G59R9D4CKY3T2P2DW4KZ3Q/retry",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/run_01M5G59R9D4CKY3T2P2DW4KZ3Q\/retry",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "409",
+							"otherinfo": ""
+						},
+						{
+							"id": "1087",
+							"uri": "http://portal:8080/api/v1/runs/run_01M5G59R9D4CKY3T2P2DW4KZ3Q/retry",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/run_01M5G59R9D4CKY3T2P2DW4KZ3Q\/retry ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "409",
+							"otherinfo": ""
+						},
+						{
+							"id": "298",
+							"uri": "http://portal:8080/api/v1/runs/run_01M5G59R9D4CKY3T2P2DW4KZ3Q/retry?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/run_01M5G59R9D4CKY3T2P2DW4KZ3Q\/retry (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo g5bq4s0vzkem...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "409",
+							"otherinfo": ""
+						},
+						{
+							"id": "313",
+							"uri": "http://portal:8080/api/v1/runs/run_01M5G59R9D4CKY3T2P2DW4KZ3Q/retry?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/run_01M5G59R9D4CKY3T2P2DW4KZ3Q\/retry (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo g5bq4s0vzkemgp9t6ac2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "409",
+							"otherinfo": ""
+						},
+						{
+							"id": "1789",
+							"uri": "http://portal:8080/api/v1/runs/run_01M5G59R9D4CKY3T2P2DW4KZ3Q/retry/",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/run_01M5G59R9D4CKY3T2P2DW4KZ3Q\/retry\/",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1122",
+							"uri": "http://portal:8080/api/v1/runs/run_01M5G59R9D4CKY3T2P2DW4KZ3Q/troubleshoot",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/run_01M5G59R9D4CKY3T2P2DW4KZ3Q\/troubleshoot ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "329",
+							"uri": "http://portal:8080/api/v1/runs/run_01M5G59R9D4CKY3T2P2DW4KZ3Q/troubleshoot?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/run_01M5G59R9D4CKY3T2P2DW4KZ3Q\/troubleshoot (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo g5bq4s0vzkem...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "334",
+							"uri": "http://portal:8080/api/v1/runs/run_01M5G59R9D4CKY3T2P2DW4KZ3Q/troubleshoot?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/runs\/run_01M5G59R9D4CKY3T2P2DW4KZ3Q\/troubleshoot (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo g5bq4s0vzkemgp9t6ac2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "1121",
+							"uri": "http://portal:8080/api/v1/teams-stub",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/teams-stub ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "338",
+							"uri": "http://portal:8080/api/v1/teams-stub?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/teams-stub (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo g5bq4s0vzkem...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "346",
+							"uri": "http://portal:8080/api/v1/teams-stub?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/teams-stub (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo g5bq4s0vzkemgp9t6ac2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1126",
+							"uri": "http://portal:8080/api/v1/teams-stub/messages",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/teams-stub\/messages ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "340",
+							"uri": "http://portal:8080/api/v1/teams-stub/messages?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/teams-stub\/messages (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo g5bq4s0vzkem...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "345",
+							"uri": "http://portal:8080/api/v1/teams-stub/messages?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/teams-stub\/messages (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo g5bq4s0vzkemgp9t6ac2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "1125",
+							"uri": "http://portal:8080/api/v1/templates",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/templates ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "336",
+							"uri": "http://portal:8080/api/v1/templates?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/templates (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo g5bq4s0vzkem...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "344",
+							"uri": "http://portal:8080/api/v1/templates?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/templates (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo g5bq4s0vzkemgp9t6ac2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "1091",
+							"uri": "http://portal:8080/api/v1/use-cases",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "0",
+							"uri": "http://portal:8080/api/v1/use-cases",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases ()({template,name,instruction,params:{John Doe}})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "301",
+							"uri": "http://portal:8080/api/v1/use-cases?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo g5bq4s0vzkem...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "314",
+							"uri": "http://portal:8080/api/v1/use-cases?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo g5bq4s0vzkemgp9t6ac2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "1792",
+							"uri": "http://portal:8080/api/v1/use-cases/",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases\/ ()({template,name,instruction,params:{John Doe}})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1093",
+							"uri": "http://portal:8080/api/v1/use-cases/suggest",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases\/suggest ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "300",
+							"uri": "http://portal:8080/api/v1/use-cases/suggest?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases\/suggest (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo g5bq4s0vzkem...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "306",
+							"uri": "http://portal:8080/api/v1/use-cases/suggest?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases\/suggest (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo g5bq4s0vzkemgp9t6ac2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "1791",
+							"uri": "http://portal:8080/api/v1/use-cases/suggest/",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases\/suggest\/ ()({text})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1127",
+							"uri": "http://portal:8080/api/v1/use-cases/uc_01M5G59R99PYTAWW8BSGADYYDP",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases\/uc_01M5G59R99PYTAWW8BSGADYYDP ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "337",
+							"uri": "http://portal:8080/api/v1/use-cases/uc_01M5G59R99PYTAWW8BSGADYYDP?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases\/uc_01M5G59R99PYTAWW8BSGADYYDP (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo g5bq4s0vzkem...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "342",
+							"uri": "http://portal:8080/api/v1/use-cases/uc_01M5G59R99PYTAWW8BSGADYYDP?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases\/uc_01M5G59R99PYTAWW8BSGADYYDP (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo g5bq4s0vzkemgp9t6ac2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "299",
+							"uri": "http://portal:8080/api/v1/use-cases/uc_01M5G59R99PYTAWW8BSGADYYDP/runs?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases\/uc_01M5G59R99PYTAWW8BSGADYYDP\/runs (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo g5bq4s0vzkem...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "310",
+							"uri": "http://portal:8080/api/v1/use-cases/uc_01M5G59R99PYTAWW8BSGADYYDP/runs?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases\/uc_01M5G59R99PYTAWW8BSGADYYDP\/runs (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo g5bq4s0vzkemgp9t6ac2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "1793",
+							"uri": "http://portal:8080/api/v1/use-cases/uc_01M5G59R99PYTAWW8BSGADYYDP/runs/",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases\/uc_01M5G59R99PYTAWW8BSGADYYDP\/runs\/",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1410",
+							"uri": "http://portal:8080/computeMetadata/v1/",
+							"nodeName": "http:\/\/portal:8080\/computeMetadata\/v1\/ ()({step,verdict,digest})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "1405",
+							"uri": "http://portal:8080/latest/meta-data/",
+							"nodeName": "http:\/\/portal:8080\/latest\/meta-data\/ ()({step,verdict,digest})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "1435",
+							"uri": "http://portal:8080/metadata/instance",
+							"nodeName": "http:\/\/portal:8080\/metadata\/instance ()({step,verdict,digest})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "1439",
+							"uri": "http://portal:8080/metadata/v1",
+							"nodeName": "http:\/\/portal:8080\/metadata\/v1 ()({step,verdict,digest})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "1417",
+							"uri": "http://portal:8080/opc/v1/instance/",
+							"nodeName": "http:\/\/portal:8080\/opc\/v1\/instance\/ ()({step,verdict,digest})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "1424",
+							"uri": "http://portal:8080/opc/v2/instance/",
+							"nodeName": "http:\/\/portal:8080\/opc\/v2\/instance\/ ()({step,verdict,digest})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "1443",
+							"uri": "http://portal:8080/openstack/latest/meta_data.json",
+							"nodeName": "http:\/\/portal:8080\/openstack\/latest\/meta_data.json ()({step,verdict,digest})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						}
+					],
+					"count": "169",
+					"systemic": false,
+					"solution": "",
+					"otherinfo": "",
+					"reference": "",
+					"cweid": "388",
+					"wascid": "20",
+					"sourceid": "1270"
+				},
+				{
+					"pluginid": "10104",
+					"alertRef": "10104",
+					"alert": "User Agent Fuzzer",
+					"name": "User Agent Fuzzer",
+					"riskcode": "0",
+					"confidence": "2",
+					"riskdesc": "Informational (Medium)",
+					"desc": "<p>Check for differences in response based on fuzzed User Agent (eg. mobile sites, access as a Search Engine Crawler). Compares the response statuscode and the hashcode of the response body with the original response.</p>",
+					"instances":[ 
+						{
+							"id": "2157",
+							"uri": "http://portal:8080/api",
+							"nodeName": "http:\/\/portal:8080\/api",
+							"method": "GET",
+							"param": "Header User-Agent",
+							"attack": "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)",
+							"evidence": "",
+							"otherinfo": ""
+						},
+						{
+							"id": "2147",
+							"uri": "http://portal:8080/api",
+							"nodeName": "http:\/\/portal:8080\/api",
+							"method": "GET",
+							"param": "Header User-Agent",
+							"attack": "Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.0)",
+							"evidence": "",
+							"otherinfo": ""
+						},
+						{
+							"id": "2131",
+							"uri": "http://portal:8080/api",
+							"nodeName": "http:\/\/portal:8080\/api",
+							"method": "GET",
+							"param": "Header User-Agent",
+							"attack": "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1)",
+							"evidence": "",
+							"otherinfo": ""
+						},
+						{
+							"id": "2166",
+							"uri": "http://portal:8080/api",
+							"nodeName": "http:\/\/portal:8080\/api",
+							"method": "GET",
+							"param": "Header User-Agent",
+							"attack": "Mozilla/5.0 (Windows NT 10.0; Trident/7.0; rv:11.0) like Gecko",
+							"evidence": "",
+							"otherinfo": ""
+						},
+						{
+							"id": "2152",
+							"uri": "http://portal:8080/api/v1/use-cases/uc_01M5G59R99PYTAWW8BSGADYYDP/runs",
+							"nodeName": "http:\/\/portal:8080\/api\/v1\/use-cases\/uc_01M5G59R99PYTAWW8BSGADYYDP\/runs",
+							"method": "POST",
+							"param": "Header User-Agent",
+							"attack": "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1)",
+							"evidence": "",
+							"otherinfo": ""
+						}
+					],
+					"count": "5",
+					"systemic": true,
+					"solution": "",
+					"otherinfo": "",
+					"reference": "<p>https://owasp.org/wstg</p>",
+					"cweid": "0",
+					"wascid": "0",
+					"sourceid": "2466"
+				}
+			]
+		}
+	],
+	"sequences":[
+	]
+
+}
