@@ -55,7 +55,7 @@ test('alice starts a release check, bob approves it, and one MOCK ticket is writ
   await expect(page).toHaveURL(/\/teams$/)
   const card = page.locator('article', { has: page.locator(`a[href$="/approvals/${approvalId}"]`) })
   await expect(card, 'the card shows the backend message').toContainText(message?.text ?? '')
-  await expect(card, 'the card says which run it belongs to').toContainText(/Run started by Alice, /)
+  await expect(card, 'the card says which run it belongs to').toContainText(/Started by Alice, /)
   await expect(card, 'the card says the approval is still waiting').toContainText('Waiting for an Approver')
   await shot(page, info, 'success-06-teams-card')
   await page.locator(`a[href$="/approvals/${approvalId}"]`).click()
