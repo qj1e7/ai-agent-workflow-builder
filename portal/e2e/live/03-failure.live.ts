@@ -1,8 +1,14 @@
 import { expect } from '@playwright/test'
-import { headline } from '../support/flows'
+import { headline, tracker } from '../support/flows'
 import { PLATFORM_RETRY_DELAY_MS, setMockGithubMode } from './support/stack'
 import { test } from './support/test'
 import { CATCH_UP_MS, expectCaughtUp, runExampleFromBuilder, shot } from './support/ui'
+
+/**
+ * Well inside the feed's 30 s idle recheck. The platform keeps the event stream open after run_failed
+ * (platform_api/monitoring/http.py), so run_retried arrives on it whether or not Retry reconnects the feed.
+ */
+const LEAVES_BREAK_MS = 12_000
 
 test.afterEach(async () => {
   await setMockGithubMode('ok')
@@ -41,6 +47,10 @@ test('a GitHub outage stops the run, the AI troubleshooter explains it, and a re
     button.click()
     button.click()
   })
+  await expect(
+    tracker(page).getByText('Attempt 2', { exact: true }),
+    "the Tracker leaves the break within 12 s of Retry run, not at the feed's 30 s recheck",
+  ).toBeVisible({ timeout: LEAVES_BREAK_MS })
   await backend.waitToLeave(runId, 'failed')
 
   await backend.waitForState(runId, ['awaiting_approval'])
