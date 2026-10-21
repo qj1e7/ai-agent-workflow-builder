@@ -17,7 +17,7 @@ export function UseCaseList({ runNow }: { runNow: RunNow }) {
       <h2 id="use-cases-heading">Your use cases</h2>
       {useCases.data && useCases.data.length === 0 ? (
         <EmptyState title="No use cases yet.">
-          Plan a task above and choose Save use case. It shows up here, ready to run.
+          A saved use case appears here.
         </EmptyState>
       ) : null}
       {useCases.data && useCases.data.length > 0 ? (

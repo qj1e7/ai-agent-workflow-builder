@@ -49,7 +49,7 @@ function Waiting() {
         <span />
         <span />
       </div>
-      <p className="muted">The steps appear here. Describe the task on the left, then choose Plan it.</p>
+      <p className="muted">The steps appear here.</p>
     </div>
   )
 }
@@ -192,7 +192,7 @@ function PlanForm({ template, task, runNow }: { template: TemplateView; task: st
       {create.isError ? <InlineMessage tone="error">{errorWords(create.error)}</InlineMessage> : null}
       {saved ? (
         <InlineMessage tone="success">
-          Saved {saved.name}, version {saved.version}. It is in your list below.
+          Saved {saved.name}, version {saved.version}.
         </InlineMessage>
       ) : null}
       {saved ? <RunError message={runNow.errorFor(saved.useCaseId)} /> : null}
@@ -211,7 +211,7 @@ function PlanForm({ template, task, runNow }: { template: TemplateView; task: st
           ))}
           {fixedParams(template).map((param) => (
             <div key={param.name}>
-              <dt>{param.description}, set by the plan and not editable</dt>
+              <dt>{param.description}, fixed by the plan</dt>
               <dd>
                 <code>{param.example}</code>
               </dd>

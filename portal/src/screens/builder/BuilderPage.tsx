@@ -48,9 +48,7 @@ export function BuilderPage() {
 
   return (
     <div className="page">
-      <PageHeader title="Builder">
-        Describe a task in your own words. The Room lead plans the steps. Nothing is written to another system without an Approver.
-      </PageHeader>
+      <PageHeader title="Builder">Nothing is written to another system without an Approver.</PageHeader>
 
       <div className={styles['workspace']}>
         <section className={styles['ask']} aria-label="Describe the task">
@@ -72,11 +70,11 @@ export function BuilderPage() {
             onKeyDown={planFromKeyboard}
           />
           <p id={helpId} className={styles['help']}>
-            Write it the way you would ask a colleague. Name the system and when it should run.
+            Name the system and when it should run.
           </p>
           {missing ? (
             <InlineMessage tone="error" id={problemId}>
-              Write what should happen first, then choose Plan it.
+              Write what should happen first.
             </InlineMessage>
           ) : null}
           <div className={styles['buttons']}>

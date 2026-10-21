@@ -5,9 +5,9 @@ export const EXAMPLE_TASK =
   'Every Monday, check langchain-ai/langgraph on GitHub for new releases. If there are any, open a Jira ticket for the team.'
 
 export const NO_MATCH_WORDS =
-  'The Room lead could not match this to a ready-made plan yet. Try naming the system and the action, for example GitHub releases and a Jira ticket.'
+  'The Room lead has no plan for this yet. Name the system and the action, for example GitHub releases and a Jira ticket.'
 
-export const FILL_IN_WORDS = 'Fill this in before saving.'
+export const FILL_IN_WORDS = 'Fill this in.'
 
 export function planBlocks(template: TemplateView): SpineBlock[] {
   return template.blocks.map((block) => ({
