@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { layoutOf, type RoomState } from '../run'
 import { chipsFit } from './chips'
-import { slideToward } from './motion'
+import { slideOffset } from './motion'
 
 const found: RoomState = {
   cursor: 9,
@@ -38,12 +38,12 @@ describe('the finding chips', () => {
   })
 
   it('start a chip part of the way towards its agent, never further than 48 px', () => {
-    const near = slideToward({ x: 100, y: 100 }, { x: 140, y: 60 })
+    const near = slideOffset({ x: 100, y: 100 }, { x: 140, y: 60 })
     expect(near.x).toBeCloseTo(14, 5)
     expect(near.y).toBeCloseTo(-14, 5)
-    const far = slideToward({ x: 0, y: 0 }, { x: 300, y: 400 })
+    const far = slideOffset({ x: 0, y: 0 }, { x: 300, y: 400 })
     expect(Math.hypot(far.x, far.y)).toBeCloseTo(48, 5)
     expect(far.x / far.y).toBeCloseTo(0.75, 5)
-    expect(slideToward({ x: 5, y: 5 }, { x: 5, y: 5 })).toEqual({ x: 0, y: 0 })
+    expect(slideOffset({ x: 5, y: 5 }, { x: 5, y: 5 })).toEqual({ x: 0, y: 0 })
   })
 })

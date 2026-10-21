@@ -4,7 +4,7 @@ import type { Box, Finding, Point, RoomSize } from '../run'
 import { IconTag } from '../ui/icons'
 import { CHIP_FRAME, CHIP_TYPE } from './chips'
 import { useBeatAnimation, type AnimationPlan } from './hooks'
-import { EASE_MOVE, slideToward } from './motion'
+import { EASE_MOVE, slideOffset } from './motion'
 import styles from './Finding.module.css'
 
 export interface Land {
@@ -85,8 +85,7 @@ function Chip({ item, index, spot, size, land, fold, motion }: ChipProps) {
 }
 
 function landPlan(element: HTMLElement, index: number, spot: Box, land: Land): AnimationPlan {
-  const centre = { x: spot.x + element.offsetLeft + element.offsetWidth / 2, y: spot.y + element.offsetTop + element.offsetHeight / 2 }
-  const start = slideToward(centre, land.agentAt)
+  const start = slideOffset(centreInRoom(element, spot), land.agentAt)
   const delay = land.fromMs + index * CHIP_STAGGER_MS
   return {
     keyframes: [
@@ -95,6 +94,10 @@ function landPlan(element: HTMLElement, index: number, spot: Box, land: Land): A
     ],
     options: { duration: Math.max(0, land.byMs - delay), delay, easing: EASE_MOVE, fill: 'both' },
   }
+}
+
+function centreInRoom(chip: HTMLElement, spot: Box): Point {
+  return { x: spot.x + chip.offsetLeft + chip.offsetWidth / 2, y: spot.y + chip.offsetTop + chip.offsetHeight / 2 }
 }
 
 function foldPlan(fold: Fold): AnimationPlan {
