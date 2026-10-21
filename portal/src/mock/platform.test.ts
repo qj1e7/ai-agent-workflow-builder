@@ -93,13 +93,13 @@ describe('the live success run', () => {
   it('reports recorded time and its rate through now, so the waiting counter shows the real six minutes and says it is sped up', async () => {
     await vi.advanceTimersByTimeAsync(18 * SECOND)
     const requested = (await eventsOf('run_01JB8')).find((event) => event.kind === 'approval_requested')
-    expect(demo.now.rate('run_01JB8')).toBe(1)
+    expect(demo.clock.rate('run_01JB8')).toBe(1)
     await vi.advanceTimersByTimeAsync(8 * SECOND)
-    const waited = demo.now.now('run_01JB8') - Date.parse(requested?.ts ?? '')
+    const waited = demo.clock.now('run_01JB8') - Date.parse(requested?.ts ?? '')
     expect(waited).toBeGreaterThan(60 * SECOND)
     expect(waited).toBeLessThan(6 * 60 * SECOND)
-    expect(demo.now.rate('run_01JB8')).toBe(40)
-    expect(demo.now.rate('run_01JB9'), 'a finished run is never sped up').toBe(1)
+    expect(demo.clock.rate('run_01JB8')).toBe(40)
+    expect(demo.clock.rate('run_01JB9'), 'a finished run is never sped up').toBe(1)
   })
 
   it('posts the Teams message in the platform words, once the request is announced', async () => {

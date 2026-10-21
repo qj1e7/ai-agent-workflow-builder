@@ -77,7 +77,7 @@ function pointAlong(path: readonly Point[], lengths: readonly number[], total: n
   return path[path.length - 1] as Point
 }
 
-export function slideToward(from: Point, to: Point, share = 0.35, capPx = 48): Point {
+export function slideOffset(from: Point, to: Point, share = 0.35, capPx = 48): Point {
   const dx = (to.x - from.x) * share
   const dy = (to.y - from.y) * share
   const length = Math.hypot(dx, dy)

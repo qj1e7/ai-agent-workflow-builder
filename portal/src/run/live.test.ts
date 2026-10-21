@@ -40,7 +40,7 @@ function open(id = LIVE_RUN, whenFinished: 'rest' | 'replay' = 'rest', openingMs
   }
   const store: LiveViewStore = createLiveView({
     runId: id,
-    env: { fetch: authed, clock: createClock(demo.now, id), registry: TEST_REGISTRY },
+    env: { fetch: authed, clock: createClock(demo.clock, id), registry: TEST_REGISTRY },
     whenFinished,
     openingMs,
   })

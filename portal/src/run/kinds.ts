@@ -19,7 +19,7 @@ export type KindRule =
 type StoryRule = Extract<KindRule, { tier: 'story' }>
 
 const technical: KindRule = { tier: 'technical' }
-const story = (beatMs: Ms, floorMs: Ms, caption = true): StoryRule => ({ tier: 'story', beatMs, floorMs, caption })
+const story = (beatMs: Ms, floorMs: Ms, { caption = true } = {}): StoryRule => ({ tier: 'story', beatMs, floorMs, caption })
 
 /**
  * Durations follow DESIGN.md motion rules: crossfade 180, arrivals and hand-offs 700 to 1000, the stamp
@@ -33,7 +33,7 @@ export const KINDS = {
   step_finished: technical,
   step_retried: technical,
   agent_joined: story(1000, 400),
-  agent_step_started: story(900, 300, false),
+  agent_step_started: story(900, 300, { caption: false }),
   agent_step_finished: story(1600, 400),
   agent_failed: story(1200, 700),
   agent_message: story(2200, 1200),
