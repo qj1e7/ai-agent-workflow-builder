@@ -3,13 +3,13 @@ import type { Page } from '@playwright/test'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { blockingViolations } from '../support/axe'
+import { headline } from '../support/flows'
 import { outOfVisualOrder, walkTabs, withoutVisibleFocus } from '../support/keyboard'
 import { expect, test } from './support/test'
-import { OUT, shot } from './support/ui'
+import { CATCH_UP_MS, expectCaughtUp, openContext, OUT, shot } from './support/ui'
 
-const PHONE = { width: 390, height: 844 }
-const IN_THE_ROOM = ['Room lead', 'Release checker', 'Alice', 'Approver', 'GitHub', 'Jira', 'Teams']
-const caughtUp = (page: Page) => page.getByRole('status').filter({ hasText: 'Live' })
+const STOP_KEYS = ['start', 'agent:read_releases', 'draft', 'gate', 'write:jira', 'done']
+const STOP_NAMES = ['Started', 'Read GitHub releases', 'Draft ticket', 'Approval gate', 'Jira', 'Done']
 
 /** Runs axe on the page as it is, saves the whole result under e2e/out/live/axe, and fails on a serious or critical violation. */
 async function expectAccessible(page: Page, name: string): Promise<void> {
@@ -19,29 +19,39 @@ async function expectAccessible(page: Page, name: string): Promise<void> {
   expect(blockingViolations(axe), `${name}: serious or critical accessibility violations`).toEqual([])
 }
 
-test('a fresh Portal opens on a set room, and one click starts a real run that stops at the approval gate', async ({ page, browser, backend }, info) => {
+/** The first screen's heading, its two actions, and the release check's line with nothing done. */
+async function expectFirstScreen(page: Page): Promise<void> {
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Start the first run')
+  await expect(page.getByRole('button', { name: 'Run the example' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Describe your own task' })).toBeVisible()
+  const stops = page.getByRole('region', { name: 'Steps in Release check' }).locator('li[data-stop]')
+  await expect(stops, 'the line has the six stops of the release check').toHaveCount(STOP_KEYS.length)
+  expect(await stops.evaluateAll((items) => items.map((item) => item.getAttribute('data-stop')))).toEqual(STOP_KEYS)
+  await expect(stops, 'each stop shows its name').toContainText(STOP_NAMES)
+  await expect(page.locator('li[data-stop][data-state="future"]'), 'nothing is done yet').toHaveCount(STOP_KEYS.length)
+}
+
+test('a fresh Portal opens on the line of the release check, and one click starts a real run that stops at the approval gate', async ({ page, browser, backend }, info) => {
   test.skip((await backend.runs()).length > 0, 'the stack already has runs, so there is no first screen to see')
 
   await page.goto('/')
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Start the first run')
-  const runTheExample = page.getByRole('button', { name: 'Run the example' })
-  await expect(runTheExample).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Describe your own task' })).toBeVisible()
-  // The drawn room is aria-hidden, so its words are found by text inside the stage, not by role.
-  const stage = page.locator('[data-stage]')
-  for (const name of IN_THE_ROOM) {
-    await expect(stage.getByText(name, { exact: true }).first(), `the set room shows ${name}`).toBeVisible()
-  }
+  await expectFirstScreen(page)
   await shot(page, info, '00-first-screen-empty')
   await expectAccessible(page, '00-first-screen-empty')
 
-  const phone = await browser.newContext({ viewport: PHONE, isMobile: true, hasTouch: true, locale: 'en-SG', timezoneId: 'Asia/Singapore' })
-  const phonePage = await phone.newPage()
-  await phonePage.goto('/')
-  await expect(phonePage.getByRole('button', { name: 'Run the example' })).toBeVisible()
-  await shot(phonePage, info, '00-first-screen-empty-phone')
-  await expectAccessible(phonePage, '00-first-screen-empty-phone')
-  await phone.close()
+  for (const [name, options] of [
+    ['00-first-screen-empty-dark', { dark: true }],
+    ['00-first-screen-empty-phone', { phone: true }],
+    ['00-first-screen-empty-phone-dark', { phone: true, dark: true }],
+  ] as const) {
+    const context = await openContext(browser, options)
+    const other = await context.newPage()
+    await other.goto('/')
+    await expectFirstScreen(other)
+    await shot(other, info, name)
+    await expectAccessible(other, name)
+    await context.close()
+  }
 
   const walk = await walkTabs(page)
   const labels = walk.stops.map((stop) => stop.label)
@@ -53,16 +63,16 @@ test('a fresh Portal opens on a set room, and one click starts a real run that s
   expect(outOfVisualOrder(walk.stops), 'Tab moves that go against the visual order').toEqual([])
 
   const ticketsBefore = (await backend.tickets()).length
-  await runTheExample.click()
-  await expect(page.getByRole('heading', { level: 1 }), 'the hero takes the stage with the new run').toHaveText('Release check', { timeout: 15_000 })
+  await page.getByRole('button', { name: 'Run the example' }).click()
+  await expect(page.getByRole('heading', { level: 1 }), 'the Tracker takes the overview with the new run').toHaveText('Release check', { timeout: 15_000 })
 
   const runs = await backend.runs()
   expect(runs, 'one click made exactly one run').toHaveLength(1)
   const run = runs[0]
   expect(run?.use_case_name).toBe('Release check')
   await backend.waitForState(run?.run_id ?? '', ['awaiting_approval'])
-  await expect(page.getByRole('heading', { name: /waiting for an Approver/ })).toBeVisible({ timeout: 30_000 })
   expect((await backend.tickets()).length, 'the approval gate holds: nothing was written').toBe(ticketsBefore)
-  await expect(caughtUp(page), 'the room has caught up with the backend').toBeVisible({ timeout: 30_000 })
+  await expect(headline(page), 'the Tracker reaches the approval gate').toHaveText('Waiting for an Approver', { timeout: CATCH_UP_MS })
+  await expectCaughtUp(page)
   await shot(page, info, '00-first-run-awaiting-approval')
 })
