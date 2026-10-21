@@ -1,9 +1,10 @@
 import { useState, useSyncExternalStore } from 'react'
 import { runId, useLiveView, type LiveView, type WhenFinished } from '../run'
 import { AGENTS } from './registry'
+import { getSpeed } from './speed'
 
 export function useLiveRun(id: string, whenFinished: WhenFinished): LiveView {
-  return useLiveView(runId(id), { whenFinished, registry: AGENTS, speed: 1 })
+  return useLiveView(runId(id), { whenFinished, registry: AGENTS, speed: getSpeed() })
 }
 
 const REDUCED = '(prefers-reduced-motion: reduce)'

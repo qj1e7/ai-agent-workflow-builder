@@ -1,0 +1,58 @@
+.seg {
+  display: inline-flex;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+  padding: 3px;
+  border: 1px solid var(--hair);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.option {
+  position: relative;
+  display: grid;
+}
+
+/* The input stays in the accessibility tree and takes focus; the span beside it is what shows. */
+.option input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.option span {
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 9px;
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.option input:checked + span {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+
+.option input:focus-visible + span {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.option input:not(:checked):hover + span {
+  color: var(--ink);
+}
+
+@media (max-width: 759px) {
+  .option span {
+    padding: 0 10px;
+  }
+}

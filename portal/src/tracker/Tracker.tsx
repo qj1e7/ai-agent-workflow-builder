@@ -1,13 +1,15 @@
 import { useCallback, useId, useRef } from 'react'
 import { Link } from 'react-router'
 import type { BlockView, TemplateView } from '../api/types'
-import { headlineWords, type Headline, type LiveView } from '../run'
+import { headlineWords, type Headline, type LiveView, type Speed } from '../run'
 import { useDecision } from '../screens/approval/useDecision'
 import { cx } from '../ui/cx'
 import { Skeleton } from '../ui/Feedback'
 import { IconCheck, IconPause, IconSpinner, IconX } from '../ui/icons'
 import { useReducedMotion } from './hooks'
 import { ApprovalPanel, TroublePanel, WrittenPanel } from './panels'
+import { rememberSpeed } from './speed'
+import { SpeedControl } from './SpeedControl'
 import { TrackLine } from './TrackLine'
 import styles from './Tracker.module.css'
 
@@ -65,6 +67,11 @@ export function Tracker({ runId, view, template, title, titleTo }: TrackerProps)
   const tone = TONE[track.headline.is]
   const focusHeadline = useCallback(() => headline.current?.focus(), [])
 
+  function setSpeed(speed: Speed) {
+    rememberSpeed(speed)
+    view.controls.setSpeed(speed)
+  }
+
   const panel =
     spot?.is === 'approval' ? (
       <ApprovalPanel decision={decision} gate={track.gate} atHead={view.atHead} onLeave={focusHeadline} />
@@ -84,6 +91,7 @@ export function Tracker({ runId, view, template, title, titleTo }: TrackerProps)
           </div>
           {track.attempt > 1 ? <span className={styles['attempt']}>Attempt {track.attempt}</span> : null}
         </div>
+        <SpeedControl value={view.speed} onChange={setSpeed} />
       </header>
       <div className={styles['status']} role="status" aria-atomic="true">
         <div className={styles['head']}>
