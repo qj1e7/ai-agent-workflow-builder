@@ -21,6 +21,8 @@ test('the overview shows each stage of the live success run', async ({ page }, i
   await expect(headline(page)).toHaveText('Waiting for an Approver')
   const approval = page.getByRole('region', { name: 'Approval' })
   const ownWork = approval.getByText(OWN_WORK)
+  // The approval record renders on the page's frozen clock, so the clock moves until the panel has it.
+  await advanceUntil(page, ownWork)
   await expect(ownWork, 'Alice is told why she cannot decide').toBeVisible()
   await expect(approval.getByRole('button', { name: 'Approve', exact: true }), 'Alice has no Approve button').toHaveCount(0)
   if (desktop) await expectEndsAboveTheFold(ownWork, "the approval panel's own-work line")
