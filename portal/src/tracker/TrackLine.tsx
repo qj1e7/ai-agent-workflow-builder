@@ -10,6 +10,7 @@ import {
   parcelWords,
   SPED_UP_WORDS,
   stopWords,
+  type AgentStatus,
   type BeatPlan,
   type Figure,
   type Gate,
@@ -26,7 +27,7 @@ import { AgentFace } from '../ui/AgentFace'
 import { agentIdentity } from '../ui/agents'
 import { Avatar } from '../ui/Avatar'
 import { cx } from '../ui/cx'
-import { IconBox, IconCheck, IconDash, IconDoc, IconLock, IconPause, IconPerson, IconX } from '../ui/icons'
+import { IconBox, IconCheck, IconDash, IconDoc, IconLock, IconPause, IconPerson, IconSpinner, IconX } from '../ui/icons'
 import { personTone } from '../ui/personTone'
 import { createMotion, type Motion } from './motion'
 import { place } from './place'
@@ -246,12 +247,13 @@ function Chips({ items }: { items: Items }) {
   )
 }
 
-function Cast({ figures, users }: { figures: readonly Figure[]; users: readonly DevUser[] | undefined }) {
+export function Cast({ figures, users }: { figures: readonly Figure[]; users: readonly DevUser[] | undefined }) {
   const layout = castLayout(figures.length)
+  const compact = layout.size === 'compact'
   return (
-    <div className={cx(styles['cast'], layout.size === 'compact' && styles['compact'])}>
+    <div className={cx(styles['cast'], compact && styles['compact'])}>
       {figures.slice(0, layout.shown).map((figure) => (
-        <FigureMark key={figure.key} figure={figure} users={users} />
+        <FigureMark key={figure.key} figure={figure} users={users} badge={compact} />
       ))}
       {layout.more > 0 ? (
         <div className={styles['who']}>
@@ -273,7 +275,7 @@ function statusOf(figure: Figure): string {
   }
 }
 
-function FigureMark({ figure, users }: { figure: Figure; users: readonly DevUser[] | undefined }) {
+function FigureMark({ figure, users, badge }: { figure: Figure; users: readonly DevUser[] | undefined; badge: boolean }) {
   const named = figure.is === 'person' && users ? { ...figure, name: displayName(users, figure.id) } : figure
   const name = named.is === 'seat' ? named.label : named.name
   const acting = named.is !== 'seat' && named.acting
@@ -287,12 +289,22 @@ function FigureMark({ figure, users }: { figure: Figure; users: readonly DevUser
     >
       <span className={styles['av']}>
         <Face figure={named} name={name} />
+        {badge && named.is === 'agent' && named.status !== 'present' ? <StatusBadge status={named.status} /> : null}
       </span>
       <span className={styles['nm']} aria-hidden="true">
         {name}
       </span>
       <span className="visually-hidden">{figureWords(named)}</span>
     </div>
+  )
+}
+
+/** On a crowded stop, which agent works, is done or stopped, by its icon as well as its colour. The figure's words say it too. */
+function StatusBadge({ status }: { status: Exclude<AgentStatus, 'present'> }) {
+  return (
+    <span className={cx(styles['badge'], styles[`badge_${status}`])}>
+      {status === 'stopped' ? <IconX strokeWidth={3} /> : status === 'done' ? <IconCheck strokeWidth={3} /> : <IconSpinner strokeWidth={3} />}
+    </span>
   )
 }
 
