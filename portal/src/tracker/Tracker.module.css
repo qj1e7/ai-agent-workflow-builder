@@ -146,7 +146,13 @@
     padding-top: 18px;
   }
 
+  /* The words change as the run goes. Two lines each is the most a headline or a subline takes on a phone, so reserving them moves nothing below when the words change. */
+  .head {
+    align-items: flex-start;
+  }
+
   .headline {
+    min-height: 2lh;
     font-size: var(--text-28);
   }
 
@@ -161,6 +167,7 @@
   }
 
   .subline {
+    min-height: 2lh;
     margin: 8px 0 0;
     font-size: var(--text-16);
   }
