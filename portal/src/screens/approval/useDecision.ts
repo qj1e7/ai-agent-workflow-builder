@@ -1,8 +1,9 @@
+import { useState } from 'react'
 import { errorWords } from '../../api/errors'
 import { isConflict, refusalOf, useApproval, useDecide, useDevUsers } from '../../api/queries'
 import { useDevUser } from '../../api/session'
 import type { ApprovalView, Verdict } from '../../api/types'
-import { decisionRequest, decisionState, type DecisionAttempt, type DecisionState } from './decisionState'
+import { decisionRequest, decisionState, sentBy, type DecisionAttempt, type DecisionState, type Sender } from './decisionState'
 
 export interface Decision {
   /** GET /api/v1/approvals/{id} for the signed-in user: the actions, the steps, you_can_decide and why_not. */
@@ -21,33 +22,39 @@ export interface Decision {
 /**
  * The one way to decide an approval, for the approval page and the Tracker's gate panel alike. A null id fetches
  * nothing. The record polls while it is in use, so a decision made in Teams or on another screen shows here too.
+ * A decision belongs to the person who sent it on that approval: after a user switch the next person starts clean.
  */
 export function useDecision(approvalId: string | null): Decision {
   const approval = useApproval(approvalId ?? '', { poll: true, enabled: approvalId !== null })
   const decide = useDecide(approvalId ?? '')
   const userId = useDevUser()
   const user = useDevUsers().data?.find((candidate) => candidate.id === userId)
+  const [sender, setSender] = useState<Sender | null>(null)
+  const own = sentBy(sender, user, approvalId ?? '')
   const view = approvalId === null ? undefined : approval.data
-  const state = view ? decisionState(view, user, attemptOf(decide)) : null
+  const state = view ? decisionState(view, user, attemptOf(decide, sender)) : null
 
   return {
     view,
     state,
     loadError: approval.error,
-    sending: decide.isPending ? decide.variables.verdict : null,
-    sent: decide.isSuccess ? decide.variables.digest : null,
+    sending: own && decide.isPending ? decide.variables.verdict : null,
+    sent: own && decide.isSuccess ? decide.variables.digest : null,
     send(verdict) {
       const request = view && state ? decisionRequest(view, state.panel, verdict) : null
-      if (request && !decide.isPending) decide.mutate(request)
+      if (!request || approvalId === null || decide.isPending) return
+      setSender({ user: userId, approvalId })
+      decide.mutate(request)
     },
   }
 }
 
-function attemptOf(decide: ReturnType<typeof useDecide>): DecisionAttempt {
-  if (decide.isSuccess) return { kind: 'recorded', sent: decide.variables, out: decide.data }
+function attemptOf(decide: ReturnType<typeof useDecide>, sender: Sender | null): DecisionAttempt {
+  if (sender === null) return { kind: 'none' }
+  if (decide.isSuccess) return { kind: 'recorded', sender, sent: decide.variables, out: decide.data }
   if (!decide.isError) return { kind: 'none' }
   const refusal = refusalOf(decide.error)
-  if (refusal) return { kind: 'refused', refusal }
-  if (isConflict(decide.error)) return { kind: 'conflict' }
-  return { kind: 'failed', message: errorWords(decide.error) }
+  if (refusal) return { kind: 'refused', sender, refusal }
+  if (isConflict(decide.error)) return { kind: 'conflict', sender }
+  return { kind: 'failed', sender, message: errorWords(decide.error) }
 }
