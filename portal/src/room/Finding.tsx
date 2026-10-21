@@ -40,20 +40,35 @@ interface FindingChipsProps {
 }
 
 export function FindingChips({ finding, spot, size, land, fold, motion }: FindingChipsProps) {
-  const type = CHIP_TYPE[size]
   return (
     <div className={styles['finding']} style={{ left: spot.x, top: spot.y, width: spot.w, height: spot.h, gap: CHIP_FRAME.gap }} data-finding={finding.step}>
-      {finding.from ? (
-        <span className={styles['from']} style={{ fontSize: type.from, lineHeight: `${type.fromLine}px` }}>
-          From {connectorLabel(finding.from)}
-        </span>
-      ) : null}
+      {finding.from ? <FromLine label={connectorLabel(finding.from)} size={size} land={land} fold={fold} motion={motion} /> : null}
       <div className={styles['chips']} style={{ gap: CHIP_FRAME.gap }}>
         {finding.items.map((item, index) => (
           <Chip key={`${index}:${item}`} item={item} index={index} spot={spot} size={size} land={land} fold={fold} motion={motion} />
         ))}
       </div>
     </div>
+  )
+}
+
+interface FromLineProps {
+  label: string
+  size: RoomSize
+  land: Land | null
+  fold: Fold | null
+  motion: boolean
+}
+
+function FromLine({ label, size, land, fold, motion }: FromLineProps) {
+  const ref = useRef<HTMLSpanElement>(null)
+  const type = CHIP_TYPE[size]
+  const plan = land ? fromLandPlan(land) : fold ? fromFoldPlan(fold) : null
+  useBeatAnimation(ref, land?.key ?? fold?.key ?? null, plan, motion)
+  return (
+    <span ref={ref} className={styles['from']} style={{ fontSize: type.from, lineHeight: `${type.fromLine}px` }}>
+      From {label}
+    </span>
   )
 }
 
@@ -102,4 +117,18 @@ function centreInRoom(chip: HTMLElement, spot: Box): Point {
 
 function foldPlan(fold: Fold): AnimationPlan {
   return { keyframes: FOLD, options: { duration: FOLD_MS, delay: fold.atMs, easing: EASE_MOVE, fill: 'both' } }
+}
+
+function fromLandPlan(land: Land): AnimationPlan {
+  return {
+    keyframes: [{ opacity: 0 }, { opacity: 1 }],
+    options: { duration: Math.max(0, land.byMs - land.fromMs), delay: land.fromMs, easing: EASE_MOVE, fill: 'both' },
+  }
+}
+
+function fromFoldPlan(fold: Fold): AnimationPlan {
+  return {
+    keyframes: [{ opacity: 1 }, { opacity: 0 }],
+    options: { duration: FOLD_MS, delay: fold.atMs, easing: EASE_MOVE, fill: 'both' },
+  }
 }
