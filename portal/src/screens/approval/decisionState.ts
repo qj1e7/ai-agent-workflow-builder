@@ -67,7 +67,7 @@ function refusalHint(refusal: Refusal, user: DevUser | undefined): string | null
       return 'Send the link to another Approver.'
     case 'not_an_approver':
       return user
-        ? `You are signed in as ${user.display}, who is not an Approver. Send the link to an Approver.`
+        ? `You are signed in as ${user.display}. Send the link to an Approver.`
         : 'Send the link to an Approver.'
     default:
       return null
@@ -125,7 +125,7 @@ export function stepBlocks(
       case 'open':
         return { ...base, state: { kind: 'waiting' } }
       case 'waiting':
-        return { ...base, state: { kind: 'not_reached' }, description: 'Opens after the earlier step is decided.' }
+        return { ...base, state: { kind: 'not_reached' }, description: 'Opens after the earlier step.' }
     }
   })
 }

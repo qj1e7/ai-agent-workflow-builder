@@ -14,7 +14,7 @@ import { IconCheck, IconClock, IconCopy, IconDoor, IconLock, IconReplay, IconShi
 import { PageHeader } from '../../ui/PageHeader'
 import { Spine } from '../../ui/Spine'
 import { decisionRequest, decisionState, stepBlocks, type DecisionAttempt, type DecisionPanel } from './decisionState'
-import { ticketStatus, type TicketStatus } from './ticketStatus'
+import { ticketStatus } from './ticketStatus'
 import { useWaited } from './useWaited'
 import { atWords } from './waiting'
 import { systemsWritten } from './writeAction'
@@ -33,11 +33,8 @@ export function ApprovalPage() {
   if (notFound) {
     return (
       <Frame title="Approval not found">
-        <EmptyState
-          title="There is no approval at this address."
-          action={<ButtonLink to="/approvals">See approvals waiting for a decision</ButtonLink>}
-        >
-          The link may be mistyped, or the request may have been removed.
+        <EmptyState title="No approval at this address." action={<ButtonLink to="/approvals">See approvals</ButtonLink>}>
+          The link may be wrong, or the request was removed.
         </EmptyState>
       </Frame>
     )
@@ -120,7 +117,7 @@ function ApprovalContent({ view }: { view: ApprovalView }) {
       lede={lede}
       aside={<ButtonLink to={`/runs/${view.run_id}`}>Watch the run</ButtonLink>}
     >
-      <Banner panel={state.panel} status={status} run={run} view={view} nameOf={nameOf} now={now} />
+      <Banner panel={state.panel} run={run} view={view} nameOf={nameOf} />
       <div className={styles['layout']}>
         <section aria-labelledby="written-heading" className={styles['written']}>
           <h2 id="written-heading">Exactly what will be written</h2>
@@ -158,22 +155,19 @@ function ApprovalContent({ view }: { view: ApprovalView }) {
 
 interface BannerProps {
   panel: DecisionPanel
-  status: TicketStatus
   run: RunView | undefined
   view: ApprovalView
   nameOf: (id: string) => string
-  now: number
 }
 
-function Banner({ panel, status, run, view, nameOf, now }: BannerProps) {
+function Banner({ panel, run, view, nameOf }: BannerProps) {
   if (panel.kind === 'decided') {
-    const who = `${nameOf(panel.by)} ${atWords(panel.at, now)}`
     if (panel.verdict === 'decline') {
       return (
         <div className={`${styles['banner']} ${styles['bannerDeclined']}`}>
           <IconX size={22} />
           <p>
-            <strong>Declined by {who}.</strong> Nothing was written.
+            <strong>Declined by {nameOf(panel.by)}.</strong> Nothing was written.
           </p>
         </div>
       )
@@ -182,7 +176,7 @@ function Banner({ panel, status, run, view, nameOf, now }: BannerProps) {
       <div className={`${styles['banner']} ${styles['bannerApproved']}`}>
         <IconCheck size={22} />
         <p>
-          <strong>Approved by {who}.</strong> {status.kind === 'written' ? `Written as ${status.key}.` : 'The run is writing the ticket now.'}
+          <strong>Approved by {nameOf(panel.by)}.</strong>
         </p>
       </div>
     )
@@ -191,7 +185,7 @@ function Banner({ panel, status, run, view, nameOf, now }: BannerProps) {
     <div className={`${styles['banner']} ${styles['bannerOpen']}`}>
       <IconDoor size={22} />
       <p>
-        <strong>The run is paused at the approval gate.</strong> Nothing has been written.
+        <strong>Waiting for an Approver.</strong> Nothing has been written.
       </p>
       {run?.state === 'awaiting_approval' ? <Waited runId={view.run_id} since={run.updated_at} /> : null}
     </div>
@@ -228,9 +222,7 @@ function DecisionBody({ panel, notice, view, systems, sending, sent, onDecide }:
       ) : null}
       {panel.kind === 'can_decide' ? (
         <>
-          <p>
-            Approving writes this request to {systems}, and nothing else. Declining stops the run without writing anything.
-          </p>
+          <p>Declining stops the run and writes nothing.</p>
           <div className={styles['actions']}>
             <Button
               variant="approve"
@@ -263,11 +255,6 @@ function DecisionBody({ panel, notice, view, systems, sending, sent, onDecide }:
           <CopyLink />
         </div>
       ) : null}
-      {panel.kind === 'decided' ? (
-        <ButtonLink to={`/runs/${view.run_id}`}>
-          {panel.verdict === 'approve' ? 'Watch the rest of the run' : 'Open the run'}
-        </ButtonLink>
-      ) : null}
       <Fingerprint digest={sent ?? view.digest} show={panel.kind === 'can_decide' || sent !== null} />
       <TechnicalDetails view={view} sentDigest={sent} panel={panel} />
     </div>
@@ -284,7 +271,7 @@ function Fingerprint({ digest, show }: { digest: string; show: boolean }) {
           <span>Sent with your decision</span>
           <span className={styles['digest']}>{shortDigest(digest)}</span>
         </p>
-        <p className={styles['fineprint']}>A short code for the exact request on this page. If the request changes, the platform refuses your decision.</p>
+        <p className={styles['fineprint']}>A short code for this exact request.</p>
       </div>
     </div>
   )
@@ -333,10 +320,10 @@ function CopyLink() {
   return (
     <div className={styles['copy']}>
       <Button icon={result === 'copied' ? IconCheck : IconCopy} onClick={() => void copy()}>
-        {result === 'copied' ? 'Link copied' : 'Copy link to this page'}
+        {result === 'copied' ? 'Link copied' : 'Copy link'}
       </Button>
       <span role="status" className={styles['copyStatus']}>
-        {result === 'failed' ? 'The link could not be copied. Copy it from the address bar instead.' : ''}
+        {result === 'failed' ? 'We could not copy the link. Copy it from the address bar.' : ''}
       </span>
     </div>
   )

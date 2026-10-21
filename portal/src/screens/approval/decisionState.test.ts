@@ -61,7 +61,7 @@ describe('what the decision panel offers', () => {
     const state = decisionState(view({ you_can_decide: false, why_not: 'not_an_approver' }), carol, none)
     expect(state.panel).toMatchObject({ kind: 'cannot_decide', words: 'Only Approvers can decide this request.' })
     expect(state.panel.kind === 'cannot_decide' && state.panel.hint).toBe(
-      'You are signed in as Carol, who is not an Approver. Send the link to an Approver.',
+      'You are signed in as Carol. Send the link to an Approver.',
     )
   })
 
@@ -144,6 +144,6 @@ describe('the steps list', () => {
   it('says a later step opens after the earlier one', () => {
     const [, second] = stepBlocks([step(0, 'open'), step(1, 'waiting')], nameOf, now)
     expect(second?.state.kind).toBe('not_reached')
-    expect(second?.description).toBe('Opens after the earlier step is decided.')
+    expect(second?.description).toBe('Opens after the earlier step.')
   })
 })
