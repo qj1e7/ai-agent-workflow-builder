@@ -91,5 +91,11 @@ test('an Approver approves in place with the keyboard alone', async ({ page }) =
   await advanceUntil(page, page.locator('li[data-gate="open"]'))
   await expect(page.getByRole('region', { name: 'Approval' }), 'the approval panel closes once Bob decides').toHaveCount(0)
   await expect(headline(page), 'focus moves to the headline when the panel it was in closes').toBeFocused()
+  const ring = await headline(page).evaluate((el) => {
+    const style = getComputedStyle(el)
+    return { style: style.outlineStyle, width: parseFloat(style.outlineWidth) }
+  })
+  expect(ring.style, 'the focused headline shows its ring').not.toBe('none')
+  expect(ring.width, 'the ring is at least 2 px').toBeGreaterThanOrEqual(2)
   await advanceUntil(page, headline(page).getByText('MOCK-143 is in Jira', { exact: true }))
 })

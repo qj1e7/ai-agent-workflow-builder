@@ -6,6 +6,7 @@ import {
   captionWords,
   castLayout,
   figureWords,
+  moreWords,
   parcelShortWords,
   parcelWords,
   SPED_UP_WORDS,
@@ -249,7 +250,10 @@ export function Cast({ figures, users }: { figures: readonly Figure[]; users: re
       ))}
       {layout.more > 0 ? (
         <div className={styles['who']}>
-          <span className={cx(styles['av'], styles['more'])}>+{layout.more}</span>
+          <span className={cx(styles['av'], styles['more'])} aria-hidden="true">
+            +{layout.more}
+          </span>
+          <span className="visually-hidden">{moreWords(figures.slice(layout.shown))}</span>
         </div>
       ) : null}
     </div>

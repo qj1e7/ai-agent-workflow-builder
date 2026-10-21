@@ -74,8 +74,9 @@
   letter-spacing: -0.01em;
 }
 
-.headline:focus {
-  outline: none;
+/* Focus lands here when a panel closes. The ring shows only when the person was using the keyboard. */
+.headline:focus-visible {
+  border-radius: 6px;
 }
 
 .icon {

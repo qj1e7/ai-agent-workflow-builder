@@ -220,6 +220,11 @@ export function figureWords(figure: Figure): string {
   }
 }
 
+/** The figures a crowded stop folds into "+N", for a screen reader: "3 more: Jira reader, VPN reader, Wiki reader". */
+export function moreWords(hidden: readonly Figure[]): string {
+  return `${hidden.length} more: ${hidden.map((figure) => (figure.is === 'seat' ? figure.label : figure.name)).join(', ')}`
+}
+
 /** A proposal's action line split at its first colon: "Create Jira ticket in MOCK: New releases" gives the action and the title. */
 export function splitActionLine(line: string): { readonly action: string | null; readonly title: string } {
   const colon = line.indexOf(': ')

@@ -32,6 +32,7 @@ export {
   createdWords,
   figureWords,
   headlineWords,
+  moreWords,
   OPEN_APPROVAL_PAGE,
   parcelShortWords,
   parcelWords,

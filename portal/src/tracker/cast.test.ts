@@ -34,4 +34,11 @@ describe('the cast on a stop', () => {
       for (const mark of Object.values(MARK)) expect(figure).not.toContain(mark)
     }
   })
+
+  it('names the figures that a crowded stop folds into "+N", for a screen reader', () => {
+    const readers = ['Entra', 'Admin', 'GitLab', 'Jira', 'VPN', 'Wiki'].map((name) => agent(`${name.toLowerCase()}_reader`, `${name} reader`, 'working'))
+    const html = renderToStaticMarkup(createElement(Cast, { figures: readers, users: undefined }))
+    expect(html, 'the visible count is not read out twice').toMatch(/aria-hidden="true"[^>]*>\+3</)
+    expect(html).toContain('3 more: Jira reader, VPN reader, Wiki reader')
+  })
 })
