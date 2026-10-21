@@ -42,3 +42,5 @@ scripts/down.sh
 ```
 
 `scripts/e2e.sh` runs the end to end tests against the whole stack with a fake GitHub, first the API tests and then the same product in a real browser through the Portal. It tears everything down afterwards. See [e2e/README.md](e2e/README.md).
+
+`scripts/dast.sh` scans the running stack with OWASP ZAP, and `scripts/load.sh` load tests it with k6. Each starts its own stack with no host ports, prints PASS or FAIL, and tears the stack down. The ZAP rules and their reasons are in `dast/`. The k6 script is `load/team.js`. The latest results are in `docs/evidence/dast/` and `docs/evidence/load-test/`.
