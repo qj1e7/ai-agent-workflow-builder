@@ -1,7 +1,7 @@
 import os
 from collections.abc import AsyncGenerator, Mapping
 from contextlib import asynccontextmanager
-from typing import Any, Literal
+from typing import Literal
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
@@ -82,7 +82,6 @@ def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
     match settings.auth:
         case auth.DevAuth():
             app.include_router(auth.dev_router)
-            _document_dev_header(app)
     return app
 
 
@@ -108,22 +107,3 @@ async def readiness_of(db: Database, listening: bool) -> Readiness:
         detail = f"{row['detail']} (bootstrap at {row['loaded_at'].isoformat()})"
         checks.append(ReadinessCheck(name="workflows", ok=bool(row["ready"]), detail=detail))
     return Readiness(ready=all(c.ok for c in checks), checks=checks)
-
-
-def _document_dev_header(app: FastAPI) -> None:
-    def openapi() -> dict[str, Any]:
-        if app.openapi_schema is None:
-            schema = FastAPI.openapi(app)
-            schema.setdefault("components", {})["securitySchemes"] = {
-                "DevUser": {
-                    "type": "apiKey",
-                    "in": "header",
-                    "name": auth.DEV_USER_HEADER,
-                    "description": "Local sign-in stub. One of the ids from GET /api/v1/dev/users.",
-                }
-            }
-            schema["security"] = [{"DevUser": []}]
-            app.openapi_schema = schema
-        return app.openapi_schema
-
-    app.openapi = openapi

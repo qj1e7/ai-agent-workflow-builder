@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import Field, TypeAdapter
 
-from platform_api.auth import CurrentPrincipal
+from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
 from platform_api.orchestration.approvals import (
     ApprovalRequest,
     Approved,
@@ -59,6 +59,7 @@ from platform_api.wire import (
     StepName,
     StepOutcome,
     WireModel,
+    error_response,
 )
 
 
@@ -427,12 +428,16 @@ def _decision_out(decided: Decided) -> DecisionOut:
     )
 
 
-@router.get("/api/v1/runs", tags=["orchestration"])
+@router.get("/api/v1/runs", tags=["orchestration"], responses=SIGNED_IN)
 async def list_runs(principal: CurrentPrincipal, orchestrator: CurrentOrchestrator) -> RunList:
     return RunList(runs=[run_view(d) for d in await orchestrator.list_runs()])
 
 
-@router.get("/api/v1/runs/{run_id}", tags=["orchestration"])
+@router.get(
+    "/api/v1/runs/{run_id}",
+    tags=["orchestration"],
+    responses={**SIGNED_IN, 404: error_response("No such run")},
+)
 async def get_run(
     run_id: RunId, principal: CurrentPrincipal, orchestrator: CurrentOrchestrator
 ) -> RunView:
@@ -442,7 +447,16 @@ async def get_run(
     return run_view(detail)
 
 
-@router.post("/api/v1/runs/{run_id}/retry", status_code=202, tags=["orchestration"])
+@router.post(
+    "/api/v1/runs/{run_id}/retry",
+    status_code=202,
+    tags=["orchestration"],
+    responses={
+        **OPERATORS_ONLY,
+        404: error_response("No such run"),
+        409: error_response("The run is not failed, or its failure cannot be retried"),
+    },
+)
 async def retry_run(
     run_id: RunId, principal: Operator, orchestrator: CurrentOrchestrator
 ) -> RetryAccepted:
@@ -455,7 +469,11 @@ async def retry_run(
             raise HTTPException(status_code=404, detail="No such run")
 
 
-@router.get("/api/v1/approvals/{approval_id}", tags=["orchestration"])
+@router.get(
+    "/api/v1/approvals/{approval_id}",
+    tags=["orchestration"],
+    responses={**SIGNED_IN, 404: error_response("No such approval")},
+)
 async def get_approval(
     approval_id: ApprovalId, principal: CurrentPrincipal, orchestrator: CurrentOrchestrator
 ) -> ApprovalView:
@@ -479,9 +497,11 @@ async def get_approval(
     response_model=DecisionOut,
     tags=["orchestration"],
     responses={
+        **SIGNED_IN,
         200: {"model": DecisionOut, "description": "The same decision was already recorded"},
         403: {"model": RefusalOut, "description": "This person cannot decide this step"},
-        409: {"description": "Another Approver decided this step first"},
+        404: error_response("No such approval"),
+        409: error_response("Another Approver decided this step first"),
     },
 )
 async def decide(
@@ -509,7 +529,10 @@ async def decide(
     "/internal/v1/runs/{run_id}/steps/{step}",
     response_model=StepResponseOut,
     tags=["internal"],
-    responses={503: {"model": RetryLater, "description": "Try the same step again later"}},
+    responses={
+        401: error_response("Bad step key"),
+        503: {"model": RetryLater, "description": "Try the same step again later"},
+    },
 )
 async def run_step(
     run_id: RunId,
@@ -532,6 +555,7 @@ async def run_step(
     status_code=202,
     tags=["internal"],
     response_class=Response,
+    responses={401: error_response("Bad step key")},
 )
 async def report_workflow_failure(
     body: WorkflowFailureIn, step_key: StepKey, request: Request, orchestrator: CurrentOrchestrator
@@ -542,7 +566,7 @@ async def report_workflow_failure(
     )
 
 
-@router.get("/api/v1/teams-stub/messages", tags=["stubs"])
+@router.get("/api/v1/teams-stub/messages", tags=["stubs"], responses=SIGNED_IN)
 async def list_teams_stub_messages(
     principal: CurrentPrincipal, stub: Annotated[TeamsStub, Depends(current_teams_stub)]
 ) -> TeamsStubMessages:
@@ -562,7 +586,7 @@ async def list_teams_stub_messages(
     )
 
 
-@router.get("/api/v1/mock-jira/tickets", tags=["stubs"])
+@router.get("/api/v1/mock-jira/tickets", tags=["stubs"], responses=SIGNED_IN)
 async def list_mock_jira_tickets(
     principal: CurrentPrincipal, jira: Annotated[MockJiraConnector, Depends(current_mock_jira)]
 ) -> MockJiraTickets:

@@ -25,7 +25,7 @@
       "id": "platform",
       "display": "Platform"
     },
-    "summary": "The work leg was sent to the workflow engine (attempt 1).",
+    "summary": "The work leg was queued for the workflow engine (attempt 1).",
     "kind": "leg_dispatched",
     "data": {
       "leg": "work",
@@ -356,7 +356,7 @@
       "id": "platform",
       "display": "Platform"
     },
-    "summary": "The act leg was sent to the workflow engine (attempt 1).",
+    "summary": "The act leg was queued for the workflow engine (attempt 1).",
     "kind": "leg_dispatched",
     "data": {
       "leg": "act",

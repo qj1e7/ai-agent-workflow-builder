@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Annotated, Literal, NoReturn
+from typing import Annotated, Any, Literal, NoReturn
 
 from fastapi import HTTPException
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field
@@ -9,6 +9,17 @@ from platform_api.shared import UserId
 
 class WireModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+class ErrorBody(WireModel):
+    detail: str
+
+
+type Responses = dict[int | str, dict[str, Any]]
+
+
+def error_response(description: str) -> dict[str, Any]:
+    return {"model": ErrorBody, "description": description}
 
 
 def not_implemented() -> NoReturn:
