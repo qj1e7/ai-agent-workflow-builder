@@ -9,7 +9,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from platform_api.app import create_app
-from platform_api.oidc import KEYS_MAX_AGE_SECONDS, MAX_DOCUMENT_BYTES, REFETCH_COOLDOWN_SECONDS
+from platform_api.oidc import (
+    KEYS_MAX_AGE_SECONDS,
+    KEYS_MAX_STALE_SECONDS,
+    MAX_DOCUMENT_BYTES,
+    REFETCH_COOLDOWN_SECONDS,
+)
 from platform_api.orchestration.service import NotFound
 from tests.declared import FakeOrchestrator, declared_status
 from tests.oidc_support import (
@@ -279,6 +284,17 @@ def test_a_key_fetch_failure_keeps_the_keys_already_loaded(
     clock.advance(KEYS_MAX_AGE_SECONDS)
     assert client.get(ME, headers=bearer(token())).status_code == 200
     assert issuer.jwks_fetches == 2
+
+
+def test_keys_older_than_a_day_are_refused_when_they_cannot_be_reloaded(
+    client: TestClient, app: FastAPI, issuer: FakeIssuer, clock: Clock
+):
+    assert client.get(ME, headers=bearer(token())).status_code == 200
+    issuer.down = True
+    clock.advance(KEYS_MAX_STALE_SECONDS - 1)
+    assert client.get(ME, headers=bearer(token())).status_code == 200
+    clock.advance(1)
+    unavailable(app, client.get(ME, headers=bearer(token())))
 
 
 def test_a_down_issuer_is_asked_at_most_once_per_cooldown(

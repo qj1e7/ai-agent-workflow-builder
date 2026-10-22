@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import math
 import time
 from collections import Counter
 from collections.abc import Callable, Mapping
@@ -26,6 +27,7 @@ type Algorithm = Literal["RS256", "ES256"]
 ACCEPTED: frozenset[str] = frozenset({"RS256", "ES256"})
 LEEWAY_SECONDS = 60
 KEYS_MAX_AGE_SECONDS = 3600
+KEYS_MAX_STALE_SECONDS = 24 * 3600
 REFETCH_COOLDOWN_SECONDS = 30
 FETCH_TIMEOUT_SECONDS = 5
 RETRY_AFTER_SECONDS = 30
@@ -231,14 +233,17 @@ class SigningKeys:
                 return key
             outcome = await self._load_if_due()
             key = self._keys.get(kid)
-            if key is not None:
+            if key is not None and self._age() < KEYS_MAX_STALE_SECONDS:
                 return key
             if outcome is _Outcome.FAILED:
                 raise KeysUnavailable
             raise TokenRejected(Rejection.UNKNOWN_KEY)
 
+    def _age(self) -> float:
+        return math.inf if self._loaded_at is None else self._clock() - self._loaded_at
+
     def _fresh(self, kid: str) -> VerificationKey | None:
-        if self._loaded_at is None or self._clock() - self._loaded_at >= KEYS_MAX_AGE_SECONDS:
+        if self._age() >= KEYS_MAX_AGE_SECONDS:
             return None
         return self._keys.get(kid)
 
