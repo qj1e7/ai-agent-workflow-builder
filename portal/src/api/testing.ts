@@ -8,6 +8,7 @@ export interface FakeOidcClient extends OidcClient {
     userLoaded(user: OidcUser): void
     userUnloaded(): void
     silentRenewError(): void
+    accessTokenExpiring(): void
     accessTokenExpired(): void
   }
   renewWith(outcome: OidcUser | null | Error | Promise<OidcUser | null>): void
@@ -39,6 +40,7 @@ export function fakeOidcClient({ stored = null, callback }: FakeOptions = {}): F
   const loaded = new Set<Listener<OidcUser>>()
   const unloaded = new Set<Listener<void>>()
   const renewErrors = new Set<Listener<Error>>()
+  const expiring = new Set<Listener<void>>()
   const expired = new Set<Listener<void>>()
   const calls: string[] = []
   let renew: OidcUser | null | Error | Promise<OidcUser | null> = null
@@ -61,12 +63,14 @@ export function fakeOidcClient({ stored = null, callback }: FakeOptions = {}): F
       addUserLoaded: on(loaded),
       addUserUnloaded: on(unloaded),
       addSilentRenewError: on(renewErrors),
+      addAccessTokenExpiring: on(expiring),
       addAccessTokenExpired: on(expired),
     },
     fire: {
       userLoaded: (user) => raise(loaded, user),
       userUnloaded: () => raise(unloaded, undefined),
       silentRenewError: () => raise(renewErrors, new Error('renew failed')),
+      accessTokenExpiring: () => raise(expiring, undefined),
       accessTokenExpired: () => raise(expired, undefined),
     },
     renewWith: (outcome) => {

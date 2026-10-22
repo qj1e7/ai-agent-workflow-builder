@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bootOidc, CALLBACK_FAILED_WORDS, createOidcSession, INSECURE_WORDS, safeReturnPath, type BootPlace } from './oidc'
+import { bootOidc, CALLBACK_FAILED_WORDS, createOidcSession, INSECURE_WORDS, safeReturnPath, type BootPlace, type OidcUser } from './oidc'
 import { authorizedFetch, SIGNED_IN, SIGNED_OUT, SignedOut } from './session'
 import { fakeOidcClient, fakeUser } from './testing'
 
@@ -37,6 +37,27 @@ describe('the OpenID Connect session', () => {
     expect(client.calls).toEqual(['signinSilent'])
     expect(await session.credentials()).toEqual({ Authorization: 'Bearer token-2' })
     expect(client.calls).toEqual(['signinSilent'])
+  })
+
+  it('renews once when the library says the token is about to end, and a request asking at the same time shares it', async () => {
+    const client = fakeOidcClient()
+    const renewal = deferred<OidcUser | null>()
+    client.renewWith(renewal.promise)
+    const session = createOidcSession(client, fakeUser('token-1', NOW, { expiresInS: 20 }), SIGNED_IN, now)
+    client.fire.accessTokenExpiring()
+    expect(client.calls).toEqual(['signinSilent'])
+    const request = session.credentials()
+    renewal.resolve(fakeUser('token-2', NOW))
+    expect(await request).toEqual({ Authorization: 'Bearer token-2' })
+    expect(client.calls).toEqual(['signinSilent'])
+  })
+
+  it('lets a token with no refresh token run to its end when the library says it is about to end', () => {
+    const client = fakeOidcClient()
+    const session = createOidcSession(client, fakeUser('token-1', NOW, { expiresInS: 50, refresh: false }), SIGNED_IN, now)
+    client.fire.accessTokenExpiring()
+    expect(client.calls).toEqual([])
+    expect(session.status()).toEqual({ kind: 'signed-in' })
   })
 
   it('reports expired and sends nothing when the renewal fails', async () => {

@@ -22,6 +22,7 @@ export interface OidcEvents {
   addUserLoaded(cb: (user: OidcUser) => void): () => void
   addUserUnloaded(cb: () => void): () => void
   addSilentRenewError(cb: (error: Error) => void): () => void
+  addAccessTokenExpiring(cb: () => void): () => void
   addAccessTokenExpired(cb: () => void): () => void
 }
 
@@ -43,7 +44,8 @@ export function oidcClientFor(config: OidcSignIn, origin: string): OidcClient {
     redirect_uri: `${origin}${CALLBACK_PATH}`,
     post_logout_redirect_uri: `${origin}${SIGNED_OUT_PATH}`,
     response_type: 'code',
-    automaticSilentRenew: true,
+    // The session's single-flight renew() is the only renewal path; the library's own timer would run a second one.
+    automaticSilentRenew: false,
     loadUserInfo: false,
     monitorSession: false,
     revokeTokensOnSignout: false,
@@ -101,6 +103,9 @@ export function createOidcSession(client: OidcClient, user: OidcUser | null, ini
   client.events.addUserLoaded(load)
   client.events.addUserUnloaded(() => become(SIGNED_OUT))
   client.events.addSilentRenewError(expire)
+  client.events.addAccessTokenExpiring(() => {
+    if (current?.refresh_token) void renew()
+  })
   client.events.addAccessTokenExpired(expire)
 
   return {
