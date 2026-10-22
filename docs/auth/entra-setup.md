@@ -2,7 +2,7 @@
 
 This guide is for the person who holds admin rights in the Entra tenant. When you finish, people sign in to the Portal with their work account, and platform-api knows who is an Operator and who is an Approver. [ADR 0018](../adr/0018-sign-in-with-openid-connect.md) explains the design.
 
-You register two apps. One is for platform-api, which owns the roles. One is for the Portal, which signs people in. You need the Portal's https address before you start. In this guide it is `https://<portal-host>`.
+You register two apps. One is for platform-api, which owns the roles. One is for the Portal, which signs people in. Keep them separate: platform-api does not check the kind of token it gets, and two registrations keep the Portal's ID token from ever passing as an access token for platform-api. You need the Portal's https address before you start. In this guide it is `https://<portal-host>`.
 
 ## Register the app for platform-api
 
@@ -71,4 +71,4 @@ None of these values is a secret. They can live in plain Terraform variables, no
 
 1. Open `https://login.microsoftonline.com/<tenant-id>/v2.0/.well-known/openid-configuration` in a browser. Its `issuer` must equal `OIDC_ISSUER` exactly.
 2. Open the Portal as an assigned person. You should go to the Microsoft sign-in page and come back signed in, with your name and roles in the header.
-3. If the Portal says the platform refused your sign-in, the platform-api log names the reason. The usual causes are a missing step 4 in the platform-api registration (the issuer is wrong), an `OIDC_AUDIENCE` set to the `api://` URI instead of the client ID, or a person with no assignment.
+3. If the Portal keeps asking you to sign in again, the platform-api log names the reason it refused the token. The usual causes are a missing step 4 in the platform-api registration (the issuer is wrong), an `OIDC_AUDIENCE` set to the `api://` URI instead of the client ID, or a person with no assignment.
