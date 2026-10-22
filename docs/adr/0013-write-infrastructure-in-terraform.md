@@ -1,10 +1,10 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Write infrastructure as code in Terraform, and keep it working under OpenTofu
 
-The walking skeleton deploys to Azure through CI, so the team must pick an infrastructure-as-code tool. CLAUDE.md left Terraform or Bicep open. [Prototype P5](../evidence/prototypes/p5-iac-terraform-vs-bicep/findings.md) wrote the same Azure setup in both, using the resource list from the [walking skeleton design](../design/walking-skeleton.md). Both expressed every resource with no workaround, including the Container Apps Job and a Key Vault secret reference. Both passed their offline checks. Terraform took 233 lines and Bicep 259. So the choice turns on what comes after the first deploy. We propose Terraform. [ADR 0004](0004-host-on-azure-behind-ports-and-adapters.md) keeps a move to AWS open, and Terraform's language, plan and apply steps, state model and CI jobs carry over to AWS. Bicep only targets Azure. Semgrep, which our CI already runs, has Terraform rules, and P5 found no Semgrep rules for Bicep. The same Terraform code also passed unchanged under OpenTofu, its open-source fork, which gives us a way out if the licence becomes a problem.
+The walking skeleton deploys to Azure through CI, so the team must pick an infrastructure-as-code tool. CLAUDE.md left Terraform or Bicep open. [Prototype P5](../evidence/prototypes/p5-iac-terraform-vs-bicep/findings.md) wrote the same Azure setup in both, using the resource list from the [walking skeleton design](../design/walking-skeleton.md). Both expressed every resource with no workaround, including the Container Apps Job and a Key Vault secret reference. Both passed their offline checks. Terraform took 233 lines and Bicep 259. So the choice turns on what comes after the first deploy. We chose Terraform. The team lead accepted this on 22 Oct 2026. [ADR 0004](0004-host-on-azure-behind-ports-and-adapters.md) keeps a move to AWS open, and Terraform's language, plan and apply steps, state model and CI jobs carry over to AWS. Bicep only targets Azure. Semgrep, which our CI already runs, has Terraform rules, and P5 found no Semgrep rules for Bicep. The same Terraform code also passed unchanged under OpenTofu, its open-source fork, which gives us a way out if the licence becomes a problem.
 
 ## Considered options
 

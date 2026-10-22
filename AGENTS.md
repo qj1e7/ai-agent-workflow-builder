@@ -28,6 +28,7 @@ Other commit scopes: `infra`, `ci`, `docs`.
 - n8n does the workflow plumbing. Our own code goes into the builder, the Room lead, the live activity view and the AI troubleshooter.
 - Agents use LangChain and LangGraph, traced with LangSmith. The backend is Python.
 - PostgreSQL is the relational store.
+- Infrastructure as code is Terraform, kept working under OpenTofu (ADR 0013).
 - Azure first (Container Apps, Static Web Apps, PostgreSQL, Azure OpenAI, Key Vault, App Insights), behind ports and adapters so it can move to AWS.
 - Build and prove everything on the open internet first. DevNet (the NCS private network) comes later.
 - Keep agents clean and reusable, so they can go into NCS's internal agent hub.
@@ -36,7 +37,6 @@ Other commit scopes: `infra`, `ci`, `docs`.
 
 Do not assume an answer. Ask, or propose an ADR.
 
-- Terraform or Bicep for infrastructure as code.
 - Which NoSQL store (Cosmos DB was suggested).
 - Which AI model provider (decide after testing in early sprints).
 - Who owns the code and the reuse rights (waiting on the sponsor).
