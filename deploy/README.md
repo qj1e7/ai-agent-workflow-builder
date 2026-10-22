@@ -10,6 +10,8 @@ docker compose -f deploy/compose.yaml down -v   # stop and delete the data
 
 `make-env.sh` refuses to overwrite an existing `.env`. Keep it while the volumes exist, because `N8N_ENCRYPTION_KEY` must not change. After `down -v` you may run `make-env.sh --force`.
 
+To sign in for real against a mock identity provider instead of the dev user switcher, add `compose.oidc.yaml`. It runs `navikt/mock-oauth2-server` with the users alice, bob and carol, sets `AUTH_MODE=oidc`, and publishes no host ports, because the provider's address only resolves inside the compose network. `E2E_AUTH=oidc scripts/e2e.sh` uses it. [docs/auth/entra-setup.md](../docs/auth/entra-setup.md) covers the real provider in Azure.
+
 To run without the real agent, add the fake agent. It replays the contract fixtures, and `POST /_admin/mode` with `{"mode": "failed"}` switches it to the failure case.
 
 ```sh
