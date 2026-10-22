@@ -78,6 +78,16 @@ describe('the OpenID Connect session', () => {
     await expect(session.credentials()).rejects.toBeInstanceOf(SignedOut)
   })
 
+  it('stays usable when sign-out cannot leave for the provider, so a renewed user loads again', async () => {
+    const client = fakeOidcClient({ signOut: new Error('No end session endpoint') })
+    const session = createOidcSession(client, fakeUser('token-1', NOW), SIGNED_IN, now)
+    await expect(session.signOut()).rejects.toThrow('No end session endpoint')
+    client.fire.userLoaded(fakeUser('token-2', NOW))
+    expect(session.status()).toEqual({ kind: 'signed-in' })
+    expect(await session.credentials()).toEqual({ Authorization: 'Bearer token-2' })
+    expect(client.calls).toEqual(['signoutRedirect'])
+  })
+
   it('reports expired and sends nothing when the renewal fails', async () => {
     const client = fakeOidcClient()
     client.renewWith(new Error('refresh token revoked'))

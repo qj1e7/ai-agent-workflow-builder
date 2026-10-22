@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { rolesLabel } from '../api/labels'
 import { useMe } from '../api/queries'
 import type { OidcSession } from '../api/session'
@@ -5,8 +6,17 @@ import { Avatar } from './Avatar'
 import { Button } from './Button'
 import styles from './SignedInAs.module.css'
 
+export const SIGN_OUT_FAILED_WORDS = 'Sign-out did not finish. Try again.'
+
 export function SignedInAs({ session }: { session: OidcSession }) {
   const me = useMe().data
+  const [failed, setFailed] = useState(false)
+
+  function signOut() {
+    setFailed(false)
+    session.signOut().catch(() => setFailed(true))
+  }
+
   return (
     <div className={styles['signedIn']}>
       {me ? (
@@ -19,7 +29,12 @@ export function SignedInAs({ session }: { session: OidcSession }) {
           </span>
         </span>
       ) : null}
-      <Button onClick={() => void session.signOut()}>Sign out</Button>
+      <Button onClick={signOut}>Sign out</Button>
+      {failed ? (
+        <p className={styles['failed']} role="alert">
+          {SIGN_OUT_FAILED_WORDS}
+        </p>
+      ) : null}
     </div>
   )
 }

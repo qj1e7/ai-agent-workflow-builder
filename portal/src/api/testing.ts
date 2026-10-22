@@ -17,6 +17,7 @@ export interface FakeOidcClient extends OidcClient {
 interface FakeOptions {
   readonly stored?: OidcUser | null
   readonly callback?: OidcUser | Error
+  readonly signOut?: Error
 }
 
 interface UserOptions {
@@ -36,7 +37,7 @@ export function fakeUser(token: string, now: number, { expiresInS = 3600, refres
   }
 }
 
-export function fakeOidcClient({ stored = null, callback }: FakeOptions = {}): FakeOidcClient {
+export function fakeOidcClient({ stored = null, callback, signOut }: FakeOptions = {}): FakeOidcClient {
   const loaded = new Set<Listener<OidcUser>>()
   const unloaded = new Set<Listener<void>>()
   const renewErrors = new Set<Listener<Error>>()
@@ -95,7 +96,7 @@ export function fakeOidcClient({ stored = null, callback }: FakeOptions = {}): F
     },
     signoutRedirect: () => {
       calls.push('signoutRedirect')
-      return Promise.resolve()
+      return signOut ? Promise.reject(signOut) : Promise.resolve()
     },
     removeUser: () => {
       calls.push('removeUser')

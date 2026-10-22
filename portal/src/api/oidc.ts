@@ -130,8 +130,13 @@ export function createOidcSession(client: OidcClient, user: OidcUser | null, ini
     signIn: (returnTo) => client.signinRedirect({ state: { returnTo } }),
     signOut: async () => {
       signingOut = true
-      await renewing
-      await client.signoutRedirect()
+      try {
+        await renewing
+        await client.signoutRedirect()
+      } catch (error) {
+        signingOut = false
+        throw error
+      }
     },
   }
 }
