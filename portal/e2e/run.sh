@@ -15,11 +15,13 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+image="${PORTAL_E2E_IMAGE:-portal:e2e}"
+
 runner=$("$portal_dir/e2e/runner-image.sh")
-docker build -f "$portal_dir/Dockerfile" -t portal:e2e "$repo_dir"
+docker build -f "$portal_dir/Dockerfile" -t "$image" "$repo_dir"
 docker network create "$network" >/dev/null
 docker run -d --name "$server" --network "$network" --network-alias portal \
-  -e PORTAL_MODE=demo portal:e2e >/dev/null
+  -e PORTAL_MODE=demo "$image" >/dev/null
 
 ready=
 for _ in $(seq 1 30); do

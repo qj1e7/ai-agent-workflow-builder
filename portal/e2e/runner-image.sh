@@ -5,7 +5,7 @@
 set -eu
 
 portal_dir=$(cd "$(dirname "$0")/.." && pwd)
-image=portal-e2e-runner:local
+image="${E2E_RUNNER_IMAGE:-portal-e2e-runner:local}"
 
 docker build -q -f "$portal_dir/e2e/Dockerfile.runner" -t "$image" "$portal_dir" >/dev/null
 echo "$image"
