@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, useSyncExternalStore, type ReactNod
 import { createApiClient, type ApiClient } from './client'
 import { wallClock, type RunClock } from './clock'
 import type { PortalMode } from './config'
+import { errorWords } from './errors'
 import { authorizedFetch, type Session, type SessionStatus } from './session'
 
 export interface ApiEnvironment {
@@ -76,4 +77,10 @@ export function useSessionKey(): string {
 export function useSessionStatus(): SessionStatus {
   const session = useSession()
   return useSyncExternalStore(session.subscribe, session.status, session.status)
+}
+
+/** errorWords bound to the session kind, so a 401 asks for the right kind of sign-in. */
+export function useErrorWords(): (error: unknown) => string {
+  const { kind } = useSession()
+  return (error) => errorWords(error, kind)
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { errorWords } from '../../api/errors'
+import { useErrorWords } from '../../api/context'
 import { useDisplayName } from '../../api/people'
 import { useApproval, useRuns, useTeamsMessages } from '../../api/queries'
 import type { RunView, TeamsStubMessage } from '../../api/types'
@@ -15,6 +15,7 @@ import { standingOf, type StandingKind } from './standing'
 import styles from './TeamsPage.module.css'
 
 export function TeamsPage() {
+  const explain = useErrorWords()
   const messages = useTeamsMessages({ poll: true })
   const runs = useRuns({ poll: true })
   const [wanted, setWanted] = useState<string | null>(null)
@@ -29,7 +30,7 @@ export function TeamsPage() {
           <div className={styles['single']}>
             {messages.isError ? (
               <div className={styles['problem']}>
-                <InlineMessage tone="error">We could not load the messages. {errorWords(messages.error)}</InlineMessage>
+                <InlineMessage tone="error">We could not load the messages. {explain(messages.error)}</InlineMessage>
                 <Button icon={IconReplay} loading={messages.isFetching} onClick={() => void messages.refetch()}>
                   Try again
                 </Button>

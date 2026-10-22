@@ -1,5 +1,5 @@
 import { useId, useState, type ChangeEvent, type ReactNode } from 'react'
-import { errorWords } from '../../api/errors'
+import { useErrorWords } from '../../api/context'
 import { useCreateUseCase, useSuggest } from '../../api/queries'
 import type { SuggestOut, TemplateView } from '../../api/types'
 import { Button } from '../../ui/Button'
@@ -99,6 +99,7 @@ interface Saved {
 }
 
 function PlanForm({ template, task, runNow }: { template: TemplateView; task: string; runNow: RunNow }) {
+  const explain = useErrorWords()
   const [name, setName] = useState(template.name)
   const [params, setParams] = useState<Record<string, string>>(() => exampleParams(template))
   const [attempted, setAttempted] = useState(false)
@@ -189,7 +190,7 @@ function PlanForm({ template, task, runNow }: { template: TemplateView; task: st
           </Button>
         ) : null}
       </div>
-      {create.isError ? <InlineMessage tone="error">{errorWords(create.error)}</InlineMessage> : null}
+      {create.isError ? <InlineMessage tone="error">{explain(create.error)}</InlineMessage> : null}
       {saved ? (
         <InlineMessage tone="success">
           Saved {saved.name}, version {saved.version}.

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { errorWords } from '../api/errors'
+import { useErrorWords } from '../api/context'
 import { useLatch } from '../api/latch'
 import { connectorLabel, objectNoun } from '../api/labels'
 import { useMe, useRetry, useTroubleshoot } from '../api/queries'
@@ -78,6 +78,7 @@ interface ApprovalPanelProps {
 
 /** The proposed write under the barrier, and the decision in place: Approve and Decline, or the platform's reason this viewer cannot. */
 export function ApprovalPanel({ decision, gate, atHead, onLeave }: ApprovalPanelProps) {
+  const explain = useErrorWords()
   const { view, state, sending, sent } = decision
   const panel = state?.panel
   const notice = state?.notice
@@ -102,7 +103,7 @@ export function ApprovalPanel({ decision, gate, atHead, onLeave }: ApprovalPanel
           })}
         </>
       ) : decision.loadError ? (
-        <InlineMessage tone="error">{errorWords(decision.loadError)}</InlineMessage>
+        <InlineMessage tone="error">{explain(decision.loadError)}</InlineMessage>
       ) : (
         <Skeleton lines={3} label="Loading the request." />
       )}
@@ -143,6 +144,7 @@ interface TroublePanelProps {
 
 /** Under the break: the AI troubleshooter's likely cause and suggestion, and Retry run when the platform allows it and the person is an Operator. */
 export function TroublePanel({ runId, spot, atHead, onRetried, onLeave }: TroublePanelProps) {
+  const explain = useErrorWords()
   const advice = useTroubleshoot(runId, true, spot.attempt)
   const retry = useRetry(runId)
   const latch = useLatch()
@@ -161,7 +163,7 @@ export function TroublePanel({ runId, spot, atHead, onRetried, onLeave }: Troubl
           <p className={styles['do']}>{advice.data.advice.suggestion}</p>
         </>
       ) : advice.isError ? (
-        <InlineMessage tone="error">{errorWords(advice.error)}</InlineMessage>
+        <InlineMessage tone="error">{explain(advice.error)}</InlineMessage>
       ) : (
         <Skeleton lines={2} label="Loading the advice." />
       )}
@@ -183,7 +185,7 @@ export function TroublePanel({ runId, spot, atHead, onRetried, onLeave }: Troubl
           </Action>
         </div>
       ) : null}
-      {retry.isError ? <InlineMessage tone="error">{errorWords(retry.error)}</InlineMessage> : null}
+      {retry.isError ? <InlineMessage tone="error">{explain(retry.error)}</InlineMessage> : null}
     </Frame>
   )
 }

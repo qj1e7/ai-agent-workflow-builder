@@ -1,5 +1,5 @@
 import { useId, useRef, useState, type KeyboardEvent } from 'react'
-import { errorWords } from '../../api/errors'
+import { useErrorWords } from '../../api/context'
 import { useSuggest } from '../../api/queries'
 import { Button } from '../../ui/Button'
 import { InlineMessage } from '../../ui/Feedback'
@@ -12,6 +12,7 @@ import { useRunNow } from './useRunNow'
 import styles from './BuilderPage.module.css'
 
 export function BuilderPage() {
+  const explain = useErrorWords()
   const [task, setTask] = useState('')
   const [missing, setMissing] = useState(false)
   const suggest = useSuggest()
@@ -83,7 +84,7 @@ export function BuilderPage() {
             </Button>
             <Button onClick={planExample}>Plan the example</Button>
           </div>
-          {suggest.isError ? <InlineMessage tone="error">{errorWords(suggest.error)}</InlineMessage> : null}
+          {suggest.isError ? <InlineMessage tone="error">{explain(suggest.error)}</InlineMessage> : null}
         </section>
 
         <PlanPanel suggest={suggest} task={task} runNow={runNow} />

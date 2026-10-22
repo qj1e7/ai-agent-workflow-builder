@@ -1,8 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { useParams } from 'react-router'
 import { ApiError } from '../../api/client'
-import { useRunClock } from '../../api/context'
-import { errorWords } from '../../api/errors'
+import { useErrorWords, useRunClock } from '../../api/context'
 import { useDisplayName } from '../../api/people'
 import { useApproval, useRun } from '../../api/queries'
 import type { ApprovalView, RunView, Verdict } from '../../api/types'
@@ -25,6 +24,7 @@ import styles from './ApprovalPage.module.css'
 const TITLE = 'Approve a write to Jira'
 
 export function ApprovalPage() {
+  const explain = useErrorWords()
   const { approvalId = '' } = useParams()
   const approval = useApproval(approvalId, { poll: true })
 
@@ -44,7 +44,7 @@ export function ApprovalPage() {
     return (
       <Frame title={TITLE}>
         <div className={styles['problem']}>
-          <InlineMessage tone="error">We could not load this approval. {errorWords(approval.error)}</InlineMessage>
+          <InlineMessage tone="error">We could not load this approval. {explain(approval.error)}</InlineMessage>
           <Button icon={IconReplay} onClick={() => void approval.refetch()} loading={approval.isFetching}>
             Try again
           </Button>

@@ -5,21 +5,22 @@ import { displayName } from './people'
 
 describe('errorWords', () => {
   it('shows the platform own message for a refusal the person can act on', () => {
-    expect(errorWords(new ApiError(404, { message: 'There is no such use case.' }))).toBe('There is no such use case.')
+    expect(errorWords(new ApiError(404, { message: 'There is no such use case.' }), 'dev')).toBe('There is no such use case.')
   })
 
-  it('tells the person to sign in on a 401', () => {
-    expect(errorWords(new ApiError(401, { message: 'x' }))).toMatch(/sign in/i)
+  it('tells the person to sign in on a 401, in the words of their kind of sign-in', () => {
+    expect(errorWords(new ApiError(401, { message: 'x' }), 'dev')).toBe('Sign in as one of the demo users, then try again.')
+    expect(errorWords(new ApiError(401, { message: 'x' }), 'oidc')).toBe('Sign in again, then try again.')
   })
 
   it('does not leak server internals on a 500', () => {
-    expect(errorWords(new ApiError(500, { detail: 'Traceback (most recent call last)' }))).toBe(
+    expect(errorWords(new ApiError(500, { detail: 'Traceback (most recent call last)' }), 'dev')).toBe(
       'The platform had a problem. Try again in a moment.',
     )
   })
 
   it('says the platform is unreachable when the request never got an answer', () => {
-    expect(errorWords(new TypeError('Failed to fetch'))).toMatch(/could not be reached/)
+    expect(errorWords(new TypeError('Failed to fetch'), 'dev')).toMatch(/could not be reached/)
   })
 })
 

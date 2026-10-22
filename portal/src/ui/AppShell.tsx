@@ -4,6 +4,7 @@ import { usePortalMode, useSession } from '../api/context'
 import { cx } from './cx'
 import { ErrorBoundary } from './ErrorBoundary'
 import { IconChat, IconFlow, IconReplay, IconShield, IconTicket, IconWave, PortalMark, type Icon } from './icons'
+import { SignedInAs } from './SignedInAs'
 import { ThemeToggle } from './ThemeToggle'
 import { UserSwitcher } from './UserSwitcher'
 import styles from './AppShell.module.css'
@@ -100,7 +101,7 @@ export function AppShell() {
             </span>
           ) : null}
           <ThemeToggle />
-          {session.kind === 'dev' ? <UserSwitcher session={session} /> : null}
+          {session.kind === 'dev' ? <UserSwitcher session={session} /> : <SignedInAs session={session} />}
         </div>
       </header>
       <main id="main" tabIndex={-1} className={styles['main']}>
