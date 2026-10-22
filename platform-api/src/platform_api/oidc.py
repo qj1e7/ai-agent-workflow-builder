@@ -351,7 +351,7 @@ class OidcAuthenticator:
         try:
             return await self.verify(bearer_token(request.headers.get("authorization")))
         except TokenRejected as rejected:
-            log.info("Refused an access token: %s", rejected.reason.value)
+            log.info("Sign-in refused: %s", rejected.reason.value)
             raise _unauthorized(rejected.reason) from None
         except KeysUnavailable:
             raise _unavailable() from None
