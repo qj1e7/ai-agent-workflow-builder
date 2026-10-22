@@ -87,7 +87,7 @@ describe('authorizedFetch', () => {
   })
 
   it.each([
-    ['another origin', 'https://login.example.test/oauth2/token'],
+    ['another origin', 'https://login.example.test/api/v1/runs'],
     ['a path outside the API', `${ORIGIN}/config.json`],
     ['a relative path outside the API', '/assets/app.js'],
   ])('never signs a request to %s', async (_name, url) => {
