@@ -13,10 +13,20 @@ COPY pyproject.toml uv.lock ./
 FROM base AS test
 RUN uv sync --locked --no-install-project
 COPY src ./src
+COPY evals ./evals
 COPY tests ./tests
 RUN uv sync --locked
 USER nobody
 CMD ["pytest", "-p", "no:cacheprovider"]
+
+# The model bake-off. Provider packages live only in this stage, never in the runtime image.
+FROM base AS evals
+RUN uv sync --locked --no-dev --group evals --no-install-project
+COPY src ./src
+COPY evals ./evals
+RUN uv sync --locked --no-dev --group evals
+USER nobody
+ENTRYPOINT ["python", "-m", "evals"]
 
 FROM base AS build
 RUN uv sync --locked --no-dev --no-install-project

@@ -22,12 +22,22 @@ dev = [
     "pytest>=8.4",
     "ruff>=0.14",
 ]
+evals = [
+    "langchain-anthropic==1.7.5",
+    "langchain-google-genai==4.4.0",
+    "langchain-ollama==1.1.0",
+    "langchain-openai==1.6.7",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecated"]
 
 [tool.pyright]
-include = ["src", "tests"]
+include = ["src", "tests", "evals"]
 strict = ["src"]
 pythonVersion = "3.14"
+
+[tool.uv]
+conflicts = [[{ group = "dev" }, { group = "evals" }]]
+exclude-newer-package = { anthropic = "2026-10-08T00:00:00Z", google-auth = "2026-10-08T00:00:00Z", google-genai = "2026-10-08T00:00:00Z", openai = "2026-10-08T00:00:00Z", pycparser = "2026-10-08T00:00:00Z" }
