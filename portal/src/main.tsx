@@ -7,7 +7,7 @@ import { ApiError } from './api/client'
 import { wallClock, type RunClock } from './api/clock'
 import { loadConfig, PortalConfigError, type PortalConfig, type PortalMode } from './api/config'
 import { ApiProvider } from './api/context'
-import { createDevSession, type Session } from './api/session'
+import { createDevSession, type Boot } from './api/session'
 import { ErrorBoundary, ErrorScreen } from './ui/ErrorBoundary'
 import { SignInGate } from './ui/SignInGate'
 import './ui/tokens.css'
@@ -25,16 +25,15 @@ async function choosePlatform(mode: PortalMode): Promise<Platform> {
   return { fetch: demo.fetch, clock: demo.clock }
 }
 
-async function chooseSession(config: PortalConfig): Promise<Session | null> {
-  if (config.mode === 'demo' || config.signIn.kind === 'dev') return createDevSession()
+async function chooseSession(config: PortalConfig): Promise<Boot> {
+  if (config.mode === 'demo' || config.signIn.kind === 'dev') return { kind: 'session', session: createDevSession() }
   const { bootOidc, oidcClientFor } = await import('./api/oidc')
-  const boot = await bootOidc(oidcClientFor(config.signIn, window.location.origin), {
+  return bootOidc(oidcClientFor(config.signIn, window.location.origin), {
     pathname: window.location.pathname,
     search: window.location.search,
     secure: window.isSecureContext && typeof crypto.subtle !== 'undefined',
     replacePath: (path) => window.history.replaceState(null, '', path),
   })
-  return boot.kind === 'session' ? boot.session : null
 }
 
 const queryClient = new QueryClient({
@@ -53,12 +52,12 @@ function mount(tree: ReactNode): void {
 async function start(): Promise<void> {
   const config = await loadConfig()
   const platform = await choosePlatform(config.mode)
-  const session = await chooseSession(config)
-  if (!session) return
+  const boot = await chooseSession(config)
+  if (boot.kind === 'redirecting') return
   mount(
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <ApiProvider mode={config.mode} session={session} platformFetch={platform.fetch} clock={platform.clock}>
+        <ApiProvider mode={config.mode} session={boot.session} platformFetch={platform.fetch} clock={platform.clock}>
           <BrowserRouter>
             <SignInGate>
               <App />

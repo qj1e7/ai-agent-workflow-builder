@@ -41,6 +41,10 @@ export interface OidcSession extends SessionBase {
 
 export type Session = DevSession | OidcSession
 
+export type Boot<S extends Session = Session> =
+  | { readonly kind: 'session'; readonly session: S }
+  | { readonly kind: 'redirecting' }
+
 export const DEFAULT_DEV_USER = 'alice'
 const STORAGE_KEY = 'portal.dev-user'
 

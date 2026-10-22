@@ -1,6 +1,6 @@
 import { UserManager, WebStorageStateStore } from 'oidc-client-ts'
 import type { OidcSignIn } from './config'
-import { EXPIRED, SIGNED_IN, SIGNED_OUT, SignedOut, type OidcSession, type SessionStatus } from './session'
+import { EXPIRED, SIGNED_IN, SIGNED_OUT, SignedOut, type Boot, type OidcSession, type SessionStatus } from './session'
 
 export const CALLBACK_PATH = '/auth/callback'
 export const SIGNED_OUT_PATH = '/signed-out'
@@ -144,8 +144,6 @@ export interface BootPlace {
   replacePath(this: void, path: string): void
 }
 
-export type Boot = { readonly kind: 'session'; readonly session: OidcSession } | { readonly kind: 'redirecting' }
-
 export function safeReturnPath(raw: unknown): string {
   if (typeof raw !== 'string' || !raw.startsWith('/') || raw.startsWith('//') || raw.startsWith('/\\')) return '/'
   return raw === CALLBACK_PATH || raw === SIGNED_OUT_PATH ? '/' : raw
@@ -155,8 +153,8 @@ function returnToOf({ state }: OidcUser): unknown {
   return typeof state === 'object' && state !== null && 'returnTo' in state ? state.returnTo : undefined
 }
 
-export async function bootOidc(client: OidcClient, place: BootPlace, now: () => number = Date.now): Promise<Boot> {
-  const session = (user: OidcUser | null, status: SessionStatus): Boot => ({
+export async function bootOidc(client: OidcClient, place: BootPlace, now: () => number = Date.now): Promise<Boot<OidcSession>> {
+  const session = (user: OidcUser | null, status: SessionStatus): Boot<OidcSession> => ({
     kind: 'session',
     session: createOidcSession(client, user, status, now),
   })
