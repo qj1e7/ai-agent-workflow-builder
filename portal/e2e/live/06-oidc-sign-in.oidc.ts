@@ -7,22 +7,15 @@ import { CATCH_UP_MS, openContext, runExampleFromBuilder, shot } from './support
 
 const AUTHORITY = process.env['MOCK_OIDC_URL'] ?? 'http://mock-oidc:8080/default'
 const OWN_WORK = 'You started this run, so another Approver must decide.'
-/** The mock provider's tokens last 120 s, so the Portal renews about a minute after sign-in. */
 const RENEWAL_MS = 120_000
 
 interface Person {
   readonly page: Page
   readonly watch: Watch
-  /** Every grant the Portal sent to the token endpoint, in order: authorization_code, then refresh_token for each renewal. */
   readonly grants: string[]
   readonly tokens: string[]
 }
 
-/**
- * Opens the Portal at `path` in a new browser context, signs in as `user` through the provider's own form, and keeps every access
- * token the Portal receives. The backend's calls for `user` then carry the newest of them, so the checks below use the very token the
- * Portal holds.
- */
 async function signIn(browser: Browser, backend: Backend, user: string, path: string, info: TestInfo, formShot?: string): Promise<Person> {
   const context = await openContext(browser)
   const page = await context.newPage()

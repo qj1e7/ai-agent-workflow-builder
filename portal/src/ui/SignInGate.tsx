@@ -14,7 +14,6 @@ function useSignIn(session: OidcSession): () => void {
   return () => void session.signIn(pathname + search)
 }
 
-/** With real sign-in the app shows only to a signed-in person. Dev sign-in never gates. */
 export function SignInGate({ children }: { children: ReactNode }) {
   const session = useSession()
   const status = useSessionStatus()

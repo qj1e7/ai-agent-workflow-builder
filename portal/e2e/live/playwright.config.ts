@@ -2,7 +2,6 @@ import { defineConfig } from '@playwright/test'
 
 export default defineConfig({
   testDir: '.',
-  // The oidc spec needs the stack with real sign-in (E2E_AUTH=oidc); the other specs sign in with the dev switcher.
   testMatch: process.env['E2E_AUTH'] === 'oidc' ? /\.oidc\.ts$/ : /\.live\.ts$/,
   outputDir: '../out/live/results',
   reporter: [['list']],

@@ -25,7 +25,6 @@ async function choosePlatform(mode: PortalMode): Promise<Platform> {
   return { fetch: demo.fetch, clock: demo.clock }
 }
 
-/** Null means the browser is leaving for the identity provider, so there is nothing to mount. */
 async function chooseSession(config: PortalConfig): Promise<Session | null> {
   if (config.mode === 'demo' || config.signIn.kind === 'dev') return createDevSession()
   const { bootOidc, oidcClientFor } = await import('./api/oidc')

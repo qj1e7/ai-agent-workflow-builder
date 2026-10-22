@@ -53,7 +53,6 @@ function spedUp(view: LiveView): boolean {
   return caption?.is === 'waiting' && caption.spedUp
 }
 
-/** The platform as the signed-in dev user sees it, through the same signing fetch the Portal uses. */
 function fetchAs(user: string): typeof fetch {
   const session = createDevSession(null)
   session.choose(user)

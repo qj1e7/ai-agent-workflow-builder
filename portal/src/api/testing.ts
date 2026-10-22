@@ -3,7 +3,6 @@ import type { OidcClient, OidcUser } from './oidc'
 type Listener<T> = (value: T) => void
 
 export interface FakeOidcClient extends OidcClient {
-  /** Every call, in order, with the state given to signinRedirect. */
   readonly calls: string[]
   readonly fire: {
     userLoaded(user: OidcUser): void
@@ -11,7 +10,6 @@ export interface FakeOidcClient extends OidcClient {
     silentRenewError(): void
     accessTokenExpired(): void
   }
-  /** What the next signinSilent answers: a user, null, an error, or a promise to settle later. */
   renewWith(outcome: OidcUser | null | Error | Promise<OidcUser | null>): void
 }
 

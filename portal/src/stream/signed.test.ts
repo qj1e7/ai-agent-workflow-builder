@@ -14,7 +14,6 @@ interface Seen {
   readonly authorization: string | null
 }
 
-/** A platform that records each request's Accept and Authorization headers. Its streams stay open until closed. */
 function platform() {
   const seen: Seen[] = []
   const streams: ReadableStreamDefaultController<Uint8Array>[] = []

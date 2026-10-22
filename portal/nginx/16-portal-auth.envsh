@@ -1,10 +1,6 @@
 #!/bin/sh
 # Sourced by the nginx image's /docker-entrypoint.sh (set -e) before 20-envsubst-on-templates.sh renders
-# default.conf.template. Turns OIDC_AUTHORITY, OIDC_CLIENT_ID and OIDC_SCOPE into the two template variables:
-#   PORTAL_CONFIG_AUTH  the auth block appended to the /config.json body
-#   PORTAL_CSP_AUTH     the authority's origin appended to connect-src
-# With none of the three set, both stay empty and dev and demo render exactly as before. A set that is
-# incomplete or unsafe to put in a header or a JSON string stops the container with the variable's name.
+# default.conf.template.
 
 export PORTAL_CONFIG_AUTH=""
 export PORTAL_CSP_AUTH=""

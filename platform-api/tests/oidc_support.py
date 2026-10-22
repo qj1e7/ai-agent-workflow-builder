@@ -1,5 +1,3 @@
-"""A fake identity provider for the tests: keys made here, served over httpx.MockTransport."""
-
 import asyncio
 import base64
 import hashlib
@@ -147,7 +145,6 @@ def token(
     audience: object = AUDIENCE,
     expires_in: int = 300,
 ) -> str:
-    """A token for alice unless told otherwise. key=None makes an unsigned alg=none token."""
     now = int(time.time())
     payload: dict[str, object] = {
         "iss": issuer,
@@ -173,7 +170,6 @@ def _b64(data: bytes) -> str:
 
 
 def hs256_token_signed_with_the_public_key(key: KeyPair = RSA_KEY) -> str:
-    """The key-confusion attack: HS256 with the issuer's public key as the shared secret."""
     now = int(time.time())
     header = _b64(json.dumps({"alg": "HS256", "kid": key.kid, "typ": "JWT"}).encode())
     payload = _b64(

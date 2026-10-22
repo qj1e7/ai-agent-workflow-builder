@@ -5,7 +5,6 @@ import { Avatar } from './Avatar'
 import { Button } from './Button'
 import styles from './SignedInAs.module.css'
 
-/** The header's identity with real sign-in: the person's name, their roles in words, and the way out. */
 export function SignedInAs({ session }: { session: OidcSession }) {
   const me = useMe().data
   return (

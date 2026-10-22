@@ -4,20 +4,17 @@ import { EXPIRED, SIGNED_IN, SIGNED_OUT, SignedOut, type OidcSession, type Sessi
 
 export const CALLBACK_PATH = '/auth/callback'
 export const SIGNED_OUT_PATH = '/signed-out'
-/** A token this close to its end is renewed before it signs a request. */
 export const RENEW_BEFORE_MS = 30_000
 
 export const INSECURE_WORDS = 'Open the Portal over https or on localhost to sign in.'
 export const CALLBACK_FAILED_WORDS = 'Sign-in did not finish. Try again.'
 
-/** The part of an oidc-client-ts User the session reads. */
 export interface OidcUser {
   readonly access_token: string
   readonly refresh_token?: string | undefined
   /** Epoch seconds. */
   readonly expires_at?: number | undefined
   readonly profile: { readonly sub: string }
-  /** What signinRedirect was given as state, round-tripped by the identity provider. */
   readonly state?: unknown
 }
 
@@ -28,7 +25,6 @@ export interface OidcEvents {
   addAccessTokenExpired(cb: () => void): () => void
 }
 
-/** The part of oidc-client-ts's UserManager the Portal uses, so tests pass a fake. */
 export interface OidcClient {
   readonly events: OidcEvents
   getUser(): Promise<OidcUser | null>
@@ -47,7 +43,6 @@ export function oidcClientFor(config: OidcSignIn, origin: string): OidcClient {
     redirect_uri: `${origin}${CALLBACK_PATH}`,
     post_logout_redirect_uri: `${origin}${SIGNED_OUT_PATH}`,
     response_type: 'code',
-    // Renews with the refresh token a minute before expiry. The CSP rules out the hidden iframe and the popup.
     automaticSilentRenew: true,
     loadUserInfo: false,
     monitorSession: false,
@@ -79,7 +74,6 @@ export function createOidcSession(client: OidcClient, user: OidcUser | null, ini
 
   const expire = () => become(EXPIRED)
 
-  /** One renewal at a time; every caller waiting shares its outcome. */
   function renew(): Promise<OidcUser | null> {
     if (!current?.refresh_token) {
       expire()
@@ -131,7 +125,6 @@ export function createOidcSession(client: OidcClient, user: OidcUser | null, ini
   }
 }
 
-/** Where the Portal was opened, and how to move the address bar without a reload. */
 export interface BootPlace {
   readonly pathname: string
   readonly search: string
@@ -142,7 +135,6 @@ export interface BootPlace {
 
 export type Boot = { readonly kind: 'session'; readonly session: OidcSession } | { readonly kind: 'redirecting' }
 
-/** A path on this origin to come back to after sign-in. Anything else, and the Portal's own sign-in paths, mean the start page. */
 export function safeReturnPath(raw: unknown): string {
   if (typeof raw !== 'string' || !raw.startsWith('/') || raw.startsWith('//') || raw.startsWith('/\\')) return '/'
   return raw === CALLBACK_PATH || raw === SIGNED_OUT_PATH ? '/' : raw

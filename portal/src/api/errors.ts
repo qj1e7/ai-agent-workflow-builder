@@ -1,7 +1,6 @@
 import { ApiError } from './client'
 import type { SessionKind } from './session'
 
-/** By sign-in kind. The dev wording is pinned by the demo specs; real sign-in asks for a new sign-in. */
 export const SIGNED_OUT_WORDS: Record<SessionKind, string> = {
   dev: 'Sign in as one of the demo users, then try again.',
   oidc: 'Sign in again, then try again.',

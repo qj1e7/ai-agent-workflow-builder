@@ -28,7 +28,6 @@ FIXTURES = Path(os.environ.get("CONTRACT_FIXTURES") or CONTRACTS / "fixtures")
 MOCK_OIDC_CONFIG = Path(
     os.environ.get("MOCK_OIDC_CONFIG") or REPO / "deploy" / "mock-oidc" / "config.json"
 )
-"""The same for deploy/, which holds the mock identity provider's users."""
 
 ALICE = Principal(UserId("alice"), frozenset({Role.OPERATOR, Role.APPROVER}), "Alice")
 BOB = Principal(UserId("bob"), frozenset({Role.APPROVER}), "Bob")

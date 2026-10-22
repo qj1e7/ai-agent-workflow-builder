@@ -4,7 +4,6 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
-# E2E_AUTH=oidc runs the stack with real sign-in against a mock identity provider, and only the oidc browser spec.
 auth="${E2E_AUTH:-dev}"
 case "$auth" in
   dev) default_project=wab-e2e default_suites="api ui" files=() ;;

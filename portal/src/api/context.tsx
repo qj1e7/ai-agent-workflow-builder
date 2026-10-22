@@ -8,7 +8,6 @@ import { authorizedFetch, type Session, type SessionStatus } from './session'
 export interface ApiEnvironment {
   readonly mode: PortalMode
   readonly session: Session
-  /** The platform's fetch, already signing requests. */
   readonly fetch: typeof fetch
   readonly client: ApiClient
   readonly clock: RunClock
@@ -19,7 +18,6 @@ const ApiContext = createContext<ApiEnvironment | null>(null)
 interface ApiProviderProps {
   mode: PortalMode
   session: Session
-  /** The platform's raw fetch. It is wrapped once with authorizedFetch, so nothing else attaches credentials. */
   fetch: typeof fetch
   clock?: RunClock
   baseUrl?: string
@@ -79,7 +77,6 @@ export function useSessionStatus(): SessionStatus {
   return useSyncExternalStore(session.subscribe, session.status, session.status)
 }
 
-/** errorWords bound to the session kind, so a 401 asks for the right kind of sign-in. */
 export function useErrorWords(): (error: unknown) => string {
   const { kind } = useSession()
   return (error) => errorWords(error, kind)

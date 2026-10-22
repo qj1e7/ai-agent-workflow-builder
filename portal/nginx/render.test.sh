@@ -1,10 +1,4 @@
 #!/bin/sh
-# Renders default.conf.template through the real entrypoint of the pinned nginx image, with
-# 16-portal-auth.envsh bind-mounted, and checks:
-#   dev and demo   the /config.json body and the Content-Security-Policy are the golden lines, byte for byte
-#   oidc           the render differs from dev only in connect-src and the /config.json body
-#   bad env sets   the container exits non-zero and names the variable
-# Needs the image locally; it never pulls or builds. Usage: sh portal/nginx/render.test.sh
 set -eu
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -20,7 +14,6 @@ bad() {
   failures=$((failures + 1))
 }
 
-# render NAME [-e VAR=value ...]: the rendered default.conf on stdout; the entrypoint's exit status.
 render() {
   name=$1
   shift
@@ -32,7 +25,6 @@ render() {
     sh -c '/docker-entrypoint.sh nginx -t >/tmp/entrypoint.log 2>&1 || { cat /tmp/entrypoint.log; exit 1; }; cat /etc/nginx/conf.d/default.conf'
 }
 
-# The two lines the Portal depends on: the CSP header and the /config.json body.
 served_lines() { grep -E 'Content-Security-Policy|"mode"' "$1"; }
 
 expect_golden() {
@@ -48,7 +40,6 @@ expect_golden() {
   fi
 }
 
-# expect_oidc NAME ORIGIN AUTH_JSON [-e VAR=value ...]: the render differs from dev only in connect-src and /config.json.
 expect_oidc() {
   name=$1
   origin=$2
@@ -70,7 +61,6 @@ expect_oidc() {
   fi
 }
 
-# expect_refused NAME VARIABLE [-e VAR=value ...]: the container stops and the message names the variable.
 expect_refused() {
   name=$1
   variable=$2

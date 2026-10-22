@@ -12,7 +12,6 @@ export const EXPIRED: SessionStatus = { kind: 'expired' }
 
 export type Credentials = Readonly<Record<string, string>>
 
-/** credentials() rejects with this when the session cannot sign a request. */
 export class SignedOut extends Error {
   constructor() {
     super('Not signed in.')
@@ -21,14 +20,11 @@ export class SignedOut extends Error {
 }
 
 interface SessionBase {
-  /** Scopes cached data to the signed-in person: the dev user id, or the subject of the OpenID Connect token. */
   key(this: void): string
   /** One stable object per state, so useSyncExternalStore compares by identity. */
   status(this: void): SessionStatus
   subscribe(this: void, listener: () => void): () => void
-  /** The headers that sign one request. */
   credentials(this: void): Promise<Credentials>
-  /** The platform answered 401 to a request this session signed. */
   rejected(this: void): void
 }
 
@@ -39,7 +35,6 @@ export interface DevSession extends SessionBase {
 
 export interface OidcSession extends SessionBase {
   readonly kind: 'oidc'
-  /** Leaves for the identity provider. Comes back to returnTo, a path on this origin. */
   signIn(this: void, returnTo: string): Promise<void>
   signOut(this: void): Promise<void>
 }
@@ -65,7 +60,6 @@ export function createDevSession(store: DevUserStore | null = localStore()): Dev
   try {
     current = store?.getItem(STORAGE_KEY) || DEFAULT_DEV_USER
   } catch {
-    // Blocked storage means the default user, as before.
   }
   return {
     kind: 'dev',
@@ -99,7 +93,6 @@ function requestFor(input: RequestInfo | URL, init: RequestInit | undefined, ori
   return new Request(typeof input === 'string' ? new URL(input, origin) : input, init)
 }
 
-/** What the platform answers when nothing signs the request, so every consumer takes one path. */
 function notSignedIn(): Response {
   return new Response(JSON.stringify({ detail: 'Not signed in.' }), {
     status: 401,
@@ -107,10 +100,6 @@ function notSignedIn(): Response {
   })
 }
 
-/**
- * The only place credentials attach. Signs a request only when its URL is on the Portal's own origin under /api/,
- * so a token never leaves for another origin. Keeps the headers the caller set.
- */
 export function authorizedFetch(session: Session, fetchImpl: typeof fetch, origin: string): typeof fetch {
   return async (input, init) => {
     const request = requestFor(input, init, origin)

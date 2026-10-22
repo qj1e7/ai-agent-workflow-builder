@@ -1,5 +1,3 @@
-"""Trusting an OpenID Connect issuer: its published keys, its tokens, and the people they name."""
-
 import asyncio
 import json
 import logging
@@ -36,7 +34,6 @@ MAX_DISPLAY_CHARS = 120
 MAX_DOCUMENT_BYTES = 256 * 1024
 
 ROLE_BY_CLAIM: Mapping[str, Role] = {"Operator": Role.OPERATOR, "Approver": Role.APPROVER}
-"""The app role values the identity provider puts in the roles claim. Case-sensitive."""
 
 
 @dataclass(frozen=True)
@@ -84,7 +81,6 @@ def origin_of(url: str) -> str:
 
 
 def is_trusted_url(url: str, http_origin: str | None) -> bool:
-    """Absolute https with a host and no query or fragment, or http on the test-only origin."""
     try:
         parts = urlsplit(url)
     except ValueError:
@@ -133,7 +129,6 @@ def _verification_key(entry: _Jwk) -> VerificationKey | None:
 
 
 def parse_jwks(document: object) -> dict[str, VerificationKey]:
-    """Keeps the keys that verify RS256 or ES256 under one unambiguous kid. Never raises."""
     try:
         entries = _Jwks.model_validate(document).keys
     except ValidationError:
@@ -162,7 +157,6 @@ def _cleaned(display: str) -> str:
 
 
 def principal_from_claims(claims: Mapping[str, object]) -> Principal:
-    """The only place a token's claims become a Principal."""
     user_id = _text(claims.get("oid")) or _text(claims.get("sub"))
     if user_id is None:
         raise TokenRejected(Rejection.NO_USER)
@@ -200,8 +194,6 @@ async def _document(client: httpx.AsyncClient, url: str) -> object:
 
 
 class SigningKeys:
-    """The issuer's published keys. Loaded lazily, replaced whole, and written by nothing else."""
-
     def __init__(
         self,
         config: OidcAuth,
@@ -240,7 +232,6 @@ class SigningKeys:
         return self._keys.get(kid)
 
     async def _load_if_due(self) -> bool:
-        """Loads at most once per cooldown. False only when the load this call made failed."""
         now = self._clock()
         if self._attempted_at is not None and now - self._attempted_at < REFETCH_COOLDOWN_SECONDS:
             return True

@@ -38,7 +38,6 @@ export function useDevUsers() {
   })
 }
 
-/** The signed-in person as the platform sees them. Stale after a minute, so a changed role shows without a reload. */
 export function useMe(enabled = true) {
   const client = useApiClient()
   const user = useSessionKey()

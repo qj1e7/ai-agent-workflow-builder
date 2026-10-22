@@ -3,7 +3,6 @@ import type { paths } from './schema'
 
 export type ApiClient = ReturnType<typeof createClient<paths>>
 
-/** fetchImpl must already sign requests: see authorizedFetch in session.ts. */
 export function createApiClient(fetchImpl: typeof fetch, baseUrl = ''): ApiClient {
   return createClient<paths>({ baseUrl, fetch: fetchImpl })
 }

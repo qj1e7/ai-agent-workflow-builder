@@ -16,11 +16,9 @@ function sentenceCase(id: string): string {
 export function displayName(people: readonly Person[] | undefined, id: string): string {
   const known = people?.find((person) => person.id === id)
   if (known) return known.display
-  // Real sign-in stores an identity provider's object id, which is nobody's name.
   return UUID.test(id) ? 'a colleague' : sentenceCase(id)
 }
 
-/** The people the Portal can name: the dev users in dev and demo, only the signed-in person with real sign-in. */
 export function usePeople(): readonly Person[] | undefined {
   const { kind } = useSession()
   const devUsers = useDevUsers()

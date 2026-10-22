@@ -26,7 +26,7 @@ def test_dev_sign_in_is_an_api_key_header_scheme(schema: dict[str, object]):
 
 
 def test_real_sign_in_is_an_http_bearer_scheme(schema: dict[str, object]):
-    scheme = schema["components"]["securitySchemes"]["OidcBearer"]  # type: ignore[index]
+    scheme = schema["components"]["securitySchemes"]["OidcBearer"]
     assert (scheme["type"], scheme["scheme"], scheme["bearerFormat"]) == ("http", "bearer", "JWT")
     assert "oidc" in scheme["description"].lower()
 

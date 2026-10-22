@@ -44,7 +44,6 @@ export class Backend {
     this.http = http
   }
 
-  /** The headers that sign the backend's calls in as this person. With no proof registered, a person is a dev user. */
   proofOf(user: string): Proof {
     return this.proofs.get(user) ?? { 'X-Dev-User': user }
   }

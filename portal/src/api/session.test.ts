@@ -10,7 +10,6 @@ interface Sent {
   readonly headers: Headers
 }
 
-/** A platform that records what reaches it and answers with the status asked for. */
 function platform(status = 200) {
   const sent: Sent[] = []
   const fetchImpl: typeof fetch = (input, init) => {
@@ -21,7 +20,6 @@ function platform(status = 200) {
   return { sent, fetchImpl }
 }
 
-/** A session that signs with whatever credentials it is given, as the OpenID Connect session does with a bearer. */
 function signingSession(credentials: () => Promise<Credentials>) {
   let rejections = 0
   const session: Session = {

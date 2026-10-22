@@ -8,7 +8,6 @@ export type OidcSignIn = Extract<SignInConfig, { kind: 'oidc' }>
 
 export type PortalConfig = { readonly mode: 'demo' } | { readonly mode: 'live'; readonly signIn: SignInConfig }
 
-/** The platform served a /config.json that names a sign-in the Portal cannot use. Never falls back to dev sign-in. */
 export class PortalConfigError extends Error {
   constructor(message: string) {
     super(message)
@@ -44,7 +43,6 @@ function parseSignIn(auth: unknown): SignInConfig {
   return { kind: 'oidc', authority, clientId, scope }
 }
 
-/** Reads the body nginx serves at /config.json. Anything unreadable is live dev, as before; a present but unusable `auth` is an error. */
 export function parseConfig(raw: unknown): PortalConfig {
   if (!isRecord(raw)) return LIVE_DEV
   const hasAuth = raw['auth'] !== undefined

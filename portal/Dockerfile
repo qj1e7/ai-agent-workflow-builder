@@ -16,7 +16,6 @@ ENV PORTAL_MODE=live \
     PORTAL_CSP_AUTH=""
 COPY portal/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY portal/nginx/default.conf.template /etc/nginx/templates/default.conf.template
-# Sourced by the image's entrypoint: turns OIDC_* into PORTAL_CONFIG_AUTH and PORTAL_CSP_AUTH, or stops the container.
 COPY --chmod=755 portal/nginx/16-portal-auth.envsh /docker-entrypoint.d/
 COPY --from=build /repo/portal/dist /usr/share/nginx/html
 # The entrypoint renders templates into conf.d as the running user, so that folder must be writable.
