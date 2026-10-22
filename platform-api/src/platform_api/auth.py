@@ -42,7 +42,7 @@ def auth_config(env: Mapping[str, str]) -> AuthConfig:
 
 
 class Authenticator(Protocol):
-    def __call__(self, request: Request) -> Principal: ...
+    async def __call__(self, request: Request) -> Principal: ...
 
 
 class DevUser(WireModel):
@@ -66,7 +66,7 @@ DEV_USERS = DevUsers(
 DEV_USER_HEADER = "X-Dev-User"
 
 
-def dev_authenticator(request: Request) -> Principal:
+async def dev_authenticator(request: Request) -> Principal:
     user_id = request.headers.get(DEV_USER_HEADER)
     user = next((user for user in DEV_USERS.users if user.id == user_id), None)
     if user is None:
@@ -102,13 +102,13 @@ oidc_bearer_scheme = HTTPBearer(
 )
 
 
-def current_principal(
+async def current_principal(
     request: Request,
     dev_declared: Annotated[str | None, Security(dev_user_scheme)],
     bearer_declared: Annotated[HTTPAuthorizationCredentials | None, Security(oidc_bearer_scheme)],
 ) -> Principal:
     authenticator: Authenticator = request.app.state.authenticator
-    return authenticator(request)
+    return await authenticator(request)
 
 
 CurrentPrincipal = Annotated[Principal, Depends(current_principal)]
