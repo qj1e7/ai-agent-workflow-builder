@@ -33,12 +33,24 @@ export interface TeamsMessage {
   approval_id: string
 }
 
+export type Proof = Readonly<Record<string, string>>
+
 /** The backend as the Portal sees it: through the Portal's own address, so the nginx proxy is part of the check. */
 export class Backend {
   private readonly http: APIRequestContext
+  private readonly proofs = new Map<string, Proof>()
 
   private constructor(http: APIRequestContext) {
     this.http = http
+  }
+
+  /** The headers that sign the backend's calls in as this person. With no proof registered, a person is a dev user. */
+  proofOf(user: string): Proof {
+    return this.proofs.get(user) ?? { 'X-Dev-User': user }
+  }
+
+  signedIn(user: string, proof: Proof): void {
+    this.proofs.set(user, proof)
   }
 
   static async connect(baseURL: string): Promise<Backend> {
@@ -50,7 +62,7 @@ export class Backend {
   }
 
   async get<T = Json>(user: string, path: string): Promise<T> {
-    const response = await this.http.get(path, { headers: { 'X-Dev-User': user } })
+    const response = await this.http.get(path, { headers: this.proofOf(user) })
     expect(response.status(), `GET ${path} as ${user}`).toBe(200)
     return (await response.json()) as T
   }

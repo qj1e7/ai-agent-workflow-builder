@@ -4,11 +4,20 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
+# E2E_AUTH=oidc runs the stack with real sign-in against a mock identity provider, and only the oidc browser spec.
+auth="${E2E_AUTH:-dev}"
+case "$auth" in
+  dev) default_project=wab-e2e default_suites="api ui" files=() ;;
+  oidc) default_project=wab-e2e-oidc default_suites=ui files=(-f deploy/compose.oidc.yaml) ;;
+  *) echo "E2E_AUTH takes dev or oidc, not '$auth'." >&2; exit 2 ;;
+esac
+export E2E_AUTH="$auth"
+
 # Its own project name, so tearing it down never touches a stack that scripts/up.sh started.
-project="${E2E_PROJECT:-wab-e2e}"
-suites="${E2E_SUITES:-api ui}"
+project="${E2E_PROJECT:-$default_project}"
+suites="${E2E_SUITES:-$default_suites}"
 out="e2e/out"
-compose=(docker compose -p "$project" -f deploy/compose.yaml -f deploy/compose.e2e.yaml)
+compose=(docker compose -p "$project" -f deploy/compose.yaml -f deploy/compose.e2e.yaml ${files[@]+"${files[@]}"})
 mkdir -p "$out"
 rm -f "$out/e2e.log" "$out/ui.log" "$out/compose.log"
 
@@ -40,6 +49,10 @@ for suite in $suites; do
     *) echo "E2E_SUITES takes api and ui, not '$suite'." >&2; exit 2 ;;
   esac
 done
+if [ "$auth" = oidc ] && wanted api; then
+  echo "The api suite signs in with X-Dev-User, so it runs only with E2E_AUTH=dev." >&2
+  exit 2
+fi
 
 if ! "${compose[@]}" up --build --wait --wait-timeout "${WAIT_TIMEOUT:-300}" >"$out/up.log" 2>&1; then
   tail -n 30 "$out/up.log" >&2
