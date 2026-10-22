@@ -1,0 +1,6 @@
+.terraform/
+.cache/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
