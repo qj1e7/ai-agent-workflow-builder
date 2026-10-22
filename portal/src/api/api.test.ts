@@ -1,23 +1,62 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createDemoPlatform } from '../mock'
 import { ApiError, createApiClient, unwrap } from './client'
-import { loadConfig, parseConfig } from './config'
+import { loadConfig, parseConfig, PortalConfigError } from './config'
 import { fetchEventPage, refusalOf } from './queries'
 
+const LIVE_DEV = { mode: 'live', signIn: { kind: 'dev' } }
+const AUTH = { authority: 'https://login.example.test/tenant/v2.0', client_id: 'portal', scope: 'openid profile offline_access' }
+
 describe('parseConfig', () => {
-  it('reads demo mode and treats anything else as live', () => {
+  it('reads demo mode, and live mode with dev sign-in when there are no sign-in settings', () => {
     expect(parseConfig({ mode: 'demo' })).toEqual({ mode: 'demo' })
-    expect(parseConfig({ mode: 'live' })).toEqual({ mode: 'live' })
+    expect(parseConfig({ mode: 'live' })).toEqual(LIVE_DEV)
     for (const junk of [null, 42, 'demo', [], {}, { mode: 'DEMO' }, { mode: 7 }]) {
-      expect(parseConfig(junk)).toEqual({ mode: 'live' })
+      expect(parseConfig(junk)).toEqual(LIVE_DEV)
     }
   })
 
-  it('falls back to live when the file is missing, broken or unreachable', async () => {
-    expect(await loadConfig(() => Promise.resolve(new Response('nope', { status: 404 })))).toEqual({ mode: 'live' })
-    expect(await loadConfig(() => Promise.resolve(new Response('{oops')))).toEqual({ mode: 'live' })
-    expect(await loadConfig(() => Promise.reject(new Error('offline')))).toEqual({ mode: 'live' })
+  it('reads OpenID Connect sign-in settings', () => {
+    expect(parseConfig({ mode: 'live', auth: AUTH })).toEqual({
+      mode: 'live',
+      signIn: { kind: 'oidc', authority: AUTH.authority, clientId: 'portal', scope: AUTH.scope },
+    })
+    expect(parseConfig({ mode: 'live', auth: { ...AUTH, authority: 'http://mock-oidc:8080/default' } })).toMatchObject({
+      signIn: { authority: 'http://mock-oidc:8080/default' },
+    })
+  })
+
+  it.each([
+    ['no object', 'not an object'],
+    ['no authority', { ...AUTH, authority: undefined }],
+    ['a relative authority', { ...AUTH, authority: '/tenant/v2.0' }],
+    ['a non-http authority', { ...AUTH, authority: 'ftp://login.example.test' }],
+    ['an empty client id', { ...AUTH, client_id: '' }],
+    ['no client id', { ...AUTH, client_id: 7 }],
+    ['a scope without openid', { ...AUTH, scope: 'profile offline_access' }],
+    ['a scope that only contains the word', { ...AUTH, scope: 'openidx' }],
+  ])('refuses sign-in settings with %s rather than falling back to dev sign-in', (_name, auth) => {
+    expect(() => parseConfig({ mode: 'live', auth })).toThrow(PortalConfigError)
+  })
+
+  it('refuses sign-in settings in demo mode', () => {
+    expect(() => parseConfig({ mode: 'demo', auth: AUTH })).toThrow(PortalConfigError)
+  })
+})
+
+describe('loadConfig', () => {
+  it('falls back to live dev sign-in when the file is missing, broken or unreachable', async () => {
+    expect(await loadConfig(() => Promise.resolve(new Response('nope', { status: 404 })))).toEqual(LIVE_DEV)
+    expect(await loadConfig(() => Promise.resolve(new Response('{oops')))).toEqual(LIVE_DEV)
+    expect(await loadConfig(() => Promise.reject(new Error('offline')))).toEqual(LIVE_DEV)
     expect(await loadConfig(() => Promise.resolve(new Response('{"mode":"demo"}')))).toEqual({ mode: 'demo' })
+  })
+
+  it('reads sign-in settings, and lets a bad set through as an error', async () => {
+    const body = JSON.stringify({ mode: 'live', auth: AUTH })
+    expect(await loadConfig(() => Promise.resolve(new Response(body)))).toMatchObject({ signIn: { kind: 'oidc' } })
+    const bad = JSON.stringify({ mode: 'live', auth: { ...AUTH, scope: 'profile' } })
+    await expect(loadConfig(() => Promise.resolve(new Response(bad)))).rejects.toThrow(PortalConfigError)
   })
 })
 
