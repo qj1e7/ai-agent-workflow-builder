@@ -54,13 +54,17 @@ function localStore(): DevUserStore | null {
   }
 }
 
+function storedDevUser(store: DevUserStore | null): string {
+  try {
+    return store?.getItem(STORAGE_KEY) || DEFAULT_DEV_USER
+  } catch {
+    return DEFAULT_DEV_USER
+  }
+}
+
 export function createDevSession(store: DevUserStore | null = localStore()): DevSession {
   const listeners = new Set<() => void>()
-  let current = DEFAULT_DEV_USER
-  try {
-    current = store?.getItem(STORAGE_KEY) || DEFAULT_DEV_USER
-  } catch {
-  }
+  let current = storedDevUser(store)
   return {
     kind: 'dev',
     key: () => current,
