@@ -30,6 +30,7 @@ KEYS_MAX_AGE_SECONDS = 3600
 KEYS_MAX_STALE_SECONDS = 24 * 3600
 REFETCH_COOLDOWN_SECONDS = 30
 FETCH_TIMEOUT_SECONDS = 5
+FETCH_DEADLINE_SECONDS = 2 * FETCH_TIMEOUT_SECONDS
 RETRY_AFTER_SECONDS = 30
 MIN_RSA_BITS = 2048
 MAX_DISPLAY_CHARS = 120
@@ -275,12 +276,23 @@ class SigningKeys:
         return self._attempt.outcome
 
     async def _fetch(self) -> dict[str, VerificationKey]:
-        async with httpx.AsyncClient(
-            transport=self._transport, timeout=FETCH_TIMEOUT_SECONDS, follow_redirects=False
-        ) as client:
-            if self._jwks_url is None:
-                self._jwks_url = await self._discover(client)
-            keys = parse_jwks(await _document(client, self._jwks_url))
+        # httpx's timeout bounds each read, not the fetch, and the caller holds the key lock.
+        try:
+            async with (
+                asyncio.timeout(FETCH_DEADLINE_SECONDS),
+                httpx.AsyncClient(
+                    transport=self._transport,
+                    timeout=FETCH_TIMEOUT_SECONDS,
+                    follow_redirects=False,
+                ) as client,
+            ):
+                if self._jwks_url is None:
+                    self._jwks_url = await self._discover(client)
+                keys = parse_jwks(await _document(client, self._jwks_url))
+        except TimeoutError:
+            raise _LoadFailed(
+                f"the keys did not load within {FETCH_DEADLINE_SECONDS} seconds"
+            ) from None
         if not keys:
             raise _LoadFailed(f"{self._jwks_url} has no usable keys")
         return keys

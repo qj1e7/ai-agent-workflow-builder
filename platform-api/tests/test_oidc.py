@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 
 import httpx
 import pytest
@@ -89,6 +89,13 @@ async def eventually(condition: Callable[[], bool]) -> None:
     async with asyncio.timeout(1):
         while not condition():
             await asyncio.sleep(0)
+
+
+class Drip(httpx.AsyncByteStream):
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        while True:
+            yield b" "
+            await asyncio.sleep(0.01)
 
 
 @pytest.mark.parametrize("key", [RSA_KEY, EC_KEY], ids=["RS256", "ES256"])
@@ -285,6 +292,19 @@ def test_a_key_fetch_failure_with_no_keys_is_503_with_retry_after(
 ):
     issuer.down = True
     unavailable(app, client.get(ME, headers=bearer(token())))
+
+
+@pytest.mark.anyio
+async def test_an_issuer_that_drips_its_keys_is_a_failed_load_at_the_deadline(
+    issuer: FakeIssuer, clock: Clock, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr("platform_api.oidc.FETCH_DEADLINE_SECONDS", 0.2)
+    issuer.jwks_answer = httpx.Response(200, stream=Drip())
+    app = oidc_app(issuer, clock)
+    async with async_client(app) as client, asyncio.timeout(1):
+        response = await client.get(ME, headers=bearer(token()))
+    unavailable(app, response)
+    assert issuer.jwks_fetches == 1
 
 
 @pytest.mark.anyio
