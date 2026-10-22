@@ -1,0 +1,44 @@
+{
+  "interactiveLogin": true,
+  "tokenCallbacks": [
+    {
+      "issuerId": "default",
+      "tokenExpiry": 120,
+      "requestMappings": [
+        {
+          "requestParam": "subject",
+          "match": "alice",
+          "claims": {
+            "oid": "0a11ce00-0000-4000-8000-000000000001",
+            "name": "Alice",
+            "preferred_username": "alice@example.test",
+            "roles": ["Operator", "Approver"],
+            "aud": ["platform-api"]
+          }
+        },
+        {
+          "requestParam": "subject",
+          "match": "bob",
+          "claims": {
+            "oid": "0b0b0000-0000-4000-8000-000000000002",
+            "name": "Bob",
+            "preferred_username": "bob@example.test",
+            "roles": ["Approver"],
+            "aud": ["platform-api"]
+          }
+        },
+        {
+          "requestParam": "subject",
+          "match": "carol",
+          "claims": {
+            "oid": "0ca201e0-0000-4000-8000-000000000003",
+            "name": "Carol",
+            "preferred_username": "carol@example.test",
+            "roles": ["Operator"],
+            "aud": ["platform-api"]
+          }
+        }
+      ]
+    }
+  ]
+}
