@@ -14,11 +14,22 @@ portal_auth_refuse() {
   exit 1
 }
 
+# grep checks each line on its own, so a value with a newline could pass with a bad second line.
+portal_auth_one_line() {
+  case "$2" in
+    *"
+"*) portal_auth_refuse "$1 must be a single line" ;;
+  esac
+}
+
 if [ -n "${OIDC_AUTHORITY:-}${OIDC_CLIENT_ID:-}${OIDC_SCOPE:-}" ]; then
   [ "${PORTAL_MODE:-live}" = "live" ] || portal_auth_refuse "PORTAL_MODE must be live when sign-in is configured, not '${PORTAL_MODE:-}'"
   [ -n "${OIDC_AUTHORITY:-}" ] || portal_auth_refuse "OIDC_AUTHORITY is not set, but OIDC_CLIENT_ID or OIDC_SCOPE is"
   [ -n "${OIDC_CLIENT_ID:-}" ] || portal_auth_refuse "OIDC_CLIENT_ID is not set"
   [ -n "${OIDC_SCOPE:-}" ] || portal_auth_refuse "OIDC_SCOPE is not set"
+  portal_auth_one_line OIDC_AUTHORITY "$OIDC_AUTHORITY"
+  portal_auth_one_line OIDC_CLIENT_ID "$OIDC_CLIENT_ID"
+  portal_auth_one_line OIDC_SCOPE "$OIDC_SCOPE"
   case "$OIDC_AUTHORITY" in
     https://*) ;;
     http://*)

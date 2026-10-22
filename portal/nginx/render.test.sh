@@ -116,6 +116,12 @@ expect_refused scope-without-openid OIDC_SCOPE -e "OIDC_AUTHORITY=$ENTRA" -e "OI
 expect_refused scope-openid-prefix-only OIDC_SCOPE -e "OIDC_AUTHORITY=$ENTRA" -e "OIDC_CLIENT_ID=$CLIENT" -e 'OIDC_SCOPE=openidx profile'
 expect_refused scope-bad-char OIDC_SCOPE -e "OIDC_AUTHORITY=$ENTRA" -e "OIDC_CLIENT_ID=$CLIENT" -e 'OIDC_SCOPE=openid pro"file'
 expect_refused scope-double-space OIDC_SCOPE -e "OIDC_AUTHORITY=$ENTRA" -e "OIDC_CLIENT_ID=$CLIENT" -e 'OIDC_SCOPE=openid  profile'
+expect_refused authority-newline OIDC_AUTHORITY -e "OIDC_AUTHORITY=$ENTRA
+\"; add_header X-Injected 1; #" -e "OIDC_CLIENT_ID=$CLIENT" -e "OIDC_SCOPE=$SCOPE"
+expect_refused client-id-newline OIDC_CLIENT_ID -e "OIDC_AUTHORITY=$ENTRA" -e "OIDC_CLIENT_ID=$CLIENT
+'; return 200 'x" -e "OIDC_SCOPE=$SCOPE"
+expect_refused scope-newline OIDC_SCOPE -e "OIDC_AUTHORITY=$ENTRA" -e "OIDC_CLIENT_ID=$CLIENT" -e "OIDC_SCOPE=$SCOPE
+\"}"
 
 if [ "$failures" = 0 ]; then
   echo "render.test.sh: all checks passed"
