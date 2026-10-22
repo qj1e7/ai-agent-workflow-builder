@@ -1,0 +1,52 @@
+name: infra
+
+# Only pull requests that touch the infrastructure pay for these checks.
+on:
+  pull_request:
+    paths:
+      - "infra/**"
+      - ".github/workflows/infra.yml"
+      - ".github/workflows/deploy.yml"
+  push:
+    branches: [main]
+    paths:
+      - "infra/**"
+      - ".github/workflows/infra.yml"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: infra-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ACTIONLINT_IMAGE: rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+
+jobs:
+  infra:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: fmt, validate under Terraform and OpenTofu, tflint and Checkov, all offline
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: infra/scripts/check.sh infra-checks
+
+      - name: Lint the workflows with actionlint
+        if: ${{ !cancelled() }}
+        run: docker run --rm --volume "$PWD:/repo" --workdir /repo "$ACTIONLINT_IMAGE" -color
+
+      - name: Keep the check output
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: infra-checks
+          path: infra-checks/
+          if-no-files-found: ignore
