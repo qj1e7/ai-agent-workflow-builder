@@ -58,7 +58,7 @@ async function start(): Promise<void> {
   mount(
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <ApiProvider mode={config.mode} session={session} fetch={platform.fetch} clock={platform.clock}>
+        <ApiProvider mode={config.mode} session={session} platformFetch={platform.fetch} clock={platform.clock}>
           <BrowserRouter>
             <SignInGate>
               <App />

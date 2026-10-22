@@ -104,8 +104,12 @@ function notSignedIn(): Response {
   })
 }
 
-export function authorizedFetch(session: Session, fetchImpl: typeof fetch, origin: string): typeof fetch {
-  return async (input, init) => {
+declare const signed: unique symbol
+/** The brand exists only in the type, and only authorizedFetch hands it out. */
+export type SignedFetch = typeof fetch & { readonly [signed]: true }
+
+export function authorizedFetch(session: Session, fetchImpl: typeof fetch, origin: string): SignedFetch {
+  const fetchSigned: typeof fetch = async (input, init) => {
     const request = requestFor(input, init, origin)
     const url = new URL(request.url)
     if (url.origin !== origin || !url.pathname.startsWith(API_PREFIX)) return fetchImpl(request)
@@ -121,4 +125,5 @@ export function authorizedFetch(session: Session, fetchImpl: typeof fetch, origi
     if (response.status === 401) session.refusedByPlatform()
     return response
   }
+  return fetchSigned as SignedFetch
 }

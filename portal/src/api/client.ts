@@ -1,9 +1,10 @@
 import createClient from 'openapi-fetch'
 import type { paths } from './schema'
+import type { SignedFetch } from './session'
 
 export type ApiClient = ReturnType<typeof createClient<paths>>
 
-export function createApiClient(fetchImpl: typeof fetch, baseUrl = ''): ApiClient {
+export function createApiClient(fetchImpl: SignedFetch, baseUrl = ''): ApiClient {
   return createClient<paths>({ baseUrl, fetch: fetchImpl })
 }
 

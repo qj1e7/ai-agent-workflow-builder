@@ -113,6 +113,13 @@ describe('authorizedFetch', () => {
     expect(rejections()).toBe(1)
   })
 
+  it('is the only fetch the typed client takes', () => {
+    const { fetchImpl } = platform()
+    // @ts-expect-error a raw fetch carries no sign-in, so the client refuses it before anything runs
+    createApiClient(fetchImpl, ORIGIN)
+    expect(createApiClient(authorizedFetch(createDevSession(null), fetchImpl, ORIGIN), ORIGIN)).toBeDefined()
+  })
+
   it('answers 401 itself and sends nothing when the session cannot sign', async () => {
     const { sent, fetchImpl } = platform()
     const { session, rejections } = signingSession(() => Promise.reject(new SignedOut()))

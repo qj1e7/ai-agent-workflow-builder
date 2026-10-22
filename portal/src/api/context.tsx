@@ -3,12 +3,12 @@ import { createApiClient, type ApiClient } from './client'
 import { wallClock, type RunClock } from './clock'
 import type { PortalMode } from './config'
 import { errorWords } from './errors'
-import { authorizedFetch, type Session, type SessionStatus } from './session'
+import { authorizedFetch, type Session, type SessionStatus, type SignedFetch } from './session'
 
 export interface ApiEnvironment {
   readonly mode: PortalMode
   readonly session: Session
-  readonly fetch: typeof fetch
+  readonly fetch: SignedFetch
   readonly client: ApiClient
   readonly clock: RunClock
 }
@@ -18,7 +18,7 @@ const ApiContext = createContext<ApiEnvironment | null>(null)
 interface ApiProviderProps {
   mode: PortalMode
   session: Session
-  fetch: typeof fetch
+  platformFetch: typeof fetch
   clock?: RunClock
   baseUrl?: string
   origin?: string
@@ -28,7 +28,7 @@ interface ApiProviderProps {
 export function ApiProvider({
   mode,
   session,
-  fetch: platformFetch,
+  platformFetch,
   clock = wallClock,
   baseUrl = '',
   origin = window.location.origin,
@@ -51,7 +51,7 @@ export function useApiClient(): ApiClient {
   return useEnvironment().client
 }
 
-export function useApiFetch(): typeof fetch {
+export function useApiFetch(): SignedFetch {
   return useEnvironment().fetch
 }
 
