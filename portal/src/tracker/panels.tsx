@@ -3,8 +3,7 @@ import { Link } from 'react-router'
 import { errorWords } from '../api/errors'
 import { useLatch } from '../api/latch'
 import { connectorLabel, objectNoun } from '../api/labels'
-import { useDevUsers, useRetry, useTroubleshoot } from '../api/queries'
-import { useDevUser } from '../api/session'
+import { useMe, useRetry, useTroubleshoot } from '../api/queries'
 import type { WriteActionView } from '../api/types'
 import { CONFLICT_WORDS, createdWords, OPEN_APPROVAL_PAGE, RETRY_NEEDS_OPERATOR, teamsWords, type Gate, type PanelSpot } from '../run'
 import type { Decision } from '../screens/approval/useDecision'
@@ -147,8 +146,7 @@ export function TroublePanel({ runId, spot, atHead, onRetried, onLeave }: Troubl
   const advice = useTroubleshoot(runId, true, spot.attempt)
   const retry = useRetry(runId)
   const latch = useLatch()
-  const userId = useDevUser()
-  const user = useDevUsers().data?.find((candidate) => candidate.id === userId)
+  const user = useMe().data
   const offered = spot.retryable && atHead && user !== undefined
   const troubleshooter = agentIdentity('troubleshooter')
   return (

@@ -7,6 +7,7 @@ import { ApiError } from './api/client'
 import { wallClock, type RunClock } from './api/clock'
 import { loadConfig, type PortalMode } from './api/config'
 import { ApiProvider } from './api/context'
+import { createDevSession } from './api/session'
 import { ErrorBoundary, ErrorScreen } from './ui/ErrorBoundary'
 import './ui/tokens.css'
 import './ui/base.css'
@@ -39,10 +40,11 @@ function mount(tree: ReactNode): void {
 async function start(): Promise<void> {
   const { mode } = await loadConfig()
   const platform = await choosePlatform(mode)
+  const session = createDevSession()
   mount(
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <ApiProvider mode={mode} fetch={platform.fetch} clock={platform.clock}>
+        <ApiProvider mode={mode} session={session} fetch={platform.fetch} clock={platform.clock}>
           <BrowserRouter>
             <App />
           </BrowserRouter>

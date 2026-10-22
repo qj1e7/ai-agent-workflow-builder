@@ -34,4 +34,9 @@ describe('displayName', () => {
     expect(displayName(undefined, 'alice')).toBe('Alice')
     expect(displayName(users, 'dana_lee')).toBe('Dana lee')
   })
+
+  it('never shows an identity provider object id as a name', () => {
+    expect(displayName(users, '3f2504e0-4f89-41d3-9a0c-0305e82c3301')).toBe('a colleague')
+    expect(displayName([{ id: '3f2504e0-4f89-41d3-9a0c-0305e82c3301', display: 'Dana' }], '3f2504e0-4f89-41d3-9a0c-0305e82c3301')).toBe('Dana')
+  })
 })

@@ -3,6 +3,7 @@ import { createDemoPlatform } from '../mock'
 import { ApiError, createApiClient, unwrap } from './client'
 import { loadConfig, parseConfig, PortalConfigError } from './config'
 import { fetchEventPage, refusalOf } from './queries'
+import { authorizedFetch, createDevSession } from './session'
 
 const LIVE_DEV = { mode: 'live', signIn: { kind: 'dev' } }
 const AUTH = { authority: 'https://login.example.test/tenant/v2.0', client_id: 'portal', scope: 'openid profile offline_access' }
@@ -70,7 +71,9 @@ describe('the API client against the demo platform', () => {
 
   function clientFor(user: string) {
     const demo = createDemoPlatform()
-    return createApiClient(demo.fetch, () => user, 'http://portal.test')
+    const session = createDevSession(null)
+    session.choose(user)
+    return createApiClient(authorizedFetch(session, demo.fetch, 'http://portal.test'), 'http://portal.test')
   }
 
   it('sends the dev user and gets typed answers back', async () => {

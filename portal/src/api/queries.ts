@@ -1,13 +1,13 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { ApiError, unwrap, type ApiClient } from './client'
-import { useApiClient } from './context'
-import { useDevUser } from './session'
+import { useApiClient, useSession, useSessionKey } from './context'
 import type { CreateUseCase, DecisionIn, EventPage, RefusalOut } from './types'
 
 export const POLL_MS = 3000
 
 export const keys = {
   devUsers: () => ['dev-users'] as const,
+  me: (user: string) => ['me', user] as const,
   runs: (user: string) => ['runs', user] as const,
   run: (user: string, runId: string) => ['run', user, runId] as const,
   useCases: (user: string) => ['use-cases', user] as const,
@@ -29,16 +29,30 @@ function pollEvery(options: QueryOptions | undefined): number | false {
 
 export function useDevUsers() {
   const client = useApiClient()
+  const { kind } = useSession()
   return useQuery({
     queryKey: keys.devUsers(),
     queryFn: async () => unwrap(await client.GET('/api/v1/dev/users')).users,
     staleTime: Infinity,
+    enabled: kind === 'dev',
+  })
+}
+
+/** The signed-in person as the platform sees them. Stale after a minute, so a changed role shows without a reload. */
+export function useMe(enabled = true) {
+  const client = useApiClient()
+  const user = useSessionKey()
+  return useQuery({
+    queryKey: keys.me(user),
+    queryFn: async () => unwrap(await client.GET('/api/v1/me')),
+    staleTime: 60_000,
+    enabled,
   })
 }
 
 export function useRuns(options?: QueryOptions) {
   const client = useApiClient()
-  const user = useDevUser()
+  const user = useSessionKey()
   return useQuery({
     queryKey: keys.runs(user),
     queryFn: async () => unwrap(await client.GET('/api/v1/runs')).runs,
@@ -48,7 +62,7 @@ export function useRuns(options?: QueryOptions) {
 
 export function useRun(runId: string, options?: QueryOptions) {
   const client = useApiClient()
-  const user = useDevUser()
+  const user = useSessionKey()
   return useQuery({
     queryKey: keys.run(user, runId),
     queryFn: async () => unwrap(await client.GET('/api/v1/runs/{run_id}', { params: { path: { run_id: runId } } })),
@@ -58,7 +72,7 @@ export function useRun(runId: string, options?: QueryOptions) {
 
 export function useUseCases() {
   const client = useApiClient()
-  const user = useDevUser()
+  const user = useSessionKey()
   return useQuery({
     queryKey: keys.useCases(user),
     queryFn: async () => unwrap(await client.GET('/api/v1/use-cases')).use_cases,
@@ -67,7 +81,7 @@ export function useUseCases() {
 
 export function useUseCase(useCaseId: string, enabled = true) {
   const client = useApiClient()
-  const user = useDevUser()
+  const user = useSessionKey()
   return useQuery({
     queryKey: keys.useCase(user, useCaseId),
     queryFn: async () =>
@@ -122,7 +136,7 @@ export function useStartRun() {
 
 export function useApproval(approvalId: string, options?: QueryOptions & { enabled?: boolean }) {
   const client = useApiClient()
-  const user = useDevUser()
+  const user = useSessionKey()
   return useQuery({
     queryKey: keys.approval(user, approvalId),
     queryFn: async () =>
@@ -168,7 +182,7 @@ export function useRetry(runId: string) {
 /** Keyed by attempt, so a second failure never shows the first one's cached advice. */
 export function useTroubleshoot(runId: string, enabled: boolean, attempt: number) {
   const client = useApiClient()
-  const user = useDevUser()
+  const user = useSessionKey()
   return useQuery({
     queryKey: keys.troubleshoot(user, runId, attempt),
     queryFn: async () =>
@@ -179,7 +193,7 @@ export function useTroubleshoot(runId: string, enabled: boolean, attempt: number
 
 export function useTeamsMessages(options?: QueryOptions) {
   const client = useApiClient()
-  const user = useDevUser()
+  const user = useSessionKey()
   return useQuery({
     queryKey: keys.teamsMessages(user),
     queryFn: async () => unwrap(await client.GET('/api/v1/teams-stub/messages')).messages,
@@ -189,7 +203,7 @@ export function useTeamsMessages(options?: QueryOptions) {
 
 export function useMockJiraTickets(options?: QueryOptions) {
   const client = useApiClient()
-  const user = useDevUser()
+  const user = useSessionKey()
   return useQuery({
     queryKey: keys.jiraTickets(user),
     queryFn: async () => unwrap(await client.GET('/api/v1/mock-jira/tickets')).tickets,

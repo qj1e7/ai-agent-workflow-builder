@@ -3,14 +3,9 @@ import type { paths } from './schema'
 
 export type ApiClient = ReturnType<typeof createClient<paths>>
 
-export function createApiClient(fetchImpl: typeof fetch, getDevUser: () => string, baseUrl = ''): ApiClient {
-  const client = createClient<paths>({ baseUrl, fetch: fetchImpl })
-  client.use({
-    onRequest({ request }) {
-      request.headers.set('X-Dev-User', getDevUser())
-    },
-  })
-  return client
+/** fetchImpl must already sign requests: see authorizedFetch in session.ts. */
+export function createApiClient(fetchImpl: typeof fetch, baseUrl = ''): ApiClient {
+  return createClient<paths>({ baseUrl, fetch: fetchImpl })
 }
 
 export class ApiError extends Error {

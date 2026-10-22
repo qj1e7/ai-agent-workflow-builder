@@ -1,6 +1,7 @@
 import failure from '@contracts/fixtures/runs/failure.json'
 import success from '@contracts/fixtures/runs/success.json'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { authorizedFetch, createDevSession } from '../api/session'
 import type { ApprovalView, MockJiraTicket, RunView } from '../api/types'
 import { createDemoPlatform, type DemoPlatformHandle } from '../mock'
 import type { FetchLike } from '../stream/feed'
@@ -14,6 +15,7 @@ import type { StopCaption, Track } from './track'
 const START = Date.parse('2026-11-27T02:00:00Z')
 const LIVE_RUN = runId('run_01JB8')
 const SECOND = 1000
+const ORIGIN = 'http://portal.test'
 
 type Raw = { readonly seq: number; readonly ts: string } & Readonly<Record<string, unknown>>
 const RAW: readonly Raw[] = success
@@ -51,15 +53,17 @@ function spedUp(view: LiveView): boolean {
   return caption?.is === 'waiting' && caption.spedUp
 }
 
+/** The platform as the signed-in dev user sees it, through the same signing fetch the Portal uses. */
+function fetchAs(user: string): typeof fetch {
+  const session = createDevSession(null)
+  session.choose(user)
+  return authorizedFetch(session, demo.fetch, ORIGIN)
+}
+
 function open(id = LIVE_RUN, whenFinished: 'rest' | 'replay' = 'rest', speed: Speed = 1) {
-  const authed: typeof fetch = (input, init) => {
-    const headers = new Headers(init?.headers)
-    if (!headers.has('X-Dev-User')) headers.set('X-Dev-User', 'alice')
-    return demo.fetch(input, { ...init, headers })
-  }
   const store: LiveViewStore = createLiveView({
     runId: id,
-    env: { fetch: authed, clock: createClock(demo.clock, id), registry: TEST_REGISTRY },
+    env: { fetch: fetchAs('alice'), clock: createClock(demo.clock, id), registry: TEST_REGISTRY },
     whenFinished,
     speed,
   })
@@ -105,9 +109,8 @@ async function openBurst(runNow: number) {
 
 async function api<T>(path: string, user = 'alice', init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers)
-  headers.set('X-Dev-User', user)
   if (init.body) headers.set('Content-Type', 'application/json')
-  const response = await demo.fetch(`/api/v1${path}`, { ...init, headers })
+  const response = await fetchAs(user)(`/api/v1${path}`, { ...init, headers })
   return (await response.json()) as T
 }
 
@@ -305,7 +308,7 @@ describe('createLiveView against the demo platform', () => {
     const { view, unsubscribe } = open(runId('run_01JB9'))
     await tick(0)
     expect(headline(view())).toBe('stopped')
-    const retry = await demo.fetch(`/api/v1/runs/run_01JB9/retry`, { method: 'POST', headers: { 'X-Dev-User': 'alice' } })
+    const retry = await fetchAs('alice')(`/api/v1/runs/run_01JB9/retry`, { method: 'POST' })
     expect(retry.status).toBe(202)
     view().controls.reconnect()
     await tick(5 * SECOND)

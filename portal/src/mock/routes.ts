@@ -51,6 +51,7 @@ function parseVerdict(value: unknown): Verdict | undefined {
 
 const routes: readonly Route[] = [
   route('GET', '/dev/users', () => json(200, { users: fixtures.devUsers }), true),
+  route('GET', '/me', ({ user }) => json(200, user)),
   route('GET', '/templates', () => json(200, { templates: fixtures.templates }), true),
   route('GET', '/use-cases', ({ platform }) => json(200, { use_cases: platform.listUseCases() })),
   route('POST', '/use-cases/suggest', ({ platform, request }) => {

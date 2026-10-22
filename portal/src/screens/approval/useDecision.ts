@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { errorWords } from '../../api/errors'
 import { useLatch } from '../../api/latch'
-import { isConflict, refusalOf, useApproval, useDecide, useDevUsers } from '../../api/queries'
-import { useDevUser } from '../../api/session'
+import { isConflict, refusalOf, useApproval, useDecide, useMe } from '../../api/queries'
 import type { ApprovalView, Verdict } from '../../api/types'
 import { decisionRequest, decisionState, sentBy, type DecisionAttempt, type DecisionState, type Sender } from './decisionState'
 
@@ -28,8 +27,7 @@ export interface Decision {
 export function useDecision(approvalId: string | null): Decision {
   const approval = useApproval(approvalId ?? '', { poll: true, enabled: approvalId !== null })
   const decide = useDecide(approvalId ?? '')
-  const userId = useDevUser()
-  const user = useDevUsers().data?.find((candidate) => candidate.id === userId)
+  const user = useMe().data
   const [sender, setSender] = useState<Sender | null>(null)
   const latch = useLatch()
   const own = sentBy(sender, user, approvalId ?? '')
@@ -44,9 +42,9 @@ export function useDecision(approvalId: string | null): Decision {
     sent: own && decide.isSuccess ? decide.variables.digest : null,
     send(verdict) {
       const request = view && state ? decisionRequest(view, state.panel, verdict) : null
-      if (!request || approvalId === null) return
+      if (!request || approvalId === null || !user) return
       latch.run((settled) => {
-        setSender({ user: userId, approvalId })
+        setSender({ user: user.id, approvalId })
         decide.mutate(request, { onSettled: settled })
       })
     },

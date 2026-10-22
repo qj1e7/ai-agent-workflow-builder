@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { ApprovalStepView, ApprovalView, DecisionOut, DevUser } from '../../api/types'
+import type { ApprovalStepView, ApprovalView, DecisionOut, Me } from '../../api/types'
 import { decisionRequest, decisionState, stepBlocks, type DecisionAttempt } from './decisionState'
 
 const DIGEST = 'sha256:0be2129632d1283e015efcae22757aa3e182793e0153503bdd30dc0327a42576'
 
-const alice: DevUser = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
-const bob: DevUser = { id: 'bob', display: 'Bob', roles: ['approver'] }
-const carol: DevUser = { id: 'carol', display: 'Carol', roles: ['operator'] }
+const alice: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
+const bob: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
+const carol: Me = { id: 'carol', display: 'Carol', roles: ['operator'] }
 
 function step(index: number, status: ApprovalStepView['status'], by: string | null = null): ApprovalStepView {
   return {
