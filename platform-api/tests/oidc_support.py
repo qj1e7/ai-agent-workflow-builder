@@ -94,8 +94,6 @@ class Clock:
 
 
 class FakeIssuer:
-    """Serves discovery and a JWKS, counts every request, and can go down."""
-
     def __init__(self, issuer: str = ISSUER, keys: Iterable[KeyPair] = (RSA_KEY, EC_KEY)) -> None:
         self.issuer = issuer
         base = urlsplit(issuer).path.rstrip("/")

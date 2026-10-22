@@ -1,5 +1,3 @@
-"""Signed-in people reach the approval gate through the real orchestrator and database."""
-
 import json
 from collections.abc import AsyncIterator
 

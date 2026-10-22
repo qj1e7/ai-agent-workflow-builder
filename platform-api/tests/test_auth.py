@@ -91,7 +91,7 @@ def test_bad_auth_config_refuses_to_start(env: dict[str, str], reason: str):
         create_app(env)
 
 
-def test_oidc_mode_allows_a_plain_http_issuer_only_on_localhost_and_only_that_origin():
+def test_oidc_mode_starts_with_the_test_only_http_issuer_on_localhost():
     issuer = "http://mock-oidc:8080/default"
     create_app(
         {
