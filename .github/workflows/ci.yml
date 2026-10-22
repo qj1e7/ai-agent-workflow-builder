@@ -91,6 +91,8 @@ jobs:
             --env PLATFORM_TEST_DATABASE_URL \
             --env CONTRACT_FIXTURES=/contracts/fixtures \
             --volume "$PWD/contracts:/contracts:ro" \
+            --env MOCK_OIDC_CONFIG=/mock-oidc/config.json \
+            --volume "$PWD/deploy/mock-oidc:/mock-oidc:ro" \
             ${{ matrix.project }}:test
 
       - name: Build the runtime image
@@ -134,6 +136,11 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Sign-in settings in the nginx config
+        run: |
+          docker pull --quiet nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
+          sh nginx/render.test.sh
 
   scans:
     runs-on: ubuntu-latest

@@ -24,7 +24,7 @@ bad() {
 render() {
   name=$1
   shift
-  docker run --rm --name "$prefix-$name" \
+  docker run --rm --pull never --name "$prefix-$name" \
     -v "$here/default.conf.template:/etc/nginx/templates/default.conf.template:ro" \
     -v "$here/16-portal-auth.envsh:/docker-entrypoint.d/16-portal-auth.envsh:ro" \
     -e API_UPSTREAM=http://platform-api:8000 -e NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1 \
