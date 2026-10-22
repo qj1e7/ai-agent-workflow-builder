@@ -83,6 +83,8 @@ def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
     match settings.auth:
         case auth.DevAuth():
             app.include_router(auth.dev_router)
+        case auth.OidcAuth():
+            pass
     return app
 
 

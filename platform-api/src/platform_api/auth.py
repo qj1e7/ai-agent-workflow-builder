@@ -6,6 +6,7 @@ from urllib.parse import urlsplit
 from fastapi import APIRouter, Depends, HTTPException, Request, Security
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 
+from platform_api.oidc import OidcAuth, OidcAuthenticator, is_trusted_url, origin_of
 from platform_api.shared import Principal, Role, UserId
 from platform_api.wire import Responses, WireModel, error_response
 
@@ -21,15 +22,25 @@ class DevAuth:
     public_base_url: str
 
 
-type AuthConfig = DevAuth
+type AuthConfig = DevAuth | OidcAuth
 
 
 def auth_config(env: Mapping[str, str]) -> AuthConfig:
-    mode = env.get("AUTH_MODE")
-    if mode is None:
-        raise ConfigError("AUTH_MODE is not set. Set AUTH_MODE=dev for local mode.")
-    if mode != "dev":
-        raise ConfigError(f"AUTH_MODE={mode!r} is not supported. Only 'dev' exists so far.")
+    match env.get("AUTH_MODE"):
+        case None:
+            raise ConfigError(
+                "AUTH_MODE is not set. Set AUTH_MODE=dev for local mode "
+                "or AUTH_MODE=oidc for real sign-in."
+            )
+        case "dev":
+            return _dev_config(env)
+        case "oidc":
+            return _oidc_config(env)
+        case mode:
+            raise ConfigError(f"AUTH_MODE={mode!r} is not supported. Use 'dev' or 'oidc'.")
+
+
+def _dev_config(env: Mapping[str, str]) -> DevAuth:
     base_url = env.get("PUBLIC_BASE_URL")
     if base_url is None:
         raise ConfigError("PUBLIC_BASE_URL is not set. Dev mode needs it to prove it is local.")
@@ -39,6 +50,46 @@ def auth_config(env: Mapping[str, str]) -> AuthConfig:
             "The dev sign-in stub must never reach a shared deployment."
         )
     return DevAuth(base_url)
+
+
+def _required(env: Mapping[str, str], name: str) -> str:
+    value = env.get(name, "").strip()
+    if not value:
+        raise ConfigError(f"{name} is not set. AUTH_MODE=oidc needs it.")
+    return value
+
+
+def _test_only_http_origin(env: Mapping[str, str], issuer: str, base_url: str) -> str | None:
+    allowance = env.get("OIDC_TEST_ONLY_HTTP_ISSUER", "").strip()
+    if not allowance:
+        return None
+    if allowance != issuer:
+        raise ConfigError(
+            "OIDC_TEST_ONLY_HTTP_ISSUER must equal OIDC_ISSUER exactly. "
+            "It allows plain http for that one issuer in local tests."
+        )
+    if urlsplit(base_url).hostname not in LOCAL_HOSTS:
+        raise ConfigError(
+            "OIDC_TEST_ONLY_HTTP_ISSUER only works with PUBLIC_BASE_URL on localhost or "
+            f"127.0.0.1, not {base_url!r}. A plain-http issuer must never reach a shared "
+            "deployment."
+        )
+    return origin_of(issuer) if urlsplit(issuer).scheme == "http" else None
+
+
+def _oidc_config(env: Mapping[str, str]) -> OidcAuth:
+    base_url = _required(env, "PUBLIC_BASE_URL")
+    issuer = _required(env, "OIDC_ISSUER")
+    audience = _required(env, "OIDC_AUDIENCE")
+    http_origin = _test_only_http_origin(env, issuer, base_url)
+    jwks_url = env.get("OIDC_JWKS_URL", "").strip() or None
+    for name, url in (("OIDC_ISSUER", issuer), ("OIDC_JWKS_URL", jwks_url)):
+        if url is not None and not is_trusted_url(url, http_origin):
+            raise ConfigError(
+                f"{name} must be an absolute https URL with a host and no query or fragment, "
+                f"not {url!r}."
+            )
+    return OidcAuth(base_url, issuer, audience, jwks_url, http_origin)
 
 
 class Authenticator(Protocol):
@@ -78,6 +129,8 @@ def authenticator_for(config: AuthConfig) -> Authenticator:
     match config:
         case DevAuth():
             return dev_authenticator
+        case OidcAuth():
+            return OidcAuthenticator(config)
 
 
 dev_user_scheme = APIKeyHeader(
