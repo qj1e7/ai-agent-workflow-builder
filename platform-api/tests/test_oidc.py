@@ -28,6 +28,7 @@ from tests.oidc_support import (
     oidc_app,
     rsa_pair,
     token,
+    unsigned_token,
 )
 from tests.support import LOCAL_ENV
 
@@ -156,7 +157,7 @@ def test_the_bearer_scheme_is_case_insensitive(client: TestClient):
 def test_an_unsigned_token_is_refused_without_asking_the_issuer(
     client: TestClient, app: FastAPI, issuer: FakeIssuer
 ):
-    refused(app, client.get(ME, headers=bearer(token(None))))
+    refused(app, client.get(ME, headers=bearer(unsigned_token())))
     assert issuer.requests == []
 
 

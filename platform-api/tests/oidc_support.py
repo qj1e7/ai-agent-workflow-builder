@@ -135,16 +135,13 @@ def oidc_app(issuer: FakeIssuer, clock: Clock, env: Mapping[str, str] = OIDC_ENV
     return app
 
 
-def token(
-    key: KeyPair | None = RSA_KEY,
-    *,
-    claims: Mapping[str, object] | None = None,
-    drop: Iterable[str] = (),
-    headers: Mapping[str, str] | None = None,
-    issuer: str = ISSUER,
-    audience: object = AUDIENCE,
-    expires_in: int = 300,
-) -> str:
+def _claims(
+    claims: Mapping[str, object] | None,
+    drop: Iterable[str],
+    issuer: str,
+    audience: object,
+    expires_in: int,
+) -> dict[str, object]:
     now = int(time.time())
     payload: dict[str, object] = {
         "iss": issuer,
@@ -156,13 +153,30 @@ def token(
     }
     for name in drop:
         payload.pop(name, None)
+    return payload
+
+
+def token(
+    key: KeyPair = RSA_KEY,
+    *,
+    claims: Mapping[str, object] | None = None,
+    drop: Iterable[str] = (),
+    headers: Mapping[str, str] | None = None,
+    issuer: str = ISSUER,
+    audience: object = AUDIENCE,
+    expires_in: int = 300,
+) -> str:
+    payload = _claims(claims, drop, issuer, audience, expires_in)
     if headers is None:
-        headers = {"kid": key.kid if key is not None else RSA_KEY.kid}
+        headers = {"kid": key.kid}
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", jwt.warnings.InsecureKeyLengthWarning)
-        if key is None:
-            return jwt.encode(payload, "", algorithm="none", headers=dict(headers))
         return jwt.encode(payload, key.private, algorithm=key.algorithm, headers=dict(headers))
+
+
+def unsigned_token() -> str:
+    payload = _claims(None, (), ISSUER, AUDIENCE, 300)
+    return jwt.encode(payload, "", algorithm="none", headers={"kid": RSA_KEY.kid})
 
 
 def _b64(data: bytes) -> str:
