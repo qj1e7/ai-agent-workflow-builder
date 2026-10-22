@@ -49,7 +49,9 @@ export type Session = DevSession | OidcSession
 export const DEFAULT_DEV_USER = 'alice'
 const STORAGE_KEY = 'portal.dev-user'
 
-function localStore(): Storage | null {
+export type DevUserStore = Pick<Storage, 'getItem' | 'setItem'>
+
+function localStore(): DevUserStore | null {
   try {
     return window.localStorage
   } catch {
@@ -57,7 +59,7 @@ function localStore(): Storage | null {
   }
 }
 
-export function createDevSession(store: Storage | null = localStore()): DevSession {
+export function createDevSession(store: DevUserStore | null = localStore()): DevSession {
   const listeners = new Set<() => void>()
   let current = DEFAULT_DEV_USER
   try {

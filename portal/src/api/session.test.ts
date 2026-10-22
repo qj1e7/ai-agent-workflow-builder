@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createApiClient } from './client'
-import { authorizedFetch, createDevSession, SIGNED_IN, SignedOut, type Credentials, type Session } from './session'
+import { authorizedFetch, createDevSession, SIGNED_IN, SignedOut, type Credentials, type DevUserStore, type Session } from './session'
 
 const ORIGIN = 'http://portal.test'
 
@@ -39,17 +39,19 @@ function signingSession(credentials: () => Promise<Credentials>) {
   return { session, rejections: () => rejections }
 }
 
-class MemoryStorage implements Pick<Storage, 'getItem' | 'setItem'> {
-  readonly items = new Map<string, string>()
-  getItem(key: string): string | null {
-    return this.items.get(key) ?? null
-  }
-  setItem(key: string, value: string): void {
-    this.items.set(key, value)
-  }
+function memoryStore(): DevUserStore {
+  const items = new Map<string, string>()
+  return { getItem: (key) => items.get(key) ?? null, setItem: (key, value) => void items.set(key, value) }
 }
 
-const asStorage = (memory: MemoryStorage) => memory as unknown as Storage
+const blockedStore: DevUserStore = {
+  getItem: () => {
+    throw new Error('blocked')
+  },
+  setItem: () => {
+    throw new Error('blocked')
+  },
+}
 
 describe('authorizedFetch', () => {
   it('sends the chosen dev user on a request the typed client builds', async () => {
@@ -127,8 +129,8 @@ describe('authorizedFetch', () => {
 
 describe('the dev session', () => {
   it('starts as alice, remembers the chosen user, and tells its subscribers', () => {
-    const memory = new MemoryStorage()
-    const session = createDevSession(asStorage(memory))
+    const memory = memoryStore()
+    const session = createDevSession(memory)
     let told = 0
     session.subscribe(() => {
       told += 1
@@ -138,20 +140,12 @@ describe('the dev session', () => {
     session.choose('carol')
     expect(session.key()).toBe('carol')
     expect(told).toBe(1)
-    expect(createDevSession(asStorage(memory)).key()).toBe('carol')
+    expect(createDevSession(memory).key()).toBe('carol')
     expect(session.status()).toEqual({ kind: 'signed-in' })
   })
 
   it('keeps the choice for the tab when storage is blocked', () => {
-    const blocked = {
-      getItem: () => {
-        throw new Error('blocked')
-      },
-      setItem: () => {
-        throw new Error('blocked')
-      },
-    } as unknown as Storage
-    const session = createDevSession(blocked)
+    const session = createDevSession(blockedStore)
     expect(session.key()).toBe('alice')
     session.choose('bob')
     expect(session.key()).toBe('bob')

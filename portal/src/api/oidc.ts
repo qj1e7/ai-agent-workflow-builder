@@ -122,7 +122,7 @@ export function createOidcSession(client: OidcClient, user: OidcUser | null, ini
     credentials: async () => {
       if (status.kind !== 'signed-in' || !current) throw new SignedOut()
       const signer = msLeft(current, now()) < RENEW_BEFORE_MS ? await renew() : current
-      if (!signer || status.kind !== 'signed-in') throw new SignedOut()
+      if (!signer) throw new SignedOut()
       return { Authorization: `Bearer ${signer.access_token}` }
     },
     rejected: expire,
@@ -148,9 +148,8 @@ export function safeReturnPath(raw: unknown): string {
   return raw === CALLBACK_PATH || raw === SIGNED_OUT_PATH ? '/' : raw
 }
 
-function returnToOf(user: OidcUser): unknown {
-  const { state } = user
-  return typeof state === 'object' && state !== null ? (state as { returnTo?: unknown }).returnTo : undefined
+function returnToOf({ state }: OidcUser): unknown {
+  return typeof state === 'object' && state !== null && 'returnTo' in state ? state.returnTo : undefined
 }
 
 export async function bootOidc(client: OidcClient, place: BootPlace, now: () => number = Date.now): Promise<Boot> {
