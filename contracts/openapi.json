@@ -1810,6 +1810,33 @@
         "title": "LegDispatchedData",
         "type": "object"
       },
+      "Me": {
+        "additionalProperties": false,
+        "properties": {
+          "display": {
+            "title": "Display",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/Role"
+            },
+            "title": "Roles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "display",
+          "roles"
+        ],
+        "title": "Me",
+        "type": "object"
+      },
       "MockJiraTicket": {
         "additionalProperties": false,
         "properties": {
@@ -3739,6 +3766,12 @@
         "in": "header",
         "name": "X-Dev-User",
         "type": "apiKey"
+      },
+      "OidcBearer": {
+        "bearerFormat": "JWT",
+        "description": "Real sign-in (AUTH_MODE=oidc). Send an OpenID Connect access token whose audience is platform-api. Roles come from its roles claim: Operator and Approver.",
+        "scheme": "bearer",
+        "type": "http"
       }
     }
   },
@@ -3781,7 +3814,7 @@
                 }
               }
             },
-            "description": "X-Dev-User is missing or not a dev user"
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
           },
           "404": {
             "content": {
@@ -3802,11 +3835,24 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
           }
         },
         "security": [
           {
             "DevUser": []
+          },
+          {
+            "OidcBearer": []
           }
         ],
         "summary": "Get Approval",
@@ -3868,7 +3914,7 @@
                 }
               }
             },
-            "description": "X-Dev-User is missing or not a dev user"
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
           },
           "403": {
             "content": {
@@ -3909,11 +3955,24 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
           }
         },
         "security": [
           {
             "DevUser": []
+          },
+          {
+            "OidcBearer": []
           }
         ],
         "summary": "Decide",
@@ -3943,6 +4002,55 @@
         ]
       }
     },
+    "/api/v1/me": {
+      "get": {
+        "operationId": "who_am_i_api_v1_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Who Am I",
+        "tags": [
+          "sign-in"
+        ]
+      }
+    },
     "/api/v1/mock-jira/tickets": {
       "get": {
         "operationId": "list_mock_jira_tickets_api_v1_mock_jira_tickets_get",
@@ -3965,12 +4073,25 @@
                 }
               }
             },
-            "description": "X-Dev-User is missing or not a dev user"
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
           }
         },
         "security": [
           {
             "DevUser": []
+          },
+          {
+            "OidcBearer": []
           }
         ],
         "summary": "List Mock Jira Tickets",
@@ -4001,12 +4122,25 @@
                 }
               }
             },
-            "description": "X-Dev-User is missing or not a dev user"
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
           }
         },
         "security": [
           {
             "DevUser": []
+          },
+          {
+            "OidcBearer": []
           }
         ],
         "summary": "List Runs",
@@ -4048,7 +4182,7 @@
                 }
               }
             },
-            "description": "X-Dev-User is missing or not a dev user"
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
           },
           "404": {
             "content": {
@@ -4069,11 +4203,24 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
           }
         },
         "security": [
           {
             "DevUser": []
+          },
+          {
+            "OidcBearer": []
           }
         ],
         "summary": "Get Run",
@@ -4159,7 +4306,7 @@
                 }
               }
             },
-            "description": "X-Dev-User is missing or not a dev user"
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
           },
           "422": {
             "content": {
@@ -4170,11 +4317,24 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
           }
         },
         "security": [
           {
             "DevUser": []
+          },
+          {
+            "OidcBearer": []
           }
         ],
         "summary": "Run Events",
@@ -4216,7 +4376,7 @@
                 }
               }
             },
-            "description": "X-Dev-User is missing or not a dev user"
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
           },
           "403": {
             "content": {
@@ -4257,11 +4417,24 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
           }
         },
         "security": [
           {
             "DevUser": []
+          },
+          {
+            "OidcBearer": []
           }
         ],
         "summary": "Retry Run",
@@ -4303,7 +4476,7 @@
                 }
               }
             },
-            "description": "X-Dev-User is missing or not a dev user"
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
           },
           "404": {
             "content": {
@@ -4334,11 +4507,24 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
           }
         },
         "security": [
           {
             "DevUser": []
+          },
+          {
+            "OidcBearer": []
           }
         ],
         "summary": "Troubleshoot",
@@ -4369,12 +4555,25 @@
                 }
               }
             },
-            "description": "X-Dev-User is missing or not a dev user"
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
           }
         },
         "security": [
           {
             "DevUser": []
+          },
+          {
+            "OidcBearer": []
           }
         ],
         "summary": "List Teams Stub Messages",
@@ -4405,12 +4604,25 @@
                 }
               }
             },
-            "description": "X-Dev-User is missing or not a dev user"
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
           }
         },
         "security": [
           {
             "DevUser": []
+          },
+          {
+            "OidcBearer": []
           }
         ],
         "summary": "List Templates",
@@ -4441,12 +4653,25 @@
                 }
               }
             },
-            "description": "X-Dev-User is missing or not a dev user"
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
           }
         },
         "security": [
           {
             "DevUser": []
+          },
+          {
+            "OidcBearer": []
           }
         ],
         "summary": "List Use Cases",
@@ -4485,7 +4710,7 @@
                 }
               }
             },
-            "description": "X-Dev-User is missing or not a dev user"
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
           },
           "403": {
             "content": {
@@ -4506,11 +4731,24 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
           }
         },
         "security": [
           {
             "DevUser": []
+          },
+          {
+            "OidcBearer": []
           }
         ],
         "summary": "Create Use Case",
@@ -4551,7 +4789,7 @@
                 }
               }
             },
-            "description": "X-Dev-User is missing or not a dev user"
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
           },
           "422": {
             "content": {
@@ -4562,11 +4800,24 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
           }
         },
         "security": [
           {
             "DevUser": []
+          },
+          {
+            "OidcBearer": []
           }
         ],
         "summary": "Suggest Template",
@@ -4608,7 +4859,7 @@
                 }
               }
             },
-            "description": "X-Dev-User is missing or not a dev user"
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
           },
           "404": {
             "content": {
@@ -4629,11 +4880,24 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
           }
         },
         "security": [
           {
             "DevUser": []
+          },
+          {
+            "OidcBearer": []
           }
         ],
         "summary": "Get Use Case",
@@ -4694,7 +4958,7 @@
                 }
               }
             },
-            "description": "X-Dev-User is missing or not a dev user"
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
           },
           "403": {
             "content": {
@@ -4725,11 +4989,24 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
           }
         },
         "security": [
           {
             "DevUser": []
+          },
+          {
+            "OidcBearer": []
           }
         ],
         "summary": "Start Run",

@@ -5,6 +5,7 @@ from platform_api.app import create_app
 from tests.support import LOCAL_ENV
 
 SIGNED_OUT = {"/healthz", "/healthz/ready", "/api/v1/dev/users"}
+SIGN_IN = [{"DevUser": []}, {"OidcBearer": []}]
 
 
 @pytest.fixture(scope="module")
@@ -24,11 +25,15 @@ def test_dev_sign_in_is_an_api_key_header_scheme(schema: dict[str, object]):
     assert "dev" in scheme["description"].lower()
 
 
-def test_dev_sign_in_is_required_on_exactly_the_routes_that_read_it(schema: dict[str, object]):
+def test_real_sign_in_is_an_http_bearer_scheme(schema: dict[str, object]):
+    scheme = schema["components"]["securitySchemes"]["OidcBearer"]  # type: ignore[index]
+    assert (scheme["type"], scheme["scheme"], scheme["bearerFormat"]) == ("http", "bearer", "JWT")
+    assert "oidc" in scheme["description"].lower()
+
+
+def test_sign_in_is_required_on_exactly_the_routes_that_read_it(schema: dict[str, object]):
     needs = {
-        (path, method)
-        for path, method, op in operations(schema)
-        if op.get("security") == [{"DevUser": []}]
+        (path, method) for path, method, op in operations(schema) if op.get("security") == SIGN_IN
     }
     reads = {
         (path, method)
@@ -39,11 +44,13 @@ def test_dev_sign_in_is_required_on_exactly_the_routes_that_read_it(schema: dict
     assert "security" not in schema
 
 
-def test_every_signed_in_route_declares_the_401_it_answers(schema: dict[str, object]):
+def test_every_signed_in_route_declares_the_401_and_503_it_answers(schema: dict[str, object]):
     missing = [
-        f"{method.upper()} {path}"
+        f"{method.upper()} {path} {status}"
         for path, method, op in operations(schema)
-        if op.get("security") and "401" not in op["responses"]
+        if op.get("security")
+        for status in ("401", "503")
+        if status not in op["responses"]
     ]
     assert missing == []
 

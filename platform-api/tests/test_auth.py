@@ -41,3 +41,20 @@ def test_dev_mode_on_localhost_lists_users_and_signs_in():
 def test_dev_mode_rejects_missing_or_unknown_user(headers: dict[str, str]):
     client = TestClient(create_app(LOCAL))
     assert client.get("/api/v1/runs", headers=headers).status_code == 401
+
+
+@pytest.mark.parametrize(
+    ("user", "me"),
+    [
+        ("alice", {"id": "alice", "display": "Alice", "roles": ["operator", "approver"]}),
+        ("bob", {"id": "bob", "display": "Bob", "roles": ["approver"]}),
+    ],
+)
+def test_me_answers_who_the_platform_thinks_you_are(user: str, me: dict[str, object]):
+    client = TestClient(create_app(LOCAL))
+    assert client.get("/api/v1/me", headers={"X-Dev-User": user}).json() == me
+
+
+def test_me_needs_a_signed_in_user():
+    client = TestClient(create_app(LOCAL))
+    assert client.get("/api/v1/me").status_code == 401

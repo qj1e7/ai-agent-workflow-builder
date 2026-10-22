@@ -79,6 +79,7 @@ def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
             content=readiness.model_dump(mode="json"),
         )
 
+    app.include_router(auth.me_router)
     match settings.auth:
         case auth.DevAuth():
             app.include_router(auth.dev_router)

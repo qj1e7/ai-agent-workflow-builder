@@ -4,7 +4,7 @@ from typing import Annotated, Protocol
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Security
-from fastapi.security import APIKeyHeader
+from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 
 from platform_api.shared import Principal, Role, UserId
 from platform_api.wire import Responses, WireModel, error_response
@@ -91,8 +91,21 @@ dev_user_scheme = APIKeyHeader(
 )
 
 
+oidc_bearer_scheme = HTTPBearer(
+    scheme_name="OidcBearer",
+    bearerFormat="JWT",
+    description=(
+        "Real sign-in (AUTH_MODE=oidc). Send an OpenID Connect access token whose audience is "
+        "platform-api. Roles come from its roles claim: Operator and Approver."
+    ),
+    auto_error=False,
+)
+
+
 def current_principal(
-    request: Request, declared_only: Annotated[str | None, Security(dev_user_scheme)]
+    request: Request,
+    dev_declared: Annotated[str | None, Security(dev_user_scheme)],
+    bearer_declared: Annotated[HTTPAuthorizationCredentials | None, Security(oidc_bearer_scheme)],
 ) -> Principal:
     authenticator: Authenticator = request.app.state.authenticator
     return authenticator(request)
@@ -100,11 +113,37 @@ def current_principal(
 
 CurrentPrincipal = Annotated[Principal, Depends(current_principal)]
 
-SIGNED_IN: Responses = {401: error_response(f"{DEV_USER_HEADER} is missing or not a dev user")}
+SIGNED_IN: Responses = {
+    401: error_response(
+        f"Not signed in: no valid access token, or in local mode no known {DEV_USER_HEADER}"
+    ),
+    503: error_response(
+        "Sign-in could not be checked because the identity provider's keys are unavailable"
+    ),
+}
 OPERATORS_ONLY: Responses = {
     **SIGNED_IN,
     403: error_response("Only an Operator can do this"),
 }
+
+
+class Me(WireModel):
+    id: UserId
+    display: str
+    roles: list[Role]
+
+
+me_router = APIRouter(tags=["sign-in"])
+
+
+@me_router.get("/api/v1/me", responses=SIGNED_IN)
+def who_am_i(principal: CurrentPrincipal) -> Me:
+    return Me(
+        id=principal.user_id,
+        display=principal.display,
+        roles=[role for role in Role if role in principal.roles],
+    )
+
 
 dev_router = APIRouter(tags=["dev"])
 
