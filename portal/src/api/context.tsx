@@ -67,9 +67,9 @@ export function useSession(): Session {
   return useEnvironment().session
 }
 
-export function useSessionKey(): string {
+export function useCacheScope(): string {
   const session = useSession()
-  return useSyncExternalStore(session.subscribe, session.key, session.key)
+  return useSyncExternalStore(session.subscribe, session.cacheScope, session.cacheScope)
 }
 
 export function useSessionStatus(): SessionStatus {

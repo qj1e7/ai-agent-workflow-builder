@@ -112,7 +112,7 @@ export function createOidcSession(client: OidcClient, user: OidcUser | null, ini
 
   return {
     kind: 'oidc',
-    key: () => current?.profile.sub ?? '',
+    cacheScope: () => current?.profile.sub ?? '',
     status: () => status,
     subscribe: (listener) => {
       listeners.add(listener)
@@ -126,7 +126,7 @@ export function createOidcSession(client: OidcClient, user: OidcUser | null, ini
       if (!signer) throw new SignedOut()
       return { Authorization: `Bearer ${signer.access_token}` }
     },
-    rejected: expire,
+    refusedByPlatform: expire,
     signIn: (returnTo) => client.signinRedirect({ state: { returnTo } }),
     signOut: async () => {
       signingOut = true

@@ -20,12 +20,12 @@ export class SignedOut extends Error {
 }
 
 interface SessionBase {
-  key(this: void): string
+  cacheScope(this: void): string
   /** One stable object per state, so useSyncExternalStore compares by identity. */
   status(this: void): SessionStatus
   subscribe(this: void, listener: () => void): () => void
   credentials(this: void): Promise<Credentials>
-  rejected(this: void): void
+  refusedByPlatform(this: void): void
 }
 
 export interface DevSession extends SessionBase {
@@ -67,7 +67,7 @@ export function createDevSession(store: DevUserStore | null = localStore()): Dev
   let current = storedDevUser(store)
   return {
     kind: 'dev',
-    key: () => current,
+    cacheScope: () => current,
     status: () => SIGNED_IN,
     subscribe: (listener) => {
       listeners.add(listener)
@@ -76,7 +76,7 @@ export function createDevSession(store: DevUserStore | null = localStore()): Dev
       }
     },
     credentials: () => Promise.resolve({ 'X-Dev-User': current }),
-    rejected: () => undefined,
+    refusedByPlatform: () => undefined,
     choose: (id) => {
       if (id === current) return
       current = id
@@ -118,7 +118,7 @@ export function authorizedFetch(session: Session, fetchImpl: typeof fetch, origi
     }
     for (const [name, value] of Object.entries(credentials)) request.headers.set(name, value)
     const response = await fetchImpl(request)
-    if (response.status === 401) session.rejected()
+    if (response.status === 401) session.refusedByPlatform()
     return response
   }
 }

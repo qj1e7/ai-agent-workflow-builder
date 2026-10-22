@@ -20,7 +20,7 @@ describe('the OpenID Connect session', () => {
     const client = fakeOidcClient()
     const session = createOidcSession(client, fakeUser('token-1', NOW), SIGNED_IN, now)
     expect(await session.credentials()).toEqual({ Authorization: 'Bearer token-1' })
-    expect(session.key()).toBe('subject-1')
+    expect(session.cacheScope()).toBe('subject-1')
     expect(client.calls).toEqual([])
   })
 
@@ -121,7 +121,7 @@ describe('the OpenID Connect session', () => {
       told += 1
     })
     happen(client)
-    session.rejected()
+    session.refusedByPlatform()
     expect(session.status()).toEqual({ kind: 'expired' })
     expect(told).toBe(1)
   })
@@ -129,7 +129,7 @@ describe('the OpenID Connect session', () => {
   it('comes back to signed in when a renewal lands after the platform refused a token', async () => {
     const client = fakeOidcClient()
     const session = createOidcSession(client, fakeUser('token-1', NOW), SIGNED_IN, now)
-    session.rejected()
+    session.refusedByPlatform()
     await expect(session.credentials()).rejects.toBeInstanceOf(SignedOut)
     client.fire.userLoaded(fakeUser('token-2', NOW))
     expect(await session.credentials()).toEqual({ Authorization: 'Bearer token-2' })
@@ -138,7 +138,7 @@ describe('the OpenID Connect session', () => {
   it('cannot sign when signed out, and has no cache key', async () => {
     const session = createOidcSession(fakeOidcClient(), null, SIGNED_OUT, now)
     await expect(session.credentials()).rejects.toBeInstanceOf(SignedOut)
-    expect(session.key()).toBe('')
+    expect(session.cacheScope()).toBe('')
   })
 
   it('leaves for the provider to sign in with the path to come back to, and to sign out', async () => {

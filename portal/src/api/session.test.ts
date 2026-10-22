@@ -24,11 +24,11 @@ function signingSession(credentials: () => Promise<Credentials>) {
   let rejections = 0
   const session: Session = {
     kind: 'oidc',
-    key: () => 'subject-1',
+    cacheScope: () => 'subject-1',
     status: () => SIGNED_IN,
     subscribe: () => () => undefined,
     credentials,
-    rejected: () => {
+    refusedByPlatform: () => {
       rejections += 1
     },
     signIn: () => Promise.resolve(),
@@ -133,19 +133,19 @@ describe('the dev session', () => {
     session.subscribe(() => {
       told += 1
     })
-    expect(session.key()).toBe('alice')
+    expect(session.cacheScope()).toBe('alice')
     session.choose('carol')
     session.choose('carol')
-    expect(session.key()).toBe('carol')
+    expect(session.cacheScope()).toBe('carol')
     expect(told).toBe(1)
-    expect(createDevSession(memory).key()).toBe('carol')
+    expect(createDevSession(memory).cacheScope()).toBe('carol')
     expect(session.status()).toEqual({ kind: 'signed-in' })
   })
 
   it('keeps the choice for the tab when storage is blocked', () => {
     const session = createDevSession(blockedStore)
-    expect(session.key()).toBe('alice')
+    expect(session.cacheScope()).toBe('alice')
     session.choose('bob')
-    expect(session.key()).toBe('bob')
+    expect(session.cacheScope()).toBe('bob')
   })
 })

@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
-import { useSessionKey } from '../api/context'
+import { useCacheScope } from '../api/context'
 import { rolesLabel } from '../api/labels'
 import { useDevUsers } from '../api/queries'
 import type { DevSession } from '../api/session'
@@ -9,7 +9,7 @@ import { IconCheck, IconChevronDown } from './icons'
 import styles from './UserSwitcher.module.css'
 
 export function UserSwitcher({ session }: { session: DevSession }) {
-  const userId = useSessionKey()
+  const userId = useCacheScope()
   const { data: users, isError } = useDevUsers()
   const [open, setOpen] = useState(false)
   const buttonRef = useRef<HTMLButtonElement>(null)

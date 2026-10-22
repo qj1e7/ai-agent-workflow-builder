@@ -6,7 +6,7 @@ export interface Person {
   readonly display: string
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const IDENTITY_PROVIDER_OBJECT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 function sentenceCase(id: string): string {
   const spaced = id.replaceAll('_', ' ').trim()
@@ -16,7 +16,7 @@ function sentenceCase(id: string): string {
 export function displayName(people: readonly Person[] | undefined, id: string): string {
   const known = people?.find((person) => person.id === id)
   if (known) return known.display
-  return UUID.test(id) ? 'a colleague' : sentenceCase(id)
+  return IDENTITY_PROVIDER_OBJECT_ID.test(id) ? 'a colleague' : sentenceCase(id)
 }
 
 export function usePeople(): readonly Person[] | undefined {
