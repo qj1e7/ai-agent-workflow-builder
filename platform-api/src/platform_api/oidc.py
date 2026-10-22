@@ -222,15 +222,16 @@ class SigningKeys:
         self._keys: dict[str, VerificationKey] = {}
         self._loaded_at: float | None = None
         self._attempt: _Attempt | None = None
+        self._refresh: asyncio.Task[None] | None = None
 
     async def key_for(self, kid: str) -> VerificationKey:
-        key = self._fresh(kid)
-        if key is not None:
+        key = self._keys.get(kid)
+        age = self._age()
+        if key is not None and age < KEYS_MAX_STALE_SECONDS:
+            if age >= KEYS_MAX_AGE_SECONDS:
+                self._refresh_in_background()
             return key
         async with self._lock:
-            key = self._fresh(kid)
-            if key is not None:
-                return key
             outcome = await self._load_if_due()
             key = self._keys.get(kid)
             if key is not None and self._age() < KEYS_MAX_STALE_SECONDS:
@@ -242,15 +243,27 @@ class SigningKeys:
     def _age(self) -> float:
         return math.inf if self._loaded_at is None else self._clock() - self._loaded_at
 
-    def _fresh(self, kid: str) -> VerificationKey | None:
-        if self._age() >= KEYS_MAX_AGE_SECONDS:
+    def _recent_attempt(self) -> _Attempt | None:
+        if self._attempt is None or self._clock() - self._attempt.at >= REFETCH_COOLDOWN_SECONDS:
             return None
-        return self._keys.get(kid)
+        return self._attempt
+
+    def _refresh_in_background(self) -> None:
+        if self._recent_attempt() is None and (self._refresh is None or self._refresh.done()):
+            self._refresh = asyncio.create_task(self._refresh_quietly())
+
+    async def _refresh_quietly(self) -> None:
+        try:
+            async with self._lock:
+                await self._load_if_due()
+        except Exception:
+            log.exception("Refreshing the identity provider's keys failed")
 
     async def _load_if_due(self) -> _Outcome:
+        recent = self._recent_attempt()
+        if recent is not None:
+            return recent.outcome
         now = self._clock()
-        if self._attempt is not None and now - self._attempt.at < REFETCH_COOLDOWN_SECONDS:
-            return self._attempt.outcome
         try:
             self._keys = await self._fetch()
         except _LoadFailed as failed:

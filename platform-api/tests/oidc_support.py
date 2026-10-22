@@ -101,6 +101,7 @@ class FakeIssuer:
         self.jwks_answer: httpx.Response | None = None
         self.discovery: dict[str, object] = {"issuer": issuer, "jwks_uri": f"{issuer}/keys"}
         self.down = False
+        self.hold: asyncio.Event | None = None
         self.requests: list[str] = []
 
     @property
@@ -117,6 +118,8 @@ class FakeIssuer:
     async def handle(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request.url.path)
         await asyncio.sleep(0)
+        if self.hold is not None:
+            await self.hold.wait()
         if self.down:
             raise httpx.ConnectError("connection refused", request=request)
         if request.url.path == self.discovery_path:

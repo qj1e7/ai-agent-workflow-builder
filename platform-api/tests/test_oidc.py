@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import time
+from collections.abc import Callable
 
 import httpx
 import pytest
@@ -78,6 +79,16 @@ def unavailable(app: FastAPI, response: httpx.Response) -> None:
     assert response.headers["retry-after"] == "30"
     assert set(response.json()) == {"detail"}
     declared_status(app, "GET", ME, response)
+
+
+def async_client(app: FastAPI) -> httpx.AsyncClient:
+    return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test")
+
+
+async def eventually(condition: Callable[[], bool]) -> None:
+    async with asyncio.timeout(1):
+        while not condition():
+            await asyncio.sleep(0)
 
 
 @pytest.mark.parametrize("key", [RSA_KEY, EC_KEY], ids=["RS256", "ES256"])
@@ -276,13 +287,40 @@ def test_a_key_fetch_failure_with_no_keys_is_503_with_retry_after(
     unavailable(app, client.get(ME, headers=bearer(token())))
 
 
-def test_a_key_fetch_failure_keeps_the_keys_already_loaded(
-    client: TestClient, issuer: FakeIssuer, clock: Clock
+@pytest.mark.anyio
+async def test_a_failed_refresh_keeps_the_keys_already_loaded(
+    issuer: FakeIssuer, clock: Clock, caplog: pytest.LogCaptureFixture
 ):
-    assert client.get(ME, headers=bearer(token())).status_code == 200
-    issuer.down = True
-    clock.advance(KEYS_MAX_AGE_SECONDS)
-    assert client.get(ME, headers=bearer(token())).status_code == 200
+    async with async_client(oidc_app(issuer, clock)) as client:
+        assert (await client.get(ME, headers=bearer(token()))).status_code == 200
+        issuer.down = True
+        clock.advance(KEYS_MAX_AGE_SECONDS)
+        with caplog.at_level(logging.WARNING, logger="platform_api.oidc"):
+            assert (await client.get(ME, headers=bearer(token()))).status_code == 200
+            await eventually(lambda: "Could not load the identity provider's keys" in caplog.text)
+        assert (await client.get(ME, headers=bearer(token()))).status_code == 200
+    assert issuer.jwks_fetches == 2
+
+
+@pytest.mark.anyio
+async def test_a_known_kid_is_answered_from_stale_keys_while_they_refresh_in_the_background(
+    issuer: FakeIssuer, clock: Clock
+):
+    rotated = rsa_pair("rsa-2")
+    hold = asyncio.Event()
+    async with async_client(oidc_app(issuer, clock)) as client:
+        assert (await client.get(ME, headers=bearer(token()))).status_code == 200
+        issuer.publish(RSA_KEY, rotated)
+        clock.advance(KEYS_MAX_AGE_SECONDS)
+        issuer.hold = hold
+        async with asyncio.timeout(1):
+            responses = await asyncio.gather(
+                *(client.get(ME, headers=bearer(token())) for _ in range(3))
+            )
+        assert [r.status_code for r in responses] == [200] * 3
+        await eventually(lambda: issuer.jwks_fetches == 2)
+        hold.set()
+        assert (await client.get(ME, headers=bearer(token(rotated)))).status_code == 200
     assert issuer.jwks_fetches == 2
 
 
@@ -507,9 +545,7 @@ def test_the_allowance_covers_only_the_issuers_origin(clock: Clock):
 
 @pytest.mark.anyio
 async def test_concurrent_first_requests_share_one_key_load(issuer: FakeIssuer, clock: Clock):
-    app = oidc_app(issuer, clock)
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+    async with async_client(oidc_app(issuer, clock)) as client:
         responses = await asyncio.gather(
             *(client.get(ME, headers=bearer(token())) for _ in range(5))
         )
