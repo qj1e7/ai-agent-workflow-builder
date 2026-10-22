@@ -60,6 +60,24 @@ describe('the OpenID Connect session', () => {
     expect(session.status()).toEqual({ kind: 'signed-in' })
   })
 
+  it('finishes a renewal in flight before leaving to sign out, and a late renewal cannot sign the person back in', async () => {
+    const client = fakeOidcClient()
+    const renewal = deferred<OidcUser | null>()
+    client.renewWith(renewal.promise)
+    const session = createOidcSession(client, fakeUser('token-1', NOW, { expiresInS: 20 }), SIGNED_IN, now)
+    const request = session.credentials()
+    const signOut = session.signOut()
+    expect(client.calls).toEqual(['signinSilent'])
+    renewal.resolve(fakeUser('token-2', NOW))
+    expect(await request).toEqual({ Authorization: 'Bearer token-2' })
+    await signOut
+    expect(client.calls).toEqual(['signinSilent', 'signoutRedirect'])
+    client.fire.userUnloaded()
+    client.fire.userLoaded(fakeUser('token-3', NOW))
+    expect(session.status()).toEqual({ kind: 'signed-out' })
+    await expect(session.credentials()).rejects.toBeInstanceOf(SignedOut)
+  })
+
   it('reports expired and sends nothing when the renewal fails', async () => {
     const client = fakeOidcClient()
     client.renewWith(new Error('refresh token revoked'))

@@ -61,6 +61,7 @@ export function createOidcSession(client: OidcClient, user: OidcUser | null, ini
   let current = user
   let status = initial
   let renewing: Promise<OidcUser | null> | null = null
+  let signingOut = false
   const listeners = new Set<() => void>()
 
   function become(next: SessionStatus): void {
@@ -70,6 +71,7 @@ export function createOidcSession(client: OidcClient, user: OidcUser | null, ini
   }
 
   function load(next: OidcUser): void {
+    if (signingOut) return
     current = next
     become(SIGNED_IN)
   }
@@ -126,7 +128,11 @@ export function createOidcSession(client: OidcClient, user: OidcUser | null, ini
     },
     rejected: expire,
     signIn: (returnTo) => client.signinRedirect({ state: { returnTo } }),
-    signOut: () => client.signoutRedirect(),
+    signOut: async () => {
+      signingOut = true
+      await renewing
+      await client.signoutRedirect()
+    },
   }
 }
 
