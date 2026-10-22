@@ -1,0 +1,33 @@
+# Real sign-in against a mock identity provider: AUTH_MODE=oidc on platform-api, Authorization Code with PKCE in the Portal.
+# Layer it on compose.yaml and compose.e2e.yaml, as `E2E_AUTH=oidc scripts/e2e.sh` does. Relative paths resolve from deploy/.
+# The browser suite runs inside the Portal container's network namespace, so the browser and platform-api both reach the
+# provider as http://mock-oidc:8080. The provider builds the issuer from that address, so every token's iss matches OIDC_ISSUER.
+# The provider's users (alice, bob, carol) and their roles are in mock-oidc/config.json; a platform-api test keeps them equal to the dev users.
+# No service publishes a host port, so this stack can run beside a dev stack.
+services:
+  mock-oidc:
+    image: ghcr.io/navikt/mock-oauth2-server:6.0.4@sha256:47374fe063995d9b6d39ebb6ea21eb5f765025bf0aa08b61b08b439eb91adaf0
+    environment:
+      JSON_CONFIG_PATH: /config/mock-oidc.json
+    volumes:
+      - ./mock-oidc/config.json:/config/mock-oidc.json:ro
+
+  platform-api:
+    environment:
+      AUTH_MODE: oidc
+      OIDC_ISSUER: http://mock-oidc:8080/default
+      OIDC_AUDIENCE: platform-api
+      # Plain http is allowed for this one issuer only because PUBLIC_BASE_URL is on localhost. Never set it in a shared deployment.
+      OIDC_TEST_ONLY_HTTP_ISSUER: http://mock-oidc:8080/default
+    ports: !reset []
+
+  portal:
+    environment:
+      OIDC_AUTHORITY: http://mock-oidc:8080/default
+      OIDC_CLIENT_ID: portal
+      OIDC_SCOPE: openid profile offline_access platform-api
+      OIDC_TEST_ONLY_HTTP_AUTHORITY: http://mock-oidc:8080/default
+    ports: !reset []
+
+  n8n:
+    ports: !reset []
