@@ -208,6 +208,24 @@ def test_an_unknown_kid_inside_the_cooldown_is_refused_without_a_fetch(
     assert issuer.jwks_fetches == 1
 
 
+@pytest.mark.parametrize(
+    ("issuer_up", "status"),
+    [(True, 401), (False, 503)],
+    ids=["the reload succeeded", "the reload failed"],
+)
+def test_an_unknown_kid_inside_the_cooldown_answers_as_the_reload_that_opened_it_did(
+    client: TestClient, issuer: FakeIssuer, clock: Clock, issuer_up: bool, status: int
+):
+    assert client.get(ME, headers=bearer(token())).status_code == 200
+    issuer.down = not issuer_up
+    clock.advance(REFETCH_COOLDOWN_SECONDS)
+    unknown = bearer(token(rsa_pair("rsa-9")))
+    assert client.get(ME, headers=unknown).status_code == status
+    clock.advance(1)
+    assert client.get(ME, headers=unknown).status_code == status
+    assert issuer.jwks_fetches == 2
+
+
 def test_an_unknown_kid_is_still_refused_after_the_keys_are_fetched_again(
     client: TestClient, issuer: FakeIssuer, clock: Clock
 ):

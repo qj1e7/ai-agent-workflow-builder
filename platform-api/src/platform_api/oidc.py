@@ -193,6 +193,17 @@ async def _document(client: httpx.AsyncClient, url: str) -> object:
         raise _LoadFailed(f"{url} is not JSON") from None
 
 
+class _Outcome(Enum):
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+@dataclass(frozen=True)
+class _Attempt:
+    at: float
+    outcome: _Outcome
+
+
 class SigningKeys:
     def __init__(
         self,
@@ -208,7 +219,7 @@ class SigningKeys:
         self._jwks_url = config.jwks_url
         self._keys: dict[str, VerificationKey] = {}
         self._loaded_at: float | None = None
-        self._attempted_at: float | None = None
+        self._attempt: _Attempt | None = None
 
     async def key_for(self, kid: str) -> VerificationKey:
         key = self._fresh(kid)
@@ -218,11 +229,11 @@ class SigningKeys:
             key = self._fresh(kid)
             if key is not None:
                 return key
-            loaded = await self._load_if_due()
+            outcome = await self._load_if_due()
             key = self._keys.get(kid)
             if key is not None:
                 return key
-            if not self._keys or not loaded:
+            if outcome is _Outcome.FAILED:
                 raise KeysUnavailable
             raise TokenRejected(Rejection.UNKNOWN_KEY)
 
@@ -231,18 +242,19 @@ class SigningKeys:
             return None
         return self._keys.get(kid)
 
-    async def _load_if_due(self) -> bool:
+    async def _load_if_due(self) -> _Outcome:
         now = self._clock()
-        if self._attempted_at is not None and now - self._attempted_at < REFETCH_COOLDOWN_SECONDS:
-            return True
-        self._attempted_at = now
+        if self._attempt is not None and now - self._attempt.at < REFETCH_COOLDOWN_SECONDS:
+            return self._attempt.outcome
         try:
             self._keys = await self._fetch()
         except _LoadFailed as failed:
             log.warning("Could not load the identity provider's keys: %s", failed)
-            return False
-        self._loaded_at = now
-        return True
+            self._attempt = _Attempt(now, _Outcome.FAILED)
+        else:
+            self._loaded_at = now
+            self._attempt = _Attempt(now, _Outcome.SUCCEEDED)
+        return self._attempt.outcome
 
     async def _fetch(self) -> dict[str, VerificationKey]:
         async with httpx.AsyncClient(
