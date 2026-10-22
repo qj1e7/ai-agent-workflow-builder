@@ -476,7 +476,8 @@ def test_the_display_name_is_name_then_preferred_username_then_the_id(
 
 
 def test_an_unknown_role_is_ignored(client: TestClient):
-    response = client.get(ME, headers=bearer(token(claims={"roles": ["Operator", "Admin", 5]})))
+    roles = ["Operator", "Admin", 5, "operator", "APPROVER"]
+    response = client.get(ME, headers=bearer(token(claims={"roles": roles})))
     assert response.json()["roles"] == ["operator"]
 
 
