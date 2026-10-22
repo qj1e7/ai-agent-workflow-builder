@@ -2,7 +2,7 @@
 
 This guide is for the person who holds admin rights in the Entra tenant. When you finish, people sign in to the Portal with their work account, and platform-api knows who is an Operator and who is an Approver. [ADR 0018](../adr/0018-sign-in-with-openid-connect.md) explains the design.
 
-You register two apps. One is for platform-api, which owns the roles. One is for the Portal, which signs people in. Keep them separate: platform-api does not check the kind of token it gets, and two registrations keep the Portal's ID token from ever passing as an access token for platform-api. You need the Portal's https address before you start. In this guide it is `https://<portal-host>`.
+You register two apps. One is for platform-api, which owns the roles. One is for the Portal, which signs people in. Keep them separate: platform-api does not check the kind of token it gets, and two registrations keep the Portal's ID token from ever passing as an access token for platform-api. In this guide the Portal's https address is `https://<portal-host>`. When you deploy to Azure, Azure picks that address as the first deploy creates the environment, and the deploy prints it. So for a first Azure deploy, register both apps, leave out the Portal's redirect URIs, and add them once the deploy has printed the address. [infra/README.md](../../infra/README.md#one-time-human-steps-before-the-first-deploy) lists that order.
 
 ## Register the app for platform-api
 
@@ -57,13 +57,13 @@ The Terraform variables that feed these settings are:
 
 | Terraform variable | Sets |
 |---|---|
-| `auth_mode` | `AUTH_MODE`, `oidc` in Azure |
-| `public_base_url` | `PUBLIC_BASE_URL` |
 | `oidc_issuer` | `OIDC_ISSUER` and `OIDC_AUTHORITY` |
 | `oidc_audience` | `OIDC_AUDIENCE` |
-| `oidc_jwks_url` | `OIDC_JWKS_URL`, empty by default |
+| `oidc_jwks_url` | `OIDC_JWKS_URL`, only when it is not empty. Empty by default |
 | `oidc_client_id` | `OIDC_CLIENT_ID` (the Portal app) |
 | `oidc_scope` | `OIDC_SCOPE` |
+
+Terraform sets the other two settings itself, with no variable. `AUTH_MODE` is always `oidc`, because dev mode refuses to start anywhere but localhost. `PUBLIC_BASE_URL` is the Portal's address, `https://portal.<domain>`, built from the Container Apps environment's default domain, which nobody knows before the first deploy. The deploy workflow fills each variable from the GitHub environment variable of the same name in capitals, such as `OIDC_SCOPE`.
 
 None of these values is a secret. They can live in plain Terraform variables, not in Key Vault.
 

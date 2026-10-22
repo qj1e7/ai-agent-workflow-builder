@@ -1,0 +1,28 @@
+               
+               
+┌─────────────┐
+│ Scan Status │
+└─────────────┘
+  Scanning 58 files tracked by git with 82 Code rules:
+                                                                                                                        
+  Language      Rules   Files          Origin      Rules                                                                
+ ─────────────────────────────        ───────────────────                                                               
+  terraform        63      39          Community      82                                                                
+  yaml             11       4                                                                                           
+  <multilang>       7       2                                                                                           
+                                                                                                                        
+                
+                
+┌──────────────┐
+│ Scan Summary │
+└──────────────┘
+✅ Scan completed successfully.
+ • Findings: 0 (0 blocking)
+ • Rules run: 81
+ • Targets scanned: 45
+ • Parsed lines: ~99.7%
+ • No ignore information available
+ • For a detailed list of skipped files and lines, run semgrep with the --verbose flag
+Ran 81 rules on 45 files: 0 findings.
+(need more rules? `semgrep login` for additional free Semgrep Registry rules)
+

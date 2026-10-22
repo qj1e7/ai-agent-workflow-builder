@@ -1,0 +1,25 @@
+ok    live serves the golden /config.json body and CSP
+ok    demo serves the golden /config.json body and CSP
+ok    entra changes only connect-src and the /config.json body
+ok    mock changes only connect-src and the /config.json body
+ok    only-authority is refused, naming OIDC_CLIENT_ID
+ok    only-client-id is refused, naming OIDC_AUTHORITY
+ok    only-scope is refused, naming OIDC_AUTHORITY
+ok    no-scope is refused, naming OIDC_SCOPE
+ok    demo-with-auth is refused, naming PORTAL_MODE
+ok    http-authority is refused, naming OIDC_AUTHORITY
+ok    http-allowance-mismatch is refused, naming OIDC_AUTHORITY
+ok    ftp-authority is refused, naming OIDC_AUTHORITY
+ok    authority-query is refused, naming OIDC_AUTHORITY
+ok    authority-fragment is refused, naming OIDC_AUTHORITY
+ok    authority-quote is refused, naming OIDC_AUTHORITY
+ok    client-id-space is refused, naming OIDC_CLIENT_ID
+ok    client-id-quote is refused, naming OIDC_CLIENT_ID
+ok    scope-without-openid is refused, naming OIDC_SCOPE
+ok    scope-openid-prefix-only is refused, naming OIDC_SCOPE
+ok    scope-bad-char is refused, naming OIDC_SCOPE
+ok    scope-double-space is refused, naming OIDC_SCOPE
+ok    authority-newline is refused, naming OIDC_AUTHORITY
+ok    client-id-newline is refused, naming OIDC_CLIENT_ID
+ok    scope-newline is refused, naming OIDC_SCOPE
+render.test.sh: all checks passed

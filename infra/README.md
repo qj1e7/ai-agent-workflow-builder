@@ -1,0 +1,182 @@
+# Azure infrastructure
+
+This folder holds the Terraform code for the walking skeleton on Azure (ADR 0004, ADR 0013). It is written so it also runs under OpenTofu. Nothing here has been applied yet. Every check so far ran offline, without an Azure account.
+
+> **The first deploy needs Entra ID sign-in.** platform-api runs with `AUTH_MODE=oidc` on Azure, so the deploy needs two Entra ID app registrations, with the app roles `Operator` and `Approver` on platform-api's. [docs/auth/entra-setup.md](../docs/auth/entra-setup.md) has the steps, and the values it produces go into the variables below. The `AUTH_MODE=dev` guard stays as it is: dev sign-in only runs on localhost, so it can never reach a shared deployment.
+
+## What gets created
+
+One environment, `dev`, in Southeast Asia (`southeastasia`), in the resource group `rg-wab-dev`. Names follow `<type>-wab-<environment>`, plus a random 5-character suffix where Azure needs a globally unique name. Every resource carries the tags `project`, `environment` and `managed-by`.
+
+| Resource | Name | Size and notes |
+|---|---|---|
+| Resource group | `rg-wab-dev` | The bootstrap script creates it, and Terraform only reads it. The deploy identity's rights end at this group |
+| Log Analytics workspace | `log-wab-dev` | Pay as you go, 30 days, capped at 1 GB a day |
+| Application Insights | `appi-wab-dev` | Uses the workspace. No app sends telemetry to it yet |
+| Key Vault | `kv-wab-dev-<suffix>` | RBAC mode, purge protection, 7 days of soft delete |
+| Container registry | `crwabdev<suffix>` | Basic SKU, admin user off |
+| PostgreSQL Flexible Server | `psql-wab-dev-<suffix>` | Version 17, Burstable `B_Standard_B1ms`, 32 GB, TLS required, databases `platform` and `n8n` |
+| Container Apps environment | `cae-wab-dev` | Consumption plan, logs to Log Analytics |
+| Container App | `platform-api` | External ingress on 8000, 0.25 vCPU, 1 replica always on for the `tick` loop |
+| Container App | `agent-runtime` | Internal ingress on 8100, 0.25 vCPU, scales to zero |
+| Container App | `n8n` | Internal ingress on 5678, 0.5 vCPU, exactly 1 replica |
+| Container App | `portal` | External ingress on 8080, 0.25 vCPU, scales to zero |
+| Container Apps Job | `db-init` | Creates the per-context database roles. Runs on every deploy |
+| Container Apps Job | `bootstrap` | Migrations, n8n owner, workflow load and lint. Runs on every deploy |
+| Managed identities | `id-<app>-wab-dev`, one per app and job | AcrPull on the registry, and Key Vault Secrets User on each secret it reads, nothing else |
+
+PostgreSQL 17 matches Compose and is listed as supported in [Azure's version list](https://learn.microsoft.com/en-us/azure/postgresql/configure-maintain/concepts-supported-versions). We did not check that the Southeast Asia region offers it, because nothing here contacts Azure. If the first deploy says it does not, set `version = "16"` in `modules/postgres/main.tf`.
+
+The Portal runs its existing nginx image as a Container App, not on Static Web Apps. Static Web Apps stops each API request after 45 seconds, which breaks the live view's event stream. Proposed [ADR 0016](../docs/adr/0016-host-the-portal-as-a-container-app.md) explains the choice.
+
+### Layout
+
+```text
+infra/
+  envs/dev/            the dev environment: the app table, generated secrets, backend
+  modules/
+    observability/     Log Analytics and Application Insights
+    key_vault/         the vault and its secrets
+    registry/          the container registry
+    postgres/          the server, its firewall rule and the databases
+    container_env/     the Container Apps environment
+    workload_identity/ one identity and its role assignments
+    container_app/     one Container App
+    container_app_job/ one Container Apps Job
+  sql/db-init.sql      the role setup that the db-init job runs
+  public-images.json   n8n and PostgreSQL, pinned by digest, copied into our registry
+  bootstrap/           one-time setup by a person: state storage and the deploy identity
+  scripts/             the offline checks, and the job runner the deploy workflow uses
+```
+
+`envs/dev/main.tf` describes the four apps and two jobs as one table. Each row names the image, size, replicas, plain settings and the secrets it reads. Adding an app is one more row.
+
+## Secrets
+
+- No secret value is in any `.tf` file or tfvars file in git. Terraform generates every secret with `random_password` and writes it to Key Vault.
+- The apps never hold a secret value in their own settings. Each Container App setting points at a Key Vault secret's URL, and Azure reads it with the app's own managed identity. Our code reads plain environment variables and never calls a Key Vault SDK, the same as in Compose.
+- **The generated secrets are also in the Terraform state file, in plain text.** That is how Terraform remembers a value so the next run keeps it. The state lives in Azure Storage with access keys turned off, so only identities with a blob data role can read it. [bootstrap/README.md](bootstrap/README.md) explains who that is. We kept stored random values over Terraform's newer write-only arguments, because a write-only value is new on every run, and a run that fails halfway would leave the database and Key Vault with different passwords.
+- `GITHUB_TOKEN` for the release checker is not set. The checker works without it at GitHub's lower anonymous rate limit.
+
+### How each setting maps from Compose
+
+| Setting | Compose | Azure |
+|---|---|---|
+| `AUTH_MODE` | `dev` | always `oidc`, because dev mode refuses to start off localhost |
+| `PUBLIC_BASE_URL` | `http://localhost:8080` | the Portal's HTTPS URL, `https://portal.<domain>`, built from the environment's domain |
+| `OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_JWKS_URL` | not set | from variables. `OIDC_JWKS_URL` only when it is not empty |
+| `DATABASE_URL_*` | built from `.env` | Key Vault secrets, each a full URL with `sslmode=require` |
+| `AGENT_API_KEY`, `STEP_KEY`, `CALLBACK_SIGNING_KEY` | `.env` | Key Vault secrets |
+| `AGENT_RUNTIME_URL`, `N8N_BASE_URL`, `PLATFORM_INTERNAL_URL` | `http://<service>:<port>` | `https://<app>.internal.<domain>` or `https://<app>.<domain>` |
+| `CALLBACK_ALLOWED_ORIGINS` | `http://platform-api:8000` | platform-api's HTTPS origin |
+| n8n database settings | `postgres` host, password from `.env` | the server's host name, TLS on, password from Key Vault |
+| `N8N_ENCRYPTION_KEY` | `.env` | Key Vault secret. It must never change |
+| `N8N_SECURE_COOKIE` | `false`, for plain HTTP | not set, so n8n's default `true` applies over HTTPS |
+| Portal `API_UPSTREAM` | `http://platform-api:8000` | platform-api's HTTPS URL |
+| Portal `OIDC_AUTHORITY`, `OIDC_CLIENT_ID`, `OIDC_SCOPE` | not set | from variables, for `/config.json`. `OIDC_AUTHORITY` is the same value as `OIDC_ISSUER` |
+
+Apps call each other over HTTPS, because Container Apps redirects plain HTTP and our HTTP clients do not follow redirects. Traffic between apps in one environment stays inside it.
+
+Every app's address comes from the Container Apps environment's default domain: `https://<app>.<domain>`, or `https://<app>.internal.<domain>` for an internal app. So the Portal and platform-api can each know the other's address without waiting for the other app to exist. Azure picks the domain when it creates the environment, so a new environment gets a new one.
+
+## Known risk: the database is reachable from Azure
+
+The PostgreSQL server has public access, with the firewall rule that lets Azure services in. That rule lets in any Azure customer's services, not only our apps. TLS and a 48-character generated password per role are what keep others out.
+
+The team lead accepted this for the dev and demo environment on 23 Oct 2026. Private networking comes with DevNet.
+
+Changing it later is not a small edit. Private access needs the Container Apps environment inside a virtual network, and an environment cannot join one after it is created. So the move means recreating the environment, which also gives it a new domain and new app addresses.
+
+## Cost estimate
+
+This is an **estimate** from Azure's published US-dollar list prices for pay-as-you-go. We did not check prices for Southeast Asia, which can be 10 to 20 percent higher.
+
+| Item | Per month |
+|---|---|
+| PostgreSQL B1ms compute and 32 GB storage | USD 16 to 20 |
+| Container Apps: platform-api and n8n always on (0.75 vCPU, 1.5 GiB) after the monthly free grant. Low end if Azure bills them at the idle rate, high end at the active rate | USD 16 to 54 |
+| Container Apps: agent-runtime and the Portal, scaled to zero between demos | about USD 0 |
+| Container registry, Basic | about USD 5 |
+| Log Analytics, under the first 5 GB free | USD 0 to 3 |
+| Key Vault operations, Terraform state storage | under USD 1 |
+| **Total** | **about USD 35 to 85** |
+
+Azure for Students gives USD 100 of credit for 12 months. At this rate, an environment that runs all the time uses the credit in two or three months. So bring it up for demos and test weeks, and take it down afterwards with `terraform destroy` from a signed-in laptop. Keep these points in mind:
+
+- The state storage, the deploy identity and the empty resource group `rg-wab-dev` stay. Terraform did not create the group, so it does not delete it. Leave it in place: the deploy identity's roles live on it, and an empty group costs nothing. The next deploy starts from there in about 20 minutes (a guess).
+- Run only `destroy` from a laptop. `apply` belongs to the deploy workflow, because the Terraform code gives its caller two roles as a service principal, and a person is not one.
+- A new environment gets a new domain, so the Portal's address changes. After the first deploy that follows a destroy, add the Portal's new redirect URIs to its app registration (step 6 below).
+- Key Vault names stay reserved for 7 days after a destroy, which is why the names carry a random suffix.
+
+## One-time human steps before the first deploy
+
+Do these in order. Each one changes cloud resources or repository settings, so a person does them.
+
+1. **Create the state storage, the resource group and the deploy identity.** Follow [bootstrap/README.md](bootstrap/README.md). It prints five values for step 4.
+2. **Create the GitHub environment.** In the repository's Settings, open Environments and create `azure-dev`.
+   - Under Required reviewers, add at least one teammate. Tick "Prevent self-review", so the person who starts a deploy cannot also approve it.
+   - Under Deployment branches, allow `main` only. Keep it that way. The federated credential from step 1 trusts the environment name, not a branch, so any workflow job that names `environment: azure-dev` acts as the deploy identity. This branch rule and the reviewers are what stop an unreviewed branch from doing that.
+3. **Register the Entra ID apps.** Follow [docs/auth/entra-setup.md](../docs/auth/entra-setup.md). It creates the two app registrations, with the app roles `Operator` and `Approver` on platform-api's, and gives the values for the `OIDC_` variables in step 4. The Portal's address does not exist until the first deploy, so register the Portal app without its redirect URIs for now. If the university tenant does not let students register apps, this step needs a tenant that does, because app roles live on an app registration. The deploy identity from step 1 does not have this problem, because it is a managed identity.
+4. **Set the environment variables.** On the `azure-dev` environment, add these variables. They are configuration, not secrets, so they go under Variables, not Secrets.
+
+   | Variable | Value |
+   |---|---|
+   | `AZURE_CLIENT_ID` | printed by the bootstrap script |
+   | `AZURE_TENANT_ID` | printed by the bootstrap script |
+   | `AZURE_SUBSCRIPTION_ID` | printed by the bootstrap script |
+   | `TFSTATE_RESOURCE_GROUP` | printed by the bootstrap script |
+   | `TFSTATE_STORAGE_ACCOUNT` | printed by the bootstrap script |
+   | `OIDC_ISSUER` | `https://login.microsoftonline.com/<tenant-id>/v2.0`. The Portal uses it as its sign-in authority too |
+   | `OIDC_AUDIENCE` | the Application (client) ID of platform-api's app registration, not its `api://` URI |
+   | `OIDC_CLIENT_ID` | the Application (client) ID of the Portal's app registration |
+   | `OIDC_SCOPE` | `openid profile offline_access api://<api-client-id>/access_as_user` |
+   | `OIDC_JWKS_URL` | optional. Leave it unset, and platform-api finds the keys through the issuer |
+   | `N8N_OWNER_EMAIL` | the email for the n8n owner account |
+
+   With the GitHub CLI, each is one command, for example `gh variable set OIDC_ISSUER --env azure-dev --body "https://login.microsoftonline.com/<tenant-id>/v2.0"`.
+5. **Run the deploy.** In the Actions tab, run the `deploy` workflow on `main`. A reviewer from step 2 approves it, and then it:
+   1. creates the registry if it is missing,
+   2. copies n8n and PostgreSQL into the registry by digest, then builds and pushes our three images, tagged with the commit SHA,
+   3. creates the `db-init` job if it is missing and runs it, so the database roles exist before any app starts,
+   4. runs `terraform plan`, shows the plan in the run summary, and applies that exact plan,
+   5. runs the `bootstrap` job, and prints the Portal's URL.
+
+   The workflow never runs on a push. Only `workflow_dispatch` starts it.
+6. **Add the Portal's redirect URIs.** In the Portal's app registration, add `https://<portal-host>/auth/callback` and `https://<portal-host>/signed-out` as single-page application redirect URIs, with the address the deploy printed. Sign-in works from then on. Repeat this after any deploy that creates a new environment, because its address changes.
+
+### What to watch on the first deploy
+
+These were not testable offline, so they are guesses until a real deploy confirms them:
+
+- Azure RBAC can take a few minutes to reach Key Vault. Each identity waits 90 seconds after its role assignments before its app is created. If an app still fails to read a secret, rerun the workflow.
+- `az acr import` should keep each image's digest, since the Terraform code pulls n8n and PostgreSQL by digest. If a pull fails with "manifest unknown", compare the digest in the registry with `public-images.json`.
+- The Azure admin role is not a superuser. `db-init` grants itself membership in `n8n` and `wab_owner` before it hands them their databases. A local PostgreSQL 17 run showed that the handover fails without that grant and works with it. On Azure it is still untested.
+- Container Apps ingress ends any request after 240 seconds. The live view's event stream reconnects on its own. Check that the live view keeps up after 4 minutes.
+
+## Run the checks locally
+
+You need Docker. Nothing else is installed, and nothing talks to Azure.
+
+```sh
+infra/scripts/check.sh            # print the results
+infra/scripts/check.sh out/infra  # also save each tool's output in out/infra/
+```
+
+The script runs, each in a Docker image pinned by digest:
+
+1. `terraform fmt -check -recursive`
+2. `terraform init -backend=false`, then `terraform validate`, for each environment
+3. `tofu init -backend=false`, then `tofu validate`, on a copy without the lock file
+4. `tflint` with the `terraform` and `azurerm` rulesets (`.tflint.hcl`)
+5. Checkov's Terraform checks
+
+CI runs the same script in the `infra` workflow, only when a pull request changes `infra/` or one of the two infrastructure workflows. It also runs `actionlint` on every workflow. Semgrep's `p/terraform` rules run in the main CI's SAST step.
+
+Accepted findings are written next to the code they are about, with a one-line reason, in each tool's own syntax: `#checkov:skip=`, `# tflint-ignore:` and `# nosemgrep:`. Most come from the Basic registry tier and from having no virtual network. A virtual network and private endpoints would cost more than the credits allow, and they arrive with the move to DevNet (ADR 0005). [docs/evidence/iac/](../docs/evidence/iac/README.md) lists them all.
+
+## How AWS stays possible
+
+ADR 0004 keeps a move to AWS open. This code does that in two ways:
+
+- **Modules per concern.** Each module wraps one kind of cloud service: logs, secrets, registry, database, container runtime, identity. A move to AWS replaces each module with its AWS twin (CloudWatch, Secrets Manager, ECR, RDS for PostgreSQL, ECS on Fargate, IAM roles) and keeps the same `envs/` table of apps and settings. The tooling stays the same: Terraform, the S3 state backend, the same checks and the same plan-and-apply workflow.
+- **No Azure-only logic in the apps.** The apps read plain environment variables and talk to PostgreSQL, HTTP and each other. They never call an Azure SDK, Key Vault or Managed Identity directly. The managed identities and Key Vault references live in this folder only.
