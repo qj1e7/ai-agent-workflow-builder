@@ -1,13 +1,21 @@
 name: deploy
 
-# Only a person starts a deploy. Once the repository is public and the azure-dev environment has
-# its rules, a reviewer must approve each run before the job gets any Azure credentials.
-# infra/README.md lists the one-time setup in the order that makes that true.
+# A person starts each deploy by hand. The azure-dev environment only accepts main, and main only
+# takes pull requests a second person approved, so only reviewed code can deploy. No second person
+# approves each run, so every apply goes through guarded-apply.sh, which stops before applying a
+# plan that would destroy or replace anything unless allow_destroy is ticked. infra/README.md
+# lists the one-time setup in the order that makes this true.
 #
-# The logs of a public repository are public. So the Azure IDs are secrets, which GitHub masks,
-# and the steps print summaries: Terraform's full output and the plan stay on the runner.
+# The Azure IDs are secrets, which GitHub masks, and the steps print summaries only. Terraform's
+# full output and the plan stay on the runner. That keeps the logs safe if the repository is ever
+# made public.
 on:
   workflow_dispatch:
+    inputs:
+      allow_destroy:
+        description: Let this deploy destroy or replace Azure resources. Leave it off unless you mean it.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -29,6 +37,7 @@ jobs:
         working-directory: infra/envs/dev
     env:
       TF_IN_AUTOMATION: "true"
+      ALLOW_DESTROY: ${{ inputs.allow_destroy }}
       TF_INPUT: "false"
       ARM_USE_OIDC: "true"
       ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -75,7 +84,7 @@ jobs:
       # The images need a registry, and the apps need their database roles, before the full apply can
       # create the apps. On every later deploy these targeted applies find nothing to change.
       - name: Create the registry
-        run: ../../scripts/terraform-quiet.sh apply-registry.txt apply -auto-approve -target=module.registry
+        run: ../../scripts/guarded-apply.sh registry -target=module.registry
 
       - name: Put the images in the registry
         working-directory: .
@@ -117,23 +126,13 @@ jobs:
       # cold start counts against the wait but not against the job's timeout.
       - name: Create the database roles
         run: |
-          ../../scripts/terraform-quiet.sh apply-db-init.txt apply -auto-approve -target='module.job["db-init"]'
+          ../../scripts/guarded-apply.sh db-init -target='module.job["db-init"]'
           ../../scripts/run-job.sh "$(terraform output -raw resource_group_name)" db-init 600
 
-      # The full plan names every resource, so it stays in plan.txt on the runner and is never
+      # The full plan names every resource, so it stays in a file on the runner and is never
       # uploaded. The run summary gets only the count of changes.
-      - name: Plan
-        run: |
-          counts=$(../../scripts/terraform-quiet.sh plan.txt plan -out=tfplan)
-          echo "$counts"
-          {
-            echo '## Terraform plan'
-            echo
-            echo "$counts"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Apply
-        run: ../../scripts/terraform-quiet.sh apply.txt apply tfplan
+      - name: Plan, check and apply everything
+        run: ../../scripts/guarded-apply.sh all
 
       - name: Run the bootstrap job
         run: ../../scripts/run-job.sh "$(terraform output -raw resource_group_name)" bootstrap 1200
