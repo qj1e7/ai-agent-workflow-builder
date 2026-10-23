@@ -29,30 +29,34 @@ A self-hosted model answers both questions, because nothing leaves the network. 
 
 ## 4. Is a self-hosted model enough?
 
-Two runs on the laptop give a first answer for small local models. Both runs scored the same, and every answer was the same word for word:
+Three runs on the laptop give a first answer for small local models. All three scored the same, and every answer was the same word for word. These scores use the checks as they stand after an independent review:
 
-| Model | Summarise | Explain | Match |
-|---|---|---|---|
-| `gemma:2b` (3B, 4-bit) | 1/12 | 3/13 | 0/13 |
-| `deepseek-r1:latest` (8B, 4-bit, thinking) | 11/12 | 7/13 | 11/13 |
+| Model | Summarise | Over 10 s | Explain | Match |
+|---|---|---|---|---|
+| `gemma:2b` (3B, 4-bit) | 1/12 | 0 of 12 | 2/13 | 0/13 |
+| `deepseek-r1:latest` (8B, 4-bit, thinking) | 11/12 | 2 or 3 of 12 | 6/13 | 11/13 |
 
-An earlier run scored `explain` one lower for each model (2/13 and 6/13). The answers were the same. A check was too strict about who declined a run, and we fixed it. The README explains this, and lists the checks that may still be too strict.
+The `explain` score moved twice on the same answers. First a check that wanted the approver's name was fixed, which raised it by one for each model. Then the review made the checks match whole words only, which lowered it by one for each model. The README gives every step, and lists the checks that may still be wrong.
 
 `gemma:2b` is not enough:
 - It refuses 11 of the 12 summaries ("I do not have access to real-time project updates"), even though the prompt gives it the tags.
-- It never picks a template. It copies the example values from the template list (`langchain-ai/langgraph`, `MOCK`) into every answer, even for a meeting room booking.
+- It never picks a template, so every match fails.
+- It fills in values the request never gave. The example project `MOCK` from the template list is in 10 of its 13 answers, but only one request named `MOCK`, and one asked for `VSC`. For the 5 requests that fit no template, and for the one that names no product, it filled in the example repository `langchain-ai/langgraph`. When a request did name a repository, it used that one.
 - It says a retry is not safe every time, so its right answers on retry are luck.
 
 `deepseek-r1` is close on summaries and matching:
 - **Summarise.** One summary leaves out the version ("There is a new release of langgraph available."). The product would still show it, because it only checks the length and the line breaks.
 - **Match.** It misses the starting tag in a casual sentence ("anything newer than 0.115.0"). It also keeps the `v` in `v1.9.8`, which the builder would refuse.
 
-It falls short on plain-language explanations:
-- Three answers repeat a code or status: `503`, `write_action` and `create_page`.
+It falls short on plain-language explanations. 7 of its 13 answers fail:
+- Four repeat a code or status: `503`, `release_check`, `write_action` and `create_page`.
 - Two leave out that the request was approved before Jira failed.
+- One says the safety checker found "a mismatch", but not that the approved ticket had changed.
 - One says a retry is not safe when it is. That is the cautious mistake, not the costly one.
 
-It is also slow. The median summary took 5 to 6 seconds. Three of the 12 summaries took over 10 seconds, and the slowest took 30 to 34 seconds. The product gives up on the model after 10 seconds and uses its template, so in the product those three would be the template sentence. Its explanations and matches took about 8 seconds each.
+One answer fails two of these, so the list adds up to 8.
+
+It is also slow. The median summary took 5 to 6 seconds. Two or three of the 12 summaries took over 10 seconds, because one sits right at the limit (9.8 to 10.9 seconds). The slowest took 30 to 34 seconds. The product gives up on the model after 10 seconds and uses its template, so in the product those would be the template sentence. Its explanations and matches took about 8 seconds each.
 
 So the open questions for a self-hosted route are:
 

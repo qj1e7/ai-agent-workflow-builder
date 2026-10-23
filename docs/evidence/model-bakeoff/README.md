@@ -40,12 +40,12 @@ Every check is deterministic. A case passes only when all of its checks pass. Th
 | `answered` | all | The model raised an error or its structured answer did not parse. |
 | `usable_by_product` | summarise | The answer is empty, has a line break, or is over 300 characters. The runtime would throw it away and use its template instead. |
 | `every_new_version` | summarise | A new version number is missing. A tag counts by its version number, so `v1.10.0` counts as `1.10.0`. |
-| `required_facts` | explain | A fact the case names is missing, such as the system that failed and the kind of failure. Each fact lists the plain words that count. |
+| `required_facts` | explain | A fact the case names is missing, such as the system that failed and the kind of failure. Each fact lists the plain words that count. A word must appear whole, so `repo` does not count inside `report`. A word marked with `*` is cut short on purpose: `approv*` counts in `approved` and `approval`. |
 | `retry_safe_matches` | explain | `retry_safe` differs from the truth. |
 | `length_cap` | explain | The explanation is over 500 characters. |
 | `no_invented_version` | summarise, explain | The answer has a version number that is not in the input. |
 | `no_invented_system` | summarise, explain | The answer names a system (GitHub, Jira, Confluence, Teams, PyPI and others) that is not in the input. |
-| `no_jargon` | summarise, explain | The answer has a word from the jargon list (`API`, `HTTP`, `endpoint`, `payload`, `n8n`, the error type names and others), an HTTP status code such as `503`, or a code name such as `run_agents`. A summary may repeat a word from the repo's own name. |
+| `no_jargon` | summarise, explain | The answer has a word from the jargon list (`API`, `HTTP`, `endpoint`, `payload`, `n8n`, the error type names and others), an HTTP status code such as `503`, or a code name such as `run_agents`. Plurals and hyphenated forms count too (`APIs`, `Rest-API`), and so do code names in capitals (`Run_agents`). A summary may repeat a word from the repo's own name. |
 | `no_themed_names` | summarise, explain | The answer uses one of the old themed names that `AGENTS.md` bans. |
 | `no_write_claim` | summarise, explain | The answer says a ticket or page was created, opened or written, or names a ticket key such as `MOCK-142` that is not in the input. "No ticket was created" and "a ticket will be created" do not count. |
 | `right_template` | match | The template is not the expected one. No template is the right answer for the five unrelated requests. |
@@ -59,20 +59,24 @@ The unit tests in `agent-runtime/tests/test_eval_scoring.py` prove the scoring i
 
 An LLM judge is optional and off by default. Set `EVAL_JUDGE=<provider>:<model>` to get a 1 to 5 score per `summarise` and `explain` answer. The score appears as `judge_mean` in `results.json`. It never changes a pass or a fail.
 
-Each run also records median and p95 latency, mean input and output tokens, and the cost per 100 runs where the price is known. Prices live in `agent-runtime/evals/pricing.json` with their source and date. The p95 uses the nearest-rank method, so with 12 or 13 cases it is the slowest case.
+The product asks the summary model once, with no retry, and waits 10 seconds before it uses its template sentence instead. The harness asks once with no retry too, but it waits longer, so it can still time a slow answer. Each summary records `within_product_limit`: whether it came within those 10 seconds. The table counts the ones that did not, under "over 10 s". This is not a check, so it does not change a pass or a fail.
+
+Each run also records median and p95 latency, mean input and output tokens, and the cost per 100 runs where the price is known. The token and cost means count only the cases that got an answer, so a provider that errors does not look cheap. Prices live in `agent-runtime/evals/pricing.json` with their source and date. The p95 uses the nearest-rank method, so with 12 or 13 cases it is the slowest case.
 
 ## Results
 
 We ran the full set twice on 23 October 2026 (Singapore time), one run straight after the other, on the two local Ollama models. Every cloud provider is "not run", because no key is set yet.
 
-| Model | Job | Pass, run 2 | Pass, run 3 | Median seconds (run 2 / run 3) | p95 seconds (run 2 / run 3) | Mean tokens in / out | $ per 100 runs |
-|---|---|---|---|---|---|---|---|
-| `gemma:2b` | summarise | 1/12 | 1/12 | 0.3 / 0.3 | 0.4 / 0.5 | 94 / 27 | 0 |
-| `gemma:2b` | explain | 3/13 | 3/13 | 0.9 / 0.9 | 1.3 / 1.3 | 300 / 37 | 0 |
-| `gemma:2b` | match | 0/13 | 0/13 | 1.6 / 1.6 | 1.8 / 1.8 | 354 / 74 | 0 |
-| `deepseek-r1:latest` | summarise | 11/12 | 11/12 | 5.3 / 6.1 | 30.0 / 34.1 | 73 / 543 | 0 |
-| `deepseek-r1:latest` | explain | 7/13 | 7/13 | 8.7 / 7.5 | 10.4 / 9.0 | 550 / 52 | 0 |
-| `deepseek-r1:latest` | match | 11/13 | 11/13 | 8.4 / 7.9 | 15.2 / 13.7 | 632 / 26 | 0 |
+The pass rates below use the scoring rules as they stand after the independent review described further down. We applied those rules to the saved answers of runs 2 and 3, without asking the models again. A third run with the updated harness, run 4, is described under the spread.
+
+| Model | Job | Pass, run 2 | Pass, run 3 | Over 10 s (run 2 / run 3) | Median seconds (run 2 / run 3) | p95 seconds (run 2 / run 3) | Mean tokens in / out | $ per 100 runs |
+|---|---|---|---|---|---|---|---|---|
+| `gemma:2b` | summarise | 1/12 | 1/12 | 0 / 0 | 0.3 / 0.3 | 0.4 / 0.5 | 94 / 27 | 0 |
+| `gemma:2b` | explain | 2/13 | 2/13 | - | 0.9 / 0.9 | 1.3 / 1.3 | 300 / 37 | 0 |
+| `gemma:2b` | match | 0/13 | 0/13 | - | 1.6 / 1.6 | 1.8 / 1.8 | 354 / 74 | 0 |
+| `deepseek-r1:latest` | summarise | 11/12 | 11/12 | 3 / 3 | 5.3 / 6.1 | 30.0 / 34.1 | 73 / 543 | 0 |
+| `deepseek-r1:latest` | explain | 6/13 | 6/13 | - | 8.7 / 7.5 | 10.4 / 9.0 | 550 / 52 | 0 |
+| `deepseek-r1:latest` | match | 11/13 | 11/13 | - | 8.4 / 7.9 | 15.2 / 13.7 | 632 / 26 | 0 |
 
 Not run: Azure OpenAI, Anthropic and Google Gemini (no key set).
 
@@ -84,6 +88,7 @@ The cost is 0 for Ollama because there is no charge per token. The laptop and it
 - Every answer is the same, word for word: 76 of 76 (38 cases for each of the 2 models). Ollama runs at temperature 0 with a fixed seed, so these two models repeat themselves on this machine. Cloud models run without a fixed temperature, so their answers may vary more.
 - The latency moves. `gemma:2b` stays within 0.1 seconds. The median for `deepseek-r1` moves by up to 1.2 seconds, and its slowest answer by up to 4.1 seconds. The answers and the token counts did not change, so this spread comes from the machine, not the model.
 - Each full run took about 6.5 minutes, including the build of the eval image.
+- Run 4 came later the same day (11:43), with the updated harness. Its 76 answers were again the same as in runs 2 and 3, word for word, and its pass rates match the table above. Only the time moved. One summary (`across-minor`) took 10.7 and 10.9 seconds in runs 2 and 3, but 9.8 seconds in run 4. So the count of `deepseek-r1` summaries over 10 seconds was 3, 3 and then 2. A summary that close to the limit can land on either side.
 
 ### What changed since run 1
 
@@ -96,12 +101,37 @@ We made both changes after reading the answers from run 1. That carries a risk: 
 
 `deepseek-r1` was a little slower in run 1 (a median of 10.3 seconds for `explain` and 9.5 seconds for `match`). Run 1 ran at another time, and we did not record how busy the machine was.
 
+### What changed after the independent review
+
+An independent review of the harness came after runs 2 and 3, so the answers had already been seen. These changes came from that review:
+
+- **Whole words.** A fact word now has to appear whole, so `repo` no longer counts inside `report`, and `down` no longer counts inside `download`. Three words are cut short on purpose and marked with `*`: `approv*`, `declin*` and `temporar*`.
+- **No stock phrases.** "changed", "failed" and "stopped" no longer count as facts. Almost every answer says "Nothing was changed" or "the run failed", so those words prove nothing.
+- **Two more ways to say it.** "no connector" and "not bound" now count for `unbound-intent`.
+- **More jargon caught.** Plurals, hyphenated forms and code names in capitals now count.
+- **The product's time limit.** The summary job now gets one try with no retry, as in the product, and each summary records whether it came within 10 seconds.
+- **Fair token counts.** A case that errored no longer counts in the token and cost means.
+
+We rescored the saved answers of runs 2 and 3 with the new rules. Both runs gave the same result:
+
+| Model | Summarise, before / after | Explain, before / after | Match, before / after |
+|---|---|---|---|
+| `gemma:2b` | 1/12 / 1/12 | 3/13 / 2/13 | 0/13 / 0/13 |
+| `deepseek-r1:latest` | 11/12 / 11/12 | 7/13 / 6/13 | 11/13 / 11/13 |
+
+The only case that changed is `safety-denied`, for both models. Both wrote "mismatch", which repeats the code word `digest_mismatch` from the log. The old check counted "mismatch" because it contains "match". With whole words it does not. Neither answer says that the approved ticket no longer matched what was about to be written, and `gemma:2b` gave the wrong cause. We did not add "mismatch" to the list, because that would only raise a score.
+
+The review also suggested dropping any fact word that already appears in the run's log. We did not apply that. Those words are the names of what broke, such as GitHub, Jira or the approver. Saying what broke is the fact the check exists for, and it is expected to be in the log. Dropping them would let an answer pass without saying what failed.
+
 ### Checks that may be wrong, left as they are
 
 - **timed-out.** `gemma:2b` wrote "failed to come back". The list accepts "did not come back" but not this. It is the same kind of gap as "wasn't set up". Adding it would change no score, because `gemma:2b` also fails that case on the retry answer and on jargon (`TimedOut`). We left it for the team lead to decide.
-- **The two Jira failures after approval.** The check wants the answer to say the request was approved. The answers from `deepseek-r1` are accurate and plain, but they do not say it. That costs `deepseek-r1` two of its six `explain` failures. The rule can be defended, because the Operator should know the approval still stands and only the Jira step failed. But it is a judgment call, and the team lead should confirm it.
-- **A wrong cause can pass.** `gemma:2b` passed `safety-denied` while it blamed "a digest mismatch between the last known tag and the newly fetched releases". That cause is wrong. The checks catch invented versions, systems and ticket keys, and claims that a ticket was written. They do not catch a wrong story. The optional LLM judge or a person reading the answers can.
+- **The two Jira failures after approval.** The check wants the answer to say the request was approved. The answers from `deepseek-r1` are accurate and plain, but they do not say it. That costs `deepseek-r1` two of its seven `explain` failures. The rule can be defended, because the Operator should know the approval still stands and only the Jira step failed. But it is a judgment call, and the team lead should confirm it.
+- **A wrong story can still pass.** `gemma:2b` used to pass `safety-denied` while it blamed "a digest mismatch between the last known tag and the newly fetched releases". Whole words now stop that. But the checks look for words, not for a true account, so an answer can use the right words in a wrong sentence. The optional LLM judge or a person reading the answers can catch that.
 - **Always "not safe".** `gemma:2b` said a retry was not safe in all 13 cases. Its 6 right answers on retry are exactly the 6 cases where "not safe" is true. Read that score as a guess, not a skill.
+- **A hedge word anywhere before a write claim cancels it.** `no_write_claim` ignores a claim when an earlier part of the same sentence has a word such as "not", "if", "once" or "before". So "Once Bob approved, the ticket was created" does not count as a claim, though it says a ticket was made.
+- **Versions without a dot are not checked.** A version is a number with at least one dot, such as `1.2.16`. An invented "version 2" is not caught.
+- **The repo name lets jargon through.** A summary may use a jargon word that appears anywhere in the repo's name. That is a plain text match, so for `fastapi/fastapi` the word "API" passes.
 
 ## What limits the local numbers
 
@@ -166,4 +196,15 @@ You need Docker and the provider's key. Nothing else. The script passes each set
 
 Cloud models reject `temperature: 0` in some families (newer Claude models and reasoning models do). So the harness sends no temperature to cloud providers unless you set `EVAL_TEMPERATURE`. Ollama runs at temperature 0 with a fixed seed.
 
-**In CI.** The `evals` workflow runs only when started by hand (Actions, then "evals", then "Run workflow"). Add the keys as repository secrets: `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`. Add the model lists as repository variables: `AZURE_OPENAI_API_VERSION`, `AZURE_OPENAI_DEPLOYMENTS`, `ANTHROPIC_MODELS`, `GOOGLE_MODELS`. A provider without its secret is reported as "not run" and the job still passes. The results are attached to the run as the `eval-results` artifact. Adding secrets changes repository settings, so a human does it.
+**In CI.** The `evals` workflow runs only when started by hand (Actions, then "evals", then "Run workflow"). Its job runs in a GitHub Environment called `evals`. Setting it up changes repository settings, so a human does it:
+
+1. In the repository's Settings, open Environments and create one named `evals`. Do this before the first run. If the workflow runs first, GitHub creates the environment by itself, with no protection.
+2. Under deployment branches, allow `main` only.
+3. Add each key you have as a secret of the `evals` environment: `AZURE_OPENAI_API_KEY` with `AZURE_OPENAI_ENDPOINT`, `ANTHROPIC_API_KEY`, and `GOOGLE_API_KEY`. Add `OLLAMA_BASE_URL` only if an Ollama server can be reached from GitHub.
+4. Add the model lists as variables of the same environment: `AZURE_OPENAI_API_VERSION`, `AZURE_OPENAI_DEPLOYMENTS`, `ANTHROPIC_MODELS` and `GOOGLE_MODELS`.
+
+Never store these keys as repository secrets. "Run workflow" runs the workflow file from whatever branch you pick, and that branch can change the file. A workflow on any branch can read a repository secret. Only `main` can use the `evals` environment.
+
+On a private repository, environment secrets and deployment branch rules need GitHub Pro (or Team) on the owner's account. GitHub Pro is free with the GitHub Student Developer Pack. If the account does not have it, do not add cloud keys to GitHub at all. Run the bake-off on a laptop instead, with the keys in the shell (steps 1 to 4 above).
+
+A provider without its secret is reported as "not run", and the job still passes. The results are attached to the run as the `eval-results` artifact. It holds every answer word for word, with the keys and addresses removed.
