@@ -1,0 +1,7 @@
+# syntax=docker/dockerfile:1
+# The browser suites run in this image, so the host needs Docker and nothing else.
+# runner-image.sh builds it from the portal folder, so the context holds only the package files.
+FROM mcr.microsoft.com/playwright:v1.55.1-noble@sha256:2f29369043d81d6d69a815ceb80760f55e85f5020371ad06a4d996f18503ad1c
+WORKDIR /work
+COPY package.json package-lock.json .npmrc ./
+RUN --mount=type=cache,target=/root/.npm npm ci --ignore-scripts

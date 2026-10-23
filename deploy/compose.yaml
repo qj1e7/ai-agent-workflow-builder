@@ -96,7 +96,7 @@ services:
         condition: service_healthy
     environment:
       AUTH_MODE: dev
-      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:${PORTAL_HOST_PORT:-8080}}
       DATABASE_URL_BUILDER: postgresql://wab_builder:${WAB_BUILDER_PASSWORD:?run deploy/make-env.sh}@postgres:5432/platform
       DATABASE_URL_ORCHESTRATION: postgresql://wab_orchestration:${WAB_ORCHESTRATION_PASSWORD:?run deploy/make-env.sh}@postgres:5432/platform
       DATABASE_URL_MONITORING: postgresql://wab_monitoring:${WAB_MONITORING_PASSWORD:?run deploy/make-env.sh}@postgres:5432/platform
@@ -113,6 +113,20 @@ services:
       interval: 3s
       timeout: 3s
       retries: 20
+
+  portal:
+    build:
+      context: ..
+      dockerfile: portal/Dockerfile
+    image: wab/portal:dev
+    depends_on:
+      platform-api:
+        condition: service_healthy
+    environment:
+      PORTAL_MODE: live
+      API_UPSTREAM: http://platform-api:8000
+    ports:
+      - "${PORTAL_HOST_PORT:-8080}:8080"
 
 volumes:
   pgdata:

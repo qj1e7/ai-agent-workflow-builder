@@ -4,10 +4,13 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
+# Its own project name, so tearing it down never touches a stack that scripts/up.sh started.
+project="${E2E_PROJECT:-wab-e2e}"
+suites="${E2E_SUITES:-api ui}"
 out="e2e/out"
-compose=(docker compose -p wab -f deploy/compose.yaml -f deploy/compose.e2e.yaml)
+compose=(docker compose -p "$project" -f deploy/compose.yaml -f deploy/compose.e2e.yaml)
 mkdir -p "$out"
-rm -f "$out/e2e.log" "$out/compose.log"
+rm -f "$out/e2e.log" "$out/ui.log" "$out/compose.log"
 
 if [ ! -f deploy/.env ]; then
   deploy/make-env.sh
@@ -23,9 +26,20 @@ collect_and_stop() {
 }
 trap collect_and_stop EXIT
 
-summary_line() {
-  grep -E "[0-9]+ (passed|failed|error)" "$out/e2e.log" | tail -n 1 || echo "no pytest summary"
+wanted() {
+  case " $suites " in *" $1 "*) return 0 ;; *) return 1 ;; esac
 }
+
+summary_line() {
+  grep -E "[0-9]+ (passed|failed|error)" "$1" | tail -n 1 || echo "no summary"
+}
+
+for suite in $suites; do
+  case "$suite" in
+    api | ui) ;;
+    *) echo "E2E_SUITES takes api and ui, not '$suite'." >&2; exit 2 ;;
+  esac
+done
 
 if ! "${compose[@]}" up --build --wait --wait-timeout "${WAIT_TIMEOUT:-300}" >"$out/up.log" 2>&1; then
   tail -n 30 "$out/up.log" >&2
@@ -33,16 +47,35 @@ if ! "${compose[@]}" up --build --wait --wait-timeout "${WAIT_TIMEOUT:-300}" >"$
   exit 2
 fi
 
-set +e
-"${compose[@]}" --profile e2e run --rm --build e2e 2>&1 | tee "$out/e2e.log"
-status="${PIPESTATUS[0]}"
-set -e
+api_status=0
+ui_status=0
+
+if wanted api; then
+  set +e
+  "${compose[@]}" --profile e2e run --rm --build e2e 2>&1 | tee "$out/e2e.log"
+  api_status="${PIPESTATUS[0]}"
+  set -e
+fi
+
+# The browser suite runs after the API tests, on the same stack. It counts tickets before and after, so earlier tests do not matter.
+if wanted ui; then
+  portal_container=$("${compose[@]}" ps -q portal)
+  set +e
+  portal/e2e/live/run.sh "$portal_container" 2>&1 | tee "$out/ui.log"
+  ui_status="${PIPESTATUS[0]}"
+  set -e
+fi
 
 echo
-if [ "$status" -eq 0 ]; then
-  echo "PASS: $(summary_line)"
-else
-  echo "FAIL (exit $status): $(summary_line)"
-  echo "Details: $out/e2e.log and $out/compose.log"
+status=0
+if wanted api; then
+  if [ "$api_status" -eq 0 ]; then echo "PASS api: $(summary_line "$out/e2e.log")"; else echo "FAIL api (exit $api_status): $(summary_line "$out/e2e.log")"; status=$api_status; fi
+fi
+if wanted ui; then
+  if [ "$ui_status" -eq 0 ]; then echo "PASS ui:  $(summary_line "$out/ui.log")"; else echo "FAIL ui (exit $ui_status): $(summary_line "$out/ui.log")"; [ "$status" -ne 0 ] || status=$ui_status; fi
+  echo "Browser evidence: portal/e2e/out/live (shots and video)"
+fi
+if [ "$status" -ne 0 ]; then
+  echo "Details: $out/e2e.log, $out/ui.log and $out/compose.log"
 fi
 exit "$status"

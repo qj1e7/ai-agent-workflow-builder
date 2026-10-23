@@ -7,7 +7,7 @@ cd portal
 npm run e2e
 ```
 
-Docker is the only thing you need. It takes about two minutes with a warm Docker cache (the image build is cached, the specs themselves take about 100 seconds).
+Docker is the only thing you need. The specs run in a runner image (`e2e/Dockerfile.runner`) that holds the pinned Playwright and the dependencies from `package-lock.json`, so a `portal/node_modules` on your machine is never used. Docker reuses the install until the lockfile changes. A first run takes a few minutes while the images build. After that it takes about two minutes (the specs themselves take about 100 seconds).
 
 Pass Playwright arguments to run less, for example `npm run e2e -- keyboard.spec.ts --project=phone`. A run with arguments keeps the evidence already in `e2e/out`. A run without arguments empties the evidence folders first, then checks at the end that every file exists.
 
@@ -47,8 +47,12 @@ Every screenshot test also runs, on the state it just reached: axe (zero serious
 
 In demo mode every full page load restarts the in-memory mock, so the specs reach approval states by in-app navigation and the header's user switcher. The page clock is frozen after load (`support/clock.ts`) and moved with `page.clock.runFor`, so a state does not depend on how fast the machine is. CSS transitions run on the real clock, so each jump is followed by 1.2 seconds of real waiting before the shot. axe schedules work with `setTimeout`, so the clock is nudged by 1 ms while it runs.
 
-The specs run inside the server's network namespace, so the page is at `http://localhost:8080`. That matters: `crypto.randomUUID`, which Run now uses, only exists in a secure context, and a plain `http://` host name is not one.
+The specs run inside the server's network namespace, so the page is at `http://localhost:8080`, which browsers treat as a secure context. Run now works from a plain `http://` host name too. The live suite proves that in `04-plain-http-origin`.
 
 ## Known findings
 
 `support/known.ts` lists what the app still gets wrong. A listed finding is printed as `KNOWN FINDING ...` and does not fail the run. Run with `E2E_STRICT=1 npm run e2e` to make them fail. Delete an entry when the app is fixed.
+
+## The live suite
+
+`npm run e2e` runs against the demo mock. The specs in `e2e/live/` run against the real stack instead, so they are not part of `npm run e2e`. Run them with `scripts/e2e.sh` from the repository root. See "The browser suite" in [../../e2e/README.md](../../e2e/README.md). It uses the same runner image, so it also needs only Docker.
