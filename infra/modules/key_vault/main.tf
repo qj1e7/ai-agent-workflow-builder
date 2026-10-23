@@ -25,6 +25,17 @@ resource "azurerm_role_assignment" "deployer_secrets_officer" {
   principal_type       = "ServicePrincipal"
 }
 
+# Azure RBAC can take minutes to reach Key Vault. Without the wait, the first secret write can be
+# refused. The secrets read the vault ID through this resource, so they are written after it.
+resource "time_sleep" "deployer_rbac_propagation" {
+  create_duration = "90s"
+
+  triggers = {
+    role_assignment_id = azurerm_role_assignment.deployer_secrets_officer.id
+    key_vault_id       = azurerm_key_vault.this.id
+  }
+}
+
 # nosemgrep: terraform.azure.security.keyvault.keyvault-ensure-secret-expires.keyvault-ensure-secret-expires
 resource "azurerm_key_vault_secret" "this" {
   #checkov:skip=CKV_AZURE_41:Generated secrets do not expire. An expired secret would stop every Container App that reads it, and nothing rotates them yet.
@@ -33,8 +44,6 @@ resource "azurerm_key_vault_secret" "this" {
   name         = each.key
   value        = var.secrets[each.key]
   content_type = "text/plain"
-  key_vault_id = azurerm_key_vault.this.id
+  key_vault_id = time_sleep.deployer_rbac_propagation.triggers["key_vault_id"]
   tags         = var.tags
-
-  depends_on = [azurerm_role_assignment.deployer_secrets_officer]
 }

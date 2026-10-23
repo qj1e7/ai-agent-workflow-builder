@@ -25,3 +25,15 @@ resource "azurerm_role_assignment" "deployer_push" {
   principal_id         = data.azurerm_client_config.current.object_id
   principal_type       = "ServicePrincipal"
 }
+
+# Azure RBAC can take minutes to reach the registry, and the deploy workflow pushes images as
+# soon as this module is applied. The name and login server outputs resolve only after the wait.
+resource "time_sleep" "deployer_rbac_propagation" {
+  create_duration = "90s"
+
+  triggers = {
+    role_assignment_id = azurerm_role_assignment.deployer_push.id
+    name               = azurerm_container_registry.this.name
+    login_server       = azurerm_container_registry.this.login_server
+  }
+}
