@@ -1,0 +1,9 @@
+# Layered over compose.yaml and compose.e2e.yaml by scripts/dast.sh and scripts/load.sh.
+# The scanner and the load generator join the project network, so nothing is published on the host.
+services:
+  n8n:
+    ports: !reset []
+  platform-api:
+    ports: !reset []
+  portal:
+    ports: !reset []

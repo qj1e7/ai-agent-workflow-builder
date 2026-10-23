@@ -43,6 +43,30 @@ def test_openapi_lists_every_route(client: TestClient):
     assert listed == ROUTES
 
 
+@pytest.mark.parametrize(
+    ("path", "headers", "status"),
+    [
+        ("/healthz", {}, 200),
+        ("/api/v1/dev/users", {}, 200),
+        ("/api/v1/runs", {}, 401),
+        ("/no/such/route", {}, 404),
+        ("/openapi.json", {}, 200),
+    ],
+)
+def test_every_response_forbids_content_sniffing(
+    client: TestClient, path: str, headers: dict[str, str], status: int
+):
+    response = client.get(path, headers=headers)
+    assert response.status_code == status
+    assert response.headers["x-content-type-options"] == "nosniff"
+
+
+def test_a_trailing_slash_is_not_found_and_never_redirects(client: TestClient):
+    response = client.get("/api/v1/runs/", headers={"X-Dev-User": "alice"}, follow_redirects=False)
+    assert response.status_code == 404
+    assert "location" not in response.headers
+
+
 def test_healthz(client: TestClient):
     assert client.get("/healthz").json() == {"status": "ok"}
 

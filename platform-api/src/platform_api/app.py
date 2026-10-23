@@ -11,6 +11,7 @@ from platform_api.builder import http as builder_http
 from platform_api.db import Database
 from platform_api.monitoring import http as monitoring_http
 from platform_api.orchestration import http as orchestration_http
+from platform_api.security_headers import SecurityHeaders
 from platform_api.settings import Settings, settings_from_env
 from platform_api.wire import WireModel
 
@@ -45,10 +46,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
 def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
     settings = settings_from_env(os.environ if env is None else env)
-    app = FastAPI(title="AI workflow builder platform API", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(
+        title="AI workflow builder platform API",
+        version="0.1.0",
+        lifespan=lifespan,
+        # A slash redirect puts the request's Host in an absolute Location.
+        # Behind the Portal's nginx that is the internal name platform-api:8000.
+        redirect_slashes=False,
+    )
     app.state.settings = settings
     app.state.step_key = settings.step_key
     app.state.authenticator = auth.authenticator_for(settings.auth)
+    app.add_middleware(SecurityHeaders)
     app.include_router(builder_http.router)
     app.include_router(orchestration_http.router)
     app.include_router(monitoring_http.router)

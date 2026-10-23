@@ -1,0 +1,89 @@
+time="2026-10-21T21:28:23Z" level=info msg="history before the test: 151 runs, all waiting at the approval gate" source=console
+
+
+  █ THRESHOLDS 
+
+    checks
+    ✓ 'rate>0.99' rate=100.00%
+
+    http_req_duration{path:get_run}
+    ✓ 'p(95)<100' p(95)=7ms
+
+    http_req_duration{path:list_approvals}
+    ✓ 'p(95)<100' p(95)=5.26ms
+
+    http_req_duration{path:list_runs}
+    ✓ 'p(95)<250' p(95)=73.87ms
+
+    http_req_duration{path:portal_static}
+    ✓ 'p(95)<100' p(95)=422.7µs
+
+    http_req_duration{path:run_events}
+    ✓ 'p(95)<100' p(95)=4.5ms
+
+    http_req_duration{path:start_run}
+    ✓ 'p(95)<500' p(95)=12.17ms
+
+    http_req_failed{path:get_run}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{path:list_approvals}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{path:list_runs}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{path:portal_static}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{path:run_events}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{path:start_run}
+    ✓ 'rate<0.01' rate=0.00%
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 1661    47.406732/s
+    checks_succeeded...: 100.00% 1661 out of 1661
+    checks_failed......: 0.00%   0 out of 1661
+
+    ✓ portal page is 200
+    ✓ portal asset is 200
+    ✓ approvals list is 200
+    ✓ events page is 200
+    ✓ get run is 200
+    ✓ start run is 201
+    ✓ list runs is 200
+
+    HTTP
+    http_req_duration..............: avg=12.96ms  med=3.39ms   p(90)=62.23ms  p(95)=64.89ms p(99)=73.8ms   max=92.94ms
+      { expected_response:true }...: avg=12.96ms  med=3.39ms   p(90)=62.23ms  p(95)=64.89ms p(99)=73.8ms   max=92.94ms
+      { path:get_run }.............: avg=4.91ms   med=4.82ms   p(90)=6.69ms   p(95)=7ms     p(99)=8.62ms   max=20.29ms
+      { path:list_approvals }......: avg=4.4ms    med=4.22ms   p(90)=4.89ms   p(95)=5.26ms  p(99)=7.37ms   max=19.66ms
+      { path:list_runs }...........: avg=64.14ms  med=62.74ms  p(90)=68.77ms  p(95)=73.87ms p(99)=85.86ms  max=88.86ms
+      { path:portal_static }.......: avg=234.59µs med=193.58µs p(90)=382.65µs p(95)=422.7µs p(99)=691.67µs max=1.64ms 
+      { path:run_events }..........: avg=3.18ms   med=3.07ms   p(90)=4.11ms   p(95)=4.5ms   p(99)=5.2ms    max=6.49ms 
+      { path:start_run }...........: avg=9.19ms   med=8.96ms   p(90)=11.16ms  p(95)=12.17ms p(99)=12.97ms  max=13.17ms
+    http_req_failed................: 0.00%  0 out of 1817
+      { path:get_run }.............: 0.00%  0 out of 301
+      { path:list_approvals }......: 0.00%  0 out of 150
+      { path:list_runs }...........: 0.00%  0 out of 300
+      { path:portal_static }.......: 0.00%  0 out of 602
+      { path:run_events }..........: 0.00%  0 out of 301
+      { path:start_run }...........: 0.00%  0 out of 7
+    http_reqs......................: 1817   51.859141/s
+
+    EXECUTION
+    iteration_duration.............: avg=16.66ms  med=4.03ms   p(90)=63.25ms  p(95)=65.86ms p(99)=75.05ms  max=89ms   
+    iterations.....................: 1360   38.815867/s
+    vus............................: 0      min=0         max=1 
+    vus_max........................: 55     min=55        max=55
+
+    NETWORK
+    data_received..................: 134 MB 3.8 MB/s
+    data_sent......................: 216 kB 6.2 kB/s
+
+
+

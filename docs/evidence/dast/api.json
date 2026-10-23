@@ -1,0 +1,3377 @@
+{
+	"@programName": "ZAP",
+	"@version": "2.17.0",
+	"@generated": "Wed, 21 Oct 2026 21:19:11",
+	"created": "2026-10-21T21:19:11.413212379Z",
+	"insights":[
+		{
+			"level": "Low",
+			"reason": "Warning",
+			"site": "",
+			"key": "insight.log.warn",
+			"description": "ZAP warnings logged - see the zap.log file for details",
+			"statistic": "2"
+		},
+		{
+			"level": "Low",
+			"reason": "Exceeded High",
+			"site": "http://platform-api:8000",
+			"key": "insight.code.4xx",
+			"description": "Percentage of responses with status code 4xx",
+			"statistic": "89"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://platform-api:8000",
+			"key": "insight.code.2xx",
+			"description": "Percentage of responses with status code 2xx",
+			"statistic": "10"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://platform-api:8000",
+			"key": "insight.endpoint.ctype.application/json",
+			"description": "Percentage of endpoints with content type application/json",
+			"statistic": "100"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://platform-api:8000",
+			"key": "insight.endpoint.method.GET",
+			"description": "Percentage of endpoints with method GET",
+			"statistic": "64"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://platform-api:8000",
+			"key": "insight.endpoint.method.POST",
+			"description": "Percentage of endpoints with method POST",
+			"statistic": "35"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://platform-api:8000",
+			"key": "insight.endpoint.total",
+			"description": "Count of total endpoints",
+			"statistic": "330"
+		}
+	],
+	"site":[ 
+		{
+			"@name": "http://platform-api:8000",
+			"@host": "platform-api",
+			"@port": "8000",
+			"@ssl": "false",
+			"alerts": [ 
+				{
+					"pluginid": "100000",
+					"alertRef": "100000-1",
+					"alert": "A Client Error response code was returned by the server",
+					"name": "A Client Error response code was returned by the server",
+					"riskcode": "0",
+					"confidence": "3",
+					"riskdesc": "Informational (High)",
+					"desc": "<p>A response code of 404 was returned by the server.</p><p>This may indicate that the application is failing to handle unexpected input correctly.</p><p>Raised by the 'Alert on HTTP Response Code Error' script</p>",
+					"instances":[ 
+						{
+							"id": "25",
+							"uri": "http://platform-api:8000",
+							"nodeName": "http:\/\/platform-api:8000",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2092",
+							"uri": "http://platform-api:8000?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/platform-api:8000 (class.module.classLoader.DefaultAssertio...)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3417",
+							"uri": "http://platform-api:8000/",
+							"nodeName": "http:\/\/platform-api:8000\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3825",
+							"uri": "http://platform-api:8000/.DS_Store",
+							"nodeName": "http:\/\/platform-api:8000\/.DS_Store",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3854",
+							"uri": "http://platform-api:8000/._darcs",
+							"nodeName": "http:\/\/platform-api:8000\/._darcs",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3853",
+							"uri": "http://platform-api:8000/.bzr",
+							"nodeName": "http:\/\/platform-api:8000\/.bzr",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3768",
+							"uri": "http://platform-api:8000/.env",
+							"nodeName": "http:\/\/platform-api:8000\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3803",
+							"uri": "http://platform-api:8000/.git/config",
+							"nodeName": "http:\/\/platform-api:8000\/.git\/config",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3852",
+							"uri": "http://platform-api:8000/.hg",
+							"nodeName": "http:\/\/platform-api:8000\/.hg",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3739",
+							"uri": "http://platform-api:8000/.htaccess",
+							"nodeName": "http:\/\/platform-api:8000\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3797",
+							"uri": "http://platform-api:8000/.idea/WebServers.xml",
+							"nodeName": "http:\/\/platform-api:8000\/.idea\/WebServers.xml",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3826",
+							"uri": "http://platform-api:8000/.php_cs.cache",
+							"nodeName": "http:\/\/platform-api:8000\/.php_cs.cache",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3837",
+							"uri": "http://platform-api:8000/.ssh/id_dsa",
+							"nodeName": "http:\/\/platform-api:8000\/.ssh\/id_dsa",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3836",
+							"uri": "http://platform-api:8000/.ssh/id_rsa",
+							"nodeName": "http:\/\/platform-api:8000\/.ssh\/id_rsa",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3805",
+							"uri": "http://platform-api:8000/.svn/entries",
+							"nodeName": "http:\/\/platform-api:8000\/.svn\/entries",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3807",
+							"uri": "http://platform-api:8000/.svn/wc.db",
+							"nodeName": "http:\/\/platform-api:8000\/.svn\/wc.db",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3792",
+							"uri": "http://platform-api:8000/.zap3228000293628933619",
+							"nodeName": "http:\/\/platform-api:8000\/.zap3228000293628933619",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "7",
+							"uri": "http://platform-api:8000/4402698561247857250",
+							"nodeName": "http:\/\/platform-api:8000\/4402698561247857250",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3855",
+							"uri": "http://platform-api:8000/BitKeeper",
+							"nodeName": "http:\/\/platform-api:8000\/BitKeeper",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3840",
+							"uri": "http://platform-api:8000/CHANGELOG.txt",
+							"nodeName": "http:\/\/platform-api:8000\/CHANGELOG.txt",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3808",
+							"uri": "http://platform-api:8000/CVS/root",
+							"nodeName": "http:\/\/platform-api:8000\/CVS\/root",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3827",
+							"uri": "http://platform-api:8000/DEADJOE",
+							"nodeName": "http:\/\/platform-api:8000\/DEADJOE",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3822",
+							"uri": "http://platform-api:8000/FileZilla.xml",
+							"nodeName": "http:\/\/platform-api:8000\/FileZilla.xml",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "498",
+							"uri": "http://platform-api:8000/WEB-INF/applicationContext.xml",
+							"nodeName": "http:\/\/platform-api:8000\/WEB-INF\/applicationContext.xml",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "497",
+							"uri": "http://platform-api:8000/WEB-INF/web.xml",
+							"nodeName": "http:\/\/platform-api:8000\/WEB-INF\/web.xml",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3819",
+							"uri": "http://platform-api:8000/WS_FTP.INI",
+							"nodeName": "http:\/\/platform-api:8000\/WS_FTP.INI",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3816",
+							"uri": "http://platform-api:8000/WS_FTP.ini",
+							"nodeName": "http:\/\/platform-api:8000\/WS_FTP.ini",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3824",
+							"uri": "http://platform-api:8000/WinSCP.ini",
+							"nodeName": "http:\/\/platform-api:8000\/WinSCP.ini",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3851",
+							"uri": "http://platform-api:8000/_framework/blazor.boot.json",
+							"nodeName": "http:\/\/platform-api:8000\/_framework\/blazor.boot.json",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3850",
+							"uri": "http://platform-api:8000/_wpeprivate/config.json",
+							"nodeName": "http:\/\/platform-api:8000\/_wpeprivate\/config.json",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3838",
+							"uri": "http://platform-api:8000/adminer.php",
+							"nodeName": "http:\/\/platform-api:8000\/adminer.php",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "26",
+							"uri": "http://platform-api:8000/api",
+							"nodeName": "http:\/\/platform-api:8000\/api",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2096",
+							"uri": "http://platform-api:8000/api?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/platform-api:8000\/api (class.module.classLoader.DefaultAssertio...)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "4266",
+							"uri": "http://platform-api:8000/api-docs",
+							"nodeName": "http:\/\/platform-api:8000\/api-docs ()({step,verdict,digest})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3419",
+							"uri": "http://platform-api:8000/api/",
+							"nodeName": "http:\/\/platform-api:8000\/api\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3773",
+							"uri": "http://platform-api:8000/api/.env",
+							"nodeName": "http:\/\/platform-api:8000\/api\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3743",
+							"uri": "http://platform-api:8000/api/.htaccess",
+							"nodeName": "http:\/\/platform-api:8000\/api\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "8",
+							"uri": "http://platform-api:8000/api/6800385678890103043",
+							"nodeName": "http:\/\/platform-api:8000\/api\/6800385678890103043",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3710",
+							"uri": "http://platform-api:8000/api/trace.axd",
+							"nodeName": "http:\/\/platform-api:8000\/api\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "28",
+							"uri": "http://platform-api:8000/api/v1",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2097",
+							"uri": "http://platform-api:8000/api/v1?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1 (class.module.classLoader.DefaultAssertio...)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3421",
+							"uri": "http://platform-api:8000/api/v1/",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3762",
+							"uri": "http://platform-api:8000/api/v1/.env",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3736",
+							"uri": "http://platform-api:8000/api/v1/.htaccess",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "9",
+							"uri": "http://platform-api:8000/api/v1/3839135359774392640",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/3839135359774392640",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "33",
+							"uri": "http://platform-api:8000/api/v1/approvals",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/approvals",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2105",
+							"uri": "http://platform-api:8000/api/v1/approvals?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/approvals (class.module.classLoader.DefaultAssertio...)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3423",
+							"uri": "http://platform-api:8000/api/v1/approvals/",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/approvals\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3775",
+							"uri": "http://platform-api:8000/api/v1/approvals/.env",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/approvals\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3748",
+							"uri": "http://platform-api:8000/api/v1/approvals/.htaccess",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/approvals\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "10",
+							"uri": "http://platform-api:8000/api/v1/approvals/1234798032045757432",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/approvals\/1234798032045757432",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3424",
+							"uri": "http://platform-api:8000/api/v1/approvals/apr_01M5G59Q5KAQSXWQFPAS5VEJ57/",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/approvals\/apr_01M5G59Q5KAQSXWQFPAS5VEJ57\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3760",
+							"uri": "http://platform-api:8000/api/v1/approvals/apr_01M5G59Q5KAQSXWQFPAS5VEJ57/.env",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/approvals\/apr_01M5G59Q5KAQSXWQFPAS5VEJ57\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3730",
+							"uri": "http://platform-api:8000/api/v1/approvals/apr_01M5G59Q5KAQSXWQFPAS5VEJ57/.htaccess",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/approvals\/apr_01M5G59Q5KAQSXWQFPAS5VEJ57\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "11",
+							"uri": "http://platform-api:8000/api/v1/approvals/apr_01M5G59Q5KAQSXWQFPAS5VEJ57/5069497429819633256",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/approvals\/apr_01M5G59Q5KAQSXWQFPAS5VEJ57\/5069497429819633256",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3791",
+							"uri": "http://platform-api:8000/api/v1/approvals/apr_01M5G59Q5KAQSXWQFPAS5VEJ57/actuator/health",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/approvals\/apr_01M5G59Q5KAQSXWQFPAS5VEJ57\/actuator\/health",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "4275",
+							"uri": "http://platform-api:8000/api/v1/approvals/apr_01M5G59Q5KAQSXWQFPAS5VEJ57/decisions",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/approvals\/apr_01M5G59Q5KAQSXWQFPAS5VEJ57\/decisions ()({step,verdict,digest})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "2081",
+							"uri": "http://platform-api:8000/api/v1/approvals/apr_01M5G59Q5KAQSXWQFPAS5VEJ57/decisions?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/approvals\/apr_01M5G59Q5KAQSXWQFPAS5VEJ57\/decisions (class.module.classLoader.DefaultAssertio...)({step,verdict,digest})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "3704",
+							"uri": "http://platform-api:8000/api/v1/approvals/apr_01M5G59Q5KAQSXWQFPAS5VEJ57/trace.axd",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/approvals\/apr_01M5G59Q5KAQSXWQFPAS5VEJ57\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3715",
+							"uri": "http://platform-api:8000/api/v1/approvals/trace.axd",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/approvals\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "36",
+							"uri": "http://platform-api:8000/api/v1/dev",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/dev",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2107",
+							"uri": "http://platform-api:8000/api/v1/dev?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/dev (class.module.classLoader.DefaultAssertio...)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3426",
+							"uri": "http://platform-api:8000/api/v1/dev/",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/dev\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3777",
+							"uri": "http://platform-api:8000/api/v1/dev/.env",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/dev\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3746",
+							"uri": "http://platform-api:8000/api/v1/dev/.htaccess",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/dev\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12",
+							"uri": "http://platform-api:8000/api/v1/dev/2707844382903820572",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/dev\/2707844382903820572",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3714",
+							"uri": "http://platform-api:8000/api/v1/dev/trace.axd",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/dev\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3425",
+							"uri": "http://platform-api:8000/api/v1/dev/users/",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/dev\/users\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "41",
+							"uri": "http://platform-api:8000/api/v1/mock-jira",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/mock-jira",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2111",
+							"uri": "http://platform-api:8000/api/v1/mock-jira?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/mock-jira (class.module.classLoader.DefaultAssertio...)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3428",
+							"uri": "http://platform-api:8000/api/v1/mock-jira/",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/mock-jira\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3778",
+							"uri": "http://platform-api:8000/api/v1/mock-jira/.env",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/mock-jira\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3747",
+							"uri": "http://platform-api:8000/api/v1/mock-jira/.htaccess",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/mock-jira\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "13",
+							"uri": "http://platform-api:8000/api/v1/mock-jira/4467238647199281628",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/mock-jira\/4467238647199281628",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3429",
+							"uri": "http://platform-api:8000/api/v1/mock-jira/tickets/",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/mock-jira\/tickets\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3716",
+							"uri": "http://platform-api:8000/api/v1/mock-jira/trace.axd",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/mock-jira\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3431",
+							"uri": "http://platform-api:8000/api/v1/runs/",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3781",
+							"uri": "http://platform-api:8000/api/v1/runs/.env",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3752",
+							"uri": "http://platform-api:8000/api/v1/runs/.htaccess",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "14",
+							"uri": "http://platform-api:8000/api/v1/runs/2485879046181954670",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/2485879046181954670",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3430",
+							"uri": "http://platform-api:8000/api/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3761",
+							"uri": "http://platform-api:8000/api/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/.env",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3731",
+							"uri": "http://platform-api:8000/api/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/.htaccess",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "15",
+							"uri": "http://platform-api:8000/api/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/8089220115998312046",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/8089220115998312046",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "51",
+							"uri": "http://platform-api:8000/api/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/events?after=c%3A%2FWindows%2Fsystem.ini",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/events (after)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "3432",
+							"uri": "http://platform-api:8000/api/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/events/",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/events\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "4261",
+							"uri": "http://platform-api:8000/api/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/retry",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/retry",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "2082",
+							"uri": "http://platform-api:8000/api/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/retry?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/retry (class.module.classLoader.DefaultAssertio...)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "3702",
+							"uri": "http://platform-api:8000/api/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/trace.axd",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "5",
+							"uri": "http://platform-api:8000/api/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/troubleshoot",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/troubleshoot",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "409",
+							"otherinfo": ""
+						},
+						{
+							"id": "2124",
+							"uri": "http://platform-api:8000/api/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/troubleshoot?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/troubleshoot (class.module.classLoader.DefaultAssertio...)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "409",
+							"otherinfo": ""
+						},
+						{
+							"id": "3434",
+							"uri": "http://platform-api:8000/api/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/troubleshoot/",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/troubleshoot\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3721",
+							"uri": "http://platform-api:8000/api/v1/runs/trace.axd",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "46",
+							"uri": "http://platform-api:8000/api/v1/teams-stub",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/teams-stub",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2115",
+							"uri": "http://platform-api:8000/api/v1/teams-stub?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/teams-stub (class.module.classLoader.DefaultAssertio...)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3436",
+							"uri": "http://platform-api:8000/api/v1/teams-stub/",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/teams-stub\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3780",
+							"uri": "http://platform-api:8000/api/v1/teams-stub/.env",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/teams-stub\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3750",
+							"uri": "http://platform-api:8000/api/v1/teams-stub/.htaccess",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/teams-stub\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "16",
+							"uri": "http://platform-api:8000/api/v1/teams-stub/6794462774517490095",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/teams-stub\/6794462774517490095",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3435",
+							"uri": "http://platform-api:8000/api/v1/teams-stub/messages/",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/teams-stub\/messages\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3719",
+							"uri": "http://platform-api:8000/api/v1/teams-stub/trace.axd",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/teams-stub\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3439",
+							"uri": "http://platform-api:8000/api/v1/templates/",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/templates\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3705",
+							"uri": "http://platform-api:8000/api/v1/trace.axd",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3437",
+							"uri": "http://platform-api:8000/api/v1/use-cases/",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3771",
+							"uri": "http://platform-api:8000/api/v1/use-cases/.env",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3738",
+							"uri": "http://platform-api:8000/api/v1/use-cases/.htaccess",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "17",
+							"uri": "http://platform-api:8000/api/v1/use-cases/5771092168271390035",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases\/5771092168271390035",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "4264",
+							"uri": "http://platform-api:8000/api/v1/use-cases/suggest",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases\/suggest ()({text})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "549",
+							"uri": "http://platform-api:8000/api/v1/use-cases/suggest?-s",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases\/suggest (-s)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2088",
+							"uri": "http://platform-api:8000/api/v1/use-cases/suggest?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases\/suggest (class.module.classLoader.DefaultAssertio...)({text})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3706",
+							"uri": "http://platform-api:8000/api/v1/use-cases/trace.axd",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3438",
+							"uri": "http://platform-api:8000/api/v1/use-cases/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2/",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases\/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3763",
+							"uri": "http://platform-api:8000/api/v1/use-cases/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2/.env",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases\/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3732",
+							"uri": "http://platform-api:8000/api/v1/use-cases/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2/.htaccess",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases\/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "18",
+							"uri": "http://platform-api:8000/api/v1/use-cases/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2/353271697101156257",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases\/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2\/353271697101156257",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "4265",
+							"uri": "http://platform-api:8000/api/v1/use-cases/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2/runs",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases\/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2\/runs",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "2084",
+							"uri": "http://platform-api:8000/api/v1/use-cases/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2/runs?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases\/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2\/runs (class.module.classLoader.DefaultAssertio...)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "3703",
+							"uri": "http://platform-api:8000/api/v1/use-cases/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2/trace.axd",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases\/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3829",
+							"uri": "http://platform-api:8000/app/etc/local.xml",
+							"nodeName": "http:\/\/platform-api:8000\/app\/etc\/local.xml",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3842",
+							"uri": "http://platform-api:8000/composer.json",
+							"nodeName": "http:\/\/platform-api:8000\/composer.json",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3843",
+							"uri": "http://platform-api:8000/composer.lock",
+							"nodeName": "http:\/\/platform-api:8000\/composer.lock",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3801",
+							"uri": "http://platform-api:8000/config/database.yml",
+							"nodeName": "http:\/\/platform-api:8000\/config\/database.yml",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3799",
+							"uri": "http://platform-api:8000/config/databases.yml",
+							"nodeName": "http:\/\/platform-api:8000\/config\/databases.yml",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3812",
+							"uri": "http://platform-api:8000/core",
+							"nodeName": "http:\/\/platform-api:8000\/core",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "4267",
+							"uri": "http://platform-api:8000/docs/",
+							"nodeName": "http:\/\/platform-api:8000\/docs\/ ()({step,verdict,digest})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3696",
+							"uri": "http://platform-api:8000/elmah.axd",
+							"nodeName": "http:\/\/platform-api:8000\/elmah.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3820",
+							"uri": "http://platform-api:8000/filezilla.xml",
+							"nodeName": "http:\/\/platform-api:8000\/filezilla.xml",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3442",
+							"uri": "http://platform-api:8000/healthz/",
+							"nodeName": "http:\/\/platform-api:8000\/healthz\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3782",
+							"uri": "http://platform-api:8000/healthz/.env",
+							"nodeName": "http:\/\/platform-api:8000\/healthz\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3753",
+							"uri": "http://platform-api:8000/healthz/.htaccess",
+							"nodeName": "http:\/\/platform-api:8000\/healthz\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "19",
+							"uri": "http://platform-api:8000/healthz/7872307400426528505",
+							"nodeName": "http:\/\/platform-api:8000\/healthz\/7872307400426528505",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3441",
+							"uri": "http://platform-api:8000/healthz/ready/",
+							"nodeName": "http:\/\/platform-api:8000\/healthz\/ready\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3722",
+							"uri": "http://platform-api:8000/healthz/trace.axd",
+							"nodeName": "http:\/\/platform-api:8000\/healthz\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3848",
+							"uri": "http://platform-api:8000/i.php",
+							"nodeName": "http:\/\/platform-api:8000\/i.php",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3835",
+							"uri": "http://platform-api:8000/id_dsa",
+							"nodeName": "http:\/\/platform-api:8000\/id_dsa",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3834",
+							"uri": "http://platform-api:8000/id_rsa",
+							"nodeName": "http:\/\/platform-api:8000\/id_rsa",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3847",
+							"uri": "http://platform-api:8000/info.php",
+							"nodeName": "http:\/\/platform-api:8000\/info.php",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "54",
+							"uri": "http://platform-api:8000/internal",
+							"nodeName": "http:\/\/platform-api:8000\/internal",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2119",
+							"uri": "http://platform-api:8000/internal?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/platform-api:8000\/internal (class.module.classLoader.DefaultAssertio...)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3443",
+							"uri": "http://platform-api:8000/internal/",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3786",
+							"uri": "http://platform-api:8000/internal/.env",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3756",
+							"uri": "http://platform-api:8000/internal/.htaccess",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "20",
+							"uri": "http://platform-api:8000/internal/3338743112331322929",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/3338743112331322929",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3726",
+							"uri": "http://platform-api:8000/internal/trace.axd",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "62",
+							"uri": "http://platform-api:8000/internal/v1",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2122",
+							"uri": "http://platform-api:8000/internal/v1?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1 (class.module.classLoader.DefaultAssertio...)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3446",
+							"uri": "http://platform-api:8000/internal/v1/",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3765",
+							"uri": "http://platform-api:8000/internal/v1/.env",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3735",
+							"uri": "http://platform-api:8000/internal/v1/.htaccess",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "21",
+							"uri": "http://platform-api:8000/internal/v1/4419648967575647534",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/4419648967575647534",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "66",
+							"uri": "http://platform-api:8000/internal/v1/runs",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2130",
+							"uri": "http://platform-api:8000/internal/v1/runs?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs (class.module.classLoader.DefaultAssertio...)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3447",
+							"uri": "http://platform-api:8000/internal/v1/runs/",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3789",
+							"uri": "http://platform-api:8000/internal/v1/runs/.env",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3759",
+							"uri": "http://platform-api:8000/internal/v1/runs/.htaccess",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "22",
+							"uri": "http://platform-api:8000/internal/v1/runs/8026307060210576459",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/8026307060210576459",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "72",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2134",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7 (class.module.classLoader.DefaultAssertio...)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3450",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3767",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/.env",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3737",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/.htaccess",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "23",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/6811058024215890268",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/6811058024215890268",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2087",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/agent-events?task=task&class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/agent-events (class.module.classLoader.DefaultAssertio...,task)({task_id,event:{John Doe}})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "77",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/steps",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/steps",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2138",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/steps?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/steps (class.module.classLoader.DefaultAssertio...)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3451",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/steps/",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/steps\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3766",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/steps/.env",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/steps\/.env",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "3733",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/steps/.htaccess",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/steps\/.htaccess",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "24",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/steps/2186860778799256347",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/steps\/2186860778799256347",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "2083",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/steps/run_agents?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/steps\/run_agents (class.module.classLoader.DefaultAssertio...)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "3698",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/steps/trace.axd",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/steps\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "3699",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/trace.axd",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3729",
+							"uri": "http://platform-api:8000/internal/v1/runs/trace.axd",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3700",
+							"uri": "http://platform-api:8000/internal/v1/trace.axd",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2085",
+							"uri": "http://platform-api:8000/internal/v1/workflow-failures?class.module.classLoader.DefaultAssertionStatus=nonsense",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/workflow-failures (class.module.classLoader.DefaultAssertio...)({execution_id,workflow,last_node,message,execution_url})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "3833",
+							"uri": "http://platform-api:8000/key.pem",
+							"nodeName": "http:\/\/platform-api:8000\/key.pem",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3795",
+							"uri": "http://platform-api:8000/lfm.php",
+							"nodeName": "http:\/\/platform-api:8000\/lfm.php",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3832",
+							"uri": "http://platform-api:8000/myserver.key",
+							"nodeName": "http:\/\/platform-api:8000\/myserver.key",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "4271",
+							"uri": "http://platform-api:8000/openapi.yaml",
+							"nodeName": "http:\/\/platform-api:8000\/openapi.yaml ()({step,verdict,digest})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3846",
+							"uri": "http://platform-api:8000/phpinfo.php",
+							"nodeName": "http:\/\/platform-api:8000\/phpinfo.php",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3831",
+							"uri": "http://platform-api:8000/privatekey.key",
+							"nodeName": "http:\/\/platform-api:8000\/privatekey.key",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3845",
+							"uri": "http://platform-api:8000/server-info",
+							"nodeName": "http:\/\/platform-api:8000\/server-info",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3810",
+							"uri": "http://platform-api:8000/server-status",
+							"nodeName": "http:\/\/platform-api:8000\/server-status",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3830",
+							"uri": "http://platform-api:8000/server.key",
+							"nodeName": "http:\/\/platform-api:8000\/server.key",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3814",
+							"uri": "http://platform-api:8000/sftp-config.json",
+							"nodeName": "http:\/\/platform-api:8000\/sftp-config.json",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3821",
+							"uri": "http://platform-api:8000/sitemanager.xml",
+							"nodeName": "http:\/\/platform-api:8000\/sitemanager.xml",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3841",
+							"uri": "http://platform-api:8000/sites/default/files/.ht.sqlite",
+							"nodeName": "http:\/\/platform-api:8000\/sites\/default\/files\/.ht.sqlite",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3828",
+							"uri": "http://platform-api:8000/sites/default/private/files/backup_migrate/scheduled/test.txt",
+							"nodeName": "http:\/\/platform-api:8000\/sites\/default\/private\/files\/backup_migrate\/scheduled\/test.txt",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "4268",
+							"uri": "http://platform-api:8000/swagger",
+							"nodeName": "http:\/\/platform-api:8000\/swagger ()({step,verdict,digest})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "4260",
+							"uri": "http://platform-api:8000/swagger-ui/",
+							"nodeName": "http:\/\/platform-api:8000\/swagger-ui\/ ()({step,verdict,digest})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "4270",
+							"uri": "http://platform-api:8000/swagger-ui/index.html",
+							"nodeName": "http:\/\/platform-api:8000\/swagger-ui\/index.html ()({step,verdict,digest})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "4263",
+							"uri": "http://platform-api:8000/swagger.json",
+							"nodeName": "http:\/\/platform-api:8000\/swagger.json ()({step,verdict,digest})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "4272",
+							"uri": "http://platform-api:8000/swagger.yaml",
+							"nodeName": "http:\/\/platform-api:8000\/swagger.yaml ()({step,verdict,digest})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "4273",
+							"uri": "http://platform-api:8000/swagger/ui/index.html",
+							"nodeName": "http:\/\/platform-api:8000\/swagger\/ui\/index.html ()({step,verdict,digest})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3849",
+							"uri": "http://platform-api:8000/test.php",
+							"nodeName": "http:\/\/platform-api:8000\/test.php",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3701",
+							"uri": "http://platform-api:8000/trace.axd",
+							"nodeName": "http:\/\/platform-api:8000\/trace.axd",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "4269",
+							"uri": "http://platform-api:8000/v2/api-docs",
+							"nodeName": "http:\/\/platform-api:8000\/v2\/api-docs ()({step,verdict,digest})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "4262",
+							"uri": "http://platform-api:8000/v3/api-docs",
+							"nodeName": "http:\/\/platform-api:8000\/v3\/api-docs ()({step,verdict,digest})",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3839",
+							"uri": "http://platform-api:8000/vb_test.php",
+							"nodeName": "http:\/\/platform-api:8000\/vb_test.php",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3844",
+							"uri": "http://platform-api:8000/vim_settings.xml",
+							"nodeName": "http:\/\/platform-api:8000\/vim_settings.xml",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3823",
+							"uri": "http://platform-api:8000/winscp.ini",
+							"nodeName": "http:\/\/platform-api:8000\/winscp.ini",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3818",
+							"uri": "http://platform-api:8000/ws_ftp.ini",
+							"nodeName": "http:\/\/platform-api:8000\/ws_ftp.ini",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3790",
+							"uri": "http://platform-api:8000/zap4235780901052476482",
+							"nodeName": "http:\/\/platform-api:8000\/zap4235780901052476482",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2095",
+							"uri": "http://platform-api:8000",
+							"nodeName": "http:\/\/platform-api:8000 ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "558",
+							"uri": "http://platform-api:8000/?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/ (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "568",
+							"uri": "http://platform-api:8000/?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/ (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2100",
+							"uri": "http://platform-api:8000/api",
+							"nodeName": "http:\/\/platform-api:8000\/api ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "563",
+							"uri": "http://platform-api:8000/api?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "573",
+							"uri": "http://platform-api:8000/api?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2103",
+							"uri": "http://platform-api:8000/api/v1",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1 ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "570",
+							"uri": "http://platform-api:8000/api/v1?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1 (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "580",
+							"uri": "http://platform-api:8000/api/v1?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1 (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2109",
+							"uri": "http://platform-api:8000/api/v1/approvals",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/approvals ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "581",
+							"uri": "http://platform-api:8000/api/v1/approvals?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/approvals (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "586",
+							"uri": "http://platform-api:8000/api/v1/approvals?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/approvals (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2116",
+							"uri": "http://platform-api:8000/api/v1/approvals/apr_01M5G59Q5KAQSXWQFPAS5VEJ57",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/approvals\/apr_01M5G59Q5KAQSXWQFPAS5VEJ57 ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "582",
+							"uri": "http://platform-api:8000/api/v1/approvals/apr_01M5G59Q5KAQSXWQFPAS5VEJ57?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/approvals\/apr_01M5G59Q5KAQSXWQFPAS5VEJ57 (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "590",
+							"uri": "http://platform-api:8000/api/v1/approvals/apr_01M5G59Q5KAQSXWQFPAS5VEJ57?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/approvals\/apr_01M5G59Q5KAQSXWQFPAS5VEJ57 (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "2145",
+							"uri": "http://platform-api:8000/api/v1/approvals/apr_01M5G59Q5KAQSXWQFPAS5VEJ57/decisions",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/approvals\/apr_01M5G59Q5KAQSXWQFPAS5VEJ57\/decisions ()(------81350c02-d900-4612-82e8-19762a80f3e5\r\nContent-Disposition: form-data; name=\"1\"\r\n\r\n{}\r\n------81350c02-d900-4612-82e8-19762a80f3e5\r\nContent-Disposition: form-data; name=\"0\"\r\n\r\n[\"$1:a:a\"]\r\n------81350c02-d900-4612-82e8-19762a80f3e5--\r\n)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "2089",
+							"uri": "http://platform-api:8000/api/v1/approvals/apr_01M5G59Q5KAQSXWQFPAS5VEJ57/decisions",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/approvals\/apr_01M5G59Q5KAQSXWQFPAS5VEJ57\/decisions ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "2",
+							"uri": "http://platform-api:8000/api/v1/approvals/apr_01M5G59Q5KAQSXWQFPAS5VEJ57/decisions",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/approvals\/apr_01M5G59Q5KAQSXWQFPAS5VEJ57\/decisions ()({step,verdict,digest})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "30",
+							"uri": "http://platform-api:8000/api/v1/approvals/apr_01M5G59Q5KAQSXWQFPAS5VEJ57/decisions",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/approvals\/apr_01M5G59Q5KAQSXWQFPAS5VEJ57\/decisions ()({step,verdict,digest})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "560",
+							"uri": "http://platform-api:8000/api/v1/approvals/apr_01M5G59Q5KAQSXWQFPAS5VEJ57/decisions?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/approvals\/apr_01M5G59Q5KAQSXWQFPAS5VEJ57\/decisions (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "574",
+							"uri": "http://platform-api:8000/api/v1/approvals/apr_01M5G59Q5KAQSXWQFPAS5VEJ57/decisions?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/approvals\/apr_01M5G59Q5KAQSXWQFPAS5VEJ57\/decisions (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "3412",
+							"uri": "http://platform-api:8000/api/v1/approvals/apr_01M5G59Q5KAQSXWQFPAS5VEJ57/decisions/",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/approvals\/apr_01M5G59Q5KAQSXWQFPAS5VEJ57\/decisions\/ ()({step,verdict,digest})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2110",
+							"uri": "http://platform-api:8000/api/v1/dev",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/dev ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "587",
+							"uri": "http://platform-api:8000/api/v1/dev?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/dev (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "592",
+							"uri": "http://platform-api:8000/api/v1/dev?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/dev (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2114",
+							"uri": "http://platform-api:8000/api/v1/dev/users",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/dev\/users ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "584",
+							"uri": "http://platform-api:8000/api/v1/dev/users?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/dev\/users (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "589",
+							"uri": "http://platform-api:8000/api/v1/dev/users?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/dev\/users (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "2113",
+							"uri": "http://platform-api:8000/api/v1/mock-jira",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/mock-jira ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "594",
+							"uri": "http://platform-api:8000/api/v1/mock-jira?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/mock-jira (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "602",
+							"uri": "http://platform-api:8000/api/v1/mock-jira?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/mock-jira (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2125",
+							"uri": "http://platform-api:8000/api/v1/mock-jira/tickets",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/mock-jira\/tickets ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "591",
+							"uri": "http://platform-api:8000/api/v1/mock-jira/tickets?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/mock-jira\/tickets (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "605",
+							"uri": "http://platform-api:8000/api/v1/mock-jira/tickets?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/mock-jira\/tickets (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "2144",
+							"uri": "http://platform-api:8000/api/v1/runs",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "598",
+							"uri": "http://platform-api:8000/api/v1/runs?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "610",
+							"uri": "http://platform-api:8000/api/v1/runs?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "2142",
+							"uri": "http://platform-api:8000/api/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7 ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "599",
+							"uri": "http://platform-api:8000/api/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7 (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "619",
+							"uri": "http://platform-api:8000/api/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7 (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "596",
+							"uri": "http://platform-api:8000/api/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/events?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/events (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "615",
+							"uri": "http://platform-api:8000/api/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/events?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/events (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "2137",
+							"uri": "http://platform-api:8000/api/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/events?after=0",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/events (after)(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "1",
+							"uri": "http://platform-api:8000/api/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/retry",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/retry",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "409",
+							"otherinfo": ""
+						},
+						{
+							"id": "2106",
+							"uri": "http://platform-api:8000/api/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/retry",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/retry ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "409",
+							"otherinfo": ""
+						},
+						{
+							"id": "566",
+							"uri": "http://platform-api:8000/api/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/retry?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/retry (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "409",
+							"otherinfo": ""
+						},
+						{
+							"id": "585",
+							"uri": "http://platform-api:8000/api/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/retry?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/retry (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "409",
+							"otherinfo": ""
+						},
+						{
+							"id": "3407",
+							"uri": "http://platform-api:8000/api/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/retry/",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/retry\/",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2132",
+							"uri": "http://platform-api:8000/api/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/troubleshoot",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/troubleshoot ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "593",
+							"uri": "http://platform-api:8000/api/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/troubleshoot?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/troubleshoot (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "597",
+							"uri": "http://platform-api:8000/api/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/troubleshoot?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/troubleshoot (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "2117",
+							"uri": "http://platform-api:8000/api/v1/teams-stub",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/teams-stub ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "609",
+							"uri": "http://platform-api:8000/api/v1/teams-stub?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/teams-stub (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "618",
+							"uri": "http://platform-api:8000/api/v1/teams-stub?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/teams-stub (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2140",
+							"uri": "http://platform-api:8000/api/v1/teams-stub/messages",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/teams-stub\/messages ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "600",
+							"uri": "http://platform-api:8000/api/v1/teams-stub/messages?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/teams-stub\/messages (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "611",
+							"uri": "http://platform-api:8000/api/v1/teams-stub/messages?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/teams-stub\/messages (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "2131",
+							"uri": "http://platform-api:8000/api/v1/templates",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/templates ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "601",
+							"uri": "http://platform-api:8000/api/v1/templates?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/templates (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "604",
+							"uri": "http://platform-api:8000/api/v1/templates?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/templates (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "2102",
+							"uri": "http://platform-api:8000/api/v1/use-cases",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "0",
+							"uri": "http://platform-api:8000/api/v1/use-cases",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases ()({template,name,instruction,params:{John Doe}})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "569",
+							"uri": "http://platform-api:8000/api/v1/use-cases?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "583",
+							"uri": "http://platform-api:8000/api/v1/use-cases?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "3409",
+							"uri": "http://platform-api:8000/api/v1/use-cases/",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases\/ ()({template,name,instruction,params:{John Doe}})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2098",
+							"uri": "http://platform-api:8000/api/v1/use-cases/suggest",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases\/suggest ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "564",
+							"uri": "http://platform-api:8000/api/v1/use-cases/suggest?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases\/suggest (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "572",
+							"uri": "http://platform-api:8000/api/v1/use-cases/suggest?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases\/suggest (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "3408",
+							"uri": "http://platform-api:8000/api/v1/use-cases/suggest/",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases\/suggest\/ ()({text})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2136",
+							"uri": "http://platform-api:8000/api/v1/use-cases/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases\/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2 ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "606",
+							"uri": "http://platform-api:8000/api/v1/use-cases/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases\/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2 (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "623",
+							"uri": "http://platform-api:8000/api/v1/use-cases/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases\/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2 (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "567",
+							"uri": "http://platform-api:8000/api/v1/use-cases/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2/runs?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases\/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2\/runs (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "576",
+							"uri": "http://platform-api:8000/api/v1/use-cases/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2/runs?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases\/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2\/runs (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "3413",
+							"uri": "http://platform-api:8000/api/v1/use-cases/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2/runs/",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases\/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2\/runs\/",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2690",
+							"uri": "http://platform-api:8000/computeMetadata/v1/",
+							"nodeName": "http:\/\/platform-api:8000\/computeMetadata\/v1\/ ()({step,verdict,digest})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2128",
+							"uri": "http://platform-api:8000/healthz",
+							"nodeName": "http:\/\/platform-api:8000\/healthz ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "607",
+							"uri": "http://platform-api:8000/healthz?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/healthz (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "616",
+							"uri": "http://platform-api:8000/healthz?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/healthz (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "2126",
+							"uri": "http://platform-api:8000/healthz/ready",
+							"nodeName": "http:\/\/platform-api:8000\/healthz\/ready ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "608",
+							"uri": "http://platform-api:8000/healthz/ready?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/healthz\/ready (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "617",
+							"uri": "http://platform-api:8000/healthz/ready?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/healthz\/ready (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "2121",
+							"uri": "http://platform-api:8000/internal",
+							"nodeName": "http:\/\/platform-api:8000\/internal ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "613",
+							"uri": "http://platform-api:8000/internal?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/internal (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "620",
+							"uri": "http://platform-api:8000/internal?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/internal (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2127",
+							"uri": "http://platform-api:8000/internal/v1",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1 ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "621",
+							"uri": "http://platform-api:8000/internal/v1?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1 (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "627",
+							"uri": "http://platform-api:8000/internal/v1?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1 (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2135",
+							"uri": "http://platform-api:8000/internal/v1/runs",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "626",
+							"uri": "http://platform-api:8000/internal/v1/runs?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "629",
+							"uri": "http://platform-api:8000/internal/v1/runs?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2139",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7 ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "628",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7 (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "631",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7 (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "565",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/agent-events?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/agent-events (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "579",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/agent-events?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/agent-events (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "2099",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/agent-events?task=task",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/agent-events (task)(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "6",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/agent-events?task=task",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/agent-events (task)({task_id,event:{John Doe}})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "3411",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/agent-events/",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/agent-events\/ ()({task_id,event:{John Doe}})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2141",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/steps",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/steps ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "632",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/steps?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/steps (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "633",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/steps?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/steps (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/steps/run_agents",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/steps\/run_agents",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "2090",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/steps/run_agents",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/steps\/run_agents ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "561",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/steps/run_agents?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/steps\/run_agents (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "577",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/steps/run_agents?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/steps\/run_agents (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "3410",
+							"uri": "http://platform-api:8000/internal/v1/runs/run_01M5G59Q0SXQZD8MCD4FJWGZE7/steps/run_agents/",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/runs\/run_01M5G59Q0SXQZD8MCD4FJWGZE7\/steps\/run_agents\/",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2093",
+							"uri": "http://platform-api:8000/internal/v1/workflow-failures",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/workflow-failures ()(class.module.classLoader.DefaultAssertio...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "4",
+							"uri": "http://platform-api:8000/internal/v1/workflow-failures",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/workflow-failures ()({execution_id,workflow,last_node,message,execution_url})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "559",
+							"uri": "http://platform-api:8000/internal/v1/workflow-failures?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/workflow-failures (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('cmd.exe \/C echo qf7e5axs1e0m...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "575",
+							"uri": "http://platform-api:8000/internal/v1/workflow-failures?-d+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/workflow-failures (-d allow_url_include=1 -d auto_prepend_f...)(<?php exec('echo qf7e5axs1e0mjwigz2f2',$...)",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "3414",
+							"uri": "http://platform-api:8000/internal/v1/workflow-failures/",
+							"nodeName": "http:\/\/platform-api:8000\/internal\/v1\/workflow-failures\/ ()({execution_id,workflow,last_node,message,execution_url})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2686",
+							"uri": "http://platform-api:8000/latest/meta-data/",
+							"nodeName": "http:\/\/platform-api:8000\/latest\/meta-data\/ ()({step,verdict,digest})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2717",
+							"uri": "http://platform-api:8000/metadata/instance",
+							"nodeName": "http:\/\/platform-api:8000\/metadata\/instance ()({step,verdict,digest})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2724",
+							"uri": "http://platform-api:8000/metadata/v1",
+							"nodeName": "http:\/\/platform-api:8000\/metadata\/v1 ()({step,verdict,digest})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2698",
+							"uri": "http://platform-api:8000/opc/v1/instance/",
+							"nodeName": "http:\/\/platform-api:8000\/opc\/v1\/instance\/ ()({step,verdict,digest})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2706",
+							"uri": "http://platform-api:8000/opc/v2/instance/",
+							"nodeName": "http:\/\/platform-api:8000\/opc\/v2\/instance\/ ()({step,verdict,digest})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2726",
+							"uri": "http://platform-api:8000/openstack/latest/meta_data.json",
+							"nodeName": "http:\/\/platform-api:8000\/openstack\/latest\/meta_data.json ()({step,verdict,digest})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						}
+					],
+					"count": "321",
+					"systemic": false,
+					"solution": "",
+					"otherinfo": "",
+					"reference": "",
+					"cweid": "388",
+					"wascid": "20",
+					"sourceid": "76"
+				},
+				{
+					"pluginid": "10104",
+					"alertRef": "10104",
+					"alert": "User Agent Fuzzer",
+					"name": "User Agent Fuzzer",
+					"riskcode": "0",
+					"confidence": "2",
+					"riskdesc": "Informational (Medium)",
+					"desc": "<p>Check for differences in response based on fuzzed User Agent (eg. mobile sites, access as a Search Engine Crawler). Compares the response statuscode and the hashcode of the response body with the original response.</p>",
+					"instances":[ 
+						{
+							"id": "4144",
+							"uri": "http://platform-api:8000/api/v1/runs",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/runs",
+							"method": "GET",
+							"param": "Header User-Agent",
+							"attack": "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1)",
+							"evidence": "",
+							"otherinfo": ""
+						},
+						{
+							"id": "4127",
+							"uri": "http://platform-api:8000/api/v1/teams-stub/messages",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/teams-stub\/messages",
+							"method": "GET",
+							"param": "Header User-Agent",
+							"attack": "Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.0)",
+							"evidence": "",
+							"otherinfo": ""
+						},
+						{
+							"id": "4069",
+							"uri": "http://platform-api:8000/api/v1/teams-stub/messages",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/teams-stub\/messages",
+							"method": "GET",
+							"param": "Header User-Agent",
+							"attack": "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1)",
+							"evidence": "",
+							"otherinfo": ""
+						},
+						{
+							"id": "4149",
+							"uri": "http://platform-api:8000/api/v1/use-cases/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2/runs",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases\/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2\/runs",
+							"method": "POST",
+							"param": "Header User-Agent",
+							"attack": "Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.0)",
+							"evidence": "",
+							"otherinfo": ""
+						},
+						{
+							"id": "4026",
+							"uri": "http://platform-api:8000/api/v1/use-cases/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2/runs",
+							"nodeName": "http:\/\/platform-api:8000\/api\/v1\/use-cases\/uc_01M5G59Q0N8RKEZ7XR3JZ6XTA2\/runs",
+							"method": "POST",
+							"param": "Header User-Agent",
+							"attack": "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1)",
+							"evidence": "",
+							"otherinfo": ""
+						}
+					],
+					"count": "5",
+					"systemic": true,
+					"solution": "",
+					"otherinfo": "",
+					"reference": "<p>https://owasp.org/wstg</p>",
+					"cweid": "0",
+					"wascid": "0",
+					"sourceid": "4522"
+				}
+			]
+		}
+	],
+	"sequences":[
+	]
+
+}
