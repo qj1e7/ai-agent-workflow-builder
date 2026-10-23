@@ -1,0 +1,5 @@
+.page {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-4);
+}

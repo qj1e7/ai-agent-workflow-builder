@@ -1,0 +1,50 @@
+import { describe, expect, it } from 'vitest'
+import { formatClock, formatDuration, formatRelative, shortDigest } from './format'
+import { spineStateWords } from './spineState'
+
+describe('formatDuration', () => {
+  it('writes waits the way the transport labels them', () => {
+    expect(formatDuration(42_000)).toBe('42 s')
+    expect(formatDuration(373_000)).toBe('6 min 13 s')
+    expect(formatDuration(3_900_000)).toBe('1 h 5 min')
+    expect(formatClock(12_400)).toBe('0:12')
+    expect(formatClock(386_000)).toBe('6:26')
+  })
+
+  it('counts a clock past an hour in hours, so a retried run reads 3:00:07 and not 180:07', () => {
+    expect(formatClock(3_599_000)).toBe('59:59')
+    expect(formatClock(3_600_000)).toBe('1:00:00')
+    expect(formatClock(10_807_000)).toBe('3:00:07')
+  })
+
+  it('drops the seconds when asked for a coarse wait, and joins with non-breaking spaces when asked not to wrap', () => {
+    expect(formatDuration(373_000, { coarse: true })).toBe('6 min')
+    expect(formatDuration(42_000, { coarse: true })).toBe('42 s')
+    expect(formatDuration(3_900_000, { coarse: true })).toBe('1 h 5 min')
+    expect(formatDuration(373_000, { noWrap: true })).toBe('6 min 13 s')
+  })
+})
+
+describe('formatRelative', () => {
+  it('rounds to the unit a person would say', () => {
+    const now = Date.parse('2026-11-27T12:00:00Z')
+    expect(formatRelative('2026-11-27T11:59:50Z', now)).toBe('Just now')
+    expect(formatRelative('2026-11-27T11:48:00Z', now)).toBe('12 min ago')
+    expect(formatRelative('2026-11-27T09:00:00Z', now)).toBe('3 hours ago')
+    expect(formatRelative('2026-11-26T12:00:00Z', now)).toBe('Yesterday')
+  })
+})
+
+describe('shortDigest', () => {
+  it('keeps the algorithm and the first and last characters', () => {
+    expect(shortDigest('sha256:0be2129632d1283e015efcae22757aa3e182793e0153503bdd30dc0327a42576')).toBe('sha256:0be2…2576')
+  })
+})
+
+describe('spineStateWords', () => {
+  it('says each state in words, with the Approver and the wait', () => {
+    expect(spineStateWords({ kind: 'waiting', waited: '6 min' })).toBe('Waiting for an Approver, 6 min')
+    expect(spineStateWords({ kind: 'approved', by: 'Bob' })).toBe('Approved by Bob')
+    expect(spineStateWords({ kind: 'failed' })).toBe('Stopped here')
+  })
+})

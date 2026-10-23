@@ -1,0 +1,26 @@
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  line-height: 1;
+}
+
+.agent {
+  border-radius: 30%;
+  color: #fff;
+}
+
+.person {
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 620;
+}
+
+.seat {
+  border-radius: 50%;
+  border: 2px dashed var(--wait-line);
+  background: var(--wait-tint);
+  color: var(--wait);
+}

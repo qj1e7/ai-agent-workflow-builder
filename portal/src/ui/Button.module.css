@@ -1,0 +1,90 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-button);
+  font-size: var(--text-16);
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  transition: transform 80ms var(--ease-out);
+}
+
+.button:active:not([aria-disabled='true']) {
+  transform: translateY(1px);
+}
+
+.button[aria-disabled='true'] {
+  cursor: not-allowed;
+}
+
+.button[aria-disabled='true']:not([aria-busy='true']) {
+  opacity: 0.5;
+}
+
+.button[aria-busy='true'] {
+  cursor: progress;
+}
+
+.primary {
+  background: var(--ink);
+  color: #fff;
+}
+
+.primary:hover:not([aria-disabled='true']) {
+  background: var(--wall);
+}
+
+.secondary {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.secondary:hover:not([aria-disabled='true']) {
+  background: var(--mist);
+  border-color: var(--muted);
+}
+
+.dangerOutline {
+  background: var(--surface);
+  border-color: var(--fail-line);
+  color: var(--fail);
+}
+
+.dangerOutline:hover:not([aria-disabled='true']) {
+  background: var(--fail-tint);
+  border-color: var(--fail);
+}
+
+.approve {
+  background: var(--done);
+  color: #fff;
+}
+
+.approve:hover:not([aria-disabled='true']) {
+  background: #17613b;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 800ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -1,0 +1,56 @@
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  color: var(--muted);
+  font-size: var(--text-12);
+  font-stretch: 88%;
+  font-weight: 560;
+}
+
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.square,
+.circle,
+.ring {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid var(--muted);
+}
+
+.square {
+  border-radius: 3px;
+}
+
+.circle,
+.ring {
+  border-radius: 50%;
+}
+
+.ring {
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--lead-line);
+}
+
+.path {
+  display: inline-block;
+  width: 22px;
+  height: 0;
+  border-top: 2px dotted var(--ink);
+}
+
+.wait {
+  color: var(--wait);
+}
+
+.fail {
+  color: var(--fail);
+}
+
+.done {
+  color: var(--done);
+}

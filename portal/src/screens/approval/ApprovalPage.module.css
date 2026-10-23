@@ -1,0 +1,217 @@
+.frame {
+  max-width: 1180px;
+  margin-inline: auto;
+}
+
+.problem {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-4);
+}
+
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-5);
+  padding: var(--space-3) var(--space-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+}
+
+.banner > svg {
+  flex: none;
+}
+
+.banner > p {
+  flex: 1 1 22ch;
+  min-width: 0;
+}
+
+.bannerOpen {
+  border-color: var(--wait-line);
+  background: var(--wait-tint);
+  color: var(--wait);
+}
+
+.bannerOpen > p {
+  color: var(--ink);
+}
+
+.bannerApproved {
+  border-color: var(--done-line);
+  background: var(--done-tint);
+  color: var(--done);
+}
+
+.bannerDeclined {
+  border-color: var(--fail-line);
+  background: var(--fail-tint);
+  color: var(--fail);
+}
+
+.bannerApproved > p,
+.bannerDeclined > p {
+  color: var(--ink);
+}
+
+.waited {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--wait);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.written {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.skeletonPane {
+  padding: var(--space-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+}
+
+.decision {
+  position: sticky;
+  top: calc(var(--header-height) + var(--space-4));
+  display: grid;
+  gap: var(--space-5);
+  padding: var(--space-5);
+}
+
+.body {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.actions {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.actions > button {
+  width: 100%;
+}
+
+.cannot {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+}
+
+.cannotWords {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-weight: 600;
+}
+
+.cannotWords > svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.copy {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.copyStatus {
+  color: var(--fail);
+  font-size: var(--text-14);
+}
+
+.copyStatus:empty {
+  display: none;
+}
+
+.fingerprint {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line-soft);
+}
+
+.fingerprint > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--safety);
+}
+
+.fingerprintLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  font-size: var(--text-14);
+}
+
+.fingerprintLine > span:first-child {
+  color: var(--muted);
+}
+
+.digest {
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.fineprint {
+  margin-top: var(--space-1);
+  color: var(--muted);
+  font-size: var(--text-14);
+  line-height: 1.45;
+}
+
+.details dl {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding-bottom: var(--space-2);
+}
+
+.details dt {
+  color: var(--muted);
+  font-size: var(--text-12);
+}
+
+.details dd {
+  margin: 0;
+  font-size: var(--text-14);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1000px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .decision {
+    position: static;
+  }
+}
+
+@media (max-width: 759px) {
+  .banner {
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .decision {
+    padding: var(--space-4);
+  }
+}

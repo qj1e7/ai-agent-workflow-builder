@@ -1,0 +1,95 @@
+.section {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-7);
+}
+
+.list {
+  overflow: hidden;
+}
+
+.padded {
+  padding: var(--space-5);
+}
+
+.problem {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-4);
+}
+
+.list li + li {
+  border-top: 1px solid var(--line-soft);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 220px);
+  gap: var(--space-3) var(--space-6);
+  align-items: start;
+  padding: var(--space-4) var(--space-5);
+}
+
+.what {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.what h3 {
+  font-size: var(--text-18);
+}
+
+.instruction {
+  max-width: 70ch;
+  color: var(--muted);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-5);
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-14);
+}
+
+.meta > div {
+  display: flex;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.meta dt {
+  color: var(--muted);
+}
+
+.meta dd {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.run {
+  display: grid;
+  justify-items: end;
+  gap: var(--space-2);
+}
+
+@media (max-width: 759px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--space-4);
+  }
+
+  .run {
+    justify-items: start;
+  }
+
+  .padded {
+    padding: var(--space-4);
+  }
+
+  .section {
+    margin-top: var(--space-6);
+  }
+}

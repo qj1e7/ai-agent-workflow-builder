@@ -103,6 +103,38 @@ jobs:
           docker build --target test --tag mock-github:test e2e/mock_github
           docker run --rm mock-github:test
 
+  portal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: portal
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version-file: portal/.nvmrc
+          cache: npm
+          cache-dependency-path: portal/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
   scans:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -116,6 +148,7 @@ jobs:
           docker run --rm --volume "$PWD:/src" --workdir /src "$SEMGREP_IMAGE" \
             semgrep scan \
               --config p/python --config p/dockerfile --config p/github-actions \
+              --config p/typescript --config p/javascript --config p/react --config p/nginx \
               --metrics=off --error --exclude docs \
               --sarif-output=semgrep.sarif .
 
