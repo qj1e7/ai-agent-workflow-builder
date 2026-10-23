@@ -2,21 +2,21 @@ verbose: Linting all workflow files in repository: /repo
 verbose: Detected project: /repo
 verbose: Collected 4 YAML files
 verbose: Linting 4 files
-verbose: verbose: Linting .github/workflows/ci.yml
-verbose: Using project at /repo
-Linting .github/workflows/infra.yml
-verbose: Using project at /repo
 verbose: Linting .github/workflows/pstack-playbooks.yml
 verbose: Using project at /repo
 verbose: Linting .github/workflows/deploy.yml
 verbose: Using project at /repo
-verbose: Found 0 parse errors in 0 ms for .github/workflows/pstack-playbooks.yml
+verbose: Linting .github/workflows/infra.yml
+verbose: Using project at /repo
+verbose: verbose: Found 0 parse errors in 0 ms for .github/workflows/infra.yml
+Linting .github/workflows/ci.yml
+verbose: Using project at /repo
+verbose: Found 0 parse errors in 0 ms for .github/workflows/ci.yml
 verbose: Found 0 parse errors in 0 ms for .github/workflows/deploy.yml
-verbose: Found 0 parse errors in 0 ms for .github/workflows/infra.yml
-verbose: Found 0 parse errors in 1 ms for .github/workflows/ci.yml
-verbose: Found total 0 errors in 19 ms for .github/workflows/infra.yml
-verbose: Found total 0 errors in 24 ms for .github/workflows/pstack-playbooks.yml
-verbose: Found total 0 errors in 33 ms for .github/workflows/ci.yml
-verbose: Found total 0 errors in 55 ms for .github/workflows/deploy.yml
+verbose: Found 0 parse errors in 0 ms for .github/workflows/pstack-playbooks.yml
+verbose: Found total 0 errors in 12 ms for .github/workflows/infra.yml
+verbose: Found total 0 errors in 23 ms for .github/workflows/ci.yml
+verbose: Found total 0 errors in 36 ms for .github/workflows/pstack-playbooks.yml
+verbose: Found total 0 errors in 70 ms for .github/workflows/deploy.yml
 verbose: Found 0 errors in 4 files
 exit 0

@@ -17,7 +17,7 @@
 | 6 | Checkov, Terraform checks | Checkov 3.3.20 | Passed 6, Failed 0, Skipped 15 | `checkov.txt` |
 | 7 | Semgrep `p/terraform`, `p/nginx` and `p/github-actions` on `infra/`, `.github/` and `portal/nginx/` | Semgrep 1.179.0 | 81 rules on 45 files, 0 findings, after 1 accepted finding | `semgrep.txt` |
 | 8 | actionlint on every workflow | actionlint 1.7.12 | 0 errors in 4 files | `actionlint.txt` |
-| 9 | ShellCheck on `setup-azure.sh`, `check.sh`, `check-variables.sh` and `run-job.sh` | ShellCheck 0.11.0 | No findings, exit 0 | `shellcheck.txt` |
+| 9 | ShellCheck on `setup-azure.sh`, `check.sh`, `check-variables.sh`, `run-job.sh` and `terraform-quiet.sh` | ShellCheck 0.11.0 | No findings, exit 0 | `shellcheck.txt` |
 | 10 | `infra/sql/db-init.sql`, run twice with the `db-init` job's own command, as a non-superuser admin with CREATEROLE and CREATEDB | PostgreSQL 17, the digest in `infra/public-images.json` | Both runs exit 0. `n8n` owns `n8n`, `wab_owner` owns `platform`, all five roles sign in, none is a superuser | `db-init.txt` |
 | 11 | `portal/nginx/render.test.sh`, the Portal's nginx render test from the sign-in work | nginx 1.27-alpine | 24 of 24 pass. Each render runs `nginx -t`, so the `proxy_ssl_server_name on` line passes | `portal-render-test.txt` |
 | 12 | The Portal's nginx with the settings Terraform gives it on Azure | nginx 1.27-alpine | An earlier draft of this pull request left out `OIDC_SCOPE`, and with those settings the Portal refuses to start ("OIDC_SCOPE is not set"). With the settings Terraform gives it now, it passes `nginx -t` and serves the sign-in settings. The sign-in pull request has no Terraform, so the gap was only ever in this pull request | `portal-azure-render.txt` |
@@ -112,7 +112,7 @@ docker run --rm --volume "$PWD:/repo:ro" --workdir /repo \
 docker run --rm --volume "$PWD:/repo:ro" --workdir /repo --entrypoint shellcheck \
   rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 \
   infra/bootstrap/setup-azure.sh infra/scripts/check.sh infra/scripts/check-variables.sh \
-  infra/scripts/run-job.sh
+  infra/scripts/run-job.sh infra/scripts/terraform-quiet.sh
 
 # Row 11
 portal/nginx/render.test.sh

@@ -3,7 +3,7 @@
 ┌─────────────┐
 │ Scan Status │
 └─────────────┘
-  Scanning 59 files tracked by git with 82 Code rules:
+  Scanning 60 files tracked by git with 82 Code rules:
                                                                                                                         
   Language      Rules   Files          Origin      Rules                                                                
  ─────────────────────────────        ───────────────────                                                               
