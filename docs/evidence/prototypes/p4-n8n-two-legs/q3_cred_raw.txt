@@ -1,0 +1,10 @@
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Content-Length: 253
+ETag: W/"fd-C0m2k/4LI9DOMkq6e529uHvW4jI"
+Vary: Accept-Encoding
+Date: Tue, 20 Oct 2026 11:36:45 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"id":"OAKL2MURToNrvxf6","name":"X-Step-Key","type":"httpHeaderAuth","isManaged":false,"isGlobal":false,"isResolvable":false,"resolvableAllowFallback":false,"resolverId":null,"createdAt":"2026-10-20T11:36:45.047Z","updatedAt":"2026-10-20T11:36:45.044Z"}
