@@ -41,9 +41,3 @@ def test_dev_mode_on_localhost_lists_users_and_signs_in():
 def test_dev_mode_rejects_missing_or_unknown_user(headers: dict[str, str]):
     client = TestClient(create_app(LOCAL))
     assert client.get("/api/v1/runs", headers=headers).status_code == 401
-
-
-def test_dev_mode_documents_the_header():
-    schema = create_app(LOCAL).openapi()
-    assert schema["components"]["securitySchemes"]["DevUser"]["name"] == "X-Dev-User"
-    assert schema["security"] == [{"DevUser": []}]

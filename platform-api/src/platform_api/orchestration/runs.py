@@ -153,7 +153,7 @@ def _leg_dispatched(leg: Leg, attempt: int) -> PendingEvent:
     return PendingEvent(
         PLATFORM,
         "leg_dispatched",
-        f"The {leg.value} leg was sent to the workflow engine (attempt {attempt}).",
+        f"The {leg.value} leg was queued for the workflow engine (attempt {attempt}).",
         LegDispatchedData(leg=leg.value, attempt=attempt),
     )
 

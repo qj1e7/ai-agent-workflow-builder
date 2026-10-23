@@ -3,10 +3,11 @@ from dataclasses import dataclass
 from typing import Annotated, Protocol
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Security
+from fastapi.security import APIKeyHeader
 
 from platform_api.shared import Principal, Role, UserId
-from platform_api.wire import WireModel
+from platform_api.wire import Responses, WireModel, error_response
 
 LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1"})
 
@@ -79,12 +80,31 @@ def authenticator_for(config: AuthConfig) -> Authenticator:
             return dev_authenticator
 
 
-def current_principal(request: Request) -> Principal:
+dev_user_scheme = APIKeyHeader(
+    name=DEV_USER_HEADER,
+    scheme_name="DevUser",
+    description=(
+        "Dev-only sign-in for local mode. Send one of the ids from GET /api/v1/dev/users. "
+        "A deployment with real sign-in does not use it."
+    ),
+    auto_error=False,
+)
+
+
+def current_principal(
+    request: Request, declared_only: Annotated[str | None, Security(dev_user_scheme)]
+) -> Principal:
     authenticator: Authenticator = request.app.state.authenticator
     return authenticator(request)
 
 
 CurrentPrincipal = Annotated[Principal, Depends(current_principal)]
+
+SIGNED_IN: Responses = {401: error_response(f"{DEV_USER_HEADER} is missing or not a dev user")}
+OPERATORS_ONLY: Responses = {
+    **SIGNED_IN,
+    403: error_response("Only an Operator can do this"),
+}
 
 dev_router = APIRouter(tags=["dev"])
 

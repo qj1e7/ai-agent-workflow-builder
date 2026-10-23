@@ -214,7 +214,7 @@ def run_created(tl: Timeline) -> None:
         LegDispatched,
         0.18,
         PLATFORM,
-        "The work leg was sent to the workflow engine (attempt 1).",
+        "The work leg was queued for the workflow engine (attempt 1).",
         LegDispatchedData(leg="work", attempt=1),
     )
     tl.add(
@@ -381,7 +381,7 @@ def success_events() -> Timeline:
         LegDispatched,
         383.61,
         PLATFORM,
-        "The act leg was sent to the workflow engine (attempt 1).",
+        "The act leg was queued for the workflow engine (attempt 1).",
         LegDispatchedData(leg="act", attempt=1),
     )
     tl.add(
