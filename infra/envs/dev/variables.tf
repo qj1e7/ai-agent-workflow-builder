@@ -91,6 +91,13 @@ variable "n8n_owner_email" {
   type        = string
 }
 
+variable "github_token" {
+  description = "Optional GitHub token for agent-runtime's release checker (GITHUB_TOKEN). Without one, GitHub allows 60 requests an hour per IP address, and Container Apps can share that address with other Azure customers. Empty sends no token."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "github_api_base" {
   description = "GitHub API that the release checker reads."
   type        = string

@@ -46,8 +46,9 @@ expect() {
   fi
 }
 
-expect accepted - "Entra values, no keys URL"
+expect accepted - "Entra values, no keys URL, no GitHub token"
 expect accepted - "a keys URL" -var oidc_jwks_url=https://login.microsoftonline.com/t/discovery/v2.0/keys
+expect accepted - "a GitHub token" -var github_token=example-token
 
 expect refused oidc_issuer "issuer over http" -var oidc_issuer=http://mock-oidc:8080/default
 expect refused oidc_issuer "issuer with no host" -var oidc_issuer=https:///tenant/v2.0
