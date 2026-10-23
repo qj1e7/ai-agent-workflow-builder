@@ -1,0 +1,17 @@
+POST act (b1=409, b1 has retry) (202, {'run_id': 'run-C1', 'n8n_execution_id': '4'})
+== after b1 409
+EXEC 5 wf Ys6QEhp71eXY4c1G success error lastNode Report error err None
+EXEC 4 wf nUWPVlW2XF7pa4HW error webhook lastNode Step B1 err Your request is invalid or could not be processed by the service
+EXEC 3 wf nUWPVlW2XF7pa4HW success webhook lastNode Step A2 err None
+11:37:40.069 /step/b1 1 409 {"run_id": "run-C1"}
+11:37:42.080 /step/b1 2 409 {"run_id": "run-C1"}
+11:37:44.089 /step/b1 3 409 {"run_id": "run-C1"}
+11:37:44.116 /error 1 200 {"failed_execution_id": "4", "last_node": "Step B1", "message": "Your request is invalid or could not be processed by the service"}
+POST act (b2=409, b2 has no retry) (202, {'run_id': 'run-C2', 'n8n_execution_id': '6'})
+== after b2 409
+EXEC 7 wf Ys6QEhp71eXY4c1G success error lastNode Report error err None
+EXEC 6 wf nUWPVlW2XF7pa4HW error webhook lastNode Step B2 err Your request is invalid or could not be processed by the service
+EXEC 5 wf Ys6QEhp71eXY4c1G success error lastNode Report error err None
+11:37:48.152 /step/b1 1 200 {"run_id": "run-C2"}
+11:37:48.158 /step/b2 1 409 {"run_id": ""}
+11:37:48.194 /error 1 200 {"failed_execution_id": "6", "last_node": "Step B2", "message": "Your request is invalid or could not be processed by the service"}
