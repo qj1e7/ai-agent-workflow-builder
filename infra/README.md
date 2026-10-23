@@ -56,7 +56,7 @@ infra/
 - No secret value is in any `.tf` file or tfvars file in git. Terraform generates every secret with `random_password` and writes it to Key Vault.
 - The apps never hold a secret value in their own settings. Each Container App setting points at a Key Vault secret's URL, and Azure reads it with the app's own managed identity. Our code reads plain environment variables and never calls a Key Vault SDK, the same as in Compose.
 - **The generated secrets are also in the Terraform state file, in plain text.** That is how Terraform remembers a value so the next run keeps it. The state lives in Azure Storage with access keys turned off, so only identities with a blob data role can read it. [bootstrap/README.md](bootstrap/README.md) explains who that is. We kept stored random values over Terraform's newer write-only arguments, because a write-only value is new on every run, and a run that fails halfway would leave the database and Key Vault with different passwords.
-- `GITHUB_TOKEN` for the release checker is not set. The checker works without it at GitHub's lower anonymous rate limit.
+- The release checker in agent-runtime calls GitHub's API. Without a token, GitHub allows only 60 requests an hour per IP address. On the Consumption plan our outbound address can be shared with other Azure customers, so a demo could run out. A token raises the limit to 5,000 an hour. To use one, set the secret `GH_RELEASE_TOKEN` on the `azure-dev` environment (step 7 below). The deploy passes it to Terraform as `github_token`, Terraform stores it in Key Vault, and agent-runtime reads it as `GITHUB_TOKEN`. Leave the secret unset, and agent-runtime calls GitHub without a token. Where the token comes from is still open (placeholder: the team lead decides who owns it). A fine-grained personal access token with no extra permissions can read public repositories' releases.
 
 ### How each setting maps from Compose
 
@@ -67,6 +67,7 @@ infra/
 | `OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_JWKS_URL` | not set | from variables. `OIDC_JWKS_URL` only when it is not empty |
 | `DATABASE_URL_*` | built from `.env` | Key Vault secrets, each a full URL with `sslmode=require` |
 | `AGENT_API_KEY`, `STEP_KEY`, `CALLBACK_SIGNING_KEY` | `.env` | Key Vault secrets |
+| `GITHUB_TOKEN` | `.env`, empty by default | a Key Vault secret from `GH_RELEASE_TOKEN`, only when that secret is set |
 | `AGENT_RUNTIME_URL`, `N8N_BASE_URL`, `PLATFORM_INTERNAL_URL` | `http://<service>:<port>` | `https://<app>.internal.<domain>` or `https://<app>.<domain>` |
 | `CALLBACK_ALLOWED_ORIGINS` | `http://platform-api:8000` | platform-api's HTTPS origin |
 | n8n database settings | `postgres` host, password from `.env` | the server's host name, TLS on, password from Key Vault |
@@ -105,25 +106,47 @@ Azure for Students gives USD 100 of credit for 12 months. At this rate, an envir
 
 - The state storage, the deploy identity and the empty resource group `rg-wab-dev` stay. Terraform did not create the group, so it does not delete it. Leave it in place: the deploy identity's roles live on it, and an empty group costs nothing. The next deploy starts from there in about 20 minutes (a guess).
 - Run only `destroy` from a laptop. `apply` belongs to the deploy workflow, because the Terraform code gives its caller two roles as a service principal, and a person is not one.
-- A new environment gets a new domain, so the Portal's address changes. After the first deploy that follows a destroy, add the Portal's new redirect URIs to its app registration (step 6 below).
+- A new environment gets a new domain, so the Portal's address changes. After the first deploy that follows a destroy, add the Portal's new redirect URIs to its app registration (step 9 below).
 - Key Vault names stay reserved for 7 days after a destroy, which is why the names carry a random suffix.
 
 ## One-time human steps before the first deploy
 
-Do these in order. Each one changes cloud resources or repository settings, so a person does them.
+Do these in order. Each one changes cloud resources or repository settings, so a person does them. The order matters: the GitHub environment `azure-dev` must exist, limited to `main`, before any Azure credential trusts it.
 
-1. **Create the state storage, the resource group and the deploy identity.** Follow [bootstrap/README.md](bootstrap/README.md). It prints five values for step 4.
-2. **Create the GitHub environment.** In the repository's Settings, open Environments and create `azure-dev`.
-   - Under Required reviewers, add at least one teammate. Tick "Prevent self-review", so the person who starts a deploy cannot also approve it.
-   - Under Deployment branches, allow `main` only. Keep it that way. The federated credential from step 1 trusts the environment name, not a branch, so any workflow job that names `environment: azure-dev` acts as the deploy identity. This branch rule and the reviewers are what stop an unreviewed branch from doing that.
-3. **Register the Entra ID apps.** Follow [docs/auth/entra-setup.md](../docs/auth/entra-setup.md). It creates the two app registrations, with the app roles `Operator` and `Approver` on platform-api's, and gives the values for the `OIDC_` variables in step 4. The Portal's address does not exist until the first deploy, so register the Portal app without its redirect URIs for now. If the university tenant does not let students register apps, this step needs a tenant that does, because app roles live on an app registration. The deploy identity from step 1 does not have this problem, because it is a managed identity.
-4. **Set the environment variables.** On the `azure-dev` environment, add these variables. They are configuration, not secrets, so they go under Variables, not Secrets.
+### The gate, as it is
 
-   | Variable | Value |
+The repository is private. On a private repository with GitHub Pro, an environment can be limited to certain branches, but it cannot have required reviewers, "Prevent self-review" or a wait timer. Those need a public repository or GitHub Enterprise. So the gate is:
+
+- Only code reviewed into `main` can deploy. The `azure-dev` environment only accepts `main`, and `main` only takes pull requests that someone other than the author approved.
+- A person starts each deploy by hand. Anyone with write access to the repository can start one.
+- No second person approves each run. To make up for that, the deploy stops before any apply that would destroy or replace a resource, unless the person who starts it ticks `allow_destroy`.
+
+If the repository is made public later, add required reviewers and "Prevent self-review" to `azure-dev`.
+
+### Steps
+
+1. **Wait until the owner account is on GitHub Pro.** On GitHub Free, a private repository has no environments, no environment secrets and no branch protection, so none of the gate above exists.
+2. **Add the teammates as collaborators.** They review the pull requests into `main` (step 3).
+3. **Protect `main`.** In the repository's Settings, open Branches and add a rule for `main`:
+   - Tick "Require a pull request before merging", with 1 required approval. GitHub never counts the author's own approval.
+   - Tick "Require approval of the most recent reviewable push", so a change pushed after the approval needs a new one.
+   - Tick "Do not allow bypassing the above settings", so the owner cannot push to `main` directly either.
+4. **Create the GitHub environment.** In Settings, open Environments and create `azure-dev`. Under Deployment branches and tags, choose "Selected branches and tags" and add `main` only. Keep it that way. The deploy's secrets go into this environment, not into the repository's secrets (step 7).
+
+   Do this before step 5. The deploy identity's federated credential trusts any workflow job that names `environment: azure-dev`. A workflow that names an environment that does not exist creates it, with no rules at all. So if the credential came first, a workflow on any branch could act as the deploy identity.
+5. **Create the state storage, the resource group and the deploy identity.** Follow [bootstrap/README.md](bootstrap/README.md). It prints five values for step 7.
+6. **Register the Entra ID apps.** Follow [docs/auth/entra-setup.md](../docs/auth/entra-setup.md). It creates the two app registrations, with the app roles `Operator` and `Approver` on platform-api's, and gives the values for the `OIDC_` variables in step 7. The Portal's address does not exist until the first deploy, so register the Portal app without its redirect URIs for now. If the university tenant does not let students register apps, this step needs a tenant that does, because app roles live on an app registration. The deploy identity from step 5 does not have this problem, because it is a managed identity.
+7. **Set the environment's secrets and variables.** On the `azure-dev` environment, add these. GitHub masks secret values wherever they appear in a log. So the Azure IDs go under Secrets, and the rest goes under Variables.
+
+   | Secret | Value |
    |---|---|
    | `AZURE_CLIENT_ID` | printed by the bootstrap script |
    | `AZURE_TENANT_ID` | printed by the bootstrap script |
    | `AZURE_SUBSCRIPTION_ID` | printed by the bootstrap script |
+   | `GH_RELEASE_TOKEN` | optional. A GitHub token for the release checker, as [Secrets](#secrets) describes |
+
+   | Variable | Value |
+   |---|---|
    | `TFSTATE_RESOURCE_GROUP` | printed by the bootstrap script |
    | `TFSTATE_STORAGE_ACCOUNT` | printed by the bootstrap script |
    | `OIDC_ISSUER` | `https://login.microsoftonline.com/<tenant-id>/v2.0`. The Portal uses it as its sign-in authority too |
@@ -133,22 +156,25 @@ Do these in order. Each one changes cloud resources or repository settings, so a
    | `OIDC_JWKS_URL` | optional. Leave it unset, and platform-api finds the keys through the issuer |
    | `N8N_OWNER_EMAIL` | the email for the n8n owner account |
 
-   With the GitHub CLI, each is one command, for example `gh variable set OIDC_ISSUER --env azure-dev --body "https://login.microsoftonline.com/<tenant-id>/v2.0"`.
-5. **Run the deploy.** In the Actions tab, run the `deploy` workflow on `main`. A reviewer from step 2 approves it, and then it:
+   With the GitHub CLI, each is one command, for example `gh secret set AZURE_TENANT_ID --env azure-dev` (it asks for the value) or `gh variable set OIDC_ISSUER --env azure-dev --body "https://login.microsoftonline.com/<tenant-id>/v2.0"`.
+8. **Run the deploy.** In the Actions tab, run the `deploy` workflow on `main`. Leave `allow_destroy` off. The workflow then:
    1. creates the registry if it is missing,
    2. copies n8n and PostgreSQL into the registry by digest, then builds and pushes our three images, tagged with the commit SHA,
    3. creates the `db-init` job if it is missing and runs it, so the database roles exist before any app starts,
-   4. runs `terraform plan`, shows the plan in the run summary, and applies that exact plan,
+   4. plans everything, puts the count of changes in the run summary, and applies that exact plan,
    5. runs the `bootstrap` job, and prints the Portal's URL.
 
-   The workflow never runs on a push. Only `workflow_dispatch` starts it.
-6. **Add the Portal's redirect URIs.** In the Portal's app registration, add `https://<portal-host>/auth/callback` and `https://<portal-host>/signed-out` as single-page application redirect URIs, with the address the deploy printed. Sign-in works from then on. Repeat this after any deploy that creates a new environment, because its address changes.
+   Each apply in steps 1, 3 and 4 first saves its plan and checks it. If the plan would destroy or replace any resource, the deploy stops before that apply and prints only the counts. Run it again with `allow_destroy` ticked only when you mean it, for example after renaming a resource on purpose.
+
+   The workflow never runs on a push. Only `workflow_dispatch` starts it. It prints summaries only: Terraform's summary lines, the plan's counts, the job names and the Portal's URL. The full plan and Terraform's full output stay in files on the runner and are never uploaded. On a failure it prints Terraform's errors, which can name a resource.
+9. **Add the Portal's redirect URIs.** In the Portal's app registration, add `https://<portal-host>/auth/callback` and `https://<portal-host>/signed-out` as single-page application redirect URIs, with the address the deploy printed. Sign-in works from then on. Repeat this after any deploy that creates a new environment, because its address changes.
 
 ### What to watch on the first deploy
 
 These were not testable offline, so they are guesses until a real deploy confirms them:
 
-- Azure RBAC can take a few minutes to reach Key Vault. Each identity waits 90 seconds after its role assignments before its app is created. If an app still fails to read a secret, rerun the workflow.
+- Azure RBAC can take a few minutes to reach Key Vault and the registry. Microsoft says up to 10 minutes. Each app's identity waits 90 seconds after its role assignments before its app is created. The deploy identity waits 90 seconds after giving itself AcrPush and Key Vault Secrets Officer, before it pushes images or writes secrets. The workflow also tries `az acr login` and each `docker push` up to five times, 30 seconds apart. If an app still fails to read a secret, or Terraform cannot write one, rerun the workflow.
+- The workflow waits for each job twice as long as the job's own timeout: 600 seconds for `db-init` and 1200 for `bootstrap`. Pulling the image on a cold start counts against the wait, not the timeout. If a wait still runs out, check the job's execution in the Azure portal before you rerun.
 - `az acr import` should keep each image's digest, since the Terraform code pulls n8n and PostgreSQL by digest. If a pull fails with "manifest unknown", compare the digest in the registry with `public-images.json`.
 - The Azure admin role is not a superuser. `db-init` grants itself membership in `n8n` and `wab_owner` before it hands them their databases. A local PostgreSQL 17 run showed that the handover fails without that grant and works with it. On Azure it is still untested.
 - Container Apps ingress ends any request after 240 seconds. The live view's event stream reconnects on its own. Check that the live view keeps up after 4 minutes.
@@ -166,9 +192,10 @@ The script runs, each in a Docker image pinned by digest:
 
 1. `terraform fmt -check -recursive`
 2. `terraform init -backend=false`, then `terraform validate`, for each environment
-3. `tofu init -backend=false`, then `tofu validate`, on a copy without the lock file
-4. `tflint` with the `terraform` and `azurerm` rulesets (`.tflint.hcl`)
-5. Checkov's Terraform checks
+3. `scripts/check-variables.sh`, which plans each environment's `variables.tf` alone with good sign-in values and with each kind of value that platform-api or the Portal would refuse at startup
+4. `tofu init -backend=false`, then `tofu validate`, on a copy without the lock file
+5. `tflint` with the `terraform` and `azurerm` rulesets (`.tflint.hcl`)
+6. Checkov's Terraform checks
 
 CI runs the same script in the `infra` workflow, only when a pull request changes `infra/` or one of the two infrastructure workflows. It also runs `actionlint` on every workflow. Semgrep's `p/terraform` rules run in the main CI's SAST step.
 

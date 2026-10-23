@@ -1,0 +1,12 @@
+Gitleaks 8.21.2, the image CI pins. --redact on.
+
+== CI's command: detect --no-git over the tracked and new files of the working tree
+INF scan completed in 184ms
+INF no leaks found
+exit 0
+
+== detect on the git history of every review-fix commit, e43ff08..HEAD
+INF 14 commits scanned.
+INF scan completed in 56.3ms
+INF no leaks found
+exit 0

@@ -1,0 +1,49 @@
+## no signature
+HTTP/1.1 401 Unauthorized
+Content-Type: application/json; charset=utf-8
+Content-Length: 25
+ETag: W/"19-1luTU257I9tvKUXOJotGBQDVDqk"
+Vary: Accept-Encoding
+Date: Tue, 20 Oct 2026 10:25:40 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"error":"Invalid token"}
+
+## wrong signature
+HTTP/1.1 401 Unauthorized
+Content-Type: application/json; charset=utf-8
+Content-Length: 25
+ETag: W/"19-1luTU257I9tvKUXOJotGBQDVDqk"
+Vary: Accept-Encoding
+Date: Tue, 20 Oct 2026 10:25:40 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"error":"Invalid token"}
+
+## writes after bad attempts
+[{"request_id": "req-A1", "approver": "alice", "title": "New langgraph release", "ts": "10:25:28.226"}]
+
+## valid resume
+HTTP/1.0 200 OK
+Server: BaseHTTP/0.6 Python/3.12.15
+Date: Tue, 20 Oct 2026 10:25:40 GMT
+content-type: application/json
+
+{"n8n_status": 200, "n8n_body": "{\"message\":\"Workflow was started\"}"}
+
+## resume finished run, direct
+HTTP/1.1 409 Conflict
+Content-Type: application/json; charset=utf-8
+Content-Length: 64
+ETag: W/"40-wm1+wInIYCOzXy9cZUaPcPQa0Iw"
+Vary: Accept-Encoding
+Date: Tue, 20 Oct 2026 10:25:42 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"code":409,"message":"The execution \"2 has finished already."}
+
+## writes
+[{"request_id": "req-A1", "approver": "alice", "title": "New langgraph release", "ts": "10:25:28.226"}, {"request_id": "req-A2", "approver": "bob", "title": "New langgraph release", "ts": "10:25:40.711"}]

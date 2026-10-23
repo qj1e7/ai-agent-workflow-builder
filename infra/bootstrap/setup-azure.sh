@@ -70,9 +70,11 @@ az role assignment create --assignee-object-id "$principal_id" --assignee-princi
   --condition "$condition" --condition-version 2.0 --output none
 
 echo
-echo "Done. Set these variables on the azure-dev GitHub environment:"
+echo "Done. On the azure-dev GitHub environment, set these three as secrets, so GitHub masks them"
+echo "in the workflow logs:"
 echo "  AZURE_CLIENT_ID=$client_id"
 echo "  AZURE_TENANT_ID=$tenant"
 echo "  AZURE_SUBSCRIPTION_ID=$subscription"
+echo "And set these two as variables:"
 echo "  TFSTATE_RESOURCE_GROUP=$state_group"
 echo "  TFSTATE_STORAGE_ACCOUNT=$state_account"

@@ -11,18 +11,21 @@
 |---|---|---|---|---|
 | 1 | `terraform fmt -check -recursive` | Terraform 1.16.5 | Clean. No file needs formatting | `terraform-fmt.txt` (empty on purpose) |
 | 2 | `terraform init -backend=false`, then `terraform validate` | Terraform 1.16.5 | "Success! The configuration is valid." | `terraform-validate-dev.txt` |
-| 3 | `tofu init -backend=false`, then `tofu validate`, on a copy without the lock file | OpenTofu 1.12.7 | "Success! The configuration is valid." | `tofu-validate-dev.txt` |
-| 4 | `tflint --recursive`, with the `terraform` ruleset (all rules) and the `azurerm` ruleset 0.32.0 | TFLint 0.64.0 | 0 issues, after 3 accepted findings | `tflint.txt` |
-| 5 | Checkov, Terraform checks | Checkov 3.3.20 | Passed 6, Failed 0, Skipped 15 | `checkov.txt` |
-| 6 | Semgrep `p/terraform`, `p/nginx` and `p/github-actions` on `infra/`, `.github/` and `portal/nginx/` | Semgrep 1.179.0 | 81 rules on 45 files, 0 findings, after 1 accepted finding | `semgrep.txt` |
-| 7 | actionlint on every workflow | actionlint 1.7.12 | 0 errors in 4 files | `actionlint.txt` |
-| 8 | ShellCheck on `setup-azure.sh`, `check.sh` and `run-job.sh` | ShellCheck 0.11.0 | No findings, exit 0 | `shellcheck.txt` |
-| 9 | `infra/sql/db-init.sql`, run twice with the `db-init` job's own command, as a non-superuser admin with CREATEROLE and CREATEDB | PostgreSQL 17, the digest in `infra/public-images.json` | Both runs exit 0. `n8n` owns `n8n`, `wab_owner` owns `platform`, all five roles sign in, none is a superuser | `db-init.txt` |
-| 10 | `portal/nginx/render.test.sh`, the Portal's nginx render test from the sign-in work | nginx 1.27-alpine | 24 of 24 pass. Each render runs `nginx -t`, so the `proxy_ssl_server_name on` line passes | `portal-render-test.txt` |
-| 11 | The Portal's nginx with the settings Terraform gives it on Azure | nginx 1.27-alpine | The old settings stop the Portal ("OIDC_SCOPE is not set"). The new ones pass `nginx -t` and serve the sign-in settings | `portal-azure-render.txt` |
-| 12 | The sign-in variable checks in `infra/envs/dev/variables.tf`, through `terraform plan` on a module that holds only that file | Terraform 1.16.5 | Good values pass. An http issuer or keys URL, a scope without `openid` and an `api://` audience are refused | `terraform-variable-checks.txt` |
+| 3 | `infra/scripts/check-variables.sh`: `terraform plan` on a module that holds only `envs/dev/variables.tf`, with good sign-in values and with each kind of value platform-api or the Portal refuses at startup | Terraform 1.16.5 | All 24 cases as expected: 3 accepted, 21 refused, each by the right variable's rule | `terraform-variables-dev.txt` |
+| 4 | `tofu init -backend=false`, then `tofu validate`, on a copy without the lock file | OpenTofu 1.12.7 | "Success! The configuration is valid." | `tofu-validate-dev.txt` |
+| 5 | `tflint --recursive`, with the `terraform` ruleset (all rules) and the `azurerm` ruleset 0.32.0 | TFLint 0.64.0 | 0 issues, after 3 accepted findings | `tflint.txt` |
+| 6 | Checkov, Terraform checks | Checkov 3.3.20 | Passed 6, Failed 0, Skipped 15 | `checkov.txt` |
+| 7 | Semgrep `p/terraform`, `p/nginx` and `p/github-actions` on `infra/`, `.github/` and `portal/nginx/` | Semgrep 1.179.0 | 81 rules on 45 files, 0 findings, after 1 accepted finding | `semgrep.txt` |
+| 8 | actionlint on every workflow | actionlint 1.7.12 | 0 errors in 4 files | `actionlint.txt` |
+| 9 | ShellCheck on `setup-azure.sh` and the six scripts in `infra/scripts/` | ShellCheck 0.11.0 | No findings, exit 0 | `shellcheck.txt` |
+| 10 | `infra/sql/db-init.sql`, run twice with the `db-init` job's own command, as a non-superuser admin with CREATEROLE and CREATEDB | PostgreSQL 17, the digest in `infra/public-images.json` | Both runs exit 0. `n8n` owns `n8n`, `wab_owner` owns `platform`, all five roles sign in, none is a superuser | `db-init.txt` |
+| 11 | `portal/nginx/render.test.sh`, the Portal's nginx render test from the sign-in work | nginx 1.27-alpine | 24 of 24 pass. Each render runs `nginx -t`, so the `proxy_ssl_server_name on` line passes | `portal-render-test.txt` |
+| 12 | The Portal's nginx with the settings Terraform gives it on Azure | nginx 1.27-alpine | An earlier draft of this pull request left out `OIDC_SCOPE`, and with those settings the Portal refuses to start ("OIDC_SCOPE is not set"). With the settings Terraform gives it now, it passes `nginx -t` and serves the sign-in settings. The sign-in pull request has no Terraform, so the gap was only ever in this pull request | `portal-azure-render.txt` |
+| 13 | `terraform test` with mocked providers, on a copy of `infra/` with two test-only outputs: agent-runtime's secret names and the vault's secret names | Terraform 1.16.5 | Without `github_token`, agent-runtime gets only `AGENT_API_KEY` and the vault has no `github-token`. With it, agent-runtime also gets `GITHUB_TOKEN` and the vault stores it. 2 of 2 pass | `terraform-github-token-test.txt` |
+| 14 | Gitleaks, CI's `detect --no-git` over the working tree, and `detect` over the git history of the review-fix commits | Gitleaks 8.21.2 | No leaks found in either scan | `gitleaks.txt` |
+| 15 | The destroy guard: `plan-guard.sh` on real saved plans, then `guarded-apply.sh` end to end, on a scratch module of `terraform_data` resources | Terraform 1.16.5, jq | A destroy or a replace, in either order, is refused unless `allow_destroy` is true, and the refusal leaves the state untouched. Adds, in-place changes, no change and a targeted update pass. Empty input and JSON that is not a plan are refused. Only counts are printed | `plan-guard-test.txt` |
 
-Rows 1 to 5 are `check.sh`. CI runs the same script in the `infra` workflow. CI's own SAST step also runs Semgrep with all eight of its rule sets, now with `p/terraform`, over the whole repository. We ran that exact rule list too: 313 rules on 315 files, 0 findings. Its output is not saved, because it starts with a Git warning from the worktree setup.
+Rows 1 to 6 are `check.sh`. CI runs the same script in the `infra` workflow. CI's own SAST step also runs Semgrep with all eight of its rule sets, now with `p/terraform`, over the whole repository. We ran that exact rule list too: 313 rules on 315 files, 0 findings. Its output is not saved, because it starts with a Git warning from the worktree setup.
 
 Two more things were checked by hand and not saved:
 
@@ -41,6 +44,7 @@ Two more things were checked by hand and not saved:
 | actionlint and ShellCheck | `rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667` |
 | PostgreSQL | `postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3` |
 | nginx | `nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10` |
+| Gitleaks | `zricethezav/gitleaks:v8.21.2@sha256:0e99e8821643ea5b235718642b93bb32486af9c8162c8b8731f7cbdc951a7f46` |
 
 The Terraform providers are pinned to azurerm 5.7.0, random 3.9.1 and time 0.14.2. The lock file has hashes for five platforms for each of them.
 
@@ -87,31 +91,36 @@ Each one is written next to its code, with its reason, in the tool's own syntax:
 - **Azure itself.** Nothing was planned against or applied to Azure. Region support for PostgreSQL 17, quotas, how long role assignments take to reach Key Vault, Key Vault references and `az acr import` are all untested. The infra README lists what to watch on the first deploy.
 - **The one-time setup.** `infra/bootstrap/setup-azure.sh` has never run. Its role condition follows Microsoft's "Constrain ACR management" example character for character, with our four roles, but Azure has not checked it.
 - **The deploy workflow.** It has never run.
-- **Sign-in on Azure.** Row 11 shows the Portal starts with Terraform's settings. Signing in through Entra ID on Azure is not tested.
+- **Sign-in on Azure.** Row 12 shows the Portal starts with Terraform's settings. Signing in through Entra ID on Azure is not tested.
 
 ## Run the checks again
 
 ```sh
-# Rows 1 to 5
+# Rows 1 to 6
 infra/scripts/check.sh docs/evidence/iac
 
-# Row 6
+# Row 7
 docker run --rm --volume "$PWD:/src:ro" --workdir /src \
   semgrep/semgrep:1.179.0@sha256:93963d9295a366f59e4850127b1550400ee7b388f04fe144e4a1f6325d96e01b \
   semgrep scan --config p/terraform --config p/nginx --config p/github-actions \
   --metrics=off --error infra .github portal/nginx
 
-# Row 7
+# Row 8
 docker run --rm --volume "$PWD:/repo:ro" --workdir /repo \
   rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
 
-# Row 8
+# Row 9
 docker run --rm --volume "$PWD:/repo:ro" --workdir /repo --entrypoint shellcheck \
   rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 \
-  infra/bootstrap/setup-azure.sh infra/scripts/check.sh infra/scripts/run-job.sh
+  infra/bootstrap/setup-azure.sh infra/scripts/*.sh
 
-# Row 10
+# Row 11
 portal/nginx/render.test.sh
+
+# Row 14, the scan CI runs
+docker run --rm --volume "$PWD:/repo:ro" \
+  zricethezav/gitleaks:v8.21.2@sha256:0e99e8821643ea5b235718642b93bb32486af9c8162c8b8731f7cbdc951a7f46 \
+  detect --no-git --source /repo --redact --verbose
 ```
 
-Rows 9, 11 and 12 were one-off `docker run` commands. Each output file starts with what was run.
+Rows 10, 12, 13 and 15 were one-off runs. Each output file starts with what was run.

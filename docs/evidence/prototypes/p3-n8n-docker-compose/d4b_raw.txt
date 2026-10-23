@@ -1,0 +1,36 @@
+{"accepted":true,"request_id":"req-D1"}
+saved url: http://n8n:5678/webhook-waiting/4?signature=<redacted-3>
+## events before down
+run_started
+agent_done
+awaiting_approval
+ Container protodocker-stub-1 Removing 
+ Container protodocker-stub-1 Removed 
+ Network protodocker_default Removing 
+ Network protodocker_default Removed 
+NAME      IMAGE     COMMAND   SERVICE   CREATED   STATUS    PORTS
+local     protodocker_n8ndata
+local     protodocker_pgdata
+ Container protodocker-postgres-1 Healthy 
+ Container protodocker-n8n-1 Starting 
+ Container protodocker-n8n-1 Started 
+healthy
+## stub state after down/up (stub is stateless, in-memory)
+{}
+{"ok": 1}
+## resume with same saved URL via stub
+HTTP/1.0 200 OK
+Server: BaseHTTP/0.6 Python/3.12.15
+Date: Tue, 20 Oct 2026 10:26:18 GMT
+content-type: application/json
+
+{"n8n_status": 200, "n8n_body": "{\"message\":\"Workflow was started\"}"}
+## events
+10:26:18.893 run_finished_approved
+## writes
+[{"request_id": "req-D1", "approver": "alice", "title": "New langgraph release", "ts": "10:26:18.884"}]
+## executions
+4 success True
+3 success True
+2 success True
+1 success True

@@ -27,6 +27,9 @@ locals {
     managed-by  = "terraform"
   }
 
+  # Whether a token is set is not secret, and plain is needed to choose which secrets exist.
+  github_token_set = nonsensitive(var.github_token != "")
+
   public_images = jsondecode(file("${path.module}/../../public-images.json"))
   images = merge(
     { for name, image in local.public_images : name => "${module.registry.login_server}/${image.repository}@${image.digest}" },
@@ -137,6 +140,7 @@ module "key_vault" {
       for context, role in local.platform_roles :
       "database-url-${context}" => "postgresql://${role}:${random_password.generated["wab-${context}-password"].result}@${module.postgres.fqdn}:5432/platform?sslmode=require"
     },
+    local.github_token_set ? { "github-token" = var.github_token } : {},
   )
 }
 
@@ -187,9 +191,10 @@ locals {
         GITHUB_API_BASE          = var.github_api_base
         CALLBACK_ALLOWED_ORIGINS = local.url["platform-api"]
       }
-      secrets = {
-        AGENT_API_KEY = local.secret["agent-api-key"]
-      }
+      secrets = merge(
+        { AGENT_API_KEY = local.secret["agent-api-key"] },
+        local.github_token_set ? { GITHUB_TOKEN = local.secret["github-token"] } : {},
+      )
     }
 
     n8n = {
