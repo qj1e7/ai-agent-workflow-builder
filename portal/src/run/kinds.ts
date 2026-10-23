@@ -3,7 +3,7 @@ import type { Ms } from './brand'
 
 /**
  * The two fields a rule reads. A parsed RunEvent and a wire ActivityEvent both carry them, so one
- * table paces the room and the demo platform's recording alike.
+ * table paces the run view and the demo platform's recording alike.
  */
 export type BeatEvent = { [K in EventKind]: { readonly kind: K; readonly data: DataOf<K> } }[EventKind] | { readonly kind: 'opaque' }
 
@@ -33,10 +33,11 @@ export const KINDS = {
   step_finished: technical,
   step_retried: technical,
   agent_joined: story(1000, 400),
-  agent_step_started: story(900, 300, { caption: false }),
+  agent_step_started: story(900, 300),
   agent_step_finished: story(1600, 400),
   agent_failed: story(1200, 700),
-  agent_message: story(2200, 1200),
+  /** The bubble carries the words, so speech leaves the subline alone. */
+  agent_message: story(2200, 1200, { caption: false }),
   write_action_proposed: story(1400, 600),
   approval_requested: story(1600, 900),
   approval_announced: story(1000, 400),
@@ -46,7 +47,8 @@ export const KINDS = {
   write_action_done: story(2200, 1400),
   run_succeeded: story(1200, 600),
   run_rejected: story(1200, 600),
-  run_failed: story(1400, 800),
+  /** The fold sets the subline only when no agent stopped, since agent_failed's summary already names what broke. */
+  run_failed: story(1400, 800, { caption: false }),
   run_retried: story(1200, 600),
 } as const satisfies Record<EventKind, KindRule>
 
@@ -61,7 +63,7 @@ export function ruleOf(e: BeatEvent): KindRule {
   if (e.kind === 'opaque') return technical
   if (e.kind === 'agent_message') {
     const reading = readingMsOf(e.data.text)
-    return story(Math.max(KINDS.agent_message.beatMs, reading), reading)
+    return story(Math.max(KINDS.agent_message.beatMs, reading), reading, { caption: KINDS.agent_message.caption })
   }
   return KINDS[e.kind]
 }

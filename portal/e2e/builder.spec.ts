@@ -6,8 +6,7 @@ test('the builder plans a task and saves it as a use case', async ({ page }, inf
   await openFrozen(page, '/builder')
   await record(page, info, 'builder-empty')
 
-  await page.getByRole('button', { name: 'Use the example' }).click()
-  await page.getByRole('button', { name: 'Plan it' }).click()
+  await page.getByRole('button', { name: 'Plan the example' }).click()
   await advanceUntil(page, page.getByRole('heading', { name: 'Matched your words' }))
   await record(page, info, 'builder-planned')
 

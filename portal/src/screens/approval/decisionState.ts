@@ -13,12 +13,24 @@ import type {
 import type { SpineBlock } from '../../ui/Spine'
 import { atWords } from './waiting'
 
+/** Who sent a decision, on which approval. The decision and its notice count only while that person views that approval. */
+export interface Sender {
+  readonly user: string
+  readonly approvalId: string
+}
+
 export type DecisionAttempt =
   | { kind: 'none' }
-  | { kind: 'recorded'; sent: DecisionIn; out: DecisionOut }
-  | { kind: 'refused'; refusal: RefusalOut }
-  | { kind: 'conflict' }
-  | { kind: 'failed'; message: string }
+  | { kind: 'recorded'; sender: Sender; sent: DecisionIn; out: DecisionOut }
+  | { kind: 'refused'; sender: Sender; refusal: RefusalOut }
+  | { kind: 'conflict'; sender: Sender }
+  | { kind: 'failed'; sender: Sender; message: string }
+
+const NO_ATTEMPT: DecisionAttempt = { kind: 'none' }
+
+export function sentBy(sender: Sender | null, user: DevUser | undefined, approvalId: string): boolean {
+  return sender !== null && sender.user === user?.id && sender.approvalId === approvalId
+}
 
 export type Notice =
   | { kind: 'refused'; message: string }
@@ -67,7 +79,7 @@ function refusalHint(refusal: Refusal, user: DevUser | undefined): string | null
       return 'Send the link to another Approver.'
     case 'not_an_approver':
       return user
-        ? `You are signed in as ${user.display}, who is not an Approver. Send the link to an Approver.`
+        ? `You are signed in as ${user.display}. Send the link to an Approver.`
         : 'Send the link to an Approver.'
     default:
       return null
@@ -91,15 +103,17 @@ function noticeOf(attempt: DecisionAttempt): Notice | null {
   }
 }
 
-export function decisionState(view: ApprovalView, user: DevUser | undefined, attempt: DecisionAttempt): DecisionState {
+export function decisionState(view: ApprovalView, user: DevUser | undefined, sent: DecisionAttempt): DecisionState {
+  const attempt = sent.kind === 'none' || sentBy(sent.sender, user, view.approval_id) ? sent : NO_ATTEMPT
   const steps = attempt.kind === 'recorded' ? withDecision(view.steps, attempt.out.decision) : view.steps
   const notice = noticeOf(attempt)
   const closed = closedBy(steps)
   if (closed) return { steps, panel: closed, notice }
 
+  // Before the record reloads, the step after this person's decision still reads waiting, not open.
+  if (attempt.kind === 'recorded') return { steps, panel: cannotDecide('decided_earlier_step', user), notice }
   const open = steps.find((step) => step.status === 'open')
   if (!open) return { steps, panel: cannotDecide(view.why_not ?? 'invalid_decisions', user), notice }
-  if (attempt.kind === 'recorded') return { steps, panel: cannotDecide('decided_earlier_step', user), notice }
   if (view.you_can_decide) return { steps, panel: { kind: 'can_decide', step: open }, notice }
   return { steps, panel: cannotDecide(view.why_not ?? 'not_open', user), notice }
 }
@@ -125,7 +139,7 @@ export function stepBlocks(
       case 'open':
         return { ...base, state: { kind: 'waiting' } }
       case 'waiting':
-        return { ...base, state: { kind: 'not_reached' }, description: 'Opens after the earlier step is decided.' }
+        return { ...base, state: { kind: 'not_reached' }, description: 'Opens after the earlier step.' }
     }
   })
 }

@@ -1,18 +1,34 @@
-/* The same geometry as the hero, so the swap to the live run moves nothing. */
-.hero {
-  composes: hero from './OverviewPage.module.css';
+.first {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-4);
+  max-width: 1216px;
+  margin-inline: auto;
+  padding-top: 26px;
 }
 
-.heroBody {
-  composes: heroBody from './OverviewPage.module.css';
+.first > section {
+  justify-self: stretch;
 }
 
-.stageColumn {
-  composes: stageColumn from './OverviewPage.module.css';
+/* The Tracker's headline style: the first screen's one line of state. */
+.title {
+  font-size: var(--text-40);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
 }
 
-.rail {
-  composes: rail from './OverviewPage.module.css';
+.promise {
+  max-width: 60ch;
+  color: var(--muted);
+  font-size: var(--text-18);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
 }
 
 .fallback {
@@ -21,40 +37,16 @@
   gap: var(--space-4);
 }
 
-.promise {
-  font-size: var(--text-16);
-  line-height: 1.5;
-}
+@media (max-width: 759px) {
+  .first {
+    padding-top: 18px;
+  }
 
-.example {
-  display: grid;
-  gap: var(--space-2);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--line-soft);
-}
+  .title {
+    font-size: var(--text-28);
+  }
 
-.exampleTitle {
-  font-size: var(--text-16);
-}
-
-.exampleTask {
-  margin: 0;
-  padding-left: var(--space-3);
-  border-left: 2px solid var(--line);
-  color: var(--muted);
-  font-size: var(--text-14);
-  line-height: 1.5;
-}
-
-/* Both buttons span the rail, so the longer "Starting the run" changes no width. */
-.actions {
-  display: grid;
-  justify-self: stretch;
-  gap: var(--space-2);
-}
-
-@media (max-width: 1099px) {
-  .rail {
-    order: -1;
+  .promise {
+    font-size: var(--text-16);
   }
 }

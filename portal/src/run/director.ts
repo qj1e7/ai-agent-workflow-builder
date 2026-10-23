@@ -1,21 +1,27 @@
 import type { Ms, RunTime, WallTime } from './brand'
-import { beatMsOf, floorMsOf, isStory } from './kinds'
+import { beatMsOf, floorMsOf, isStory, type BeatEvent } from './kinds'
 import { isSettled, openStep, type OpenStep } from './room'
 import type { TapeReader } from './tape'
 import type { Origin } from './tape'
 
-/** The room may trail live by this much choreographed time before beats speed up. */
+/** The view may trail live by this much choreographed time before beats speed up. */
 export const TARGET_LAG_MS: Ms = 4_000
 /** More queued choreography than this snaps to the end state. Above the demo's three-message burst, which director.test.ts pins. */
 export const SNAP_DEBT_MS: Ms = 20_000
 /** An unshown live event older than this on the wall clock means the tab was throttled: snap. */
 export const STALE_MS: Ms = SNAP_DEBT_MS + 2_000
-/** A gap longer than this between events is a wait: a fixed segment on the scrubber, a hold in replay. */
+/** A gap longer than this between events is a wait: a hold in replay. The demo platform paces its recording by it too. */
 export const LONG_GAP_MS: Ms = 30_000
 /** Replay compresses a long wait to this, while the waiting counter rolls through the real duration. */
 export const REPLAY_HOLD_MS: Ms = 2_400
 export const COUNTER_TICK_MS: Ms = 1_000
 export const ROLL_TICK_MS: Ms = 50
+
+/**
+ * The viewer's speed. 1 and 2 scale beats; 'instant' shows the newest frame at once and stops only where
+ * the run itself stops: a person is needed now, or the run ended.
+ */
+export type Speed = 1 | 2 | 'instant'
 
 export type Start = 'edge' | 'beginning'
 
@@ -24,8 +30,6 @@ export type Mode =
   | { readonly is: 'live' }
   /** Walks forward at choreographed pace, never compressed. Becomes live at the end of the tape. */
   | { readonly is: 'replay' }
-  /** Nothing moves. The tape keeps growing underneath. */
-  | { readonly is: 'paused'; readonly frozenAt: RunTime }
 
 export type Beat =
   | {
@@ -33,7 +37,7 @@ export type Beat =
       readonly seq: number
       readonly startedAt: WallTime
       readonly durationMs: Ms
-      /** cut: the frames before this beat were skipped (snap or seek), so the room crossfades in first. */
+      /** cut: the frames before this beat were skipped by a snap, so the view crossfades in first. */
       readonly entry: 'continuous' | 'cut'
     }
   | {
@@ -51,18 +55,16 @@ export interface Director {
   /** The frame on screen (0..tape.length). During an event beat it is the beat's target frame. */
   readonly shown: number
   readonly beat: Beat | null
-  /** Bumps on restart and seek, so a beat replayed for the same seq gets a fresh animation key. */
+  /** Bumps on restart and on an Instant landing, so a beat replayed for the same seq gets a fresh animation key. */
   readonly take: number
+  readonly speed: Speed
 }
 
 export type Cue =
   | { readonly type: 'grew'; readonly origin: Origin }
   | { readonly type: 'tick' }
-  | { readonly type: 'play' }
-  | { readonly type: 'pause' }
   | { readonly type: 'restart' }
-  | { readonly type: 'seek'; readonly cursor: number }
-  | { readonly type: 'go_live' }
+  | { readonly type: 'speed'; readonly speed: Speed }
 
 export interface Stage {
   readonly tape: TapeReader
@@ -72,8 +74,21 @@ export interface Stage {
   readonly rate: number
 }
 
-export function startDirector(start: Start): Director {
-  return { mode: start === 'edge' ? { is: 'live' } : { is: 'replay' }, shown: 0, beat: null, take: 0 }
+export function startDirector(start: Start, speed: Speed): Director {
+  return { mode: start === 'edge' ? { is: 'live' } : { is: 'replay' }, shown: 0, beat: null, take: 0, speed }
+}
+
+/**
+ * The one pacing rule. At r = 1 it is beatMs, since floorMs <= beatMs for every kind, so every 1x timing holds.
+ * Speech's floor is its reading time: no speed or catch-up shortens reading below the 1x reading time.
+ */
+export function paced(event: BeatEvent, r: number): Ms {
+  return Math.max(floorMsOf(event), Math.round(beatMsOf(event) / r))
+}
+
+/** 1 or 2. Instant never paces a beat, it lands. */
+function factorOf(d: Director): number {
+  return d.speed === 'instant' ? 1 : d.speed
 }
 
 function beatRunning(d: Director, wall: WallTime): boolean {
@@ -96,9 +111,10 @@ function queuedDebt(tape: TapeReader, after: number): Ms {
   return debt
 }
 
+/** Wall time still owed at the chosen speed, so the snap and catch-up thresholds mean the same wait at 1x and 2x. */
 function debt(d: Director, s: Stage): Ms {
   const remaining = d.beat ? Math.max(0, d.beat.startedAt + d.beat.durationMs - s.wall) : 0
-  return remaining + queuedDebt(s.tape, d.shown)
+  return remaining + queuedDebt(s.tape, d.shown) / factorOf(d)
 }
 
 function eventAt(tape: TapeReader, cursor: number): RunTime | null {
@@ -120,10 +136,6 @@ export function liveNow(s: Stage): RunTime {
   return last !== null && last > s.runNow ? last : s.runNow
 }
 
-export function catchingUp(d: Director, s: Stage): boolean {
-  return atEdge(d) && !settled(s) && queuedDebt(s.tape, d.shown) > TARGET_LAG_MS
-}
-
 export function holding(d: Director, s: Stage): boolean {
   return d.beat?.type === 'hold' && beatRunning(d, s.wall)
 }
@@ -134,19 +146,27 @@ function snap(d: Director, s: Stage): Director {
   return {
     ...d,
     shown: k,
-    beat: { type: 'event', seq: k, startedAt: s.wall, durationMs: beatMsOf(s.tape.event(k)), entry: 'cut' },
+    beat: { type: 'event', seq: k, startedAt: s.wall, durationMs: paced(s.tape.event(k), factorOf(d)), entry: 'cut' },
   }
+}
+
+/**
+ * Instant: straight to the head with no beat, following live, so a run waiting for a person stays at its wait.
+ * Already there, it returns the same director: the counter's tick and a repeated grew never bump the take.
+ */
+function land(d: Director, s: Stage): Director {
+  if (d.mode.is === 'live' && d.shown === s.tape.length && d.beat === null) return d
+  return { ...d, mode: { is: 'live' }, shown: s.tape.length, beat: null, take: d.take + 1 }
 }
 
 function next(d: Director, s: Stage): Director {
   const j = nextStory(s.tape, d.shown)
   if (j === null) return { ...d, shown: s.tape.length, beat: null }
-  const owed = queuedDebt(s.tape, d.shown)
+  const owed = queuedDebt(s.tape, d.shown) / factorOf(d)
   const stale = s.wall - s.tape.arrival(j).at > STALE_MS
   if (owed > SNAP_DEBT_MS || stale) return snap(d, s)
-  const rate = Math.max(1, owed / TARGET_LAG_MS)
-  const event = s.tape.event(j)
-  const durationMs = Math.max(floorMsOf(event), Math.round(beatMsOf(event) / rate))
+  const catchUp = Math.max(1, owed / TARGET_LAG_MS)
+  const durationMs = paced(s.tape.event(j), factorOf(d) * catchUp)
   return { ...d, shown: j, beat: { type: 'event', seq: j, startedAt: s.wall, durationMs, entry: 'continuous' } }
 }
 
@@ -157,31 +177,25 @@ function nextReplay(d: Director, s: Stage): Director {
   const to = s.tape.event(j).at
   const held = d.beat?.type === 'hold' && d.beat.after === d.shown
   if (from !== null && to - from > LONG_GAP_MS && !held) {
-    return { ...d, beat: { type: 'hold', after: d.shown, from, to, startedAt: s.wall, durationMs: REPLAY_HOLD_MS } }
+    return { ...d, beat: { type: 'hold', after: d.shown, from, to, startedAt: s.wall, durationMs: REPLAY_HOLD_MS / factorOf(d) } }
   }
   return {
     ...d,
     shown: j,
-    beat: { type: 'event', seq: j, startedAt: s.wall, durationMs: beatMsOf(s.tape.event(j)), entry: 'continuous' },
+    beat: { type: 'event', seq: j, startedAt: s.wall, durationMs: paced(s.tape.event(j), factorOf(d)), entry: 'continuous' },
   }
 }
 
 function advance(d: Director, s: Stage): Director {
-  switch (d.mode.is) {
-    case 'live':
-      return next(d, s)
-    case 'replay':
-      return nextReplay(d, s)
-    case 'paused':
-      return d
-  }
+  if (d.speed === 'instant') return land(d, s)
+  return d.mode.is === 'live' ? next(d, s) : nextReplay(d, s)
 }
 
 /** Every transition of the choreographer. Pure: the same director, cue and stage give the same result. */
 export function direct(d: Director, cue: Cue, s: Stage): Director {
   switch (cue.type) {
     case 'grew':
-      if (d.mode.is === 'paused') return d
+      if (d.speed === 'instant') return land(d, s)
       if (d.mode.is === 'replay') return beatRunning(d, s.wall) ? d : nextReplay(d, s)
       if (cue.origin === 'backlog') return { ...d, shown: s.tape.length, beat: null }
       if (beatRunning(d, s.wall)) return debt(d, s) > SNAP_DEBT_MS ? snap(d, s) : d
@@ -189,30 +203,15 @@ export function direct(d: Director, cue: Cue, s: Stage): Director {
     case 'tick':
       if (beatRunning(d, s.wall)) return d
       return advance(d, s)
-    case 'play': {
-      if (d.mode.is !== 'paused') return d
-      const mode: Mode = d.shown < s.tape.length ? { is: 'replay' } : { is: 'live' }
-      return advance({ ...d, mode, beat: null }, s)
-    }
-    case 'pause':
-      return { ...d, mode: { is: 'paused', frozenAt: sceneTime(d, s) }, beat: null }
     case 'restart':
-      return nextReplay({ ...d, mode: { is: 'replay' }, shown: 0, beat: null, take: d.take + 1 }, s)
-    case 'seek': {
-      const shown = Math.max(0, Math.min(s.tape.length, cue.cursor))
-      const atEdge = shown === s.tape.length
-      const sought: Director = { ...d, shown, beat: null, take: d.take + 1 }
-      if (d.mode.is === 'paused') {
-        return { ...sought, mode: { is: 'paused', frozenAt: eventAt(s.tape, shown) ?? s.runNow } }
-      }
-      return { ...sought, mode: atEdge ? { is: 'live' } : { is: 'replay' } }
-    }
-    case 'go_live':
-      return { ...d, mode: { is: 'live' }, shown: s.tape.length, beat: null, take: d.take + 1 }
+      return d.speed === 'instant' ? land(d, s) : nextReplay({ ...d, mode: { is: 'replay' }, shown: 0, beat: null, take: d.take + 1 }, s)
+    case 'speed':
+      // Between 1x and 2x the playing beat keeps its length, because its animations already run; the next beat takes the new speed.
+      return cue.speed === 'instant' ? land({ ...d, speed: 'instant' }, s) : { ...d, speed: cue.speed }
   }
 }
 
-/** Following live: the viewer has not paused or scrubbed, even if beats are still catching up. */
+/** Following live, even if beats are still catching up. */
 export function atEdge(d: Director): boolean {
   return d.mode.is === 'live'
 }
@@ -233,9 +232,8 @@ export function wakeAt(d: Director, s: Stage): WallTime | null {
   return candidates.length === 0 ? null : (Math.min(...candidates) as WallTime)
 }
 
-/** The time every counter reads: waiting since, elapsed. One rule, so the seat, spine and scrubber agree. */
+/** The time every counter reads: waiting since, elapsed. One rule, so every counter agrees. */
 export function sceneTime(d: Director, s: Stage): RunTime {
-  if (d.mode.is === 'paused') return d.mode.frozenAt
   if (d.beat?.type === 'hold' && s.wall < d.beat.startedAt + d.beat.durationMs) {
     const progress = (s.wall - d.beat.startedAt) / d.beat.durationMs
     return Math.round(d.beat.from + (d.beat.to - d.beat.from) * progress) as RunTime
@@ -246,19 +244,12 @@ export function sceneTime(d: Director, s: Stage): RunTime {
 
 /**
  * How long the shown frame's open step has waited. Following live while the room catches up on a step the
- * head still holds open, the wait is ongoing and runs to now, so the seat never reads 0 s under a scrubber
- * that reads minutes. In replay, paused, or once the head has decided the step, the wait is the shown frame's own.
+ * head still holds open, the wait is ongoing and runs to now, so the counter never reads 0 s while the run
+ * has waited minutes. In replay, or once the head has decided the step, the wait is the shown frame's own.
  */
 export function waitElapsed(d: Director, s: Stage, open: OpenStep): Ms {
   const head = atEdge(d) && !settled(s) ? openStep(s.tape.frame(s.tape.length)) : null
   const ongoing = head !== null && head.index === open.index && head.state.since === open.state.since
   const now = ongoing ? liveNow(s) : sceneTime(d, s)
   return Math.max(0, now - open.state.since)
-}
-
-export type FrameLabel = 'live' | 'replay' | 'finished'
-
-export function labelOf(d: Director, s: Stage): FrameLabel {
-  if (d.mode.is !== 'live') return 'replay'
-  return settled(s) && d.shown === s.tape.length ? 'finished' : 'live'
 }

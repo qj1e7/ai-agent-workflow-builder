@@ -1,39 +1,76 @@
+/* Light values live in this block. The dark block at the end overrides only the colours that change with the theme. */
 :root {
-  --mist: #f3f5f4;
-  --floor: #e5ece9;
-  --grid: #d5dfdb;
+  --bg: #f4f6f9;
   --surface: #ffffff;
-  --ink: #15222a;
-  --wall: #55666f;
-  --muted: #4a5860;
-  --line: #c4cecb;
-  --line-soft: #dce3e0;
+  --ink: #16233a;
+  --on-ink: #f4f6f9;
+  --muted: #55657d;
+  --rail: #cbd3de;
+  --hair: #dce2ea;
+  --hover: rgba(255, 255, 255, 0.55);
+  --shadow: 0 1px 2px rgba(22, 35, 58, 0.06), 0 6px 18px rgba(22, 35, 58, 0.08);
+  --focus: #2f6bff;
 
-  --lead: #0d6b66;
-  --lead-tint: #e1f0ee;
-  --lead-line: #9cc9c5;
-  --checker: #4547ae;
-  --checker-tint: #e9e9f8;
-  --trouble: #8a3a7d;
-  --trouble-tint: #f5e8f2;
-  --safety: #2b5770;
-  --agent-1: #2d6a8f;
-  --agent-2: #7a4e1d;
-  --agent-3: #5b4a9e;
-  --agent-4: #3b6b47;
+  --amber: #e89a0c;
+  --amber-ink: #7e4a00;
+  --amber-soft: #fff4da;
+  --red: #c62f2f;
+  --red-ink: #a51f1f;
+  --red-soft: #fdecec;
+  --green: #23854a;
+  --green-ink: #1b6b3b;
+  --green-soft: #e4f4ea;
+  --on-status: #ffffff;
 
-  --wait: #8f5300;
-  --wait-line: #d99a2b;
-  --wait-tint: #fff4de;
-  --fail: #b3261e;
-  --fail-tint: #fcebe9;
-  --fail-line: #e3a29c;
-  --done: #1d7348;
-  --done-tint: #e3f2ea;
-  --done-line: #9ac9af;
-  --focus: #1f5bd6;
+  /* An agent's hue draws its accessory, its ring and its name. Its tint is the head and stays light in both themes. */
+  --lead: #3e5bd8;
+  --lead-tint: #dfe5ff;
+  --checker: #0b7d76;
+  --checker-tint: #d3f0ec;
+  --trouble: #7a4bd6;
+  --trouble-tint: #ece3ff;
+  --agent-1: #b02a6b;
+  --agent-1-tint: #fbe3ee;
+  --agent-2: #1f6f9f;
+  --agent-2-tint: #ddeffb;
+  --agent-3: #5c7a12;
+  --agent-3-tint: #ebf2d3;
+  --agent-4: #b2520a;
+  --agent-4-tint: #ffe7d3;
+  --face-ink: #16233a;
+  --face-lens: rgba(255, 255, 255, 0.55);
 
-  --font: 'Instrument Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --person-1-bg: #ffe0cc;
+  --person-1-ink: #7a3410;
+  --person-2-bg: #d7e3ff;
+  --person-2-ink: #1e3b8a;
+  --person-3-bg: #d8efdf;
+  --person-3-ink: #1d5a33;
+  --person-4-bg: #f9dde8;
+  --person-4-ink: #7a1f45;
+
+  --chip-bg: var(--checker-tint);
+  --chip-ink: #0a4f4a;
+
+  /* Names the screens already use. Each points at one token above, so the dark block never repeats it. */
+  --mist: var(--bg);
+  --line: var(--rail);
+  --line-soft: var(--hair);
+  --wait: var(--amber-ink);
+  --wait-line: var(--amber);
+  --wait-tint: var(--amber-soft);
+  --fail: var(--red-ink);
+  --fail-line: var(--red);
+  --fail-tint: var(--red-soft);
+  --done: var(--green-ink);
+  --done-line: var(--green);
+  --done-tint: var(--green-soft);
+  --lead-line: var(--lead);
+  --safety: var(--ink);
+  --paper-shadow: var(--shadow);
+  --floor: var(--hair);
+
+  --font: 'Atkinson Hyperlegible Next', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 
   --text-12: 0.75rem;
   --text-14: 0.875rem;
@@ -56,9 +93,6 @@
   --radius-button: 10px;
   --radius-object: 10px;
   --radius-panel: 14px;
-  --radius-room: 18px;
-
-  --paper-shadow: 0 1px 0 rgba(21, 34, 42, 0.06), 0 6px 16px -8px rgba(21, 34, 42, 0.28);
 
   --ease-move: cubic-bezier(0.65, 0, 0.35, 1);
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
@@ -79,4 +113,36 @@
   :root {
     --gutter: var(--space-4);
   }
+}
+
+:root[data-theme='dark'] {
+  --bg: #0f1828;
+  --surface: #182439;
+  --ink: #e6edf7;
+  --on-ink: #0f1828;
+  --muted: #a6b4c8;
+  --rail: #34465f;
+  --hair: #26354c;
+  --hover: rgba(255, 255, 255, 0.07);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 22px rgba(0, 0, 0, 0.35);
+  --focus: #7fa6ff;
+
+  --amber: #f2b23a;
+  --amber-ink: #ffd58a;
+  --amber-soft: #33280f;
+  --red: #ff7d7d;
+  --red-ink: #ffa3a3;
+  --red-soft: #3a1c22;
+  --green: #5ccb8a;
+  --green-ink: #8be0ae;
+  --green-soft: #14301f;
+  --on-status: #0f1828;
+
+  --lead: #8fa4ff;
+  --checker: #4fc9bf;
+  --trouble: #b79bff;
+  --agent-1: #ff8fc2;
+  --agent-2: #6cc0f0;
+  --agent-3: #b5d94c;
+  --agent-4: #ffa05c;
 }

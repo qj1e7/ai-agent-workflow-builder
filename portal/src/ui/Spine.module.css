@@ -1,6 +1,6 @@
 .spine {
   --node: 36px;
-  --rail: 2px;
+  --rail-width: 2px;
   display: grid;
   margin: 0;
   padding: 0;
@@ -54,17 +54,17 @@
 }
 
 .horizontal .station::before {
-  top: calc(var(--node) / 2 - var(--rail) / 2);
+  top: calc(var(--node) / 2 - var(--rail-width) / 2);
   left: calc(var(--node) + var(--space-2));
   right: var(--space-2);
-  height: var(--rail);
+  height: var(--rail-width);
 }
 
 .vertical .station::before {
   top: calc(var(--node) + var(--space-2));
   bottom: var(--space-2);
-  left: calc(var(--node) / 2 - var(--rail) / 2);
-  width: var(--rail);
+  left: calc(var(--node) / 2 - var(--rail-width) / 2);
+  width: var(--rail-width);
   background: repeating-linear-gradient(180deg, var(--line) 0 4px, transparent 4px 8px);
 }
 
@@ -85,7 +85,7 @@
   order: 3;
   flex: 1;
   min-width: var(--space-4);
-  height: var(--rail);
+  height: var(--rail-width);
   margin-right: var(--space-2);
 }
 
@@ -199,7 +199,7 @@
 .approved .node {
   border-color: var(--ink);
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
 }
 
 .done .state,
@@ -220,9 +220,9 @@
 }
 
 .failed .node {
-  border-color: var(--fail);
-  background: var(--fail);
-  color: #fff;
+  border-color: var(--red);
+  background: var(--red);
+  color: var(--on-status);
 }
 
 .failed .state {

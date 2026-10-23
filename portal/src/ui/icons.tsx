@@ -145,35 +145,33 @@ export const IconExternal = drawn(
     <path d="M11 6H7.5A1.5 1.5 0 0 0 6 7.5v9A1.5 1.5 0 0 0 7.5 18h9a1.5 1.5 0 0 0 1.5-1.5V13" />
   </>,
 )
+export const IconSun = drawn(
+  'IconSun',
+  <>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4" />
+  </>,
+)
+export const IconMoon = drawn('IconMoon', <path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z" />)
 export const IconDot = drawn('IconDot', <circle cx="12" cy="12" r="4" />)
 export const IconRing = drawn('IconRing', <circle cx="12" cy="12" r="7.5" />)
 export const IconDash = drawn('IconDash', <path d="M7 12h10" />)
+export const IconBox = drawn(
+  'IconBox',
+  <>
+    <path d="M3.5 7.5L12 3.5l8.5 4v9L12 20.5l-8.5-4z" />
+    <path d="M3.5 7.5L12 11.5l8.5-4M12 11.5v9" />
+  </>,
+)
+export const IconDoc = drawn(
+  'IconDoc',
+  <>
+    <path d="M6 3.5h8l4 4v13H6z" />
+    <path d="M14 3.5v4h4M9 12h6M9 16h4" />
+  </>,
+)
+export const IconSpinner = drawn('IconSpinner', <path d="M12 4a8 8 0 1 1-8 8" />)
 
-export const GlyphLead = drawn(
-  'GlyphLead',
-  <>
-    <circle cx="12" cy="12.5" r="3.6" />
-    <circle cx="12" cy="4.6" r="1.7" />
-    <circle cx="19.2" cy="16.8" r="1.7" />
-    <circle cx="4.8" cy="16.8" r="1.7" />
-  </>,
-)
-export const GlyphChecker = drawn(
-  'GlyphChecker',
-  <>
-    <path d="M3.8 12.4l7.6-7.6H19.2v7.8l-7.6 7.6z" />
-    <circle cx="15.6" cy="8.4" r="1.4" />
-    <path d="M8.6 13.4l2 2 3.6-3.8" />
-  </>,
-)
-export const GlyphTrouble = drawn(
-  'GlyphTrouble',
-  <>
-    <circle cx="10.5" cy="10.5" r="6.2" />
-    <path d="M15 15l5 5" />
-    <path d="M6.6 10.6h1.6l1.1-2.2 2.1 4.4 1.1-2.2h1.5" />
-  </>,
-)
 export const GlyphPlatform = drawn(
   'GlyphPlatform',
   <>

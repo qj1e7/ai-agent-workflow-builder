@@ -13,15 +13,10 @@ export function JiraPage() {
 
   return (
     <div className="page">
-      <PageHeader title="Mock Jira, project MOCK">
-        A stand-in for Jira, so the demo never touches a real project. This is where approved tickets are written.
-      </PageHeader>
+      <PageHeader title="Mock Jira, project MOCK">Approved tickets are written here. This is not a real Jira project.</PageHeader>
       {tickets.data && tickets.data.length === 0 ? (
-        <EmptyState
-          title="No tickets yet."
-          action={<ButtonLink to="/approvals">See approvals waiting for a decision</ButtonLink>}
-        >
-          A ticket appears here after an Approver approves a run.
+        <EmptyState title="No tickets yet." action={<ButtonLink to="/approvals">See approvals</ButtonLink>}>
+          Nothing has been written yet.
         </EmptyState>
       ) : null}
       {tickets.data && tickets.data.length > 0 ? (

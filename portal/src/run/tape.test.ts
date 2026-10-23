@@ -14,8 +14,6 @@ describe('createTape', () => {
     expect(tape.frame(17).phase.name).toBe('awaiting_approval')
     expect(tape.frame(23).phase.name).toBe('succeeded')
     expect(tape.event(5).kind).toBe('agent_message')
-    expect(tape.move(12)).toMatchObject({ type: 'carry', token: 'ticket' })
-    expect(tape.move(13)).toBeNull()
   })
 
   it('ignores a duplicate, an old or a skipped seq, so a restarted feed cannot corrupt the log', () => {
@@ -26,16 +24,6 @@ describe('createTape', () => {
     expect(tape.append(slice('success', 4, 7), 'live', wallTime(20))).toBe(7)
     expect(tape.arrival(5)).toEqual({ at: 0, origin: 'backlog' })
     expect(tape.arrival(7)).toEqual({ at: 20, origin: 'live' })
-  })
-
-  it('marks story events on the timeline and remembers since when a person was needed', () => {
-    const tape = createTape(TEST_REGISTRY)
-    tape.append(recording('success'), 'backlog', wallTime(0))
-    const marks = tape.marks()
-    expect(marks).toHaveLength(23)
-    expect(marks[1]).toMatchObject({ seq: 2, tier: 'technical', waitingSince: null })
-    expect(marks[14]).toMatchObject({ seq: 15, tier: 'story', waitingSince: Date.parse('2026-11-03T02:14:08.244Z') })
-    expect(marks[17]).toMatchObject({ seq: 18, tier: 'story', waitingSince: null })
   })
 
   it('writes a Minutes entry per event with its tier, raw kind and attempt', () => {
@@ -51,11 +39,9 @@ describe('createTape', () => {
     const tape = createTape(TEST_REGISTRY)
     tape.append(slice('success', 1, 10), 'backlog', wallTime(0))
     const minutes = [...tape.minutes()]
-    const marks = [...tape.marks()]
     const frame = tape.frame(10)
     tape.append(slice('success', 11, 12), 'live', wallTime(5))
     minutes.forEach((entry, i) => expect(tape.minutes()[i]).toBe(entry))
-    marks.forEach((mark, i) => expect(tape.marks()[i]).toBe(mark))
     expect(tape.frame(10)).toBe(frame)
   })
 })

@@ -1,19 +1,10 @@
 import { type Page } from '@playwright/test'
 import { advance, advanceUntil, finishLoading, openFrozen } from './support/clock'
-import { waitingForApprover } from './support/flows'
+import { headline, tracker, waitingForApprover } from './support/flows'
 import { outOfVisualOrder, tabTo, walkTabs, withoutVisibleFocus } from './support/keyboard'
 import { withoutKnown } from './support/known'
-import { switchUser } from './support/people'
+import { goTo, switchUser } from './support/people'
 import { expect, test } from './support/test'
-
-async function openApprovalAs(page: Page, user: string): Promise<void> {
-  await openFrozen(page, '/')
-  await advanceUntil(page, waitingForApprover(page))
-  await page.getByRole('link', { name: 'Open the approval page' }).click()
-  await page.getByRole('heading', { name: 'Approve a write to Jira' }).waitFor()
-  await finishLoading(page)
-  await switchUser(page, user)
-}
 
 async function expectGoodWalk(page: Page, scope: string): Promise<void> {
   const walk = await walkTabs(page)
@@ -29,7 +20,13 @@ test('Tab walks the overview in visual order with a visible focus ring', async (
 })
 
 test('Tab walks the approval page in visual order with a visible focus ring', async ({ page }, info) => {
-  await openApprovalAs(page, 'Bob')
+  await openFrozen(page, '/')
+  await advanceUntil(page, waitingForApprover(page))
+  await switchUser(page, 'Bob')
+  await goTo(page, 'Approvals')
+  await page.getByRole('link', { name: 'Open the approval page' }).click()
+  await page.getByRole('heading', { name: 'Approve a write to Jira' }).waitFor()
+  await finishLoading(page)
   await expect(page.getByRole('button', { name: /^Approve and write to/ })).toBeEnabled()
   await expectGoodWalk(page, `${info.project.name}/approval`)
 })
@@ -37,7 +34,7 @@ test('Tab walks the approval page in visual order with a visible focus ring', as
 test('the user switcher works with the keyboard alone', async ({ page }) => {
   await openFrozen(page, '/')
   const trigger = page.getByRole('button', { name: /Switch user/ })
-  await tabTo(page, /Switch user/)
+  await tabTo(page, trigger)
   await expect(trigger).toBeFocused()
 
   await page.keyboard.press('Enter')
@@ -59,48 +56,46 @@ test('the user switcher works with the keyboard alone', async ({ page }) => {
   await expect(trigger, 'focus returns to the trigger after Escape').toBeFocused()
 })
 
-test('the transport pauses, restarts and scrubs with the keyboard alone', async ({ page }) => {
+test('the speed control works with the keyboard alone', async ({ page }) => {
   await openFrozen(page, '/runs/run_01JB8')
-  await advance(page, 6_000)
-  const slider = page.getByRole('slider', { name: 'Position in the run' })
-  const valueNow = async () => Number(await slider.inputValue())
+  await advance(page, 2_000)
+  const radio = (name: string) => page.getByRole('radio', { name })
 
-  await tabTo(page, /^Pause$/)
-  await page.keyboard.press('Enter')
-  await expect(page.getByRole('button', { name: 'Play', exact: true }), 'Enter on Pause turns it into Play').toBeFocused()
-  await page.keyboard.press('Enter')
-  await expect(page.getByRole('button', { name: 'Pause', exact: true }), 'Enter on Play turns it back into Pause').toBeFocused()
+  await tabTo(page, radio('1x'))
+  await expect(radio('1x'), 'Tab enters the speed control on the checked speed').toBeChecked()
 
-  const before = await valueNow()
-  expect(before, 'the run has moved on from the start').toBeGreaterThan(0)
-  await tabTo(page, /^Restart from the beginning$/)
-  await page.keyboard.press('Enter')
-  await advance(page, 300, 800)
-  await expect(slider, 'Restart puts the scrubber back at the start').toHaveValue('0')
-
-  await tabTo(page, /^Position in the run$/)
-  await expect(slider).toBeFocused()
   await page.keyboard.press('ArrowRight')
-  await advance(page, 300, 800)
-  const forward = await valueNow()
-  expect(forward, 'ArrowRight moves the scrubber forward').toBeGreaterThan(0)
+  await expect(radio('2x'), 'ArrowRight moves to 2x').toBeFocused()
+  await expect(radio('2x')).toBeChecked()
+  await expect(tracker(page), 'the run plays at 2x').toHaveAttribute('data-speed', '2')
+
   await page.keyboard.press('ArrowRight')
-  await advance(page, 300, 800)
-  expect(await valueNow(), 'a second ArrowRight moves it further').toBeGreaterThan(forward)
+  await expect(radio('Instant'), 'ArrowRight moves to Instant').toBeChecked()
+  await expect(tracker(page)).toHaveAttribute('data-speed', 'instant')
+  await expect(tracker(page), 'Instant lands on the newest event').toHaveAttribute('data-at-head', 'true')
+
   await page.keyboard.press('ArrowLeft')
-  await advance(page, 300, 800)
-  expect(await valueNow(), 'ArrowLeft moves it back').toBeLessThan(await slider.evaluate((el) => Number((el as HTMLInputElement).max)))
-  await page.keyboard.press('Home')
-  await advance(page, 300, 800)
-  expect(await valueNow(), 'Home goes to the first moment of the run').toBeLessThanOrEqual(forward)
+  await expect(radio('2x'), 'ArrowLeft moves back to 2x').toBeChecked()
+  await expect(tracker(page)).toHaveAttribute('data-speed', '2')
 })
 
-test('an Approver approves with the keyboard alone', async ({ page }) => {
-  await openApprovalAs(page, 'Bob')
+test('an Approver approves in place with the keyboard alone', async ({ page }) => {
+  await openFrozen(page, '/')
+  await switchUser(page, 'Bob')
+  const approve = page.getByRole('region', { name: 'Approval' }).getByRole('button', { name: 'Approve', exact: true })
+  await advanceUntil(page, approve)
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
-  await tabTo(page, /^Approve and write to/)
-  await expect(page.getByRole('button', { name: /^Approve and write to/ })).toBeFocused()
+
+  await tabTo(page, approve)
   await page.keyboard.press('Enter')
-  await advanceUntil(page, page.getByText(/^Approved by Bob/))
-  await expect(page.getByText(/^Approved by Bob/).first()).toBeVisible()
+  await advanceUntil(page, page.locator('li[data-gate="open"]'))
+  await expect(page.getByRole('region', { name: 'Approval' }), 'the approval panel closes once Bob decides').toHaveCount(0)
+  await expect(headline(page), 'focus moves to the headline when the panel it was in closes').toBeFocused()
+  const ring = await headline(page).evaluate((el) => {
+    const style = getComputedStyle(el)
+    return { style: style.outlineStyle, width: parseFloat(style.outlineWidth) }
+  })
+  expect(ring.style, 'the focused headline shows its ring').not.toBe('none')
+  expect(ring.width, 'the ring is at least 2 px').toBeGreaterThanOrEqual(2)
+  await advanceUntil(page, headline(page).getByText('MOCK-143 is in Jira', { exact: true }))
 })

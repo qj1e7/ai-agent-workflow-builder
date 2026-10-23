@@ -12,9 +12,9 @@ interface WriteTicketProps {
 
 const statusWords: Record<TicketStatus['kind'], { line: (status: TicketStatus) => string; tag: string; icon: Icon }> = {
   draft: { line: () => 'Not written yet', tag: 'Draft', icon: IconLock },
-  writing: { line: () => 'Approved, being written', tag: 'Approved', icon: IconUnlock },
+  writing: { line: () => 'Being written', tag: 'Approved', icon: IconUnlock },
   written: { line: (status) => (status.kind === 'written' ? `Written as ${status.key}` : ''), tag: 'Written', icon: IconCheck },
-  declined: { line: () => 'Declined, nothing was written', tag: 'Declined', icon: IconX },
+  declined: { line: () => 'Not written', tag: 'Declined', icon: IconX },
 }
 
 export function WriteTicket({ action, position, status }: WriteTicketProps) {
@@ -42,10 +42,12 @@ export function WriteTicket({ action, position, status }: WriteTicketProps) {
         {title ? <h3 className={styles['title']}>{title}</h3> : null}
         {body ? <p className={styles['body']}>{body}</p> : null}
       </div>
-      <footer className={styles['foot']}>
-        <IconShield size={18} />
-        <p>{status.kind === 'declined' ? 'Nothing was written.' : 'Nothing else will be written. If this ticket changes, your approval no longer applies.'}</p>
-      </footer>
+      {status.kind === 'declined' ? null : (
+        <footer className={styles['foot']}>
+          <IconShield size={18} />
+          <p>Nothing else will be written. If this ticket changes, your approval no longer applies.</p>
+        </footer>
+      )}
     </article>
   )
 }

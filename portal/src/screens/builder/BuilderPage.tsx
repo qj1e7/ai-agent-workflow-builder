@@ -38,19 +38,17 @@ export function BuilderPage() {
     }
   }
 
-  function useExample() {
+  function planExample() {
     setTask(EXAMPLE_TASK)
     setMissing(false)
-    textarea.current?.focus()
+    suggest.mutate(EXAMPLE_TASK)
   }
 
   const describedBy = [helpId, missing ? problemId : null].filter(Boolean).join(' ')
 
   return (
     <div className="page">
-      <PageHeader title="Builder">
-        Describe a task in your own words. The Room lead plans the steps. Nothing is written to another system without an Approver.
-      </PageHeader>
+      <PageHeader title="Builder">Nothing is written to another system without an Approver.</PageHeader>
 
       <div className={styles['workspace']}>
         <section className={styles['ask']} aria-label="Describe the task">
@@ -72,18 +70,18 @@ export function BuilderPage() {
             onKeyDown={planFromKeyboard}
           />
           <p id={helpId} className={styles['help']}>
-            Write it the way you would ask a colleague. Name the system and when it should run.
+            Name the system and when it should run.
           </p>
           {missing ? (
             <InlineMessage tone="error" id={problemId}>
-              Write what should happen first, then choose Plan it.
+              Write what should happen first.
             </InlineMessage>
           ) : null}
           <div className={styles['buttons']}>
             <Button variant="primary" icon={IconFlow} loading={suggest.isPending} onClick={plan}>
               Plan it
             </Button>
-            <Button onClick={useExample}>Use the example</Button>
+            <Button onClick={planExample}>Plan the example</Button>
           </div>
           {suggest.isError ? <InlineMessage tone="error">{errorWords(suggest.error)}</InlineMessage> : null}
         </section>

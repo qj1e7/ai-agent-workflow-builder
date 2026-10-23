@@ -32,10 +32,12 @@ function view(overrides: Partial<ApprovalView>): ApprovalView {
 }
 
 const none: DecisionAttempt = { kind: 'none' }
+const BOB_HERE = { user: 'bob', approvalId: 'apr_01JB8' }
 
 function recorded(decisionStep: number, verdict: 'approve' | 'decline', status: DecisionOut['status']): DecisionAttempt {
   return {
     kind: 'recorded',
+    sender: BOB_HERE,
     sent: { digest: DIGEST, step: decisionStep, verdict },
     out: { status, decision: { step: decisionStep, by: 'bob', verdict, at: '2026-11-03T02:20:23.447Z' } },
   }
@@ -61,7 +63,7 @@ describe('what the decision panel offers', () => {
     const state = decisionState(view({ you_can_decide: false, why_not: 'not_an_approver' }), carol, none)
     expect(state.panel).toMatchObject({ kind: 'cannot_decide', words: 'Only Approvers can decide this request.' })
     expect(state.panel.kind === 'cannot_decide' && state.panel.hint).toBe(
-      'You are signed in as Carol, who is not an Approver. Send the link to an Approver.',
+      'You are signed in as Carol. Send the link to an Approver.',
     )
   })
 
@@ -91,16 +93,30 @@ describe('after the person decides', () => {
     expect(state.steps[0]).toMatchObject({ status: 'approved', decided_by: 'bob' })
   })
 
-  it('does not offer the next step to the person who just decided the first', () => {
+  it('tells the person who just decided the first step that another Approver decides the next, before the record reloads', () => {
     const steps = [step(0, 'open'), step(1, 'waiting')]
     const state = decisionState(view({ steps }), bob, recorded(0, 'approve', 'open'))
     expect(state.steps.map((each) => each.status)).toEqual(['approved', 'waiting'])
-    expect(state.panel.kind).toBe('cannot_decide')
+    expect(state.panel).toMatchObject({ kind: 'cannot_decide', refusal: 'decided_earlier_step' })
+  })
+
+  it("offers the next step to the next Approver, not the earlier person's decision, once the signed-in user changes", () => {
+    const steps = [step(0, 'approved', 'bob'), step(1, 'open')]
+    const state = decisionState(view({ steps }), alice, recorded(0, 'approve', 'open'))
+    expect(state.panel).toEqual({ kind: 'can_decide', step: step(1, 'open') })
+  })
+
+  it("does not show one person's failed attempt to the next, or on another approval", () => {
+    const failed: DecisionAttempt = { kind: 'failed', sender: BOB_HERE, message: 'The platform did not answer.' }
+    expect(decisionState(view({}), alice, failed).notice).toBeNull()
+    expect(decisionState(view({ approval_id: 'apr_other' }), bob, failed).notice).toBeNull()
+    expect(decisionState(view({}), bob, failed).notice).toEqual({ kind: 'failed', message: 'The platform did not answer.' })
   })
 
   it('keeps the panel and shows the server message when the server refuses', () => {
     const attempt: DecisionAttempt = {
       kind: 'refused',
+      sender: BOB_HERE,
       refusal: { refusal: 'own_work', message: 'You started this run, so another Approver must decide.' },
     }
     const state = decisionState(view({}), bob, attempt)
@@ -110,7 +126,7 @@ describe('after the person decides', () => {
 
   it('reports that another Approver got there first, and follows the reloaded view', () => {
     const steps = [step(0, 'approved', 'dana')]
-    const state = decisionState(view({ steps, you_can_decide: false, why_not: 'not_open' }), bob, { kind: 'conflict' })
+    const state = decisionState(view({ steps, you_can_decide: false, why_not: 'not_open' }), bob, { kind: 'conflict', sender: BOB_HERE })
     expect(state.notice).toEqual({ kind: 'conflict' })
     expect(state.panel).toMatchObject({ kind: 'decided', by: 'dana' })
   })
@@ -144,6 +160,6 @@ describe('the steps list', () => {
   it('says a later step opens after the earlier one', () => {
     const [, second] = stepBlocks([step(0, 'open'), step(1, 'waiting')], nameOf, now)
     expect(second?.state.kind).toBe('not_reached')
-    expect(second?.description).toBe('Opens after the earlier step is decided.')
+    expect(second?.description).toBe('Opens after the earlier step.')
   })
 })

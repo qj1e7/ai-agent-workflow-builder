@@ -20,8 +20,8 @@
 }
 
 .working {
-  border-color: var(--lead-line);
-  background: var(--lead-tint);
+  border-color: var(--lead);
+  background: var(--surface);
   color: var(--lead);
 }
 

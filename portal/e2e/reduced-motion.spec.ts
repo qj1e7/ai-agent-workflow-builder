@@ -1,6 +1,6 @@
-import { type Page } from '@playwright/test'
+import { type Locator, type Page } from '@playwright/test'
 import { openFrozen } from './support/clock'
-import { waitingForApprover } from './support/flows'
+import { headline, waitingForApprover } from './support/flows'
 import { movingAnimations, MOVING, type MovingAnimation } from './support/motion'
 import { record } from './support/record'
 import { expect, test } from './support/test'
@@ -29,8 +29,8 @@ async function playToPause(page: Page): Promise<{ moving: MovingAnimation[]; sam
   return { moving, samples }
 }
 
-async function opacityOf(page: Page, text: string | RegExp): Promise<number> {
-  return page.getByText(text).first().evaluate((el) => {
+async function opacityOf(target: Locator): Promise<number> {
+  return target.evaluate((el) => {
     let opacity = 1
     for (let node: Element | null = el; node; node = node.parentElement) opacity *= Number(getComputedStyle(node).opacity)
     return opacity
@@ -46,11 +46,11 @@ test('with reduced motion nothing travels, and the approval pause is still fully
   expect(samples, 'sampled animations through the run until the pause').toBeGreaterThan(10)
   expect(moving, 'running animations that move something under reduced motion').toEqual([])
 
-  await expect(waitingForApprover(page), 'the action card says the run is waiting').toBeVisible()
-  await expect(page.getByText(/^Waiting \d+/).first(), 'the seat shows its waiting counter').toBeVisible()
-  await expect(page.getByText('Waiting for an Approver', { exact: true }).first(), 'the ticket shows its waiting status').toBeVisible()
-  for (const text of [/^Waiting \d+/, 'Waiting for an Approver']) {
-    expect(await opacityOf(page, text), `${text} is fully opaque, not mid-fade`).toBeGreaterThan(0.99)
+  await expect(headline(page), 'the headline says the run is waiting').toHaveText('Waiting for an Approver')
+  const counter = page.locator('li[data-stop="gate"]').getByText(/^Waiting \d+:\d\d$/)
+  await expect(counter, 'the gate shows its waiting counter').toBeVisible()
+  for (const [what, target] of [['the headline', headline(page)], ['the waiting counter', counter]] as const) {
+    expect(await opacityOf(target), `${what} is fully opaque, not mid-fade`).toBeGreaterThan(0.99)
   }
   await record(page, info, 'reduced-motion-pause')
 })

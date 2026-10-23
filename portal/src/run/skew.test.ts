@@ -3,8 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FetchLike } from '../stream/feed'
 import { runId } from './brand'
 import { createLiveView, type LiveView } from './live'
-import { layoutScrubber, SCRUB } from './scrubber'
-import { fixedClock, TEST_REGISTRY } from './testing'
+import { fixedClock, RELEASE_CHECK, TEST_REGISTRY } from './testing'
 
 /**
  * The fake agent stamps its events with the recording's times while the platform stamps its own with
@@ -38,69 +37,44 @@ function scriptedFetch(events: readonly Raw[]): FetchLike {
   }
 }
 
-async function open(events: readonly Raw[], runNow: number): Promise<{ view(this: void): LiveView; close(this: void): void }> {
-  const store = createLiveView({ runId: RUN, env: { fetch: scriptedFetch(events), clock: fixedClock(runNow), registry: TEST_REGISTRY }, whenFinished: 'rest' })
-  const close = store.subscribe(() => undefined)
+async function open(events: readonly Raw[], runNow: number): Promise<{ view(this: void): LiveView; seen: LiveView[]; close(this: void): void }> {
+  const store = createLiveView({ runId: RUN, env: { fetch: scriptedFetch(events), clock: fixedClock(runNow), registry: TEST_REGISTRY }, whenFinished: 'rest', speed: 1 })
+  const seen: LiveView[] = []
+  const close = store.subscribe(() => seen.push(store.getSnapshot()))
   await vi.advanceTimersByTimeAsync(0)
-  return { view: () => store.getSnapshot(), close }
+  return { view: () => store.getSnapshot(), seen, close }
 }
 
-function expectSaneTrack(view: LiveView, width: number): void {
-  const track = view.track(width)
-  for (const wait of track.waits) {
-    expect(wait.w, 'wait width').toBeGreaterThanOrEqual(0)
-    expect(wait.fill, 'wait fill').toBeGreaterThanOrEqual(0)
-    expect(wait.fill, 'wait fill within width').toBeLessThanOrEqual(wait.w)
-    expect(wait.lasted, 'wait lasted').toBeGreaterThanOrEqual(0)
-    expect(Number.isFinite(wait.x) && Number.isFinite(wait.lasted), 'finite wait').toBe(true)
-  }
-  for (let cursor = 1; cursor <= view.frame.head; cursor += 1) {
-    expect(track.xOf(cursor), `x of ${cursor} never steps back`).toBeGreaterThanOrEqual(track.xOf(cursor - 1))
-    expect(Number.isFinite(track.xOf(cursor))).toBe(true)
-  }
+/** The gate's waiting counter in this snapshot, or null when the gate is not waiting. */
+function waited(view: LiveView): number | null {
+  const caption = view.track(RELEASE_CHECK).track.stops.find((stop) => stop.key === 'gate')?.caption
+  return caption?.is === 'waiting' ? caption.elapsedMs : null
 }
 
 beforeEach(() => vi.useFakeTimers({ now: Date.parse('2026-11-03T02:14:00Z') }))
 afterEach(() => vi.useRealTimers())
 
 describe('a run whose event times jump forward and back', () => {
-  it('keeps elapsed time between zero and the total at every frame of the finished run', async () => {
-    const { view, close } = await open(skewed(23), at(23))
-    expect(view().transport.settled).toBe(true)
-    for (let cursor = 0; cursor <= 23; cursor += 1) {
-      view().transport.seek(cursor)
-      const { at: shown, total } = view().frame.elapsed
-      expect(Number.isFinite(shown) && Number.isFinite(total), `finite at frame ${cursor}`).toBe(true)
-      expect(shown, `elapsed at frame ${cursor}`).toBeGreaterThanOrEqual(0)
-      expect(shown, `elapsed within total at frame ${cursor}`).toBeLessThanOrEqual(total)
-      expectSaneTrack(view(), 600)
+  it('keeps the waiting counter between zero and the real wait in every frame of a replay', async () => {
+    const { view, seen, close } = await open(skewed(23), at(23))
+    expect(view().atHead).toBe(true)
+    view().controls.restart()
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(view().atHead).toBe(true)
+    const waits = seen.flatMap((snapshot) => waited(snapshot) ?? [])
+    expect(waits.length, 'the replay showed the wait').toBeGreaterThan(0)
+    for (const wait of waits) {
+      expect(wait).toBeGreaterThanOrEqual(0)
+      expect(wait).toBeLessThanOrEqual(at(18) - at(15))
     }
-    close()
-  })
-
-  it('draws a gap that goes backwards like a tiny gap, never as a wait', async () => {
-    const { view, close } = await open(skewed(23), at(23))
-    const marks = view().transport.marks
-    const track = layoutScrubber({ marks, width: 600, edge: null })
-    const back = marks.findIndex((mark, i) => i > 0 && mark.at < (marks[i - 1]?.at ?? 0))
-    expect(back, 'the skew makes one gap go backwards').toBeGreaterThan(0)
-    const backwards = track.xOf(back + 1) - track.xOf(back)
-    const tiny = track.xOf(9) - track.xOf(8)
-    expect(at(9) - at(8)).toBeLessThan(SCRUB.minTickMs)
-    expect(backwards).toBeGreaterThan(0)
-    expect(Math.abs(backwards - tiny)).toBeLessThanOrEqual(1)
-    expect(track.waits.some((wait) => wait.x === track.xOf(back))).toBe(false)
     close()
   })
 
   it('keeps the live waiting counter honest while the run waits for an Approver', async () => {
     const now = at(17) + 90_000
     const { view, close } = await open(skewed(17), now)
-    expect(view().room.phase.name).toBe('awaiting_approval')
-    expect(view().frame.waiting).toEqual({ since: at(15), elapsedMs: now - at(15) })
-    expect(view().frame.elapsed.at).toBeGreaterThanOrEqual(0)
-    expect(view().frame.elapsed.at).toBeLessThanOrEqual(view().frame.elapsed.total)
-    expectSaneTrack(view(), 600)
+    expect(view().track(RELEASE_CHECK).track.headline).toEqual({ is: 'waiting' })
+    expect(waited(view())).toBe(now - at(15))
     close()
   })
 })

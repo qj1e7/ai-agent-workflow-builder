@@ -1,10 +1,9 @@
 @font-face {
-  font-family: 'Instrument Sans';
+  font-family: 'Atkinson Hyperlegible Next';
   font-style: normal;
   font-display: swap;
-  font-weight: 400 700;
-  font-stretch: 75% 100%;
-  src: url('@fontsource-variable/instrument-sans/files/instrument-sans-latin-standard-normal.woff2') format('woff2');
+  font-weight: 200 800;
+  src: url('@fontsource-variable/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-wght-normal.woff2') format('woff2');
 }
 
 *,
@@ -19,10 +18,14 @@ html {
   text-size-adjust: 100%;
 }
 
+html[data-theme='dark'] {
+  color-scheme: dark;
+}
+
 body {
   margin: 0;
   min-height: 100dvh;
-  background: var(--mist);
+  background: var(--bg);
   color: var(--ink);
   font-family: var(--font);
   font-size: var(--text-16);
@@ -104,7 +107,7 @@ textarea {
 }
 
 :focus-visible {
-  outline: 2px solid var(--focus);
+  outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -114,7 +117,8 @@ main[tabindex='-1']:focus {
 }
 
 ::selection {
-  background: var(--lead-tint);
+  background: var(--lead);
+  color: var(--on-ink);
 }
 
 .visually-hidden {
@@ -147,7 +151,6 @@ main[tabindex='-1']:focus {
 }
 
 .plan-voice {
-  font-stretch: 82%;
   font-weight: 560;
 }
 

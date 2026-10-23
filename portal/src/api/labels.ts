@@ -44,11 +44,11 @@ export const refusalLabel: Record<Refusal, string> = {
   own_work: 'You started this run, so another Approver must decide.',
   not_an_approver: 'Only Approvers can decide this request.',
   not_eligible: 'You are not one of the Approvers for this step.',
-  decided_earlier_step: 'You already decided an earlier step, so another Approver must decide this one.',
+  decided_earlier_step: 'You decided an earlier step, so another Approver must decide.',
   wrong_step: 'This is not the step that is waiting for a decision.',
   not_open: 'This request is not open for a decision.',
   stale_digest: 'The request changed after you opened this page. Reload to see what will be written.',
-  invalid_decisions: 'This approval has a problem. Ask a maintainer to check it.',
+  invalid_decisions: 'This approval has a problem. Ask a maintainer.',
 }
 
 export const approvalStepStatusLabel: Record<ApprovalStepStatus, string> = {
@@ -112,6 +112,15 @@ export function connectorNamedIn(words: string): string | null {
 
 export function operationLabel(operation: string): string {
   return operationNames[operation] ?? humanise(operation)
+}
+
+/**
+ * The thing an operation writes, from the contract's verb_object operation keys: create_ticket gives
+ * ticket, update_page gives page. Empty when the key has no object part.
+ */
+export function objectNoun(operation: string): string {
+  const parts = operation.split('_').filter(Boolean)
+  return parts.length > 1 ? (parts.at(-1) ?? '') : ''
 }
 
 export function rolesLabel(roles: readonly Role[]): string {

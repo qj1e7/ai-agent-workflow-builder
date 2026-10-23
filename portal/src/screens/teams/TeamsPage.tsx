@@ -6,7 +6,7 @@ import type { RunView, TeamsStubMessage } from '../../api/types'
 import { Button, ButtonLink } from '../../ui/Button'
 import { EmptyState, InlineMessage, Skeleton } from '../../ui/Feedback'
 import { formatDayAndTime } from '../../ui/format'
-import { IconCheck, IconChat, IconClock, IconReplay, IconX, PortalMark, type Icon } from '../../ui/icons'
+import { IconCheck, IconClock, IconReplay, IconX, PortalMark, type Icon } from '../../ui/icons'
 import { PageHeader } from '../../ui/PageHeader'
 import { Pill, type PillTone } from '../../ui/StatusPill'
 import { channelsOf, chosenChannel, messagesIn } from './channels'
@@ -21,9 +21,7 @@ export function TeamsPage() {
 
   return (
     <div className="page">
-      <PageHeader title="Teams">
-        A stand-in for Microsoft Teams. Approval requests from the AI workflow builder arrive here, as they will in the real thing.
-      </PageHeader>
+      <PageHeader title="Teams">A stand-in for Microsoft Teams. Approval requests arrive here.</PageHeader>
       <div className={styles['window']}>
         {messages.data ? (
           <Inbox messages={messages.data} runs={runs.data ?? []} wanted={wanted} onChoose={setWanted} />
@@ -60,11 +58,8 @@ function Inbox({ messages, runs, wanted, onChoose }: InboxProps) {
   if (open === null) {
     return (
       <div className={styles['single']}>
-        <EmptyState
-          title="No messages yet."
-          action={<ButtonLink to="/builder">Open the builder</ButtonLink>}
-        >
-          A message appears here when a run asks an Approver for a decision.
+        <EmptyState title="No messages yet." action={<ButtonLink to="/builder">Open the builder</ButtonLink>}>
+          An approval request appears here.
         </EmptyState>
       </div>
     )
@@ -73,10 +68,6 @@ function Inbox({ messages, runs, wanted, onChoose }: InboxProps) {
   return (
     <>
       <nav className={styles['channels']} aria-label="Channels">
-        <p className={styles['stub']}>
-          <IconChat size={18} />
-          Demo stub
-        </p>
         <ul>
           {channels.map((channel) => (
             <li key={channel.name}>
@@ -139,7 +130,7 @@ function Message({ message, run }: { message: TeamsStubMessage; run: RunView | u
             <p className={styles['run']}>
               <strong>{run.use_case_name}</strong>
               <span>
-                Run started by {nameOf(run.started_by)}, {startedWords(run.started_at)}
+                Started by {nameOf(run.started_by)}, {startedWords(run.started_at)}
               </span>
             </p>
           ) : null}
@@ -153,14 +144,14 @@ function Message({ message, run }: { message: TeamsStubMessage; run: RunView | u
                 {standing.detail ? <span className={styles['detail']}>{standing.detail}</span> : null}
               </>
             ) : approval.isError ? (
-              <span className={styles['detail']}>We could not check where this stands.</span>
+              <span className={styles['detail']}>We could not check the approval.</span>
             ) : (
-              <span className={styles['detail']}>Checking where this stands.</span>
+              <span className={styles['detail']}>Checking the approval.</span>
             )}
           </div>
           <div className={styles['actions']}>
             <ButtonLink to={message.link}>Open the approval page</ButtonLink>
-            <ButtonLink to={`/runs/${message.run_id}`}>See the run</ButtonLink>
+            <ButtonLink to={`/runs/${message.run_id}`}>Watch the run</ButtonLink>
           </div>
         </div>
       </div>

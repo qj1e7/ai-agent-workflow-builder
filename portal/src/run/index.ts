@@ -1,53 +1,54 @@
 export { createLiveView, useLiveView } from './live'
-export type { BeatView, Frame, LiveView, LiveViewEnv, LiveViewStore, RoomView, Transport, UseLiveViewOptions, WhenFinished } from './live'
-export { expectedWritesOf, stageSet } from './stage'
-export type { StageOptions, StageSet } from './stage'
+export type { Controls, LiveView, LiveViewEnv, LiveViewStore, TrackView, UseLiveViewOptions, WhenFinished } from './live'
+export { LONG_GAP_MS } from './director'
+export type { Speed } from './director'
+export { castLayout, planTrack } from './track'
+export type {
+  CastLayout,
+  Figure,
+  Gate,
+  GateState,
+  Headline,
+  Items,
+  PanelSpot,
+  Parcel,
+  ParcelForm,
+  Speech,
+  Stop,
+  StopCaption,
+  StopKey,
+  StopKind,
+  StopState,
+  Track,
+  WriteStatus,
+  WrittenLine,
+} from './track'
+export { ACT_MS } from './choreography'
+export type { Act, BeatPlan, TimedAct } from './choreography'
+export {
+  attemptWords,
+  captionWords,
+  CONFLICT_WORDS,
+  createdWords,
+  figureWords,
+  headlineWords,
+  moreWords,
+  OPEN_APPROVAL_PAGE,
+  parcelShortWords,
+  parcelWords,
+  RETRY_NEEDS_OPERATOR,
+  splitActionLine,
+  SPED_UP_WORDS,
+  stopWords,
+  teamsWords,
+} from './describe'
+export type { Viewer } from './describe'
 export { createClock } from './clock'
 export type { Clock } from './clock'
-export { runId, agentId, doorKey, userId, runTime } from './brand'
-export type { AgentId, DoorKey, Ms, RunId, RunTime, Seq, UserId, WallTime } from './brand'
-export { collisions, ROOM_METRICS } from './layout'
-export { layoutOf } from './plan'
-export type { Box, DoorBox, LayoutBox, OverflowSeat, Point, RoomLayout, RoomSize, SeatBox, SpeechSlot } from './layout'
-export { SCRUB } from './scrubber'
-export type { ScrubberLayout, WaitSegment } from './scrubber'
-export { LONG_GAP_MS } from './director'
-export type { FrameLabel } from './director'
+export { agentId, connectorKey, runId, runTime, userId } from './brand'
+export type { AgentId, ConnectorKey, Ms, RunId, RunTime, Seq, UserId, WallTime } from './brand'
 export { beatMsOf, isStory } from './kinds'
 export type { BeatEvent } from './kinds'
-export { statusOf } from './status'
-export type { Status } from './status'
-export { openStep, ticketLife, stamps, isSettled, agentSeatKey, stepSeatKey, seatKeyOf, agentNamedIn } from './room'
-export type {
-  AgentRef,
-  AgentRegistry,
-  AgentSeat,
-  AgentStatus,
-  Anchor,
-  Approval,
-  ApprovalStep,
-  Checker,
-  Door,
-  ExpectedWrite,
-  Finding,
-  Light,
-  Move,
-  OpenStep,
-  Phase,
-  PlanDoor,
-  RoomState,
-  SeatKey,
-  Speech,
-  Stamp,
-  Station,
-  StationState,
-  StepState,
-  TeamsPost,
-  Ticket,
-  TicketLife,
-  TicketLine,
-  Trip,
-  UserRef,
-} from './room'
-export type { MinutesEntry, TimelineMark } from './tape'
+export type { AgentRef, AgentRegistry, AgentStatus, AgentStep } from './room'
+export type { MinutesEntry } from './tape'
 export type { Connection } from '../stream/feed'

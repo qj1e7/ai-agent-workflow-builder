@@ -1,24 +1,22 @@
+import failure from '@contracts/fixtures/runs/failure.json'
 import success from '@contracts/fixtures/runs/success.json'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ApprovalView, MockJiraTicket, RunView } from '../api/types'
 import { createDemoPlatform, type DemoPlatformHandle } from '../mock'
 import type { FetchLike } from '../stream/feed'
-import { formatDuration } from '../ui/format'
 import { runId } from './brand'
 import { createClock } from './clock'
+import type { Speed } from './director'
 import { createLiveView, type LiveView, type LiveViewStore } from './live'
-import { statusOf } from './status'
-import { fixedClock, TEST_REGISTRY } from './testing'
+import { fixedClock, RELEASE_CHECK, TEST_REGISTRY } from './testing'
+import type { StopCaption, Track } from './track'
 
 const START = Date.parse('2026-11-27T02:00:00Z')
 const LIVE_RUN = runId('run_01JB8')
 const SECOND = 1000
 
-interface Raw {
-  readonly seq: number
-  readonly ts: string
-}
-const RAW = success as Raw[]
+type Raw = { readonly seq: number; readonly ts: string } & Readonly<Record<string, unknown>>
+const RAW: readonly Raw[] = success
 const at = (seq: number) => Date.parse(RAW[seq - 1]?.ts ?? '')
 
 let demo: DemoPlatformHandle
@@ -32,7 +30,28 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-function open(id = LIVE_RUN, whenFinished: 'rest' | 'replay' = 'rest', openingMs = 0) {
+const trackOf = (view: LiveView): Track => view.track(RELEASE_CHECK).track
+const beatSeq = (view: LiveView): number | null => {
+  const key = view.track(RELEASE_CHECK).plan?.key
+  return key === undefined ? null : Number(key.split(':')[1])
+}
+const headline = (view: LiveView) => trackOf(view).headline.is
+
+function gateCaption(view: LiveView): StopCaption | undefined {
+  return trackOf(view).stops.find((stop) => stop.key === 'gate')?.caption
+}
+
+function waited(view: LiveView): number | null {
+  const caption = gateCaption(view)
+  return caption?.is === 'waiting' ? caption.elapsedMs : null
+}
+
+function spedUp(view: LiveView): boolean {
+  const caption = gateCaption(view)
+  return caption?.is === 'waiting' && caption.spedUp
+}
+
+function open(id = LIVE_RUN, whenFinished: 'rest' | 'replay' = 'rest', speed: Speed = 1) {
   const authed: typeof fetch = (input, init) => {
     const headers = new Headers(init?.headers)
     if (!headers.has('X-Dev-User')) headers.set('X-Dev-User', 'alice')
@@ -42,15 +61,15 @@ function open(id = LIVE_RUN, whenFinished: 'rest' | 'replay' = 'rest', openingMs
     runId: id,
     env: { fetch: authed, clock: createClock(demo.clock, id), registry: TEST_REGISTRY },
     whenFinished,
-    openingMs,
+    speed,
   })
   const seen: LiveView[] = []
   const beatStarts = new Map<number, number>()
   const unsubscribe = store.subscribe(() => {
     const snapshot = store.getSnapshot()
     seen.push(snapshot)
-    const beat = snapshot.frame.beat
-    if (beat?.type === 'event' && !beatStarts.has(beat.seq)) beatStarts.set(beat.seq, Date.now() - START)
+    const seq = beatSeq(snapshot)
+    if (seq !== null && !beatStarts.has(seq)) beatStarts.set(seq, Date.now() - START)
   })
   return { store, seen, beatStarts, unsubscribe, view: () => store.getSnapshot() }
 }
@@ -78,9 +97,9 @@ function burstFetch(backlog: number, upTo: number): FetchLike {
 }
 
 async function openBurst(runNow: number) {
-  const store = createLiveView({ runId: LIVE_RUN, env: { fetch: burstFetch(3, 17), clock: fixedClock(runNow), registry: TEST_REGISTRY }, whenFinished: 'rest' })
+  const store = createLiveView({ runId: LIVE_RUN, env: { fetch: burstFetch(3, 17), clock: fixedClock(runNow), registry: TEST_REGISTRY }, whenFinished: 'rest', speed: 1 })
   const close = store.subscribe(() => undefined)
-  while (store.getSnapshot().frame.head < 17) await tick(10)
+  while (store.getSnapshot().minutes.length < 3) await tick(10)
   return { view: () => store.getSnapshot(), close }
 }
 
@@ -97,35 +116,28 @@ describe('createLiveView against the demo platform', () => {
     const { seen, view, unsubscribe } = open()
     await tick(0)
     expect(view().connection.is).toBe('live')
-    expect(view().room.phase.name).toBe('pending')
-    expect(view().room.agents.map((seat) => seat.id)).toEqual(['room_lead'])
+    expect(headline(view())).toBe('starting')
+    expect(trackOf(view()).stops[0]?.cast.map((figure) => figure.key)).toEqual(['person:alice'])
 
     await tick(18 * SECOND)
-    expect(view().room.phase.name).toBe('awaiting_approval')
-    expect(view().frame.waiting).not.toBeNull()
-    const firstWait = view().frame.waiting?.elapsedMs ?? 0
+    expect(headline(view())).toBe('waiting')
+    const firstWait = waited(view()) ?? Number.NaN
     await tick(4 * SECOND)
-    expect(view().room.phase.name).toBe('awaiting_approval')
-    const laterWait = view().frame.waiting?.elapsedMs ?? 0
-    expect(laterWait).toBeGreaterThan(firstWait)
-    expect(view().frame.label).toBe('live')
-    expect(view().transport.atEdge).toBe(true)
-    expect(view().frame.elapsed.at, 'live, the transport shows one clock: the run is as long as it has run').toBe(view().frame.elapsed.total)
-    expect(view().room.doors.find((door) => door.side === 'write')).toMatchObject({ key: 'jira', checker: 'locked' })
+    expect(headline(view())).toBe('waiting')
+    expect(waited(view())).toBeGreaterThan(firstWait)
+    expect(view().atHead).toBe(true)
 
-    const phases = new Set(seen.map((snapshot) => snapshot.room.phase.name))
-    expect([...phases]).toEqual(expect.arrayContaining(['pending', 'working', 'proposed', 'awaiting_approval']))
-    const beats = seen.flatMap((snapshot) => (snapshot.frame.beat?.type === 'event' ? [snapshot.frame.beat.seq] : []))
+    const headlines = new Set(seen.map(headline))
+    expect([...headlines]).toEqual(expect.arrayContaining(['starting', 'working', 'found', 'drafting', 'waiting']))
+    const beats = seen.flatMap((snapshot) => beatSeq(snapshot) ?? [])
     expect([...new Set(beats)]).toEqual([4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 17])
 
     await tick(11 * SECOND)
-    expect(view().room.approval?.steps[0]?.state).toMatchObject({ is: 'approved', by: { id: 'bob', display: 'Bob' } })
+    expect(trackOf(view()).gate?.state).toBe('open')
     await tick(60 * SECOND)
-    expect(view().room.phase).toEqual({ name: 'succeeded', outcome: 'written' })
-    expect(view().room.ticket?.lines[0]?.reference).toBe('MOCK-142')
-    expect(view().frame.label).toBe('finished')
+    expect(trackOf(view()).headline).toEqual({ is: 'written', lines: [{ reference: 'MOCK-142', connector: 'jira' }] })
+    expect(view().atHead).toBe(true)
     expect(view().connection.is).toBe('settled')
-    expect(view().transport.settled).toBe(true)
     unsubscribe()
   })
 
@@ -155,93 +167,65 @@ describe('createLiveView against the demo platform', () => {
     unsubscribe()
   })
 
-  it("counts the live wait as the edge's wait, not the shown frame's, while the room catches up on an open approval", async () => {
+  it("counts the live wait as the head's wait, not the shown frame's, while the view catches up on an open approval", async () => {
     const now = at(17) + 90 * SECOND
     const { view, close } = await openBurst(now)
-    while (view().room.phase.name !== 'awaiting_approval') await tick(100)
-    expect(view().frame.shown, 'the room is still catching up').toBeLessThan(view().frame.head)
-    const edge = view().transport.edge
-    if (!edge?.waitingSince) throw new Error('no live edge')
-    const liveWait = view().frame.waiting?.elapsedMs ?? 0
-    expect(liveWait).toBe(edge.now - edge.waitingSince)
-    expect(liveWait).toBe(now - at(15))
-    const shown = view().frame
-    expect(liveWait, "the live wait, not the shown frame's own").toBeGreaterThan(shown.sceneTime - (shown.waiting?.since ?? 0))
-    expect(view().describe()).toContain(`for ${formatDuration(liveWait)}.`)
+    while (headline(view()) !== 'waiting') await tick(100)
+    expect(view().atHead, 'the view is still catching up').toBe(false)
+    expect(waited(view())).toBe(now - at(15))
     close()
   })
 
-  it("counts the shown frame's own wait in replay and after a seek, and says Sped up through the replay's compressed wait", async () => {
+  it("counts the shown frame's own wait in replay, and says Sped up through the replay's compressed wait", async () => {
     const { view, unsubscribe } = open()
     await tick(80 * SECOND)
-    expect(view().transport.settled).toBe(true)
-    view().transport.seek(15)
-    expect(view().frame.mode).toBe('replay')
-    const sought = view().frame
-    expect(sought.waiting?.elapsedMs).toBe(sought.sceneTime - (sought.waiting?.since ?? 0))
-    expect(sought.waiting?.elapsedMs).toBeLessThan(60 * SECOND)
-    expect(sought.elapsed.at, 'behind the end, the transport shows the position of the total').toBeLessThan(sought.elapsed.total)
-    expect(statusOf(view())).toBe('replay')
+    expect(view().atHead).toBe(true)
 
-    view().transport.restart()
-    while (view().room.phase.name !== 'awaiting_approval') await tick(100)
-    const replayed = view().frame
-    expect(replayed.mode).toBe('replay')
-    expect(replayed.spedUp).toBe(false)
-    expect(replayed.waiting?.elapsedMs).toBe(replayed.sceneTime - (replayed.waiting?.since ?? 0))
-    expect(replayed.waiting?.elapsedMs).toBeLessThan(60 * SECOND)
-    expect(view().describe()).toContain(`for ${formatDuration(replayed.waiting?.elapsedMs ?? 0)}.`)
+    view().controls.restart()
+    while (headline(view()) !== 'waiting') await tick(100)
+    expect(view().atHead).toBe(false)
+    expect(spedUp(view())).toBe(false)
+    expect(waited(view())).toBeLessThan(60 * SECOND)
 
-    while (view().frame.beat?.type !== 'hold') await tick(100)
-    expect(view().frame.spedUp).toBe(true)
-    expect(statusOf(view())).toBe('sped_up')
+    while (!spedUp(view())) await tick(100)
+    expect(headline(view())).toBe('waiting')
     unsubscribe()
   })
 
-  it("says Sped up while the demo squeezes the wait for Bob, on the transport and in the frame the seat reads", async () => {
+  it('says Sped up while the demo squeezes the wait for Bob', async () => {
     const { view, unsubscribe } = open()
     await tick(20 * SECOND)
-    expect(view().room.phase.name).toBe('awaiting_approval')
-    expect(view().frame.spedUp, 'the head of the wait plays at real speed').toBe(false)
-    expect(statusOf(view())).toBe('live')
+    expect(headline(view())).toBe('waiting')
+    expect(spedUp(view()), 'the head of the wait plays at real speed').toBe(false)
     await tick(6 * SECOND)
-    expect(view().frame.spedUp).toBe(true)
-    expect(statusOf(view())).toBe('sped_up')
-    expect(view().frame.waiting?.elapsedMs ?? 0).toBeGreaterThan(60 * SECOND)
+    expect(spedUp(view())).toBe(true)
+    expect(waited(view())).toBeGreaterThan(60 * SECOND)
     await tick(8 * SECOND)
-    expect(view().room.approval?.steps[0]?.state.is).toBe('approved')
-    expect(view().frame.spedUp).toBe(false)
+    expect(trackOf(view()).gate?.state).toBe('open')
+    expect(spedUp(view())).toBe(false)
     unsubscribe()
   })
 
-  it('says the outcome on the transport: Done, Declined, Stopped, and Catching up while behind the live edge', async () => {
+  it('ends each recorded run at its outcome, and is not at the head while catching up', async () => {
     const behind = await openBurst(at(17) + SECOND)
-    expect(behind.view().frame.shown).toBeLessThan(behind.view().frame.head)
-    expect(statusOf(behind.view())).toBe('catching_up')
+    expect(behind.view().atHead).toBe(false)
     behind.close()
 
     const live = open()
-    await tick(0)
-    expect(statusOf(live.view())).toBe('live')
-    await tick(8 * SECOND)
-    expect(statusOf(live.view()), 'the paced demo never has to catch up').toBe('live')
-    await tick(80 * SECOND)
-    expect(live.view().room.phase.name).toBe('succeeded')
-    expect(statusOf(live.view())).toBe('done')
-    live.view().transport.seek(5)
-    expect(statusOf(live.view())).toBe('replay')
+    await tick(88 * SECOND)
+    expect(headline(live.view())).toBe('written')
+    expect(live.view().atHead).toBe(true)
     live.unsubscribe()
 
     const failed = open(runId('run_01JB9'))
     await tick(0)
-    expect(failed.view().room.phase.name).toBe('failed')
-    expect(statusOf(failed.view())).toBe('stopped')
+    expect(headline(failed.view())).toBe('stopped')
+    expect(trackOf(failed.view()).panel).toMatchObject({ is: 'trouble', retryable: true })
     failed.unsubscribe()
 
     const rejected = open(runId('run_01JBA'))
     await tick(0)
-    expect(rejected.view().room.phase.name).toBe('rejected')
-    expect(statusOf(rejected.view())).toBe('declined')
+    expect(trackOf(rejected.view()).headline).toEqual({ is: 'declined', by: 'Bob' })
     rejected.unsubscribe()
   })
 
@@ -257,84 +241,132 @@ describe('createLiveView against the demo platform', () => {
       body: JSON.stringify({ step: 0, verdict: 'approve', digest: approval.digest }),
     })
     await tick(15 * SECOND)
-    const written = view().room.ticket?.lines[0]?.reference
+    const panel = trackOf(view()).panel
+    const written = panel?.is === 'written' ? panel.lines[0]?.reference : undefined
     expect(written).toMatch(/^MOCK-\d+$/)
     const tickets = await api<{ tickets: MockJiraTicket[] }>('/mock-jira/tickets')
     expect(tickets.tickets.map((ticket) => ticket.key)).toContain(written)
-    expect(view().room.approval?.steps[0]?.state).toMatchObject({ is: 'approved', by: { id: 'bob', display: 'Bob' } })
+    expect(panel).toMatchObject({ approvedBy: ['Bob'] })
     unsubscribe()
   })
 
   it('rests on a finished run, or replays it once from the start when asked', async () => {
     const rest = open(runId('run_01JB9'), 'rest')
     await tick(0)
-    expect(rest.view().room.phase.name).toBe('failed')
-    expect(rest.view().frame.label).toBe('finished')
-    expect(rest.view().frame.beat).toBeNull()
+    expect(headline(rest.view())).toBe('stopped')
+    expect(rest.view().atHead).toBe(true)
+    expect(rest.view().track(RELEASE_CHECK).plan).toBeNull()
     rest.unsubscribe()
 
     const replay = open(runId('run_01JB9'), 'replay')
     await tick(0)
-    expect(replay.view().frame.mode).toBe('replay')
-    expect(replay.view().frame.shown).toBe(1)
-    expect(replay.view().frame.beat).toMatchObject({ type: 'event', seq: 1, entry: 'continuous' })
+    expect(replay.view().atHead).toBe(false)
+    expect(replay.view().track(RELEASE_CHECK).plan).toMatchObject({ key: '1:1', entry: 'continuous' })
+    expect(headline(replay.view())).toBe('starting')
     await tick(40 * SECOND)
-    expect(replay.view().frame.label).toBe('finished')
-    expect(replay.view().room.phase.name).toBe('failed')
-    expect(replay.view().room.agents.map((seat) => seat.id)).toContain('troubleshooter')
+    expect(replay.view().atHead).toBe(true)
+    expect(headline(replay.view())).toBe('stopped')
+    expect(trackOf(replay.view()).stops[1]?.cast.find((figure) => figure.is === 'agent' && figure.status === 'stopped')).toBeDefined()
     replay.unsubscribe()
   })
 
-  it('holds the first beat for the opening: a replay restarts only when the hold ends', async () => {
-    const { view, unsubscribe } = open(runId('run_01JB9'), 'replay', 900)
-    await tick(0)
-    expect(view().frame.shown).toBe(view().frame.head)
-    expect(view().frame.beat).toBeNull()
-    await tick(899)
-    expect(view().frame.beat).toBeNull()
-    await tick(2)
-    expect(view().frame.mode).toBe('replay')
-    expect(view().frame.shown).toBe(1)
-    expect(view().frame.beat).toMatchObject({ type: 'event', seq: 1 })
+  it('starts at the speed it is given, and Instant lands on the newest frame at once', async () => {
+    const instant = open(LIVE_RUN, 'rest', 'instant')
+    await tick(3 * SECOND)
+    expect(instant.view().speed).toBe('instant')
+    expect(instant.view().atHead).toBe(true)
+    expect(instant.view().track(RELEASE_CHECK).plan).toBeNull()
+    instant.unsubscribe()
+
+    const live = open()
+    await tick(3 * SECOND)
+    expect(live.view().track(RELEASE_CHECK).plan).not.toBeNull()
+    live.view().controls.setSpeed('instant')
+    expect(live.view().speed).toBe('instant')
+    expect(live.view().atHead).toBe(true)
+    expect(live.view().track(RELEASE_CHECK).plan).toBeNull()
+    live.view().controls.setSpeed(2)
+    expect(live.view().speed).toBe(2)
+    live.unsubscribe()
+  })
+
+  it('gives the same track for the same blocks in one snapshot, and a fresh one for other blocks', async () => {
+    const { view, unsubscribe } = open()
+    await tick(2 * SECOND)
+    const snapshot = view()
+    expect(snapshot.track(RELEASE_CHECK)).toBe(snapshot.track(RELEASE_CHECK))
+    const other = snapshot.track([...RELEASE_CHECK])
+    expect(other).not.toBe(snapshot.track(RELEASE_CHECK))
+    expect(other).toEqual(snapshot.track(RELEASE_CHECK))
     unsubscribe()
   })
 
-  it('holds the first beat for the opening: a live event that lands during the hold plays after it', async () => {
-    const { view, unsubscribe } = open(LIVE_RUN, 'rest', 3000)
-    await tick(2900)
-    expect(view().frame.head).toBeGreaterThanOrEqual(4)
-    expect(view().room.phase.name).toBe('pending')
-    expect(view().frame.beat).toBeNull()
-    await tick(200)
-    expect(view().frame.beat).toMatchObject({ type: 'event', seq: 4 })
-    expect(view().room.agents.map((seat) => seat.id)).toContain('release_checker')
-    unsubscribe()
-  })
-
-  it('retries a failed run: the troubleshooter leaves and the agents start again', async () => {
+  it('retries a failed run: attempt 2 starts with no stopped agent', async () => {
     const { view, unsubscribe } = open(runId('run_01JB9'))
     await tick(0)
-    expect(view().room.phase.name).toBe('failed')
+    expect(headline(view())).toBe('stopped')
     const retry = await demo.fetch(`/api/v1/runs/run_01JB9/retry`, { method: 'POST', headers: { 'X-Dev-User': 'alice' } })
     expect(retry.status).toBe(202)
-    view().transport.reconnect()
+    view().controls.reconnect()
     await tick(5 * SECOND)
-    expect(view().room.attempt).toBe(2)
-    expect(view().room.agents.map((seat) => seat.id)).not.toContain('troubleshooter')
-    expect(['working', 'proposed', 'awaiting_approval']).toContain(view().room.phase.name)
+    expect(trackOf(view()).attempt).toBe(2)
+    expect(trackOf(view()).breakAt).toBeNull()
+    expect(['working', 'found', 'drafting', 'waiting']).toContain(headline(view()))
     unsubscribe()
   })
 
   it('survives StrictMode: subscribe, unsubscribe, subscribe keeps one tape and repeats nothing', async () => {
     const { store, unsubscribe } = open()
     await tick(2 * SECOND)
-    const head = store.getSnapshot().frame.head
+    const shown = store.getSnapshot().minutes.length
     unsubscribe()
     const again = store.subscribe(() => undefined)
     await tick(0)
-    expect(store.getSnapshot().frame.head).toBeGreaterThanOrEqual(head)
+    expect(store.getSnapshot().minutes.length).toBeGreaterThanOrEqual(shown)
     const seqs = store.getSnapshot().minutes.map((entry) => entry.seq)
     expect(seqs).toEqual([...new Set(seqs)])
     again()
+  })
+})
+
+describe('reconnect after a retry', () => {
+  /** A platform whose stream has closed: only pages answer, and the SSE request never does. */
+  function pagesOnly(events: () => readonly Raw[]): FetchLike {
+    return (input, init) => {
+      if (new Headers(init?.headers).get('Accept') === 'text/event-stream') {
+        return new Promise((_, reject) => init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError'))))
+      }
+      const after = Number(new URL(input, 'http://portal.test').searchParams.get('after'))
+      return Promise.resolve(new Response(JSON.stringify({ events: events().filter((raw) => raw.seq > after) }), { status: 200 }))
+    }
+  }
+
+  it('plays the events a reconnect brings back as live, so the retry animates instead of jumping', async () => {
+    const recorded: readonly Raw[] = failure
+    let events = recorded
+    const store = createLiveView({
+      runId: runId('run_01JB9'),
+      env: { fetch: pagesOnly(() => events), clock: fixedClock(Date.parse('2026-11-04T02:20:00Z')), registry: TEST_REGISTRY },
+      whenFinished: 'rest',
+      speed: 1,
+    })
+    const beats: number[] = []
+    const close = store.subscribe(() => {
+      const seq = beatSeq(store.getSnapshot())
+      if (seq !== null && !beats.includes(seq)) beats.push(seq)
+    })
+    await tick(0)
+    expect(headline(store.getSnapshot())).toBe('stopped')
+    expect(beats, 'the first backlog rests on the end').toEqual([])
+
+    events = [
+      ...recorded,
+      { seq: 13, run_id: 'run_01JB9', ts: '2026-11-04T02:20:00Z', actor: { kind: 'user', id: 'alice', display: 'Alice' }, summary: 'Alice retried the run.', kind: 'run_retried', data: { leg: 'work', attempt: 2 } },
+    ]
+    store.getSnapshot().controls.reconnect()
+    await tick(0)
+    expect(beats).toEqual([13])
+    expect(trackOf(store.getSnapshot()).attempt).toBe(2)
+    close()
   })
 })

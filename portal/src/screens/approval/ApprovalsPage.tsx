@@ -18,9 +18,7 @@ export function ApprovalsPage() {
 
   return (
     <div className="page">
-      <PageHeader title="Approvals">
-        Runs that stopped at the approval gate. Nothing is written until an Approver decides.
-      </PageHeader>
+      <PageHeader title="Approvals">Runs waiting for an Approver.</PageHeader>
       {runs.data ? <WaitingList runs={waitingApprovals(runs.data)} /> : null}
       {!runs.data && runs.isError ? (
         <div className={styles['problem']}>
@@ -42,8 +40,8 @@ export function ApprovalsPage() {
 function WaitingList({ runs }: { runs: RunViewOf<'awaiting_approval'>[] }) {
   if (runs.length === 0) {
     return (
-      <EmptyState title="Nothing is waiting for a decision." action={<ButtonLink to="/">See all runs</ButtonLink>}>
-        When a run reaches the approval gate, it shows up here with how long it has waited.
+      <EmptyState title="Nothing is waiting for an Approver." action={<ButtonLink to="/">See all runs</ButtonLink>}>
+        A run appears here when it reaches the approval gate.
       </EmptyState>
     )
   }

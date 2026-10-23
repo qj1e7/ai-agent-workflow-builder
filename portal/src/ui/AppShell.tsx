@@ -4,6 +4,7 @@ import { usePortalMode } from '../api/context'
 import { cx } from './cx'
 import { ErrorBoundary } from './ErrorBoundary'
 import { IconChat, IconFlow, IconReplay, IconShield, IconTicket, IconWave, PortalMark, type Icon } from './icons'
+import { ThemeToggle } from './ThemeToggle'
 import { UserSwitcher } from './UserSwitcher'
 import styles from './AppShell.module.css'
 
@@ -76,7 +77,7 @@ export function AppShell() {
       <header className={styles['header']}>
         <Link to="/" className={styles['brand']}>
           <PortalMark />
-          <span>Portal</span>
+          <span className={styles['brandName']}>Portal</span>
         </Link>
         <nav className={styles['nav']} aria-label="Main">
           {NAV_ITEMS.map((item) => (
@@ -97,6 +98,7 @@ export function AppShell() {
               Demo data
             </span>
           ) : null}
+          <ThemeToggle />
           <UserSwitcher />
         </div>
       </header>

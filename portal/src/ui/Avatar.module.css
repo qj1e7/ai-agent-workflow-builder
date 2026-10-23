@@ -5,22 +5,24 @@
   line-height: 1;
 }
 
-.agent {
-  border-radius: 30%;
-  color: #fff;
-}
-
 .person {
   border-radius: 50%;
-  border: 2px solid var(--ink);
-  background: var(--surface);
-  color: var(--ink);
-  font-weight: 620;
+  font-weight: 800;
 }
 
 .seat {
+  border: 2px dashed var(--amber);
   border-radius: 50%;
-  border: 2px dashed var(--wait-line);
-  background: var(--wait-tint);
-  color: var(--wait);
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+}
+
+.system {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--mist);
+  color: var(--muted);
 }

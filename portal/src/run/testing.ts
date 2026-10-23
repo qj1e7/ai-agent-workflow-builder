@@ -1,43 +1,21 @@
+import type { BlockView } from '../api/types'
 import type { RunEvent } from '../stream/parse'
-import { agentId, doorKey, runTime, wallTime, type Ms, type RunTime, type WallTime } from './brand'
+import { agentId, runTime, wallTime, type Ms, type RunTime, type WallTime } from './brand'
 import type { Clock } from './clock'
-import {
-  catchingUp,
-  direct,
-  labelOf,
-  sceneTime,
-  startDirector,
-  waitElapsed,
-  wakeAt,
-  atEdge,
-  type Beat,
-  type Cue,
-  type Director,
-  type FrameLabel,
-  type Start,
-} from './director'
+import { atEdge, direct, sceneTime, startDirector, waitElapsed, wakeAt, type Beat, type Cue, type Director, type Speed, type Start } from './director'
 import { recording, synthetic, type RecordingName } from './recordings'
-import { agentNamedIn, openStep, type AgentRef, type AgentRegistry, type Move, type RoomState } from './room'
+import { openStep, type AgentRegistry, type RoomState } from './room'
 import { createTape, type Origin } from './tape'
 
-const KNOWN: readonly AgentRef[] = [
-  { id: agentId('room_lead'), display: 'Room lead' },
-  { id: agentId('release_checker'), display: 'Release checker' },
-  { id: agentId('troubleshooter'), display: 'AI troubleshooter' },
+/** contracts/fixtures/builder/templates.json, release_check. */
+export const RELEASE_CHECK: readonly BlockView[] = [
+  { key: 'read_releases', name: 'Read GitHub releases', description: "The Release checker reads the repository's releases.", kind: 'agent' },
+  { key: 'approval_gate', name: 'Approval gate', description: 'An Approver reviews the proposed ticket in Teams before it is written.', kind: 'approval' },
+  { key: 'create_ticket', name: 'Create Jira ticket', description: 'One ticket in the chosen project listing the new releases.', kind: 'write_action' },
 ]
 
-/** The registry the tests fold with: the same three known agents as src/ui/agents.ts. */
-export const TEST_REGISTRY: AgentRegistry = {
-  host: { id: agentId('room_lead'), display: 'Room lead' },
-  troubleshooter: { id: agentId('troubleshooter'), display: 'AI troubleshooter' },
-  lookup(id) {
-    if (id === 'release_checker') return { display: 'Release checker', readDoor: doorKey('github') }
-    if (id === 'room_lead') return { display: 'Room lead', readDoor: null }
-    if (id === 'troubleshooter') return { display: 'AI troubleshooter', readDoor: null }
-    return { display: id, readDoor: null }
-  },
-  named: (words) => agentNamedIn(words, KNOWN),
-}
+/** The registry the tests fold with: the same host as src/tracker/registry.ts. */
+export const TEST_REGISTRY: AgentRegistry = { host: { id: agentId('room_lead'), display: 'Room lead' } }
 
 export function fixedClock(runNow: number): Clock {
   return {
@@ -59,7 +37,6 @@ export interface PlayedBeat {
   readonly startedAt: number
   readonly durationMs: Ms
   readonly entry: 'continuous' | 'cut'
-  readonly move: Move | null
 }
 
 export interface Rehearsal {
@@ -83,18 +60,16 @@ export interface Rehearsal {
   readonly room: RoomState
   readonly sceneTime: RunTime
   readonly atEdge: boolean
-  readonly catchingUp: boolean
-  readonly label: FrameLabel
   readonly waiting: { readonly since: RunTime; readonly elapsedMs: Ms } | null
   readonly nextWake: number | null
   readonly holds: readonly Extract<Beat, { type: 'hold' }>[]
 }
 
 /** Drives startDirector, createTape, direct and wakeAt with integer times. No timers, no DOM. */
-export function rehearse(name: RecordingName, o: { start: Start }): Rehearsal {
+export function rehearse(name: RecordingName, o: { start: Start; speed?: Speed }): Rehearsal {
   const events = recording(name)
   const tape = createTape(TEST_REGISTRY)
-  let director = startDirector(o.start)
+  let director = startDirector(o.start, o.speed ?? 1)
   let now = 0
   let runNow: number | null = null
   const played: PlayedBeat[] = []
@@ -122,7 +97,6 @@ export function rehearse(name: RecordingName, o: { start: Start }): Rehearsal {
       startedAt: beat.startedAt,
       durationMs: beat.durationMs,
       entry: beat.entry,
-      move: tape.move(beat.seq),
     })
   }
 
@@ -139,10 +113,7 @@ export function rehearse(name: RecordingName, o: { start: Start }): Rehearsal {
   }
 
   function pending(): boolean {
-    if (director.beat !== null) return true
-    if (director.mode.is === 'paused') return false
-    for (let seq = director.shown + 1; seq <= tape.length; seq += 1) if (seq > director.shown) return true
-    return false
+    return director.beat !== null || director.shown < tape.length
   }
 
   let reported = 0
@@ -214,12 +185,6 @@ export function rehearse(name: RecordingName, o: { start: Start }): Rehearsal {
     },
     get atEdge() {
       return atEdge(director)
-    },
-    get catchingUp() {
-      return catchingUp(director, stage(now))
-    },
-    get label() {
-      return labelOf(director, stage(now))
     },
     get waiting() {
       const open = openStep(tape.frame(director.shown))

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { connectorNamedIn } from './labels'
+import { connectorNamedIn, objectNoun } from './labels'
 
 describe('connectorNamedIn', () => {
   it('finds the connector a block names as a whole word, in any case', () => {
@@ -10,5 +10,17 @@ describe('connectorNamedIn', () => {
   it('names nothing for words that hold no connector, or only part of one', () => {
     expect(connectorNamedIn('Send an email')).toBeNull()
     expect(connectorNamedIn('Open Jiramatic')).toBeNull()
+  })
+})
+
+describe('objectNoun', () => {
+  it('reads the thing an operation writes from its last word', () => {
+    expect(objectNoun('create_ticket')).toBe('ticket')
+    expect(objectNoun('update_confluence_page')).toBe('page')
+  })
+
+  it('names nothing for an operation key with no object part', () => {
+    expect(objectNoun('publish')).toBe('')
+    expect(objectNoun('')).toBe('')
   })
 })

@@ -1,9 +1,8 @@
 import { analyzeInPage, blockingViolations } from './support/axe'
-import { collisionSampler } from './support/collisions'
 import { pumpWhile, START } from './support/clock'
 import { measureLayout, MIN_TARGET, MIN_TEXT } from './support/layout'
 import { movingAnimations, MOVING } from './support/motion'
-import { outOfVisualOrder } from './support/keyboard'
+import { outOfVisualOrder, walkTabs } from './support/keyboard'
 import { expect, test } from './support/test'
 
 // These prove the instruments can fail: each one is pointed at a page built to break its rule.
@@ -36,34 +35,28 @@ test('the moving-animation detector sees a running transform animation and ignor
   expect(moving.map((animation) => `${animation.name} on ${animation.target}`)).toEqual(['slide on div#a'])
 })
 
-test('the collision sampler flags a speech card over a label and stays quiet when they are apart', async ({ page }) => {
-  await page.setContent(`
-    <body style="margin:0">
-      <div data-room-label style="position:absolute;left:100px;top:100px;width:100px;height:20px">Jira</div>
-      <div id="speech" data-speech style="position:absolute;left:300px;top:100px;width:100px;height:40px">Hello</div>
-    </body>`)
-  const sampler = await collisionSampler(page)
-  await page.waitForTimeout(400)
-  const quiet = await sampler.stop()
-  expect(quiet.samples).toBeGreaterThan(2)
-  expect(quiet.collisions, 'no overlap while they are apart').toEqual([])
-
-  const again = await collisionSampler(page)
-  await page.locator('#speech').evaluate((el) => {
-    el.style.left = '150px'
-  })
-  await page.waitForTimeout(400)
-  const hit = await again.stop()
-  expect(hit.collisions.length, 'the overlap is reported').toBeGreaterThan(0)
-  expect(hit.collisions[0]?.overlap).toEqual({ width: 50, height: 20 })
-})
-
 test('the tab order check flags a jump back up the page', () => {
   const stop = (label: string, top: number, left: number) => ({ id: 0, label, top, bottom: top + 40, left, rest: { style: '', width: 0 }, focused: { style: '', width: 0 }, pixelsChange: null })
   const inOrder = [stop('a', 0, 0), stop('b', 0, 200), stop('c', 100, 0)]
   expect(outOfVisualOrder(inOrder)).toEqual([])
   const jumpsBack = [stop('a', 0, 0), stop('c', 100, 0), stop('b', 0, 200)]
   expect(outOfVisualOrder(jumpsBack)).toHaveLength(1)
+})
+
+test('the Tab walk enters a radio group once, names inputs by their label, and reports a control Tab cannot reach', async ({ page }) => {
+  await page.setContent(`
+    <body>
+      <fieldset>
+        <label><input type="radio" name="speed" value="1"> 1x</label>
+        <label><input type="radio" name="speed" value="2" checked> 2x</label>
+        <label><input type="radio" name="speed" value="3"> 3x</label>
+      </fieldset>
+      <button>Reached</button>
+      <button tabindex="-1">Skipped</button>
+    </body>`)
+  const walk = await walkTabs(page)
+  expect(walk.stops.map((stop) => stop.label)).toEqual(['2x', 'Reached'])
+  expect(walk.unreached).toEqual(['Skipped'])
 })
 
 test('the axe run names a button without a name and reports nothing on a labelled one, on a paused clock', async ({ page }) => {
