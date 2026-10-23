@@ -7,11 +7,12 @@ from typing import Any
 import psycopg
 import pytest
 
-from platform_api.db import Database
+from platform_api.db import Database, UnitOfWork
 from platform_api.monitoring import ActivityLog
 from platform_api.orchestration.agents import (
     AgentReply,
     AgentUnavailable,
+    ModelAccess,
     TaskRequest,
     task_result_adapter,
 )
@@ -556,3 +557,37 @@ async def test_listing_runs_costs_the_same_queries_however_many_runs(
     statements.clear()
     assert len(await h.orchestrator.list_runs()) == 6
     assert len(statements) == one_run
+
+
+@dataclass
+class SavedModel:
+    model: ModelAccess | None
+
+    async def access(self, uow: UnitOfWork) -> ModelAccess | None:
+        return self.model
+
+
+async def test_the_task_carries_the_model_the_operators_saved(h: Harness):
+    model = ModelAccess(
+        style="anthropic",
+        base_url="https://llm-gateway.aisg.sg",
+        model="claude-haiku-5-5",
+        api_key="sk-example-key-not-real-x7",
+    )
+    h.orchestrator = Orchestrator(
+        h.db,
+        h.log,
+        h.engine,
+        h.teams,
+        h.agent,
+        WriteGateway(h.db, [h.jira], poll=0.05),
+        mint,
+        models=SavedModel(model),
+    )
+    await work_leg_to_approval(h)
+    assert h.agent.requests[0].model == model
+
+
+async def test_without_a_saved_model_the_task_names_none(h: Harness):
+    await work_leg_to_approval(h)
+    assert h.agent.requests[0].model is None

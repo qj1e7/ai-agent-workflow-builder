@@ -30,6 +30,11 @@ ROUTES = {
     ("POST", "/internal/v1/runs/{run_id}/steps/{step}"),
     ("POST", "/internal/v1/runs/{run_id}/agent-events"),
     ("POST", "/internal/v1/workflow-failures"),
+    ("GET", "/api/v1/settings/model"),
+    ("PUT", "/api/v1/settings/model"),
+    ("DELETE", "/api/v1/settings/model"),
+    ("POST", "/api/v1/settings/model/connect"),
+    ("POST", "/api/v1/settings/model/address-decision"),
 }
 
 

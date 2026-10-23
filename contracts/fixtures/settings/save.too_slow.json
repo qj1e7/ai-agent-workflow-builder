@@ -1,0 +1,5 @@
+{
+  "status": "problem",
+  "reason": "too_slow",
+  "message": "The model answered in 11.2 seconds. Summaries wait 10 seconds, so runs would use the built-in sentence. Pick a faster model."
+}

@@ -9,6 +9,7 @@ from platform_api.db import Database
 from platform_api.monitoring import ActivityLog, callback_for
 from platform_api.orchestration.agents import HttpAgentRuntime
 from platform_api.orchestration.dispatch import N8nWebhooks, TeamsStub
+from platform_api.orchestration.model_settings import KeyBox, ModelSettings
 from platform_api.orchestration.runs import Leg
 from platform_api.orchestration.service import Orchestrator
 from platform_api.orchestration.workflows import load_all
@@ -26,6 +27,7 @@ class Services:
     builder: Builder
     teams_stub: TeamsStub
     mock_jira: MockJiraConnector
+    model_settings: ModelSettings
 
 
 def install(app: FastAPI, services: Services) -> None:
@@ -37,6 +39,7 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.builder = services.builder
     app.state.teams_stub = services.teams_stub
     app.state.mock_jira = services.mock_jira
+    app.state.model_settings = services.model_settings
 
 
 async def build(settings: Settings) -> Services:
@@ -62,14 +65,18 @@ async def build(settings: Settings) -> Services:
     def path_for(workflow: str, leg: Leg) -> str:
         return definitions[workflow].webhook_path(leg)
 
+    agents = HttpAgentRuntime(settings.agent_runtime_url, settings.agent_api_key)
+    secret = settings.settings_encryption_key
+    model_settings = ModelSettings(db, agents, KeyBox(secret) if secret else None)
     orchestrator = Orchestrator(
         db,
         activity,
         N8nWebhooks(settings.n8n_base_url, path_for),
         teams,
-        HttpAgentRuntime(settings.agent_runtime_url, settings.agent_api_key),
+        agents,
         WriteGateway(db, [jira]),
         mint,
+        models=model_settings,
     )
     return Services(
         settings=settings,
@@ -79,6 +86,7 @@ async def build(settings: Settings) -> Services:
         builder=Builder(db, orchestrator, settings.public_base_url),
         teams_stub=teams,
         mock_jira=jira,
+        model_settings=model_settings,
     )
 
 

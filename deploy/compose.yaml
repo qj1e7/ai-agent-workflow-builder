@@ -110,6 +110,8 @@ services:
       STEP_KEY: ${STEP_KEY:?run deploy/make-env.sh}
       PLATFORM_INTERNAL_URL: http://platform-api:8000
       CALLBACK_SIGNING_KEY: ${CALLBACK_SIGNING_KEY:?run deploy/make-env.sh}
+      # Optional: without it the Portal's AI model settings are off (ADR 0022).
+      SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:-}
     ports:
       - "${PLATFORM_API_HOST_PORT:-8000}:8000"
     healthcheck:

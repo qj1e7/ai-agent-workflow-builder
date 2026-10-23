@@ -221,6 +221,24 @@
         ],
         "type": "string"
       },
+      "AddressDecisionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "verdict": {
+            "enum": [
+              "confirm",
+              "decline"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "verdict"
+        ],
+        "title": "AddressDecisionIn",
+        "type": "object"
+      },
       "Addressee": {
         "discriminator": {
           "mapping": {
@@ -1383,6 +1401,31 @@
         "title": "AwaitingApprovalView",
         "type": "object"
       },
+      "AwaitingConfirmationOut": {
+        "additionalProperties": false,
+        "properties": {
+          "seconds": {
+            "title": "Seconds",
+            "type": "number"
+          },
+          "status": {
+            "const": "awaiting_confirmation",
+            "default": "awaiting_confirmation",
+            "title": "Status",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "seconds",
+          "text"
+        ],
+        "title": "AwaitingConfirmationOut",
+        "type": "object"
+      },
       "BlockKind": {
         "enum": [
           "agent",
@@ -1417,6 +1460,102 @@
           "kind"
         ],
         "title": "BlockView",
+        "type": "object"
+      },
+      "ConnectIn": {
+        "additionalProperties": false,
+        "properties": {
+          "api_key": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sent once and stored sealed. It is never sent back, only its last two characters.",
+            "title": "Api Key"
+          },
+          "base_url": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          },
+          "provider_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KnownProviderId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "use_saved_key": {
+            "default": false,
+            "title": "Use Saved Key",
+            "type": "boolean"
+          }
+        },
+        "title": "ConnectIn",
+        "type": "object"
+      },
+      "ConnectResult": {
+        "discriminator": {
+          "mapping": {
+            "connected": "#/components/schemas/Connected",
+            "problem": "#/components/schemas/ModelProblem"
+          },
+          "propertyName": "status"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/Connected"
+          },
+          {
+            "$ref": "#/components/schemas/ModelProblem"
+          }
+        ]
+      },
+      "Connected": {
+        "additionalProperties": false,
+        "properties": {
+          "base_url": {
+            "title": "Base Url",
+            "type": "string"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/FoundModel"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "status": {
+            "const": "connected",
+            "default": "connected",
+            "title": "Status",
+            "type": "string"
+          },
+          "style": {
+            "$ref": "#/components/schemas/ModelStyle"
+          }
+        },
+        "required": [
+          "style",
+          "base_url",
+          "models"
+        ],
+        "title": "Connected",
         "type": "object"
       },
       "CreateUseCase": {
@@ -1714,6 +1853,30 @@
         ],
         "type": "string"
       },
+      "FoundModel": {
+        "additionalProperties": false,
+        "properties": {
+          "display": {
+            "title": "Display",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "suggested": {
+            "title": "Suggested",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "display",
+          "suggested"
+        ],
+        "title": "FoundModel",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1738,6 +1901,38 @@
           }
         },
         "title": "Health",
+        "type": "object"
+      },
+      "KnownProviderId": {
+        "enum": [
+          "aisg",
+          "openai",
+          "anthropic",
+          "gemini"
+        ],
+        "type": "string"
+      },
+      "KnownProviderOut": {
+        "additionalProperties": false,
+        "properties": {
+          "base_url": {
+            "title": "Base Url",
+            "type": "string"
+          },
+          "id": {
+            "$ref": "#/components/schemas/KnownProviderId"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "base_url"
+        ],
+        "title": "KnownProviderOut",
         "type": "object"
       },
       "Leg": {
@@ -1899,6 +2094,187 @@
         "title": "MockJiraTickets",
         "type": "object"
       },
+      "ModelChangeOut": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "by": {
+            "title": "By",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "by",
+          "summary"
+        ],
+        "title": "ModelChangeOut",
+        "type": "object"
+      },
+      "ModelOut": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "base_url": {
+            "title": "Base Url",
+            "type": "string"
+          },
+          "by": {
+            "title": "By",
+            "type": "string"
+          },
+          "by_name": {
+            "title": "By Name",
+            "type": "string"
+          },
+          "key_hint": {
+            "description": "The key's last two characters.",
+            "title": "Key Hint",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "provider": {
+            "description": "The known provider's name, or the address's host.",
+            "title": "Provider",
+            "type": "string"
+          },
+          "style": {
+            "$ref": "#/components/schemas/ModelStyle"
+          },
+          "test_seconds": {
+            "title": "Test Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "provider",
+          "style",
+          "base_url",
+          "model",
+          "key_hint",
+          "test_seconds",
+          "by",
+          "by_name",
+          "at"
+        ],
+        "title": "ModelOut",
+        "type": "object"
+      },
+      "ModelProblem": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/ProblemReason"
+          },
+          "status": {
+            "const": "problem",
+            "default": "problem",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "message"
+        ],
+        "title": "ModelProblem",
+        "type": "object"
+      },
+      "ModelSettingsView": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ModelChangeOut"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "pending": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PendingModelOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/KnownProviderOut"
+            },
+            "title": "Providers",
+            "type": "array"
+          },
+          "unavailable_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Message"
+          },
+          "you_can_change": {
+            "title": "You Can Change",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "available",
+          "unavailable_message",
+          "you_can_change",
+          "active",
+          "pending",
+          "providers",
+          "changes"
+        ],
+        "title": "ModelSettingsView",
+        "type": "object"
+      },
+      "ModelStyle": {
+        "enum": [
+          "anthropic",
+          "openai"
+        ],
+        "type": "string"
+      },
       "ParamSpec": {
         "additionalProperties": false,
         "properties": {
@@ -1921,6 +2297,79 @@
           "example"
         ],
         "title": "ParamSpec",
+        "type": "object"
+      },
+      "PendingModelOut": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "base_url": {
+            "title": "Base Url",
+            "type": "string"
+          },
+          "by": {
+            "title": "By",
+            "type": "string"
+          },
+          "by_name": {
+            "title": "By Name",
+            "type": "string"
+          },
+          "key_hint": {
+            "description": "The key's last two characters.",
+            "title": "Key Hint",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "provider": {
+            "description": "The known provider's name, or the address's host.",
+            "title": "Provider",
+            "type": "string"
+          },
+          "style": {
+            "$ref": "#/components/schemas/ModelStyle"
+          },
+          "test_seconds": {
+            "title": "Test Seconds",
+            "type": "number"
+          },
+          "why_not": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Why Not"
+          },
+          "you_can_decide": {
+            "title": "You Can Decide",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "provider",
+          "style",
+          "base_url",
+          "model",
+          "key_hint",
+          "test_seconds",
+          "by",
+          "by_name",
+          "at",
+          "you_can_decide",
+          "why_not"
+        ],
+        "title": "PendingModelOut",
         "type": "object"
       },
       "PendingView": {
@@ -1984,6 +2433,20 @@
         ],
         "title": "PendingView",
         "type": "object"
+      },
+      "ProblemReason": {
+        "enum": [
+          "address_not_allowed",
+          "unreachable",
+          "key_refused",
+          "not_a_model_api",
+          "no_text_models",
+          "model_not_found",
+          "too_slow",
+          "unusable_answer",
+          "failed"
+        ],
+        "type": "string"
       },
       "ProposalView": {
         "additionalProperties": false,
@@ -2710,6 +3173,96 @@
             "$ref": "#/components/schemas/FailedView"
           }
         ]
+      },
+      "SaveIn": {
+        "additionalProperties": false,
+        "properties": {
+          "api_key": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sent once and stored sealed. It is never sent back, only its last two characters.",
+            "title": "Api Key"
+          },
+          "base_url": {
+            "maxLength": 2048,
+            "title": "Base Url",
+            "type": "string"
+          },
+          "model": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
+          },
+          "style": {
+            "$ref": "#/components/schemas/ModelStyle"
+          },
+          "use_saved_key": {
+            "default": false,
+            "title": "Use Saved Key",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "style",
+          "base_url",
+          "model"
+        ],
+        "title": "SaveIn",
+        "type": "object"
+      },
+      "SaveOut": {
+        "discriminator": {
+          "mapping": {
+            "awaiting_confirmation": "#/components/schemas/AwaitingConfirmationOut",
+            "problem": "#/components/schemas/ModelProblem",
+            "saved": "#/components/schemas/SavedOut"
+          },
+          "propertyName": "status"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/SavedOut"
+          },
+          {
+            "$ref": "#/components/schemas/AwaitingConfirmationOut"
+          },
+          {
+            "$ref": "#/components/schemas/ModelProblem"
+          }
+        ]
+      },
+      "SavedOut": {
+        "additionalProperties": false,
+        "properties": {
+          "seconds": {
+            "title": "Seconds",
+            "type": "number"
+          },
+          "status": {
+            "const": "saved",
+            "default": "saved",
+            "title": "Status",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "seconds",
+          "text"
+        ],
+        "title": "SavedOut",
+        "type": "object"
       },
       "StepFinished": {
         "additionalProperties": false,
@@ -4530,6 +5083,390 @@
         "summary": "Troubleshoot",
         "tags": [
           "monitoring"
+        ]
+      }
+    },
+    "/api/v1/settings/model": {
+      "delete": {
+        "operationId": "turn_model_off_api_v1_settings_model_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Settings are off until SETTINGS_ENCRYPTION_KEY is set"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Turn Model Off",
+        "tags": [
+          "settings"
+        ]
+      },
+      "get": {
+        "operationId": "get_model_settings_api_v1_settings_model_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelSettingsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Get Model Settings",
+        "tags": [
+          "settings"
+        ]
+      },
+      "put": {
+        "operationId": "save_model_api_v1_settings_model_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The saved key belongs to another address, or no longer opens"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The agent runtime did not answer, so nothing was checked"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Settings are off until SETTINGS_ENCRYPTION_KEY is set"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Save Model",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/v1/settings/model/address-decision": {
+      "post": {
+        "operationId": "decide_address_api_v1_settings_model_address_decision_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddressDecisionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelSettingsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not an Approver, or the person who entered the address"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No address is waiting for confirmation"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Settings are off until SETTINGS_ENCRYPTION_KEY is set"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Decide Address",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/v1/settings/model/connect": {
+      "post": {
+        "operationId": "connect_model_api_v1_settings_model_connect_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The saved key belongs to another address, or no longer opens"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The agent runtime did not answer, so nothing was checked"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Settings are off until SETTINGS_ENCRYPTION_KEY is set"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Connect Model",
+        "tags": [
+          "settings"
         ]
       }
     },

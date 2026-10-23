@@ -199,5 +199,37 @@ class HttpAgentRuntime:
         except ValueError as error:
             return AgentRejected(f"The agent runtime's reply did not parse: {error}")
 
+    async def connect_model(
+        self, request: ConnectRequest
+    ) -> ConnectResult | AgentUnavailable | AgentRejected:
+        return await self._model_call("/v1/models/connect", request, connect_result_adapter)
+
+    async def test_model(
+        self, access: ModelAccess
+    ) -> ModelTestResult | AgentUnavailable | AgentRejected:
+        return await self._model_call("/v1/models/test", access, model_test_result_adapter)
+
+    async def _model_call[T](
+        self, path: str, body: WireModel, adapter: TypeAdapter[T]
+    ) -> T | AgentUnavailable | AgentRejected:
+        # The body holds a model key, and an error answer can echo the body, so no text is kept.
+        try:
+            response = await self._client.post(
+                f"{self._base_url}{path}",
+                json=body.model_dump(mode="json"),
+                headers={AGENT_KEY_HEADER: self._api_key},
+                timeout=AGENT_TIMEOUT_SECONDS,
+            )
+        except httpx.HTTPError as error:
+            return AgentUnavailable(f"The agent runtime did not answer: {type(error).__name__}")
+        if response.status_code >= 500:
+            return AgentUnavailable(f"The agent runtime answered {response.status_code}")
+        if response.status_code >= 400:
+            return AgentRejected(f"The agent runtime refused the request ({response.status_code})")
+        try:
+            return adapter.validate_json(response.content)
+        except ValueError:
+            return AgentRejected("The agent runtime's answer did not parse")
+
     async def close(self) -> None:
         await self._client.aclose()

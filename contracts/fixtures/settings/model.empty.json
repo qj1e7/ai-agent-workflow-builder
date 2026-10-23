@@ -1,0 +1,30 @@
+{
+  "available": true,
+  "unavailable_message": null,
+  "you_can_change": true,
+  "active": null,
+  "pending": null,
+  "providers": [
+    {
+      "id": "aisg",
+      "name": "AI Singapore gateway",
+      "base_url": "https://llm-gateway.aisg.sg"
+    },
+    {
+      "id": "openai",
+      "name": "OpenAI",
+      "base_url": "https://api.openai.com/v1"
+    },
+    {
+      "id": "anthropic",
+      "name": "Anthropic",
+      "base_url": "https://api.anthropic.com"
+    },
+    {
+      "id": "gemini",
+      "name": "Google Gemini",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai"
+    }
+  ],
+  "changes": []
+}

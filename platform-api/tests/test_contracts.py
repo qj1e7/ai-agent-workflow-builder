@@ -30,6 +30,7 @@ from platform_api.orchestration.http import (
     run_view_adapter,
 )
 from platform_api.orchestration.runs import FailureReason, Leg, Stage, StepName
+from platform_api.orchestration.settings_http import ModelSettingsView, SaveOut
 from platform_api.orchestration.write_actions import DenyReason
 from platform_api.wire import FailureReason as WireFailureReason
 from platform_api.wire import FailureStage
@@ -74,6 +75,15 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "agent/model-test-request.json": TypeAdapter(ModelAccess),
     "agent/model-test-passed.json": model_test_result_adapter,
     "agent/model-problem.json": model_test_result_adapter,
+    "settings/model.empty.json": TypeAdapter(ModelSettingsView),
+    "settings/model.active.json": TypeAdapter(ModelSettingsView),
+    "settings/model.pending.alice.json": TypeAdapter(ModelSettingsView),
+    "settings/model.pending.bob.json": TypeAdapter(ModelSettingsView),
+    "settings/connect.connected.json": connect_result_adapter,
+    "settings/connect.problem.json": connect_result_adapter,
+    "settings/save.saved.json": TypeAdapter(SaveOut),
+    "settings/save.awaiting_confirmation.json": TypeAdapter(SaveOut),
+    "settings/save.too_slow.json": TypeAdapter(SaveOut),
 }
 
 

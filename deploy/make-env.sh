@@ -40,6 +40,7 @@ N8N_OWNER_PASSWORD=Aa1$(secret | head -c 20)
 STEP_KEY=$(secret)
 AGENT_API_KEY=$(secret)
 CALLBACK_SIGNING_KEY=$(secret)
+SETTINGS_ENCRYPTION_KEY=$(secret)
 GITHUB_TOKEN=
 GITHUB_API_BASE=https://api.github.com
 AGENT_SUMMARY_MODEL=
