@@ -1,3 +1,4 @@
+import base64
 import json
 import math
 import os
@@ -9,7 +10,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import unquote
 
 from langchain_core.language_models import BaseChatModel
 from pydantic import BaseModel, Field
@@ -28,6 +29,33 @@ URL_ENVS = ("AZURE_OPENAI_ENDPOINT", "OLLAMA_BASE_URL")
 SECRET_ENVS = ("AZURE_OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY", *URL_ENVS)
 _KEY_SHAPES = re.compile(r"\b(?:sk-[\w*-]{8,}|AIza[\w-]{8,})")
 WARM_UP = "Reply with the word ready."
+# A piece of a URL shorter than this is not redacted on its own. Short pieces such as "db", "a"
+# or "host" are ordinary words in error text, so removing them would wreck the message. They are
+# still removed inside the longer forms: the whole URL, the host and the base64 credentials.
+MIN_FRAGMENT = 6
+# Pydantic quotes the settings a model was built with, cut short, so a cut URL would not match.
+_PYDANTIC_INPUT = re.compile(r"input_value=(?:(?!, input_type=).)*")
+
+
+def _b64(text: str) -> set[str]:
+    encoded = base64.b64encode(text.encode()).decode()
+    return {encoded, encoded.rstrip("=")}
+
+
+def _url_fragments(url: str) -> set[str]:
+    rest = url.split("://", 1)[-1]
+    netloc = re.split(r"[/?#]", rest, maxsplit=1)[0]
+    userinfo, _, hostport = netloc.rpartition("@")
+    host = hostport[1:].partition("]")[0] if hostport.startswith("[") else hostport
+    host = re.sub(r":\d+$", "", host)
+    found = {netloc, host, host.split(".")[0]}  # The first label is the Azure resource name.
+    if userinfo:
+        user, _, password = userinfo.partition(":")
+        plain_user, plain_password = unquote(user), unquote(password)
+        found |= {user, password, plain_user, plain_password}
+        # Basic auth sends base64 of "user:password" in a header.
+        found |= _b64(f"{plain_user}:{plain_password}") | _b64(f"{user}:{password}")
+    return {piece for piece in found if len(piece) >= MIN_FRAGMENT}
 
 
 def _secret_values(env: Env) -> list[str]:
@@ -36,22 +64,25 @@ def _secret_values(env: Env) -> list[str]:
         value = env.get(name, "").strip()
         if not value:
             continue
+        # The whole value is always redacted, however short. Only pieces of it have a minimum.
         values |= {value, value.rstrip("/")}
         if name in URL_ENVS:
-            try:
-                parts = urlsplit(value)
-                values |= {parts.netloc, parts.hostname or "", parts.password or ""}
-            except ValueError:
-                pass  # Not a well-formed URL. The whole value is still redacted.
+            values |= _url_fragments(value)
     # Longest first, so a whole URL is replaced before the host name inside it.
     return sorted(values - {""}, key=len, reverse=True)
 
 
 def redact(text: str, env: Env) -> str:
+    text = _PYDANTIC_INPUT.sub("input_value=[hidden]", text)
     text = _KEY_SHAPES.sub("[redacted]", text)
     for secret in _secret_values(env):
         text = text.replace(secret, "[redacted]")
     return text
+
+
+def _failure(error: Exception, env: Env) -> str:
+    # Redact before cutting, so a secret is never cut in half and left partly visible.
+    return redact(f"{type(error).__name__}: {error}", env)[:500]
 
 
 @dataclass(frozen=True)
@@ -79,8 +110,7 @@ def run_case(model: BaseChatModel, job: Job[Any], case: Case, env: Env) -> Outco
     try:
         answer = job.ask(model, case)
     except Exception as error:
-        detail = redact(f"{type(error).__name__}: {error}", env)[:500]
-        return Outcome(case.id, [Check("answered", False, detail)], None, 0, 0, "")
+        return Outcome(case.id, [Check("answered", False, _failure(error, env))], None, 0, 0, "")
     latency = (time.perf_counter() - started) * 1000
     tokens_in, tokens_out = _usage(answer)
     return Outcome(case.id, job.score(case, answer), latency, tokens_in, tokens_out, answer.text)
@@ -116,6 +146,16 @@ def judge_target(env: Env) -> Target | None:
         if provider.name == provider_name and all(env.get(n) for n in provider.needs):
             return Target(provider.name, model, provider.settings(env, model))
     return None
+
+
+def build_judge(env: Env) -> tuple[BaseChatModel | None, Target | None, NotRun | None]:
+    spec = env.get("EVAL_JUDGE", "")
+    try:
+        target = judge_target(env)
+        return (target.build() if target else None), target, None
+    except Exception as error:
+        provider, _, model = spec.partition(":")
+        return None, None, NotRun(provider, model or None, f"judge: {_failure(error, env)}")
 
 
 def percentile(values: Sequence[float], share: float) -> float | None:
@@ -185,13 +225,14 @@ def summarise_job(
 def run_target(
     target: Target, env: Env, judge_model: BaseChatModel | None, pricing: Mapping[str, Any]
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    model = target.build()
-    started = time.perf_counter()
     try:
+        # Building can fail on a malformed setting, and the error can quote it.
+        model = target.build()
+        started = time.perf_counter()
         model.invoke(WARM_UP)
+        warm_up_ms = round((time.perf_counter() - started) * 1000)
     except Exception as error:
-        return {"error": redact(f"{type(error).__name__}: {error}", env)[:500]}, []
-    warm_up_ms = round((time.perf_counter() - started) * 1000)
+        return {"error": _failure(error, env)}, []
     rows: list[dict[str, Any]] = []
     for job in JOBS:
         outcomes: list[Outcome] = []
@@ -244,8 +285,9 @@ def main(out: Path, env: Env | None = None) -> int:
     targets, planned_skips = plan(env)
     # Every reason is redacted before it is kept, because results.json is uploaded from CI.
     not_run = [_redacted(n, env) for n in planned_skips]
-    judge_spec = judge_target(env)
-    judge_model = judge_spec.build() if judge_spec else None
+    judge_model, judge_spec, judge_skip = build_judge(env)
+    if judge_skip is not None:
+        not_run.append(judge_skip)
     results: list[dict[str, Any]] = []
     models: list[dict[str, Any]] = []
     for target in targets:

@@ -108,33 +108,42 @@ def _ollama_models(base_url: str) -> set[str] | str:
     try:
         reply = httpx.get(f"{base_url.rstrip('/')}/api/tags", timeout=5)
         reply.raise_for_status()
-    except httpx.HTTPError as error:
+        return {m["name"] for m in reply.json().get("models", [])}
+    except Exception as error:  # A malformed address raises InvalidURL, not an HTTPError.
         # The address can hold a password or a private host name, so it stays out of the reason.
         return f"cannot reach Ollama ({type(error).__name__})"
-    return {m["name"] for m in reply.json().get("models", [])}
 
 
 def plan(env: Env) -> tuple[list[Target], list[NotRun]]:
     targets: list[Target] = []
     not_run: list[NotRun] = []
     for provider in PROVIDERS:
-        missing = [name for name in provider.needs if not env.get(name)]
-        if missing:
-            not_run.append(NotRun(provider.name, None, f"not set: {', '.join(missing)}"))
-            continue
-        listed = env.get(provider.models_env, "")
-        models = [m.strip() for m in listed.split(",") if m.strip()] or list(
-            provider.default_models
-        )
-        if not models:
-            not_run.append(NotRun(provider.name, None, f"not set: {provider.models_env}"))
-            continue
-        installed = _ollama_models(env["OLLAMA_BASE_URL"]) if provider.name == "ollama" else None
-        for model in models:
-            if isinstance(installed, str):
-                not_run.append(NotRun(provider.name, model, installed))
-            elif installed is not None and model not in installed:
-                not_run.append(NotRun(provider.name, model, "model not installed, not pulled"))
-            else:
-                targets.append(Target(provider.name, model, provider.settings(env, model)))
+        try:
+            planned, skipped = _plan_provider(provider, env)
+        except Exception as error:
+            # The caller redacts every reason before it keeps it.
+            planned, skipped = [], [NotRun(provider.name, None, f"{type(error).__name__}: {error}")]
+        targets += planned
+        not_run += skipped
+    return targets, not_run
+
+
+def _plan_provider(provider: Provider, env: Env) -> tuple[list[Target], list[NotRun]]:
+    missing = [name for name in provider.needs if not env.get(name)]
+    if missing:
+        return [], [NotRun(provider.name, None, f"not set: {', '.join(missing)}")]
+    listed = env.get(provider.models_env, "")
+    models = [m.strip() for m in listed.split(",") if m.strip()] or list(provider.default_models)
+    if not models:
+        return [], [NotRun(provider.name, None, f"not set: {provider.models_env}")]
+    installed = _ollama_models(env["OLLAMA_BASE_URL"]) if provider.name == "ollama" else None
+    targets: list[Target] = []
+    not_run: list[NotRun] = []
+    for model in models:
+        if isinstance(installed, str):
+            not_run.append(NotRun(provider.name, model, installed))
+        elif installed is not None and model not in installed:
+            not_run.append(NotRun(provider.name, model, "model not installed, not pulled"))
+        else:
+            targets.append(Target(provider.name, model, provider.settings(env, model)))
     return targets, not_run
