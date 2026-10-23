@@ -93,13 +93,14 @@ One person does this at the start of each sprint.
 
 ## Run the checks locally
 
-CI runs the same commands. You need [uv](https://docs.astral.sh/uv/) and Docker. Run the first block in each project folder, `platform-api` and `agent-runtime`.
+CI runs the same commands. You need [uv](https://docs.astral.sh/uv/), Node.js (pyright runs on it) and Docker. Run the first block in each project folder, `platform-api` and `agent-runtime`.
 
 ```sh
 cd platform-api
 uv sync --locked
 uv run ruff check .
 uv run ruff format --check .
+uv run pyright
 uv run lint-imports   # platform-api only
 uv run pytest
 ```
