@@ -6,3 +6,4 @@ package-lock.json
 node_modules/
 n8n-data/
 .venv/
+.terraform/
