@@ -4,7 +4,7 @@ Terraform keeps its state in an Azure storage account, and GitHub Actions needs 
 
 ## Before you start
 
-- Steps 1 to 3 of [the main README's one-time steps](../README.md#one-time-human-steps-before-the-first-deploy) are done: the repository is public, a teammate besides you can review, and the `azure-dev` environment exists with its rules. This script makes Azure trust that environment, so its rules must exist first.
+- Steps 1 to 4 of [the main README's one-time steps](../README.md#one-time-human-steps-before-the-first-deploy) are done: the owner account is on GitHub Pro, the teammates are collaborators, `main` is protected, and the `azure-dev` environment exists, limited to `main`. This script makes Azure trust that environment, so it must exist first.
 - You have the Azure CLI and are signed in with `az login`.
 - Your account is an Owner of the Azure for Students subscription. The script creates role assignments, which Contributor cannot do.
 - You picked a storage account name. It must be 3 to 24 lowercase letters and digits, and unique across Azure, for example `stwabtfstate` plus your initials.
@@ -26,18 +26,22 @@ The script does five things, and each is safe to run again:
    - Contributor on `rg-wab-dev`, to create the environment's resources.
    - Role Based Access Control Administrator on `rg-wab-dev`, with a condition. It may only assign or remove AcrPull, AcrPush, Key Vault Secrets User and Key Vault Secrets Officer, which are the only roles the Terraform code assigns. And it may only give them to service principals, such as our managed identities, never to a person or a group. The condition follows Microsoft's ["Constrain ACR management" example](https://learn.microsoft.com/en-us/azure/role-based-access-control/delegate-role-assignments-examples#example-constrain-acr-management).
 
-At the end the script prints five values. Put the three Azure IDs on the `azure-dev` GitHub environment as secrets, and the two state values as variables, as step 6 of [the main README](../README.md#one-time-human-steps-before-the-first-deploy) describes.
+At the end the script prints five values. Put the three Azure IDs on the `azure-dev` GitHub environment as secrets, and the two state values as variables, as step 7 of [the main README](../README.md#one-time-human-steps-before-the-first-deploy) describes.
 
 ## Who can act as the deploy identity
 
-The federated credential trusts any workflow job that names the `azure-dev` environment, whatever branch it runs on. So the environment's rules are the gate: required reviewers, "Prevent self-review", and deployment branches limited to `main`. A reviewer then approves each run before the job gets any Azure credentials, the person who started the run cannot approve it, and only `main` can run it.
+The federated credential trusts any workflow job that names the `azure-dev` environment, whatever branch it runs on. The environment's rules decide which jobs those are. While the repository is private on GitHub Pro, the gate is:
 
-That holds once the repository is public and the environment has those rules, which steps 1 to 3 of [the main README](../README.md#one-time-human-steps-before-the-first-deploy) set up. Two things break it, so avoid both:
+- Only `main` can deploy, because `azure-dev` only accepts `main`. And `main` only takes pull requests that someone other than the author approved, so only reviewed code can deploy.
+- A person starts each deploy by hand. Anyone with write access can start one.
+- No second person approves each run. Required reviewers on an environment need a public repository or GitHub Enterprise. Instead, the deploy stops before any apply that would destroy or replace a resource, unless the person who starts it ticks `allow_destroy`.
 
-- A private repository on GitHub Free. Required reviewers on a private repository need GitHub Enterprise.
-- A missing environment. A workflow that names one that does not exist creates it, with no rules.
+Two things break the gate, so avoid both:
 
-Do not loosen the rules later.
+- A missing environment. A workflow that names one that does not exist creates it, with no rules. That is why `azure-dev` must exist before this script runs.
+- Looser rules. Do not add other branches to `azure-dev`, and do not let anyone bypass the protection on `main`.
+
+If the repository is made public later, add required reviewers and "Prevent self-review" to `azure-dev`.
 
 ## Why the state needs this care
 
