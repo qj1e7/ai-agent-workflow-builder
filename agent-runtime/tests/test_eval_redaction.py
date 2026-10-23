@@ -34,6 +34,10 @@ FORMS = {
     "Azure host": "bakeoff-res-9.openai.azure.com",
     "Azure resource name": "bakeoff-res-9",
     "Azure key": "azure-key-value-9",
+    "decoded host and port with the user": (
+        "bake@off-user:pass/word-9@ollama-box-9.private.example:11434"
+    ),
+    "decoded whole URL": "http://bake@off-user:pass/word-9@ollama-box-9.private.example:11434",
 }
 
 
@@ -42,11 +46,27 @@ def test_redact_removes_every_form_of_a_secret(form: str) -> None:
     assert form not in redact(f"failed near {form} after 3 tries", SECRETS)
 
 
-def test_redact_keeps_short_fragments_so_the_message_stays_readable() -> None:
-    env = {"OLLAMA_BASE_URL": "http://a:pw@db:11434"}
-    message = "a request to the database failed"
+def test_redact_keeps_short_names_so_the_message_stays_readable() -> None:
+    env = {"OLLAMA_BASE_URL": "http://a:k3y9@db:11434"}
+    message = "a request to the db failed"
     assert redact(message, env) == message
-    assert len("pw") < MIN_FRAGMENT
+    assert len("db") < MIN_FRAGMENT
+
+
+@pytest.mark.parametrize(
+    ("url", "password"),
+    [
+        ("http://bakeoff-user:k3y9@ollama-box-9.private.example:11434", "k3y9"),
+        ("http://bakeoff-user:p%40s9@ollama-box-9.private.example:11434", "p@s9"),
+    ],
+    ids=["short password", "short decoded password"],
+)
+def test_redact_removes_a_password_however_short(url: str, password: str) -> None:
+    assert len(password) < MIN_FRAGMENT
+    cleaned = redact(
+        f"login refused for password {password} at the server", {"OLLAMA_BASE_URL": url}
+    )
+    assert password not in cleaned
 
 
 def test_redact_removes_a_whole_secret_however_short() -> None:

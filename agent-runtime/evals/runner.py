@@ -29,9 +29,10 @@ URL_ENVS = ("AZURE_OPENAI_ENDPOINT", "OLLAMA_BASE_URL")
 SECRET_ENVS = ("AZURE_OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY", *URL_ENVS)
 _KEY_SHAPES = re.compile(r"\b(?:sk-[\w*-]{8,}|AIza[\w-]{8,})")
 WARM_UP = "Reply with the word ready."
-# A piece of a URL shorter than this is not redacted on its own. Short pieces such as "db", "a"
-# or "host" are ordinary words in error text, so removing them would wreck the message. They are
-# still removed inside the longer forms: the whole URL, the host and the base64 credentials.
+# A host name, host label or user name shorter than this is not redacted on its own. Short ones
+# such as "db", "a" or "host" are ordinary words in error text, so removing them would wreck the
+# message. They are still removed inside the longer forms, such as the whole URL. A password is
+# always redacted, however short: hiding a few stray letters is better than showing a credential.
 MIN_FRAGMENT = 6
 # Pydantic quotes the settings a model was built with, cut short, so a cut URL would not match.
 _PYDANTIC_INPUT = re.compile(r"input_value=(?:(?!, input_type=).)*")
@@ -48,14 +49,19 @@ def _url_fragments(url: str) -> set[str]:
     userinfo, _, hostport = netloc.rpartition("@")
     host = hostport[1:].partition("]")[0] if hostport.startswith("[") else hostport
     host = re.sub(r":\d+$", "", host)
-    found = {netloc, host, host.split(".")[0]}  # The first label is the Azure resource name.
+    # Not secret on their own, so only long enough ones are redacted. The first label of the host
+    # is the Azure resource name.
+    names = {host, host.split(".")[0]}
+    # Secret, or holding a secret, so always redacted.
+    secrets = {netloc, unquote(netloc), unquote(url)}
     if userinfo:
         user, _, password = userinfo.partition(":")
         plain_user, plain_password = unquote(user), unquote(password)
-        found |= {user, password, plain_user, plain_password}
+        names |= {user, plain_user}
+        secrets |= {password, plain_password}
         # Basic auth sends base64 of "user:password" in a header.
-        found |= _b64(f"{plain_user}:{plain_password}") | _b64(f"{user}:{password}")
-    return {piece for piece in found if len(piece) >= MIN_FRAGMENT}
+        secrets |= _b64(f"{plain_user}:{plain_password}") | _b64(f"{user}:{password}")
+    return {name for name in names if len(name) >= MIN_FRAGMENT} | secrets
 
 
 def _secret_values(env: Env) -> list[str]:
