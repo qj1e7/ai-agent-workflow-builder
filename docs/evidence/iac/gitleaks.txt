@@ -1,0 +1,12 @@
+Gitleaks 8.21.2, the image CI pins. --redact on.
+
+== CI's command: detect --no-git over the tracked and new files of the working tree
+3:56AM INF scan completed in 172ms
+3:56AM INF no leaks found
+exit 0
+
+== detect on the git history of this round's commits, e43ff08..af669c8
+3:56AM INF 4 commits scanned.
+3:56AM INF scan completed in 27.5ms
+3:56AM INF no leaks found
+exit 0

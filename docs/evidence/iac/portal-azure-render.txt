@@ -1,11 +1,12 @@
-Portal nginx rendered with the settings Terraform gives it on Azure. Image nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10.
-API_UPSTREAM=https://platform-api.calmriver-1a2b3c4d.southeastasia.azurecontainerapps.io (the shape Terraform builds from the environment's default domain).
+The Portal's nginx, rendered with the settings Terraform gives it on Azure. Image nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10.
+API_UPSTREAM=https://platform-api.calmriver-1a2b3c4d.southeastasia.azurecontainerapps.io, the shape Terraform builds from the environment's default domain.
+The first case is an earlier draft of this pull request's Terraform, before review. The sign-in pull request (#18) has no Terraform.
 
-== Before this branch's fix: OIDC_AUTHORITY and OIDC_CLIENT_ID, no OIDC_SCOPE
+== Earlier draft of this pull request: OIDC_AUTHORITY and OIDC_CLIENT_ID, no OIDC_SCOPE
 portal: OIDC_SCOPE is not set
 exit 1
 
-== After: OIDC_AUTHORITY from oidc_issuer, OIDC_CLIENT_ID from oidc_client_id, OIDC_SCOPE from oidc_scope
+== Now: OIDC_AUTHORITY from oidc_issuer, OIDC_CLIENT_ID from oidc_client_id, OIDC_SCOPE from oidc_scope
 nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
 nginx: configuration file /etc/nginx/nginx.conf test is successful
   add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://login.microsoftonline.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;

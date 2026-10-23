@@ -1,8 +1,0 @@
-Sign-in variable validations in infra/envs/dev/variables.tf, checked with terraform plan on a module that holds only that file. Terraform 1.16.5.
-accepted  good values, jwks unset
-accepted  jwks https
-refused   jwks http: oidc_jwks_url must be empty or an https URL. 
-refused   scope without openid: oidc_scope must include openid. The Portal refuses to start without it. 
-refused   scope openidx: oidc_scope must include openid. The Portal refuses to start without it. 
-refused   audience api:// URI: oidc_audience is platform-api's Application (client) ID, not its api:// Application ID URI. Entra puts the client ID in the tokens' aud claim. 
-refused   issuer http: oidc_issuer must be an https URL. 

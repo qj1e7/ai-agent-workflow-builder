@@ -56,7 +56,7 @@ infra/
 - No secret value is in any `.tf` file or tfvars file in git. Terraform generates every secret with `random_password` and writes it to Key Vault.
 - The apps never hold a secret value in their own settings. Each Container App setting points at a Key Vault secret's URL, and Azure reads it with the app's own managed identity. Our code reads plain environment variables and never calls a Key Vault SDK, the same as in Compose.
 - **The generated secrets are also in the Terraform state file, in plain text.** That is how Terraform remembers a value so the next run keeps it. The state lives in Azure Storage with access keys turned off, so only identities with a blob data role can read it. [bootstrap/README.md](bootstrap/README.md) explains who that is. We kept stored random values over Terraform's newer write-only arguments, because a write-only value is new on every run, and a run that fails halfway would leave the database and Key Vault with different passwords.
-- `GITHUB_TOKEN` for the release checker is not set. The checker works without it at GitHub's lower anonymous rate limit.
+- The release checker in agent-runtime calls GitHub's API. Without a token, GitHub allows only 60 requests an hour per IP address. On the Consumption plan our outbound address can be shared with other Azure customers, so a demo could run out. A token raises the limit to 5,000 an hour. To use one, set the GitHub Actions secret `GH_RELEASE_TOKEN`. The deploy passes it to Terraform as `github_token`, Terraform stores it in Key Vault, and agent-runtime reads it as `GITHUB_TOKEN`. Leave the secret unset, and agent-runtime calls GitHub without a token. Where the token comes from is still open (placeholder: the team lead decides who owns it). A fine-grained personal access token with no extra permissions can read public repositories' releases.
 
 ### How each setting maps from Compose
 
@@ -67,6 +67,7 @@ infra/
 | `OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_JWKS_URL` | not set | from variables. `OIDC_JWKS_URL` only when it is not empty |
 | `DATABASE_URL_*` | built from `.env` | Key Vault secrets, each a full URL with `sslmode=require` |
 | `AGENT_API_KEY`, `STEP_KEY`, `CALLBACK_SIGNING_KEY` | `.env` | Key Vault secrets |
+| `GITHUB_TOKEN` | `.env`, empty by default | a Key Vault secret from `GH_RELEASE_TOKEN`, only when that secret is set |
 | `AGENT_RUNTIME_URL`, `N8N_BASE_URL`, `PLATFORM_INTERNAL_URL` | `http://<service>:<port>` | `https://<app>.internal.<domain>` or `https://<app>.<domain>` |
 | `CALLBACK_ALLOWED_ORIGINS` | `http://platform-api:8000` | platform-api's HTTPS origin |
 | n8n database settings | `postgres` host, password from `.env` | the server's host name, TLS on, password from Key Vault |
@@ -134,6 +135,8 @@ Do these in order. Each one changes cloud resources or repository settings, so a
    | `N8N_OWNER_EMAIL` | the email for the n8n owner account |
 
    With the GitHub CLI, each is one command, for example `gh variable set OIDC_ISSUER --env azure-dev --body "https://login.microsoftonline.com/<tenant-id>/v2.0"`.
+
+   Optionally, add the secret `GH_RELEASE_TOKEN` for the release checker, as [Secrets](#secrets) describes.
 5. **Run the deploy.** In the Actions tab, run the `deploy` workflow on `main`. A reviewer from step 2 approves it, and then it:
    1. creates the registry if it is missing,
    2. copies n8n and PostgreSQL into the registry by digest, then builds and pushes our three images, tagged with the commit SHA,
@@ -148,7 +151,8 @@ Do these in order. Each one changes cloud resources or repository settings, so a
 
 These were not testable offline, so they are guesses until a real deploy confirms them:
 
-- Azure RBAC can take a few minutes to reach Key Vault. Each identity waits 90 seconds after its role assignments before its app is created. If an app still fails to read a secret, rerun the workflow.
+- Azure RBAC can take a few minutes to reach Key Vault and the registry. Microsoft says up to 10 minutes. Each app's identity waits 90 seconds after its role assignments before its app is created. The deploy identity waits 90 seconds after giving itself AcrPush and Key Vault Secrets Officer, before it pushes images or writes secrets. The workflow also tries `az acr login` and each `docker push` up to five times, 30 seconds apart. If an app still fails to read a secret, or Terraform cannot write one, rerun the workflow.
+- The workflow waits for each job twice as long as the job's own timeout: 600 seconds for `db-init` and 1200 for `bootstrap`. Pulling the image on a cold start counts against the wait, not the timeout. If a wait still runs out, check the job's execution in the Azure portal before you rerun.
 - `az acr import` should keep each image's digest, since the Terraform code pulls n8n and PostgreSQL by digest. If a pull fails with "manifest unknown", compare the digest in the registry with `public-images.json`.
 - The Azure admin role is not a superuser. `db-init` grants itself membership in `n8n` and `wab_owner` before it hands them their databases. A local PostgreSQL 17 run showed that the handover fails without that grant and works with it. On Azure it is still untested.
 - Container Apps ingress ends any request after 240 seconds. The live view's event stream reconnects on its own. Check that the live view keeps up after 4 minutes.
@@ -166,9 +170,10 @@ The script runs, each in a Docker image pinned by digest:
 
 1. `terraform fmt -check -recursive`
 2. `terraform init -backend=false`, then `terraform validate`, for each environment
-3. `tofu init -backend=false`, then `tofu validate`, on a copy without the lock file
-4. `tflint` with the `terraform` and `azurerm` rulesets (`.tflint.hcl`)
-5. Checkov's Terraform checks
+3. `scripts/check-variables.sh`, which plans each environment's `variables.tf` alone with good sign-in values and with each kind of value that platform-api or the Portal would refuse at startup
+4. `tofu init -backend=false`, then `tofu validate`, on a copy without the lock file
+5. `tflint` with the `terraform` and `azurerm` rulesets (`.tflint.hcl`)
+6. Checkov's Terraform checks
 
 CI runs the same script in the `infra` workflow, only when a pull request changes `infra/` or one of the two infrastructure workflows. It also runs `actionlint` on every workflow. Semgrep's `p/terraform` rules run in the main CI's SAST step.
 
