@@ -139,7 +139,7 @@ Each context reaches the outside world through ports that it owns. The adapters 
 | Shared kernel | `Authenticator` | `DevAuth`, which reads `X-Dev-User` | Entra ID |
 | Agent runtime | `RoomLead` | `FixedRoomLead`, which always brings in the Release checker | an LLM planner |
 | Agent runtime | `ReleaseSource` | `GitHubReleaseSource`, or a fake GitHub in tests | none needed |
-| Agent runtime | `Summarizer` | `TemplateSummarizer`, or `ModelSummarizer` when `AGENT_SUMMARY_MODEL` is set | the model the team picks |
+| Agent runtime | `Summarizer` | `TemplateSummarizer`, or `ModelSummarizer` when `AGENT_SUMMARY_MODEL` is set, through the gateway in `AGENT_MODEL_BASE_URL` when that is set (ADR 0021) | the model the team picks |
 
 The database holds the same boundaries as the code. Each role has grants on its own schema only. The one exception is that `wab_orchestration` may read and insert into `monitoring.run_events`, so a run's state change and its activity events commit in one transaction. n8n has its own database, `n8n`, and its own role, with no access to `platform`.
 

@@ -1,6 +1,6 @@
 import logging
 from collections.abc import Callable, Sequence
-from typing import Protocol
+from typing import Any, Protocol
 
 from langchain.chat_models import init_chat_model
 from langchain_core.language_models import BaseChatModel
@@ -40,8 +40,24 @@ class TemplateSummarizer:
         return template_summary(new_tags)
 
 
-def default_model_factory(name: str) -> BaseChatModel:
-    return init_chat_model(name, timeout=SUMMARY_TIMEOUT_SECONDS, max_retries=0)
+def model_factory(base_url: str | None = None, api_key: str | None = None) -> ModelFactory:
+    pairs = (("base_url", base_url), ("api_key", api_key))
+    gateway: dict[str, Any] = {key: value for key, value in pairs if value}
+
+    def build(name: str) -> BaseChatModel:
+        # Naming configurable_fields picks the overload that returns a plain chat model.
+        return init_chat_model(
+            name,
+            configurable_fields=None,
+            timeout=SUMMARY_TIMEOUT_SECONDS,
+            max_retries=0,
+            **gateway,
+        )
+
+    return build
+
+
+default_model_factory = model_factory()
 
 
 class ModelSummarizer:
