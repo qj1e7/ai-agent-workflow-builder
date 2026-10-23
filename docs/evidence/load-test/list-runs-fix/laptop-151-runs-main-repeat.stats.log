@@ -1,0 +1,70 @@
+09:53:30
+wab-load-agent-runtime-1 cpu=26.97% mem=84.01MiB / 7.65GiB
+wab-load-mock-github-1 cpu=1.62% mem=20.89MiB / 7.65GiB
+wab-load-n8n-1 cpu=179.50% mem=527.2MiB / 7.65GiB
+wab-load-platform-api-1 cpu=62.94% mem=69.02MiB / 7.65GiB
+wab-load-portal-1 cpu=0.63% mem=14.22MiB / 7.65GiB
+wab-load-postgres-1 cpu=29.68% mem=93.11MiB / 7.65GiB
+09:53:37
+wab-load-agent-runtime-1 cpu=0.07% mem=84.96MiB / 7.65GiB
+wab-load-mock-github-1 cpu=16.41% mem=20.72MiB / 7.65GiB
+wab-load-n8n-1 cpu=0.36% mem=582.3MiB / 7.65GiB
+wab-load-platform-api-1 cpu=47.30% mem=70.57MiB / 7.65GiB
+wab-load-portal-1 cpu=1.06% mem=16.39MiB / 7.65GiB
+wab-load-postgres-1 cpu=18.47% mem=95.12MiB / 7.65GiB
+09:53:44
+wab-load-agent-runtime-1 cpu=17.40% mem=86.87MiB / 7.65GiB
+wab-load-mock-github-1 cpu=0.01% mem=19.78MiB / 7.65GiB
+wab-load-n8n-1 cpu=15.32% mem=377.4MiB / 7.65GiB
+wab-load-platform-api-1 cpu=68.53% mem=70.86MiB / 7.65GiB
+wab-load-portal-1 cpu=1.26% mem=17.43MiB / 7.65GiB
+wab-load-postgres-1 cpu=18.19% mem=97.84MiB / 7.65GiB
+09:53:51
+wab-load-agent-runtime-1 cpu=16.38% mem=86.88MiB / 7.65GiB
+wab-load-mock-github-1 cpu=16.30% mem=21.23MiB / 7.65GiB
+wab-load-n8n-1 cpu=0.09% mem=376.5MiB / 7.65GiB
+wab-load-platform-api-1 cpu=66.03% mem=71.09MiB / 7.65GiB
+wab-load-portal-1 cpu=0.98% mem=17.54MiB / 7.65GiB
+wab-load-postgres-1 cpu=16.86% mem=97.96MiB / 7.65GiB
+09:53:58
+wab-load-agent-runtime-1 cpu=16.06% mem=87.18MiB / 7.65GiB
+wab-load-mock-github-1 cpu=0.00% mem=19.99MiB / 7.65GiB
+wab-load-n8n-1 cpu=0.18% mem=376.4MiB / 7.65GiB
+wab-load-platform-api-1 cpu=47.41% mem=71.04MiB / 7.65GiB
+wab-load-portal-1 cpu=1.06% mem=17.68MiB / 7.65GiB
+wab-load-postgres-1 cpu=15.45% mem=98.39MiB / 7.65GiB
+09:54:05
+wab-load-agent-runtime-1 cpu=0.07% mem=85.28MiB / 7.65GiB
+wab-load-mock-github-1 cpu=8.32% mem=31.8MiB / 7.65GiB
+wab-load-n8n-1 cpu=1.30% mem=377.5MiB / 7.65GiB
+wab-load-platform-api-1 cpu=48.55% mem=71.06MiB / 7.65GiB
+wab-load-portal-1 cpu=1.06% mem=17.15MiB / 7.65GiB
+wab-load-postgres-1 cpu=16.41% mem=98.98MiB / 7.65GiB
+09:54:12
+wab-load-agent-runtime-1 cpu=0.06% mem=85.36MiB / 7.65GiB
+wab-load-mock-github-1 cpu=16.58% mem=21.87MiB / 7.65GiB
+wab-load-n8n-1 cpu=0.07% mem=375.7MiB / 7.65GiB
+wab-load-platform-api-1 cpu=50.29% mem=71.22MiB / 7.65GiB
+wab-load-portal-1 cpu=1.08% mem=17.73MiB / 7.65GiB
+wab-load-postgres-1 cpu=16.33% mem=101.2MiB / 7.65GiB
+09:54:19
+wab-load-agent-runtime-1 cpu=0.07% mem=85.45MiB / 7.65GiB
+wab-load-mock-github-1 cpu=15.86% mem=20.32MiB / 7.65GiB
+wab-load-n8n-1 cpu=5.23% mem=376.7MiB / 7.65GiB
+wab-load-platform-api-1 cpu=67.45% mem=71.28MiB / 7.65GiB
+wab-load-portal-1 cpu=1.12% mem=17.64MiB / 7.65GiB
+wab-load-postgres-1 cpu=17.32% mem=101.8MiB / 7.65GiB
+09:54:26
+wab-load-agent-runtime-1 cpu=5.38% mem=86.46MiB / 7.65GiB
+wab-load-mock-github-1 cpu=16.04% mem=21.67MiB / 7.65GiB
+wab-load-n8n-1 cpu=1.15% mem=377.7MiB / 7.65GiB
+wab-load-platform-api-1 cpu=48.48% mem=71.61MiB / 7.65GiB
+wab-load-portal-1 cpu=1.02% mem=18.27MiB / 7.65GiB
+wab-load-postgres-1 cpu=18.32% mem=102.4MiB / 7.65GiB
+09:54:33
+wab-load-agent-runtime-1 cpu=0.07% mem=85.7MiB / 7.65GiB
+wab-load-mock-github-1 cpu=5.29% mem=33.53MiB / 7.65GiB
+wab-load-n8n-1 cpu=0.05% mem=376.5MiB / 7.65GiB
+wab-load-platform-api-1 cpu=49.41% mem=70.77MiB / 7.65GiB
+wab-load-portal-1 cpu=1.06% mem=17.51MiB / 7.65GiB
+wab-load-postgres-1 cpu=19.56% mem=101.4MiB / 7.65GiB

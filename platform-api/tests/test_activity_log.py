@@ -75,6 +75,16 @@ async def test_last_seq_is_zero_for_an_unknown_run(log: ActivityLog):
         assert await log.last_seq(uow, RUN) == 2
 
 
+async def test_last_seqs_reads_many_runs_at_once_and_gives_zero_for_unknown_ones(log: ActivityLog):
+    other, unknown = RunId("run_01OTHER"), RunId("run_01UNKNOWN")
+    await append(log, "monitoring", pending(1), pending(2), pending(3))
+    async with log.database.transaction("orchestration") as uow:
+        await log.append(uow, other, [pending(1)])
+    async with log.database.transaction("orchestration") as uow:
+        assert await log.last_seqs(uow, [RUN, other, unknown]) == {RUN: 3, other: 1, unknown: 0}
+        assert await log.last_seqs(uow, []) == {}
+
+
 async def test_concurrent_appends_from_both_roles_leave_no_gap(log: ActivityLog):
     async def worker(i: int) -> None:
         context: Context = "orchestration" if i % 2 else "monitoring"

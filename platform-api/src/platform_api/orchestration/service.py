@@ -1,7 +1,7 @@
 import asyncio
 import contextlib
 import logging
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Protocol
@@ -126,7 +126,7 @@ class ActivityLogPort(Protocol):
         self, uow: UnitOfWork, run_id: RunId, events: Iterable[PendingEvent]
     ) -> list[ActivityEvent]: ...
 
-    async def last_seq(self, uow: UnitOfWork, run_id: RunId) -> int: ...
+    async def last_seqs(self, uow: UnitOfWork, run_ids: Collection[RunId]) -> dict[RunId, int]: ...
 
     async def ingest_agent_events(
         self, uow: UnitOfWork, run_id: RunId, task_id: TaskId, events: Iterable[AgentEvent]
@@ -154,6 +154,20 @@ class RunDetail:
     proposal: Proposal | None
     approval: ApprovalRequest | None
     decisions: tuple[Decision, ...]
+
+
+def _links(state: RunState) -> tuple[ProposalId | None, ApprovalId | None]:
+    match state:
+        case Proposed(proposal_id=pid):
+            return pid, None
+        case (
+            AwaitingApproval(proposal_id=pid, approval_id=aid)
+            | Acting(proposal_id=pid, approval_id=aid)
+            | Rejected(proposal_id=pid, approval_id=aid)
+        ):
+            return pid, aid
+        case _:
+            return None, None
 
 
 @dataclass(frozen=True)
@@ -729,34 +743,31 @@ class Orchestrator:
 
     async def list_runs(self) -> list[RunDetail]:
         async with self._db.transaction("orchestration") as uow:
-            records = await self._store.list_runs(uow)
-            return [await self._detail(uow, record) for record in records]
+            return await self._details(uow, await self._store.list_runs(uow))
 
     async def _detail(self, uow: UnitOfWork, record: RunRecord) -> RunDetail:
-        last_seq = await self._activity.last_seq(uow, record.run_id)
-        proposal_id: ProposalId | None = None
-        approval_id: ApprovalId | None = None
-        match record.state:
-            case Proposed(proposal_id=pid):
-                proposal_id = pid
-            case (
-                AwaitingApproval(proposal_id=pid, approval_id=aid)
-                | Acting(proposal_id=pid, approval_id=aid)
-                | Rejected(proposal_id=pid, approval_id=aid)
-            ):
-                proposal_id, approval_id = pid, aid
-            case _:
-                pass
-        proposal = (
-            await self._store.load_proposal(uow, proposal_id) if proposal_id is not None else None
-        )
-        approval = (
-            await self._store.load_approval(uow, approval_id) if approval_id is not None else None
-        )
-        decisions = (
-            await self._store.load_decisions(uow, approval_id) if approval_id is not None else ()
-        )
-        return RunDetail(record, last_seq, proposal, approval, decisions)
+        (detail,) = await self._details(uow, [record])
+        return detail
+
+    async def _details(self, uow: UnitOfWork, records: Sequence[RunRecord]) -> list[RunDetail]:
+        """One query per table, however many runs, so the run list stays cheap as history grows."""
+        links = [_links(record.state) for record in records]
+        proposal_ids = [pid for pid, _ in links if pid is not None]
+        approval_ids = [aid for _, aid in links if aid is not None]
+        last_seqs = await self._activity.last_seqs(uow, [record.run_id for record in records])
+        proposals = await self._store.load_proposals(uow, proposal_ids)
+        approvals = await self._store.load_approvals(uow, approval_ids)
+        decisions = await self._store.load_decisions_for(uow, approval_ids)
+        return [
+            RunDetail(
+                record,
+                last_seqs[record.run_id],
+                proposals.get(pid) if pid is not None else None,
+                approvals.get(aid) if aid is not None else None,
+                decisions.get(aid, ()) if aid is not None else (),
+            )
+            for record, (pid, aid) in zip(records, links, strict=True)
+        ]
 
     def nudge(self) -> None:
         self._wake.set()
