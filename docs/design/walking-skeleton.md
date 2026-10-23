@@ -641,7 +641,41 @@ What was left out of the other designs, and why:
 
 ## Implementation reconciliation
 
-Empty until implementation starts.
+The build followed this design except where the table below says otherwise. Each row was accepted in review by the session that ran the build, and each is still open for the team to accept or reject in the PR named in the row. A row that weakens a safety rule would need an ADR. None of them does.
+
+| Change from the design | Why | PR |
+|---|---|---|
+| `approval_status` has a fourth outcome, `Invalid(fault)`, for a stale digest, two decisions on one step, an approver who is a party, or one person on two steps. `decide()` refuses it and `check()` denies it | The fold reads stored rows, and `check()` must not trust that only `decide()` wrote them. Found by a security review | #5 |
+| `UnboundIntent` names every unbound kind, not only the first | A failure message can name them all | #5 |
+| Every activity event carries a plain-English `summary`. A new kind, `agent_message`, shows agents talking | The live view never builds English from data, and the agent room needs speech | #6 |
+| `step_finished` adds the outcomes `approval_opened`, `written`, `failed` and `replayed`. `write_action_denied` adds `out_of_order` | The live view and the troubleshooter need to tell these apart | #6 |
+| The run view is one shape per state, not one shape with optional fields | Each state shows only what exists in it | #6 |
+| Agent event models live in run monitoring, and shared wire types in `wire.py` | The callback route belongs to monitoring, and the import rules forbid monitoring importing orchestration | #6 |
+| `AUTH_MODE` must be set, and dev mode refuses to start unless the public base URL is local | The dev sign-in must never reach a shared deployment. Found by a security review | #6 |
+| The Agent API needs `X-Agent-Key`, takes the callback as `{url, token}`, sends the token in a header, accepts callbacks only at allowed origins, binds a `task_id` to its request body (409 on a different body), validates the repo name and accepts only vetted tag patterns | The agent holds a GitHub token, so it must not act for an unknown caller or post anywhere. Found by security reviews | #6, #7 |
+| The task id is `{run_id}/work/{attempt}`, and the callback token is derived per task and stored | A retry after a failure must really rerun, while an n8n retry of the same step reuses the stored result | #8 |
+| `last_seen_tag` is a template parameter. The watermark is read from the newest succeeded run, falling back to that parameter | It moves only on success, with no write across contexts | #8 |
+| Retry needs the Operator role, and so do saving a use case and starting a run. Any Operator may run any team use case | A teammate covering a shift is the normal case. Found by a security review | #8 |
+| Use cases and runs are visible to the whole team | The Portal is one team's tool. Scoping per team comes with Entra ID | #8 |
+| A superseded step call records no event | The design lists none, and the live view has nothing to show for it | #8 |
+| Bootstrap waits on n8n's `/healthz/readiness`, deletes older API keys by label before creating one, and recreates the step key credential on every run | n8n 2.42.6 makes API key labels unique and never returns a credential's value. `/healthz` answered before n8n could take requests | #8 |
+| Refusals (403) and retry-later answers (503) return the declared body at the top level, not inside `detail` | The contract promised it, and the end-to-end run found the gap | #10 |
+| The test client uses `httpx`, not its successor `httpx2` | A security bot flagged `httpx2` as a possible typosquat. Adopting it is the team's dependency decision | #6 |
+| An approval decision's summary names the step in words: "Bob approved the request (Team approver).", or "step 1 of 2 (label)" for two steps | The live view showed "step 0", which means nothing to support staff | #10 |
+| The run page is the Tracker, not a plain event list: one line of stops from the use case's blocks, the work as the only moving thing, a barrier at the approval stop, and a 1x, 2x and Instant speed control. The plain list stays underneath as the minutes | The team lead picked it from four templates for a non-technical Operator. It replaced the floor-plan room built in #12 | #14 |
+| An Approver can decide from the run view, with the same request and checks as the approval page. The approval page stays as the Teams card's link target | One click instead of a page change. The gate's rules do not change (ADR 0015) | #14 |
+| The Portal opens on the latest run, live. A fresh install opens on the release check's line with nothing done, and a one-click run of the template's own example | The first screen is the first impression, and an empty page explained nothing | #12, #14 |
+| The Portal has a demo mode, `PORTAL_MODE=demo`, that runs an in-memory platform behind the same typed client and says "Demo data" on every page | The UI can be built, tested and shown without the stack, and 52 browser specs run against it | #12 |
+| Speech in the room is only `agent_message` text, word for word. Every other event's `summary` plays as a caption | Agents' words come from the backend, so approved wording lives in one place | #12 |
+| The Teams stub card shows its run and where its approval stands, read from existing routes | Several runs produced identical cards | #12 |
+| nginx does not forward the browser's `Host` header to platform-api | Host-header injection risk, found by Semgrep. platform-api builds links from `PUBLIC_BASE_URL` | #12 |
+| `PUBLIC_BASE_URL` follows `PORTAL_HOST_PORT`, and `scripts/e2e.sh` runs as its own compose project, `wab-e2e` | A test teardown must never delete a dev stack's volumes | #13 |
+| The AI troubleshooter is a rule table, one piece of advice per typed failure reason, reading only the activity log. No model runs in it yet | The AI model provider is an open decision, so nothing may require an LLM. A model can sit behind the same route once a provider is chosen | #6, #8 |
+| No LLM and no LangSmith tracing run in the stack. `AGENT_SUMMARY_MODEL` and the `LANGSMITH_*` variables are optional and unset, so agent summaries come from templates | Same open decision. Tracing switches on by setting the variables | #7 |
+| Orchestration's role has SELECT as well as INSERT on `monitoring.run_events` | Appending an event reads the run's last `seq` under an advisory lock, inside orchestration's own transaction, to keep `seq` gapless | #8 |
+| The dev sign-in adapter is named `DevAuth`, not `DevAuthenticator` | Naming only | #6 |
+| There is no `RELEASE_SOURCE` variable. The real agent reads `GITHUB_API_BASE`, the e2e stack points it at mock GitHub, and CI's checks swap the whole agent runtime for `deploy/fake-agent` | A fake at the HTTP edge tests the real agent code; a whole fake agent keeps the per-PR checks fast | #8, #9 |
+| platform-api starts with the image's default `uvicorn` command, and bootstrap runs `python -m platform_api.bootstrap` | No separate `serve` or `bootstrap` entry points were needed | #8 |
 
 ## Open questions and risks
 
