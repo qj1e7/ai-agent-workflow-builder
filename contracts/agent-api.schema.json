@@ -536,12 +536,10 @@
       "additionalProperties": false,
       "properties": {
         "repo": {
-          "title": "Repo",
-          "type": "string"
+          "$ref": "#/$defs/RepoName"
         },
         "tag_pattern": {
-          "title": "Tag Pattern",
-          "type": "string"
+          "$ref": "#/$defs/TagPattern"
         }
       },
       "required": [
@@ -550,6 +548,10 @@
       ],
       "title": "ReleaseCheckInputs",
       "type": "object"
+    },
+    "RepoName": {
+      "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$",
+      "type": "string"
     },
     "RoomAddressee": {
       "additionalProperties": false,
@@ -563,6 +565,10 @@
       },
       "title": "RoomAddressee",
       "type": "object"
+    },
+    "TagPattern": {
+      "description": "Which release tags count. Only a pattern from a fixed list is accepted, never one the caller writes. Allowed values: `^\\d+\\.\\d+\\.\\d+$`.",
+      "type": "string"
     },
     "TaskError": {
       "additionalProperties": false,

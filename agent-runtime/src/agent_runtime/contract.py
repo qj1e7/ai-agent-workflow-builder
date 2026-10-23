@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, TypeAdapter
 
 
 class WireModel(BaseModel):
@@ -102,9 +102,45 @@ class AgentEventPost(WireModel):
     event: AgentEvent
 
 
+REPO_PATTERN = r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$"
+
+
+def _not_a_dot_segment(repo: str) -> str:
+    if repo.split("/")[-1] in {".", ".."}:
+        raise ValueError("repo must not be . or ..")
+    return repo
+
+
+type RepoName = Annotated[str, Field(pattern=REPO_PATTERN), AfterValidator(_not_a_dot_segment)]
+
+
+SEMVER_TAG_PATTERN = r"^\d+\.\d+\.\d+$"
+VETTED_TAG_PATTERNS = frozenset({SEMVER_TAG_PATTERN})
+
+
+def _vetted_tag_pattern(pattern: str) -> str:
+    if pattern not in VETTED_TAG_PATTERNS:
+        raise ValueError(f"tag_pattern must be one of {sorted(VETTED_TAG_PATTERNS)}")
+    return pattern
+
+
+def _allowed_list() -> str:
+    return ", ".join(f"`{pattern}`" for pattern in sorted(VETTED_TAG_PATTERNS))
+
+
+type TagPattern = Annotated[
+    str,
+    AfterValidator(_vetted_tag_pattern),
+    Field(
+        description="Which release tags count. Only a pattern from a fixed list is accepted, "
+        f"never one the caller writes. Allowed values: {_allowed_list()}."
+    ),
+]
+
+
 class ReleaseCheckInputs(WireModel):
-    repo: str
-    tag_pattern: str
+    repo: RepoName
+    tag_pattern: TagPattern
 
 
 class CarryForward(WireModel):
