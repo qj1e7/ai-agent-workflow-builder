@@ -1,0 +1,1790 @@
+{
+  "$defs": {
+    "ActionLine": {
+      "additionalProperties": false,
+      "properties": {
+        "connector": {
+          "title": "Connector",
+          "type": "string"
+        },
+        "line": {
+          "title": "Line",
+          "type": "string"
+        },
+        "operation": {
+          "title": "Operation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "connector",
+        "operation",
+        "line"
+      ],
+      "title": "ActionLine",
+      "type": "object"
+    },
+    "Actor": {
+      "additionalProperties": false,
+      "properties": {
+        "display": {
+          "title": "Display",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ActorKind"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "display"
+      ],
+      "title": "Actor",
+      "type": "object"
+    },
+    "ActorKind": {
+      "enum": [
+        "user",
+        "platform",
+        "workflow",
+        "agent",
+        "safety_checker"
+      ],
+      "type": "string"
+    },
+    "Addressee": {
+      "discriminator": {
+        "mapping": {
+          "agent": "#/$defs/AgentAddressee",
+          "room": "#/$defs/RoomAddressee"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/AgentAddressee"
+        },
+        {
+          "$ref": "#/$defs/RoomAddressee"
+        }
+      ]
+    },
+    "AgentAddressee": {
+      "additionalProperties": false,
+      "properties": {
+        "display": {
+          "title": "Display",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "agent",
+          "default": "agent",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "display"
+      ],
+      "title": "AgentAddressee",
+      "type": "object"
+    },
+    "AgentFailed": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/AgentFailedData"
+        },
+        "kind": {
+          "const": "agent_failed",
+          "default": "agent_failed",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "AgentFailed",
+      "type": "object"
+    },
+    "AgentFailedData": {
+      "additionalProperties": false,
+      "properties": {
+        "error_type": {
+          "title": "Error Type",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "retryable": {
+          "title": "Retryable",
+          "type": "boolean"
+        },
+        "step": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Step"
+        }
+      },
+      "required": [
+        "step",
+        "error_type",
+        "message",
+        "retryable"
+      ],
+      "title": "AgentFailedData",
+      "type": "object"
+    },
+    "AgentJoined": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/AgentJoinedData"
+        },
+        "kind": {
+          "const": "agent_joined",
+          "default": "agent_joined",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "AgentJoined",
+      "type": "object"
+    },
+    "AgentJoinedData": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "$ref": "#/$defs/AgentRef"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent",
+        "reason"
+      ],
+      "title": "AgentJoinedData",
+      "type": "object"
+    },
+    "AgentMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/AgentMessageData"
+        },
+        "kind": {
+          "const": "agent_message",
+          "default": "agent_message",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "AgentMessage",
+      "type": "object"
+    },
+    "AgentMessageData": {
+      "additionalProperties": false,
+      "properties": {
+        "addressee": {
+          "$ref": "#/$defs/Addressee"
+        },
+        "speaker": {
+          "$ref": "#/$defs/AgentRef"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "speaker",
+        "addressee",
+        "text"
+      ],
+      "title": "AgentMessageData",
+      "type": "object"
+    },
+    "AgentRef": {
+      "additionalProperties": false,
+      "properties": {
+        "display": {
+          "title": "Display",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "display"
+      ],
+      "title": "AgentRef",
+      "type": "object"
+    },
+    "AgentStepFinished": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/AgentStepFinishedData"
+        },
+        "kind": {
+          "const": "agent_step_finished",
+          "default": "agent_step_finished",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "AgentStepFinished",
+      "type": "object"
+    },
+    "AgentStepFinishedData": {
+      "additionalProperties": false,
+      "properties": {
+        "result": {
+          "additionalProperties": true,
+          "title": "Result",
+          "type": "object"
+        },
+        "step": {
+          "title": "Step",
+          "type": "string"
+        }
+      },
+      "required": [
+        "step",
+        "result"
+      ],
+      "title": "AgentStepFinishedData",
+      "type": "object"
+    },
+    "AgentStepStarted": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/AgentStepStartedData"
+        },
+        "kind": {
+          "const": "agent_step_started",
+          "default": "agent_step_started",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "AgentStepStarted",
+      "type": "object"
+    },
+    "AgentStepStartedData": {
+      "additionalProperties": false,
+      "properties": {
+        "step": {
+          "title": "Step",
+          "type": "string"
+        }
+      },
+      "required": [
+        "step"
+      ],
+      "title": "AgentStepStartedData",
+      "type": "object"
+    },
+    "ApprovalAnnounceFailed": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/ApprovalAnnounceFailedData"
+        },
+        "kind": {
+          "const": "approval_announce_failed",
+          "default": "approval_announce_failed",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "ApprovalAnnounceFailed",
+      "type": "object"
+    },
+    "ApprovalAnnounceFailedData": {
+      "additionalProperties": false,
+      "properties": {
+        "approval_id": {
+          "title": "Approval Id",
+          "type": "string"
+        },
+        "channel": {
+          "title": "Channel",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "approval_id",
+        "channel",
+        "message"
+      ],
+      "title": "ApprovalAnnounceFailedData",
+      "type": "object"
+    },
+    "ApprovalAnnounced": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/ApprovalAnnouncedData"
+        },
+        "kind": {
+          "const": "approval_announced",
+          "default": "approval_announced",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "ApprovalAnnounced",
+      "type": "object"
+    },
+    "ApprovalAnnouncedData": {
+      "additionalProperties": false,
+      "properties": {
+        "approval_id": {
+          "title": "Approval Id",
+          "type": "string"
+        },
+        "channel": {
+          "title": "Channel",
+          "type": "string"
+        },
+        "link": {
+          "title": "Link",
+          "type": "string"
+        }
+      },
+      "required": [
+        "approval_id",
+        "channel",
+        "link"
+      ],
+      "title": "ApprovalAnnouncedData",
+      "type": "object"
+    },
+    "ApprovalDecided": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/ApprovalDecidedData"
+        },
+        "kind": {
+          "const": "approval_decided",
+          "default": "approval_decided",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "ApprovalDecided",
+      "type": "object"
+    },
+    "ApprovalDecidedData": {
+      "additionalProperties": false,
+      "properties": {
+        "approval_id": {
+          "title": "Approval Id",
+          "type": "string"
+        },
+        "by": {
+          "title": "By",
+          "type": "string"
+        },
+        "step": {
+          "title": "Step",
+          "type": "integer"
+        },
+        "verdict": {
+          "$ref": "#/$defs/WireVerdict"
+        }
+      },
+      "required": [
+        "approval_id",
+        "step",
+        "verdict",
+        "by"
+      ],
+      "title": "ApprovalDecidedData",
+      "type": "object"
+    },
+    "ApprovalRequested": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/ApprovalRequestedData"
+        },
+        "kind": {
+          "const": "approval_requested",
+          "default": "approval_requested",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "ApprovalRequested",
+      "type": "object"
+    },
+    "ApprovalRequestedData": {
+      "additionalProperties": false,
+      "properties": {
+        "approval_id": {
+          "title": "Approval Id",
+          "type": "string"
+        },
+        "link": {
+          "title": "Link",
+          "type": "string"
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/ApprovalStepView"
+          },
+          "title": "Steps",
+          "type": "array"
+        }
+      },
+      "required": [
+        "approval_id",
+        "steps",
+        "link"
+      ],
+      "title": "ApprovalRequestedData",
+      "type": "object"
+    },
+    "ApprovalStepStatus": {
+      "enum": [
+        "waiting",
+        "open",
+        "approved",
+        "declined"
+      ],
+      "type": "string"
+    },
+    "ApprovalStepView": {
+      "additionalProperties": false,
+      "properties": {
+        "decided_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Decided At"
+        },
+        "decided_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Decided By"
+        },
+        "index": {
+          "title": "Index",
+          "type": "integer"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/ApprovalStepStatus"
+        }
+      },
+      "required": [
+        "index",
+        "label",
+        "status"
+      ],
+      "title": "ApprovalStepView",
+      "type": "object"
+    },
+    "DeniedReason": {
+      "enum": [
+        "run_mismatch",
+        "not_approved",
+        "invalid_decisions",
+        "digest_mismatch",
+        "unregistered_action",
+        "out_of_order"
+      ],
+      "type": "string"
+    },
+    "FailureReason": {
+      "enum": [
+        "AgentError",
+        "WorkflowNodeError",
+        "TimedOut",
+        "DispatchFailed",
+        "WriteFailed",
+        "SafetyDenied",
+        "UnboundIntent",
+        "OutOfOrderStep"
+      ],
+      "type": "string"
+    },
+    "FailureStage": {
+      "enum": [
+        "pending",
+        "working",
+        "proposed",
+        "acting"
+      ],
+      "type": "string"
+    },
+    "Leg": {
+      "enum": [
+        "work",
+        "act"
+      ],
+      "type": "string"
+    },
+    "LegDispatched": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/LegDispatchedData"
+        },
+        "kind": {
+          "const": "leg_dispatched",
+          "default": "leg_dispatched",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "LegDispatched",
+      "type": "object"
+    },
+    "LegDispatchedData": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt": {
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "leg": {
+          "$ref": "#/$defs/Leg"
+        }
+      },
+      "required": [
+        "leg",
+        "attempt"
+      ],
+      "title": "LegDispatchedData",
+      "type": "object"
+    },
+    "RoomAddressee": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "room",
+          "default": "room",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "title": "RoomAddressee",
+      "type": "object"
+    },
+    "RunCreated": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/RunCreatedData"
+        },
+        "kind": {
+          "const": "run_created",
+          "default": "run_created",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "RunCreated",
+      "type": "object"
+    },
+    "RunCreatedData": {
+      "additionalProperties": false,
+      "properties": {
+        "started_by": {
+          "title": "Started By",
+          "type": "string"
+        },
+        "use_case_id": {
+          "title": "Use Case Id",
+          "type": "string"
+        },
+        "use_case_version": {
+          "title": "Use Case Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "use_case_id",
+        "use_case_version",
+        "started_by"
+      ],
+      "title": "RunCreatedData",
+      "type": "object"
+    },
+    "RunFailed": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/RunFailedData"
+        },
+        "kind": {
+          "const": "run_failed",
+          "default": "run_failed",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "RunFailed",
+      "type": "object"
+    },
+    "RunFailedData": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "reason": {
+          "$ref": "#/$defs/FailureReason"
+        },
+        "retryable": {
+          "title": "Retryable",
+          "type": "boolean"
+        },
+        "stage": {
+          "$ref": "#/$defs/FailureStage"
+        }
+      },
+      "required": [
+        "stage",
+        "reason",
+        "retryable",
+        "message"
+      ],
+      "title": "RunFailedData",
+      "type": "object"
+    },
+    "RunOutcome": {
+      "enum": [
+        "written",
+        "nothing_to_write"
+      ],
+      "type": "string"
+    },
+    "RunRejected": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/RunRejectedData"
+        },
+        "kind": {
+          "const": "run_rejected",
+          "default": "run_rejected",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "RunRejected",
+      "type": "object"
+    },
+    "RunRejectedData": {
+      "additionalProperties": false,
+      "properties": {
+        "by": {
+          "title": "By",
+          "type": "string"
+        },
+        "step": {
+          "title": "Step",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "by",
+        "step"
+      ],
+      "title": "RunRejectedData",
+      "type": "object"
+    },
+    "RunRetried": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/RunRetriedData"
+        },
+        "kind": {
+          "const": "run_retried",
+          "default": "run_retried",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "RunRetried",
+      "type": "object"
+    },
+    "RunRetriedData": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt": {
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "leg": {
+          "$ref": "#/$defs/Leg"
+        }
+      },
+      "required": [
+        "leg",
+        "attempt"
+      ],
+      "title": "RunRetriedData",
+      "type": "object"
+    },
+    "RunSucceeded": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/RunSucceededData"
+        },
+        "kind": {
+          "const": "run_succeeded",
+          "default": "run_succeeded",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "RunSucceeded",
+      "type": "object"
+    },
+    "RunSucceededData": {
+      "additionalProperties": false,
+      "properties": {
+        "outcome": {
+          "$ref": "#/$defs/RunOutcome"
+        }
+      },
+      "required": [
+        "outcome"
+      ],
+      "title": "RunSucceededData",
+      "type": "object"
+    },
+    "StepFinished": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/StepFinishedData"
+        },
+        "kind": {
+          "const": "step_finished",
+          "default": "step_finished",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "StepFinished",
+      "type": "object"
+    },
+    "StepFinishedData": {
+      "additionalProperties": false,
+      "properties": {
+        "detail": {
+          "title": "Detail",
+          "type": "string"
+        },
+        "n8n_execution_id": {
+          "title": "N8N Execution Id",
+          "type": "string"
+        },
+        "outcome": {
+          "$ref": "#/$defs/StepOutcome"
+        },
+        "step": {
+          "$ref": "#/$defs/StepName"
+        },
+        "try_number": {
+          "title": "Try Number",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "step",
+        "n8n_execution_id",
+        "try_number",
+        "outcome",
+        "detail"
+      ],
+      "title": "StepFinishedData",
+      "type": "object"
+    },
+    "StepName": {
+      "enum": [
+        "run_agents",
+        "ask_approval",
+        "write_action"
+      ],
+      "type": "string"
+    },
+    "StepOutcome": {
+      "enum": [
+        "proposed",
+        "nothing_to_write",
+        "approval_opened",
+        "written",
+        "failed",
+        "superseded",
+        "refused",
+        "replayed"
+      ],
+      "type": "string"
+    },
+    "StepRetried": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/StepRetriedData"
+        },
+        "kind": {
+          "const": "step_retried",
+          "default": "step_retried",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "StepRetried",
+      "type": "object"
+    },
+    "StepRetriedData": {
+      "additionalProperties": false,
+      "properties": {
+        "n8n_execution_id": {
+          "title": "N8N Execution Id",
+          "type": "string"
+        },
+        "step": {
+          "$ref": "#/$defs/StepName"
+        },
+        "try_number": {
+          "title": "Try Number",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "step",
+        "n8n_execution_id",
+        "try_number"
+      ],
+      "title": "StepRetriedData",
+      "type": "object"
+    },
+    "StepStarted": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/StepStartedData"
+        },
+        "kind": {
+          "const": "step_started",
+          "default": "step_started",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "StepStarted",
+      "type": "object"
+    },
+    "StepStartedData": {
+      "additionalProperties": false,
+      "properties": {
+        "n8n_execution_id": {
+          "title": "N8N Execution Id",
+          "type": "string"
+        },
+        "step": {
+          "$ref": "#/$defs/StepName"
+        },
+        "try_number": {
+          "title": "Try Number",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "step",
+        "n8n_execution_id",
+        "try_number"
+      ],
+      "title": "StepStartedData",
+      "type": "object"
+    },
+    "WireVerdict": {
+      "enum": [
+        "approve",
+        "decline"
+      ],
+      "type": "string"
+    },
+    "WriteActionDenied": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/WriteActionDeniedData"
+        },
+        "kind": {
+          "const": "write_action_denied",
+          "default": "write_action_denied",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "WriteActionDenied",
+      "type": "object"
+    },
+    "WriteActionDeniedData": {
+      "additionalProperties": false,
+      "properties": {
+        "detail": {
+          "title": "Detail",
+          "type": "string"
+        },
+        "reason": {
+          "$ref": "#/$defs/DeniedReason"
+        }
+      },
+      "required": [
+        "reason",
+        "detail"
+      ],
+      "title": "WriteActionDeniedData",
+      "type": "object"
+    },
+    "WriteActionDone": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/WriteActionDoneData"
+        },
+        "kind": {
+          "const": "write_action_done",
+          "default": "write_action_done",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "WriteActionDone",
+      "type": "object"
+    },
+    "WriteActionDoneData": {
+      "additionalProperties": false,
+      "properties": {
+        "approved_by": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Approved By",
+          "type": "array"
+        },
+        "connector": {
+          "title": "Connector",
+          "type": "string"
+        },
+        "external_reference": {
+          "title": "External Reference",
+          "type": "string"
+        },
+        "operation": {
+          "title": "Operation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "connector",
+        "operation",
+        "external_reference",
+        "approved_by"
+      ],
+      "title": "WriteActionDoneData",
+      "type": "object"
+    },
+    "WriteActionProposed": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/WriteActionProposedData"
+        },
+        "kind": {
+          "const": "write_action_proposed",
+          "default": "write_action_proposed",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "WriteActionProposed",
+      "type": "object"
+    },
+    "WriteActionProposedData": {
+      "additionalProperties": false,
+      "properties": {
+        "actions": {
+          "items": {
+            "$ref": "#/$defs/ActionLine"
+          },
+          "title": "Actions",
+          "type": "array"
+        },
+        "digest": {
+          "title": "Digest",
+          "type": "string"
+        },
+        "proposal_id": {
+          "title": "Proposal Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "proposal_id",
+        "digest",
+        "actions"
+      ],
+      "title": "WriteActionProposedData",
+      "type": "object"
+    }
+  },
+  "discriminator": {
+    "mapping": {
+      "agent_failed": "#/$defs/AgentFailed",
+      "agent_joined": "#/$defs/AgentJoined",
+      "agent_message": "#/$defs/AgentMessage",
+      "agent_step_finished": "#/$defs/AgentStepFinished",
+      "agent_step_started": "#/$defs/AgentStepStarted",
+      "approval_announce_failed": "#/$defs/ApprovalAnnounceFailed",
+      "approval_announced": "#/$defs/ApprovalAnnounced",
+      "approval_decided": "#/$defs/ApprovalDecided",
+      "approval_requested": "#/$defs/ApprovalRequested",
+      "leg_dispatched": "#/$defs/LegDispatched",
+      "run_created": "#/$defs/RunCreated",
+      "run_failed": "#/$defs/RunFailed",
+      "run_rejected": "#/$defs/RunRejected",
+      "run_retried": "#/$defs/RunRetried",
+      "run_succeeded": "#/$defs/RunSucceeded",
+      "step_finished": "#/$defs/StepFinished",
+      "step_retried": "#/$defs/StepRetried",
+      "step_started": "#/$defs/StepStarted",
+      "write_action_denied": "#/$defs/WriteActionDenied",
+      "write_action_done": "#/$defs/WriteActionDone",
+      "write_action_proposed": "#/$defs/WriteActionProposed"
+    },
+    "propertyName": "kind"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/RunCreated"
+    },
+    {
+      "$ref": "#/$defs/LegDispatched"
+    },
+    {
+      "$ref": "#/$defs/StepStarted"
+    },
+    {
+      "$ref": "#/$defs/StepFinished"
+    },
+    {
+      "$ref": "#/$defs/StepRetried"
+    },
+    {
+      "$ref": "#/$defs/AgentJoined"
+    },
+    {
+      "$ref": "#/$defs/AgentStepStarted"
+    },
+    {
+      "$ref": "#/$defs/AgentStepFinished"
+    },
+    {
+      "$ref": "#/$defs/AgentFailed"
+    },
+    {
+      "$ref": "#/$defs/AgentMessage"
+    },
+    {
+      "$ref": "#/$defs/WriteActionProposed"
+    },
+    {
+      "$ref": "#/$defs/ApprovalRequested"
+    },
+    {
+      "$ref": "#/$defs/ApprovalAnnounced"
+    },
+    {
+      "$ref": "#/$defs/ApprovalAnnounceFailed"
+    },
+    {
+      "$ref": "#/$defs/ApprovalDecided"
+    },
+    {
+      "$ref": "#/$defs/WriteActionDenied"
+    },
+    {
+      "$ref": "#/$defs/WriteActionDone"
+    },
+    {
+      "$ref": "#/$defs/RunSucceeded"
+    },
+    {
+      "$ref": "#/$defs/RunRejected"
+    },
+    {
+      "$ref": "#/$defs/RunFailed"
+    },
+    {
+      "$ref": "#/$defs/RunRetried"
+    }
+  ]
+}

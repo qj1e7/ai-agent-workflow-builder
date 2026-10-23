@@ -53,6 +53,19 @@ jobs:
         working-directory: ${{ matrix.project }}
         run: uv run lint-imports
 
+      - name: Check the generated contracts are current
+        working-directory: ${{ matrix.project }}
+        env:
+          PROJECT: ${{ matrix.project }}
+        run: |
+          uv run python -m "${PROJECT//-/_}.contracts" ../contracts
+          if [ -n "$(git status --porcelain -- ../contracts)" ]; then
+            git status --short -- ../contracts
+            echo "contracts/ is out of date. Run the commands in contracts/README.md and commit." >&2
+            exit 1
+          fi
+          uv run pytest tests/test_contracts.py
+
       - name: Unit tests in the image
         run: |
           docker build --target test --tag ${{ matrix.project }}:test ${{ matrix.project }}

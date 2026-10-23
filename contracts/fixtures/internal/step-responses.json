@@ -1,0 +1,27 @@
+[
+  {
+    "proceed": true,
+    "outcome": "proposed",
+    "detail": "2 new releases: 1.2.16, 1.2.15"
+  },
+  {
+    "proceed": false,
+    "outcome": "nothing_to_write",
+    "detail": "No new releases since 1.2.16"
+  },
+  {
+    "proceed": false,
+    "outcome": "superseded",
+    "detail": "Execution 40 holds this leg"
+  },
+  {
+    "proceed": false,
+    "outcome": "refused",
+    "detail": "write_action is not allowed while the run is proposed"
+  },
+  {
+    "proceed": true,
+    "outcome": "written",
+    "detail": "Created MOCK-142"
+  }
+]

@@ -1,0 +1,4615 @@
+{
+  "components": {
+    "schemas": {
+      "ActingView": {
+        "additionalProperties": false,
+        "properties": {
+          "approval": {
+            "$ref": "#/components/schemas/ApprovalRef"
+          },
+          "events_url": {
+            "title": "Events Url",
+            "type": "string"
+          },
+          "last_seq": {
+            "title": "Last Seq",
+            "type": "integer"
+          },
+          "proposal": {
+            "$ref": "#/components/schemas/ProposalView"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "started_by": {
+            "title": "Started By",
+            "type": "string"
+          },
+          "state": {
+            "const": "acting",
+            "default": "acting",
+            "title": "State",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "use_case_name": {
+            "title": "Use Case Name",
+            "type": "string"
+          },
+          "use_case_version": {
+            "title": "Use Case Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_id",
+          "use_case_id",
+          "use_case_name",
+          "use_case_version",
+          "started_by",
+          "started_at",
+          "updated_at",
+          "last_seq",
+          "events_url",
+          "proposal",
+          "approval"
+        ],
+        "title": "ActingView",
+        "type": "object"
+      },
+      "ActionLine": {
+        "additionalProperties": false,
+        "properties": {
+          "connector": {
+            "title": "Connector",
+            "type": "string"
+          },
+          "line": {
+            "title": "Line",
+            "type": "string"
+          },
+          "operation": {
+            "title": "Operation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "connector",
+          "operation",
+          "line"
+        ],
+        "title": "ActionLine",
+        "type": "object"
+      },
+      "ActivityEvent": {
+        "discriminator": {
+          "mapping": {
+            "agent_failed": "#/components/schemas/AgentFailed",
+            "agent_joined": "#/components/schemas/AgentJoined",
+            "agent_message": "#/components/schemas/AgentMessage",
+            "agent_step_finished": "#/components/schemas/AgentStepFinished",
+            "agent_step_started": "#/components/schemas/AgentStepStarted",
+            "approval_announce_failed": "#/components/schemas/ApprovalAnnounceFailed",
+            "approval_announced": "#/components/schemas/ApprovalAnnounced",
+            "approval_decided": "#/components/schemas/ApprovalDecided",
+            "approval_requested": "#/components/schemas/ApprovalRequested",
+            "leg_dispatched": "#/components/schemas/LegDispatched",
+            "run_created": "#/components/schemas/RunCreated",
+            "run_failed": "#/components/schemas/RunFailed",
+            "run_rejected": "#/components/schemas/RunRejected",
+            "run_retried": "#/components/schemas/RunRetried",
+            "run_succeeded": "#/components/schemas/RunSucceeded",
+            "step_finished": "#/components/schemas/StepFinished",
+            "step_retried": "#/components/schemas/StepRetried",
+            "step_started": "#/components/schemas/StepStarted",
+            "write_action_denied": "#/components/schemas/WriteActionDenied",
+            "write_action_done": "#/components/schemas/WriteActionDone",
+            "write_action_proposed": "#/components/schemas/WriteActionProposed"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/RunCreated"
+          },
+          {
+            "$ref": "#/components/schemas/LegDispatched"
+          },
+          {
+            "$ref": "#/components/schemas/StepStarted"
+          },
+          {
+            "$ref": "#/components/schemas/StepFinished"
+          },
+          {
+            "$ref": "#/components/schemas/StepRetried"
+          },
+          {
+            "$ref": "#/components/schemas/AgentJoined"
+          },
+          {
+            "$ref": "#/components/schemas/AgentStepStarted"
+          },
+          {
+            "$ref": "#/components/schemas/AgentStepFinished"
+          },
+          {
+            "$ref": "#/components/schemas/AgentFailed"
+          },
+          {
+            "$ref": "#/components/schemas/AgentMessage"
+          },
+          {
+            "$ref": "#/components/schemas/WriteActionProposed"
+          },
+          {
+            "$ref": "#/components/schemas/ApprovalRequested"
+          },
+          {
+            "$ref": "#/components/schemas/ApprovalAnnounced"
+          },
+          {
+            "$ref": "#/components/schemas/ApprovalAnnounceFailed"
+          },
+          {
+            "$ref": "#/components/schemas/ApprovalDecided"
+          },
+          {
+            "$ref": "#/components/schemas/WriteActionDenied"
+          },
+          {
+            "$ref": "#/components/schemas/WriteActionDone"
+          },
+          {
+            "$ref": "#/components/schemas/RunSucceeded"
+          },
+          {
+            "$ref": "#/components/schemas/RunRejected"
+          },
+          {
+            "$ref": "#/components/schemas/RunFailed"
+          },
+          {
+            "$ref": "#/components/schemas/RunRetried"
+          }
+        ]
+      },
+      "Actor": {
+        "additionalProperties": false,
+        "properties": {
+          "display": {
+            "title": "Display",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ActorKind"
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "display"
+        ],
+        "title": "Actor",
+        "type": "object"
+      },
+      "ActorKind": {
+        "enum": [
+          "user",
+          "platform",
+          "workflow",
+          "agent",
+          "safety_checker"
+        ],
+        "type": "string"
+      },
+      "Addressee": {
+        "discriminator": {
+          "mapping": {
+            "agent": "#/components/schemas/AgentAddressee",
+            "room": "#/components/schemas/RoomAddressee"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/AgentAddressee"
+          },
+          {
+            "$ref": "#/components/schemas/RoomAddressee"
+          }
+        ]
+      },
+      "Advice": {
+        "additionalProperties": false,
+        "properties": {
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "likely_cause": {
+            "title": "Likely Cause",
+            "type": "string"
+          },
+          "suggested_action": {
+            "$ref": "#/components/schemas/SuggestedAction"
+          },
+          "suggestion": {
+            "title": "Suggestion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "explanation",
+          "likely_cause",
+          "suggested_action",
+          "suggestion"
+        ],
+        "title": "Advice",
+        "type": "object"
+      },
+      "AgentAddressee": {
+        "additionalProperties": false,
+        "properties": {
+          "display": {
+            "title": "Display",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "agent",
+            "default": "agent",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "display"
+        ],
+        "title": "AgentAddressee",
+        "type": "object"
+      },
+      "AgentEvent": {
+        "discriminator": {
+          "mapping": {
+            "agent_failed": "#/components/schemas/AgentFailedEvent",
+            "agent_joined": "#/components/schemas/AgentJoinedEvent",
+            "agent_message": "#/components/schemas/AgentMessageEvent",
+            "agent_step_finished": "#/components/schemas/AgentStepFinishedEvent",
+            "agent_step_started": "#/components/schemas/AgentStepStartedEvent"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/AgentJoinedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/AgentStepStartedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/AgentStepFinishedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/AgentFailedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/AgentMessageEvent"
+          }
+        ]
+      },
+      "AgentEventPost": {
+        "additionalProperties": false,
+        "properties": {
+          "event": {
+            "$ref": "#/components/schemas/AgentEvent"
+          },
+          "task_id": {
+            "title": "Task Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "event"
+        ],
+        "title": "AgentEventPost",
+        "type": "object"
+      },
+      "AgentFailed": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/AgentFailedData"
+          },
+          "kind": {
+            "const": "agent_failed",
+            "default": "agent_failed",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "AgentFailed",
+        "type": "object"
+      },
+      "AgentFailedData": {
+        "additionalProperties": false,
+        "properties": {
+          "error_type": {
+            "title": "Error Type",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "retryable": {
+            "title": "Retryable",
+            "type": "boolean"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step"
+          }
+        },
+        "required": [
+          "step",
+          "error_type",
+          "message",
+          "retryable"
+        ],
+        "title": "AgentFailedData",
+        "type": "object"
+      },
+      "AgentFailedEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/AgentRef"
+          },
+          "agent_seq": {
+            "minimum": 1.0,
+            "title": "Agent Seq",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/AgentFailedData"
+          },
+          "kind": {
+            "const": "agent_failed",
+            "default": "agent_failed",
+            "title": "Kind",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent_seq",
+          "ts",
+          "agent",
+          "summary",
+          "data"
+        ],
+        "title": "AgentFailedEvent",
+        "type": "object"
+      },
+      "AgentJoined": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/AgentJoinedData"
+          },
+          "kind": {
+            "const": "agent_joined",
+            "default": "agent_joined",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "AgentJoined",
+        "type": "object"
+      },
+      "AgentJoinedData": {
+        "additionalProperties": false,
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/AgentRef"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent",
+          "reason"
+        ],
+        "title": "AgentJoinedData",
+        "type": "object"
+      },
+      "AgentJoinedEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/AgentRef"
+          },
+          "agent_seq": {
+            "minimum": 1.0,
+            "title": "Agent Seq",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/AgentJoinedData"
+          },
+          "kind": {
+            "const": "agent_joined",
+            "default": "agent_joined",
+            "title": "Kind",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent_seq",
+          "ts",
+          "agent",
+          "summary",
+          "data"
+        ],
+        "title": "AgentJoinedEvent",
+        "type": "object"
+      },
+      "AgentMessage": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/AgentMessageData"
+          },
+          "kind": {
+            "const": "agent_message",
+            "default": "agent_message",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "AgentMessage",
+        "type": "object"
+      },
+      "AgentMessageData": {
+        "additionalProperties": false,
+        "properties": {
+          "addressee": {
+            "$ref": "#/components/schemas/Addressee"
+          },
+          "speaker": {
+            "$ref": "#/components/schemas/AgentRef"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "speaker",
+          "addressee",
+          "text"
+        ],
+        "title": "AgentMessageData",
+        "type": "object"
+      },
+      "AgentMessageEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/AgentRef"
+          },
+          "agent_seq": {
+            "minimum": 1.0,
+            "title": "Agent Seq",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/AgentMessageData"
+          },
+          "kind": {
+            "const": "agent_message",
+            "default": "agent_message",
+            "title": "Kind",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent_seq",
+          "ts",
+          "agent",
+          "summary",
+          "data"
+        ],
+        "title": "AgentMessageEvent",
+        "type": "object"
+      },
+      "AgentRef": {
+        "additionalProperties": false,
+        "properties": {
+          "display": {
+            "title": "Display",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "display"
+        ],
+        "title": "AgentRef",
+        "type": "object"
+      },
+      "AgentStepFinished": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/AgentStepFinishedData"
+          },
+          "kind": {
+            "const": "agent_step_finished",
+            "default": "agent_step_finished",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "AgentStepFinished",
+        "type": "object"
+      },
+      "AgentStepFinishedData": {
+        "additionalProperties": false,
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          },
+          "step": {
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "required": [
+          "step",
+          "result"
+        ],
+        "title": "AgentStepFinishedData",
+        "type": "object"
+      },
+      "AgentStepFinishedEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/AgentRef"
+          },
+          "agent_seq": {
+            "minimum": 1.0,
+            "title": "Agent Seq",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/AgentStepFinishedData"
+          },
+          "kind": {
+            "const": "agent_step_finished",
+            "default": "agent_step_finished",
+            "title": "Kind",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent_seq",
+          "ts",
+          "agent",
+          "summary",
+          "data"
+        ],
+        "title": "AgentStepFinishedEvent",
+        "type": "object"
+      },
+      "AgentStepStarted": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/AgentStepStartedData"
+          },
+          "kind": {
+            "const": "agent_step_started",
+            "default": "agent_step_started",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "AgentStepStarted",
+        "type": "object"
+      },
+      "AgentStepStartedData": {
+        "additionalProperties": false,
+        "properties": {
+          "step": {
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "required": [
+          "step"
+        ],
+        "title": "AgentStepStartedData",
+        "type": "object"
+      },
+      "AgentStepStartedEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/AgentRef"
+          },
+          "agent_seq": {
+            "minimum": 1.0,
+            "title": "Agent Seq",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/AgentStepStartedData"
+          },
+          "kind": {
+            "const": "agent_step_started",
+            "default": "agent_step_started",
+            "title": "Kind",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent_seq",
+          "ts",
+          "agent",
+          "summary",
+          "data"
+        ],
+        "title": "AgentStepStartedEvent",
+        "type": "object"
+      },
+      "ApprovalAnnounceFailed": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ApprovalAnnounceFailedData"
+          },
+          "kind": {
+            "const": "approval_announce_failed",
+            "default": "approval_announce_failed",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "ApprovalAnnounceFailed",
+        "type": "object"
+      },
+      "ApprovalAnnounceFailedData": {
+        "additionalProperties": false,
+        "properties": {
+          "approval_id": {
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "channel": {
+            "title": "Channel",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approval_id",
+          "channel",
+          "message"
+        ],
+        "title": "ApprovalAnnounceFailedData",
+        "type": "object"
+      },
+      "ApprovalAnnounced": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ApprovalAnnouncedData"
+          },
+          "kind": {
+            "const": "approval_announced",
+            "default": "approval_announced",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "ApprovalAnnounced",
+        "type": "object"
+      },
+      "ApprovalAnnouncedData": {
+        "additionalProperties": false,
+        "properties": {
+          "approval_id": {
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "channel": {
+            "title": "Channel",
+            "type": "string"
+          },
+          "link": {
+            "title": "Link",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approval_id",
+          "channel",
+          "link"
+        ],
+        "title": "ApprovalAnnouncedData",
+        "type": "object"
+      },
+      "ApprovalDecided": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ApprovalDecidedData"
+          },
+          "kind": {
+            "const": "approval_decided",
+            "default": "approval_decided",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "ApprovalDecided",
+        "type": "object"
+      },
+      "ApprovalDecidedData": {
+        "additionalProperties": false,
+        "properties": {
+          "approval_id": {
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "by": {
+            "title": "By",
+            "type": "string"
+          },
+          "step": {
+            "title": "Step",
+            "type": "integer"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/WireVerdict"
+          }
+        },
+        "required": [
+          "approval_id",
+          "step",
+          "verdict",
+          "by"
+        ],
+        "title": "ApprovalDecidedData",
+        "type": "object"
+      },
+      "ApprovalRef": {
+        "additionalProperties": false,
+        "properties": {
+          "approval_id": {
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "link": {
+            "title": "Link",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/ApprovalStepView"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "approval_id",
+          "link",
+          "steps"
+        ],
+        "title": "ApprovalRef",
+        "type": "object"
+      },
+      "ApprovalRequested": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ApprovalRequestedData"
+          },
+          "kind": {
+            "const": "approval_requested",
+            "default": "approval_requested",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "ApprovalRequested",
+        "type": "object"
+      },
+      "ApprovalRequestedData": {
+        "additionalProperties": false,
+        "properties": {
+          "approval_id": {
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "link": {
+            "title": "Link",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/ApprovalStepView"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "approval_id",
+          "steps",
+          "link"
+        ],
+        "title": "ApprovalRequestedData",
+        "type": "object"
+      },
+      "ApprovalStepStatus": {
+        "enum": [
+          "waiting",
+          "open",
+          "approved",
+          "declined"
+        ],
+        "type": "string"
+      },
+      "ApprovalStepView": {
+        "additionalProperties": false,
+        "properties": {
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "index": {
+            "title": "Index",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ApprovalStepStatus"
+          }
+        },
+        "required": [
+          "index",
+          "label",
+          "status"
+        ],
+        "title": "ApprovalStepView",
+        "type": "object"
+      },
+      "ApprovalView": {
+        "additionalProperties": false,
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/WriteActionView"
+            },
+            "title": "Actions",
+            "type": "array"
+          },
+          "approval_id": {
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "digest": {
+            "title": "Digest",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/ApprovalStepView"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "why_not": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Refusal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "you_can_decide": {
+            "title": "You Can Decide",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "approval_id",
+          "run_id",
+          "digest",
+          "actions",
+          "steps",
+          "you_can_decide",
+          "why_not"
+        ],
+        "title": "ApprovalView",
+        "type": "object"
+      },
+      "AwaitingApprovalView": {
+        "additionalProperties": false,
+        "properties": {
+          "approval": {
+            "$ref": "#/components/schemas/ApprovalRef"
+          },
+          "events_url": {
+            "title": "Events Url",
+            "type": "string"
+          },
+          "last_seq": {
+            "title": "Last Seq",
+            "type": "integer"
+          },
+          "proposal": {
+            "$ref": "#/components/schemas/ProposalView"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "started_by": {
+            "title": "Started By",
+            "type": "string"
+          },
+          "state": {
+            "const": "awaiting_approval",
+            "default": "awaiting_approval",
+            "title": "State",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "use_case_name": {
+            "title": "Use Case Name",
+            "type": "string"
+          },
+          "use_case_version": {
+            "title": "Use Case Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_id",
+          "use_case_id",
+          "use_case_name",
+          "use_case_version",
+          "started_by",
+          "started_at",
+          "updated_at",
+          "last_seq",
+          "events_url",
+          "proposal",
+          "approval"
+        ],
+        "title": "AwaitingApprovalView",
+        "type": "object"
+      },
+      "BlockKind": {
+        "enum": [
+          "agent",
+          "approval",
+          "write_action"
+        ],
+        "type": "string"
+      },
+      "BlockView": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/BlockKind"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "description",
+          "kind"
+        ],
+        "title": "BlockView",
+        "type": "object"
+      },
+      "CreateUseCase": {
+        "additionalProperties": false,
+        "properties": {
+          "instruction": {
+            "title": "Instruction",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Params",
+            "type": "object"
+          },
+          "template": {
+            "title": "Template",
+            "type": "string"
+          }
+        },
+        "required": [
+          "template",
+          "name",
+          "instruction",
+          "params"
+        ],
+        "title": "CreateUseCase",
+        "type": "object"
+      },
+      "DecisionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "digest": {
+            "title": "Digest",
+            "type": "string"
+          },
+          "step": {
+            "title": "Step",
+            "type": "integer"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/Verdict"
+          }
+        },
+        "required": [
+          "step",
+          "verdict",
+          "digest"
+        ],
+        "title": "DecisionIn",
+        "type": "object"
+      },
+      "DecisionOut": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "$ref": "#/components/schemas/DecisionView"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "approved",
+              "declined"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "decision"
+        ],
+        "title": "DecisionOut",
+        "type": "object"
+      },
+      "DecisionView": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "by": {
+            "title": "By",
+            "type": "string"
+          },
+          "step": {
+            "title": "Step",
+            "type": "integer"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/Verdict"
+          }
+        },
+        "required": [
+          "step",
+          "by",
+          "verdict",
+          "at"
+        ],
+        "title": "DecisionView",
+        "type": "object"
+      },
+      "DeniedReason": {
+        "enum": [
+          "run_mismatch",
+          "not_approved",
+          "invalid_decisions",
+          "digest_mismatch",
+          "unregistered_action",
+          "out_of_order"
+        ],
+        "type": "string"
+      },
+      "DevUser": {
+        "additionalProperties": false,
+        "properties": {
+          "display": {
+            "title": "Display",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/Role"
+            },
+            "title": "Roles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "display",
+          "roles"
+        ],
+        "title": "DevUser",
+        "type": "object"
+      },
+      "DevUsers": {
+        "additionalProperties": false,
+        "properties": {
+          "users": {
+            "items": {
+              "$ref": "#/components/schemas/DevUser"
+            },
+            "title": "Users",
+            "type": "array"
+          }
+        },
+        "required": [
+          "users"
+        ],
+        "title": "DevUsers",
+        "type": "object"
+      },
+      "EventPage": {
+        "additionalProperties": false,
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityEvent"
+            },
+            "title": "Events",
+            "type": "array"
+          }
+        },
+        "required": [
+          "events"
+        ],
+        "title": "EventPage",
+        "type": "object"
+      },
+      "FailedView": {
+        "additionalProperties": false,
+        "properties": {
+          "events_url": {
+            "title": "Events Url",
+            "type": "string"
+          },
+          "last_seq": {
+            "title": "Last Seq",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/FailureReason"
+          },
+          "retryable": {
+            "title": "Retryable",
+            "type": "boolean"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "stage": {
+            "$ref": "#/components/schemas/FailureStage"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "started_by": {
+            "title": "Started By",
+            "type": "string"
+          },
+          "state": {
+            "const": "failed",
+            "default": "failed",
+            "title": "State",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "use_case_name": {
+            "title": "Use Case Name",
+            "type": "string"
+          },
+          "use_case_version": {
+            "title": "Use Case Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_id",
+          "use_case_id",
+          "use_case_name",
+          "use_case_version",
+          "started_by",
+          "started_at",
+          "updated_at",
+          "last_seq",
+          "events_url",
+          "stage",
+          "reason",
+          "retryable",
+          "message"
+        ],
+        "title": "FailedView",
+        "type": "object"
+      },
+      "FailureReason": {
+        "enum": [
+          "AgentError",
+          "WorkflowNodeError",
+          "TimedOut",
+          "DispatchFailed",
+          "WriteFailed",
+          "SafetyDenied",
+          "UnboundIntent",
+          "OutOfOrderStep"
+        ],
+        "type": "string"
+      },
+      "FailureStage": {
+        "enum": [
+          "pending",
+          "working",
+          "proposed",
+          "acting"
+        ],
+        "type": "string"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "Health": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "const": "ok",
+            "default": "ok",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "title": "Health",
+        "type": "object"
+      },
+      "Leg": {
+        "enum": [
+          "work",
+          "act"
+        ],
+        "type": "string"
+      },
+      "LegDispatched": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/LegDispatchedData"
+          },
+          "kind": {
+            "const": "leg_dispatched",
+            "default": "leg_dispatched",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "LegDispatched",
+        "type": "object"
+      },
+      "LegDispatchedData": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt": {
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "leg": {
+            "$ref": "#/components/schemas/Leg"
+          }
+        },
+        "required": [
+          "leg",
+          "attempt"
+        ],
+        "title": "LegDispatchedData",
+        "type": "object"
+      },
+      "MockJiraTicket": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          },
+          "proposal_id": {
+            "title": "Proposal Id",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "project",
+          "title",
+          "body",
+          "created_at",
+          "run_id",
+          "proposal_id"
+        ],
+        "title": "MockJiraTicket",
+        "type": "object"
+      },
+      "MockJiraTickets": {
+        "additionalProperties": false,
+        "properties": {
+          "tickets": {
+            "items": {
+              "$ref": "#/components/schemas/MockJiraTicket"
+            },
+            "title": "Tickets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tickets"
+        ],
+        "title": "MockJiraTickets",
+        "type": "object"
+      },
+      "ParamSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "example": {
+            "title": "Example",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "example"
+        ],
+        "title": "ParamSpec",
+        "type": "object"
+      },
+      "PendingView": {
+        "additionalProperties": false,
+        "properties": {
+          "events_url": {
+            "title": "Events Url",
+            "type": "string"
+          },
+          "last_seq": {
+            "title": "Last Seq",
+            "type": "integer"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "started_by": {
+            "title": "Started By",
+            "type": "string"
+          },
+          "state": {
+            "const": "pending",
+            "default": "pending",
+            "title": "State",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "use_case_name": {
+            "title": "Use Case Name",
+            "type": "string"
+          },
+          "use_case_version": {
+            "title": "Use Case Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_id",
+          "use_case_id",
+          "use_case_name",
+          "use_case_version",
+          "started_by",
+          "started_at",
+          "updated_at",
+          "last_seq",
+          "events_url"
+        ],
+        "title": "PendingView",
+        "type": "object"
+      },
+      "ProposalView": {
+        "additionalProperties": false,
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/WriteActionView"
+            },
+            "title": "Actions",
+            "type": "array"
+          },
+          "digest": {
+            "title": "Digest",
+            "type": "string"
+          },
+          "proposal_id": {
+            "title": "Proposal Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proposal_id",
+          "digest",
+          "actions"
+        ],
+        "title": "ProposalView",
+        "type": "object"
+      },
+      "ProposedView": {
+        "additionalProperties": false,
+        "properties": {
+          "events_url": {
+            "title": "Events Url",
+            "type": "string"
+          },
+          "last_seq": {
+            "title": "Last Seq",
+            "type": "integer"
+          },
+          "proposal": {
+            "$ref": "#/components/schemas/ProposalView"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "started_by": {
+            "title": "Started By",
+            "type": "string"
+          },
+          "state": {
+            "const": "proposed",
+            "default": "proposed",
+            "title": "State",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "use_case_name": {
+            "title": "Use Case Name",
+            "type": "string"
+          },
+          "use_case_version": {
+            "title": "Use Case Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_id",
+          "use_case_id",
+          "use_case_name",
+          "use_case_version",
+          "started_by",
+          "started_at",
+          "updated_at",
+          "last_seq",
+          "events_url",
+          "proposal"
+        ],
+        "title": "ProposedView",
+        "type": "object"
+      },
+      "Readiness": {
+        "additionalProperties": false,
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/ReadinessCheck"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "ready": {
+            "title": "Ready",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ready",
+          "checks"
+        ],
+        "title": "Readiness",
+        "type": "object"
+      },
+      "ReadinessCheck": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "ok",
+          "detail"
+        ],
+        "title": "ReadinessCheck",
+        "type": "object"
+      },
+      "Refusal": {
+        "enum": [
+          "invalid_decisions",
+          "not_open",
+          "wrong_step",
+          "not_an_approver",
+          "own_work",
+          "decided_earlier_step",
+          "not_eligible",
+          "stale_digest"
+        ],
+        "title": "Refusal",
+        "type": "string"
+      },
+      "RefusalOut": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "refusal": {
+            "$ref": "#/components/schemas/Refusal"
+          }
+        },
+        "required": [
+          "refusal",
+          "message"
+        ],
+        "title": "RefusalOut",
+        "type": "object"
+      },
+      "RejectedView": {
+        "additionalProperties": false,
+        "properties": {
+          "approval": {
+            "$ref": "#/components/schemas/ApprovalRef"
+          },
+          "events_url": {
+            "title": "Events Url",
+            "type": "string"
+          },
+          "last_seq": {
+            "title": "Last Seq",
+            "type": "integer"
+          },
+          "proposal": {
+            "$ref": "#/components/schemas/ProposalView"
+          },
+          "rejected_by": {
+            "title": "Rejected By",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "started_by": {
+            "title": "Started By",
+            "type": "string"
+          },
+          "state": {
+            "const": "rejected",
+            "default": "rejected",
+            "title": "State",
+            "type": "string"
+          },
+          "step": {
+            "title": "Step",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "use_case_name": {
+            "title": "Use Case Name",
+            "type": "string"
+          },
+          "use_case_version": {
+            "title": "Use Case Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_id",
+          "use_case_id",
+          "use_case_name",
+          "use_case_version",
+          "started_by",
+          "started_at",
+          "updated_at",
+          "last_seq",
+          "events_url",
+          "proposal",
+          "approval",
+          "rejected_by",
+          "step"
+        ],
+        "title": "RejectedView",
+        "type": "object"
+      },
+      "RetryAccepted": {
+        "additionalProperties": false,
+        "properties": {
+          "state": {
+            "enum": [
+              "pending",
+              "acting"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "title": "RetryAccepted",
+        "type": "object"
+      },
+      "RetryLater": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "retryable": {
+            "const": true,
+            "default": true,
+            "title": "Retryable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "RetryLater",
+        "type": "object"
+      },
+      "Role": {
+        "enum": [
+          "operator",
+          "approver"
+        ],
+        "title": "Role",
+        "type": "string"
+      },
+      "RoomAddressee": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "room",
+            "default": "room",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "title": "RoomAddressee",
+        "type": "object"
+      },
+      "RunCreated": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/RunCreatedData"
+          },
+          "kind": {
+            "const": "run_created",
+            "default": "run_created",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "RunCreated",
+        "type": "object"
+      },
+      "RunCreatedData": {
+        "additionalProperties": false,
+        "properties": {
+          "started_by": {
+            "title": "Started By",
+            "type": "string"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "use_case_version": {
+            "title": "Use Case Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "use_case_id",
+          "use_case_version",
+          "started_by"
+        ],
+        "title": "RunCreatedData",
+        "type": "object"
+      },
+      "RunFailed": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/RunFailedData"
+          },
+          "kind": {
+            "const": "run_failed",
+            "default": "run_failed",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "RunFailed",
+        "type": "object"
+      },
+      "RunFailedData": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/FailureReason"
+          },
+          "retryable": {
+            "title": "Retryable",
+            "type": "boolean"
+          },
+          "stage": {
+            "$ref": "#/components/schemas/FailureStage"
+          }
+        },
+        "required": [
+          "stage",
+          "reason",
+          "retryable",
+          "message"
+        ],
+        "title": "RunFailedData",
+        "type": "object"
+      },
+      "RunList": {
+        "additionalProperties": false,
+        "properties": {
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/RunView"
+            },
+            "title": "Runs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "runs"
+        ],
+        "title": "RunList",
+        "type": "object"
+      },
+      "RunOutcome": {
+        "enum": [
+          "written",
+          "nothing_to_write"
+        ],
+        "type": "string"
+      },
+      "RunRejected": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/RunRejectedData"
+          },
+          "kind": {
+            "const": "run_rejected",
+            "default": "run_rejected",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "RunRejected",
+        "type": "object"
+      },
+      "RunRejectedData": {
+        "additionalProperties": false,
+        "properties": {
+          "by": {
+            "title": "By",
+            "type": "string"
+          },
+          "step": {
+            "title": "Step",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "by",
+          "step"
+        ],
+        "title": "RunRejectedData",
+        "type": "object"
+      },
+      "RunRetried": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/RunRetriedData"
+          },
+          "kind": {
+            "const": "run_retried",
+            "default": "run_retried",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "RunRetried",
+        "type": "object"
+      },
+      "RunRetriedData": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt": {
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "leg": {
+            "$ref": "#/components/schemas/Leg"
+          }
+        },
+        "required": [
+          "leg",
+          "attempt"
+        ],
+        "title": "RunRetriedData",
+        "type": "object"
+      },
+      "RunStarted": {
+        "additionalProperties": false,
+        "properties": {
+          "events_url": {
+            "title": "Events Url",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "state": {
+            "const": "pending",
+            "default": "pending",
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "events_url"
+        ],
+        "title": "RunStarted",
+        "type": "object"
+      },
+      "RunSucceeded": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/RunSucceededData"
+          },
+          "kind": {
+            "const": "run_succeeded",
+            "default": "run_succeeded",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "RunSucceeded",
+        "type": "object"
+      },
+      "RunSucceededData": {
+        "additionalProperties": false,
+        "properties": {
+          "outcome": {
+            "$ref": "#/components/schemas/RunOutcome"
+          }
+        },
+        "required": [
+          "outcome"
+        ],
+        "title": "RunSucceededData",
+        "type": "object"
+      },
+      "RunView": {
+        "discriminator": {
+          "mapping": {
+            "acting": "#/components/schemas/ActingView",
+            "awaiting_approval": "#/components/schemas/AwaitingApprovalView",
+            "failed": "#/components/schemas/FailedView",
+            "pending": "#/components/schemas/PendingView",
+            "proposed": "#/components/schemas/ProposedView",
+            "rejected": "#/components/schemas/RejectedView",
+            "succeeded": "#/components/schemas/SucceededView",
+            "working": "#/components/schemas/WorkingView"
+          },
+          "propertyName": "state"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/PendingView"
+          },
+          {
+            "$ref": "#/components/schemas/WorkingView"
+          },
+          {
+            "$ref": "#/components/schemas/ProposedView"
+          },
+          {
+            "$ref": "#/components/schemas/AwaitingApprovalView"
+          },
+          {
+            "$ref": "#/components/schemas/ActingView"
+          },
+          {
+            "$ref": "#/components/schemas/SucceededView"
+          },
+          {
+            "$ref": "#/components/schemas/RejectedView"
+          },
+          {
+            "$ref": "#/components/schemas/FailedView"
+          }
+        ]
+      },
+      "StepFinished": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/StepFinishedData"
+          },
+          "kind": {
+            "const": "step_finished",
+            "default": "step_finished",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "StepFinished",
+        "type": "object"
+      },
+      "StepFinishedData": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "n8n_execution_id": {
+            "title": "N8N Execution Id",
+            "type": "string"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/StepOutcome"
+          },
+          "step": {
+            "$ref": "#/components/schemas/StepName"
+          },
+          "try_number": {
+            "title": "Try Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "step",
+          "n8n_execution_id",
+          "try_number",
+          "outcome",
+          "detail"
+        ],
+        "title": "StepFinishedData",
+        "type": "object"
+      },
+      "StepName": {
+        "enum": [
+          "run_agents",
+          "ask_approval",
+          "write_action"
+        ],
+        "type": "string"
+      },
+      "StepOutcome": {
+        "enum": [
+          "proposed",
+          "nothing_to_write",
+          "approval_opened",
+          "written",
+          "failed",
+          "superseded",
+          "refused",
+          "replayed"
+        ],
+        "type": "string"
+      },
+      "StepResponseOut": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/StepOutcome"
+          },
+          "proceed": {
+            "title": "Proceed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "proceed",
+          "outcome",
+          "detail"
+        ],
+        "title": "StepResponseOut",
+        "type": "object"
+      },
+      "StepRetried": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/StepRetriedData"
+          },
+          "kind": {
+            "const": "step_retried",
+            "default": "step_retried",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "StepRetried",
+        "type": "object"
+      },
+      "StepRetriedData": {
+        "additionalProperties": false,
+        "properties": {
+          "n8n_execution_id": {
+            "title": "N8N Execution Id",
+            "type": "string"
+          },
+          "step": {
+            "$ref": "#/components/schemas/StepName"
+          },
+          "try_number": {
+            "title": "Try Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "step",
+          "n8n_execution_id",
+          "try_number"
+        ],
+        "title": "StepRetriedData",
+        "type": "object"
+      },
+      "StepStarted": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/StepStartedData"
+          },
+          "kind": {
+            "const": "step_started",
+            "default": "step_started",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "StepStarted",
+        "type": "object"
+      },
+      "StepStartedData": {
+        "additionalProperties": false,
+        "properties": {
+          "n8n_execution_id": {
+            "title": "N8N Execution Id",
+            "type": "string"
+          },
+          "step": {
+            "$ref": "#/components/schemas/StepName"
+          },
+          "try_number": {
+            "title": "Try Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "step",
+          "n8n_execution_id",
+          "try_number"
+        ],
+        "title": "StepStartedData",
+        "type": "object"
+      },
+      "SucceededView": {
+        "additionalProperties": false,
+        "properties": {
+          "events_url": {
+            "title": "Events Url",
+            "type": "string"
+          },
+          "last_seq": {
+            "title": "Last Seq",
+            "type": "integer"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/RunOutcome"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "started_by": {
+            "title": "Started By",
+            "type": "string"
+          },
+          "state": {
+            "const": "succeeded",
+            "default": "succeeded",
+            "title": "State",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "use_case_name": {
+            "title": "Use Case Name",
+            "type": "string"
+          },
+          "use_case_version": {
+            "title": "Use Case Version",
+            "type": "integer"
+          },
+          "written": {
+            "items": {
+              "$ref": "#/components/schemas/WriteDoneView"
+            },
+            "title": "Written",
+            "type": "array"
+          }
+        },
+        "required": [
+          "run_id",
+          "use_case_id",
+          "use_case_name",
+          "use_case_version",
+          "started_by",
+          "started_at",
+          "updated_at",
+          "last_seq",
+          "events_url",
+          "outcome",
+          "written"
+        ],
+        "title": "SucceededView",
+        "type": "object"
+      },
+      "SuggestIn": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "SuggestIn",
+        "type": "object"
+      },
+      "SuggestOut": {
+        "additionalProperties": false,
+        "properties": {
+          "matched_terms": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Matched Terms",
+            "type": "array"
+          },
+          "template": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TemplateView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "template",
+          "matched_terms"
+        ],
+        "title": "SuggestOut",
+        "type": "object"
+      },
+      "SuggestedAction": {
+        "enum": [
+          "retry",
+          "check_workflow_engine",
+          "reload_workflow",
+          "ask_maintainer"
+        ],
+        "type": "string"
+      },
+      "TeamsStubMessage": {
+        "additionalProperties": false,
+        "properties": {
+          "approval_id": {
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "channel": {
+            "title": "Channel",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "link": {
+            "title": "Link",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "ts",
+          "channel",
+          "text",
+          "link",
+          "run_id",
+          "approval_id"
+        ],
+        "title": "TeamsStubMessage",
+        "type": "object"
+      },
+      "TeamsStubMessages": {
+        "additionalProperties": false,
+        "properties": {
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/TeamsStubMessage"
+            },
+            "title": "Messages",
+            "type": "array"
+          }
+        },
+        "required": [
+          "messages"
+        ],
+        "title": "TeamsStubMessages",
+        "type": "object"
+      },
+      "TemplateList": {
+        "additionalProperties": false,
+        "properties": {
+          "templates": {
+            "items": {
+              "$ref": "#/components/schemas/TemplateView"
+            },
+            "title": "Templates",
+            "type": "array"
+          }
+        },
+        "required": [
+          "templates"
+        ],
+        "title": "TemplateList",
+        "type": "object"
+      },
+      "TemplateView": {
+        "additionalProperties": false,
+        "properties": {
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/BlockView"
+            },
+            "title": "Blocks",
+            "type": "array"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "params": {
+            "items": {
+              "$ref": "#/components/schemas/ParamSpec"
+            },
+            "title": "Params",
+            "type": "array"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "description",
+          "blocks",
+          "params"
+        ],
+        "title": "TemplateView",
+        "type": "object"
+      },
+      "TroubleshootingOut": {
+        "additionalProperties": false,
+        "properties": {
+          "advice": {
+            "$ref": "#/components/schemas/Advice"
+          },
+          "failure": {
+            "$ref": "#/components/schemas/RunFailedData"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "failure",
+          "advice"
+        ],
+        "title": "TroubleshootingOut",
+        "type": "object"
+      },
+      "UseCaseCreated": {
+        "additionalProperties": false,
+        "properties": {
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "use_case_id",
+          "version"
+        ],
+        "title": "UseCaseCreated",
+        "type": "object"
+      },
+      "UseCaseList": {
+        "additionalProperties": false,
+        "properties": {
+          "use_cases": {
+            "items": {
+              "$ref": "#/components/schemas/UseCaseView"
+            },
+            "title": "Use Cases",
+            "type": "array"
+          }
+        },
+        "required": [
+          "use_cases"
+        ],
+        "title": "UseCaseList",
+        "type": "object"
+      },
+      "UseCaseView": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "instruction": {
+            "title": "Instruction",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "owner": {
+            "title": "Owner",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Params",
+            "type": "object"
+          },
+          "template": {
+            "title": "Template",
+            "type": "string"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "use_case_id",
+          "version",
+          "template",
+          "name",
+          "instruction",
+          "params",
+          "owner",
+          "created_at"
+        ],
+        "title": "UseCaseView",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "Verdict": {
+        "enum": [
+          "approve",
+          "decline"
+        ],
+        "title": "Verdict",
+        "type": "string"
+      },
+      "WireVerdict": {
+        "enum": [
+          "approve",
+          "decline"
+        ],
+        "type": "string"
+      },
+      "WorkflowFailureIn": {
+        "additionalProperties": false,
+        "properties": {
+          "execution_id": {
+            "title": "Execution Id",
+            "type": "string"
+          },
+          "execution_url": {
+            "title": "Execution Url",
+            "type": "string"
+          },
+          "last_node": {
+            "title": "Last Node",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "workflow": {
+            "title": "Workflow",
+            "type": "string"
+          }
+        },
+        "required": [
+          "execution_id",
+          "workflow",
+          "last_node",
+          "message",
+          "execution_url"
+        ],
+        "title": "WorkflowFailureIn",
+        "type": "object"
+      },
+      "WorkingView": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt": {
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "events_url": {
+            "title": "Events Url",
+            "type": "string"
+          },
+          "last_seq": {
+            "title": "Last Seq",
+            "type": "integer"
+          },
+          "n8n_execution_id": {
+            "title": "N8N Execution Id",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "started_by": {
+            "title": "Started By",
+            "type": "string"
+          },
+          "state": {
+            "const": "working",
+            "default": "working",
+            "title": "State",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "use_case_name": {
+            "title": "Use Case Name",
+            "type": "string"
+          },
+          "use_case_version": {
+            "title": "Use Case Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_id",
+          "use_case_id",
+          "use_case_name",
+          "use_case_version",
+          "started_by",
+          "started_at",
+          "updated_at",
+          "last_seq",
+          "events_url",
+          "n8n_execution_id",
+          "attempt"
+        ],
+        "title": "WorkingView",
+        "type": "object"
+      },
+      "WriteActionDenied": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WriteActionDeniedData"
+          },
+          "kind": {
+            "const": "write_action_denied",
+            "default": "write_action_denied",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "WriteActionDenied",
+        "type": "object"
+      },
+      "WriteActionDeniedData": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/DeniedReason"
+          }
+        },
+        "required": [
+          "reason",
+          "detail"
+        ],
+        "title": "WriteActionDeniedData",
+        "type": "object"
+      },
+      "WriteActionDone": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WriteActionDoneData"
+          },
+          "kind": {
+            "const": "write_action_done",
+            "default": "write_action_done",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "WriteActionDone",
+        "type": "object"
+      },
+      "WriteActionDoneData": {
+        "additionalProperties": false,
+        "properties": {
+          "approved_by": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Approved By",
+            "type": "array"
+          },
+          "connector": {
+            "title": "Connector",
+            "type": "string"
+          },
+          "external_reference": {
+            "title": "External Reference",
+            "type": "string"
+          },
+          "operation": {
+            "title": "Operation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "connector",
+          "operation",
+          "external_reference",
+          "approved_by"
+        ],
+        "title": "WriteActionDoneData",
+        "type": "object"
+      },
+      "WriteActionProposed": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WriteActionProposedData"
+          },
+          "kind": {
+            "const": "write_action_proposed",
+            "default": "write_action_proposed",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "WriteActionProposed",
+        "type": "object"
+      },
+      "WriteActionProposedData": {
+        "additionalProperties": false,
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/ActionLine"
+            },
+            "title": "Actions",
+            "type": "array"
+          },
+          "digest": {
+            "title": "Digest",
+            "type": "string"
+          },
+          "proposal_id": {
+            "title": "Proposal Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proposal_id",
+          "digest",
+          "actions"
+        ],
+        "title": "WriteActionProposedData",
+        "type": "object"
+      },
+      "WriteActionView": {
+        "additionalProperties": false,
+        "properties": {
+          "connector": {
+            "title": "Connector",
+            "type": "string"
+          },
+          "fields": {
+            "additionalProperties": true,
+            "title": "Fields",
+            "type": "object"
+          },
+          "operation": {
+            "title": "Operation",
+            "type": "string"
+          },
+          "target": {
+            "additionalProperties": true,
+            "title": "Target",
+            "type": "object"
+          }
+        },
+        "required": [
+          "connector",
+          "operation",
+          "target",
+          "fields"
+        ],
+        "title": "WriteActionView",
+        "type": "object"
+      },
+      "WriteDoneView": {
+        "additionalProperties": false,
+        "properties": {
+          "approved_by": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Approved By",
+            "type": "array"
+          },
+          "connector": {
+            "title": "Connector",
+            "type": "string"
+          },
+          "external_reference": {
+            "title": "External Reference",
+            "type": "string"
+          },
+          "operation": {
+            "title": "Operation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "connector",
+          "operation",
+          "external_reference",
+          "approved_by"
+        ],
+        "title": "WriteDoneView",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "DevUser": {
+        "description": "Local sign-in stub. One of the ids from GET /api/v1/dev/users.",
+        "in": "header",
+        "name": "X-Dev-User",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "title": "AI workflow builder platform API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/approvals/{approval_id}": {
+      "get": {
+        "operationId": "get_approval_api_v1_approvals__approval_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "approval_id",
+            "required": true,
+            "schema": {
+              "title": "Approval Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Approval",
+        "tags": [
+          "orchestration"
+        ]
+      }
+    },
+    "/api/v1/approvals/{approval_id}/decisions": {
+      "post": {
+        "operationId": "decide_api_v1_approvals__approval_id__decisions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "approval_id",
+            "required": true,
+            "schema": {
+              "title": "Approval Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionOut"
+                }
+              }
+            },
+            "description": "The same decision was already recorded"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefusalOut"
+                }
+              }
+            },
+            "description": "This person cannot decide this step"
+          },
+          "409": {
+            "description": "Another Approver decided this step first"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Decide",
+        "tags": [
+          "orchestration"
+        ]
+      }
+    },
+    "/api/v1/dev/users": {
+      "get": {
+        "operationId": "list_dev_users_api_v1_dev_users_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevUsers"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Dev Users",
+        "tags": [
+          "dev"
+        ]
+      }
+    },
+    "/api/v1/mock-jira/tickets": {
+      "get": {
+        "operationId": "list_mock_jira_tickets_api_v1_mock_jira_tickets_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MockJiraTickets"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Mock Jira Tickets",
+        "tags": [
+          "stubs"
+        ]
+      }
+    },
+    "/api/v1/runs": {
+      "get": {
+        "operationId": "list_runs_api_v1_runs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Runs",
+        "tags": [
+          "orchestration"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}": {
+      "get": {
+        "operationId": "get_run_api_v1_runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Run",
+        "tags": [
+          "orchestration"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/events": {
+      "get": {
+        "description": "With `Accept: text/event-stream` this is the live stream. Each frame is `id: <seq>`, `event: activity`, `data: <ActivityEvent>`. The server replays from the event after `Last-Event-ID` and then waits for new ones. Otherwise it returns the events after `after` as one JSON page.",
+        "operationId": "run_events_api_v1_runs__run_id__events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "After",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Last-Event-ID",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "accept",
+            "required": false,
+            "schema": {
+              "default": "application/json",
+              "title": "Accept",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventPage"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "description": "SSE frames of ActivityEvent",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Events",
+        "tags": [
+          "monitoring"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/retry": {
+      "post": {
+        "operationId": "retry_run_api_v1_runs__run_id__retry_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryAccepted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retry Run",
+        "tags": [
+          "orchestration"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/troubleshoot": {
+      "get": {
+        "operationId": "troubleshoot_api_v1_runs__run_id__troubleshoot_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TroubleshootingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Troubleshoot",
+        "tags": [
+          "monitoring"
+        ]
+      }
+    },
+    "/api/v1/teams-stub/messages": {
+      "get": {
+        "operationId": "list_teams_stub_messages_api_v1_teams_stub_messages_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamsStubMessages"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Teams Stub Messages",
+        "tags": [
+          "stubs"
+        ]
+      }
+    },
+    "/api/v1/templates": {
+      "get": {
+        "operationId": "list_templates_api_v1_templates_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Templates",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/use-cases": {
+      "get": {
+        "operationId": "list_use_cases_api_v1_use_cases_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UseCaseList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Use Cases",
+        "tags": [
+          "builder"
+        ]
+      },
+      "post": {
+        "operationId": "create_use_case_api_v1_use_cases_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUseCase"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UseCaseCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Use Case",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/use-cases/suggest": {
+      "post": {
+        "operationId": "suggest_template_api_v1_use_cases_suggest_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuggestIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Suggest Template",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/use-cases/{use_case_id}": {
+      "get": {
+        "operationId": "get_use_case_api_v1_use_cases__use_case_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "use_case_id",
+            "required": true,
+            "schema": {
+              "title": "Use Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UseCaseView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Use Case",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/use-cases/{use_case_id}/runs": {
+      "post": {
+        "operationId": "start_run_api_v1_use_cases__use_case_id__runs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "use_case_id",
+            "required": true,
+            "schema": {
+              "title": "Use Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunStarted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Run",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/healthz": {
+      "get": {
+        "operationId": "healthz_healthz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Healthz",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/healthz/ready": {
+      "get": {
+        "operationId": "ready_healthz_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Readiness"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Readiness"
+                }
+              }
+            },
+            "description": "Not ready to take traffic"
+          }
+        },
+        "summary": "Ready",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/internal/v1/runs/{run_id}/agent-events": {
+      "post": {
+        "operationId": "ingest_agent_event_internal_v1_runs__run_id__agent_events_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "task",
+            "required": true,
+            "schema": {
+              "title": "Task",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Callback-Token",
+            "required": true,
+            "schema": {
+              "title": "X-Callback-Token",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentEventPost"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ingest Agent Event",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/internal/v1/runs/{run_id}/steps/{step}": {
+      "post": {
+        "operationId": "run_step_internal_v1_runs__run_id__steps__step__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "step",
+            "required": true,
+            "schema": {
+              "enum": [
+                "run_agents",
+                "ask_approval",
+                "write_action"
+              ],
+              "title": "Step",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Step-Key",
+            "required": true,
+            "schema": {
+              "title": "X-Step-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-N8N-Execution",
+            "required": true,
+            "schema": {
+              "title": "X-N8N-Execution",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StepResponseOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryLater"
+                }
+              }
+            },
+            "description": "Try the same step again later"
+          }
+        },
+        "summary": "Run Step",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/internal/v1/workflow-failures": {
+      "post": {
+        "operationId": "report_workflow_failure_internal_v1_workflow_failures_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Step-Key",
+            "required": true,
+            "schema": {
+              "title": "X-Step-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowFailureIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Report Workflow Failure",
+        "tags": [
+          "internal"
+        ]
+      }
+    }
+  },
+  "security": [
+    {
+      "DevUser": []
+    }
+  ]
+}

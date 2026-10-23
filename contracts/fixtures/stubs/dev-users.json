@@ -1,0 +1,26 @@
+{
+  "users": [
+    {
+      "id": "alice",
+      "display": "Alice",
+      "roles": [
+        "operator",
+        "approver"
+      ]
+    },
+    {
+      "id": "bob",
+      "display": "Bob",
+      "roles": [
+        "approver"
+      ]
+    },
+    {
+      "id": "carol",
+      "display": "Carol",
+      "roles": [
+        "operator"
+      ]
+    }
+  ]
+}

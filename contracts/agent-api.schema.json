@@ -1,0 +1,766 @@
+{
+  "$defs": {
+    "Addressee": {
+      "discriminator": {
+        "mapping": {
+          "agent": "#/$defs/AgentAddressee",
+          "room": "#/$defs/RoomAddressee"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/AgentAddressee"
+        },
+        {
+          "$ref": "#/$defs/RoomAddressee"
+        }
+      ]
+    },
+    "AgentAddressee": {
+      "additionalProperties": false,
+      "properties": {
+        "display": {
+          "title": "Display",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "agent",
+          "default": "agent",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "display"
+      ],
+      "title": "AgentAddressee",
+      "type": "object"
+    },
+    "AgentCard": {
+      "additionalProperties": false,
+      "properties": {
+        "capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Capabilities",
+          "type": "array"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "display": {
+          "title": "Display",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "display",
+        "description",
+        "capabilities"
+      ],
+      "title": "AgentCard",
+      "type": "object"
+    },
+    "AgentCards": {
+      "additionalProperties": false,
+      "properties": {
+        "agents": {
+          "items": {
+            "$ref": "#/$defs/AgentCard"
+          },
+          "title": "Agents",
+          "type": "array"
+        }
+      },
+      "required": [
+        "agents"
+      ],
+      "title": "AgentCards",
+      "type": "object"
+    },
+    "AgentEvent": {
+      "discriminator": {
+        "mapping": {
+          "agent_failed": "#/$defs/AgentFailedEvent",
+          "agent_joined": "#/$defs/AgentJoinedEvent",
+          "agent_message": "#/$defs/AgentMessageEvent",
+          "agent_step_finished": "#/$defs/AgentStepFinishedEvent",
+          "agent_step_started": "#/$defs/AgentStepStartedEvent"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/AgentJoinedEvent"
+        },
+        {
+          "$ref": "#/$defs/AgentStepStartedEvent"
+        },
+        {
+          "$ref": "#/$defs/AgentStepFinishedEvent"
+        },
+        {
+          "$ref": "#/$defs/AgentFailedEvent"
+        },
+        {
+          "$ref": "#/$defs/AgentMessageEvent"
+        }
+      ]
+    },
+    "AgentEventPost": {
+      "additionalProperties": false,
+      "properties": {
+        "event": {
+          "$ref": "#/$defs/AgentEvent"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id",
+        "event"
+      ],
+      "title": "AgentEventPost",
+      "type": "object"
+    },
+    "AgentFailedData": {
+      "additionalProperties": false,
+      "properties": {
+        "error_type": {
+          "title": "Error Type",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "retryable": {
+          "title": "Retryable",
+          "type": "boolean"
+        },
+        "step": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Step"
+        }
+      },
+      "required": [
+        "step",
+        "error_type",
+        "message",
+        "retryable"
+      ],
+      "title": "AgentFailedData",
+      "type": "object"
+    },
+    "AgentFailedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "$ref": "#/$defs/AgentRef"
+        },
+        "agent_seq": {
+          "minimum": 1,
+          "title": "Agent Seq",
+          "type": "integer"
+        },
+        "data": {
+          "$ref": "#/$defs/AgentFailedData"
+        },
+        "kind": {
+          "const": "agent_failed",
+          "default": "agent_failed",
+          "title": "Kind",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent_seq",
+        "ts",
+        "agent",
+        "summary",
+        "data"
+      ],
+      "title": "AgentFailedEvent",
+      "type": "object"
+    },
+    "AgentJoinedData": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "$ref": "#/$defs/AgentRef"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent",
+        "reason"
+      ],
+      "title": "AgentJoinedData",
+      "type": "object"
+    },
+    "AgentJoinedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "$ref": "#/$defs/AgentRef"
+        },
+        "agent_seq": {
+          "minimum": 1,
+          "title": "Agent Seq",
+          "type": "integer"
+        },
+        "data": {
+          "$ref": "#/$defs/AgentJoinedData"
+        },
+        "kind": {
+          "const": "agent_joined",
+          "default": "agent_joined",
+          "title": "Kind",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent_seq",
+        "ts",
+        "agent",
+        "summary",
+        "data"
+      ],
+      "title": "AgentJoinedEvent",
+      "type": "object"
+    },
+    "AgentMessageData": {
+      "additionalProperties": false,
+      "properties": {
+        "addressee": {
+          "$ref": "#/$defs/Addressee"
+        },
+        "speaker": {
+          "$ref": "#/$defs/AgentRef"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "speaker",
+        "addressee",
+        "text"
+      ],
+      "title": "AgentMessageData",
+      "type": "object"
+    },
+    "AgentMessageEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "$ref": "#/$defs/AgentRef"
+        },
+        "agent_seq": {
+          "minimum": 1,
+          "title": "Agent Seq",
+          "type": "integer"
+        },
+        "data": {
+          "$ref": "#/$defs/AgentMessageData"
+        },
+        "kind": {
+          "const": "agent_message",
+          "default": "agent_message",
+          "title": "Kind",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent_seq",
+        "ts",
+        "agent",
+        "summary",
+        "data"
+      ],
+      "title": "AgentMessageEvent",
+      "type": "object"
+    },
+    "AgentRef": {
+      "additionalProperties": false,
+      "properties": {
+        "display": {
+          "title": "Display",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "display"
+      ],
+      "title": "AgentRef",
+      "type": "object"
+    },
+    "AgentStepFinishedData": {
+      "additionalProperties": false,
+      "properties": {
+        "result": {
+          "additionalProperties": true,
+          "title": "Result",
+          "type": "object"
+        },
+        "step": {
+          "title": "Step",
+          "type": "string"
+        }
+      },
+      "required": [
+        "step",
+        "result"
+      ],
+      "title": "AgentStepFinishedData",
+      "type": "object"
+    },
+    "AgentStepFinishedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "$ref": "#/$defs/AgentRef"
+        },
+        "agent_seq": {
+          "minimum": 1,
+          "title": "Agent Seq",
+          "type": "integer"
+        },
+        "data": {
+          "$ref": "#/$defs/AgentStepFinishedData"
+        },
+        "kind": {
+          "const": "agent_step_finished",
+          "default": "agent_step_finished",
+          "title": "Kind",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent_seq",
+        "ts",
+        "agent",
+        "summary",
+        "data"
+      ],
+      "title": "AgentStepFinishedEvent",
+      "type": "object"
+    },
+    "AgentStepStartedData": {
+      "additionalProperties": false,
+      "properties": {
+        "step": {
+          "title": "Step",
+          "type": "string"
+        }
+      },
+      "required": [
+        "step"
+      ],
+      "title": "AgentStepStartedData",
+      "type": "object"
+    },
+    "AgentStepStartedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "$ref": "#/$defs/AgentRef"
+        },
+        "agent_seq": {
+          "minimum": 1,
+          "title": "Agent Seq",
+          "type": "integer"
+        },
+        "data": {
+          "$ref": "#/$defs/AgentStepStartedData"
+        },
+        "kind": {
+          "const": "agent_step_started",
+          "default": "agent_step_started",
+          "title": "Kind",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent_seq",
+        "ts",
+        "agent",
+        "summary",
+        "data"
+      ],
+      "title": "AgentStepStartedEvent",
+      "type": "object"
+    },
+    "Callback": {
+      "additionalProperties": false,
+      "properties": {
+        "token": {
+          "description": "Sent back as the X-Callback-Token header, never in the URL. The handler must compare it in constant time, bind it to this run_id and task_id, and give it an expiry.",
+          "title": "Token",
+          "type": "string"
+        },
+        "url": {
+          "description": "Where the agent posts each event. It names only the run and the task.",
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "token"
+      ],
+      "title": "Callback",
+      "type": "object"
+    },
+    "CarryForward": {
+      "additionalProperties": false,
+      "properties": {
+        "last_known_tag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Known Tag"
+        }
+      },
+      "title": "CarryForward",
+      "type": "object"
+    },
+    "ProposedIntent": {
+      "additionalProperties": false,
+      "properties": {
+        "fields": {
+          "additionalProperties": true,
+          "title": "Fields",
+          "type": "object"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "fields",
+        "reason"
+      ],
+      "title": "ProposedIntent",
+      "type": "object"
+    },
+    "ReleaseCheckInputs": {
+      "additionalProperties": false,
+      "properties": {
+        "repo": {
+          "title": "Repo",
+          "type": "string"
+        },
+        "tag_pattern": {
+          "title": "Tag Pattern",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo",
+        "tag_pattern"
+      ],
+      "title": "ReleaseCheckInputs",
+      "type": "object"
+    },
+    "RoomAddressee": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "room",
+          "default": "room",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "title": "RoomAddressee",
+      "type": "object"
+    },
+    "TaskError": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "retryable": {
+          "title": "Retryable",
+          "type": "boolean"
+        },
+        "type": {
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "message",
+        "retryable"
+      ],
+      "title": "TaskError",
+      "type": "object"
+    },
+    "TaskFailed": {
+      "additionalProperties": false,
+      "properties": {
+        "error": {
+          "$ref": "#/$defs/TaskError"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/AgentEvent"
+          },
+          "title": "Events",
+          "type": "array"
+        },
+        "status": {
+          "const": "failed",
+          "default": "failed",
+          "title": "Status",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id",
+        "error",
+        "events"
+      ],
+      "title": "TaskFailed",
+      "type": "object"
+    },
+    "TaskFinished": {
+      "additionalProperties": false,
+      "properties": {
+        "events": {
+          "items": {
+            "$ref": "#/$defs/AgentEvent"
+          },
+          "title": "Events",
+          "type": "array"
+        },
+        "output": {
+          "$ref": "#/$defs/TaskOutput"
+        },
+        "status": {
+          "const": "finished",
+          "default": "finished",
+          "title": "Status",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id",
+        "output",
+        "events"
+      ],
+      "title": "TaskFinished",
+      "type": "object"
+    },
+    "TaskOutput": {
+      "additionalProperties": false,
+      "properties": {
+        "carry_forward": {
+          "$ref": "#/$defs/CarryForward"
+        },
+        "new_tags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "New Tags",
+          "type": "array"
+        },
+        "proposed": {
+          "items": {
+            "$ref": "#/$defs/ProposedIntent"
+          },
+          "title": "Proposed",
+          "type": "array"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "summary",
+        "new_tags",
+        "proposed",
+        "carry_forward"
+      ],
+      "title": "TaskOutput",
+      "type": "object"
+    },
+    "TaskRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "callback": {
+          "$ref": "#/$defs/Callback"
+        },
+        "carry_forward": {
+          "$ref": "#/$defs/CarryForward"
+        },
+        "inputs": {
+          "$ref": "#/$defs/ReleaseCheckInputs"
+        },
+        "instruction": {
+          "title": "Instruction",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id",
+        "run_id",
+        "instruction",
+        "inputs",
+        "carry_forward",
+        "callback"
+      ],
+      "title": "TaskRequest",
+      "type": "object"
+    },
+    "TaskResult": {
+      "discriminator": {
+        "mapping": {
+          "failed": "#/$defs/TaskFailed",
+          "finished": "#/$defs/TaskFinished"
+        },
+        "propertyName": "status"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/TaskFinished"
+        },
+        {
+          "$ref": "#/$defs/TaskFailed"
+        }
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "agent_cards": {
+      "$ref": "#/$defs/AgentCards"
+    },
+    "callback": {
+      "$ref": "#/$defs/AgentEventPost"
+    },
+    "task_request": {
+      "$ref": "#/$defs/TaskRequest"
+    },
+    "task_result": {
+      "$ref": "#/$defs/TaskResult"
+    }
+  },
+  "required": [
+    "task_request",
+    "task_result",
+    "callback",
+    "agent_cards"
+  ],
+  "title": "AgentApiSchema",
+  "type": "object"
+}

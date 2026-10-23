@@ -1,0 +1,29 @@
+{
+  "approval_id": "apr_01JB8",
+  "run_id": "run_01JB8",
+  "digest": "sha256:0be2129632d1283e015efcae22757aa3e182793e0153503bdd30dc0327a42576",
+  "actions": [
+    {
+      "connector": "jira",
+      "operation": "create_ticket",
+      "target": {
+        "project": "MOCK"
+      },
+      "fields": {
+        "title": "New LangGraph releases: 1.2.16, 1.2.15",
+        "body": "Releases newer than 1.2.14 on langchain-ai/langgraph:\n- 1.2.16\n- 1.2.15\n\nProposed by the AI workflow builder."
+      }
+    }
+  ],
+  "steps": [
+    {
+      "index": 0,
+      "label": "Team approver",
+      "status": "open",
+      "decided_by": null,
+      "decided_at": null
+    }
+  ],
+  "you_can_decide": true,
+  "why_not": null
+}
