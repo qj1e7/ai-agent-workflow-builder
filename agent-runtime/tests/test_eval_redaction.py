@@ -118,3 +118,11 @@ def test_a_model_or_judge_that_cannot_be_built_is_not_run_and_leaks_nothing(
             assert value not in written
     for fragment in ("secret-pw-9", "ollama-box-9", "bakeoff-res-9", "user-9"):
         assert fragment not in written
+
+
+WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "evals.yml"
+
+
+@pytest.mark.skipif(not WORKFLOW.exists(), reason="The workflows are not in the test image.")
+def test_the_evals_workflow_takes_its_keys_from_the_evals_environment() -> None:
+    assert "\n    environment: evals\n" in WORKFLOW.read_text()
