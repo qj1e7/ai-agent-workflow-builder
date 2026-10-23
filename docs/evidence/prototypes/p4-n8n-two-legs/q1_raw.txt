@@ -1,0 +1,10 @@
+POST release-check/work (202, {'run_id': 'run-A1', 'n8n_execution_id': '1'})
+POST release-check/act (202, {'run_id': 'run-B1', 'n8n_execution_id': '2'})
+EXECUTIONS status 200
+2 success webhook nodes run: ['Webhook B', 'Respond B', 'Step B1', 'Proceed? B', 'Step B2']
+1 success webhook nodes run: ['Webhook A', 'Respond A', 'Step A1', 'Proceed? A', 'Step A2']
+STUB LOG
+{"t": "11:37:11.960", "path": "/step/a1", "call": 1, "status": 200, "headers": {"Accept": "application/json,text/html,application/xhtml+xml,application/xml,text/*;q=0.9, image/*;q=0.8, */*;q=0.7", "Content-Type": "application/json", "X-Step-Key": "<redacted-step-key>", "User-Agent": "n8n", "Content-Length": "19", "Accept-Encoding": "gzip, compress, deflate, br", "Host": "stub:5690", "Connection": "close"}, "body": {"run_id": "run-A1"}}
+{"t": "11:37:11.974", "path": "/step/a2", "call": 1, "status": 200, "headers": {"Accept": "application/json,text/html,application/xhtml+xml,application/xml,text/*;q=0.9, image/*;q=0.8, */*;q=0.7", "Content-Type": "application/json", "X-Step-Key": "<redacted-step-key>", "User-Agent": "n8n", "Content-Length": "13", "Accept-Encoding": "gzip, compress, deflate, br", "Host": "stub:5690", "Connection": "close"}, "body": {"run_id": ""}}
+{"t": "11:37:11.993", "path": "/step/b1", "call": 1, "status": 200, "headers": {"Accept": "application/json,text/html,application/xhtml+xml,application/xml,text/*;q=0.9, image/*;q=0.8, */*;q=0.7", "Content-Type": "application/json", "X-Step-Key": "<redacted-step-key>", "User-Agent": "n8n", "Content-Length": "19", "Accept-Encoding": "gzip, compress, deflate, br", "Host": "stub:5690", "Connection": "close"}, "body": {"run_id": "run-B1"}}
+{"t": "11:37:11.998", "path": "/step/b2", "call": 1, "status": 200, "headers": {"Accept": "application/json,text/html,application/xhtml+xml,application/xml,text/*;q=0.9, image/*;q=0.8, */*;q=0.7", "Content-Type": "application/json", "X-Step-Key": "<redacted-step-key>", "User-Agent": "n8n", "Content-Length": "13", "Accept-Encoding": "gzip, compress, deflate, br", "Host": "stub:5690", "Connection": "close"}, "body": {"run_id": ""}}

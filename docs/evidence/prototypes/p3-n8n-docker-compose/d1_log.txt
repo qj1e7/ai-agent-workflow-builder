@@ -1,0 +1,6 @@
+n8n-1  | Starting migration CreateMigrationFindingTables1790598807675
+n8n-1  | Finished migration CreateMigrationFindingTables1790598807675
+   286
+
+ CreateMigrationFindingTables1790598807675
+

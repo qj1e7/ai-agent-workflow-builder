@@ -1,0 +1,1160 @@
+{
+    "check_type": "terraform",
+    "results": {
+        "passed_checks": [
+            {
+                "check_id": "CKV_AZURE_42",
+                "bc_check_id": "BC_AZR_GENERAL_11",
+                "check_name": "Ensure the key vault is recoverable",
+                "check_result": {
+                    "result": "PASSED",
+                    "evaluated_keys": [
+                        "purge_protection_enabled",
+                        "soft_delete_enabled"
+                    ]
+                },
+                "code_block": [
+                    [
+                        34,
+                        "resource \"azurerm_key_vault\" \"kv\" {\n"
+                    ],
+                    [
+                        35,
+                        "  name                       = \"${var.name_prefix}-kv\"\n"
+                    ],
+                    [
+                        36,
+                        "  location                   = azurerm_resource_group.rg.location\n"
+                    ],
+                    [
+                        37,
+                        "  resource_group_name        = azurerm_resource_group.rg.name\n"
+                    ],
+                    [
+                        38,
+                        "  tenant_id                  = data.azurerm_client_config.current.tenant_id\n"
+                    ],
+                    [
+                        39,
+                        "  sku_name                   = \"standard\"\n"
+                    ],
+                    [
+                        40,
+                        "  rbac_authorization_enabled = true\n"
+                    ],
+                    [
+                        41,
+                        "  purge_protection_enabled   = true\n"
+                    ],
+                    [
+                        42,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/s/terraform/main.tf",
+                "repo_file_path": "/s/terraform/main.tf",
+                "file_line_range": [
+                    34,
+                    42
+                ],
+                "resource": "azurerm_key_vault.kv",
+                "evaluations": null,
+                "check_class": "checkov.terraform.checks.resource.azure.KeyvaultRecoveryEnabled",
+                "fixed_definition": null,
+                "entity_tags": null,
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": null,
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/azure-policies/azure-general-policies/ensure-the-key-vault-is-recoverable",
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/s/terraform/main.tf",
+                "breadcrumbs": {
+                    "name": [
+                        {
+                            "type": "variable",
+                            "name": "name_prefix",
+                            "path": "/s/terraform/variables.tf",
+                            "module_connection": false
+                        }
+                    ],
+                    "location": [
+                        {
+                            "type": "variable",
+                            "name": "location",
+                            "path": "/s/terraform/variables.tf",
+                            "module_connection": false
+                        },
+                        {
+                            "type": "resource",
+                            "name": "azurerm_resource_group.rg",
+                            "path": "/s/terraform/main.tf",
+                            "module_connection": false
+                        }
+                    ],
+                    "resource_group_name": [
+                        {
+                            "type": "variable",
+                            "name": "name_prefix",
+                            "path": "/s/terraform/variables.tf",
+                            "module_connection": false
+                        },
+                        {
+                            "type": "resource",
+                            "name": "azurerm_resource_group.rg",
+                            "path": "/s/terraform/main.tf",
+                            "module_connection": false
+                        }
+                    ]
+                }
+            },
+            {
+                "check_id": "CKV_AZURE_111",
+                "bc_check_id": "BC_AZR_GENERAL_41",
+                "check_name": "Ensure that key vault enables soft delete",
+                "check_result": {
+                    "result": "PASSED",
+                    "evaluated_keys": [
+                        "soft_delete_enabled"
+                    ]
+                },
+                "code_block": [
+                    [
+                        34,
+                        "resource \"azurerm_key_vault\" \"kv\" {\n"
+                    ],
+                    [
+                        35,
+                        "  name                       = \"${var.name_prefix}-kv\"\n"
+                    ],
+                    [
+                        36,
+                        "  location                   = azurerm_resource_group.rg.location\n"
+                    ],
+                    [
+                        37,
+                        "  resource_group_name        = azurerm_resource_group.rg.name\n"
+                    ],
+                    [
+                        38,
+                        "  tenant_id                  = data.azurerm_client_config.current.tenant_id\n"
+                    ],
+                    [
+                        39,
+                        "  sku_name                   = \"standard\"\n"
+                    ],
+                    [
+                        40,
+                        "  rbac_authorization_enabled = true\n"
+                    ],
+                    [
+                        41,
+                        "  purge_protection_enabled   = true\n"
+                    ],
+                    [
+                        42,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/s/terraform/main.tf",
+                "repo_file_path": "/s/terraform/main.tf",
+                "file_line_range": [
+                    34,
+                    42
+                ],
+                "resource": "azurerm_key_vault.kv",
+                "evaluations": null,
+                "check_class": "checkov.terraform.checks.resource.azure.KeyVaultEnablesSoftDelete",
+                "fixed_definition": null,
+                "entity_tags": null,
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": null,
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/azure-policies/azure-general-policies/ensure-that-key-vault-enables-soft-delete",
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/s/terraform/main.tf",
+                "breadcrumbs": {
+                    "name": [
+                        {
+                            "type": "variable",
+                            "name": "name_prefix",
+                            "path": "/s/terraform/variables.tf",
+                            "module_connection": false
+                        }
+                    ],
+                    "location": [
+                        {
+                            "type": "variable",
+                            "name": "location",
+                            "path": "/s/terraform/variables.tf",
+                            "module_connection": false
+                        },
+                        {
+                            "type": "resource",
+                            "name": "azurerm_resource_group.rg",
+                            "path": "/s/terraform/main.tf",
+                            "module_connection": false
+                        }
+                    ],
+                    "resource_group_name": [
+                        {
+                            "type": "variable",
+                            "name": "name_prefix",
+                            "path": "/s/terraform/variables.tf",
+                            "module_connection": false
+                        },
+                        {
+                            "type": "resource",
+                            "name": "azurerm_resource_group.rg",
+                            "path": "/s/terraform/main.tf",
+                            "module_connection": false
+                        }
+                    ]
+                }
+            },
+            {
+                "check_id": "CKV_AZURE_110",
+                "bc_check_id": "BC_AZR_GENERAL_40",
+                "check_name": "Ensure that key vault enables purge protection",
+                "check_result": {
+                    "result": "PASSED",
+                    "evaluated_keys": [
+                        "purge_protection_enabled"
+                    ]
+                },
+                "code_block": [
+                    [
+                        34,
+                        "resource \"azurerm_key_vault\" \"kv\" {\n"
+                    ],
+                    [
+                        35,
+                        "  name                       = \"${var.name_prefix}-kv\"\n"
+                    ],
+                    [
+                        36,
+                        "  location                   = azurerm_resource_group.rg.location\n"
+                    ],
+                    [
+                        37,
+                        "  resource_group_name        = azurerm_resource_group.rg.name\n"
+                    ],
+                    [
+                        38,
+                        "  tenant_id                  = data.azurerm_client_config.current.tenant_id\n"
+                    ],
+                    [
+                        39,
+                        "  sku_name                   = \"standard\"\n"
+                    ],
+                    [
+                        40,
+                        "  rbac_authorization_enabled = true\n"
+                    ],
+                    [
+                        41,
+                        "  purge_protection_enabled   = true\n"
+                    ],
+                    [
+                        42,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/s/terraform/main.tf",
+                "repo_file_path": "/s/terraform/main.tf",
+                "file_line_range": [
+                    34,
+                    42
+                ],
+                "resource": "azurerm_key_vault.kv",
+                "evaluations": null,
+                "check_class": "checkov.terraform.checks.resource.azure.KeyVaultEnablesPurgeProtection",
+                "fixed_definition": null,
+                "entity_tags": null,
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": null,
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/azure-policies/azure-general-policies/ensure-that-key-vault-enables-purge-protection",
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/s/terraform/main.tf",
+                "breadcrumbs": {
+                    "name": [
+                        {
+                            "type": "variable",
+                            "name": "name_prefix",
+                            "path": "/s/terraform/variables.tf",
+                            "module_connection": false
+                        }
+                    ],
+                    "location": [
+                        {
+                            "type": "variable",
+                            "name": "location",
+                            "path": "/s/terraform/variables.tf",
+                            "module_connection": false
+                        },
+                        {
+                            "type": "resource",
+                            "name": "azurerm_resource_group.rg",
+                            "path": "/s/terraform/main.tf",
+                            "module_connection": false
+                        }
+                    ],
+                    "resource_group_name": [
+                        {
+                            "type": "variable",
+                            "name": "name_prefix",
+                            "path": "/s/terraform/variables.tf",
+                            "module_connection": false
+                        },
+                        {
+                            "type": "resource",
+                            "name": "azurerm_resource_group.rg",
+                            "path": "/s/terraform/main.tf",
+                            "module_connection": false
+                        }
+                    ]
+                }
+            }
+        ],
+        "failed_checks": [
+            {
+                "check_id": "CKV_AZURE_109",
+                "bc_check_id": "BC_AZR_NETWORKING_33",
+                "check_name": "Ensure that key vault allows firewall rules settings",
+                "check_result": {
+                    "result": "FAILED",
+                    "evaluated_keys": [
+                        "network_acls/[0]/default_action"
+                    ]
+                },
+                "code_block": [
+                    [
+                        34,
+                        "resource \"azurerm_key_vault\" \"kv\" {\n"
+                    ],
+                    [
+                        35,
+                        "  name                       = \"${var.name_prefix}-kv\"\n"
+                    ],
+                    [
+                        36,
+                        "  location                   = azurerm_resource_group.rg.location\n"
+                    ],
+                    [
+                        37,
+                        "  resource_group_name        = azurerm_resource_group.rg.name\n"
+                    ],
+                    [
+                        38,
+                        "  tenant_id                  = data.azurerm_client_config.current.tenant_id\n"
+                    ],
+                    [
+                        39,
+                        "  sku_name                   = \"standard\"\n"
+                    ],
+                    [
+                        40,
+                        "  rbac_authorization_enabled = true\n"
+                    ],
+                    [
+                        41,
+                        "  purge_protection_enabled   = true\n"
+                    ],
+                    [
+                        42,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/s/terraform/main.tf",
+                "repo_file_path": "/s/terraform/main.tf",
+                "file_line_range": [
+                    34,
+                    42
+                ],
+                "resource": "azurerm_key_vault.kv",
+                "evaluations": null,
+                "check_class": "checkov.terraform.checks.resource.azure.KeyVaultEnablesFirewallRulesSettings",
+                "fixed_definition": null,
+                "entity_tags": null,
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": null,
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/azure-policies/azure-networking-policies/ensure-that-key-vault-allows-firewall-rules-settings",
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/s/terraform/main.tf",
+                "breadcrumbs": {
+                    "name": [
+                        {
+                            "type": "variable",
+                            "name": "name_prefix",
+                            "path": "/s/terraform/variables.tf",
+                            "module_connection": false
+                        }
+                    ],
+                    "location": [
+                        {
+                            "type": "variable",
+                            "name": "location",
+                            "path": "/s/terraform/variables.tf",
+                            "module_connection": false
+                        },
+                        {
+                            "type": "resource",
+                            "name": "azurerm_resource_group.rg",
+                            "path": "/s/terraform/main.tf",
+                            "module_connection": false
+                        }
+                    ],
+                    "resource_group_name": [
+                        {
+                            "type": "variable",
+                            "name": "name_prefix",
+                            "path": "/s/terraform/variables.tf",
+                            "module_connection": false
+                        },
+                        {
+                            "type": "resource",
+                            "name": "azurerm_resource_group.rg",
+                            "path": "/s/terraform/main.tf",
+                            "module_connection": false
+                        }
+                    ]
+                }
+            },
+            {
+                "check_id": "CKV_AZURE_189",
+                "bc_check_id": "BC_AZR_NETWORKING_71",
+                "check_name": "Ensure that Azure Key Vault disables public network access",
+                "check_result": {
+                    "result": "FAILED",
+                    "evaluated_keys": [
+                        "public_network_access_enabled"
+                    ]
+                },
+                "code_block": [
+                    [
+                        34,
+                        "resource \"azurerm_key_vault\" \"kv\" {\n"
+                    ],
+                    [
+                        35,
+                        "  name                       = \"${var.name_prefix}-kv\"\n"
+                    ],
+                    [
+                        36,
+                        "  location                   = azurerm_resource_group.rg.location\n"
+                    ],
+                    [
+                        37,
+                        "  resource_group_name        = azurerm_resource_group.rg.name\n"
+                    ],
+                    [
+                        38,
+                        "  tenant_id                  = data.azurerm_client_config.current.tenant_id\n"
+                    ],
+                    [
+                        39,
+                        "  sku_name                   = \"standard\"\n"
+                    ],
+                    [
+                        40,
+                        "  rbac_authorization_enabled = true\n"
+                    ],
+                    [
+                        41,
+                        "  purge_protection_enabled   = true\n"
+                    ],
+                    [
+                        42,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/s/terraform/main.tf",
+                "repo_file_path": "/s/terraform/main.tf",
+                "file_line_range": [
+                    34,
+                    42
+                ],
+                "resource": "azurerm_key_vault.kv",
+                "evaluations": null,
+                "check_class": "checkov.terraform.checks.resource.azure.KeyVaultDisablesPublicNetworkAccess",
+                "fixed_definition": null,
+                "entity_tags": null,
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": null,
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/azure-policies/azure-networking-policies/azr-networking-189",
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/s/terraform/main.tf",
+                "breadcrumbs": {
+                    "name": [
+                        {
+                            "type": "variable",
+                            "name": "name_prefix",
+                            "path": "/s/terraform/variables.tf",
+                            "module_connection": false
+                        }
+                    ],
+                    "location": [
+                        {
+                            "type": "variable",
+                            "name": "location",
+                            "path": "/s/terraform/variables.tf",
+                            "module_connection": false
+                        },
+                        {
+                            "type": "resource",
+                            "name": "azurerm_resource_group.rg",
+                            "path": "/s/terraform/main.tf",
+                            "module_connection": false
+                        }
+                    ],
+                    "resource_group_name": [
+                        {
+                            "type": "variable",
+                            "name": "name_prefix",
+                            "path": "/s/terraform/variables.tf",
+                            "module_connection": false
+                        },
+                        {
+                            "type": "resource",
+                            "name": "azurerm_resource_group.rg",
+                            "path": "/s/terraform/main.tf",
+                            "module_connection": false
+                        }
+                    ]
+                }
+            },
+            {
+                "check_id": "CKV_AZURE_41",
+                "bc_check_id": "BC_AZR_SECRETS_1",
+                "check_name": "Ensure that the expiration date is set on all secrets",
+                "check_result": {
+                    "result": "FAILED",
+                    "evaluated_keys": [
+                        "expiration_date"
+                    ]
+                },
+                "code_block": [
+                    [
+                        56,
+                        "resource \"azurerm_key_vault_secret\" \"database_url\" {\n"
+                    ],
+                    [
+                        57,
+                        "  name         = \"database-url\"\n"
+                    ],
+                    [
+                        58,
+                        "  value        = var.database_url\n"
+                    ],
+                    [
+                        59,
+                        "  key_vault_id = azurerm_key_vault.kv.id\n"
+                    ],
+                    [
+                        60,
+                        "  depends_on   = [azurerm_role_assignment.deployer_secrets_officer]\n"
+                    ],
+                    [
+                        61,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/s/terraform/main.tf",
+                "repo_file_path": "/s/terraform/main.tf",
+                "file_line_range": [
+                    56,
+                    61
+                ],
+                "resource": "azurerm_key_vault_secret.database_url",
+                "evaluations": null,
+                "check_class": "checkov.terraform.checks.resource.azure.SecretExpirationDate",
+                "fixed_definition": null,
+                "entity_tags": null,
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": null,
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/azure-policies/azure-secrets-policies/set-an-expiration-date-on-all-secrets",
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/s/terraform/main.tf"
+            },
+            {
+                "check_id": "CKV_AZURE_114",
+                "bc_check_id": "BC_AZR_GENERAL_42",
+                "check_name": "Ensure that key vault secrets have \"content_type\" set",
+                "check_result": {
+                    "result": "FAILED",
+                    "evaluated_keys": [
+                        "content_type"
+                    ]
+                },
+                "code_block": [
+                    [
+                        56,
+                        "resource \"azurerm_key_vault_secret\" \"database_url\" {\n"
+                    ],
+                    [
+                        57,
+                        "  name         = \"database-url\"\n"
+                    ],
+                    [
+                        58,
+                        "  value        = var.database_url\n"
+                    ],
+                    [
+                        59,
+                        "  key_vault_id = azurerm_key_vault.kv.id\n"
+                    ],
+                    [
+                        60,
+                        "  depends_on   = [azurerm_role_assignment.deployer_secrets_officer]\n"
+                    ],
+                    [
+                        61,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/s/terraform/main.tf",
+                "repo_file_path": "/s/terraform/main.tf",
+                "file_line_range": [
+                    56,
+                    61
+                ],
+                "resource": "azurerm_key_vault_secret.database_url",
+                "evaluations": null,
+                "check_class": "checkov.terraform.checks.resource.azure.SecretContentType",
+                "fixed_definition": null,
+                "entity_tags": null,
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": null,
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/azure-policies/azure-general-policies/ensure-that-key-vault-secrets-have-content-type-set",
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/s/terraform/main.tf"
+            },
+            {
+                "check_id": "CKV_AZURE_136",
+                "bc_check_id": "BC_AZR_GENERAL_87",
+                "check_name": "Ensure that PostgreSQL Flexible server enables geo-redundant backups",
+                "check_result": {
+                    "result": "FAILED",
+                    "evaluated_keys": [
+                        "geo_redundant_backup_enabled"
+                    ]
+                },
+                "code_block": [
+                    [
+                        63,
+                        "resource \"azurerm_postgresql_flexible_server\" \"pg\" {\n"
+                    ],
+                    [
+                        64,
+                        "  name                          = \"${var.name_prefix}-pg\"\n"
+                    ],
+                    [
+                        65,
+                        "  location                      = azurerm_resource_group.rg.location\n"
+                    ],
+                    [
+                        66,
+                        "  resource_group_name           = azurerm_resource_group.rg.name\n"
+                    ],
+                    [
+                        67,
+                        "  version                       = \"17\"\n"
+                    ],
+                    [
+                        68,
+                        "  sku_name                      = \"B_Standard_B1ms\"\n"
+                    ],
+                    [
+                        69,
+                        "  storage_mb                    = 32768\n"
+                    ],
+                    [
+                        70,
+                        "  administrator_login           = var.postgres_admin_login\n"
+                    ],
+                    [
+                        71,
+                        "  administrator_password        = var.postgres_admin_password\n"
+                    ],
+                    [
+                        72,
+                        "  public_network_access_enabled = true\n"
+                    ],
+                    [
+                        73,
+                        "  zone                          = \"1\"\n"
+                    ],
+                    [
+                        74,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/s/terraform/main.tf",
+                "repo_file_path": "/s/terraform/main.tf",
+                "file_line_range": [
+                    63,
+                    74
+                ],
+                "resource": "azurerm_postgresql_flexible_server.pg",
+                "evaluations": null,
+                "check_class": "checkov.terraform.checks.resource.azure.PostgreSQLFlexiServerGeoBackupEnabled",
+                "fixed_definition": null,
+                "entity_tags": null,
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": null,
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/azure-policies/azure-general-policies/ensure-azure-postgresql-flexible-server-enables-geo-redundant-backups",
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/s/terraform/main.tf",
+                "breadcrumbs": {
+                    "name": [
+                        {
+                            "type": "variable",
+                            "name": "name_prefix",
+                            "path": "/s/terraform/variables.tf",
+                            "module_connection": false
+                        }
+                    ],
+                    "administrator_login": [
+                        {
+                            "type": "variable",
+                            "name": "postgres_admin_login",
+                            "path": "/s/terraform/variables.tf",
+                            "module_connection": false
+                        }
+                    ],
+                    "location": [
+                        {
+                            "type": "variable",
+                            "name": "location",
+                            "path": "/s/terraform/variables.tf",
+                            "module_connection": false
+                        },
+                        {
+                            "type": "resource",
+                            "name": "azurerm_resource_group.rg",
+                            "path": "/s/terraform/main.tf",
+                            "module_connection": false
+                        }
+                    ],
+                    "resource_group_name": [
+                        {
+                            "type": "variable",
+                            "name": "name_prefix",
+                            "path": "/s/terraform/variables.tf",
+                            "module_connection": false
+                        },
+                        {
+                            "type": "resource",
+                            "name": "azurerm_resource_group.rg",
+                            "path": "/s/terraform/main.tf",
+                            "module_connection": false
+                        }
+                    ]
+                }
+            },
+            {
+                "check_id": "CKV2_AZURE_32",
+                "bc_check_id": "BC_AZR_GENERAL_125",
+                "check_name": "Ensure private endpoint is configured to key vault",
+                "check_result": {
+                    "result": "FAILED",
+                    "entity": {
+                        "azurerm_key_vault": {
+                            "kv": {
+                                "__end_line__": 42,
+                                "__start_line__": 34,
+                                "location": [
+                                    "southeastasia"
+                                ],
+                                "name": [
+                                    "fyp-kv"
+                                ],
+                                "purge_protection_enabled": [
+                                    true
+                                ],
+                                "rbac_authorization_enabled": [
+                                    true
+                                ],
+                                "resource_group_name": [
+                                    "fyp-rg"
+                                ],
+                                "sku_name": [
+                                    "standard"
+                                ],
+                                "tenant_id": [
+                                    "data.azurerm_client_config.current.tenant_id"
+                                ],
+                                "__address__": "azurerm_key_vault.kv"
+                            }
+                        }
+                    },
+                    "evaluated_keys": [
+                        "resource_type"
+                    ]
+                },
+                "code_block": [
+                    [
+                        34,
+                        "resource \"azurerm_key_vault\" \"kv\" {\n"
+                    ],
+                    [
+                        35,
+                        "  name                       = \"${var.name_prefix}-kv\"\n"
+                    ],
+                    [
+                        36,
+                        "  location                   = azurerm_resource_group.rg.location\n"
+                    ],
+                    [
+                        37,
+                        "  resource_group_name        = azurerm_resource_group.rg.name\n"
+                    ],
+                    [
+                        38,
+                        "  tenant_id                  = data.azurerm_client_config.current.tenant_id\n"
+                    ],
+                    [
+                        39,
+                        "  sku_name                   = \"standard\"\n"
+                    ],
+                    [
+                        40,
+                        "  rbac_authorization_enabled = true\n"
+                    ],
+                    [
+                        41,
+                        "  purge_protection_enabled   = true\n"
+                    ],
+                    [
+                        42,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/s/terraform/main.tf",
+                "repo_file_path": "/s/terraform/main.tf",
+                "file_line_range": [
+                    34,
+                    42
+                ],
+                "resource": "azurerm_key_vault.kv",
+                "evaluations": null,
+                "check_class": "checkov.common.graph.checks_infra.base_check",
+                "fixed_definition": null,
+                "entity_tags": null,
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": null,
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/azure-policies/azure-general-policies/bc-azure-2-32",
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/s/terraform/main.tf",
+                "breadcrumbs": {
+                    "name": [
+                        {
+                            "type": "variable",
+                            "name": "name_prefix",
+                            "path": "/s/terraform/variables.tf",
+                            "module_connection": false
+                        }
+                    ],
+                    "location": [
+                        {
+                            "type": "variable",
+                            "name": "location",
+                            "path": "/s/terraform/variables.tf",
+                            "module_connection": false
+                        },
+                        {
+                            "type": "resource",
+                            "name": "azurerm_resource_group.rg",
+                            "path": "/s/terraform/main.tf",
+                            "module_connection": false
+                        }
+                    ],
+                    "resource_group_name": [
+                        {
+                            "type": "variable",
+                            "name": "name_prefix",
+                            "path": "/s/terraform/variables.tf",
+                            "module_connection": false
+                        },
+                        {
+                            "type": "resource",
+                            "name": "azurerm_resource_group.rg",
+                            "path": "/s/terraform/main.tf",
+                            "module_connection": false
+                        }
+                    ]
+                }
+            },
+            {
+                "check_id": "CKV2_AZURE_57",
+                "bc_check_id": "BC_AZR_GENERAL_149",
+                "check_name": "Ensure PostgreSQL Flexible Server is configured with private endpoint",
+                "check_result": {
+                    "result": "FAILED",
+                    "entity": {
+                        "azurerm_postgresql_flexible_server": {
+                            "pg": {
+                                "__end_line__": 74,
+                                "__start_line__": 63,
+                                "administrator_login": [
+                                    "pgadmin"
+                                ],
+                                "administrator_password": [
+                                    "var.postgres_admin_password"
+                                ],
+                                "location": [
+                                    "southeastasia"
+                                ],
+                                "name": [
+                                    "fyp-pg"
+                                ],
+                                "public_network_access_enabled": [
+                                    true
+                                ],
+                                "resource_group_name": [
+                                    "fyp-rg"
+                                ],
+                                "sku_name": [
+                                    "B_Standard_B1ms"
+                                ],
+                                "storage_mb": [
+                                    32768
+                                ],
+                                "version": [
+                                    "17"
+                                ],
+                                "zone": [
+                                    "1"
+                                ],
+                                "__address__": "azurerm_postgresql_flexible_server.pg"
+                            }
+                        }
+                    },
+                    "evaluated_keys": [
+                        "resource_type"
+                    ]
+                },
+                "code_block": [
+                    [
+                        63,
+                        "resource \"azurerm_postgresql_flexible_server\" \"pg\" {\n"
+                    ],
+                    [
+                        64,
+                        "  name                          = \"${var.name_prefix}-pg\"\n"
+                    ],
+                    [
+                        65,
+                        "  location                      = azurerm_resource_group.rg.location\n"
+                    ],
+                    [
+                        66,
+                        "  resource_group_name           = azurerm_resource_group.rg.name\n"
+                    ],
+                    [
+                        67,
+                        "  version                       = \"17\"\n"
+                    ],
+                    [
+                        68,
+                        "  sku_name                      = \"B_Standard_B1ms\"\n"
+                    ],
+                    [
+                        69,
+                        "  storage_mb                    = 32768\n"
+                    ],
+                    [
+                        70,
+                        "  administrator_login           = var.postgres_admin_login\n"
+                    ],
+                    [
+                        71,
+                        "  administrator_password        = var.postgres_admin_password\n"
+                    ],
+                    [
+                        72,
+                        "  public_network_access_enabled = true\n"
+                    ],
+                    [
+                        73,
+                        "  zone                          = \"1\"\n"
+                    ],
+                    [
+                        74,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/s/terraform/main.tf",
+                "repo_file_path": "/s/terraform/main.tf",
+                "file_line_range": [
+                    63,
+                    74
+                ],
+                "resource": "azurerm_postgresql_flexible_server.pg",
+                "evaluations": null,
+                "check_class": "checkov.common.graph.checks_infra.base_check",
+                "fixed_definition": null,
+                "entity_tags": null,
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": null,
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": "https://docs.prismacloud.io/en/enterprise-edition/policy-reference/azure-policies/azure-general-policies/bc-azure-2-57",
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/s/terraform/main.tf",
+                "breadcrumbs": {
+                    "name": [
+                        {
+                            "type": "variable",
+                            "name": "name_prefix",
+                            "path": "/s/terraform/variables.tf",
+                            "module_connection": false
+                        }
+                    ],
+                    "administrator_login": [
+                        {
+                            "type": "variable",
+                            "name": "postgres_admin_login",
+                            "path": "/s/terraform/variables.tf",
+                            "module_connection": false
+                        }
+                    ],
+                    "location": [
+                        {
+                            "type": "variable",
+                            "name": "location",
+                            "path": "/s/terraform/variables.tf",
+                            "module_connection": false
+                        },
+                        {
+                            "type": "resource",
+                            "name": "azurerm_resource_group.rg",
+                            "path": "/s/terraform/main.tf",
+                            "module_connection": false
+                        }
+                    ],
+                    "resource_group_name": [
+                        {
+                            "type": "variable",
+                            "name": "name_prefix",
+                            "path": "/s/terraform/variables.tf",
+                            "module_connection": false
+                        },
+                        {
+                            "type": "resource",
+                            "name": "azurerm_resource_group.rg",
+                            "path": "/s/terraform/main.tf",
+                            "module_connection": false
+                        }
+                    ]
+                }
+            }
+        ],
+        "skipped_checks": [],
+        "parsing_errors": []
+    },
+    "summary": {
+        "passed": 3,
+        "failed": 7,
+        "skipped": 0,
+        "parsing_errors": 0,
+        "resource_count": 17,
+        "checkov_version": "3.3.20"
+    },
+    "url": "Add an api key '--bc-api-key <api-key>' to see more detailed insights via https://bridgecrew.cloud"
+}

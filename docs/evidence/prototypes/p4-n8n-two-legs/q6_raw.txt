@@ -1,0 +1,11 @@
+before: active True versionId 24b02e33-ec2d-4deb-b139-a7a77dfcd5ad activeVersionId 24b02e33-ec2d-4deb-b139-a7a77dfcd5ad
+PUT while active -> 200 {'active': True, 'versionId': '2bc29336-7986-4bb1-a12e-fbda0ddab8b3', 'activeVersionId': '2bc29336-7986-4bb1-a12e-fbda0ddab8b3'}
+after PUT: active True nodes ['Step A1 renamed'] versionId 2bc29336-7986-4bb1-a12e-fbda0ddab8b3 activeVersionId 2bc29336-7986-4bb1-a12e-fbda0ddab8b3
+POST release-check/work (202, {'run_id': 'run-U1', 'n8n_execution_id': '8'})
+POST release-check/act (202, {'run_id': 'run-U2', 'n8n_execution_id': '9'})
+EXEC 9 success ['Webhook B', 'Respond B', 'Step B1', 'Proceed? B', 'Step B2']
+EXEC 8 success ['Webhook A', 'Respond A', 'Step A1', 'Proceed? A', 'Step A2']
+11:38:03.078 /step/a1 200
+11:38:03.105 /step/a2 200
+11:38:03.120 /step/b1 200
+11:38:03.124 /step/b2 200
