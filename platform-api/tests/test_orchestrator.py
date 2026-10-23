@@ -2,7 +2,9 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from typing import Any
 
+import psycopg
 import pytest
 
 from platform_api.db import Database
@@ -468,3 +470,89 @@ async def test_the_announcement_gives_up_without_failing_the_run(h: Harness):
         h.advance(timedelta(seconds=10))
     assert isinstance(await h.state(run_id), AwaitingApproval)
     assert (await h.kinds(run_id))[-1] == "approval_announce_failed"
+
+
+async def to_step(h: Harness, key: str, step: StepName) -> RunId:
+    run_id = await start(h, key)
+    await h.orchestrator.tick()
+    state = await h.state(run_id)
+    assert isinstance(state, Pending) and state.claimant is not None
+    for name in (RUN_AGENTS, ASK_APPROVAL):
+        await h.orchestrator.on_step(run_id, name, state.claimant)
+        if name == step:
+            break
+    await h.orchestrator.tick()
+    return run_id
+
+
+async def decide_as_bob(h: Harness, run_id: RunId, verdict: Verdict) -> None:
+    state = await h.state(run_id)
+    assert isinstance(state, AwaitingApproval)
+    detail = await h.orchestrator.get_approval(state.approval_id, BOB)
+    assert detail is not None
+    decided = await h.orchestrator.decide(state.approval_id, BOB, 0, verdict, detail.request.digest)
+    assert isinstance(decided, Decided)
+
+
+async def mixed_history(h: Harness) -> dict[str, RunId]:
+    """One run in each state the run list shows differently, a second apart."""
+    runs: dict[str, RunId] = {}
+    runs["pending"] = await start(h, "key-pending")
+    await h.orchestrator.tick()
+    for name, step in (("proposed", RUN_AGENTS), ("awaiting", ASK_APPROVAL)):
+        h.advance(timedelta(seconds=1))
+        runs[name] = await to_step(h, f"key-{name}", step)
+    for name, verdict in (("declined", Verdict.DECLINE), ("approved", Verdict.APPROVE)):
+        h.advance(timedelta(seconds=1))
+        runs[name] = await to_step(h, f"key-{name}", ASK_APPROVAL)
+        await decide_as_bob(h, runs[name], verdict)
+    return runs
+
+
+async def test_the_run_list_gives_each_run_its_own_proposal_approval_and_decisions(h: Harness):
+    runs = await mixed_history(h)
+    listed = await h.orchestrator.list_runs()
+    assert [d.record.run_id for d in listed] == list(reversed(runs.values()))
+    seen: dict[RunId, tuple[str, bool, bool, list[Verdict]]] = {}
+    for detail in listed:
+        run_id = detail.record.run_id
+        assert detail.last_seq == (await h.log.read_after(run_id, 0))[-1].seq
+        assert detail.proposal is None or detail.proposal.run_id == run_id
+        assert detail.approval is None or detail.approval.run_id == run_id
+        approval_id = detail.approval.id if detail.approval else None
+        assert all(d.approval_id == approval_id for d in detail.decisions)
+        seen[run_id] = (
+            type(detail.record.state).__name__,
+            detail.proposal is not None,
+            detail.approval is not None,
+            [d.verdict for d in detail.decisions],
+        )
+    assert seen == {
+        runs["pending"]: ("Pending", False, False, []),
+        runs["proposed"]: ("Proposed", True, False, []),
+        runs["awaiting"]: ("AwaitingApproval", True, True, []),
+        runs["declined"]: ("Rejected", True, True, [Verdict.DECLINE]),
+        runs["approved"]: ("Acting", True, True, [Verdict.APPROVE]),
+    }
+
+
+async def test_listing_runs_costs_the_same_queries_however_many_runs(
+    h: Harness, monkeypatch: pytest.MonkeyPatch
+):
+    statements: list[object] = []
+    execute = psycopg.AsyncConnection.execute
+
+    async def counted(self: psycopg.AsyncConnection[Any], query: Any, *args: Any, **kw: Any) -> Any:
+        statements.append(query)
+        return await execute(self, query, *args, **kw)
+
+    monkeypatch.setattr(psycopg.AsyncConnection, "execute", counted)
+    await to_step(h, "key-first", ASK_APPROVAL)
+    statements.clear()
+    await h.orchestrator.list_runs()
+    one_run = len(statements)
+
+    await mixed_history(h)
+    statements.clear()
+    assert len(await h.orchestrator.list_runs()) == 6
+    assert len(statements) == one_run

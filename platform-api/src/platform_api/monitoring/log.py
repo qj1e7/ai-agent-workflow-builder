@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import secrets
-from collections.abc import AsyncGenerator, AsyncIterator, Iterable
+from collections.abc import AsyncGenerator, AsyncIterator, Collection, Iterable
 from contextlib import asynccontextmanager, suppress
 
 from platform_api.db import Database, UnitOfWork, json
@@ -157,6 +157,19 @@ class ActivityLog:
         ).fetchone()
         assert row is not None
         return int(row["seq"])
+
+    async def last_seqs(self, uow: UnitOfWork, run_ids: Collection[RunId]) -> dict[RunId, int]:
+        if not run_ids:
+            return {}
+        rows = await (
+            await uow.conn.execute(
+                "SELECT run_id, max(seq) AS seq FROM monitoring.run_events "
+                "WHERE run_id = ANY(%s) GROUP BY run_id",
+                (list(run_ids),),
+            )
+        ).fetchall()
+        found = {RunId(row["run_id"]): int(row["seq"]) for row in rows}
+        return {run_id: found.get(run_id, 0) for run_id in run_ids}
 
     async def read_after(
         self, run_id: RunId, after: int, *, uow: UnitOfWork | None = None

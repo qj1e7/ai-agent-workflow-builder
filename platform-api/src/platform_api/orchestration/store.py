@@ -1,4 +1,4 @@
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any
@@ -272,21 +272,29 @@ class Store:
         )
 
     async def load_proposal(self, uow: UnitOfWork, proposal_id: ProposalId) -> Proposal | None:
-        row = await (
+        return (await self.load_proposals(uow, [proposal_id])).get(proposal_id)
+
+    async def load_proposals(
+        self, uow: UnitOfWork, proposal_ids: Collection[ProposalId]
+    ) -> dict[ProposalId, Proposal]:
+        if not proposal_ids:
+            return {}
+        rows = await (
             await uow.conn.execute(
                 "SELECT proposal_id, run_id, actions, digest FROM orchestration.proposals "
-                "WHERE proposal_id = %s",
-                (proposal_id,),
+                "WHERE proposal_id = ANY(%s)",
+                (list(proposal_ids),),
             )
-        ).fetchone()
-        if row is None:
-            return None
-        return Proposal(
-            ProposalId(row["proposal_id"]),
-            RunId(row["run_id"]),
-            _actions_adapter.validate_python(row["actions"]),
-            Digest(row["digest"]),
-        )
+        ).fetchall()
+        return {
+            ProposalId(row["proposal_id"]): Proposal(
+                ProposalId(row["proposal_id"]),
+                RunId(row["run_id"]),
+                _actions_adapter.validate_python(row["actions"]),
+                Digest(row["digest"]),
+            )
+            for row in rows
+        }
 
     async def insert_approval(self, uow: UnitOfWork, request: ApprovalRequest) -> None:
         await uow.conn.execute(
@@ -306,23 +314,31 @@ class Store:
     async def load_approval(
         self, uow: UnitOfWork, approval_id: ApprovalId
     ) -> ApprovalRequest | None:
-        row = await (
+        return (await self.load_approvals(uow, [approval_id])).get(approval_id)
+
+    async def load_approvals(
+        self, uow: UnitOfWork, approval_ids: Collection[ApprovalId]
+    ) -> dict[ApprovalId, ApprovalRequest]:
+        if not approval_ids:
+            return {}
+        rows = await (
             await uow.conn.execute(
                 "SELECT approval_id, run_id, proposal_id, digest, policy, parties "
-                "FROM orchestration.approval_requests WHERE approval_id = %s",
-                (approval_id,),
+                "FROM orchestration.approval_requests WHERE approval_id = ANY(%s)",
+                (list(approval_ids),),
             )
-        ).fetchone()
-        if row is None:
-            return None
-        return ApprovalRequest(
-            ApprovalId(row["approval_id"]),
-            RunId(row["run_id"]),
-            ProposalId(row["proposal_id"]),
-            Digest(row["digest"]),
-            _policy_adapter.validate_python(row["policy"]),
-            frozenset(UserId(u) for u in row["parties"]),
-        )
+        ).fetchall()
+        return {
+            ApprovalId(row["approval_id"]): ApprovalRequest(
+                ApprovalId(row["approval_id"]),
+                RunId(row["run_id"]),
+                ProposalId(row["proposal_id"]),
+                Digest(row["digest"]),
+                _policy_adapter.validate_python(row["policy"]),
+                frozenset(UserId(u) for u in row["parties"]),
+            )
+            for row in rows
+        }
 
     async def insert_decision(self, uow: UnitOfWork, decision: Decision) -> None:
         try:
@@ -344,15 +360,25 @@ class Store:
     async def load_decisions(
         self, uow: UnitOfWork, approval_id: ApprovalId
     ) -> tuple[Decision, ...]:
+        return (await self.load_decisions_for(uow, [approval_id])).get(approval_id, ())
+
+    async def load_decisions_for(
+        self, uow: UnitOfWork, approval_ids: Collection[ApprovalId]
+    ) -> dict[ApprovalId, tuple[Decision, ...]]:
+        """Each approval's decisions in step order. An approval with none is left out."""
+        if not approval_ids:
+            return {}
         rows = await (
             await uow.conn.execute(
                 "SELECT approval_id, step_index, decided_by, verdict, seen_digest, decided_at "
-                "FROM orchestration.approval_decisions WHERE approval_id = %s ORDER BY step_index",
-                (approval_id,),
+                "FROM orchestration.approval_decisions WHERE approval_id = ANY(%s) "
+                "ORDER BY approval_id, step_index",
+                (list(approval_ids),),
             )
         ).fetchall()
-        return tuple(
-            Decision(
+        decisions: dict[ApprovalId, tuple[Decision, ...]] = {}
+        for row in rows:
+            decision = Decision(
                 ApprovalId(row["approval_id"]),
                 int(row["step_index"]),
                 UserId(row["decided_by"]),
@@ -360,8 +386,8 @@ class Store:
                 Digest(row["seen_digest"]),
                 row["decided_at"],
             )
-            for row in rows
-        )
+            decisions[decision.approval_id] = (*decisions.get(decision.approval_id, ()), decision)
+        return decisions
 
     async def enqueue(
         self, uow: UnitOfWork, run_id: RunId, kind: str, payload: dict[str, Any], next_at: datetime
