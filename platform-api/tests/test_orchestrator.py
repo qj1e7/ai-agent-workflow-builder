@@ -189,7 +189,7 @@ async def test_the_whole_success_path_matches_the_recorded_run(h: Harness):
     assert request.carry_forward.last_known_tag == "1.2.14"
     messages = await h.teams.messages()
     assert len(messages) == 1
-    assert "New LangGraph releases: 1.2.16, 1.2.15" in messages[0].text
+    assert messages[0].text == fixture("stubs/teams-messages.json")["messages"][0]["text"]
     assert approval_id in messages[0].link
 
     detail = await h.orchestrator.get_approval(approval_id, ALICE)
@@ -216,6 +216,10 @@ async def test_the_whole_success_path_matches_the_recorded_run(h: Harness):
 
     expected = [e["kind"] for e in fixture("runs/success.json")]
     assert await h.kinds(run_id) == expected
+    decided_summary = next(
+        e.summary for e in await h.log.read_after(run_id, 0) if e.kind == "approval_decided"
+    )
+    assert decided_summary == "Bob approved the request (Team approver)."
     assert await h.orchestrator.latest_carry_forward(SPEC.use_case_id) == "1.2.16"
 
 
@@ -258,6 +262,8 @@ async def test_the_rejected_path_matches_the_recorded_run(h: Harness):
     assert await h.jira.tickets() == []
     expected = [e["kind"] for e in fixture("runs/rejected.json")]
     assert await h.kinds(run_id) == expected
+    summaries = [e.summary for e in await h.log.read_after(run_id, 0)]
+    assert "Bob declined the request. Nothing was written." in summaries
 
 
 async def test_the_safety_checker_refuses_a_write_before_approval(h: Harness):

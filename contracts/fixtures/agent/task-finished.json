@@ -58,7 +58,7 @@
           "id": "release_checker",
           "display": "Release checker"
         },
-        "text": "Please check langchain-ai/langgraph for releases newer than 1.2.14 that match the plain version pattern."
+        "text": "Please check langchain-ai/langgraph for releases newer than 1.2.14."
       }
     },
     {
@@ -141,7 +141,7 @@
         "addressee": {
           "kind": "room"
         },
-        "text": "Two releases are newer than 1.2.14: 1.2.16 and 1.2.15. I suggest one ticket so the team reviews both."
+        "text": "Two releases are newer than 1.2.14: 1.2.16 and 1.2.15. I suggest one ticket for both."
       }
     },
     {
@@ -163,7 +163,7 @@
           "id": "release_checker",
           "display": "Release checker"
         },
-        "text": "Agreed. I will propose the ticket. The platform asks an Approver before anything is written."
+        "text": "Agreed. I'll draft one ticket for an Approver to check."
       }
     }
   ]

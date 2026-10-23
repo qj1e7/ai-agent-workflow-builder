@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Annotated, Any, Literal, TypedDict
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 from pydantic import Field, TypeAdapter
 
 from platform_api.auth import CurrentPrincipal
@@ -408,6 +409,10 @@ REFUSAL_MESSAGES: dict[Refusal, str] = {
 }
 
 
+def _json(status_code: int, body: WireModel) -> JSONResponse:
+    return JSONResponse(status_code=status_code, content=body.model_dump(mode="json"))
+
+
 def _decision_out(decided: Decided) -> DecisionOut:
     match decided.status:
         case Approved():
@@ -471,6 +476,7 @@ async def get_approval(
 @router.post(
     "/api/v1/approvals/{approval_id}/decisions",
     status_code=201,
+    response_model=DecisionOut,
     tags=["orchestration"],
     responses={
         200: {"model": DecisionOut, "description": "The same decision was already recorded"},
@@ -484,7 +490,7 @@ async def decide(
     principal: CurrentPrincipal,
     orchestrator: CurrentOrchestrator,
     response: Response,
-) -> DecisionOut:
+) -> DecisionOut | JSONResponse:
     result = await orchestrator.decide(approval_id, principal, body.step, body.verdict, body.digest)
     match result:
         case Decided() as decided:
@@ -492,12 +498,7 @@ async def decide(
                 response.status_code = 200
             return _decision_out(decided)
         case DecisionRefused(reason):
-            raise HTTPException(
-                status_code=403,
-                detail=RefusalOut(refusal=reason, message=REFUSAL_MESSAGES[reason]).model_dump(
-                    mode="json"
-                ),
-            )
+            return _json(403, RefusalOut(refusal=reason, message=REFUSAL_MESSAGES[reason]))
         case DecisionRace():
             raise HTTPException(status_code=409, detail="Another Approver decided this step first")
         case NotFound():
@@ -506,6 +507,7 @@ async def decide(
 
 @router.post(
     "/internal/v1/runs/{run_id}/steps/{step}",
+    response_model=StepResponseOut,
     tags=["internal"],
     responses={503: {"model": RetryLater, "description": "Try the same step again later"}},
 )
@@ -516,14 +518,12 @@ async def run_step(
     n8n_execution: Annotated[str, Header(alias="X-N8N-Execution")],
     request: Request,
     orchestrator: CurrentOrchestrator,
-) -> StepResponseOut:
+) -> StepResponseOut | JSONResponse:
     check_step_key(request, step_key)
     try:
         reply = await orchestrator.on_step(run_id, DomainStep(step), N8nExecutionId(n8n_execution))
     except RetryLaterError as error:
-        raise HTTPException(
-            status_code=503, detail=RetryLater(detail=str(error)).model_dump(mode="json")
-        ) from error
+        return _json(503, RetryLater(detail=str(error)))
     return StepResponseOut(proceed=reply.proceed, outcome=reply.outcome, detail=reply.detail)
 
 

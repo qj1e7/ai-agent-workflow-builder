@@ -292,7 +292,7 @@ class AwaitingApproval:
         rejected = PendingEvent(
             PLATFORM,
             "run_rejected",
-            f"The run was rejected by {by_display}. Nothing was written.",
+            f"{by_display} declined the request. Nothing was written.",
             RunRejectedData(by=by, step=step),
         )
         return Moved(

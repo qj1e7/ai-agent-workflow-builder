@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -24,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        project: [platform-api, agent-runtime]
+        project: [platform-api, agent-runtime, e2e]
     services:
       postgres:
         image: postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
@@ -69,6 +70,7 @@ jobs:
         run: uv run lint-imports
 
       - name: Check the generated contracts are current
+        if: matrix.project != 'e2e'
         working-directory: ${{ matrix.project }}
         env:
           PROJECT: ${{ matrix.project }}
@@ -82,6 +84,7 @@ jobs:
           uv run pytest tests/test_contracts.py
 
       - name: Unit tests in the image
+        if: matrix.project != 'e2e'
         run: |
           docker build --target test --tag ${{ matrix.project }}:test ${{ matrix.project }}
           docker run --rm --network host \
@@ -91,7 +94,14 @@ jobs:
             ${{ matrix.project }}:test
 
       - name: Build the runtime image
+        if: matrix.project != 'e2e'
         run: docker build --target runtime --tag ${{ matrix.project }}:runtime ${{ matrix.project }}
+
+      - name: Mock GitHub tests in its image
+        if: matrix.project == 'e2e'
+        run: |
+          docker build --target test --tag mock-github:test e2e/mock_github
+          docker run --rm mock-github:test
 
   scans:
     runs-on: ubuntu-latest
@@ -122,3 +132,23 @@ jobs:
         run: |
           docker run --rm --volume "$PWD:/repo" "$GITLEAKS_IMAGE" \
             detect --no-git --source /repo --redact --verbose
+
+  e2e:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Run the end to end harness against the whole stack
+        run: scripts/e2e.sh
+
+      - name: Keep the stack and test logs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-logs
+          path: e2e/out/
+          if-no-files-found: ignore

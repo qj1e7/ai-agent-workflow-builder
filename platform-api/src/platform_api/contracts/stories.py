@@ -242,8 +242,7 @@ def room_opens(tl: Timeline, base: float) -> None:
         AgentMessageData(
             speaker=ROOM_LEAD,
             addressee=TO_CHECKER,
-            text=f"Please check {REPO} for releases newer than {LAST_KNOWN_TAG} that match "
-            "the plain version pattern.",
+            text=f"Please check {REPO} for releases newer than {LAST_KNOWN_TAG}.",
         ),
     )
     tl.add(
@@ -289,8 +288,8 @@ def work_leg_to_announcement(tl: Timeline) -> None:
         AgentMessageData(
             speaker=CHECKER,
             addressee=TO_ROOM,
-            text="Two releases are newer than 1.2.14: 1.2.16 and 1.2.15. I suggest one ticket "
-            "so the team reviews both.",
+            text="Two releases are newer than 1.2.14: 1.2.16 and 1.2.15. "
+            "I suggest one ticket for both.",
         ),
     )
     tl.add(
@@ -301,8 +300,7 @@ def work_leg_to_announcement(tl: Timeline) -> None:
         AgentMessageData(
             speaker=ROOM_LEAD,
             addressee=TO_CHECKER,
-            text="Agreed. I will propose the ticket. The platform asks an Approver before "
-            "anything is written.",
+            text="Agreed. I'll draft one ticket for an Approver to check.",
         ),
     )
     tl.add(
@@ -376,7 +374,7 @@ def success_events() -> Timeline:
         ApprovalDecided,
         383.447,
         USER_BOB,
-        "Bob approved step 0 (Team approver).",
+        "Bob approved the request (Team approver).",
         ApprovalDecidedData(approval_id=SUCCESS.approval_id, step=0, verdict="approve", by=BOB),
     )
     tl.add(
@@ -496,14 +494,14 @@ def rejected_events() -> Timeline:
         ApprovalDecided,
         251.903,
         USER_BOB,
-        "Bob declined step 0 (Team approver).",
+        "Bob declined the request (Team approver).",
         ApprovalDecidedData(approval_id=REJECTED.approval_id, step=0, verdict="decline", by=BOB),
     )
     tl.add(
         RunRejected,
         251.92,
         PLATFORM,
-        "The run was rejected by Bob. Nothing was written.",
+        "Bob declined the request. Nothing was written.",
         RunRejectedData(by=BOB, step=0),
     )
     return tl
@@ -670,8 +668,8 @@ def teams_messages(tl: Timeline) -> TeamsStubMessages:
                 id="tm_01JB8",
                 ts=announced.ts,
                 channel=CHANNEL,
-                text=f"Approval needed: {USE_CASE_NAME} wants to create a Jira ticket in MOCK "
-                f'titled "{TICKET_TITLE}". Open the approval page to decide.',
+                text=f"A run of {USE_CASE_NAME} needs an Approver. It would create a Jira "
+                f'ticket in MOCK titled "{TICKET_TITLE}". Open the approval page to decide.',
                 link=SUCCESS.approval_link,
                 run_id=SUCCESS.run_id,
                 approval_id=SUCCESS.approval_id,

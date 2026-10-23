@@ -102,6 +102,7 @@ from platform_api.orchestration.write_actions import (
     check,
     describe,
     digest,
+    intent,
 )
 from platform_api.shared import (
     ApprovalId,
@@ -263,14 +264,16 @@ def _denied(reason: DeniedReason, detail: str) -> PendingEvent:
     )
 
 
-def _decided(approval_id: ApprovalId, decision: Decision, display: str) -> PendingEvent:
+def _decided(request: ApprovalRequest, decision: Decision, display: str) -> PendingEvent:
     verdict: WireVerdict = "approve" if decision.verdict is Verdict.APPROVE else "decline"
+    steps = request.policy.steps
+    which = "the request" if len(steps) == 1 else f"step {decision.step_index + 1} of {len(steps)}"
     return PendingEvent(
         user_actor(decision.by, display),
         "approval_decided",
-        f"{display} {verdict}d step {decision.step_index}.",
+        f"{display} {verdict}d {which} ({steps[decision.step_index].label}).",
         ApprovalDecidedData(
-            approval_id=approval_id, step=decision.step_index, verdict=verdict, by=decision.by
+            approval_id=request.id, step=decision.step_index, verdict=verdict, by=decision.by
         ),
     )
 
@@ -519,7 +522,7 @@ class Orchestrator:
                 run_id=run_id,
                 approval_id=request.id,
                 use_case_name=record.spec.use_case_name,
-                summary="; ".join(describe(a).line for a in proposal.actions),
+                actions=tuple(intent(a) for a in proposal.actions),
                 link=link,
             )
             await self._store.enqueue(
@@ -530,7 +533,7 @@ class Orchestrator:
                     "run_id": notice.run_id,
                     "approval_id": notice.approval_id,
                     "use_case_name": notice.use_case_name,
-                    "summary": notice.summary,
+                    "actions": list(notice.actions),
                     "link": notice.link,
                 },
                 uow.now,
@@ -677,7 +680,7 @@ class Orchestrator:
                         return DecisionRace()
                     all_decisions = (*decisions, decision)
                     status = approval_status(request, all_decisions)
-                    decided = _decided(approval_id, decision, principal.display)
+                    decided = _decided(request, decision, principal.display)
                     if not isinstance(record.state, AwaitingApproval):
                         await self._activity.append(uow, record.run_id, [decided])
                         return Decided(status, decision, False)
@@ -813,7 +816,7 @@ class Orchestrator:
             run_id=RunId(row.payload["run_id"]),
             approval_id=ApprovalId(row.payload["approval_id"]),
             use_case_name=row.payload["use_case_name"],
-            summary=row.payload["summary"],
+            actions=tuple(row.payload["actions"]),
             link=row.payload["link"],
         )
         await self._channel.announce(notice)
