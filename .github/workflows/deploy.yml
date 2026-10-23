@@ -39,6 +39,8 @@ jobs:
       TF_VAR_oidc_client_id: ${{ vars.OIDC_CLIENT_ID }}
       TF_VAR_oidc_scope: ${{ vars.OIDC_SCOPE }}
       TF_VAR_n8n_owner_email: ${{ vars.N8N_OWNER_EMAIL }}
+      # Optional. Without it agent-runtime calls GitHub anonymously, at 60 requests an hour.
+      TF_VAR_github_token: ${{ secrets.GH_RELEASE_TOKEN }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -84,15 +86,29 @@ jobs:
           docker build --target runtime --tag "$server/platform-api:$GITHUB_SHA" platform-api
           docker build --target runtime --tag "$server/agent-runtime:$GITHUB_SHA" agent-runtime
           docker build --file portal/Dockerfile --tag "$server/portal:$GITHUB_SHA" .
-          az acr login --name "$registry"
+          # The deploy identity's AcrPush can still be on its way after Terraform's wait.
+          retry() {
+            attempt=1
+            until "$@"; do
+              if [ "$attempt" -ge 5 ]; then
+                return 1
+              fi
+              echo "Attempt $attempt of '$*' failed. Trying again in 30 seconds."
+              attempt=$((attempt + 1))
+              sleep 30
+            done
+          }
+          retry az acr login --name "$registry"
           for image in platform-api agent-runtime portal; do
-            docker push "$server/$image:$GITHUB_SHA"
+            retry docker push "$server/$image:$GITHUB_SHA"
           done
 
+      # Each wait is twice the job's own timeout_seconds in main.tf, because pulling the image on a
+      # cold start counts against the wait but not against the job's timeout.
       - name: Create the database roles
         run: |
           terraform apply -auto-approve -target='module.job["db-init"]'
-          ../../scripts/run-job.sh "$(terraform output -raw resource_group_name)" db-init 300
+          ../../scripts/run-job.sh "$(terraform output -raw resource_group_name)" db-init 600
 
       - name: Plan
         run: |
@@ -108,7 +124,7 @@ jobs:
         run: terraform apply tfplan
 
       - name: Run the bootstrap job
-        run: ../../scripts/run-job.sh "$(terraform output -raw resource_group_name)" bootstrap 600
+        run: ../../scripts/run-job.sh "$(terraform output -raw resource_group_name)" bootstrap 1200
 
       - name: Say where the Portal is
         run: echo "The Portal is at $(terraform output -raw portal_url)" >> "$GITHUB_STEP_SUMMARY"
