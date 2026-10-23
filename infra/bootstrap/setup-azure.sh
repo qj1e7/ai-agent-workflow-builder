@@ -71,7 +71,7 @@ az role assignment create --assignee-object-id "$principal_id" --assignee-princi
 
 echo
 echo "Done. On the azure-dev GitHub environment, set these three as secrets, so GitHub masks them"
-echo "in the public workflow logs:"
+echo "in the workflow logs:"
 echo "  AZURE_CLIENT_ID=$client_id"
 echo "  AZURE_TENANT_ID=$tenant"
 echo "  AZURE_SUBSCRIPTION_ID=$subscription"
