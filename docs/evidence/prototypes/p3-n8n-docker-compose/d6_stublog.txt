@@ -1,0 +1,4 @@
+stub-1  | 10:25:26.101 EVENT {"request_id": "req-A1", "step": "run_started", "n8n_exec": "1"}
+stub-1  | 10:25:28.140 RESUME -> http://n8n:5678/webhook-waiting/1?signature=<redacted-1>
+stub-1  | 10:25:28.190 RESUME RESULT 200 {"message":"Workflow was started"}
+stub-1  | 10:25:28.232 EVENT {"request_id": "req-A1", "step": "run_finished_approved", "n8n_exec": "1"}

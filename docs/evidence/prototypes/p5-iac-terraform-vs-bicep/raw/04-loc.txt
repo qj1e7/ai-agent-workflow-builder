@@ -1,0 +1,8 @@
+terraform/main.tf 186
+terraform/outputs.tf 7
+terraform/variables.tf 27
+terraform/versions.tf 13
+terraform TOTAL 233
+bicep/main.bicep 26
+bicep/resources.bicep 233
+bicep TOTAL 259

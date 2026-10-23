@@ -1,0 +1,9 @@
+## 30s+ after PUT, still active, no toggle
+POST (202, {'run_id': 'run-U3', 'n8n_execution_id': '10'})
+EXEC 10 success ['Webhook A', 'Respond A', 'Step A1 renamed', 'Proceed? A', 'Step A2']
+deactivate 200
+POST while inactive (202, {'run_id': 'run-U4', 'n8n_execution_id': '11'})
+activate 200
+## after deactivate+activate
+POST (404, {'code': 404, 'message': 'The requested webhook "POST release-check/work" is not registered.', 'hint': "The workflow must be active for a production URL to run successfully. You can activate the workflow using the toggle in the top-right of the editor. Note that unlike test URL calls, production URL calls aren't shown on the canvas (only in the executions list)"})
+EXEC 11 success ['Webhook A', 'Respond A', 'Step A1 renamed', 'Proceed? A', 'Step A2']

@@ -1,0 +1,115 @@
+[
+ {
+  "id": "FAILWF000000001",
+  "name": "release-check-fail",
+  "nodes": [
+   {
+    "id": "n84981092",
+    "name": "Webhook",
+    "type": "n8n-nodes-base.webhook",
+    "typeVersion": 2,
+    "position": [
+     220,
+     300
+    ],
+    "parameters": {
+     "httpMethod": "POST",
+     "path": "release-check-fail",
+     "responseMode": "responseNode",
+     "options": {}
+    },
+    "webhookId": "wh-fail-1"
+   },
+   {
+    "id": "n5330097",
+    "name": "Respond now",
+    "type": "n8n-nodes-base.respondToWebhook",
+    "typeVersion": 1.1,
+    "position": [
+     440,
+     300
+    ],
+    "parameters": {
+     "respondWith": "json",
+     "responseBody": "={ \"accepted\": true, \"request_id\": \"{{ $('Webhook').first().json.body.request_id }}\" }",
+     "options": {
+      "responseCode": 202
+     }
+    }
+   },
+   {
+    "id": "n29597449",
+    "name": "Event started",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 4.2,
+    "position": [
+     660,
+     300
+    ],
+    "parameters": {
+     "method": "POST",
+     "url": "http://stub:5690/events",
+     "sendBody": true,
+     "specifyBody": "json",
+     "jsonBody": "={ \"request_id\": \"{{ $('Webhook').first().json.body.request_id }}\", \"step\": \"run_started\", \"n8n_exec\": \"{{ $execution.id }}\" }",
+     "options": {}
+    }
+   },
+   {
+    "id": "n31606179",
+    "name": "Dead HTTP call",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 4.2,
+    "position": [
+     880,
+     300
+    ],
+    "parameters": {
+     "method": "GET",
+     "url": "http://127.0.0.1:1/dead",
+     "options": {}
+    }
+   }
+  ],
+  "connections": {
+   "Webhook": {
+    "main": [
+     [
+      {
+       "node": "Respond now",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Respond now": {
+    "main": [
+     [
+      {
+       "node": "Event started",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Event started": {
+    "main": [
+     [
+      {
+       "node": "Dead HTTP call",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  },
+  "settings": {
+   "executionOrder": "v1",
+   "errorWorkflow": "ERRWF0000000001"
+  },
+  "active": true
+ }
+]
