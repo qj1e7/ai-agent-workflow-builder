@@ -38,6 +38,11 @@
         "name": "ticket_project",
         "description": "Jira project key",
         "example": "MOCK"
+      },
+      {
+        "name": "last_seen_tag",
+        "description": "The last release tag already handled, for example 1.2.14. Leave empty to start from the newest release.",
+        "example": "1.2.14"
       }
     ]
   },

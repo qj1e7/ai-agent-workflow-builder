@@ -1,0 +1,151 @@
+{
+  "name": "release_check",
+  "nodes": [
+    {
+      "id": "start-work",
+      "name": "Start work",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "3f6c2b1e-8d4a-4c7e-9b2f-1a5d7e9c0b41",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "release-check/work",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "accepted-work",
+      "name": "Accepted (work)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [220, 0],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"run_id\": \"{{ $('Start work').first().json.body.run_id }}\", \"n8n_execution_id\": \"{{ $execution.id }}\" }",
+        "options": { "responseCode": 202 }
+      }
+    },
+    {
+      "id": "run-agents",
+      "name": "Run agents",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 0],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": { "httpHeaderAuth": { "id": "${STEP_KEY_CREDENTIAL_ID}", "name": "X-Step-Key" } },
+      "parameters": {
+        "method": "POST",
+        "url": "=${PLATFORM_INTERNAL_URL}/internal/v1/runs/{{ $('Start work').first().json.body.run_id }}/steps/run_agents",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "X-N8N-Execution", "value": "={{ $execution.id }}" }] },
+        "options": { "timeout": 120000 }
+      }
+    },
+    {
+      "id": "continue",
+      "name": "Continue?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [660, 0],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "loose", "version": 2 },
+          "conditions": [
+            {
+              "id": "proceed",
+              "leftValue": "={{ $json.proceed }}",
+              "rightValue": "",
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "ask-for-approval",
+      "name": "Ask for approval",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 0],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": { "httpHeaderAuth": { "id": "${STEP_KEY_CREDENTIAL_ID}", "name": "X-Step-Key" } },
+      "parameters": {
+        "method": "POST",
+        "url": "=${PLATFORM_INTERNAL_URL}/internal/v1/runs/{{ $('Start work').first().json.body.run_id }}/steps/ask_approval",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "X-N8N-Execution", "value": "={{ $execution.id }}" }] },
+        "options": { "timeout": 30000 }
+      }
+    },
+    {
+      "id": "start-act",
+      "name": "Start act",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "webhookId": "a84e5d2c-1f7b-4e3a-8c6d-2b9f0e4a7d13",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "release-check/act",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "accepted-act",
+      "name": "Accepted (act)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [220, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"run_id\": \"{{ $('Start act').first().json.body.run_id }}\", \"n8n_execution_id\": \"{{ $execution.id }}\" }",
+        "options": { "responseCode": 202 }
+      }
+    },
+    {
+      "id": "do-write-action",
+      "name": "Do write action",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 300],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": { "httpHeaderAuth": { "id": "${STEP_KEY_CREDENTIAL_ID}", "name": "X-Step-Key" } },
+      "parameters": {
+        "method": "POST",
+        "url": "=${PLATFORM_INTERNAL_URL}/internal/v1/runs/{{ $('Start act').first().json.body.run_id }}/steps/write_action",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "X-N8N-Execution", "value": "={{ $execution.id }}" }] },
+        "options": { "timeout": 60000 }
+      }
+    }
+  ],
+  "connections": {
+    "Start work": { "main": [[{ "node": "Accepted (work)", "type": "main", "index": 0 }]] },
+    "Accepted (work)": { "main": [[{ "node": "Run agents", "type": "main", "index": 0 }]] },
+    "Run agents": { "main": [[{ "node": "Continue?", "type": "main", "index": 0 }]] },
+    "Continue?": { "main": [[{ "node": "Ask for approval", "type": "main", "index": 0 }], []] },
+    "Start act": { "main": [[{ "node": "Accepted (act)", "type": "main", "index": 0 }]] },
+    "Accepted (act)": { "main": [[{ "node": "Do write action", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "${ERROR_WORKFLOW_ID}"
+  }
+}

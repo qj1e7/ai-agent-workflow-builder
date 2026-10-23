@@ -3,7 +3,10 @@ name = "platform-api"
 version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
+    "alembic>=1.16",
     "fastapi>=0.120",
+    "httpx>=0.28,<0.29",
+    "psycopg[binary,pool]>=3.3",
     "pydantic>=2.11",
     "uvicorn>=0.34",
 ]
@@ -14,6 +17,7 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "anyio>=4.9",
     "httpx>=0.28,<0.29",
     "import-linter>=2.3",
     "pyright>=1.1.414",

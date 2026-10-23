@@ -76,7 +76,7 @@ def decline(step: int, by: UserId) -> Decision:
     return Decision(APPROVAL, step, by, Verdict.DECLINE, TICKET_DIGEST, NOW)
 
 
-ACTING = Acting(RUN, PROPOSAL, APPROVAL)
+ACTING = Acting(RUN, PROPOSAL, APPROVAL, 1, None, NOW)
 
 
 def test_digest_matches_the_golden_vector():
@@ -209,7 +209,7 @@ def test_bind(intents, expected):
             id="registered connector, unregistered operation",
         ),
         pytest.param(
-            Acting(RUN, ProposalId("prp_other"), APPROVAL),
+            Acting(RUN, ProposalId("prp_other"), APPROVAL, 1, None, NOW),
             proposal(),
             request(),
             (approve(0, BOB),),
@@ -218,7 +218,7 @@ def test_bind(intents, expected):
             id="acting run is for a different proposal",
         ),
         pytest.param(
-            Acting(RUN, PROPOSAL, ApprovalId("apr_other")),
+            Acting(RUN, PROPOSAL, ApprovalId("apr_other"), 1, None, NOW),
             proposal(),
             request(),
             (approve(0, BOB),),
@@ -227,7 +227,7 @@ def test_bind(intents, expected):
             id="acting run is for a different approval",
         ),
         pytest.param(
-            Acting(RunId("run_other"), PROPOSAL, APPROVAL),
+            Acting(RunId("run_other"), PROPOSAL, APPROVAL, 1, None, NOW),
             proposal(),
             request(),
             (approve(0, BOB),),

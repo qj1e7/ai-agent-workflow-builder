@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 from typing import Any, TypeAliasType, get_args
 
 import pytest
@@ -22,10 +21,13 @@ from platform_api.orchestration.http import (
     WorkflowFailureIn,
     run_view_adapter,
 )
+from platform_api.orchestration.runs import FailureReason, Leg, Stage, StepName
 from platform_api.orchestration.write_actions import DenyReason
-
-CONTRACTS = Path(__file__).resolve().parents[2] / "contracts"
-FIXTURES = CONTRACTS / "fixtures"
+from platform_api.wire import FailureReason as WireFailureReason
+from platform_api.wire import FailureStage
+from platform_api.wire import Leg as WireLeg
+from platform_api.wire import StepName as WireStepName
+from tests.support import FIXTURES
 
 pytestmark = pytest.mark.skipif(
     not FIXTURES.exists(), reason="contracts/ is not in the test image. CI runs this on the host."
@@ -140,3 +142,7 @@ def _literal_values(alias: TypeAliasType) -> set[str]:
 def test_wire_sets_cover_the_domain_enums():
     assert {r.value for r in DenyReason} <= _literal_values(DeniedReason)
     assert {v.value for v in Verdict} == _literal_values(WireVerdict)
+    assert {r.value for r in FailureReason} == _literal_values(WireFailureReason)
+    assert {s.value for s in Stage} == _literal_values(FailureStage)
+    assert {s.value for s in StepName} == _literal_values(WireStepName)
+    assert {leg.value for leg in Leg} == _literal_values(WireLeg)

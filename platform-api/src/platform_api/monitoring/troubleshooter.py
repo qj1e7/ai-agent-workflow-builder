@@ -1,6 +1,7 @@
 from collections.abc import Mapping
 from typing import Literal
 
+from platform_api.monitoring.events import RunFailedData
 from platform_api.wire import FailureReason, WireModel
 
 type SuggestedAction = Literal[
@@ -75,5 +76,22 @@ ADVICE: Mapping[FailureReason, Advice] = {
 }
 
 
+AGENT_REFUSED = Advice(
+    explanation="The agent was refused by the service it reads from, so retrying would "
+    "get the same answer.",
+    likely_cause="The use case names a repository that does not exist or that the token "
+    "cannot read, or the task input was not valid.",
+    suggested_action="ask_maintainer",
+    suggestion="Check the repository name and the token in the use case, fix them, "
+    "then start a new run.",
+)
+
+
 def explain(reason: FailureReason) -> Advice:
     return ADVICE[reason]
+
+
+def explain_failure(failure: RunFailedData) -> Advice:
+    if failure.reason == "AgentError" and not failure.retryable:
+        return AGENT_REFUSED
+    return ADVICE[failure.reason]

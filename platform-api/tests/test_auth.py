@@ -3,8 +3,7 @@ from fastapi.testclient import TestClient
 
 from platform_api.app import create_app
 from platform_api.auth import ConfigError
-
-LOCAL = {"AUTH_MODE": "dev", "PUBLIC_BASE_URL": "http://localhost:8000"}
+from tests.support import LOCAL_ENV as LOCAL
 
 
 @pytest.mark.parametrize(
@@ -14,9 +13,14 @@ LOCAL = {"AUTH_MODE": "dev", "PUBLIC_BASE_URL": "http://localhost:8000"}
         pytest.param({"AUTH_MODE": "entra"}, "not supported", id="unknown mode"),
         pytest.param({"AUTH_MODE": "dev"}, "PUBLIC_BASE_URL is not set", id="dev without a URL"),
         pytest.param(
-            {"AUTH_MODE": "dev", "PUBLIC_BASE_URL": "https://wab.azurecontainerapps.io"},
+            {**LOCAL, "PUBLIC_BASE_URL": "https://wab.azurecontainerapps.io"},
             "only runs on localhost",
             id="dev on a shared host",
+        ),
+        pytest.param(
+            {k: v for k, v in LOCAL.items() if k != "STEP_KEY"},
+            "STEP_KEY is not set",
+            id="no step key",
         ),
     ],
 )
@@ -30,7 +34,7 @@ def test_dev_mode_on_localhost_lists_users_and_signs_in():
     users = client.get("/api/v1/dev/users").json()["users"]
     assert [u["id"] for u in users] == ["alice", "bob", "carol"]
     assert users[0]["roles"] == ["operator", "approver"]
-    assert client.get("/api/v1/runs", headers={"X-Dev-User": "alice"}).status_code == 501
+    assert client.get("/api/v1/dev/users", headers={"X-Dev-User": "alice"}).status_code == 200
 
 
 @pytest.mark.parametrize("headers", [{}, {"X-Dev-User": "mallory"}], ids=["missing", "unknown"])

@@ -4294,6 +4294,9 @@
             },
             "description": "Successful Response"
           },
+          "404": {
+            "description": "No such use case"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -4344,6 +4347,9 @@
               }
             },
             "description": "Successful Response"
+          },
+          "404": {
+            "description": "No such use case"
           },
           "422": {
             "content": {
