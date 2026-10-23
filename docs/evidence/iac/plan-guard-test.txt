@@ -1,0 +1,48 @@
+Tests of infra/scripts/plan-guard.sh and guarded-apply.sh. Terraform 1.16.5, on a scratch module of terraform_data resources a, b and c, applied once.
+
+== 1. plan-guard.sh on real saved plans (terraform show -json), with jq jq-1.7.1-apple
+add       allow_destroy=false -> exit 0 | The plan would add 1, change 0, destroy 0 and replace 0 resources.
+add       allow_destroy=true  -> exit 0 | The plan would add 1, change 0, destroy 0 and replace 0 resources.
+destroy   allow_destroy=false -> exit 1 | The plan would add 0, change 0, destroy 1 and replace 0 resources. Stopped before apply: the plan would destroy or replace 1 resources. If that is intended, run the deploy again with allow_destroy ticked.
+destroy   allow_destroy=true  -> exit 0 | The plan would add 0, change 0, destroy 1 and replace 0 resources. allow_destroy is on, so the deploy goes ahead.
+replace   allow_destroy=false -> exit 1 | The plan would add 0, change 0, destroy 0 and replace 1 resources. Stopped before apply: the plan would destroy or replace 1 resources. If that is intended, run the deploy again with allow_destroy ticked.
+replace   allow_destroy=true  -> exit 0 | The plan would add 0, change 0, destroy 0 and replace 1 resources. allow_destroy is on, so the deploy goes ahead.
+update    allow_destroy=false -> exit 0 | The plan would add 0, change 1, destroy 0 and replace 0 resources.
+update    allow_destroy=true  -> exit 0 | The plan would add 0, change 1, destroy 0 and replace 0 resources.
+nochange  allow_destroy=false -> exit 0 | The plan would add 0, change 0, destroy 0 and replace 0 resources.
+nochange  allow_destroy=true  -> exit 0 | The plan would add 0, change 0, destroy 0 and replace 0 resources.
+empty input                     -> exit 1 | plan-guard: no plan on stdin
+JSON that is not a plan         -> exit 5 | jq: error (at <stdin>:1): plan-guard: stdin is not a Terraform plan in JSON
+create-before-destroy replace   -> exit 1 | The plan would add 0, change 0, destroy 0 and replace 1 resources. Stopped before apply: the plan would destroy or replace 1 resources. If that is intended, run the deploy again with allow_destroy ticked.
+
+== 2. guarded-apply.sh end to end, in the Terraform image with jq added
+-- first apply, only adds
+Plan: 3 to add, 0 to change, 0 to destroy.
+The plan would add 3, change 0, destroy 0 and replace 0 resources.
+Apply complete! Resources: 3 added, 0 changed, 0 destroyed.
+exit 0
+-- a destroy, allow_destroy off
+Plan: 0 to add, 0 to change, 1 to destroy.
+The plan would add 0, change 0, destroy 1 and replace 0 resources.
+Stopped before apply: the plan would destroy or replace 1 resources. If that is intended, run the deploy again with allow_destroy ticked.
+exit 1
+   state after the refusal: terraform_data.a terraform_data.b terraform_data.c[0] 
+-- a replace, ALLOW_DESTROY unset
+Plan: 1 to add, 0 to change, 1 to destroy.
+The plan would add 0, change 0, destroy 0 and replace 1 resources.
+Stopped before apply: the plan would destroy or replace 1 resources. If that is intended, run the deploy again with allow_destroy ticked.
+exit 1
+-- the same destroy, allow_destroy on
+Plan: 0 to add, 0 to change, 1 to destroy.
+The plan would add 0, change 0, destroy 1 and replace 0 resources.
+allow_destroy is on, so the deploy goes ahead.
+Apply complete! Resources: 0 added, 0 changed, 1 destroyed.
+exit 0
+   state after: terraform_data.a terraform_data.b 
+-- a targeted plan with only an update
+Plan: 0 to add, 1 to change, 0 to destroy.
+The plan would add 0, change 1, destroy 0 and replace 0 resources.
+Apply complete! Resources: 0 added, 1 changed, 0 destroyed.
+exit 0
+-- run summary lines written:
+5
