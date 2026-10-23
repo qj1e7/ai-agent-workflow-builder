@@ -1,0 +1,92 @@
+time="2026-10-23T09:29:02Z" level=info msg="history before the test: 31 runs, all waiting at the approval gate" source=console
+
+
+  █ THRESHOLDS 
+
+    checks
+    ✓ 'rate>0.99' rate=100.00%
+
+    http_req_duration{path:get_run}
+    ✓ 'p(95)<100' p(95)=54.65ms
+
+    http_req_duration{path:list_approvals}
+    ✓ 'p(95)<100' p(95)=38.07ms
+
+    http_req_duration{path:list_runs}
+    ✗ 'p(95)<250' p(95)=356.38ms
+
+    http_req_duration{path:portal_static}
+    ✓ 'p(95)<100' p(95)=2.96ms
+
+    http_req_duration{path:run_events}
+    ✓ 'p(95)<100' p(95)=43.19ms
+
+    http_req_duration{path:start_run}
+    ✓ 'p(95)<500' p(95)=74.75ms
+
+    http_req_failed{path:get_run}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{path:list_approvals}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{path:list_runs}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{path:portal_static}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{path:run_events}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{path:start_run}
+    ✓ 'rate<0.01' rate=0.00%
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 3318    49.179066/s
+    checks_succeeded...: 100.00% 3318 out of 3318
+    checks_failed......: 0.00%   0 out of 3318
+
+    ✓ portal page is 200
+    ✓ portal asset is 200
+    ✓ approvals list is 200
+    ✓ events page is 200
+    ✓ start run is 201
+    ✓ get run is 200
+    ✓ list runs is 200
+
+    HTTP
+    http_req_duration..............: avg=28.5ms  med=10.76ms p(90)=65.03ms  p(95)=88.31ms  p(99)=338.7ms  max=696.47ms
+      { expected_response:true }...: avg=28.5ms  med=10.76ms p(90)=65.03ms  p(95)=88.31ms  p(99)=338.7ms  max=696.47ms
+      { path:get_run }.............: avg=21.29ms med=16.69ms p(90)=40.14ms  p(95)=54.65ms  p(99)=75.97ms  max=119.91ms
+      { path:list_approvals }......: avg=15.72ms med=11.84ms p(90)=29.52ms  p(95)=38.07ms  p(99)=66ms     max=133.7ms 
+      { path:list_runs }...........: avg=107.2ms med=65.33ms p(90)=230.26ms p(95)=356.38ms p(99)=583.85ms max=696.47ms
+      { path:portal_static }.......: avg=1.38ms  med=1.07ms  p(90)=2.26ms   p(95)=2.96ms   p(99)=7.36ms   max=23.92ms 
+      { path:run_events }..........: avg=17.01ms med=12.45ms p(90)=32.03ms  p(95)=43.19ms  p(99)=60.32ms  max=80.92ms 
+      { path:start_run }...........: avg=35.15ms med=24.29ms p(90)=62.16ms  p(95)=74.75ms  p(99)=89.28ms  max=92.91ms 
+    http_req_failed................: 0.00%  0 out of 3356
+      { path:get_run }.............: 0.00%  0 out of 600
+      { path:list_approvals }......: 0.00%  0 out of 301
+      { path:list_runs }...........: 0.00%  0 out of 601
+      { path:portal_static }.......: 0.00%  0 out of 1202
+      { path:run_events }..........: 0.00%  0 out of 601
+      { path:start_run }...........: 0.00%  0 out of 13
+    http_reqs......................: 3356   49.742299/s
+
+    EXECUTION
+    iteration_duration.............: avg=34.89ms med=14.19ms p(90)=69.81ms  p(95)=105.96ms p(99)=366.08ms max=696.68ms
+    iterations.....................: 2717   40.271104/s
+    vus............................: 0      min=0         max=6 
+    vus_max........................: 55     min=55        max=55
+
+    NETWORK
+    data_received..................: 186 MB 2.8 MB/s
+    data_sent......................: 375 kB 5.6 kB/s
+
+
+
+time="2026-10-23T09:30:02Z" level=error msg="thresholds on metrics 'http_req_duration{path:list_runs}' have been crossed"
+
+FAIL load (k6 exit 99): a threshold or the run failed. See load/out/k6.log
