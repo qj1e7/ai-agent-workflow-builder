@@ -2,11 +2,13 @@ import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { Button } from './Button'
 import styles from './ErrorBoundary.module.css'
 
-export function ErrorScreen() {
+const STOPPED_WORKING = 'The page stopped working. Reload it to try again. If it keeps happening, tell the team what you were doing.'
+
+export function ErrorScreen({ message = STOPPED_WORKING }: { message?: string | undefined }) {
   return (
     <div className={styles['screen']} role="alert">
       <h1>Something went wrong</h1>
-      <p>The page stopped working. Reload it to try again. If it keeps happening, tell the team what you were doing.</p>
+      <p>{message}</p>
       <Button variant="primary" onClick={() => window.location.reload()}>
         Reload the page
       </Button>

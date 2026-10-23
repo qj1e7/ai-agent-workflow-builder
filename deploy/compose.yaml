@@ -4,7 +4,7 @@ x-platform-image: &platform-image
   build:
     context: ../platform-api
     target: runtime
-  image: wab/platform-api:dev
+  image: wab/platform-api:${WAB_IMAGE_TAG:-dev}
 
 services:
   postgres:
@@ -58,7 +58,7 @@ services:
     build:
       context: ../agent-runtime
       target: runtime
-    image: wab/agent-runtime:dev
+    image: wab/agent-runtime:${WAB_IMAGE_TAG:-dev}
     environment:
       GITHUB_API_BASE: ${GITHUB_API_BASE:-https://api.github.com}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
@@ -118,7 +118,7 @@ services:
     build:
       context: ..
       dockerfile: portal/Dockerfile
-    image: wab/portal:dev
+    image: wab/portal:${WAB_IMAGE_TAG:-dev}
     depends_on:
       platform-api:
         condition: service_healthy

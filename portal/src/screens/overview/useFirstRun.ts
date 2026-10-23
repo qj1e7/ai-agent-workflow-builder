@@ -1,4 +1,4 @@
-import { errorWords } from '../../api/errors'
+import { useErrorWords } from '../../api/context'
 import { newIdempotencyKey } from '../../api/idempotency'
 import { useCreateUseCase, useStartRun } from '../../api/queries'
 import type { TemplateView } from '../../api/types'
@@ -19,7 +19,8 @@ export interface FirstRun {
 export function useFirstRun(template: TemplateView): FirstRun {
   const create = useCreateUseCase()
   const run = useStartRun()
-  const state = stateOf(create, run)
+  const explain = useErrorWords()
+  const state = stateOf(create, run, explain)
 
   function start(): void {
     if (state.is === 'starting') return
@@ -31,9 +32,13 @@ export function useFirstRun(template: TemplateView): FirstRun {
   return { state, start }
 }
 
-function stateOf(create: ReturnType<typeof useCreateUseCase>, run: ReturnType<typeof useStartRun>): FirstRunState {
+function stateOf(
+  create: ReturnType<typeof useCreateUseCase>,
+  run: ReturnType<typeof useStartRun>,
+  explain: (error: unknown) => string,
+): FirstRunState {
   if (create.isPending || run.isPending || run.isSuccess) return { is: 'starting' }
-  if (create.isError) return { is: 'failed', message: errorWords(create.error) }
-  if (run.isError) return { is: 'failed', message: errorWords(run.error) }
+  if (create.isError) return { is: 'failed', message: explain(create.error) }
+  if (run.isError) return { is: 'failed', message: explain(run.error) }
   return { is: 'idle' }
 }

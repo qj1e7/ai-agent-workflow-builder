@@ -2,7 +2,7 @@ import { defineConfig } from '@playwright/test'
 
 export default defineConfig({
   testDir: '.',
-  testMatch: /\.live\.ts$/,
+  testMatch: process.env['E2E_AUTH'] === 'oidc' ? /\.oidc\.ts$/ : /\.live\.ts$/,
   outputDir: '../out/live/results',
   reporter: [['list']],
   fullyParallel: false,

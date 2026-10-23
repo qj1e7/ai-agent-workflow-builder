@@ -21,9 +21,13 @@ LOCAL_ENV = {
     "CALLBACK_SIGNING_KEY": "test-callback-key",
 }
 
-CONTRACTS = Path(__file__).resolve().parents[2] / "contracts"
+REPO = Path(__file__).resolve().parents[2]
+CONTRACTS = REPO / "contracts"
 FIXTURES = Path(os.environ.get("CONTRACT_FIXTURES") or CONTRACTS / "fixtures")
 """The test image has no contracts/ folder, so CI mounts it and names it here."""
+MOCK_OIDC_CONFIG = Path(
+    os.environ.get("MOCK_OIDC_CONFIG") or REPO / "deploy" / "mock-oidc" / "config.json"
+)
 
 ALICE = Principal(UserId("alice"), frozenset({Role.OPERATOR, Role.APPROVER}), "Alice")
 BOB = Principal(UserId("bob"), frozenset({Role.APPROVER}), "Bob")

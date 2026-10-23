@@ -1,5 +1,4 @@
-import { useRunClock } from '../../api/context'
-import { errorWords } from '../../api/errors'
+import { useErrorWords, useRunClock } from '../../api/context'
 import { useDisplayName } from '../../api/people'
 import { useRuns } from '../../api/queries'
 import type { RunViewOf } from '../../api/types'
@@ -14,6 +13,7 @@ import { atWords } from './waiting'
 import styles from './ApprovalsPage.module.css'
 
 export function ApprovalsPage() {
+  const explain = useErrorWords()
   const runs = useRuns({ poll: true })
 
   return (
@@ -22,7 +22,7 @@ export function ApprovalsPage() {
       {runs.data ? <WaitingList runs={waitingApprovals(runs.data)} /> : null}
       {!runs.data && runs.isError ? (
         <div className={styles['problem']}>
-          <InlineMessage tone="error">We could not load the approvals. {errorWords(runs.error)}</InlineMessage>
+          <InlineMessage tone="error">We could not load the approvals. {explain(runs.error)}</InlineMessage>
           <Button icon={IconReplay} onClick={() => void runs.refetch()} loading={runs.isFetching}>
             Try again
           </Button>

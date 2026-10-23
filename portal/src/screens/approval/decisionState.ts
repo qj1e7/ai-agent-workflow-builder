@@ -5,7 +5,7 @@ import type {
   DecisionIn,
   DecisionOut,
   DecisionView,
-  DevUser,
+  Me,
   Refusal,
   RefusalOut,
   Verdict,
@@ -28,7 +28,7 @@ export type DecisionAttempt =
 
 const NO_ATTEMPT: DecisionAttempt = { kind: 'none' }
 
-export function sentBy(sender: Sender | null, user: DevUser | undefined, approvalId: string): boolean {
+export function sentBy(sender: Sender | null, user: Me | undefined, approvalId: string): boolean {
   return sender !== null && sender.user === user?.id && sender.approvalId === approvalId
 }
 
@@ -73,7 +73,7 @@ function closedBy(steps: readonly ApprovalStepView[]): DecisionPanel | null {
   return null
 }
 
-function refusalHint(refusal: Refusal, user: DevUser | undefined): string | null {
+function refusalHint(refusal: Refusal, user: Me | undefined): string | null {
   switch (refusal) {
     case 'own_work':
       return 'Send the link to another Approver.'
@@ -86,7 +86,7 @@ function refusalHint(refusal: Refusal, user: DevUser | undefined): string | null
   }
 }
 
-function cannotDecide(refusal: Refusal, user: DevUser | undefined): DecisionPanel {
+function cannotDecide(refusal: Refusal, user: Me | undefined): DecisionPanel {
   return { kind: 'cannot_decide', refusal, words: refusalLabel[refusal], hint: refusalHint(refusal, user) }
 }
 
@@ -103,7 +103,7 @@ function noticeOf(attempt: DecisionAttempt): Notice | null {
   }
 }
 
-export function decisionState(view: ApprovalView, user: DevUser | undefined, sent: DecisionAttempt): DecisionState {
+export function decisionState(view: ApprovalView, user: Me | undefined, sent: DecisionAttempt): DecisionState {
   const attempt = sent.kind === 'none' || sentBy(sent.sender, user, view.approval_id) ? sent : NO_ATTEMPT
   const steps = attempt.kind === 'recorded' ? withDecision(view.steps, attempt.out.decision) : view.steps
   const notice = noticeOf(attempt)

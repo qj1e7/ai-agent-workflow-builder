@@ -45,6 +45,7 @@ export type ParamSpec = Schemas['ParamSpec']
 export type SuggestOut = Schemas['SuggestOut']
 
 export type DevUser = Schemas['DevUser']
+export type Me = Schemas['Me']
 export type Role = Schemas['Role']
 export type TeamsStubMessage = Schemas['TeamsStubMessage']
 export type MockJiraTicket = Schemas['MockJiraTicket']

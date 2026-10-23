@@ -1,4 +1,5 @@
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
@@ -39,7 +40,7 @@ from platform_api.orchestration.service import (
     StepReply,
 )
 from platform_api.orchestration.write_actions import MockJiraConnector, WriteGateway
-from platform_api.shared import ApprovalId, Digest, N8nExecutionId, RunId, TaskId
+from platform_api.shared import ApprovalId, Digest, N8nExecutionId, Principal, RunId, TaskId
 from tests.conftest import PostgresUrls, truncate_all
 from tests.support import ALICE, BOB, CAROL, NOW, SPEC, fixture
 
@@ -117,8 +118,8 @@ def mint(run_id: RunId, task_id: TaskId, expires_at: datetime) -> tuple[str, str
     return (f"http://platform-api:8000/cb/{run_id}?task={task_id}", f"token-{task_id}")
 
 
-@pytest.fixture
-async def h(postgres: PostgresUrls) -> AsyncIterator[Harness]:
+@asynccontextmanager
+async def open_harness(postgres: PostgresUrls) -> AsyncIterator[Harness]:
     truncate_all(postgres.owner)
     clock = {"now": NOW}
     db = Database(postgres.contexts, clock=lambda: clock["now"])
@@ -137,13 +138,21 @@ async def h(postgres: PostgresUrls) -> AsyncIterator[Harness]:
         await db.close()
 
 
-async def start(h: Harness, key: str = "key-1") -> RunId:
-    started = await h.orchestrator.start_run(SPEC, ALICE, key)
+@pytest.fixture
+async def h(postgres: PostgresUrls) -> AsyncIterator[Harness]:
+    async with open_harness(postgres) as harness:
+        yield harness
+
+
+async def start(h: Harness, key: str = "key-1", by: Principal = ALICE) -> RunId:
+    started = await h.orchestrator.start_run(SPEC, by, key)
     return started.run_id
 
 
-async def work_leg_to_approval(h: Harness) -> tuple[RunId, N8nExecutionId, ApprovalId]:
-    run_id = await start(h)
+async def work_leg_to_approval(
+    h: Harness, by: Principal = ALICE
+) -> tuple[RunId, N8nExecutionId, ApprovalId]:
+    run_id = await start(h, by=by)
     await h.orchestrator.tick()
     execution = N8nExecutionId("41")
     assert await h.orchestrator.on_step(run_id, RUN_AGENTS, execution) == StepReply(

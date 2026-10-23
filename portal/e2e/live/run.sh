@@ -22,7 +22,8 @@ rm -rf "$out"
 mkdir -p "$out"
 
 docker run --rm --network "container:$portal_container" --ipc=host \
-  -e CI="${CI:-}" -e BASE_URL=http://localhost:8080 \
+  -e CI="${CI:-}" -e BASE_URL=http://localhost:8080 -e E2E_AUTH="${E2E_AUTH:-dev}" \
+  -e MOCK_OIDC_URL="${MOCK_OIDC_URL:-http://mock-oidc:8080/default}" \
   -e MOCK_GITHUB_URL="${MOCK_GITHUB_URL:-http://mock-github:8200}" \
   -e PLAIN_HTTP_URL="${PLAIN_HTTP_URL:-http://portal:8080}" \
   -v "$portal_dir/e2e:/work/e2e:ro" -v "$out:/work/e2e/out/live" \

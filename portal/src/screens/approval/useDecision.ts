@@ -1,8 +1,7 @@
 import { useState } from 'react'
-import { errorWords } from '../../api/errors'
+import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
-import { isConflict, refusalOf, useApproval, useDecide, useDevUsers } from '../../api/queries'
-import { useDevUser } from '../../api/session'
+import { isConflict, refusalOf, useApproval, useDecide, useMe } from '../../api/queries'
 import type { ApprovalView, Verdict } from '../../api/types'
 import { decisionRequest, decisionState, sentBy, type DecisionAttempt, type DecisionState, type Sender } from './decisionState'
 
@@ -28,13 +27,13 @@ export interface Decision {
 export function useDecision(approvalId: string | null): Decision {
   const approval = useApproval(approvalId ?? '', { poll: true, enabled: approvalId !== null })
   const decide = useDecide(approvalId ?? '')
-  const userId = useDevUser()
-  const user = useDevUsers().data?.find((candidate) => candidate.id === userId)
+  const user = useMe().data
+  const explain = useErrorWords()
   const [sender, setSender] = useState<Sender | null>(null)
   const latch = useLatch()
   const own = sentBy(sender, user, approvalId ?? '')
   const view = approvalId === null ? undefined : approval.data
-  const state = view ? decisionState(view, user, attemptOf(decide, sender)) : null
+  const state = view ? decisionState(view, user, attemptOf(decide, sender, explain)) : null
 
   return {
     view,
@@ -44,21 +43,21 @@ export function useDecision(approvalId: string | null): Decision {
     sent: own && decide.isSuccess ? decide.variables.digest : null,
     send(verdict) {
       const request = view && state ? decisionRequest(view, state.panel, verdict) : null
-      if (!request || approvalId === null) return
+      if (!request || approvalId === null || !user) return
       latch.run((settled) => {
-        setSender({ user: userId, approvalId })
+        setSender({ user: user.id, approvalId })
         decide.mutate(request, { onSettled: settled })
       })
     },
   }
 }
 
-function attemptOf(decide: ReturnType<typeof useDecide>, sender: Sender | null): DecisionAttempt {
+function attemptOf(decide: ReturnType<typeof useDecide>, sender: Sender | null, explain: (error: unknown) => string): DecisionAttempt {
   if (sender === null) return { kind: 'none' }
   if (decide.isSuccess) return { kind: 'recorded', sender, sent: decide.variables, out: decide.data }
   if (!decide.isError) return { kind: 'none' }
   const refusal = refusalOf(decide.error)
   if (refusal) return { kind: 'refused', sender, refusal }
   if (isConflict(decide.error)) return { kind: 'conflict', sender }
-  return { kind: 'failed', sender, message: errorWords(decide.error) }
+  return { kind: 'failed', sender, message: explain(decide.error) }
 }

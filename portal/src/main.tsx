@@ -5,9 +5,11 @@ import { BrowserRouter } from 'react-router'
 import { App } from './App'
 import { ApiError } from './api/client'
 import { wallClock, type RunClock } from './api/clock'
-import { loadConfig, type PortalMode } from './api/config'
+import { loadConfig, PortalConfigError, type PortalConfig, type PortalMode } from './api/config'
 import { ApiProvider } from './api/context'
+import { createDevSession, type Boot } from './api/session'
 import { ErrorBoundary, ErrorScreen } from './ui/ErrorBoundary'
+import { SignInGate } from './ui/SignInGate'
 import './ui/tokens.css'
 import './ui/base.css'
 
@@ -21,6 +23,17 @@ async function choosePlatform(mode: PortalMode): Promise<Platform> {
   const { createDemoPlatform } = await import('./mock')
   const demo = createDemoPlatform()
   return { fetch: demo.fetch, clock: demo.clock }
+}
+
+async function chooseSession(config: PortalConfig): Promise<Boot> {
+  if (config.mode === 'demo' || config.signIn.kind === 'dev') return { kind: 'session', session: createDevSession() }
+  const { bootOidc, oidcClientFor } = await import('./api/oidc')
+  return bootOidc(oidcClientFor(config.signIn, window.location.origin), {
+    pathname: window.location.pathname,
+    search: window.location.search,
+    secure: window.isSecureContext && typeof crypto.subtle !== 'undefined',
+    replacePath: (path) => window.history.replaceState(null, '', path),
+  })
 }
 
 const queryClient = new QueryClient({
@@ -37,14 +50,18 @@ function mount(tree: ReactNode): void {
 }
 
 async function start(): Promise<void> {
-  const { mode } = await loadConfig()
-  const platform = await choosePlatform(mode)
+  const config = await loadConfig()
+  const platform = await choosePlatform(config.mode)
+  const boot = await chooseSession(config)
+  if (boot.kind === 'redirecting') return
   mount(
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <ApiProvider mode={mode} fetch={platform.fetch} clock={platform.clock}>
+        <ApiProvider mode={config.mode} session={boot.session} platformFetch={platform.fetch} clock={platform.clock}>
           <BrowserRouter>
-            <App />
+            <SignInGate>
+              <App />
+            </SignInGate>
           </BrowserRouter>
         </ApiProvider>
       </QueryClientProvider>
@@ -54,5 +71,5 @@ async function start(): Promise<void> {
 
 start().catch((error: unknown) => {
   console.error(error)
-  mount(<ErrorScreen />)
+  mount(<ErrorScreen message={error instanceof PortalConfigError ? error.message : undefined} />)
 })

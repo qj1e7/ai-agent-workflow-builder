@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router'
-import { errorWords } from '../../api/errors'
+import { useErrorWords } from '../../api/context'
 import { newIdempotencyKey } from '../../api/idempotency'
 import { useStartRun } from '../../api/queries'
 
@@ -11,6 +11,7 @@ export interface RunNow {
 }
 
 export function useRunNow(): RunNow {
+  const explain = useErrorWords()
   const navigate = useNavigate()
   const mutation = useStartRun()
 
@@ -23,6 +24,6 @@ export function useRunNow(): RunNow {
     isStarting: (useCaseId) => mutation.isPending && mutation.variables.useCaseId === useCaseId,
     anyStarting: mutation.isPending,
     errorFor: (useCaseId) =>
-      mutation.isError && mutation.variables.useCaseId === useCaseId ? errorWords(mutation.error) : null,
+      mutation.isError && mutation.variables.useCaseId === useCaseId ? explain(mutation.error) : null,
   }
 }

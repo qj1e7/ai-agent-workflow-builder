@@ -1,4 +1,4 @@
-import { errorWords } from '../../api/errors'
+import { useErrorWords } from '../../api/context'
 import { useDisplayName } from '../../api/people'
 import { useUseCases } from '../../api/queries'
 import type { UseCaseView } from '../../api/types'
@@ -10,6 +10,7 @@ import type { RunNow } from './useRunNow'
 import styles from './UseCaseList.module.css'
 
 export function UseCaseList({ runNow }: { runNow: RunNow }) {
+  const explain = useErrorWords()
   const useCases = useUseCases()
 
   return (
@@ -31,7 +32,7 @@ export function UseCaseList({ runNow }: { runNow: RunNow }) {
       ) : null}
       {!useCases.data && useCases.isError ? (
         <div className={styles['problem']}>
-          <InlineMessage tone="error">We could not load your use cases. {errorWords(useCases.error)}</InlineMessage>
+          <InlineMessage tone="error">We could not load your use cases. {explain(useCases.error)}</InlineMessage>
           <Button icon={IconReplay} loading={useCases.isFetching} onClick={() => void useCases.refetch()}>
             Try again
           </Button>

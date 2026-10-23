@@ -1,7 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from 'react'
-import { useDevUsers } from '../api/queries'
-import { displayName } from '../api/people'
-import type { DevUser } from '../api/types'
+import { displayName, usePeople, type Person } from '../api/people'
 import {
   captionWords,
   castLayout,
@@ -57,7 +55,7 @@ export function TrackLine({ track, plan = null, panel = null, reduced = false, s
   const placedFor = useRef<string | null>(null)
   const scene = { track, plan, reduced }
   const latest = useRef(scene)
-  const users = useDevUsers().data
+  const users = usePeople()
 
   // A replay hold renders every 50 ms to move one counter, so the line is measured again only when a part could move.
   useLayoutEffect(() => {
@@ -124,7 +122,7 @@ interface StopItemProps {
   readonly holds: boolean
   /** Every stop but Done and Draft keeps the caption row on the phone, so words that come and go never move the stops below. Draft's only caption, "Not needed", comes at the very end of a run with nothing to write. */
   readonly captions: boolean
-  readonly users: readonly DevUser[] | undefined
+  readonly users: readonly Person[] | undefined
 }
 
 function StopItem({ stop, parcel, gate, speech, panel, holds, captions, users }: StopItemProps) {
@@ -240,7 +238,7 @@ function Chips({ items }: { items: Items }) {
   )
 }
 
-export function Cast({ figures, users }: { figures: readonly Figure[]; users: readonly DevUser[] | undefined }) {
+export function Cast({ figures, users }: { figures: readonly Figure[]; users: readonly Person[] | undefined }) {
   const layout = castLayout(figures.length)
   const compact = layout.size === 'compact'
   return (
@@ -271,7 +269,7 @@ function statusOf(figure: Figure): string {
   }
 }
 
-function FigureMark({ figure, users, badge }: { figure: Figure; users: readonly DevUser[] | undefined; badge: boolean }) {
+function FigureMark({ figure, users, badge }: { figure: Figure; users: readonly Person[] | undefined; badge: boolean }) {
   const named = figure.is === 'person' && users ? { ...figure, name: displayName(users, figure.id) } : figure
   const name = named.is === 'seat' ? named.label : named.name
   const acting = named.is !== 'seat' && named.acting

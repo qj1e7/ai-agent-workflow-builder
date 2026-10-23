@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { errorWords } from '../../api/errors'
+import { useErrorWords, useRunClock } from '../../api/context'
 import { useDisplayName } from '../../api/people'
-import { useRunClock } from '../../api/context'
 import { useRuns, useTemplates } from '../../api/queries'
 import type { RunView } from '../../api/types'
 import { useLiveRun } from '../../tracker/hooks'
@@ -19,6 +18,7 @@ import styles from './OverviewPage.module.css'
 const SETTLED = new Set<RunView['state']>(['succeeded', 'rejected', 'failed'])
 
 export function OverviewPage() {
+  const explain = useErrorWords()
   const runs = useRuns({ poll: true })
   const latest = runs.data?.[0]
   return (
@@ -26,7 +26,7 @@ export function OverviewPage() {
       {runs.isError ? (
         <>
           <h1>Runs</h1>
-          <InlineMessage tone="error">{errorWords(runs.error)}</InlineMessage>
+          <InlineMessage tone="error">{explain(runs.error)}</InlineMessage>
         </>
       ) : null}
       {runs.isPending ? (

@@ -1,4 +1,4 @@
-import { errorWords } from '../../api/errors'
+import { useErrorWords } from '../../api/context'
 import { useMockJiraTickets } from '../../api/queries'
 import type { MockJiraTicket } from '../../api/types'
 import { Button, ButtonLink } from '../../ui/Button'
@@ -9,6 +9,7 @@ import { PageHeader } from '../../ui/PageHeader'
 import styles from './JiraPage.module.css'
 
 export function JiraPage() {
+  const explain = useErrorWords()
   const tickets = useMockJiraTickets({ poll: true })
 
   return (
@@ -30,7 +31,7 @@ export function JiraPage() {
       ) : null}
       {!tickets.data && tickets.isError ? (
         <div className={styles['problem']}>
-          <InlineMessage tone="error">We could not load the tickets. {errorWords(tickets.error)}</InlineMessage>
+          <InlineMessage tone="error">We could not load the tickets. {explain(tickets.error)}</InlineMessage>
           <Button icon={IconReplay} loading={tickets.isFetching} onClick={() => void tickets.refetch()}>
             Try again
           </Button>

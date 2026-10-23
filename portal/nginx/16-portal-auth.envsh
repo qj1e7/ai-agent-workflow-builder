@@ -1,0 +1,47 @@
+#!/bin/sh
+# Sourced by the nginx image's /docker-entrypoint.sh (set -e) before 20-envsubst-on-templates.sh renders
+# default.conf.template.
+
+export PORTAL_CONFIG_AUTH=""
+export PORTAL_CSP_AUTH=""
+
+portal_auth_refuse() {
+  echo "portal: $1" >&2
+  exit 1
+}
+
+# grep checks each line on its own, so a value with a newline could pass with a bad second line.
+portal_auth_one_line() {
+  case "$2" in
+    *"
+"*) portal_auth_refuse "$1 must be a single line" ;;
+  esac
+}
+
+if [ -n "${OIDC_AUTHORITY:-}${OIDC_CLIENT_ID:-}${OIDC_SCOPE:-}" ]; then
+  [ "${PORTAL_MODE:-live}" = "live" ] || portal_auth_refuse "PORTAL_MODE must be live when sign-in is configured, not '${PORTAL_MODE:-}'"
+  [ -n "${OIDC_AUTHORITY:-}" ] || portal_auth_refuse "OIDC_AUTHORITY is not set, but OIDC_CLIENT_ID or OIDC_SCOPE is"
+  [ -n "${OIDC_CLIENT_ID:-}" ] || portal_auth_refuse "OIDC_CLIENT_ID is not set"
+  [ -n "${OIDC_SCOPE:-}" ] || portal_auth_refuse "OIDC_SCOPE is not set"
+  portal_auth_one_line OIDC_AUTHORITY "$OIDC_AUTHORITY"
+  portal_auth_one_line OIDC_CLIENT_ID "$OIDC_CLIENT_ID"
+  portal_auth_one_line OIDC_SCOPE "$OIDC_SCOPE"
+  case "$OIDC_AUTHORITY" in
+    https://*) ;;
+    http://*)
+      [ "${OIDC_TEST_ONLY_HTTP_AUTHORITY:-}" = "$OIDC_AUTHORITY" ] \
+        || portal_auth_refuse "OIDC_AUTHORITY must be https. Plain http is for the test stack only, with OIDC_TEST_ONLY_HTTP_AUTHORITY set to the same value" ;;
+    *) portal_auth_refuse "OIDC_AUTHORITY must start with https://" ;;
+  esac
+  printf '%s' "$OIDC_AUTHORITY" | grep -Eq '^https?://[A-Za-z0-9._~:/%-]+$' \
+    || portal_auth_refuse "OIDC_AUTHORITY may only hold letters, digits and . _ ~ : / % -, with no query or fragment"
+  printf '%s' "$OIDC_CLIENT_ID" | grep -Eq '^[A-Za-z0-9._-]+$' \
+    || portal_auth_refuse "OIDC_CLIENT_ID may only hold letters, digits and . _ -"
+  printf '%s' "$OIDC_SCOPE" | grep -Eq '^[A-Za-z0-9._:/-]+( [A-Za-z0-9._:/-]+)*$' \
+    || portal_auth_refuse "OIDC_SCOPE must be space-separated tokens of letters, digits and . _ : / -"
+  printf '%s' "$OIDC_SCOPE" | grep -Eq '(^| )openid( |$)' \
+    || portal_auth_refuse "OIDC_SCOPE must include openid"
+  portal_auth_origin=$(printf '%s' "$OIDC_AUTHORITY" | sed -E 's#^(https?://[^/]+).*$#\1#')
+  export PORTAL_CONFIG_AUTH=",\"auth\":{\"authority\":\"$OIDC_AUTHORITY\",\"client_id\":\"$OIDC_CLIENT_ID\",\"scope\":\"$OIDC_SCOPE\"}"
+  export PORTAL_CSP_AUTH=" $portal_auth_origin"
+fi

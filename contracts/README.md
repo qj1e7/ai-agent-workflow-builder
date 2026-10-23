@@ -67,13 +67,19 @@ Every event has `run_id`, `seq` (gapless from 1 per run), `ts`, `actor {kind, id
 
 `run_failed.reason` is one of `AgentError`, `WorkflowNodeError`, `TimedOut`, `DispatchFailed`, `WriteFailed`, `SafetyDenied`, `UnboundIntent`, `OutOfOrderStep`. The AI troubleshooter has one rule per reason.
 
-## Sign-in in local mode
+## Sign-in
 
-platform-api starts only with `AUTH_MODE=dev` and a `PUBLIC_BASE_URL` on `localhost` or `127.0.0.1`. Portal routes then read `X-Dev-User`, one of the ids from `GET /api/v1/dev/users`: `alice` (Operator and Approver), `bob` (Approver), `carol` (Operator). Alice starts the fixture runs, so she is refused with `own_work` when she tries to approve them.
+platform-api has two sign-in modes. `AUTH_MODE` picks one at startup. The contract is the same in both, except that local mode adds `GET /api/v1/dev/users`.
 
-`openapi.json` declares this as the `DevUser` security scheme, an API key sent in the `X-Dev-User` header. Only the routes that read the header carry it. A client that reads the contract sees which routes need a signed-in user, and that the scheme is for local mode only.
+Local mode (`AUTH_MODE=dev`) starts only with a `PUBLIC_BASE_URL` on `localhost` or `127.0.0.1`. Portal routes then read `X-Dev-User`, one of the ids from `GET /api/v1/dev/users`: `alice` (Operator and Approver), `bob` (Approver), `carol` (Operator). Alice starts the fixture runs, so she is refused with `own_work` when she tries to approve them.
 
-Every error the API sends from its own code has the body `{"detail": "..."}`, and each route declares the error statuses it can answer: 401 without a known user, 403 when the user's role does not allow the route, 404 for an unknown id, and 409 when the state of the run or approval does not allow the action. The two other error bodies are the refusal on a decision (`RefusalOut`) and the try-again-later answer of the step route (`RetryLater`). Request validation answers 422 in FastAPI's own shape.
+Real sign-in (`AUTH_MODE=oidc`) reads an OpenID Connect access token from the `Authorization: Bearer` header and ignores `X-Dev-User`. platform-api checks the token's signature against the identity provider's published keys (RS256 or ES256 only), then its issuer, its audience and its times. The person's id is the `oid` claim, or `sub` when there is no `oid`. Their roles come from the `roles` claim, where `Operator` and `Approver` are the only values that count. [ADR 0018](../docs/adr/0018-sign-in-with-openid-connect.md) explains the choice.
+
+`openapi.json` declares both modes as security schemes: `DevUser`, an API key in the `X-Dev-User` header, and `OidcBearer`, an HTTP bearer token in JWT format. Every route that reads the signed-in user lists both. That means one or the other signs the request in, depending on the mode. A client that reads the contract sees which routes need a signed-in user.
+
+`GET /api/v1/me` answers who the platform takes the caller to be: `id`, `display` and `roles`. The Portal shows that instead of reading the token itself.
+
+Every error the API sends from its own code has the body `{"detail": "..."}`, and each route declares the error statuses it can answer: 401 without a signed-in user, 403 when the user's role does not allow the route, 404 for an unknown id, 409 when the state of the run or approval does not allow the action, and 503 on every signed-in route when the identity provider's keys cannot be fetched, with a `Retry-After` header. In real sign-in a 401 also carries `WWW-Authenticate: Bearer`. The two other error bodies are the refusal on a decision (`RefusalOut`) and the try-again-later answer of the step route (`RetryLater`). Request validation answers 422 in FastAPI's own shape.
 
 ## The agent callback
 

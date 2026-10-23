@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { errorWords } from '../../api/errors'
+import { useErrorWords } from '../../api/context'
 import { useTemplates } from '../../api/queries'
 import type { TemplateView } from '../../api/types'
 import { planTrack } from '../../run'
@@ -14,6 +14,7 @@ const PROMISE = 'Describe a task in plain English. Agents do the work, and nothi
 const NO_TEMPLATE = 'No ready-made task is available yet.'
 
 export function FirstRun() {
+  const explain = useErrorWords()
   const templates = useTemplates()
   const template = templates.data?.[0]
   if (template) return <Ready template={template} />
@@ -26,7 +27,7 @@ export function FirstRun() {
         <Skeleton lines={4} label="Loading the example." />
       ) : (
         <div className={styles['fallback']}>
-          <InlineMessage tone="error">{templates.isError ? errorWords(templates.error) : NO_TEMPLATE}</InlineMessage>
+          <InlineMessage tone="error">{templates.isError ? explain(templates.error) : NO_TEMPLATE}</InlineMessage>
           <ButtonLink to="/builder">Describe your own task</ButtonLink>
         </div>
       )}

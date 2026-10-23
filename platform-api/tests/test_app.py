@@ -11,6 +11,7 @@ ROUTES = {
     ("GET", "/healthz"),
     ("GET", "/healthz/ready"),
     ("GET", "/api/v1/dev/users"),
+    ("GET", "/api/v1/me"),
     ("GET", "/api/v1/templates"),
     ("POST", "/api/v1/use-cases"),
     ("GET", "/api/v1/use-cases"),

@@ -8,6 +8,7 @@ dependencies = [
     "httpx>=0.28,<0.29",
     "psycopg[binary,pool]>=3.3",
     "pydantic>=2.11",
+    "pyjwt[crypto]>=2.15,<3",
     "uvicorn>=0.34",
 ]
 
@@ -74,4 +75,15 @@ forbidden_modules = [
     "platform_api.builder.*",
     "platform_api.orchestration.*",
 ]
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "Only the sign-in port knows about the identity provider"
+type = "forbidden"
+source_modules = [
+    "platform_api.builder",
+    "platform_api.orchestration",
+    "platform_api.monitoring",
+]
+forbidden_modules = ["platform_api.oidc"]
 allow_indirect_imports = true

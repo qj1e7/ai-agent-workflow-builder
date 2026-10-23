@@ -1,9 +1,10 @@
 import { useEffect, useRef, type MouseEvent } from 'react'
 import { Link, Outlet, useLocation } from 'react-router'
-import { usePortalMode } from '../api/context'
+import { usePortalMode, useSession } from '../api/context'
 import { cx } from './cx'
 import { ErrorBoundary } from './ErrorBoundary'
 import { IconChat, IconFlow, IconReplay, IconShield, IconTicket, IconWave, PortalMark, type Icon } from './icons'
+import { SignedInAs } from './SignedInAs'
 import { ThemeToggle } from './ThemeToggle'
 import { UserSwitcher } from './UserSwitcher'
 import styles from './AppShell.module.css'
@@ -61,6 +62,7 @@ function useHeadingFocus(): void {
 
 export function AppShell() {
   const mode = usePortalMode()
+  const session = useSession()
   const { pathname } = useLocation()
   useHeadingFocus()
 
@@ -99,7 +101,7 @@ export function AppShell() {
             </span>
           ) : null}
           <ThemeToggle />
-          <UserSwitcher />
+          {session.kind === 'dev' ? <UserSwitcher session={session} /> : <SignedInAs session={session} />}
         </div>
       </header>
       <main id="main" tabIndex={-1} className={styles['main']}>

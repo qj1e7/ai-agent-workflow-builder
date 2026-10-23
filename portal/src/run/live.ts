@@ -1,6 +1,5 @@
 import { useMemo, useState, useSyncExternalStore } from 'react'
 import { useApiFetch, useRunClock } from '../api/context'
-import { getDevUser } from '../api/session'
 import type { BlockView } from '../api/types'
 import { runFeed, type Connection, type FetchLike } from '../stream/feed'
 import type { RunId } from './brand'
@@ -213,14 +212,6 @@ export function createLiveView(o: { runId: RunId; env: LiveViewEnv; whenFinished
   }
 }
 
-function withDevUser(fetchImpl: typeof fetch): FetchLike {
-  return (input, init) => {
-    const headers = new Headers(init?.headers)
-    headers.set('X-Dev-User', getDevUser())
-    return fetchImpl(input, { ...init, headers })
-  }
-}
-
 export interface UseLiveViewOptions {
   readonly whenFinished: WhenFinished
   readonly registry: AgentRegistry
@@ -240,7 +231,7 @@ export function useLiveView(runId: RunId, { whenFinished, registry, speed }: Use
     () =>
       createLiveView({
         runId,
-        env: { fetch: withDevUser(fetchImpl), clock: createClock(runClock, runId), registry },
+        env: { fetch: fetchImpl, clock: createClock(runClock, runId), registry },
         whenFinished,
         speed: initialSpeed,
       }),

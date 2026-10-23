@@ -4,7 +4,7 @@ server {
 
   root /usr/share/nginx/html;
 
-  add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
+  add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'${PORTAL_CSP_AUTH}; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
   add_header X-Content-Type-Options "nosniff" always;
   add_header Referrer-Policy "no-referrer" always;
   add_header X-Frame-Options "DENY" always;
@@ -31,7 +31,7 @@ server {
   location = /config.json {
     default_type application/json;
     expires -1;
-    return 200 '{"mode":"${PORTAL_MODE}"}';
+    return 200 '{"mode":"${PORTAL_MODE}"${PORTAL_CONFIG_AUTH}}';
   }
 
   location = /healthz {
