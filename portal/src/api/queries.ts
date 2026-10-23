@@ -1,7 +1,15 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { ApiError, unwrap, type ApiClient } from './client'
 import { useApiClient, useSession, useCacheScope } from './context'
-import type { CreateUseCase, DecisionIn, EventPage, RefusalOut } from './types'
+import type {
+  AddressDecisionIn,
+  ConnectIn,
+  CreateUseCase,
+  DecisionIn,
+  EventPage,
+  RefusalOut,
+  SaveIn,
+} from './types'
 
 export const POLL_MS = 3000
 
@@ -17,6 +25,7 @@ export const keys = {
   troubleshoot: (user: string, runId: string, attempt: number) => ['troubleshoot', user, runId, attempt] as const,
   teamsMessages: (user: string) => ['teams-messages', user] as const,
   jiraTickets: (user: string) => ['jira-tickets', user] as const,
+  modelSettings: (user: string) => ['model-settings', user] as const,
 }
 
 interface QueryOptions {
@@ -230,4 +239,56 @@ export function refusalOf(error: unknown): RefusalOut | null {
 
 export function isConflict(error: unknown): boolean {
   return error instanceof ApiError && error.status === 409
+}
+
+export function useModelSettings() {
+  const client = useApiClient()
+  const user = useCacheScope()
+  return useQuery({
+    queryKey: keys.modelSettings(user),
+    queryFn: async () => unwrap(await client.GET('/api/v1/settings/model')),
+  })
+}
+
+function refreshModelSettings(queryClient: QueryClient): Promise<unknown> {
+  return queryClient.invalidateQueries({ queryKey: ['model-settings'] })
+}
+
+export function useConnectModel() {
+  const client = useApiClient()
+  return useMutation({
+    mutationFn: async (body: ConnectIn) => unwrap(await client.POST('/api/v1/settings/model/connect', { body })),
+  })
+}
+
+export function useSaveModel() {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (body: SaveIn) => unwrap(await client.PUT('/api/v1/settings/model', { body })),
+    onSettled: () => refreshModelSettings(queryClient),
+  })
+}
+
+export function useTurnModelOff() {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async () => {
+      // The platform answers 204 with no body, so there is no data to unwrap.
+      const { response, error } = await client.DELETE('/api/v1/settings/model')
+      if (!response.ok) throw new ApiError(response.status, error)
+    },
+    onSettled: () => refreshModelSettings(queryClient),
+  })
+}
+
+export function useDecideAddress() {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (body: AddressDecisionIn) =>
+      unwrap(await client.POST('/api/v1/settings/model/address-decision', { body })),
+    onSettled: () => refreshModelSettings(queryClient),
+  })
 }

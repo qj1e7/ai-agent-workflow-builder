@@ -5,7 +5,7 @@ const AFTER_EVERYTHING = /inventory\.spec\.ts/
 /** Plays the run on the real clock under a trace, so it runs after the rest: it neither slows them nor is slowed by them. */
 const STEADY = /steady\.spec\.ts/
 /** The specs that record states. The dark projects run only these, so every state has a shot and an axe result in both themes. */
-const RECORDING = /\/(overview|run|builder|approvals|inboxes|reduced-motion)\.spec\.ts$/
+const RECORDING = /\/(overview|run|builder|approvals|inboxes|settings|reduced-motion)\.spec\.ts$/
 
 const DESKTOP = { viewport: { width: 1440, height: 900 } }
 const PHONE = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }

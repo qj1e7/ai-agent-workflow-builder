@@ -130,6 +130,17 @@ const routes: readonly Route[] = [
   }),
   route('GET', '/teams-stub/messages', ({ platform, wall }) => json(200, { messages: platform.teamsMessages(wall) })),
   route('GET', '/mock-jira/tickets', ({ platform, wall }) => json(200, { tickets: platform.jiraTickets(wall) })),
+  route('GET', '/settings/model', ({ platform, user }) => json(200, platform.modelSettings.view(user))),
+  route('POST', '/settings/model/connect', ({ platform, request, user }) =>
+    platform.modelSettings.connect(user, request.body),
+  ),
+  route('PUT', '/settings/model', ({ platform, request, user, wall }) =>
+    platform.modelSettings.save(user, request.body, wall),
+  ),
+  route('DELETE', '/settings/model', ({ platform, user, wall }) => platform.modelSettings.turnOff(user, wall)),
+  route('POST', '/settings/model/address-decision', ({ platform, request, user, wall }) =>
+    platform.modelSettings.decide(user, request.body, wall),
+  ),
 ]
 
 export function dispatch(platform: DemoPlatform, request: MockRequest, wall: number): Response {

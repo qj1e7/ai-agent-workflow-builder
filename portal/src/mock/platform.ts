@@ -18,6 +18,7 @@ import { FIRST_NEW_TICKET_NUMBER, proposalFor, workLeg, type Person, type RunCon
 import { Run } from './run'
 import type { ApprovalRecord } from './runView'
 import { finished, replay, Timeline } from './timeline'
+import { DemoModelSettings } from './settings'
 
 const HOUR_MS = 3_600_000
 const SEEDED_FAILURE_AGE_MS = 3 * HOUR_MS
@@ -43,6 +44,7 @@ function person(user: DevUser): Person {
 }
 
 export class DemoPlatform {
+  readonly modelSettings = new DemoModelSettings()
   private readonly runs: Run[]
   private readonly useCases: UseCaseView[]
   private readonly startedRuns = new Map<string, string>()
