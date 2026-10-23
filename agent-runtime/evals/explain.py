@@ -6,6 +6,7 @@ from evals.checks import (
     Check,
     check,
     length_cap,
+    mentions,
     no_invented,
     no_jargon,
     no_themed_names,
@@ -61,7 +62,6 @@ def score(case: ExplainCase, answer: Answer) -> list[Check]:
         return [check("answered", ["no structured answer"])]
     text = answer.value.explanation
     source = "\n".join([*case.events, case.message, "workflow engine"])
-    lowered = text.lower()
     return [
         check("answered", [] if text.strip() else ["empty explanation"]),
         check(
@@ -75,7 +75,7 @@ def score(case: ExplainCase, answer: Answer) -> list[Check]:
             [
                 " or ".join(group)
                 for group in case.must_mention
-                if not any(term.lower() in lowered for term in group)
+                if not any(mentions(text, term) for term in group)
             ],
         ),
         length_cap(text, MAX_EXPLANATION_LENGTH),

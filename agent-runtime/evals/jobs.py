@@ -36,6 +36,7 @@ class Job[C: Case]:
     schema: Callable[[], type[BaseModel]] | None
     score: Callable[[C, Answer], list[Check]]
     judged: bool
+    time_limit_s: float | None = None
 
     def cases(self) -> list[C]:
         rows = json.loads((CASES / f"{self.name}.json").read_text())

@@ -1,6 +1,11 @@
 from pydantic import Field
 
-from agent_runtime.summary import MAX_SUMMARY_LENGTH, summary_prompt, usable_summary
+from agent_runtime.summary import (
+    MAX_SUMMARY_LENGTH,
+    SUMMARY_TIMEOUT_SECONDS,
+    summary_prompt,
+    usable_summary,
+)
 from evals.checks import (
     Check,
     check,
@@ -52,4 +57,5 @@ SUMMARISE = Job(
     schema=None,
     score=score,
     judged=True,
+    time_limit_s=SUMMARY_TIMEOUT_SECONDS,
 )

@@ -32,8 +32,9 @@ class Target:
     def label(self) -> str:
         return f"{self.provider}:{self.model}"
 
-    def build(self) -> BaseChatModel:
-        return init_chat_model(self.model, model_provider=self.provider, **self.kwargs)
+    def build(self, **overrides: Any) -> BaseChatModel:
+        settings = self.kwargs | overrides
+        return init_chat_model(self.model, model_provider=self.provider, **settings)
 
 
 @dataclass(frozen=True)

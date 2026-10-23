@@ -4,17 +4,17 @@ from typing import Any
 
 import httpx
 import pytest
-from evals.checks import jargon, write_claims
+from evals.checks import Check, jargon, mentions, write_claims
 from evals.explain import EXPLAIN, ExplainCase, Explanation
 from evals.jobs import Answer
 from evals.match import MATCH, TEMPLATES, MatchCase, schema
 from evals.providers import Target, plan
-from evals.runner import JOBS, main, redact, run_case
+from evals.runner import JOBS, Outcome, main, model_for, redact, run_case, summarise_job
 from evals.summarise import SUMMARISE, SummariseCase
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 
-from agent_runtime.summary import template_summary
+from agent_runtime.summary import SUMMARY_TIMEOUT_SECONDS, template_summary
 
 needs_contracts = pytest.mark.skipif(
     not TEMPLATES.exists(), reason="contracts/ is not in the test image. CI runs this on the host."
@@ -288,3 +288,95 @@ def test_a_cloud_provider_with_a_key_runs_its_default_models() -> None:
 
 def test_every_job_is_registered_once() -> None:
     assert [job.name for job in JOBS] == ["summarise", "explain", "match"]
+
+
+@pytest.mark.parametrize(
+    ("text", "term", "found"),
+    [
+        ("Here is the report.", "repo", False),
+        ("Check the repo name.", "repo", True),
+        ("The download failed.", "down", False),
+        ("GitHub was down.", "down", True),
+        ("Bob approved it.", "approv*", True),
+        ("Bob disapproved it.", "approv*", False),
+        ("It wasn't set up.", "wasn't set up", True),
+    ],
+)
+def test_a_fact_term_matches_whole_words_or_a_marked_stem(
+    text: str, term: str, found: bool
+) -> None:
+    assert mentions(text, term) is found
+
+
+STOCK = "The run failed and stopped. Nothing was changed or written."
+
+
+@pytest.mark.parametrize("case", EXPLAIN.cases(), ids=lambda c: c.id)
+def test_no_fact_term_is_satisfied_by_a_stock_phrase(case: ExplainCase) -> None:
+    assert [t for group in case.must_mention for t in group if mentions(STOCK, t)] == []
+
+
+def explanation(text: str, retry_safe: bool) -> Answer:
+    value = Explanation(explanation=text, retry_safe=retry_safe)
+    return Answer(value, value.model_dump_json(), None)
+
+
+def test_nothing_was_changed_is_not_the_fact_that_the_approved_ticket_changed() -> None:
+    answer = explanation("The safety checker blocked the write. Nothing was changed.", False)
+    assert "required_facts" in failed(EXPLAIN.score(explain_case("safety-denied"), answer))
+
+
+def test_no_connector_counts_as_saying_the_use_case_cannot_do_it() -> None:
+    answer = explanation("The run stopped because there is no connector for that step.", False)
+    assert "required_facts" not in failed(EXPLAIN.score(explain_case("unbound-intent"), answer))
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["Two endpoints failed.", "The APIs are down.", "A Rest-API call failed.", "Run_agents broke."],
+)
+def test_jargon_catches_plurals_hyphens_and_identifiers_in_any_case(text: str) -> None:
+    assert jargon(text) != []
+
+
+def outcome(latency_ms: float | None, tokens: tuple[int, int] = (100, 10)) -> Outcome:
+    answered = latency_ms is not None
+    return Outcome("c", [Check("answered", answered)], latency_ms, *tokens, "x" if answered else "")
+
+
+def test_the_summary_job_has_the_products_time_limit() -> None:
+    assert SUMMARISE.time_limit_s == SUMMARY_TIMEOUT_SECONDS
+    assert EXPLAIN.time_limit_s is None
+
+
+def test_a_summary_row_counts_answers_over_the_products_time_limit() -> None:
+    outcomes = [outcome(9_000), outcome(10_000), outcome(12_000), outcome(None, (0, 0))]
+    row = summarise_job(Target("anthropic", "m", {}), SUMMARISE, outcomes, {})
+    assert [o["within_product_limit"] for o in row["outcomes"]] == [True, True, False, False]
+    assert row["over_product_limit"] == 2
+
+
+def test_errored_cases_do_not_lower_the_token_and_cost_means() -> None:
+    pricing = {"anthropic:m": {"input_usd_per_mtok": 1, "output_usd_per_mtok": 1, "source": "t"}}
+    outcomes = [outcome(1_000, (100, 10)), outcome(1_000, (300, 30)), outcome(None, (0, 0))]
+    row = summarise_job(Target("anthropic", "m", {}), EXPLAIN, outcomes, pricing)
+    assert (row["tokens"]["input_mean"], row["tokens"]["output_mean"]) == (200, 20)
+    assert row["cost_per_100_runs_usd"] == round(220 / 1_000_000 * 100, 4)
+    assert row["over_product_limit"] is None
+
+
+def test_the_summary_job_gets_no_retries_like_the_product(monkeypatch: pytest.MonkeyPatch) -> None:
+    built: list[dict[str, Any]] = []
+
+    def build(self: Target, **overrides: Any) -> Any:
+        built.append(overrides)
+        return f"built {overrides}"
+
+    monkeypatch.setattr(Target, "build", build)
+    cloud = Target("anthropic", "m", {"timeout": 120, "max_retries": 2})
+    local = Target("ollama", "g", {"seed": 7})
+    shared: Any = "shared"
+    assert model_for(SUMMARISE, cloud, shared) == "built {'max_retries': 0}"
+    assert model_for(EXPLAIN, cloud, shared) == "shared"
+    assert model_for(SUMMARISE, local, shared) == "shared"
+    assert built == [{"max_retries": 0}]

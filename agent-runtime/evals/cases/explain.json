@@ -34,7 +34,7 @@
         "could not be reached",
         "couldn't be reached",
         "outage",
-        "temporar",
+        "temporar*",
         "not working",
         "trouble"
       ]
@@ -79,7 +79,7 @@
         "could not be reached",
         "couldn't be reached",
         "outage",
-        "temporar",
+        "temporar*",
         "not working",
         "trouble"
       ]
@@ -124,7 +124,7 @@
         "could not be reached",
         "couldn't be reached",
         "outage",
-        "temporar",
+        "temporar*",
         "not working",
         "trouble",
         "reach",
@@ -246,7 +246,7 @@
         "Jira"
       ],
       [
-        "approv"
+        "approv*"
       ]
     ],
     "reference": {
@@ -290,7 +290,7 @@
         "Jira"
       ],
       [
-        "approv"
+        "approv*"
       ]
     ],
     "reference": {
@@ -332,7 +332,7 @@
         "approver"
       ],
       [
-        "declin",
+        "declin*",
         "rejected",
         "said no",
         "turned down",
@@ -374,12 +374,11 @@
         "did not respond",
         "didn't respond",
         "stuck",
-        "waited",
-        "stopped"
+        "waited"
       ]
     ],
     "reference": {
-      "explanation": "The workflow engine stopped answering while the agents were working, so the run gave up. Nothing was changed. Retry the run, and if it times out again, check that the workflow engine is running.",
+      "explanation": "The workflow engine stopped answering while the agents were working, so the run timed out. Nothing was changed. Retry the run, and if it times out again, check that the workflow engine is running.",
       "retry_safe": true
     }
   },
@@ -405,8 +404,7 @@
         "couldn't reach",
         "connect",
         "refused",
-        "reach",
-        "failed"
+        "reach"
       ]
     ],
     "reference": {
@@ -451,9 +449,8 @@
         "safety"
       ],
       [
-        "approv",
+        "approv*",
         "match",
-        "changed",
         "different"
       ]
     ],
@@ -483,7 +480,6 @@
       [
         "order",
         "edited",
-        "changed",
         "reload"
       ]
     ],
@@ -527,7 +523,9 @@
         "wasn't set up",
         "was not set up",
         "properly set up",
-        "missing"
+        "missing",
+        "no connector",
+        "not bound"
       ]
     ],
     "reference": {

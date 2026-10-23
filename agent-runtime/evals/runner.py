@@ -172,12 +172,20 @@ def price_for(target: Target, pricing: Mapping[str, Any]) -> Mapping[str, Any] |
 def summarise_job(
     target: Target, job: Job[Any], outcomes: list[Outcome], pricing: Mapping[str, Any]
 ) -> dict[str, Any]:
-    latencies = [o.latency_ms for o in outcomes if o.latency_ms is not None]
-    tokens_in = [o.input_tokens for o in outcomes]
-    tokens_out = [o.output_tokens for o in outcomes]
+    answered = [o for o in outcomes if o.latency_ms is not None]
+    latencies = [o.latency_ms for o in answered if o.latency_ms is not None]
+    # A case that errored used no tokens. Counting it would make a failing provider look cheap.
+    tokens_in = [o.input_tokens for o in answered]
+    tokens_out = [o.output_tokens for o in answered]
+    limit_ms = None if job.time_limit_s is None else job.time_limit_s * 1000
+    within = (
+        [o.latency_ms is not None and o.latency_ms <= limit_ms for o in outcomes]
+        if limit_ms
+        else []
+    )
     price = price_for(target, pricing)
     cost = None
-    if price is not None and outcomes:
+    if price is not None and answered:
         per_call = (
             statistics.fmean(tokens_in) * price["input_usd_per_mtok"]
             + statistics.fmean(tokens_out) * price["output_usd_per_mtok"]
@@ -199,9 +207,11 @@ def summarise_job(
             "median": round(statistics.median(latencies)) if latencies else None,
             "p95": round(percentile(latencies, 0.95) or 0) if latencies else None,
         },
+        # Cases that took longer than the product waits, or errored. Their answer would be lost.
+        "over_product_limit": within.count(False) if limit_ms else None,
         "tokens": {
-            "input_mean": round(statistics.fmean(tokens_in)),
-            "output_mean": round(statistics.fmean(tokens_out)),
+            "input_mean": round(statistics.fmean(tokens_in)) if answered else None,
+            "output_mean": round(statistics.fmean(tokens_out)) if answered else None,
             "input_total": sum(tokens_in),
             "output_total": sum(tokens_out),
         },
@@ -214,12 +224,21 @@ def summarise_job(
                 "passed": o.passed,
                 "failed": {c.name: c.detail for c in o.checks if not c.passed},
                 "latency_ms": None if o.latency_ms is None else round(o.latency_ms),
+                **({"within_product_limit": within[i]} if limit_ms else {}),
                 "answer": o.answer,
                 **({"judge": o.judge} if o.judge is not None else {}),
             }
-            for o in outcomes
+            for i, o in enumerate(outcomes)
         ],
     }
+
+
+def model_for(job: Job[Any], target: Target, shared: BaseChatModel) -> BaseChatModel:
+    # The product calls the summary model once, with no retries. Keep the long timeout, so a slow
+    # answer is still measured, and count it against the product's limit instead.
+    if job.time_limit_s is not None and "max_retries" in target.kwargs:
+        return target.build(max_retries=0)
+    return shared
 
 
 def run_target(
@@ -231,13 +250,14 @@ def run_target(
         started = time.perf_counter()
         model.invoke(WARM_UP)
         warm_up_ms = round((time.perf_counter() - started) * 1000)
+        models = {job.name: model_for(job, target, model) for job in JOBS}
     except Exception as error:
         return {"error": _failure(error, env)}, []
     rows: list[dict[str, Any]] = []
     for job in JOBS:
         outcomes: list[Outcome] = []
         for case in job.cases():
-            outcome = run_case(model, job, case, env)
+            outcome = run_case(models[job.name], job, case, env)
             if judge_model is not None and job.judged and outcome.answer:
                 outcome = replace(
                     outcome, judge=judge(judge_model, job.prompt(case), outcome.answer)
@@ -249,12 +269,25 @@ def run_target(
     return {"warm_up_ms": warm_up_ms}, rows
 
 
+def _cell(value: object) -> str:
+    return "-" if value is None else str(value)
+
+
 def _seconds(ms: float | None) -> str:
     return "-" if ms is None else f"{ms / 1000:.1f}"
 
 
 def table(results: list[dict[str, Any]], not_run: list[NotRun]) -> str:
-    head = ("provider:model", "job", "pass", "median s", "p95 s", "tokens in/out", "$/100 runs")
+    head = (
+        "provider:model",
+        "job",
+        "pass",
+        "median s",
+        "p95 s",
+        "over limit",
+        "tokens in/out",
+        "$/100 runs",
+    )
     lines: list[tuple[str, ...]] = [head]
     for r in results:
         cost = r["cost_per_100_runs_usd"]
@@ -265,7 +298,8 @@ def table(results: list[dict[str, Any]], not_run: list[NotRun]) -> str:
                 f"{r['passed']}/{r['cases']} ({r['pass_rate']:.0%})",
                 _seconds(r["latency_ms"]["median"]),
                 _seconds(r["latency_ms"]["p95"]),
-                f"{r['tokens']['input_mean']}/{r['tokens']['output_mean']}",
+                _cell(r["over_product_limit"]),
+                f"{_cell(r['tokens']['input_mean'])}/{_cell(r['tokens']['output_mean'])}",
                 "unknown" if cost is None else f"{cost:.4f}",
             )
         )

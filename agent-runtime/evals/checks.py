@@ -82,7 +82,7 @@ JARGON_WORDS = (
 )
 
 _STATUS_CODE = re.compile(r"(?<![\w.])[45]\d\d(?![\w.])")
-_IDENTIFIER = re.compile(r"\b[a-z]+(?:_[a-z]+)+\b")
+_IDENTIFIER = re.compile(r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b", re.IGNORECASE)
 _VERSION = re.compile(r"\d+(?:\.\d+)+")
 _TICKET_KEY = re.compile(r"\b[A-Z][A-Z0-9]{1,9}-\d+\b")
 _WRITE_CLAIMS = (
@@ -110,9 +110,24 @@ def _word(term: str, flags: int = 0) -> re.Pattern[str]:
     return re.compile(rf"(?<![\w-]){re.escape(term)}(?![\w-])", flags)
 
 
+def _jargon_word(term: str) -> re.Pattern[str]:
+    # A letter or digit must not touch the word, but a hyphen or underscore may ("Rest-API").
+    # An "s" or "es" on the end still counts ("endpoints", "APIs").
+    return re.compile(rf"(?<![A-Za-z0-9]){re.escape(term)}(?:e?s)?(?![A-Za-z0-9])", re.IGNORECASE)
+
+
 _THEMED = [_word(name, re.IGNORECASE) for name in THEMED_NAMES]
 _SYSTEM = [(name, _word(name)) for name in SYSTEMS]
-_JARGON = [(word, _word(word, re.IGNORECASE)) for word in JARGON_WORDS]
+_JARGON = [(word, _jargon_word(word)) for word in JARGON_WORDS]
+
+
+def mentions(text: str, term: str) -> bool:
+    """Whole words only, so "repo" does not match "report". A trailing * marks a stem:
+    "approv*" matches "approved" and "approval", but not "disapproved"."""
+    stem = term.endswith("*")
+    word = re.escape(term.removesuffix("*"))
+    end = "" if stem else r"(?!\w)"
+    return re.search(rf"(?<!\w){word}{end}", text, re.IGNORECASE) is not None
 
 
 def versions_in(text: str) -> set[str]:

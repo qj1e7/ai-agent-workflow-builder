@@ -8,6 +8,8 @@ from langchain_core.language_models import BaseChatModel
 log = logging.getLogger(__name__)
 
 MAX_SUMMARY_LENGTH = 300
+# The summary model gets one try of at most this long, then the template answers instead.
+SUMMARY_TIMEOUT_SECONDS = 10
 
 type ModelFactory = Callable[[str], BaseChatModel]
 
@@ -39,7 +41,7 @@ class TemplateSummarizer:
 
 
 def default_model_factory(name: str) -> BaseChatModel:
-    return init_chat_model(name, timeout=10, max_retries=0)
+    return init_chat_model(name, timeout=SUMMARY_TIMEOUT_SECONDS, max_retries=0)
 
 
 class ModelSummarizer:
