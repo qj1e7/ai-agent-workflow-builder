@@ -1,0 +1,1 @@
+n8n-1  | Postgres 16 is outside the supported range and receives compatibility support only. Upgrade to Postgres 17 or newer.

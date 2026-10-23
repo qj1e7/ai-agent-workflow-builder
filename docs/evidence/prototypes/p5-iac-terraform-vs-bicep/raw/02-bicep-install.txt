@@ -1,0 +1,3 @@
+WARNING: The configuration value of bicep.use_binary_from_path has been set to 'false'.
+Installing Bicep CLI v0.48.1...
+Successfully installed Bicep CLI to "/root/.azure/bin/bicep".

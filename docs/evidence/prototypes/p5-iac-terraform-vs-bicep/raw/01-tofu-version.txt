@@ -1,0 +1,2 @@
+OpenTofu v1.12.7
+on linux_arm64
