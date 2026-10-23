@@ -1,0 +1,141 @@
+name: deploy
+
+# A person starts each deploy by hand. The azure-dev environment only accepts main, and main only
+# takes pull requests a second person approved, so only reviewed code can deploy. No second person
+# approves each run, so every apply goes through guarded-apply.sh, which stops before applying a
+# plan that would destroy or replace anything unless allow_destroy is ticked. infra/README.md
+# lists the one-time setup in the order that makes this true.
+#
+# The Azure IDs are secrets, which GitHub masks, and the steps print summaries only. Terraform's
+# full output and the plan stay on the runner. That keeps the logs safe if the repository is ever
+# made public.
+on:
+  workflow_dispatch:
+    inputs:
+      allow_destroy:
+        description: Let this deploy destroy or replace Azure resources. Leave it off unless you mean it.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-azure-dev
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: azure-dev
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: infra/envs/dev
+    env:
+      TF_IN_AUTOMATION: "true"
+      ALLOW_DESTROY: ${{ inputs.allow_destroy }}
+      TF_INPUT: "false"
+      ARM_USE_OIDC: "true"
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      TF_VAR_image_tag: ${{ github.sha }}
+      # docs/auth/entra-setup.md says where each sign-in value comes from. OIDC_JWKS_URL may stay unset.
+      TF_VAR_oidc_issuer: ${{ vars.OIDC_ISSUER }}
+      TF_VAR_oidc_audience: ${{ vars.OIDC_AUDIENCE }}
+      TF_VAR_oidc_jwks_url: ${{ vars.OIDC_JWKS_URL }}
+      TF_VAR_oidc_client_id: ${{ vars.OIDC_CLIENT_ID }}
+      TF_VAR_oidc_scope: ${{ vars.OIDC_SCOPE }}
+      TF_VAR_n8n_owner_email: ${{ vars.N8N_OWNER_EMAIL }}
+      # Optional. Without it agent-runtime calls GitHub anonymously, at 60 requests an hour.
+      TF_VAR_github_token: ${{ secrets.GH_RELEASE_TOKEN }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.16.5
+          terraform_wrapper: false
+
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Connect to the remote state
+        env:
+          STATE_GROUP: ${{ vars.TFSTATE_RESOURCE_GROUP }}
+          STATE_ACCOUNT: ${{ vars.TFSTATE_STORAGE_ACCOUNT }}
+        run: |
+          terraform init -lockfile=readonly \
+            -backend-config="resource_group_name=$STATE_GROUP" \
+            -backend-config="storage_account_name=$STATE_ACCOUNT" \
+            -backend-config="container_name=tfstate" \
+            -backend-config="key=dev.tfstate"
+
+      # The images need a registry, and the apps need their database roles, before the full apply can
+      # create the apps. On every later deploy these targeted applies find nothing to change.
+      - name: Create the registry
+        run: ../../scripts/guarded-apply.sh registry -target=module.registry
+
+      - name: Put the images in the registry
+        working-directory: .
+        run: |
+          registry=$(terraform -chdir=infra/envs/dev output -raw registry_name)
+          server=$(terraform -chdir=infra/envs/dev output -raw registry_login_server)
+          jq -r 'to_entries[] | .value | "\(.repository) \(.tag) \(.digest)"' infra/public-images.json |
+            while read -r repository tag digest; do
+              az acr import --name "$registry" --source "docker.io/$repository@$digest" \
+                --image "$repository:$tag" --force --output none
+            done
+          # Local tags, so the build log does not print the registry's host name.
+          docker build --target runtime --tag "wab/platform-api:$GITHUB_SHA" platform-api
+          docker build --target runtime --tag "wab/agent-runtime:$GITHUB_SHA" agent-runtime
+          docker build --file portal/Dockerfile --tag "wab/portal:$GITHUB_SHA" .
+          # The deploy identity's AcrPush can still be on its way after Terraform's wait.
+          retry() {
+            label=$1
+            shift
+            attempt=1
+            until "$@"; do
+              if [ "$attempt" -ge 5 ]; then
+                echo "$label failed 5 times." >&2
+                return 1
+              fi
+              echo "$label failed. Trying again in 30 seconds." >&2
+              attempt=$((attempt + 1))
+              sleep 30
+            done
+          }
+          retry "Signing in to the registry" az acr login --name "$registry"
+          for image in platform-api agent-runtime portal; do
+            docker tag "wab/$image:$GITHUB_SHA" "$server/$image:$GITHUB_SHA"
+            retry "Pushing $image" docker push --quiet "$server/$image:$GITHUB_SHA" >/dev/null
+            echo "Pushed $image"
+          done
+
+      # Each wait is twice the job's own timeout_seconds in main.tf, because pulling the image on a
+      # cold start counts against the wait but not against the job's timeout.
+      - name: Create the database roles
+        run: |
+          ../../scripts/guarded-apply.sh db-init -target='module.job["db-init"]'
+          ../../scripts/run-job.sh "$(terraform output -raw resource_group_name)" db-init 600
+
+      # The full plan names every resource, so it stays in a file on the runner and is never
+      # uploaded. The run summary gets only the count of changes.
+      - name: Plan, check and apply everything
+        run: ../../scripts/guarded-apply.sh all
+
+      - name: Run the bootstrap job
+        run: ../../scripts/run-job.sh "$(terraform output -raw resource_group_name)" bootstrap 1200
+
+      - name: Say where the Portal is
+        run: echo "The Portal is at $(terraform output -raw portal_url)" >> "$GITHUB_STEP_SUMMARY"

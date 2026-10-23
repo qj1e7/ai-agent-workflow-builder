@@ -155,7 +155,7 @@ jobs:
           docker run --rm --volume "$PWD:/src" --workdir /src "$SEMGREP_IMAGE" \
             semgrep scan \
               --config p/python --config p/dockerfile --config p/github-actions \
-              --config p/typescript --config p/javascript --config p/react --config p/nginx \
+              --config p/typescript --config p/javascript --config p/react --config p/nginx --config p/terraform \
               --metrics=off --error --exclude docs \
               --sarif-output=semgrep.sarif .
 

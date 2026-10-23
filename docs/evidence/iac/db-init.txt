@@ -1,0 +1,18 @@
+db-init.sql run twice with the job's own command, as a non-superuser admin (CREATEROLE, CREATEDB), against postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3.
+run 1 exit 0
+run 2 exit 0
+== database owners
+n8n owned by n8n
+platform owned by wab_owner
+== roles: name, can log in, superuser
+n8n|t|f
+wab_builder|t|f
+wab_monitoring|t|f
+wab_orchestration|t|f
+wab_owner|t|f
+== each role signs in with its password
+n8n
+wab_owner
+wab_builder
+wab_orchestration
+wab_monitoring

@@ -1,0 +1,12 @@
+One-off terraform test of the GitHub token wiring, Terraform 1.16.5, with mocked azurerm, random and time providers, on a copy of infra/.
+The copy has no backend.tf, plus two test-only outputs: keys(local.apps["agent-runtime"].secrets) and keys(module.key_vault.secrets).
+no_token: github_token empty. Expects agent-runtime secrets [AGENT_API_KEY] and no github-token in the vault.
+with_token: github_token set. Expects [AGENT_API_KEY, GITHUB_TOKEN] and a github-token secret in the vault.
+
+tests/github_token.tftest.hcl... in progress
+  run "no_token"... pass
+  run "with_token"... pass
+tests/github_token.tftest.hcl... tearing down
+tests/github_token.tftest.hcl... pass
+
+Success! 2 passed, 0 failed.

@@ -1,0 +1,12 @@
+{
+  "n8n": {
+    "repository": "n8nio/n8n",
+    "tag": "2.42.6",
+    "digest": "sha256:526daa38b68e923cc00c5280d18b4da5d489f115a73bdbf3b8e452b184197a9a"
+  },
+  "postgres": {
+    "repository": "library/postgres",
+    "tag": "17",
+    "digest": "sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3"
+  }
+}
