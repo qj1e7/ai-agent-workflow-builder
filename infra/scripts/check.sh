@@ -42,6 +42,9 @@ for env_dir in "$infra"/envs/*/; do
     --workdir "/infra/envs/$env" --entrypoint /bin/sh "$TERRAFORM_IMAGE" -c \
     'terraform init -backend=false -input=false -lockfile=readonly -no-color >/dev/null && terraform validate -no-color'
 
+  run "terraform-variables-$env" tool --volume "$infra:/infra:ro" --entrypoint /bin/sh "$TERRAFORM_IMAGE" \
+    /infra/scripts/check-variables.sh "/infra/envs/$env/variables.tf"
+
   # OpenTofu gets a scratch copy without the lock file, because the lock file names Terraform's registry.
   run "tofu-validate-$env" tool \
     --volume "$infra:/src:ro" --volume "$cache/tofu:/cache" --env TF_PLUGIN_CACHE_DIR=/cache \
