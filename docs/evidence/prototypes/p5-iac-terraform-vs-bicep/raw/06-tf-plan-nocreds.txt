@@ -1,0 +1,11 @@
+
+[0m[1m[31mPlanning failed.[0m[1m Terraform encountered an error while generating this plan.[0m
+
+[0m[31m╷[0m[0m
+[31m│[0m [0m[1m[31mError: [0m[0m[1munable to build authorizer for Resource Manager API: could not configure AzureCli Authorizer: could not parse Azure CLI version: launching Azure CLI: exec: "az": executable file not found in $PATH[0m
+[31m│[0m [0m
+[31m│[0m [0m[0m  with provider["registry.terraform.io/hashicorp/azurerm"],
+[31m│[0m [0m  on versions.tf line 12, in provider "azurerm":
+[31m│[0m [0m  12: provider "azurerm" [4m{[0m[0m
+[31m│[0m [0m
+[31m╵[0m[0m

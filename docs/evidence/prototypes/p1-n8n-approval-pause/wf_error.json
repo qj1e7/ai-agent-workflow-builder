@@ -1,0 +1,142 @@
+[
+ {
+  "id": "ERRWF0000000001",
+  "name": "error-handler",
+  "nodes": [
+   {
+    "id": "n74505376",
+    "name": "Error Trigger",
+    "type": "n8n-nodes-base.errorTrigger",
+    "typeVersion": 1,
+    "position": [
+     220,
+     300
+    ],
+    "parameters": {}
+   },
+   {
+    "id": "n17188577",
+    "name": "Report raw error payload",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 4.2,
+    "position": [
+     440,
+     300
+    ],
+    "parameters": {
+     "method": "POST",
+     "url": "http://127.0.0.1:5690/events",
+     "sendBody": true,
+     "specifyBody": "json",
+     "jsonBody": "={{ JSON.stringify({step:\"error_workflow_fired\", raw_error_payload:$json}) }}",
+     "options": {}
+    }
+   },
+   {
+    "id": "n6343325",
+    "name": "Fetch execution data",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 4.2,
+    "position": [
+     660,
+     300
+    ],
+    "parameters": {
+     "method": "GET",
+     "url": "=http://localhost:5688/api/v1/executions/{{ $('Error Trigger').first().json.execution.id }}?includeData=true",
+     "sendHeaders": true,
+     "headerParameters": {
+      "parameters": [
+       {
+        "name": "X-N8N-API-KEY",
+        "value": "<redacted: local n8n API key>"
+       }
+      ]
+     },
+     "options": {}
+    }
+   },
+   {
+    "id": "n26358678",
+    "name": "Extract request_id",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     880,
+     300
+    ],
+    "parameters": {
+     "jsCode": "const rd=$input.first().json.data.resultData.runData; const w=rd['Webhook'][0].data.main[0][0].json.body; return [{json:{request_id:w.request_id}}];"
+    }
+   },
+   {
+    "id": "n14267008",
+    "name": "Report recovered request_id",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 4.2,
+    "position": [
+     1100,
+     300
+    ],
+    "parameters": {
+     "method": "POST",
+     "url": "http://127.0.0.1:5690/events",
+     "sendBody": true,
+     "specifyBody": "json",
+     "jsonBody": "={{ JSON.stringify({step:\"error_recovered_request_id\", request_id:$json.request_id, failed_exec:$('Error Trigger').first().json.execution.id, failed_node:$('Error Trigger').first().json.execution.lastNodeExecuted, message:$('Error Trigger').first().json.execution.error.message}) }}",
+     "options": {}
+    }
+   }
+  ],
+  "connections": {
+   "Error Trigger": {
+    "main": [
+     [
+      {
+       "node": "Report raw error payload",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Report raw error payload": {
+    "main": [
+     [
+      {
+       "node": "Fetch execution data",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Fetch execution data": {
+    "main": [
+     [
+      {
+       "node": "Extract request_id",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Extract request_id": {
+    "main": [
+     [
+      {
+       "node": "Report recovered request_id",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  },
+  "settings": {
+   "executionOrder": "v1"
+  },
+  "active": true
+ }
+]

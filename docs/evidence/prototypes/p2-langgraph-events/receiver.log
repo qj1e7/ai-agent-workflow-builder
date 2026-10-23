@@ -1,0 +1,24 @@
+INFO:     Started server process [59810]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:9101 (Press CTRL+C to quit)
+CALLBACK {'run_id': '02318396', 'seq': 1, 'ts': '2026-10-20T10:11:26.969+00:00', 'type': 'run_started', 'input': {'last_known_tag': 'sdk==0.4.8'}}
+INFO:     127.0.0.1:61379 - "POST /hook HTTP/1.1" 200 OK
+CALLBACK {'run_id': '02318396', 'seq': 2, 'ts': '2026-10-20T10:11:27.011+00:00', 'type': 'step_started', 'step': 'fetch_releases'}
+INFO:     127.0.0.1:61379 - "POST /hook HTTP/1.1" 200 OK
+CALLBACK {'run_id': '02318396', 'seq': 3, 'ts': '2026-10-20T10:11:27.124+00:00', 'type': 'step_finished', 'step': 'fetch_releases', 'result': {'count': 5}}
+INFO:     127.0.0.1:61379 - "POST /hook HTTP/1.1" 200 OK
+CALLBACK {'run_id': '02318396', 'seq': 4, 'ts': '2026-10-20T10:11:27.126+00:00', 'type': 'step_started', 'step': 'find_new'}
+INFO:     127.0.0.1:61379 - "POST /hook HTTP/1.1" 200 OK
+CALLBACK {'run_id': '02318396', 'seq': 5, 'ts': '2026-10-20T10:11:27.127+00:00', 'type': 'step_finished', 'step': 'find_new', 'result': {'new_count': 2, 'tags': ['cli==0.4.37', '1.2.16']}}
+INFO:     127.0.0.1:61379 - "POST /hook HTTP/1.1" 200 OK
+CALLBACK {'run_id': '02318396', 'seq': 6, 'ts': '2026-10-20T10:11:27.129+00:00', 'type': 'step_started', 'step': 'summarize'}
+INFO:     127.0.0.1:61379 - "POST /hook HTTP/1.1" 200 OK
+CALLBACK {'run_id': '02318396', 'seq': 7, 'ts': '2026-10-20T10:11:27.131+00:00', 'type': 'step_finished', 'step': 'summarize', 'result': {'summary': '2 new release(s): cli==0.4.37, 1.2.16'}}
+INFO:     127.0.0.1:61379 - "POST /hook HTTP/1.1" 200 OK
+CALLBACK {'run_id': '02318396', 'seq': 8, 'ts': '2026-10-20T10:11:27.132+00:00', 'type': 'run_finished', 'result': {'summary': '2 new release(s): cli==0.4.37, 1.2.16', 'new_tags': ['cli==0.4.37', '1.2.16']}}
+INFO:     127.0.0.1:61379 - "POST /hook HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [59810]

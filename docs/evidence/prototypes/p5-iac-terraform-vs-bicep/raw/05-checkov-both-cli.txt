@@ -1,0 +1,65 @@
+secrets scan results:
+
+Passed checks: 0, Failed checks: 1, Skipped checks: 0
+
+Check: CKV_SECRET_6: "Base64 High Entropy String"
+	FAILED for resource: d87e35e2370ac3c7a3ab4dc29cd662a1fa349c64
+	File: /bicep/resources.bicep:217-218
+	Guide: https://docs.prismacloud.io/en/enterprise-edition/policy-reference/secrets-policies/secrets-policy-index/git-secrets-6
+terraform scan results:
+
+Passed checks: 3, Failed checks: 7, Skipped checks: 0
+
+Check: CKV_AZURE_109: "Ensure that key vault allows firewall rules settings"
+	FAILED for resource: azurerm_key_vault.kv
+	File: /terraform/main.tf:34-42
+	Guide: https://docs.prismacloud.io/en/enterprise-edition/policy-reference/azure-policies/azure-networking-policies/ensure-that-key-vault-allows-firewall-rules-settings
+Check: CKV_AZURE_189: "Ensure that Azure Key Vault disables public network access"
+	FAILED for resource: azurerm_key_vault.kv
+	File: /terraform/main.tf:34-42
+	Guide: https://docs.prismacloud.io/en/enterprise-edition/policy-reference/azure-policies/azure-networking-policies/azr-networking-189
+Check: CKV_AZURE_41: "Ensure that the expiration date is set on all secrets"
+	FAILED for resource: azurerm_key_vault_secret.database_url
+	File: /terraform/main.tf:56-61
+	Guide: https://docs.prismacloud.io/en/enterprise-edition/policy-reference/azure-policies/azure-secrets-policies/set-an-expiration-date-on-all-secrets
+Check: CKV_AZURE_114: "Ensure that key vault secrets have "content_type" set"
+	FAILED for resource: azurerm_key_vault_secret.database_url
+	File: /terraform/main.tf:56-61
+	Guide: https://docs.prismacloud.io/en/enterprise-edition/policy-reference/azure-policies/azure-general-policies/ensure-that-key-vault-secrets-have-content-type-set
+Check: CKV_AZURE_136: "Ensure that PostgreSQL Flexible server enables geo-redundant backups"
+	FAILED for resource: azurerm_postgresql_flexible_server.pg
+	File: /terraform/main.tf:63-74
+	Guide: https://docs.prismacloud.io/en/enterprise-edition/policy-reference/azure-policies/azure-general-policies/ensure-azure-postgresql-flexible-server-enables-geo-redundant-backups
+Check: CKV2_AZURE_32: "Ensure private endpoint is configured to key vault"
+	FAILED for resource: azurerm_key_vault.kv
+	File: /terraform/main.tf:34-42
+	Guide: https://docs.prismacloud.io/en/enterprise-edition/policy-reference/azure-policies/azure-general-policies/bc-azure-2-32
+Check: CKV2_AZURE_57: "Ensure PostgreSQL Flexible Server is configured with private endpoint"
+	FAILED for resource: azurerm_postgresql_flexible_server.pg
+	File: /terraform/main.tf:63-74
+	Guide: https://docs.prismacloud.io/en/enterprise-edition/policy-reference/azure-policies/azure-general-policies/bc-azure-2-57
+bicep scan results:
+
+Passed checks: 6, Failed checks: 5, Skipped checks: 0
+
+Check: CKV_AZURE_42: "Ensure the key vault is recoverable"
+	FAILED for resource: Microsoft.KeyVault/vaults.kv
+	File: /bicep/resources.bicep:44-56
+	Guide: https://docs.prismacloud.io/en/enterprise-edition/policy-reference/azure-policies/azure-general-policies/ensure-the-key-vault-is-recoverable
+Check: CKV_AZURE_109: "Ensure that key vault allows firewall rules settings"
+	FAILED for resource: Microsoft.KeyVault/vaults.kv
+	File: /bicep/resources.bicep:44-56
+	Guide: https://docs.prismacloud.io/en/enterprise-edition/policy-reference/azure-policies/azure-networking-policies/ensure-that-key-vault-allows-firewall-rules-settings
+Check: CKV_AZURE_189: "Ensure that Azure Key Vault disables public network access"
+	FAILED for resource: Microsoft.KeyVault/vaults.kv
+	File: /bicep/resources.bicep:44-56
+	Guide: https://docs.prismacloud.io/en/enterprise-edition/policy-reference/azure-policies/azure-networking-policies/azr-networking-189
+Check: CKV_AZURE_41: "Ensure that the expiration date is set on all secrets"
+	FAILED for resource: Microsoft.KeyVault/vaults/secrets.databaseUrlSecret
+	File: /bicep/resources.bicep:77-84
+	Guide: https://docs.prismacloud.io/en/enterprise-edition/policy-reference/azure-policies/azure-secrets-policies/set-an-expiration-date-on-all-secrets
+Check: CKV_AZURE_114: "Ensure that key vault secrets have "content_type" set"
+	FAILED for resource: Microsoft.KeyVault/vaults/secrets.databaseUrlSecret
+	File: /bicep/resources.bicep:77-84
+	Guide: https://docs.prismacloud.io/en/enterprise-edition/policy-reference/azure-policies/azure-general-policies/ensure-that-key-vault-secrets-have-content-type-set
+

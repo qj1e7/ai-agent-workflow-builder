@@ -1,0 +1,12 @@
+POST work (202, {'run_id': 'run-R1', 'n8n_execution_id': '3'})
+EXEC 3 success startedAt 2026-10-20T11:37:22.990Z stoppedAt 2026-10-20T11:37:27.071Z
+ node Webhook A startTime 1792496242996 ms 0 status success err None
+ node Respond A startTime 1792496242996 ms 3 status success err None
+ node Step A1 startTime 1792496242999 ms 4064 status success err None
+ node Proceed? A startTime 1792496247063 ms 1 status success err None
+ node Step A2 startTime 1792496247064 ms 7 status success err None
+STUB LOG (path,t,status)
+11:37:23.002 /step/a1 1 503
+11:37:25.036 /step/a1 2 503
+11:37:27.058 /step/a1 3 200
+11:37:27.068 /step/a2 1 200

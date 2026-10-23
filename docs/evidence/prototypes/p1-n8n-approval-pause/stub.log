@@ -1,0 +1,36 @@
+18:19:59.635 EVENT {"request_id": "req-A1", "step": "run_started", "n8n_exec": "1"}
+18:19:59.645 AGENT {"request_id": "req-A1", "repo": "langchain-ai/langgraph"}
+18:19:59.653 EVENT {"request_id": "req-A1", "step": "agent_done", "n8n_exec": "1", "summary": "langgraph 0.9.9 released (fake)"}
+18:19:59.661 APPROVAL REGISTER {"approval_id": "apr-req-A1", "request_id": "req-A1", "resume_url": "http://localhost:5688/webhook-waiting/1?signature=<redacted-4>"}
+18:19:59.666 EVENT {"request_id": "req-A1", "step": "awaiting_approval", "n8n_exec": "1"}
+18:20:09.252 RESUME -> http://localhost:5688/webhook-waiting/1?signature=<redacted-4>
+18:20:09.274 RESUME RESULT 200 {"message":"Workflow was started"}
+18:20:09.301 JIRA WRITE {"request_id": "req-A1", "approver": "alice", "title": "New langgraph release"}
+18:20:09.307 EVENT {"request_id": "req-A1", "step": "run_finished_approved", "n8n_exec": "1"}
+18:20:11.307 RESUME -> http://localhost:5688/webhook-waiting/1?signature=<redacted-4>
+18:20:11.319 RESUME RESULT 409 {"code":409,"message":"The execution \"1 has finished already.","stacktrace":"ResponseError: The execution \"1 has finished already.\n    at WaitingWebhooks.executeWebhook (<scratch>
+18:20:18.784 EVENT {"request_id": "req-B1", "step": "run_started", "n8n_exec": "2"}
+18:20:18.786 AGENT {"request_id": "req-B1", "repo": "langchain-ai/langgraph"}
+18:20:18.787 EVENT {"request_id": "req-B1", "step": "agent_done", "n8n_exec": "2", "summary": "langgraph 0.9.9 released (fake)"}
+18:20:18.789 APPROVAL REGISTER {"approval_id": "apr-req-B1", "request_id": "req-B1", "resume_url": "http://localhost:5688/webhook-waiting/2?signature=<redacted-5>"}
+18:20:18.790 EVENT {"request_id": "req-B1", "step": "awaiting_approval", "n8n_exec": "2"}
+18:20:20.959 RESUME -> http://localhost:5688/webhook-waiting/2?signature=<redacted-5>
+18:20:20.981 RESUME RESULT 200 {"message":"Workflow was started"}
+18:20:21.008 EVENT {"request_id": "req-B1", "step": "run_finished_rejected", "n8n_exec": "2", "approver": "bob"}
+18:20:22.138 EVENT {"request_id": "req-C1", "step": "run_started", "n8n_exec": "3"}
+18:20:22.139 AGENT {"request_id": "req-C1", "repo": "langchain-ai/langgraph"}
+18:20:22.141 EVENT {"request_id": "req-C1", "step": "agent_done", "n8n_exec": "3", "summary": "langgraph 0.9.9 released (fake)"}
+18:20:22.142 APPROVAL REGISTER {"approval_id": "apr-req-C1", "request_id": "req-C1", "resume_url": "http://localhost:5688/webhook-waiting/3?signature=<redacted-6>"}
+18:20:22.143 EVENT {"request_id": "req-C1", "step": "awaiting_approval", "n8n_exec": "3"}
+18:20:24.161 RESUME -> http://localhost:5688/webhook-waiting/3?signature=<redacted-6>
+18:20:24.162 RESUME -> http://localhost:5688/webhook-waiting/3?signature=<redacted-6>
+18:20:24.162 RESUME -> http://localhost:5688/webhook-waiting/3?signature=<redacted-6>
+18:20:24.182 RESUME RESULT 200 {"message":"Workflow was started"}
+18:20:24.215 RESUME RESULT 500 {"code":0,"message":"There was a problem executing the workflow","stacktrace":"Error: There was a problem executing the workflow\n    at Object.executeWebhook (<scratch>
+18:20:24.221 JIRA WRITE {"request_id": "req-C1", "approver": "alice", "title": "New langgraph release"}
+18:20:24.221 RESUME RESULT 500 {"code":0,"message":"There was a problem executing the workflow","stacktrace":"Error: There was a problem executing the workflow\n    at Object.executeWebhook (<scratch>
+18:20:24.223 EVENT {"request_id": "req-C1", "step": "run_finished_approved", "n8n_exec": "3"}
+18:20:32.481 EVENT {"request_id": "req-E1", "step": "run_started", "n8n_exec": "4"}
+18:20:32.509 EVENT {"step": "error_workflow_fired", "raw_error_payload": {"execution": {"id": "4", "url": "http://localhost:5688/workflow/J19l8qQqgjIWJR2K/executions/4", "error": {"level": "warning", "shouldReport": true, "tags": {}, "timestamp": 1792491632487, "context": {"itemIndex": 0, "request": {"headers": {"accept": "application/json,text/html,application/xhtml+xml,application/xml,text/*;q=0.9, image/*;q=0.8, */*;q=0.7"}, "method": "GET", "uri": "http://127.0.0.1:1/dead", "gzip": true, "rejectUnauthorized": true, "followRedirect": true, "resolveWithFullResponse": true, "sendCredentialsOnCrossOriginRedirect": true, "followAllRedirects": true, "timeout": 300000, "encoding": null, "json": false, "useStream": true}}, "functionality": "regular", "name": "NodeApiError", "node": {"id": "n62240143", "name": "Dead HTTP call", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [880, 300], "parameters": {"curlImport": "", "method": "GET", "url": "http://127.0.0.1:1/dead", "authentication": "none", "provideSslCertificates": false, "sendQuery": false, "sendHeaders": false, "sendBody": false, "options": {}, "infoMessage": ""}}, "messages": ["connect ECONNREFUSED 127.0.0.1:1", "connect ECONNREFUSED 127.0.0.1:1"], "httpCode": "ECONNREFUSED", "message": "The service refused the connection - perhaps it is offline", "stack": "NodeApiError: The service refused the connection - perhaps it is offline\n    at ExecuteContext.execute (./node_modules/n8n-nodes-base/nodes/HttpRequest/V3/HttpRequestV3.node.ts:892:16)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at WorkflowExecute.executeNode (./node_modules/n8n-core/src/execution-engine/workflow-execute.ts:1129:8)\n    at WorkflowExecute.runNode (./node_modules/n8n-core/src/execution-engine/workflow-execute.ts:1431:11)\n    at ./node_modules/n8n-core/src/execution-engine/workflow-execute.ts:2333:27\n    at ./node_modules/n8n-core/src/execution-engine/workflow-execute.ts:2814:11"}, "lastNodeExecuted": "Dead HTTP call", "mode": "webhook", "executionContext": {"version": 1, "establishedAt": 1792491632470, "source": "webhook", "triggerNode": {"name": "Webhook", "type": "n8n-nodes-base.webhook"}, "redaction": {"version": 2, "production": false, "manual": false}}}, "workflow": {"id": "J19l8qQqgjIWJR2K", "name": "release-check-fail"}}}
+18:20:32.545 EVENT {"step": "error_recovered_request_id", "request_id": "req-E1", "failed_exec": "4", "failed_node": "Dead HTTP call", "message": "The service refused the connection - perhaps it is offline"}
+18:20:43.351 EVENT {"request_id": "req-E2", "step": "run_started", "n8n_exec": "6"}
