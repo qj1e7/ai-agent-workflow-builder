@@ -4,6 +4,7 @@ Terraform keeps its state in an Azure storage account, and GitHub Actions needs 
 
 ## Before you start
 
+- Steps 1 to 3 of [the main README's one-time steps](../README.md#one-time-human-steps-before-the-first-deploy) are done: the repository is public, a teammate besides you can review, and the `azure-dev` environment exists with its rules. This script makes Azure trust that environment, so its rules must exist first.
 - You have the Azure CLI and are signed in with `az login`.
 - Your account is an Owner of the Azure for Students subscription. The script creates role assignments, which Contributor cannot do.
 - You picked a storage account name. It must be 3 to 24 lowercase letters and digits, and unique across Azure, for example `stwabtfstate` plus your initials.
@@ -25,14 +26,21 @@ The script does five things, and each is safe to run again:
    - Contributor on `rg-wab-dev`, to create the environment's resources.
    - Role Based Access Control Administrator on `rg-wab-dev`, with a condition. It may only assign or remove AcrPull, AcrPush, Key Vault Secrets User and Key Vault Secrets Officer, which are the only roles the Terraform code assigns. And it may only give them to service principals, such as our managed identities, never to a person or a group. The condition follows Microsoft's ["Constrain ACR management" example](https://learn.microsoft.com/en-us/azure/role-based-access-control/delegate-role-assignments-examples#example-constrain-acr-management).
 
-At the end the script prints five values. Put them on the `azure-dev` GitHub environment, as [the main README](../README.md#one-time-human-steps-before-the-first-deploy) describes.
+At the end the script prints five values. Put the three Azure IDs on the `azure-dev` GitHub environment as secrets, and the two state values as variables, as step 6 of [the main README](../README.md#one-time-human-steps-before-the-first-deploy) describes.
 
 ## Who can act as the deploy identity
 
-The federated credential trusts any workflow job that names the `azure-dev` environment, whatever branch it runs on. So the environment's settings are the real gate: required reviewers, "Prevent self-review", and deployment branches limited to `main`. [The main README](../README.md#one-time-human-steps-before-the-first-deploy) sets them in step 2. Do not loosen them.
+The federated credential trusts any workflow job that names the `azure-dev` environment, whatever branch it runs on. So the environment's rules are the gate: required reviewers, "Prevent self-review", and deployment branches limited to `main`. A reviewer then approves each run before the job gets any Azure credentials, the person who started the run cannot approve it, and only `main` can run it.
+
+That holds once the repository is public and the environment has those rules, which steps 1 to 3 of [the main README](../README.md#one-time-human-steps-before-the-first-deploy) set up. Two things break it, so avoid both:
+
+- A private repository on GitHub Free. Required reviewers on a private repository need GitHub Enterprise.
+- A missing environment. A workflow that names one that does not exist creates it, with no rules.
+
+Do not loosen the rules later.
 
 ## Why the state needs this care
 
-Terraform state holds every generated secret in plain text: the database passwords, `STEP_KEY`, `AGENT_API_KEY`, `CALLBACK_SIGNING_KEY` and the n8n encryption key. Anyone who can read the state file can read those secrets. With access keys off, only identities with a blob data role can read it: the deploy identity and the person who ran this script. Do not give anyone else a data role on this storage account.
+Terraform state holds every generated secret in plain text: the database passwords, `STEP_KEY`, `AGENT_API_KEY`, `CALLBACK_SIGNING_KEY` and the n8n encryption key, plus the GitHub token when one is set. Anyone who can read the state file can read those secrets. With access keys off, only identities with a blob data role can read it: the deploy identity and the person who ran this script. Do not give anyone else a data role on this storage account.
 
 The script was written without access to Azure and has not been run. If a step fails, the error from `az` names the problem, and you can rerun the script after you fix it.
