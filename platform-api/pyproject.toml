@@ -1,0 +1,61 @@
+[project]
+name = "platform-api"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = []
+
+[build-system]
+requires = ["uv_build>=0.12.23,<0.13"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "import-linter>=2.3",
+    "pytest>=8.4",
+    "ruff>=0.14",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.importlinter]
+root_package = "platform_api"
+
+[[tool.importlinter.contracts]]
+name = "Dependencies point from builder to orchestration to monitoring"
+type = "layers"
+layers = [
+    "platform_api.builder",
+    "platform_api.orchestration",
+    "platform_api.monitoring",
+]
+
+[[tool.importlinter.contracts]]
+name = "builder reaches other contexts only through their package __init__"
+type = "forbidden"
+source_modules = ["platform_api.builder"]
+forbidden_modules = [
+    "platform_api.orchestration.*",
+    "platform_api.monitoring.*",
+]
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "orchestration reaches other contexts only through their package __init__"
+type = "forbidden"
+source_modules = ["platform_api.orchestration"]
+forbidden_modules = [
+    "platform_api.builder.*",
+    "platform_api.monitoring.*",
+]
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "monitoring reaches other contexts only through their package __init__"
+type = "forbidden"
+source_modules = ["platform_api.monitoring"]
+forbidden_modules = [
+    "platform_api.builder.*",
+    "platform_api.orchestration.*",
+]
+allow_indirect_imports = true
