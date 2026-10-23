@@ -196,15 +196,16 @@ You need Docker and the provider's key. Nothing else. The script passes each set
 
 Cloud models reject `temperature: 0` in some families (newer Claude models and reasoning models do). So the harness sends no temperature to cloud providers unless you set `EVAL_TEMPERATURE`. Ollama runs at temperature 0 with a fixed seed.
 
-**In CI.** The `evals` workflow runs only when started by hand (Actions, then "evals", then "Run workflow"). Its job runs in a GitHub Environment called `evals`. Setting it up changes repository settings, so a human does it:
+**In CI.** The `evals` workflow runs only when started by hand (Actions, then "evals", then "Run workflow"). Its job runs in a GitHub Environment called `evals`. The team has decided to make this repository public. Until it is public and the environment below is set up, put no cloud keys into GitHub. Run the bake-off on a laptop instead, with the keys in the shell (steps 1 to 4 above).
+
+Setting up the environment changes repository settings, so a human does it:
 
 1. In the repository's Settings, open Environments and create one named `evals`. Do this before the first run. If the workflow runs first, GitHub creates the environment by itself, with no protection.
 2. Under deployment branches, allow `main` only.
-3. Add each key you have as a secret of the `evals` environment: `AZURE_OPENAI_API_KEY` with `AZURE_OPENAI_ENDPOINT`, `ANTHROPIC_API_KEY`, and `GOOGLE_API_KEY`. Add `OLLAMA_BASE_URL` only if an Ollama server can be reached from GitHub.
-4. Add the model lists as variables of the same environment: `AZURE_OPENAI_API_VERSION`, `AZURE_OPENAI_DEPLOYMENTS`, `ANTHROPIC_MODELS` and `GOOGLE_MODELS`.
+3. Add a required reviewer, so each run waits until that person approves it. Required reviewers work on a public repository. On a private one they need GitHub Enterprise.
+4. Add each key you have as a secret of the `evals` environment: `AZURE_OPENAI_API_KEY` with `AZURE_OPENAI_ENDPOINT`, `ANTHROPIC_API_KEY`, and `GOOGLE_API_KEY`. Add `OLLAMA_BASE_URL` only if an Ollama server can be reached from GitHub.
+5. Add the model lists as variables of the same environment: `AZURE_OPENAI_API_VERSION`, `AZURE_OPENAI_DEPLOYMENTS`, `ANTHROPIC_MODELS` and `GOOGLE_MODELS`.
 
-Never store these keys as repository secrets. "Run workflow" runs the workflow file from whatever branch you pick, and that branch can change the file. A workflow on any branch can read a repository secret. Only `main` can use the `evals` environment.
+Never store these keys as repository secrets. "Run workflow" runs the workflow file from whatever branch you pick, and that branch can change the file. A workflow on any branch can read a repository secret. Only `main` can use the `evals` environment, and only after the reviewer approves.
 
-On a private repository, environment secrets and deployment branch rules need GitHub Pro (or Team) on the owner's account. GitHub Pro is free with the GitHub Student Developer Pack. If the account does not have it, do not add cloud keys to GitHub at all. Run the bake-off on a laptop instead, with the keys in the shell (steps 1 to 4 above).
-
-A provider without its secret is reported as "not run", and the job still passes. The results are attached to the run as the `eval-results` artifact. It holds every answer word for word, with the keys and addresses removed.
+On a public repository, anyone can read the run logs and download the artifacts. A provider without its secret is reported as "not run", and the job still passes. The results are attached to the run as the `eval-results` artifact. That `results.json` holds the models' answers and their scores, nothing else. The endpoints and keys are redacted from it.
