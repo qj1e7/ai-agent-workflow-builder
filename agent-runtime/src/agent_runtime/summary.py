@@ -8,12 +8,26 @@ from langchain_core.language_models import BaseChatModel
 log = logging.getLogger(__name__)
 
 MAX_SUMMARY_LENGTH = 300
+# The summary model gets one try of at most this long, then the template answers instead.
+SUMMARY_TIMEOUT_SECONDS = 10
 
 type ModelFactory = Callable[[str], BaseChatModel]
 
 
 class Summarizer(Protocol):
     def summarise(self, repo: str, last_known_tag: str, new_tags: Sequence[str]) -> str: ...
+
+
+def summary_prompt(repo: str, last_known_tag: str, new_tags: Sequence[str]) -> str:
+    return (
+        f"Write one plain sentence for non-technical support staff. Say which new releases "
+        f"of the project {repo} appeared after {last_known_tag}. The new release tags are: "
+        f"{', '.join(new_tags)}. Reply with the sentence only."
+    )
+
+
+def usable_summary(text: str) -> bool:
+    return bool(text) and "\n" not in text and len(text) <= MAX_SUMMARY_LENGTH
 
 
 def template_summary(new_tags: Sequence[str]) -> str:
@@ -27,7 +41,7 @@ class TemplateSummarizer:
 
 
 def default_model_factory(name: str) -> BaseChatModel:
-    return init_chat_model(name, timeout=10, max_retries=0)
+    return init_chat_model(name, timeout=SUMMARY_TIMEOUT_SECONDS, max_retries=0)
 
 
 class ModelSummarizer:
@@ -47,15 +61,11 @@ class ModelSummarizer:
         except Exception:
             log.warning("summary model failed, using the template", exc_info=True)
             return self._fallback.summarise(repo, last_known_tag, new_tags)
-        if not text or "\n" in text or len(text) > MAX_SUMMARY_LENGTH:
+        if not usable_summary(text):
             log.warning("summary model gave an unusable answer, using the template")
             return self._fallback.summarise(repo, last_known_tag, new_tags)
         return text
 
     def _ask(self, repo: str, last_known_tag: str, new_tags: Sequence[str]) -> str:
-        prompt = (
-            f"Write one plain sentence for non-technical support staff. Say which new releases "
-            f"of the project {repo} appeared after {last_known_tag}. The new release tags are: "
-            f"{', '.join(new_tags)}. Reply with the sentence only."
-        )
+        prompt = summary_prompt(repo, last_known_tag, new_tags)
         return self._factory(self._model_name).invoke(prompt).text.strip()

@@ -1,0 +1,536 @@
+[
+  {
+    "id": "github-503-fixture",
+    "note": "The recorded failure run: GitHub answered 503 on all three tries.",
+    "outcome": "failed",
+    "stage": "working",
+    "reason": "AgentError",
+    "message": "Release checker failed: GitHub returned 503 Service Unavailable three times",
+    "events": [
+      "Alice started a run of LangGraph releases.",
+      "The work leg was queued for the workflow engine (attempt 1).",
+      "Workflow step run_agents started (n8n execution 43).",
+      "Room lead brought in Release checker to read the GitHub releases.",
+      "Room lead asked Release checker to look for releases newer than 1.2.14.",
+      "Release checker is fetching releases from langchain-ai/langgraph.",
+      "Release checker reported that GitHub answered 503 (try 1 of 3).",
+      "Release checker reported that GitHub answered 503 (try 2 of 3).",
+      "Release checker reported that GitHub answered 503 (try 3 of 3).",
+      "Release checker failed: GitHub was unavailable.",
+      "Workflow step run_agents finished with a failure."
+    ],
+    "retry_safe": true,
+    "must_mention": [
+      [
+        "GitHub"
+      ],
+      [
+        "unavailable",
+        "not available",
+        "down",
+        "busy",
+        "overloaded",
+        "not responding",
+        "could not be reached",
+        "couldn't be reached",
+        "outage",
+        "temporar*",
+        "not working",
+        "trouble"
+      ]
+    ],
+    "reference": {
+      "explanation": "GitHub was not available when the Release checker tried to read the releases, even after three tries. Nothing was changed. Retry the run, and if it fails again, check whether GitHub is up.",
+      "retry_safe": true
+    }
+  },
+  {
+    "id": "github-502",
+    "note": "GitHub answered 502 on all three tries.",
+    "outcome": "failed",
+    "stage": "working",
+    "reason": "AgentError",
+    "message": "UpstreamUnavailable: GitHub returned 502 Bad Gateway three times",
+    "events": [
+      "Alice started a run of Terraform releases.",
+      "The work leg was queued for the workflow engine (attempt 1).",
+      "Workflow step run_agents started (n8n execution 43).",
+      "Room lead brought in Release checker to read the GitHub releases.",
+      "Room lead asked Release checker to look for releases newer than 1.9.8.",
+      "Release checker is fetching releases from hashicorp/terraform.",
+      "Release checker reported that GitHub answered 502 (try 1 of 3).",
+      "Release checker reported that GitHub answered 502 (try 2 of 3).",
+      "Release checker reported that GitHub answered 502 (try 3 of 3).",
+      "Release checker failed: GitHub was unavailable.",
+      "Workflow step run_agents finished with a failure."
+    ],
+    "retry_safe": true,
+    "must_mention": [
+      [
+        "GitHub"
+      ],
+      [
+        "unavailable",
+        "not available",
+        "down",
+        "busy",
+        "overloaded",
+        "not responding",
+        "could not be reached",
+        "couldn't be reached",
+        "outage",
+        "temporar*",
+        "not working",
+        "trouble"
+      ]
+    ],
+    "reference": {
+      "explanation": "GitHub was having trouble and did not answer properly, even after three tries. Nothing was changed. Retry the run in a few minutes.",
+      "retry_safe": true
+    }
+  },
+  {
+    "id": "github-unreachable",
+    "note": "The network to GitHub failed on all three tries.",
+    "outcome": "failed",
+    "stage": "working",
+    "reason": "AgentError",
+    "message": "UpstreamUnavailable: GitHub could not be reached three times",
+    "events": [
+      "Alice started a run of LangGraph releases.",
+      "The work leg was queued for the workflow engine (attempt 1).",
+      "Workflow step run_agents started (n8n execution 43).",
+      "Room lead brought in Release checker to read the GitHub releases.",
+      "Room lead asked Release checker to look for releases newer than 1.2.14.",
+      "Release checker is fetching releases from langchain-ai/langgraph.",
+      "Release checker reported that GitHub could not be reached (try 1 of 3).",
+      "Release checker reported that GitHub could not be reached (try 2 of 3).",
+      "Release checker reported that GitHub could not be reached (try 3 of 3).",
+      "Release checker failed: GitHub was unavailable.",
+      "Workflow step run_agents finished with a failure."
+    ],
+    "retry_safe": true,
+    "must_mention": [
+      [
+        "GitHub"
+      ],
+      [
+        "unavailable",
+        "not available",
+        "down",
+        "busy",
+        "overloaded",
+        "not responding",
+        "could not be reached",
+        "couldn't be reached",
+        "outage",
+        "temporar*",
+        "not working",
+        "trouble",
+        "reach",
+        "connect"
+      ]
+    ],
+    "reference": {
+      "explanation": "The Release checker could not reach GitHub, even after three tries. Nothing was changed. Retry the run, and if it fails again, check the network connection to GitHub.",
+      "retry_safe": true
+    }
+  },
+  {
+    "id": "github-404-typo",
+    "note": "The use case names a repository that does not exist, so GitHub refused.",
+    "outcome": "failed",
+    "stage": "working",
+    "reason": "AgentError",
+    "message": "UpstreamRejected: GitHub answered 404 Not Found",
+    "events": [
+      "Alice started a run of LangGraph releases.",
+      "The work leg was queued for the workflow engine (attempt 1).",
+      "Workflow step run_agents started (n8n execution 43).",
+      "Room lead brought in Release checker to read the GitHub releases.",
+      "Room lead asked Release checker to look for releases newer than 1.2.14.",
+      "Release checker is fetching releases from langchain-ai/langgrph.",
+      "Release checker failed: GitHub refused the request.",
+      "Workflow step run_agents finished with a failure."
+    ],
+    "retry_safe": false,
+    "must_mention": [
+      [
+        "GitHub"
+      ],
+      [
+        "repository",
+        "repo",
+        "name",
+        "not found",
+        "does not exist",
+        "doesn't exist",
+        "find"
+      ]
+    ],
+    "reference": {
+      "explanation": "GitHub could not find the repository langchain-ai/langgrph, so the Release checker stopped. The name looks misspelled. Ask a maintainer to fix the repository name in the use case, then start a new run.",
+      "retry_safe": false
+    }
+  },
+  {
+    "id": "github-403-private",
+    "note": "The repository is private, so GitHub refused.",
+    "outcome": "failed",
+    "stage": "working",
+    "reason": "AgentError",
+    "message": "UpstreamRejected: GitHub answered 403 Forbidden",
+    "events": [
+      "Alice started a run of Internal tools releases.",
+      "The work leg was queued for the workflow engine (attempt 1).",
+      "Workflow step run_agents started (n8n execution 43).",
+      "Room lead brought in Release checker to read the GitHub releases.",
+      "Room lead asked Release checker to look for releases newer than 2.4.0.",
+      "Release checker is fetching releases from codesparks/internal-tools.",
+      "Release checker failed: GitHub refused the request.",
+      "Workflow step run_agents finished with a failure."
+    ],
+    "retry_safe": false,
+    "must_mention": [
+      [
+        "GitHub"
+      ],
+      [
+        "access",
+        "permission",
+        "private",
+        "refused",
+        "denied",
+        "not allowed",
+        "forbidden"
+      ]
+    ],
+    "reference": {
+      "explanation": "GitHub refused to show the releases of codesparks/internal-tools, most likely because the repository is private. Retrying will get the same answer. Ask a maintainer to check the repository and its access, then start a new run.",
+      "retry_safe": false
+    }
+  },
+  {
+    "id": "jira-503-after-approval",
+    "note": "Bob approved, then Jira was unavailable when the ticket was written.",
+    "outcome": "failed",
+    "stage": "acting",
+    "reason": "WriteFailed",
+    "message": "jira create_ticket failed: Jira answered 503 Service Unavailable",
+    "events": [
+      "Alice started a run of LangGraph releases.",
+      "The work leg was queued for the workflow engine (attempt 1).",
+      "Workflow step run_agents started (n8n execution 41).",
+      "Room lead brought in Release checker to read the GitHub releases.",
+      "Room lead asked Release checker to look for releases newer than 1.2.14.",
+      "Release checker is fetching releases from langchain-ai/langgraph.",
+      "Release checker fetched 30 releases. The latest is 1.2.16.",
+      "Release checker is comparing them with the last known tag 1.2.14.",
+      "Release checker found 2 new releases: 1.2.16, 1.2.15.",
+      "Release checker reported 2 new releases to the room and suggested one ticket.",
+      "Room lead agreed and will propose the ticket for approval.",
+      "The agents proposed 1 write action: create a Jira ticket in MOCK.",
+      "Workflow step run_agents finished: 2 new releases: 1.2.16, 1.2.15.",
+      "Workflow step ask_approval started (n8n execution 41).",
+      "Approval requested. Waiting for the Team approver.",
+      "Workflow step ask_approval finished. The work leg ends here.",
+      "The approval request was posted to the Teams channel CODESparks Ops.",
+      "Bob approved the request (Team approver).",
+      "The act leg was queued for the workflow engine (attempt 1).",
+      "Workflow step write_action started (n8n execution 42).",
+      "Workflow step write_action finished with a failure."
+    ],
+    "retry_safe": true,
+    "must_mention": [
+      [
+        "Jira"
+      ],
+      [
+        "approv*"
+      ]
+    ],
+    "reference": {
+      "explanation": "Bob approved the ticket, but Jira was not available when the platform tried to create it, so no ticket was made. Retry the run. It carries on from the approval, so nobody has to approve again.",
+      "retry_safe": true
+    }
+  },
+  {
+    "id": "jira-timeout-after-approval",
+    "note": "Bob approved, then the Jira call timed out.",
+    "outcome": "failed",
+    "stage": "acting",
+    "reason": "WriteFailed",
+    "message": "jira create_ticket failed: the request to Jira timed out after 30 seconds",
+    "events": [
+      "Alice started a run of LangGraph releases.",
+      "The work leg was queued for the workflow engine (attempt 1).",
+      "Workflow step run_agents started (n8n execution 41).",
+      "Room lead brought in Release checker to read the GitHub releases.",
+      "Room lead asked Release checker to look for releases newer than 1.2.14.",
+      "Release checker is fetching releases from langchain-ai/langgraph.",
+      "Release checker fetched 30 releases. The latest is 1.2.16.",
+      "Release checker is comparing them with the last known tag 1.2.14.",
+      "Release checker found 2 new releases: 1.2.16, 1.2.15.",
+      "Release checker reported 2 new releases to the room and suggested one ticket.",
+      "Room lead agreed and will propose the ticket for approval.",
+      "The agents proposed 1 write action: create a Jira ticket in MOCK.",
+      "Workflow step run_agents finished: 2 new releases: 1.2.16, 1.2.15.",
+      "Workflow step ask_approval started (n8n execution 41).",
+      "Approval requested. Waiting for the Team approver.",
+      "Workflow step ask_approval finished. The work leg ends here.",
+      "The approval request was posted to the Teams channel CODESparks Ops.",
+      "Bob approved the request (Team approver).",
+      "The act leg was queued for the workflow engine (attempt 1).",
+      "Workflow step write_action started (n8n execution 42).",
+      "Workflow step write_action finished with a failure."
+    ],
+    "retry_safe": true,
+    "must_mention": [
+      [
+        "Jira"
+      ],
+      [
+        "approv*"
+      ]
+    ],
+    "reference": {
+      "explanation": "Bob approved the ticket, but Jira took too long to answer, so the ticket was not made. Retry the run. It carries on from the approval, so nobody has to approve again.",
+      "retry_safe": true
+    }
+  },
+  {
+    "id": "declined",
+    "note": "The recorded declined run: Bob said no, so nothing was written.",
+    "outcome": "declined",
+    "stage": "awaiting approval",
+    "reason": null,
+    "message": "Bob declined the request. Nothing was written.",
+    "events": [
+      "Alice started a run of LangGraph releases.",
+      "The work leg was queued for the workflow engine (attempt 1).",
+      "Workflow step run_agents started (n8n execution 44).",
+      "Room lead brought in Release checker to read the GitHub releases.",
+      "Room lead asked Release checker to look for releases newer than 1.2.14.",
+      "Release checker is fetching releases from langchain-ai/langgraph.",
+      "Release checker fetched 30 releases. The latest is 1.2.16.",
+      "Release checker is comparing them with the last known tag 1.2.14.",
+      "Release checker found 2 new releases: 1.2.16, 1.2.15.",
+      "Release checker reported 2 new releases to the room and suggested one ticket.",
+      "Room lead agreed and will propose the ticket for approval.",
+      "The agents proposed 1 write action: create a Jira ticket in MOCK.",
+      "Workflow step run_agents finished: 2 new releases: 1.2.16, 1.2.15.",
+      "Workflow step ask_approval started (n8n execution 44).",
+      "Approval requested. Waiting for the Team approver.",
+      "Workflow step ask_approval finished. The work leg ends here.",
+      "The approval request was posted to the Teams channel CODESparks Ops.",
+      "Bob declined the request (Team approver)."
+    ],
+    "retry_safe": false,
+    "must_mention": [
+      [
+        "Bob",
+        "approver"
+      ],
+      [
+        "declin*",
+        "rejected",
+        "said no",
+        "turned down",
+        "did not approve",
+        "didn't approve"
+      ]
+    ],
+    "reference": {
+      "explanation": "Bob declined the proposed ticket, so nothing was written to Jira. This was a decision, not a fault. Talk to Bob if you think the ticket is still needed.",
+      "retry_safe": false
+    }
+  },
+  {
+    "id": "timed-out",
+    "note": "The workflow engine never came back while the agents worked.",
+    "outcome": "failed",
+    "stage": "working",
+    "reason": "TimedOut",
+    "message": "The workflow engine did not come back while the run was working",
+    "events": [
+      "Alice started a run of LangGraph releases.",
+      "The work leg was queued for the workflow engine (attempt 1).",
+      "Workflow step run_agents started (n8n execution 45).",
+      "Room lead brought in Release checker to read the GitHub releases."
+    ],
+    "retry_safe": true,
+    "must_mention": [
+      [
+        "workflow engine",
+        "workflow"
+      ],
+      [
+        "did not come back",
+        "didn't come back",
+        "too long",
+        "timed out",
+        "time out",
+        "no response",
+        "did not respond",
+        "didn't respond",
+        "stuck",
+        "waited"
+      ]
+    ],
+    "reference": {
+      "explanation": "The workflow engine stopped answering while the agents were working, so the run timed out. Nothing was changed. Retry the run, and if it times out again, check that the workflow engine is running.",
+      "retry_safe": true
+    }
+  },
+  {
+    "id": "workflow-node-error",
+    "note": "A workflow step could not reach the platform.",
+    "outcome": "failed",
+    "stage": "working",
+    "reason": "WorkflowNodeError",
+    "message": "release_check failed at Run agents: The service refused the connection",
+    "events": [
+      "Alice started a run of LangGraph releases.",
+      "The work leg was queued for the workflow engine (attempt 1).",
+      "Workflow step run_agents started (n8n execution 41)."
+    ],
+    "retry_safe": true,
+    "must_mention": [
+      [
+        "workflow"
+      ],
+      [
+        "could not reach",
+        "couldn't reach",
+        "connect",
+        "refused",
+        "reach"
+      ]
+    ],
+    "reference": {
+      "explanation": "A step in the workflow engine could not connect to the platform, so the run stopped before the agents started. Nothing was changed. Retry the run, and if it fails on the same step, ask a maintainer to look at the workflow engine.",
+      "retry_safe": true
+    }
+  },
+  {
+    "id": "safety-denied",
+    "note": "The safety checker blocked the write because the approval no longer matched the proposal.",
+    "outcome": "failed",
+    "stage": "acting",
+    "reason": "SafetyDenied",
+    "message": "the safety checker denied the write: digest_mismatch",
+    "events": [
+      "Alice started a run of LangGraph releases.",
+      "The work leg was queued for the workflow engine (attempt 1).",
+      "Workflow step run_agents started (n8n execution 41).",
+      "Room lead brought in Release checker to read the GitHub releases.",
+      "Room lead asked Release checker to look for releases newer than 1.2.14.",
+      "Release checker is fetching releases from langchain-ai/langgraph.",
+      "Release checker fetched 30 releases. The latest is 1.2.16.",
+      "Release checker is comparing them with the last known tag 1.2.14.",
+      "Release checker found 2 new releases: 1.2.16, 1.2.15.",
+      "Release checker reported 2 new releases to the room and suggested one ticket.",
+      "Room lead agreed and will propose the ticket for approval.",
+      "The agents proposed 1 write action: create a Jira ticket in MOCK.",
+      "Workflow step run_agents finished: 2 new releases: 1.2.16, 1.2.15.",
+      "Workflow step ask_approval started (n8n execution 41).",
+      "Approval requested. Waiting for the Team approver.",
+      "Workflow step ask_approval finished. The work leg ends here.",
+      "The approval request was posted to the Teams channel CODESparks Ops.",
+      "Bob approved the request (Team approver).",
+      "The act leg was queued for the workflow engine (attempt 1).",
+      "Workflow step write_action started (n8n execution 42).",
+      "The safety checker blocked a write action: the safety checker denied the write: digest_mismatch.",
+      "Workflow step write_action finished: refused."
+    ],
+    "retry_safe": false,
+    "must_mention": [
+      [
+        "safety"
+      ],
+      [
+        "approv*",
+        "match",
+        "different"
+      ]
+    ],
+    "reference": {
+      "explanation": "The safety checker stopped the ticket because what was approved no longer matched what was about to be written. Nothing was written. Start a new run, and if this happens again, ask a maintainer to check the approval records.",
+      "retry_safe": false
+    }
+  },
+  {
+    "id": "out-of-order",
+    "note": "Someone edited the workflow so it called the write step out of order.",
+    "outcome": "failed",
+    "stage": "working",
+    "reason": "OutOfOrderStep",
+    "message": "The workflow called write_action out of order. Reload it from git and start a new run",
+    "events": [
+      "Alice started a run of LangGraph releases.",
+      "The work leg was queued for the workflow engine (attempt 1).",
+      "Workflow step run_agents started (n8n execution 46).",
+      "Workflow step write_action finished: refused."
+    ],
+    "retry_safe": false,
+    "must_mention": [
+      [
+        "workflow"
+      ],
+      [
+        "order",
+        "edited",
+        "reload"
+      ]
+    ],
+    "reference": {
+      "explanation": "The workflow tried to write before the work and approval were done, which usually means it was edited by hand. Nothing was written. Ask a maintainer to reload the workflow, then start a new run.",
+      "retry_safe": false
+    }
+  },
+  {
+    "id": "unbound-intent",
+    "note": "The agents proposed an action the use case has no connector for.",
+    "outcome": "failed",
+    "stage": "working",
+    "reason": "UnboundIntent",
+    "message": "No connector is bound for create_page",
+    "events": [
+      "Alice started a run of LangGraph releases.",
+      "The work leg was queued for the workflow engine (attempt 1).",
+      "Workflow step run_agents started (n8n execution 47).",
+      "Room lead brought in Release checker to read the GitHub releases.",
+      "Release checker found 1 new release: 1.2.17.",
+      "Workflow step run_agents finished with a failure."
+    ],
+    "retry_safe": false,
+    "must_mention": [
+      [
+        "template",
+        "use case",
+        "set up",
+        "connector",
+        "maintainer"
+      ],
+      [
+        "cannot",
+        "can't",
+        "not able",
+        "no way",
+        "not set up",
+        "isn't set up",
+        "is not set up",
+        "wasn't set up",
+        "was not set up",
+        "properly set up",
+        "missing",
+        "no connector",
+        "not bound"
+      ]
+    ],
+    "reference": {
+      "explanation": "The agents suggested an action that this use case is not set up to carry out, so the run stopped. Nothing was written. Ask a maintainer to update the template, then start a new run.",
+      "retry_safe": false
+    }
+  }
+]

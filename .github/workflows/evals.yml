@@ -1,0 +1,46 @@
+name: evals
+
+# The model bake-off. Run by hand from the Actions tab. Never on a pull request.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # The keys live only in the evals environment, which only main may use. "Run workflow" runs
+    # the file from the chosen branch, so a guard in this file could be deleted on that branch.
+    # The environment's branch rule cannot.
+    environment: evals
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      # A provider whose secret is not configured is reported as "not run", and the job still passes.
+      - name: Score the configured providers on the golden set
+        env:
+          OLLAMA_BASE_URL: ${{ secrets.OLLAMA_BASE_URL }}
+          OLLAMA_MODELS: ${{ vars.OLLAMA_MODELS }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_API_VERSION: ${{ vars.AZURE_OPENAI_API_VERSION }}
+          AZURE_OPENAI_DEPLOYMENTS: ${{ vars.AZURE_OPENAI_DEPLOYMENTS }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODELS: ${{ vars.ANTHROPIC_MODELS }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          GOOGLE_MODELS: ${{ vars.GOOGLE_MODELS }}
+          EVAL_TEMPERATURE: ${{ vars.EVAL_TEMPERATURE }}
+          EVAL_JUDGE: ${{ vars.EVAL_JUDGE }}
+        run: scripts/evals.sh
+
+      - name: Keep the results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: eval-results
+          path: agent-runtime/evals/out/
+          if-no-files-found: ignore
