@@ -1,0 +1,10 @@
+Bicep CLI version 0.48.1 (cec7951cf6)
+
+main format-same
+resources format-same
+build main exit 0
+build resources exit 0
+
+lint main exit 0
+
+lint resources exit 0

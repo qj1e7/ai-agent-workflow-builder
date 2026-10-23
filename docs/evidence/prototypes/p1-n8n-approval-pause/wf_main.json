@@ -1,0 +1,357 @@
+[
+ {
+  "id": "MAINWF000000001",
+  "name": "release-check",
+  "nodes": [
+   {
+    "id": "n20934940",
+    "name": "Webhook",
+    "type": "n8n-nodes-base.webhook",
+    "typeVersion": 2,
+    "position": [
+     220,
+     300
+    ],
+    "parameters": {
+     "httpMethod": "POST",
+     "path": "release-check",
+     "responseMode": "responseNode",
+     "options": {}
+    },
+    "webhookId": "wh-main-1"
+   },
+   {
+    "id": "n59300199",
+    "name": "Respond now",
+    "type": "n8n-nodes-base.respondToWebhook",
+    "typeVersion": 1.1,
+    "position": [
+     440,
+     300
+    ],
+    "parameters": {
+     "respondWith": "json",
+     "responseBody": "={ \"accepted\": true, \"request_id\": \"{{ $('Webhook').first().json.body.request_id }}\" }",
+     "options": {
+      "responseCode": 202
+     }
+    }
+   },
+   {
+    "id": "n60483966",
+    "name": "Event started",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 4.2,
+    "position": [
+     660,
+     300
+    ],
+    "parameters": {
+     "method": "POST",
+     "url": "http://127.0.0.1:5690/events",
+     "sendBody": true,
+     "specifyBody": "json",
+     "jsonBody": "={ \"request_id\": \"{{ $('Webhook').first().json.body.request_id }}\", \"step\": \"run_started\", \"n8n_exec\": \"{{ $execution.id }}\" }",
+     "options": {}
+    }
+   },
+   {
+    "id": "n50706631",
+    "name": "Agent",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 4.2,
+    "position": [
+     880,
+     300
+    ],
+    "parameters": {
+     "method": "POST",
+     "url": "http://127.0.0.1:5690/agent",
+     "sendBody": true,
+     "specifyBody": "json",
+     "jsonBody": "={ \"request_id\": \"{{ $('Webhook').first().json.body.request_id }}\", \"repo\": \"langchain-ai/langgraph\" }",
+     "options": {}
+    }
+   },
+   {
+    "id": "n29194374",
+    "name": "Event agent done",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 4.2,
+    "position": [
+     1100,
+     300
+    ],
+    "parameters": {
+     "method": "POST",
+     "url": "http://127.0.0.1:5690/events",
+     "sendBody": true,
+     "specifyBody": "json",
+     "jsonBody": "={ \"request_id\": \"{{ $('Webhook').first().json.body.request_id }}\", \"step\": \"agent_done\", \"n8n_exec\": \"{{ $execution.id }}\", \"summary\": \"{{ $json.summary }}\" }",
+     "options": {}
+    }
+   },
+   {
+    "id": "n41127375",
+    "name": "Register approval",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 4.2,
+    "position": [
+     1320,
+     300
+    ],
+    "parameters": {
+     "method": "POST",
+     "url": "http://127.0.0.1:5690/approvals/register",
+     "sendBody": true,
+     "specifyBody": "json",
+     "jsonBody": "={ \"approval_id\": \"apr-{{ $('Webhook').first().json.body.request_id }}\", \"request_id\": \"{{ $('Webhook').first().json.body.request_id }}\", \"resume_url\": \"{{ $execution.resumeUrl }}\" }",
+     "options": {}
+    }
+   },
+   {
+    "id": "n12212354",
+    "name": "Event awaiting approval",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 4.2,
+    "position": [
+     1540,
+     300
+    ],
+    "parameters": {
+     "method": "POST",
+     "url": "http://127.0.0.1:5690/events",
+     "sendBody": true,
+     "specifyBody": "json",
+     "jsonBody": "={ \"request_id\": \"{{ $('Webhook').first().json.body.request_id }}\", \"step\": \"awaiting_approval\", \"n8n_exec\": \"{{ $execution.id }}\" }",
+     "options": {}
+    }
+   },
+   {
+    "id": "n38040951",
+    "name": "Wait for approval",
+    "type": "n8n-nodes-base.wait",
+    "typeVersion": 1.1,
+    "position": [
+     1760,
+     300
+    ],
+    "parameters": {
+     "resume": "webhook",
+     "httpMethod": "POST",
+     "options": {}
+    },
+    "webhookId": "wait-1"
+   },
+   {
+    "id": "n97673547",
+    "name": "Approved?",
+    "type": "n8n-nodes-base.if",
+    "typeVersion": 2,
+    "position": [
+     1980,
+     300
+    ],
+    "parameters": {
+     "conditions": {
+      "options": {
+       "caseSensitive": true,
+       "typeValidation": "loose",
+       "version": 2
+      },
+      "conditions": [
+       {
+        "id": "c1",
+        "leftValue": "={{ $json.body.decision }}",
+        "rightValue": "approved",
+        "operator": {
+         "type": "string",
+         "operation": "equals"
+        }
+       }
+      ],
+      "combinator": "and"
+     },
+     "options": {}
+    }
+   },
+   {
+    "id": "n67991960",
+    "name": "Mock Jira create ticket",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 4.2,
+    "position": [
+     2200,
+     300
+    ],
+    "parameters": {
+     "method": "POST",
+     "url": "http://127.0.0.1:5690/jira/ticket",
+     "sendBody": true,
+     "specifyBody": "json",
+     "jsonBody": "={ \"request_id\": \"{{ $('Webhook').first().json.body.request_id }}\", \"approver\": \"{{ $('Wait for approval').first().json.body.approver }}\", \"title\": \"New langgraph release\" }",
+     "options": {}
+    }
+   },
+   {
+    "id": "n65326550",
+    "name": "Event finished approved",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 4.2,
+    "position": [
+     2420,
+     300
+    ],
+    "parameters": {
+     "method": "POST",
+     "url": "http://127.0.0.1:5690/events",
+     "sendBody": true,
+     "specifyBody": "json",
+     "jsonBody": "={ \"request_id\": \"{{ $('Webhook').first().json.body.request_id }}\", \"step\": \"run_finished_approved\", \"n8n_exec\": \"{{ $execution.id }}\" }",
+     "options": {}
+    }
+   },
+   {
+    "id": "n39376680",
+    "name": "Event finished rejected",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 4.2,
+    "position": [
+     2640,
+     300
+    ],
+    "parameters": {
+     "method": "POST",
+     "url": "http://127.0.0.1:5690/events",
+     "sendBody": true,
+     "specifyBody": "json",
+     "jsonBody": "={ \"request_id\": \"{{ $('Webhook').first().json.body.request_id }}\", \"step\": \"run_finished_rejected\", \"n8n_exec\": \"{{ $execution.id }}\", \"approver\": \"{{ $('Wait for approval').first().json.body.approver }}\" }",
+     "options": {}
+    }
+   }
+  ],
+  "connections": {
+   "Webhook": {
+    "main": [
+     [
+      {
+       "node": "Respond now",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Respond now": {
+    "main": [
+     [
+      {
+       "node": "Event started",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Event started": {
+    "main": [
+     [
+      {
+       "node": "Agent",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Agent": {
+    "main": [
+     [
+      {
+       "node": "Event agent done",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Event agent done": {
+    "main": [
+     [
+      {
+       "node": "Register approval",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Register approval": {
+    "main": [
+     [
+      {
+       "node": "Event awaiting approval",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Event awaiting approval": {
+    "main": [
+     [
+      {
+       "node": "Wait for approval",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Wait for approval": {
+    "main": [
+     [
+      {
+       "node": "Approved?",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Approved?": {
+    "main": [
+     [
+      {
+       "node": "Mock Jira create ticket",
+       "type": "main",
+       "index": 0
+      }
+     ],
+     [
+      {
+       "node": "Event finished rejected",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Mock Jira create ticket": {
+    "main": [
+     [
+      {
+       "node": "Event finished approved",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  },
+  "settings": {
+   "executionOrder": "v1"
+  },
+  "active": true
+ }
+]

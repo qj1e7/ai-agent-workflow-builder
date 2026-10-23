@@ -1,0 +1,12 @@
+18:25:26.030066000
+HTTP/1.1 202 Accepted
+Content-Security-Policy: sandbox allow-downloads allow-forms allow-modals allow-orientation-lock allow-pointer-lock allow-popups allow-popups-to-escape-sandbox allow-presentation allow-scripts allow-top-navigation-by-user-activation allow-top-navigation-to-custom-protocols
+Content-Type: application/json; charset=utf-8
+Content-Length: 39
+ETag: W/"27-MUiexBu39zZTYOKmHoDIcRMXlIk"
+Vary: Accept-Encoding
+Date: Tue, 20 Oct 2026 10:25:26 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"accepted":true,"request_id":"req-A1"}
