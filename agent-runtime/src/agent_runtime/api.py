@@ -29,6 +29,7 @@ from agent_runtime.contract import (
 )
 from agent_runtime.events import Clock, EventLog, EventSink
 from agent_runtime.github import GitHubReleaseSource
+from agent_runtime.guarded import GuardedModels
 from agent_runtime.model_access import ModelProbe, summarizer_for
 from agent_runtime.origins import Origin, origin_of, parse_origin_list
 from agent_runtime.release_checker import ReleaseChecker
@@ -152,7 +153,8 @@ type SummarizerFor = Callable[[ModelAccess], Summarizer]
 
 
 def _summarizer_under_default_policy(access: ModelAccess) -> Summarizer:
-    return summarizer_for(access, AddressPolicy())
+    policy = AddressPolicy()
+    return summarizer_for(access, policy, GuardedModels(policy))
 
 
 @dataclass(frozen=True)
@@ -174,9 +176,10 @@ def build_summarizer(settings: Settings) -> Summarizer:
 def build_runtime(settings: Settings) -> Runtime:
     source = GitHubReleaseSource(settings.github_api_base, token=settings.github_token)
     policy = settings.address_policy
+    models = GuardedModels(policy)
 
     def summarizer_under_policy(access: ModelAccess) -> Summarizer:
-        return summarizer_for(access, policy)
+        return summarizer_for(access, policy, models)
 
     return Runtime(
         checker=ReleaseChecker(source, build_summarizer(settings), sleep=time.sleep),

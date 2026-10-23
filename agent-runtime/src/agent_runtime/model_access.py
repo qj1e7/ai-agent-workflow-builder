@@ -6,7 +6,7 @@ import httpx
 from langchain_core.language_models import BaseChatModel
 from pydantic import BaseModel, ValidationError
 
-from agent_runtime.addresses import AddressPolicy
+from agent_runtime.addresses import AddressPolicy, AddressRefused, AddressRefusedError
 from agent_runtime.contract import (
     Connected,
     ConnectRequest,
@@ -18,12 +18,12 @@ from agent_runtime.contract import (
     ModelTestPassed,
     ModelTestResult,
 )
+from agent_runtime.guarded import GuardedModels, GuardedTransport
 from agent_runtime.summary import (
     SUMMARY_TIMEOUT_SECONDS,
     ModelFactory,
     ModelSummarizer,
     Summarizer,
-    model_factory,
     summary_prompt,
     usable_summary,
 )
@@ -46,10 +46,6 @@ UNREACHABLE = "Nobody answered at that address. Check it and try again."
 type FactoryFor = Callable[[ModelAccess], ModelFactory]
 
 
-class AddressNotAllowed(Exception):
-    pass
-
-
 class _ListedModel(BaseModel):
     id: str
     type: str | None = None
@@ -60,17 +56,14 @@ class _ModelList(BaseModel):
     data: list[_ListedModel]
 
 
-def factory_for(access: ModelAccess) -> ModelFactory:
-    return model_factory(access.base_url, access.api_key, provider=access.style)
-
-
-def summarizer_for(access: ModelAccess, policy: AddressPolicy) -> Summarizer:
-    # The address is checked again before each task, because what a name resolves to can change.
+def summarizer_for(access: ModelAccess, policy: AddressPolicy, models: GuardedModels) -> Summarizer:
+    # The address is checked before each task as well as at every connection, because a setting
+    # saved last week can now name an address the deployment no longer allows.
     def build(name: str) -> BaseChatModel:
         refused = policy.check(access.base_url)
         if refused is not None:
-            raise AddressNotAllowed(refused.message)
-        return factory_for(access)(name)
+            raise AddressRefusedError(refused)
+        return models.factory_for(access)(name)
 
     return ModelSummarizer(access.model, factory=build)
 
@@ -80,12 +73,17 @@ class ModelProbe:
         self,
         policy: AddressPolicy,
         client: httpx.Client | None = None,
-        factory_for: FactoryFor = factory_for,
+        factory_for: FactoryFor | None = None,
         clock: Callable[[], float] = time.monotonic,
+        models: GuardedModels | None = None,
     ) -> None:
         self._policy = policy
-        self._client = client or httpx.Client(timeout=LIST_TIMEOUT_SECONDS, follow_redirects=False)
-        self._factory_for = factory_for
+        self._client = client or httpx.Client(
+            transport=GuardedTransport(policy),
+            timeout=LIST_TIMEOUT_SECONDS,
+            follow_redirects=False,
+        )
+        self._factory_for = factory_for or (models or GuardedModels(policy)).factory_for
         self._clock = clock
 
     def connect(self, request: ConnectRequest) -> ConnectResult:
@@ -101,6 +99,8 @@ class ModelProbe:
         for prefix in _list_prefixes(request.base_url.rstrip("/")):
             try:
                 response = self._client.get(f"{prefix}/models", headers=headers)
+            except AddressRefusedError as error:
+                return ModelProblem(reason=error.refused.reason, message=error.refused.message)
             except httpx.HTTPError:
                 return ModelProblem(reason="unreachable", message=UNREACHABLE)
             if response.status_code in (401, 403):
@@ -176,7 +176,22 @@ def _connected(content: bytes, prefix: str) -> ConnectResult | None:
     return Connected(style=style, base_url=base_url, models=models)
 
 
+def _refusal_behind(error: BaseException) -> AddressRefused | None:
+    # The clients wrap whatever the transport raises, so look through the chain of causes.
+    seen: BaseException | None = error
+    for _ in range(10):
+        if seen is None:
+            return None
+        if isinstance(seen, AddressRefusedError):
+            return seen.refused
+        seen = seen.__cause__ or seen.__context__
+    return None
+
+
 def _problem(error: Exception) -> ModelProblem:
+    refused = _refusal_behind(error)
+    if refused is not None:
+        return ModelProblem(reason=refused.reason, message=refused.message)
     # Only the status and the error's type are used. The provider's words can quote the key.
     status: object = getattr(error, "status_code", None)
     name = type(error).__name__

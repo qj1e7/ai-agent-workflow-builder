@@ -20,8 +20,10 @@ name = "agent-runtime"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "anthropic" },
     { name = "fastapi" },
     { name = "httpx" },
+    { name = "httpx2" },
     { name = "langchain" },
     { name = "langchain-anthropic" },
     { name = "langchain-core" },
@@ -44,8 +46,10 @@ evals = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anthropic", specifier = ">=1.12,<2" },
     { name = "fastapi", specifier = ">=0.120" },
     { name = "httpx", specifier = ">=0.28,<0.29" },
+    { name = "httpx2", specifier = ">=2.15,<3" },
     { name = "langchain", specifier = "==1.4.3" },
     { name = "langchain-anthropic", specifier = "==1.7.5" },
     { name = "langchain-core", specifier = "==1.6.6" },
