@@ -507,6 +507,219 @@
       "title": "CarryForward",
       "type": "object"
     },
+    "ConnectRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "api_key": {
+          "title": "Api Key",
+          "type": "string"
+        },
+        "base_url": {
+          "title": "Base Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base_url",
+        "api_key"
+      ],
+      "title": "ConnectRequest",
+      "type": "object"
+    },
+    "ConnectResult": {
+      "discriminator": {
+        "mapping": {
+          "connected": "#/$defs/Connected",
+          "problem": "#/$defs/ModelProblem"
+        },
+        "propertyName": "status"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Connected"
+        },
+        {
+          "$ref": "#/$defs/ModelProblem"
+        }
+      ]
+    },
+    "Connected": {
+      "additionalProperties": false,
+      "properties": {
+        "base_url": {
+          "description": "The address to send with this style in a ModelAccess.",
+          "title": "Base Url",
+          "type": "string"
+        },
+        "models": {
+          "items": {
+            "$ref": "#/$defs/FoundModel"
+          },
+          "title": "Models",
+          "type": "array"
+        },
+        "status": {
+          "const": "connected",
+          "default": "connected",
+          "title": "Status",
+          "type": "string"
+        },
+        "style": {
+          "$ref": "#/$defs/ModelStyle"
+        }
+      },
+      "required": [
+        "style",
+        "base_url",
+        "models"
+      ],
+      "title": "Connected",
+      "type": "object"
+    },
+    "FoundModel": {
+      "additionalProperties": false,
+      "properties": {
+        "display": {
+          "title": "Display",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "suggested": {
+          "description": "True when the name suggests a fast model, which suits summaries.",
+          "title": "Suggested",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "display",
+        "suggested"
+      ],
+      "title": "FoundModel",
+      "type": "object"
+    },
+    "ModelAccess": {
+      "additionalProperties": false,
+      "properties": {
+        "api_key": {
+          "description": "Used for this call only. The runtime never stores or logs it.",
+          "title": "Api Key",
+          "type": "string"
+        },
+        "base_url": {
+          "description": "The address the chat client calls, as Connect found it.",
+          "title": "Base Url",
+          "type": "string"
+        },
+        "model": {
+          "title": "Model",
+          "type": "string"
+        },
+        "style": {
+          "$ref": "#/$defs/ModelStyle",
+          "description": "How to call the model: Anthropic's Messages API or OpenAI's Chat Completions API."
+        }
+      },
+      "required": [
+        "style",
+        "base_url",
+        "model",
+        "api_key"
+      ],
+      "title": "ModelAccess",
+      "type": "object"
+    },
+    "ModelProblem": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "description": "Plain words for an Operator. Never the provider's own error text, which can quote the address or the key.",
+          "title": "Message",
+          "type": "string"
+        },
+        "reason": {
+          "$ref": "#/$defs/ProblemReason"
+        },
+        "status": {
+          "const": "problem",
+          "default": "problem",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reason",
+        "message"
+      ],
+      "title": "ModelProblem",
+      "type": "object"
+    },
+    "ModelStyle": {
+      "enum": [
+        "anthropic",
+        "openai"
+      ],
+      "type": "string"
+    },
+    "ModelTestPassed": {
+      "additionalProperties": false,
+      "properties": {
+        "seconds": {
+          "title": "Seconds",
+          "type": "number"
+        },
+        "status": {
+          "const": "passed",
+          "default": "passed",
+          "title": "Status",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "seconds",
+        "text"
+      ],
+      "title": "ModelTestPassed",
+      "type": "object"
+    },
+    "ModelTestResult": {
+      "discriminator": {
+        "mapping": {
+          "passed": "#/$defs/ModelTestPassed",
+          "problem": "#/$defs/ModelProblem"
+        },
+        "propertyName": "status"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ModelTestPassed"
+        },
+        {
+          "$ref": "#/$defs/ModelProblem"
+        }
+      ]
+    },
+    "ProblemReason": {
+      "enum": [
+        "address_not_allowed",
+        "unreachable",
+        "key_refused",
+        "not_a_model_api",
+        "no_text_models",
+        "model_not_found",
+        "too_slow",
+        "unusable_answer",
+        "failed"
+      ],
+      "type": "string"
+    },
     "ProposedIntent": {
       "additionalProperties": false,
       "properties": {
@@ -708,6 +921,18 @@
           "title": "Instruction",
           "type": "string"
         },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelAccess"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The model that writes the summary. Without one, the runtime uses its own settings, then its template. A reused task_id is matched without this field, so a key replaced between two tries of one task does not make it a different task."
+        },
         "run_id": {
           "title": "Run Id",
           "type": "string"
@@ -754,6 +979,18 @@
     "callback": {
       "$ref": "#/$defs/AgentEventPost"
     },
+    "model_connect_request": {
+      "$ref": "#/$defs/ConnectRequest"
+    },
+    "model_connect_result": {
+      "$ref": "#/$defs/ConnectResult"
+    },
+    "model_test_request": {
+      "$ref": "#/$defs/ModelAccess"
+    },
+    "model_test_result": {
+      "$ref": "#/$defs/ModelTestResult"
+    },
     "task_request": {
       "$ref": "#/$defs/TaskRequest"
     },
@@ -765,7 +1002,11 @@
     "task_request",
     "task_result",
     "callback",
-    "agent_cards"
+    "agent_cards",
+    "model_connect_request",
+    "model_connect_result",
+    "model_test_request",
+    "model_test_result"
   ],
   "title": "AgentApiSchema",
   "type": "object"

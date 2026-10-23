@@ -1,0 +1,4 @@
+{
+  "base_url": "https://llm-gateway.example",
+  "api_key": "example-key-not-a-secret"
+}

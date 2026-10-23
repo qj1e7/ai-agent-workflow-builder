@@ -28,6 +28,16 @@ class Callback(WireModel):
     )
 
 
+type ModelStyle = Literal["anthropic", "openai"]
+
+
+class ModelAccess(WireModel):
+    style: ModelStyle
+    base_url: str
+    model: str
+    api_key: str = Field(repr=False)
+
+
 class TaskRequest(WireModel):
     task_id: str
     run_id: str
@@ -35,6 +45,7 @@ class TaskRequest(WireModel):
     inputs: ReleaseCheckInputs
     carry_forward: CarryForward
     callback: Callback
+    model: ModelAccess | None = None
 
 
 class ProposedIntentIn(WireModel):
@@ -73,6 +84,59 @@ class TaskFailed(WireModel):
 type TaskResult = Annotated[TaskFinished | TaskFailed, Field(discriminator="status")]
 
 task_result_adapter: TypeAdapter[TaskResult] = TypeAdapter(TaskResult)
+
+
+class ConnectRequest(WireModel):
+    base_url: str
+    api_key: str = Field(repr=False)
+
+
+class FoundModel(WireModel):
+    id: str
+    display: str
+    suggested: bool
+
+
+class Connected(WireModel):
+    status: Literal["connected"] = "connected"
+    style: ModelStyle
+    base_url: str
+    models: list[FoundModel]
+
+
+type ProblemReason = Literal[
+    "address_not_allowed",
+    "unreachable",
+    "key_refused",
+    "not_a_model_api",
+    "no_text_models",
+    "model_not_found",
+    "too_slow",
+    "unusable_answer",
+    "failed",
+]
+
+
+class ModelProblem(WireModel):
+    status: Literal["problem"] = "problem"
+    reason: ProblemReason
+    message: str
+
+
+type ConnectResult = Annotated[Connected | ModelProblem, Field(discriminator="status")]
+
+connect_result_adapter: TypeAdapter[ConnectResult] = TypeAdapter(ConnectResult)
+
+
+class ModelTestPassed(WireModel):
+    status: Literal["passed"] = "passed"
+    seconds: float
+    text: str
+
+
+type ModelTestResult = Annotated[ModelTestPassed | ModelProblem, Field(discriminator="status")]
+
+model_test_result_adapter: TypeAdapter[ModelTestResult] = TypeAdapter(ModelTestResult)
 
 
 class AgentCard(WireModel):

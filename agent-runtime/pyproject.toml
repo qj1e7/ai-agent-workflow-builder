@@ -8,6 +8,7 @@ dependencies = [
     "langchain==1.4.3",
     "langchain-anthropic==1.7.5",
     "langchain-core==1.6.6",
+    "langchain-openai==1.6.7",
     "langgraph==1.2.13",
     "pydantic>=2.11",
     "uvicorn>=0.34",
@@ -26,7 +27,6 @@ dev = [
 evals = [
     "langchain-google-genai==4.4.0",
     "langchain-ollama==1.1.0",
-    "langchain-openai==1.6.7",
 ]
 
 [tool.pytest.ini_options]

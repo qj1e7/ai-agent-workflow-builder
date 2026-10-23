@@ -5,7 +5,7 @@ import os
 import threading
 import time
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Protocol, Self
 
@@ -13,17 +13,23 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.security import APIKeyHeader
 
+from agent_runtime.addresses import AddressPolicy
 from agent_runtime.contract import (
     AgentCard,
     AgentCards,
     AgentEvent,
     AgentEventPost,
+    ConnectRequest,
+    ConnectResult,
     Health,
+    ModelAccess,
+    ModelTestResult,
     TaskRequest,
     TaskResult,
 )
 from agent_runtime.events import Clock, EventLog, EventSink
 from agent_runtime.github import GitHubReleaseSource
+from agent_runtime.model_access import ModelProbe, summarizer_for
 from agent_runtime.origins import Origin, origin_of, parse_origin_list
 from agent_runtime.release_checker import ReleaseChecker
 from agent_runtime.room import FixedRoomLead, RoomLead, run_task
@@ -78,6 +84,7 @@ class Settings:
     summary_model: str | None
     model_base_url: str | None
     model_api_key: str | None
+    model_private_hosts: frozenset[str] = frozenset()
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> Self:
@@ -95,7 +102,16 @@ class Settings:
             summary_model=env.get("AGENT_SUMMARY_MODEL") or None,
             model_base_url=env.get("AGENT_MODEL_BASE_URL") or None,
             model_api_key=env.get("AGENT_MODEL_API_KEY") or None,
+            model_private_hosts=frozenset(
+                host.strip().lower()
+                for host in env.get("AGENT_MODEL_PRIVATE_HOSTS", "").split(",")
+                if host.strip()
+            ),
         )
+
+    @property
+    def address_policy(self) -> AddressPolicy:
+        return AddressPolicy(listed_hosts=self.model_private_hosts)
 
 
 class Callbacks(Protocol):
@@ -132,12 +148,20 @@ class HttpCallbacks:
         return post
 
 
+type SummarizerFor = Callable[[ModelAccess], Summarizer]
+
+
+def _summarizer_under_default_policy(access: ModelAccess) -> Summarizer:
+    return summarizer_for(access, AddressPolicy())
+
+
 @dataclass(frozen=True)
 class Runtime:
     checker: ReleaseChecker
     lead: RoomLead
     clock: Clock
     callbacks: Callbacks
+    summarizer_for: SummarizerFor = field(default=_summarizer_under_default_policy)
 
 
 def build_summarizer(settings: Settings) -> Summarizer:
@@ -149,12 +173,24 @@ def build_summarizer(settings: Settings) -> Summarizer:
 
 def build_runtime(settings: Settings) -> Runtime:
     source = GitHubReleaseSource(settings.github_api_base, token=settings.github_token)
+    policy = settings.address_policy
+
+    def summarizer_under_policy(access: ModelAccess) -> Summarizer:
+        return summarizer_for(access, policy)
+
     return Runtime(
         checker=ReleaseChecker(source, build_summarizer(settings), sleep=time.sleep),
         lead=FixedRoomLead(),
         clock=utc_now,
         callbacks=HttpCallbacks(),
+        summarizer_for=summarizer_under_policy,
     )
+
+
+class ModelChecks(Protocol):
+    def connect(self, request: ConnectRequest) -> ConnectResult: ...
+
+    def test(self, access: ModelAccess) -> ModelTestResult: ...
 
 
 class TaskIdReused(Exception):
@@ -162,7 +198,8 @@ class TaskIdReused(Exception):
 
 
 def fingerprint(request: TaskRequest) -> str:
-    return hashlib.sha256(request.model_dump_json().encode()).hexdigest()
+    # The model is left out: a key replaced between two tries of one task is the same task.
+    return hashlib.sha256(request.model_dump_json(exclude={"model"}).encode()).hexdigest()
 
 
 # In memory: results are lost on restart and the dict grows with every task id.
@@ -185,9 +222,14 @@ class TaskStore:
             return result
 
 
-def create_app(settings: Settings | None = None, runtime: Runtime | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    runtime: Runtime | None = None,
+    models: ModelChecks | None = None,
+) -> FastAPI:
     config = settings or Settings.from_env(os.environ)
     active = runtime or build_runtime(config)
+    probe = models or ModelProbe(config.address_policy)
     store = TaskStore()
     app = FastAPI(title="Agent API", version="0.1.0")
     expected_key = config.agent_api_key.encode()
@@ -202,9 +244,13 @@ def create_app(settings: Settings | None = None, runtime: Runtime | None = None)
         if origin_of(body.callback.url) not in config.callback_allowed_origins:
             raise HTTPException(status_code=422, detail="callback.url is not at an allowed origin")
 
+        checker = active.checker
+        if body.model is not None:
+            checker = checker.with_summarizer(active.summarizer_for(body.model))
+
         def run() -> TaskResult:
             events = EventLog(active.clock, active.callbacks.sink_for(body))
-            return run_task(body, active.lead, active.checker, events)
+            return run_task(body, active.lead, checker, events)
 
         try:
             return store.run_once(body, run)
@@ -212,6 +258,14 @@ def create_app(settings: Settings | None = None, runtime: Runtime | None = None)
             raise HTTPException(
                 status_code=409, detail="task_id was already used with a different request"
             ) from reused
+
+    @app.post("/v1/models/connect", dependencies=[Depends(require_key)])
+    def connect_model(body: ConnectRequest) -> ConnectResult:
+        return probe.connect(body)
+
+    @app.post("/v1/models/test", dependencies=[Depends(require_key)])
+    def test_model(body: ModelAccess) -> ModelTestResult:
+        return probe.test(body)
 
     @app.get("/v1/agents")
     def list_agents() -> AgentCards:

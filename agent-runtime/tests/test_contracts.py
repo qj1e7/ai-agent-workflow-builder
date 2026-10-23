@@ -10,6 +10,10 @@ from agent_runtime.api import Settings, create_app
 from agent_runtime.contract import (
     AgentCards,
     AgentEventPost,
+    ConnectRequest,
+    ConnectResult,
+    ModelAccess,
+    ModelTestResult,
     TaskRequest,
     task_result_adapter,
 )
@@ -26,6 +30,11 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "task-failed.json": task_result_adapter,
     "callback-event.json": TypeAdapter(AgentEventPost),
     "agent-cards.json": TypeAdapter(AgentCards),
+    "model-connect-request.json": TypeAdapter(ConnectRequest),
+    "model-connected.json": TypeAdapter(ConnectResult),
+    "model-test-request.json": TypeAdapter(ModelAccess),
+    "model-test-passed.json": TypeAdapter(ModelTestResult),
+    "model-problem.json": TypeAdapter(ModelTestResult),
 }
 
 

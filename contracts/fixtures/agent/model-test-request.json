@@ -1,0 +1,6 @@
+{
+  "style": "anthropic",
+  "base_url": "https://llm-gateway.example",
+  "model": "claude-haiku-5-5",
+  "api_key": "example-key-not-a-secret"
+}

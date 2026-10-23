@@ -23,6 +23,12 @@ from agent_runtime.contract import (
     AgentStepStartedEvent,
     Callback,
     CarryForward,
+    Connected,
+    ConnectRequest,
+    FoundModel,
+    ModelAccess,
+    ModelProblem,
+    ModelTestPassed,
     ProposedIntent,
     ReleaseCheckInputs,
     RoomAddressee,
@@ -34,6 +40,7 @@ from agent_runtime.contract import (
     WireModel,
     agent_event_adapter,
 )
+from agent_runtime.model_access import KEY_REFUSED
 
 ROOM_LEAD = AgentRef(id="room_lead", display="Room lead")
 CHECKER = AgentRef(id="release_checker", display="Release checker")
@@ -221,6 +228,10 @@ def failed_task() -> TaskFailed:
     )
 
 
+GATEWAY = "https://llm-gateway.example"
+EXAMPLE_KEY = "example-key-not-a-secret"
+
+
 def fixtures() -> dict[str, WireModel]:
     finished = finished_task()
     return {
@@ -229,6 +240,22 @@ def fixtures() -> dict[str, WireModel]:
         "task-failed.json": failed_task(),
         "callback-event.json": AgentEventPost(task_id=finished.task_id, event=finished.events[0]),
         "agent-cards.json": AGENT_CARDS,
+        "model-connect-request.json": ConnectRequest(base_url=GATEWAY, api_key=EXAMPLE_KEY),
+        "model-connected.json": Connected(
+            style="anthropic",
+            base_url=GATEWAY,
+            models=[
+                FoundModel(id="claude-haiku-5-5", display="Claude Haiku 5.5", suggested=True),
+                FoundModel(id="claude-sonnet-5-5", display="Claude Sonnet 5.5", suggested=False),
+            ],
+        ),
+        "model-test-request.json": ModelAccess(
+            style="anthropic", base_url=GATEWAY, model="claude-haiku-5-5", api_key=EXAMPLE_KEY
+        ),
+        "model-test-passed.json": ModelTestPassed(
+            seconds=1.4, text="Two new LangGraph releases came out after 1.2.14: 1.2.16 and 1.2.15."
+        ),
+        "model-problem.json": ModelProblem(reason="key_refused", message=KEY_REFUSED),
     }
 
 

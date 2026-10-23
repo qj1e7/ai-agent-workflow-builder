@@ -12,5 +12,6 @@
   "callback": {
     "url": "http://platform-api:8000/internal/v1/runs/run_01JB8/agent-events?task=run_01JB8/work/1/1",
     "token": "example-callback-token-not-a-secret"
-  }
+  },
+  "model": null
 }

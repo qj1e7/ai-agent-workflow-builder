@@ -158,6 +158,21 @@ class Callback(WireModel):
     )
 
 
+type ModelStyle = Literal["anthropic", "openai"]
+
+
+class ModelAccess(WireModel):
+    style: ModelStyle = Field(
+        description="How to call the model: Anthropic's Messages API or OpenAI's Chat Completions "
+        "API."
+    )
+    base_url: str = Field(description="The address the chat client calls, as Connect found it.")
+    model: str
+    api_key: str = Field(
+        repr=False, description="Used for this call only. The runtime never stores or logs it."
+    )
+
+
 class TaskRequest(WireModel):
     task_id: str
     run_id: str
@@ -165,6 +180,12 @@ class TaskRequest(WireModel):
     inputs: ReleaseCheckInputs
     carry_forward: CarryForward
     callback: Callback
+    model: ModelAccess | None = Field(
+        default=None,
+        description="The model that writes the summary. Without one, the runtime uses its own "
+        "settings, then its template. A reused task_id is matched without this field, so a key "
+        "replaced between two tries of one task does not make it a different task.",
+    )
 
 
 class ProposedIntent(WireModel):
@@ -205,6 +226,60 @@ type TaskResult = Annotated[TaskFinished | TaskFailed, Field(discriminator="stat
 task_result_adapter: TypeAdapter[TaskResult] = TypeAdapter(TaskResult)
 
 
+class ConnectRequest(WireModel):
+    base_url: str
+    api_key: str = Field(repr=False)
+
+
+class FoundModel(WireModel):
+    id: str
+    display: str
+    suggested: bool = Field(
+        description="True when the name suggests a fast model, which suits summaries."
+    )
+
+
+class Connected(WireModel):
+    status: Literal["connected"] = "connected"
+    style: ModelStyle
+    base_url: str = Field(description="The address to send with this style in a ModelAccess.")
+    models: list[FoundModel]
+
+
+type ProblemReason = Literal[
+    "address_not_allowed",
+    "unreachable",
+    "key_refused",
+    "not_a_model_api",
+    "no_text_models",
+    "model_not_found",
+    "too_slow",
+    "unusable_answer",
+    "failed",
+]
+
+
+class ModelProblem(WireModel):
+    status: Literal["problem"] = "problem"
+    reason: ProblemReason
+    message: str = Field(
+        description="Plain words for an Operator. Never the provider's own error text, which can "
+        "quote the address or the key."
+    )
+
+
+type ConnectResult = Annotated[Connected | ModelProblem, Field(discriminator="status")]
+
+
+class ModelTestPassed(WireModel):
+    status: Literal["passed"] = "passed"
+    seconds: float
+    text: str
+
+
+type ModelTestResult = Annotated[ModelTestPassed | ModelProblem, Field(discriminator="status")]
+
+
 class AgentCard(WireModel):
     id: str
     display: str
@@ -225,3 +300,7 @@ class AgentApiSchema(WireModel):
     task_result: TaskResult
     callback: AgentEventPost
     agent_cards: AgentCards
+    model_connect_request: ConnectRequest
+    model_connect_result: ConnectResult
+    model_test_request: ModelAccess
+    model_test_result: ModelTestResult

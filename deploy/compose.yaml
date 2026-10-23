@@ -67,6 +67,7 @@ services:
       AGENT_SUMMARY_MODEL: ${AGENT_SUMMARY_MODEL:-}
       AGENT_MODEL_BASE_URL: ${AGENT_MODEL_BASE_URL:-}
       AGENT_MODEL_API_KEY: ${AGENT_MODEL_API_KEY:-}
+      AGENT_MODEL_PRIVATE_HOSTS: ${AGENT_MODEL_PRIVATE_HOSTS:-}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=2)"]
       interval: 3s

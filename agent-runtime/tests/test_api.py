@@ -9,6 +9,9 @@ from typing import Any, cast
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from langchain_core.language_models import BaseChatModel
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from langchain_core.messages import AIMessage
 
 from agent_runtime.api import (
     HttpCallbacks,
@@ -19,11 +22,29 @@ from agent_runtime.api import (
     build_summarizer,
     create_app,
 )
-from agent_runtime.contract import AgentEventPost, TaskRequest, task_result_adapter
+from agent_runtime.contract import (
+    AgentEventPost,
+    Connected,
+    ConnectRequest,
+    ConnectResult,
+    FoundModel,
+    ModelAccess,
+    ModelTestPassed,
+    ModelTestResult,
+    TaskFinished,
+    TaskRequest,
+    task_result_adapter,
+)
 from agent_runtime.contracts import task_request
 from agent_runtime.release_checker import ReleaseChecker
 from agent_runtime.room import FixedRoomLead
-from agent_runtime.summary import ModelFactory, ModelSummarizer, TemplateSummarizer, model_factory
+from agent_runtime.summary import (
+    ModelFactory,
+    ModelSummarizer,
+    Summarizer,
+    TemplateSummarizer,
+    model_factory,
+)
 from tests.fakes import FakeClock, FakeSource, langgraph_tags
 
 KEY = "test-agent-key-not-a-secret"
@@ -511,3 +532,114 @@ def test_langsmith_tracing_is_off_unless_its_variables_are_set(monkeypatch: pyte
     for name in ("LANGSMITH_TRACING", "LANGSMITH_API_KEY", "LANGCHAIN_TRACING_V2"):
         monkeypatch.delenv(name, raising=False)
     assert not utils.tracing_is_enabled()
+
+
+GATEWAY_MODEL: dict[str, object] = {
+    "style": "anthropic",
+    "base_url": "https://llm-gateway.example",
+    "model": "claude-haiku-5-5",
+    "api_key": "sk-first-key-not-real",
+}
+
+
+def from_the_model(sentence: str, used: list[ModelAccess]) -> Callable[[ModelAccess], Summarizer]:
+    def summarizer_for(access: ModelAccess) -> Summarizer:
+        used.append(access)
+
+        def factory(name: str) -> BaseChatModel:
+            return GenericFakeChatModel(messages=iter([AIMessage(content=sentence)]))
+
+        return ModelSummarizer(access.model, factory=factory)
+
+    return summarizer_for
+
+
+def test_a_task_that_names_a_model_writes_its_summary_with_that_model():
+    used: list[ModelAccess] = []
+    runtime = replace(make_runtime(), summarizer_for=from_the_model("From the model.", used))
+    client = TestClient(create_app(SETTINGS, runtime), headers={"X-Agent-Key": KEY})
+    body = request_body()
+    body["model"] = GATEWAY_MODEL
+    result = task_result_adapter.validate_python(client.post("/v1/tasks", json=body).json())
+    assert isinstance(result, TaskFinished)
+    assert result.output.summary == "From the model."
+    assert [(a.style, a.model) for a in used] == [("anthropic", "claude-haiku-5-5")]
+
+
+def test_a_task_without_a_model_keeps_the_runtimes_own_summary():
+    used: list[ModelAccess] = []
+    runtime = replace(make_runtime(), summarizer_for=from_the_model("From the model.", used))
+    client = TestClient(create_app(SETTINGS, runtime), headers={"X-Agent-Key": KEY})
+    result = task_result_adapter.validate_python(
+        client.post("/v1/tasks", json=request_body()).json()
+    )
+    assert isinstance(result, TaskFinished)
+    assert result.output.summary == "2 new releases: 1.2.16, 1.2.15"
+    assert used == []
+
+
+def test_a_key_replaced_between_two_tries_of_one_task_is_the_same_task():
+    used: list[ModelAccess] = []
+    runtime = replace(make_runtime(), summarizer_for=from_the_model("From the model.", used))
+    client = TestClient(create_app(SETTINGS, runtime), headers={"X-Agent-Key": KEY})
+    first = request_body()
+    first["model"] = GATEWAY_MODEL
+    second = request_body()
+    second["model"] = {**GATEWAY_MODEL, "api_key": "sk-second-key-not-real"}
+    answer = client.post("/v1/tasks", json=first)
+    again = client.post("/v1/tasks", json=second)
+    assert again.status_code == 200
+    assert again.json() == answer.json()
+
+
+class FakeModels:
+    def __init__(self) -> None:
+        self.connected: list[ConnectRequest] = []
+        self.tested: list[ModelAccess] = []
+
+    def connect(self, request: ConnectRequest) -> ConnectResult:
+        self.connected.append(request)
+        return Connected(
+            style="openai",
+            base_url="https://api.example/v1",
+            models=[FoundModel(id="gpt-5-mini", display="gpt-5-mini", suggested=True)],
+        )
+
+    def test(self, access: ModelAccess) -> ModelTestResult:
+        self.tested.append(access)
+        return ModelTestPassed(seconds=1.2, text="Two new releases came out.")
+
+
+def test_connect_and_test_need_the_agent_key():
+    client = TestClient(create_app(SETTINGS, make_runtime(), models=FakeModels()))
+    connect = {"base_url": "https://api.example", "api_key": "sk-x"}
+    assert client.post("/v1/models/connect", json=connect).status_code == 401
+    assert client.post("/v1/models/test", json=GATEWAY_MODEL).status_code == 401
+
+
+def test_connect_and_test_answer_with_what_the_probe_found():
+    models = FakeModels()
+    client = TestClient(
+        create_app(SETTINGS, make_runtime(), models=models), headers={"X-Agent-Key": KEY}
+    )
+    connected = client.post(
+        "/v1/models/connect", json={"base_url": "https://api.example", "api_key": "sk-x"}
+    )
+    tested = client.post("/v1/models/test", json=GATEWAY_MODEL)
+    assert connected.json()["status"] == "connected"
+    assert connected.json()["models"][0]["id"] == "gpt-5-mini"
+    assert tested.json() == {
+        "status": "passed",
+        "seconds": 1.2,
+        "text": "Two new releases came out.",
+    }
+    assert [r.base_url for r in models.connected] == ["https://api.example"]
+    assert [a.model for a in models.tested] == ["claude-haiku-5-5"]
+
+
+def test_settings_read_the_private_model_hosts():
+    env = {**BASE_ENV, "AGENT_MODEL_PRIVATE_HOSTS": " Host.Docker.Internal , ollama.lan ,"}
+    settings = Settings.from_env(env)
+    assert settings.model_private_hosts == frozenset({"host.docker.internal", "ollama.lan"})
+    assert settings.address_policy.listed_hosts == settings.model_private_hosts
+    assert Settings.from_env(BASE_ENV).model_private_hosts == frozenset()
