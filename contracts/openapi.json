@@ -224,6 +224,11 @@
       "AddressDecisionIn": {
         "additionalProperties": false,
         "properties": {
+          "digest": {
+            "description": "The digest of the waiting entry the Approver looked at.",
+            "title": "Digest",
+            "type": "string"
+          },
           "verdict": {
             "enum": [
               "confirm",
@@ -234,7 +239,8 @@
           }
         },
         "required": [
-          "verdict"
+          "verdict",
+          "digest"
         ],
         "title": "AddressDecisionIn",
         "type": "object"
@@ -2319,6 +2325,11 @@
             "title": "By Name",
             "type": "string"
           },
+          "digest": {
+            "description": "Quote it in the decision, so it applies to this entry only.",
+            "title": "Digest",
+            "type": "string"
+          },
           "key_hint": {
             "description": "The key's last two characters.",
             "title": "Key Hint",
@@ -2366,6 +2377,7 @@
           "by",
           "by_name",
           "at",
+          "digest",
           "you_can_decide",
           "why_not"
         ],
@@ -5335,6 +5347,16 @@
               }
             },
             "description": "No address is waiting for confirmation"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The waiting address changed after it was seen"
           },
           "422": {
             "content": {

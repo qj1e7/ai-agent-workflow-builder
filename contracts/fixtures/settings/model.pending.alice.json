@@ -23,6 +23,7 @@
     "by": "alice",
     "by_name": "Alice",
     "at": "2026-11-09T03:40:00Z",
+    "digest": "sha256:a8270cbe4c8982a210a50bff14069966ac68dc8c750044210ede0c8ba6c56240",
     "you_can_decide": false,
     "why_not": "You entered this address, so another Approver must confirm it."
   },

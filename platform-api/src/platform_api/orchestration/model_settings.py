@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import hmac
 import logging
 from dataclasses import dataclass
 from datetime import datetime
@@ -84,6 +85,12 @@ class StoredModel:
     by_name: str
     at: datetime
 
+    @property
+    def digest(self) -> str:
+        """Names exactly this entry. An Approver's decision quotes it, as with ADR 0008's digest."""
+        seen = "|".join((self.style, self.base_url, self.model, self.key_hint, self.at.isoformat()))
+        return "sha256:" + hashlib.sha256(seen.encode()).hexdigest()
+
 
 @dataclass(frozen=True)
 class ModelChange:
@@ -129,6 +136,11 @@ class NothingPending:
 @dataclass(frozen=True)
 class OwnAddress:
     message: str = "You entered this address, so another Approver must confirm it."
+
+
+@dataclass(frozen=True)
+class PendingChanged:
+    message: str = "The waiting address changed after you looked at it. Look again before deciding."
 
 
 @dataclass(frozen=True)
@@ -351,8 +363,8 @@ class ModelSettings:
         return None
 
     async def decide(
-        self, principal: Principal, confirm: bool
-    ) -> AddressDecided | NothingPending | OwnAddress | SettingsOff:
+        self, principal: Principal, confirm: bool, digest: str
+    ) -> AddressDecided | NothingPending | OwnAddress | PendingChanged | SettingsOff:
         if self._box is None:
             return SettingsOff()
         async with self._db.transaction("orchestration") as uow:
@@ -361,6 +373,8 @@ class ModelSettings:
                 return NothingPending()
             if pending.by == principal.user_id:
                 return OwnAddress()
+            if not hmac.compare_digest(pending.digest, digest):
+                return PendingChanged()
             host = host_of(pending.base_url)
             await self._store.remove(uow, "pending")
             if confirm:

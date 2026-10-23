@@ -11,6 +11,7 @@ from platform_api.orchestration.model_settings import (
     KeyNeeded,
     NothingPending,
     OwnAddress,
+    PendingChanged,
     RuntimeDown,
     Saved,
     SettingsOff,
@@ -79,8 +80,8 @@ class FakeModelSettings:
     async def turn_off(self, principal: object) -> object:
         return self.off
 
-    async def decide(self, principal: object, confirm: bool) -> object:
-        self.calls.append(("decide", confirm))
+    async def decide(self, principal: object, confirm: bool, digest: str) -> object:
+        self.calls.append(("decide", (confirm, digest)))
         return self.decided
 
 
@@ -100,7 +101,7 @@ SAVE_BODY = {
     "model": "claude-haiku-5-5",
     "api_key": KEY,
 }
-CONFIRM = {"verdict": "confirm"}
+CONFIRM = {"verdict": "confirm", "digest": "sha256:" + "0" * 64}
 
 
 def fake(**changes: object) -> FakeModelSettings:
@@ -145,6 +146,9 @@ CASES = [
         "POST", DECISION, BOB, CONFIRM, fake(decided=NothingPending()), 404, id="decide-404"
     ),
     pytest.param("POST", DECISION, BOB, CONFIRM, fake(decided=SettingsOff()), 503, id="decide-503"),
+    pytest.param(
+        "POST", DECISION, BOB, CONFIRM, fake(decided=PendingChanged()), 409, id="decide-409"
+    ),
 ]
 
 
@@ -246,3 +250,18 @@ def test_the_saved_key_can_stand_in_for_a_pasted_one():
     response = TestClient(app_for(settings)).post(CONNECT, headers=ALICE, json=body)
     assert response.status_code == 200
     assert settings.calls == [("connect", (None, "https://llm-gateway.aisg.sg", None, True))]
+
+
+def test_a_decision_must_quote_the_digest_of_what_was_seen():
+    settings = fake()
+    response = TestClient(app_for(settings)).post(
+        DECISION, headers=BOB, json={"verdict": "confirm"}
+    )
+    assert response.status_code == 422
+    assert settings.calls == []
+
+
+def test_the_waiting_entry_carries_its_digest():
+    pending = view_as(BOB)["pending"]
+    assert isinstance(pending, dict)
+    assert str(pending["digest"]).startswith("sha256:")

@@ -15,6 +15,7 @@ from platform_api.orchestration.model_settings import (
     ModelSettings,
     NothingPending,
     OwnAddress,
+    PendingChanged,
     RuntimeDown,
     Saved,
     SettingsOff,
@@ -50,6 +51,7 @@ class ModelOut(WireModel):
 
 
 class PendingModelOut(ModelOut):
+    digest: str = Field(description="Quote it in the decision, so it applies to this entry only.")
     you_can_decide: bool
     why_not: str | None
 
@@ -122,6 +124,7 @@ type SaveOut = Annotated[
 
 class AddressDecisionIn(WireModel):
     verdict: Literal["confirm", "decline"]
+    digest: str = Field(description="The digest of the waiting entry the Approver looked at.")
 
 
 def current_model_settings(request: Request) -> ModelSettings:
@@ -171,6 +174,7 @@ def view_of(state: SettingsState, principal: Principal) -> ModelSettingsView:
             why_not = "Only an Approver can confirm an address."
         pending = PendingModelOut(
             **_model_out(state.pending).model_dump(),
+            digest=state.pending.digest,
             you_can_decide=why_not is None,
             why_not=why_not,
         )
@@ -259,18 +263,21 @@ async def turn_model_off(principal: Operator, settings: CurrentModelSettings) ->
         **SIGNED_IN,
         403: error_response("Not an Approver, or the person who entered the address"),
         404: error_response("No address is waiting for confirmation"),
+        409: error_response("The waiting address changed after it was seen"),
         503: SETTINGS_OFF,
     },
 )
 async def decide_address(
     body: AddressDecisionIn, principal: Approver, settings: CurrentModelSettings
 ) -> ModelSettingsView:
-    result = await settings.decide(principal, confirm=body.verdict == "confirm")
+    result = await settings.decide(principal, body.verdict == "confirm", body.digest)
     match result:
         case AddressDecided():
             return view_of(await settings.view(), principal)
         case OwnAddress(message):
             raise HTTPException(status_code=403, detail=message)
+        case PendingChanged(message):
+            raise HTTPException(status_code=409, detail=message)
         case NothingPending():
             raise HTTPException(status_code=404, detail="No address is waiting for confirmation")
         case SettingsOff(message):

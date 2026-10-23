@@ -19,6 +19,7 @@ from platform_api.orchestration.model_settings import (
     ModelSettings,
     NothingPending,
     OwnAddress,
+    PendingChanged,
     RuntimeDown,
     Saved,
     SettingsOff,
@@ -78,6 +79,11 @@ async def save(settings: ModelSettings, who: Principal = ALICE, **changes: objec
 async def runs_use(db: Database, settings: ModelSettings) -> ModelAccess | None:
     async with db.transaction("orchestration") as uow:
         return await settings.access(uow)
+
+
+async def waiting(settings: ModelSettings) -> str:
+    pending = (await settings.view()).pending
+    return pending.digest if pending is not None else "sha256:none"
 
 
 async def summaries(settings: ModelSettings) -> list[str]:
@@ -158,7 +164,9 @@ async def test_a_new_address_waits_for_an_approver_and_runs_keep_the_old_model(d
 async def test_the_person_who_entered_an_address_cannot_confirm_it(db: Database):
     settings = settings_for(db)
     await save(settings, style="openai", base_url=NCS, model="ncs-llm-small")
-    assert isinstance(await settings.decide(ALICE, confirm=True), OwnAddress)
+    assert isinstance(
+        await settings.decide(ALICE, confirm=True, digest=await waiting(settings)), OwnAddress
+    )
     assert (await settings.view()).pending is not None
 
 
@@ -166,7 +174,9 @@ async def test_another_approver_confirms_and_runs_switch(db: Database):
     settings = settings_for(db)
     await save(settings)
     await save(settings, style="openai", base_url=NCS, model="ncs-llm-small", api_key=NEW_KEY)
-    assert await settings.decide(BOB, confirm=True) == AddressDecided(confirmed=True)
+    assert await settings.decide(
+        BOB, confirm=True, digest=await waiting(settings)
+    ) == AddressDecided(confirmed=True)
     state = await settings.view()
     assert state.pending is None
     assert await runs_use(db, settings) == ModelAccess(
@@ -180,7 +190,7 @@ async def test_another_approver_confirms_and_runs_switch(db: Database):
 async def test_a_confirmed_address_needs_no_second_confirmation(db: Database):
     settings = settings_for(db)
     await save(settings, style="openai", base_url=NCS, model="ncs-llm-small")
-    await settings.decide(BOB, confirm=True)
+    await settings.decide(BOB, confirm=True, digest=await waiting(settings))
     outcome = await save(settings, style="openai", base_url=NCS, model="ncs-llm-large")
     assert outcome == Saved(PASSED, awaiting_confirmation=False)
 
@@ -188,7 +198,9 @@ async def test_a_confirmed_address_needs_no_second_confirmation(db: Database):
 async def test_declining_deletes_the_waiting_key(db: Database):
     settings = settings_for(db)
     await save(settings, style="openai", base_url=NCS, model="ncs-llm-small")
-    assert await settings.decide(BOB, confirm=False) == AddressDecided(confirmed=False)
+    assert await settings.decide(
+        BOB, confirm=False, digest=await waiting(settings)
+    ) == AddressDecided(confirmed=False)
     assert (await settings.view()).pending is None
     async with db.connection("orchestration") as conn:
         rows = await (await conn.execute("SELECT * FROM orchestration.model_setting")).fetchall()
@@ -199,7 +211,9 @@ async def test_declining_deletes_the_waiting_key(db: Database):
 
 
 async def test_deciding_with_nothing_waiting_says_so(db: Database):
-    assert isinstance(await settings_for(db).decide(BOB, confirm=True), NothingPending)
+    assert isinstance(
+        await settings_for(db).decide(BOB, confirm=True, digest="sha256:none"), NothingPending
+    )
 
 
 async def test_the_saved_key_is_reused_only_at_the_same_host(db: Database):
@@ -270,3 +284,23 @@ def test_a_sealed_key_opens_only_with_the_same_secret():
     assert KEY not in sealed
     assert KeyBox("one").open(sealed) == KEY
     assert KeyBox("two").open(sealed) is None
+
+
+async def test_a_decision_on_an_address_that_changed_since_it_was_seen_is_refused(db: Database):
+    settings = settings_for(db)
+    await save(settings, style="openai", base_url=NCS, model="ncs-llm-small")
+    seen = await waiting(settings)
+    await save(settings, style="openai", base_url="https://elsewhere.example/v1", model="other")
+    assert isinstance(await settings.decide(BOB, confirm=True, digest=seen), PendingChanged)
+    state = await settings.view()
+    assert state.pending is not None
+    assert state.pending.base_url == "https://elsewhere.example/v1"
+    assert await runs_use(db, settings) is None
+
+
+async def test_the_digest_changes_with_every_save(db: Database):
+    settings = settings_for(db)
+    await save(settings, style="openai", base_url=NCS, model="ncs-llm-small")
+    first = await waiting(settings)
+    await save(settings, style="openai", base_url=NCS, model="ncs-llm-small", api_key=NEW_KEY)
+    assert await waiting(settings) != first
