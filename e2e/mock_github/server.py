@@ -7,6 +7,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 REPO = "langchain-ai/langgraph"
+REDIS = "redis/redis"
 MODES = ("ok", "unavailable")
 DEFAULT_PER_PAGE = 30
 MAX_PER_PAGE = 100
@@ -26,6 +27,7 @@ OTHER_FAMILY_TAGS = {
     19: "sdk==0.2.3",
     22: "cli==0.4.35",
 }
+REDIS_TAGS = ["8.2.1", "8.2.0", "8.0.3", "8.0.2", "7.4.5", "7.4.4"]
 LATEST_PUBLISHED = datetime(2026, 10, 28, 9, 0, tzinfo=UTC)
 
 
@@ -37,20 +39,20 @@ def release_order() -> list[str]:
     return tags
 
 
-def build_releases() -> list[dict[str, Any]]:
+def build_releases(repo: str, tags: list[str], latest_published: datetime) -> list[dict[str, Any]]:
     releases: list[dict[str, Any]] = []
-    total = len(release_order())
-    for index, tag in enumerate(release_order()):
+    total = len(tags)
+    for index, tag in enumerate(tags):
         number = total - index
-        published = LATEST_PUBLISHED - timedelta(hours=31 * index)
+        published = latest_published - timedelta(hours=31 * index)
         stamp = published.strftime("%Y-%m-%dT%H:%M:%SZ")
-        base = f"https://api.github.com/repos/{REPO}"
+        base = f"https://api.github.com/repos/{repo}"
         releases.append(
             {
                 "url": f"{base}/releases/{number}",
-                "html_url": f"https://github.com/{REPO}/releases/tag/{tag}",
+                "html_url": f"https://github.com/{repo}/releases/tag/{tag}",
                 "assets_url": f"{base}/releases/{number}/assets",
-                "upload_url": f"https://uploads.github.com/repos/{REPO}/releases/{number}/assets",
+                "upload_url": f"https://uploads.github.com/repos/{repo}/releases/{number}/assets",
                 "tarball_url": f"{base}/tarball/{tag}",
                 "zipball_url": f"{base}/zipball/{tag}",
                 "id": 900_000 + number,
@@ -70,8 +72,13 @@ def build_releases() -> list[dict[str, Any]]:
     return releases
 
 
-RELEASES = build_releases()
-RELEASES_PATH = re.compile(rf"^/repos/{re.escape(REPO)}/releases/?$")
+RELEASES_BY_REPO: dict[str, list[dict[str, Any]]] = {
+    REPO: build_releases(REPO, release_order(), LATEST_PUBLISHED),
+    REDIS: build_releases(REDIS, REDIS_TAGS, LATEST_PUBLISHED - timedelta(days=2)),
+}
+"""The repositories the mock knows. Any other repository answers 404, as GitHub does."""
+RELEASES = RELEASES_BY_REPO[REPO]
+RELEASES_PATH = re.compile(r"^/repos/([^/]+)/([^/]+)/releases/?$")
 
 
 class State:
@@ -90,11 +97,11 @@ class State:
             self._mode = value
 
 
-def page_of(query: dict[str, list[str]]) -> list[dict[str, Any]]:
+def page_of(releases: list[dict[str, Any]], query: dict[str, list[str]]) -> list[dict[str, Any]]:
     per_page = min(int(query.get("per_page", [DEFAULT_PER_PAGE])[0]), MAX_PER_PAGE)
     page = max(int(query.get("page", [1])[0]), 1)
     start = (page - 1) * per_page
-    return RELEASES[start : start + per_page]
+    return releases[start : start + per_page]
 
 
 def make_handler(state: State) -> type[BaseHTTPRequestHandler]:
@@ -113,16 +120,20 @@ def make_handler(state: State) -> type[BaseHTTPRequestHandler]:
                 self.send_json(200, {"status": "ok"})
             elif url.path == "/_admin/mode":
                 self.send_json(200, {"mode": state.mode})
-            elif RELEASES_PATH.match(url.path):
+            elif (match := RELEASES_PATH.match(url.path)) is not None:
                 if state.mode == "unavailable":
                     self.send_json(503, {"message": "Service Unavailable"})
                     return
+                releases = RELEASES_BY_REPO.get(f"{match.group(1)}/{match.group(2)}")
+                if releases is None:
+                    self.send_json(404, {"message": "Not Found"})
+                    return
                 try:
-                    releases = page_of(parse_qs(url.query))
+                    page = page_of(releases, parse_qs(url.query))
                 except ValueError:
                     self.send_json(422, {"message": "Validation Failed"})
                     return
-                self.send_json(200, releases)
+                self.send_json(200, page)
             else:
                 self.send_json(404, {"message": "Not Found"})
 

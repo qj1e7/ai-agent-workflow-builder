@@ -148,8 +148,42 @@ class Api:
     def events_after(self, user: str, run_id: str, after: int = 0) -> list[Json]:
         return self.get(user, f"/api/v1/runs/{run_id}/events?after={after}")["events"]
 
+    def delete(self, user: str, path: str, *, expect: Iterable[int]) -> httpx.Response:
+        return self.request(user, "DELETE", path, expect=expect)
+
     def tickets(self, user: str = "alice") -> list[Json]:
         return self.get(user, "/api/v1/mock-jira/tickets")["tickets"]
+
+    def mark_done(self, user: str, key: str, *, expect: Iterable[int] = (200,)) -> httpx.Response:
+        return self.post(user, f"/api/v1/mock-jira/tickets/{key}/done", expect=expect)
+
+    def watchlist(self, user: str = "alice") -> Json | None:
+        return self.get(user, "/api/v1/watchlist")["watchlist"]
+
+    def add_software(
+        self,
+        user: str,
+        name: str,
+        repo: str,
+        our_version: str | None = None,
+        *,
+        expect: Iterable[int] = (201,),
+    ) -> httpx.Response:
+        body: Json = {"name": name, "repo": repo, "our_version": our_version}
+        return self.post(user, "/api/v1/watchlist/software", body, expect=expect)
+
+    def remove_software(
+        self, user: str, software_id: str, *, expect: Iterable[int] = (200,)
+    ) -> httpx.Response:
+        return self.delete(user, f"/api/v1/watchlist/software/{software_id}", expect=expect)
+
+    def clear_watchlist(self, user: str = "alice") -> None:
+        """One watchlist per team, so a test on a stack that kept state starts from an empty one."""
+        watchlist = self.watchlist(user)
+        if watchlist is None:
+            return
+        for row in watchlist["software"]:
+            self.remove_software(user, row["id"])
 
     def describe_run(self, user: str, run_id: str) -> str:
         try:
