@@ -6,14 +6,22 @@ import pytest
 from platform_api.app import create_app
 from platform_api.builder import Watchlist
 from platform_api.db import Database
-from platform_api.orchestration import Given, SoftwareFacts, Standing, WatchlistStanding
-from platform_api.shared import SoftwareId, UseCaseId
+from platform_api.orchestration import (
+    Given,
+    ScheduleBook,
+    SoftwareFacts,
+    Standing,
+    WatchlistStanding,
+)
+from platform_api.shared import RunId, SoftwareId, UseCaseId
 from tests.support import LOCAL_ENV
 
 pytestmark = pytest.mark.anyio
 
 ALICE = {"X-Dev-User": "alice"}
 BOB = {"X-Dev-User": "bob"}
+CAROL = {"X-Dev-User": "carol"}
+STEP_KEY = {"X-Step-Key": LOCAL_ENV["STEP_KEY"]}
 LANGGRAPH = {"name": "LangGraph", "repo": "langchain-ai/langgraph", "our_version": "1.2.14"}
 REDIS = {"name": "Redis", "repo": "redis/redis"}
 
@@ -31,10 +39,16 @@ class NothingLearned:
         )
 
 
+class FakeTicker:
+    async def tick(self) -> list[RunId]:
+        return [RunId("run_01A"), RunId("run_01B")]
+
+
 @pytest.fixture
 async def client(db: Database) -> AsyncIterator[httpx.AsyncClient]:
     app = create_app(LOCAL_ENV)
-    app.state.watchlist = Watchlist(db, NothingLearned())
+    app.state.watchlist = Watchlist(db, NothingLearned(), ScheduleBook(db))
+    app.state.schedule_ticker = FakeTicker()
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
@@ -58,7 +72,12 @@ async def test_the_watchlist_is_null_until_software_is_added_then_lists_it(
         "alice",
     )
     assert row["our_version_source"]["kind"] == "given"
-    assert (view["last_check"], view["schedule"]) == (None, None)
+    assert view["last_check"] is None
+    assert (view["schedule"]["day"], view["schedule"]["at"], view["schedule"]["owner"]) == (
+        "monday",
+        "09:00",
+        "alice",
+    )
 
     again = await client.get("/api/v1/watchlist", headers=BOB)
     assert again.json() == {"watchlist": view}
@@ -115,3 +134,104 @@ async def test_only_an_operator_changes_the_list_and_anyone_signed_in_reads_it(
     assert refused.status_code == 403
     assert (await client.delete("/api/v1/watchlist/software/sw_x", headers=BOB)).status_code == 403
     assert (await client.get("/api/v1/watchlist", headers=BOB)).json() == {"watchlist": None}
+
+
+async def test_the_first_add_saves_the_default_schedule_for_the_person_who_added(
+    client: httpx.AsyncClient,
+):
+    created = await client.post("/api/v1/watchlist/software", json=LANGGRAPH, headers=CAROL)
+    schedule = created.json()["schedule"]
+    assert schedule["owner"] == "carol" and schedule["owner_name"] == "Carol"
+    assert (schedule["day"], schedule["at"], schedule["time_zone"]) == (
+        "monday",
+        "09:00",
+        "Asia/Singapore",
+    )
+    assert schedule["next_at"].endswith("+08:00")
+    assert schedule["next_at"] > schedule["saved_at"]
+
+    second = await client.post("/api/v1/watchlist/software", json=REDIS, headers=ALICE)
+    assert second.json()["schedule"] == schedule, "a later add leaves the schedule and its owner"
+
+
+async def test_saving_a_schedule_makes_the_caller_its_owner_and_answers_the_watchlist(
+    client: httpx.AsyncClient,
+):
+    await client.post("/api/v1/watchlist/software", json=LANGGRAPH, headers=CAROL)
+    saved = await client.put(
+        "/api/v1/watchlist/schedule", json={"day": "every_day", "at": "06:30"}, headers=ALICE
+    )
+    assert saved.status_code == 200
+    view = saved.json()
+    assert [row["name"] for row in view["software"]] == ["LangGraph"]
+    schedule = view["schedule"]
+    assert (schedule["day"], schedule["at"], schedule["owner"]) == ("every_day", "06:30", "alice")
+    assert schedule["next_at"].endswith("06:30:00+08:00")
+    got = await client.get("/api/v1/watchlist", headers=BOB)
+    assert got.json() == {"watchlist": view}
+
+
+async def test_turning_the_schedule_off_leaves_null_and_saving_again_turns_it_on(
+    client: httpx.AsyncClient,
+):
+    await client.post("/api/v1/watchlist/software", json=LANGGRAPH, headers=ALICE)
+    off = await client.delete("/api/v1/watchlist/schedule", headers=CAROL)
+    assert (off.status_code, off.json()["schedule"]) == (200, None)
+    again = await client.delete("/api/v1/watchlist/schedule", headers=CAROL)
+    assert (again.status_code, again.json()["schedule"]) == (200, None)
+    await client.post("/api/v1/watchlist/software", json=REDIS, headers=ALICE)
+    assert (await client.get("/api/v1/watchlist", headers=ALICE)).json()["watchlist"][
+        "schedule"
+    ] is None, "adding more software does not bring a turned off schedule back"
+    on = await client.put(
+        "/api/v1/watchlist/schedule", json={"day": "friday", "at": "17:00"}, headers=CAROL
+    )
+    assert on.json()["schedule"]["owner"] == "carol"
+
+
+async def test_a_schedule_needs_a_watchlist_and_an_operator(client: httpx.AsyncClient):
+    body = {"day": "monday", "at": "09:00"}
+    assert (
+        await client.put("/api/v1/watchlist/schedule", json=body, headers=ALICE)
+    ).status_code == 404
+    assert (await client.delete("/api/v1/watchlist/schedule", headers=ALICE)).status_code == 404
+    await client.post("/api/v1/watchlist/software", json=LANGGRAPH, headers=ALICE)
+    assert (
+        await client.put("/api/v1/watchlist/schedule", json=body, headers=BOB)
+    ).status_code == 403
+    assert (await client.delete("/api/v1/watchlist/schedule", headers=BOB)).status_code == 403
+    assert (await client.put("/api/v1/watchlist/schedule", json=body)).status_code == 401
+
+
+@pytest.mark.parametrize(
+    ("body", "field"),
+    [
+        ({"day": "monday", "at": "09:03"}, "at"),
+        ({"day": "monday", "at": "9:00"}, "at"),
+        ({"day": "monday", "at": "24:00"}, "at"),
+        ({"day": "monday", "at": "09:60"}, "at"),
+        ({"day": "monday", "at": "09:00:00"}, "at"),
+        ({"day": "someday", "at": "09:00"}, "day"),
+        ({"day": "Monday", "at": "09:00"}, "day"),
+        ({"at": "09:00"}, "day"),
+        ({"day": "monday"}, "at"),
+    ],
+)
+async def test_a_bad_day_or_time_is_a_422_naming_the_field(
+    client: httpx.AsyncClient, body: dict[str, str], field: str
+):
+    await client.post("/api/v1/watchlist/software", json=LANGGRAPH, headers=ALICE)
+    r = await client.put("/api/v1/watchlist/schedule", json=body, headers=ALICE)
+    assert r.status_code == 422
+    assert [problem["loc"][-1] for problem in r.json()["detail"]] == [field]
+
+
+async def test_the_tick_checks_the_step_key_and_answers_the_runs_it_started(
+    client: httpx.AsyncClient,
+):
+    assert (await client.post("/internal/v1/schedules/tick")).status_code == 422
+    wrong = await client.post("/internal/v1/schedules/tick", headers={"X-Step-Key": "wrong"})
+    assert wrong.status_code == 401
+    assert (await client.post("/internal/v1/schedules/tick", headers=ALICE)).status_code == 422
+    ticked = await client.post("/internal/v1/schedules/tick", headers=STEP_KEY)
+    assert (ticked.status_code, ticked.json()) == (200, {"started": ["run_01A", "run_01B"]})

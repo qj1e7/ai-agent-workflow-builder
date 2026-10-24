@@ -32,7 +32,7 @@ from platform_api.shared import (
     TaskId,
     UserId,
 )
-from platform_api.wire import ApprovalStepView, StepOutcome
+from platform_api.wire import ApprovalStepView, StepOutcome, Trigger
 from platform_api.wire import RunState as RunStateName
 
 
@@ -506,14 +506,27 @@ def fail(state: ActiveState, failure: Failure) -> Moved[Failed]:
 
 
 def created_events(
-    use_case_id: str, use_case_version: int, use_case_name: str, by: Actor, attempt: int
+    use_case_id: str,
+    use_case_version: int,
+    use_case_name: str,
+    by: Actor,
+    attempt: int,
+    trigger: Trigger = "person",
 ) -> tuple[PendingEvent, ...]:
+    summary = (
+        f"{by.display} started a run of {use_case_name}."
+        if trigger == "person"
+        else f"{by.display}'s schedule started a check of {use_case_name}."
+    )
     created = PendingEvent(
         by,
         "run_created",
-        f"{by.display} started a run of {use_case_name}.",
+        summary,
         RunCreatedData(
-            use_case_id=use_case_id, use_case_version=use_case_version, started_by=UserId(by.id)
+            use_case_id=use_case_id,
+            use_case_version=use_case_version,
+            started_by=UserId(by.id),
+            trigger=trigger,
         ),
     )
     return (created, _leg_dispatched(Leg.WORK, attempt))

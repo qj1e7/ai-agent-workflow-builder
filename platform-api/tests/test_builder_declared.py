@@ -14,6 +14,7 @@ USE_CASE = {
 }
 KEY = {"Idempotency-Key": "k"}
 REPEATED = FakeBuilder(started=RunStarted(RunId("run_1"), created=False))
+SCHEDULE = {"day": "monday", "at": "09:00"}
 SOFTWARE = {"name": "LangGraph", "repo": "langchain-ai/langgraph", "our_version": "1.2.14"}
 
 CASES = [
@@ -88,6 +89,23 @@ CASES = [
     pytest.param(
         "DELETE", "/api/v1/watchlist/software/sw_x", ALICE, None, None, 404, id="remove-404"
     ),
+    pytest.param("PUT", "/api/v1/watchlist/schedule", {}, SCHEDULE, None, 401, id="schedule-401"),
+    pytest.param("PUT", "/api/v1/watchlist/schedule", BOB, SCHEDULE, None, 403, id="schedule-403"),
+    pytest.param(
+        "PUT", "/api/v1/watchlist/schedule", ALICE, SCHEDULE, None, 404, id="schedule-404"
+    ),
+    pytest.param(
+        "PUT",
+        "/api/v1/watchlist/schedule",
+        ALICE,
+        {**SCHEDULE, "at": "09:03"},
+        None,
+        422,
+        id="schedule-422",
+    ),
+    pytest.param("DELETE", "/api/v1/watchlist/schedule", {}, None, None, 401, id="off-401"),
+    pytest.param("DELETE", "/api/v1/watchlist/schedule", BOB, None, None, 403, id="off-403"),
+    pytest.param("DELETE", "/api/v1/watchlist/schedule", ALICE, None, None, 404, id="off-404"),
 ]
 
 

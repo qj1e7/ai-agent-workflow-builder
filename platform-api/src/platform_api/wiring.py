@@ -11,6 +11,7 @@ from platform_api.orchestration.agents import HttpAgentRuntime
 from platform_api.orchestration.dispatch import N8nWebhooks, TeamsStub
 from platform_api.orchestration.model_settings import KeyBox, ModelSettings
 from platform_api.orchestration.runs import Leg
+from platform_api.orchestration.schedule_store import ScheduleBook, ScheduleTicker
 from platform_api.orchestration.service import Orchestrator
 from platform_api.orchestration.watch_store import WatchFacts
 from platform_api.orchestration.workflows import load_all
@@ -27,6 +28,7 @@ class Services:
     orchestrator: Orchestrator
     builder: Builder
     watchlist: Watchlist
+    schedule_ticker: ScheduleTicker
     teams_stub: TeamsStub
     mock_jira: MockJiraConnector
     model_settings: ModelSettings
@@ -40,6 +42,7 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.orchestrator = services.orchestrator
     app.state.builder = services.builder
     app.state.watchlist = services.watchlist
+    app.state.schedule_ticker = services.schedule_ticker
     app.state.teams_stub = services.teams_stub
     app.state.mock_jira = services.mock_jira
     app.state.model_settings = services.model_settings
@@ -81,14 +84,17 @@ async def build(settings: Settings) -> Services:
         mint,
         models=model_settings,
     )
-    watchlist = Watchlist(db, WatchFacts(db, jira))
+    schedules = ScheduleBook(db)
+    watchlist = Watchlist(db, WatchFacts(db, jira), schedules)
+    builder = Builder(db, orchestrator, watchlist, settings.public_base_url)
     return Services(
         settings=settings,
         db=db,
         activity_log=activity,
         orchestrator=orchestrator,
-        builder=Builder(db, orchestrator, watchlist, settings.public_base_url),
+        builder=builder,
         watchlist=watchlist,
+        schedule_ticker=ScheduleTicker(db, schedules, builder, orchestrator),
         teams_stub=teams,
         mock_jira=jira,
         model_settings=model_settings,

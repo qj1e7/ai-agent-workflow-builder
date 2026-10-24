@@ -7,6 +7,7 @@ from pydantic import Field
 from platform_api.orchestration.approvals import ApprovalPolicy
 from platform_api.orchestration.write_actions import Binding
 from platform_api.shared import Principal, RunId, SoftwareId, UseCaseId, UserId
+from platform_api.wire import Trigger
 
 
 @dataclass(frozen=True)
@@ -56,6 +57,7 @@ class RunSpec:
     task: Task
     bindings: Mapping[str, Binding]
     approval_policy: ApprovalPolicy
+    trigger: Trigger = "person"
 
 
 @dataclass(frozen=True)

@@ -60,6 +60,7 @@ type FailureReason = Literal[
     "UnboundIntent",
     "OutOfOrderStep",
 ]
+type Trigger = Literal["person", "schedule"]
 type ApprovalStepStatus = Literal["waiting", "open", "approved", "declined"]
 
 

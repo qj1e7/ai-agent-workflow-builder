@@ -79,7 +79,7 @@ from platform_api.orchestration.http import (
 )
 from platform_api.orchestration.write_actions import WriteAction, digest
 from platform_api.shared import ApprovalId, ProposalId, RunId, UserId
-from platform_api.wire import ApprovalStepView, WireModel
+from platform_api.wire import ApprovalStepView, Trigger, WireModel
 
 ALICE = UserId("alice")
 BOB = UserId("bob")
@@ -521,6 +521,7 @@ class RunBaseFields(TypedDict):
     use_case_name: str
     use_case_version: int
     started_by: UserId
+    trigger: Trigger
     started_at: datetime
     updated_at: datetime
     last_seq: int
@@ -534,6 +535,7 @@ def _base(story: Story, tl: Timeline, seq: int) -> RunBaseFields:
         use_case_name=USE_CASE_NAME,
         use_case_version=1,
         started_by=ALICE,
+        trigger="person",
         started_at=story.t0,
         updated_at=tl.events[seq - 1].ts,
         last_seq=seq,

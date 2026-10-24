@@ -21,6 +21,7 @@ from platform_api.orchestration import (
     PendingTicket,
     RunSpec,
     RunStarted,
+    ScheduleBook,
     SoftwareFacts,
     SoftwareSource,
     Standing,
@@ -81,7 +82,7 @@ def facts() -> FakeFacts:
 
 @pytest.fixture
 def watchlist(db: Database, facts: FakeFacts) -> Watchlist:
-    return Watchlist(db, facts)
+    return Watchlist(db, facts, ScheduleBook(db))
 
 
 @pytest.fixture
@@ -119,12 +120,14 @@ async def test_the_first_add_makes_the_watchlist_use_case_with_the_software_in_v
 ):
     view = await added(watchlist, LANGGRAPH, by=CAROL)
     assert view.use_case_id.startswith("uc_")
-    assert (view.version, view.ticket_project, view.last_check, view.schedule) == (
-        1,
-        "MOCK",
-        None,
-        None,
+    assert (view.version, view.ticket_project, view.last_check) == (1, "MOCK", None)
+    assert view.schedule is not None
+    assert (view.schedule.day, view.schedule.at, view.schedule.time_zone) == (
+        "monday",
+        "09:00",
+        "Asia/Singapore",
     )
+    assert (view.schedule.owner, view.schedule.owner_name) == ("carol", "Carol")
     [row] = view.software
     assert row.id.startswith("sw_") and len(row.id) == 29
     assert (row.name, row.source.ref, row.source.kind) == (

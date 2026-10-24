@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 from pydantic import Field, StringConstraints
 
 from platform_api.builder.templates import TAG_PATTERN
-from platform_api.orchestration import Status
+from platform_api.orchestration import AT_PATTERN, Day, Status
 from platform_api.shared import ApprovalId, RunId, SoftwareId, UserId
 from platform_api.wire import RepoName, WireModel
 from platform_api.wire import RunState as RunStateName
@@ -132,18 +132,22 @@ class LastCheckView(WireModel):
     started_at: datetime
 
 
-type Day = Literal[
-    "every_day", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"
-]
+type ClockTime = Annotated[str, Field(pattern=AT_PATTERN, examples=["09:00"])]
+
+
+class ScheduleIn(WireModel):
+    day: Day
+    at: ClockTime = Field(description="Time of day in Singapore, HH:MM on a 5-minute step.")
 
 
 class ScheduleView(WireModel):
     day: Day
-    at: str
+    at: ClockTime
     time_zone: str
-    owner: UserId
+    owner: UserId = Field(description="The schedule owner. Only another Approver can approve.")
+    owner_name: str
     saved_at: datetime
-    next_at: datetime
+    next_at: datetime = Field(description="The next time a check starts.")
 
 
 class WatchlistView(WireModel):
@@ -155,9 +159,7 @@ class WatchlistView(WireModel):
         "ticket open, not checked; then up to date. Rows with one status sort by name."
     )
     last_check: LastCheckView | None
-    schedule: ScheduleView | None = Field(
-        default=None, description="Always null until schedules arrive in a later change."
-    )
+    schedule: ScheduleView | None = Field(description="Null when the schedule is turned off.")
 
 
 class WatchlistOut(WireModel):

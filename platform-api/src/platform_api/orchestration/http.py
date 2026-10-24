@@ -27,6 +27,7 @@ from platform_api.orchestration.runs import (
     Working,
 )
 from platform_api.orchestration.runs import StepName as DomainStep
+from platform_api.orchestration.schedule_store import ScheduleTicker
 from platform_api.orchestration.service import (
     Decided,
     DecisionRace,
@@ -63,6 +64,7 @@ from platform_api.wire import (
     RunOutcome,
     StepName,
     StepOutcome,
+    Trigger,
     WireModel,
     error_response,
 )
@@ -100,6 +102,7 @@ class _RunBase(WireModel):
     use_case_name: str
     use_case_version: int
     started_by: UserId
+    trigger: Trigger
     started_at: datetime
     updated_at: datetime
     last_seq: int
@@ -222,6 +225,10 @@ class RetryLater(WireModel):
     detail: str
 
 
+class TickOut(WireModel):
+    started: list[RunId]
+
+
 class WorkflowFailureIn(WireModel):
     execution_id: str
     workflow: str
@@ -268,6 +275,11 @@ StepKey = Annotated[str, Header(alias="X-Step-Key")]
 def current_orchestrator(request: Request) -> Orchestrator:
     orchestrator: Orchestrator = request.app.state.orchestrator
     return orchestrator
+
+
+def current_ticker(request: Request) -> ScheduleTicker:
+    ticker: ScheduleTicker = request.app.state.schedule_ticker
+    return ticker
 
 
 def current_teams_stub(request: Request) -> TeamsStub:
@@ -328,6 +340,7 @@ class RunBaseFields(TypedDict):
     use_case_name: str
     use_case_version: int
     started_by: UserId
+    trigger: Trigger
     started_at: datetime
     updated_at: datetime
     last_seq: int
@@ -342,6 +355,7 @@ def run_view(detail: RunDetail) -> RunView:
         use_case_name=record.spec.use_case_name,
         use_case_version=record.spec.use_case_version,
         started_by=record.started_by,
+        trigger=record.spec.trigger,
         started_at=record.started_at,
         updated_at=record.updated_at,
         last_seq=detail.last_seq,
@@ -555,6 +569,22 @@ async def run_step(
     except RetryLaterError as error:
         return _json(503, RetryLater(detail=str(error)))
     return StepResponseOut(proceed=reply.proceed, outcome=reply.outcome, detail=reply.detail)
+
+
+@router.post(
+    "/internal/v1/schedules/tick",
+    tags=["internal"],
+    description=(
+        "Asked every 5 minutes by the schedule_tick workflow. Starts one check for each "
+        "schedule that is due and answers the runs it started."
+    ),
+    responses={401: error_response("Bad step key")},
+)
+async def tick_schedules(
+    step_key: StepKey, request: Request, ticker: Annotated[ScheduleTicker, Depends(current_ticker)]
+) -> TickOut:
+    check_step_key(request, step_key)
+    return TickOut(started=await ticker.tick())
 
 
 @router.post(

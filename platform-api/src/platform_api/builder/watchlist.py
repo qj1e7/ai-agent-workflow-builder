@@ -13,6 +13,8 @@ from typing import Any
 from platform_api.builder.models import (
     AddSoftware,
     LastCheckView,
+    ScheduleIn,
+    ScheduleView,
     SourceView,
     VersionSourceView,
     WatchedSoftwareView,
@@ -34,6 +36,9 @@ from platform_api.orchestration import (
     FromTicketDone,
     Given,
     LastCheck,
+    SavedSchedule,
+    Schedule,
+    ScheduleBook,
     SoftwareSource,
     Standing,
     WatchedSoftware,
@@ -135,7 +140,28 @@ def last_check_view(last: LastCheck | None) -> LastCheckView | None:
     return LastCheckView(run_id=last.run_id, state=last.state, started_at=last.started_at)
 
 
-def view(record: WatchlistRecord, standing: WatchlistStanding) -> WatchlistView:
+@dataclass(frozen=True)
+class NoWatchlist:
+    pass
+
+
+def schedule_view(saved: SavedSchedule | None, now: datetime) -> ScheduleView | None:
+    if saved is None:
+        return None
+    return ScheduleView(
+        day=saved.schedule.day,
+        at=saved.schedule.at,
+        time_zone=saved.schedule.time_zone,
+        owner=saved.owner,
+        owner_name=saved.owner_name,
+        saved_at=saved.saved_at,
+        next_at=saved.slots(now).next,
+    )
+
+
+def view(
+    record: WatchlistRecord, standing: WatchlistStanding, schedule: ScheduleView | None = None
+) -> WatchlistView:
     return WatchlistView(
         use_case_id=record.use_case_id,
         version=record.version,
@@ -144,7 +170,7 @@ def view(record: WatchlistRecord, standing: WatchlistStanding) -> WatchlistView:
             [software_view(listed, standing.software[listed.id]) for listed in record.software]
         ),
         last_check=last_check_view(standing.last_check),
-        schedule=None,
+        schedule=schedule,
     )
 
 
@@ -246,9 +272,10 @@ async def _write_list(
 
 
 class Watchlist:
-    def __init__(self, db: Database, facts: WatchlistFacts) -> None:
+    def __init__(self, db: Database, facts: WatchlistFacts, schedules: ScheduleBook) -> None:
         self._db = db
         self._facts = facts
+        self._schedules = schedules
 
     async def view(self) -> WatchlistView | None:
         async with self._db.connection("builder") as conn:
@@ -276,10 +303,32 @@ class Watchlist:
                 principal.user_id,
                 uow.now,
             )
+            created = record is None
             if record is None:
                 record = await self._create(uow, principal, listed)
             else:
                 record = await self._next_version(uow, record, (*record.software, listed))
+        if created:
+            await self._schedules.save_default(record.use_case_id, principal)
+        return await self._view_of(record)
+
+    async def save_schedule(
+        self, principal: Principal, body: ScheduleIn
+    ) -> WatchlistView | NoWatchlist:
+        """Saving makes the caller the schedule owner, and the owner cannot approve its checks."""
+        async with self._db.connection("builder") as conn:
+            record = await _current(conn, lock=False)
+        if record is None:
+            return NoWatchlist()
+        await self._schedules.save(record.use_case_id, Schedule(body.day, body.at), principal)
+        return await self._view_of(record)
+
+    async def turn_off_schedule(self) -> WatchlistView | NoWatchlist:
+        async with self._db.connection("builder") as conn:
+            record = await _current(conn, lock=False)
+        if record is None:
+            return NoWatchlist()
+        await self._schedules.delete(record.use_case_id)
         return await self._view_of(record)
 
     async def remove(self, software_id: SoftwareId) -> WatchlistView | NoSuchSoftware:
@@ -317,7 +366,9 @@ class Watchlist:
         return task(record, await self._facts.standings(use_case_id, given_versions(record)))
 
     async def _view_of(self, record: WatchlistRecord) -> WatchlistView:
-        return view(record, await self._facts.standings(record.use_case_id, given_versions(record)))
+        standing = await self._facts.standings(record.use_case_id, given_versions(record))
+        saved = await self._schedules.get(record.use_case_id)
+        return view(record, standing, schedule_view(saved, self._db.clock()))
 
     async def _create(
         self, uow: UnitOfWork, principal: Principal, first: ListedSoftware
