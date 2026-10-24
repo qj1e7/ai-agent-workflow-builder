@@ -379,8 +379,13 @@ HELD_SPEC = replace(
         (WATCHLIST_SPEC, [upgrade_ticket(None, "LangGraph", "1.2.14", "1.2.16")], "without naming"),
         (WATCHLIST_SPEC, [LANGGRAPH_TICKET, LANGGRAPH_TICKET], "two tickets for LangGraph"),
         (HELD_SPEC, [LANGGRAPH_TICKET], "LangGraph, which has one already"),
+        (
+            WATCHLIST_SPEC,
+            [upgrade_ticket(LANGGRAPH, "LangGraph", "1.2.14", "1.2.17")],
+            'differently from "Upgrade LangGraph from 1.2.14 to 1.2.16"',
+        ),
     ],
-    ids=["unknown", "unnamed", "twice", "held"],
+    ids=["unknown", "unnamed", "twice", "held", "mistitled"],
 )
 async def test_a_ticket_for_unknown_or_held_software_fails_the_run_for_good(
     h: Harness, spec: RunSpec, proposed: list[ProposedIntentIn], words: str

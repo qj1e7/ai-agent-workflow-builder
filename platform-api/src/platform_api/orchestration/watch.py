@@ -185,12 +185,14 @@ def review(
     The agents' words are untrusted input, like their proposals (ADR 0008), so nothing is kept
     until it fits the list: exactly one finding per listed software, every version shaped like
     the tag pattern, a starting point only where the platform sent no version, and a ticket only
-    for listed software that is not already held.
+    for listed software that is behind, not held, and titled with the versions the platform
+    knows, so the version our version moves to on Done is the one the Approver saw.
     """
     listed = {software.id: software for software in task.software}
-    tag = re.compile(task.tag_pattern)
+    # ASCII and fullmatch: "$" alone would allow a trailing newline, and "\d" other scripts.
+    tag = re.compile(task.tag_pattern, re.ASCII)
     learned: list[Learned] = []
-    newest: dict[SoftwareId, str] = {}
+    read: dict[SoftwareId, Finding] = {}
     for finding in findings:
         software_id = SoftwareId(finding.software_id)
         software = listed.get(software_id)
@@ -198,7 +200,7 @@ def review(
             return Unusable(f"The agents reported on {software_id}, which is not on the list")
         if any(entry.software_id == software_id for entry in learned):
             return Unusable(f"The agents reported twice on {software.name}")
-        if any(tag.match(version) is None for version in finding.new_versions):
+        if any(tag.fullmatch(version) is None for version in finding.new_versions):
             return Unusable(f"The agents named a version for {software.name} that is not a tag")
         if finding.state == "cant_check":
             learned.append(CouldNotRead(software_id, finding.detail))
@@ -207,7 +209,7 @@ def review(
             return Unusable(
                 f"The agents gave no newest version for {software.name} ({finding.state})"
             )
-        if tag.match(finding.newest) is None:
+        if tag.fullmatch(finding.newest) is None:
             return Unusable(f"The agents named a version for {software.name} that is not a tag")
         starting_point = finding.state == "starting_point"
         if starting_point != (software.our_version is None):
@@ -216,7 +218,7 @@ def review(
                 if starting_point
                 else f"The agents did not take a starting point for {software.name}"
             )
-        newest[software_id] = finding.newest
+        read[software_id] = finding
         learned.append(ReadNewest(software_id, finding.newest, starting_point))
     for software in task.software:
         if not any(entry.software_id == software.id for entry in learned):
@@ -238,10 +240,25 @@ def review(
             return Unusable(
                 f"The agents proposed a ticket for {software.name}, which has one already"
             )
-        if software_id not in newest:
+        finding = read.get(software_id)
+        if finding is None or finding.newest is None:
             return Unusable(
                 f"The agents proposed a ticket for {software.name} without reading its "
                 "newest version"
             )
-        tickets.append(TicketToPropose(index, software_id, newest[software_id]))
+        if finding.state != "behind":
+            return Unusable(
+                f"The agents proposed a ticket for {software.name} but found it {finding.state}"
+            )
+        if software.our_version is None or not newer(finding.newest, software.our_version):
+            return Unusable(
+                f"The agents proposed a ticket for {software.name}, but {finding.newest} is not "
+                f"newer than our version {software.our_version}"
+            )
+        expected = f"Upgrade {software.name} from {software.our_version} to {finding.newest}"
+        if intent.fields.get("title") != expected:
+            return Unusable(
+                f'The agents titled the ticket for {software.name} differently from "{expected}"'
+            )
+        tickets.append(TicketToPropose(index, software_id, finding.newest))
     return Reviewed(tuple(learned), tuple(tickets))

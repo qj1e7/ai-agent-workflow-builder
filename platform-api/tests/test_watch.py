@@ -124,11 +124,17 @@ def finding(
     )
 
 
-def ticket(subject: str | None, name: str = "LangGraph") -> ProposedIntentIn:
+def ticket(
+    subject: str | None,
+    name: str = "LangGraph",
+    ours: str = "1.2.14",
+    newest: str = "1.2.16",
+    title: str | None = None,
+) -> ProposedIntentIn:
     return ProposedIntentIn(
         kind="create_ticket",
-        fields={"title": f"Upgrade {name}", "body": "..."},
-        reason=f"{name} is behind",
+        fields={"title": title or f"Upgrade {name} from {ours} to {newest}", "body": "..."},
+        reason=f"{name} {newest} is out, and we run {ours}",
         subject=subject,
     )
 
@@ -177,6 +183,7 @@ HELD = replace(
 )
 
 HELD_FINDINGS = [finding(LANGGRAPH, "behind", "1.2.16"), finding(REDIS, "behind", "8.2.1")]
+OLDER = [finding(LANGGRAPH, "behind", "1.2.13"), *FINDINGS[1:]]
 
 
 @pytest.mark.parametrize(
@@ -189,6 +196,14 @@ HELD_FINDINGS = [finding(LANGGRAPH, "behind", "1.2.16"), finding(REDIS, "behind"
         (TASK, FINDINGS, [ticket("sw_ghost", "Ghost")], "sw_ghost, which is not on the list"),
         (TASK, FINDINGS, [ticket(LANGGRAPH), ticket(LANGGRAPH)], "two tickets for LangGraph"),
         (TASK, FINDINGS, [ticket(FASTAPI, "FastAPI")], "FastAPI without reading its newest"),
+        (TASK, FINDINGS, [ticket(POSTGRES, "PostgreSQL", "17.2.0", "17.2.0")], "found it up_to"),
+        (TASK, FINDINGS, [ticket(REDIS, "Redis", "8.2.0", "8.2.1")], "found it starting_point"),
+        (TASK, OLDER, [ticket(LANGGRAPH, newest="1.2.13")], "1.2.13 is not newer than our"),
+        (TASK, FINDINGS, [ticket(LANGGRAPH, newest="1.2.17")], 'differently from "Upgrade'),
+        (TASK, FINDINGS, [ticket(LANGGRAPH, ours="1.2.15")], "titled the ticket for LangGraph"),
+        (TASK, FINDINGS, [ticket(LANGGRAPH, title="Upgrade LangGraph")], "titled the ticket"),
+        (TASK, [finding(LANGGRAPH, "behind", "1.2.16\n"), *FINDINGS[1:]], [], "not a tag"),
+        (TASK, [finding(LANGGRAPH, "behind", "١.2.16"), *FINDINGS[1:]], [], "not a tag"),
         (TASK, FINDINGS[1:], [ticket(LANGGRAPH)], "did not report on LangGraph"),
         (TASK, [finding(LANGGRAPH, "starting_point", "1.2.16"), *FINDINGS[1:]], [], "as our"),
         (TASK, [FINDINGS[0], finding(REDIS, "behind", "8.2.1"), *FINDINGS[2:]], [], "starting"),
