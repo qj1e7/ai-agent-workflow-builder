@@ -8,6 +8,7 @@ from agent_runtime.contract import (
     AgentJoinedData,
     AgentMessageData,
     AgentRef,
+    ReleaseCheckInputs,
     TaskError,
     TaskFailed,
     TaskFinished,
@@ -50,7 +51,9 @@ class RoomLead(Protocol):
 
 class FixedRoomLead:
     def staff(self, request: TaskRequest) -> Staffing:
-        repo, last = request.inputs.repo, request.carry_forward.last_known_tag
+        inputs = request.inputs
+        assert isinstance(inputs, ReleaseCheckInputs), "run_task staffs only release checks"
+        repo, last = inputs.repo, request.carry_forward.last_known_tag
         if last is None:
             return Staffing(
                 reason="The task asks about releases of a GitHub repo.",
@@ -79,6 +82,12 @@ class FixedRoomLead:
 def run_task(
     request: TaskRequest, lead: RoomLead, checker: ReleaseChecker, events: EventLog
 ) -> TaskResult:
+    inputs = request.inputs
+    if not isinstance(inputs, ReleaseCheckInputs):
+        error = TaskError(
+            type="InvalidTask", message="This runtime cannot check a watchlist yet", retryable=False
+        )
+        return TaskFailed(task_id=request.task_id, error=error, events=events.events)
     staffing = lead.staff(request)
     events.add(
         Draft(
@@ -95,7 +104,7 @@ def run_task(
         )
     )
     try:
-        outcome = checker.check(request.inputs, request.carry_forward.last_known_tag, events.add)
+        outcome = checker.check(inputs, request.carry_forward.last_known_tag, events.add)
     except Exception:
         log.exception("release checker crashed on task %s", request.task_id)
         events.add(

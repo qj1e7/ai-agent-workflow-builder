@@ -9,8 +9,32 @@ from platform_api.wire import RepoName, WireModel
 
 
 class ReleaseCheckInputs(WireModel):
+    kind: Literal["release_check"] = "release_check"
     repo: RepoName
     tag_pattern: str
+
+
+class GithubSource(WireModel):
+    kind: Literal["github"] = "github"
+    ref: RepoName
+
+
+class SoftwareToCheck(WireModel):
+    id: str
+    name: str
+    source: GithubSource
+    our_version: str | None
+    open_ticket: str | None = None
+    awaiting_approval: bool = False
+
+
+class WatchlistInputs(WireModel):
+    kind: Literal["watchlist"] = "watchlist"
+    tag_pattern: str
+    software: list[SoftwareToCheck]
+
+
+type TaskInputs = Annotated[ReleaseCheckInputs | WatchlistInputs, Field(discriminator="kind")]
 
 
 class CarryForward(WireModel):
@@ -42,7 +66,7 @@ class TaskRequest(WireModel):
     task_id: str
     run_id: str
     instruction: str
-    inputs: ReleaseCheckInputs
+    inputs: TaskInputs
     carry_forward: CarryForward
     callback: Callback
     model: ModelAccess | None = None
@@ -52,6 +76,20 @@ class ProposedIntentIn(WireModel):
     kind: str
     fields: dict[str, Any]
     reason: str
+    subject: str | None = None
+
+
+type FindingState = Literal[
+    "behind", "up_to_date", "starting_point", "already_raised", "cant_check"
+]
+
+
+class Finding(WireModel):
+    software_id: str
+    state: FindingState
+    newest: str | None
+    new_versions: list[str]
+    detail: str
 
 
 class TaskOutput(WireModel):
@@ -59,6 +97,7 @@ class TaskOutput(WireModel):
     new_tags: list[str]
     proposed: list[ProposedIntentIn]
     carry_forward: CarryForward
+    findings: list[Finding] = Field(default_factory=list[Finding])
 
 
 class TaskError(WireModel):
