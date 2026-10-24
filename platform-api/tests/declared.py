@@ -5,6 +5,8 @@ import httpx
 from fastapi import FastAPI
 
 from platform_api.app import create_app
+from platform_api.builder.watchlist import NoSuchSoftware
+from platform_api.shared import SoftwareId
 from tests.support import LOCAL_ENV
 
 ALICE = {"X-Dev-User": "alice"}
@@ -44,6 +46,17 @@ class FakeBuilder:
         return self._started
 
 
+class FakeWatchlist:
+    async def view(self) -> None:
+        return None
+
+    async def add(self, principal: object, body: object) -> object:
+        raise AssertionError("not asked in these tests")
+
+    async def remove(self, software_id: str) -> object:
+        return NoSuchSoftware(SoftwareId(software_id))
+
+
 class FakeMockJira:
     async def tickets(self) -> list[Any]:
         return []
@@ -67,6 +80,7 @@ def app_with(orchestrator: object = None, builder: object = None, log: object = 
     app.state.builder = builder or FakeBuilder()
     app.state.activity_log = log or FakeLog()
     app.state.mock_jira = FakeMockJira()
+    app.state.watchlist = FakeWatchlist()
     return app
 
 

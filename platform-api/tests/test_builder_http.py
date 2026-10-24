@@ -1,13 +1,13 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 
 import httpx
 import pytest
 
 from platform_api.app import create_app
-from platform_api.builder import Builder
+from platform_api.builder import Builder, Watchlist
 from platform_api.db import Database
-from platform_api.orchestration import RunSpec, RunStarted
-from platform_api.shared import Principal, RunId, UseCaseId
+from platform_api.orchestration import Given, RunSpec, RunStarted, WatchlistStanding
+from platform_api.shared import Principal, RunId, SoftwareId, UseCaseId
 from tests.support import LOCAL_ENV
 
 pytestmark = pytest.mark.anyio
@@ -33,10 +33,19 @@ class SecondCallRepeats:
         return None
 
 
+class NoFacts:
+    async def standings(
+        self, use_case_id: UseCaseId, given: Mapping[SoftwareId, Given | None]
+    ) -> WatchlistStanding:
+        raise AssertionError("a release check never asks for watchlist facts")
+
+
 @pytest.fixture
 async def client(db: Database) -> AsyncIterator[httpx.AsyncClient]:
     app = create_app(LOCAL_ENV)
-    app.state.builder = Builder(db, SecondCallRepeats(), "http://localhost:8000")
+    app.state.builder = Builder(
+        db, SecondCallRepeats(), Watchlist(db, NoFacts()), "http://localhost:8000"
+    )
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
@@ -50,13 +59,27 @@ async def save(client: httpx.AsyncClient) -> str:
 
 async def test_templates_are_listed_with_the_last_seen_tag_param(client: httpx.AsyncClient):
     r = await client.get("/api/v1/templates", headers=ALICE)
-    [template] = r.json()["templates"]
-    assert [p["name"] for p in template["params"]] == [
+    release_check, watchlist = r.json()["templates"]
+    assert [p["name"] for p in release_check["params"]] == [
         "repo",
         "tag_pattern",
         "ticket_project",
         "last_seen_tag",
     ]
+    assert watchlist["key"] == "software_watchlist"
+    assert [p["name"] for p in watchlist["params"]] == ["ticket_project"]
+
+
+async def test_the_watchlist_template_is_listed_but_not_built_by_hand(client: httpx.AsyncClient):
+    body = {**GOOD, "template": "software_watchlist", "params": {"ticket_project": "MOCK"}}
+    r = await client.post("/api/v1/use-cases", json=body, headers=ALICE)
+    assert r.status_code == 422
+    [problem] = r.json()["detail"]
+    assert (problem["loc"], problem["msg"]) == (
+        ["body", "template"],
+        "Add software on the Software page",
+    )
+    assert (await client.get("/api/v1/use-cases", headers=ALICE)).json()["use_cases"] == []
 
 
 async def test_a_saved_use_case_can_be_read_and_listed(client: httpx.AsyncClient):

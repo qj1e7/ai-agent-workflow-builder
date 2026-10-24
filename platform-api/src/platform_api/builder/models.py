@@ -1,8 +1,13 @@
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from platform_api.shared import RunId, UserId
-from platform_api.wire import WireModel
+from pydantic import Field, StringConstraints
+
+from platform_api.builder.templates import TAG_PATTERN
+from platform_api.orchestration import Status
+from platform_api.shared import ApprovalId, RunId, SoftwareId, UserId
+from platform_api.wire import RepoName, WireModel
+from platform_api.wire import RunState as RunStateName
 
 type BlockKind = Literal["agent", "approval", "write_action"]
 
@@ -72,3 +77,88 @@ class RunStarted(WireModel):
     run_id: RunId
     state: Literal["pending"] = "pending"
     events_url: str
+
+
+type SoftwareName = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)
+]
+type Version = Annotated[str, Field(pattern=TAG_PATTERN)]
+
+
+class AddSoftware(WireModel):
+    name: SoftwareName
+    repo: RepoName
+    our_version: Version | None = Field(
+        default=None,
+        description="The version the team runs now, such as 1.2.14. Leave it out to take the "
+        "newest release at the first check as ours.",
+    )
+
+
+class SourceView(WireModel):
+    kind: Literal["github"]
+    ref: str
+    url: str
+
+
+type VersionSourceKind = Literal["given", "first_check", "ticket_done"]
+
+
+class VersionSourceView(WireModel):
+    kind: VersionSourceKind
+    at: datetime
+    ticket: str | None
+
+
+class WatchedSoftwareView(WireModel):
+    id: SoftwareId
+    name: str
+    source: SourceView
+    our_version: str | None
+    our_version_source: VersionSourceView | None
+    newest_version: str | None
+    checked_at: datetime | None
+    status: Status
+    problem: str | None
+    open_ticket: str | None
+    approval_id: ApprovalId | None
+    added_by: UserId
+    added_at: datetime
+
+
+class LastCheckView(WireModel):
+    run_id: RunId
+    state: RunStateName
+    started_at: datetime
+
+
+type Day = Literal[
+    "every_day", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"
+]
+
+
+class ScheduleView(WireModel):
+    day: Day
+    at: str
+    time_zone: str
+    owner: UserId
+    saved_at: datetime
+    next_at: datetime
+
+
+class WatchlistView(WireModel):
+    use_case_id: str
+    version: int
+    ticket_project: str
+    software: list[WatchedSoftwareView] = Field(
+        description="Rows that need a person first: cannot check, behind, awaiting approval, "
+        "ticket open, not checked; then up to date. Rows with one status sort by name."
+    )
+    last_check: LastCheckView | None
+    schedule: ScheduleView | None = Field(
+        default=None, description="Always null until schedules arrive in a later change."
+    )
+
+
+class WatchlistOut(WireModel):
+    watchlist: WatchlistView | None

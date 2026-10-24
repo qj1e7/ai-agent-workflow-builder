@@ -4,7 +4,7 @@ from datetime import datetime
 
 from fastapi import FastAPI
 
-from platform_api.builder import Builder
+from platform_api.builder import Builder, Watchlist
 from platform_api.db import Database
 from platform_api.monitoring import ActivityLog, callback_for
 from platform_api.orchestration.agents import HttpAgentRuntime
@@ -12,6 +12,7 @@ from platform_api.orchestration.dispatch import N8nWebhooks, TeamsStub
 from platform_api.orchestration.model_settings import KeyBox, ModelSettings
 from platform_api.orchestration.runs import Leg
 from platform_api.orchestration.service import Orchestrator
+from platform_api.orchestration.watch_store import WatchFacts
 from platform_api.orchestration.workflows import load_all
 from platform_api.orchestration.write_actions import MockJiraConnector, WriteGateway
 from platform_api.settings import Settings
@@ -25,6 +26,7 @@ class Services:
     activity_log: ActivityLog
     orchestrator: Orchestrator
     builder: Builder
+    watchlist: Watchlist
     teams_stub: TeamsStub
     mock_jira: MockJiraConnector
     model_settings: ModelSettings
@@ -37,6 +39,7 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.activity_log = services.activity_log
     app.state.orchestrator = services.orchestrator
     app.state.builder = services.builder
+    app.state.watchlist = services.watchlist
     app.state.teams_stub = services.teams_stub
     app.state.mock_jira = services.mock_jira
     app.state.model_settings = services.model_settings
@@ -78,12 +81,14 @@ async def build(settings: Settings) -> Services:
         mint,
         models=model_settings,
     )
+    watchlist = Watchlist(db, WatchFacts(db, jira))
     return Services(
         settings=settings,
         db=db,
         activity_log=activity,
         orchestrator=orchestrator,
-        builder=Builder(db, orchestrator, settings.public_base_url),
+        builder=Builder(db, orchestrator, watchlist, settings.public_base_url),
+        watchlist=watchlist,
         teams_stub=teams,
         mock_jira=jira,
         model_settings=model_settings,

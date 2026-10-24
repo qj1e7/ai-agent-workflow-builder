@@ -104,3 +104,12 @@ def test_the_ticket_project_comes_from_the_params_into_the_binding():
 def test_suggest_needs_two_matching_words(text: str, template: str | None, terms: list[str]):
     found, matched = suggest_template(text)
     assert (found.key if found else None, matched) == (template, terms)
+
+
+def test_the_watchlist_template_is_listed_but_never_suggested():
+    watchlist = TEMPLATES["software_watchlist"]
+    assert watchlist.offered is False
+    assert [p.name for p in watchlist.params] == ["ticket_project"]
+    assert [b.kind for b in watchlist.blocks] == ["agent", "approval", "write_action"]
+    found, _ = suggest_template("watch the software watchlist for releases and open a ticket")
+    assert found is not None and found.key == "release_check"
