@@ -4691,7 +4691,7 @@
     },
     "/api/v1/mock-jira/tickets/{key}/done": {
       "post": {
-        "description": "Marks a practice Jira ticket Done, as a person would in Jira. The watchlist then moves our version to the version the ticket named. Marking a Done ticket again changes nothing.",
+        "description": "Marks a practice Jira ticket Done, as a person would in Jira. The watchlist then moves our version to the version the ticket named, so only an Operator may do it. Marking a Done ticket again changes nothing.",
         "operationId": "mark_mock_jira_ticket_done_api_v1_mock_jira_tickets__key__done_post",
         "parameters": [
           {
@@ -4724,6 +4724,16 @@
               }
             },
             "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this"
           },
           "404": {
             "content": {

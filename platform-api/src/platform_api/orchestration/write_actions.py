@@ -153,13 +153,38 @@ def check(
     return _issue(proposal, request.id, status.approvers)
 
 
+def one_line(text: str, limit: int) -> str:
+    """text on one line and cut to limit characters, with an ellipsis when cut.
+
+    Every piece of model-written text that people read goes through here, so it cannot break
+    out of the sentence the platform wrote around it.
+    """
+    flat = " ".join(text.split())
+    if len(flat) > limit:
+        flat = flat[: limit - 1].rstrip() + "…"
+    return flat
+
+
+TITLE_LIMIT = 120
+TITLES_SHOWN = 5
+
+
+def shown_title(action: WriteAction) -> str:
+    """The ticket title as people read it. The stored field and the digest keep the agent's text."""
+    return one_line(str(action.fields.get("title", "")).replace('"', ""), TITLE_LIMIT)
+
+
+def _is_ticket(action: WriteAction) -> bool:
+    return action.connector == "jira" and action.operation == "create_ticket"
+
+
 def describe(action: WriteAction) -> ActionLine:
-    if action.connector == "jira" and action.operation == "create_ticket":
-        title = str(action.fields.get("title", ""))
+    if _is_ticket(action):
+        project = action.target.get("project", "?")
         return ActionLine(
             connector="jira",
             operation="create_ticket",
-            line=f"Create Jira ticket in {action.target.get('project', '?')}: {title}",
+            line=f"Create Jira ticket in {project}: {shown_title(action)}",
         )
     return ActionLine(
         connector=action.connector,
@@ -168,14 +193,13 @@ def describe(action: WriteAction) -> ActionLine:
     )
 
 
-def _is_ticket(action: WriteAction) -> bool:
-    return action.connector == "jira" and action.operation == "create_ticket"
+def _ticket_phrase(project: str, title: str) -> str:
+    return f'create a Jira ticket in {project} titled "{title}"'
 
 
 def intent(action: WriteAction) -> str:
     if _is_ticket(action):
-        project = action.target.get("project", "?")
-        return f'create a Jira ticket in {project} titled "{action.fields.get("title", "")}"'
+        return _ticket_phrase(str(action.target.get("project", "?")), shown_title(action))
     return f"{action.operation} on {action.connector}"
 
 
@@ -201,15 +225,15 @@ def intents(actions: Sequence[WriteAction]) -> tuple[str, ...]:
             slot[project] = len(phrases)
             phrases.append("")
             titles[project] = []
-        titles[project].append(str(action.fields.get("title", "")))
+        titles[project].append(shown_title(action))
     for project, group in titles.items():
         if len(group) == 1:
-            phrases[slot[project]] = f'create a Jira ticket in {project} titled "{group[0]}"'
-        else:
-            quoted = [f'"{title}"' for title in group]
-            phrases[slot[project]] = (
-                f"create {len(group)} Jira tickets in {project}: {listed(quoted)}"
-            )
+            phrases[slot[project]] = _ticket_phrase(project, group[0])
+            continue
+        quoted = [f'"{title}"' for title in group[:TITLES_SHOWN]]
+        more = len(group) - len(quoted)
+        shown = listed(quoted) if more == 0 else f"{', '.join(quoted)} and {more} more"
+        phrases[slot[project]] = f"create {len(group)} Jira tickets in {project}: {shown}"
     return tuple(phrases)
 
 

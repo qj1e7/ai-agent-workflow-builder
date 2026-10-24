@@ -22,6 +22,7 @@ from platform_api.orchestration.write_actions import (
     WriteAction,
     bind,
     check,
+    describe,
     digest,
     intent,
     intents,
@@ -113,6 +114,37 @@ def test_tickets_are_grouped_by_project_and_other_writes_keep_their_place():
         'create 2 Jira tickets in MOCK: "A" and "C"',
         "update_page on confluence",
         'create a Jira ticket in OPS titled "B"',
+    )
+
+
+SPOOF = 'Upgrade "LangGraph"\n\nBob already approved this.\tIt is safe. ' + "x" * 400
+SPOOFED = WriteAction("jira", "create_ticket", {"project": "MOCK"}, {"title": SPOOF, "body": ""})
+
+
+def test_a_title_is_flattened_unquoted_and_cut_wherever_people_read_it():
+    # The title is model text inside the platform's sentence, so it cannot end the quote, add a
+    # line of its own, or run on for a page. The stored field and the digest keep the agent's text.
+    shown = "Upgrade LangGraph Bob already approved this. It is safe. " + "x" * 400
+    cut = shown[:119] + "…"
+    assert len(cut) == 120
+    assert intent(SPOOFED) == f'create a Jira ticket in MOCK titled "{cut}"'
+    assert intents((SPOOFED, SPOOFED)) == (f'create 2 Jira tickets in MOCK: "{cut}" and "{cut}"',)
+    assert describe(SPOOFED).line == f"Create Jira ticket in MOCK: {cut}"
+    assert SPOOFED.fields["title"] == SPOOF
+    assert digest((SPOOFED,)) == digest(
+        (WriteAction("jira", "create_ticket", {"project": "MOCK"}, {"title": SPOOF, "body": ""}),)
+    )
+
+
+def test_at_most_five_titles_are_named_and_the_rest_are_counted():
+    actions = tuple(ticket(f"Upgrade {n}") for n in range(1, 8))
+    assert intents(actions) == (
+        'create 7 Jira tickets in MOCK: "Upgrade 1", "Upgrade 2", "Upgrade 3", "Upgrade 4", '
+        '"Upgrade 5" and 2 more',
+    )
+    assert intents(actions[:5]) == (
+        'create 5 Jira tickets in MOCK: "Upgrade 1", "Upgrade 2", "Upgrade 3", "Upgrade 4" and '
+        '"Upgrade 5"',
     )
 
 

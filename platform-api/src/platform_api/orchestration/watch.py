@@ -3,6 +3,7 @@
 Pure. The tables and the refresh against Jira are in watch_store.py.
 """
 
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -181,31 +182,45 @@ def review(
 ) -> Reviewed | Unusable:
     """Reads the agents' answer against the list the check was given.
 
-    The agents hold no write tools, so what they say about the list is checked here before any
-    of it is kept: every finding and every ticket must name a software on the list, once, and a
-    ticket must not be for software the platform said was held.
+    The agents' words are untrusted input, like their proposals (ADR 0008), so nothing is kept
+    until it fits the list: exactly one finding per listed software, every version shaped like
+    the tag pattern, a starting point only where the platform sent no version, and a ticket only
+    for listed software that is not already held.
     """
     listed = {software.id: software for software in task.software}
+    tag = re.compile(task.tag_pattern)
     learned: list[Learned] = []
     newest: dict[SoftwareId, str] = {}
     for finding in findings:
         software_id = SoftwareId(finding.software_id)
-        if software_id not in listed:
+        software = listed.get(software_id)
+        if software is None:
             return Unusable(f"The agents reported on {software_id}, which is not on the list")
         if any(entry.software_id == software_id for entry in learned):
-            return Unusable(f"The agents reported twice on {listed[software_id].name}")
+            return Unusable(f"The agents reported twice on {software.name}")
+        if any(tag.match(version) is None for version in finding.new_versions):
+            return Unusable(f"The agents named a version for {software.name} that is not a tag")
         if finding.state == "cant_check":
             learned.append(CouldNotRead(software_id, finding.detail))
-        elif finding.newest is None:
+            continue
+        if finding.newest is None:
             return Unusable(
-                f"The agents gave no newest version for {listed[software_id].name} "
-                f"({finding.state})"
+                f"The agents gave no newest version for {software.name} ({finding.state})"
             )
-        else:
-            newest[software_id] = finding.newest
-            learned.append(
-                ReadNewest(software_id, finding.newest, finding.state == "starting_point")
+        if tag.match(finding.newest) is None:
+            return Unusable(f"The agents named a version for {software.name} that is not a tag")
+        starting_point = finding.state == "starting_point"
+        if starting_point != (software.our_version is None):
+            return Unusable(
+                f"The agents took {finding.newest} as our version of {software.name}"
+                if starting_point
+                else f"The agents did not take a starting point for {software.name}"
             )
+        newest[software_id] = finding.newest
+        learned.append(ReadNewest(software_id, finding.newest, starting_point))
+    for software in task.software:
+        if not any(entry.software_id == software.id for entry in learned):
+            return Unusable(f"The agents did not report on {software.name}")
 
     tickets: list[TicketToPropose] = []
     for index, intent in enumerate(proposed):

@@ -620,13 +620,13 @@ async def list_mock_jira_tickets(principal: CurrentPrincipal, jira: MockJira) ->
     tags=["stubs"],
     description=(
         "Marks a practice Jira ticket Done, as a person would in Jira. The watchlist then "
-        "moves our version to the version the ticket named. Marking a Done ticket again "
-        "changes nothing."
+        "moves our version to the version the ticket named, so only an Operator may do it. "
+        "Marking a Done ticket again changes nothing."
     ),
-    responses={**SIGNED_IN, 404: error_response("No such ticket")},
+    responses={**OPERATORS_ONLY, 404: error_response("No such ticket")},
 )
 async def mark_mock_jira_ticket_done(
-    key: str, principal: CurrentPrincipal, jira: MockJira
+    key: str, principal: Operator, jira: MockJira
 ) -> MockJiraTicket:
     ticket = await jira.mark_done(key)
     if ticket is None:

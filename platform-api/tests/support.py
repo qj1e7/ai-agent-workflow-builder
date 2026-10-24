@@ -84,7 +84,7 @@ WATCHLIST_TASK = WatchlistTask(
         watched(LANGGRAPH, "LangGraph", "langchain-ai/langgraph", "1.2.14"),
         watched(REDIS, "Redis", "redis/redis", None),
         watched(FASTAPI, "FastAPI", "fastapi/fastapi", "0.115.0"),
-        watched(POSTGRES, "PostgreSQL", "postgres/postgres", "17.2"),
+        watched(POSTGRES, "PostgreSQL", "postgres/postgres", "17.2.0"),
     ),
 )
 

@@ -66,7 +66,7 @@ GIVEN = {
     LANGGRAPH: Given("1.2.14", NOW),
     REDIS: None,
     FASTAPI: Given("0.115.0", NOW),
-    POSTGRES: Given("17.2", NOW),
+    POSTGRES: Given("17.2.0", NOW),
 }
 SUMMARY = (
     "1 of 4 watched software has a new release: LangGraph 1.2.16. FastAPI could not be checked."
@@ -106,7 +106,7 @@ ONE_BEHIND = TaskOutput(
         finding(LANGGRAPH, "behind", "1.2.16"),
         finding(REDIS, "starting_point", "8.2.1"),
         finding(FASTAPI, "cant_check", None, NOT_FOUND),
-        finding(POSTGRES, "up_to_date", "17.2"),
+        finding(POSTGRES, "up_to_date", "17.2.0"),
     ],
 )
 
@@ -175,7 +175,7 @@ async def test_a_check_asks_the_agents_about_every_watched_software(h: Harness):
                 id=POSTGRES,
                 name="PostgreSQL",
                 source=GithubSource(ref="postgres/postgres"),
-                our_version="17.2",
+                our_version="17.2.0",
             ),
         ],
     )
@@ -188,13 +188,13 @@ async def test_the_teams_message_names_every_ticket_of_the_check(h: Harness):
         update={
             "proposed": [
                 LANGGRAPH_TICKET,
-                upgrade_ticket(POSTGRES, "PostgreSQL", "17.2", "17.3"),
+                upgrade_ticket(POSTGRES, "PostgreSQL", "17.2.0", "17.3.0"),
             ],
             "findings": [
                 finding(LANGGRAPH, "behind", "1.2.16"),
                 finding(REDIS, "starting_point", "8.2.1"),
                 finding(FASTAPI, "cant_check", None, NOT_FOUND),
-                finding(POSTGRES, "behind", "17.3"),
+                finding(POSTGRES, "behind", "17.3.0"),
             ],
         }
     )
@@ -202,7 +202,7 @@ async def test_the_teams_message_names_every_ticket_of_the_check(h: Harness):
     [message] = await h.teams.messages()
     assert message.text == (
         "A run of Software watchlist needs an Approver. It would create 2 Jira tickets in MOCK: "
-        '"Upgrade LangGraph from 1.2.14 to 1.2.16" and "Upgrade PostgreSQL from 17.2 to 17.3". '
+        '"Upgrade LangGraph from 1.2.14 to 1.2.16" and "Upgrade PostgreSQL from 17.2.0 to 17.3.0". '
         f"Open the approval page to decide. The agents said: {SUMMARY}"
     )
 
@@ -337,7 +337,7 @@ async def test_a_check_with_nothing_behind_records_the_findings_and_writes_nothi
             finding(LANGGRAPH, "up_to_date", "1.2.14"),
             finding(REDIS, "starting_point", "8.2.1"),
             finding(FASTAPI, "up_to_date", "0.115.0"),
-            finding(POSTGRES, "up_to_date", "17.2"),
+            finding(POSTGRES, "up_to_date", "17.2.0"),
         ],
     )
     run_id = await start_check(h)

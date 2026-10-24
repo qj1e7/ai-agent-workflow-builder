@@ -105,13 +105,20 @@ def test_a_learned_version_outranks_the_one_the_operator_typed():
     assert standing(None, None, None, None, None) == Standing(NOTHING, "not_checked")
 
 
-def finding(software_id: SoftwareId, state: str, newest: str | None, detail: str = "") -> Finding:
+def finding(
+    software_id: SoftwareId,
+    state: str,
+    newest: str | None,
+    detail: str = "",
+    bad: str | None = None,
+) -> Finding:
+    new_versions = [newest] if state == "behind" and newest else []
     return Finding.model_validate(
         {
             "software_id": software_id,
             "state": state,
             "newest": newest,
-            "new_versions": [newest] if state == "behind" and newest else [],
+            "new_versions": new_versions + ([bad] if bad else []),
             "detail": detail,
         }
     )
@@ -130,7 +137,7 @@ FINDINGS = [
     finding(LANGGRAPH, "behind", "1.2.16"),
     finding(REDIS, "starting_point", "8.2.1"),
     finding(FASTAPI, "cant_check", None, "GitHub answered 404 Not Found."),
-    finding(POSTGRES, "up_to_date", "17.2"),
+    finding(POSTGRES, "up_to_date", "17.2.0"),
 ]
 
 
@@ -140,15 +147,25 @@ def test_a_sound_answer_is_kept_as_what_was_learned_and_which_tickets_to_make():
             ReadNewest(LANGGRAPH, "1.2.16", False),
             ReadNewest(REDIS, "8.2.1", True),
             CouldNotRead(FASTAPI, "GitHub answered 404 Not Found."),
-            ReadNewest(POSTGRES, "17.2", False),
+            ReadNewest(POSTGRES, "17.2.0", False),
         ),
         (TicketToPropose(0, LANGGRAPH, "1.2.16"),),
     )
 
 
-def test_findings_may_leave_software_out_and_tickets_may_be_absent():
-    assert review(TASK, FINDINGS[:1], []) == Reviewed((ReadNewest(LANGGRAPH, "1.2.16", False),), ())
-    assert review(TASK, [], []) == Reviewed((), ())
+def test_tickets_may_be_absent_but_every_software_needs_its_finding():
+    assert review(TASK, FINDINGS, []) == Reviewed(
+        (
+            ReadNewest(LANGGRAPH, "1.2.16", False),
+            ReadNewest(REDIS, "8.2.1", True),
+            CouldNotRead(FASTAPI, "GitHub answered 404 Not Found."),
+            ReadNewest(POSTGRES, "17.2.0", False),
+        ),
+        (),
+    )
+    missing = review(TASK, FINDINGS[:3], [])
+    assert missing == Unusable("The agents did not report on PostgreSQL")
+    assert review(TASK, [], []) == Unusable("The agents did not report on LangGraph")
 
 
 HELD = replace(
@@ -158,6 +175,8 @@ HELD = replace(
         watched(REDIS, "Redis", "redis/redis", "8.2.0", awaiting_approval=True),
     ),
 )
+
+HELD_FINDINGS = [finding(LANGGRAPH, "behind", "1.2.16"), finding(REDIS, "behind", "8.2.1")]
 
 
 @pytest.mark.parametrize(
@@ -170,14 +189,16 @@ HELD = replace(
         (TASK, FINDINGS, [ticket("sw_ghost", "Ghost")], "sw_ghost, which is not on the list"),
         (TASK, FINDINGS, [ticket(LANGGRAPH), ticket(LANGGRAPH)], "two tickets for LangGraph"),
         (TASK, FINDINGS, [ticket(FASTAPI, "FastAPI")], "FastAPI without reading its newest"),
-        (TASK, FINDINGS[1:], [ticket(LANGGRAPH)], "LangGraph without reading its newest"),
-        (HELD, [finding(LANGGRAPH, "behind", "1.2.16")], [ticket(LANGGRAPH)], "has one already"),
-        (
-            HELD,
-            [finding(REDIS, "behind", "8.2.1")],
-            [ticket(REDIS, "Redis")],
-            "Redis, which has one",
-        ),
+        (TASK, FINDINGS[1:], [ticket(LANGGRAPH)], "did not report on LangGraph"),
+        (TASK, [finding(LANGGRAPH, "starting_point", "1.2.16"), *FINDINGS[1:]], [], "as our"),
+        (TASK, [FINDINGS[0], finding(REDIS, "behind", "8.2.1"), *FINDINGS[2:]], [], "starting"),
+        (TASK, [finding(LANGGRAPH, "behind", "v1.2.16"), *FINDINGS[1:]], [], "not a tag"),
+        (TASK, [finding(LANGGRAPH, "behind", "1.2.16; rm -rf"), *FINDINGS[1:]], [], "not a tag"),
+        (TASK, [*FINDINGS[:3], finding(POSTGRES, "up_to_date", "17")], [], "not a tag"),
+        (TASK, [*FINDINGS[:3], finding(POSTGRES, "up_to_date", "17.2.0", bad="x")], [], "not a"),
+        (TASK, [*FINDINGS[:2], finding(FASTAPI, "cant_check", None, bad="1.0")], [], "not a tag"),
+        (HELD, HELD_FINDINGS, [ticket(LANGGRAPH)], "LangGraph, which has one already"),
+        (HELD, HELD_FINDINGS, [ticket(REDIS, "Redis")], "Redis, which has one already"),
     ],
     ids=lambda value: value if isinstance(value, str) else "",
 )

@@ -103,6 +103,9 @@ CASES = [
         "POST", "/api/v1/mock-jira/tickets/{key}/done", {}, None, None, 401, id="jira-done-401"
     ),
     pytest.param(
+        "POST", "/api/v1/mock-jira/tickets/{key}/done", BOB, None, None, 403, id="jira-done-403"
+    ),
+    pytest.param(
         "POST", "/api/v1/mock-jira/tickets/{key}/done", ALICE, None, None, 404, id="jira-done-404"
     ),
     pytest.param(
