@@ -34,6 +34,7 @@ from platform_api.orchestration.agents import (
     SoftwareToCheck,
     TaskFailed,
     TaskFinished,
+    TaskOutput,
     TaskRequest,
     WatchlistInputs,
 )
@@ -84,6 +85,7 @@ from platform_api.orchestration.runs import (
     fail,
     holder_of,
     referee,
+    state_name,
     step_finished,
 )
 from platform_api.orchestration.spec import ReleaseTask, RunSpec, RunStarted, WatchlistTask
@@ -93,6 +95,8 @@ from platform_api.orchestration.store import (
     RunRecord,
     Store,
 )
+from platform_api.orchestration.watch import Reviewed, Unusable, review
+from platform_api.orchestration.watch_store import WatchStore
 from platform_api.orchestration.write_actions import (
     AuthorizedWrite,
     Deny,
@@ -219,17 +223,6 @@ class NotRetryable:
 
 type RetryResult = Retried | NotRetryable | NotFound
 
-STATE_NAMES: dict[type[RunState], str] = {
-    Pending: "pending",
-    Working: "working",
-    Proposed: "proposed",
-    AwaitingApproval: "awaiting_approval",
-    Acting: "acting",
-    Succeeded: "succeeded",
-    Rejected: "rejected",
-    Failed: "failed",
-}
-
 START_LEG = "start_leg"
 ANNOUNCE = "announce"
 
@@ -316,6 +309,7 @@ class Orchestrator:
         self._db = db
         self._models = models
         self._store = Store()
+        self._watch = WatchStore()
         self._activity = activity
         self._engine = engine
         self._channel = channel
@@ -477,24 +471,35 @@ class Orchestrator:
         )
 
     async def _finish_work(
-        self, uow: UnitOfWork, record: RunRecord, working: Working, summary: str, output: Any
+        self,
+        uow: UnitOfWork,
+        record: RunRecord,
+        working: Working,
+        summary: str,
+        output: TaskOutput,
     ) -> StepReply:
+        reviewed: Reviewed | None = None
+        if isinstance(record.spec.task, WatchlistTask):
+            match review(record.spec.task, output.findings, output.proposed):
+                case Unusable(detail):
+                    return await self._fail_work(
+                        uow, record, working, FailureReason.AGENT_ERROR, detail
+                    )
+                case Reviewed() as reviewed:
+                    pass
         intents = [ProposedIntent(p.kind, dict(p.fields), p.reason) for p in output.proposed]
         bound = bind(intents, record.spec.bindings)
         carry = output.carry_forward.last_known_tag
+        proposal: Proposal | None = None
         match bound:
             case UnboundIntent(kinds):
                 detail = f"No connector is bound for {', '.join(kinds)}"
-                moved = working.fail(
-                    Failure(FailureReason.UNBOUND_INTENT, detail, retryable=False)
-                ).preceded_by(self._finished(working, "failed", detail))
-                await self._commit(uow, record, moved)
-                await self._store.cancel_outbox(uow, record.run_id)
-                return StepReply(False, "failed", detail)
+                return await self._fail_work(
+                    uow, record, working, FailureReason.UNBOUND_INTENT, detail
+                )
             case ():
                 moved = working.finish_with_nothing_to_write(summary)
-                await self._commit(uow, record, moved, carry_forward=carry)
-                return StepReply(False, "nothing_to_write", summary)
+                reply = StepReply(False, "nothing_to_write", summary)
             case actions:
                 proposal = Proposal(
                     ProposalId(new_id("prp")), record.run_id, actions, digest(actions)
@@ -504,8 +509,28 @@ class Orchestrator:
                 moved = working.propose(
                     proposal.id, proposal.digest, lines, ROOM_LEAD, summary, uow.now
                 )
-                await self._commit(uow, record, moved, carry_forward=carry)
-                return StepReply(True, "proposed", summary)
+                reply = StepReply(True, "proposed", summary)
+        if reviewed is not None:
+            await self._watch.record_review(
+                uow, record, reviewed, None if proposal is None else proposal.id
+            )
+        await self._commit(uow, record, moved, carry_forward=carry)
+        return reply
+
+    async def _fail_work(
+        self,
+        uow: UnitOfWork,
+        record: RunRecord,
+        working: Working,
+        reason: FailureReason,
+        detail: str,
+    ) -> StepReply:
+        moved = working.fail(Failure(reason, detail, retryable=False)).preceded_by(
+            self._finished(working, "failed", detail)
+        )
+        await self._commit(uow, record, moved)
+        await self._store.cancel_outbox(uow, record.run_id)
+        return StepReply(False, "failed", detail)
 
     def _task_request(
         self, record: RunRecord, working: Working, model: ModelAccess | None
@@ -967,6 +992,7 @@ class Orchestrator:
             uow, record, moved.state, retried_by=retried_by, carry_forward=carry_forward
         )
         await self._activity.append(uow, record.run_id, moved.events)
+        await self._watch.run_moved(uow, record, moved.state)
         return saved
 
     async def _enqueue_leg(
@@ -980,10 +1006,6 @@ class Orchestrator:
             {"workflow": record.spec.workflow, "leg": leg.value, "attempt": attempt},
             next_at,
         )
-
-
-def state_name(state: RunState) -> str:
-    return STATE_NAMES[type(state)]
 
 
 def _active(state: RunState) -> Pending | Working | Proposed | Acting:

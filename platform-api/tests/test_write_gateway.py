@@ -151,3 +151,18 @@ async def test_mock_jira_makes_one_ticket_per_idempotency_key(db: Database):
     ]
     assert tickets[0].created_at.tzinfo is not None
     assert tickets[0].created_at <= datetime.now(UTC)
+
+
+async def test_mock_jira_tickets_start_as_to_do_and_mark_done_is_idempotent(db: Database):
+    await seed_run(db)
+    jira = MockJiraConnector(db)
+    await jira.execute(ACTION, WriteKey(RUN, PRP, 0))
+    [ticket] = await jira.tickets()
+    assert (ticket.status, ticket.done_at) == ("To Do", None)
+    assert await jira.done_tickets(["MOCK-1"]) == {}
+    done = await jira.mark_done("MOCK-1")
+    assert done is not None and done.status == "Done" and done.done_at is not None
+    assert await jira.mark_done("MOCK-1") == done
+    assert await jira.done_tickets(["MOCK-1", "MOCK-9"]) == {"MOCK-1": done.done_at}
+    assert await jira.done_tickets([]) == {}
+    assert await jira.mark_done("MOCK-9") is None

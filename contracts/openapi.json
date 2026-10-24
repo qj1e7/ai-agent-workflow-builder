@@ -2050,6 +2050,18 @@
             "title": "Created At",
             "type": "string"
           },
+          "done_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Done At"
+          },
           "key": {
             "title": "Key",
             "type": "string"
@@ -2066,6 +2078,9 @@
             "title": "Run Id",
             "type": "string"
           },
+          "status": {
+            "$ref": "#/components/schemas/TicketStatus"
+          },
           "title": {
             "title": "Title",
             "type": "string"
@@ -2078,7 +2093,9 @@
           "body",
           "created_at",
           "run_id",
-          "proposal_id"
+          "proposal_id",
+          "status",
+          "done_at"
         ],
         "title": "MockJiraTicket",
         "type": "object"
@@ -3777,6 +3794,13 @@
         "title": "TemplateView",
         "type": "object"
       },
+      "TicketStatus": {
+        "enum": [
+          "To Do",
+          "Done"
+        ],
+        "type": "string"
+      },
       "TroubleshootingOut": {
         "additionalProperties": false,
         "properties": {
@@ -4660,6 +4684,87 @@
           }
         ],
         "summary": "List Mock Jira Tickets",
+        "tags": [
+          "stubs"
+        ]
+      }
+    },
+    "/api/v1/mock-jira/tickets/{key}/done": {
+      "post": {
+        "description": "Marks a practice Jira ticket Done, as a person would in Jira. The watchlist then moves our version to the version the ticket named. Marking a Done ticket again changes nothing.",
+        "operationId": "mark_mock_jira_ticket_done_api_v1_mock_jira_tickets__key__done_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MockJiraTicket"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such ticket"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Mark Mock Jira Ticket Done",
         "tags": [
           "stubs"
         ]

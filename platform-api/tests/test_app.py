@@ -27,6 +27,7 @@ ROUTES = {
     ("POST", "/api/v1/approvals/{approval_id}/decisions"),
     ("GET", "/api/v1/teams-stub/messages"),
     ("GET", "/api/v1/mock-jira/tickets"),
+    ("POST", "/api/v1/mock-jira/tickets/{key}/done"),
     ("POST", "/internal/v1/runs/{run_id}/steps/{step}"),
     ("POST", "/internal/v1/runs/{run_id}/agent-events"),
     ("POST", "/internal/v1/workflow-failures"),

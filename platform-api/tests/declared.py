@@ -44,6 +44,14 @@ class FakeBuilder:
         return self._started
 
 
+class FakeMockJira:
+    async def tickets(self) -> list[Any]:
+        return []
+
+    async def mark_done(self, key: str) -> None:
+        return None
+
+
 class FakeLog:
     def __init__(self, events: list[Any] | None = None) -> None:
         self._events = events or []
@@ -58,6 +66,7 @@ def app_with(orchestrator: object = None, builder: object = None, log: object = 
     app.state.orchestrator = orchestrator or FakeOrchestrator()
     app.state.builder = builder or FakeBuilder()
     app.state.activity_log = log or FakeLog()
+    app.state.mock_jira = FakeMockJira()
     return app
 
 
