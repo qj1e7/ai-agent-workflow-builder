@@ -210,10 +210,11 @@ def test_template_matches_are_scored_against_the_builder_rules(
 
 @needs_contracts
 def test_the_mirrored_rules_cover_every_parameter_the_builder_publishes() -> None:
-    from evals.match import RULES
+    from evals.match import NOT_OFFERED, RULES, catalog
 
     published = json.loads(TEMPLATES.read_text())["templates"]
-    assert {t["key"]: {p["name"] for p in t["params"]} for t in published} == {
+    assert {t["key"] for t in published} == set(RULES) | NOT_OFFERED
+    assert {t["key"]: {p["name"] for p in t["params"]} for t in catalog()} == {
         key: set(rules) for key, rules in RULES.items()
     }
 
