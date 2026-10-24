@@ -84,6 +84,20 @@ describe('a watchlist check', () => {
     expect(headlineWords(at(32).headline, ALICE)).toBe('Written to Jira')
   })
 
+  it("stands the schedule's owner at Started as their schedule when a schedule started the check", () => {
+    const scheduled = synthetic('watchlist', {
+      seq: 1,
+      ts: '2026-11-23T01:00:00Z',
+      actor: { kind: 'user', id: 'alice', display: 'Alice' },
+      summary: "Alice's schedule started a check of Software watchlist.",
+      kind: 'run_created',
+      data: { use_case_id: 'uc_01JBW', use_case_version: 6, started_by: 'alice', trigger: 'schedule' },
+    })
+    const track = trackOf({ room: fold([scheduled]), waiting: null, spedUp: false }, SOFTWARE_WATCHLIST)
+    const [figure] = stop(track, 'start').cast
+    expect(figure ? figureWords(figure) : null).toBe("Alice's schedule, started the run")
+  })
+
   it('reads a source the platform could not reach as GitHub being unavailable', () => {
     expect(captionWords({ is: 'stopped', step: 'read_source', errorType: 'UpstreamUnavailable', reason: 'AgentError' })).toBe('GitHub unavailable')
     expect(captionWords({ is: 'step', step: 'read_source', summary: 'Release checker is working.' })).toBe('Reading a source')
