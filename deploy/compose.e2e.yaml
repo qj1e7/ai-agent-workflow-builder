@@ -31,6 +31,7 @@ services:
       PLATFORM_API_URL: http://platform-api:8000
       MOCK_GITHUB_URL: http://mock-github:8200
       E2E_WAIT_SECONDS: ${E2E_WAIT_SECONDS:-90}
+      STEP_KEY: ${STEP_KEY:?run deploy/make-env.sh}
     depends_on:
       platform-api:
         condition: service_healthy

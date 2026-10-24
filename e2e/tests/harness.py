@@ -14,6 +14,7 @@ type Json = dict[str, Any]
 
 PLATFORM_API_URL = os.environ.get("PLATFORM_API_URL", "http://platform-api:8000")
 MOCK_GITHUB_URL = os.environ.get("MOCK_GITHUB_URL", "http://mock-github:8200")
+STEP_KEY = os.environ.get("STEP_KEY", "")
 WAIT_SECONDS = float(os.environ.get("E2E_WAIT_SECONDS", "90"))
 CONTRACTS_DIR = Path(os.environ.get("CONTRACTS_DIR", Path(__file__).parents[2] / "contracts"))
 
@@ -156,6 +157,16 @@ class Api:
 
     def mark_done(self, user: str, key: str, *, expect: Iterable[int] = (200,)) -> httpx.Response:
         return self.post(user, f"/api/v1/mock-jira/tickets/{key}/done", expect=expect)
+
+    def tick(self, step_key: str, *, expect: Iterable[int] = (200,)) -> httpx.Response:
+        """What the schedule_tick workflow asks every 5 minutes. It signs in with the step key."""
+        return self.request(
+            None,
+            "POST",
+            "/internal/v1/schedules/tick",
+            expect=expect,
+            headers={"X-Step-Key": step_key},
+        )
 
     def watchlist(self, user: str = "alice") -> Json | None:
         return self.get(user, "/api/v1/watchlist")["watchlist"]
