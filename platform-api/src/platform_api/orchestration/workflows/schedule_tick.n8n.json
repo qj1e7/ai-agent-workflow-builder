@@ -1,0 +1,41 @@
+{
+  "name": "schedule_tick",
+  "nodes": [
+    {
+      "id": "every-five-minutes",
+      "name": "Every 5 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "parameters": {
+        "rule": { "interval": [{ "field": "minutes", "minutesInterval": 5 }] }
+      }
+    },
+    {
+      "id": "ask-what-is-due",
+      "name": "Ask what is due",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 0],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": { "httpHeaderAuth": { "id": "${STEP_KEY_CREDENTIAL_ID}", "name": "X-Step-Key" } },
+      "parameters": {
+        "method": "POST",
+        "url": "${PLATFORM_INTERNAL_URL}/internal/v1/schedules/tick",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": { "timeout": 60000 }
+      }
+    }
+  ],
+  "connections": {
+    "Every 5 minutes": { "main": [[{ "node": "Ask what is due", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "${ERROR_WORKFLOW_ID}",
+    "saveDataSuccessExecution": "none"
+  }
+}

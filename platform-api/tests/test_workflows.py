@@ -47,8 +47,13 @@ def by_name(definitions: tuple[WorkflowDefinition, ...], name: str) -> WorkflowD
     return next(d for d in definitions if d.name == name)
 
 
-def test_the_files_ship_two_workflows():
-    assert {d.name for d in load_all()} == {"release_check", "run_failure_reporter"}
+def test_the_files_ship_three_workflows():
+    assert {d.name for d in load_all()} == {
+        "release_check",
+        "run_failure_reporter",
+        "schedule_tick",
+    }
+    assert by_name(load_all(), "schedule_tick").is_tick_workflow
     assert by_name(load_all(), "run_failure_reporter").is_error_workflow
 
 
@@ -182,6 +187,56 @@ def a_set_node(docs: dict[str, Document]) -> None:
     )
 
 
+def tick_calls_another_internal_route(docs: dict[str, Document]) -> None:
+    node(docs["schedule_tick"], "Ask what is due")["parameters"]["url"] = (
+        f"{PLATFORM_INTERNAL_URL}/internal/v1/workflow-failures"
+    )
+
+
+def tick_calls_a_run_step(docs: dict[str, Document]) -> None:
+    node(docs["schedule_tick"], "Ask what is due")["parameters"]["url"] = (
+        f"={PLATFORM_INTERNAL_URL}/internal/v1/runs/run_1/steps/run_agents"
+    )
+
+
+def tick_fires_every_minute(docs: dict[str, Document]) -> None:
+    node(docs["schedule_tick"], "Every 5 minutes")["parameters"]["rule"]["interval"] = [
+        {"field": "minutes", "minutesInterval": 1}
+    ]
+
+
+def tick_keeps_successful_executions(docs: dict[str, Document]) -> None:
+    del docs["schedule_tick"]["settings"]["saveDataSuccessExecution"]
+
+
+def tick_makes_a_second_call(docs: dict[str, Document]) -> None:
+    second = copy.deepcopy(node(docs["schedule_tick"], "Ask what is due"))
+    second["id"], second["name"] = "second", "Ask again"
+    docs["schedule_tick"]["nodes"].append(second)
+
+
+def tick_has_two_triggers(docs: dict[str, Document]) -> None:
+    second = copy.deepcopy(node(docs["schedule_tick"], "Every 5 minutes"))
+    second["id"], second["name"] = "second", "Every 5 minutes again"
+    docs["schedule_tick"]["nodes"].append(second)
+
+
+def tick_has_no_trigger_link(docs: dict[str, Document]) -> None:
+    docs["schedule_tick"]["connections"] = {}
+
+
+def tick_is_not_a_post(docs: dict[str, Document]) -> None:
+    node(docs["schedule_tick"], "Ask what is due")["parameters"]["method"] = "GET"
+
+
+def tick_without_error_workflow(docs: dict[str, Document]) -> None:
+    del docs["schedule_tick"]["settings"]["errorWorkflow"]
+
+
+def tick_does_not_retry(docs: dict[str, Document]) -> None:
+    node(docs["schedule_tick"], "Ask what is due")["retryOnFail"] = False
+
+
 MUTATIONS: list[tuple[Rule, Callable[[dict[str, Document]], None]]] = [
     (Rule.WEBHOOK_PATHS, wrong_webhook_path),
     (Rule.INTERNAL_URLS, reporter_calls_the_internet),
@@ -197,6 +252,16 @@ MUTATIONS: list[tuple[Rule, Callable[[dict[str, Document]], None]]] = [
     (Rule.ERROR_WORKFLOW, no_error_workflow_setting),
     (Rule.ERROR_WORKFLOW, error_workflow_file_missing),
     (Rule.NODE_TYPES, a_set_node),
+    (Rule.TICK_SHAPE, tick_calls_another_internal_route),
+    (Rule.TICK_SHAPE, tick_calls_a_run_step),
+    (Rule.TICK_SHAPE, tick_fires_every_minute),
+    (Rule.TICK_SHAPE, tick_keeps_successful_executions),
+    (Rule.TICK_SHAPE, tick_makes_a_second_call),
+    (Rule.TICK_SHAPE, tick_has_two_triggers),
+    (Rule.TICK_SHAPE, tick_has_no_trigger_link),
+    (Rule.TICK_SHAPE, tick_is_not_a_post),
+    (Rule.ERROR_WORKFLOW, tick_without_error_workflow),
+    (Rule.RETRY_WAIT, tick_does_not_retry),
 ]
 
 
@@ -216,12 +281,53 @@ def rendered_definitions(error_workflow_id: str) -> tuple[WorkflowDefinition, ..
     return tuple(parse(render(d, values)) for d in load_all())
 
 
+def test_a_tick_workflow_that_calls_the_internet_fails_the_url_and_shape_rules():
+    docs = copy.deepcopy(documents())
+    node(docs["schedule_tick"], "Ask what is due")["parameters"]["url"] = (
+        "https://hooks.example.com/alerts"
+    )
+    findings = lint(parse(d) for d in docs.values())
+    assert {f.rule for f in findings} == {Rule.INTERNAL_URLS, Rule.TICK_SHAPE}
+
+
+def test_a_run_workflow_with_a_schedule_trigger_is_held_to_the_tick_rules():
+    docs = copy.deepcopy(documents())
+    docs["release_check"]["nodes"].append(
+        {
+            "id": "timer",
+            "name": "Timer",
+            "type": "n8n-nodes-base.scheduleTrigger",
+            "typeVersion": 1.2,
+            "position": [0, 400],
+            "parameters": {"rule": {"interval": [{"field": "minutes", "minutesInterval": 5}]}},
+        }
+    )
+    findings = lint(parse(d) for d in docs.values())
+    assert Rule.TICK_SHAPE in {f.rule for f in findings}
+
+
+def test_the_tick_workflow_has_no_run_steps_and_ships_the_step_key_credential():
+    tick = by_name(load_all(), "schedule_tick")
+    assert tick.webhooks == () and tick.is_tick_workflow and not tick.is_error_workflow
+    assert tick.document["settings"]["saveDataSuccessExecution"] == "none"
+    assert placeholders(tick) == {
+        "PLATFORM_INTERNAL_URL",
+        "ERROR_WORKFLOW_ID",
+        "STEP_KEY_CREDENTIAL_ID",
+    }
+    rendered = render(tick, VALUES)
+    assert node(rendered, "Ask what is due")["parameters"]["url"] == (
+        "http://platform-api:8000/internal/v1/schedules/tick"
+    )
+
+
 def test_the_live_lint_passes_when_the_error_workflow_is_wired_and_active():
     live = LiveState(
         VALUES["PLATFORM_INTERNAL_URL"],
         {
             "run_failure_reporter": LiveWorkflow("ERR1", True),
             "release_check": LiveWorkflow("W1", True),
+            "schedule_tick": LiveWorkflow("W2", True),
         },
     )
     assert lint(rendered_definitions("ERR1"), live=live) == []
