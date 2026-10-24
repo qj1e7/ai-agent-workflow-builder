@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { useErrorWords } from '../../api/context'
 import { useMarkDone, useMe, useMockJiraTickets } from '../../api/queries'
 import type { JiraTicketStatus, MockJiraTicket } from '../../api/types'
@@ -56,6 +57,7 @@ export function JiraPage() {
 function Ticket({ ticket, operator }: { ticket: MockJiraTicket; operator: boolean }) {
   const explain = useErrorWords()
   const markDone = useMarkDone()
+  const heading = useRef<HTMLHeadingElement>(null)
   const look = STATUS_LOOK[ticket.status]
   return (
     <article className={styles['ticket']} aria-labelledby={`${ticket.key}-title`}>
@@ -69,7 +71,9 @@ function Ticket({ ticket, operator }: { ticket: MockJiraTicket; operator: boolea
         </Pill>
       </div>
       <div className={styles['what']}>
-        <h2 id={`${ticket.key}-title`}>{ticket.title}</h2>
+        <h2 id={`${ticket.key}-title`} ref={heading} tabIndex={-1}>
+          {ticket.title}
+        </h2>
         <p className={styles['body']}>{ticket.body}</p>
       </div>
       <div className={styles['side']}>
@@ -86,7 +90,8 @@ function Ticket({ ticket, operator }: { ticket: MockJiraTicket; operator: boolea
           <Button
             icon={IconCheck}
             loading={markDone.isPending}
-            onClick={() => markDone.mutate(ticket.key)}
+            // The button goes once the ticket is Done, so focus moves to the ticket rather than the page.
+            onClick={() => markDone.mutate(ticket.key, { onSuccess: () => heading.current?.focus() })}
           >
             Mark Done<span className="visually-hidden">: {ticket.key}</span>
           </Button>

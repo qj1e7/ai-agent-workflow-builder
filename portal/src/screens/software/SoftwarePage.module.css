@@ -197,6 +197,10 @@
   text-underline-offset: 3px;
 }
 
+.remove {
+  margin-inline: calc(-1 * var(--space-2));
+}
+
 .remove:hover,
 .link:hover {
   color: var(--ink);

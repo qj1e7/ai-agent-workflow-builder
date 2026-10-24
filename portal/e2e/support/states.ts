@@ -32,6 +32,17 @@ export const STATES = [
   'settings-pending-bob',
   'settings-confirmed',
   'reduced-motion-pause',
+  'software-operator',
+  'software-approver',
+  'software-add-problems',
+  'software-remove-confirm',
+  'software-empty',
+  'software-schedule-edit',
+  'software-check-run',
+  'software-after-check',
+  'approval-check-bob',
+  'jira-mark-done',
+  'software-after-done',
 ] as const
 
 export type StateName = (typeof STATES)[number]

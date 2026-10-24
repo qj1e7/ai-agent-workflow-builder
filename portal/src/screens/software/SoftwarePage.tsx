@@ -118,8 +118,8 @@ function Loaded({ view, operator, viewer }: LoadedProps) {
           <h2 id="software-empty">No software yet</h2>
           <p className="muted">
             {operator
-              ? 'Add the software the team runs. Each check looks for new releases and drafts an upgrade ticket for an Approver.'
-              : 'An Operator adds the software the team runs. Each check looks for new releases and drafts an upgrade ticket for an Approver.'}
+              ? 'Add the software the team runs, and each check drafts an upgrade ticket when a new release is out.'
+              : 'An Operator adds the software the team runs, and each check drafts an upgrade ticket when a new release is out.'}
           </p>
         </section>
       ) : (
@@ -160,7 +160,8 @@ function Loaded({ view, operator, viewer }: LoadedProps) {
           </section>
         </>
       )}
-      {operator ? <AddForm first={empty} /> : <p className="muted">Operators add and remove software.</p>}
+      {operator ? <AddForm first={empty} /> : null}
+      {!operator && !empty ? <p className="muted">Operators add and remove software.</p> : null}
     </div>
   )
 }

@@ -52,6 +52,10 @@
   min-width: 0;
 }
 
+.what h2:focus {
+  outline: none;
+}
+
 .what h2 {
   font-size: var(--text-18);
   text-wrap: pretty;
