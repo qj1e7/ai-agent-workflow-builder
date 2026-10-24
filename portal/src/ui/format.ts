@@ -41,6 +41,12 @@ const dayAndTime = new Intl.DateTimeFormat('en-SG', {
   hour12: false,
 })
 
+const dayOnly = new Intl.DateTimeFormat('en-SG', { day: 'numeric', month: 'short' })
+
+export function formatDay(iso: string): string {
+  return dayOnly.format(new Date(iso))
+}
+
 export function formatTime(iso: string): string {
   return timeOfDay.format(new Date(iso))
 }
