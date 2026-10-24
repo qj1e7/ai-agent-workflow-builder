@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { useParams } from 'react-router'
 import { ApiError } from '../../api/client'
+import { starterName } from '../../api/labels'
 import { useErrorWords, useRunClock } from '../../api/context'
 import { useDisplayName } from '../../api/people'
 import { useApproval, useRun } from '../../api/queries'
@@ -17,7 +18,7 @@ import { ticketStatus } from './ticketStatus'
 import { useDecision } from './useDecision'
 import { useWaited } from './useWaited'
 import { atWords } from './waiting'
-import { systemsWritten } from './writeAction'
+import { approvalTitle, systemsWritten } from './writeAction'
 import { WriteTicket } from './WriteTicket'
 import styles from './ApprovalPage.module.css'
 
@@ -91,14 +92,15 @@ function ApprovalContent({ view }: { view: ApprovalView }) {
   const clock = useRunClock()
   const run = useRun(view.run_id, { poll: true }).data
   const decision = useDecision(view.approval_id)
-  const state = decision.state ?? decisionState(view, undefined, { kind: 'none' })
+  const state = decision.state ?? decisionState(view, undefined, { kind: 'none' }, run?.trigger)
   const now = clock.now(view.run_id)
-  const status = ticketStatus(state.panel, run)
-  const lede = run ? `${run.use_case_name}, started by ${nameOf(run.started_by)} ${atWords(run.started_at, now)}.` : null
+  const lede = run
+    ? `${run.use_case_name}, started by ${starterName(nameOf(run.started_by), run.trigger)} ${atWords(run.started_at, now)}.`
+    : null
 
   return (
     <Frame
-      title={TITLE}
+      title={approvalTitle(view.actions)}
       lede={lede}
       aside={<ButtonLink to={`/runs/${view.run_id}`}>Watch the run</ButtonLink>}
     >
@@ -110,7 +112,12 @@ function ApprovalContent({ view }: { view: ApprovalView }) {
             <p className="muted">This request has nothing to write.</p>
           ) : (
             view.actions.map((action, index) => (
-              <WriteTicket key={index} action={action} position={{ index, total: view.actions.length }} status={status} />
+              <WriteTicket
+                key={index}
+                action={action}
+                position={{ index, total: view.actions.length }}
+                status={ticketStatus(state.panel, run, index)}
+              />
             ))
           )}
         </section>

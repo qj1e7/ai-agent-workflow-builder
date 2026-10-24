@@ -42,10 +42,14 @@ export function WriteTicket({ action, position, status }: WriteTicketProps) {
         {title ? <h3 className={styles['title']}>{title}</h3> : null}
         {body ? <p className={styles['body']}>{body}</p> : null}
       </div>
-      {status.kind === 'declined' ? null : (
+      {status.kind === 'declined' || position.index < position.total - 1 ? null : (
         <footer className={styles['foot']}>
           <IconShield size={18} />
-          <p>Nothing else will be written. If this ticket changes, your approval no longer applies.</p>
+          <p>
+            {position.total > 1
+              ? 'Nothing else will be written. If any of these tickets changes, your approval no longer applies.'
+              : 'Nothing else will be written. If this ticket changes, your approval no longer applies.'}
+          </p>
         </footer>
       )}
     </article>

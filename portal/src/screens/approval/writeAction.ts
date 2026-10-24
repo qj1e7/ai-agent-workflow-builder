@@ -43,3 +43,9 @@ export function systemsWritten(actions: readonly WriteActionView[]): string {
   if (names.length === 0) return 'the system'
   return names.length === 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''}`
 }
+
+/** The approval page's title: "Approve a write to Jira", or "Approve 3 writes to Jira" for a check with several tickets. */
+export function approvalTitle(actions: readonly WriteActionView[]): string {
+  const systems = systemsWritten(actions)
+  return actions.length > 1 ? `Approve ${actions.length} writes to ${systems}` : `Approve a write to ${systems === 'the system' ? 'Jira' : systems}`
+}

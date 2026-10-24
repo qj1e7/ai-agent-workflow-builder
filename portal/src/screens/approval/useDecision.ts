@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
-import { isConflict, refusalOf, useApproval, useDecide, useMe } from '../../api/queries'
+import { isConflict, refusalOf, useApproval, useDecide, useMe, useRun } from '../../api/queries'
 import type { ApprovalView, Verdict } from '../../api/types'
 import { decisionRequest, decisionState, sentBy, type DecisionAttempt, type DecisionState, type Sender } from './decisionState'
 
@@ -33,7 +33,8 @@ export function useDecision(approvalId: string | null): Decision {
   const latch = useLatch()
   const own = sentBy(sender, user, approvalId ?? '')
   const view = approvalId === null ? undefined : approval.data
-  const state = view ? decisionState(view, user, attemptOf(decide, sender, explain)) : null
+  const trigger = useRun(view?.run_id ?? '').data?.trigger
+  const state = view ? decisionState(view, user, attemptOf(decide, sender, explain), trigger) : null
 
   return {
     view,

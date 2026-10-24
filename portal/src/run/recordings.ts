@@ -1,15 +1,17 @@
 import failure from '@contracts/fixtures/runs/failure.json'
 import rejected from '@contracts/fixtures/runs/rejected.json'
 import success from '@contracts/fixtures/runs/success.json'
+import watchlist from '@contracts/fixtures/runs/watchlist.json'
 import { parseEvent, type RunEvent } from '../stream/parse'
 import { runId, type RunId } from './brand'
 
-export type RecordingName = 'success' | 'failure' | 'rejected'
+export type RecordingName = 'success' | 'failure' | 'rejected' | 'watchlist'
 
 const RAW: Record<RecordingName, { readonly runId: RunId; readonly events: readonly unknown[] }> = {
   success: { runId: runId('run_01JB8'), events: success },
   failure: { runId: runId('run_01JB9'), events: failure },
   rejected: { runId: runId('run_01JBA'), events: rejected },
+  watchlist: { runId: runId('run_01JBC'), events: watchlist },
 }
 
 export function runIdOf(name: RecordingName): RunId {

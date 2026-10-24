@@ -14,6 +14,12 @@ export const RELEASE_CHECK: readonly BlockView[] = [
   { key: 'create_ticket', name: 'Create Jira ticket', description: 'One ticket in the chosen project listing the new releases.', kind: 'write_action' },
 ]
 
+export const SOFTWARE_WATCHLIST: readonly BlockView[] = [
+  { key: 'read_versions', name: 'Read every source', description: 'The Release checker reads the newest release of each watched software.', kind: 'agent' },
+  { key: 'approval_gate', name: 'Approval gate', description: "An Approver reviews all of the check's tickets in Teams with one decision.", kind: 'approval' },
+  { key: 'create_tickets', name: 'Create Jira tickets', description: 'One upgrade ticket for each software that is behind.', kind: 'write_action' },
+]
+
 /** The registry the tests fold with: the same host as src/tracker/registry.ts. */
 export const TEST_REGISTRY: AgentRegistry = { host: { id: agentId('room_lead'), display: 'Room lead' } }
 

@@ -8,6 +8,7 @@ import type {
   Role,
   RunOutcome,
   RunState,
+  Trigger,
   Verdict,
 } from './types'
 
@@ -20,6 +21,11 @@ export const runStateLabel: Record<RunState, string> = {
   succeeded: 'Done',
   rejected: 'Declined',
   failed: 'Stopped',
+}
+
+/** Who started a run, as people say it: "Alice", or "Alice's schedule" for a scheduled check. */
+export function starterName(name: string, trigger: Trigger | undefined): string {
+  return trigger === 'schedule' ? `${name}'s schedule` : name
 }
 
 export const failureStageLabel: Record<FailureStage, string> = {
@@ -49,6 +55,13 @@ export const refusalLabel: Record<Refusal, string> = {
   not_open: 'This request is not open for a decision.',
   stale_digest: 'The request changed after you opened this page. Reload to see what will be written.',
   invalid_decisions: 'This approval has a problem. Ask a maintainer.',
+}
+
+/** A refusal in words. The owner of a schedule did not press a button, so their refusal names the schedule. */
+export function refusalWords(refusal: Refusal, trigger: Trigger | undefined): string {
+  return refusal === 'own_work' && trigger === 'schedule'
+    ? 'Your schedule started this check, so another Approver must decide.'
+    : refusalLabel[refusal]
 }
 
 export const approvalStepStatusLabel: Record<ApprovalStepStatus, string> = {

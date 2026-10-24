@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { useErrorWords, useRunClock } from '../../api/context'
+import { starterName } from '../../api/labels'
 import { useDisplayName } from '../../api/people'
 import { useRuns, useTemplates } from '../../api/queries'
 import type { RunView } from '../../api/types'
@@ -66,7 +67,7 @@ function EarlierRuns({ runs }: { runs: readonly RunView[] }) {
                 <span className={styles['rowName']}>{run.use_case_name}</span>
                 <StatusPill state={run.state} />
                 <span className={styles['rowMeta']}>
-                  Started by {nameOf(run.started_by)}, {formatRelative(run.started_at, clock.now(run.run_id)).toLowerCase()}
+                  Started by {starterName(nameOf(run.started_by), run.trigger)}, {formatRelative(run.started_at, clock.now(run.run_id)).toLowerCase()}
                   <span className="visually-hidden"> on {formatDayAndTime(run.started_at)}</span>
                 </span>
                 <span className={styles['dots']} aria-label={dots.map((dot) => `${dot.name}: ${dot.words}`).join('. ')}>

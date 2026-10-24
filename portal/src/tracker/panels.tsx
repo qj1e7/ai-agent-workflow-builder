@@ -58,10 +58,20 @@ function Action({ variant, busy, onPress, children }: ActionProps) {
   )
 }
 
-function headingOf(action: WriteActionView): string {
-  const thing = [connectorLabel(action.connector), objectNoun(action.operation)].filter((word) => word !== '').join(' ')
+function headingOf(action: WriteActionView, count: number): string {
+  const noun = objectNoun(action.operation)
+  const thing = [connectorLabel(action.connector), noun === '' || count === 1 ? noun : `${noun}s`].filter((word) => word !== '').join(' ')
   const project = action.target['project']
-  return typeof project === 'string' && project !== '' ? `${thing} in ${project}` : thing
+  const counted = count > 1 ? `${count} ${thing}` : thing
+  return typeof project === 'string' && project !== '' ? `${counted} in ${project}` : counted
+}
+
+/** One heading for the proposal: "Jira ticket in MOCK", or "3 Jira tickets in MOCK" when every write is alike. */
+function proposalHeading(actions: readonly WriteActionView[]): string | null {
+  const [first] = actions
+  if (!first) return null
+  const alike = actions.every((action) => headingOf(action, 1) === headingOf(first, 1))
+  return alike ? headingOf(first, actions.length) : headingOf(first, 1)
 }
 
 function paragraphs(body: string | null): string[] {
@@ -83,13 +93,13 @@ export function ApprovalPanel({ decision, gate, atHead, onLeave }: ApprovalPanel
   const panel = state?.panel
   const notice = state?.notice
   const busy = sending !== null || sent !== null
-  const first = view?.actions[0]
+  const heading = view ? proposalHeading(view.actions) : null
   const teams = gate ? teamsWords(gate) : null
   return (
     <Frame tone="wait" label="Approval" onLeave={onLeave}>
       {view ? (
         <>
-          {first ? <h3 className={styles['heading']}>{headingOf(first)}</h3> : null}
+          {heading ? <h3 className={styles['heading']}>{heading}</h3> : null}
           {view.actions.map((action, index) => {
             const { title, body } = describeAction(action)
             return (

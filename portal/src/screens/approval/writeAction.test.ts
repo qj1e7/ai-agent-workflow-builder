@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { WriteActionView } from '../../api/types'
-import { describeAction, systemsWritten } from './writeAction'
+import { approvalTitle, describeAction, systemsWritten } from './writeAction'
 
 const ticket: WriteActionView = {
   connector: 'jira',
@@ -41,5 +41,12 @@ describe('systemsWritten', () => {
   it('names one system once and joins several in plain words', () => {
     expect(systemsWritten([ticket, ticket])).toBe('Jira')
     expect(systemsWritten([ticket, { ...ticket, connector: 'confluence' }])).toBe('Jira and Confluence')
+  })
+})
+
+describe('approvalTitle', () => {
+  it('counts the writes when a check proposes several tickets', () => {
+    expect(approvalTitle([ticket])).toBe('Approve a write to Jira')
+    expect(approvalTitle([ticket, ticket, ticket])).toBe('Approve 3 writes to Jira')
   })
 })

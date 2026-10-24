@@ -1,3 +1,4 @@
+import { starterName } from '../api/labels'
 import type { Actor, FailureReason, FailureStage, RunOutcome } from '../api/types'
 import type { EventOf, RunEvent } from '../stream/parse'
 import { agentId, connectorKey, userId, type AgentId, type ConnectorKey, type RunTime, type Seq, type UserId } from './brand'
@@ -297,7 +298,7 @@ function step(room: RoomState, e: RunEvent, registry: AgentRegistry): RoomState 
       return room
 
     case 'run_created':
-      return { ...room, startedAt: e.at, phase: { name: 'pending' }, starter: user(e.data.started_by, e.actor.display), work: START }
+      return { ...room, startedAt: e.at, phase: { name: 'pending' }, starter: user(e.data.started_by, starterName(e.actor.display, e.data.trigger)), work: START }
 
     case 'agent_joined': {
       const guest: AgentRef = { id: agentId(e.data.agent.id), display: e.data.agent.display }

@@ -16,6 +16,14 @@ interface StepLabel {
 
 const STEP_LABELS: Readonly<Record<string, StepLabel>> = {
   fetch_releases: { source: 'github', running: () => 'Reading GitHub' },
+  read_source: {
+    source: 'github',
+    // The summary names the software: "Release checker is reading the releases of LangGraph."
+    running: (summary) => {
+      const name = /reading the releases of (.+?)\.?$/.exec(summary)?.[1]
+      return name ? `Reading ${name}` : 'Reading a source'
+    },
+  },
   find_new: {
     // The summary names the last known tag: "...comparing them with the last known tag 1.2.14."
     running: (summary) => {

@@ -7,7 +7,7 @@ const open: DecisionPanel = { kind: 'cannot_decide', refusal: 'own_work', words:
 const approved: DecisionPanel = { kind: 'decided', verdict: 'approve', by: 'bob', at: '2026-11-03T02:20:23Z' }
 const declined: DecisionPanel = { kind: 'decided', verdict: 'decline', by: 'bob', at: '2026-11-03T02:20:23Z' }
 
-function succeeded(key: string): RunView {
+function succeeded(...keys: string[]): RunView {
   return {
     run_id: 'run_1',
     use_case_id: 'uc',
@@ -21,7 +21,7 @@ function succeeded(key: string): RunView {
     events_url: '/e',
     state: 'succeeded',
     outcome: 'written',
-    written: [{ connector: 'jira', operation: 'create_ticket', external_reference: key, approved_by: ['bob'] }],
+    written: keys.map((key) => ({ connector: 'jira', operation: 'create_ticket', external_reference: key, approved_by: ['bob'] })),
   }
 }
 
@@ -33,6 +33,15 @@ describe('what the ticket says it is', () => {
   it('is being written once approved, then carries the ticket key when the run has written it', () => {
     expect(ticketStatus(approved, undefined)).toEqual({ kind: 'writing' })
     expect(ticketStatus(approved, succeeded('MOCK-142'))).toEqual({ kind: 'written', key: 'MOCK-142' })
+  })
+
+  it('gives each ticket of a check its own key, in the order they were proposed', () => {
+    const run = succeeded('MOCK-143', 'MOCK-144', 'MOCK-145')
+    expect([0, 1, 2].map((index) => ticketStatus(approved, run, index))).toEqual([
+      { kind: 'written', key: 'MOCK-143' },
+      { kind: 'written', key: 'MOCK-144' },
+      { kind: 'written', key: 'MOCK-145' },
+    ])
   })
 
   it('is declined and never written after a decline, whatever the run shows', () => {

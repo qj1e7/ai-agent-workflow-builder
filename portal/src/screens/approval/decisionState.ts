@@ -1,4 +1,4 @@
-import { refusalLabel } from '../../api/labels'
+import { refusalWords } from '../../api/labels'
 import type {
   ApprovalStepView,
   ApprovalView,
@@ -8,6 +8,7 @@ import type {
   Me,
   Refusal,
   RefusalOut,
+  Trigger,
   Verdict,
 } from '../../api/types'
 import type { SpineBlock } from '../../ui/Spine'
@@ -86,8 +87,8 @@ function refusalHint(refusal: Refusal, user: Me | undefined): string | null {
   }
 }
 
-function cannotDecide(refusal: Refusal, user: Me | undefined): DecisionPanel {
-  return { kind: 'cannot_decide', refusal, words: refusalLabel[refusal], hint: refusalHint(refusal, user) }
+function cannotDecide(refusal: Refusal, user: Me | undefined, trigger: Trigger): DecisionPanel {
+  return { kind: 'cannot_decide', refusal, words: refusalWords(refusal, trigger), hint: refusalHint(refusal, user) }
 }
 
 function noticeOf(attempt: DecisionAttempt): Notice | null {
@@ -103,7 +104,8 @@ function noticeOf(attempt: DecisionAttempt): Notice | null {
   }
 }
 
-export function decisionState(view: ApprovalView, user: Me | undefined, sent: DecisionAttempt): DecisionState {
+/** trigger is how the run started: a scheduled check's owner is refused in words that name the schedule. */
+export function decisionState(view: ApprovalView, user: Me | undefined, sent: DecisionAttempt, trigger: Trigger = 'person'): DecisionState {
   const attempt = sent.kind === 'none' || sentBy(sent.sender, user, view.approval_id) ? sent : NO_ATTEMPT
   const steps = attempt.kind === 'recorded' ? withDecision(view.steps, attempt.out.decision) : view.steps
   const notice = noticeOf(attempt)
@@ -111,11 +113,11 @@ export function decisionState(view: ApprovalView, user: Me | undefined, sent: De
   if (closed) return { steps, panel: closed, notice }
 
   // Before the record reloads, the step after this person's decision still reads waiting, not open.
-  if (attempt.kind === 'recorded') return { steps, panel: cannotDecide('decided_earlier_step', user), notice }
+  if (attempt.kind === 'recorded') return { steps, panel: cannotDecide('decided_earlier_step', user, trigger), notice }
   const open = steps.find((step) => step.status === 'open')
-  if (!open) return { steps, panel: cannotDecide(view.why_not ?? 'invalid_decisions', user), notice }
+  if (!open) return { steps, panel: cannotDecide(view.why_not ?? 'invalid_decisions', user, trigger), notice }
   if (view.you_can_decide) return { steps, panel: { kind: 'can_decide', step: open }, notice }
-  return { steps, panel: cannotDecide(view.why_not ?? 'not_open', user), notice }
+  return { steps, panel: cannotDecide(view.why_not ?? 'not_open', user, trigger), notice }
 }
 
 export function decisionRequest(view: ApprovalView, panel: DecisionPanel, verdict: Verdict): DecisionIn | null {
