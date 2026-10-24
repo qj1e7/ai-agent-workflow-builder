@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { connectorNamedIn, objectNoun } from './labels'
+import { connectorNamedIn, objectNoun, refusalWords, starterName } from './labels'
 
 describe('connectorNamedIn', () => {
   it('finds the connector a block names as a whole word, in any case', () => {
@@ -22,5 +22,21 @@ describe('objectNoun', () => {
   it('names nothing for an operation key with no object part', () => {
     expect(objectNoun('publish')).toBe('')
     expect(objectNoun('')).toBe('')
+  })
+})
+
+describe('starterName', () => {
+  it('names the schedule when a schedule started the run', () => {
+    expect(starterName('Alice', 'person')).toBe('Alice')
+    expect(starterName('Alice', 'schedule')).toBe("Alice's schedule")
+    expect(starterName('Alice', undefined), 'a run from before schedules').toBe('Alice')
+  })
+})
+
+describe('refusalWords', () => {
+  it('tells a schedule owner that their schedule started the check', () => {
+    expect(refusalWords('own_work', 'person')).toBe('You started this run, so another Approver must decide.')
+    expect(refusalWords('own_work', 'schedule')).toBe('Your schedule started this check, so another Approver must decide.')
+    expect(refusalWords('not_an_approver', 'schedule')).toBe('Only Approvers can decide this request.')
   })
 })

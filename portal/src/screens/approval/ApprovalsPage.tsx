@@ -1,4 +1,5 @@
 import { useErrorWords, useRunClock } from '../../api/context'
+import { starterName } from '../../api/labels'
 import { useDisplayName } from '../../api/people'
 import { useRuns } from '../../api/queries'
 import type { RunViewOf } from '../../api/types'
@@ -60,7 +61,7 @@ function WaitingRun({ run }: { run: RunViewOf<'awaiting_approval'> }) {
   const nameOf = useDisplayName()
   const clock = useRunClock()
   const waited = useWaited(run.run_id, run.updated_at)
-  const starter = nameOf(run.started_by)
+  const starter = starterName(nameOf(run.started_by), run.trigger)
   const step = run.approval.steps.find((each) => each.status === 'open') ?? run.approval.steps[0]
 
   return (

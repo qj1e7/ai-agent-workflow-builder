@@ -1,4 +1,4 @@
-import type { AnchorHTMLAttributes, ButtonHTMLAttributes, MouseEvent, ReactNode } from 'react'
+import type { AnchorHTMLAttributes, ButtonHTMLAttributes, MouseEvent, ReactNode, Ref } from 'react'
 import { Link, type LinkProps } from 'react-router'
 import { IconExternal, type Icon } from './icons'
 import { cx } from './cx'
@@ -18,6 +18,7 @@ export function buttonClassName(variant: ButtonVariant = 'secondary'): string {
 }
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  ref?: Ref<HTMLButtonElement>
   variant?: ButtonVariant
   loading?: boolean
   icon?: Icon

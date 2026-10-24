@@ -5,6 +5,7 @@ from pathlib import Path
 from platform_api.app import create_app
 from platform_api.contracts.settings_stories import settings_fixtures
 from platform_api.contracts.stories import fixtures
+from platform_api.contracts.watchlist_run import watchlist_run_fixtures
 from platform_api.contracts.watchlist_stories import watchlist_fixtures
 from platform_api.monitoring.events import activity_event_adapter
 from platform_api.wire import WireModel
@@ -57,7 +58,12 @@ def write_all(root: Path) -> list[Path]:
     fixture_root = root / "fixtures"
     for name in OWNED_FIXTURE_DIRS:
         shutil.rmtree(fixture_root / name, ignore_errors=True)
-    for relative, value in {**fixtures(), **settings_fixtures(), **watchlist_fixtures()}.items():
+    for relative, value in {
+        **fixtures(),
+        **settings_fixtures(),
+        **watchlist_fixtures(),
+        **watchlist_run_fixtures(),
+    }.items():
         path = fixture_root / relative
         _write_json(path, _dump(value))
         written.append(path)

@@ -1,0 +1,649 @@
+[
+  {
+    "run_id": "run_01JBC",
+    "seq": 1,
+    "ts": "2026-11-20T02:14:00Z",
+    "actor": {
+      "kind": "user",
+      "id": "alice",
+      "display": "Alice"
+    },
+    "summary": "Alice started a run of Software watchlist.",
+    "kind": "run_created",
+    "data": {
+      "use_case_id": "uc_01JBW",
+      "use_case_version": 6,
+      "started_by": "alice",
+      "trigger": "person"
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 2,
+    "ts": "2026-11-20T02:14:00.180000Z",
+    "actor": {
+      "kind": "platform",
+      "id": "platform",
+      "display": "Platform"
+    },
+    "summary": "The work leg was queued for the workflow engine (attempt 1).",
+    "kind": "leg_dispatched",
+    "data": {
+      "leg": "work",
+      "attempt": 1
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 3,
+    "ts": "2026-11-20T02:14:02.100000Z",
+    "actor": {
+      "kind": "workflow",
+      "id": "n8n",
+      "display": "Workflow engine"
+    },
+    "summary": "Workflow step run_agents started (n8n execution 51).",
+    "kind": "step_started",
+    "data": {
+      "step": "run_agents",
+      "n8n_execution_id": "51",
+      "try_number": 1
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 4,
+    "ts": "2026-11-20T02:14:02.390000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "room_lead",
+      "display": "Room lead"
+    },
+    "summary": "Room lead brought in Release checker to read the sources of 6 watched software.",
+    "kind": "agent_joined",
+    "data": {
+      "agent": {
+        "id": "release_checker",
+        "display": "Release checker"
+      },
+      "reason": "The task asks about releases of several watched software."
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 5,
+    "ts": "2026-11-20T02:14:02.510000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "room_lead",
+      "display": "Room lead"
+    },
+    "summary": "Room lead asked Release checker to check 6 watched software for new releases.",
+    "kind": "agent_message",
+    "data": {
+      "speaker": {
+        "id": "room_lead",
+        "display": "Room lead"
+      },
+      "addressee": {
+        "kind": "agent",
+        "id": "release_checker",
+        "display": "Release checker"
+      },
+      "text": "Please check these for new releases: n8n, LangGraph, Redis, PostgreSQL, FastAPI and Terraform."
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 6,
+    "ts": "2026-11-20T02:14:02.700000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker is reading the releases of n8n.",
+    "kind": "agent_step_started",
+    "data": {
+      "step": "read_source"
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 7,
+    "ts": "2026-11-20T02:14:03.100000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker read n8n. Nothing is newer than 2.42.6.",
+    "kind": "agent_step_finished",
+    "data": {
+      "step": "read_source",
+      "result": {
+        "software_id": "sw_01JBY00000000000000000001",
+        "state": "up_to_date",
+        "newest": "2.42.6"
+      }
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 8,
+    "ts": "2026-11-20T02:14:03.200000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker is reading the releases of LangGraph.",
+    "kind": "agent_step_started",
+    "data": {
+      "step": "read_source"
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 9,
+    "ts": "2026-11-20T02:14:03.600000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker read LangGraph. 2 releases newer than 1.2.14.",
+    "kind": "agent_step_finished",
+    "data": {
+      "step": "read_source",
+      "result": {
+        "software_id": "sw_01JBY00000000000000000002",
+        "state": "behind",
+        "newest": "1.2.16"
+      }
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 10,
+    "ts": "2026-11-20T02:14:03.700000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker is reading the releases of Redis.",
+    "kind": "agent_step_started",
+    "data": {
+      "step": "read_source"
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 11,
+    "ts": "2026-11-20T02:14:04.100000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker read Redis. 1 release newer than 8.2.0.",
+    "kind": "agent_step_finished",
+    "data": {
+      "step": "read_source",
+      "result": {
+        "software_id": "sw_01JBY00000000000000000003",
+        "state": "behind",
+        "newest": "8.2.1"
+      }
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 12,
+    "ts": "2026-11-20T02:14:04.200000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker is reading the releases of PostgreSQL.",
+    "kind": "agent_step_started",
+    "data": {
+      "step": "read_source"
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 13,
+    "ts": "2026-11-20T02:14:04.600000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker read PostgreSQL. 1 release newer than 17.2.0.",
+    "kind": "agent_step_finished",
+    "data": {
+      "step": "read_source",
+      "result": {
+        "software_id": "sw_01JBY00000000000000000004",
+        "state": "behind",
+        "newest": "17.3.0"
+      }
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 14,
+    "ts": "2026-11-20T02:14:04.700000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker is reading the releases of FastAPI.",
+    "kind": "agent_step_started",
+    "data": {
+      "step": "read_source"
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 15,
+    "ts": "2026-11-20T02:14:05.100000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker could not read FastAPI.",
+    "kind": "agent_step_finished",
+    "data": {
+      "step": "read_source",
+      "result": {
+        "software_id": "sw_01JBY00000000000000000005",
+        "state": "cant_check",
+        "newest": null
+      }
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 16,
+    "ts": "2026-11-20T02:14:05.200000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker could not check FastAPI and carried on.",
+    "kind": "agent_message",
+    "data": {
+      "speaker": {
+        "id": "release_checker",
+        "display": "Release checker"
+      },
+      "addressee": {
+        "kind": "room"
+      },
+      "text": "I could not read FastAPI's releases: GitHub answered 404 Not Found. I will carry on with the rest."
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 17,
+    "ts": "2026-11-20T02:14:05.300000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker is reading the releases of Terraform.",
+    "kind": "agent_step_started",
+    "data": {
+      "step": "read_source"
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 18,
+    "ts": "2026-11-20T02:14:05.700000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker read Terraform. No version was given, so 1.9.8 is the starting point.",
+    "kind": "agent_step_finished",
+    "data": {
+      "step": "read_source",
+      "result": {
+        "software_id": "sw_01JBY00000000000000000006",
+        "state": "starting_point",
+        "newest": "1.9.8"
+      }
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 19,
+    "ts": "2026-11-20T02:14:06Z",
+    "actor": {
+      "kind": "agent",
+      "id": "release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker reported 3 of 6 watched software behind and suggested 3 tickets.",
+    "kind": "agent_message",
+    "data": {
+      "speaker": {
+        "id": "release_checker",
+        "display": "Release checker"
+      },
+      "addressee": {
+        "kind": "room"
+      },
+      "text": "3 of 6 watched software have new releases: LangGraph, Redis and PostgreSQL. I suggest 3 tickets, one for each."
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 20,
+    "ts": "2026-11-20T02:14:06.200000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "room_lead",
+      "display": "Room lead"
+    },
+    "summary": "Room lead agreed and will propose 3 tickets for approval.",
+    "kind": "agent_message",
+    "data": {
+      "speaker": {
+        "id": "room_lead",
+        "display": "Room lead"
+      },
+      "addressee": {
+        "kind": "agent",
+        "id": "release_checker",
+        "display": "Release checker"
+      },
+      "text": "Agreed. I'll draft 3 tickets for an Approver to check together."
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 21,
+    "ts": "2026-11-20T02:14:06.700000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "room_lead",
+      "display": "Room lead"
+    },
+    "summary": "The agents proposed 3 write actions: Create Jira ticket in MOCK: Upgrade LangGraph from 1.2.14 to 1.2.16; Create Jira ticket in MOCK: Upgrade Redis from 8.2.0 to 8.2.1; Create Jira ticket in MOCK: Upgrade PostgreSQL from 17.2.0 to 17.3.0.",
+    "kind": "write_action_proposed",
+    "data": {
+      "proposal_id": "prp_01JBC",
+      "digest": "sha256:c331bd883a0099caaeb7a7c1a29a07ef2f2bbebb162db28b9b7972c5e02d2c72",
+      "actions": [
+        {
+          "connector": "jira",
+          "operation": "create_ticket",
+          "line": "Create Jira ticket in MOCK: Upgrade LangGraph from 1.2.14 to 1.2.16"
+        },
+        {
+          "connector": "jira",
+          "operation": "create_ticket",
+          "line": "Create Jira ticket in MOCK: Upgrade Redis from 8.2.0 to 8.2.1"
+        },
+        {
+          "connector": "jira",
+          "operation": "create_ticket",
+          "line": "Create Jira ticket in MOCK: Upgrade PostgreSQL from 17.2.0 to 17.3.0"
+        }
+      ]
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 22,
+    "ts": "2026-11-20T02:14:06.760000Z",
+    "actor": {
+      "kind": "workflow",
+      "id": "n8n",
+      "display": "Workflow engine"
+    },
+    "summary": "Workflow step run_agents finished: 3 of 6 watched software have new releases: LangGraph 1.2.16, Redis 8.2.1 and PostgreSQL 17.3.0. FastAPI could not be checked.",
+    "kind": "step_finished",
+    "data": {
+      "step": "run_agents",
+      "n8n_execution_id": "51",
+      "try_number": 1,
+      "outcome": "proposed",
+      "detail": "3 of 6 watched software have new releases: LangGraph 1.2.16, Redis 8.2.1 and PostgreSQL 17.3.0. FastAPI could not be checked."
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 23,
+    "ts": "2026-11-20T02:14:09Z",
+    "actor": {
+      "kind": "workflow",
+      "id": "n8n",
+      "display": "Workflow engine"
+    },
+    "summary": "Workflow step ask_approval started (n8n execution 51).",
+    "kind": "step_started",
+    "data": {
+      "step": "ask_approval",
+      "n8n_execution_id": "51",
+      "try_number": 1
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 24,
+    "ts": "2026-11-20T02:14:09.030000Z",
+    "actor": {
+      "kind": "platform",
+      "id": "platform",
+      "display": "Platform"
+    },
+    "summary": "Approval requested. Waiting for the Team approver.",
+    "kind": "approval_requested",
+    "data": {
+      "approval_id": "apr_01JBC",
+      "steps": [
+        {
+          "index": 0,
+          "label": "Team approver",
+          "status": "open",
+          "decided_by": null,
+          "decided_at": null
+        }
+      ],
+      "link": "/approvals/apr_01JBC"
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 25,
+    "ts": "2026-11-20T02:14:09.050000Z",
+    "actor": {
+      "kind": "workflow",
+      "id": "n8n",
+      "display": "Workflow engine"
+    },
+    "summary": "Workflow step ask_approval finished. The work leg ends here.",
+    "kind": "step_finished",
+    "data": {
+      "step": "ask_approval",
+      "n8n_execution_id": "51",
+      "try_number": 1,
+      "outcome": "approval_opened",
+      "detail": "Approval apr_01JBC opened"
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 26,
+    "ts": "2026-11-20T02:14:11.400000Z",
+    "actor": {
+      "kind": "platform",
+      "id": "platform",
+      "display": "Platform"
+    },
+    "summary": "The approval request was posted to the Teams channel CODESparks Ops.",
+    "kind": "approval_announced",
+    "data": {
+      "approval_id": "apr_01JBC",
+      "channel": "CODESparks Ops",
+      "link": "/approvals/apr_01JBC"
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 27,
+    "ts": "2026-11-20T02:35:05.800000Z",
+    "actor": {
+      "kind": "user",
+      "id": "bob",
+      "display": "Bob"
+    },
+    "summary": "Bob approved the request (Team approver).",
+    "kind": "approval_decided",
+    "data": {
+      "approval_id": "apr_01JBC",
+      "step": 0,
+      "verdict": "approve",
+      "by": "bob"
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 28,
+    "ts": "2026-11-20T02:35:05.960000Z",
+    "actor": {
+      "kind": "platform",
+      "id": "platform",
+      "display": "Platform"
+    },
+    "summary": "The act leg was queued for the workflow engine (attempt 1).",
+    "kind": "leg_dispatched",
+    "data": {
+      "leg": "act",
+      "attempt": 1
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 29,
+    "ts": "2026-11-20T02:35:08.250000Z",
+    "actor": {
+      "kind": "workflow",
+      "id": "n8n",
+      "display": "Workflow engine"
+    },
+    "summary": "Workflow step write_action started (n8n execution 52).",
+    "kind": "step_started",
+    "data": {
+      "step": "write_action",
+      "n8n_execution_id": "52",
+      "try_number": 1
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 30,
+    "ts": "2026-11-20T02:35:08.700000Z",
+    "actor": {
+      "kind": "platform",
+      "id": "platform",
+      "display": "Platform"
+    },
+    "summary": "Jira ticket MOCK-143 was created, approved by Bob.",
+    "kind": "write_action_done",
+    "data": {
+      "connector": "jira",
+      "operation": "create_ticket",
+      "external_reference": "MOCK-143",
+      "approved_by": [
+        "bob"
+      ]
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 31,
+    "ts": "2026-11-20T02:35:09.100000Z",
+    "actor": {
+      "kind": "platform",
+      "id": "platform",
+      "display": "Platform"
+    },
+    "summary": "Jira ticket MOCK-144 was created, approved by Bob.",
+    "kind": "write_action_done",
+    "data": {
+      "connector": "jira",
+      "operation": "create_ticket",
+      "external_reference": "MOCK-144",
+      "approved_by": [
+        "bob"
+      ]
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 32,
+    "ts": "2026-11-20T02:35:09.500000Z",
+    "actor": {
+      "kind": "platform",
+      "id": "platform",
+      "display": "Platform"
+    },
+    "summary": "Jira ticket MOCK-145 was created, approved by Bob.",
+    "kind": "write_action_done",
+    "data": {
+      "connector": "jira",
+      "operation": "create_ticket",
+      "external_reference": "MOCK-145",
+      "approved_by": [
+        "bob"
+      ]
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 33,
+    "ts": "2026-11-20T02:35:09.900000Z",
+    "actor": {
+      "kind": "workflow",
+      "id": "n8n",
+      "display": "Workflow engine"
+    },
+    "summary": "Workflow step write_action finished: created MOCK-143, MOCK-144, MOCK-145.",
+    "kind": "step_finished",
+    "data": {
+      "step": "write_action",
+      "n8n_execution_id": "52",
+      "try_number": 1,
+      "outcome": "written",
+      "detail": "Created MOCK-143, MOCK-144, MOCK-145"
+    }
+  },
+  {
+    "run_id": "run_01JBC",
+    "seq": 34,
+    "ts": "2026-11-20T02:35:09.910000Z",
+    "actor": {
+      "kind": "platform",
+      "id": "platform",
+      "display": "Platform"
+    },
+    "summary": "The run succeeded. 3 write actions were done.",
+    "kind": "run_succeeded",
+    "data": {
+      "outcome": "written"
+    }
+  }
+]

@@ -46,6 +46,8 @@ The schedule ([ADR 0020](../docs/adr/0020-our-api-keeps-schedules-and-one-n8n-wo
 
 A scheduled check is started by the schedule owner, so `started_by` is the owner, who cannot approve it. Every run view and `run_created` event says how it started: `trigger` is `person` or `schedule`. `views/scheduled.pending.json` is a scheduled run, and its `run_created` summary reads "Alice's schedule started a check of Software watchlist." The `schedule_tick` workflow asks `POST /internal/v1/schedules/tick` (step key, not a signed-in route) every 5 minutes; it answers the runs it started (`internal/tick.started.json`, or `internal/tick.nothing-due.json`).
 
+`runs/watchlist.json` is one recorded check, which the Portal's demo replays. `watchlist/before-check.json` is the watchlist just before it: six software with the results of Monday's scheduled check, and Alice's schedule for Mondays at 9:00. On Friday Alice starts a check by hand. The Release checker reads each source in list order: n8n is up to date, LangGraph, Redis and PostgreSQL are behind, FastAPI's source answers 404 and the checker carries on, and Terraform, added without a version, gets its starting point. The agents propose three upgrade tickets in one proposal (`views/watchlist.awaiting_approval.json`), Bob approves them with one decision, and they are written as MOCK-143, MOCK-144 and MOCK-145.
+
 `stubs/mock-jira-tickets.json` shows a practice Jira ticket with its `status` (`To Do` or `Done`) and `done_at`. `stubs/mock-jira-ticket.done.json` is the answer of `POST /api/v1/mock-jira/tickets/{key}/done`, which an Operator uses as a person would in Jira; marking a Done ticket again answers the same. The watchlist moves our version to the version a Done ticket named.
 
 ## The activity event

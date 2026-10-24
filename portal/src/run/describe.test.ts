@@ -18,7 +18,7 @@ import {
 } from './describe'
 import { recording, slice, synthetic, type RecordingName } from './recordings'
 import { applyEvent, EMPTY_ROOM, type RoomState } from './room'
-import { RELEASE_CHECK, TEST_REGISTRY } from './testing'
+import { RELEASE_CHECK, SOFTWARE_WATCHLIST, TEST_REGISTRY } from './testing'
 import { trackOf, type Gate, type Stop, type Track } from './track'
 
 const ALICE = { canDecide: false }
@@ -63,6 +63,44 @@ describe('headlineWords on the recordings', () => {
     expect(headlineWords(trackAt('failure', 12).headline, ALICE)).toBe('The run stopped')
     expect(headlineWords(trackAt('rejected', 18).headline, ALICE)).toBe('Declined by Bob')
     expect(headlineWords(trackAt('rejected', 19).headline, BOB)).toBe('Declined by Bob')
+  })
+})
+
+describe('a watchlist check', () => {
+  const at = (seq: number) => trackOf({ room: fold(slice('watchlist', 1, seq)), waiting: null, spedUp: false }, SOFTWARE_WATCHLIST)
+
+  it('draws its line from the watchlist template', () => {
+    expect(at(1).stops.map((each) => each.name)).toEqual(['Started', 'Read every source', 'Draft tickets', 'Approval gate', 'Jira', 'Done'])
+  })
+
+  it('names the software the Release checker is reading', () => {
+    expect(caption(at(6), 'agent:read_versions')).toBe('Reading n8n')
+    expect(caption(at(10), 'agent:read_versions')).toBe('Reading Redis')
+    expect(headlineWords(at(10).headline, ALICE)).toBe('Looking for new releases')
+  })
+
+  it('drafts one ticket for each software that is behind, and writes them all', () => {
+    expect(headlineWords(at(21).headline, ALICE)).toBe('Drafting 3 tickets')
+    expect(headlineWords(at(32).headline, ALICE)).toBe('Written to Jira')
+  })
+
+  it("stands the schedule's owner at Started as their schedule when a schedule started the check", () => {
+    const scheduled = synthetic('watchlist', {
+      seq: 1,
+      ts: '2026-11-23T01:00:00Z',
+      actor: { kind: 'user', id: 'alice', display: 'Alice' },
+      summary: "Alice's schedule started a check of Software watchlist.",
+      kind: 'run_created',
+      data: { use_case_id: 'uc_01JBW', use_case_version: 6, started_by: 'alice', trigger: 'schedule' },
+    })
+    const track = trackOf({ room: fold([scheduled]), waiting: null, spedUp: false }, SOFTWARE_WATCHLIST)
+    const [figure] = stop(track, 'start').cast
+    expect(figure ? figureWords(figure) : null).toBe("Alice's schedule, started the run")
+  })
+
+  it('reads a source the platform could not reach as GitHub being unavailable', () => {
+    expect(captionWords({ is: 'stopped', step: 'read_source', errorType: 'UpstreamUnavailable', reason: 'AgentError' })).toBe('GitHub unavailable')
+    expect(captionWords({ is: 'step', step: 'read_source', summary: 'Release checker is working.' })).toBe('Reading a source')
   })
 })
 

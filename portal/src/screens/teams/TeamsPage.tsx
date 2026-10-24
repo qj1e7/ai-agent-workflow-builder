@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useErrorWords } from '../../api/context'
+import { starterName } from '../../api/labels'
 import { useDisplayName } from '../../api/people'
 import { useApproval, useRuns, useTeamsMessages } from '../../api/queries'
 import type { RunView, TeamsStubMessage } from '../../api/types'
@@ -131,7 +132,7 @@ function Message({ message, run }: { message: TeamsStubMessage; run: RunView | u
             <p className={styles['run']}>
               <strong>{run.use_case_name}</strong>
               <span>
-                Started by {nameOf(run.started_by)}, {startedWords(run.started_at)}
+                Started by {starterName(nameOf(run.started_by), run.trigger)}, {startedWords(run.started_at)}
               </span>
             </p>
           ) : null}

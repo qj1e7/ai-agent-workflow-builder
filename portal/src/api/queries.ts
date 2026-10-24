@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { ApiError, unwrap, type ApiClient } from './client'
 import { useApiClient, useSession, useCacheScope } from './context'
 import type {
+  AddSoftware,
   AddressDecisionIn,
   ConnectIn,
   CreateUseCase,
@@ -9,6 +10,7 @@ import type {
   EventPage,
   RefusalOut,
   SaveIn,
+  ScheduleIn,
 } from './types'
 
 export const POLL_MS = 3000
@@ -26,6 +28,7 @@ export const keys = {
   teamsMessages: (user: string) => ['teams-messages', user] as const,
   jiraTickets: (user: string) => ['jira-tickets', user] as const,
   modelSettings: (user: string) => ['model-settings', user] as const,
+  watchlist: (user: string) => ['watchlist', user] as const,
 }
 
 interface QueryOptions {
@@ -75,6 +78,7 @@ export function useRun(runId: string, options?: QueryOptions) {
     queryKey: keys.run(user, runId),
     queryFn: async () => unwrap(await client.GET('/api/v1/runs/{run_id}', { params: { path: { run_id: runId } } })),
     refetchInterval: pollEvery(options),
+    enabled: runId !== '',
   })
 }
 
@@ -138,7 +142,7 @@ export function useStartRun() {
           params: { path: { use_case_id: useCaseId }, header: { 'Idempotency-Key': idempotencyKey } },
         }),
       ),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['runs'] }),
+    onSuccess: () => Promise.all(['runs', 'watchlist'].map((key) => queryClient.invalidateQueries({ queryKey: [key] }))),
   })
 }
 
@@ -156,7 +160,7 @@ export function useApproval(approvalId: string, options?: QueryOptions & { enabl
 
 function refreshAfterChange(queryClient: QueryClient): Promise<unknown> {
   return Promise.all(
-    ['approval', 'run', 'runs', 'teams-messages', 'jira-tickets'].map((key) =>
+    ['approval', 'run', 'runs', 'teams-messages', 'jira-tickets', 'watchlist'].map((key) =>
       queryClient.invalidateQueries({ queryKey: [key] }),
     ),
   )
@@ -216,6 +220,74 @@ export function useMockJiraTickets(options?: QueryOptions) {
     queryKey: keys.jiraTickets(user),
     queryFn: async () => unwrap(await client.GET('/api/v1/mock-jira/tickets')).tickets,
     refetchInterval: pollEvery(options),
+  })
+}
+
+/** Marks a practice Jira ticket Done. The watchlist then moves our version, so both refresh. */
+export function useMarkDone() {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (key: string) =>
+      unwrap(await client.POST('/api/v1/mock-jira/tickets/{key}/done', { params: { path: { key } } })),
+    onSettled: () =>
+      Promise.all(['jira-tickets', 'watchlist'].map((key) => queryClient.invalidateQueries({ queryKey: [key] }))),
+  })
+}
+
+export function useWatchlist(options?: QueryOptions) {
+  const client = useApiClient()
+  const user = useCacheScope()
+  return useQuery({
+    queryKey: keys.watchlist(user),
+    queryFn: async () => unwrap(await client.GET('/api/v1/watchlist')).watchlist,
+    refetchInterval: pollEvery(options),
+  })
+}
+
+export function useAddSoftware() {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  return useMutation({
+    mutationFn: async (body: AddSoftware) => unwrap(await client.POST('/api/v1/watchlist/software', { body })),
+    onSuccess: (view) => {
+      queryClient.setQueryData(keys.watchlist(user), view)
+      return queryClient.invalidateQueries({ queryKey: ['use-cases'] })
+    },
+  })
+}
+
+export function useRemoveSoftware() {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  return useMutation({
+    mutationFn: async (softwareId: string) =>
+      unwrap(
+        await client.DELETE('/api/v1/watchlist/software/{software_id}', { params: { path: { software_id: softwareId } } }),
+      ),
+    onSuccess: (view) => queryClient.setQueryData(keys.watchlist(user), view),
+  })
+}
+
+export function useSaveSchedule() {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  return useMutation({
+    mutationFn: async (body: ScheduleIn) => unwrap(await client.PUT('/api/v1/watchlist/schedule', { body })),
+    onSuccess: (view) => queryClient.setQueryData(keys.watchlist(user), view),
+  })
+}
+
+export function useTurnOffSchedule() {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  return useMutation({
+    mutationFn: async () => unwrap(await client.DELETE('/api/v1/watchlist/schedule')),
+    onSuccess: (view) => queryClient.setQueryData(keys.watchlist(user), view),
   })
 }
 

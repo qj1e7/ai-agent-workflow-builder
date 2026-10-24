@@ -49,12 +49,14 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "runs/success.json": activity_events_adapter,
     "runs/failure.json": activity_events_adapter,
     "runs/rejected.json": activity_events_adapter,
+    "runs/watchlist.json": activity_events_adapter,
     "views/success.awaiting_approval.json": run_view_adapter,
     "views/success.final.json": run_view_adapter,
     "views/failure.working.json": run_view_adapter,
     "views/failure.final.json": run_view_adapter,
     "views/rejected.awaiting_approval.json": run_view_adapter,
     "views/rejected.final.json": run_view_adapter,
+    "views/watchlist.awaiting_approval.json": run_view_adapter,
     "approvals/apr_01JB8.alice.json": TypeAdapter(ApprovalView),
     "approvals/apr_01JB8.bob.json": TypeAdapter(ApprovalView),
     "approvals/decision.approved.json": TypeAdapter(DecisionOut),
@@ -100,6 +102,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "internal/tick.started.json": TypeAdapter(TickOut),
     "internal/tick.nothing-due.json": TypeAdapter(TickOut),
     "views/scheduled.pending.json": run_view_adapter,
+    "watchlist/before-check.json": TypeAdapter(WatchlistView),
 }
 
 
@@ -117,7 +120,7 @@ def test_every_fixture_file_has_a_parser():
     assert on_disk == set(PARSERS)
 
 
-@pytest.mark.parametrize("story", ["success", "failure", "rejected"])
+@pytest.mark.parametrize("story", ["success", "failure", "rejected", "watchlist"])
 def test_run_events_are_gapless_and_in_time_order(story: str):
     events = activity_events_adapter.validate_python(load(f"runs/{story}.json"))
     assert [e.seq for e in events] == list(range(1, len(events) + 1))
@@ -179,6 +182,26 @@ def test_the_watchlist_fixture_shows_every_status_attention_first():
     assert view.schedule is not None
     none = WatchlistOut.model_validate(load("watchlist/none.json"))
     assert none.watchlist is None
+
+
+def test_the_recorded_check_reads_every_watched_software_and_tickets_the_behind_ones():
+    before = WatchlistView.model_validate(load("watchlist/before-check.json"))
+    events = activity_events_adapter.validate_python(load("runs/watchlist.json"))
+    read = [
+        e.data.result
+        for e in events
+        if e.kind == "agent_step_finished" and e.data.step == "read_source"
+    ]
+    assert sorted(r["software_id"] for r in read) == sorted(row.id for row in before.software)
+    behind = [r["software_id"] for r in read if r["state"] == "behind"]
+    view = run_view_adapter.validate_python(load("views/watchlist.awaiting_approval.json"))
+    assert view.state == "awaiting_approval"
+    names = {row.id: row.name for row in before.software}
+    titles = [str(action.fields["title"]) for action in view.proposal.actions]
+    assert [title.split(" ")[1] for title in titles] == [names[sid] for sid in behind]
+    written = [e.data.external_reference for e in events if e.kind == "write_action_done"]
+    assert len(written) == len(behind)
+    assert events[-1].kind == "run_succeeded"
 
 
 def test_approval_views_follow_the_own_work_rule():

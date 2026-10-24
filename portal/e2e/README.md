@@ -33,6 +33,7 @@ The state names and the four projects are listed in `support/states.ts`. A TypeS
 | `builder.spec.ts` | The builder empty, planned and saved. |
 | `settings.spec.ts` | The AI model settings: connect a known provider, test and save, a new address waiting for another Approver, Bob confirming it, and a refused key and a slow model explained in plain words. |
 | `approvals.spec.ts` | The approvals list, then the approval page as Alice, Carol and Bob, and after approving. Approve and Decline pressed in one tick send one decision. |
+| `software.spec.ts` | The Software page as Alice (Operator) and Bob (Approver, read-only): rows that need a person first, the rest folded under "N up to date", field problems on add, add and remove with an inline confirm, the empty watchlist, and a schedule Carol saves and Alice turns off. Check now opens the recorded check, whose three tickets Bob approves from the row's "Open the approval", and Mark Done on the demo Jira moves our version. |
 | `inboxes.spec.ts` | The Teams inbox and the mock Jira after the live run finished. |
 | `reduced-motion.spec.ts` | With reduced motion nothing that moves is running, and the approval pause reads fully. A control run without reduced motion proves the sampler can see movement. |
 | `keyboard.spec.ts` | Tab order and focus rings on the overview and approval page. The user switcher, the speed control and approving in place on the overview by keyboard alone. |

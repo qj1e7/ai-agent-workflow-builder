@@ -7,6 +7,7 @@ import { NotFoundPage } from './screens/NotFoundPage'
 import { OverviewPage } from './screens/overview/OverviewPage'
 import { RunPage } from './screens/run/RunPage'
 import { SettingsPage } from './screens/settings/SettingsPage'
+import { SoftwarePage } from './screens/software/SoftwarePage'
 import { TeamsPage } from './screens/teams/TeamsPage'
 import { AppShell } from './ui/AppShell'
 
@@ -17,6 +18,7 @@ export function App() {
         <Route index element={<OverviewPage />} />
         <Route path="runs/:runId" element={<RunPage />} />
         <Route path="builder" element={<BuilderPage />} />
+        <Route path="software" element={<SoftwarePage />} />
         <Route path="approvals" element={<ApprovalsPage />} />
         <Route path="approvals/:approvalId" element={<ApprovalPage />} />
         <Route path="teams" element={<TeamsPage />} />

@@ -3,7 +3,7 @@ import { Link, Outlet, useLocation } from 'react-router'
 import { usePortalMode, useSession } from '../api/context'
 import { cx } from './cx'
 import { ErrorBoundary } from './ErrorBoundary'
-import { IconChat, IconFlow, IconGear, IconReplay, IconShield, IconTicket, IconWave, PortalMark, type Icon } from './icons'
+import { IconBox, IconChat, IconFlow, IconGear, IconReplay, IconShield, IconTicket, IconWave, PortalMark, type Icon } from './icons'
 import { SignedInAs } from './SignedInAs'
 import { ThemeToggle } from './ThemeToggle'
 import { UserSwitcher } from './UserSwitcher'
@@ -21,6 +21,7 @@ const startsWith = (prefix: string) => (path: string) => path === prefix || path
 export const NAV_ITEMS: readonly NavItem[] = [
   { label: 'Runs', to: '/', icon: IconWave, isCurrent: (path) => path === '/' || startsWith('/runs')(path) },
   { label: 'Builder', to: '/builder', icon: IconFlow, isCurrent: startsWith('/builder') },
+  { label: 'Software', to: '/software', icon: IconBox, isCurrent: startsWith('/software') },
   { label: 'Approvals', to: '/approvals', icon: IconShield, isCurrent: startsWith('/approvals') },
   { label: 'Teams', to: '/teams', icon: IconChat, isCurrent: startsWith('/teams') },
   { label: 'Jira', to: '/jira', icon: IconTicket, isCurrent: startsWith('/jira') },
