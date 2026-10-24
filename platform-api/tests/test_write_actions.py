@@ -24,6 +24,8 @@ from platform_api.orchestration.write_actions import (
     check,
     digest,
     intent,
+    intents,
+    listed,
 )
 from platform_api.shared import ApprovalId, Digest, ProposalId, RunId, UserId
 
@@ -89,6 +91,36 @@ def test_a_ticket_is_put_in_words_from_its_project_and_title():
 def test_an_unknown_action_is_put_in_words_from_its_operation_and_connector():
     other = WriteAction(connector="confluence", operation="update_page", target={}, fields={})
     assert intent(other) == "update_page on confluence"
+
+
+def ticket(title: str, project: str = "MOCK") -> WriteAction:
+    return WriteAction("jira", "create_ticket", {"project": project}, {"title": title, "body": ""})
+
+
+def test_several_tickets_for_one_project_become_one_phrase_naming_every_title():
+    actions = (ticket("Upgrade LangGraph"), ticket("Upgrade Redis"), ticket("Upgrade FastAPI"))
+    assert intents(actions) == (
+        'create 3 Jira tickets in MOCK: "Upgrade LangGraph", "Upgrade Redis" and "Upgrade FastAPI"',
+    )
+    assert intents((TICKET,)) == (intent(TICKET),)
+    assert intents(()) == ()
+
+
+def test_tickets_are_grouped_by_project_and_other_writes_keep_their_place():
+    page = WriteAction(connector="confluence", operation="update_page", target={}, fields={})
+    actions = (ticket("A"), page, ticket("B", "OPS"), ticket("C"))
+    assert intents(actions) == (
+        'create 2 Jira tickets in MOCK: "A" and "C"',
+        "update_page on confluence",
+        'create a Jira ticket in OPS titled "B"',
+    )
+
+
+def test_listed_reads_as_english():
+    assert listed([]) == ""
+    assert listed(["a"]) == "a"
+    assert listed(["a", "b"]) == "a and b"
+    assert listed(["a", "b", "c"]) == "a, b and c"
 
 
 def test_digest_matches_the_golden_vector():

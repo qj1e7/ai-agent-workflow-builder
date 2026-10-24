@@ -183,6 +183,30 @@ async def test_a_check_asks_the_agents_about_every_watched_software(h: Harness):
     assert request.instruction == WATCHLIST_SPEC.instruction
 
 
+async def test_the_teams_message_names_every_ticket_of_the_check(h: Harness):
+    h.agent.output = ONE_BEHIND.model_copy(
+        update={
+            "proposed": [
+                LANGGRAPH_TICKET,
+                upgrade_ticket(POSTGRES, "PostgreSQL", "17.2", "17.3"),
+            ],
+            "findings": [
+                finding(LANGGRAPH, "behind", "1.2.16"),
+                finding(REDIS, "starting_point", "8.2.1"),
+                finding(FASTAPI, "cant_check", None, NOT_FOUND),
+                finding(POSTGRES, "behind", "17.3"),
+            ],
+        }
+    )
+    await work_leg(h)
+    [message] = await h.teams.messages()
+    assert message.text == (
+        "A run of Software watchlist needs an Approver. It would create 2 Jira tickets in MOCK: "
+        '"Upgrade LangGraph from 1.2.14 to 1.2.16" and "Upgrade PostgreSQL from 17.2 to 17.3". '
+        f"Open the approval page to decide. The agents said: {SUMMARY}"
+    )
+
+
 async def test_a_check_records_what_it_found_and_proposes_one_ticket_per_software_behind(
     h: Harness,
 ):

@@ -7,6 +7,7 @@ import httpx
 
 from platform_api.db import Database
 from platform_api.orchestration.runs import Leg, sentence
+from platform_api.orchestration.write_actions import listed
 from platform_api.shared import ApprovalId, N8nExecutionId, RunId, new_id
 
 
@@ -98,7 +99,7 @@ class TeamsStub:
     async def announce(self, notice: ApprovalNotice) -> None:
         text = (
             f"A run of {notice.use_case_name} needs an Approver. "
-            f"It would {' and '.join(notice.actions)}. "
+            f"It would {listed(notice.actions)}. "
             f"Open the approval page to decide.{_agents_said(notice.summary)}"
         )
         async with self._db.transaction("orchestration") as uow:

@@ -168,11 +168,49 @@ def describe(action: WriteAction) -> ActionLine:
     )
 
 
+def _is_ticket(action: WriteAction) -> bool:
+    return action.connector == "jira" and action.operation == "create_ticket"
+
+
 def intent(action: WriteAction) -> str:
-    if action.connector == "jira" and action.operation == "create_ticket":
+    if _is_ticket(action):
         project = action.target.get("project", "?")
         return f'create a Jira ticket in {project} titled "{action.fields.get("title", "")}"'
     return f"{action.operation} on {action.connector}"
+
+
+def listed(items: Sequence[str]) -> str:
+    """Items as English reads them: "a", "a and b", "a, b and c"."""
+    if len(items) <= 1:
+        return "".join(items)
+    return ", ".join(items[:-1]) + " and " + items[-1]
+
+
+def intents(actions: Sequence[WriteAction]) -> tuple[str, ...]:
+    """One phrase per kind of write. Tickets for one project become one phrase that names each
+    title, so a check with many tickets still reads as one sentence."""
+    phrases: list[str] = []
+    titles: dict[str, list[str]] = {}
+    slot: dict[str, int] = {}
+    for action in actions:
+        if not _is_ticket(action):
+            phrases.append(intent(action))
+            continue
+        project = str(action.target.get("project", "?"))
+        if project not in titles:
+            slot[project] = len(phrases)
+            phrases.append("")
+            titles[project] = []
+        titles[project].append(str(action.fields.get("title", "")))
+    for project, group in titles.items():
+        if len(group) == 1:
+            phrases[slot[project]] = f'create a Jira ticket in {project} titled "{group[0]}"'
+        else:
+            quoted = [f'"{title}"' for title in group]
+            phrases[slot[project]] = (
+                f"create {len(group)} Jira tickets in {project}: {listed(quoted)}"
+            )
+    return tuple(phrases)
 
 
 class WriteFailed(Exception): ...

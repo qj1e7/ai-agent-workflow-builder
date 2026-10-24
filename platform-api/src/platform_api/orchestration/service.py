@@ -110,7 +110,7 @@ from platform_api.orchestration.write_actions import (
     check,
     describe,
     digest,
-    intent,
+    intents,
 )
 from platform_api.shared import (
     ApprovalId,
@@ -596,7 +596,7 @@ class Orchestrator:
                 run_id=run_id,
                 approval_id=request.id,
                 use_case_name=record.spec.use_case_name,
-                actions=tuple(intent(a) for a in proposal.actions),
+                actions=intents(proposal.actions),
                 link=link,
                 summary=proposed.summary,
             )
