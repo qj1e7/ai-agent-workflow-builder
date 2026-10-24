@@ -4,7 +4,7 @@
       "id": "tm_01JB8",
       "ts": "2026-11-03T02:14:10.612000Z",
       "channel": "CODESparks Ops",
-      "text": "A run of LangGraph releases needs an Approver. It would create a Jira ticket in MOCK titled \"New LangGraph releases: 1.2.16, 1.2.15\". Open the approval page to decide.",
+      "text": "A run of LangGraph releases needs an Approver. 2 new releases: 1.2.16, 1.2.15. It would create a Jira ticket in MOCK titled \"New LangGraph releases: 1.2.16, 1.2.15\". Open the approval page to decide.",
       "link": "/approvals/apr_01JB8",
       "run_id": "run_01JB8",
       "approval_id": "apr_01JB8"

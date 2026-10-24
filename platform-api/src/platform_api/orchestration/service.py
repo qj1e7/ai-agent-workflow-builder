@@ -549,6 +549,7 @@ class Orchestrator:
                 use_case_name=record.spec.use_case_name,
                 actions=tuple(intent(a) for a in proposal.actions),
                 link=link,
+                summary=proposed.summary,
             )
             await self._store.enqueue(
                 uow,
@@ -560,6 +561,7 @@ class Orchestrator:
                     "use_case_name": notice.use_case_name,
                     "actions": list(notice.actions),
                     "link": notice.link,
+                    "summary": notice.summary,
                 },
                 uow.now,
             )
@@ -840,6 +842,8 @@ class Orchestrator:
             use_case_name=row.payload["use_case_name"],
             actions=tuple(row.payload["actions"]),
             link=row.payload["link"],
+            # Notices queued before the summary was added have none.
+            summary=row.payload.get("summary", ""),
         )
         await self._channel.announce(notice)
         async with self._db.transaction("orchestration") as uow:

@@ -13,6 +13,7 @@ from platform_api.orchestration.agents import (
     AgentReply,
     AgentUnavailable,
     ModelAccess,
+    TaskFinished,
     TaskRequest,
     task_result_adapter,
 )
@@ -72,6 +73,7 @@ class RecordingEngine:
 @dataclass
 class FakeAgent:
     mode: str = "finished"
+    summary: str | None = None
     requests: list[TaskRequest] = field(default_factory=list)
 
     async def run_task(self, request: TaskRequest) -> AgentReply:
@@ -80,6 +82,9 @@ class FakeAgent:
             return AgentUnavailable("connection refused")
         name = "task-finished" if self.mode == "finished" else "task-failed"
         result = task_result_adapter.validate_python(fixture(f"agent/{name}.json"))
+        if self.summary is not None and isinstance(result, TaskFinished):
+            output = result.output.model_copy(update={"summary": self.summary})
+            result = result.model_copy(update={"output": output})
         return result.model_copy(update={"task_id": request.task_id})
 
 
@@ -167,6 +172,42 @@ async def work_leg_to_approval(
     state = await h.state(run_id)
     assert isinstance(state, AwaitingApproval)
     return run_id, execution, state.approval_id
+
+
+async def test_the_teams_message_carries_the_model_summary_as_one_sentence(h: Harness):
+    said = "langchain-ai/langgraph has 2 new releases since 1.2.14: 1.2.16 and 1.2.15."
+    h.agent.summary = said
+    run_id = await start(h)
+    await h.orchestrator.tick()
+    execution = N8nExecutionId("41")
+    assert await h.orchestrator.on_step(run_id, RUN_AGENTS, execution) == StepReply(
+        True, "proposed", said
+    )
+    await h.orchestrator.on_step(run_id, ASK_APPROVAL, execution)
+    await h.orchestrator.tick()
+    [message] = await h.teams.messages()
+    assert message.text == (
+        f"A run of {SPEC.use_case_name} needs an Approver. {said} It would create a Jira "
+        'ticket in MOCK titled "New LangGraph releases: 1.2.16, 1.2.15". '
+        "Open the approval page to decide."
+    )
+
+
+async def test_a_notice_queued_without_a_summary_reads_as_before(h: Harness):
+    await h.teams.announce(
+        ApprovalNotice(
+            run_id=RunId("run_old"),
+            approval_id=ApprovalId("apr_old"),
+            use_case_name="LangGraph releases",
+            actions=("create a Jira ticket",),
+            link="/approvals/apr_old",
+        )
+    )
+    [message] = await h.teams.messages()
+    assert message.text == (
+        "A run of LangGraph releases needs an Approver. It would create a Jira ticket. "
+        "Open the approval page to decide."
+    )
 
 
 async def test_start_run_is_idempotent_per_key_and_dispatches_through_the_outbox(h: Harness):

@@ -6,7 +6,7 @@ from typing import Protocol
 import httpx
 
 from platform_api.db import Database
-from platform_api.orchestration.runs import Leg
+from platform_api.orchestration.runs import Leg, sentence
 from platform_api.shared import ApprovalId, N8nExecutionId, RunId, new_id
 
 
@@ -48,6 +48,7 @@ class ApprovalNotice:
     use_case_name: str
     actions: tuple[str, ...]
     link: str
+    summary: str = ""
 
 
 class ApprovalChannel(Protocol):
@@ -78,8 +79,9 @@ class TeamsStub:
         return self._channel
 
     async def announce(self, notice: ApprovalNotice) -> None:
+        said = f"{sentence(notice.summary)} " if notice.summary else ""
         text = (
-            f"A run of {notice.use_case_name} needs an Approver. "
+            f"A run of {notice.use_case_name} needs an Approver. {said}"
             f"It would {' and '.join(notice.actions)}. "
             "Open the approval page to decide."
         )
