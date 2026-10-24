@@ -1,7 +1,7 @@
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime, timedelta
 
-from agent_runtime.release_checker import Release, SourceUnavailable
+from agent_runtime.release_checker import Release, SourceRejected, SourceUnavailable
 
 
 class FakeClock:
@@ -31,6 +31,29 @@ class FakeSource:
         if self.failures:
             raise SourceUnavailable(self.failures.pop(0))
         return self.releases
+
+
+class RepoSource:
+    """Answers per repository: its tags, a refusal (4xx) or an outage (5xx) that never ends."""
+
+    def __init__(
+        self,
+        tags: dict[str, list[str]],
+        refused: dict[str, int] | None = None,
+        down: dict[str, int] | None = None,
+    ) -> None:
+        self.tags = tags
+        self.refused = refused or {}
+        self.down = down or {}
+        self.calls: list[str] = []
+
+    def fetch(self, repo: str) -> list[Release]:
+        self.calls.append(repo)
+        if repo in self.refused:
+            raise SourceRejected(self.refused[repo])
+        if repo in self.down:
+            raise SourceUnavailable(self.down[repo])
+        return [Release(tag=tag) for tag in self.tags[repo]]
 
 
 def langgraph_tags() -> list[str]:

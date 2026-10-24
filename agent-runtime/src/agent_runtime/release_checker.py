@@ -12,6 +12,7 @@ from agent_runtime.contract import (
     ReleaseCheckInputs,
     TaskError,
     TaskOutput,
+    WatchlistInputs,
 )
 from agent_runtime.events import Draft
 from agent_runtime.release_source import (
@@ -34,6 +35,7 @@ from agent_runtime.release_source import (
 )
 from agent_runtime.summary import Summarizer
 from agent_runtime.tags import family_of, highest, newer_than
+from agent_runtime.watchlist import WatchlistChecker
 
 __all__ = [
     "CHECKER",
@@ -75,6 +77,7 @@ class ReleaseChecker:
         self._summarizer = summarizer
         self._sleep = sleep
         self._retry = retry
+        self._watchlist = WatchlistChecker(source, summarizer, sleep, retry)
         self._graph = self._build()
 
     def with_summarizer(self, summarizer: Summarizer) -> ReleaseChecker:
@@ -99,6 +102,11 @@ class ReleaseChecker:
         outcome = final.get("error") or final.get("output")
         assert isinstance(outcome, TaskError | TaskOutput)
         return outcome
+
+    def check_watchlist(
+        self, inputs: WatchlistInputs, emit: Callable[[Draft], None]
+    ) -> TaskOutput | TaskError:
+        return self._watchlist.check(inputs, emit)
 
     def _build(self):
         graph = StateGraph(CheckerState)
