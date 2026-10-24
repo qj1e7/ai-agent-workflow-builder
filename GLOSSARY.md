@@ -25,6 +25,35 @@ A ready-made use case that an Operator starts from and adjusts.
 The web app where Operators build use cases and start runs, watch the live activity view, and Approvers decide on approval requests.
 _Avoid_: Frontend, dashboard
 
+### Keeping software up to date
+
+**Watchlist**:
+The list of software a team runs and keeps up to date. It is checked on a schedule, and one approval request covers each check.
+_Avoid_: Inventory, software list
+
+**Watched software**:
+One piece of software on the watchlist, with its source and our version.
+_Avoid_: Item, package, repo
+
+**Check**:
+One run of the watchlist that compares every watched software's newest version with our version.
+_Avoid_: Scan, poll
+
+**Source**:
+Where a watched software's releases are published, such as its GitHub releases.
+_Avoid_: Feed, link
+
+**Our version**:
+The version of a watched software that the team runs now.
+_Avoid_: Current version, installed version
+
+**Newest version**:
+The latest release at the source.
+_Avoid_: Latest, current version
+
+**Schedule owner**:
+The person who last saved a watchlist's schedule. Every scheduled check counts as their work.
+
 ### Running
 
 **Run**:
