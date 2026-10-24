@@ -6,7 +6,7 @@ from platform_api.builder import TAG_PATTERN, Builder
 from platform_api.builder.models import CreateUseCase, UseCaseCreated
 from platform_api.builder.templates import ParamErrors, UnknownTemplate
 from platform_api.db import Database
-from platform_api.orchestration import AnyApprover, Binding, RunSpec, RunStarted
+from platform_api.orchestration import AnyApprover, Binding, ReleaseTask, RunSpec, RunStarted
 from platform_api.shared import Principal, Role, RunId, UseCaseId, UserId
 
 pytestmark = pytest.mark.anyio
@@ -107,7 +107,7 @@ async def test_the_run_spec_snapshots_the_current_version(builder: Builder):
         "LangGraph releases",
     )
     assert (spec.owner, spec.workflow, spec.instruction) == ("alice", "release_check", INSTRUCTION)
-    assert (spec.repo, spec.tag_pattern) == ("langchain-ai/langgraph", TAG_PATTERN)
+    assert spec.task == ReleaseTask("langchain-ai/langgraph", TAG_PATTERN, None)
     assert spec.bindings == {"create_ticket": Binding("jira", "create_ticket", {"project": "MOCK"})}
     assert [step.label for step in spec.approval_policy.steps] == ["Team approver"]
     assert spec.approval_policy.steps[0].eligible == AnyApprover()
@@ -128,7 +128,8 @@ async def test_the_watermark_is_the_last_succeeded_run_else_the_saved_start(
     result = await created(builder, **({"last_seen_tag": seen} if seen else {}))
     spec = await builder.run_spec_for(UseCaseId(result.use_case_id))
     assert spec is not None
-    assert spec.last_known_tag == expected
+    assert isinstance(spec.task, ReleaseTask)
+    assert spec.task.last_known_tag == expected
 
 
 async def test_start_run_hands_the_spec_principal_and_key_to_the_starter(

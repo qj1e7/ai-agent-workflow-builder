@@ -4,7 +4,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from platform_api.orchestration import AnyApprover, ApprovalPolicy, ApprovalStep, Binding, RunSpec
+from platform_api.orchestration import (
+    AnyApprover,
+    ApprovalPolicy,
+    ApprovalStep,
+    Binding,
+    ReleaseTask,
+    RunSpec,
+)
 from platform_api.shared import Principal, Role, UseCaseId, UserId
 
 LOCAL_ENV = {
@@ -41,9 +48,9 @@ SPEC = RunSpec(
     owner=UserId("alice"),
     workflow="release_check",
     instruction="Check langchain-ai/langgraph for new releases and open a ticket for the team.",
-    repo="langchain-ai/langgraph",
-    tag_pattern=r"^\d+\.\d+\.\d+$",
-    last_known_tag="1.2.14",
+    task=ReleaseTask(
+        repo="langchain-ai/langgraph", tag_pattern=r"^\d+\.\d+\.\d+$", last_known_tag="1.2.14"
+    ),
     bindings={"create_ticket": Binding("jira", "create_ticket", {"project": "MOCK"})},
     approval_policy=ApprovalPolicy((ApprovalStep("Team approver", AnyApprover()),)),
 )

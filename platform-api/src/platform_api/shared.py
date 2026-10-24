@@ -12,6 +12,7 @@ UserId = NewType("UserId", str)
 Digest = NewType("Digest", str)
 N8nExecutionId = NewType("N8nExecutionId", str)
 TaskId = NewType("TaskId", str)
+SoftwareId = NewType("SoftwareId", str)
 
 
 class Role(Enum):

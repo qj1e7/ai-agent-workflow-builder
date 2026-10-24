@@ -8,12 +8,20 @@ from platform_api.settings import Context
 MIGRATION_ORDER: tuple[Context, ...] = ("monitoring", "orchestration", "builder")
 
 
-def upgrade(context: Context, owner_url: str) -> None:
+def _config(context: Context, owner_url: str) -> Config:
     config = Config()
     config.set_main_option("script_location", str(Path(__file__).parent / context))
     config.attributes["url"] = owner_url
     config.attributes["schema"] = context
-    command.upgrade(config, "head")
+    return config
+
+
+def upgrade(context: Context, owner_url: str) -> None:
+    command.upgrade(_config(context, owner_url), "head")
+
+
+def downgrade(context: Context, owner_url: str, revision: str) -> None:
+    command.downgrade(_config(context, owner_url), revision)
 
 
 def upgrade_all(owner_url: str) -> None:

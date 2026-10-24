@@ -17,7 +17,7 @@ from platform_api.builder.templates import (
 )
 from platform_api.builder.views import template_view
 from platform_api.db import Database, json
-from platform_api.orchestration import RunSpec, RunStarted, RunStarter
+from platform_api.orchestration import ReleaseTask, RunSpec, RunStarted, RunStarter
 from platform_api.shared import Principal, UseCaseId, UserId, new_id
 
 _CURRENT_VERSION = """
@@ -116,9 +116,11 @@ class Builder:
             owner=view.owner,
             workflow=template.workflow,
             instruction=view.instruction,
-            repo=params["repo"],
-            tag_pattern=params["tag_pattern"],
-            last_known_tag=carried or params.get("last_seen_tag"),
+            task=ReleaseTask(
+                repo=params["repo"],
+                tag_pattern=params["tag_pattern"],
+                last_known_tag=carried or params.get("last_seen_tag"),
+            ),
             bindings=template.bindings_for(params),
             approval_policy=template.approval_policy,
         )

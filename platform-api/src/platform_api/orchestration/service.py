@@ -28,11 +28,14 @@ from platform_api.orchestration.agents import (
     AgentUnavailable,
     Callback,
     CarryForward,
+    GithubSource,
     ModelAccess,
     ReleaseCheckInputs,
+    SoftwareToCheck,
     TaskFailed,
     TaskFinished,
     TaskRequest,
+    WatchlistInputs,
 )
 from platform_api.orchestration.approvals import (
     AlreadyRecorded,
@@ -83,7 +86,7 @@ from platform_api.orchestration.runs import (
     referee,
     step_finished,
 )
-from platform_api.orchestration.spec import RunSpec, RunStarted
+from platform_api.orchestration.spec import ReleaseTask, RunSpec, RunStarted, WatchlistTask
 from platform_api.orchestration.store import (
     DecisionConflict,
     OutboxRow,
@@ -511,12 +514,33 @@ class Orchestrator:
             record.run_id, working.task_id, working.callback_expires_at
         )
         spec = record.spec
+        inputs: ReleaseCheckInputs | WatchlistInputs
+        match spec.task:
+            case ReleaseTask(repo, tag_pattern, last_known_tag):
+                inputs = ReleaseCheckInputs(repo=repo, tag_pattern=tag_pattern)
+                carry = CarryForward(last_known_tag=last_known_tag)
+            case WatchlistTask(tag_pattern, software):
+                inputs = WatchlistInputs(
+                    tag_pattern=tag_pattern,
+                    software=[
+                        SoftwareToCheck(
+                            id=s.id,
+                            name=s.name,
+                            source=GithubSource(ref=s.source.ref),
+                            our_version=s.our_version,
+                            open_ticket=s.open_ticket,
+                            awaiting_approval=s.awaiting_approval,
+                        )
+                        for s in software
+                    ],
+                )
+                carry = CarryForward()
         return TaskRequest(
             task_id=working.task_id,
             run_id=record.run_id,
             instruction=spec.instruction,
-            inputs=ReleaseCheckInputs(repo=spec.repo, tag_pattern=spec.tag_pattern),
-            carry_forward=CarryForward(last_known_tag=spec.last_known_tag),
+            inputs=inputs,
+            carry_forward=carry,
             callback=Callback(url=url, token=token),
             model=model,
         )
