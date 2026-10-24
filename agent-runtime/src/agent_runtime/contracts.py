@@ -25,18 +25,22 @@ from agent_runtime.contract import (
     CarryForward,
     Connected,
     ConnectRequest,
+    Finding,
     FoundModel,
+    GithubSource,
     ModelAccess,
     ModelProblem,
     ModelTestPassed,
     ProposedIntent,
     ReleaseCheckInputs,
     RoomAddressee,
+    SoftwareToCheck,
     TaskError,
     TaskFailed,
     TaskFinished,
     TaskOutput,
     TaskRequest,
+    WatchlistInputs,
     WireModel,
     agent_event_adapter,
 )
@@ -55,8 +59,16 @@ TICKET_BODY = (
     "Releases newer than 1.2.14 on langchain-ai/langgraph:\n- 1.2.16\n- 1.2.15\n\n"
     "Proposed by the AI workflow builder."
 )
+LANGGRAPH_ID = "sw_01JC2A3B4C5D6E7F8G9H0J1K2M"
+REDIS_ID = "sw_01JC2A3B4C5D6E7F8G9H0J1K2N"
+FASTAPI_ID = "sw_01JC2A3B4C5D6E7F8G9H0J1K2P"
+WATCHLIST_TICKET_BODY = (
+    "LangGraph has 2 new releases on GitHub (langchain-ai/langgraph) newer than our version "
+    "1.2.14:\n- 1.2.16\n- 1.2.15\n\nProposed by the AI workflow builder."
+)
 GITHUB_503 = "GitHub returned 503 Service Unavailable three times"
 
+WATCHLIST_T0 = datetime(2026, 11, 10, 2, 14, tzinfo=UTC)
 SUCCESS_T0 = datetime(2026, 11, 3, 2, 14, tzinfo=UTC)
 FAILURE_T0 = datetime(2026, 11, 4, 2, 14, tzinfo=UTC)
 
@@ -69,6 +81,45 @@ def task_request(run_id: str) -> TaskRequest:
         instruction="Check langchain-ai/langgraph for new releases and open a ticket for the team.",
         inputs=ReleaseCheckInputs(repo=REPO, tag_pattern=r"^\d+\.\d+\.\d+$"),
         carry_forward=CarryForward(last_known_tag=LAST_KNOWN_TAG),
+        callback=Callback(
+            url=f"http://platform-api:8000/internal/v1/runs/{run_id}/agent-events?task={task_id}",
+            token="example-callback-token-not-a-secret",
+        ),
+    )
+
+
+def watchlist_software() -> list[SoftwareToCheck]:
+    return [
+        SoftwareToCheck(
+            id=LANGGRAPH_ID,
+            name="LangGraph",
+            source=GithubSource(ref=REPO),
+            our_version=LAST_KNOWN_TAG,
+        ),
+        SoftwareToCheck(
+            id=REDIS_ID,
+            name="Redis",
+            source=GithubSource(ref="redis/redis"),
+            our_version="8.2.1",
+        ),
+        SoftwareToCheck(
+            id=FASTAPI_ID,
+            name="FastAPI",
+            source=GithubSource(ref="fastapi/fastapi"),
+            our_version="0.115.0",
+        ),
+    ]
+
+
+def watchlist_request(run_id: str) -> TaskRequest:
+    task_id = f"{run_id}/work/1/1"
+    return TaskRequest(
+        task_id=task_id,
+        run_id=run_id,
+        instruction="Check the team's watched software for new releases and raise an upgrade "
+        "ticket for each one that is behind.",
+        inputs=WatchlistInputs(tag_pattern=r"^\d+\.\d+\.\d+$", software=watchlist_software()),
+        carry_forward=CarryForward(last_known_tag=None),
         callback=Callback(
             url=f"http://platform-api:8000/internal/v1/runs/{run_id}/agent-events?task={task_id}",
             token="example-callback-token-not-a-secret",
@@ -192,6 +243,155 @@ def finished_task() -> TaskFinished:
     )
 
 
+def _read(
+    rec: Recorder,
+    start: float,
+    name: str,
+    software_id: str,
+    state: str,
+    newest: str | None,
+    said: str,
+) -> None:
+    rec.add(
+        AgentStepStartedEvent,
+        start,
+        CHECKER,
+        f"Release checker is reading the releases of {name}.",
+        AgentStepStartedData(step="read_source"),
+    )
+    rec.add(
+        AgentStepFinishedEvent,
+        start + 0.4,
+        CHECKER,
+        f"Release checker {said}",
+        AgentStepFinishedData(
+            step="read_source",
+            result={"software_id": software_id, "state": state, "newest": newest},
+        ),
+    )
+
+
+def watchlist_finished() -> TaskFinished:
+    rec = Recorder(WATCHLIST_T0)
+    rec.add(
+        AgentJoinedEvent,
+        2.1,
+        ROOM_LEAD,
+        "Room lead brought in Release checker to read the sources of 3 watched software.",
+        AgentJoinedData(
+            agent=CHECKER, reason="The task asks about releases of several watched software."
+        ),
+    )
+    rec.add(
+        AgentMessageEvent,
+        2.3,
+        ROOM_LEAD,
+        "Room lead asked Release checker to check 3 watched software for new releases.",
+        AgentMessageData(
+            speaker=ROOM_LEAD,
+            addressee=TO_CHECKER,
+            text="Please check these for new releases: LangGraph, Redis and FastAPI.",
+        ),
+    )
+    _read(
+        rec,
+        2.5,
+        "LangGraph",
+        LANGGRAPH_ID,
+        "behind",
+        "1.2.16",
+        "read LangGraph. 2 releases newer than 1.2.14.",
+    )
+    _read(
+        rec,
+        3.4,
+        "Redis",
+        REDIS_ID,
+        "up_to_date",
+        "8.2.1",
+        "read Redis. Nothing is newer than 8.2.1.",
+    )
+    _read(rec, 4.3, "FastAPI", FASTAPI_ID, "cant_check", None, "could not read FastAPI.")
+    rec.add(
+        AgentMessageEvent,
+        4.8,
+        CHECKER,
+        "Release checker could not check FastAPI and carried on.",
+        AgentMessageData(
+            speaker=CHECKER,
+            addressee=TO_ROOM,
+            text="I could not read FastAPI's releases: GitHub answered 404 Not Found. "
+            "I will carry on with the rest.",
+        ),
+    )
+    rec.add(
+        AgentMessageEvent,
+        5.0,
+        CHECKER,
+        "Release checker reported 1 of 3 watched software behind and suggested 1 ticket.",
+        AgentMessageData(
+            speaker=CHECKER,
+            addressee=TO_ROOM,
+            text="1 of 3 watched software has new releases: LangGraph. I suggest one ticket.",
+        ),
+    )
+    rec.add(
+        AgentMessageEvent,
+        5.2,
+        ROOM_LEAD,
+        "Room lead agreed and will propose the ticket for approval.",
+        AgentMessageData(
+            speaker=ROOM_LEAD,
+            addressee=TO_CHECKER,
+            text="Agreed. I'll draft one ticket for an Approver to check.",
+        ),
+    )
+    return TaskFinished(
+        task_id="run_01JC2/work/1/1",
+        output=TaskOutput(
+            summary="1 of 3 watched software has new releases: LangGraph 1.2.16. "
+            "FastAPI could not be checked.",
+            new_tags=[],
+            proposed=[
+                ProposedIntent(
+                    kind="create_ticket",
+                    fields={
+                        "title": "Upgrade LangGraph from 1.2.14 to 1.2.16",
+                        "body": WATCHLIST_TICKET_BODY,
+                    },
+                    reason="LangGraph 1.2.16 is out, and we run 1.2.14",
+                    subject=LANGGRAPH_ID,
+                )
+            ],
+            carry_forward=CarryForward(last_known_tag=None),
+            findings=[
+                Finding(
+                    software_id=LANGGRAPH_ID,
+                    state="behind",
+                    newest="1.2.16",
+                    new_versions=NEW_TAGS,
+                    detail="2 releases newer than 1.2.14.",
+                ),
+                Finding(
+                    software_id=REDIS_ID,
+                    state="up_to_date",
+                    newest="8.2.1",
+                    new_versions=[],
+                    detail="Nothing is newer than 8.2.1.",
+                ),
+                Finding(
+                    software_id=FASTAPI_ID,
+                    state="cant_check",
+                    newest=None,
+                    new_versions=[],
+                    detail="GitHub answered 404 Not Found.",
+                ),
+            ],
+        ),
+        events=rec.events,
+    )
+
+
 def failed_task() -> TaskFailed:
     rec = Recorder(FAILURE_T0)
     room_opens(rec, 2.08)
@@ -238,6 +438,8 @@ def fixtures() -> dict[str, WireModel]:
         "task-request.json": task_request("run_01JB8"),
         "task-finished.json": finished,
         "task-failed.json": failed_task(),
+        "watchlist-task-request.json": watchlist_request("run_01JC2"),
+        "watchlist-task-finished.json": watchlist_finished(),
         "callback-event.json": AgentEventPost(task_id=finished.task_id, event=finished.events[0]),
         "agent-cards.json": AGENT_CARDS,
         "model-connect-request.json": ConnectRequest(base_url=GATEWAY, api_key=EXAMPLE_KEY),

@@ -139,8 +139,55 @@ type TagPattern = Annotated[
 
 
 class ReleaseCheckInputs(WireModel):
+    kind: Literal["release_check"] = "release_check"
     repo: RepoName
     tag_pattern: TagPattern
+
+
+SOFTWARE_ID_PATTERN = r"^sw_[0-9A-Z]{26}$"
+
+
+class GithubSource(WireModel):
+    kind: Literal["github"] = "github"
+    ref: RepoName = Field(description="The repository whose releases are read, as owner/name.")
+
+
+class SoftwareToCheck(WireModel):
+    id: str = Field(pattern=SOFTWARE_ID_PATTERN)
+    name: str = Field(min_length=1, max_length=80)
+    source: GithubSource
+    our_version: str | None = Field(
+        description="The version the team runs now. None means the newest release becomes the "
+        "starting point."
+    )
+    open_ticket: str | None = Field(
+        default=None,
+        description="The ticket already raised for this software and not yet done, such as "
+        "MOCK-7. While there is one, no new ticket is proposed.",
+    )
+    awaiting_approval: bool = Field(
+        default=False,
+        description="True while an earlier check's ticket for this software waits for an "
+        "Approver. No new ticket is proposed meanwhile.",
+    )
+
+
+def _distinct_ids(software: list[SoftwareToCheck]) -> list[SoftwareToCheck]:
+    ids = [item.id for item in software]
+    if len(set(ids)) < len(ids):
+        raise ValueError("each software id must appear once")
+    return software
+
+
+class WatchlistInputs(WireModel):
+    kind: Literal["watchlist"] = "watchlist"
+    tag_pattern: TagPattern
+    software: Annotated[
+        list[SoftwareToCheck], Field(min_length=1, max_length=100), AfterValidator(_distinct_ids)
+    ]
+
+
+type TaskInputs = Annotated[ReleaseCheckInputs | WatchlistInputs, Field(discriminator="kind")]
 
 
 class CarryForward(WireModel):
@@ -177,7 +224,7 @@ class TaskRequest(WireModel):
     task_id: str
     run_id: str
     instruction: str
-    inputs: ReleaseCheckInputs
+    inputs: TaskInputs
     carry_forward: CarryForward
     callback: Callback
     model: ModelAccess | None = Field(
@@ -192,6 +239,30 @@ class ProposedIntent(WireModel):
     kind: str
     fields: dict[str, Any]
     reason: str
+    subject: str | None = Field(
+        default=None,
+        description="The id of the input this write is about, such as a watched software's id. "
+        "The platform uses it to follow the write once it is done.",
+    )
+
+
+type FindingState = Literal[
+    "behind", "up_to_date", "starting_point", "already_raised", "cant_check"
+]
+
+
+class Finding(WireModel):
+    software_id: str
+    state: FindingState
+    newest: str | None = Field(
+        description="The newest release at the source that matches the tag pattern. None when "
+        "the source could not be read or has no such release."
+    )
+    new_versions: list[str] = Field(
+        description="Releases newer than our version, newest first. Empty unless the state is "
+        "behind or already_raised."
+    )
+    detail: str = Field(description="One plain sentence for people about this software.")
 
 
 class TaskOutput(WireModel):
@@ -199,6 +270,11 @@ class TaskOutput(WireModel):
     new_tags: list[str]
     proposed: list[ProposedIntent]
     carry_forward: CarryForward
+    findings: list[Finding] = Field(
+        default_factory=list[Finding],
+        description="One per watched software, in the order of the inputs. Empty for a release "
+        "check.",
+    )
 
 
 class TaskError(WireModel):

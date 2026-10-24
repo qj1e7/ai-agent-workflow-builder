@@ -54,8 +54,13 @@ AGENT_CARDS = AgentCards(
         AgentCard(
             id="release_checker",
             display="Release checker",
-            description="Reads a public GitHub repository's releases and finds the new ones.",
-            capabilities=["read GitHub releases", "compare with the last known tag"],
+            description="Reads the releases of public GitHub repositories and finds the new ones, "
+            "for one repository or for a list of watched software.",
+            capabilities=[
+                "read GitHub releases",
+                "compare with the last known tag",
+                "check a list of watched software",
+            ],
         ),
     ]
 )

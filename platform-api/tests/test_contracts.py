@@ -68,6 +68,8 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "agent/task-request.json": TypeAdapter(TaskRequest),
     "agent/task-finished.json": task_result_adapter,
     "agent/task-failed.json": task_result_adapter,
+    "agent/watchlist-task-request.json": TypeAdapter(TaskRequest),
+    "agent/watchlist-task-finished.json": task_result_adapter,
     "agent/callback-event.json": TypeAdapter(AgentEventPost),
     "agent/agent-cards.json": TypeAdapter(AgentCards),
     "agent/model-connect-request.json": TypeAdapter(ConnectRequest),

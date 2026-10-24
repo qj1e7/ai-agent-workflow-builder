@@ -1,0 +1,52 @@
+{
+  "task_id": "run_01JC2/work/1/1",
+  "run_id": "run_01JC2",
+  "instruction": "Check the team's watched software for new releases and raise an upgrade ticket for each one that is behind.",
+  "inputs": {
+    "kind": "watchlist",
+    "tag_pattern": "^\\d+\\.\\d+\\.\\d+$",
+    "software": [
+      {
+        "id": "sw_01JC2A3B4C5D6E7F8G9H0J1K2M",
+        "name": "LangGraph",
+        "source": {
+          "kind": "github",
+          "ref": "langchain-ai/langgraph"
+        },
+        "our_version": "1.2.14",
+        "open_ticket": null,
+        "awaiting_approval": false
+      },
+      {
+        "id": "sw_01JC2A3B4C5D6E7F8G9H0J1K2N",
+        "name": "Redis",
+        "source": {
+          "kind": "github",
+          "ref": "redis/redis"
+        },
+        "our_version": "8.2.1",
+        "open_ticket": null,
+        "awaiting_approval": false
+      },
+      {
+        "id": "sw_01JC2A3B4C5D6E7F8G9H0J1K2P",
+        "name": "FastAPI",
+        "source": {
+          "kind": "github",
+          "ref": "fastapi/fastapi"
+        },
+        "our_version": "0.115.0",
+        "open_ticket": null,
+        "awaiting_approval": false
+      }
+    ]
+  },
+  "carry_forward": {
+    "last_known_tag": null
+  },
+  "callback": {
+    "url": "http://platform-api:8000/internal/v1/runs/run_01JC2/agent-events?task=run_01JC2/work/1/1",
+    "token": "example-callback-token-not-a-secret"
+  },
+  "model": null
+}

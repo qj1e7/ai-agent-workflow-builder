@@ -1,66 +1,53 @@
 # pyright: reportMissingTypeStubs=false, reportUnknownMemberType=false
-import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from http import HTTPStatus
-from typing import Protocol, cast
+from typing import cast
 
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 
 from agent_runtime.contract import (
-    AgentFailedData,
-    AgentMessageData,
-    AgentRef,
-    AgentStepFinishedData,
-    AgentStepStartedData,
     CarryForward,
     ProposedIntent,
     ReleaseCheckInputs,
-    RoomAddressee,
     TaskError,
     TaskOutput,
+    WatchlistInputs,
 )
 from agent_runtime.events import Draft
+from agent_runtime.release_source import (
+    CHECKER,
+    DEFAULT_RETRY,
+    Release,
+    ReleaseSource,
+    RetryPolicy,
+    SourceRejected,
+    SourceUnavailable,
+    candidates,
+    failed,
+    finished,
+    plural,
+    read_releases,
+    started,
+    tag_list,
+    to_room,
+    word,
+)
 from agent_runtime.summary import Summarizer
 from agent_runtime.tags import family_of, highest, newer_than
+from agent_runtime.watchlist import WatchlistChecker
 
-CHECKER = AgentRef(id="release_checker", display="Release checker")
-SOURCE_NAME = "GitHub"
+__all__ = [
+    "CHECKER",
+    "Release",
+    "ReleaseChecker",
+    "ReleaseSource",
+    "RetryPolicy",
+    "SourceRejected",
+    "SourceUnavailable",
+]
+
 REPO_NAMES = {"langchain-ai/langgraph": "LangGraph"}
-NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]
-
-
-@dataclass(frozen=True)
-class Release:
-    tag: str
-    prerelease: bool = False
-    draft: bool = False
-
-
-class SourceUnavailable(Exception):
-    def __init__(self, status: int | None) -> None:
-        super().__init__(status)
-        self.status = status
-
-
-class SourceRejected(Exception):
-    def __init__(self, status: int) -> None:
-        super().__init__(status)
-        self.status = status
-
-
-class ReleaseSource(Protocol):
-    def fetch(self, repo: str) -> list[Release]: ...
-
-
-@dataclass(frozen=True)
-class RetryPolicy:
-    tries: int = 3
-    wait_seconds: float = 2.0
-
-
-DEFAULT_RETRY = RetryPolicy()
 
 
 @dataclass
@@ -90,6 +77,7 @@ class ReleaseChecker:
         self._summarizer = summarizer
         self._sleep = sleep
         self._retry = retry
+        self._watchlist = WatchlistChecker(source, summarizer, sleep, retry)
         self._graph = self._build()
 
     def with_summarizer(self, summarizer: Summarizer) -> ReleaseChecker:
@@ -102,7 +90,7 @@ class ReleaseChecker:
         emit: Callable[[Draft], None],
     ) -> TaskOutput | TaskError:
         if rejection := _reject_unusable(last_known_tag):
-            emit(_failed(None, rejection, "the task could not be read."))
+            emit(failed(None, rejection, "the task could not be read."))
             return rejection
         start = CheckerState(inputs=inputs, last_known_tag=last_known_tag)
         final: dict[str, object] = {}
@@ -114,6 +102,11 @@ class ReleaseChecker:
         outcome = final.get("error") or final.get("output")
         assert isinstance(outcome, TaskError | TaskOutput)
         return outcome
+
+    def check_watchlist(
+        self, inputs: WatchlistInputs, emit: Callable[[Draft], None]
+    ) -> TaskOutput | TaskError:
+        return self._watchlist.check(inputs, emit)
 
     def _build(self):
         graph = StateGraph(CheckerState)
@@ -129,63 +122,37 @@ class ReleaseChecker:
     def _fetch_releases(self, state: CheckerState) -> Update:
         write = get_stream_writer()
         inputs = state.inputs
-        write(_started("fetch_releases", f"fetching releases from {inputs.repo}."))
-        tries = self._retry.tries
-        for attempt in range(1, tries + 1):
-            try:
-                releases = self._source.fetch(inputs.repo)
-            except SourceRejected as refused:
-                error = TaskError(
-                    type="UpstreamRejected",
-                    message=f"{SOURCE_NAME} answered {_phrase(refused.status)}",
-                    retryable=False,
-                )
-                write(_failed("fetch_releases", error, "GitHub refused the request."))
-                return {"error": error}
-            except SourceUnavailable as unavailable:
-                gave_up = attempt == tries
-                wait = f"Waiting {self._retry.wait_seconds:g} s before trying again."
-                write(
-                    _try_failed(unavailable, attempt, tries, "I am giving up." if gave_up else wait)
-                )
-                if gave_up:
-                    error = TaskError(
-                        type="UpstreamUnavailable",
-                        message=f"{_gave_up_message(unavailable)} {_word(tries)} times",
-                        retryable=True,
-                    )
-                    write(_failed("fetch_releases", error, "GitHub was unavailable."))
-                    return {"error": error}
-                self._sleep(self._retry.wait_seconds)
-            else:
-                candidates = _candidates(releases, inputs.tag_pattern)
-                latest = candidates[0] if candidates else None
-                tail = f" The latest is {latest}." if latest else ""
-                write(
-                    _finished(
-                        "fetch_releases",
-                        f"fetched {len(releases)} releases.{tail}",
-                        {"release_count": len(releases), "latest": latest},
-                    )
-                )
-                return {"releases": releases, "candidates": candidates}
-        raise AssertionError("the retry loop always returns")
+        write(started("fetch_releases", f"fetching releases from {inputs.repo}."))
+        outcome = read_releases(self._source, inputs.repo, self._retry, self._sleep, write)
+        if isinstance(outcome, TaskError):
+            gone = "GitHub was unavailable." if outcome.retryable else "GitHub refused the request."
+            write(failed("fetch_releases", outcome, gone))
+            return {"error": outcome}
+        found = candidates(outcome, inputs.tag_pattern)
+        latest = found[0] if found else None
+        tail = f" The latest is {latest}." if latest else ""
+        write(
+            finished(
+                "fetch_releases",
+                f"fetched {len(outcome)} releases.{tail}",
+                {"release_count": len(outcome), "latest": latest},
+            )
+        )
+        return {"releases": outcome, "candidates": found}
 
     def _find_new(self, state: CheckerState) -> Update:
         write = get_stream_writer()
         last, candidates = state.last_known_tag, state.candidates
         write(
-            _started("find_new", f"comparing them with the last known tag {last}.")
+            started("find_new", f"comparing them with the last known tag {last}.")
             if last
-            else _started(
-                "find_new", "looking for a starting point, as there is no last known tag."
-            )
+            else started("find_new", "looking for a starting point, as there is no last known tag.")
         )
         new_tags = newer_than(last, candidates) if last else []
         baseline = None if last else highest(candidates)
         if last:
             said = (
-                f"found {_plural(len(new_tags), 'new release')}: {', '.join(new_tags)}."
+                f"found {plural(len(new_tags), 'new release')}: {', '.join(new_tags)}."
                 if new_tags
                 else "found no new releases."
             )
@@ -198,7 +165,7 @@ class ReleaseChecker:
         result: dict[str, object] = {"new_count": len(new_tags), "tags": new_tags}
         if baseline:
             result["baseline"] = baseline
-        write(_finished("find_new", said, result))
+        write(finished("find_new", said, result))
         return {"new_tags": new_tags, "baseline": baseline}
 
     def _report(self, state: CheckerState) -> Update:
@@ -215,7 +182,7 @@ class ReleaseChecker:
             )
         elif last:
             write(
-                _to_room(
+                to_room(
                     "reported no new releases to the room.",
                     f"Nothing is newer than {last}. I have nothing to propose.",
                 )
@@ -223,7 +190,7 @@ class ReleaseChecker:
             output = _nothing(f"No new releases since {last}", last)
         elif baseline:
             write(
-                _to_room(
+                to_room(
                     "reported a starting point to the room.",
                     f"There was no last known tag, so I will remember {baseline} "
                     "as the starting point. I have nothing to propose.",
@@ -232,7 +199,7 @@ class ReleaseChecker:
             output = _nothing(f"Starting point recorded: {baseline}", baseline)
         else:
             write(
-                _to_room(
+                to_room(
                     "reported to the room that no release matches.",
                     "No release has a plain version number I can compare. "
                     "I have nothing to propose.",
@@ -257,11 +224,6 @@ def _reject_unusable(last_known_tag: str | None) -> TaskError | None:
     return None
 
 
-def _candidates(releases: list[Release], tag_pattern: str) -> list[str]:
-    pattern = re.compile(tag_pattern)
-    return [r.tag for r in releases if not (r.draft or r.prerelease) and pattern.search(r.tag)]
-
-
 def _nothing(summary: str, last_known_tag: str | None) -> TaskOutput:
     return TaskOutput(
         summary=summary,
@@ -284,58 +246,6 @@ def _ticket(repo: str, last: str, new_tags: list[str]) -> ProposedIntent:
     )
 
 
-def _word(number: int) -> str:
-    return NUMBER_WORDS[number] if number < len(NUMBER_WORDS) else str(number)
-
-
-def _plural(count: int, noun: str) -> str:
-    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
-
-
-def _tag_list(tags: list[str]) -> str:
-    return tags[0] if len(tags) == 1 else f"{', '.join(tags[:-1])} and {tags[-1]}"
-
-
-def _phrase(status: int) -> str:
-    return f"{status} {HTTPStatus(status).phrase}"
-
-
-def _gave_up_message(error: SourceUnavailable) -> str:
-    if error.status:
-        return f"{SOURCE_NAME} returned {_phrase(error.status)}"
-    return f"{SOURCE_NAME} could not be reached"
-
-
-def _started(step: str, what: str) -> Draft:
-    return Draft(
-        agent=CHECKER,
-        summary=f"Release checker is {what}",
-        data=AgentStepStartedData(step=step),
-    )
-
-
-def _finished(step: str, what: str, result: dict[str, object]) -> Draft:
-    return Draft(
-        agent=CHECKER,
-        summary=f"Release checker {what}",
-        data=AgentStepFinishedData(step=step, result=result),
-    )
-
-
-def _to_room(summary_tail: str, text: str) -> Draft:
-    data = AgentMessageData(speaker=CHECKER, addressee=RoomAddressee(), text=text)
-    return Draft(agent=CHECKER, summary=f"Release checker {summary_tail}", data=data)
-
-
-def _try_failed(error: SourceUnavailable, attempt: int, tries: int, ending: str) -> Draft:
-    short = f"answered {error.status}" if error.status else "could not be reached"
-    long = f"answered {_phrase(error.status)}" if error.status else "could not be reached"
-    return _to_room(
-        f"reported that {SOURCE_NAME} {short} (try {attempt} of {tries}).",
-        f"{SOURCE_NAME} {long} (try {attempt} of {tries}). {ending}",
-    )
-
-
 def _report_new(last: str, new_tags: list[str]) -> Draft:
     count = len(new_tags)
     verb = "release is" if count == 1 else "releases are"
@@ -344,15 +254,8 @@ def _report_new(last: str, new_tags: list[str]) -> Draft:
         if count == 1
         else ("one ticket for both" if count == 2 else "one ticket for all")
     )
-    return _to_room(
-        f"reported {_plural(count, 'new release')} to the room and suggested one ticket.",
-        f"{_word(count).capitalize()} {verb} newer than {last}: {_tag_list(new_tags)}. "
+    return to_room(
+        f"reported {plural(count, 'new release')} to the room and suggested one ticket.",
+        f"{word(count).capitalize()} {verb} newer than {last}: {tag_list(new_tags)}. "
         f"I suggest {suggestion}.",
     )
-
-
-def _failed(step: str | None, error: TaskError, reason: str) -> Draft:
-    data = AgentFailedData(
-        step=step, error_type=error.type, message=error.message, retryable=error.retryable
-    )
-    return Draft(agent=CHECKER, summary=f"Release checker failed: {reason}", data=data)

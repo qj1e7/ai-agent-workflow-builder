@@ -576,6 +576,62 @@
       "title": "Connected",
       "type": "object"
     },
+    "Finding": {
+      "additionalProperties": false,
+      "properties": {
+        "detail": {
+          "description": "One plain sentence for people about this software.",
+          "title": "Detail",
+          "type": "string"
+        },
+        "new_versions": {
+          "description": "Releases newer than our version, newest first. Empty unless the state is behind or already_raised.",
+          "items": {
+            "type": "string"
+          },
+          "title": "New Versions",
+          "type": "array"
+        },
+        "newest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The newest release at the source that matches the tag pattern. None when the source could not be read or has no such release.",
+          "title": "Newest"
+        },
+        "software_id": {
+          "title": "Software Id",
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/FindingState"
+        }
+      },
+      "required": [
+        "software_id",
+        "state",
+        "newest",
+        "new_versions",
+        "detail"
+      ],
+      "title": "Finding",
+      "type": "object"
+    },
+    "FindingState": {
+      "enum": [
+        "behind",
+        "up_to_date",
+        "starting_point",
+        "already_raised",
+        "cant_check"
+      ],
+      "type": "string"
+    },
     "FoundModel": {
       "additionalProperties": false,
       "properties": {
@@ -599,6 +655,26 @@
         "suggested"
       ],
       "title": "FoundModel",
+      "type": "object"
+    },
+    "GithubSource": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "github",
+          "default": "github",
+          "title": "Kind",
+          "type": "string"
+        },
+        "ref": {
+          "$ref": "#/$defs/RepoName",
+          "description": "The repository whose releases are read, as owner/name."
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "title": "GithubSource",
       "type": "object"
     },
     "ModelAccess": {
@@ -735,6 +811,19 @@
         "reason": {
           "title": "Reason",
           "type": "string"
+        },
+        "subject": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The id of the input this write is about, such as a watched software's id. The platform uses it to follow the write once it is done.",
+          "title": "Subject"
         }
       },
       "required": [
@@ -748,6 +837,12 @@
     "ReleaseCheckInputs": {
       "additionalProperties": false,
       "properties": {
+        "kind": {
+          "const": "release_check",
+          "default": "release_check",
+          "title": "Kind",
+          "type": "string"
+        },
         "repo": {
           "$ref": "#/$defs/RepoName"
         },
@@ -777,6 +872,64 @@
         }
       },
       "title": "RoomAddressee",
+      "type": "object"
+    },
+    "SoftwareToCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "awaiting_approval": {
+          "default": false,
+          "description": "True while an earlier check's ticket for this software waits for an Approver. No new ticket is proposed meanwhile.",
+          "title": "Awaiting Approval",
+          "type": "boolean"
+        },
+        "id": {
+          "pattern": "^sw_[0-9A-Z]{26}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "open_ticket": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The ticket already raised for this software and not yet done, such as MOCK-7. While there is one, no new ticket is proposed.",
+          "title": "Open Ticket"
+        },
+        "our_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The version the team runs now. None means the newest release becomes the starting point.",
+          "title": "Our Version"
+        },
+        "source": {
+          "$ref": "#/$defs/GithubSource"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "source",
+        "our_version"
+      ],
+      "title": "SoftwareToCheck",
       "type": "object"
     },
     "TagPattern": {
@@ -871,11 +1024,36 @@
       "title": "TaskFinished",
       "type": "object"
     },
+    "TaskInputs": {
+      "discriminator": {
+        "mapping": {
+          "release_check": "#/$defs/ReleaseCheckInputs",
+          "watchlist": "#/$defs/WatchlistInputs"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ReleaseCheckInputs"
+        },
+        {
+          "$ref": "#/$defs/WatchlistInputs"
+        }
+      ]
+    },
     "TaskOutput": {
       "additionalProperties": false,
       "properties": {
         "carry_forward": {
           "$ref": "#/$defs/CarryForward"
+        },
+        "findings": {
+          "description": "One per watched software, in the order of the inputs. Empty for a release check.",
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "title": "Findings",
+          "type": "array"
         },
         "new_tags": {
           "items": {
@@ -915,7 +1093,7 @@
           "$ref": "#/$defs/CarryForward"
         },
         "inputs": {
-          "$ref": "#/$defs/ReleaseCheckInputs"
+          "$ref": "#/$defs/TaskInputs"
         },
         "instruction": {
           "title": "Instruction",
@@ -969,6 +1147,35 @@
           "$ref": "#/$defs/TaskFailed"
         }
       ]
+    },
+    "WatchlistInputs": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "watchlist",
+          "default": "watchlist",
+          "title": "Kind",
+          "type": "string"
+        },
+        "software": {
+          "items": {
+            "$ref": "#/$defs/SoftwareToCheck"
+          },
+          "maxItems": 100,
+          "minItems": 1,
+          "title": "Software",
+          "type": "array"
+        },
+        "tag_pattern": {
+          "$ref": "#/$defs/TagPattern"
+        }
+      },
+      "required": [
+        "tag_pattern",
+        "software"
+      ],
+      "title": "WatchlistInputs",
+      "type": "object"
     }
   },
   "additionalProperties": false,

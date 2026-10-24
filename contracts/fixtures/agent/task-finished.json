@@ -14,12 +14,14 @@
           "title": "New LangGraph releases: 1.2.16, 1.2.15",
           "body": "Releases newer than 1.2.14 on langchain-ai/langgraph:\n- 1.2.16\n- 1.2.15\n\nProposed by the AI workflow builder."
         },
-        "reason": "New plain-version releases since 1.2.14"
+        "reason": "New plain-version releases since 1.2.14",
+        "subject": null
       }
     ],
     "carry_forward": {
       "last_known_tag": "1.2.16"
-    }
+    },
+    "findings": []
   },
   "events": [
     {

@@ -3,6 +3,7 @@
   "run_id": "run_01JB8",
   "instruction": "Check langchain-ai/langgraph for new releases and open a ticket for the team.",
   "inputs": {
+    "kind": "release_check",
     "repo": "langchain-ai/langgraph",
     "tag_pattern": "^\\d+\\.\\d+\\.\\d+$"
   },
