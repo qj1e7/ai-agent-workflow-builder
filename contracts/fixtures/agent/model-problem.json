@@ -1,0 +1,5 @@
+{
+  "status": "problem",
+  "reason": "key_refused",
+  "message": "The address answered, but it refused this key. Check that you copied all of it."
+}

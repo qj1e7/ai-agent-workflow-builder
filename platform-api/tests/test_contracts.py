@@ -9,7 +9,15 @@ from platform_api.builder.http import SuggestOut, TemplateList, UseCaseView
 from platform_api.monitoring.agent_events import AgentEventPost
 from platform_api.monitoring.events import DeniedReason, WireVerdict, activity_events_adapter
 from platform_api.monitoring.http import TroubleshootingOut
-from platform_api.orchestration.agents import AgentCards, TaskRequest, task_result_adapter
+from platform_api.orchestration.agents import (
+    AgentCards,
+    ConnectRequest,
+    ModelAccess,
+    TaskRequest,
+    connect_result_adapter,
+    model_test_result_adapter,
+    task_result_adapter,
+)
 from platform_api.orchestration.approvals import Refusal, Verdict
 from platform_api.orchestration.http import (
     ApprovalView,
@@ -22,6 +30,7 @@ from platform_api.orchestration.http import (
     run_view_adapter,
 )
 from platform_api.orchestration.runs import FailureReason, Leg, Stage, StepName
+from platform_api.orchestration.settings_http import ModelSettingsView, SaveOut
 from platform_api.orchestration.write_actions import DenyReason
 from platform_api.wire import FailureReason as WireFailureReason
 from platform_api.wire import FailureStage
@@ -61,6 +70,20 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "agent/task-failed.json": task_result_adapter,
     "agent/callback-event.json": TypeAdapter(AgentEventPost),
     "agent/agent-cards.json": TypeAdapter(AgentCards),
+    "agent/model-connect-request.json": TypeAdapter(ConnectRequest),
+    "agent/model-connected.json": connect_result_adapter,
+    "agent/model-test-request.json": TypeAdapter(ModelAccess),
+    "agent/model-test-passed.json": model_test_result_adapter,
+    "agent/model-problem.json": model_test_result_adapter,
+    "settings/model.empty.json": TypeAdapter(ModelSettingsView),
+    "settings/model.active.json": TypeAdapter(ModelSettingsView),
+    "settings/model.pending.alice.json": TypeAdapter(ModelSettingsView),
+    "settings/model.pending.bob.json": TypeAdapter(ModelSettingsView),
+    "settings/connect.connected.json": connect_result_adapter,
+    "settings/connect.problem.json": connect_result_adapter,
+    "settings/save.saved.json": TypeAdapter(SaveOut),
+    "settings/save.awaiting_confirmation.json": TypeAdapter(SaveOut),
+    "settings/save.too_slow.json": TypeAdapter(SaveOut),
 }
 
 

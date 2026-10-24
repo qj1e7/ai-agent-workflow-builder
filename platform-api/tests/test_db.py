@@ -11,9 +11,14 @@ pytestmark = pytest.mark.anyio
 
 def test_each_context_has_a_version_table_in_its_own_schema(postgres: PostgresUrls):
     with psycopg.connect(postgres.owner) as conn:
-        for context in ("builder", "orchestration", "monitoring"):
-            row = conn.execute(f"SELECT version_num FROM {context}.alembic_version").fetchone()
-            assert row == ("0001",)
+        for context, head in (
+            ("builder", "0001"),
+            ("orchestration", "0002"),
+            ("monitoring", "0001"),
+        ):
+            table = sql.Identifier(context, "alembic_version")
+            row = conn.execute(sql.SQL("SELECT version_num FROM {}").format(table)).fetchone()
+            assert row == (head,)
 
 
 @pytest.mark.parametrize(
@@ -24,6 +29,8 @@ def test_each_context_has_a_version_table_in_its_own_schema(postgres: PostgresUr
         ("monitoring", "orchestration.runs"),
         ("monitoring", "builder.use_cases"),
         ("orchestration", "builder.use_cases"),
+        ("builder", "orchestration.model_setting"),
+        ("monitoring", "orchestration.model_setting"),
     ],
 )
 async def test_a_context_cannot_read_another_contexts_tables(

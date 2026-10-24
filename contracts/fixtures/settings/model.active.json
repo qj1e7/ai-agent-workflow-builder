@@ -1,0 +1,46 @@
+{
+  "available": true,
+  "unavailable_message": null,
+  "you_can_change": true,
+  "active": {
+    "provider": "AI Singapore gateway",
+    "style": "anthropic",
+    "base_url": "https://llm-gateway.aisg.sg",
+    "model": "claude-haiku-5-5",
+    "key_hint": "x7",
+    "test_seconds": 1.4,
+    "by": "alice",
+    "by_name": "Alice",
+    "at": "2026-11-02T06:02:00Z"
+  },
+  "pending": null,
+  "providers": [
+    {
+      "id": "aisg",
+      "name": "AI Singapore gateway",
+      "base_url": "https://llm-gateway.aisg.sg"
+    },
+    {
+      "id": "openai",
+      "name": "OpenAI",
+      "base_url": "https://api.openai.com/v1"
+    },
+    {
+      "id": "anthropic",
+      "name": "Anthropic",
+      "base_url": "https://api.anthropic.com"
+    },
+    {
+      "id": "gemini",
+      "name": "Google Gemini",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai"
+    }
+  ],
+  "changes": [
+    {
+      "at": "2026-11-02T06:02:00Z",
+      "by": "alice",
+      "summary": "Alice turned on claude-haiku-5-5 (AI Singapore gateway), with a key ending in x7."
+    }
+  ]
+}

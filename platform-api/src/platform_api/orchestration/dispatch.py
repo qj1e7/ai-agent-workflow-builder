@@ -6,7 +6,7 @@ from typing import Protocol
 import httpx
 
 from platform_api.db import Database
-from platform_api.orchestration.runs import Leg
+from platform_api.orchestration.runs import Leg, sentence
 from platform_api.shared import ApprovalId, N8nExecutionId, RunId, new_id
 
 
@@ -48,6 +48,7 @@ class ApprovalNotice:
     use_case_name: str
     actions: tuple[str, ...]
     link: str
+    summary: str = ""
 
 
 class ApprovalChannel(Protocol):
@@ -55,6 +56,23 @@ class ApprovalChannel(Protocol):
     def name(self) -> str: ...
 
     async def announce(self, notice: ApprovalNotice) -> None: ...
+
+
+SUMMARY_LIMIT = 300
+
+
+def _agents_said(summary: str) -> str:
+    """The agents' summary, labelled, on one line and cut to length.
+
+    It is model text, so it goes last: nothing the platform says can follow it and be mistaken
+    for it, and it cannot pose as the action line above it.
+    """
+    flat = " ".join(summary.split())
+    if not flat:
+        return ""
+    if len(flat) > SUMMARY_LIMIT:
+        flat = flat[: SUMMARY_LIMIT - 1].rstrip() + "…"
+    return f" The agents said: {sentence(flat)}"
 
 
 @dataclass(frozen=True)
@@ -81,7 +99,7 @@ class TeamsStub:
         text = (
             f"A run of {notice.use_case_name} needs an Approver. "
             f"It would {' and '.join(notice.actions)}. "
-            "Open the approval page to decide."
+            f"Open the approval page to decide.{_agents_said(notice.summary)}"
         )
         async with self._db.transaction("orchestration") as uow:
             await uow.conn.execute(

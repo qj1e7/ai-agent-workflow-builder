@@ -28,6 +28,7 @@ from platform_api.orchestration.agents import (
     AgentUnavailable,
     Callback,
     CarryForward,
+    ModelAccess,
     ReleaseCheckInputs,
     TaskFailed,
     TaskFinished,
@@ -292,6 +293,10 @@ def _decided(request: ApprovalRequest, decision: Decision, display: str) -> Pend
     )
 
 
+class ActiveModel(Protocol):
+    async def access(self, uow: UnitOfWork) -> ModelAccess | None: ...
+
+
 class Orchestrator:
     def __init__(
         self,
@@ -303,8 +308,10 @@ class Orchestrator:
         gateway: WriteGateway,
         mint_callback: CallbackMinter,
         retry_policy: RetryPolicy = RETRY_POLICY,
+        models: ActiveModel | None = None,
     ) -> None:
         self._db = db
+        self._models = models
         self._store = Store()
         self._activity = activity
         self._engine = engine
@@ -424,8 +431,9 @@ class Orchestrator:
                 case _:
                     raise AssertionError("the referee admits run_agents only in Pending or Working")
             record = await self._commit(uow, record, moved)
+            model = await self._models.access(uow) if self._models is not None else None
         working = moved.state
-        request = self._task_request(record, working)
+        request = self._task_request(record, working, model)
         reply = await self._agents.run_task(request)
 
         async with self._db.transaction("orchestration") as uow:
@@ -496,7 +504,9 @@ class Orchestrator:
                 await self._commit(uow, record, moved, carry_forward=carry)
                 return StepReply(True, "proposed", summary)
 
-    def _task_request(self, record: RunRecord, working: Working) -> TaskRequest:
+    def _task_request(
+        self, record: RunRecord, working: Working, model: ModelAccess | None
+    ) -> TaskRequest:
         url, token = self._mint_callback(
             record.run_id, working.task_id, working.callback_expires_at
         )
@@ -508,6 +518,7 @@ class Orchestrator:
             inputs=ReleaseCheckInputs(repo=spec.repo, tag_pattern=spec.tag_pattern),
             carry_forward=CarryForward(last_known_tag=spec.last_known_tag),
             callback=Callback(url=url, token=token),
+            model=model,
         )
 
     async def _ask_approval(self, run_id: RunId, execution: N8nExecutionId) -> StepReply:
@@ -538,6 +549,7 @@ class Orchestrator:
                 use_case_name=record.spec.use_case_name,
                 actions=tuple(intent(a) for a in proposal.actions),
                 link=link,
+                summary=proposed.summary,
             )
             await self._store.enqueue(
                 uow,
@@ -549,6 +561,7 @@ class Orchestrator:
                     "use_case_name": notice.use_case_name,
                     "actions": list(notice.actions),
                     "link": notice.link,
+                    "summary": notice.summary,
                 },
                 uow.now,
             )
@@ -829,6 +842,8 @@ class Orchestrator:
             use_case_name=row.payload["use_case_name"],
             actions=tuple(row.payload["actions"]),
             link=row.payload["link"],
+            # Notices queued before the summary was added have none.
+            summary=row.payload.get("summary", ""),
         )
         await self._channel.announce(notice)
         async with self._db.transaction("orchestration") as uow:

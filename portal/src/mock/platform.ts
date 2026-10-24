@@ -1,9 +1,11 @@
 import type {
+  ActivityEvent,
   ApprovalView,
   CreateUseCase,
   DecisionOut,
   DecisionView,
   DevUser,
+  EventOf,
   MockJiraTicket,
   ProposalView,
   Refusal,
@@ -18,6 +20,7 @@ import { FIRST_NEW_TICKET_NUMBER, proposalFor, workLeg, type Person, type RunCon
 import { Run } from './run'
 import type { ApprovalRecord } from './runView'
 import { finished, replay, Timeline } from './timeline'
+import { DemoModelSettings } from './settings'
 
 const HOUR_MS = 3_600_000
 const SEEDED_FAILURE_AGE_MS = 3 * HOUR_MS
@@ -42,7 +45,18 @@ function person(user: DevUser): Person {
   return { id: user.id, display: user.display }
 }
 
+// The agents' summary, labelled and last, the way the platform ends the Teams message.
+function agentsSaid(events: readonly ActivityEvent[]): string {
+  const said = events.findLast(
+    (event): event is EventOf<'step_finished'> =>
+      event.kind === 'step_finished' && event.data.step === 'run_agents' && event.data.outcome === 'proposed',
+  )?.data.detail
+  if (!said) return ''
+  return ` The agents said: ${/[.!?…]$/.test(said) ? said : `${said}.`}`
+}
+
 export class DemoPlatform {
+  readonly modelSettings = new DemoModelSettings()
   private readonly runs: Run[]
   private readonly useCases: UseCaseView[]
   private readonly startedRuns = new Map<string, string>()
@@ -195,7 +209,8 @@ export class DemoPlatform {
     return this.runs
       .flatMap((run) => {
         const records = run.approvals(wall)
-        return run.timeline.emitted(wall).flatMap((event) => {
+        const emitted = run.timeline.emitted(wall)
+        return emitted.flatMap((event) => {
           if (event.kind !== 'approval_announced') return []
           const record = records.find((candidate) => candidate.approval_id === event.data.approval_id)
           const action = record?.actions[0]
@@ -204,7 +219,7 @@ export class DemoPlatform {
             id: `tm_${record.approval_id.slice('apr_'.length)}`,
             ts: event.ts,
             channel: event.data.channel,
-            text: `A run of ${run.meta.useCaseName} needs an Approver. It would create a Jira ticket in ${String(action.target['project'])} titled "${String(action.fields['title'])}". Open the approval page to decide.`,
+            text: `A run of ${run.meta.useCaseName} needs an Approver. It would create a Jira ticket in ${String(action.target['project'])} titled "${String(action.fields['title'])}". Open the approval page to decide.${agentsSaid(emitted)}`,
             link: event.data.link,
             run_id: run.id,
             approval_id: record.approval_id,

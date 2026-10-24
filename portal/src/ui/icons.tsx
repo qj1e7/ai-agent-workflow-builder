@@ -126,6 +126,14 @@ export const IconFlow = drawn(
     <path d="M6.5 9v3.5a2 2 0 0 0 2 2h6" />
   </>,
 )
+export const IconGear = drawn(
+  'IconGear',
+  <>
+    <circle cx="12" cy="12" r="3" />
+    <path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6 6l1.6 1.6M16.4 16.4L18 18M6 18l1.6-1.6M16.4 7.6L18 6" />
+    <circle cx="12" cy="12" r="6.3" />
+  </>,
+)
 export const IconPerson = drawn(
   'IconPerson',
   <>

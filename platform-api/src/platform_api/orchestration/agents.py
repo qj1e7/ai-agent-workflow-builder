@@ -28,6 +28,16 @@ class Callback(WireModel):
     )
 
 
+type ModelStyle = Literal["anthropic", "openai"]
+
+
+class ModelAccess(WireModel):
+    style: ModelStyle
+    base_url: str
+    model: str
+    api_key: str = Field(repr=False)
+
+
 class TaskRequest(WireModel):
     task_id: str
     run_id: str
@@ -35,6 +45,7 @@ class TaskRequest(WireModel):
     inputs: ReleaseCheckInputs
     carry_forward: CarryForward
     callback: Callback
+    model: ModelAccess | None = None
 
 
 class ProposedIntentIn(WireModel):
@@ -73,6 +84,59 @@ class TaskFailed(WireModel):
 type TaskResult = Annotated[TaskFinished | TaskFailed, Field(discriminator="status")]
 
 task_result_adapter: TypeAdapter[TaskResult] = TypeAdapter(TaskResult)
+
+
+class ConnectRequest(WireModel):
+    base_url: str
+    api_key: str = Field(repr=False)
+
+
+class FoundModel(WireModel):
+    id: str
+    display: str
+    suggested: bool
+
+
+class Connected(WireModel):
+    status: Literal["connected"] = "connected"
+    style: ModelStyle
+    base_url: str
+    models: list[FoundModel]
+
+
+type ProblemReason = Literal[
+    "address_not_allowed",
+    "unreachable",
+    "key_refused",
+    "not_a_model_api",
+    "no_text_models",
+    "model_not_found",
+    "too_slow",
+    "unusable_answer",
+    "failed",
+]
+
+
+class ModelProblem(WireModel):
+    status: Literal["problem"] = "problem"
+    reason: ProblemReason
+    message: str
+
+
+type ConnectResult = Annotated[Connected | ModelProblem, Field(discriminator="status")]
+
+connect_result_adapter: TypeAdapter[ConnectResult] = TypeAdapter(ConnectResult)
+
+
+class ModelTestPassed(WireModel):
+    status: Literal["passed"] = "passed"
+    seconds: float
+    text: str
+
+
+type ModelTestResult = Annotated[ModelTestPassed | ModelProblem, Field(discriminator="status")]
+
+model_test_result_adapter: TypeAdapter[ModelTestResult] = TypeAdapter(ModelTestResult)
 
 
 class AgentCard(WireModel):
@@ -134,6 +198,38 @@ class HttpAgentRuntime:
             return task_result_adapter.validate_json(response.content)
         except ValueError as error:
             return AgentRejected(f"The agent runtime's reply did not parse: {error}")
+
+    async def connect_model(
+        self, request: ConnectRequest
+    ) -> ConnectResult | AgentUnavailable | AgentRejected:
+        return await self._model_call("/v1/models/connect", request, connect_result_adapter)
+
+    async def test_model(
+        self, access: ModelAccess
+    ) -> ModelTestResult | AgentUnavailable | AgentRejected:
+        return await self._model_call("/v1/models/test", access, model_test_result_adapter)
+
+    async def _model_call[T](
+        self, path: str, body: WireModel, adapter: TypeAdapter[T]
+    ) -> T | AgentUnavailable | AgentRejected:
+        # The body holds a model key, and an error answer can echo the body, so no text is kept.
+        try:
+            response = await self._client.post(
+                f"{self._base_url}{path}",
+                json=body.model_dump(mode="json"),
+                headers={AGENT_KEY_HEADER: self._api_key},
+                timeout=AGENT_TIMEOUT_SECONDS,
+            )
+        except httpx.HTTPError as error:
+            return AgentUnavailable(f"The agent runtime did not answer: {type(error).__name__}")
+        if response.status_code >= 500:
+            return AgentUnavailable(f"The agent runtime answered {response.status_code}")
+        if response.status_code >= 400:
+            return AgentRejected(f"The agent runtime refused the request ({response.status_code})")
+        try:
+            return adapter.validate_json(response.content)
+        except ValueError:
+            return AgentRejected("The agent runtime's answer did not parse")
 
     async def close(self) -> None:
         await self._client.aclose()

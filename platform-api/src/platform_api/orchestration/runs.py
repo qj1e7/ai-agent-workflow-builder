@@ -128,6 +128,11 @@ def _step_started(step: StepName, execution: N8nExecutionId, try_number: int) ->
     )
 
 
+def sentence(text: str) -> str:
+    """text with one closing full stop. A model's summary often brings its own."""
+    return text if text.endswith((".", "!", "?", "…")) else f"{text}."
+
+
 def step_finished(
     step: StepName,
     execution: N8nExecutionId,
@@ -138,7 +143,7 @@ def step_finished(
     return PendingEvent(
         WORKFLOW,
         "step_finished",
-        f"Workflow step {step.value} finished: {detail}.",
+        f"Workflow step {step.value} finished: {sentence(detail)}",
         StepFinishedData(
             step=step.value,
             n8n_execution_id=execution,
@@ -307,6 +312,8 @@ class Proposed:
     execution: N8nExecutionId
     attempt: int
     deadline_at: datetime
+    # The agents' summary, for the approval message. Runs saved before it existed load with "".
+    summary: str = ""
 
     def open_approval(
         self, approval_id: ApprovalId, steps: list[ApprovalStepView], link: str
@@ -387,7 +394,12 @@ class Working:
         )
         return Moved(
             Proposed(
-                self.run_id, proposal_id, self.execution, self.attempt, deadline(Proposed, now)
+                self.run_id,
+                proposal_id,
+                self.execution,
+                self.attempt,
+                deadline(Proposed, now),
+                summary,
             ),
             (
                 proposed,
@@ -401,7 +413,7 @@ class Working:
         succeeded = PendingEvent(
             PLATFORM,
             "run_succeeded",
-            f"The run succeeded. There was nothing to write: {summary}.",
+            f"The run succeeded. There was nothing to write: {sentence(summary)}",
             RunSucceededData(outcome=Outcome.NOTHING_TO_WRITE.value),
         )
         return Moved(

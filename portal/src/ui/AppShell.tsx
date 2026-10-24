@@ -3,7 +3,7 @@ import { Link, Outlet, useLocation } from 'react-router'
 import { usePortalMode, useSession } from '../api/context'
 import { cx } from './cx'
 import { ErrorBoundary } from './ErrorBoundary'
-import { IconChat, IconFlow, IconReplay, IconShield, IconTicket, IconWave, PortalMark, type Icon } from './icons'
+import { IconChat, IconFlow, IconGear, IconReplay, IconShield, IconTicket, IconWave, PortalMark, type Icon } from './icons'
 import { SignedInAs } from './SignedInAs'
 import { ThemeToggle } from './ThemeToggle'
 import { UserSwitcher } from './UserSwitcher'
@@ -101,6 +101,15 @@ export function AppShell() {
             </span>
           ) : null}
           <ThemeToggle />
+          <Link
+            to="/settings"
+            className={styles['settings']}
+            aria-label="Settings"
+            title="Settings"
+            aria-current={startsWith('/settings')(pathname) ? 'page' : undefined}
+          >
+            <IconGear size={20} />
+          </Link>
           {session.kind === 'dev' ? <UserSwitcher session={session} /> : <SignedInAs session={session} />}
         </div>
       </header>

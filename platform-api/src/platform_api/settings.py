@@ -37,6 +37,7 @@ class Settings:
     platform_internal_url: str
     callback_signing_key: str
     teams_channel: str
+    settings_encryption_key: str | None = None
 
 
 def _required(env: Mapping[str, str], name: str) -> str:
@@ -63,6 +64,7 @@ def settings_from_env(env: Mapping[str, str]) -> Settings:
         platform_internal_url=_required(env, "PLATFORM_INTERNAL_URL").rstrip("/"),
         callback_signing_key=_required(env, "CALLBACK_SIGNING_KEY"),
         teams_channel=env.get("TEAMS_CHANNEL") or "CODESparks Ops",
+        settings_encryption_key=env.get("SETTINGS_ENCRYPTION_KEY") or None,
     )
 
 

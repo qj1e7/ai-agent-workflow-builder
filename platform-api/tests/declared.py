@@ -72,7 +72,14 @@ def declared_status(app: FastAPI, method: str, path: str, response: httpx.Respon
     )
     assert "content" in declared, f"{method} {path} declares {response.status_code} with no body"
     body_schema = declared["content"]["application/json"]["schema"]
-    model = schema["components"]["schemas"][body_schema["$ref"].rsplit("/", 1)[1]]
+    components = schema["components"]["schemas"]
+    declared_model = components[body_schema["$ref"].rsplit("/", 1)[1]]
+    # A tagged union is a component that lists its variants under oneOf.
+    refs = declared_model.get("oneOf", [])
+    models = [components[r["$ref"].rsplit("/", 1)[1]] for r in refs] or [declared_model]
     body = response.json()
-    assert set(body) <= set(model["properties"]), (body, model["properties"])
-    assert set(model.get("required", [])) <= set(body), (body, model["required"])
+    # A tagged union answers with one of its variants, so the body has to fit one of them.
+    assert any(
+        set(body) <= set(m["properties"]) and set(m.get("required", [])) <= set(body)
+        for m in models
+    ), (body, [m["properties"] for m in models])

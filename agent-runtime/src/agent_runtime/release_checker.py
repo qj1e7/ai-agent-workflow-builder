@@ -92,6 +92,9 @@ class ReleaseChecker:
         self._retry = retry
         self._graph = self._build()
 
+    def with_summarizer(self, summarizer: Summarizer) -> ReleaseChecker:
+        return ReleaseChecker(self._source, summarizer, self._sleep, self._retry)
+
     def check(
         self,
         inputs: ReleaseCheckInputs,

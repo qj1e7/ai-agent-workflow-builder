@@ -40,8 +40,10 @@ class TemplateSummarizer:
         return template_summary(new_tags)
 
 
-def model_factory(base_url: str | None = None, api_key: str | None = None) -> ModelFactory:
-    pairs = (("base_url", base_url), ("api_key", api_key))
+def model_factory(
+    base_url: str | None = None, api_key: str | None = None, provider: str | None = None
+) -> ModelFactory:
+    pairs = (("base_url", base_url), ("api_key", api_key), ("model_provider", provider))
     gateway: dict[str, Any] = {key: value for key, value in pairs if value}
 
     def build(name: str) -> BaseChatModel:

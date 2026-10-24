@@ -25,6 +25,12 @@ export const STATES = [
   'approval-approved',
   'teams-inbox',
   'jira-tickets',
+  'settings-empty',
+  'settings-connected',
+  'settings-saved',
+  'settings-pending-alice',
+  'settings-pending-bob',
+  'settings-confirmed',
   'reduced-motion-pause',
 ] as const
 

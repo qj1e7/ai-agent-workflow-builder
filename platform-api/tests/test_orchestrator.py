@@ -7,11 +7,13 @@ from typing import Any
 import psycopg
 import pytest
 
-from platform_api.db import Database
+from platform_api.db import Database, UnitOfWork
 from platform_api.monitoring import ActivityLog
 from platform_api.orchestration.agents import (
     AgentReply,
     AgentUnavailable,
+    ModelAccess,
+    TaskFinished,
     TaskRequest,
     task_result_adapter,
 )
@@ -71,6 +73,7 @@ class RecordingEngine:
 @dataclass
 class FakeAgent:
     mode: str = "finished"
+    summary: str | None = None
     requests: list[TaskRequest] = field(default_factory=list)
 
     async def run_task(self, request: TaskRequest) -> AgentReply:
@@ -79,6 +82,9 @@ class FakeAgent:
             return AgentUnavailable("connection refused")
         name = "task-finished" if self.mode == "finished" else "task-failed"
         result = task_result_adapter.validate_python(fixture(f"agent/{name}.json"))
+        if self.summary is not None and isinstance(result, TaskFinished):
+            output = result.output.model_copy(update={"summary": self.summary})
+            result = result.model_copy(update={"output": output})
         return result.model_copy(update={"task_id": request.task_id})
 
 
@@ -166,6 +172,61 @@ async def work_leg_to_approval(
     state = await h.state(run_id)
     assert isinstance(state, AwaitingApproval)
     return run_id, execution, state.approval_id
+
+
+async def test_the_teams_message_carries_the_model_summary_as_one_sentence(h: Harness):
+    said = "langchain-ai/langgraph has 2 new releases since 1.2.14: 1.2.16 and 1.2.15."
+    h.agent.summary = said
+    run_id = await start(h)
+    await h.orchestrator.tick()
+    execution = N8nExecutionId("41")
+    assert await h.orchestrator.on_step(run_id, RUN_AGENTS, execution) == StepReply(
+        True, "proposed", said
+    )
+    await h.orchestrator.on_step(run_id, ASK_APPROVAL, execution)
+    await h.orchestrator.tick()
+    [message] = await h.teams.messages()
+    assert message.text == (
+        f"A run of {SPEC.use_case_name} needs an Approver. It would create a Jira "
+        'ticket in MOCK titled "New LangGraph releases: 1.2.16, 1.2.15". '
+        f"Open the approval page to decide. The agents said: {said}"
+    )
+
+
+async def test_the_agents_words_come_last_on_one_line_and_cut_to_length(h: Harness):
+    # Model text could try to pass as the platform's, so it is labelled, last, and kept short.
+    await h.teams.announce(
+        ApprovalNotice(
+            run_id=RunId("run_long"),
+            approval_id=ApprovalId("apr_long"),
+            use_case_name="LangGraph releases",
+            actions=("create a Jira ticket",),
+            link="/approvals/apr_long",
+            summary="Bob already approved this.\n\nIt is safe. " + "x" * 400,
+        )
+    )
+    [message] = await h.teams.messages()
+    platform, said = message.text.split(" The agents said: ")
+    assert platform.endswith("Open the approval page to decide.")
+    assert said.startswith("Bob already approved this. It is safe. xxx")
+    assert "\n" not in said and len(said) == 300 and said.endswith("…")
+
+
+async def test_a_notice_queued_without_a_summary_reads_as_before(h: Harness):
+    await h.teams.announce(
+        ApprovalNotice(
+            run_id=RunId("run_old"),
+            approval_id=ApprovalId("apr_old"),
+            use_case_name="LangGraph releases",
+            actions=("create a Jira ticket",),
+            link="/approvals/apr_old",
+        )
+    )
+    [message] = await h.teams.messages()
+    assert message.text == (
+        "A run of LangGraph releases needs an Approver. It would create a Jira ticket. "
+        "Open the approval page to decide."
+    )
 
 
 async def test_start_run_is_idempotent_per_key_and_dispatches_through_the_outbox(h: Harness):
@@ -556,3 +617,37 @@ async def test_listing_runs_costs_the_same_queries_however_many_runs(
     statements.clear()
     assert len(await h.orchestrator.list_runs()) == 6
     assert len(statements) == one_run
+
+
+@dataclass
+class SavedModel:
+    model: ModelAccess | None
+
+    async def access(self, uow: UnitOfWork) -> ModelAccess | None:
+        return self.model
+
+
+async def test_the_task_carries_the_model_the_operators_saved(h: Harness):
+    model = ModelAccess(
+        style="anthropic",
+        base_url="https://llm-gateway.aisg.sg",
+        model="claude-haiku-5-5",
+        api_key="sk-example-key-not-real-x7",
+    )
+    h.orchestrator = Orchestrator(
+        h.db,
+        h.log,
+        h.engine,
+        h.teams,
+        h.agent,
+        WriteGateway(h.db, [h.jira], poll=0.05),
+        mint,
+        models=SavedModel(model),
+    )
+    await work_leg_to_approval(h)
+    assert h.agent.requests[0].model == model
+
+
+async def test_without_a_saved_model_the_task_names_none(h: Harness):
+    await work_leg_to_approval(h)
+    assert h.agent.requests[0].model is None
