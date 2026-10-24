@@ -23,6 +23,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
     { name = "langchain" },
+    { name = "langchain-anthropic" },
     { name = "langchain-core" },
     { name = "langgraph" },
     { name = "pydantic" },
@@ -36,7 +37,6 @@ dev = [
     { name = "ruff" },
 ]
 evals = [
-    { name = "langchain-anthropic" },
     { name = "langchain-google-genai" },
     { name = "langchain-ollama" },
     { name = "langchain-openai" },
@@ -47,6 +47,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.120" },
     { name = "httpx", specifier = ">=0.28,<0.29" },
     { name = "langchain", specifier = "==1.4.3" },
+    { name = "langchain-anthropic", specifier = "==1.7.5" },
     { name = "langchain-core", specifier = "==1.6.6" },
     { name = "langgraph", specifier = "==1.2.13" },
     { name = "pydantic", specifier = ">=2.11" },
@@ -60,7 +61,6 @@ dev = [
     { name = "ruff", specifier = ">=0.14" },
 ]
 evals = [
-    { name = "langchain-anthropic", specifier = "==1.7.5" },
     { name = "langchain-google-genai", specifier = "==4.4.0" },
     { name = "langchain-ollama", specifier = "==1.1.0" },
     { name = "langchain-openai", specifier = "==1.6.7" },

@@ -19,7 +19,8 @@ RUN uv sync --locked
 USER nobody
 CMD ["pytest", "-p", "no:cacheprovider"]
 
-# The model bake-off. Provider packages live only in this stage, never in the runtime image.
+# The model bake-off. The other providers' packages live only in this stage, never in the
+# runtime image.
 FROM base AS evals
 RUN uv sync --locked --no-dev --group evals --no-install-project
 COPY src ./src

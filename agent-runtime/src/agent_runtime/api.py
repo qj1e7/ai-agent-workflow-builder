@@ -27,7 +27,7 @@ from agent_runtime.github import GitHubReleaseSource
 from agent_runtime.origins import Origin, origin_of, parse_origin_list
 from agent_runtime.release_checker import ReleaseChecker
 from agent_runtime.room import FixedRoomLead, RoomLead, run_task
-from agent_runtime.summary import ModelSummarizer, Summarizer, TemplateSummarizer
+from agent_runtime.summary import ModelSummarizer, Summarizer, TemplateSummarizer, model_factory
 
 log = logging.getLogger(__name__)
 
@@ -76,6 +76,8 @@ class Settings:
     github_api_base: str
     github_token: str | None
     summary_model: str | None
+    model_base_url: str | None
+    model_api_key: str | None
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> Self:
@@ -91,6 +93,8 @@ class Settings:
             github_api_base=env.get("GITHUB_API_BASE") or DEFAULT_GITHUB_API_BASE,
             github_token=env.get("GITHUB_TOKEN") or None,
             summary_model=env.get("AGENT_SUMMARY_MODEL") or None,
+            model_base_url=env.get("AGENT_MODEL_BASE_URL") or None,
+            model_api_key=env.get("AGENT_MODEL_API_KEY") or None,
         )
 
 
@@ -138,7 +142,8 @@ class Runtime:
 
 def build_summarizer(settings: Settings) -> Summarizer:
     if settings.summary_model:
-        return ModelSummarizer(settings.summary_model)
+        factory = model_factory(settings.model_base_url, settings.model_api_key)
+        return ModelSummarizer(settings.summary_model, factory=factory)
     return TemplateSummarizer()
 
 

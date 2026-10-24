@@ -23,7 +23,7 @@ from agent_runtime.contract import AgentEventPost, TaskRequest, task_result_adap
 from agent_runtime.contracts import task_request
 from agent_runtime.release_checker import ReleaseChecker
 from agent_runtime.room import FixedRoomLead
-from agent_runtime.summary import ModelSummarizer, TemplateSummarizer
+from agent_runtime.summary import ModelFactory, ModelSummarizer, TemplateSummarizer, model_factory
 from tests.fakes import FakeClock, FakeSource, langgraph_tags
 
 KEY = "test-agent-key-not-a-secret"
@@ -244,6 +244,8 @@ def test_settings_default_to_the_public_api_and_no_model():
     assert settings.github_api_base == "https://api.github.com"
     assert settings.github_token is None
     assert settings.summary_model is None
+    assert settings.model_base_url is None
+    assert settings.model_api_key is None
     assert isinstance(build_runtime(settings).checker, ReleaseChecker)
 
 
@@ -254,11 +256,15 @@ def test_settings_read_the_environment():
             "GITHUB_API_BASE": "http://mock-github:8200",
             "GITHUB_TOKEN": "ghp_example",
             "AGENT_SUMMARY_MODEL": "openai:gpt-4o-mini",
+            "AGENT_MODEL_BASE_URL": "https://gateway.example",
+            "AGENT_MODEL_API_KEY": "sk-example",
         }
     )
     assert settings.github_api_base == "http://mock-github:8200"
     assert settings.github_token == "ghp_example"
     assert settings.summary_model == "openai:gpt-4o-mini"
+    assert settings.model_base_url == "https://gateway.example"
+    assert settings.model_api_key == "sk-example"
 
 
 @pytest.mark.parametrize(
@@ -267,6 +273,24 @@ def test_settings_read_the_environment():
 )
 def test_a_model_is_used_only_when_one_is_named(env: dict[str, str], expected: type):
     assert isinstance(build_summarizer(Settings.from_env({**BASE_ENV, **env})), expected)
+
+
+def test_the_summary_model_is_reached_through_the_gateway(monkeypatch: pytest.MonkeyPatch):
+    gateways: list[tuple[str | None, str | None]] = []
+
+    def factory_for(base_url: str | None, api_key: str | None) -> ModelFactory:
+        gateways.append((base_url, api_key))
+        return model_factory(base_url, api_key)
+
+    monkeypatch.setattr("agent_runtime.api.model_factory", factory_for)
+    env = {
+        **BASE_ENV,
+        "AGENT_SUMMARY_MODEL": "anthropic:claude-test",
+        "AGENT_MODEL_BASE_URL": "https://gateway.example",
+        "AGENT_MODEL_API_KEY": "sk-example",
+    }
+    build_summarizer(Settings.from_env(env))
+    assert gateways == [("https://gateway.example", "sk-example")]
 
 
 def body_with_callback(url: str) -> dict[str, object]:

@@ -1,11 +1,12 @@
 from collections.abc import Callable, Iterator
 
 import pytest
+from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models import BaseChatModel
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 
-from agent_runtime.summary import ModelSummarizer, TemplateSummarizer
+from agent_runtime.summary import ModelSummarizer, TemplateSummarizer, model_factory
 
 TEMPLATE = "2 new releases: 1.2.16, 1.2.15"
 NEW = ["1.2.16", "1.2.15"]
@@ -51,3 +52,17 @@ def test_a_provider_package_that_is_not_installed_falls_back_to_the_template():
 def test_an_unusable_answer_falls_back_to_the_template(reply: str):
     summarizer = ModelSummarizer("any:model", factory=answering(reply))
     assert summarizer.summarise("o/r", "1.2.14", NEW) == TEMPLATE
+
+
+def test_a_gateway_model_gets_the_gateway_address_and_key():
+    model = model_factory("https://gateway.example", "sk-test")("anthropic:claude-test")
+    assert isinstance(model, ChatAnthropic)
+    assert model.anthropic_api_url == "https://gateway.example"
+    assert model.anthropic_api_key.get_secret_value() == "sk-test"
+
+
+def test_a_gateway_model_keeps_the_ten_second_single_try():
+    model = model_factory("https://gateway.example", "sk-test")("anthropic:claude-test")
+    assert isinstance(model, ChatAnthropic)
+    assert model.default_request_timeout == 10
+    assert model.max_retries == 0
