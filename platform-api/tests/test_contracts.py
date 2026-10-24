@@ -6,6 +6,7 @@ from pydantic import TypeAdapter
 
 from platform_api.auth import DevUsers
 from platform_api.builder.http import SuggestOut, TemplateList, UseCaseView
+from platform_api.builder.models import AddSoftware, WatchlistOut, WatchlistView
 from platform_api.monitoring.agent_events import AgentEventPost
 from platform_api.monitoring.events import DeniedReason, WireVerdict, activity_events_adapter
 from platform_api.monitoring.http import TroubleshootingOut
@@ -22,6 +23,7 @@ from platform_api.orchestration.approvals import Refusal, Verdict
 from platform_api.orchestration.http import (
     ApprovalView,
     DecisionOut,
+    MockJiraTicket,
     MockJiraTickets,
     RefusalOut,
     StepResponseOut,
@@ -64,6 +66,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "stubs/dev-users.json": TypeAdapter(DevUsers),
     "stubs/teams-messages.json": TypeAdapter(TeamsStubMessages),
     "stubs/mock-jira-tickets.json": TypeAdapter(MockJiraTickets),
+    "stubs/mock-jira-ticket.done.json": TypeAdapter(MockJiraTicket),
     "troubleshooting/failure.json": TypeAdapter(TroubleshootingOut),
     "agent/task-request.json": TypeAdapter(TaskRequest),
     "agent/task-finished.json": task_result_adapter,
@@ -86,6 +89,10 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "settings/save.saved.json": TypeAdapter(SaveOut),
     "settings/save.awaiting_confirmation.json": TypeAdapter(SaveOut),
     "settings/save.too_slow.json": TypeAdapter(SaveOut),
+    "watchlist/none.json": TypeAdapter(WatchlistOut),
+    "watchlist/empty.json": TypeAdapter(WatchlistView),
+    "watchlist/statuses.json": TypeAdapter(WatchlistView),
+    "watchlist/add-software.json": TypeAdapter(AddSoftware),
 }
 
 
@@ -150,6 +157,21 @@ def test_stories_end_as_their_names_say():
     rejected = activity_events_adapter.validate_python(load("runs/rejected.json"))[-1]
     assert rejected.kind == "run_rejected"
     assert rejected.data.by == "bob"
+
+
+def test_the_watchlist_fixture_shows_every_status_attention_first():
+    view = WatchlistView.model_validate(load("watchlist/statuses.json"))
+    assert [row.status for row in view.software] == [
+        "cant_check",
+        "behind",
+        "awaiting_approval",
+        "ticket_open",
+        "not_checked",
+        "up_to_date",
+    ]
+    assert view.schedule is None
+    none = WatchlistOut.model_validate(load("watchlist/none.json"))
+    assert none.watchlist is None
 
 
 def test_approval_views_follow_the_own_work_rule():

@@ -11,7 +11,7 @@ Every shape that crosses a process boundary, plus recorded example runs. The Por
 | `agent-api.schema.json` | agent-runtime | `agent_runtime.contracts` |
 | `fixtures/runs/*.json` | platform-api, run monitoring context | `platform_api.contracts` |
 | `fixtures/views/*.json`, `fixtures/approvals/*.json`, `fixtures/internal/*.json`, `fixtures/stubs/*.json` | platform-api, orchestration context | `platform_api.contracts` |
-| `fixtures/builder/*.json` | platform-api, use case builder context | `platform_api.contracts` |
+| `fixtures/builder/*.json`, `fixtures/watchlist/*.json` | platform-api, use case builder context | `platform_api.contracts` |
 | `fixtures/troubleshooting/*.json` | platform-api, run monitoring context | `platform_api.contracts` |
 | `fixtures/agent/*.json` | agent-runtime | `agent_runtime.contracts` |
 
@@ -37,6 +37,12 @@ Three runs of the `release_check` template on `langchain-ai/langgraph`, each as 
 - `runs/rejected.json`. The same work leg, then Bob declines.
 
 `views/` holds the `GET /api/v1/runs/{run_id}` answer for each run at the end and at the approval pause (for the failure, while the agents are working). `approvals/` holds `GET /api/v1/approvals/apr_01JB8` as Alice sees it (refused, own work) and as Bob sees it (can decide), plus one recorded decision and one refusal body. `agent/` holds the Agent API task request, a finished result, a failed result, one callback post and the agent cards, and a watchlist check of three software (one behind, one up to date, one that cannot be read) as `watchlist-task-request.json` and `watchlist-task-finished.json`. Apart from the watchlist result, the agent events inside the results are the same events, with the same timestamps, as the agent-actor events in `runs/`. `troubleshooting/failure.json` is the AI troubleshooter's answer for the failed run.
+
+### The software watchlist
+
+`watchlist/` records the Software page's API ([ADR 0019](../docs/adr/0019-watch-software-in-one-list-with-one-approval-per-check.md)). `none.json` is `GET /api/v1/watchlist` before any software is added (`watchlist: null`). `statuses.json` is the view with one row in each status, already in the order the page shows them: cannot check, behind, awaiting approval, ticket open, not checked, then up to date, and by name within one status. Each row carries our version and where it came from (`given` by the Operator, `first_check`, or `ticket_done` with the ticket key), the newest version and when it was checked, the problem sentence when the check could not read it, the open ticket, and the approval to decide. `empty.json` is the view after the last software was removed, which `POST /api/v1/watchlist/software` and `DELETE /api/v1/watchlist/software/{software_id}` also answer. `add-software.json` is the body of the add. `schedule` is always null until schedules arrive.
+
+`stubs/mock-jira-tickets.json` shows a practice Jira ticket with its `status` (`To Do` or `Done`) and `done_at`. `stubs/mock-jira-ticket.done.json` is the answer of `POST /api/v1/mock-jira/tickets/{key}/done`, which an Operator uses as a person would in Jira; marking a Done ticket again answers the same. The watchlist moves our version to the version a Done ticket named.
 
 ## The activity event
 
