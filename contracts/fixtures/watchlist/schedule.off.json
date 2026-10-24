@@ -1,0 +1,147 @@
+{
+  "use_case_id": "uc_01JBW",
+  "version": 7,
+  "ticket_project": "MOCK",
+  "software": [
+    {
+      "id": "sw_01JBW00000000000000000005",
+      "name": "FastAPI",
+      "source": {
+        "kind": "github",
+        "ref": "fastapi/fastapi",
+        "url": "https://github.com/fastapi/fastapi/releases"
+      },
+      "our_version": "0.115.0",
+      "our_version_source": {
+        "kind": "given",
+        "at": "2026-11-02T10:00:00Z",
+        "ticket": null
+      },
+      "newest_version": null,
+      "checked_at": "2026-11-16T01:00:12Z",
+      "status": "cant_check",
+      "problem": "GitHub answered 404 Not Found.",
+      "open_ticket": null,
+      "approval_id": null,
+      "added_by": "alice",
+      "added_at": "2026-11-02T10:00:00Z"
+    },
+    {
+      "id": "sw_01JBW00000000000000000002",
+      "name": "LangGraph",
+      "source": {
+        "kind": "github",
+        "ref": "langchain-ai/langgraph",
+        "url": "https://github.com/langchain-ai/langgraph/releases"
+      },
+      "our_version": "1.2.14",
+      "our_version_source": {
+        "kind": "given",
+        "at": "2026-11-02T10:00:00Z",
+        "ticket": null
+      },
+      "newest_version": "1.2.16",
+      "checked_at": "2026-11-16T01:00:12Z",
+      "status": "behind",
+      "problem": null,
+      "open_ticket": null,
+      "approval_id": null,
+      "added_by": "alice",
+      "added_at": "2026-11-02T10:00:00Z"
+    },
+    {
+      "id": "sw_01JBW00000000000000000003",
+      "name": "Redis",
+      "source": {
+        "kind": "github",
+        "ref": "redis/redis",
+        "url": "https://github.com/redis/redis/releases"
+      },
+      "our_version": "8.2.0",
+      "our_version_source": {
+        "kind": "first_check",
+        "at": "2026-11-09T01:00:00Z",
+        "ticket": null
+      },
+      "newest_version": "8.2.1",
+      "checked_at": "2026-11-16T01:00:12Z",
+      "status": "awaiting_approval",
+      "problem": null,
+      "open_ticket": null,
+      "approval_id": "apr_01JBB",
+      "added_by": "alice",
+      "added_at": "2026-11-02T10:00:00Z"
+    },
+    {
+      "id": "sw_01JBW00000000000000000004",
+      "name": "PostgreSQL",
+      "source": {
+        "kind": "github",
+        "ref": "postgres/postgres",
+        "url": "https://github.com/postgres/postgres/releases"
+      },
+      "our_version": "17.2.0",
+      "our_version_source": {
+        "kind": "given",
+        "at": "2026-11-02T10:00:00Z",
+        "ticket": null
+      },
+      "newest_version": "17.3.0",
+      "checked_at": "2026-11-16T01:00:12Z",
+      "status": "ticket_open",
+      "problem": null,
+      "open_ticket": "MOCK-143",
+      "approval_id": null,
+      "added_by": "alice",
+      "added_at": "2026-11-02T10:00:00Z"
+    },
+    {
+      "id": "sw_01JBW00000000000000000006",
+      "name": "Terraform",
+      "source": {
+        "kind": "github",
+        "ref": "hashicorp/terraform",
+        "url": "https://github.com/hashicorp/terraform/releases"
+      },
+      "our_version": null,
+      "our_version_source": null,
+      "newest_version": null,
+      "checked_at": null,
+      "status": "not_checked",
+      "problem": null,
+      "open_ticket": null,
+      "approval_id": null,
+      "added_by": "alice",
+      "added_at": "2026-11-16T09:00:12Z"
+    },
+    {
+      "id": "sw_01JBW00000000000000000001",
+      "name": "n8n",
+      "source": {
+        "kind": "github",
+        "ref": "n8n-io/n8n",
+        "url": "https://github.com/n8n-io/n8n/releases"
+      },
+      "our_version": "2.42.6",
+      "our_version_source": {
+        "kind": "ticket_done",
+        "at": "2026-11-13T01:00:12Z",
+        "ticket": "MOCK-140"
+      },
+      "newest_version": "2.42.6",
+      "checked_at": "2026-11-16T01:00:12Z",
+      "status": "up_to_date",
+      "problem": null,
+      "open_ticket": null,
+      "approval_id": null,
+      "added_by": "alice",
+      "added_at": "2026-11-02T10:00:00Z"
+    }
+  ],
+  "last_check": {
+    "run_id": "run_01JBB",
+    "state": "awaiting_approval",
+    "started_at": "2026-11-16T01:00:12Z"
+  },
+  "schedule": null
+}

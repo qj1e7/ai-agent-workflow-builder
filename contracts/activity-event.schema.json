@@ -961,6 +961,10 @@
           "title": "Started By",
           "type": "string"
         },
+        "trigger": {
+          "$ref": "#/$defs/Trigger",
+          "default": "person"
+        },
         "use_case_id": {
           "title": "Use Case Id",
           "type": "string"
@@ -1475,6 +1479,13 @@
       ],
       "title": "StepStartedData",
       "type": "object"
+    },
+    "Trigger": {
+      "enum": [
+        "person",
+        "schedule"
+      ],
+      "type": "string"
     },
     "WireVerdict": {
       "enum": [

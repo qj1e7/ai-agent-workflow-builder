@@ -1,0 +1,13 @@
+{
+  "run_id": "run_01JBB",
+  "use_case_id": "uc_01JBW",
+  "use_case_name": "Software watchlist",
+  "use_case_version": 7,
+  "started_by": "alice",
+  "trigger": "schedule",
+  "started_at": "2026-11-16T01:00:12Z",
+  "updated_at": "2026-11-16T01:00:12Z",
+  "last_seq": 2,
+  "events_url": "/api/v1/runs/run_01JBB/events",
+  "state": "pending"
+}

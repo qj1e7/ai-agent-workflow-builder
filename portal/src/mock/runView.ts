@@ -148,6 +148,7 @@ export function foldView(
     use_case_name: meta.useCaseName,
     use_case_version: meta.useCaseVersion,
     started_by: meta.startedBy,
+    trigger: 'person' as const,
     started_at: first?.ts ?? new Date(0).toISOString(),
     updated_at: last?.ts ?? new Date(0).toISOString(),
     last_seq: last?.seq ?? 0,

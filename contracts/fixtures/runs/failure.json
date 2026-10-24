@@ -13,7 +13,8 @@
     "data": {
       "use_case_id": "uc_01JB7",
       "use_case_version": 1,
-      "started_by": "alice"
+      "started_by": "alice",
+      "trigger": "person"
     }
   },
   {

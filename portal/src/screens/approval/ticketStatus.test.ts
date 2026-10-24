@@ -14,6 +14,7 @@ function succeeded(key: string): RunView {
     use_case_name: 'Name',
     use_case_version: 1,
     started_by: 'alice',
+    trigger: 'person',
     started_at: '2026-11-03T02:14:00Z',
     updated_at: '2026-11-03T02:20:26Z',
     last_seq: 23,
