@@ -4,6 +4,7 @@
   "use_case_name": "LangGraph releases",
   "use_case_version": 1,
   "started_by": "alice",
+  "trigger": "person",
   "started_at": "2026-11-03T02:14:00Z",
   "updated_at": "2026-11-03T02:20:26.380000Z",
   "last_seq": 23,

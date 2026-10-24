@@ -20,6 +20,7 @@ from platform_api.wire import (
     RunOutcome,
     StepName,
     StepOutcome,
+    Trigger,
     WireModel,
 )
 
@@ -51,6 +52,7 @@ class RunCreatedData(WireModel):
     use_case_id: str
     use_case_version: int
     started_by: UserId
+    trigger: Trigger = "person"
 
 
 class LegDispatchedData(WireModel):

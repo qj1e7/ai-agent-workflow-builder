@@ -14,6 +14,7 @@ from platform_api.orchestration import (
     ReleaseTask,
     RunSpec,
     RunStarted,
+    ScheduleBook,
     WatchlistStanding,
 )
 from platform_api.shared import Principal, Role, RunId, SoftwareId, UseCaseId, UserId
@@ -66,7 +67,7 @@ class NoFacts:
 
 @pytest.fixture
 def builder(db: Database, runs: FakeRuns) -> Builder:
-    return Builder(db, runs, Watchlist(db, NoFacts()), "http://localhost:8080")
+    return Builder(db, runs, Watchlist(db, NoFacts(), ScheduleBook(db)), "http://localhost:8080")
 
 
 async def test_a_created_use_case_reads_back_as_version_one_owned_by_the_creator(

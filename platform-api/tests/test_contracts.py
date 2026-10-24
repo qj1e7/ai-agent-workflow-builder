@@ -6,7 +6,7 @@ from pydantic import TypeAdapter
 
 from platform_api.auth import DevUsers
 from platform_api.builder.http import SuggestOut, TemplateList, UseCaseView
-from platform_api.builder.models import AddSoftware, WatchlistOut, WatchlistView
+from platform_api.builder.models import AddSoftware, ScheduleIn, WatchlistOut, WatchlistView
 from platform_api.monitoring.agent_events import AgentEventPost
 from platform_api.monitoring.events import DeniedReason, WireVerdict, activity_events_adapter
 from platform_api.monitoring.http import TroubleshootingOut
@@ -28,6 +28,7 @@ from platform_api.orchestration.http import (
     RefusalOut,
     StepResponseOut,
     TeamsStubMessages,
+    TickOut,
     WorkflowFailureIn,
     run_view_adapter,
 )
@@ -93,6 +94,12 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "watchlist/empty.json": TypeAdapter(WatchlistView),
     "watchlist/statuses.json": TypeAdapter(WatchlistView),
     "watchlist/add-software.json": TypeAdapter(AddSoftware),
+    "watchlist/schedule.in.json": TypeAdapter(ScheduleIn),
+    "watchlist/schedule.saved.json": TypeAdapter(WatchlistView),
+    "watchlist/schedule.off.json": TypeAdapter(WatchlistView),
+    "internal/tick.started.json": TypeAdapter(TickOut),
+    "internal/tick.nothing-due.json": TypeAdapter(TickOut),
+    "views/scheduled.pending.json": run_view_adapter,
 }
 
 
@@ -169,7 +176,7 @@ def test_the_watchlist_fixture_shows_every_status_attention_first():
         "not_checked",
         "up_to_date",
     ]
-    assert view.schedule is None
+    assert view.schedule is not None
     none = WatchlistOut.model_validate(load("watchlist/none.json"))
     assert none.watchlist is None
 
@@ -193,3 +200,22 @@ def test_wire_sets_cover_the_domain_enums():
     assert {s.value for s in Stage} == _literal_values(FailureStage)
     assert {s.value for s in StepName} == _literal_values(WireStepName)
     assert {leg.value for leg in Leg} == _literal_values(WireLeg)
+
+
+def test_the_schedule_fixtures_show_the_owner_and_the_next_check():
+    statuses = WatchlistView.model_validate(load("watchlist/statuses.json"))
+    saved = WatchlistView.model_validate(load("watchlist/schedule.saved.json"))
+    off = WatchlistView.model_validate(load("watchlist/schedule.off.json"))
+    assert statuses.schedule is not None and saved.schedule is not None
+    assert (statuses.schedule.day, statuses.schedule.owner_name) == ("monday", "Alice")
+    assert (saved.schedule.day, saved.schedule.at, saved.schedule.owner) == (
+        "every_day",
+        "06:30",
+        "carol",
+    )
+    assert saved.schedule.next_at > saved.schedule.saved_at
+    assert off.schedule is None
+    scheduled = run_view_adapter.validate_python(load("views/scheduled.pending.json"))
+    assert (scheduled.trigger, scheduled.started_by) == ("schedule", "alice")
+    ran = run_view_adapter.validate_python(load("views/success.final.json"))
+    assert ran.trigger == "person"

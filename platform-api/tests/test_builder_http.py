@@ -6,7 +6,13 @@ import pytest
 from platform_api.app import create_app
 from platform_api.builder import Builder, Watchlist
 from platform_api.db import Database
-from platform_api.orchestration import Given, RunSpec, RunStarted, WatchlistStanding
+from platform_api.orchestration import (
+    Given,
+    RunSpec,
+    RunStarted,
+    ScheduleBook,
+    WatchlistStanding,
+)
 from platform_api.shared import Principal, RunId, SoftwareId, UseCaseId
 from tests.support import LOCAL_ENV
 
@@ -44,7 +50,7 @@ class NoFacts:
 async def client(db: Database) -> AsyncIterator[httpx.AsyncClient]:
     app = create_app(LOCAL_ENV)
     app.state.builder = Builder(
-        db, SecondCallRepeats(), Watchlist(db, NoFacts()), "http://localhost:8000"
+        db, SecondCallRepeats(), Watchlist(db, NoFacts(), ScheduleBook(db)), "http://localhost:8000"
     )
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:

@@ -85,7 +85,7 @@ def load_into_n8n(
     settings: BootstrapSettings, definitions: tuple[WorkflowDefinition, ...], say: Say
 ) -> tuple[list[LoadedWorkflow], list[Finding]]:
     error_workflow = next(d for d in definitions if d.is_error_workflow)
-    run_workflows = [d for d in definitions if not d.is_error_workflow]
+    other_workflows = [d for d in definitions if not d.is_error_workflow]
     previous = previous_hashes(settings.owner_database_url)
     client = N8nClient(settings.n8n_base_url)
     try:
@@ -106,7 +106,7 @@ def load_into_n8n(
         error_id, error_hash = _load(client, error_workflow, values, previous, say)
         values["ERROR_WORKFLOW_ID"] = error_id
         hashes = {error_id: error_hash}
-        for d in run_workflows:
+        for d in other_workflows:
             workflow_id, digest = _load(client, d, values, previous, say)
             hashes[workflow_id] = digest
         stale = [c for c in client.credentials_named(CREDENTIAL_NAME) if c != credential_id]

@@ -103,7 +103,8 @@ async def readiness_of(db: Database, listening: bool) -> Readiness:
     async with db.transaction("orchestration") as uow:
         row = await (
             await uow.conn.execute(
-                "SELECT ready, detail, loaded_at FROM orchestration.engine_status WHERE id = 1"
+                "SELECT ready, detail, loaded_at, workflows "
+                "FROM orchestration.engine_status WHERE id = 1"
             )
         ).fetchone()
     if row is None:
@@ -111,6 +112,11 @@ async def readiness_of(db: Database, listening: bool) -> Readiness:
             ReadinessCheck(name="workflows", ok=False, detail="bootstrap has not run yet")
         )
     else:
+        loaded = ", ".join(
+            f"{w['name']} {'active' if w['active'] else 'inactive'}" for w in row["workflows"]
+        )
         detail = f"{row['detail']} (bootstrap at {row['loaded_at'].isoformat()})"
+        if loaded:
+            detail += f"; loaded: {loaded}"
         checks.append(ReadinessCheck(name="workflows", ok=bool(row["ready"]), detail=detail))
     return Readiness(ready=all(c.ok for c in checks), checks=checks)

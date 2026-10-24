@@ -143,5 +143,13 @@
     "state": "awaiting_approval",
     "started_at": "2026-11-16T01:00:12Z"
   },
-  "schedule": null
+  "schedule": {
+    "day": "monday",
+    "at": "09:00",
+    "time_zone": "Asia/Singapore",
+    "owner": "alice",
+    "owner_name": "Alice",
+    "saved_at": "2026-11-02T10:00:00Z",
+    "next_at": "2026-11-23T09:00:00+08:00"
+  }
 }

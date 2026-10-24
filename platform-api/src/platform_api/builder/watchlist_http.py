@@ -4,9 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
 from platform_api.builder.http import Operator
-from platform_api.builder.models import AddSoftware, WatchlistOut, WatchlistView
+from platform_api.builder.models import AddSoftware, ScheduleIn, WatchlistOut, WatchlistView
 from platform_api.builder.watchlist import (
     NoSuchSoftware,
+    NoWatchlist,
     RepoAlreadyWatched,
     Watchlist,
     WatchlistFull,
@@ -66,3 +67,34 @@ async def remove_software(
             return left
         case NoSuchSoftware():
             raise HTTPException(404, "No such watched software")
+
+
+@router.put(
+    "/watchlist/schedule",
+    description=(
+        "Saves when the watchlist is checked on its own. The caller becomes the schedule "
+        "owner, who can never approve a scheduled check."
+    ),
+    responses={**OPERATORS_ONLY, 404: error_response("The watchlist does not exist yet")},
+)
+async def save_schedule(
+    body: ScheduleIn, principal: Operator, watchlist: CurrentWatchlist
+) -> WatchlistView:
+    match await watchlist.save_schedule(principal, body):
+        case WatchlistView() as saved:
+            return saved
+        case NoWatchlist():
+            raise HTTPException(404, "Add software first, then set the schedule")
+
+
+@router.delete(
+    "/watchlist/schedule",
+    description="Turns the schedule off. Checks then start only when an Operator starts one.",
+    responses={**OPERATORS_ONLY, 404: error_response("The watchlist does not exist yet")},
+)
+async def turn_off_schedule(principal: Operator, watchlist: CurrentWatchlist) -> WatchlistView:
+    match await watchlist.turn_off_schedule():
+        case WatchlistView() as left:
+            return left
+        case NoWatchlist():
+            raise HTTPException(404, "Add software first, then set the schedule")

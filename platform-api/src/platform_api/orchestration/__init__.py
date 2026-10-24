@@ -1,4 +1,11 @@
 from platform_api.orchestration.approvals import AnyApprover, ApprovalPolicy, ApprovalStep
+from platform_api.orchestration.schedule import AT_PATTERN, Day, Schedule, parse_at
+from platform_api.orchestration.schedule_store import (
+    CheckSpecs,
+    SavedSchedule,
+    ScheduleBook,
+    ScheduleTicker,
+)
 from platform_api.orchestration.spec import (
     ReleaseTask,
     RunSpec,
@@ -31,15 +38,18 @@ from platform_api.orchestration.watch_store import (
 from platform_api.orchestration.write_actions import Binding
 
 __all__ = [
+    "AT_PATTERN",
     "ATTENTION_ORDER",
     "AnyApprover",
     "ApprovalPolicy",
     "ApprovalStep",
     "Binding",
+    "CheckSpecs",
     "Checked",
     "CouldNotCheck",
     "FromFirstCheck",
     "FromTicketDone",
+    "Day",
     "Given",
     "LastCheck",
     "OpenTicket",
@@ -48,6 +58,10 @@ __all__ = [
     "RunSpec",
     "RunStarted",
     "RunStarter",
+    "SavedSchedule",
+    "Schedule",
+    "ScheduleBook",
+    "ScheduleTicker",
     "SoftwareFacts",
     "SoftwareSource",
     "Standing",
@@ -58,4 +72,5 @@ __all__ = [
     "WatchlistFacts",
     "WatchlistStanding",
     "WatchlistTask",
+    "parse_at",
 ]

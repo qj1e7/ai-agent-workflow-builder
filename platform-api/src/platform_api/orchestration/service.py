@@ -350,6 +350,7 @@ class Orchestrator:
                     spec.use_case_name,
                     user_actor(principal.user_id, principal.display),
                     1,
+                    spec.trigger,
                 ),
             )
         self.nudge()

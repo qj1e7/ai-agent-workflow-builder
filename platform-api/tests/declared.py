@@ -5,7 +5,7 @@ import httpx
 from fastapi import FastAPI
 
 from platform_api.app import create_app
-from platform_api.builder.watchlist import NoSuchSoftware
+from platform_api.builder.watchlist import NoSuchSoftware, NoWatchlist
 from platform_api.shared import SoftwareId
 from tests.support import LOCAL_ENV
 
@@ -56,6 +56,17 @@ class FakeWatchlist:
     async def remove(self, software_id: str) -> object:
         return NoSuchSoftware(SoftwareId(software_id))
 
+    async def save_schedule(self, principal: object, body: object) -> object:
+        return NoWatchlist()
+
+    async def turn_off_schedule(self) -> object:
+        return NoWatchlist()
+
+
+class FakeTicker:
+    async def tick(self) -> list[Any]:
+        return []
+
 
 class FakeMockJira:
     async def tickets(self) -> list[Any]:
@@ -81,6 +92,7 @@ def app_with(orchestrator: object = None, builder: object = None, log: object = 
     app.state.activity_log = log or FakeLog()
     app.state.mock_jira = FakeMockJira()
     app.state.watchlist = FakeWatchlist()
+    app.state.schedule_ticker = FakeTicker()
     return app
 
 

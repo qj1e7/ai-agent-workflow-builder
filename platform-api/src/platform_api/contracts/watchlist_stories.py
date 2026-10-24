@@ -1,11 +1,14 @@
 """Recorded answers of the watchlist routes: no watchlist yet, an emptied one, and one with a
-row in every status, plus the practice Jira ticket after Mark Done."""
+row in every status, the schedule routes, the schedule tick, a scheduled run and the practice
+Jira ticket after Mark Done."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 
 from platform_api.builder.models import (
     AddSoftware,
     LastCheckView,
+    ScheduleIn,
+    ScheduleView,
     SourceView,
     VersionSourceView,
     WatchedSoftwareView,
@@ -14,7 +17,7 @@ from platform_api.builder.models import (
 )
 from platform_api.builder.watchlist import attention_first
 from platform_api.contracts.stories import SUCCESS, TICKET_BODY, TICKET_TITLE
-from platform_api.orchestration.http import MockJiraTicket
+from platform_api.orchestration.http import MockJiraTicket, PendingView, TickOut
 from platform_api.shared import ApprovalId, RunId, SoftwareId, UserId
 from platform_api.wire import WireModel
 
@@ -138,13 +141,34 @@ ROWS = [
     ),
 ]
 
+SINGAPORE = timezone(timedelta(hours=8))
+SCHEDULE = ScheduleView(
+    day="monday",
+    at="09:00",
+    time_zone="Asia/Singapore",
+    owner=ALICE,
+    owner_name="Alice",
+    saved_at=ADDED_AT,
+    next_at=datetime(2026, 11, 23, 9, 0, tzinfo=SINGAPORE),
+)
+SCHEDULE_IN = ScheduleIn(day="every_day", at="06:30")
+SCHEDULE_SAVED = ScheduleView(
+    day="every_day",
+    at="06:30",
+    time_zone="Asia/Singapore",
+    owner=CAROL,
+    owner_name="Carol",
+    saved_at=CHECKED_AT + timedelta(hours=2),
+    next_at=datetime(2026, 11, 17, 6, 30, tzinfo=SINGAPORE),
+)
+
 STATUSES = WatchlistView(
     use_case_id=USE_CASE_ID,
     version=7,
     ticket_project="MOCK",
     software=attention_first(ROWS),
     last_check=LastCheckView(run_id=LAST_RUN, state="awaiting_approval", started_at=CHECKED_AT),
-    schedule=None,
+    schedule=SCHEDULE,
 )
 
 EMPTY = WatchlistView(
@@ -153,7 +177,22 @@ EMPTY = WatchlistView(
     ticket_project="MOCK",
     software=[],
     last_check=STATUSES.last_check,
-    schedule=None,
+    schedule=SCHEDULE,
+)
+SCHEDULE_SAVED_VIEW = STATUSES.model_copy(update={"schedule": SCHEDULE_SAVED})
+SCHEDULE_OFF_VIEW = STATUSES.model_copy(update={"schedule": None})
+
+SCHEDULED_RUN = PendingView(
+    run_id=LAST_RUN,
+    use_case_id=USE_CASE_ID,
+    use_case_name="Software watchlist",
+    use_case_version=7,
+    started_by=ALICE,
+    trigger="schedule",
+    started_at=CHECKED_AT,
+    updated_at=CHECKED_AT,
+    last_seq=2,
+    events_url=f"/api/v1/runs/{LAST_RUN}/events",
 )
 
 DONE_TICKET = MockJiraTicket(
@@ -175,5 +214,11 @@ def watchlist_fixtures() -> dict[str, WireModel | list[WireModel]]:
         "watchlist/empty.json": EMPTY,
         "watchlist/statuses.json": STATUSES,
         "watchlist/add-software.json": ADD_SOFTWARE,
+        "watchlist/schedule.in.json": SCHEDULE_IN,
+        "watchlist/schedule.saved.json": SCHEDULE_SAVED_VIEW,
+        "watchlist/schedule.off.json": SCHEDULE_OFF_VIEW,
+        "internal/tick.started.json": TickOut(started=[LAST_RUN]),
+        "internal/tick.nothing-due.json": TickOut(started=[]),
+        "views/scheduled.pending.json": SCHEDULED_RUN,
         "stubs/mock-jira-ticket.done.json": DONE_TICKET,
     }

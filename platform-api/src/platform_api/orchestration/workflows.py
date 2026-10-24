@@ -27,6 +27,8 @@ PLATFORM_INTERNAL_URL = "${PLATFORM_INTERNAL_URL}"
 ERROR_WORKFLOW_ID = "${ERROR_WORKFLOW_ID}"
 STEP_KEY_CREDENTIAL_ID = "${STEP_KEY_CREDENTIAL_ID}"
 INTERNAL_PREFIX = "/internal/v1/"
+TICK_PATH = "/internal/v1/schedules/tick"
+TICK_INTERVAL = [{"field": "minutes", "minutesInterval": 5}]
 MIN_RETRY_WAIT = timedelta(milliseconds=2000)
 
 _PLACEHOLDER = re.compile(r"\$\{([A-Z_]+)\}")
@@ -43,6 +45,7 @@ class NodeType(Enum):
     HTTP_REQUEST = "n8n-nodes-base.httpRequest"
     IF = "n8n-nodes-base.if"
     ERROR_TRIGGER = "n8n-nodes-base.errorTrigger"
+    SCHEDULE_TRIGGER = "n8n-nodes-base.scheduleTrigger"
 
 
 ALLOWED_NODE_TYPES = frozenset(t.value for t in NodeType)
@@ -107,6 +110,7 @@ class WorkflowDefinition:
     chains: Mapping[str, tuple[str, ...]]
     error_workflow: str | None
     is_error_workflow: bool
+    is_tick_workflow: bool
 
     def webhook_path(self, leg: Leg) -> str:
         return f"{self.name.replace('_', '-')}/{leg.value}"
@@ -163,6 +167,7 @@ def parse(document: Mapping[str, Any]) -> WorkflowDefinition:
         chains=chains,
         error_workflow=str(error_workflow) if error_workflow is not None else None,
         is_error_workflow=NodeType.ERROR_TRIGGER.value in node_types.values(),
+        is_tick_workflow=NodeType.SCHEDULE_TRIGGER.value in node_types.values(),
     )
 
 
@@ -221,6 +226,7 @@ class Rule(Enum):
     DEADLINES = 5
     ERROR_WORKFLOW = 6
     NODE_TYPES = 7
+    TICK_SHAPE = 8
 
 
 @dataclass(frozen=True)
@@ -256,7 +262,10 @@ def lint(
         findings += _node_types(d)
         findings += _internal_urls(d, base)
         findings += _retry_waits(d)
-        if not d.is_error_workflow:
+        if d.is_tick_workflow:
+            findings += _tick_shape(d, base)
+            findings += _error_workflow_setting(d, error_workflows, live)
+        elif not d.is_error_workflow:
             findings += _webhook_paths(d)
             findings += _step_order(d)
             findings += _deadlines(d)
@@ -265,6 +274,41 @@ def lint(
         names = ", ".join(d.name for d in error_workflows) or "none"
         findings.append(
             Finding(Rule.ERROR_WORKFLOW, "*", f"expected one error workflow, found {names}")
+        )
+    return findings
+
+
+def _tick_shape(d: WorkflowDefinition, base: str) -> list[Finding]:
+    """The tick workflow is one schedule trigger every 5 minutes and one call that asks our API
+    what is due. It never reads a run, so it has no webhooks and calls nothing else."""
+
+    def problem(message: str) -> Finding:
+        return Finding(Rule.TICK_SHAPE, d.name, message)
+
+    findings: list[Finding] = []
+    triggers = [n for n, t in d.node_types.items() if t == NodeType.SCHEDULE_TRIGGER.value]
+    if len(triggers) != 1:
+        return [problem(f"expected one schedule trigger, found {len(triggers)}")]
+    trigger = triggers[0]
+    nodes: dict[str, Mapping[str, Any]] = {str(n["name"]): n for n in d.document["nodes"]}
+    interval = nodes[trigger].get("parameters", {}).get("rule", {}).get("interval")
+    if interval != TICK_INTERVAL:
+        findings.append(problem(f"'{trigger}' must fire every 5 minutes, not {interval!r}"))
+    if len(d.http_nodes) != 1:
+        return [*findings, problem(f"expected one HTTP request, found {len(d.http_nodes)}")]
+    call = next(iter(d.http_nodes.values()))
+    if call.url != base + TICK_PATH:
+        findings.append(problem(f"'{call.name}' calls {call.url}, not {base + TICK_PATH}"))
+    if nodes[call.name].get("parameters", {}).get("method") != "POST":
+        findings.append(problem(f"'{call.name}' must POST"))
+    if d.webhooks or len(d.node_types) != 2:
+        findings.append(problem("the workflow holds only the schedule trigger and the one call"))
+    connections: Mapping[str, Any] = d.document.get("connections", {})
+    if _chain(connections, trigger) != (trigger, call.name):
+        findings.append(problem(f"'{trigger}' must lead straight to '{call.name}'"))
+    if d.document.get("settings", {}).get("saveDataSuccessExecution") != "none":
+        findings.append(
+            problem("settings.saveDataSuccessExecution must be 'none', or n8n keeps 288 runs a day")
         )
     return findings
 

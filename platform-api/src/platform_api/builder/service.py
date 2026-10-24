@@ -146,6 +146,11 @@ class Builder:
             approval_policy=template.approval_policy,
         )
 
+    async def check_spec(self, use_case_id: UseCaseId) -> RunSpec | None:
+        """What the schedule tick asks for. None means nothing to check."""
+        spec = await self.run_spec_for(use_case_id)
+        return None if isinstance(spec, NothingToCheck) else spec
+
     async def start_run(
         self, use_case_id: UseCaseId, principal: Principal, idempotency_key: str
     ) -> RunStarted | None | NothingToCheck:
