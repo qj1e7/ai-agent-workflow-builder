@@ -245,6 +245,8 @@ export class DemoPlatform {
             created_at: event.ts,
             run_id: run.id,
             proposal_id: record.proposal_id,
+            status: 'To Do',
+            done_at: null,
           }
           return [ticket]
         })
