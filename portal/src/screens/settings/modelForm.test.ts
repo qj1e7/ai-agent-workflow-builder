@@ -6,6 +6,7 @@ import type { Connected, ModelSettingsView } from '../../api/types'
 import {
   OTHER,
   addressFor,
+  answerTime,
   connectBody,
   hostOf,
   maskedKey,
@@ -105,5 +106,15 @@ describe('startingChoice', () => {
     const elsewhere = { ...view, active: view.active && { ...view.active, base_url: 'https://ai.ncs.example/v1' } }
     expect(startingChoice(elsewhere)).toEqual({ choice: OTHER, typed: 'https://ai.ncs.example/v1' })
     expect(startingChoice(empty as ModelSettingsView)).toEqual({ choice: 'aisg', typed: '' })
+  })
+})
+
+describe('answerTime', () => {
+  it('says under a second when the answer rounds to nothing', () => {
+    expect([answerTime(0), answerTime(0.4)]).toEqual(['under a second', 'under a second'])
+  })
+
+  it('names the seconds otherwise, with one second singular', () => {
+    expect([answerTime(1), answerTime(1.4), answerTime(11.2)]).toEqual(['1 second', '1.4 seconds', '11.2 seconds'])
   })
 })

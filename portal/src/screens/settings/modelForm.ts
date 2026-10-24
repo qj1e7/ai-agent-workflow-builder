@@ -58,3 +58,9 @@ export function startingChoice(view: ModelSettingsView): { choice: Choice; typed
   const known = view.providers.find((provider) => hostOf(provider.base_url) === hostOf(active.base_url))
   return known ? { choice: known.id, typed: '' } : { choice: OTHER, typed: active.base_url }
 }
+
+// How long a test answer took, in words. The platform rounds to a tenth, so a quick answer comes back as 0.
+export function answerTime(seconds: number): string {
+  if (seconds < 1) return 'under a second'
+  return seconds === 1 ? '1 second' : `${seconds} seconds`
+}

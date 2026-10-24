@@ -17,6 +17,7 @@ import { PageHeader } from '../../ui/PageHeader'
 import {
   OTHER,
   addressFor,
+  answerTime,
   connectBody,
   hostOf,
   maskedKey,
@@ -98,7 +99,7 @@ function Pending({ pending, active }: { pending: PendingModelOut; active: ModelO
       <h3 id={headingId}>Waiting for an Approver to confirm a new address</h3>
       <p>
         {pending.by_name} asked to use {pending.model} at {pending.base_url}. It answered a test in{' '}
-        {pending.test_seconds} seconds. Until an Approver confirms it, runs keep using{' '}
+        {answerTime(pending.test_seconds)}. Until an Approver confirms it, runs keep using{' '}
         {active ? active.model : 'the built-in sentence'}.
       </p>
       {pending.you_can_decide ? (
@@ -338,12 +339,12 @@ function ConnectForm({ view }: { view: ModelSettingsView }) {
         {connect.isError ? <InlineMessage tone="error">{explain(connect.error)}</InlineMessage> : null}
         {save.data?.status === 'saved' ? (
           <InlineMessage tone="success">
-            Saved. The model answered in {save.data.seconds} seconds with: “{save.data.text}”
+            Saved. The model answered in {answerTime(save.data.seconds)} with: “{save.data.text}”
           </InlineMessage>
         ) : null}
         {save.data?.status === 'awaiting_confirmation' ? (
           <p className={styles['wait']} role="status">
-            Tested: the model answered in {save.data.seconds} seconds with: “{save.data.text}” The address is new, so an
+            Tested: the model answered in {answerTime(save.data.seconds)} with: “{save.data.text}” The address is new, so an
             Approver must confirm it before runs use it.
           </p>
         ) : null}
