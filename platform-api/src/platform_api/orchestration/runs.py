@@ -130,7 +130,7 @@ def _step_started(step: StepName, execution: N8nExecutionId, try_number: int) ->
 
 def sentence(text: str) -> str:
     """text with one closing full stop. A model's summary often brings its own."""
-    return text if text.endswith((".", "!", "?")) else f"{text}."
+    return text if text.endswith((".", "!", "?", "…")) else f"{text}."
 
 
 def step_finished(

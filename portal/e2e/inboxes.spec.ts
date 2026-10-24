@@ -12,8 +12,8 @@ test('the Teams inbox and the mock Jira show what the live run did', async ({ pa
   await goTo(page, 'Teams')
   await expect(page.getByRole('heading', { name: 'Teams' })).toBeVisible()
   await expect(
-    page.getByText(/needs an Approver\. 2 new releases: 1\.2\.16, 1\.2\.15\. It would create a Jira ticket/).first(),
-    'the message carries what the agents found',
+    page.getByText(/needs an Approver\. It would create a Jira ticket.*The agents said: 2 new releases: 1\.2\.16, 1\.2\.15\.$/).first(),
+    'the message ends with what the agents found, labelled as theirs',
   ).toBeVisible()
   const cards = page.getByRole('article')
   await expect(cards, 'one card for the declined run and one for the live run').toHaveCount(2)

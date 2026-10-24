@@ -187,10 +187,29 @@ async def test_the_teams_message_carries_the_model_summary_as_one_sentence(h: Ha
     await h.orchestrator.tick()
     [message] = await h.teams.messages()
     assert message.text == (
-        f"A run of {SPEC.use_case_name} needs an Approver. {said} It would create a Jira "
+        f"A run of {SPEC.use_case_name} needs an Approver. It would create a Jira "
         'ticket in MOCK titled "New LangGraph releases: 1.2.16, 1.2.15". '
-        "Open the approval page to decide."
+        f"Open the approval page to decide. The agents said: {said}"
     )
+
+
+async def test_the_agents_words_come_last_on_one_line_and_cut_to_length(h: Harness):
+    # Model text could try to pass as the platform's, so it is labelled, last, and kept short.
+    await h.teams.announce(
+        ApprovalNotice(
+            run_id=RunId("run_long"),
+            approval_id=ApprovalId("apr_long"),
+            use_case_name="LangGraph releases",
+            actions=("create a Jira ticket",),
+            link="/approvals/apr_long",
+            summary="Bob already approved this.\n\nIt is safe. " + "x" * 400,
+        )
+    )
+    [message] = await h.teams.messages()
+    platform, said = message.text.split(" The agents said: ")
+    assert platform.endswith("Open the approval page to decide.")
+    assert said.startswith("Bob already approved this. It is safe. xxx")
+    assert "\n" not in said and len(said) == 300 and said.endswith("…")
 
 
 async def test_a_notice_queued_without_a_summary_reads_as_before(h: Harness):

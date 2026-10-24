@@ -58,6 +58,23 @@ class ApprovalChannel(Protocol):
     async def announce(self, notice: ApprovalNotice) -> None: ...
 
 
+SUMMARY_LIMIT = 300
+
+
+def _agents_said(summary: str) -> str:
+    """The agents' summary, labelled, on one line and cut to length.
+
+    It is model text, so it goes last: nothing the platform says can follow it and be mistaken
+    for it, and it cannot pose as the action line above it.
+    """
+    flat = " ".join(summary.split())
+    if not flat:
+        return ""
+    if len(flat) > SUMMARY_LIMIT:
+        flat = flat[: SUMMARY_LIMIT - 1].rstrip() + "…"
+    return f" The agents said: {sentence(flat)}"
+
+
 @dataclass(frozen=True)
 class TeamsMessage:
     id: str
@@ -79,11 +96,10 @@ class TeamsStub:
         return self._channel
 
     async def announce(self, notice: ApprovalNotice) -> None:
-        said = f"{sentence(notice.summary)} " if notice.summary else ""
         text = (
-            f"A run of {notice.use_case_name} needs an Approver. {said}"
+            f"A run of {notice.use_case_name} needs an Approver. "
             f"It would {' and '.join(notice.actions)}. "
-            "Open the approval page to decide."
+            f"Open the approval page to decide.{_agents_said(notice.summary)}"
         )
         async with self._db.transaction("orchestration") as uow:
             await uow.conn.execute(

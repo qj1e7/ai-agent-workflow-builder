@@ -668,9 +668,9 @@ def teams_messages(tl: Timeline) -> TeamsStubMessages:
                 id="tm_01JB8",
                 ts=announced.ts,
                 channel=CHANNEL,
-                text=f"A run of {USE_CASE_NAME} needs an Approver. 2 new releases: 1.2.16, "
-                f'1.2.15. It would create a Jira ticket in MOCK titled "{TICKET_TITLE}". '
-                "Open the approval page to decide.",
+                text=f"A run of {USE_CASE_NAME} needs an Approver. It would create a Jira "
+                f'ticket in MOCK titled "{TICKET_TITLE}". Open the approval page to decide. '
+                "The agents said: 2 new releases: 1.2.16, 1.2.15.",
                 link=SUCCESS.approval_link,
                 run_id=SUCCESS.run_id,
                 approval_id=SUCCESS.approval_id,
