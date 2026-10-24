@@ -3,6 +3,7 @@ import { fixtures } from './fixtures'
 import { invalid, isRecord, json, problem, type MockRequest } from './http'
 import type { DemoPlatform } from './platform'
 import { streamEvents } from './stream'
+import { NOTHING_TO_CHECK } from './watchlist'
 
 const API_PREFIX = '/api/v1'
 const NOBODY: DevUser = { id: 'nobody', display: 'Nobody', roles: [] }
@@ -49,6 +50,11 @@ function parseVerdict(value: unknown): Verdict | undefined {
   return value === 'approve' || value === 'decline' ? value : undefined
 }
 
+/** A watchlist change answers the whole view, or the refusal the change gave. */
+function answered(platform: DemoPlatform, change: { response?: Response }, wall: number, status = 200): Response {
+  return change.response ?? json(status, platform.watchlistView(wall))
+}
+
 const routes: readonly Route[] = [
   route('GET', '/dev/users', () => json(200, { users: fixtures.devUsers }), true),
   route('GET', '/me', ({ user }) => json(200, user)),
@@ -72,8 +78,11 @@ const routes: readonly Route[] = [
   route('POST', '/use-cases/{id}/runs', ({ platform, request, params, user, wall }) => {
     const key = request.headers.get('Idempotency-Key')
     if (!key) return invalid('The Idempotency-Key header is required')
-    const run = platform.startRun(user, params[0] ?? '', key, wall)
-    if (!run) return problem(404, 'There is no such use case.')
+    if (!user.roles.includes('operator')) return problem(403, 'Only an Operator can do this. Ask an Operator on the team.')
+    const started = platform.startRun(user, params[0] ?? '', key, wall)
+    if (started.kind === 'not_found') return problem(404, 'There is no such use case.')
+    if (started.kind === 'nothing_to_check') return problem(409, NOTHING_TO_CHECK)
+    const { run } = started
     return json(201, { run_id: run.id, state: 'pending', events_url: `${API_PREFIX}/runs/${run.id}/events` })
   }),
   route('GET', '/runs', ({ platform, wall }) => json(200, { runs: platform.listRuns(wall) })),
@@ -130,6 +139,22 @@ const routes: readonly Route[] = [
   }),
   route('GET', '/teams-stub/messages', ({ platform, wall }) => json(200, { messages: platform.teamsMessages(wall) })),
   route('GET', '/mock-jira/tickets', ({ platform, wall }) => json(200, { tickets: platform.jiraTickets(wall) })),
+  route('POST', '/mock-jira/tickets/{key}/done', ({ platform, params, user, wall }) =>
+    platform.markDone(user, decodeURIComponent(params[0] ?? ''), wall),
+  ),
+  route('GET', '/watchlist', ({ platform, wall }) => json(200, { watchlist: platform.watchlistView(wall) })),
+  route('POST', '/watchlist/software', ({ platform, request, user, wall }) =>
+    answered(platform, platform.watchlist.add(user, request.body, wall), wall, 201),
+  ),
+  route('DELETE', '/watchlist/software/{id}', ({ platform, params, user, wall }) =>
+    answered(platform, platform.watchlist.remove(user, decodeURIComponent(params[0] ?? '')), wall),
+  ),
+  route('PUT', '/watchlist/schedule', ({ platform, request, user, wall }) =>
+    answered(platform, platform.watchlist.saveSchedule(user, request.body, wall), wall),
+  ),
+  route('DELETE', '/watchlist/schedule', ({ platform, user, wall }) =>
+    answered(platform, platform.watchlist.turnOffSchedule(user), wall),
+  ),
   route('GET', '/settings/model', ({ platform, user }) => json(200, platform.modelSettings.view(user))),
   route('POST', '/settings/model/connect', ({ platform, request, user }) =>
     platform.modelSettings.connect(user, request.body),

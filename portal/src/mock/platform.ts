@@ -14,13 +14,17 @@ import type {
   TeamsStubMessage,
   UseCaseView,
   Verdict,
+  WatchlistView,
+  WriteActionView,
 } from '../api/types'
 import { fixtures } from './fixtures'
-import { FIRST_NEW_TICKET_NUMBER, proposalFor, workLeg, type Person, type RunContext } from './recordings'
+import { json, problem } from './http'
+import { FIRST_NEW_TICKET_NUMBER, RELEASE_CHECK, WATCHLIST_CHECK, type Person, type RunContext } from './recordings'
 import { Run } from './run'
 import type { ApprovalRecord } from './runView'
 import { finished, replay, Timeline } from './timeline'
 import { DemoModelSettings } from './settings'
+import { DemoWatchlist, type CheckEvents } from './watchlist'
 
 const HOUR_MS = 3_600_000
 const SEEDED_FAILURE_AGE_MS = 3 * HOUR_MS
@@ -35,6 +39,48 @@ export type DecideResult =
   | { kind: 'recorded'; created: boolean; out: DecisionOut }
 
 export type RetryResult = { kind: 'not_found' } | { kind: 'not_retryable' } | { kind: 'accepted' }
+
+export type StartResult = { kind: 'started'; run: Run } | { kind: 'not_found' } | { kind: 'nothing_to_check' }
+
+const TITLES_SHOWN = 5
+const OPERATORS_ONLY = 'Only an Operator can do this. Ask an Operator on the team.'
+
+function listed(items: readonly string[]): string {
+  return items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1) ?? ''}`
+}
+
+function textOf(value: unknown, fallback: string): string {
+  return typeof value === 'string' ? value : fallback
+}
+
+/** What a proposal would write, as the platform's Teams stub words it: tickets for one project become one phrase. */
+export function wouldDo(actions: readonly WriteActionView[]): string {
+  const phrases: string[] = []
+  const titles = new Map<string, { slot: number; titles: string[] }>()
+  for (const action of actions) {
+    const title = textOf(action.fields['title'], '').replaceAll('"', '')
+    if (action.connector !== 'jira' || action.operation !== 'create_ticket') {
+      phrases.push(`${action.operation} on ${action.connector}`)
+      continue
+    }
+    const project = textOf(action.target['project'], '?')
+    const group = titles.get(project) ?? { slot: phrases.push('') - 1, titles: [] }
+    group.titles.push(title)
+    titles.set(project, group)
+  }
+  for (const [project, group] of titles) {
+    const [only] = group.titles
+    if (group.titles.length === 1 && only !== undefined) {
+      phrases[group.slot] = `create a Jira ticket in ${project} titled "${only}"`
+      continue
+    }
+    const quoted = group.titles.slice(0, TITLES_SHOWN).map((title) => `"${title}"`)
+    const more = group.titles.length - quoted.length
+    const shown = more === 0 ? listed(quoted) : `${quoted.join(', ')} and ${more} more`
+    phrases[group.slot] = `create ${group.titles.length} Jira tickets in ${project}: ${shown}`
+  }
+  return listed(phrases)
+}
 
 interface FoundApproval {
   readonly run: Run
@@ -57,7 +103,9 @@ function agentsSaid(events: readonly ActivityEvent[]): string {
 
 export class DemoPlatform {
   readonly modelSettings = new DemoModelSettings()
+  readonly watchlist: DemoWatchlist
   private readonly runs: Run[]
+  private readonly done = new Map<string, string>()
   private readonly useCases: UseCaseView[]
   private readonly startedRuns = new Map<string, string>()
   private counter = 0
@@ -68,6 +116,7 @@ export class DemoPlatform {
       { ...fixtures.useCase, created_at: new Date(start - SEEDED_USE_CASE_AGE_MS).toISOString() },
     ]
     this.runs = [this.seedLive(start), this.seedFinished('failure', start), this.seedFinished('rejected', start)]
+    this.watchlist = new DemoWatchlist(start)
   }
 
   users(): DevUser[] {
@@ -97,11 +146,38 @@ export class DemoPlatform {
   }
 
   listUseCases(): UseCaseView[] {
-    return [...this.useCases].reverse()
+    const watchlist = this.watchlist.useCase()
+    const all = watchlist ? [watchlist, ...this.useCases] : [...this.useCases]
+    return all.reverse().sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
   }
 
   useCase(useCaseId: string): UseCaseView | undefined {
+    const watchlist = this.watchlist.useCase()
+    if (watchlist?.use_case_id === useCaseId) return watchlist
     return this.useCases.find((candidate) => candidate.use_case_id === useCaseId)
+  }
+
+  /** The watchlist's checks so far, oldest first, as the watchlist reads them. */
+  watchlistChecks(wall: number): CheckEvents[] {
+    return this.runs
+      .filter((run) => run.meta.useCaseId === this.watchlist.useCaseId)
+      .map((run) => {
+        const view = run.view(wall)
+        return { runId: run.id, state: view.state, startedAt: view.started_at, events: run.timeline.emitted(wall) }
+      })
+      .sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt))
+  }
+
+  watchlistView(wall: number): WatchlistView | null {
+    return this.watchlist.view(this.watchlistChecks(wall), this.done, wall)
+  }
+
+  markDone(user: DevUser, key: string, wall: number): Response {
+    if (!user.roles.includes('operator')) return problem(403, OPERATORS_ONLY)
+    if (!this.jiraTickets(wall).some((ticket) => ticket.key === key)) return problem(404, 'There is no such ticket.')
+    if (!this.done.has(key)) this.done.set(key, new Date(wall).toISOString())
+    const ticket = this.jiraTickets(wall).find((candidate) => candidate.key === key)
+    return json(200, ticket)
   }
 
   suggest(text: string): SuggestOut {
@@ -125,12 +201,15 @@ export class DemoPlatform {
     return created
   }
 
-  startRun(starter: DevUser, useCaseId: string, idempotencyKey: string, wall: number): Run | undefined {
+  startRun(starter: DevUser, useCaseId: string, idempotencyKey: string, wall: number): StartResult {
     const useCase = this.useCase(useCaseId)
-    if (!useCase) return undefined
+    if (!useCase) return { kind: 'not_found' }
     const remembered = this.startedRuns.get(`${starter.id}:${idempotencyKey}`)
     const existing = remembered ? this.run(remembered) : undefined
-    if (existing) return existing
+    if (existing) return { kind: 'started', run: existing }
+    const check = useCase.template === 'software_watchlist'
+    if (check && this.watchlist.isEmpty) return { kind: 'nothing_to_check' }
+    const recording = check ? WATCHLIST_CHECK : RELEASE_CHECK
 
     const context: RunContext = {
       runId: this.newId('run'),
@@ -140,7 +219,7 @@ export class DemoPlatform {
       approvalId: this.newId('apr'),
       proposalId: this.newId('prp'),
     }
-    const timeline = new Timeline(replay(workLeg(context, { firstSeq: 1, attempt: 1 }), { wall, recorded: wall }))
+    const timeline = new Timeline(replay(recording.workLeg(context, { firstSeq: 1, attempt: 1 }), { wall, recorded: wall }))
     const run = new Run(
       {
         id: context.runId,
@@ -151,11 +230,12 @@ export class DemoPlatform {
       },
       context,
       timeline,
-      [proposalFor(context)],
+      [recording.proposalFor(context)],
+      recording,
     )
     this.runs.push(run)
     this.startedRuns.set(`${starter.id}:${idempotencyKey}`, run.id)
-    return run
+    return { kind: 'started', run }
   }
 
   retry(by: DevUser, runId: string, wall: number): RetryResult {
@@ -213,13 +293,12 @@ export class DemoPlatform {
         return emitted.flatMap((event) => {
           if (event.kind !== 'approval_announced') return []
           const record = records.find((candidate) => candidate.approval_id === event.data.approval_id)
-          const action = record?.actions[0]
-          if (!record || !action) return []
+          if (!record || record.actions.length === 0) return []
           const message: TeamsStubMessage = {
             id: `tm_${record.approval_id.slice('apr_'.length)}`,
             ts: event.ts,
             channel: event.data.channel,
-            text: `A run of ${run.meta.useCaseName} needs an Approver. It would create a Jira ticket in ${String(action.target['project'])} titled "${String(action.fields['title'])}". Open the approval page to decide.${agentsSaid(emitted)}`,
+            text: `A run of ${run.meta.useCaseName} needs an Approver. It would ${wouldDo(record.actions)}. Open the approval page to decide.${agentsSaid(emitted)}`,
             link: event.data.link,
             run_id: run.id,
             approval_id: record.approval_id,
@@ -234,9 +313,15 @@ export class DemoPlatform {
     return this.runs
       .flatMap((run) => {
         const record = run.approvals(wall).at(-1)
-        const action = record?.actions[0]
+        // The writes after a decision come in the proposal's order, so the nth write is the nth action.
+        let written = 0
         return run.timeline.emitted(wall).flatMap((event) => {
-          if (event.kind !== 'write_action_done' || !record || !action) return []
+          if (event.kind === 'approval_decided') written = 0
+          if (event.kind !== 'write_action_done' || !record) return []
+          const action = record.actions[written]
+          written += 1
+          if (!action) return []
+          const doneAt = this.done.get(event.data.external_reference) ?? null
           const ticket: MockJiraTicket = {
             key: event.data.external_reference,
             project: String(action.target['project']),
@@ -245,8 +330,8 @@ export class DemoPlatform {
             created_at: event.ts,
             run_id: run.id,
             proposal_id: record.proposal_id,
-            status: 'To Do',
-            done_at: null,
+            status: doneAt ? 'Done' : 'To Do',
+            done_at: doneAt,
           }
           return [ticket]
         })

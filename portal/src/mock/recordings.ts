@@ -16,15 +16,65 @@ export interface RunContext {
   readonly proposalId: string
 }
 
-const WORK_LEG_LAST_SEQ = 17
+interface WorkLegOptions {
+  readonly firstSeq: number
+  readonly attempt: number
+}
+
+/** One recorded run the demo replays for a run it starts: the work leg, the rest after a decision, and the proposal. */
+export interface Recording {
+  readonly workLeg: (context: RunContext, options: WorkLegOptions) => ActivityEvent[]
+  /** keys are the ticket keys an approval writes, one for each of `tickets`. */
+  readonly decisionTail: (
+    verdict: Verdict,
+    context: RunContext,
+    decider: Person,
+    keys: readonly string[],
+    firstSeq: number,
+  ) => ActivityEvent[]
+  readonly proposalFor: (context: RunContext) => ProposalView
+  readonly tickets: number
+}
+
 const RECORDED_DECIDER: Person = { id: 'bob', display: 'Bob' }
 export const FIRST_NEW_TICKET_NUMBER = 143
 
-const recordedWorkLeg = fixtures.successEvents.filter((event) => event.seq <= WORK_LEG_LAST_SEQ)
-const recordedActLeg = fixtures.successEvents.filter((event) => event.seq > WORK_LEG_LAST_SEQ)
-const recordedDecline = fixtures.rejectedEvents.filter((event) => event.seq > WORK_LEG_LAST_SEQ)
+function numbered(events: readonly ActivityEvent[], firstSeq: number): ActivityEvent[] {
+  return events.map((event, index) => ({ ...event, seq: firstSeq + index }))
+}
 
-function replacements(context: RunContext, decider: Person, ticketKey: string): Replacement[] {
+function withAttempt(event: ActivityEvent, attempt: number): ActivityEvent {
+  if (event.kind !== 'leg_dispatched') return event
+  return {
+    ...event,
+    summary: event.summary.replace('(attempt 1)', `(attempt ${attempt})`),
+    data: { ...event.data, attempt },
+  }
+}
+
+function lastSeqOfWorkLeg(events: readonly ActivityEvent[]): number {
+  return events.find((event) => event.kind === 'approval_announced')?.seq ?? events.length
+}
+
+function playWorkLeg(
+  recorded: readonly ActivityEvent[],
+  replacements: readonly Replacement[],
+  { firstSeq, attempt }: WorkLegOptions,
+): ActivityEvent[] {
+  const events = firstSeq === 1 ? recorded : recorded.slice(1)
+  return numbered(
+    substitute(events, replacements).map((event) => withAttempt(event, attempt)),
+    firstSeq,
+  )
+}
+
+// The release check: runs/success.json, with runs/rejected.json for a decline.
+const RELEASE_LAST = lastSeqOfWorkLeg(fixtures.successEvents)
+const releaseWorkLeg = fixtures.successEvents.filter((event) => event.seq <= RELEASE_LAST)
+const releaseActLeg = fixtures.successEvents.filter((event) => event.seq > RELEASE_LAST)
+const releaseDecline = fixtures.rejectedEvents.filter((event) => event.seq > lastSeqOfWorkLeg(fixtures.rejectedEvents))
+
+function releaseReplacements(context: RunContext, decider: Person, ticketKey: string): Replacement[] {
   const [useCaseName, repo] = [context.useCase.name, context.repo ?? 'langchain-ai/langgraph']
   return [
     ['run_01JB8', context.runId],
@@ -44,39 +94,60 @@ function replacements(context: RunContext, decider: Person, ticketKey: string): 
   ]
 }
 
-function numbered(events: readonly ActivityEvent[], firstSeq: number): ActivityEvent[] {
-  return events.map((event, index) => ({ ...event, seq: firstSeq + index }))
+function declineTail(context: RunContext, decider: Person, firstSeq: number): ActivityEvent[] {
+  return numbered(substitute(releaseDecline, releaseReplacements(context, decider, 'MOCK-142')), firstSeq)
 }
 
-function withAttempt(event: ActivityEvent, attempt: number): ActivityEvent {
-  if (event.kind !== 'leg_dispatched') return event
-  return {
-    ...event,
-    summary: event.summary.replace('(attempt 1)', `(attempt ${attempt})`),
-    data: { ...event.data, attempt },
-  }
+export const RELEASE_CHECK: Recording = {
+  workLeg: (context, options) =>
+    playWorkLeg(releaseWorkLeg, releaseReplacements(context, RECORDED_DECIDER, 'MOCK-142'), options),
+  decisionTail: (verdict, context, decider, keys, firstSeq) =>
+    verdict === 'approve'
+      ? numbered(substitute(releaseActLeg, releaseReplacements(context, decider, keys[0] ?? 'MOCK-142')), firstSeq)
+      : declineTail(context, decider, firstSeq),
+  proposalFor: (context) =>
+    substitute(fixtures.successProposal, releaseReplacements(context, RECORDED_DECIDER, 'MOCK-142')),
+  tickets: 1,
 }
 
-interface WorkLegOptions {
-  readonly firstSeq: number
-  readonly attempt: number
+// The watchlist check: runs/watchlist.json, which writes one ticket for each software that is behind.
+const WATCH_LAST = lastSeqOfWorkLeg(fixtures.watchlistEvents)
+const watchWorkLeg = fixtures.watchlistEvents.filter((event) => event.seq <= WATCH_LAST)
+const watchActLeg = fixtures.watchlistEvents.filter((event) => event.seq > WATCH_LAST)
+const watchKeys = [
+  ...new Set(
+    watchActLeg.flatMap((event) => (event.kind === 'write_action_done' ? [event.data.external_reference] : [])),
+  ),
+]
+
+function watchReplacements(context: RunContext, decider: Person, keys: readonly string[]): Replacement[] {
+  const [first] = fixtures.watchlistEvents
+  const runId = first?.run_id ?? ''
+  const suffix = runId.slice('run_'.length)
+  const useCaseId = first?.kind === 'run_created' ? first.data.use_case_id : ''
+  return [
+    [runId, context.runId],
+    [`apr_${suffix}`, context.approvalId],
+    [`prp_${suffix}`, context.proposalId],
+    [useCaseId, context.useCase.id],
+    ['Alice', context.starter.display],
+    ['alice', context.starter.id],
+    ['Bob', decider.display],
+    ['bob', decider.id],
+    ...watchKeys.map((key, index): Replacement => [key, keys[index] ?? key]),
+  ]
 }
 
-export function workLeg(context: RunContext, { firstSeq, attempt }: WorkLegOptions): ActivityEvent[] {
-  const events = firstSeq === 1 ? recordedWorkLeg : recordedWorkLeg.slice(1)
-  const own = substitute(events, replacements(context, RECORDED_DECIDER, 'MOCK-142'))
-  return numbered(own.map((event) => withAttempt(event, attempt)), firstSeq)
-}
-
-export function decisionTail(
-  verdict: Verdict,
-  context: RunContext,
-  decider: Person,
-  ticketKey: string,
-  firstSeq: number,
-): ActivityEvent[] {
-  const recorded = verdict === 'approve' ? recordedActLeg : recordedDecline
-  return numbered(substitute(recorded, replacements(context, decider, ticketKey)), firstSeq)
+export const WATCHLIST_CHECK: Recording = {
+  workLeg: (context, options) =>
+    playWorkLeg(watchWorkLeg, watchReplacements(context, RECORDED_DECIDER, watchKeys), options),
+  decisionTail: (verdict, context, decider, keys, firstSeq) =>
+    verdict === 'approve'
+      ? numbered(substitute(watchActLeg, watchReplacements(context, decider, keys)), firstSeq)
+      : declineTail(context, decider, firstSeq),
+  proposalFor: (context) =>
+    substitute(fixtures.watchlistProposal, watchReplacements(context, RECORDED_DECIDER, watchKeys)),
+  tickets: watchKeys.length,
 }
 
 export function retriedEvent(context: RunContext, by: Person, attempt: number, seq: number): ActivityEvent {
@@ -88,20 +159,5 @@ export function retriedEvent(context: RunContext, by: Person, attempt: number, s
     kind: 'run_retried',
     summary: `${by.display} retried the run.`,
     data: { leg: 'work', attempt },
-  }
-}
-
-export function proposalFor(context: RunContext): ProposalView {
-  return substitute(fixtures.successProposal, replacements(context, RECORDED_DECIDER, 'MOCK-142'))
-}
-
-export function recordedContext(runId: string, proposalId: string, approvalId: string): RunContext {
-  return {
-    runId,
-    starter: { id: 'alice', display: 'Alice' },
-    useCase: { id: fixtures.useCase.use_case_id, name: fixtures.useCase.name },
-    repo: undefined,
-    approvalId,
-    proposalId,
   }
 }
