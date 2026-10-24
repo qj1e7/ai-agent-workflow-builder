@@ -1,0 +1,65 @@
+{
+  "run_id": "run_01JBC",
+  "use_case_id": "uc_01JBW",
+  "use_case_name": "Software watchlist",
+  "use_case_version": 6,
+  "started_by": "alice",
+  "trigger": "person",
+  "started_at": "2026-11-20T02:14:00Z",
+  "updated_at": "2026-11-20T02:14:11.400000Z",
+  "last_seq": 26,
+  "events_url": "/api/v1/runs/run_01JBC/events",
+  "state": "awaiting_approval",
+  "proposal": {
+    "proposal_id": "prp_01JBC",
+    "digest": "sha256:c331bd883a0099caaeb7a7c1a29a07ef2f2bbebb162db28b9b7972c5e02d2c72",
+    "actions": [
+      {
+        "connector": "jira",
+        "operation": "create_ticket",
+        "target": {
+          "project": "MOCK"
+        },
+        "fields": {
+          "title": "Upgrade LangGraph from 1.2.14 to 1.2.16",
+          "body": "LangGraph has 2 new releases on GitHub (langchain-ai/langgraph) newer than our version 1.2.14:\n- 1.2.16\n- 1.2.15\n\nProposed by the AI workflow builder."
+        }
+      },
+      {
+        "connector": "jira",
+        "operation": "create_ticket",
+        "target": {
+          "project": "MOCK"
+        },
+        "fields": {
+          "title": "Upgrade Redis from 8.2.0 to 8.2.1",
+          "body": "Redis has 1 new release on GitHub (redis/redis) newer than our version 8.2.0:\n- 8.2.1\n\nProposed by the AI workflow builder."
+        }
+      },
+      {
+        "connector": "jira",
+        "operation": "create_ticket",
+        "target": {
+          "project": "MOCK"
+        },
+        "fields": {
+          "title": "Upgrade PostgreSQL from 17.2.0 to 17.3.0",
+          "body": "PostgreSQL has 1 new release on GitHub (postgres/postgres) newer than our version 17.2.0:\n- 17.3.0\n\nProposed by the AI workflow builder."
+        }
+      }
+    ]
+  },
+  "approval": {
+    "approval_id": "apr_01JBC",
+    "link": "/approvals/apr_01JBC",
+    "steps": [
+      {
+        "index": 0,
+        "label": "Team approver",
+        "status": "open",
+        "decided_by": null,
+        "decided_at": null
+      }
+    ]
+  }
+}
