@@ -16,8 +16,13 @@ from platform_api.builder.models import (
     UseCaseList,
     UseCaseView,
 )
-from platform_api.builder.service import Builder
-from platform_api.builder.templates import TEMPLATES, ParamErrors, UnknownTemplate
+from platform_api.builder.service import Builder, NothingToCheck
+from platform_api.builder.templates import (
+    TEMPLATES,
+    ParamErrors,
+    TemplateNotOffered,
+    UnknownTemplate,
+)
 from platform_api.builder.views import template_view
 from platform_api.shared import Principal, Role, UseCaseId
 from platform_api.wire import error_response
@@ -78,6 +83,10 @@ async def create_use_case(
                 422,
                 [{"loc": ["body", "template"], "msg": f"Unknown template {body.template!r}"}],
             )
+        case TemplateNotOffered():
+            raise HTTPException(
+                422, [{"loc": ["body", "template"], "msg": "Add software on the Software page"}]
+            )
         case ParamErrors(errors):
             raise HTTPException(
                 422,
@@ -114,6 +123,7 @@ async def get_use_case(
         **OPERATORS_ONLY,
         200: {"model": RunStarted, "description": "This Idempotency-Key started the run before"},
         404: NOT_FOUND,
+        409: error_response("The watchlist is empty, so there is nothing to check"),
     },
 )
 async def start_run(
@@ -126,6 +136,8 @@ async def start_run(
     started = await builder.start_run(UseCaseId(use_case_id), principal, idempotency_key)
     if started is None:
         raise HTTPException(404, "No such use case")
+    if isinstance(started, NothingToCheck):
+        raise HTTPException(409, "The watchlist is empty. Add software before starting a check.")
     if not started.created:
         response.status_code = 200
     return RunStarted(run_id=started.run_id, events_url=f"/api/v1/runs/{started.run_id}/events")

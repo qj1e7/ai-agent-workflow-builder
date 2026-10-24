@@ -44,8 +44,9 @@ PLATFORM_API_URL=http://localhost:18000 MOCK_GITHUB_URL=http://localhost:8200 uv
 | `test_rejected` | When Bob declines, the run ends `rejected`, no ticket is written, and the event kinds equal `contracts/fixtures/runs/rejected.json`. |
 | `test_failure_retry` | With GitHub down, the run fails with reason `AgentError`, retryable. The troubleshoot route suggests a retry. After GitHub recovers, Alice retries, the run reaches the approval gate again, Bob approves, and exactly one ticket is written. |
 | `test_safety` | An unknown or missing `X-Dev-User` gets 401. Bob deciding with a stale digest is refused, the step stays open, and nothing is written. |
+| `test_watchlist` | Alice adds three software to the team's watchlist: LangGraph at 1.2.14 (behind), Redis at 8.2.1 (up to date) and a repository the mock GitHub does not know. Adding a repository twice is 409, Bob cannot add (403), and a bad version is 422. One check sends one approval request with exactly one ticket, "Upgrade LangGraph from 1.2.14 to 1.2.16", and the Teams message names it. While it waits, the Software page shows LangGraph awaiting approval with the approval id, Redis up to date and the unknown repository as cannot check with the 404 in its problem, rows that need a person first. Bob approves, the ticket is written as To Do and LangGraph shows it as open. Bob cannot mark it Done (403); Alice marks it Done, twice with the same answer, and our version moves to 1.2.16 with source `ticket_done` and the ticket key. Removing software answers the list that is left. |
 
-Each test makes its own use case, so order does not matter. Tests count tickets by `run_id`, so a ticket from another test never counts. `test_rejected` also checks the total ticket count did not move.
+Each test makes its own use case, so order does not matter. There is one watchlist per team, so `test_watchlist` first removes whatever a kept stack still watches. Tests count tickets by `run_id`, so a ticket from another test never counts. `test_rejected` also checks the total ticket count did not move.
 
 ## The browser suite
 
@@ -66,7 +67,7 @@ Evidence lands in `portal/e2e/out/live/` (gitignored). `shots/` has a 1440 by 90
 
 ## Mock GitHub
 
-`e2e/mock_github/` is a small server with no dependencies. It answers `GET /repos/langchain-ai/langgraph/releases` in GitHub's shape: 30 releases, newest first, with 1.2.16, 1.2.15 and 1.2.14 at the top and other tag families (`cli==...`, `sdk==...`) below them. `per_page` and `page` work. `POST /_admin/mode` with `{"mode": "unavailable"}` makes the releases route answer 503, and `{"mode": "ok"}` restores it. Every test starts and ends with the mode set to `ok`.
+`e2e/mock_github/` is a small server with no dependencies. It answers `GET /repos/{owner}/{name}/releases` in GitHub's shape for two repositories. `langchain-ai/langgraph` has 30 releases, newest first, with 1.2.16, 1.2.15 and 1.2.14 at the top and other tag families (`cli==...`, `sdk==...`) below them. `redis/redis` has six, newest 8.2.1. Any other repository answers 404, as GitHub does. `per_page` and `page` work. `POST /_admin/mode` with `{"mode": "unavailable"}` makes every releases route answer 503, and `{"mode": "ok"}` restores it. Every test starts and ends with the mode set to `ok`.
 
 Its own tests run in its container:
 
@@ -83,6 +84,7 @@ These points are not spelled out in `contracts/`. If the real API differs, chang
 - A missing `X-Dev-User` gets 401, the same as an unknown one.
 - A stale digest is refused with 403, 409 or 422, and does not close the step.
 - After a retry, the next event is `run_retried` with `seq` continuing from the failed run's last `seq`.
+- A watchlist check's ticket is titled `Upgrade {name} from {our version} to {newest}`, and the problem of a software the mock GitHub does not know names the 404.
 
 ## Checks
 

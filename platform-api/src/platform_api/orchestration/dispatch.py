@@ -7,6 +7,7 @@ import httpx
 
 from platform_api.db import Database
 from platform_api.orchestration.runs import Leg, sentence
+from platform_api.orchestration.write_actions import listed, one_line
 from platform_api.shared import ApprovalId, N8nExecutionId, RunId, new_id
 
 
@@ -67,12 +68,8 @@ def _agents_said(summary: str) -> str:
     It is model text, so it goes last: nothing the platform says can follow it and be mistaken
     for it, and it cannot pose as the action line above it.
     """
-    flat = " ".join(summary.split())
-    if not flat:
-        return ""
-    if len(flat) > SUMMARY_LIMIT:
-        flat = flat[: SUMMARY_LIMIT - 1].rstrip() + "…"
-    return f" The agents said: {sentence(flat)}"
+    flat = one_line(summary, SUMMARY_LIMIT)
+    return f" The agents said: {sentence(flat)}" if flat else ""
 
 
 @dataclass(frozen=True)
@@ -98,7 +95,7 @@ class TeamsStub:
     async def announce(self, notice: ApprovalNotice) -> None:
         text = (
             f"A run of {notice.use_case_name} needs an Approver. "
-            f"It would {' and '.join(notice.actions)}. "
+            f"It would {listed(notice.actions)}. "
             f"Open the approval page to decide.{_agents_said(notice.summary)}"
         )
         async with self._db.transaction("orchestration") as uow:

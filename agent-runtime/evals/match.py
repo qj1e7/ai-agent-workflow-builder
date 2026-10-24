@@ -25,10 +25,14 @@ RULES: dict[str, dict[str, re.Pattern[str]]] = {
     }
 }
 FIXED = {"tag_pattern": TAG_PATTERN}
+# Published for the live view, but the builder never suggests it: a watchlist is made by adding
+# software on the Software page.
+NOT_OFFERED = frozenset({"software_watchlist"})
 
 
 def catalog() -> list[dict[str, Any]]:
-    return json.loads(TEMPLATES.read_text())["templates"]
+    published: list[dict[str, Any]] = json.loads(TEMPLATES.read_text())["templates"]
+    return [t for t in published if t["key"] not in NOT_OFFERED]
 
 
 def schema() -> type[BaseModel]:

@@ -33,6 +33,7 @@ from platform_api.shared import (
     UserId,
 )
 from platform_api.wire import ApprovalStepView, StepOutcome
+from platform_api.wire import RunState as RunStateName
 
 
 class Leg(Enum):
@@ -469,6 +470,22 @@ type RunState = (
     Pending | Working | Proposed | AwaitingApproval | Acting | Succeeded | Rejected | Failed
 )
 type ActiveState = Pending | Working | Proposed | Acting
+
+STATE_NAMES: Mapping[type[RunState], RunStateName] = {
+    Pending: "pending",
+    Working: "working",
+    Proposed: "proposed",
+    AwaitingApproval: "awaiting_approval",
+    Acting: "acting",
+    Succeeded: "succeeded",
+    Rejected: "rejected",
+    Failed: "failed",
+}
+
+
+def state_name(state: RunState) -> RunStateName:
+    return STATE_NAMES[type(state)]
+
 
 CALLBACK_LIFETIME = timedelta(hours=2)
 

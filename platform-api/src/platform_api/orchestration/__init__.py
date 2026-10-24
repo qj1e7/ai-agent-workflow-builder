@@ -1,13 +1,61 @@
 from platform_api.orchestration.approvals import AnyApprover, ApprovalPolicy, ApprovalStep
-from platform_api.orchestration.spec import RunSpec, RunStarted, RunStarter
+from platform_api.orchestration.spec import (
+    ReleaseTask,
+    RunSpec,
+    RunStarted,
+    RunStarter,
+    SoftwareSource,
+    Task,
+    WatchedSoftware,
+    WatchlistTask,
+)
+from platform_api.orchestration.watch import (
+    ATTENTION_ORDER,
+    Checked,
+    CouldNotCheck,
+    FromFirstCheck,
+    FromTicketDone,
+    Given,
+    OpenTicket,
+    PendingTicket,
+    SoftwareFacts,
+    Standing,
+    Status,
+)
+from platform_api.orchestration.watch_store import (
+    LastCheck,
+    WatchFacts,
+    WatchlistFacts,
+    WatchlistStanding,
+)
 from platform_api.orchestration.write_actions import Binding
 
 __all__ = [
+    "ATTENTION_ORDER",
     "AnyApprover",
     "ApprovalPolicy",
     "ApprovalStep",
     "Binding",
+    "Checked",
+    "CouldNotCheck",
+    "FromFirstCheck",
+    "FromTicketDone",
+    "Given",
+    "LastCheck",
+    "OpenTicket",
+    "PendingTicket",
+    "ReleaseTask",
     "RunSpec",
     "RunStarted",
     "RunStarter",
+    "SoftwareFacts",
+    "SoftwareSource",
+    "Standing",
+    "Status",
+    "Task",
+    "WatchFacts",
+    "WatchedSoftware",
+    "WatchlistFacts",
+    "WatchlistStanding",
+    "WatchlistTask",
 ]

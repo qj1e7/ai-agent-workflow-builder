@@ -1,0 +1,12 @@
+{
+  "use_case_id": "uc_01JBW",
+  "version": 8,
+  "ticket_project": "MOCK",
+  "software": [],
+  "last_check": {
+    "run_id": "run_01JBB",
+    "state": "awaiting_approval",
+    "started_at": "2026-11-16T01:00:12Z"
+  },
+  "schedule": null
+}

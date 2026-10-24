@@ -40,7 +40,12 @@ from platform_api.orchestration.service import (
     steps_view,
 )
 from platform_api.orchestration.service import RetryLater as RetryLaterError
-from platform_api.orchestration.write_actions import MockJiraConnector, Proposal
+from platform_api.orchestration.write_actions import (
+    MockJiraConnector,
+    MockTicket,
+    Proposal,
+    TicketStatus,
+)
 from platform_api.shared import (
     ApprovalId,
     Digest,
@@ -247,6 +252,8 @@ class MockJiraTicket(WireModel):
     created_at: datetime
     run_id: RunId
     proposal_id: ProposalId
+    status: TicketStatus
+    done_at: datetime | None
 
 
 class MockJiraTickets(WireModel):
@@ -586,21 +593,42 @@ async def list_teams_stub_messages(
     )
 
 
-@router.get("/api/v1/mock-jira/tickets", tags=["stubs"], responses=SIGNED_IN)
-async def list_mock_jira_tickets(
-    principal: CurrentPrincipal, jira: Annotated[MockJiraConnector, Depends(current_mock_jira)]
-) -> MockJiraTickets:
-    return MockJiraTickets(
-        tickets=[
-            MockJiraTicket(
-                key=t.key,
-                project=t.project,
-                title=t.title,
-                body=t.body,
-                created_at=t.created_at,
-                run_id=t.run_id,
-                proposal_id=t.proposal_id,
-            )
-            for t in await jira.tickets()
-        ]
+def mock_jira_ticket(ticket: MockTicket) -> MockJiraTicket:
+    return MockJiraTicket(
+        key=ticket.key,
+        project=ticket.project,
+        title=ticket.title,
+        body=ticket.body,
+        created_at=ticket.created_at,
+        run_id=ticket.run_id,
+        proposal_id=ticket.proposal_id,
+        status=ticket.status,
+        done_at=ticket.done_at,
     )
+
+
+MockJira = Annotated[MockJiraConnector, Depends(current_mock_jira)]
+
+
+@router.get("/api/v1/mock-jira/tickets", tags=["stubs"], responses=SIGNED_IN)
+async def list_mock_jira_tickets(principal: CurrentPrincipal, jira: MockJira) -> MockJiraTickets:
+    return MockJiraTickets(tickets=[mock_jira_ticket(t) for t in await jira.tickets()])
+
+
+@router.post(
+    "/api/v1/mock-jira/tickets/{key}/done",
+    tags=["stubs"],
+    description=(
+        "Marks a practice Jira ticket Done, as a person would in Jira. The watchlist then "
+        "moves our version to the version the ticket named, so only an Operator may do it. "
+        "Marking a Done ticket again changes nothing."
+    ),
+    responses={**OPERATORS_ONLY, 404: error_response("No such ticket")},
+)
+async def mark_mock_jira_ticket_done(
+    key: str, principal: Operator, jira: MockJira
+) -> MockJiraTicket:
+    ticket = await jira.mark_done(key)
+    if ticket is None:
+        raise HTTPException(status_code=404, detail="No such ticket")
+    return mock_jira_ticket(ticket)

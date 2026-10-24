@@ -100,6 +100,15 @@ CASES = [
     pytest.param("GET", "/api/v1/teams-stub/messages", {}, None, None, 401, id="teams-401"),
     pytest.param("GET", "/api/v1/mock-jira/tickets", {}, None, None, 401, id="jira-401"),
     pytest.param(
+        "POST", "/api/v1/mock-jira/tickets/{key}/done", {}, None, None, 401, id="jira-done-401"
+    ),
+    pytest.param(
+        "POST", "/api/v1/mock-jira/tickets/{key}/done", BOB, None, None, 403, id="jira-done-403"
+    ),
+    pytest.param(
+        "POST", "/api/v1/mock-jira/tickets/{key}/done", ALICE, None, None, 404, id="jira-done-404"
+    ),
+    pytest.param(
         "POST",
         "/internal/v1/runs/{run_id}/steps/{step}",
         {"X-Step-Key": "wrong", "X-N8N-Execution": "1"},
@@ -136,7 +145,7 @@ def test_the_route_answers_the_status_and_declares_it(
     status: int,
 ):
     app = app_with(orchestrator=orchestrator)
-    concrete = path.format(run_id="run_x", approval_id="apr_x", step="run_agents")
+    concrete = path.format(run_id="run_x", approval_id="apr_x", step="run_agents", key="MOCK-1")
     response = TestClient(app).request(method, concrete, headers=headers, json=body)
     assert response.status_code == status
     declared_status(app, method, path, response)

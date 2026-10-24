@@ -221,6 +221,34 @@
         ],
         "type": "string"
       },
+      "AddSoftware": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "$ref": "#/components/schemas/SoftwareName"
+          },
+          "our_version": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Version"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The version the team runs now, such as 1.2.14. Leave it out to take the newest release at the first check as ours."
+          },
+          "repo": {
+            "$ref": "#/components/schemas/RepoName"
+          }
+        },
+        "required": [
+          "name",
+          "repo"
+        ],
+        "title": "AddSoftware",
+        "type": "object"
+      },
       "AddressDecisionIn": {
         "additionalProperties": false,
         "properties": {
@@ -1596,6 +1624,19 @@
         "title": "CreateUseCase",
         "type": "object"
       },
+      "Day": {
+        "enum": [
+          "every_day",
+          "monday",
+          "tuesday",
+          "wednesday",
+          "thursday",
+          "friday",
+          "saturday",
+          "sunday"
+        ],
+        "type": "string"
+      },
       "DecisionIn": {
         "additionalProperties": false,
         "properties": {
@@ -1941,6 +1982,30 @@
         "title": "KnownProviderOut",
         "type": "object"
       },
+      "LastCheckView": {
+        "additionalProperties": false,
+        "properties": {
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/RunState"
+          }
+        },
+        "required": [
+          "run_id",
+          "state",
+          "started_at"
+        ],
+        "title": "LastCheckView",
+        "type": "object"
+      },
       "Leg": {
         "enum": [
           "work",
@@ -2050,6 +2115,18 @@
             "title": "Created At",
             "type": "string"
           },
+          "done_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Done At"
+          },
           "key": {
             "title": "Key",
             "type": "string"
@@ -2066,6 +2143,9 @@
             "title": "Run Id",
             "type": "string"
           },
+          "status": {
+            "$ref": "#/components/schemas/TicketStatus"
+          },
           "title": {
             "title": "Title",
             "type": "string"
@@ -2078,7 +2158,9 @@
           "body",
           "created_at",
           "run_id",
-          "proposal_id"
+          "proposal_id",
+          "status",
+          "done_at"
         ],
         "title": "MockJiraTicket",
         "type": "object"
@@ -2711,6 +2793,10 @@
         "title": "RejectedView",
         "type": "object"
       },
+      "RepoName": {
+        "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$",
+        "type": "string"
+      },
       "RetryAccepted": {
         "additionalProperties": false,
         "properties": {
@@ -3087,6 +3173,19 @@
         "title": "RunStarted",
         "type": "object"
       },
+      "RunState": {
+        "enum": [
+          "pending",
+          "working",
+          "proposed",
+          "awaiting_approval",
+          "acting",
+          "succeeded",
+          "rejected",
+          "failed"
+        ],
+        "type": "string"
+      },
       "RunSucceeded": {
         "additionalProperties": false,
         "properties": {
@@ -3275,6 +3374,87 @@
         ],
         "title": "SavedOut",
         "type": "object"
+      },
+      "ScheduleView": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "title": "At",
+            "type": "string"
+          },
+          "day": {
+            "$ref": "#/components/schemas/Day"
+          },
+          "next_at": {
+            "format": "date-time",
+            "title": "Next At",
+            "type": "string"
+          },
+          "owner": {
+            "title": "Owner",
+            "type": "string"
+          },
+          "saved_at": {
+            "format": "date-time",
+            "title": "Saved At",
+            "type": "string"
+          },
+          "time_zone": {
+            "title": "Time Zone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "at",
+          "time_zone",
+          "owner",
+          "saved_at",
+          "next_at"
+        ],
+        "title": "ScheduleView",
+        "type": "object"
+      },
+      "SoftwareName": {
+        "maxLength": 80,
+        "minLength": 1,
+        "type": "string"
+      },
+      "SourceView": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "github",
+            "title": "Kind",
+            "type": "string"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "ref",
+          "url"
+        ],
+        "title": "SourceView",
+        "type": "object"
+      },
+      "Status": {
+        "enum": [
+          "cant_check",
+          "behind",
+          "awaiting_approval",
+          "ticket_open",
+          "up_to_date",
+          "not_checked"
+        ],
+        "type": "string"
       },
       "StepFinished": {
         "additionalProperties": false,
@@ -3777,6 +3957,13 @@
         "title": "TemplateView",
         "type": "object"
       },
+      "TicketStatus": {
+        "enum": [
+          "To Do",
+          "Done"
+        ],
+        "type": "string"
+      },
       "TroubleshootingOut": {
         "additionalProperties": false,
         "properties": {
@@ -3935,6 +4122,246 @@
         ],
         "title": "Verdict",
         "type": "string"
+      },
+      "Version": {
+        "pattern": "^\\d+\\.\\d+\\.\\d+$",
+        "type": "string"
+      },
+      "VersionSourceKind": {
+        "enum": [
+          "given",
+          "first_check",
+          "ticket_done"
+        ],
+        "type": "string"
+      },
+      "VersionSourceView": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/VersionSourceKind"
+          },
+          "ticket": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ticket"
+          }
+        },
+        "required": [
+          "kind",
+          "at",
+          "ticket"
+        ],
+        "title": "VersionSourceView",
+        "type": "object"
+      },
+      "WatchedSoftwareView": {
+        "additionalProperties": false,
+        "properties": {
+          "added_at": {
+            "format": "date-time",
+            "title": "Added At",
+            "type": "string"
+          },
+          "added_by": {
+            "title": "Added By",
+            "type": "string"
+          },
+          "approval_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Id"
+          },
+          "checked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "newest_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Newest Version"
+          },
+          "open_ticket": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Ticket"
+          },
+          "our_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Our Version"
+          },
+          "our_version_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VersionSourceView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
+          },
+          "source": {
+            "$ref": "#/components/schemas/SourceView"
+          },
+          "status": {
+            "$ref": "#/components/schemas/Status"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "source",
+          "our_version",
+          "our_version_source",
+          "newest_version",
+          "checked_at",
+          "status",
+          "problem",
+          "open_ticket",
+          "approval_id",
+          "added_by",
+          "added_at"
+        ],
+        "title": "WatchedSoftwareView",
+        "type": "object"
+      },
+      "WatchlistOut": {
+        "additionalProperties": false,
+        "properties": {
+          "watchlist": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatchlistView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "watchlist"
+        ],
+        "title": "WatchlistOut",
+        "type": "object"
+      },
+      "WatchlistView": {
+        "additionalProperties": false,
+        "properties": {
+          "last_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LastCheckView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScheduleView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Always null until schedules arrive in a later change."
+          },
+          "software": {
+            "description": "Rows that need a person first: cannot check, behind, awaiting approval, ticket open, not checked; then up to date. Rows with one status sort by name.",
+            "items": {
+              "$ref": "#/components/schemas/WatchedSoftwareView"
+            },
+            "title": "Software",
+            "type": "array"
+          },
+          "ticket_project": {
+            "title": "Ticket Project",
+            "type": "string"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "use_case_id",
+          "version",
+          "ticket_project",
+          "software",
+          "last_check"
+        ],
+        "title": "WatchlistView",
+        "type": "object"
       },
       "WireVerdict": {
         "enum": [
@@ -4660,6 +5087,97 @@
           }
         ],
         "summary": "List Mock Jira Tickets",
+        "tags": [
+          "stubs"
+        ]
+      }
+    },
+    "/api/v1/mock-jira/tickets/{key}/done": {
+      "post": {
+        "description": "Marks a practice Jira ticket Done, as a person would in Jira. The watchlist then moves our version to the version the ticket named, so only an Operator may do it. Marking a Done ticket again changes nothing.",
+        "operationId": "mark_mock_jira_ticket_done_api_v1_mock_jira_tickets__key__done_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MockJiraTicket"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such ticket"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Mark Mock Jira Ticket Done",
         "tags": [
           "stubs"
         ]
@@ -5939,6 +6457,16 @@
             },
             "description": "No such use case"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The watchlist is empty, so there is nothing to check"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -5969,6 +6497,236 @@
           }
         ],
         "summary": "Start Run",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/watchlist": {
+      "get": {
+        "description": "The team's watchlist, or null until the first software is added.",
+        "operationId": "get_watchlist_api_v1_watchlist_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchlistOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Get Watchlist",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/watchlist/software": {
+      "post": {
+        "description": "Adds software to the watchlist, making the watchlist on the first add.",
+        "operationId": "add_software_api_v1_watchlist_software_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddSoftware"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchlistView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "This repository is already watched"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Add Software",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/watchlist/software/{software_id}": {
+      "delete": {
+        "operationId": "remove_software_api_v1_watchlist_software__software_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "software_id",
+            "required": true,
+            "schema": {
+              "title": "Software Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchlistView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such watched software"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Remove Software",
         "tags": [
           "builder"
         ]

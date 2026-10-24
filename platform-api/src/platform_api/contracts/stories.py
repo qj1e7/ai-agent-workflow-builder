@@ -691,6 +691,8 @@ def mock_jira_tickets(tl: Timeline) -> MockJiraTickets:
                 created_at=done.ts,
                 run_id=SUCCESS.run_id,
                 proposal_id=SUCCESS.proposal_id,
+                status="To Do",
+                done_at=None,
             )
         ]
     )

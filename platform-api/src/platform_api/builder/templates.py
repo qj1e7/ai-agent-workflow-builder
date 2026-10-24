@@ -56,6 +56,9 @@ class Template:
     bindings: Mapping[str, BindingSpec]
     approval_policy: ApprovalPolicy
     keywords: frozenset[str]
+    offered: bool = True
+    """False when another page owns this template's use cases. The Builder lists it, because
+    the live view draws a run from its template's blocks, but never suggests or makes one."""
 
     def bindings_for(self, params: Mapping[str, str]) -> Mapping[str, Binding]:
         return {kind: spec.bind(params) for kind, spec in self.bindings.items()}
@@ -116,7 +119,52 @@ RELEASE_CHECK = Template(
     ),
 )
 
-TEMPLATES: Mapping[str, Template] = {RELEASE_CHECK.key: RELEASE_CHECK}
+SOFTWARE_WATCHLIST = Template(
+    key="software_watchlist",
+    name="Software watchlist",
+    description="Check every watched software for new releases and raise one upgrade ticket for "
+    "each that is behind.",
+    blocks=(
+        Block(
+            "read_versions",
+            "Read every source",
+            "The Release checker reads the newest release of each watched software.",
+            "agent",
+        ),
+        Block(
+            "approval_gate",
+            "Approval gate",
+            "An Approver reviews all of the check's tickets in Teams with one decision.",
+            "approval",
+        ),
+        Block(
+            "create_tickets",
+            "Create Jira tickets",
+            "One upgrade ticket for each software that is behind.",
+            "write_action",
+        ),
+    ),
+    params=(ParamSpec("ticket_project", "Jira project key", "MOCK"),),
+    workflow="release_check",
+    tag_pattern=TAG_PATTERN,
+    bindings={"create_ticket": BindingSpec("jira", "create_ticket", {"project": "ticket_project"})},
+    approval_policy=ApprovalPolicy((ApprovalStep("Team approver", AnyApprover()),)),
+    keywords=frozenset(),
+    offered=False,
+)
+
+TEMPLATES: Mapping[str, Template] = {
+    RELEASE_CHECK.key: RELEASE_CHECK,
+    SOFTWARE_WATCHLIST.key: SOFTWARE_WATCHLIST,
+}
+
+WATCHLIST_NAME = "Software watchlist"
+WATCHLIST_INSTRUCTION = (
+    "Check the team's watched software for new releases and raise an upgrade ticket for each "
+    "one that is behind."
+)
+WATCHLIST_PARAMS: Mapping[str, str] = {"ticket_project": "MOCK"}
+WATCHLIST_LIMIT = 100
 
 
 @dataclass(frozen=True)
@@ -131,6 +179,11 @@ class ParamErrors:
 
 @dataclass(frozen=True)
 class UnknownTemplate:
+    key: str
+
+
+@dataclass(frozen=True)
+class TemplateNotOffered:
     key: str
 
 
@@ -192,6 +245,8 @@ def suggest_template(text: str) -> tuple[Template | None, list[str]]:
     best_terms: list[str] = []
     all_terms: set[str] = set()
     for template in TEMPLATES.values():
+        if not template.offered:
+            continue
         terms = [word for word in words if word in template.keywords]
         all_terms.update(terms)
         if len(terms) >= 2 and len(terms) > len(best_terms):

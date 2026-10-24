@@ -1,4 +1,5 @@
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 
 from platform_api.builder.models import (
@@ -11,13 +12,15 @@ from platform_api.builder.models import (
 from platform_api.builder.templates import (
     TEMPLATES,
     ParamErrors,
+    TemplateNotOffered,
     UnknownTemplate,
     suggest_template,
     validate_params,
 )
 from platform_api.builder.views import template_view
+from platform_api.builder.watchlist import Watchlist
 from platform_api.db import Database, json
-from platform_api.orchestration import RunSpec, RunStarted, RunStarter
+from platform_api.orchestration import ReleaseTask, RunSpec, RunStarted, RunStarter, Task
 from platform_api.shared import Principal, UseCaseId, UserId, new_id
 
 _CURRENT_VERSION = """
@@ -42,18 +45,28 @@ def _view(row: Mapping[str, Any]) -> UseCaseView:
     )
 
 
+@dataclass(frozen=True)
+class NothingToCheck:
+    """The watchlist has no software, so a check would have nothing to do."""
+
+
 class Builder:
-    def __init__(self, db: Database, runs: RunStarter, public_base_url: str) -> None:
+    def __init__(
+        self, db: Database, runs: RunStarter, watchlist: Watchlist, public_base_url: str
+    ) -> None:
         self._db = db
         self._runs = runs
+        self._watchlist = watchlist
         self.public_base_url = public_base_url
 
     async def create_use_case(
         self, principal: Principal, body: CreateUseCase
-    ) -> UseCaseCreated | ParamErrors | UnknownTemplate:
+    ) -> UseCaseCreated | ParamErrors | UnknownTemplate | TemplateNotOffered:
         template = TEMPLATES.get(body.template)
         if template is None:
             return UnknownTemplate(body.template)
+        if not template.offered:
+            return TemplateNotOffered(template.key)
         checked = validate_params(template, body.params)
         if isinstance(checked, ParamErrors):
             return checked
@@ -102,13 +115,25 @@ class Builder:
             template=None if template is None else template_view(template), matched_terms=terms
         )
 
-    async def run_spec_for(self, use_case_id: UseCaseId) -> RunSpec | None:
+    async def run_spec_for(self, use_case_id: UseCaseId) -> RunSpec | None | NothingToCheck:
         view = await self.get_use_case(use_case_id)
         if view is None:
             return None
         template = TEMPLATES[view.template]
         params = view.params
-        carried = await self._runs.latest_carry_forward(use_case_id)
+        task: Task
+        if template.offered:
+            carried = await self._runs.latest_carry_forward(use_case_id)
+            task = ReleaseTask(
+                repo=params["repo"],
+                tag_pattern=params["tag_pattern"],
+                last_known_tag=carried or params.get("last_seen_tag"),
+            )
+        else:
+            listed = await self._watchlist.task_for(use_case_id, view.version)
+            if listed is None:
+                return NothingToCheck()
+            task = listed
         return RunSpec(
             use_case_id=use_case_id,
             use_case_version=view.version,
@@ -116,17 +141,15 @@ class Builder:
             owner=view.owner,
             workflow=template.workflow,
             instruction=view.instruction,
-            repo=params["repo"],
-            tag_pattern=params["tag_pattern"],
-            last_known_tag=carried or params.get("last_seen_tag"),
+            task=task,
             bindings=template.bindings_for(params),
             approval_policy=template.approval_policy,
         )
 
     async def start_run(
         self, use_case_id: UseCaseId, principal: Principal, idempotency_key: str
-    ) -> RunStarted | None:
+    ) -> RunStarted | None | NothingToCheck:
         spec = await self.run_spec_for(use_case_id)
-        if spec is None:
-            return None
+        if spec is None or isinstance(spec, NothingToCheck):
+            return spec
         return await self._runs.start_run(spec, principal, idempotency_key)

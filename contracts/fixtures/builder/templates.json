@@ -46,6 +46,38 @@
           "example": "1.2.14"
         }
       ]
+    },
+    {
+      "key": "software_watchlist",
+      "name": "Software watchlist",
+      "description": "Check every watched software for new releases and raise one upgrade ticket for each that is behind.",
+      "blocks": [
+        {
+          "key": "read_versions",
+          "name": "Read every source",
+          "description": "The Release checker reads the newest release of each watched software.",
+          "kind": "agent"
+        },
+        {
+          "key": "approval_gate",
+          "name": "Approval gate",
+          "description": "An Approver reviews all of the check's tickets in Teams with one decision.",
+          "kind": "approval"
+        },
+        {
+          "key": "create_tickets",
+          "name": "Create Jira tickets",
+          "description": "One upgrade ticket for each software that is behind.",
+          "kind": "write_action"
+        }
+      ],
+      "params": [
+        {
+          "name": "ticket_project",
+          "description": "Jira project key",
+          "example": "MOCK"
+        }
+      ]
     }
   ]
 }

@@ -1,11 +1,11 @@
 import asyncio
 import hashlib
 import json
-from collections.abc import Iterable, Mapping, Sequence, Set
+from collections.abc import Collection, Iterable, Mapping, Sequence, Set
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Protocol
+from typing import Any, Literal, Protocol
 
 from platform_api.db import Database
 from platform_api.monitoring import ActionLine
@@ -153,13 +153,38 @@ def check(
     return _issue(proposal, request.id, status.approvers)
 
 
+def one_line(text: str, limit: int) -> str:
+    """text on one line and cut to limit characters, with an ellipsis when cut.
+
+    Every piece of model-written text that people read goes through here, so it cannot break
+    out of the sentence the platform wrote around it.
+    """
+    flat = " ".join(text.split())
+    if len(flat) > limit:
+        flat = flat[: limit - 1].rstrip() + "…"
+    return flat
+
+
+TITLE_LIMIT = 120
+TITLES_SHOWN = 5
+
+
+def shown_title(action: WriteAction) -> str:
+    """The ticket title as people read it. The stored field and the digest keep the agent's text."""
+    return one_line(str(action.fields.get("title", "")).replace('"', ""), TITLE_LIMIT)
+
+
+def _is_ticket(action: WriteAction) -> bool:
+    return action.connector == "jira" and action.operation == "create_ticket"
+
+
 def describe(action: WriteAction) -> ActionLine:
-    if action.connector == "jira" and action.operation == "create_ticket":
-        title = str(action.fields.get("title", ""))
+    if _is_ticket(action):
+        project = action.target.get("project", "?")
         return ActionLine(
             connector="jira",
             operation="create_ticket",
-            line=f"Create Jira ticket in {action.target.get('project', '?')}: {title}",
+            line=f"Create Jira ticket in {project}: {shown_title(action)}",
         )
     return ActionLine(
         connector=action.connector,
@@ -168,11 +193,48 @@ def describe(action: WriteAction) -> ActionLine:
     )
 
 
+def _ticket_phrase(project: str, title: str) -> str:
+    return f'create a Jira ticket in {project} titled "{title}"'
+
+
 def intent(action: WriteAction) -> str:
-    if action.connector == "jira" and action.operation == "create_ticket":
-        project = action.target.get("project", "?")
-        return f'create a Jira ticket in {project} titled "{action.fields.get("title", "")}"'
+    if _is_ticket(action):
+        return _ticket_phrase(str(action.target.get("project", "?")), shown_title(action))
     return f"{action.operation} on {action.connector}"
+
+
+def listed(items: Sequence[str]) -> str:
+    """Items as English reads them: "a", "a and b", "a, b and c"."""
+    if len(items) <= 1:
+        return "".join(items)
+    return ", ".join(items[:-1]) + " and " + items[-1]
+
+
+def intents(actions: Sequence[WriteAction]) -> tuple[str, ...]:
+    """One phrase per kind of write. Tickets for one project become one phrase that names each
+    title, so a check with many tickets still reads as one sentence."""
+    phrases: list[str] = []
+    titles: dict[str, list[str]] = {}
+    slot: dict[str, int] = {}
+    for action in actions:
+        if not _is_ticket(action):
+            phrases.append(intent(action))
+            continue
+        project = str(action.target.get("project", "?"))
+        if project not in titles:
+            slot[project] = len(phrases)
+            phrases.append("")
+            titles[project] = []
+        titles[project].append(shown_title(action))
+    for project, group in titles.items():
+        if len(group) == 1:
+            phrases[slot[project]] = _ticket_phrase(project, group[0])
+            continue
+        quoted = [f'"{title}"' for title in group[:TITLES_SHOWN]]
+        more = len(group) - len(quoted)
+        shown = listed(quoted) if more == 0 else f"{', '.join(quoted)} and {more} more"
+        phrases[slot[project]] = f"create {len(group)} Jira tickets in {project}: {shown}"
+    return tuple(phrases)
 
 
 class WriteFailed(Exception): ...
@@ -253,22 +315,41 @@ class MockJiraConnector:
         async with self._db.transaction("orchestration") as uow:
             rows = await (
                 await uow.conn.execute(
-                    "SELECT key, project, title, body, created_at, run_id, proposal_id "
-                    "FROM orchestration.mock_jira_tickets ORDER BY number"
+                    f"SELECT {TICKET_COLUMNS} FROM orchestration.mock_jira_tickets ORDER BY number"
                 )
             ).fetchall()
-        return [
-            MockTicket(
-                key=row["key"],
-                project=row["project"],
-                title=row["title"],
-                body=row["body"],
-                created_at=row["created_at"],
-                run_id=RunId(row["run_id"]),
-                proposal_id=ProposalId(row["proposal_id"]),
-            )
-            for row in rows
-        ]
+        return [_ticket(row) for row in rows]
+
+    async def mark_done(self, key: str) -> MockTicket | None:
+        """Marks a ticket Done. A ticket already Done keeps its first done time."""
+        async with self._db.transaction("orchestration") as uow:
+            row = await (
+                await uow.conn.execute(
+                    "UPDATE orchestration.mock_jira_tickets SET status = 'Done', "
+                    "done_at = coalesce(done_at, %s) WHERE key = %s "
+                    f"RETURNING {TICKET_COLUMNS}",
+                    (uow.now, key),
+                )
+            ).fetchone()
+        return None if row is None else _ticket(row)
+
+    async def done_tickets(self, keys: Collection[str]) -> Mapping[str, datetime]:
+        if not keys:
+            return {}
+        async with self._db.transaction("orchestration") as uow:
+            rows = await (
+                await uow.conn.execute(
+                    "SELECT key, done_at FROM orchestration.mock_jira_tickets "
+                    "WHERE key = ANY(%s) AND status = 'Done'",
+                    (list(keys),),
+                )
+            ).fetchall()
+        return {str(row["key"]): row["done_at"] for row in rows}
+
+
+type TicketStatus = Literal["To Do", "Done"]
+
+TICKET_COLUMNS = "key, project, title, body, created_at, run_id, proposal_id, status, done_at"
 
 
 @dataclass(frozen=True)
@@ -280,6 +361,23 @@ class MockTicket:
     created_at: datetime
     run_id: RunId
     proposal_id: ProposalId
+    status: TicketStatus = "To Do"
+    done_at: datetime | None = None
+
+
+def _ticket(row: Mapping[str, Any]) -> MockTicket:
+    status: TicketStatus = "Done" if row["status"] == "Done" else "To Do"
+    return MockTicket(
+        key=row["key"],
+        project=row["project"],
+        title=row["title"],
+        body=row["body"],
+        created_at=row["created_at"],
+        run_id=RunId(row["run_id"]),
+        proposal_id=ProposalId(row["proposal_id"]),
+        status=status,
+        done_at=row["done_at"],
+    )
 
 
 CONNECTOR_TIMEOUT = timedelta(seconds=30)

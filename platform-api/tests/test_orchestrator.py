@@ -14,6 +14,7 @@ from platform_api.orchestration.agents import (
     AgentUnavailable,
     ModelAccess,
     TaskFinished,
+    TaskOutput,
     TaskRequest,
     task_result_adapter,
 )
@@ -74,6 +75,7 @@ class RecordingEngine:
 class FakeAgent:
     mode: str = "finished"
     summary: str | None = None
+    output: TaskOutput | None = None
     requests: list[TaskRequest] = field(default_factory=list)
 
     async def run_task(self, request: TaskRequest) -> AgentReply:
@@ -82,6 +84,8 @@ class FakeAgent:
             return AgentUnavailable("connection refused")
         name = "task-finished" if self.mode == "finished" else "task-failed"
         result = task_result_adapter.validate_python(fixture(f"agent/{name}.json"))
+        if self.output is not None and isinstance(result, TaskFinished):
+            result = result.model_copy(update={"output": self.output})
         if self.summary is not None and isinstance(result, TaskFinished):
             output = result.output.model_copy(update={"summary": self.summary})
             result = result.model_copy(update={"output": output})

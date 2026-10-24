@@ -4,8 +4,18 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from platform_api.orchestration import AnyApprover, ApprovalPolicy, ApprovalStep, Binding, RunSpec
-from platform_api.shared import Principal, Role, UseCaseId, UserId
+from platform_api.orchestration import (
+    AnyApprover,
+    ApprovalPolicy,
+    ApprovalStep,
+    Binding,
+    ReleaseTask,
+    RunSpec,
+    SoftwareSource,
+    WatchedSoftware,
+    WatchlistTask,
+)
+from platform_api.shared import Principal, Role, SoftwareId, UseCaseId, UserId
 
 LOCAL_ENV = {
     "AUTH_MODE": "dev",
@@ -41,9 +51,52 @@ SPEC = RunSpec(
     owner=UserId("alice"),
     workflow="release_check",
     instruction="Check langchain-ai/langgraph for new releases and open a ticket for the team.",
-    repo="langchain-ai/langgraph",
+    task=ReleaseTask(
+        repo="langchain-ai/langgraph", tag_pattern=r"^\d+\.\d+\.\d+$", last_known_tag="1.2.14"
+    ),
+    bindings={"create_ticket": Binding("jira", "create_ticket", {"project": "MOCK"})},
+    approval_policy=ApprovalPolicy((ApprovalStep("Team approver", AnyApprover()),)),
+)
+
+
+LANGGRAPH = SoftwareId("sw_01LANGGRAPH")
+REDIS = SoftwareId("sw_01REDIS")
+FASTAPI = SoftwareId("sw_01FASTAPI")
+POSTGRES = SoftwareId("sw_01POSTGRES")
+
+
+def watched(
+    software_id: SoftwareId,
+    name: str,
+    ref: str,
+    our_version: str | None,
+    open_ticket: str | None = None,
+    awaiting_approval: bool = False,
+) -> WatchedSoftware:
+    return WatchedSoftware(
+        software_id, name, SoftwareSource(ref), our_version, open_ticket, awaiting_approval
+    )
+
+
+WATCHLIST_TASK = WatchlistTask(
     tag_pattern=r"^\d+\.\d+\.\d+$",
-    last_known_tag="1.2.14",
+    software=(
+        watched(LANGGRAPH, "LangGraph", "langchain-ai/langgraph", "1.2.14"),
+        watched(REDIS, "Redis", "redis/redis", None),
+        watched(FASTAPI, "FastAPI", "fastapi/fastapi", "0.115.0"),
+        watched(POSTGRES, "PostgreSQL", "postgres/postgres", "17.2.0"),
+    ),
+)
+
+WATCHLIST_SPEC = RunSpec(
+    use_case_id=UseCaseId("uc_01WATCH"),
+    use_case_version=3,
+    use_case_name="Software watchlist",
+    owner=UserId("alice"),
+    workflow="release_check",
+    instruction="Check the team's watched software for new releases and raise an upgrade "
+    "ticket for each one that is behind.",
+    task=WATCHLIST_TASK,
     bindings={"create_ticket": Binding("jira", "create_ticket", {"project": "MOCK"})},
     approval_policy=ApprovalPolicy((ApprovalStep("Team approver", AnyApprover()),)),
 )

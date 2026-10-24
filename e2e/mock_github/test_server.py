@@ -92,6 +92,24 @@ class MockGithubTest(unittest.TestCase):
     def test_unknown_repo_is_404(self) -> None:
         with running() as base:
             self.assertEqual(call(base, "/repos/someone/else/releases")[0], 404)
+            self.assertEqual(call(base, "/repos/redis/releases")[0], 404)
+
+    def test_a_second_repository_has_its_own_releases(self) -> None:
+        with running() as base:
+            status, releases = call(base, "/repos/redis/redis/releases")
+            _, paged = call(base, "/repos/redis/redis/releases?per_page=2&page=2")
+        self.assertEqual(status, 200)
+        self.assertEqual([r["tag_name"] for r in releases[:2]], ["8.2.1", "8.2.0"])
+        self.assertEqual(len(releases), len(server.REDIS_TAGS))
+        urls = [r["html_url"] for r in releases]
+        self.assertTrue(all(url.startswith("https://github.com/redis/redis/") for url in urls))
+        self.assertEqual([r["tag_name"] for r in paged], ["8.0.3", "8.0.2"])
+
+    def test_unavailable_mode_covers_every_repository(self) -> None:
+        with running() as base:
+            call(base, "/_admin/mode", {"mode": "unavailable"})
+            self.assertEqual(call(base, "/repos/redis/redis/releases")[0], 503)
+            self.assertEqual(call(base, "/repos/someone/else/releases")[0], 503)
 
 
 if __name__ == "__main__":
