@@ -332,7 +332,7 @@ def watchlist_finished() -> TaskFinished:
         AgentMessageData(
             speaker=CHECKER,
             addressee=TO_ROOM,
-            text="1 of 3 watched software have new releases: LangGraph. I suggest one ticket.",
+            text="1 of 3 watched software has new releases: LangGraph. I suggest one ticket.",
         ),
     )
     rec.add(
@@ -349,7 +349,7 @@ def watchlist_finished() -> TaskFinished:
     return TaskFinished(
         task_id="run_01JC2/work/1/1",
         output=TaskOutput(
-            summary="1 of 3 watched software have new releases: LangGraph 1.2.16. "
+            summary="1 of 3 watched software has new releases: LangGraph 1.2.16. "
             "FastAPI could not be checked.",
             new_tags=[],
             proposed=[

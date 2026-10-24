@@ -239,9 +239,10 @@ def _report_total(total: int, behind: list[str]) -> Draft:
         )
     count = len(behind)
     suggestion = "one ticket" if count == 1 else f"{count} tickets, one for each"
+    verb = "has" if count == 1 else "have"
     return to_room(
         f"reported {count} of {total} watched software behind and suggested "
         f"{plural(count, 'ticket')}.",
-        f"{count} of {total} watched software have new releases: {tag_list(behind)}. "
+        f"{count} of {total} watched software {verb} new releases: {tag_list(behind)}. "
         f"I suggest {suggestion}.",
     )

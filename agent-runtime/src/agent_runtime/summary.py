@@ -74,7 +74,8 @@ def template_check_summary(checked: Sequence[Checked]) -> str:
     readable = len(checked) - len(cannot)
     if behind:
         news = _names_and([f"{c.name} {c.finding.newest}" for c in behind])
-        sentence = f"{len(behind)} of {len(checked)} watched software have new releases: {news}."
+        verb = "has" if len(behind) == 1 else "have"
+        sentence = f"{len(behind)} of {len(checked)} watched software {verb} new releases: {news}."
     elif raised:
         verb = "has a ticket" if len(raised) == 1 else "have tickets"
         sentence = f"No new tickets are needed, as {_names_and(raised)} already {verb}."

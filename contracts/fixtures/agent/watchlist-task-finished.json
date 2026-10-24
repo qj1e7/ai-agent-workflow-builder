@@ -2,7 +2,7 @@
   "task_id": "run_01JC2/work/1/1",
   "status": "finished",
   "output": {
-    "summary": "1 of 3 watched software have new releases: LangGraph 1.2.16. FastAPI could not be checked.",
+    "summary": "1 of 3 watched software has new releases: LangGraph 1.2.16. FastAPI could not be checked.",
     "new_tags": [],
     "proposed": [
       {
@@ -215,7 +215,7 @@
         "addressee": {
           "kind": "room"
         },
-        "text": "1 of 3 watched software have new releases: LangGraph. I suggest one ticket."
+        "text": "1 of 3 watched software has new releases: LangGraph. I suggest one ticket."
       }
     },
     {

@@ -281,7 +281,7 @@ def test_the_model_writes_the_summary_when_it_answers():
 def test_an_unusable_model_answer_falls_back_to_the_template(reply: str):
     summarizer = ModelSummarizer("any:model", factory=model_saying(reply))
     result = finished(Room(RepoSource(TAGS), summarizer).run(request_for(langgraph("1.2.14"))))
-    assert result.output.summary == "1 of 1 watched software have new releases: LangGraph 1.2.16."
+    assert result.output.summary == "1 of 1 watched software has new releases: LangGraph 1.2.16."
 
 
 def test_a_failing_model_falls_back_to_the_template():
