@@ -40,11 +40,6 @@
   text-decoration: underline;
 }
 
-.template {
-  color: var(--muted);
-  font-size: var(--text-14);
-}
-
 .attempt {
   padding: 3px 10px;
   border: 1px solid var(--hair);

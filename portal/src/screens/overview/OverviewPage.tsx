@@ -7,7 +7,7 @@ import { useRuns, useTemplates } from '../../api/queries'
 import type { RunView } from '../../api/types'
 import { useLiveRun } from '../../tracker/hooks'
 import { Tracker } from '../../tracker/Tracker'
-import { useRunTemplate } from '../../tracker/useRunTemplate'
+import { useRunBlocks } from '../../tracker/useRunBlocks'
 import type { WhenFinished } from '../../run'
 import { InlineMessage, Skeleton } from '../../ui/Feedback'
 import { formatDayAndTime, formatRelative } from '../../ui/format'
@@ -47,8 +47,8 @@ function Hero({ run }: { run: RunView }) {
   // Decided once per run: a run that was already finished when the page opened replays, a live one is followed to its end.
   const [whenFinished] = useState<WhenFinished>(() => (SETTLED.has(run.state) ? 'replay' : 'rest'))
   const view = useLiveRun(run.run_id, whenFinished)
-  const template = useRunTemplate(run)
-  return <Tracker runId={run.run_id} view={view} template={template} title={run.use_case_name} titleTo={`/runs/${run.run_id}`} />
+  const blocks = useRunBlocks(run)
+  return <Tracker runId={run.run_id} view={view} blocks={blocks} title={run.use_case_name} titleTo={`/runs/${run.run_id}`} />
 }
 
 function EarlierRuns({ runs }: { runs: readonly RunView[] }) {

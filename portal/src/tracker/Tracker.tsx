@@ -1,6 +1,6 @@
 import { useCallback, useId, useRef } from 'react'
 import { Link } from 'react-router'
-import type { BlockView, TemplateView } from '../api/types'
+import type { BlockView } from '../api/types'
 import { attemptWords, headlineWords, type Headline, type LiveView, type Speed } from '../run'
 import { useDecision } from '../screens/approval/useDecision'
 import { cx } from '../ui/cx'
@@ -48,19 +48,19 @@ function ToneMark({ tone }: { tone: Tone }) {
 export interface TrackerProps {
   readonly runId: string
   readonly view: LiveView
-  /** The template behind the run's use case. Undefined while it loads: the header and status show, the line waits. */
-  readonly template: TemplateView | undefined
+  /** The blocks of the run's use case. Undefined while it loads: the header and status show, the line waits. */
+  readonly blocks: readonly BlockView[] | undefined
   readonly title: string
   /** The overview links its title to the run page. */
   readonly titleTo?: string
 }
 
 /** The run view: the use case name, the speed, the headline and subline as one status region, and the line with its one panel. */
-export function Tracker({ runId, view, template, title, titleTo }: TrackerProps) {
+export function Tracker({ runId, view, blocks, title, titleTo }: TrackerProps) {
   const reduced = useReducedMotion()
   const titleId = useId()
   const headline = useRef<HTMLHeadingElement>(null)
-  const { track, plan } = view.track(template?.blocks ?? NO_BLOCKS)
+  const { track, plan } = view.track(blocks ?? NO_BLOCKS)
   const spot = track.panel
   const decision = useDecision(spot?.is === 'approval' ? spot.approvalId : null)
   const canDecide = decision.state?.panel.kind === 'can_decide'
@@ -87,7 +87,6 @@ export function Tracker({ runId, view, template, title, titleTo }: TrackerProps)
         <div className={styles['title']}>
           <div>
             <h1 id={titleId}>{titleTo ? <Link to={titleTo}>{title}</Link> : title}</h1>
-            {template && template.name !== title ? <p className={styles['template']}>{template.name}</p> : null}
           </div>
           {track.attempt > 1 ? <span className={styles['attempt']}>{attemptWords(track.attempt)}</span> : null}
         </div>
@@ -105,7 +104,7 @@ export function Tracker({ runId, view, template, title, titleTo }: TrackerProps)
         </div>
         <p className={styles['subline']}>{track.subline}</p>
       </div>
-      {template ? (
+      {blocks ? (
         <TrackLine track={track} plan={plan} reduced={reduced} panel={panel} />
       ) : (
         <div className={styles['loading']}>
