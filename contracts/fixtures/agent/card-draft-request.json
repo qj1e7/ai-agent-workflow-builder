@@ -1,0 +1,9 @@
+{
+  "task": "Every Friday, look at the tickets finished this week in one Jira project and open a summary ticket for the team.",
+  "model": {
+    "style": "anthropic",
+    "base_url": "https://llm-gateway.example",
+    "model": "claude-sonnet-5-5",
+    "api_key": "example-key-not-a-secret"
+  }
+}

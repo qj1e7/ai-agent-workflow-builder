@@ -15,6 +15,8 @@ MAX_SUMMARY_LENGTH = 300
 SUMMARY_TIMEOUT_SECONDS = 10
 
 type ModelFactory = Callable[[str], BaseChatModel]
+# A chat model for one model name, whose every answer is waited for at most this many seconds.
+type ChatFor = Callable[[float], BaseChatModel]
 
 
 @dataclass(frozen=True)
@@ -99,7 +101,10 @@ class TemplateSummarizer:
 
 
 def model_factory(
-    base_url: str | None = None, api_key: str | None = None, provider: str | None = None
+    base_url: str | None = None,
+    api_key: str | None = None,
+    provider: str | None = None,
+    timeout: float = SUMMARY_TIMEOUT_SECONDS,
 ) -> ModelFactory:
     pairs = (("base_url", base_url), ("api_key", api_key), ("model_provider", provider))
     gateway: dict[str, Any] = {key: value for key, value in pairs if value}
@@ -109,7 +114,7 @@ def model_factory(
         return init_chat_model(
             name,
             configurable_fields=None,
-            timeout=SUMMARY_TIMEOUT_SECONDS,
+            timeout=timeout,
             max_retries=0,
             **gateway,
         )

@@ -1,0 +1,35 @@
+{
+  "task": "Check fastapi/fastapi for a new release and raise a ticket in project MOCK.",
+  "library": [
+    {
+      "card_id": "crd_release_checker",
+      "name": "Release checker",
+      "purpose": "Checks a public GitHub repository for a new release and proposes a Jira ticket for it.",
+      "good_for": [
+        "Check a repository for new releases",
+        "Raise a ticket for a release"
+      ],
+      "inputs": [
+        {
+          "name": "GitHub repository",
+          "kind": "github_repo"
+        },
+        {
+          "name": "Jira project",
+          "kind": "jira_project"
+        }
+      ],
+      "tools": [
+        "github.read_releases",
+        "jira.search",
+        "jira.create_ticket"
+      ]
+    }
+  ],
+  "model": {
+    "style": "anthropic",
+    "base_url": "https://llm-gateway.example",
+    "model": "claude-sonnet-5-5",
+    "api_key": "example-key-not-a-secret"
+  }
+}

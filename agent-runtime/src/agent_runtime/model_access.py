@@ -21,6 +21,7 @@ from agent_runtime.contract import (
 from agent_runtime.guarded import GuardedModels, GuardedTransport
 from agent_runtime.summary import (
     SUMMARY_TIMEOUT_SECONDS,
+    ChatFor,
     ModelFactory,
     ModelSummarizer,
     Summarizer,
@@ -66,6 +67,19 @@ def summarizer_for(access: ModelAccess, policy: AddressPolicy, models: GuardedMo
         return models.factory_for(access)(name)
 
     return ModelSummarizer(access.model, factory=build)
+
+
+def chat_for(access: ModelAccess, policy: AddressPolicy, models: GuardedModels) -> ChatFor:
+    """The chat model for an agent card's run, draft or choice. It checks the address each time
+    a model is built, like the summarizer does."""
+
+    def build(timeout: float) -> BaseChatModel:
+        refused = policy.check(access.base_url)
+        if refused is not None:
+            raise AddressRefusedError(refused)
+        return models.factory_for(access, timeout)(access.model)
+
+    return build
 
 
 class ModelProbe:
@@ -130,7 +144,7 @@ class ModelProbe:
         try:
             text = self._factory_for(access)(access.model).invoke(prompt).text.strip()
         except Exception as error:
-            return _problem(error)
+            return problem_for(error)
         seconds = round(self._clock() - started, 1)
         if seconds > SUMMARY_TIMEOUT_SECONDS:
             return ModelProblem(
@@ -188,7 +202,9 @@ def _refusal_behind(error: BaseException) -> AddressRefused | None:
     return None
 
 
-def _problem(error: Exception) -> ModelProblem:
+def problem_for(error: Exception, runs_fall_back: bool = True) -> ModelProblem:
+    """The plain reason a model call failed. A card's draft or choice has no built-in sentence to
+    fall back on, so it passes runs_fall_back=False."""
     refused = _refusal_behind(error)
     if refused is not None:
         return ModelProblem(reason=refused.reason, message=refused.message)
@@ -202,6 +218,11 @@ def _problem(error: Exception) -> ModelProblem:
             reason="model_not_found",
             message="The address does not offer this model. Connect again and pick one from the "
             "list.",
+        )
+    if "Timeout" in name and not runs_fall_back:
+        return ModelProblem(
+            reason="too_slow",
+            message="The model did not answer in time. Try again, or pick a faster model.",
         )
     if "Timeout" in name:
         return ModelProblem(

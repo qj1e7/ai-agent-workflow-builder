@@ -197,3 +197,18 @@ def test_a_public_name_passes_the_test_through_the_guard():
     result = probe.test(access)
     assert isinstance(result, ModelTestPassed)
     assert result.text == SENTENCE
+
+
+@pytest.mark.parametrize("style", ["anthropic", "openai"])
+def test_a_card_model_waits_as_long_as_it_is_told(style: str):
+    access = ModelAccess(
+        style=style,  # type: ignore[arg-type]
+        base_url="https://api.example",
+        model="m",
+        api_key=KEY,
+    )
+    quick = GuardedModels(POLICY).factory_for(access)("m")
+    patient = GuardedModels(POLICY).factory_for(access, 45.0)("m")
+    wait = {"anthropic": "default_request_timeout", "openai": "request_timeout"}[style]
+    assert getattr(quick, wait) == 10.0
+    assert getattr(patient, wait) == 45.0

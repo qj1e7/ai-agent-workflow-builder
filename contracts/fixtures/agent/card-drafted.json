@@ -1,0 +1,52 @@
+{
+  "status": "drafted",
+  "draft": {
+    "can_do": true,
+    "why_not": null,
+    "name": "Weekly finished tickets summary",
+    "purpose": "Looks at the Jira tickets finished this week in one project and proposes a summary ticket for the team.",
+    "good_for": [
+      "Summarise what we finished this week",
+      "Make a weekly report of finished Jira tickets",
+      "Tell the team what was closed in a project"
+    ],
+    "inputs": [
+      {
+        "name": "Jira project",
+        "kind": "jira_project",
+        "what": "The project to summarise, and where the summary ticket goes.",
+        "example": "SUP"
+      }
+    ],
+    "blocks": [
+      {
+        "say": "Find the tickets in the project that were finished since last Friday.",
+        "tool": "jira.search"
+      },
+      {
+        "say": "Group them by what they were about and write a short summary.",
+        "tool": null
+      },
+      {
+        "say": "Propose one ticket that lists the summary.",
+        "tool": "jira.create_ticket"
+      }
+    ],
+    "approvals": [
+      {
+        "tool": "jira.create_ticket",
+        "approvers": 1,
+        "why": "It writes a new ticket that the team will read."
+      }
+    ],
+    "missing_tools": [
+      {
+        "need": "Post the summary in a Teams channel",
+        "why": "No tool posts in Teams yet, so the summary goes in a Jira ticket."
+      }
+    ],
+    "questions": [
+      "Which Jira project should the summary cover?"
+    ]
+  }
+}

@@ -6,6 +6,7 @@ from pydantic import BaseModel, TypeAdapter, ValidationError
 from agent_runtime.release_checker import Release, SourceRejected, SourceUnavailable
 
 PAGE_SIZE = 30
+NOTES_LENGTH = 400
 TIMEOUT_SECONDS = 10.0
 RETRY_STATUSES = {429}
 
@@ -14,6 +15,9 @@ class _GitHubRelease(BaseModel):
     tag_name: str
     prerelease: bool = False
     draft: bool = False
+    name: str | None = None
+    published_at: str | None = None
+    body: str | None = None
 
 
 _RELEASES = TypeAdapter(list[_GitHubRelease])
@@ -55,4 +59,14 @@ class GitHubReleaseSource:
             parsed = _RELEASES.validate_json(response.content)
         except ValidationError as error:
             raise SourceUnavailable(None) from error
-        return [Release(r.tag_name, prerelease=r.prerelease, draft=r.draft) for r in parsed]
+        return [
+            Release(
+                r.tag_name,
+                prerelease=r.prerelease,
+                draft=r.draft,
+                name=r.name,
+                published_at=r.published_at,
+                notes=(r.body or "")[:NOTES_LENGTH] or None,
+            )
+            for r in parsed
+        ]

@@ -22,12 +22,30 @@ from agent_runtime.contract import (
     AgentStepStartedData,
     AgentStepStartedEvent,
     Callback,
+    CardBlock,
+    CardDraft,
+    CardInput,
+    CardsInputs,
+    CardSpec,
+    CardToRun,
     CarryForward,
+    Choice,
+    ChooseRequest,
+    Chosen,
+    ChosenAgent,
     Connected,
     ConnectRequest,
+    DraftApproval,
+    DraftBlock,
+    Drafted,
+    DraftInput,
+    DraftRequest,
     Finding,
     FoundModel,
     GithubSource,
+    LibraryCard,
+    LibraryInput,
+    MissingTool,
     ModelAccess,
     ModelProblem,
     ModelTestPassed,
@@ -45,6 +63,7 @@ from agent_runtime.contract import (
     agent_event_adapter,
 )
 from agent_runtime.model_access import KEY_REFUSED
+from agent_runtime.tools import tool_list
 
 ROOM_LEAD = AgentRef(id="room_lead", display="Room lead")
 CHECKER = AgentRef(id="release_checker", display="Release checker")
@@ -428,6 +447,292 @@ def failed_task() -> TaskFailed:
     )
 
 
+CARD_ID = "crd_release_checker"
+CARD_T0 = datetime(2026, 11, 5, 2, 14, tzinfo=UTC)
+CARD_TICKET_TITLE = "Upgrade LangGraph to 1.2.16"
+CARD_TICKET_BODY = (
+    "LangGraph 1.2.16 is out on GitHub (langchain-ai/langgraph). MOCK has no ticket for it.\n\n"
+    "Proposed by the AI workflow builder."
+)
+CARD_REPORT = (
+    "LangGraph 1.2.16 is the newest release and MOCK has no ticket for it, so I proposed one "
+    "ticket for an Approver to check."
+)
+
+
+def release_checker_card() -> CardSpec:
+    """The starter card the platform ships, as the runtime receives it."""
+    return CardSpec(
+        id=CARD_ID,
+        version=1,
+        name="Release checker",
+        purpose="Checks a public GitHub repository for a new release and proposes a Jira "
+        "ticket for it.",
+        inputs=[
+            CardInput(
+                name="GitHub repository",
+                kind="github_repo",
+                what="The public repository to check.",
+                example="langchain-ai/langgraph",
+            ),
+            CardInput(
+                name="Jira project",
+                kind="jira_project",
+                what="Where the ticket goes.",
+                example="MOCK",
+            ),
+        ],
+        blocks=[
+            CardBlock(
+                say="Read the newest releases of the repository.", tool="github.read_releases"
+            ),
+            CardBlock(
+                say="Look in Jira for a ticket about the newest release, so it is not raised "
+                "twice.",
+                tool="jira.search",
+            ),
+            CardBlock(
+                say="If there is none, propose a ticket naming the release, its date and its link.",
+                tool="jira.create_ticket",
+            ),
+        ],
+    )
+
+
+def card_request(run_id: str) -> TaskRequest:
+    task_id = f"{run_id}/work/1/1"
+    return TaskRequest(
+        task_id=task_id,
+        run_id=run_id,
+        instruction="Check langchain-ai/langgraph for a new release and open a ticket if Jira "
+        "has none.",
+        inputs=CardsInputs(
+            agents=[
+                CardToRun(
+                    card=release_checker_card(),
+                    values={"GitHub repository": REPO, "Jira project": "MOCK"},
+                )
+            ]
+        ),
+        carry_forward=CarryForward(last_known_tag=None),
+        callback=Callback(
+            url=f"http://platform-api:8000/internal/v1/runs/{run_id}/agent-events?task={task_id}",
+            token="example-callback-token-not-a-secret",
+        ),
+    )
+
+
+def card_finished() -> TaskFinished:
+    rec = Recorder(CARD_T0)
+    checker = AgentRef(id=CARD_ID, display="Release checker")
+    rec.add(
+        AgentJoinedEvent,
+        2.1,
+        ROOM_LEAD,
+        "Room lead brought in Release checker.",
+        AgentJoinedData(
+            agent=checker,
+            reason="Checks a public GitHub repository for a new release and proposes a Jira "
+            "ticket for it.",
+        ),
+    )
+    rec.add(
+        AgentMessageEvent,
+        2.3,
+        ROOM_LEAD,
+        "Room lead asked Release checker to do its part of the task.",
+        AgentMessageData(
+            speaker=ROOM_LEAD,
+            addressee=AgentAddressee(id=CARD_ID, display="Release checker"),
+            text=f"Please run your plan with these inputs. GitHub repository: {REPO}; "
+            "Jira project: MOCK.",
+        ),
+    )
+    rec.add(
+        AgentStepStartedEvent,
+        3.4,
+        checker,
+        f"Release checker reads the releases of {REPO}.",
+        AgentStepStartedData(step="github_read_releases"),
+    )
+    tags = ["1.2.16", "1.2.15", "1.2.14", "1.2.13", "1.2.12", "1.2.11", "1.2.10", "1.2.9"]
+    rec.add(
+        AgentStepFinishedEvent,
+        4.2,
+        checker,
+        f"Release checker read 8 releases of {REPO}. The newest is 1.2.16.",
+        AgentStepFinishedData(step="github_read_releases", result={"releases": 8, "tags": tags}),
+    )
+    rec.add(
+        AgentStepStartedEvent,
+        5.6,
+        checker,
+        "Release checker searches Jira project MOCK.",
+        AgentStepStartedData(step="jira_search"),
+    )
+    rec.add(
+        AgentStepFinishedEvent,
+        5.9,
+        checker,
+        "Release checker found no tickets in MOCK.",
+        AgentStepFinishedData(step="jira_search", result={"count": 0, "tickets": []}),
+    )
+    rec.add(
+        AgentStepStartedEvent,
+        7.3,
+        checker,
+        f"Release checker drafts a Jira ticket for approval: {CARD_TICKET_TITLE}",
+        AgentStepStartedData(step="jira_create_ticket"),
+    )
+    rec.add(
+        AgentStepFinishedEvent,
+        7.31,
+        checker,
+        f"Release checker proposed a ticket for approval: {CARD_TICKET_TITLE}",
+        AgentStepFinishedData(step="jira_create_ticket", result={"title": CARD_TICKET_TITLE}),
+    )
+    rec.add(
+        AgentMessageEvent,
+        9.0,
+        checker,
+        f"Release checker reported to the room: {CARD_REPORT}",
+        AgentMessageData(speaker=checker, addressee=TO_ROOM, text=CARD_REPORT),
+    )
+    rec.add(
+        AgentMessageEvent,
+        9.2,
+        ROOM_LEAD,
+        "Room lead agreed and will propose the ticket for approval.",
+        AgentMessageData(
+            speaker=ROOM_LEAD,
+            addressee=AgentAddressee(id=CARD_ID, display="Release checker"),
+            text="Agreed. I'll draft one ticket for an Approver to check.",
+        ),
+    )
+    return TaskFinished(
+        task_id="run_01JD1/work/1/1",
+        output=TaskOutput(
+            summary=CARD_REPORT,
+            new_tags=[],
+            proposed=[
+                ProposedIntent(
+                    kind="jira.create_ticket",
+                    fields={"title": CARD_TICKET_TITLE, "body": CARD_TICKET_BODY},
+                    reason="If there is none, propose a ticket naming the release, its date and "
+                    "its link.",
+                    subject=CARD_ID,
+                )
+            ],
+            carry_forward=CarryForward(last_known_tag=None),
+        ),
+        events=rec.events,
+    )
+
+
+DRAFT_TASK = (
+    "Every Friday, look at the tickets finished this week in one Jira project and open a "
+    "summary ticket for the team."
+)
+CHOOSE_TASK = "Check fastapi/fastapi for a new release and raise a ticket in project MOCK."
+
+
+def draft_request() -> DraftRequest:
+    return DraftRequest(
+        task=DRAFT_TASK,
+        model=ModelAccess(
+            style="anthropic", base_url=GATEWAY, model="claude-sonnet-5-5", api_key=EXAMPLE_KEY
+        ),
+    )
+
+
+def drafted() -> Drafted:
+    return Drafted(
+        draft=CardDraft(
+            can_do=True,
+            name="Weekly finished tickets summary",
+            purpose="Looks at the Jira tickets finished this week in one project and proposes a "
+            "summary ticket for the team.",
+            good_for=[
+                "Summarise what we finished this week",
+                "Make a weekly report of finished Jira tickets",
+                "Tell the team what was closed in a project",
+            ],
+            inputs=[
+                DraftInput(
+                    name="Jira project",
+                    kind="jira_project",
+                    what="The project to summarise, and where the summary ticket goes.",
+                    example="SUP",
+                )
+            ],
+            blocks=[
+                DraftBlock(
+                    say="Find the tickets in the project that were finished since last Friday.",
+                    tool="jira.search",
+                ),
+                DraftBlock(
+                    say="Group them by what they were about and write a short summary.",
+                    tool=None,
+                ),
+                DraftBlock(
+                    say="Propose one ticket that lists the summary.", tool="jira.create_ticket"
+                ),
+            ],
+            approvals=[
+                DraftApproval(
+                    tool="jira.create_ticket",
+                    approvers=1,
+                    why="It writes a new ticket that the team will read.",
+                )
+            ],
+            missing_tools=[
+                MissingTool(
+                    need="Post the summary in a Teams channel",
+                    why="No tool posts in Teams yet, so the summary goes in a Jira ticket.",
+                )
+            ],
+            questions=["Which Jira project should the summary cover?"],
+        )
+    )
+
+
+def choose_request() -> ChooseRequest:
+    return ChooseRequest(
+        task=CHOOSE_TASK,
+        library=[
+            LibraryCard(
+                card_id=CARD_ID,
+                name="Release checker",
+                purpose="Checks a public GitHub repository for a new release and proposes a "
+                "Jira ticket for it.",
+                good_for=["Check a repository for new releases", "Raise a ticket for a release"],
+                inputs=[
+                    LibraryInput(name="GitHub repository", kind="github_repo"),
+                    LibraryInput(name="Jira project", kind="jira_project"),
+                ],
+                tools=["github.read_releases", "jira.search", "jira.create_ticket"],
+            )
+        ],
+        model=draft_request().model,
+    )
+
+
+def chosen() -> Chosen:
+    return Chosen(
+        choice=Choice(
+            decision="use_one",
+            agents=[
+                ChosenAgent(
+                    card_id=CARD_ID,
+                    part="Check fastapi/fastapi for a new release and propose the ticket.",
+                    values={"GitHub repository": "fastapi/fastapi", "Jira project": "MOCK"},
+                )
+            ],
+            reason="The Release checker already does this for any public repository.",
+        )
+    )
+
+
 GATEWAY = "https://llm-gateway.example"
 EXAMPLE_KEY = "example-key-not-a-secret"
 
@@ -458,6 +763,13 @@ def fixtures() -> dict[str, WireModel]:
             seconds=1.4, text="Two new LangGraph releases came out after 1.2.14: 1.2.16 and 1.2.15."
         ),
         "model-problem.json": ModelProblem(reason="key_refused", message=KEY_REFUSED),
+        "tools.json": tool_list(),
+        "card-task-request.json": card_request("run_01JD1"),
+        "card-task-finished.json": card_finished(),
+        "card-draft-request.json": draft_request(),
+        "card-drafted.json": drafted(),
+        "room-choose-request.json": choose_request(),
+        "room-chosen.json": chosen(),
     }
 
 

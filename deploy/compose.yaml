@@ -64,6 +64,7 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       AGENT_API_KEY: ${AGENT_API_KEY:?run deploy/make-env.sh}
       CALLBACK_ALLOWED_ORIGINS: http://platform-api:8000
+      PRACTICE_JIRA_URL: http://platform-api:8000
       AGENT_SUMMARY_MODEL: ${AGENT_SUMMARY_MODEL:-}
       AGENT_MODEL_BASE_URL: ${AGENT_MODEL_BASE_URL:-}
       AGENT_MODEL_API_KEY: ${AGENT_MODEL_API_KEY:-}

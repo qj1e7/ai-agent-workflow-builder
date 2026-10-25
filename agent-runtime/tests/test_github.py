@@ -98,3 +98,25 @@ def test_dot_segments_are_never_sent(repo: str):
     with pytest.raises(SourceRejected):
         source(transport).fetch(repo)
     assert seen == []
+
+
+def test_reads_the_name_the_date_and_the_notes_cut_to_400_characters():
+    body = [
+        {
+            "tag_name": "1.2.16",
+            "name": "LangGraph 1.2.16",
+            "published_at": "2026-10-24T09:00:00Z",
+            "body": "n" * 500,
+        },
+        {"tag_name": "1.2.15", "name": None, "published_at": None, "body": None},
+    ]
+    found = source(answering(200, body)).fetch("o/r")
+    assert found == [
+        Release(
+            tag="1.2.16",
+            name="LangGraph 1.2.16",
+            published_at="2026-10-24T09:00:00Z",
+            notes="n" * 400,
+        ),
+        Release(tag="1.2.15"),
+    ]

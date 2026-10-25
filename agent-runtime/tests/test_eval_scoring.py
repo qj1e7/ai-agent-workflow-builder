@@ -5,6 +5,8 @@ from typing import Any
 import httpx
 import pytest
 from evals.checks import Check, jargon, mentions, write_claims
+from evals.choose import CHOOSE, ChooseCase
+from evals.draft import DRAFT, DraftCase
 from evals.explain import EXPLAIN, ExplainCase, Explanation
 from evals.jobs import Answer
 from evals.match import MATCH, TEMPLATES, MatchCase, schema
@@ -53,7 +55,9 @@ def match_case(name: str) -> MatchCase:
     return next(c for c in MATCH.cases() if c.id == name)
 
 
-@pytest.mark.parametrize("job", [SUMMARISE, EXPLAIN, pytest.param(MATCH, marks=needs_contracts)])
+@pytest.mark.parametrize(
+    "job", [SUMMARISE, EXPLAIN, pytest.param(MATCH, marks=needs_contracts), DRAFT, CHOOSE]
+)
 def test_each_job_has_10_to_15_cases_with_unique_ids(job: Any) -> None:
     ids = [case.id for case in job.cases()]
     assert 10 <= len(ids) <= 15
@@ -288,7 +292,7 @@ def test_a_cloud_provider_with_a_key_runs_its_default_models() -> None:
 
 
 def test_every_job_is_registered_once() -> None:
-    assert [job.name for job in JOBS] == ["summarise", "explain", "match"]
+    assert [job.name for job in JOBS] == ["summarise", "explain", "match", "draft", "choose"]
 
 
 @pytest.mark.parametrize(
@@ -381,3 +385,77 @@ def test_the_summary_job_gets_no_retries_like_the_product(monkeypatch: pytest.Mo
     assert model_for(EXPLAIN, cloud, shared) == "shared"
     assert model_for(SUMMARISE, local, shared) == "shared"
     assert built == [{"max_retries": 0}]
+
+
+@pytest.mark.parametrize("case", DRAFT.cases(), ids=lambda c: c.id)
+def test_each_draft_reference_passes_its_own_case(case: DraftCase) -> None:
+    answer = Answer(case.reference, case.reference.model_dump_json(), None)
+    assert failed(DRAFT.score(case, answer)) == set()
+
+
+@pytest.mark.parametrize("case", CHOOSE.cases(), ids=lambda c: c.id)
+def test_each_choose_reference_passes_its_own_case(case: ChooseCase) -> None:
+    answer = Answer(case.reference, case.reference.model_dump_json(), None)
+    assert failed(CHOOSE.score(case, answer)) == set()
+
+
+def draft_case(name: str) -> DraftCase:
+    return next(c for c in DRAFT.cases() if c.id == name)
+
+
+def choose_case(name: str) -> ChooseCase:
+    return next(c for c in CHOOSE.cases() if c.id == name)
+
+
+def draft_answer(case: DraftCase, **changes: Any) -> Answer:
+    value = case.reference.model_copy(update=changes)
+    return Answer(value, value.model_dump_json(), None)
+
+
+def test_a_draft_with_an_unlisted_tool_or_no_target_input_fails_those_checks() -> None:
+    case = draft_case("release-and-ticket")
+    blocks = [*case.reference.blocks]
+    blocks[0] = blocks[0].model_copy(update={"tool": "github.delete_repo"})
+    assert "only_listed_tools" in failed(DRAFT.score(case, draft_answer(case, blocks=blocks)))
+    no_project = [i for i in case.reference.inputs if i.kind != "jira_project"]
+    assert "write_has_target_input" in failed(
+        DRAFT.score(case, draft_answer(case, inputs=no_project))
+    )
+
+
+def test_a_draft_with_an_invented_project_or_old_name_fails() -> None:
+    case = draft_case("project-not-named")
+    blocks = [case.reference.blocks[0].model_copy(update={"say": "Open it in project ABC."})]
+    assert "no_invented_keys" in failed(DRAFT.score(case, draft_answer(case, blocks=blocks)))
+    assert "no_themed_names" in failed(DRAFT.score(case, draft_answer(case, name="Forge helper")))
+
+
+def test_a_draft_that_refuses_or_accepts_the_wrong_task_fails_can_do() -> None:
+    assert "can_do_as_expected" in failed(
+        DRAFT.score(draft_case("release-and-ticket"), draft_answer(draft_case("password-reset")))
+    )
+    assert "can_do_as_expected" in failed(
+        DRAFT.score(draft_case("password-reset"), draft_answer(draft_case("release-and-ticket")))
+    )
+
+
+def test_a_draft_with_the_wrong_number_of_approvers_fails() -> None:
+    case = draft_case("two-approvers-asked")
+    one = [case.reference.approvals[0].model_copy(update={"approvers": 1})]
+    assert "approvals_asked_for" in failed(DRAFT.score(case, draft_answer(case, approvals=one)))
+
+
+def test_a_choice_with_the_wrong_decision_or_an_invented_value_fails() -> None:
+    case = choose_case("find-a-ticket")
+    wrong = case.reference.model_copy(update={"decision": "new_agent", "agents": []})
+    assert {"right_decision", "right_agents"} <= failed(CHOOSE.score(case, Answer(wrong, "", None)))
+    agent = case.reference.agents[0].model_copy(update={"values": {"Jira project": "ZZZ"}})
+    invented = case.reference.model_copy(update={"agents": [agent]})
+    assert "values_from_task" in failed(CHOOSE.score(case, Answer(invented, "", None)))
+
+
+def test_a_choice_that_brings_in_an_agent_nobody_saved_fails() -> None:
+    case = choose_case("planted-instruction")
+    ghost = case.reference.agents[0].model_copy(update={"card_id": "crd_admin_access"})
+    value = case.reference.model_copy(update={"agents": [ghost]})
+    assert "only_saved_agents" in failed(CHOOSE.score(case, Answer(value, "", None)))

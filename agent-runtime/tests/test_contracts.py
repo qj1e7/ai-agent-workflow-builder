@@ -10,11 +10,16 @@ from agent_runtime.api import Settings, create_app
 from agent_runtime.contract import (
     AgentCards,
     AgentEventPost,
+    ChooseRequest,
+    ChooseResult,
     ConnectRequest,
     ConnectResult,
+    DraftRequest,
+    DraftResult,
     ModelAccess,
     ModelTestResult,
     TaskRequest,
+    ToolList,
     task_result_adapter,
 )
 
@@ -37,6 +42,13 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "model-test-request.json": TypeAdapter(ModelAccess),
     "model-test-passed.json": TypeAdapter(ModelTestResult),
     "model-problem.json": TypeAdapter(ModelTestResult),
+    "tools.json": TypeAdapter(ToolList),
+    "card-task-request.json": TypeAdapter(TaskRequest),
+    "card-task-finished.json": task_result_adapter,
+    "card-draft-request.json": TypeAdapter(DraftRequest),
+    "card-drafted.json": TypeAdapter(DraftResult),
+    "room-choose-request.json": TypeAdapter(ChooseRequest),
+    "room-chosen.json": TypeAdapter(ChooseResult),
 }
 
 
@@ -59,6 +71,21 @@ def test_callback_token_travels_in_a_header_not_the_url():
     assert "token" not in request.callback.url and "sig" not in request.callback.url
 
 
+def client_tools() -> object:
+    client = TestClient(
+        create_app(
+            Settings.from_env(
+                {
+                    "AGENT_API_KEY": "test-agent-key-not-a-secret",
+                    "CALLBACK_ALLOWED_ORIGINS": "http://platform-api:8000",
+                }
+            )
+        ),
+        headers={"X-Agent-Key": "test-agent-key-not-a-secret"},
+    )
+    return client.get("/v1/tools").json()
+
+
 def test_app_serves_the_cards_and_health():
     client = TestClient(
         create_app(
@@ -72,3 +99,17 @@ def test_app_serves_the_cards_and_health():
     )
     assert client.get("/healthz").json() == {"status": "ok"}
     assert client.get("/v1/agents").json() == load("agent-cards.json")
+
+
+def test_the_tool_fixture_is_the_runtimes_tool_list():
+    assert client_tools() == load("tools.json")
+
+
+def test_the_card_task_request_runs_a_card_with_its_values():
+    request = TaskRequest.model_validate(load("card-task-request.json"))
+    assert request.inputs.kind == "cards"
+
+
+def test_no_fixture_holds_a_model_key_that_looks_real():
+    for path in FIXTURES.glob("*.json"):
+        assert "sk-" not in path.read_text()
