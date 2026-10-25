@@ -143,7 +143,7 @@ def test_an_answer_that_did_not_parse_is_unusable():
 def test_the_library_is_listed_with_ids_inputs_and_tools():
     text = library_text(library())
     assert "id crd_release_checker: Release checker" in text
-    assert "GitHub repository (github_repo), Jira project (jira_project)" in text
+    assert '"GitHub repository" (a github_repo), "Jira project" (a jira_project)' in text
     assert "github.read_releases, jira.search, jira.create_ticket" in text
     assert library_text([]) == "(no saved agents)"
 
@@ -172,6 +172,35 @@ def test_a_choice_keeps_only_saved_agents_and_their_own_inputs():
             values={"GitHub repository": "fastapi/fastapi"},
         )
     ]
+
+
+def test_values_keyed_by_input_kind_land_on_the_input_of_that_kind():
+    # The real model (Claude Haiku through the AI Singapore gateway) answered this way: keyed by
+    # kind, not by name. A kind names an input only when the card has exactly one of that kind.
+    picked = choice(
+        agents=[agent(github_repo="langchain-ai/langgraph", JIRA_PROJECT="MOCK", text="x")]
+    )
+    assert choice_of(picked, library()).agents[0].values == {
+        "GitHub repository": "langchain-ai/langgraph",
+        "Jira project": "MOCK",
+    }
+    two_repos = LibraryCard(
+        card_id="crd_two",
+        name="Two repos",
+        purpose="p",
+        inputs=[
+            LibraryInput(name="Ours", kind="github_repo"),
+            LibraryInput(name="Theirs", kind="github_repo"),
+        ],
+    )
+    ambiguous = choice(agents=[agent("crd_two", github_repo="a/b", ours="c/d")])
+    assert choice_of(ambiguous, [two_repos]).agents[0].values == {"Ours": "c/d"}
+
+
+def test_the_library_says_which_words_are_the_input_names():
+    text = library_text(library())
+    assert '"GitHub repository" (a github_repo)' in text
+    assert "by exact input name" in CHOOSE_SYSTEM
 
 
 def test_the_decision_follows_the_agents_that_are_left():
