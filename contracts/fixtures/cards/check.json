@@ -32,7 +32,7 @@
   "problems": [
     {
       "field": "inputs",
-      "message": "Search Jira, Create a Jira ticket needs one input of kind jira_project, so the agent knows which project it may read. Add one."
+      "message": "Add a Jira project detail, so the agent knows which project it may read."
     },
     {
       "field": "name",

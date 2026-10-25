@@ -121,12 +121,13 @@ def test_a_tool_that_is_not_on_the_list_is_a_problem():
 
 def test_a_write_with_no_input_of_its_target_kind_is_a_problem():
     card = definition(inputs=[REPO])
-    assert "jira_project" in problems_of(card)["inputs"]
+    assert "Add a Jira project detail" in problems_of(card)["inputs"]
 
 
 def test_a_write_with_two_inputs_of_its_target_kind_is_a_problem():
     second = CardInput(name="Other project", kind="jira_project")
-    assert "Only one input" in problems_of(definition(inputs=[REPO, PROJECT, second]))["inputs"]
+    problems = problems_of(definition(inputs=[REPO, PROJECT, second]))
+    assert "Keep only one Jira project detail" in problems["inputs"]
 
 
 def test_duplicate_input_names_ignore_case():
@@ -288,10 +289,10 @@ def test_a_project_key_that_is_not_one_never_gets_through():
 def test_a_jira_read_needs_one_jira_project_input_to_limit_it(tool: str):
     reading = definition(blocks=[CardBlock(say="Look.", tool=tool)])
     assert problems_of(reading.model_copy(update={"inputs": [REPO]}))["inputs"].endswith(
-        "so the agent knows which project it may read. Add one."
+        "so the agent knows which project it may read."
     )
     assert (
-        "Only one input"
+        "Keep only one Jira project detail"
         in problems_of(
             reading.model_copy(
                 update={"inputs": [PROJECT, CardInput(name="P2", kind="jira_project")]}
@@ -308,4 +309,4 @@ def test_reads_and_writes_share_the_one_jira_project_input():
     ]
     assert problems_of(definition(blocks=blocks, inputs=[PROJECT])) == {}
     problem = problems_of(definition(blocks=blocks, inputs=[]))["inputs"]
-    assert "Search Jira, Create a Jira ticket" in problem
+    assert problem == "Add a Jira project detail, so the agent knows which project it may read."
