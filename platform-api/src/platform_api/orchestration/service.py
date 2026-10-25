@@ -898,10 +898,12 @@ class Orchestrator:
         execution = await self._engine.start_leg(row.payload["workflow"], leg, row.run_id)
         async with self._db.transaction("orchestration") as uow:
             await self._store.outbox_sent(uow, row.id)
-            await self._store.record_leg_attempt(uow, row.run_id, leg, attempt, execution)
+            # The run first, then its leg attempt: the order every step call takes. n8n can call
+            # a step before this transaction ends, and the opposite order deadlocked with it.
             record = await self._store.load_run(uow, row.run_id, lock=True)
             if record is None:
                 return
+            await self._store.record_leg_attempt(uow, row.run_id, leg, attempt, execution)
             match record.state:
                 case Pending(claimant=None, attempt=a) as pending if a == attempt:
                     await self._store.save_run(uow, record, pending.claim(execution))
