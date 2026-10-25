@@ -36,10 +36,6 @@ function toolOf(id: string | null | undefined): ToolView | undefined {
   return tools.find((tool) => tool.id === id)
 }
 
-function listed(items: readonly string[]): string {
-  return items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1) ?? ''}`
-}
-
 /** The platform's check of a card, in the demo: the same rules, in the same words. */
 export function checkCard(card: CardDefinition): CardChecked {
   const name = card.name.trim()
@@ -80,12 +76,11 @@ export function checkCard(card: CardDefinition): CardChecked {
   const needing = used.filter((tool) => tool.kind === 'write' || tool.id.startsWith('jira.'))
   const projects = inputs.filter((input) => input.kind === 'jira_project').length
   if (needing.length > 0 && projects !== 1) {
-    const names = [...new Set(needing.map((tool) => tool.name))]
     add(
       'inputs',
       projects === 0
-        ? `${listed(names)} needs one input of kind jira_project, so the agent knows which project it may read. Add one.`
-        : `${listed(names)} needs exactly one input of kind jira_project. Remove the others.`,
+        ? 'Add a Jira project detail, so the agent knows which project it may read.'
+        : 'Keep only one Jira project detail, because it sets where the agent reads and writes. Remove the others.',
     )
   }
 

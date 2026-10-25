@@ -44,7 +44,7 @@ test('a task with no saved agent opens a draft, the check guides the fix, and th
   await openFrozen(page, '/builder')
   await connectModelThenOpenBuilder(page)
   await plan(page, 'Every Friday summarise what we finished and raise a ticket.', DRAFTED)
-  await advanceUntil(page, page.getByText(/needs one input of kind jira_project/))
+  await advanceUntil(page, page.getByText(/Add a Jira project detail/))
   await expect(page.getByText('Create a Jira ticket: one Approver must approve it first.'), 'the approvals come from the check').toBeVisible()
   await record(page, info, 'builder-drafted')
 

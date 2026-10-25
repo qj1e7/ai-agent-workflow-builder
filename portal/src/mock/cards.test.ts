@@ -75,7 +75,7 @@ describe('checking a card', () => {
     expect(checked.problems.map((each) => each.field)).toEqual(['name', 'blocks.0.say', 'blocks.0.tool'])
     const noProject = checkCard({ ...weekly, inputs: [] })
     expect(noProject.problems.map((each) => each.field)).toEqual(['inputs'])
-    expect(noProject.problems[0]?.message).toContain('needs one input of kind jira_project')
+    expect(noProject.problems[0]?.message).toContain('Add a Jira project detail')
   })
 
   it('refuses an old themed name', () => {
