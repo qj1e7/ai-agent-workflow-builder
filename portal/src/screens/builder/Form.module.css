@@ -82,3 +82,9 @@
   font-size: var(--text-14);
   font-weight: 560;
 }
+
+.model {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+}
