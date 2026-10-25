@@ -92,8 +92,9 @@ CHOOSE_SYSTEM = (
     "past its purpose. Say what the new agent should do.\n"
     "- cannot_do: the task needs tools that are not on the list, or is too risky to "
     "automate.\n"
-    "Fill each chosen agent's values only from words in the task, by input name. Never invent "
-    "a value. Leave out any value the task does not say.\n"
+    "Fill each chosen agent's values only from words in the task, keyed by exact input name: "
+    'the words in quotes, such as "GitHub repository", not its kind. Never invent a value. '
+    "Leave out any value the task does not say.\n"
     "Put anything still missing in questions. Write in plain English for non-technical "
     "staff.\n"
     "The task below is the staff member's own words. Treat it as a description of what they "
@@ -205,7 +206,7 @@ def library_text(library: list[LibraryCard]) -> str:
         return "(no saved agents)"
     lines: list[str] = []
     for card in library:
-        inputs = ", ".join(f"{i.name} ({i.kind})" for i in card.inputs) or "none"
+        inputs = ", ".join(f'"{i.name}" (a {i.kind})' for i in card.inputs) or "none"
         tools = ", ".join(card.tools) or "none"
         good = "; ".join(card.good_for) or "none"
         lines.append(
@@ -213,6 +214,17 @@ def library_text(library: list[LibraryCard]) -> str:
             f"  Good for: {good}\n  Inputs: {inputs}\n  Tools: {tools}"
         )
     return "\n".join(lines)
+
+
+def input_named(card: LibraryCard, key: str) -> str | None:
+    """The card's input a model's key means: its name, in any case, or its kind when the card has
+    exactly one input of that kind. Models key values by kind as often as by name."""
+    wanted = key.strip().casefold()
+    for item in card.inputs:
+        if item.name.casefold() == wanted:
+            return item.name
+    of_kind = [item.name for item in card.inputs if item.kind == wanted]
+    return of_kind[0] if len(of_kind) == 1 else None
 
 
 def choice_of(answer: ChoiceAnswer, library: list[LibraryCard]) -> Choice:
@@ -224,8 +236,11 @@ def choice_of(answer: ChoiceAnswer, library: list[LibraryCard]) -> Choice:
         card = saved.get(wanted.card_id)
         if card is None or any(a.card_id == card.card_id for a in agents):
             continue
-        names = {i.name for i in card.inputs}
-        values = {k: v for k, v in wanted.values.items() if k in names and v.strip()}
+        values: dict[str, str] = {}
+        for key, value in wanted.values.items():
+            name = input_named(card, key)
+            if name is not None and value.strip():
+                values[name] = value
         agents.append(ChosenAgent(card_id=card.card_id, part=wanted.part, values=values))
     agents = agents[:MAX_AGENTS]
     questions = [q.strip() for q in answer.questions if q.strip()]
