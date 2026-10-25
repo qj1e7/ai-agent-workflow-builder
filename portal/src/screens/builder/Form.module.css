@@ -1,0 +1,84 @@
+.field {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.field label,
+.legend {
+  font-size: var(--text-14);
+  font-weight: 600;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-button);
+  background: var(--surface);
+  font-size: var(--text-16);
+}
+
+.field textarea {
+  min-height: 72px;
+  padding: var(--space-2) var(--space-3);
+  line-height: 1.45;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  border-color: var(--ink);
+}
+
+.field [aria-invalid='true'] {
+  border-color: var(--fail);
+}
+
+.help {
+  color: var(--muted);
+  font-size: var(--text-14);
+}
+
+.problem {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  color: var(--fail);
+  font-size: var(--text-14);
+}
+
+.problem svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.needed {
+  color: var(--wait);
+  font-size: var(--text-14);
+  font-weight: 600;
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.chips li {
+  padding: 2px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--chip-bg);
+  color: var(--chip-ink);
+  font-size: var(--text-14);
+  font-weight: 560;
+}

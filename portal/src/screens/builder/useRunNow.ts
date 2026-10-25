@@ -1,13 +1,15 @@
 import { useNavigate } from 'react-router'
 import { useErrorWords } from '../../api/context'
 import { newIdempotencyKey } from '../../api/idempotency'
-import { useStartRun } from '../../api/queries'
+import { isConflict, useStartRun } from '../../api/queries'
 
 export interface RunNow {
   start: (useCaseId: string) => void
   isStarting: (useCaseId: string) => boolean
   anyStarting: boolean
   errorFor: (useCaseId: string) => string | null
+  /** The start was refused because no AI model is connected. */
+  needsModel: (useCaseId: string) => boolean
 }
 
 export function useRunNow(): RunNow {
@@ -25,5 +27,7 @@ export function useRunNow(): RunNow {
     anyStarting: mutation.isPending,
     errorFor: (useCaseId) =>
       mutation.isError && mutation.variables.useCaseId === useCaseId ? explain(mutation.error) : null,
+    needsModel: (useCaseId) =>
+      mutation.isError && mutation.variables.useCaseId === useCaseId && isConflict(mutation.error),
   }
 }

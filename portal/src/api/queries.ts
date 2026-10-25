@@ -1,10 +1,12 @@
-import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { ApiError, unwrap, type ApiClient } from './client'
 import { useApiClient, useSession, useCacheScope } from './context'
 import type {
   AddSoftware,
   AddressDecisionIn,
+  CardDefinition,
   ConnectIn,
+  CreateAgentUseCase,
   CreateUseCase,
   DecisionIn,
   EventPage,
@@ -23,6 +25,8 @@ export const keys = {
   useCases: (user: string) => ['use-cases', user] as const,
   useCase: (user: string, useCaseId: string) => ['use-case', user, useCaseId] as const,
   templates: () => ['templates'] as const,
+  tools: () => ['tools'] as const,
+  agentCards: (user: string) => ['agent-cards', user] as const,
   approval: (user: string, approvalId: string) => ['approval', user, approvalId] as const,
   troubleshoot: (user: string, runId: string, attempt: number) => ['troubleshoot', user, runId, attempt] as const,
   teamsMessages: (user: string) => ['teams-messages', user] as const,
@@ -111,10 +115,68 @@ export function useTemplates() {
   })
 }
 
-export function useSuggest() {
+export function useTools() {
+  const client = useApiClient()
+  return useQuery({
+    queryKey: keys.tools(),
+    queryFn: async () => unwrap(await client.GET('/api/v1/tools')).tools,
+    staleTime: Infinity,
+  })
+}
+
+export function useAgentCards() {
+  const client = useApiClient()
+  const user = useCacheScope()
+  return useQuery({
+    queryKey: keys.agentCards(user),
+    queryFn: async () => unwrap(await client.GET('/api/v1/agent-cards')).cards,
+  })
+}
+
+/** The Room lead's plan for a task. The platform answers 409 until an AI model is connected. */
+export function usePlan() {
   const client = useApiClient()
   return useMutation({
-    mutationFn: async (text: string) => unwrap(await client.POST('/api/v1/use-cases/suggest', { body: { text } })),
+    mutationFn: async (task: string) => unwrap(await client.POST('/api/v1/builder/plan', { body: { task } })),
+  })
+}
+
+/** Checks a card as it is written. The key is the card itself, so the same card is never checked twice. */
+export function useCheckCard(card: CardDefinition | null) {
+  const client = useApiClient()
+  return useQuery({
+    queryKey: ['card-check', card] as const,
+    queryFn: async () => unwrap(await client.POST('/api/v1/agent-cards/check', { body: card as CardDefinition })),
+    enabled: card !== null,
+    staleTime: Infinity,
+    placeholderData: keepPreviousData,
+  })
+}
+
+interface SaveCardInput {
+  /** The card to write a next version of, or null for a new card. */
+  cardId: string | null
+  card: CardDefinition
+}
+
+export function useSaveCard() {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ cardId, card }: SaveCardInput) =>
+      cardId === null
+        ? unwrap(await client.POST('/api/v1/agent-cards', { body: card }))
+        : unwrap(await client.PUT('/api/v1/agent-cards/{card_id}', { params: { path: { card_id: cardId } }, body: card })),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agent-cards'] }),
+  })
+}
+
+export function useCreateAgentUseCase() {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (body: CreateAgentUseCase) => unwrap(await client.POST('/api/v1/agent-use-cases', { body })),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['use-cases'] }),
   })
 }
 

@@ -1,0 +1,21 @@
+.form {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.agent {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-object);
+}
+
+.legend {
+  padding: 0 var(--space-2);
+  font-size: var(--text-16);
+  font-weight: 640;
+}
