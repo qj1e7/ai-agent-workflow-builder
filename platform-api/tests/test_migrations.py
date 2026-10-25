@@ -84,3 +84,33 @@ async def test_a_release_check_run_survives_a_downgrade_and_upgrade(
     async with db.transaction("orchestration") as uow:
         loaded = await Store().load_run(uow, RunId("run_new"))
     assert loaded is not None and loaded.spec == SPEC
+
+
+async def test_the_card_tables_come_and_go_with_migration_0003_and_belong_to_the_builder(
+    postgres: PostgresUrls,
+):
+    tables = ("cards", "card_versions", "use_case_cards")
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+
+        def present() -> list[str]:
+            rows = conn.execute(
+                "SELECT table_name FROM information_schema.tables"
+                " WHERE table_schema = 'builder' AND table_name = ANY(%s) ORDER BY 1",
+                (list(tables),),
+            ).fetchall()
+            return [r[0] for r in rows]
+
+        assert present() == sorted(tables)
+        downgrade("builder", postgres.owner, "0002")
+        assert present() == []
+        upgrade("builder", postgres.owner)
+        assert present() == sorted(tables)
+
+    with psycopg.connect(postgres.contexts.builder) as builder:
+        builder.execute("SELECT count(*) FROM builder.use_case_cards")
+        builder.rollback()
+    with (
+        psycopg.connect(postgres.contexts.orchestration) as other,
+        pytest.raises(psycopg.errors.InsufficientPrivilege),
+    ):
+        other.execute("SELECT count(*) FROM builder.cards")

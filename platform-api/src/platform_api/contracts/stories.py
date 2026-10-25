@@ -635,6 +635,8 @@ USE_CASE = UseCaseView(
     params={"repo": REPO, "tag_pattern": TAG_PATTERN, "ticket_project": "MOCK"},
     owner=ALICE,
     created_at=datetime(2026, 11, 2, 9, 30, tzinfo=UTC),
+    plan=RELEASE_CHECK_TEMPLATE.blocks,
+    agents=[],
 )
 
 SUGGESTION = Builder.suggest(INSTRUCTION)

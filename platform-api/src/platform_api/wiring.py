@@ -10,6 +10,7 @@ from platform_api.monitoring import ActivityLog, callback_for
 from platform_api.orchestration.agents import HttpAgentRuntime
 from platform_api.orchestration.dispatch import N8nWebhooks, TeamsStub
 from platform_api.orchestration.model_settings import KeyBox, ModelSettings
+from platform_api.orchestration.planning import CardPlanning
 from platform_api.orchestration.runs import Leg
 from platform_api.orchestration.schedule_store import ScheduleBook, ScheduleTicker
 from platform_api.orchestration.service import Orchestrator
@@ -86,7 +87,13 @@ async def build(settings: Settings) -> Services:
     )
     schedules = ScheduleBook(db)
     watchlist = Watchlist(db, WatchFacts(db, jira), schedules)
-    builder = Builder(db, orchestrator, watchlist, settings.public_base_url)
+    builder = Builder(
+        db,
+        orchestrator,
+        watchlist,
+        settings.public_base_url,
+        CardPlanning(db, model_settings, agents),
+    )
     return Services(
         settings=settings,
         db=db,
