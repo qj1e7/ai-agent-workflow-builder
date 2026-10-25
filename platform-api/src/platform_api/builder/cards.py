@@ -42,6 +42,12 @@ from platform_api.orchestration import CardInput as RuntimeInput
 from platform_api.shared import UserId
 
 PLATFORM_OWNER = UserId("platform")
+# How an Operator reads each input kind. The Portal calls inputs "details".
+KIND_LABELS: Mapping[str, str] = {
+    "github_repo": "GitHub repository",
+    "jira_project": "Jira project",
+    "text": "text",
+}
 STARTER_CREATED_AT = datetime(2026, 11, 1, 0, 0, tzinfo=UTC)
 
 NAME_LIMIT = 60
@@ -153,21 +159,19 @@ def check_card(card: CardDefinition) -> CardChecked:
             continue
         asked.add(kind)
         matching = [item for item in inputs if item.kind == kind]
-        users = ", ".join(
-            RULES[t].name for t in used if kind in (RULES[t].target_input, RULES[t].scope_input)
-        )
+        label = KIND_LABELS.get(kind, kind)
         if not matching:
             why = (
-                "to say where it writes"
+                "so the platform knows where the agent writes"
                 if rule.target_input
                 else "so the agent knows which project it may read"
             )
-            problem("inputs", f"{users} needs one input of kind {kind}, {why}. Add one.")
+            problem("inputs", f"Add a {label} detail, {why}.")
         elif len(matching) > 1:
             problem(
                 "inputs",
-                f"Only one input can be of kind {kind}, because it limits where "
-                f"{users} reads and writes. Remove the others.",
+                f"Keep only one {label} detail, because it sets where the agent reads and "
+                "writes. Remove the others.",
             )
 
     for field, text in _words_of(name, purpose, good_for, inputs, blocks):
