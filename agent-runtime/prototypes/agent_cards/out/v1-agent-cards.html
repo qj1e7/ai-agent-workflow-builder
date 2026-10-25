@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent cards prototype</title>
+<style>
+:root {
+  --bg: #f4f5f8; --panel: #ffffff; --text: #18202e; --muted: #5b6475; --line: #dde1e8;
+  --accent: #2552c9; --accent-soft: #e8eefc; --good: #1d7a46; --good-soft: #e5f4ec;
+  --warn: #9a5b00; --warn-soft: #fdf1dc; --bad: #b42318; --bad-soft: #fdeceb; --chip: #eef0f4;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #11151c; --panel: #1a2029; --text: #e7eaf0; --muted: #9aa3b2; --line: #2c3440;
+    --accent: #7ea2ff; --accent-soft: #1f2b47; --good: #5fd08f; --good-soft: #17301f;
+    --warn: #f0b45a; --warn-soft: #33270f; --bad: #ff8a80; --bad-soft: #3a1a18; --chip: #262d38;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 980px; margin: 0 auto; padding: 32px 16px 64px; }
+h1 { font-size: 26px; margin: 0 0 4px; }
+h2 { font-size: 18px; margin: 0 0 6px; }
+h3 { font-size: 15px; margin: 18px 0 6px; }
+p { margin: 0 0 8px; }
+.muted { color: var(--muted); }
+.tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  background: var(--warn-soft); color: var(--warn); }
+.question { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin: 16px 0; }
+.summary { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 8px; }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; min-width: 150px; }
+.stat b { display: block; font-size: 20px; }
+nav { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 24px 0 16px; overflow-x: auto; }
+nav button { font: inherit; background: none; border: 0; padding: 10px 14px; color: var(--muted); cursor: pointer;
+  border-bottom: 2px solid transparent; white-space: nowrap; }
+nav button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+section.item { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; margin: 0 0 16px; }
+.typed { border-left: 3px solid var(--accent); padding: 2px 0 2px 12px; margin: 0 0 8px; }
+.hoped { font-size: 14px; color: var(--muted); }
+.card { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 6px; }
+.name { font-size: 18px; font-weight: 700; margin: 10px 0 2px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 13px; background: var(--chip); border-radius: 6px; padding: 2px 8px; }
+.tool { font: 12px/1.6 ui-monospace, Menlo, monospace; border-radius: 6px; padding: 1px 6px; background: var(--chip); white-space: nowrap; }
+.tool.write { background: var(--accent-soft); color: var(--accent); }
+ol.plan { margin: 0; padding-left: 22px; }
+ol.plan li { margin: 0 0 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; }
+.box { border-radius: 8px; padding: 8px 12px; margin: 10px 0 0; font-size: 14px; }
+.box.good { background: var(--good-soft); color: var(--good); }
+.box.warn { background: var(--warn-soft); color: var(--warn); }
+.box.bad { background: var(--bad-soft); color: var(--bad); }
+.box ul { margin: 4px 0 0; padding-left: 18px; }
+.decision { font-weight: 700; }
+.match { font-size: 13px; font-weight: 600; margin-left: 8px; }
+.match.yes { color: var(--good); } .match.no { color: var(--bad); }
+.foot { font-size: 12px; color: var(--muted); margin-top: 12px; }
+.agentstep { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin: 6px 0; }
+@media (max-width: 600px) { .stat { min-width: calc(50% - 5px); } }
+</style>
+</head>
+<body>
+<main>
+  <span class="tag">Throwaway prototype, not the product</span>
+  <h1>Agent cards prototype</h1>
+  <p class="muted" id="meta"></p>
+  <div class="question">
+    <p><b>The question:</b> can our AI model turn a plain-English task into a good <b>agent card</b>, and can the
+    <b>Room lead</b> pick the right saved agents for a new task?</p>
+    <p class="muted">An agent card is data, not code: a name, a purpose, a plan, the tools it may use (only from a fixed
+    list), and who must approve each write. The "Checks" under each card are what the platform would refuse or flag
+    before anyone could save it.</p>
+  </div>
+  <div class="summary" id="summary"></div>
+  <nav role="tablist" id="tabs"></nav>
+  <div id="panel"></div>
+</main>
+<script>
+const DATA = {"model": "azure_ai/claude-haiku-5-5", "ran_at": "2026-10-25T03:23:59.673314+00:00", "drafts": [{"task": "Every quarter we review who has admin access. List everyone in the Entra ID admin groups, our admin tools and GitLab. Ask each person's manager in Teams whether they still need it. Remove GitLab access the manager says no to, raise a Jira ticket for the rest, and record the review on our Confluence access review page. It needs two approvers, one after the other.", "hoped": "Reads Entra ID, admin tools and GitLab. Asks managers in Teams. GitLab removal has 2 approvers. Asks which groups, tools and Jira project instead of guessing.", "answer": {"can_do": true, "name": "Quarterly admin access review", "purpose": "Lists everyone with admin access across Entra ID, admin tools and GitLab, asks each person's manager if access is still needed, removes GitLab access that managers reject, and records the review in Jira and Confluence.", "good_for": ["Run this quarter's admin access review", "Check who still needs GitLab admin access and remove the rest", "Ask managers to confirm admin access and log the results in Confluence"], "inputs": [{"name": "Entra ID admin group names", "what": "The Entra ID groups that hold admin access to review.", "example": "CODESparks-Admins, Cloud-Ops-Admins"}, {"name": "Admin tool names", "what": "The admin tools whose accounts should be listed.", "example": "Admin portal, Billing console"}, {"name": "GitLab group or project", "what": "The GitLab group or project to review.", "example": "codesparks/platform"}, {"name": "Jira project key", "what": "The Jira project where review tickets are raised.", "example": "ACC"}, {"name": "Confluence access review page", "what": "The Confluence page where the review is recorded.", "example": "Access reviews 2025 Q3"}], "steps": [{"say": "Read the access review page in Confluence to find the current list and past review notes.", "tool": "confluence.read_page"}, {"say": "List the members of each Entra ID admin group.", "tool": "entra.list_group_members"}, {"say": "List the accounts in each admin tool.", "tool": "admin_tool.list_accounts"}, {"say": "List who has access to the GitLab group or project, and at what level.", "tool": "gitlab.list_members"}, {"say": "Combine the lists into one list. Show each person once, with every place they have access.", "tool": null}, {"say": "For each person, find their manager and ask in Teams whether they still need this access. Ask one manager at a time, and keep the answer for each person.", "tool": "teams.ask_person"}, {"say": "For each GitLab access the manager says no to, remove that access. Do this only after the removal has been approved.", "tool": "gitlab.remove_member"}, {"say": "For each other person, raise one Jira ticket that asks for a check of the admin access. Use the Jira project key from the inputs.", "tool": "jira.create_ticket"}, {"say": "Record the review on the Confluence access review page. Include each person, where they have access, the manager's answer, and the action taken or the Jira ticket.", "tool": "confluence.update_page"}, {"say": "Post a short summary of the review in Teams for the team.", "tool": "teams.post_message"}], "approvals": [{"tool": "gitlab.remove_member", "approvers": 2, "who": "Two approvers, one after the other. Each must be a team lead or manager who is not the staff member running the review.", "why": "Removing access changes someone's rights, so two people must agree, one after the other."}, {"tool": "jira.create_ticket", "approvers": 1, "who": "One approver, such as the staff member's lead, who is not the person running the review.", "why": "Tickets are visible to the team and should be checked before they are created."}, {"tool": "confluence.update_page", "approvers": 1, "who": "One approver, such as the staff member's lead, who is not the person running the review.", "why": "The review record is an official audit trail and should be checked before it is saved."}, {"tool": "teams.post_message", "approvers": 1, "who": "The staff member running the review.", "why": "The summary is posted to the team under their name, so they should check it first."}], "missing_tools": [{"need": "A tool to look up each person's manager (for example, from Entra ID or the HR system).", "why": "The review asks each person's manager, and the list of tools cannot find managers."}, {"need": "A tool to remove admin access from Entra ID groups or admin tools.", "why": "The review can only remove GitLab access. Other removals must be done by hand."}], "questions": ["Which Entra ID admin groups should be included?", "Which admin tools should be included?", "Which GitLab group or project should be reviewed?", "Which Jira project should the review tickets go in?", "Which Confluence page is the access review record?", "How will each person's manager be found? The tool list has no manager lookup.", "Should Entra ID and admin tool access that managers reject also be removed by this agent? Right now only GitLab removal is supported.", "Who are the two approvers for GitLab removals, in order?"], "why_not": "Not applicable."}, "seconds": 7.5, "tokens": [2139, 1695], "checks": ["Writes with teams.ask_person but names no approval for it"]}, {"task": "Keep our software up to date. The software we run and our versions are in a table on the Confluence page 'Software inventory'. Check each one against its newest release on GitHub. For anything behind, raise an upgrade ticket in Jira and update the inventory page.", "hoped": "Reads the Confluence table, then GitHub. Jira ticket and page update each need approval. Asks for the Jira project.", "answer": {"can_do": true, "name": "Software version checker", "purpose": "Compares the software versions in the Confluence 'Software inventory' table with the newest GitHub releases, then raises Jira upgrade tickets for anything out of date and updates the inventory page.", "good_for": ["Check our software inventory against the latest GitHub releases", "Raise Jira upgrade tickets for software that is behind", "Update the software inventory page with the latest versions"], "inputs": [{"name": "Inventory page", "what": "Title of the Confluence page that holds the software table", "example": "Software inventory"}, {"name": "Jira project", "what": "Jira project key where upgrade tickets should be created", "example": "OPS"}], "steps": [{"say": "Find the 'Software inventory' page in Confluence and read it, including its table.", "tool": "confluence.search"}, {"say": "Read the inventory table. Note each software name, its GitHub repository and the version we run.", "tool": "confluence.read_page"}, {"say": "For each software item, read its newest release on GitHub.", "tool": "github.read_releases"}, {"say": "Compare our version with the newest release. Mark anything older as behind. Skip items with no GitHub repository and list them for the staff member.", "tool": null}, {"say": "Search Jira for an open upgrade ticket for each item that is behind, so no duplicates are made.", "tool": "jira.search"}, {"say": "Ask the approver to confirm the list of upgrades before any ticket is created.", "tool": "teams.post_message"}, {"say": "For each item that is behind and has no open ticket, create a Jira upgrade ticket that names the software, our version and the newest release.", "tool": "jira.create_ticket"}, {"say": "Update the inventory table with the newest release numbers and a link to each new ticket.", "tool": "confluence.update_page"}, {"say": "Post a summary in Teams: what is up to date, what is behind, and which tickets were created.", "tool": "teams.post_message"}], "approvals": [{"tool": "jira.create_ticket", "approvers": 1, "who": "The support team lead, other than the staff member who ran the agent", "why": "Creating tickets adds work for the team, so a person should confirm the list first."}, {"tool": "confluence.update_page", "approvers": 1, "who": "The support team lead, other than the staff member who ran the agent", "why": "The inventory page is the team's record, so changes should be checked before they are saved."}], "missing_tools": [{"need": "A way to read the full list of GitHub releases in order, or the single latest release", "why": "The github.read_releases tool is listed as reading releases, but it is not clear it returns the newest one. The agent may need a 'latest release' option."}], "questions": ["Does the 'Software inventory' table list a GitHub repository for each item? If not, where should the agent find it?", "Which Jira project should the upgrade tickets go into?", "Who should approve the ticket creation and page updates? Is it the support team lead?", "Should the agent treat a new major version differently from a minor update, or raise a ticket for every version behind?", "Is the version in the table always a version number, or can it be text such as 'latest' or 'unknown'?"]}, "seconds": 5.9, "tokens": [2104, 1239], "checks": ["Writes with teams.post_message but names no approval for it"]}, {"task": "Tell me when LangGraph has a new release and open a Jira ticket for it.", "hoped": "A small release checker: reads GitHub, creates a ticket with 1 approver. The repository and Jira project are inputs.", "answer": {"can_do": true, "name": "Release watcher with ticket", "purpose": "Checks a public GitHub repository for new releases and opens a Jira ticket when a new release is found.", "good_for": ["Tell me when LangGraph has a new release and open a Jira ticket", "Check whether a new version of a tool has come out and log it in Jira", "Look for the latest release of a GitHub project and create a ticket for it"], "inputs": [{"name": "GitHub repository", "what": "The public repository to check for releases.", "example": "langchain-ai/langgraph"}, {"name": "Jira project key", "what": "The Jira project where the ticket should be created.", "example": "<UNKNOWN>"}, {"name": "Last known release", "what": "The release version you already know about. New releases after this one trigger a ticket.", "example": "0.2.10"}], "steps": [{"say": "Read the releases of the GitHub repository given as input.", "tool": "github.read_releases"}, {"say": "Compare the releases with the last known release. Keep only the releases that are newer.", "tool": null}, {"say": "If there is no newer release, tell the staff member that nothing is new and stop.", "tool": null}, {"say": "If there is a newer release, search Jira to see if a ticket for that release already exists, so no duplicate is made.", "tool": "jira.search"}, {"say": "If no ticket exists, ask the approver in Teams to confirm the new ticket. Show the release name, date and link.", "tool": "teams.ask_person"}, {"say": "After approval, create the Jira ticket in the given project. Put the release name, date, link and a short summary in the ticket.", "tool": "jira.create_ticket"}, {"say": "Tell the staff member in Teams what release was found and the ticket number.", "tool": "teams.post_message"}], "approvals": [{"tool": "jira.create_ticket", "approvers": 1, "who": "A team lead or another support staff member, not the person who asked.", "why": "Creating a ticket adds work to the Jira project, so a person should confirm it first."}, {"tool": "teams.post_message", "approvers": 1, "who": "The staff member who asked, or a team lead.", "why": "Posting in Teams speaks for the team, so a person should confirm the message first."}], "missing_tools": [{"need": "A scheduled run (for example, checking every day)", "why": "The agent only runs when someone starts it. It cannot check for new releases on its own."}, {"need": "A way to save the last known release between runs", "why": "The agent cannot remember the last release it reported, so the staff member must type it each time."}], "questions": ["Which Jira project key should the ticket go into?", "Should this run once when asked, or check on a schedule (for example, daily)? The list has no scheduler.", "Who should approve the ticket before it is created: a team lead or a specific person?", "Should the agent also check the release list when no last known release is given, and report only the latest one?"], "why_not": "null"}, "seconds": 5.4, "tokens": [2050, 1171], "checks": ["Writes with teams.ask_person but names no approval for it"]}, {"task": "Every Friday, summarise the Jira tickets our team closed this week and post the summary in our Teams channel.", "hoped": "Searches Jira, writes a summary, posts in Teams with 1 approver. Asks which team, project or channel.", "answer": {"can_do": true, "name": "Weekly Jira closed summary", "purpose": "Every week, find the Jira tickets the team closed in the past seven days, write a short summary, and post it to the team's Teams channel.", "good_for": ["Summarise this week's closed Jira tickets for our team", "Post the Friday Jira done list to our Teams channel", "List what our team finished in Jira this week"], "inputs": [{"name": "Jira project or team filter", "what": "The Jira project key or board our team uses, so only our tickets are counted.", "example": "SUP"}, {"name": "Teams channel", "what": "The Teams channel where the summary is posted.", "example": "Support team > General"}], "steps": [{"say": "Work out the date range: today and the six days before it.", "tool": null}, {"say": "Search Jira for tickets in the project or team filter that were moved to Done in that date range.", "tool": "jira.search"}, {"say": "Read each ticket found, so the summary has the title, the person who closed it, and the main outcome.", "tool": "jira.read_ticket"}, {"say": "Write a short summary: a count, then one line per ticket with its key, title and who closed it. Keep it plain.", "tool": null}, {"say": "Ask the team lead to approve posting the summary before it goes out.", "tool": "teams.ask_person"}, {"say": "Post the approved summary in the Teams channel.", "tool": "teams.post_message"}], "approvals": [{"tool": "teams.post_message", "approvers": 1, "who": "The team lead for the support team", "why": "A message goes to the whole team channel, so a person should check it first."}], "missing_tools": [{"need": "A scheduled trigger that runs the agent every Friday", "why": "The list has no way to run a task on a timer, so someone must start it each Friday by hand."}], "questions": ["Which Jira project or board does your team use? Please give the project key.", "Which Teams channel should the summary go to?", "Should the summary be posted only after the team lead approves it, as drafted, or can it post straight away?", "Does your team close tickets by moving them to Done, or with another status name?"]}, "seconds": 4.4, "tokens": [2059, 879], "checks": ["Writes with teams.ask_person but names no approval for it"]}, {"task": "Reset the password for a staff member who is locked out of their laptop.", "hoped": "Says it can't do this: no tool for it, and it is risky to automate.", "answer": {"can_do": false, "name": "Laptop password reset", "purpose": "Resetting a staff member's laptop password is not something this platform can do, because none of the available tools can reset device or account passwords.", "good_for": ["Find out who has admin access to a GitLab project", "Check a Jira ticket's comments and status", "Post a status update to a Teams channel"], "inputs": [], "steps": [], "approvals": [], "missing_tools": [{"need": "A tool that resets passwords on staff laptops or accounts (for example, an Entra ID password reset action)", "why": "The list has only read access to Entra ID groups. It cannot reset a password, and a password reset changes account security, so it needs a proper admin tool and a human to check identity."}], "questions": ["Should this request go to the IT or identity admin team instead? A person should verify the staff member's identity before any reset."], "why_not": "The available tools cannot reset passwords. A password reset changes account access and needs identity checks by a person, so this should stay with the IT or identity admin team."}, "seconds": 2.8, "tokens": [2045, 515], "checks": []}], "choices": [{"task": "Can you check if FastAPI has a new version? We run 0.115.", "hoped": "use_one", "hoped_text": "Use the release checker (or the software update agent), with fastapi/fastapi filled in or asked for.", "answer": {"decision": "use_one", "agents": [{"agent": "Release watcher with ticket", "part": "Checks the FastAPI GitHub repository for a newer release than 0.115 and opens a Jira ticket if one is found.", "inputs": {"GitHub repository": "fastapi/fastapi", "Last known release": "0.115"}}], "reason": "The Release watcher with ticket agent checks a public GitHub repository for new releases, which is what is needed to see if FastAPI has a version newer than 0.115. I filled the repository as the public FastAPI project on GitHub and set the last known release to 0.115 from your message.", "questions": ["Which Jira project key should the ticket go into? The agent needs this to open a ticket if a new version is found."]}, "seconds": 2.0, "tokens": [1928, 324], "checks": []}, {"task": "Our auditor wants proof that last quarter's GitLab access was reviewed. Find the review page and the tickets that came out of it.", "hoped": "new_agent", "hoped_text": "A new read-only agent, or a clear reason to reuse the access review agent. It must not start a new review.", "answer": {"decision": "cannot_do", "agents": [], "reason": "This task is to find existing records (last quarter's access review page and the Jira tickets created from it) for an auditor. None of the saved agents are built to search for past records. The Quarterly admin access review agent runs a new review and removes GitLab access, which would be risky and is not what is being asked. Nothing here needs to be automated; the records can be located by searching Confluence and Jira directly.", "questions": ["Do you want a read-only search for the past review page and tickets, which would need a new agent?", "Which Confluence access review page or Jira project key should be searched, if you know them?"]}, "seconds": 2.0, "tokens": [1948, 280], "checks": []}, {"task": "Raise upgrade tickets for any software that is behind, then post a short summary of what was raised in our Teams channel.", "hoped": "use_several", "hoped_text": "The software update agent, then the Teams summary agent, in that order.", "answer": {"decision": "use_one", "agents": [{"agent": "Software version checker", "part": "Compares the Confluence software inventory with the newest GitHub releases, raises Jira upgrade tickets for anything out of date, updates the inventory page, and posts the summary to Teams.", "inputs": {"Inventory page": "<UNKNOWN>", "Jira project": "<UNKNOWN>"}}], "reason": "The Software version checker already raises Jira upgrade tickets for out-of-date software and posts updates. It covers the whole task, including the Teams summary through its posting tool. The Inventory page and Jira project were not given in the task, so they need to be provided.", "questions": ["Which Confluence page holds the 'Software inventory' table?", "Which Jira project should the upgrade tickets go into?", "Which Teams channel should the summary be posted to?"]}, "seconds": 1.8, "tokens": [1943, 362], "checks": []}, {"task": "Book a meeting room for next Tuesday at 2pm.", "hoped": "cannot_do", "hoped_text": "Cannot do: not Jira, Confluence, GitHub, GitLab, Entra ID or Teams work.", "answer": {"decision": "cannot_do", "agents": [], "reason": "Booking a meeting room is not Jira, Confluence, GitHub, GitLab, Entra ID or Teams work, so none of the saved agents can do it. None of the saved agents is designed for room booking either.", "questions": []}, "seconds": 1.1, "tokens": [1926, 172], "checks": []}], "tries": []};
+const CATALOG = {"github.read_releases": ["read", "Read the releases of a public GitHub repository"], "gitlab.list_members": ["read", "List who has access to a GitLab group or project, and at what level"], "gitlab.remove_member": ["write", "Remove a person's access from a GitLab group or project"], "entra.list_group_members": ["read", "List the members of a Microsoft Entra ID group, such as an admin group"], "admin_tool.list_accounts": ["read", "List the accounts in one of the team's admin tools"], "jira.search": ["read", "Find Jira tickets with a search"], "jira.read_ticket": ["read", "Read one Jira ticket and its comments"], "jira.create_ticket": ["write", "Create a Jira ticket"], "jira.comment": ["write", "Add a comment to a Jira ticket"], "jira.move_ticket": ["write", "Move a Jira ticket to another status, such as Done"], "confluence.search": ["read", "Find Confluence pages"], "confluence.read_page": ["read", "Read a Confluence page, including its tables"], "confluence.update_page": ["write", "Change a Confluence page"], "teams.post_message": ["write", "Post a message in a Teams chat or channel"], "teams.ask_person": ["write", "Ask one person a question in Teams and wait for their answer"]};
+const DECISIONS = { use_one: "Use one saved agent", use_several: "Bring in several agents",
+  new_agent: "Draft a new agent", cannot_do: "Can't do this" };
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const toolChip = (t) => {
+  const kind = (CATALOG[t] || ["unknown"])[0];
+  return `<span class="tool ${kind}" title="${esc((CATALOG[t] || ["", "Not in the tool list"])[1])}">${esc(t)}</span>`;
+};
+const foot = (r) => r.seconds ? `<p class="foot">${r.seconds} s, ${r.tokens?.[0] ?? "?"} tokens in, ${r.tokens?.[1] ?? "?"} out</p>` : "";
+const checks = (list, okText) => !list ? "" : list.length
+  ? `<div class="box warn"><b>Checks flagged ${list.length}:</b><ul>${list.map((c) => `<li>${esc(c)}</li>`).join("")}</ul></div>`
+  : `<div class="box good">${okText}</div>`;
+
+function card(r) {
+  if (r.error) return `<div class="box bad"><b>The model call failed:</b> ${esc(r.error)}</div>`;
+  const c = r.answer;
+  if (!c.can_do) return `<div class="card"><p class="name">${esc(c.name)}</p>
+    <div class="box bad"><b>Says it can't do this:</b> ${esc(c.why_not || c.purpose)}</div>
+    ${list("What it would need", (c.missing_tools || []).map((m) => `${esc(m.need)}: ${esc(m.why)}`))}${foot(r)}</div>`;
+  const approvals = Object.fromEntries((c.approvals || []).map((a) => [a.tool, a]));
+  const steps = (c.steps || []).map((s) => {
+    const a = s.tool && approvals[s.tool];
+    return `<li>${esc(s.say)} ${s.tool ? toolChip(s.tool) : ""}${a ? ` <span class="muted">(${a.approvers} approver${a.approvers > 1 ? "s, one after the other" : ""})</span>` : ""}</li>`;
+  }).join("");
+  const inputs = (c.inputs || []).length ? `<h3>What the operator gives each run</h3><table><tr><th>Input</th><th>What</th><th>Example</th></tr>${
+    c.inputs.map((i) => `<tr><td>${esc(i.name)}</td><td>${esc(i.what)}</td><td>${esc(i.example)}</td></tr>`).join("")}</table>` : "";
+  return `<div class="card">
+    <p class="name">${esc(c.name)}</p><p>${esc(c.purpose)}</p>
+    <div class="chips">${(c.good_for || []).map((g) => `<span class="chip">"${esc(g)}"</span>`).join("")}</div>
+    <h3>Plan</h3><ol class="plan">${steps}</ol>
+    ${list("Approvals", (c.approvals || []).map((a) => `${toolChip(a.tool)} ${a.approvers} approver${a.approvers > 1 ? "s" : ""}: ${esc(a.who)}. ${esc(a.why)}`), true)}
+    ${inputs}
+    ${list("Tools it said are missing", (c.missing_tools || []).map((m) => `<b>${esc(m.need)}</b>: ${esc(m.why)}`), true)}
+    ${list("What it would ask before saving", (c.questions || []).map(esc), true)}
+    ${checks(r.checks, "Passes the platform's checks: only real tools, and every write has an approval.")}
+    ${foot(r)}</div>`;
+}
+function list(title, items, raw) {
+  return items.length ? `<h3>${title}</h3><ul>${items.map((i) => `<li>${raw ? i : esc(i)}</li>`).join("")}</ul>` : "";
+}
+function choice(r, hoped) {
+  if (r.error) return `<div class="box bad"><b>The model call failed:</b> ${esc(r.error)}</div>`;
+  const c = r.answer;
+  const match = hoped ? (c.decision === hoped ? `<span class="match yes">As hoped</span>` : `<span class="match no">Not as hoped</span>`) : "";
+  const agents = (c.agents || []).map((a, i) => `<div class="agentstep"><b>${i + 1}. ${esc(a.agent)}</b>: ${esc(a.part)}
+    ${Object.keys(a.inputs || {}).length ? `<div class="chips" style="margin-top:6px">${Object.entries(a.inputs).map(([k, v]) => `<span class="chip">${esc(k)} = ${esc(v)}</span>`).join("")}</div>` : ""}</div>`).join("");
+  return `<div class="card"><p><span class="decision">${esc(DECISIONS[c.decision] || c.decision)}</span>${match}</p>
+    ${agents}${c.new_agent ? `<p><b>New agent:</b> ${esc(c.new_agent)}</p>` : ""}
+    <p><b>Why:</b> ${esc(c.reason)}</p>
+    ${list("What it would ask", c.questions || [])}
+    ${checks(r.checks, "Passes the checks: only saved agents, and the count fits the decision.")}${foot(r)}</div>`;
+}
+
+const tabs = [
+  ["Drafting agents", () => DATA.drafts.map((d, i) => `<section class="item"><h2>Task ${i + 1}</h2>
+    <p class="typed">${esc(d.task)}</p><p class="hoped"><b>Hoped for:</b> ${esc(d.hoped)}</p>${card(d)}</section>`).join("")],
+  ["Room lead choices", () => `<p class="muted">The Room lead sees only the agents drafted in the first tab that said they can do their task.</p>` +
+    DATA.choices.map((d, i) => `<section class="item"><h2>New task ${i + 1}</h2>
+    <p class="typed">${esc(d.task)}</p><p class="hoped"><b>Hoped for:</b> ${esc(DECISIONS[d.hoped])}. ${esc(d.hoped_text)}</p>${choice(d, d.hoped)}</section>`).join("")],
+];
+if (DATA.tries.length) tabs.push(["Your tasks", () => DATA.tries.map((t, i) => `<section class="item"><h2>Your task ${i + 1}</h2>
+  <p class="typed">${esc(t.task)}</p>${choice(t.choice)}${t.draft ? `<h3>The new agent it drafted</h3>${card(t.draft)}` : ""}</section>`).join("")]);
+tabs.push(["Tool list", () => `<section class="item"><p>The fixed tools an agent can pick from. Writes always need approval in Teams.</p>
+  <table><tr><th>Tool</th><th>Kind</th><th>What it does</th></tr>${Object.entries(CATALOG).map(([t, [k, w]]) =>
+  `<tr><td>${toolChip(t)}</td><td>${k}</td><td>${esc(w)}</td></tr>`).join("")}</table></section>`]);
+
+function show(n) {
+  document.querySelectorAll("nav button").forEach((b, i) => b.setAttribute("aria-selected", String(i === n)));
+  document.getElementById("panel").innerHTML = tabs[n][1]();
+}
+document.getElementById("tabs").innerHTML = tabs.map(([t], i) => `<button role="tab" data-i="${i}">${t}</button>`).join("");
+document.getElementById("tabs").addEventListener("click", (e) => { if (e.target.dataset.i) show(Number(e.target.dataset.i)); });
+
+const drafted = DATA.drafts.filter((d) => d.answer);
+const clean = drafted.filter((d) => d.answer.can_do && !d.checks.length).length;
+const asHoped = DATA.choices.filter((d) => d.answer && d.answer.decision === d.hoped).length;
+const secs = [...DATA.drafts, ...DATA.choices].map((d) => d.seconds || 0);
+document.getElementById("meta").textContent = `Model: ${DATA.model}. Ran ${new Date(DATA.ran_at).toLocaleString()}.`;
+document.getElementById("summary").innerHTML = [
+  [`${drafted.filter((d) => d.answer.can_do).length} of ${DATA.drafts.length}`, "tasks got an agent card"],
+  [`${clean}`, "cards pass every check"],
+  [`${asHoped} of ${DATA.choices.length}`, "Room lead choices as hoped"],
+  [`${Math.max(...secs).toFixed(0)} s`, "slowest model answer"],
+].map(([b, t]) => `<div class="stat"><b>${b}</b>${t}</div>`).join("");
+show(0);
+</script>
+</body>
+</html>

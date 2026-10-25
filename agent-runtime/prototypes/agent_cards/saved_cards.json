@@ -1,0 +1,121 @@
+{
+ "Release checker and ticket opener": {
+  "can_do": true,
+  "name": "Release checker and ticket opener",
+  "purpose": "Checks a public GitHub repository for a new release and opens a Jira ticket to record it.",
+  "good_for": [
+   "Tell me when LangGraph has a new release and open a Jira ticket for it.",
+   "Check whether a new version of a public GitHub project is out and log it in Jira.",
+   "Find the latest release of a public repository and create a tracking ticket."
+  ],
+  "inputs": [
+   {
+    "name": "GitHub repository",
+    "what": "The public repository to check for new releases.",
+    "example": "langchain-ai/langgraph"
+   },
+   {
+    "name": "Jira project",
+    "what": "The Jira project where the ticket should be created.",
+    "example": "<the Jira project key, for example ABC>"
+   }
+  ],
+  "steps": [
+   {
+    "say": "Read the latest releases of the GitHub repository.",
+    "tool": "github.read_releases"
+   },
+   {
+    "say": "Check whether the newest release is new since the last time this agent ran. Look for an existing Jira ticket about that release, so the same release is not logged twice.",
+    "tool": "jira.search"
+   },
+   {
+    "say": "If the release is new and no ticket exists, create a Jira ticket in the chosen project. Put the release name, date and link in the ticket.",
+    "tool": "jira.create_ticket"
+   },
+   {
+    "say": "Tell the staff member in the reply what the newest release is, and whether a ticket was made or already existed.",
+    "tool": null
+   }
+  ],
+  "approvals": [
+   {
+    "tool": "jira.create_ticket",
+    "approvers": 1,
+    "why": "Creates a new ticket in Jira, so one approver checks it first."
+   }
+  ],
+  "missing_tools": [
+   {
+    "need": "A way to notify the staff member in Teams when a new release is found",
+    "why": "The request says to tell the staff member. The reply will show the result only if the run is watched. Teams posting is available, but a scheduled check is not."
+   }
+  ],
+  "questions": [
+   "Which Jira project should the ticket go into? Please give the project key.",
+   "Should the agent run only when you ask, or check on a schedule (for example, every day)? The tools here do not support scheduled runs.",
+   "Should the ticket be created for every new release, or only for major versions?",
+   "Should the Teams message go to you, or to a channel?"
+  ]
+ },
+ "Weekly Jira closed summary": {
+  "can_do": true,
+  "name": "Weekly Jira closed summary",
+  "purpose": "Every Friday, find the Jira tickets the team closed that week, write a short summary, and post it in the team's Teams channel.",
+  "good_for": [
+   "Summarise this week's closed Jira tickets for our team and post it in Teams",
+   "Post a Friday list of tickets our team finished this week",
+   "Tell the channel what the team closed this week"
+  ],
+  "inputs": [
+   {
+    "name": "Jira project",
+    "what": "The Jira project whose closed tickets you want summarised.",
+    "example": "CS-SUPPORT"
+   },
+   {
+    "name": "Teams channel",
+    "what": "The Teams channel or chat where the summary is posted.",
+    "example": "Support team channel, General"
+   }
+  ],
+  "steps": [
+   {
+    "say": "Search Jira for tickets in the chosen project that were moved to Done or closed in the last 7 days.",
+    "tool": "jira.search"
+   },
+   {
+    "say": "Read each ticket found so you know what it was about and what was done.",
+    "tool": "jira.read_ticket"
+   },
+   {
+    "say": "Group the tickets by theme or type and write a short summary: how many were closed, and one line per ticket with its key and title.",
+    "tool": null
+   },
+   {
+    "say": "Post the summary in the chosen Teams channel.",
+    "tool": "teams.post_message"
+   }
+  ],
+  "approvals": [
+   {
+    "tool": "teams.post_message",
+    "approvers": 1,
+    "why": "Posts a message in a shared team channel, so one person should check it first."
+   }
+  ],
+  "missing_tools": [
+   {
+    "need": "A way to run the agent on a schedule every Friday",
+    "why": "The tools cannot start a run by themselves. Someone must start it each Friday, or the platform must offer a weekly trigger."
+   }
+  ],
+  "questions": [
+   "Which Jira project(s) does your team use? Please give the project key.",
+   "Which Teams channel should the summary go to? Is it a channel or a group chat?",
+   "How does your team mark a ticket as closed? Is it the Done status, or another status name?",
+   "Should the summary be posted every Friday automatically, or started by a person each week? The tools available cannot schedule runs, so someone may need to start it.",
+   "Do you want a fixed time on Friday for the post?"
+  ]
+ }
+}
