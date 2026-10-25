@@ -36,7 +36,7 @@ Three runs of the `release_check` template on `langchain-ai/langgraph`, each as 
 - `runs/failure.json`. GitHub answers 503 three times, the Release checker gives up, and the run fails with reason `AgentError`, retryable.
 - `runs/rejected.json`. The same work leg, then Bob declines.
 
-`views/` holds the `GET /api/v1/runs/{run_id}` answer for each run at the end and at the approval pause (for the failure, while the agents are working). `approvals/` holds `GET /api/v1/approvals/apr_01JB8` as Alice sees it (refused, own work) and as Bob sees it (can decide), plus one recorded decision and one refusal body. `agent/` holds the Agent API task request, a finished result, a failed result, one callback post and the agent cards, and a watchlist check of three software (one behind, one up to date, one that cannot be read) as `watchlist-task-request.json` and `watchlist-task-finished.json`. Apart from the watchlist result, the agent events inside the results are the same events, with the same timestamps, as the agent-actor events in `runs/`. `troubleshooting/failure.json` is the AI troubleshooter's answer for the failed run.
+`views/` holds the `GET /api/v1/runs/{run_id}` answer for each run at the end and at the approval pause (for the failure, while the agents are working). `approvals/` holds `GET /api/v1/approvals/apr_01JB8` as Alice sees it (refused, own work) and as Bob sees it (can decide), plus one recorded decision and one refusal body. `agent/` holds the Agent API task request, a finished result, a failed result, one callback post and the agent cards, and the four tools (`tools.json`), a card task (`card-task-request.json`, `card-task-finished.json`), a draft (`card-draft-request.json`, `card-drafted.json`), a Room lead choice (`room-choose-request.json`, `room-chosen.json`), and a watchlist check of three software (one behind, one up to date, one that cannot be read) as `watchlist-task-request.json` and `watchlist-task-finished.json`. Apart from the watchlist result, the agent events inside the results are the same events, with the same timestamps, as the agent-actor events in `runs/`. `troubleshooting/failure.json` is the AI troubleshooter's answer for the failed run.
 
 ### The software watchlist
 
@@ -49,6 +49,15 @@ A scheduled check is started by the schedule owner, so `started_by` is the owner
 `runs/watchlist.json` is one recorded check, which the Portal's demo replays. `watchlist/before-check.json` is the watchlist just before it: six software with the results of Monday's scheduled check, and Alice's schedule for Mondays at 9:00. On Friday Alice starts a check by hand. The Release checker reads each source in list order: n8n is up to date, LangGraph, Redis and PostgreSQL are behind, FastAPI's source answers 404 and the checker carries on, and Terraform, added without a version, gets its starting point. The agents propose three upgrade tickets in one proposal (`views/watchlist.awaiting_approval.json`), Bob approves them with one decision, and they are written as MOCK-143, MOCK-144 and MOCK-145.
 
 `stubs/mock-jira-tickets.json` shows a practice Jira ticket with its `status` (`To Do` or `Done`) and `done_at`. `stubs/mock-jira-ticket.done.json` is the answer of `POST /api/v1/mock-jira/tickets/{key}/done`, which an Operator uses as a person would in Jira; marking a Done ticket again answers the same. The watchlist moves our version to the version a Done ticket named.
+
+## Agent cards
+
+An agent card is data: a name, a purpose, inputs and numbered blocks, each block naming at most one of four tools (`github.read_releases`, `jira.search`, `jira.read_ticket`, `jira.create_ticket`). [ADR 0023](../docs/adr/0023-agents-are-cards-the-model-drafts-and-use-only-tools-we-build.md) has the decision. The agent runtime serves `GET /v1/tools`, `POST /v1/cards/draft`, `POST /v1/room/choose`, and runs card tasks (`inputs.kind` is `cards`) through `POST /v1/tasks`.
+
+- A running agent is offered only its card's tools. A write tool takes `title` and `body` and never a target. It only records a proposal: `kind` is the tool id and `subject` is the card id.
+- Each tool call is a step pair. `step` is the tool id with `_` for `.`, such as `jira_search`. A finished read has one list of text in `result` for the live view (`tags`, or ticket keys with titles).
+- Jira reads call the platform's practice Jira at `PRACTICE_JIRA_URL` with the task's callback token. A search or a read can only reach the Jira project on the card.
+- A task has 50 seconds and each agent 8 model turns.
 
 ## The activity event
 

@@ -73,7 +73,9 @@ class GuardedModels:
             timeout=SUMMARY_TIMEOUT_SECONDS,
         )
 
-    def factory_for(self, access: ModelAccess) -> ModelFactory:
+    def factory_for(
+        self, access: ModelAccess, timeout: float = SUMMARY_TIMEOUT_SECONDS
+    ) -> ModelFactory:
         def build(name: str) -> BaseChatModel:
             if access.style == "anthropic":
                 return _GuardedChatAnthropic(
@@ -81,7 +83,7 @@ class GuardedModels:
                     stop=None,
                     base_url=access.base_url,
                     api_key=SecretStr(access.api_key),
-                    timeout=SUMMARY_TIMEOUT_SECONDS,
+                    timeout=timeout,
                     max_retries=0,
                     guarded_client=self._client,
                 )
@@ -89,7 +91,7 @@ class GuardedModels:
                 model=name,
                 base_url=access.base_url,
                 api_key=SecretStr(access.api_key),
-                timeout=SUMMARY_TIMEOUT_SECONDS,
+                timeout=timeout,
                 max_retries=0,
                 http_client=self._client,
             )

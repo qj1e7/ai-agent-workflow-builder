@@ -17,6 +17,7 @@ services:
   agent-runtime:
     environment:
       GITHUB_API_BASE: http://mock-github:8200
+      PRACTICE_JIRA_URL: http://platform-api:8000
     depends_on:
       mock-github:
         condition: service_healthy

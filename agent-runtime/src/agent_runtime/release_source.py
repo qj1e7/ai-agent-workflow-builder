@@ -25,6 +25,9 @@ class Release:
     tag: str
     prerelease: bool = False
     draft: bool = False
+    name: str | None = None
+    published_at: str | None = None
+    notes: str | None = None
 
 
 class SourceUnavailable(Exception):
@@ -58,6 +61,7 @@ def read_releases(
     retry: RetryPolicy,
     sleep: Callable[[float], None],
     write: Callable[[Draft], None],
+    agent: AgentRef = CHECKER,
 ) -> list[Release] | TaskError:
     """Reads one source. A 5xx or no answer is tried again, a 4xx stops at once."""
     for attempt in range(1, retry.tries + 1):
@@ -73,7 +77,7 @@ def read_releases(
             gave_up = attempt == retry.tries
             wait = f"Waiting {retry.wait_seconds:g} s before trying again."
             ending = "I am giving up." if gave_up else wait
-            write(try_failed(unavailable, attempt, retry.tries, ending))
+            write(try_failed(unavailable, attempt, retry.tries, ending, agent))
             if gave_up:
                 return TaskError(
                     type="UpstreamUnavailable",
@@ -127,17 +131,20 @@ def finished(step: str, what: str, result: dict[str, object]) -> Draft:
     )
 
 
-def to_room(summary_tail: str, text: str) -> Draft:
-    data = AgentMessageData(speaker=CHECKER, addressee=RoomAddressee(), text=text)
-    return Draft(agent=CHECKER, summary=f"Release checker {summary_tail}", data=data)
+def to_room(summary_tail: str, text: str, agent: AgentRef = CHECKER) -> Draft:
+    data = AgentMessageData(speaker=agent, addressee=RoomAddressee(), text=text)
+    return Draft(agent=agent, summary=f"{agent.display} {summary_tail}", data=data)
 
 
-def try_failed(error: SourceUnavailable, attempt: int, tries: int, ending: str) -> Draft:
+def try_failed(
+    error: SourceUnavailable, attempt: int, tries: int, ending: str, agent: AgentRef = CHECKER
+) -> Draft:
     short = f"answered {error.status}" if error.status else "could not be reached"
     long = f"answered {phrase(error.status)}" if error.status else "could not be reached"
     return to_room(
         f"reported that {SOURCE_NAME} {short} (try {attempt} of {tries}).",
         f"{SOURCE_NAME} {long} (try {attempt} of {tries}). {ending}",
+        agent,
     )
 
 

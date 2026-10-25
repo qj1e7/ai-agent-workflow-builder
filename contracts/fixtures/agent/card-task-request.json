@@ -1,0 +1,58 @@
+{
+  "task_id": "run_01JD1/work/1/1",
+  "run_id": "run_01JD1",
+  "instruction": "Check langchain-ai/langgraph for a new release and open a ticket if Jira has none.",
+  "inputs": {
+    "kind": "cards",
+    "agents": [
+      {
+        "card": {
+          "id": "crd_release_checker",
+          "version": 1,
+          "name": "Release checker",
+          "purpose": "Checks a public GitHub repository for a new release and proposes a Jira ticket for it.",
+          "inputs": [
+            {
+              "name": "GitHub repository",
+              "kind": "github_repo",
+              "what": "The public repository to check.",
+              "example": "langchain-ai/langgraph"
+            },
+            {
+              "name": "Jira project",
+              "kind": "jira_project",
+              "what": "Where the ticket goes.",
+              "example": "MOCK"
+            }
+          ],
+          "blocks": [
+            {
+              "say": "Read the newest releases of the repository.",
+              "tool": "github.read_releases"
+            },
+            {
+              "say": "Look in Jira for a ticket about the newest release, so it is not raised twice.",
+              "tool": "jira.search"
+            },
+            {
+              "say": "If there is none, propose a ticket naming the release, its date and its link.",
+              "tool": "jira.create_ticket"
+            }
+          ]
+        },
+        "values": {
+          "GitHub repository": "langchain-ai/langgraph",
+          "Jira project": "MOCK"
+        }
+      }
+    ]
+  },
+  "carry_forward": {
+    "last_known_tag": null
+  },
+  "callback": {
+    "url": "http://platform-api:8000/internal/v1/runs/run_01JD1/agent-events?task=run_01JD1/work/1/1",
+    "token": "example-callback-token-not-a-secret"
+  },
+  "model": null
+}

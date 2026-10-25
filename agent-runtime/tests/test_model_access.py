@@ -6,7 +6,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 
-from agent_runtime.addresses import AddressPolicy
+from agent_runtime.addresses import AddressPolicy, AddressRefusedError
 from agent_runtime.contract import (
     Connected,
     ConnectRequest,
@@ -14,7 +14,8 @@ from agent_runtime.contract import (
     ModelProblem,
     ModelTestPassed,
 )
-from agent_runtime.model_access import ModelProbe
+from agent_runtime.guarded import GuardedModels
+from agent_runtime.model_access import ModelProbe, chat_for, problem_for
 from agent_runtime.summary import ModelFactory
 
 KEY = "sk-example-key-not-real-x7"
@@ -295,3 +296,17 @@ def test_a_private_address_is_refused_before_the_model_is_built():
 
 def test_the_key_never_shows_in_the_access_repr():
     assert KEY not in repr(ACCESS)
+
+
+def test_a_slow_card_model_is_not_told_that_runs_use_the_built_in_sentence():
+    result = problem_for(APITimeoutError("slow"), runs_fall_back=False)
+    assert result.reason == "too_slow"
+    assert "built-in" not in result.message
+
+
+def test_the_chat_for_a_card_checks_the_address_each_time_a_model_is_built():
+
+    policy = AddressPolicy(resolver=lambda host: ["127.0.0.1"])
+    build = chat_for(ACCESS, policy, GuardedModels(policy))
+    with pytest.raises(AddressRefusedError):
+        build(45.0)

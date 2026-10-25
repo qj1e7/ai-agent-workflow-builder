@@ -1,0 +1,109 @@
+{
+  "tools": [
+    {
+      "id": "github.read_releases",
+      "kind": "read",
+      "name": "Read GitHub releases",
+      "description": "Read the newest releases of a public GitHub repository: tag, name, date and notes.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "repo": {
+            "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$",
+            "type": "string",
+            "description": "The repository, as owner/name, such as langchain-ai/langgraph."
+          }
+        },
+        "required": [
+          "repo"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "id": "jira.search",
+      "kind": "read",
+      "name": "Search Jira",
+      "description": "Find Jira tickets in one project. Filters are optional: words in the title or body, status, and finished on or after a date.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "project": {
+            "pattern": "^[A-Z][A-Z0-9]{0,9}$",
+            "type": "string",
+            "description": "The Jira project key, such as MOCK."
+          },
+          "text": {
+            "maxLength": 200,
+            "type": "string",
+            "description": "Words to look for in the title or body of a ticket."
+          },
+          "status": {
+            "enum": [
+              "To Do",
+              "Done"
+            ],
+            "type": "string",
+            "description": "Only tickets in this status."
+          },
+          "done_since": {
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "type": "string",
+            "description": "Only tickets finished on or after this date, YYYY-MM-DD."
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "id": "jira.read_ticket",
+      "kind": "read",
+      "name": "Read a Jira ticket",
+      "description": "Read one Jira ticket with its body.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "pattern": "^[A-Z][A-Z0-9]{0,9}-[0-9]{1,9}$",
+            "type": "string",
+            "description": "The ticket key, such as MOCK-7."
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "id": "jira.create_ticket",
+      "kind": "write",
+      "name": "Create a Jira ticket",
+      "description": "Propose a new Jira ticket. Nothing is created until an Approver approves it in Teams. The platform puts it in the Jira project saved on the agent, so you do not name one.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "description": "One line saying what the ticket is for.",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "body": {
+            "description": "The details. Plain text.",
+            "maxLength": 5000,
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "body"
+        ],
+        "type": "object"
+      }
+    }
+  ]
+}
