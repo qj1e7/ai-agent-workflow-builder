@@ -1,4 +1,5 @@
 import type { CreateUseCase, DevUser, Verdict } from '../api/types'
+import { NO_MODEL_PLAN, NO_MODEL_RUN } from './cards'
 import { fixtures } from './fixtures'
 import { invalid, isRecord, json, problem, type MockRequest } from './http'
 import type { DemoPlatform } from './platform'
@@ -60,16 +61,34 @@ const routes: readonly Route[] = [
   route('GET', '/me', ({ user }) => json(200, user)),
   route('GET', '/templates', () => json(200, { templates: fixtures.templates }), true),
   route('GET', '/use-cases', ({ platform }) => json(200, { use_cases: platform.listUseCases() })),
-  route('POST', '/use-cases/suggest', ({ platform, request }) => {
-    const text = isRecord(request.body) ? request.body['text'] : undefined
-    return typeof text === 'string' ? json(200, platform.suggest(text)) : invalid('text must be a string')
-  }),
   route('POST', '/use-cases', ({ platform, request, user, wall }) => {
     const input = parseUseCase(request.body)
     if (!input) return invalid('template, name, instruction and params are required')
     if (!fixtures.templates.some((template) => template.key === input.template)) return invalid('unknown template')
     const created = platform.createUseCase(user, input, wall)
     return json(201, { use_case_id: created.use_case_id, version: created.version })
+  }),
+  route('GET', '/tools', ({ platform }) => json(200, { tools: platform.cards.tools() })),
+  route('GET', '/agent-cards', ({ platform }) => json(200, { cards: platform.cards.list() })),
+  route('POST', '/agent-cards/check', ({ platform, request }) => platform.cards.check(request.body)),
+  route('GET', '/agent-cards/{id}', ({ platform, params }) => {
+    const card = platform.cards.get(decodeURIComponent(params[0] ?? ''))
+    return card ? json(200, card) : problem(404, 'There is no such agent.')
+  }),
+  route('POST', '/agent-cards', ({ platform, request, user, wall }) => platform.cards.create(user, request.body, wall)),
+  route('PUT', '/agent-cards/{id}', ({ platform, request, params, user, wall }) =>
+    platform.cards.update(user, decodeURIComponent(params[0] ?? ''), request.body, wall),
+  ),
+  route('POST', '/builder/plan', ({ platform, request, user }) => {
+    if (!user.roles.includes('operator')) return problem(403, 'Only an Operator can do this. Ask an Operator on the team.')
+    const task = isRecord(request.body) ? request.body['task'] : undefined
+    if (typeof task !== 'string' || task.trim() === '' || task.length > 2000) return invalid('task must be 1 to 2000 characters')
+    if (platform.modelSettings.view(user).active === null) return problem(409, NO_MODEL_PLAN)
+    return json(200, platform.cards.plan(task))
+  }),
+  route('POST', '/agent-use-cases', ({ platform, request, user, wall }) => {
+    if (!user.roles.includes('operator')) return problem(403, 'Only an Operator can do this. Ask an Operator on the team.')
+    return platform.createAgentUseCase(user, request.body, wall)
   }),
   route('GET', '/use-cases/{id}', ({ platform, params }) => {
     const useCase = platform.useCase(params[0] ?? '')
@@ -82,6 +101,7 @@ const routes: readonly Route[] = [
     const started = platform.startRun(user, params[0] ?? '', key, wall)
     if (started.kind === 'not_found') return problem(404, 'There is no such use case.')
     if (started.kind === 'nothing_to_check') return problem(409, NOTHING_TO_CHECK)
+    if (started.kind === 'needs_model') return problem(409, NO_MODEL_RUN)
     const { run } = started
     return json(201, { run_id: run.id, state: 'pending', events_url: `${API_PREFIX}/runs/${run.id}/events` })
   }),
