@@ -27,7 +27,7 @@ RULES: dict[str, dict[str, re.Pattern[str]]] = {
 FIXED = {"tag_pattern": TAG_PATTERN}
 # Published for the live view, but the builder never suggests it: a watchlist is made by adding
 # software on the Software page.
-NOT_OFFERED = frozenset({"software_watchlist"})
+NOT_OFFERED = frozenset({"software_watchlist", "agent_cards"})
 
 
 def catalog() -> list[dict[str, Any]]:

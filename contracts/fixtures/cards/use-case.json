@@ -1,0 +1,41 @@
+{
+  "use_case_id": "uc_01JD0",
+  "version": 1,
+  "template": "agent_cards",
+  "name": "LangGraph release check",
+  "instruction": "Check langchain-ai/langgraph for a new release and raise a ticket in MOCK.",
+  "params": {},
+  "owner": "alice",
+  "created_at": "2026-11-04T09:30:00Z",
+  "plan": [
+    {
+      "key": "crd_release_checker",
+      "name": "Release checker",
+      "description": "Checks a public GitHub repository for a new release and proposes a Jira ticket for it.",
+      "kind": "agent"
+    },
+    {
+      "key": "approval_gate",
+      "name": "Approval gate",
+      "description": "An Approver reviews what the agents propose in Teams before anything is written.",
+      "kind": "approval"
+    },
+    {
+      "key": "jira_create_ticket",
+      "name": "Create Jira tickets",
+      "description": "Create a Jira ticket, written only after approval.",
+      "kind": "write_action"
+    }
+  ],
+  "agents": [
+    {
+      "card_id": "crd_release_checker",
+      "card_version": 1,
+      "name": "Release checker",
+      "values": {
+        "GitHub repository": "langchain-ai/langgraph",
+        "Jira project": "MOCK"
+      }
+    }
+  ]
+}

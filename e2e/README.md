@@ -47,6 +47,8 @@ PLATFORM_API_URL=http://localhost:18000 MOCK_GITHUB_URL=http://localhost:8200 uv
 | `test_watchlist` | Alice adds three software to the team's watchlist: LangGraph at 1.2.14 (behind), Redis at 8.2.1 (up to date) and a repository the mock GitHub does not know. Adding a repository twice is 409, Bob cannot add (403), and a bad version is 422. One check sends one approval request with exactly one ticket, "Upgrade LangGraph from 1.2.14 to 1.2.16", and the Teams message names it. While it waits, the Software page shows LangGraph awaiting approval with the approval id, Redis up to date and the unknown repository as cannot check with the 404 in its problem, rows that need a person first. Bob approves, the ticket is written as To Do and LangGraph shows it as open. Bob cannot mark it Done (403); Alice marks it Done, twice with the same answer, and our version moves to 1.2.16 with source `ticket_done` and the ticket key. Removing software answers the list that is left. |
 | `test_schedule` | Bootstrap reports the `schedule_tick` workflow as loaded and active. A tick with the wrong step key is 401, and a tick with nothing due answers 200 `{"started": []}` and starts no run. Slot timing is covered by the platform-api unit tests, which control the clock. |
 
+| `test_agent_cards` | Without a model, planning is 409 and so is starting a card run. With the mock model connected in Settings (Alice saves it, Bob confirms its address), a task about summaries is planned as a new agent with no problems, Alice saves the drafted card (Bob cannot), a use case runs it, Bob approves the one ticket and it is written in MOCK. Planning saves nothing. A release whose notes order the agent to use another Jira project: the mock model obeys once, the platform refuses that proposal, and the only ticket is in the card's own project. A task about booking a room is planned as cannot do. The model is turned off again after each of these tests. |
+
 Each test makes its own use case, so order does not matter. There is one watchlist per team, so `test_watchlist` first removes whatever a kept stack still watches. Tests count tickets by `run_id`, so a ticket from another test never counts. `test_rejected` also checks the total ticket count did not move.
 
 ## The browser suite
@@ -74,6 +76,14 @@ Its own tests run in its container:
 
 ```sh
 docker build --target test -t mock-github:test e2e/mock_github && docker run --rm mock-github:test
+```
+
+## Mock model
+
+`e2e/mock_model/` is a tiny Anthropic Messages server. It answers by what the request asks for: a forced tool is a draft or a choice and gets a canned answer, a request with tools is a card run (read releases, search Jira, propose a ticket, report), and anything else gets one plain sentence. Its host is listed in `AGENT_MODEL_PRIVATE_HOSTS` for the e2e stack, so the runtime may send it a key over plain http. Its logic is plain functions with unit tests:
+
+```sh
+docker build --target test -t mock-model:test e2e/mock_model && docker run --rm mock-model:test
 ```
 
 ## What the harness assumes

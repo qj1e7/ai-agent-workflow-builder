@@ -17,3 +17,12 @@ def github() -> Iterator[MockGithub]:
     mock.set_mode("ok")
     yield mock
     mock.set_mode("ok")
+
+
+@pytest.fixture
+def mock_model(api: Api) -> Iterator[None]:
+    """The mock model is the team's model for one test, and off again after it, so the other
+    tests run as they did before agent cards."""
+    api.connect_mock_model()
+    yield
+    api.turn_model_off()

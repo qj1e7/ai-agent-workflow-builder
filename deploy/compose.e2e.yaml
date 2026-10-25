@@ -14,12 +14,31 @@ services:
       timeout: 3s
       retries: 15
 
+  # An Anthropic-style model that answers by what the request asks for, so the card tests run
+  # the real runtime without a real model. The runtime may reach it because it is listed below.
+  mock-model:
+    build:
+      context: ../e2e/mock_model
+      target: runtime
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8300/healthz', timeout=2)
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
   agent-runtime:
     environment:
       GITHUB_API_BASE: http://mock-github:8200
       PRACTICE_JIRA_URL: http://platform-api:8000
+      AGENT_MODEL_PRIVATE_HOSTS: mock-model
     depends_on:
       mock-github:
+        condition: service_healthy
+      mock-model:
         condition: service_healthy
 
   e2e:
@@ -31,10 +50,13 @@ services:
     environment:
       PLATFORM_API_URL: http://platform-api:8000
       MOCK_GITHUB_URL: http://mock-github:8200
+      MOCK_MODEL_URL: http://mock-model:8300
       E2E_WAIT_SECONDS: ${E2E_WAIT_SECONDS:-90}
       STEP_KEY: ${STEP_KEY:?run deploy/make-env.sh}
     depends_on:
       platform-api:
         condition: service_healthy
       mock-github:
+        condition: service_healthy
+      mock-model:
         condition: service_healthy

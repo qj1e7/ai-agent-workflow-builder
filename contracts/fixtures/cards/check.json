@@ -1,0 +1,42 @@
+{
+  "card": {
+    "name": "Forge reporter",
+    "purpose": "Raises a ticket that lists what was finished in a Jira project.",
+    "good_for": [
+      "Raise a ticket listing what we finished this week"
+    ],
+    "inputs": [],
+    "blocks": [
+      {
+        "say": "Find the tickets finished this week.",
+        "tool": "jira.search"
+      },
+      {
+        "say": "Propose a ticket that lists them.",
+        "tool": "jira.create_ticket"
+      }
+    ],
+    "approvals": [
+      {
+        "tool": "jira.create_ticket",
+        "approvers": 1
+      }
+    ]
+  },
+  "approvals": [
+    {
+      "tool": "jira.create_ticket",
+      "approvers": 1
+    }
+  ],
+  "problems": [
+    {
+      "field": "inputs",
+      "message": "Add a Jira project detail, so the agent knows which project it may read."
+    },
+    {
+      "field": "name",
+      "message": "Forge is an old name that confused the sponsor. Use plain words."
+    }
+  ]
+}

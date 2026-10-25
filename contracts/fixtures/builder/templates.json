@@ -78,6 +78,13 @@
           "example": "MOCK"
         }
       ]
+    },
+    {
+      "key": "agent_cards",
+      "name": "Agents",
+      "description": "Agents the Room lead brings in, each described by an agent card.",
+      "blocks": [],
+      "params": []
     }
   ]
 }

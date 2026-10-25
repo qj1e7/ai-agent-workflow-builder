@@ -153,9 +153,27 @@ SOFTWARE_WATCHLIST = Template(
     offered=False,
 )
 
+AGENT_CARDS = Template(
+    key="agent_cards",
+    name="Agents",
+    description="Agents the Room lead brings in, each described by an agent card.",
+    blocks=(),
+    params=(),
+    workflow="release_check",
+    tag_pattern=TAG_PATTERN,
+    bindings={},
+    approval_policy=ApprovalPolicy((ApprovalStep("Team approver", AnyApprover()),)),
+    keywords=frozenset(),
+    offered=False,
+)
+"""Use cases made on the Builder page from agent cards. They have no blocks of their own: each
+run's line and its bindings come from its cards, and its approval steps from the tool rules
+(ADR 0023), so nothing here is read for them. They run the same n8n workflow."""
+
 TEMPLATES: Mapping[str, Template] = {
     RELEASE_CHECK.key: RELEASE_CHECK,
     SOFTWARE_WATCHLIST.key: SOFTWARE_WATCHLIST,
+    AGENT_CARDS.key: AGENT_CARDS,
 }
 
 WATCHLIST_NAME = "Software watchlist"

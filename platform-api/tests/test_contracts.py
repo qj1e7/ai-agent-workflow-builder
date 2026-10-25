@@ -6,24 +6,37 @@ from pydantic import TypeAdapter
 
 from platform_api.auth import DevUsers
 from platform_api.builder.http import SuggestOut, TemplateList, UseCaseView
-from platform_api.builder.models import AddSoftware, ScheduleIn, WatchlistOut, WatchlistView
+from platform_api.builder.models import (
+    AddSoftware,
+    CannotDo,
+    CardChecked,
+    CardList,
+    NewAgent,
+    PlanOut,
+    ScheduleIn,
+    ToolList,
+    UseSaved,
+    WatchlistOut,
+    WatchlistView,
+)
 from platform_api.monitoring.agent_events import AgentEventPost
 from platform_api.monitoring.events import DeniedReason, WireVerdict, activity_events_adapter
 from platform_api.monitoring.http import TroubleshootingOut
 from platform_api.orchestration.agents import (
     AgentCards,
     ChooseRequest,
-    ChooseResult,
     ConnectRequest,
     DraftRequest,
-    DraftResult,
     ModelAccess,
+    TaskFinished,
     TaskRequest,
-    ToolList,
+    choose_result_adapter,
     connect_result_adapter,
+    draft_result_adapter,
     model_test_result_adapter,
     task_result_adapter,
 )
+from platform_api.orchestration.agents import ToolList as AgentToolList
 from platform_api.orchestration.approvals import Refusal, Verdict
 from platform_api.orchestration.http import (
     ApprovalView,
@@ -55,6 +68,21 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "runs/failure.json": activity_events_adapter,
     "runs/rejected.json": activity_events_adapter,
     "runs/watchlist.json": activity_events_adapter,
+    "runs/card.json": activity_events_adapter,
+    "cards/tools.json": TypeAdapter(ToolList),
+    "cards/list.json": TypeAdapter(CardList),
+    "cards/check.json": TypeAdapter(CardChecked),
+    "cards/plan.use-one.json": TypeAdapter(PlanOut),
+    "cards/plan.new-agent.json": TypeAdapter(PlanOut),
+    "cards/plan.cannot-do.json": TypeAdapter(PlanOut),
+    "cards/use-case.json": TypeAdapter(UseCaseView),
+    "agent/tools.json": TypeAdapter(AgentToolList),
+    "agent/card-task-request.json": TypeAdapter(TaskRequest),
+    "agent/card-task-finished.json": task_result_adapter,
+    "agent/card-draft-request.json": TypeAdapter(DraftRequest),
+    "agent/card-drafted.json": draft_result_adapter,
+    "agent/room-choose-request.json": TypeAdapter(ChooseRequest),
+    "agent/room-chosen.json": choose_result_adapter,
     "views/success.awaiting_approval.json": run_view_adapter,
     "views/success.final.json": run_view_adapter,
     "views/failure.working.json": run_view_adapter,
@@ -88,13 +116,6 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "agent/model-test-request.json": TypeAdapter(ModelAccess),
     "agent/model-test-passed.json": model_test_result_adapter,
     "agent/model-problem.json": model_test_result_adapter,
-    "agent/tools.json": TypeAdapter(ToolList),
-    "agent/card-task-request.json": TypeAdapter(TaskRequest),
-    "agent/card-task-finished.json": task_result_adapter,
-    "agent/card-draft-request.json": TypeAdapter(DraftRequest),
-    "agent/card-drafted.json": TypeAdapter(DraftResult),
-    "agent/room-choose-request.json": TypeAdapter(ChooseRequest),
-    "agent/room-chosen.json": TypeAdapter(ChooseResult),
     "settings/model.empty.json": TypeAdapter(ModelSettingsView),
     "settings/model.active.json": TypeAdapter(ModelSettingsView),
     "settings/model.pending.alice.json": TypeAdapter(ModelSettingsView),
@@ -132,7 +153,7 @@ def test_every_fixture_file_has_a_parser():
     assert on_disk == set(PARSERS)
 
 
-@pytest.mark.parametrize("story", ["success", "failure", "rejected", "watchlist"])
+@pytest.mark.parametrize("story", ["success", "failure", "rejected", "watchlist", "card"])
 def test_run_events_are_gapless_and_in_time_order(story: str):
     events = activity_events_adapter.validate_python(load(f"runs/{story}.json"))
     assert [e.seq for e in events] == list(range(1, len(events) + 1))
@@ -150,7 +171,8 @@ AGENT_KINDS = {
 
 
 @pytest.mark.parametrize(
-    ("story", "result"), [("success", "task-finished"), ("failure", "task-failed")]
+    ("story", "result"),
+    [("success", "task-finished"), ("failure", "task-failed"), ("card", "card-task-finished")],
 )
 def test_agent_events_in_the_run_match_the_agent_result(story: str, result: str):
     run_events = activity_events_adapter.validate_python(load(f"runs/{story}.json"))
@@ -254,3 +276,31 @@ def test_the_schedule_fixtures_show_the_owner_and_the_next_check():
     assert (scheduled.trigger, scheduled.started_by) == ("schedule", "alice")
     ran = run_view_adapter.validate_python(load("views/success.final.json"))
     assert ran.trigger == "person"
+
+
+def test_the_card_run_is_what_the_agent_sent_and_the_platform_bound():
+    request = TypeAdapter(TaskRequest).validate_python(load("agent/card-task-request.json"))
+    run = activity_events_adapter.validate_python(load("runs/card.json"))
+    assert request.run_id == run[0].run_id
+    finished = task_result_adapter.validate_python(load("agent/card-task-finished.json"))
+    assert isinstance(finished, TaskFinished)
+    proposed = next(e for e in run if e.kind == "write_action_proposed")
+    [intent] = finished.output.proposed
+    assert proposed.data.actions[0].line.endswith(str(intent.fields["title"]))
+    assert run[-1].kind == "run_succeeded"
+
+
+def test_the_three_plans_are_the_three_kinds_of_answer():
+    plans = TypeAdapter(PlanOut)
+    got = [
+        plans.validate_python(load(f"cards/plan.{name}.json"))
+        for name in ("use-one", "new-agent", "cannot-do")
+    ]
+    assert [type(p) for p in got] == [UseSaved, NewAgent, CannotDo]
+    assert isinstance(got[1], NewAgent) and got[1].problems != []
+
+
+def test_the_card_use_case_draws_agents_then_the_gate_then_the_write():
+    view = UseCaseView.model_validate(load("cards/use-case.json"))
+    assert [b.kind for b in view.plan] == ["agent", "approval", "write_action"]
+    assert view.agents[0].values["Jira project"] == "MOCK"

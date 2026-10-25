@@ -10,5 +10,26 @@
     "ticket_project": "MOCK"
   },
   "owner": "alice",
-  "created_at": "2026-11-02T09:30:00Z"
+  "created_at": "2026-11-02T09:30:00Z",
+  "plan": [
+    {
+      "key": "read_releases",
+      "name": "Read GitHub releases",
+      "description": "The Release checker reads the repository's releases.",
+      "kind": "agent"
+    },
+    {
+      "key": "approval_gate",
+      "name": "Approval gate",
+      "description": "An Approver reviews the proposed ticket in Teams before it is written.",
+      "kind": "approval"
+    },
+    {
+      "key": "create_ticket",
+      "name": "Create Jira ticket",
+      "description": "One ticket in the chosen project listing the new releases.",
+      "kind": "write_action"
+    }
+  ],
+  "agents": []
 }

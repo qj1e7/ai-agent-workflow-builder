@@ -74,3 +74,42 @@ async def test_a_runtime_that_is_down_is_unavailable():
         AgentUnavailable,
     )
     assert isinstance(await runtime(503, {}, []).test_model(ACCESS), AgentUnavailable)
+
+
+async def test_choose_and_draft_post_with_the_agent_key_and_read_either_answer():
+    from platform_api.orchestration.agents import (
+        ChooseRequest,
+        Chosen,
+        Drafted,
+        DraftRequest,
+        ModelProblem,
+    )
+
+    seen: list[httpx.Request] = []
+    chosen = {"status": "chosen", "choice": {"decision": "cannot_do", "reason": "No."}}
+    result = await runtime(200, chosen, seen).choose(
+        ChooseRequest(task="book a room", library=[], model=ACCESS)
+    )
+    assert isinstance(result, Chosen)
+    assert seen[0].url.path == "/v1/room/choose"
+    assert seen[0].headers["X-Agent-Key"] == "agent-key-not-real"
+
+    drafted = {"status": "drafted", "draft": {"can_do": False, "name": "", "purpose": ""}}
+    result = await runtime(200, drafted, seen).draft(DraftRequest(task="x", model=ACCESS))
+    assert isinstance(result, Drafted) and seen[1].url.path == "/v1/cards/draft"
+
+    problem = {"status": "problem", "reason": "too_slow", "message": "slow"}
+    result = await runtime(200, problem, seen).draft(DraftRequest(task="x", model=ACCESS))
+    assert isinstance(result, ModelProblem)
+
+
+async def test_a_refused_draft_does_not_keep_the_key():
+    from platform_api.orchestration.agents import DraftRequest
+
+    seen: list[httpx.Request] = []
+    echo = {"detail": [{"input": {"api_key": KEY}}]}
+    result = await runtime(422, echo, seen).draft(DraftRequest(task="x", model=ACCESS))
+    assert isinstance(result, AgentRejected) and KEY not in result.detail
+    assert isinstance(
+        await runtime(503, {}, seen).draft(DraftRequest(task="x", model=ACCESS)), AgentUnavailable
+    )

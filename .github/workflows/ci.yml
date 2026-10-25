@@ -99,11 +99,13 @@ jobs:
         if: matrix.project != 'e2e'
         run: docker build --target runtime --tag ${{ matrix.project }}:runtime ${{ matrix.project }}
 
-      - name: Mock GitHub tests in its image
+      - name: Mock GitHub and mock model tests in their images
         if: matrix.project == 'e2e'
         run: |
           docker build --target test --tag mock-github:test e2e/mock_github
           docker run --rm mock-github:test
+          docker build --target test --tag mock-model:test e2e/mock_model
+          docker run --rm mock-model:test
 
   portal:
     runs-on: ubuntu-latest

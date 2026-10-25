@@ -65,7 +65,7 @@ async def save(client: httpx.AsyncClient) -> str:
 
 async def test_templates_are_listed_with_the_last_seen_tag_param(client: httpx.AsyncClient):
     r = await client.get("/api/v1/templates", headers=ALICE)
-    release_check, watchlist = r.json()["templates"]
+    release_check, watchlist, agents = r.json()["templates"]
     assert [p["name"] for p in release_check["params"]] == [
         "repo",
         "tag_pattern",
@@ -74,6 +74,7 @@ async def test_templates_are_listed_with_the_last_seen_tag_param(client: httpx.A
     ]
     assert watchlist["key"] == "software_watchlist"
     assert [p["name"] for p in watchlist["params"]] == ["ticket_project"]
+    assert (agents["key"], agents["blocks"], agents["params"]) == ("agent_cards", [], [])
 
 
 async def test_the_watchlist_template_is_listed_but_not_built_by_hand(client: httpx.AsyncClient):

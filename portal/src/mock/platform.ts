@@ -196,6 +196,8 @@ export class DemoPlatform {
       params: input.params,
       owner: owner.id,
       created_at: new Date(wall).toISOString(),
+      plan: fixtures.templates.find((template) => template.key === input.template)?.blocks ?? [],
+      agents: [],
     }
     this.useCases.push(created)
     return created

@@ -1,0 +1,36 @@
+{
+  "tools": [
+    {
+      "id": "github.read_releases",
+      "kind": "read",
+      "name": "Read GitHub releases",
+      "description": "Reads the newest releases of a public GitHub repository.",
+      "target_input": null,
+      "min_approvers": null
+    },
+    {
+      "id": "jira.search",
+      "kind": "read",
+      "name": "Search Jira",
+      "description": "Finds tickets in a Jira project by words, status or the day they were done.",
+      "target_input": null,
+      "min_approvers": null
+    },
+    {
+      "id": "jira.read_ticket",
+      "kind": "read",
+      "name": "Read a Jira ticket",
+      "description": "Reads one Jira ticket.",
+      "target_input": null,
+      "min_approvers": null
+    },
+    {
+      "id": "jira.create_ticket",
+      "kind": "write",
+      "name": "Create a Jira ticket",
+      "description": "Proposes a ticket. It is created only after an Approver approves it.",
+      "target_input": "jira_project",
+      "min_approvers": 1
+    }
+  ]
+}

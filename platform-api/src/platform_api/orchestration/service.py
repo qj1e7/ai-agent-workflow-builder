@@ -27,6 +27,8 @@ from platform_api.orchestration.agents import (
     AgentRuntime,
     AgentUnavailable,
     Callback,
+    CardsInputs,
+    CardToRun,
     CarryForward,
     GithubSource,
     ModelAccess,
@@ -52,6 +54,7 @@ from platform_api.orchestration.approvals import (
     Verdict,
     approval_status,
 )
+from platform_api.orchestration.cards import ReviewedCards, bind_cards, review_cards
 from platform_api.orchestration.dispatch import (
     RETRY_POLICY,
     ApprovalChannel,
@@ -88,7 +91,13 @@ from platform_api.orchestration.runs import (
     state_name,
     step_finished,
 )
-from platform_api.orchestration.spec import ReleaseTask, RunSpec, RunStarted, WatchlistTask
+from platform_api.orchestration.spec import (
+    CardsTask,
+    ReleaseTask,
+    RunSpec,
+    RunStarted,
+    WatchlistTask,
+)
 from platform_api.orchestration.store import (
     DecisionConflict,
     OutboxRow,
@@ -480,17 +489,28 @@ class Orchestrator:
         output: TaskOutput,
     ) -> StepReply:
         reviewed: Reviewed | None = None
-        if isinstance(record.spec.task, WatchlistTask):
-            match review(record.spec.task, output.findings, output.proposed):
+        task = record.spec.task
+        carry = output.carry_forward.last_known_tag
+        if isinstance(task, CardsTask):
+            match review_cards(task, output.proposed):
                 case Unusable(detail):
                     return await self._fail_work(
                         uow, record, working, FailureReason.AGENT_ERROR, detail
                     )
-                case Reviewed() as reviewed:
-                    pass
-        intents = [ProposedIntent(p.kind, dict(p.fields), p.reason) for p in output.proposed]
-        bound = bind(intents, record.spec.bindings)
-        carry = output.carry_forward.last_known_tag
+                case ReviewedCards() as checked:
+                    bound = bind_cards(task, checked)
+            carry = None
+        else:
+            if isinstance(task, WatchlistTask):
+                match review(task, output.findings, output.proposed):
+                    case Unusable(detail):
+                        return await self._fail_work(
+                            uow, record, working, FailureReason.AGENT_ERROR, detail
+                        )
+                    case Reviewed() as reviewed:
+                        pass
+            intents = [ProposedIntent(p.kind, dict(p.fields), p.reason) for p in output.proposed]
+            bound = bind(intents, record.spec.bindings)
         proposal: Proposal | None = None
         match bound:
             case UnboundIntent(kinds):
@@ -540,7 +560,7 @@ class Orchestrator:
             record.run_id, working.task_id, working.callback_expires_at
         )
         spec = record.spec
-        inputs: ReleaseCheckInputs | WatchlistInputs
+        inputs: ReleaseCheckInputs | WatchlistInputs | CardsInputs
         match spec.task:
             case ReleaseTask(repo, tag_pattern, last_known_tag):
                 inputs = ReleaseCheckInputs(repo=repo, tag_pattern=tag_pattern)
@@ -559,6 +579,11 @@ class Orchestrator:
                         )
                         for s in software
                     ],
+                )
+                carry = CarryForward()
+            case CardsTask(agents):
+                inputs = CardsInputs(
+                    agents=[CardToRun(card=a.card, values=dict(a.values)) for a in agents]
                 )
                 carry = CarryForward()
         return TaskRequest(
@@ -873,10 +898,12 @@ class Orchestrator:
         execution = await self._engine.start_leg(row.payload["workflow"], leg, row.run_id)
         async with self._db.transaction("orchestration") as uow:
             await self._store.outbox_sent(uow, row.id)
-            await self._store.record_leg_attempt(uow, row.run_id, leg, attempt, execution)
+            # The run first, then its leg attempt: the order every step call takes. n8n can call
+            # a step before this transaction ends, and the opposite order deadlocked with it.
             record = await self._store.load_run(uow, row.run_id, lock=True)
             if record is None:
                 return
+            await self._store.record_leg_attempt(uow, row.run_id, leg, attempt, execution)
             match record.state:
                 case Pending(claimant=None, attempt=a) as pending if a == attempt:
                     await self._store.save_run(uow, record, pending.claim(execution))

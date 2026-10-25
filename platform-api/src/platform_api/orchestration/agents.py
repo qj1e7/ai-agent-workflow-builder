@@ -278,6 +278,8 @@ class Drafted(WireModel):
 
 type DraftResult = Annotated[Drafted | ModelProblem, Field(discriminator="status")]
 
+draft_result_adapter: TypeAdapter[DraftResult] = TypeAdapter(DraftResult)
+
 
 class LibraryInput(WireModel):
     name: str
@@ -322,6 +324,8 @@ class Chosen(WireModel):
 
 
 type ChooseResult = Annotated[Chosen | ModelProblem, Field(discriminator="status")]
+
+choose_result_adapter: TypeAdapter[ChooseResult] = TypeAdapter(ChooseResult)
 
 
 class AgentCard(WireModel):
@@ -393,6 +397,14 @@ class HttpAgentRuntime:
         self, access: ModelAccess
     ) -> ModelTestResult | AgentUnavailable | AgentRejected:
         return await self._model_call("/v1/models/test", access, model_test_result_adapter)
+
+    async def choose(
+        self, request: ChooseRequest
+    ) -> ChooseResult | AgentUnavailable | AgentRejected:
+        return await self._model_call("/v1/room/choose", request, choose_result_adapter)
+
+    async def draft(self, request: DraftRequest) -> DraftResult | AgentUnavailable | AgentRejected:
+        return await self._model_call("/v1/cards/draft", request, draft_result_adapter)
 
     async def _model_call[T](
         self, path: str, body: WireModel, adapter: TypeAdapter[T]
