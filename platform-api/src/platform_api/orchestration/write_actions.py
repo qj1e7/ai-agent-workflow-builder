@@ -5,7 +5,7 @@ from collections.abc import Collection, Iterable, Mapping, Sequence, Set
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, LiteralString, Protocol
 
 from platform_api.db import Database
 from platform_api.monitoring import ActionLine
@@ -18,6 +18,9 @@ from platform_api.orchestration.approvals import (
 )
 from platform_api.orchestration.runs import Acting, WriteDone
 from platform_api.shared import ApprovalId, Digest, ProposalId, RunId, UserId
+
+if TYPE_CHECKING:
+    from platform_api.orchestration.spec import RunSpec
 
 type Json = str | int | float | bool | None | Mapping[str, Json] | Sequence[Json]
 
@@ -265,6 +268,9 @@ def registry_of(connectors: Iterable[WriteConnector]) -> Registry:
     return {connector.name: connector.operations for connector in connectors}
 
 
+SEARCH_LIMIT = 50
+
+
 class MockJiraConnector:
     name = "jira"
     operations = frozenset({"create_ticket"})
@@ -332,6 +338,61 @@ class MockJiraConnector:
                 )
             ).fetchone()
         return None if row is None else _ticket(row)
+
+    def now(self) -> datetime:
+        return self._db.clock()
+
+    async def search(
+        self,
+        projects: Sequence[str],
+        words: Sequence[str],
+        status: TicketStatus | None,
+        done_since: datetime | None,
+        limit: int = SEARCH_LIMIT,
+    ) -> list[MockTicket]:
+        """Tickets for an agent's search, newest first. Words are already cut to plain letters
+        and digits, and a ticket matches when any of them is in its title or body."""
+        where: list[LiteralString] = []
+        args: list[Any] = []
+        where.append("project = ANY(%s)")
+        args.append(list(projects))
+        if words:
+            where.append("(title ILIKE ANY(%s) OR body ILIKE ANY(%s))")
+            patterns = [f"%{word}%" for word in words]
+            args.extend((patterns, patterns))
+        if status is not None:
+            where.append("status = %s")
+            args.append(status)
+        if done_since is not None:
+            where.append("done_at >= %s")
+            args.append(done_since)
+        clause = f" WHERE {' AND '.join(where)}" if where else ""
+        async with self._db.transaction("orchestration") as uow:
+            rows = await (
+                await uow.conn.execute(
+                    f"SELECT {TICKET_COLUMNS} FROM orchestration.mock_jira_tickets{clause} "
+                    "ORDER BY number DESC LIMIT %s",
+                    (*args, limit),
+                )
+            ).fetchall()
+        return [_ticket(row) for row in rows]
+
+    async def find(self, key: str) -> MockTicket | None:
+        async with self._db.transaction("orchestration") as uow:
+            row = await (
+                await uow.conn.execute(
+                    f"SELECT {TICKET_COLUMNS} FROM orchestration.mock_jira_tickets WHERE key = %s",
+                    (key,),
+                )
+            ).fetchone()
+        return None if row is None else _ticket(row)
+
+    async def run_spec(self, run_id: RunId) -> RunSpec | None:
+        from platform_api.orchestration.store import Store  # store imports this module
+
+        async with self._db.transaction("orchestration") as uow:
+            record = await Store().load_run(uow, run_id)
+        return None if record is None else record.spec
 
     async def done_tickets(self, keys: Collection[str]) -> Mapping[str, datetime]:
         if not keys:

@@ -4,6 +4,7 @@ from typing import Annotated, Literal, Protocol
 
 from pydantic import Field
 
+from platform_api.orchestration.agents import CardSpec
 from platform_api.orchestration.approvals import ApprovalPolicy
 from platform_api.orchestration.write_actions import Binding
 from platform_api.shared import Principal, RunId, SoftwareId, UseCaseId, UserId
@@ -43,7 +44,24 @@ class WatchlistTask:
     kind: Literal["watchlist"] = "watchlist"
 
 
-type Task = Annotated[ReleaseTask | WatchlistTask, Field(discriminator="kind")]
+@dataclass(frozen=True)
+class CardRun:
+    """One agent of a card run: the card as it was when the run started, the Operator's values,
+    and where its writes land. The bindings come from the tool rules and the values, never from
+    anything the model says."""
+
+    card: CardSpec
+    values: Mapping[str, str]
+    bindings: Mapping[str, Binding]
+
+
+@dataclass(frozen=True)
+class CardsTask:
+    agents: tuple[CardRun, ...]
+    kind: Literal["cards"] = "cards"
+
+
+type Task = Annotated[ReleaseTask | WatchlistTask | CardsTask, Field(discriminator="kind")]
 
 
 @dataclass(frozen=True)

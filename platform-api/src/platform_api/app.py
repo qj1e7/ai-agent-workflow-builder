@@ -12,7 +12,7 @@ from platform_api.builder import watchlist_http
 from platform_api.db import Database
 from platform_api.monitoring import http as monitoring_http
 from platform_api.orchestration import http as orchestration_http
-from platform_api.orchestration import settings_http
+from platform_api.orchestration import practice_jira_http, settings_http
 from platform_api.security_headers import SecurityHeaders
 from platform_api.settings import Settings, settings_from_env
 from platform_api.wire import WireModel
@@ -63,6 +63,7 @@ def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
     app.include_router(builder_http.router)
     app.include_router(watchlist_http.router)
     app.include_router(orchestration_http.router)
+    app.include_router(practice_jira_http.router)
     app.include_router(settings_http.router)
     app.include_router(monitoring_http.router)
 
