@@ -1,7 +1,12 @@
 import refusalOwnWork from '@contracts/fixtures/approvals/refusal.own_work.json'
-import suggest from '@contracts/fixtures/builder/suggest.json'
 import templates from '@contracts/fixtures/builder/templates.json'
+import cardList from '@contracts/fixtures/cards/list.json'
+import planCannot from '@contracts/fixtures/cards/plan.cannot-do.json'
+import planNewAgent from '@contracts/fixtures/cards/plan.new-agent.json'
+import planUseOne from '@contracts/fixtures/cards/plan.use-one.json'
+import cardTools from '@contracts/fixtures/cards/tools.json'
 import useCase from '@contracts/fixtures/builder/use-case.json'
+import cardRun from '@contracts/fixtures/runs/card.json'
 import failureRun from '@contracts/fixtures/runs/failure.json'
 import rejectedRun from '@contracts/fixtures/runs/rejected.json'
 import successRun from '@contracts/fixtures/runs/success.json'
@@ -14,9 +19,12 @@ import viewWatchlistAwaiting from '@contracts/fixtures/views/watchlist.awaiting_
 import watchlistBeforeCheck from '@contracts/fixtures/watchlist/before-check.json'
 import type {
   ActivityEvent,
+  CardView,
   DevUser,
+  PlanOut,
   ProposalView,
   TemplateView,
+  ToolView,
   TroubleshootingOut,
   UseCaseView,
   WatchlistView,
@@ -34,7 +42,12 @@ export const fixtures = {
   watchlistBeforeCheck: watchlistBeforeCheck as WatchlistView,
   useCase: useCase as UseCaseView,
   templates: templates.templates as TemplateView[],
-  releaseCheck: suggest.template as TemplateView,
+  tools: cardTools.tools as ToolView[],
+  cards: cardList.cards as CardView[],
+  planUseOne: planUseOne as Extract<PlanOut, { decision: 'use_one' | 'use_several' }>,
+  planNewAgent: planNewAgent as Extract<PlanOut, { decision: 'new_agent' }>,
+  planCannot: planCannot as PlanOut,
+  cardEvents: cardRun as ActivityEvent[],
   devUsers: devUsers.users as DevUser[],
   troubleshooting: troubleshooting as TroubleshootingOut,
   ownWorkRefusal: refusalOwnWork,

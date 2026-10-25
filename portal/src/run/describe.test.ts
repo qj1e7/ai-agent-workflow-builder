@@ -145,6 +145,17 @@ describe('captionWords', () => {
     expect(caption(trackAt('success', 9), 'agent:read_releases')).toBe('1.2.16, 1.2.15')
   })
 
+  it('words the four tool steps of an agent card', () => {
+    const say = (step: string) => captionWords({ is: 'step', step, summary: 'ignored' })
+    expect([say('github_read_releases'), say('jira_search'), say('jira_read_ticket'), say('jira_create_ticket')]).toEqual([
+      'Reading GitHub releases',
+      'Searching Jira',
+      'Reading a Jira ticket',
+      'Drafting a Jira ticket',
+    ])
+    expect(captionWords({ is: 'stopped', step: 'jira_search', errorType: 'UpstreamUnavailable', reason: null })).toBe('Jira unavailable')
+  })
+
   it("shows a step the table does not know by its event's summary", () => {
     expect(captionWords({ is: 'step', step: 'read_entra', summary: 'Entra reader is reading the directory.' })).toBe('Entra reader is reading the directory.')
   })

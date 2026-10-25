@@ -32,6 +32,11 @@ const STEP_LABELS: Readonly<Record<string, StepLabel>> = {
     },
     found: (count) => `Found ${count} new release${count === 1 ? '' : 's'}`,
   },
+  // The tools an agent card uses. The step is the tool's id with the dot written as an underscore.
+  github_read_releases: { source: 'github', running: () => 'Reading GitHub releases' },
+  jira_search: { source: 'jira', running: () => 'Searching Jira' },
+  jira_read_ticket: { source: 'jira', running: () => 'Reading a Jira ticket' },
+  jira_create_ticket: { source: 'jira', running: () => 'Drafting a Jira ticket' },
 }
 
 /** The headline while a specialist works, keyed by agent id. An agent with no row reads "Working". */

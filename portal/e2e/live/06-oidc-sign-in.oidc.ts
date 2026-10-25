@@ -65,7 +65,7 @@ test('alice signs in and starts a run, cannot approve it herself, and bob signs 
   expect(me, 'the platform maps the token to alice').toEqual({ id: '0a11ce00-0000-4000-8000-000000000001', display: 'Alice', roles: ['operator', 'approver'] })
 
   const ticketsBefore = await backend.tickets()
-  const runId = await runExampleFromBuilder(alice.page, info, 'oidc-run')
+  const runId = await runExampleFromBuilder(alice.page, info, backend, 'oidc-run')
   await backend.waitForState(runId, ['awaiting_approval'])
   expect((await backend.tickets()).filter((ticket) => ticket.run_id === runId), 'nothing is written while the run waits').toEqual([])
 

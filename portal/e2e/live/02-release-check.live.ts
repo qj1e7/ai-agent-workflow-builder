@@ -24,7 +24,7 @@ test('alice starts a release check, bob approves it on the Tracker, and one MOCK
   await page.goto('/')
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
 
-  const runId = await runExampleFromBuilder(page, info, 'success')
+  const runId = await runExampleFromBuilder(page, info, backend, 'success')
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
   await shot(page, info, 'success-04-run-page')
 

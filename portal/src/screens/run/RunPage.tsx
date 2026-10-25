@@ -4,7 +4,7 @@ import { OPEN_RUN_AGAIN_WORDS } from '../../api/errors'
 import { useRun } from '../../api/queries'
 import { useLiveRun, useTechnicalDetails } from '../../tracker/hooks'
 import { Tracker } from '../../tracker/Tracker'
-import { useRunTemplate } from '../../tracker/useRunTemplate'
+import { useRunBlocks } from '../../tracker/useRunBlocks'
 import { ButtonLink } from '../../ui/Button'
 import { InlineMessage } from '../../ui/Feedback'
 import { PageHeader } from '../../ui/PageHeader'
@@ -15,7 +15,7 @@ export function RunPage() {
   const { runId = '' } = useParams()
   const run = useRun(runId)
   const view = useLiveRun(runId, 'rest')
-  const template = useRunTemplate(run.data)
+  const blocks = useRunBlocks(run.data)
   const [technical, setTechnical] = useTechnicalDetails()
   const { kind } = useSession()
   const explain = useErrorWords()
@@ -34,7 +34,7 @@ export function RunPage() {
 
   return (
     <div className={`page ${styles['page']}`}>
-      <Tracker runId={runId} view={view} template={template} title={run.data?.use_case_name ?? 'Run'} />
+      <Tracker runId={runId} view={view} blocks={blocks} title={run.data?.use_case_name ?? 'Run'} />
       {run.isError ? <InlineMessage tone="error">{explain(run.error)}</InlineMessage> : null}
       <div className={styles['minutes']}>
         <Minutes entries={view.minutes} technical={technical} onTechnical={setTechnical} />

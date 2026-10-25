@@ -12,6 +12,8 @@ export interface RunContext {
   readonly starter: Person
   readonly useCase: { readonly id: string; readonly name: string }
   readonly repo: string | undefined
+  /** The first agent of a card use case, and the Jira project it writes to. */
+  readonly card?: { readonly id: string; readonly name: string; readonly project: string }
   readonly approvalId: string
   readonly proposalId: string
 }
@@ -148,6 +150,64 @@ export const WATCHLIST_CHECK: Recording = {
   proposalFor: (context) =>
     substitute(fixtures.watchlistProposal, watchReplacements(context, RECORDED_DECIDER, watchKeys)),
   tickets: watchKeys.length,
+}
+
+// A run of agent cards: runs/card.json, which plays the first agent. The agent, the repository and the project are the run's own.
+const CARD_LAST = lastSeqOfWorkLeg(fixtures.cardEvents)
+const cardWorkLeg = fixtures.cardEvents.filter((event) => event.seq <= CARD_LAST)
+const cardActLeg = fixtures.cardEvents.filter((event) => event.seq > CARD_LAST)
+const cardProposed = fixtures.cardEvents.find((event) => event.kind === 'write_action_proposed')
+
+function cardReplacements(context: RunContext, decider: Person, ticketKey: string): Replacement[] {
+  const [first] = fixtures.cardEvents
+  const runId = first?.run_id ?? ''
+  const suffix = runId.slice('run_'.length)
+  const useCaseId = first?.kind === 'run_created' ? first.data.use_case_id : ''
+  return [
+    [runId, context.runId],
+    [`apr_${suffix}`, context.approvalId],
+    [`prp_${suffix}`, context.proposalId],
+    [useCaseId, context.useCase.id],
+    ['a run of LangGraph release check', `a run of ${context.useCase.name}`],
+    ['crd_release_checker', context.card?.id ?? 'crd_release_checker'],
+    ['Release checker', context.card?.name ?? 'Release checker'],
+    ['langchain-ai/langgraph', context.repo ?? 'langchain-ai/langgraph'],
+    ['MOCK-150', ticketKey],
+    ['MOCK', context.card?.project ?? 'MOCK'],
+    ['Alice', context.starter.display],
+    ['alice', context.starter.id],
+    ['Bob', decider.display],
+    ['bob', decider.id],
+  ]
+}
+
+export const CARD_RUN: Recording = {
+  workLeg: (context, options) =>
+    playWorkLeg(cardWorkLeg, cardReplacements(context, RECORDED_DECIDER, 'MOCK-150'), options),
+  decisionTail: (verdict, context, decider, keys, firstSeq) =>
+    verdict === 'approve'
+      ? numbered(substitute(cardActLeg, cardReplacements(context, decider, keys[0] ?? 'MOCK-150')), firstSeq)
+      : declineTail(context, decider, firstSeq),
+  proposalFor: (context) =>
+    substitute(
+      {
+        proposal_id: 'prp_01JD1',
+        digest: cardProposed?.kind === 'write_action_proposed' ? cardProposed.data.digest : '',
+        actions: [
+          {
+            connector: 'jira',
+            operation: 'create_ticket',
+            target: { project: 'MOCK' },
+            fields: {
+              title: 'Upgrade LangGraph to 1.2.16',
+              body: 'LangGraph 1.2.16 is the newest release of langchain-ai/langgraph, and there is no ticket for it yet.\n\nProposed by the AI workflow builder.',
+            },
+          },
+        ],
+      } satisfies ProposalView,
+      cardReplacements(context, RECORDED_DECIDER, 'MOCK-150'),
+    ),
+  tickets: 1,
 }
 
 export function retriedEvent(context: RunContext, by: Person, attempt: number, seq: number): ActivityEvent {

@@ -380,15 +380,6 @@ describe('starting and retrying runs', () => {
 })
 
 describe('use cases and the Room lead', () => {
-  it('suggests the release check for releases and tickets, and nothing otherwise', async () => {
-    const hit = await call('POST', '/use-cases/suggest', {
-      body: { text: 'Every Monday, check the repo for new releases. If there are any, open a Jira ticket.' },
-    })
-    expect(await hit.json()).toEqual({ template: fixtures.releaseCheck, matched_terms: ['releases', 'ticket'] })
-    const miss = await call('POST', '/use-cases/suggest', { body: { text: 'Tidy my inbox' } })
-    expect(await miss.json()).toEqual({ template: null, matched_terms: [] })
-  })
-
   it('stores a use case and starts runs from it', async () => {
     const created = await call('POST', '/use-cases', {
       body: {

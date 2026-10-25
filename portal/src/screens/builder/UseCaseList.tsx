@@ -5,6 +5,7 @@ import type { UseCaseView } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { EmptyState, InlineMessage, Skeleton } from '../../ui/Feedback'
 import { IconPlay, IconReplay } from '../../ui/icons'
+import { ModelNeeded } from './Trouble'
 import { formatDayAndTimeSeconds } from './useCaseTime'
 import type { RunNow } from './useRunNow'
 import styles from './UseCaseList.module.css'
@@ -85,7 +86,9 @@ function UseCaseRow({ useCase, runNow }: { useCase: UseCaseView; runNow: RunNow 
         >
           Run now
         </Button>
-        {problem ? <InlineMessage tone="error">{problem}</InlineMessage> : null}
+        {problem ? (
+          runNow.needsModel(useCase.use_case_id) ? <ModelNeeded message={problem} /> : <InlineMessage tone="error">{problem}</InlineMessage>
+        ) : null}
       </div>
     </div>
   )

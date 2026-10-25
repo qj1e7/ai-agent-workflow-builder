@@ -1,26 +1,47 @@
-import { useId, useRef, useState, type KeyboardEvent } from 'react'
-import { useErrorWords } from '../../api/context'
-import { useSuggest } from '../../api/queries'
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
+import { usePlan, useMe } from '../../api/queries'
 import { Button } from '../../ui/Button'
 import { InlineMessage } from '../../ui/Feedback'
 import { IconFlow } from '../../ui/icons'
 import { PageHeader } from '../../ui/PageHeader'
 import { EXAMPLE_TASK } from './plan'
+import { AgentLibrary } from './AgentLibrary'
 import { PlanPanel } from './PlanPanel'
+import { Trouble } from './Trouble'
 import { UseCaseList } from './UseCaseList'
 import { useRunNow } from './useRunNow'
+import { workOfPlan, type Work } from './work'
 import styles from './BuilderPage.module.css'
 
 export function BuilderPage() {
-  const explain = useErrorWords()
   const [task, setTask] = useState('')
+  const [work, setWork] = useState<Work | null>(null)
+  const operator = useMe().data?.roles.includes('operator') ?? false
   const [missing, setMissing] = useState(false)
-  const suggest = useSuggest()
+  const planIt = usePlan()
+  const heading = useRef<HTMLHeadingElement>(null)
+  const moveToPanel = useRef(false)
   const runNow = useRunNow()
   const textarea = useRef<HTMLTextAreaElement>(null)
   const fieldId = useId()
   const helpId = `${fieldId}-help`
   const problemId = `${fieldId}-problem`
+
+  useEffect(() => {
+    if (!moveToPanel.current) return
+    moveToPanel.current = false
+    heading.current?.focus()
+    heading.current?.scrollIntoView({ block: 'start' })
+  }, [work])
+
+  function ask(text: string) {
+    planIt.mutate(text, { onSuccess: (answer) => setWork(workOfPlan(answer, text.trim())) })
+  }
+
+  function openWork(next: Work) {
+    moveToPanel.current = true
+    setWork(next)
+  }
 
   function plan() {
     if (task.trim() === '') {
@@ -29,7 +50,7 @@ export function BuilderPage() {
       return
     }
     setMissing(false)
-    suggest.mutate(task)
+    ask(task)
   }
 
   function planFromKeyboard(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -42,7 +63,7 @@ export function BuilderPage() {
   function planExample() {
     setTask(EXAMPLE_TASK)
     setMissing(false)
-    suggest.mutate(EXAMPLE_TASK)
+    ask(EXAMPLE_TASK)
   }
 
   const describedBy = [helpId, missing ? problemId : null].filter(Boolean).join(' ')
@@ -79,16 +100,18 @@ export function BuilderPage() {
             </InlineMessage>
           ) : null}
           <div className={styles['buttons']}>
-            <Button variant="primary" icon={IconFlow} loading={suggest.isPending} onClick={plan}>
+            <Button variant="primary" icon={IconFlow} loading={planIt.isPending} onClick={plan}>
               Plan it
             </Button>
             <Button onClick={planExample}>Plan the example</Button>
           </div>
-          {suggest.isError ? <InlineMessage tone="error">{explain(suggest.error)}</InlineMessage> : null}
+          {planIt.isError ? <Trouble error={planIt.error} /> : null}
         </section>
 
-        <PlanPanel suggest={suggest} task={task} runNow={runNow} />
+        <PlanPanel work={work} planning={planIt.isPending} onWork={openWork} heading={heading} />
       </div>
+
+      <AgentLibrary operator={operator} onEdit={openWork} />
 
       <UseCaseList runNow={runNow} />
     </div>

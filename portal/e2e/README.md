@@ -30,7 +30,7 @@ The state names and the four projects are listed in `support/states.ts`. A TypeS
 |---|---|
 | `overview.spec.ts` | The overview at each stage of the live success run as Alice, plus the earlier runs list. Then as Bob, who approves in place before the recorded approval, so the run writes MOCK-143. |
 | `run.spec.ts` | The run page for the success, failed and rejected runs, including Instant, technical details and Retry run. Only an Operator is offered Retry run. |
-| `builder.spec.ts` | The builder empty, planned and saved. |
+| `builder.spec.ts` | The builder asks for an AI model first. Then the Room lead picks the Release checker and the Operator runs it, a drafted agent is fixed with the live check and saved, runs from the library, a starter is copied and not changed, and a task the tools cannot do says what is missing. |
 | `settings.spec.ts` | The AI model settings: connect a known provider, test and save, a new address waiting for another Approver, Bob confirming it, and a refused key and a slow model explained in plain words. |
 | `approvals.spec.ts` | The approvals list, then the approval page as Alice, Carol and Bob, and after approving. Approve and Decline pressed in one tick send one decision. |
 | `software.spec.ts` | The Software page as Alice (Operator) and Bob (Approver, read-only): rows that need a person first, the rest folded under "N up to date", field problems on add, add and remove with an inline confirm, the empty watchlist, and a schedule Carol saves and Alice turns off. Check now opens the recorded check, whose three tickets Bob approves from the row's "Open the approval", and Mark Done on the demo Jira moves our version. |

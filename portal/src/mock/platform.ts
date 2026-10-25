@@ -10,16 +10,16 @@ import type {
   ProposalView,
   Refusal,
   RunView,
-  SuggestOut,
   TeamsStubMessage,
   UseCaseView,
   Verdict,
   WatchlistView,
   WriteActionView,
 } from '../api/types'
+import { DemoCards } from './cards'
 import { fixtures } from './fixtures'
 import { json, problem } from './http'
-import { FIRST_NEW_TICKET_NUMBER, RELEASE_CHECK, WATCHLIST_CHECK, type Person, type RunContext } from './recordings'
+import { CARD_RUN, FIRST_NEW_TICKET_NUMBER, RELEASE_CHECK, WATCHLIST_CHECK, type Person, type RunContext } from './recordings'
 import { Run } from './run'
 import type { ApprovalRecord } from './runView'
 import { finished, replay, Timeline } from './timeline'
@@ -30,7 +30,6 @@ const HOUR_MS = 3_600_000
 const SEEDED_FAILURE_AGE_MS = 3 * HOUR_MS
 const SEEDED_REJECTED_AGE_MS = 26 * HOUR_MS
 const SEEDED_USE_CASE_AGE_MS = 48 * HOUR_MS
-const MATCHED_TERMS = /\b(releases?|tickets?)\b/gi
 
 export type DecideResult =
   | { kind: 'not_found' }
@@ -40,7 +39,8 @@ export type DecideResult =
 
 export type RetryResult = { kind: 'not_found' } | { kind: 'not_retryable' } | { kind: 'accepted' }
 
-export type StartResult = { kind: 'started'; run: Run } | { kind: 'not_found' } | { kind: 'nothing_to_check' }
+export type StartResult =
+  { kind: 'started'; run: Run } | { kind: 'not_found' } | { kind: 'nothing_to_check' } | { kind: 'needs_model' }
 
 const TITLES_SHOWN = 5
 const OPERATORS_ONLY = 'Only an Operator can do this. Ask an Operator on the team.'
@@ -104,6 +104,7 @@ function agentsSaid(events: readonly ActivityEvent[]): string {
 export class DemoPlatform {
   readonly modelSettings = new DemoModelSettings()
   readonly watchlist: DemoWatchlist
+  readonly cards: DemoCards
   private readonly runs: Run[]
   private readonly done = new Map<string, string>()
   private readonly useCases: UseCaseView[]
@@ -117,6 +118,7 @@ export class DemoPlatform {
     ]
     this.runs = [this.seedLive(start), this.seedFinished('failure', start), this.seedFinished('rejected', start)]
     this.watchlist = new DemoWatchlist(start)
+    this.cards = new DemoCards(start)
   }
 
   users(): DevUser[] {
@@ -180,12 +182,6 @@ export class DemoPlatform {
     return json(200, ticket)
   }
 
-  suggest(text: string): SuggestOut {
-    const found = [...text.matchAll(MATCHED_TERMS)].map((match) => (match[1] ?? '').toLowerCase())
-    const matchedTerms = [...new Set(found)]
-    return { template: matchedTerms.length > 0 ? fixtures.releaseCheck : null, matched_terms: matchedTerms }
-  }
-
   createUseCase(owner: DevUser, input: CreateUseCase, wall: number): UseCaseView {
     const created: UseCaseView = {
       use_case_id: this.newId('uc'),
@@ -203,6 +199,13 @@ export class DemoPlatform {
     return created
   }
 
+  createAgentUseCase(owner: DevUser, body: unknown, wall: number): Response {
+    const made = this.cards.agentUseCase(body, owner, this.newId('uc'), wall)
+    if (made.kind === 'refused') return made.response
+    this.useCases.push(made.useCase)
+    return json(201, { use_case_id: made.useCase.use_case_id, version: made.useCase.version })
+  }
+
   startRun(starter: DevUser, useCaseId: string, idempotencyKey: string, wall: number): StartResult {
     const useCase = this.useCase(useCaseId)
     if (!useCase) return { kind: 'not_found' }
@@ -211,13 +214,22 @@ export class DemoPlatform {
     if (existing) return { kind: 'started', run: existing }
     const check = useCase.template === 'software_watchlist'
     if (check && this.watchlist.isEmpty) return { kind: 'nothing_to_check' }
-    const recording = check ? WATCHLIST_CHECK : RELEASE_CHECK
+    const cards = useCase.template === 'agent_cards'
+    if (cards && this.modelSettings.view(starter).active === null) return { kind: 'needs_model' }
+    const recording = check ? WATCHLIST_CHECK : cards ? CARD_RUN : RELEASE_CHECK
+    const first = useCase.agents[0]
+    const cardView = first ? this.cards.get(first.card_id) : undefined
+    const valueOfKind = (kind: string) => {
+      const input = cardView?.inputs.find((each) => each.kind === kind)
+      return input ? first?.values[input.name] : undefined
+    }
 
     const context: RunContext = {
       runId: this.newId('run'),
       starter: person(starter),
       useCase: { id: useCase.use_case_id, name: useCase.name },
-      repo: useCase.params['repo'],
+      repo: cards ? valueOfKind('github_repo') : useCase.params['repo'],
+      ...(first && cards ? { card: { id: first.card_id, name: first.name, project: valueOfKind('jira_project') ?? 'MOCK' } } : {}),
       approvalId: this.newId('apr'),
       proposalId: this.newId('prp'),
     }

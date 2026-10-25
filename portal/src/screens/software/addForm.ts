@@ -18,7 +18,7 @@ export const EMPTY_FIELDS: AddFields = { name: '', repo: '', ourVersion: '' }
 
 const NAME_LIMIT = 80
 // The platform's RepoName pattern: a GitHub owner, a slash and a repository name.
-const REPO = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9._-]{1,100}$/
+export const REPO = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9._-]{1,100}$/
 const VERSION = /^\d+\.\d+\.\d+$/
 const GITHUB_ADDRESS = /^(?:https?:\/\/)?(?:www\.)?github\.com\/([^/?#\s]+)\/([^/?#\s]+)/i
 
@@ -74,7 +74,7 @@ export interface Refused {
   readonly form: string | null
 }
 
-function detailsOf(body: unknown): { loc: unknown[]; msg: string }[] {
+export function detailsOf(body: unknown): { loc: unknown[]; msg: string }[] {
   if (typeof body !== 'object' || body === null) return []
   const detail = (body as { detail?: unknown }).detail
   if (!Array.isArray(detail)) return []
