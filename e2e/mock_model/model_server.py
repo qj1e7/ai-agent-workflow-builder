@@ -107,6 +107,12 @@ def user_text(body: dict[str, Any]) -> str:
     )
 
 
+def task_text(body: dict[str, Any]) -> str:
+    """Only the staff member's task. The Room lead's request also lists the saved agents, whose
+    purposes must not steer the mock's choice."""
+    return user_text(body).rpartition("The task:\n")[2]
+
+
 def choice(task: str) -> dict[str, Any]:
     words = task.lower()
     if "book" in words and "room" in words:
@@ -142,7 +148,7 @@ def forced(body: dict[str, Any], name: str) -> dict[str, Any]:
     if "draft" in lowered:
         return call(name, DRAFT, 0)
     if "choice" in lowered:
-        return call(name, choice(user_text(body)), 0)
+        return call(name, choice(task_text(body)), 0)
     return say(SENTENCE)
 
 
