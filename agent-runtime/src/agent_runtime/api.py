@@ -6,7 +6,7 @@ import threading
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Protocol, Self
 
 import httpx
@@ -14,27 +14,47 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.security import APIKeyHeader
 
 from agent_runtime.addresses import AddressPolicy
+from agent_runtime.card_runner import CardRunner
 from agent_runtime.contract import (
     AgentCard,
     AgentCards,
     AgentEvent,
     AgentEventPost,
+    CardsInputs,
+    ChooseRequest,
+    ChooseResult,
     ConnectRequest,
     ConnectResult,
+    DraftRequest,
+    DraftResult,
     Health,
+    InputKind,
     ModelAccess,
+    ModelProblem,
     ModelTestResult,
+    TaskError,
+    TaskFailed,
     TaskRequest,
     TaskResult,
+    ToolList,
 )
+from agent_runtime.drafting import choose_agents, draft_card
 from agent_runtime.events import Clock, EventLog, EventSink
 from agent_runtime.github import GitHubReleaseSource
 from agent_runtime.guarded import GuardedModels
-from agent_runtime.model_access import ModelProbe, summarizer_for
+from agent_runtime.jira import JiraReaderFor, PracticeJiraFor, no_jira
+from agent_runtime.model_access import ModelProbe, chat_for, summarizer_for
 from agent_runtime.origins import Origin, origin_of, parse_origin_list
 from agent_runtime.release_checker import ReleaseChecker
-from agent_runtime.room import FixedRoomLead, RoomLead, run_task
-from agent_runtime.summary import ModelSummarizer, Summarizer, TemplateSummarizer, model_factory
+from agent_runtime.room import FixedRoomLead, RoomLead, run_cards, run_task
+from agent_runtime.summary import (
+    ChatFor,
+    ModelSummarizer,
+    Summarizer,
+    TemplateSummarizer,
+    model_factory,
+)
+from agent_runtime.tools import tool_list, value_problem
 
 log = logging.getLogger(__name__)
 
@@ -42,6 +62,8 @@ CALLBACK_TIMEOUT_SECONDS = 2.0
 DEFAULT_GITHUB_API_BASE = "https://api.github.com"
 TOKEN_HEADER = "X-Callback-Token"
 KEY_HEADER = "X-Agent-Key"
+# The staff are in Singapore, so "today" in an agent's prompt is the date there.
+SINGAPORE = timezone(timedelta(hours=8))
 
 AGENT_CARDS = AgentCards(
     agents=[
@@ -64,6 +86,14 @@ AGENT_CARDS = AgentCards(
         ),
     ]
 )
+
+
+MODEL_NEEDED = TaskError(
+    type="ModelNeeded",
+    message="Connect an AI model in Settings to run agents.",
+    retryable=False,
+)
+NO_MODEL = ModelProblem(reason="failed", message="No AI model is connected.")
 
 
 def utc_now() -> datetime:
@@ -91,6 +121,7 @@ class Settings:
     model_base_url: str | None
     model_api_key: str | None
     model_private_hosts: frozenset[str] = frozenset()
+    practice_jira_url: str | None = None
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> Self:
@@ -113,6 +144,7 @@ class Settings:
                 for host in env.get("AGENT_MODEL_PRIVATE_HOSTS", "").split(",")
                 if host.strip()
             ),
+            practice_jira_url=env.get("PRACTICE_JIRA_URL") or None,
         )
 
     @property
@@ -155,11 +187,20 @@ class HttpCallbacks:
 
 
 type SummarizerFor = Callable[[ModelAccess], Summarizer]
+# The chat model an agent runs on: the one in the request, else the runtime's own, else none.
+type ChatSource = Callable[[ModelAccess | None], ChatFor | None]
 
 
 def _summarizer_under_default_policy(access: ModelAccess) -> Summarizer:
     policy = AddressPolicy()
     return summarizer_for(access, policy, GuardedModels(policy))
+
+
+def _chat_under_default_policy(access: ModelAccess | None) -> ChatFor | None:
+    if access is None:
+        return None
+    policy = AddressPolicy()
+    return chat_for(access, policy, GuardedModels(policy))
 
 
 @dataclass(frozen=True)
@@ -169,6 +210,8 @@ class Runtime:
     clock: Clock
     callbacks: Callbacks
     summarizer_for: SummarizerFor = field(default=_summarizer_under_default_policy)
+    cards: CardRunner | None = None
+    chat_source: ChatSource = field(default=_chat_under_default_policy)
 
 
 def build_summarizer(settings: Settings) -> Summarizer:
@@ -186,12 +229,32 @@ def build_runtime(settings: Settings) -> Runtime:
     def summarizer_under_policy(access: ModelAccess) -> Summarizer:
         return summarizer_for(access, policy, models)
 
+    def chat_source(access: ModelAccess | None) -> ChatFor | None:
+        if access is not None:
+            return chat_for(access, policy, models)
+        if settings.summary_model:
+            name = settings.summary_model
+
+            def from_settings(timeout: float):
+                factory = model_factory(
+                    settings.model_base_url, settings.model_api_key, timeout=timeout
+                )
+                return factory(name)
+
+            return from_settings
+        return None
+
+    jira_for: JiraReaderFor = (
+        PracticeJiraFor(settings.practice_jira_url) if settings.practice_jira_url else no_jira
+    )
     return Runtime(
         checker=ReleaseChecker(source, build_summarizer(settings), sleep=time.sleep),
         lead=FixedRoomLead(),
         clock=utc_now,
         callbacks=HttpCallbacks(),
         summarizer_for=summarizer_under_policy,
+        cards=CardRunner(source, jira_for, sleep=time.sleep),
+        chat_source=chat_source,
     )
 
 
@@ -252,6 +315,9 @@ def create_app(
         if origin_of(body.callback.url) not in config.callback_allowed_origins:
             raise HTTPException(status_code=422, detail="callback.url is not at an allowed origin")
 
+        if isinstance(body.inputs, CardsInputs):
+            return post_cards_task(body, body.inputs)
+
         checker = active.checker
         if body.model is not None:
             checker = checker.with_summarizer(active.summarizer_for(body.model))
@@ -266,6 +332,48 @@ def create_app(
             raise HTTPException(
                 status_code=409, detail="task_id was already used with a different request"
             ) from reused
+
+    def post_cards_task(body: TaskRequest, inputs: CardsInputs) -> TaskResult:
+        runner = active.cards
+        if runner is None:
+            raise HTTPException(status_code=501, detail="this runtime does not run agent cards")
+        for agent in inputs.agents:
+            kinds: dict[str, InputKind] = {item.name: item.kind for item in agent.card.inputs}
+            for name, value in agent.values.items():
+                if value_problem(kinds[name], value) is not None:
+                    raise HTTPException(
+                        status_code=422, detail=f"the value of {name} does not fit its kind"
+                    )
+        chat = active.chat_source(body.model)
+        if chat is None:
+            # Not stored: the same task id can run once a model is connected.
+            return TaskFailed(task_id=body.task_id, error=MODEL_NEEDED, events=[])
+        today = active.clock().astimezone(SINGAPORE).date()
+
+        def run() -> TaskResult:
+            events = EventLog(active.clock, active.callbacks.sink_for(body))
+            return run_cards(body, inputs, active.lead, runner, chat, today, events)
+
+        try:
+            return store.run_once(body, run)
+        except TaskIdReused as reused:
+            raise HTTPException(
+                status_code=409, detail="task_id was already used with a different request"
+            ) from reused
+
+    @app.get("/v1/tools", dependencies=[Depends(require_key)])
+    def list_tools() -> ToolList:
+        return tool_list()
+
+    @app.post("/v1/cards/draft", dependencies=[Depends(require_key)])
+    def draft(body: DraftRequest) -> DraftResult:
+        chat = active.chat_source(body.model)
+        return draft_card(body, chat) if chat else NO_MODEL
+
+    @app.post("/v1/room/choose", dependencies=[Depends(require_key)])
+    def choose(body: ChooseRequest) -> ChooseResult:
+        chat = active.chat_source(body.model)
+        return choose_agents(body, chat) if chat else NO_MODEL
 
     @app.post("/v1/models/connect", dependencies=[Depends(require_key)])
     def connect_model(body: ConnectRequest) -> ConnectResult:
