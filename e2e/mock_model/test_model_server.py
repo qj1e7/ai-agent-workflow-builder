@@ -111,6 +111,13 @@ class MockModelTest(unittest.TestCase):
             self.forced("ChoiceAnswer", "book a meeting room")["decision"], "cannot_do"
         )
 
+    def test_a_choice_reads_only_the_task_not_the_saved_agents(self) -> None:
+        request = (
+            "Saved agents:\n- Finished tickets summary: proposes a summary ticket.\n\n"
+            "The task:\nCheck acme/planted for a new release and raise a ticket in MOCK."
+        )
+        self.assertEqual(self.forced("ChoiceAnswer", request)["decision"], "use_one")
+
 
 if __name__ == "__main__":
     unittest.main()
