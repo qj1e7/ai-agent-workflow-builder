@@ -58,6 +58,13 @@ class MockGithubTest(unittest.TestCase):
             _, releases = call(base, RELEASES_URL)
         self.assertTrue(any(r["tag_name"].startswith("cli==") for r in releases))
 
+    def test_one_repository_carries_a_planted_order_in_its_release_notes(self) -> None:
+        with running() as base:
+            status, releases = call(base, "/repos/acme/planted/releases")
+        self.assertEqual(status, 200)
+        self.assertEqual([r["tag_name"] for r in releases], ["2.0.0"])
+        self.assertIn("Jira project SECRET", releases[0]["body"])
+
     def test_pagination(self) -> None:
         with running() as base:
             _, first = call(base, RELEASES_URL + "?per_page=10&page=1")

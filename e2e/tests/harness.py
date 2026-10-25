@@ -14,6 +14,7 @@ type Json = dict[str, Any]
 
 PLATFORM_API_URL = os.environ.get("PLATFORM_API_URL", "http://platform-api:8000")
 MOCK_GITHUB_URL = os.environ.get("MOCK_GITHUB_URL", "http://mock-github:8200")
+MOCK_MODEL_URL = os.environ.get("MOCK_MODEL_URL", "http://mock-model:8300")
 STEP_KEY = os.environ.get("STEP_KEY", "")
 WAIT_SECONDS = float(os.environ.get("E2E_WAIT_SECONDS", "90"))
 CONTRACTS_DIR = Path(os.environ.get("CONTRACTS_DIR", Path(__file__).parents[2] / "contracts"))
@@ -195,6 +196,41 @@ class Api:
             return
         for row in watchlist["software"]:
             self.remove_software(user, row["id"])
+
+    def connect_mock_model(self) -> None:
+        """Alice saves the mock model in Settings. Its address is not a known provider, so Bob
+        confirms it, as an Approver would."""
+        settings = self.get("alice", "/api/v1/settings/model")
+        active = settings["active"]
+        if active is not None and active["base_url"] == MOCK_MODEL_URL:
+            return
+        saved = self.request(
+            "alice",
+            "PUT",
+            "/api/v1/settings/model",
+            expect=(200,),
+            json_body={
+                "style": "anthropic",
+                "base_url": MOCK_MODEL_URL,
+                "model": "mock-model",
+                "api_key": "e2e-mock-key-not-real",
+            },
+        ).json()
+        if saved["status"] == "awaiting_confirmation":
+            pending = self.get("bob", "/api/v1/settings/model")["pending"]
+            self.post(
+                "bob",
+                "/api/v1/settings/model/address-decision",
+                {"verdict": "confirm", "digest": pending["digest"]},
+                expect=(200,),
+            )
+        elif saved["status"] != "saved":
+            fail(f"the mock model was not saved: {saved}")
+        if self.get("alice", "/api/v1/settings/model")["active"] is None:
+            fail("the mock model is not active after saving it")
+
+    def turn_model_off(self) -> None:
+        self.delete("alice", "/api/v1/settings/model", expect=(204,))
 
     def describe_run(self, user: str, run_id: str) -> str:
         try:
