@@ -9,17 +9,32 @@ Never use the old themed names (Flint, Forge, Striker, Spark Map, Scout, Analyst
 ### Building
 
 **AI workflow builder**:
-The product where an Operator describes a task and turns it into a use case.
+The product where an Operator describes a task and turns it into agent cards and use cases.
 
-**Use case**:
-A saved definition of a repetitive task, made from blocks and templates.
-_Avoid_: Job, recipe
+**Agent card**:
+A saved definition of an agent: its purpose, its plan, the tools it may use, the inputs an Operator gives each run, and how many Approvers each write needs. The AI model drafts it, and an Operator reviews and saves it.
+_Avoid_: Agent config, bot, prompt
+
+**Plan**:
+The ordered blocks on an agent card.
 
 **Block**:
-One reusable step that a use case is built from.
+One step of an agent card's plan. A block uses at most one tool.
+
+**Tool**:
+One thing an agent can do in another system, such as reading GitHub releases or creating a Jira ticket. The team builds and tests every tool, and an agent can use only the tools on its card.
+_Avoid_: Plugin, skill, integration
+
+**Agent library**:
+The agent cards a team has saved. The Room lead chooses from it.
+_Avoid_: Agent hub (NCS's agent hub is a separate thing)
+
+**Use case**:
+A saved repetitive task: which agent card runs, with which inputs, and when.
+_Avoid_: Job, recipe
 
 **Template**:
-A ready-made use case that an Operator starts from and adjusts.
+A ready-made agent card that ships with the platform, such as the release checker.
 
 **Portal**:
 The web app where Operators build use cases and start runs, watch the live activity view, and Approvers decide on approval requests.
@@ -61,10 +76,10 @@ One execution of a use case, from trigger to result.
 _Avoid_: Job, execution (n8n uses "execution" for its own internal runs)
 
 **Room lead**:
-The agent that reads a task and decides which specialist agents to bring in.
+The agent that reads a task and decides which saved agents to bring in, or that a new agent card is needed.
 
 **Specialist agent**:
-An agent that the Room lead brings in to do one part of a run.
+An agent, defined by an agent card, that the Room lead brings in to do one part of a run.
 
 **Leg**:
 The part of a run that n8n carries in one execution. A run has a work leg up to the approval request and an act leg from the approval to the end. Our platform owns the pause between them.
