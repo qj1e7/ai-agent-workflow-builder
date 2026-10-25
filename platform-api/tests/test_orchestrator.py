@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -44,6 +45,7 @@ from platform_api.orchestration.service import (
     RetryLater,
     StepReply,
 )
+from platform_api.orchestration.store import Store
 from platform_api.orchestration.write_actions import MockJiraConnector, WriteGateway
 from platform_api.shared import ApprovalId, Digest, N8nExecutionId, Principal, RunId, TaskId
 from tests.conftest import PostgresUrls, truncate_all
@@ -244,6 +246,22 @@ async def test_start_run_is_idempotent_per_key_and_dispatches_through_the_outbox
     await h.orchestrator.tick()
     assert [leg for _, leg, _ in h.engine.legs] == [Leg.WORK, Leg.WORK]
     state = await h.state(first.run_id)
+    assert isinstance(state, Pending) and state.claimant == "41"
+
+
+async def test_a_step_call_while_a_leg_is_dispatched_waits_instead_of_deadlocking(h: Harness):
+    # n8n can call run_agents before the dispatcher's transaction ends. The step call locks the
+    # run, then records the leg attempt. The dispatcher must take the same order, or the two
+    # wait on each other (seen in the e2e run of the agent cards stack).
+    run_id = await start(h)
+    store = Store()
+    async with h.db.transaction("orchestration") as uow:
+        await store.load_run(uow, run_id, lock=True)
+        dispatching = asyncio.create_task(h.orchestrator.tick())
+        await asyncio.sleep(0.3)
+        await store.record_leg_attempt(uow, run_id, Leg.WORK, 1, N8nExecutionId("41"))
+    await asyncio.wait_for(dispatching, timeout=10)
+    state = await h.state(run_id)
     assert isinstance(state, Pending) and state.claimant == "41"
 
 
