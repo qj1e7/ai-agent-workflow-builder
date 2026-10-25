@@ -187,7 +187,79 @@ class WatchlistInputs(WireModel):
     ]
 
 
-type TaskInputs = Annotated[ReleaseCheckInputs | WatchlistInputs, Field(discriminator="kind")]
+type ToolId = Literal[
+    "github.read_releases", "jira.search", "jira.read_ticket", "jira.create_ticket"
+]
+type ToolKind = Literal["read", "write"]
+type InputKind = Literal["github_repo", "jira_project", "text"]
+
+CARD_ID_PATTERN = r"^crd_[0-9A-Za-z_]{1,40}$"
+
+
+class CardInput(WireModel):
+    name: str = Field(min_length=1, max_length=60)
+    kind: InputKind = Field(
+        description="What the value is. A write tool's target comes from the card's one input "
+        "of the kind that tool needs, such as jira_project for jira.create_ticket."
+    )
+    what: str = Field(default="", max_length=200)
+    example: str = Field(default="", max_length=100)
+
+
+class CardBlock(WireModel):
+    say: str = Field(min_length=1, max_length=300, description="The step in plain English.")
+    tool: ToolId | None = Field(
+        description="The one tool this block uses, or None for a block that only thinks."
+    )
+
+
+def _distinct_input_names(inputs: list[CardInput]) -> list[CardInput]:
+    names = [item.name.casefold() for item in inputs]
+    if len(set(names)) < len(names):
+        raise ValueError("each input name must appear once")
+    return inputs
+
+
+class CardSpec(WireModel):
+    id: str = Field(pattern=CARD_ID_PATTERN)
+    version: int = Field(ge=1)
+    name: str = Field(min_length=2, max_length=60)
+    purpose: str = Field(min_length=1, max_length=300)
+    inputs: Annotated[list[CardInput], Field(max_length=8), AfterValidator(_distinct_input_names)]
+    blocks: Annotated[list[CardBlock], Field(min_length=1, max_length=12)]
+
+
+def _values_name_the_inputs(agent: CardToRun) -> CardToRun:
+    if set(agent.values) != {item.name for item in agent.card.inputs}:
+        raise ValueError("values must name exactly the card's inputs")
+    return agent
+
+
+class CardToRun(WireModel):
+    card: CardSpec
+    values: dict[str, str] = Field(description="One value for each of the card's inputs, by name.")
+
+
+type CheckedCardToRun = Annotated[CardToRun, AfterValidator(_values_name_the_inputs)]
+
+
+def _distinct_cards(agents: list[CardToRun]) -> list[CardToRun]:
+    ids = [agent.card.id for agent in agents]
+    if len(set(ids)) < len(ids):
+        raise ValueError("each card may run once in a task")
+    return agents
+
+
+class CardsInputs(WireModel):
+    kind: Literal["cards"] = "cards"
+    agents: Annotated[
+        list[CheckedCardToRun], Field(min_length=1, max_length=3), AfterValidator(_distinct_cards)
+    ] = Field(description="The agents the Room lead brings in, in the order they work.")
+
+
+type TaskInputs = Annotated[
+    ReleaseCheckInputs | WatchlistInputs | CardsInputs, Field(discriminator="kind")
+]
 
 
 class CarryForward(WireModel):
@@ -356,6 +428,120 @@ class ModelTestPassed(WireModel):
 type ModelTestResult = Annotated[ModelTestPassed | ModelProblem, Field(discriminator="status")]
 
 
+class ToolSpec(WireModel):
+    id: ToolId
+    kind: ToolKind
+    name: str
+    description: str
+    input_schema: dict[str, Any] = Field(
+        description="The arguments the model sends. A write tool never takes its target."
+    )
+
+
+class ToolList(WireModel):
+    tools: list[ToolSpec]
+
+
+class DraftRequest(WireModel):
+    task: str = Field(min_length=1, max_length=2000)
+    model: ModelAccess
+
+
+class DraftInput(WireModel):
+    name: str
+    kind: str
+    what: str = ""
+    example: str = ""
+
+
+class DraftBlock(WireModel):
+    say: str
+    tool: str | None
+
+
+class DraftApproval(WireModel):
+    tool: str
+    approvers: int
+    why: str = ""
+
+
+class MissingTool(WireModel):
+    need: str
+    why: str
+
+
+class CardDraft(WireModel):
+    """What the model drafted, unchecked. Tool ids and input kinds are plain text here, because
+    the platform checks the draft and shows an Operator every problem before it can be saved."""
+
+    can_do: bool
+    why_not: str | None = None
+    name: str
+    purpose: str
+    good_for: list[str] = Field(default_factory=list[str])
+    inputs: list[DraftInput] = Field(default_factory=list[DraftInput])
+    blocks: list[DraftBlock] = Field(default_factory=list[DraftBlock])
+    approvals: list[DraftApproval] = Field(default_factory=list[DraftApproval])
+    missing_tools: list[MissingTool] = Field(default_factory=list[MissingTool])
+    questions: list[str] = Field(default_factory=list[str])
+
+
+class Drafted(WireModel):
+    status: Literal["drafted"] = "drafted"
+    draft: CardDraft
+
+
+type DraftResult = Annotated[Drafted | ModelProblem, Field(discriminator="status")]
+
+
+class LibraryInput(WireModel):
+    name: str
+    kind: InputKind
+
+
+class LibraryCard(WireModel):
+    card_id: str = Field(pattern=CARD_ID_PATTERN)
+    name: str
+    purpose: str
+    good_for: list[str] = Field(default_factory=list[str])
+    inputs: list[LibraryInput] = Field(default_factory=list[LibraryInput])
+    tools: list[ToolId] = Field(default_factory=list[ToolId])
+
+
+class ChooseRequest(WireModel):
+    task: str = Field(min_length=1, max_length=2000)
+    library: list[LibraryCard] = Field(max_length=50)
+    model: ModelAccess
+
+
+type ChoiceDecision = Literal["use_one", "use_several", "new_agent", "cannot_do"]
+
+
+class ChosenAgent(WireModel):
+    card_id: str
+    part: str
+    values: dict[str, str] = Field(
+        default_factory=dict[str, str],
+        description="Only values the task itself says, by input name. Never invented.",
+    )
+
+
+class Choice(WireModel):
+    decision: ChoiceDecision
+    agents: list[ChosenAgent] = Field(default_factory=list[ChosenAgent], max_length=3)
+    new_agent: str | None = None
+    reason: str
+    questions: list[str] = Field(default_factory=list[str])
+
+
+class Chosen(WireModel):
+    status: Literal["chosen"] = "chosen"
+    choice: Choice
+
+
+type ChooseResult = Annotated[Chosen | ModelProblem, Field(discriminator="status")]
+
+
 class AgentCard(WireModel):
     id: str
     display: str
@@ -380,3 +566,8 @@ class AgentApiSchema(WireModel):
     model_connect_result: ConnectResult
     model_test_request: ModelAccess
     model_test_result: ModelTestResult
+    tool_list: ToolList
+    card_draft_request: DraftRequest
+    card_draft_result: DraftResult
+    room_choose_request: ChooseRequest
+    room_choose_result: ChooseResult

@@ -34,7 +34,47 @@ class WatchlistInputs(WireModel):
     software: list[SoftwareToCheck]
 
 
-type TaskInputs = Annotated[ReleaseCheckInputs | WatchlistInputs, Field(discriminator="kind")]
+type ToolId = Literal[
+    "github.read_releases", "jira.search", "jira.read_ticket", "jira.create_ticket"
+]
+type ToolKind = Literal["read", "write"]
+type InputKind = Literal["github_repo", "jira_project", "text"]
+
+
+class CardInput(WireModel):
+    name: str
+    kind: InputKind
+    what: str = ""
+    example: str = ""
+
+
+class CardBlock(WireModel):
+    say: str
+    tool: ToolId | None
+
+
+class CardSpec(WireModel):
+    id: str
+    version: int
+    name: str
+    purpose: str
+    inputs: list[CardInput]
+    blocks: list[CardBlock]
+
+
+class CardToRun(WireModel):
+    card: CardSpec
+    values: dict[str, str]
+
+
+class CardsInputs(WireModel):
+    kind: Literal["cards"] = "cards"
+    agents: list[CardToRun]
+
+
+type TaskInputs = Annotated[
+    ReleaseCheckInputs | WatchlistInputs | CardsInputs, Field(discriminator="kind")
+]
 
 
 class CarryForward(WireModel):
@@ -176,6 +216,112 @@ class ModelTestPassed(WireModel):
 type ModelTestResult = Annotated[ModelTestPassed | ModelProblem, Field(discriminator="status")]
 
 model_test_result_adapter: TypeAdapter[ModelTestResult] = TypeAdapter(ModelTestResult)
+
+
+class ToolSpec(WireModel):
+    id: ToolId
+    kind: ToolKind
+    name: str
+    description: str
+    input_schema: dict[str, Any]
+
+
+class ToolList(WireModel):
+    tools: list[ToolSpec]
+
+
+class DraftRequest(WireModel):
+    task: str
+    model: ModelAccess
+
+
+class DraftInput(WireModel):
+    name: str
+    kind: str
+    what: str = ""
+    example: str = ""
+
+
+class DraftBlock(WireModel):
+    say: str
+    tool: str | None
+
+
+class DraftApproval(WireModel):
+    tool: str
+    approvers: int
+    why: str = ""
+
+
+class MissingTool(WireModel):
+    need: str
+    why: str
+
+
+class CardDraft(WireModel):
+    can_do: bool
+    why_not: str | None = None
+    name: str
+    purpose: str
+    good_for: list[str] = Field(default_factory=list[str])
+    inputs: list[DraftInput] = Field(default_factory=list[DraftInput])
+    blocks: list[DraftBlock] = Field(default_factory=list[DraftBlock])
+    approvals: list[DraftApproval] = Field(default_factory=list[DraftApproval])
+    missing_tools: list[MissingTool] = Field(default_factory=list[MissingTool])
+    questions: list[str] = Field(default_factory=list[str])
+
+
+class Drafted(WireModel):
+    status: Literal["drafted"] = "drafted"
+    draft: CardDraft
+
+
+type DraftResult = Annotated[Drafted | ModelProblem, Field(discriminator="status")]
+
+
+class LibraryInput(WireModel):
+    name: str
+    kind: InputKind
+
+
+class LibraryCard(WireModel):
+    card_id: str
+    name: str
+    purpose: str
+    good_for: list[str] = Field(default_factory=list[str])
+    inputs: list[LibraryInput] = Field(default_factory=list[LibraryInput])
+    tools: list[ToolId] = Field(default_factory=list[ToolId])
+
+
+class ChooseRequest(WireModel):
+    task: str
+    library: list[LibraryCard]
+    model: ModelAccess
+
+
+type ChoiceDecision = Literal["use_one", "use_several", "new_agent", "cannot_do"]
+
+
+class ChosenAgent(WireModel):
+    card_id: str
+    part: str
+    values: dict[str, str] = Field(default_factory=dict[str, str])
+
+
+class Choice(WireModel):
+    decision: ChoiceDecision
+    agents: list[ChosenAgent] = Field(default_factory=list[ChosenAgent])
+    new_agent: str | None = None
+    reason: str
+    questions: list[str] = Field(default_factory=list[str])
+
+
+class Chosen(WireModel):
+    status: Literal["chosen"] = "chosen"
+    choice: Choice
+
+
+type ChooseResult = Annotated[Chosen | ModelProblem, Field(discriminator="status")]
 
 
 class AgentCard(WireModel):

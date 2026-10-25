@@ -488,6 +488,249 @@
       "title": "Callback",
       "type": "object"
     },
+    "CardBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "say": {
+          "description": "The step in plain English.",
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Say",
+          "type": "string"
+        },
+        "tool": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The one tool this block uses, or None for a block that only thinks."
+        }
+      },
+      "required": [
+        "say",
+        "tool"
+      ],
+      "title": "CardBlock",
+      "type": "object"
+    },
+    "CardDraft": {
+      "additionalProperties": false,
+      "description": "What the model drafted, unchecked. Tool ids and input kinds are plain text here, because\nthe platform checks the draft and shows an Operator every problem before it can be saved.",
+      "properties": {
+        "approvals": {
+          "items": {
+            "$ref": "#/$defs/DraftApproval"
+          },
+          "title": "Approvals",
+          "type": "array"
+        },
+        "blocks": {
+          "items": {
+            "$ref": "#/$defs/DraftBlock"
+          },
+          "title": "Blocks",
+          "type": "array"
+        },
+        "can_do": {
+          "title": "Can Do",
+          "type": "boolean"
+        },
+        "good_for": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Good For",
+          "type": "array"
+        },
+        "inputs": {
+          "items": {
+            "$ref": "#/$defs/DraftInput"
+          },
+          "title": "Inputs",
+          "type": "array"
+        },
+        "missing_tools": {
+          "items": {
+            "$ref": "#/$defs/MissingTool"
+          },
+          "title": "Missing Tools",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "purpose": {
+          "title": "Purpose",
+          "type": "string"
+        },
+        "questions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Questions",
+          "type": "array"
+        },
+        "why_not": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Why Not"
+        }
+      },
+      "required": [
+        "can_do",
+        "name",
+        "purpose"
+      ],
+      "title": "CardDraft",
+      "type": "object"
+    },
+    "CardInput": {
+      "additionalProperties": false,
+      "properties": {
+        "example": {
+          "default": "",
+          "maxLength": 100,
+          "title": "Example",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/InputKind",
+          "description": "What the value is. A write tool's target comes from the card's one input of the kind that tool needs, such as jira_project for jira.create_ticket."
+        },
+        "name": {
+          "maxLength": 60,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "what": {
+          "default": "",
+          "maxLength": 200,
+          "title": "What",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "kind"
+      ],
+      "title": "CardInput",
+      "type": "object"
+    },
+    "CardSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "blocks": {
+          "items": {
+            "$ref": "#/$defs/CardBlock"
+          },
+          "maxItems": 12,
+          "minItems": 1,
+          "title": "Blocks",
+          "type": "array"
+        },
+        "id": {
+          "pattern": "^crd_[0-9A-Za-z_]{1,40}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "inputs": {
+          "items": {
+            "$ref": "#/$defs/CardInput"
+          },
+          "maxItems": 8,
+          "title": "Inputs",
+          "type": "array"
+        },
+        "name": {
+          "maxLength": 60,
+          "minLength": 2,
+          "title": "Name",
+          "type": "string"
+        },
+        "purpose": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Purpose",
+          "type": "string"
+        },
+        "version": {
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "name",
+        "purpose",
+        "inputs",
+        "blocks"
+      ],
+      "title": "CardSpec",
+      "type": "object"
+    },
+    "CardToRun": {
+      "additionalProperties": false,
+      "properties": {
+        "card": {
+          "$ref": "#/$defs/CardSpec"
+        },
+        "values": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "One value for each of the card's inputs, by name.",
+          "title": "Values",
+          "type": "object"
+        }
+      },
+      "required": [
+        "card",
+        "values"
+      ],
+      "title": "CardToRun",
+      "type": "object"
+    },
+    "CardsInputs": {
+      "additionalProperties": false,
+      "properties": {
+        "agents": {
+          "description": "The agents the Room lead brings in, in the order they work.",
+          "items": {
+            "$ref": "#/$defs/CheckedCardToRun"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Agents",
+          "type": "array"
+        },
+        "kind": {
+          "const": "cards",
+          "default": "cards",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "agents"
+      ],
+      "title": "CardsInputs",
+      "type": "object"
+    },
     "CarryForward": {
       "additionalProperties": false,
       "properties": {
@@ -505,6 +748,155 @@
         }
       },
       "title": "CarryForward",
+      "type": "object"
+    },
+    "CheckedCardToRun": {
+      "$ref": "#/$defs/CardToRun"
+    },
+    "Choice": {
+      "additionalProperties": false,
+      "properties": {
+        "agents": {
+          "items": {
+            "$ref": "#/$defs/ChosenAgent"
+          },
+          "maxItems": 3,
+          "title": "Agents",
+          "type": "array"
+        },
+        "decision": {
+          "$ref": "#/$defs/ChoiceDecision"
+        },
+        "new_agent": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "New Agent"
+        },
+        "questions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Questions",
+          "type": "array"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "decision",
+        "reason"
+      ],
+      "title": "Choice",
+      "type": "object"
+    },
+    "ChoiceDecision": {
+      "enum": [
+        "use_one",
+        "use_several",
+        "new_agent",
+        "cannot_do"
+      ],
+      "type": "string"
+    },
+    "ChooseRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "library": {
+          "items": {
+            "$ref": "#/$defs/LibraryCard"
+          },
+          "maxItems": 50,
+          "title": "Library",
+          "type": "array"
+        },
+        "model": {
+          "$ref": "#/$defs/ModelAccess"
+        },
+        "task": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Task",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task",
+        "library",
+        "model"
+      ],
+      "title": "ChooseRequest",
+      "type": "object"
+    },
+    "ChooseResult": {
+      "discriminator": {
+        "mapping": {
+          "chosen": "#/$defs/Chosen",
+          "problem": "#/$defs/ModelProblem"
+        },
+        "propertyName": "status"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Chosen"
+        },
+        {
+          "$ref": "#/$defs/ModelProblem"
+        }
+      ]
+    },
+    "Chosen": {
+      "additionalProperties": false,
+      "properties": {
+        "choice": {
+          "$ref": "#/$defs/Choice"
+        },
+        "status": {
+          "const": "chosen",
+          "default": "chosen",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "choice"
+      ],
+      "title": "Chosen",
+      "type": "object"
+    },
+    "ChosenAgent": {
+      "additionalProperties": false,
+      "properties": {
+        "card_id": {
+          "title": "Card Id",
+          "type": "string"
+        },
+        "part": {
+          "title": "Part",
+          "type": "string"
+        },
+        "values": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Only values the task itself says, by input name. Never invented.",
+          "title": "Values",
+          "type": "object"
+        }
+      },
+      "required": [
+        "card_id",
+        "part"
+      ],
+      "title": "ChosenAgent",
       "type": "object"
     },
     "ConnectRequest": {
@@ -574,6 +966,141 @@
         "models"
       ],
       "title": "Connected",
+      "type": "object"
+    },
+    "DraftApproval": {
+      "additionalProperties": false,
+      "properties": {
+        "approvers": {
+          "title": "Approvers",
+          "type": "integer"
+        },
+        "tool": {
+          "title": "Tool",
+          "type": "string"
+        },
+        "why": {
+          "default": "",
+          "title": "Why",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tool",
+        "approvers"
+      ],
+      "title": "DraftApproval",
+      "type": "object"
+    },
+    "DraftBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "say": {
+          "title": "Say",
+          "type": "string"
+        },
+        "tool": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Tool"
+        }
+      },
+      "required": [
+        "say",
+        "tool"
+      ],
+      "title": "DraftBlock",
+      "type": "object"
+    },
+    "DraftInput": {
+      "additionalProperties": false,
+      "properties": {
+        "example": {
+          "default": "",
+          "title": "Example",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "what": {
+          "default": "",
+          "title": "What",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "kind"
+      ],
+      "title": "DraftInput",
+      "type": "object"
+    },
+    "DraftRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "$ref": "#/$defs/ModelAccess"
+        },
+        "task": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Task",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task",
+        "model"
+      ],
+      "title": "DraftRequest",
+      "type": "object"
+    },
+    "DraftResult": {
+      "discriminator": {
+        "mapping": {
+          "drafted": "#/$defs/Drafted",
+          "problem": "#/$defs/ModelProblem"
+        },
+        "propertyName": "status"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Drafted"
+        },
+        {
+          "$ref": "#/$defs/ModelProblem"
+        }
+      ]
+    },
+    "Drafted": {
+      "additionalProperties": false,
+      "properties": {
+        "draft": {
+          "$ref": "#/$defs/CardDraft"
+        },
+        "status": {
+          "const": "drafted",
+          "default": "drafted",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "draft"
+      ],
+      "title": "Drafted",
       "type": "object"
     },
     "Finding": {
@@ -675,6 +1202,97 @@
         "ref"
       ],
       "title": "GithubSource",
+      "type": "object"
+    },
+    "InputKind": {
+      "enum": [
+        "github_repo",
+        "jira_project",
+        "text"
+      ],
+      "type": "string"
+    },
+    "LibraryCard": {
+      "additionalProperties": false,
+      "properties": {
+        "card_id": {
+          "pattern": "^crd_[0-9A-Za-z_]{1,40}$",
+          "title": "Card Id",
+          "type": "string"
+        },
+        "good_for": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Good For",
+          "type": "array"
+        },
+        "inputs": {
+          "items": {
+            "$ref": "#/$defs/LibraryInput"
+          },
+          "title": "Inputs",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "purpose": {
+          "title": "Purpose",
+          "type": "string"
+        },
+        "tools": {
+          "items": {
+            "$ref": "#/$defs/ToolId"
+          },
+          "title": "Tools",
+          "type": "array"
+        }
+      },
+      "required": [
+        "card_id",
+        "name",
+        "purpose"
+      ],
+      "title": "LibraryCard",
+      "type": "object"
+    },
+    "LibraryInput": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/InputKind"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "kind"
+      ],
+      "title": "LibraryInput",
+      "type": "object"
+    },
+    "MissingTool": {
+      "additionalProperties": false,
+      "properties": {
+        "need": {
+          "title": "Need",
+          "type": "string"
+        },
+        "why": {
+          "title": "Why",
+          "type": "string"
+        }
+      },
+      "required": [
+        "need",
+        "why"
+      ],
+      "title": "MissingTool",
       "type": "object"
     },
     "ModelAccess": {
@@ -1027,6 +1645,7 @@
     "TaskInputs": {
       "discriminator": {
         "mapping": {
+          "cards": "#/$defs/CardsInputs",
           "release_check": "#/$defs/ReleaseCheckInputs",
           "watchlist": "#/$defs/WatchlistInputs"
         },
@@ -1038,6 +1657,9 @@
         },
         {
           "$ref": "#/$defs/WatchlistInputs"
+        },
+        {
+          "$ref": "#/$defs/CardsInputs"
         }
       ]
     },
@@ -1148,6 +1770,73 @@
         }
       ]
     },
+    "ToolId": {
+      "enum": [
+        "github.read_releases",
+        "jira.search",
+        "jira.read_ticket",
+        "jira.create_ticket"
+      ],
+      "type": "string"
+    },
+    "ToolKind": {
+      "enum": [
+        "read",
+        "write"
+      ],
+      "type": "string"
+    },
+    "ToolList": {
+      "additionalProperties": false,
+      "properties": {
+        "tools": {
+          "items": {
+            "$ref": "#/$defs/ToolSpec"
+          },
+          "title": "Tools",
+          "type": "array"
+        }
+      },
+      "required": [
+        "tools"
+      ],
+      "title": "ToolList",
+      "type": "object"
+    },
+    "ToolSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "id": {
+          "$ref": "#/$defs/ToolId"
+        },
+        "input_schema": {
+          "additionalProperties": true,
+          "description": "The arguments the model sends. A write tool never takes its target.",
+          "title": "Input Schema",
+          "type": "object"
+        },
+        "kind": {
+          "$ref": "#/$defs/ToolKind"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "name",
+        "description",
+        "input_schema"
+      ],
+      "title": "ToolSpec",
+      "type": "object"
+    },
     "WatchlistInputs": {
       "additionalProperties": false,
       "properties": {
@@ -1186,6 +1875,12 @@
     "callback": {
       "$ref": "#/$defs/AgentEventPost"
     },
+    "card_draft_request": {
+      "$ref": "#/$defs/DraftRequest"
+    },
+    "card_draft_result": {
+      "$ref": "#/$defs/DraftResult"
+    },
     "model_connect_request": {
       "$ref": "#/$defs/ConnectRequest"
     },
@@ -1198,11 +1893,20 @@
     "model_test_result": {
       "$ref": "#/$defs/ModelTestResult"
     },
+    "room_choose_request": {
+      "$ref": "#/$defs/ChooseRequest"
+    },
+    "room_choose_result": {
+      "$ref": "#/$defs/ChooseResult"
+    },
     "task_request": {
       "$ref": "#/$defs/TaskRequest"
     },
     "task_result": {
       "$ref": "#/$defs/TaskResult"
+    },
+    "tool_list": {
+      "$ref": "#/$defs/ToolList"
     }
   },
   "required": [
@@ -1213,7 +1917,12 @@
     "model_connect_request",
     "model_connect_result",
     "model_test_request",
-    "model_test_result"
+    "model_test_result",
+    "tool_list",
+    "card_draft_request",
+    "card_draft_result",
+    "room_choose_request",
+    "room_choose_result"
   ],
   "title": "AgentApiSchema",
   "type": "object"
