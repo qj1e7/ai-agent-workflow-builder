@@ -19,7 +19,7 @@ test('a GitHub outage stops the run, the AI troubleshooter explains it, and a re
   await page.goto('/')
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
 
-  const runId = await runExampleFromBuilder(page, info, 'failure')
+  const runId = await runExampleFromBuilder(page, info, backend, 'failure')
 
   const failed = await backend.waitForState(runId, ['failed'])
   expect(failed.reason, 'the agent could not read GitHub').toBe('AgentError')

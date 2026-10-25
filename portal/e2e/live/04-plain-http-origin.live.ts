@@ -12,7 +12,7 @@ test('run now works from a plain HTTP origin that is not localhost', async ({ pa
   expect(await page.evaluate(() => window.isSecureContext), `${PLAIN_HTTP_URL} is not a secure context`).toBe(false)
   expect(await page.evaluate(() => typeof crypto.randomUUID), 'the browser has no crypto.randomUUID here').toBe('undefined')
 
-  const runId = await runExampleFromBuilder(page, info, 'plain-http')
+  const runId = await runExampleFromBuilder(page, info, backend, 'plain-http')
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
   await shot(page, info, 'plain-http-04-run-page')
 
