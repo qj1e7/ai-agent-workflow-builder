@@ -68,6 +68,11 @@ SAYING_LENGTH: Final = 80
 
 GITHUB_FAILED = "GitHub could not be read."
 JIRA_OFF = "Jira is not connected."
+NO_PROJECT = "This agent has no Jira project, so it cannot read Jira."
+
+
+def _only_projects(projects: Sequence[str]) -> str:
+    return f"You can only read the Jira project on your card: {', '.join(projects)}"
 
 
 def cut(text: str, length: int) -> str:
@@ -256,6 +261,10 @@ class _AgentRun:
         self._ref = agent_ref(agent)
         self._tools = tools_of(agent)
         self._offered = {tool.model_name: tool for tool in self._tools}
+        # Jira reads stay inside the projects the staff member gave this agent.
+        self._projects = [
+            agent.values[item.name] for item in agent.card.inputs if item.kind == "jira_project"
+        ]
         self._graph = self._build()
 
     def go(self) -> AgentReport | TaskError:
@@ -405,6 +414,12 @@ class _AgentRun:
 
     def _jira_search(self, tool: Tool, args: JiraSearchArguments, write: Emit) -> str:
         jira = self._task.jira
+        if not self._projects:
+            return _error(NO_PROJECT)
+        if len(self._projects) == 1:
+            args = args.model_copy(update={"project": self._projects[0]})
+        elif args.project not in self._projects:
+            return _error(_only_projects(self._projects))
         write(self._started(tool, f"searches Jira project {args.project}."))
         if jira is None:
             return self._read_failed(tool, "could not search Jira.", JIRA_OFF, write)
@@ -436,6 +451,10 @@ class _AgentRun:
 
     def _jira_read(self, tool: Tool, args: JiraReadArguments, write: Emit) -> str:
         jira = self._task.jira
+        if not self._projects:
+            return _error(NO_PROJECT)
+        if args.key.rsplit("-", 1)[0] not in self._projects:
+            return _error(_only_projects(self._projects))
         write(self._started(tool, f"reads ticket {args.key}."))
         if jira is None:
             return self._read_failed(tool, f"could not read ticket {args.key}.", JIRA_OFF, write)

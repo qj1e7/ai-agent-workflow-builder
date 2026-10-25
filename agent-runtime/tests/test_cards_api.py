@@ -35,7 +35,10 @@ def make_app(chat: ScriptedChat | None, posts: Posts | None = None) -> TestClien
     runner = CardRunner(FakeSource(langgraph_tags()[:8]), lambda _: FakeJira(), sleep=clock.sleep)
 
     def chat_source(access: ModelAccess | None) -> ChatFor | None:
-        return (lambda timeout: chat) if chat is not None and access is not None else None
+        if chat is None or access is None:
+            return None
+        model = chat
+        return lambda timeout: model
 
     runtime = Runtime(
         checker=checker,

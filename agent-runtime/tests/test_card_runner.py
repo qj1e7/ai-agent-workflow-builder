@@ -414,3 +414,39 @@ def test_the_key_is_not_in_any_prompt_or_event():
     result = room.run()
     assert KEY not in json.dumps(result.model_dump(mode="json"))
     assert all(KEY not in str(m.content) for call_ in room.chat.calls for m in call_)
+
+
+def test_jira_search_is_kept_to_the_cards_project_whatever_the_model_names():
+    jira = FakeJira()
+    chat = ScriptedChat(
+        script=[asks(call("jira_search", {"project": "ADMIN"}, "t1")), AIMessage("Done.")]
+    )
+    Room(chat, jira=jira, request=request_with("jira.search")).run()
+    assert jira.searches == [("MOCK", None, None, None)]
+
+
+def test_a_ticket_from_another_project_is_refused_without_calling_jira():
+    jira = FakeJira()
+    chat = ScriptedChat(
+        script=[asks(call("jira_read_ticket", {"key": "ADMIN-1"}, "t1")), AIMessage("No.")]
+    )
+    Room(chat, jira=jira, request=request_with("jira.read_ticket")).run()
+    assert jira.reads == []
+    assert "only read the Jira project on your card: MOCK" in tool_answers(chat)[0]["error"]
+
+
+def test_a_card_with_no_jira_project_cannot_read_jira():
+    jira = FakeJira()
+    card = release_checker_card()
+    card = card.model_copy(update={"inputs": card.inputs[:1], "blocks": card.blocks[1:2]})
+    inputs = CardsInputs(agents=[CardToRun(card=card, values={"GitHub repository": REPO})])
+    request = card_request("run_01JD1").model_copy(update={"inputs": inputs})
+    chat = ScriptedChat(
+        script=[
+            asks(call("jira_search", {"project": "MOCK"}, "t1")),
+            AIMessage("No."),
+        ]
+    )
+    Room(chat, jira=jira, request=request).run()
+    assert jira.searches == []
+    assert "no Jira project" in tool_answers(chat)[0]["error"]
