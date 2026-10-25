@@ -16,13 +16,15 @@ from langchain_core.language_models import BaseChatModel
 from pydantic import BaseModel, Field
 
 from evals.checks import Check
+from evals.choose import CHOOSE
+from evals.draft import DRAFT
 from evals.explain import EXPLAIN
 from evals.jobs import Answer, Case, Job
 from evals.match import MATCH
 from evals.providers import PROVIDERS, Env, NotRun, Target, plan
 from evals.summarise import SUMMARISE
 
-JOBS: tuple[Job[Any], ...] = (SUMMARISE, EXPLAIN, MATCH)
+JOBS: tuple[Job[Any], ...] = (SUMMARISE, EXPLAIN, MATCH, DRAFT, CHOOSE)
 PRICING = Path(__file__).parent / "pricing.json"
 # CI keeps the endpoints as secrets too. A URL can hold a password or a private host name.
 URL_ENVS = ("AZURE_OPENAI_ENDPOINT", "OLLAMA_BASE_URL")
