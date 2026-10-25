@@ -211,6 +211,8 @@ export class DemoWatchlist {
       params: { ticket_project: this.ticketProject },
       owner: this.owner,
       created_at: this.createdAt,
+      plan: fixtures.templates.find((template) => template.key === 'software_watchlist')?.blocks ?? [],
+      agents: [],
     }
   }
 

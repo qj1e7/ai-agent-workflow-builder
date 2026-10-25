@@ -12,7 +12,7 @@ from platform_api.builder.cards import (
     tool_list,
 )
 from platform_api.builder.models import (
-    ApprovalView,
+    CardApprovalView,
     CardBlock,
     CardDefinition,
     CardInput,
@@ -45,7 +45,7 @@ def problems_of(card: CardDefinition) -> dict[str | None, str]:
 def test_a_good_card_has_no_problems_and_gets_the_rules_approval():
     checked = check_card(definition())
     assert checked.problems == []
-    assert checked.approvals == [ApprovalView(tool="jira.create_ticket", approvers=1)]
+    assert checked.approvals == [CardApprovalView(tool="jira.create_ticket", approvers=1)]
     assert checked.card.approvals == checked.approvals
 
 
@@ -73,21 +73,21 @@ def test_the_starter_card_reads_as_the_spec_says():
         "jira.search",
         "jira.create_ticket",
     ]
-    assert RELEASE_CHECKER.approvals == [ApprovalView(tool="jira.create_ticket", approvers=1)]
+    assert RELEASE_CHECKER.approvals == [CardApprovalView(tool="jira.create_ticket", approvers=1)]
 
 
 @pytest.mark.parametrize("asked", [0, 1, -3])
 def test_an_approval_below_the_minimum_is_raised_to_it(asked: int):
-    card = definition(approvals=[ApprovalView(tool="jira.create_ticket", approvers=asked)])
-    assert check_card(card).approvals == [ApprovalView(tool="jira.create_ticket", approvers=1)]
+    card = definition(approvals=[CardApprovalView(tool="jira.create_ticket", approvers=asked)])
+    assert check_card(card).approvals == [CardApprovalView(tool="jira.create_ticket", approvers=1)]
 
 
 @pytest.mark.parametrize(("asked", "got"), [(2, 2), (3, 2), (50, 2)])
 def test_an_approval_above_two_is_capped(asked: int, got: int):
-    card = definition(approvals=[ApprovalView(tool="jira.create_ticket", approvers=asked)])
+    card = definition(approvals=[CardApprovalView(tool="jira.create_ticket", approvers=asked)])
     checked = check_card(card)
     assert checked.problems == []
-    assert checked.approvals == [ApprovalView(tool="jira.create_ticket", approvers=got)]
+    assert checked.approvals == [CardApprovalView(tool="jira.create_ticket", approvers=got)]
 
 
 def test_approvals_for_tools_the_blocks_do_not_use_are_dropped():
@@ -95,9 +95,9 @@ def test_approvals_for_tools_the_blocks_do_not_use_are_dropped():
         blocks=[CardBlock(say="Read.", tool="github.read_releases")],
         inputs=[REPO],
         approvals=[
-            ApprovalView(tool="jira.create_ticket", approvers=2),
-            ApprovalView(tool="gitlab.remove_member", approvers=2),
-            ApprovalView(tool="github.read_releases", approvers=2),
+            CardApprovalView(tool="jira.create_ticket", approvers=2),
+            CardApprovalView(tool="gitlab.remove_member", approvers=2),
+            CardApprovalView(tool="github.read_releases", approvers=2),
         ],
     )
     checked = check_card(card)
@@ -107,11 +107,11 @@ def test_approvals_for_tools_the_blocks_do_not_use_are_dropped():
 def test_the_largest_of_repeated_asks_wins():
     card = definition(
         approvals=[
-            ApprovalView(tool="jira.create_ticket", approvers=2),
-            ApprovalView(tool="jira.create_ticket", approvers=1),
+            CardApprovalView(tool="jira.create_ticket", approvers=2),
+            CardApprovalView(tool="jira.create_ticket", approvers=1),
         ]
     )
-    assert check_card(card).approvals == [ApprovalView(tool="jira.create_ticket", approvers=2)]
+    assert check_card(card).approvals == [CardApprovalView(tool="jira.create_ticket", approvers=2)]
 
 
 def test_a_tool_that_is_not_on_the_list_is_a_problem():

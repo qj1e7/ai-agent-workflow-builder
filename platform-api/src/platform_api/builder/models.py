@@ -209,7 +209,7 @@ class CardBlock(WireModel):
     tool: str | None = Field(default=None, description="A tool id from GET /tools, or null.")
 
 
-class ApprovalView(WireModel):
+class CardApprovalView(WireModel):
     tool: str
     approvers: int
 
@@ -222,8 +222,8 @@ class CardDefinition(WireModel):
     good_for: list[str] = Field(default_factory=list[str])
     inputs: list[CardInput] = Field(default_factory=list[CardInput])
     blocks: list[CardBlock] = Field(default_factory=list[CardBlock])
-    approvals: list[ApprovalView] = Field(
-        default_factory=list[ApprovalView],
+    approvals: list[CardApprovalView] = Field(
+        default_factory=list[CardApprovalView],
         description="Approvers asked for each write tool. The platform raises them to the "
         "tool's minimum and drops tools the blocks do not use.",
     )
@@ -236,7 +236,7 @@ class CardProblem(WireModel):
 
 class CardChecked(WireModel):
     card: CardDefinition = Field(description="The definition cleaned up, as it would be saved.")
-    approvals: list[ApprovalView] = Field(
+    approvals: list[CardApprovalView] = Field(
         description="The approvals that apply: one for each write tool the blocks use."
     )
     problems: list[CardProblem]
@@ -269,7 +269,7 @@ class CardView(WireModel):
     good_for: list[str]
     inputs: list[CardInputView]
     blocks: list[CardBlockView]
-    approvals: list[ApprovalView]
+    approvals: list[CardApprovalView]
     tools: list[ToolId] = Field(description="The tools the blocks use, each once, in order.")
 
 
@@ -303,7 +303,7 @@ class UseSaved(WireModel):
 class NewAgent(WireModel):
     decision: Literal["new_agent"] = "new_agent"
     draft: CardDefinition
-    approvals: list[ApprovalView]
+    approvals: list[CardApprovalView]
     problems: list[CardProblem]
     reason: str
     missing_tools: list[MissingTool]

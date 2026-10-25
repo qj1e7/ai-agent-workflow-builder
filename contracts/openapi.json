@@ -1335,21 +1335,58 @@
         "title": "ApprovalStepView",
         "type": "object"
       },
-      "ApprovalView-Input": {
+      "ApprovalView": {
         "additionalProperties": false,
         "properties": {
-          "approvers": {
-            "title": "Approvers",
-            "type": "integer"
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/WriteActionView"
+            },
+            "title": "Actions",
+            "type": "array"
           },
-          "tool": {
-            "title": "Tool",
+          "approval_id": {
+            "title": "Approval Id",
             "type": "string"
+          },
+          "digest": {
+            "title": "Digest",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/ApprovalStepView"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "why_not": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Refusal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "you_can_decide": {
+            "title": "You Can Decide",
+            "type": "boolean"
           }
         },
         "required": [
-          "tool",
-          "approvers"
+          "approval_id",
+          "run_id",
+          "digest",
+          "actions",
+          "steps",
+          "you_can_decide",
+          "why_not"
         ],
         "title": "ApprovalView",
         "type": "object"
@@ -1517,6 +1554,25 @@
         "title": "CannotDo",
         "type": "object"
       },
+      "CardApprovalView": {
+        "additionalProperties": false,
+        "properties": {
+          "approvers": {
+            "title": "Approvers",
+            "type": "integer"
+          },
+          "tool": {
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tool",
+          "approvers"
+        ],
+        "title": "CardApprovalView",
+        "type": "object"
+      },
       "CardBlock": {
         "additionalProperties": false,
         "properties": {
@@ -1574,13 +1630,13 @@
           "approvals": {
             "description": "The approvals that apply: one for each write tool the blocks use.",
             "items": {
-              "$ref": "#/components/schemas/platform_api__builder__models__ApprovalView"
+              "$ref": "#/components/schemas/CardApprovalView"
             },
             "title": "Approvals",
             "type": "array"
           },
           "card": {
-            "$ref": "#/components/schemas/CardDefinition-Output",
+            "$ref": "#/components/schemas/CardDefinition",
             "description": "The definition cleaned up, as it would be saved."
           },
           "problems": {
@@ -1599,63 +1655,14 @@
         "title": "CardChecked",
         "type": "object"
       },
-      "CardDefinition-Input": {
+      "CardDefinition": {
         "additionalProperties": false,
         "description": "What an Operator or the Room lead writes. Nothing here is trusted until it is checked.",
         "properties": {
           "approvals": {
             "description": "Approvers asked for each write tool. The platform raises them to the tool's minimum and drops tools the blocks do not use.",
             "items": {
-              "$ref": "#/components/schemas/ApprovalView-Input"
-            },
-            "title": "Approvals",
-            "type": "array"
-          },
-          "blocks": {
-            "items": {
-              "$ref": "#/components/schemas/CardBlock"
-            },
-            "title": "Blocks",
-            "type": "array"
-          },
-          "good_for": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Good For",
-            "type": "array"
-          },
-          "inputs": {
-            "items": {
-              "$ref": "#/components/schemas/CardInput"
-            },
-            "title": "Inputs",
-            "type": "array"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "purpose": {
-            "title": "Purpose",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "purpose"
-        ],
-        "title": "CardDefinition",
-        "type": "object"
-      },
-      "CardDefinition-Output": {
-        "additionalProperties": false,
-        "description": "What an Operator or the Room lead writes. Nothing here is trusted until it is checked.",
-        "properties": {
-          "approvals": {
-            "description": "Approvers asked for each write tool. The platform raises them to the tool's minimum and drops tools the blocks do not use.",
-            "items": {
-              "$ref": "#/components/schemas/platform_api__builder__models__ApprovalView"
+              "$ref": "#/components/schemas/CardApprovalView"
             },
             "title": "Approvals",
             "type": "array"
@@ -1821,7 +1828,7 @@
         "properties": {
           "approvals": {
             "items": {
-              "$ref": "#/components/schemas/platform_api__builder__models__ApprovalView"
+              "$ref": "#/components/schemas/CardApprovalView"
             },
             "title": "Approvals",
             "type": "array"
@@ -2865,7 +2872,7 @@
         "properties": {
           "approvals": {
             "items": {
-              "$ref": "#/components/schemas/platform_api__builder__models__ApprovalView"
+              "$ref": "#/components/schemas/CardApprovalView"
             },
             "title": "Approvals",
             "type": "array"
@@ -2877,7 +2884,7 @@
             "type": "string"
           },
           "draft": {
-            "$ref": "#/components/schemas/CardDefinition-Output"
+            "$ref": "#/components/schemas/CardDefinition"
           },
           "missing_tools": {
             "items": {
@@ -5744,81 +5751,6 @@
         ],
         "title": "WriteDoneView",
         "type": "object"
-      },
-      "platform_api__builder__models__ApprovalView": {
-        "additionalProperties": false,
-        "properties": {
-          "approvers": {
-            "title": "Approvers",
-            "type": "integer"
-          },
-          "tool": {
-            "title": "Tool",
-            "type": "string"
-          }
-        },
-        "required": [
-          "tool",
-          "approvers"
-        ],
-        "title": "ApprovalView",
-        "type": "object"
-      },
-      "platform_api__orchestration__http__ApprovalView": {
-        "additionalProperties": false,
-        "properties": {
-          "actions": {
-            "items": {
-              "$ref": "#/components/schemas/WriteActionView"
-            },
-            "title": "Actions",
-            "type": "array"
-          },
-          "approval_id": {
-            "title": "Approval Id",
-            "type": "string"
-          },
-          "digest": {
-            "title": "Digest",
-            "type": "string"
-          },
-          "run_id": {
-            "title": "Run Id",
-            "type": "string"
-          },
-          "steps": {
-            "items": {
-              "$ref": "#/components/schemas/ApprovalStepView"
-            },
-            "title": "Steps",
-            "type": "array"
-          },
-          "why_not": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Refusal"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "you_can_decide": {
-            "title": "You Can Decide",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "approval_id",
-          "run_id",
-          "digest",
-          "actions",
-          "steps",
-          "you_can_decide",
-          "why_not"
-        ],
-        "title": "ApprovalView",
-        "type": "object"
       }
     },
     "securitySchemes": {
@@ -5896,7 +5828,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CardDefinition-Input"
+                "$ref": "#/components/schemas/CardDefinition"
               }
             }
           },
@@ -5976,7 +5908,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CardDefinition-Input"
+                "$ref": "#/components/schemas/CardDefinition"
               }
             }
           },
@@ -6135,7 +6067,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CardDefinition-Input"
+                "$ref": "#/components/schemas/CardDefinition"
               }
             }
           },
@@ -6325,7 +6257,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/platform_api__orchestration__http__ApprovalView"
+                  "$ref": "#/components/schemas/ApprovalView"
                 }
               }
             },

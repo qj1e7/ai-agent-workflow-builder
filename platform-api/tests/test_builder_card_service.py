@@ -10,7 +10,7 @@ from platform_api.app import create_app
 from platform_api.builder import Builder, Watchlist
 from platform_api.builder.cards import RELEASE_CHECKER
 from platform_api.builder.models import (
-    ApprovalView,
+    CardApprovalView,
     CardBlock,
     CardDefinition,
     CardInput,
@@ -110,7 +110,7 @@ def reader(name: str = "Ticket reader", approvers: int = 1) -> CardDefinition:
         purpose="Raises a ticket.",
         inputs=[CardInput(name="Where", kind="jira_project", example="MOCK")],
         blocks=[CardBlock(say="Raise a ticket.", tool="jira.create_ticket")],
-        approvals=[ApprovalView(tool="jira.create_ticket", approvers=approvers)],
+        approvals=[CardApprovalView(tool="jira.create_ticket", approvers=approvers)],
     )
 
 
@@ -150,7 +150,7 @@ async def test_a_saved_card_reads_back_and_a_card_with_problems_is_not_saved(bui
 
 async def test_the_rules_raise_the_saved_approvals(builder: Builder):
     saved = await builder.create_card(ALICE, reader(approvers=0))
-    assert saved.approvals == [ApprovalView(tool="jira.create_ticket", approvers=1)]  # pyright: ignore[reportAttributeAccessIssue]
+    assert saved.approvals == [CardApprovalView(tool="jira.create_ticket", approvers=1)]  # pyright: ignore[reportAttributeAccessIssue]
 
 
 async def test_an_edit_is_the_next_version_and_a_use_case_keeps_the_one_it_was_made_with(

@@ -10,8 +10,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 
 from platform_api.builder.models import (
-    ApprovalView,
     BlockView,
+    CardApprovalView,
     CardBlock,
     CardBlockView,
     CardChecked,
@@ -182,7 +182,7 @@ def check_card(card: CardDefinition) -> CardChecked:
     for item in card.approvals:
         requested[item.tool] = max(requested.get(item.tool, 0), item.approvers)
     approvals = [
-        ApprovalView(
+        CardApprovalView(
             tool=rule.id,
             approvers=min(MAX_APPROVERS, max(rule.min_approvers or 1, requested.get(rule.id, 0))),
         )
@@ -346,7 +346,7 @@ RELEASE_CHECKER = card_view(
                 tool="jira.create_ticket",
             ),
         ],
-        approvals=[ApprovalView(tool="jira.create_ticket", approvers=1)],
+        approvals=[CardApprovalView(tool="jira.create_ticket", approvers=1)],
     ),
 )
 STARTER_CARDS: tuple[CardView, ...] = (RELEASE_CHECKER,)

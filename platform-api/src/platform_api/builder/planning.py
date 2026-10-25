@@ -10,8 +10,8 @@ from typing import Protocol
 
 from platform_api.builder.cards import check_card, library_card
 from platform_api.builder.models import (
-    ApprovalView,
     CannotDo,
+    CardApprovalView,
     CardBlock,
     CardDefinition,
     CardInput,
@@ -138,7 +138,7 @@ def _definition(draft: CardDraft) -> CardDefinition:
             for i in draft.inputs
         ],
         blocks=[CardBlock(say=b.say, tool=b.tool) for b in draft.blocks],
-        approvals=[ApprovalView(tool=a.tool, approvers=a.approvers) for a in draft.approvals],
+        approvals=[CardApprovalView(tool=a.tool, approvers=a.approvers) for a in draft.approvals],
     )
 
 

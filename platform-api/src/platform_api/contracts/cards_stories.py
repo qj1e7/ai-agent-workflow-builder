@@ -16,8 +16,8 @@ from platform_api.builder.cards import (
     tool_list,
 )
 from platform_api.builder.models import (
-    ApprovalView,
     CannotDo,
+    CardApprovalView,
     CardBlock,
     CardDefinition,
     CardInput,
@@ -136,7 +136,7 @@ DRAFT = CardDefinition(
         CardBlock(say="Find the tickets finished this week.", tool="jira.search"),
         CardBlock(say="Propose a ticket that lists them.", tool="jira.create_ticket"),
     ],
-    approvals=[ApprovalView(tool="jira.create_ticket", approvers=1)],
+    approvals=[CardApprovalView(tool="jira.create_ticket", approvers=1)],
 )
 CHECKED_DRAFT = check_card(DRAFT)
 BROKEN = DRAFT.model_copy(update={"inputs": [], "name": "Forge reporter"})
