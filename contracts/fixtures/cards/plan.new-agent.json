@@ -1,0 +1,53 @@
+{
+  "decision": "new_agent",
+  "draft": {
+    "name": "Forge reporter",
+    "purpose": "Raises a ticket that lists what was finished in a Jira project.",
+    "good_for": [
+      "Raise a ticket listing what we finished this week"
+    ],
+    "inputs": [],
+    "blocks": [
+      {
+        "say": "Find the tickets finished this week.",
+        "tool": "jira.search"
+      },
+      {
+        "say": "Propose a ticket that lists them.",
+        "tool": "jira.create_ticket"
+      }
+    ],
+    "approvals": [
+      {
+        "tool": "jira.create_ticket",
+        "approvers": 1
+      }
+    ]
+  },
+  "approvals": [
+    {
+      "tool": "jira.create_ticket",
+      "approvers": 1
+    }
+  ],
+  "problems": [
+    {
+      "field": "inputs",
+      "message": "Search Jira, Create a Jira ticket needs one input of kind jira_project, so the agent knows which project it may read. Add one."
+    },
+    {
+      "field": "name",
+      "message": "Forge is an old name that confused the sponsor. Use plain words."
+    }
+  ],
+  "reason": "No saved agent raises tickets from finished work.",
+  "missing_tools": [
+    {
+      "need": "Post in Teams",
+      "why": "To share the list with the team."
+    }
+  ],
+  "questions": [
+    "Which Jira project?"
+  ]
+}

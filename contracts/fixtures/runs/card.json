@@ -1,0 +1,477 @@
+[
+  {
+    "run_id": "run_01JD1",
+    "seq": 1,
+    "ts": "2026-11-05T02:14:00Z",
+    "actor": {
+      "kind": "user",
+      "id": "alice",
+      "display": "Alice"
+    },
+    "summary": "Alice started a run of LangGraph release check.",
+    "kind": "run_created",
+    "data": {
+      "use_case_id": "uc_01JD0",
+      "use_case_version": 1,
+      "started_by": "alice",
+      "trigger": "person"
+    }
+  },
+  {
+    "run_id": "run_01JD1",
+    "seq": 2,
+    "ts": "2026-11-05T02:14:00.180000Z",
+    "actor": {
+      "kind": "platform",
+      "id": "platform",
+      "display": "Platform"
+    },
+    "summary": "The work leg was queued for the workflow engine (attempt 1).",
+    "kind": "leg_dispatched",
+    "data": {
+      "leg": "work",
+      "attempt": 1
+    }
+  },
+  {
+    "run_id": "run_01JD1",
+    "seq": 3,
+    "ts": "2026-11-05T02:14:01.900000Z",
+    "actor": {
+      "kind": "workflow",
+      "id": "n8n",
+      "display": "Workflow engine"
+    },
+    "summary": "Workflow step run_agents started (n8n execution 61).",
+    "kind": "step_started",
+    "data": {
+      "step": "run_agents",
+      "n8n_execution_id": "61",
+      "try_number": 1
+    }
+  },
+  {
+    "run_id": "run_01JD1",
+    "seq": 4,
+    "ts": "2026-11-05T02:14:02.100000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "room_lead",
+      "display": "Room lead"
+    },
+    "summary": "Room lead brought in Release checker.",
+    "kind": "agent_joined",
+    "data": {
+      "agent": {
+        "id": "crd_release_checker",
+        "display": "Release checker"
+      },
+      "reason": "Checks a public GitHub repository for a new release and proposes a Jira ticket for it."
+    }
+  },
+  {
+    "run_id": "run_01JD1",
+    "seq": 5,
+    "ts": "2026-11-05T02:14:02.300000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "room_lead",
+      "display": "Room lead"
+    },
+    "summary": "Room lead asked Release checker to do its part of the task.",
+    "kind": "agent_message",
+    "data": {
+      "speaker": {
+        "id": "room_lead",
+        "display": "Room lead"
+      },
+      "addressee": {
+        "kind": "agent",
+        "id": "crd_release_checker",
+        "display": "Release checker"
+      },
+      "text": "Please run your plan with these inputs. GitHub repository: langchain-ai/langgraph; Jira project: MOCK."
+    }
+  },
+  {
+    "run_id": "run_01JD1",
+    "seq": 6,
+    "ts": "2026-11-05T02:14:03.400000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "crd_release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker reads the releases of langchain-ai/langgraph.",
+    "kind": "agent_step_started",
+    "data": {
+      "step": "github_read_releases"
+    }
+  },
+  {
+    "run_id": "run_01JD1",
+    "seq": 7,
+    "ts": "2026-11-05T02:14:04.200000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "crd_release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker read 8 releases of langchain-ai/langgraph. The newest is 1.2.16.",
+    "kind": "agent_step_finished",
+    "data": {
+      "step": "github_read_releases",
+      "result": {
+        "releases": 8,
+        "tags": [
+          "1.2.16",
+          "1.2.15",
+          "1.2.14",
+          "1.2.13",
+          "1.2.12",
+          "1.2.11",
+          "1.2.10",
+          "1.2.9"
+        ]
+      }
+    }
+  },
+  {
+    "run_id": "run_01JD1",
+    "seq": 8,
+    "ts": "2026-11-05T02:14:05.600000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "crd_release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker searches Jira project MOCK.",
+    "kind": "agent_step_started",
+    "data": {
+      "step": "jira_search"
+    }
+  },
+  {
+    "run_id": "run_01JD1",
+    "seq": 9,
+    "ts": "2026-11-05T02:14:05.900000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "crd_release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker found no tickets in MOCK.",
+    "kind": "agent_step_finished",
+    "data": {
+      "step": "jira_search",
+      "result": {
+        "count": 0,
+        "tickets": []
+      }
+    }
+  },
+  {
+    "run_id": "run_01JD1",
+    "seq": 10,
+    "ts": "2026-11-05T02:14:07.300000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "crd_release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker drafts a Jira ticket for approval: Upgrade LangGraph to 1.2.16",
+    "kind": "agent_step_started",
+    "data": {
+      "step": "jira_create_ticket"
+    }
+  },
+  {
+    "run_id": "run_01JD1",
+    "seq": 11,
+    "ts": "2026-11-05T02:14:07.310000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "crd_release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker proposed a ticket for approval: Upgrade LangGraph to 1.2.16",
+    "kind": "agent_step_finished",
+    "data": {
+      "step": "jira_create_ticket",
+      "result": {
+        "title": "Upgrade LangGraph to 1.2.16"
+      }
+    }
+  },
+  {
+    "run_id": "run_01JD1",
+    "seq": 12,
+    "ts": "2026-11-05T02:14:09Z",
+    "actor": {
+      "kind": "agent",
+      "id": "crd_release_checker",
+      "display": "Release checker"
+    },
+    "summary": "Release checker reported to the room: LangGraph 1.2.16 is the newest release and MOCK has no ticket for it, so I proposed one ticket for an Approver to check.",
+    "kind": "agent_message",
+    "data": {
+      "speaker": {
+        "id": "crd_release_checker",
+        "display": "Release checker"
+      },
+      "addressee": {
+        "kind": "room"
+      },
+      "text": "LangGraph 1.2.16 is the newest release and MOCK has no ticket for it, so I proposed one ticket for an Approver to check."
+    }
+  },
+  {
+    "run_id": "run_01JD1",
+    "seq": 13,
+    "ts": "2026-11-05T02:14:09.200000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "room_lead",
+      "display": "Room lead"
+    },
+    "summary": "Room lead agreed and will propose the ticket for approval.",
+    "kind": "agent_message",
+    "data": {
+      "speaker": {
+        "id": "room_lead",
+        "display": "Room lead"
+      },
+      "addressee": {
+        "kind": "agent",
+        "id": "crd_release_checker",
+        "display": "Release checker"
+      },
+      "text": "Agreed. I'll draft one ticket for an Approver to check."
+    }
+  },
+  {
+    "run_id": "run_01JD1",
+    "seq": 14,
+    "ts": "2026-11-05T02:14:09.800000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "room_lead",
+      "display": "Room lead"
+    },
+    "summary": "The agents proposed 1 write action: Create Jira ticket in MOCK: Upgrade LangGraph to 1.2.16.",
+    "kind": "write_action_proposed",
+    "data": {
+      "proposal_id": "prp_01JD1",
+      "digest": "sha256:b53b3327eb5db3cbdf1c7559ad4310d809633322c018fc4894a1c65c8af4164b",
+      "actions": [
+        {
+          "connector": "jira",
+          "operation": "create_ticket",
+          "line": "Create Jira ticket in MOCK: Upgrade LangGraph to 1.2.16"
+        }
+      ]
+    }
+  },
+  {
+    "run_id": "run_01JD1",
+    "seq": 15,
+    "ts": "2026-11-05T02:14:09.860000Z",
+    "actor": {
+      "kind": "workflow",
+      "id": "n8n",
+      "display": "Workflow engine"
+    },
+    "summary": "Workflow step run_agents finished: LangGraph 1.2.16 is the newest release and MOCK has no ticket for it, so I proposed one ticket for an Approver to check.",
+    "kind": "step_finished",
+    "data": {
+      "step": "run_agents",
+      "n8n_execution_id": "61",
+      "try_number": 1,
+      "outcome": "proposed",
+      "detail": "LangGraph 1.2.16 is the newest release and MOCK has no ticket for it, so I proposed one ticket for an Approver to check."
+    }
+  },
+  {
+    "run_id": "run_01JD1",
+    "seq": 16,
+    "ts": "2026-11-05T02:14:12.200000Z",
+    "actor": {
+      "kind": "workflow",
+      "id": "n8n",
+      "display": "Workflow engine"
+    },
+    "summary": "Workflow step ask_approval started (n8n execution 61).",
+    "kind": "step_started",
+    "data": {
+      "step": "ask_approval",
+      "n8n_execution_id": "61",
+      "try_number": 1
+    }
+  },
+  {
+    "run_id": "run_01JD1",
+    "seq": 17,
+    "ts": "2026-11-05T02:14:12.240000Z",
+    "actor": {
+      "kind": "platform",
+      "id": "platform",
+      "display": "Platform"
+    },
+    "summary": "Approval requested. Waiting for the Team approver.",
+    "kind": "approval_requested",
+    "data": {
+      "approval_id": "apr_01JD1",
+      "steps": [
+        {
+          "index": 0,
+          "label": "Team approver",
+          "status": "open",
+          "decided_by": null,
+          "decided_at": null
+        }
+      ],
+      "link": "/approvals/apr_01JD1"
+    }
+  },
+  {
+    "run_id": "run_01JD1",
+    "seq": 18,
+    "ts": "2026-11-05T02:14:12.260000Z",
+    "actor": {
+      "kind": "workflow",
+      "id": "n8n",
+      "display": "Workflow engine"
+    },
+    "summary": "Workflow step ask_approval finished. The work leg ends here.",
+    "kind": "step_finished",
+    "data": {
+      "step": "ask_approval",
+      "n8n_execution_id": "61",
+      "try_number": 1,
+      "outcome": "approval_opened",
+      "detail": "Approval apr_01JD1 opened"
+    }
+  },
+  {
+    "run_id": "run_01JD1",
+    "seq": 19,
+    "ts": "2026-11-05T02:14:14.600000Z",
+    "actor": {
+      "kind": "platform",
+      "id": "platform",
+      "display": "Platform"
+    },
+    "summary": "The approval request was posted to the Teams channel CODESparks Ops.",
+    "kind": "approval_announced",
+    "data": {
+      "approval_id": "apr_01JD1",
+      "channel": "CODESparks Ops",
+      "link": "/approvals/apr_01JD1"
+    }
+  },
+  {
+    "run_id": "run_01JD1",
+    "seq": 20,
+    "ts": "2026-11-05T02:21:00Z",
+    "actor": {
+      "kind": "user",
+      "id": "bob",
+      "display": "Bob"
+    },
+    "summary": "Bob approved the request (Team approver).",
+    "kind": "approval_decided",
+    "data": {
+      "approval_id": "apr_01JD1",
+      "step": 0,
+      "verdict": "approve",
+      "by": "bob"
+    }
+  },
+  {
+    "run_id": "run_01JD1",
+    "seq": 21,
+    "ts": "2026-11-05T02:21:00.160000Z",
+    "actor": {
+      "kind": "platform",
+      "id": "platform",
+      "display": "Platform"
+    },
+    "summary": "The act leg was queued for the workflow engine (attempt 1).",
+    "kind": "leg_dispatched",
+    "data": {
+      "leg": "act",
+      "attempt": 1
+    }
+  },
+  {
+    "run_id": "run_01JD1",
+    "seq": 22,
+    "ts": "2026-11-05T02:21:02.400000Z",
+    "actor": {
+      "kind": "workflow",
+      "id": "n8n",
+      "display": "Workflow engine"
+    },
+    "summary": "Workflow step write_action started (n8n execution 62).",
+    "kind": "step_started",
+    "data": {
+      "step": "write_action",
+      "n8n_execution_id": "62",
+      "try_number": 1
+    }
+  },
+  {
+    "run_id": "run_01JD1",
+    "seq": 23,
+    "ts": "2026-11-05T02:21:02.900000Z",
+    "actor": {
+      "kind": "platform",
+      "id": "platform",
+      "display": "Platform"
+    },
+    "summary": "Jira ticket MOCK-150 was created, approved by Bob.",
+    "kind": "write_action_done",
+    "data": {
+      "connector": "jira",
+      "operation": "create_ticket",
+      "external_reference": "MOCK-150",
+      "approved_by": [
+        "bob"
+      ]
+    }
+  },
+  {
+    "run_id": "run_01JD1",
+    "seq": 24,
+    "ts": "2026-11-05T02:21:02.930000Z",
+    "actor": {
+      "kind": "workflow",
+      "id": "n8n",
+      "display": "Workflow engine"
+    },
+    "summary": "Workflow step write_action finished: created MOCK-150.",
+    "kind": "step_finished",
+    "data": {
+      "step": "write_action",
+      "n8n_execution_id": "62",
+      "try_number": 1,
+      "outcome": "written",
+      "detail": "Created MOCK-150"
+    }
+  },
+  {
+    "run_id": "run_01JD1",
+    "seq": 25,
+    "ts": "2026-11-05T02:21:02.940000Z",
+    "actor": {
+      "kind": "platform",
+      "id": "platform",
+      "display": "Platform"
+    },
+    "summary": "The run succeeded. 1 write action was done.",
+    "kind": "run_succeeded",
+    "data": {
+      "outcome": "written"
+    }
+  }
+]

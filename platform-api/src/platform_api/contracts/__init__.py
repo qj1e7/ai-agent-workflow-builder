@@ -3,6 +3,7 @@ import shutil
 from pathlib import Path
 
 from platform_api.app import create_app
+from platform_api.contracts.cards_stories import card_fixtures
 from platform_api.contracts.settings_stories import settings_fixtures
 from platform_api.contracts.stories import fixtures
 from platform_api.contracts.watchlist_run import watchlist_run_fixtures
@@ -33,6 +34,7 @@ OWNED_FIXTURE_DIRS = (
     "troubleshooting",
     "settings",
     "watchlist",
+    "cards",
 )
 
 
@@ -63,6 +65,7 @@ def write_all(root: Path) -> list[Path]:
         **settings_fixtures(),
         **watchlist_fixtures(),
         **watchlist_run_fixtures(),
+        **card_fixtures(),
     }.items():
         path = fixture_root / relative
         _write_json(path, _dump(value))

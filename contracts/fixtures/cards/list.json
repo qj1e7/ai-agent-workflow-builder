@@ -1,0 +1,86 @@
+{
+  "cards": [
+    {
+      "card_id": "crd_release_checker",
+      "version": 1,
+      "starter": true,
+      "owner": "platform",
+      "created_at": "2026-11-01T00:00:00Z",
+      "name": "Release checker",
+      "purpose": "Checks a public GitHub repository for a new release and proposes a Jira ticket for it.",
+      "good_for": [
+        "Check langchain-ai/langgraph for new releases",
+        "Tell us when a new version of a public project comes out"
+      ],
+      "inputs": [
+        {
+          "name": "GitHub repository",
+          "kind": "github_repo",
+          "what": "The public repository to watch, as owner/name.",
+          "example": "langchain-ai/langgraph"
+        },
+        {
+          "name": "Jira project",
+          "kind": "jira_project",
+          "what": "The Jira project that gets the ticket.",
+          "example": "MOCK"
+        }
+      ],
+      "blocks": [
+        {
+          "say": "Read the newest releases of the repository.",
+          "tool": "github.read_releases"
+        },
+        {
+          "say": "Look in Jira for a ticket about the newest release, so it is not raised twice.",
+          "tool": "jira.search"
+        },
+        {
+          "say": "If there is none, propose a ticket naming the release, its date and its link.",
+          "tool": "jira.create_ticket"
+        }
+      ],
+      "approvals": [
+        {
+          "tool": "jira.create_ticket",
+          "approvers": 1
+        }
+      ],
+      "tools": [
+        "github.read_releases",
+        "jira.search",
+        "jira.create_ticket"
+      ]
+    },
+    {
+      "card_id": "crd_01JD0WEEKLYSUMMARY000001",
+      "version": 2,
+      "starter": false,
+      "owner": "alice",
+      "created_at": "2026-11-03T09:00:00Z",
+      "name": "Weekly summary",
+      "purpose": "Lists the tickets finished in a Jira project this week.",
+      "good_for": [
+        "Every Friday summarise what we finished"
+      ],
+      "inputs": [
+        {
+          "name": "Jira project",
+          "kind": "jira_project",
+          "what": "",
+          "example": "MOCK"
+        }
+      ],
+      "blocks": [
+        {
+          "say": "Find the tickets finished this week.",
+          "tool": "jira.search"
+        }
+      ],
+      "approvals": [],
+      "tools": [
+        "jira.search"
+      ]
+    }
+  ]
+}

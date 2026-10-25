@@ -1,0 +1,10 @@
+{
+  "decision": "cannot_do",
+  "reason": "Booking a meeting room needs a calendar, and the platform has no calendar tool.",
+  "missing_tools": [
+    {
+      "need": "Calendar",
+      "why": "To find and book a free room."
+    }
+  ]
+}
