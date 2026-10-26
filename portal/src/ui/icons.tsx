@@ -179,6 +179,8 @@ export const IconDoc = drawn(
   </>,
 )
 export const IconSpinner = drawn('IconSpinner', <path d="M12 4a8 8 0 1 1-8 8" />)
+export const IconFlag = drawn('IconFlag', <path d="M6.5 20.5v-16M6.5 5h11l-2.5 4 2.5 4h-11" />)
+export const IconChevronUp = drawn('IconChevronUp', <path d="M6.5 14.5l5.5-5.5 5.5 5.5" />)
 
 export const GlyphPlatform = drawn(
   'GlyphPlatform',

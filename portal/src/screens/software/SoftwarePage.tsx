@@ -31,6 +31,7 @@ import { useRunNow } from '../builder/useRunNow'
 import { checkAdd, EMPTY_FIELDS, refusedAdd, type AddField, type AddFields, type FieldProblems } from './addForm'
 import { checkSchedule, DAYS, DEFAULT_SCHEDULE, nextWords, ownerWords, scheduleWords } from './schedule'
 import { softwareList, upToDateWords, type SoftwareRow } from './softwareList'
+import { tourStop } from '../../tour/stops'
 import styles from './SoftwarePage.module.css'
 
 const TONE_ICON: Readonly<Record<PillTone, Icon>> = {
@@ -66,6 +67,7 @@ export function SoftwarePage() {
                 icon={IconPlay}
                 loading={starting}
                 onClick={() => runNow.start(view.use_case_id)}
+                {...tourStop('check-now')}
               >
                 Check now
               </Button>
@@ -286,7 +288,7 @@ function Schedule({ view, operator, viewer }: ScheduleProps) {
   }, [editing])
 
   return (
-    <section className={styles['schedule']} aria-labelledby="schedule-heading">
+    <section className={styles['schedule']} aria-labelledby="schedule-heading" {...tourStop('schedule')}>
       <h2 id="schedule-heading" className="visually-hidden">
         Schedule
       </h2>
@@ -502,7 +504,7 @@ function AddForm({ first }: { first: boolean }) {
   }
 
   return (
-    <section className={cx('panel', styles['add'])} aria-labelledby="add-heading">
+    <section className={cx('panel', styles['add'])} aria-labelledby="add-heading" {...tourStop('add-form')}>
       <h2 id="add-heading">{first ? 'Add the first software' : 'Add software'}</h2>
       <form className={styles['addForm']} onSubmit={onSubmit} noValidate>
         <div className={styles['addFields']}>
@@ -515,7 +517,7 @@ function AddForm({ first }: { first: boolean }) {
           })}
         </div>
         <div className={styles['formActs']}>
-          <Button type="submit" variant="primary" loading={add.isPending}>
+          <Button type="submit" variant="primary" loading={add.isPending} {...tourStop('add-software')}>
             Add
           </Button>
         </div>

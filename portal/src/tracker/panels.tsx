@@ -13,6 +13,7 @@ import { agentIdentity } from '../ui/agents'
 import { cx } from '../ui/cx'
 import { InlineMessage, Skeleton } from '../ui/Feedback'
 import { IconCheck, IconDoc, IconLock, IconReplay } from '../ui/icons'
+import { tourStop } from '../tour/stops'
 import styles from './panels.module.css'
 
 interface FrameProps {
@@ -205,7 +206,7 @@ export function WrittenPanel({ spot, onLeave }: { spot: Extract<PanelSpot, { is:
   return (
     <Frame tone="ok" label="Written" onLeave={onLeave}>
       {spot.lines.map((line) => (
-        <div key={line.reference} className={styles['written']}>
+        <div key={line.reference} className={styles['written']} {...tourStop('written')}>
           <p className={styles['key']}>
             <IconDoc strokeWidth={2.2} />
             <span>{line.reference}</span>

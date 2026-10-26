@@ -28,6 +28,7 @@ import {
   suggestedModel,
   type Choice,
 } from './modelForm'
+import { tourStop } from '../../tour/stops'
 import styles from './SettingsPage.module.css'
 
 const BUILT_IN = 'the built-in sentence, for example “2 new releases: 1.2.16, 1.2.15”'
@@ -82,7 +83,7 @@ function Loaded({ view }: { view: ModelSettingsView }) {
 function Status({ active }: { active: ModelOut | null }) {
   if (!active) return <p className={styles['status']}>No AI model is set. Summaries use {BUILT_IN}.</p>
   return (
-    <p className={cx(styles['status'], styles['statusOn'])}>
+    <p className={cx(styles['status'], styles['statusOn'])} {...tourStop('model-on')}>
       Summaries are written by {active.model} ({active.provider}).
     </p>
   )

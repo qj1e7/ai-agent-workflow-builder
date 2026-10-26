@@ -20,6 +20,7 @@ import { useWaited } from './useWaited'
 import { atWords } from './waiting'
 import { approvalTitle, systemsWritten } from './writeAction'
 import { WriteTicket } from './WriteTicket'
+import { tourStop } from '../../tour/stops'
 import styles from './ApprovalPage.module.css'
 
 const TITLE = 'Approve a write to Jira'
@@ -102,7 +103,11 @@ function ApprovalContent({ view }: { view: ApprovalView }) {
     <Frame
       title={approvalTitle(view.actions)}
       lede={lede}
-      aside={<ButtonLink to={`/runs/${view.run_id}`}>Watch the run</ButtonLink>}
+      aside={
+        <ButtonLink to={`/runs/${view.run_id}`} {...tourStop('watch-run')}>
+          Watch the run
+        </ButtonLink>
+      }
     >
       <Banner panel={state.panel} run={run} view={view} nameOf={nameOf} />
       <div className={styles['layout']}>
@@ -121,7 +126,7 @@ function ApprovalContent({ view }: { view: ApprovalView }) {
             ))
           )}
         </section>
-        <section aria-labelledby="decision-heading" className={`panel ${styles['decision']}`}>
+        <section aria-labelledby="decision-heading" className={`panel ${styles['decision']}`} {...tourStop('decision')}>
           <h2 id="decision-heading">Your decision</h2>
           <Spine
             blocks={stepBlocks(state.steps, nameOf, now)}
@@ -222,6 +227,7 @@ function DecisionBody({ panel, notice, view, systems, sending, sent, onDecide }:
               loading={sending === 'approve'}
               disabled={sending === 'decline'}
               onClick={() => onDecide('approve')}
+              {...tourStop('decide')}
             >
               Approve and write to {systems}
             </Button>
@@ -231,6 +237,7 @@ function DecisionBody({ panel, notice, view, systems, sending, sent, onDecide }:
               loading={sending === 'decline'}
               disabled={sending === 'approve'}
               onClick={() => onDecide('decline')}
+              {...tourStop('decide')}
             >
               Decline
             </Button>

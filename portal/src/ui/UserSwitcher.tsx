@@ -6,6 +6,7 @@ import type { DevSession } from '../api/session'
 import { Avatar } from './Avatar'
 import { cx } from './cx'
 import { IconCheck, IconChevronDown } from './icons'
+import { tourStop } from '../tour/stops'
 import styles from './UserSwitcher.module.css'
 
 export function UserSwitcher({ session }: { session: DevSession }) {
@@ -77,6 +78,7 @@ export function UserSwitcher({ session }: { session: DevSession }) {
         ref={buttonRef}
         type="button"
         className={styles['trigger']}
+        {...tourStop('user-menu')}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}

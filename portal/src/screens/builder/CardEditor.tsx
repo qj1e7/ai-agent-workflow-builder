@@ -20,6 +20,7 @@ import {
 } from './cardDraft'
 import { describedBy, Field } from './Field'
 import { useDebounced } from './useDebounced'
+import { tourStop } from '../../tour/stops'
 import styles from './Form.module.css'
 import editorStyles from './CardEditor.module.css'
 
@@ -101,7 +102,7 @@ export function CardEditor({ initial, cardId, onSaved }: CardEditorProps) {
   const first = (key: string) => sorted.byField[key]?.join(' ') ?? null
 
   return (
-    <form className={editorStyles['form']} noValidate onSubmit={onSubmit}>
+    <form className={editorStyles['form']} noValidate onSubmit={onSubmit} {...tourStop('card-editor')}>
       <Field id={nameId} label="Name" problem={first('name')} quiet>
         <input
           id={nameId}
@@ -239,7 +240,10 @@ export function CardEditor({ initial, cardId, onSaved }: CardEditorProps) {
                     onChange={(event) => change({ ...draft, inputs: replaceAt(draft.inputs, at, { example: event.target.value }) })}
                   />
                 </Field>
-                <Button onClick={() => change({ ...draft, inputs: removeAt(draft.inputs, at) }, `${id}-add-input`)}>
+                <Button
+                  onClick={() => change({ ...draft, inputs: removeAt(draft.inputs, at) }, `${id}-add-input`)}
+                  {...(input.kind === 'jira_project' ? tourStop('remove-jira-detail') : {})}
+                >
                   Remove<span className="visually-hidden"> detail {at + 1}</span>
                 </Button>
               </div>
@@ -249,6 +253,7 @@ export function CardEditor({ initial, cardId, onSaved }: CardEditorProps) {
         <div>
           <Button
             id={`${id}-add-input`}
+            {...tourStop('add-detail')}
             onClick={() => change({ ...draft, inputs: [...draft.inputs, EMPTY_INPUT] }, `${id}-inputs-${draft.inputs.length}-name`)}
           >
             Add detail
@@ -270,7 +275,7 @@ export function CardEditor({ initial, cardId, onSaved }: CardEditorProps) {
       </section>
 
       {sorted.general.length > 0 ? (
-        <ul className={editorStyles['general']} aria-label="Points to fix">
+        <ul className={editorStyles['general']} aria-label="Points to fix" {...tourStop('card-problems')}>
           {sorted.general.map((message) => (
             <li key={message}>{message}</li>
           ))}
@@ -278,11 +283,11 @@ export function CardEditor({ initial, cardId, onSaved }: CardEditorProps) {
       ) : null}
 
       <div className={styles['buttons']}>
-        <Button type="submit" variant="primary" loading={save.isPending}>
+        <Button type="submit" variant="primary" loading={save.isPending} {...tourStop('save-agent')}>
           Save agent
         </Button>
         {!checking && problems.length === 0 && checked.data ? (
-          <p className={editorStyles['ready']}>
+          <p className={editorStyles['ready']} {...tourStop('card-ready')}>
             <IconCheck size={18} />
             Ready to save.
           </p>

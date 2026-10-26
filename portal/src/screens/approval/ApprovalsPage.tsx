@@ -11,6 +11,7 @@ import { PageHeader } from '../../ui/PageHeader'
 import { waitingApprovals } from './approvals'
 import { useWaited } from './useWaited'
 import { atWords } from './waiting'
+import { tourStop } from '../../tour/stops'
 import styles from './ApprovalsPage.module.css'
 
 export function ApprovalsPage() {
@@ -78,7 +79,9 @@ function WaitingRun({ run }: { run: RunViewOf<'awaiting_approval'> }) {
         Waiting {formatDuration(waited)}
       </span>
       <div className={styles['open']}>
-        <ButtonLink to={run.approval.link}>Open the approval page</ButtonLink>
+        <ButtonLink to={run.approval.link} {...tourStop('open-approval')}>
+          Open the approval page
+        </ButtonLink>
       </div>
     </div>
   )

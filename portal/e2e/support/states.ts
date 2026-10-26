@@ -47,6 +47,9 @@ export const STATES = [
   'approval-check-bob',
   'jira-mark-done',
   'software-after-done',
+  'tour-start',
+  'tour-quest-done',
+  'tour-plan',
 ] as const
 
 export type StateName = (typeof STATES)[number]

@@ -6,6 +6,7 @@ import { exampleValues } from './agentRun'
 import { CardEditor } from './CardEditor'
 import { RunForm } from './RunForm'
 import { runOfSaved, type Work } from './work'
+import { tourStop } from '../../tour/stops'
 import styles from './PlanPanel.module.css'
 
 interface PlanPanelProps {
@@ -18,7 +19,12 @@ interface PlanPanelProps {
 
 export function PlanPanel({ work, planning, onWork, heading }: PlanPanelProps) {
   return (
-    <section className={`panel ${styles['panel']}`} aria-labelledby="plan-heading" aria-busy={planning || undefined}>
+    <section
+      className={`panel ${styles['panel']}`}
+      aria-labelledby="plan-heading"
+      aria-busy={planning || undefined}
+      {...(work && !planning ? tourStop('plan', 'plan-result') : tourStop('plan'))}
+    >
       <h2 id="plan-heading" ref={heading} tabIndex={-1}>
         The Room lead's plan
       </h2>

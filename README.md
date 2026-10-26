@@ -31,6 +31,8 @@ The first run writes `deploy/.env` with random dev secrets and builds the images
 
 If a port is already taken on your machine, change it in `deploy/.env` and run `scripts/up.sh` again. The settings are `PORTAL_HOST_PORT`, `PLATFORM_API_HOST_PORT` (try `18000` when 8000 is taken) and `N8N_HOST_PORT`.
 
+New to the Portal? Press the flag at the top right. A guided tour walks you through every part of the app, one step at a time, and each step ticks itself off when you really do it.
+
 There is no sign-in yet. In the Portal, pick the user from the menu at the top right. For plain API calls, send the header `X-Dev-User` with one of the dev users: `alice` (Operator and Approver), `bob` (Approver) or `carol` (Operator). An Approver can never approve a run they started, so start runs as `alice` and approve them as `bob`.
 
 The agent runtime reads the real GitHub API. Put a `GITHUB_TOKEN` in `deploy/.env` if you hit GitHub's rate limit.

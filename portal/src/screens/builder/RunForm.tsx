@@ -19,6 +19,7 @@ import { describedBy, Field } from './Field'
 import { ToolChips } from './ToolChips'
 import { ModelNeeded } from './Trouble'
 import { useRunNow } from './useRunNow'
+import { tourStop } from '../../tour/stops'
 import styles from './Form.module.css'
 import runStyles from './RunForm.module.css'
 
@@ -94,7 +95,7 @@ export function RunForm({ agents, instruction, tools, showAgents = true }: RunFo
   const startProblem = created ? runNow.errorFor(created.id) : null
 
   return (
-    <form className={runStyles['form']} noValidate onSubmit={onSubmit}>
+    <form className={runStyles['form']} noValidate onSubmit={onSubmit} {...tourStop('run-details')}>
       {current.map((agent, at) => (
         <fieldset key={`${agent.card.card_id}-${at}`} className={runStyles['agent']}>
           <legend className={runStyles['legend']}>{agent.card.name}</legend>
@@ -145,7 +146,7 @@ export function RunForm({ agents, instruction, tools, showAgents = true }: RunFo
         />
       </Field>
       <div className={styles['buttons']}>
-        <Button type="submit" variant="primary" icon={IconPlay} loading={busy}>
+        <Button type="submit" variant="primary" icon={IconPlay} loading={busy} {...tourStop('save-and-run')}>
           Save and run
         </Button>
       </div>

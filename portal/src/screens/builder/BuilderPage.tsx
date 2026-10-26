@@ -11,6 +11,7 @@ import { Trouble } from './Trouble'
 import { UseCaseList } from './UseCaseList'
 import { useRunNow } from './useRunNow'
 import { workOfPlan, type Work } from './work'
+import { tourStop } from '../../tour/stops'
 import styles from './BuilderPage.module.css'
 
 export function BuilderPage() {
@@ -103,7 +104,9 @@ export function BuilderPage() {
             <Button variant="primary" icon={IconFlow} loading={planIt.isPending} onClick={plan}>
               Plan it
             </Button>
-            <Button onClick={planExample}>Plan the example</Button>
+            <Button onClick={planExample} {...tourStop('plan-example')}>
+              Plan the example
+            </Button>
           </div>
           {planIt.isError ? <Trouble error={planIt.error} /> : null}
         </section>

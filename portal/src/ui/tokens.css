@@ -105,6 +105,8 @@
   --gutter: var(--space-6);
 
   --z-header: 20;
+  --z-glow: 24;
+  --z-tour: 25;
   --z-menu: 30;
   --z-skip: 40;
 }
