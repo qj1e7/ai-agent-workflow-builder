@@ -29,6 +29,7 @@ import { IconBox, IconCheck, IconDash, IconDoc, IconLock, IconPause, IconPerson,
 import { personTone } from '../ui/personTone'
 import { createMotion, type Motion } from './motion'
 import { captionKey, followLayout, layoutKey, place, type Follow } from './place'
+import { tourStop } from '../tour/stops'
 import styles from './TrackLine.module.css'
 
 export interface TrackLineProps {
@@ -85,7 +86,12 @@ export function TrackLine({ track, plan = null, panel = null, reduced = false, s
   }, [])
 
   return (
-    <section ref={route} className={cx(styles['route'], track.cut && styles['cut'], still && styles['still'])} aria-label={label}>
+    <section
+      ref={route}
+      className={cx(styles['route'], track.cut && styles['cut'], still && styles['still'])}
+      aria-label={label}
+      {...tourStop('run-line')}
+    >
       <div className={styles['rail']} aria-hidden="true" />
       <div className={styles['fill']} aria-hidden="true" />
       {track.breakAt === null ? null : <BreakMark />}

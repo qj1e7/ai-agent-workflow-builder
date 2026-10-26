@@ -11,6 +11,7 @@ import { ApprovalPanel, TroublePanel, WrittenPanel } from './panels'
 import { rememberSpeed } from './speed'
 import { SpeedControl } from './SpeedControl'
 import { TrackLine } from './TrackLine'
+import { tourStop } from '../tour/stops'
 import styles from './Tracker.module.css'
 
 const NO_BLOCKS: readonly BlockView[] = []
@@ -93,7 +94,7 @@ export function Tracker({ runId, view, blocks, title, titleTo }: TrackerProps) {
         <SpeedControl value={view.speed} onChange={setSpeed} />
       </header>
       {/* Speaks only at the newest frame, so a replay or a catch-up never reads out old summaries. */}
-      <div className={styles['status']} role="status" aria-live={view.atHead ? 'polite' : 'off'} aria-atomic="true">
+      <div className={styles['status']} {...tourStop('run-status')} role="status" aria-live={view.atHead ? 'polite' : 'off'} aria-atomic="true">
         <div className={styles['head']}>
           <span className={cx(styles['icon'], styles[tone])} aria-hidden="true">
             <ToneMark tone={tone} />

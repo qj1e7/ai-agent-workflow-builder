@@ -2,6 +2,7 @@ import { Fragment } from 'react'
 import { attemptWords, type MinutesEntry } from '../../run'
 import { ActorAvatar } from '../../ui/Avatar'
 import { cx } from '../../ui/cx'
+import { tourStop } from '../../tour/stops'
 import styles from './Minutes.module.css'
 
 interface MinutesProps {
@@ -36,7 +37,13 @@ export function Minutes({ entries, technical, onTechnical }: MinutesProps) {
     <section className={styles['minutes']} aria-labelledby="minutes-title">
       <div className={styles['head']}>
         <h2 id="minutes-title">Minutes</h2>
-        <button type="button" className="disclosure" aria-expanded={technical} onClick={() => onTechnical(!technical)}>
+        <button
+          type="button"
+          className="disclosure"
+          aria-expanded={technical}
+          onClick={() => onTechnical(!technical)}
+          {...tourStop('tech-details')}
+        >
           Technical details
         </button>
       </div>

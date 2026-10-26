@@ -163,8 +163,29 @@
     display: none;
   }
 
+  /* Five header buttons and the demo label share 390 px, so the gaps close up and the label stacks on two short lines. */
+  .tools {
+    gap: var(--space-2);
+  }
+
+  .demo {
+    width: min-content;
+    font-size: var(--text-12);
+    line-height: 1.15;
+    white-space: normal;
+  }
+
+  .demo > svg {
+    display: none;
+  }
+
   .main {
     padding-bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom));
+  }
+
+  /* The open tour card covers the bottom of the screen, so the page can scroll its last part above the card. */
+  :root[data-tour-open] .main {
+    padding-bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom) + 50dvh);
   }
 
   .tabBar {

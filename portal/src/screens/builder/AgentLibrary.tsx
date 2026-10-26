@@ -10,6 +10,7 @@ import { copyOf, draftOf } from './cardDraft'
 import { RunForm } from './RunForm'
 import { ToolChips } from './ToolChips'
 import { editorOf, type Work } from './work'
+import { tourStop } from '../../tour/stops'
 import styles from './AgentLibrary.module.css'
 
 /** The saved agents, starters first. Run opens a form in place. Edit opens the card editor beside the task. */
@@ -19,7 +20,7 @@ export function AgentLibrary({ operator, onEdit }: { operator: boolean; onEdit: 
   const tools = useTools().data
 
   return (
-    <section className={styles['section']} aria-labelledby="library-heading">
+    <section className={styles['section']} aria-labelledby="library-heading" {...tourStop('agent-library')}>
       <h2 id="library-heading">Agent library</h2>
       {cards.data && cards.data.length === 0 ? <EmptyState title="No agents yet.">A saved agent appears here.</EmptyState> : null}
       {cards.data && cards.data.length > 0 ? (
@@ -73,7 +74,10 @@ function Row({ card, tools, operator, onEdit }: RowProps) {
           <Button icon={IconPlay} aria-expanded={open} aria-controls={`${id}-run`} onClick={() => setOpen((was) => !was)}>
             Run<span className="visually-hidden"> {card.name}</span>
           </Button>
-          <Button onClick={() => onEdit(editorOf(card, card.starter ? copyOf(card) : draftOf(card)))}>
+          <Button
+            onClick={() => onEdit(editorOf(card, card.starter ? copyOf(card) : draftOf(card)))}
+            {...(card.starter ? tourStop('copy-edit') : {})}
+          >
             {card.starter ? 'Copy and edit' : 'Edit'}
             <span className="visually-hidden"> {card.name}</span>
           </Button>
