@@ -63,7 +63,7 @@ The menu becomes:
 | Page | What it is for |
 |---|---|
 | **Home** | What needs you now, what you are waiting on, and what runs next |
-| **Workflows** | Every workflow as a card: status, last result, next run, its agents |
+| **Workflows** | Every workflow in one list: status, last result, its agents, next run |
 | **Software watchlist** | Every piece of software the team runs, and every release check |
 | **Agent library** | Two tabs. **Agents:** every agent the Planner can bring in; open one to see how it works and change it in plain English. **Tools:** every tool the agents use, whether it's working, and a way to ask for a new one |
 | **New workflow** | Set up a workflow in 4 steps |
@@ -93,7 +93,7 @@ A new Operator lands on Home. Instead of an empty page, it shows three ready-mad
 
 ### 2. Every day after that
 
-Home lists what needs you, each with one button. Approvers see only approvals.
+Home is one column. The most urgent item is a full card. Everything else that needs you is a one-line row with one button, and a stopped workflow's row carries the AI troubleshooter's reason. One line under the greeting says what runs next. Approvers see only approvals.
 
 ![Home in a normal week](portal-routines/home.png)
 
@@ -102,7 +102,7 @@ Home lists what needs you, each with one button. Approvers see only approvals.
 New workflow has 4 steps, and each ends in something you can see.
 
 1. **Describe it** in plain English.
-2. **Check what I understood.** The Planner shows how it read the request, line by line: when, which tickets, what it does and where the result goes. Each line is marked *From your words*, *Changed by you*, *Please choose* or *Can't do this yet*, and can be corrected. Next stays disabled until nothing is unclear. It also says when a similar workflow already exists. Below that is the plan, with each step marked *Reads*, *No system access* or *Changes data, waits for a yes*.
+2. **Check what I understood.** The Planner reads the request back as one sentence: when, which tickets, what it does and where the result goes. Each part is a coloured chip: green for *From your words*, teal for *Changed by you*, amber for *Please choose* and red for *Can't do this yet*. Clicking a chip changes it, and a short note under the sentence explains each one that isn't green. Next stays disabled until nothing is unclear. It also says when a similar workflow already exists. Below that is the plan, with each step marked *Reads*, *No system access* or *Changes data, waits for a yes*.
 3. **When and who.** How often, the day and any time, filled in from the request and never guessed. Then who is asked first, a backup, when to ask the backup and when to stop waiting (see [Who is asked](#6-who-is-asked-and-what-if-nobody-answers)). Then the Teams channel.
 4. **Turn it on.** A one-sentence summary and a check against the request that marks anything changed. Then "Your workflow is on", with the next run.
 
@@ -131,7 +131,7 @@ On the page:
 - A tool with known vulnerabilities shows how many, which sources found them, and the worst one, linked to NVD. In the sample, Log4j core 2.14.1 has 4, the worst being CVE-2021-44228 (Log4Shell), which CISA lists as actively exploited.
 - **Support ending** lists versions whose security fixes end soon, from endoflife.date. In the sample, these are PostgreSQL 14 and Node.js 22.
 - **History** shows each tool's changes over time: when it was added, the tickets raised, who approved them, and when our version changed.
-- The "Keep our software up to date" card on Workflows opens this page.
+- The "Keep our software up to date" row on Workflows opens this page.
 
 ![Software watchlist page with LangGraph's history open](portal-routines/software.png)
 
@@ -141,7 +141,7 @@ When someone asks for a release check in New workflow, the Planner adds the soft
 
 ### 5. Watch and approve
 
-The run page is the live activity view: the run line, what each agent said, and the approval gate. It shows exactly what will be written. You reach it from Home, Workflows, Software watchlist or the Teams message, not from the menu. Nobody approves their own work. If you started the run, you see a lock.
+The run page is the live activity view: the run line with each agent's face, then the run as a group chat. The Planner speaks first, and the agents it brings in join the chat. Each agent says what it did. The last message comes from whoever needs you: the approval gate with the buttons, or the AI troubleshooter with the fix. While a run replays, the next agent shows as working. It shows exactly what will be written. You reach it from Home, Workflows, Software watchlist or the Teams message, not from the menu. Nobody approves their own work. If you started the run, you see a lock.
 
 ![A run waiting at the approval gate](portal-routines/run-approval.png)
 
@@ -171,7 +171,7 @@ The AI troubleshooter's reason shows on Home. It says which kind of problem it i
 
 ### 8. Keep track
 
-Workflows shows every workflow as a card. Cards that need you come first, with the button on the card.
+Workflows shows every workflow as one row in a list, with the columns lined up. Rows that need you come first, with the button at the end of the row.
 
 ![Workflows](portal-routines/routines.png)
 
@@ -254,7 +254,7 @@ The Software page already exists, and the backend already records where each ver
 
 ## First slice, for the presentation (27 Nov to 5 Dec)
 
-1. **The menu and Home.** Home, Workflows (cards), Software watchlist, Agent library and New workflow. Teams and Jira move to Settings, and Approvals folds into Home.
+1. **The menu and Home.** Home, Workflows (one list), Software watchlist, Agent library and New workflow. Teams and Jira move to Settings, and Approvals folds into Home.
 2. **Software watchlist.** History for each tool, and release checks redirected from New workflow.
 3. **New workflow.** The 4 steps and the done screen.
 4. **Failures on Home** with the troubleshooter's reason, and Fix it where the platform allows a retry.
