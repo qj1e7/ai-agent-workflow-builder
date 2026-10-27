@@ -1,0 +1,1506 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Portal Routines Prototype</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;700;800&display=swap">
+<style>
+/* Layout: the real Portal's light tokens (portal/src/ui/tokens.css) on a white page, one sticky header, one centred column, a floating mock bar.
+   Light only, on purpose: the page stays white whatever the viewer's theme. Text is at least 4.5:1, secondary text 7:1. */
+:root {
+  color-scheme: light;
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --sunk: #eef1f5;
+  --ink: #16233a;
+  --on-ink: #f4f6f9;
+  --muted: #4a5a71;
+  --rail: #cbd3de;
+  --hair: #d3dae4;
+  --shadow: 0 1px 2px rgba(22, 35, 58, 0.06), 0 6px 18px rgba(22, 35, 58, 0.08);
+  --focus: #2f6bff;
+  --amber: #e89a0c;
+  --amber-ink: #7e4a00;
+  --amber-soft: #fff4da;
+  --red: #c62f2f;
+  --red-ink: #a51f1f;
+  --red-soft: #fdecec;
+  --green: #1d7a42;
+  --green-ink: #1b6b3b;
+  --green-soft: #e4f4ea;
+  --on-status: #ffffff;
+  --lead: #3e5bd8;
+  --lead-tint: #dfe5ff;
+  --checker: #0a7068;
+  --checker-tint: #d3f0ec;
+  --trouble: #7a4bd6;
+  --trouble-tint: #ece3ff;
+  --agent-1: #b02a6b;
+  --agent-1-tint: #fbe3ee;
+  --agent-2: #1f6f9f;
+  --agent-2-tint: #ddeffb;
+  --agent-3: #526d10;
+  --agent-3-tint: #ebf2d3;
+  --agent-4: #b2520a;
+  --agent-4-tint: #ffe7d3;
+  --face-ink: #16233a;
+  --face-lens: rgba(255, 255, 255, 0.55);
+  --person-1-bg: #ffe0cc;
+  --person-1-ink: #7a3410;
+  --person-2-bg: #d7e3ff;
+  --person-2-ink: #1e3b8a;
+  --person-3-bg: #d8efdf;
+  --person-3-ink: #1d5a33;
+  --person-4-bg: #f9dde8;
+  --person-4-ink: #7a1f45;
+  --mock-bg: #2a2140;
+  --mock-ink: #f3efff;
+  --mock-dim: #b9addb;
+  --mock-on: #f3efff;
+  --mock-on-ink: #2a2140;
+  --scrim: rgba(15, 24, 40, 0.42);
+
+  --font: 'Atkinson Hyperlegible Next', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --ease-move: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --move: 400ms;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 16px; line-height: 1.5;
+  font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--surface); }
+h1, h2, h3, p, ul, ol, dl, dd { margin: 0; }
+h1, h2, h3 { font-weight: 700; line-height: 1.2; text-wrap: balance; }
+h1 { font-size: 1.75rem; letter-spacing: -0.01em; }
+h2 { font-size: 1.125rem; }
+h3 { font-size: 1rem; }
+ul, ol { padding: 0; list-style: none; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Header */
+.hdr { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: var(--surface); border-bottom: 1px solid var(--hair); }
+.hdr-in {
+  max-width: 1180px; margin: 0 auto; min-height: 60px; display: flex; align-items: center; gap: 8px 28px; flex-wrap: wrap;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 1.125rem; background: none; border: 0; padding: 6px 0; cursor: pointer; }
+.nav { display: flex; gap: 4px; align-items: center; }
+.nav-a {
+  position: relative; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px; border: 0; border-radius: 8px;
+  background: none; color: var(--muted); font-weight: 600; font-size: 0.95rem; cursor: pointer; white-space: nowrap;
+}
+.nav-a:hover { color: var(--ink); background: var(--sunk); }
+.nav-a[aria-current="page"] { color: var(--ink); }
+.nav-a[aria-current="page"]::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -10px; height: 3px; border-radius: 3px; background: var(--ink); }
+.nav-new { color: var(--ink); border: 1px solid var(--rail); background: var(--surface); margin-left: 6px; }
+.tools { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.iconbtn {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; height: 44px; padding: 0 12px;
+  border: 1px solid var(--hair); border-radius: 10px; background: var(--surface); cursor: pointer; font-weight: 600; font-size: 0.9rem;
+}
+.iconbtn:hover { border-color: var(--rail); background: var(--sunk); }
+.iconbtn[aria-current="page"] { border-color: var(--ink); }
+.badge {
+  position: absolute; top: -6px; right: -6px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--amber);
+  color: #1d1400; font-size: 0.75rem; font-weight: 800; display: grid; place-items: center;
+}
+.me { display: flex; align-items: center; gap: 10px; padding: 4px 12px 4px 4px; border: 1px solid var(--hair); border-radius: 12px; }
+.me b { display: block; font-size: 0.9rem; line-height: 1.2; }
+.me small { display: block; font-size: 0.8125rem; color: var(--muted); line-height: 1.2; }
+.pav { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; font-weight: 800; font-size: 0.9rem; flex: none; }
+.pav.t1 { background: var(--person-1-bg); color: var(--person-1-ink); }
+.pav.t2 { background: var(--person-2-bg); color: var(--person-2-ink); }
+.pav.t3 { background: var(--person-3-bg); color: var(--person-3-ink); }
+.pav.t4 { background: var(--person-4-bg); color: var(--person-4-ink); }
+@media (max-width: 760px) {
+  .hdr-in { padding-block: 8px; gap: 6px 12px; }
+  .nav { display: none; }
+  .me-text, .iconbtn .lbl { display: none; }
+}
+/* Phones: the main menu moves to a tab bar at the bottom of the screen. */
+.tabbar { display: none; }
+@media (max-width: 760px) {
+  .tabbar {
+    position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(var(--tabs), minmax(0, 1fr));
+    background: var(--surface); border-top: 1px solid var(--hair);
+    padding-bottom: env(safe-area-inset-bottom, 0px); padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px);
+  }
+  .tab { display: grid; justify-items: center; align-content: center; gap: 2px; min-height: 58px; padding: 6px 2px; border: 0; background: none; color: var(--muted); font-size: 0.8125rem; font-weight: 700; cursor: pointer; }
+  .tab[aria-current="page"] { color: var(--ink); }
+  .tab[aria-current="page"] svg { color: var(--focus); }
+}
+
+/* Page */
+.wrap {
+  max-width: 1180px; margin: 0 auto; padding-block: 32px 150px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.narrow { max-width: 860px; margin: 0 auto; }
+.pagehead { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 28px; }
+.pagehead p { color: var(--muted); margin-top: 6px; font-size: 1.05rem; max-width: 65ch; }
+.eyebrow { font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.back { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 14px; background: none; border: 0; padding: 4px 0; color: var(--muted); font-weight: 600; cursor: pointer; }
+.back:hover { color: var(--ink); }
+.section { display: grid; gap: 12px; }
+.section + .section { margin-top: 36px; }
+.section > h2 { display: flex; align-items: center; gap: 10px; }
+.count { display: inline-grid; place-items: center; min-width: 26px; height: 26px; padding: 0 8px; border-radius: 999px; background: var(--sunk); font-size: 0.85rem; }
+.muted { color: var(--muted); }
+.small { font-size: 0.875rem; }
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 18px; border: 1px solid var(--rail);
+  border-radius: 10px; background: var(--surface); font-weight: 600; font-size: 0.95rem; cursor: pointer; white-space: nowrap; text-align: center;
+  transition: transform 80ms var(--ease-out);
+}
+.btn:hover { border-color: var(--muted); background: var(--sunk); }
+.btn:active:not([disabled]) { transform: translateY(1px); }
+.btn.primary { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
+.btn.primary:hover { filter: brightness(1.15); }
+.btn.good { background: var(--green); border-color: var(--green); color: var(--on-status); }
+.btn.bad { color: var(--red-ink); border-color: var(--red); }
+.btn.sm { min-height: 36px; padding: 0 12px; font-size: 0.875rem; }
+.btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+.btn.mock { border: 1.5px dashed var(--trouble); color: var(--trouble); background: transparent; }
+.btns { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.linkbtn { display: inline-flex; align-items: center; min-height: 32px; margin: 0 -4px; background: none; border: 0; padding: 0 4px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; font-weight: 600; cursor: pointer; font-size: 0.9rem; }
+.linkbtn:hover { color: var(--ink); }
+
+@media (pointer: coarse) {
+  .btn, .btn.sm, .chip, .seg button, .nav-a, .linkbtn, .back { min-height: 44px; }
+}
+
+/* Pills */
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px 2px 8px; border: 1px solid var(--rail); border-radius: 999px; font-size: 0.8125rem; font-weight: 700; white-space: nowrap; line-height: 1.6; }
+.pill.wait { color: var(--amber-ink); background: var(--amber-soft); border-color: var(--amber); }
+.pill.bad { color: var(--red-ink); background: var(--red-soft); border-color: var(--red); }
+.pill.ok { color: var(--green-ink); background: var(--green-soft); border-color: var(--green); }
+.pill.off { color: var(--muted); }
+.pill.new { color: var(--trouble); border-color: var(--trouble); }
+.tag { display: inline-flex; align-items: center; gap: 6px; padding: 1px 8px; border-radius: 6px; font-size: 0.8125rem; font-weight: 700; background: var(--sunk); color: var(--muted); white-space: nowrap; }
+.tag.write { background: var(--amber-soft); color: var(--amber-ink); }
+.tag.read { background: var(--checker-tint); color: #0a4f4a; }
+
+/* Home */
+.today { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 40px; align-items: start; }
+@media (max-width: 960px) { .today { grid-template-columns: minmax(0, 1fr); } }
+.hello h1 { font-size: 2.25rem; }
+.hello p { font-size: 1.15rem; color: var(--muted); margin-top: 6px; max-width: 65ch; }
+.task {
+  display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 16px; padding: 20px; background: var(--surface);
+  border: 1px solid var(--hair); border-radius: 14px; box-shadow: var(--shadow);
+}
+.task .ico { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; }
+.ico.wait { background: var(--amber-soft); color: var(--amber-ink); }
+.ico.bad { background: var(--red-soft); color: var(--red-ink); }
+.ico.ok { background: var(--green-soft); color: var(--green-ink); }
+.ico.tool { background: var(--trouble-tint); color: #4b2a96; }
+.task-body { display: grid; gap: 8px; min-width: 0; }
+.task-title { font-size: 1.125rem; font-weight: 700; }
+.task-meta { font-size: 0.875rem; color: var(--muted); }
+.says { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 10px; align-items: start; padding: 10px 12px; border-radius: 10px; background: var(--sunk); font-size: 0.95rem; }
+.says b { display: block; font-size: 0.8rem; color: var(--trouble); }
+.mini-list { display: grid; gap: 4px; font-size: 0.95rem; }
+.mini-list li { display: flex; gap: 8px; align-items: baseline; }
+.mini-list li::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--rail); flex: none; transform: translateY(-2px); }
+.side { display: grid; gap: 28px; }
+.side-box { display: grid; gap: 10px; }
+.side-box h2 { font-size: 1rem; }
+.rows { display: grid; border-top: 1px solid var(--hair); }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--hair); }
+.row-name { font-weight: 600; }
+.row-sub { font-size: 0.85rem; color: var(--muted); }
+.row-btn { width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--hair); cursor: pointer; padding: 12px 4px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.row-btn:hover { background: var(--sunk); }
+.quiet { padding: 28px; border: 1px dashed var(--rail); border-radius: 14px; text-align: center; color: var(--muted); }
+.quiet b { display: block; color: var(--ink); font-size: 1.125rem; margin-bottom: 4px; }
+
+/* Report tracker */
+.track4 { display: grid; gap: 0; }
+.track4 li { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 12px; position: relative; padding-bottom: 14px; }
+.track4 li:not(:last-child)::before { content: ""; position: absolute; left: 12px; top: 26px; bottom: 0; width: 2px; background: var(--rail); }
+.track4 li.done:not(:last-child)::before { background: var(--ink); }
+.track4 .dot { width: 26px; height: 26px; border-radius: 50%; border: 2px dashed var(--rail); background: var(--surface); display: grid; place-items: center; color: var(--on-ink); }
+.track4 li.done .dot { background: var(--ink); border: 2px solid var(--ink); }
+.track4 li.now .dot { border: 3px solid var(--lead); }
+.track4 li.todo { color: var(--muted); }
+.track4 b { display: block; font-size: 0.95rem; }
+.track4 span { font-size: 0.85rem; color: var(--muted); }
+
+/* Board */
+.strip { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 14px 16px; border-radius: 12px; background: var(--amber-soft); color: var(--amber-ink); font-weight: 700; margin-bottom: 20px; }
+.board { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 16px; }
+.rcard {
+  display: grid; grid-template-rows: auto auto 1fr auto; gap: 10px; padding: 20px; background: var(--surface); border: 1px solid var(--hair);
+  position: relative; border-radius: 14px; box-shadow: var(--shadow); text-align: left; min-width: 0;
+}
+.rcard:hover { border-color: var(--rail); }
+.rcard.needs { border-color: var(--amber); }
+.rcard.broke { border-color: var(--red); }
+.rcard-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.rcard h2 { font-size: 1.1rem; }
+.rcard-link { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.rcard-link::after { content: ""; position: absolute; inset: 0; border-radius: 14px; }
+.rcard-link:focus-visible { outline: none; }
+.rcard-link:focus-visible::after { outline: 3px solid var(--focus); outline-offset: 2px; }
+.rcard-foot .btn { position: relative; z-index: 1; }
+.rcard p { color: var(--muted); font-size: 0.95rem; }
+.rcard-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding-top: 10px; border-top: 1px solid var(--hair); font-size: 0.875rem; color: var(--muted); }
+.faces { display: inline-flex; }
+.faces .face { margin-left: -8px; }
+.faces .face:first-child { margin-left: 0; }
+.rcard.add { place-content: center; justify-items: center; text-align: center; border-style: dashed; box-shadow: none; background: transparent; min-height: 200px; color: var(--muted); grid-template-rows: none; }
+.rcard.add { cursor: pointer; }
+.rcard.add b { color: var(--ink); font-size: 1.1rem; }
+
+/* Day one */
+.starters { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 12px; }
+.starter { display: grid; grid-template-rows: auto 1fr auto; gap: 8px; padding: 18px; background: var(--surface); border: 1px solid var(--hair); border-radius: 14px; box-shadow: var(--shadow); justify-items: start; }
+.starter p { color: var(--muted); font-size: 0.95rem; }
+
+/* Routine page */
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px 24px; padding: 18px 20px; background: var(--surface); border: 1px solid var(--hair); border-radius: 14px; }
+.facts dt { font-size: 0.8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.facts dd { font-weight: 600; margin-top: 2px; }
+.panel { padding: 20px; background: var(--surface); border: 1px solid var(--hair); border-radius: 14px; display: grid; gap: 14px; min-width: 0; }
+.steps { display: grid; gap: 0; counter-reset: s; }
+.steps li { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; padding: 12px 0; border-top: 1px solid var(--hair); counter-increment: s; }
+.steps li:first-child { border-top: 0; }
+.steps li::before { content: counter(s); width: 28px; height: 28px; border-radius: 50%; background: var(--sunk); display: grid; place-items: center; font-weight: 800; font-size: 0.85rem; }
+.steps .what { font-weight: 600; }
+.steps .how { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-top: 4px; font-size: 0.875rem; color: var(--muted); }
+.sw-table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+.sw-table th { text-align: left; font-size: 0.8125rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 700; padding: 0 12px 8px 0; }
+.sw-table td { padding: 12px 12px 12px 0; border-top: 1px solid var(--hair); vertical-align: top; }
+.sw-table .src { font-size: 0.85rem; color: var(--muted); }
+.scroll-x { overflow-x: auto; }
+details summary { cursor: pointer; font-weight: 600; color: var(--muted); padding: 8px 0; }
+.uptodate { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 6px; }
+
+/* Run page */
+.runhead { display: grid; gap: 10px; margin-bottom: 8px; }
+.runhead-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
+.runhead h1 { font-size: 2.25rem; font-weight: 800; }
+.seg { display: inline-flex; padding: 3px; border: 1px solid var(--hair); border-radius: 12px; background: var(--surface); }
+.seg button { border: 0; background: none; padding: 6px 14px; border-radius: 9px; font-weight: 700; color: var(--muted); cursor: pointer; min-height: 36px; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
+.stage { padding: 24px 20px 20px; background: var(--surface); border: 1px solid var(--hair); border-radius: 16px; margin: 20px 0 24px; }
+.line { --ty: 91px; position: relative; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); padding-top: 8px; }
+.line-track, .line-fill { position: absolute; top: var(--ty); height: 4px; border-radius: 4px; left: calc(100% / var(--n) / 2); }
+.line-track { right: calc(100% / var(--n) / 2); background: var(--rail); }
+.line-fill { width: calc(100% - 100% / var(--n)); background: var(--ink); transform-origin: left center; transform: scaleX(var(--f)); transition: transform var(--move) var(--ease-move); }
+.line-fill.broken { background: var(--ink); }
+.st { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; min-width: 0; }
+.st-who { height: 56px; display: flex; align-items: flex-end; justify-content: center; transition: opacity 300ms; }
+.st-dotwrap { height: 38px; display: grid; place-items: center; }
+.st-dot { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--surface); border: 2px dashed var(--rail); color: var(--muted); transition: background 300ms, border-color 300ms; }
+.st-label { font-weight: 700; font-size: 0.95rem; line-height: 1.25; padding: 0 4px; }
+.st-label small { display: block; font-weight: 600; font-size: 0.85rem; color: var(--muted); margin-top: 3px; }
+.st.todo .st-who { opacity: 0.45; }
+.st.todo .st-label { color: var(--muted); }
+.st.skip .st-who { opacity: 0.25; }
+.st.skip .st-label { color: var(--muted); }
+.st.done .st-dot { background: var(--ink); border: 2px solid var(--ink); color: var(--on-ink); }
+.st.now .st-dot { border: 3px solid var(--lead); background: var(--surface); box-shadow: 0 0 0 6px color-mix(in srgb, var(--lead) 18%, transparent); }
+.st.now .st-who .face, .st.now .st-who .pav { animation: bob 1.2s var(--ease-out) infinite alternate; }
+.st.gate .st-dot { width: 38px; height: 38px; border: 2px solid var(--ink); background: var(--surface); color: var(--ink); }
+.st.gate.wait .st-dot { background: var(--amber-soft); border-color: var(--amber); color: var(--amber-ink); box-shadow: 0 0 0 6px color-mix(in srgb, var(--amber) 22%, transparent); }
+.st.gate.done .st-dot { background: var(--green); border-color: var(--green); color: var(--on-status); }
+.st.gate.skip .st-dot, .st.gate.todo .st-dot { border-style: dashed; border-color: var(--rail); color: var(--muted); }
+.st.fail .st-dot { background: var(--red); border: 2px solid var(--red); color: var(--on-status); box-shadow: 0 0 0 6px color-mix(in srgb, var(--red) 20%, transparent); }
+.st.fail .st-label { color: var(--red-ink); }
+@keyframes bob { from { transform: translateY(0); } to { transform: translateY(-4px); } }
+@media (max-width: 760px) {
+  .line { grid-template-columns: minmax(0, 1fr); padding-top: 0; }
+  .line-track, .line-fill { top: 32px; left: 17px; width: 4px; height: auto; right: auto; }
+  .line-track { bottom: 32px; }
+  .line-fill { height: calc(100% - 64px); width: 4px; transform-origin: center top; transform: scaleY(var(--f)); }
+  .st { flex-direction: row; text-align: left; height: 64px; gap: 12px; }
+  .st-dotwrap { width: 38px; flex: none; order: 1; }
+  .st-who { order: 2; height: auto; width: 40px; flex: none; }
+  .st-who .face { width: 36px; height: 36px; }
+  .st-who .pav { width: 32px !important; height: 32px !important; }
+  .st-label { order: 3; }
+}
+.runbody { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 24px; align-items: start; }
+@media (max-width: 960px) { .runbody { grid-template-columns: minmax(0, 1fr); } .runbody .act { order: -1; } }
+.feed { display: grid; }
+.feed li { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 12px; padding: 12px 0; border-top: 1px solid var(--hair); }
+.feed li.in { animation: rise 360ms var(--ease-out); }
+.feed li:first-child { border-top: 0; }
+.feed .who { font-weight: 700; font-size: 0.85rem; }
+.feed .txt { font-size: 0.95rem; }
+.feed li.wait .txt { color: var(--amber-ink); font-weight: 600; }
+.feed li.bad .txt { color: var(--red-ink); font-weight: 600; }
+.feed li.ok .txt { color: var(--green-ink); font-weight: 600; }
+.sysav { width: 36px; height: 36px; border-radius: 50%; background: var(--sunk); display: grid; place-items: center; color: var(--ink); }
+.sysav.gate { background: var(--amber-soft); color: var(--amber-ink); }
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.ticket { padding: 12px 14px; border: 1px solid var(--hair); border-radius: 10px; background: var(--sunk); display: grid; gap: 2px; }
+.ticket b { font-size: 0.95rem; }
+.ticket span { font-size: 0.875rem; color: var(--muted); }
+.preview { padding: 14px 16px; border: 1px solid var(--hair); border-radius: 10px; background: var(--sunk); font-size: 0.95rem; }
+.preview ul { margin-top: 6px; display: grid; gap: 2px; }
+.lock { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; padding: 12px 14px; border-radius: 10px; background: var(--sunk); font-size: 0.95rem; }
+.note { font-size: 0.875rem; color: var(--muted); max-width: 75ch; }
+.tsh { display: flex; align-items: center; gap: 10px; }
+.tsh b { color: var(--trouble); }
+.qa { display: grid; gap: 4px; }
+.qa dt { font-size: 0.8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.result-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Software */
+.sched, .apprbar { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px 18px; border-radius: 14px; margin-bottom: 24px; }
+.sched { background: var(--surface); border: 1px solid var(--hair); }
+.apprbar { background: var(--amber-soft); border: 1px solid var(--amber); color: var(--amber-ink); }
+.sched span, .apprbar span { display: block; font-size: 0.875rem; }
+.sched span { color: var(--muted); }
+@media (max-width: 560px) { .sched, .apprbar { grid-template-columns: 24px minmax(0, 1fr); } .sched > :last-child, .apprbar > :last-child { grid-column: 2; justify-self: start; } }
+.sw-table tr.hist td { border-top: 0; padding-top: 0; }
+.timeline { display: grid; margin: 0 0 6px; padding: 10px 16px; background: var(--sunk); border-radius: 10px; }
+.timeline li { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px; padding: 6px 0; font-size: 0.9rem; }
+.addgrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; margin-bottom: 4px; align-items: start; }
+@media (max-width: 760px) { .addgrid { grid-template-columns: minmax(0, 1fr); } }
+
+/* Wizard */
+.stepper { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 28px; }
+.stepper li { display: grid; gap: 6px; font-size: 0.875rem; font-weight: 700; color: var(--muted); }
+.stepper li::before { content: ""; height: 4px; border-radius: 4px; background: var(--rail); }
+.stepper li.done::before, .stepper li.now::before { background: var(--ink); }
+.stepper li.now { color: var(--ink); }
+.stepnow { display: none; }
+@media (max-width: 560px) { .stepper { margin-bottom: 10px; } .stepper li span { display: none; } .stepnow { display: block; font-weight: 700; margin-bottom: 24px; } }
+.ask { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr); gap: 24px; align-items: start; }
+@media (max-width: 860px) { .ask { grid-template-columns: minmax(0, 1fr); } }
+.field { display: grid; gap: 6px; }
+.field label, .field .lab { font-weight: 700; }
+.field .help { font-size: 0.875rem; color: var(--muted); }
+.err { display: flex; gap: 6px; align-items: center; color: var(--red-ink); font-size: 0.875rem; font-weight: 600; }
+[aria-invalid="true"] { border-color: var(--red) !important; }
+textarea, input[type="text"], select {
+  width: 100%; border: 1px solid var(--rail); border-radius: 10px; background: var(--surface); padding: 12px 14px; font-size: 1rem; line-height: 1.5;
+}
+textarea { min-height: 150px; resize: vertical; }
+select { padding: 10px 12px; width: auto; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { border: 1px solid var(--rail); background: var(--surface); border-radius: 999px; padding: 6px 14px; font-size: 0.9rem; font-weight: 600; cursor: pointer; }
+.chip:hover { border-color: var(--ink); }
+.thinking { display: grid; gap: 12px; }
+.thinking li { display: flex; gap: 10px; align-items: center; font-weight: 600; animation: rise 300ms var(--ease-out); }
+.thinking .spin { width: 18px; height: 18px; border-radius: 50%; border: 3px solid var(--lead-tint); border-top-color: var(--lead); animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.bubble { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 12px; align-items: start; }
+.bubble p { padding: 12px 16px; background: var(--lead-tint); color: #1b2a6b; border-radius: 4px 14px 14px 14px; font-size: 1rem; }
+.agentrow { display: flex; flex-wrap: wrap; gap: 12px; }
+.agentcard { display: flex; align-items: center; gap: 10px; padding: 10px 14px 10px 10px; border: 1px solid var(--hair); border-radius: 12px; background: var(--surface); }
+.agentcard b { display: block; font-size: 0.95rem; }
+.agentcard small { display: block; font-size: 0.85rem; color: var(--muted); }
+.toolcard { border: 2px solid var(--amber); border-radius: 14px; background: var(--surface); overflow: hidden; }
+.toolcard.ok { border-color: var(--green); }
+.toolcard-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; padding: 14px 18px; background: var(--amber-soft); color: var(--amber-ink); font-weight: 700; }
+.toolcard.ok .toolcard-head { background: var(--green-soft); color: var(--green-ink); }
+.toolcard-body { padding: 18px; display: grid; gap: 16px; }
+.kv { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 8px 16px; font-size: 0.95rem; }
+.kv dt { color: var(--muted); font-weight: 600; }
+@media (max-width: 560px) { .kv { grid-template-columns: minmax(0, 1fr); } .kv dd { margin-bottom: 6px; } }
+.checks { display: grid; gap: 6px; }
+.checks li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; font-size: 0.95rem; }
+.checks svg { color: var(--green); margin-top: 2px; }
+.nocode { padding: 12px 14px; border-radius: 10px; background: var(--sunk); font-size: 0.9rem; }
+.wfoot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; align-items: center; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--hair); }
+.inline-sel { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 1.05rem; font-weight: 600; }
+.sentence { font-size: 1.25rem; line-height: 1.55; padding: 22px; border-radius: 14px; background: var(--surface); border: 1px solid var(--hair); }
+.sentence mark { background: var(--lead-tint); color: #1b2a6b; padding: 0 4px; border-radius: 4px; }
+.done-hero { text-align: center; display: grid; justify-items: center; gap: 14px; padding: 40px 0 10px; }
+.done-hero .big { width: 84px; height: 84px; border-radius: 50%; background: var(--green); color: var(--on-status); display: grid; place-items: center; animation: pop 500ms var(--ease-out); }
+.done-hero h1 { font-size: 2.25rem; }
+.done-hero p { font-size: 1.15rem; color: var(--muted); max-width: 34em; }
+@keyframes pop { from { transform: scale(0.6); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* Teams drawer, modal, toast */
+.scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 40; }
+.drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100%); z-index: 41; background: var(--sunk); border-left: 1px solid var(--hair);
+  display: grid; grid-template-rows: auto auto 1fr;
+  padding-top: env(safe-area-inset-top, 0px); padding-right: env(safe-area-inset-right, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.drawer.in { animation: slide 260ms var(--ease-out); }
+@keyframes slide { from { transform: translateX(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+.drawer-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px; background: #4b53bc; color: #fff; }
+.drawer-head b { font-size: 1.05rem; }
+.drawer-head small { display: block; opacity: 0.85; font-size: 0.8rem; }
+.drawer-head .iconbtn { background: transparent; border-color: rgba(255,255,255,.4); color: #fff; }
+.chan { padding: 10px 18px; font-weight: 700; border-bottom: 1px solid var(--hair); background: var(--surface); }
+.msgs { overflow-y: auto; padding: 16px 18px 40px; display: grid; gap: 16px; align-content: start; }
+.msg { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 10px; }
+.msg-card { background: var(--surface); border: 1px solid var(--hair); border-radius: 10px; padding: 12px 14px; display: grid; gap: 10px; }
+.msg-meta { font-size: 0.85rem; color: var(--muted); }
+.msg-meta b { color: var(--ink); }
+.dialog {
+  position: fixed; z-index: 41; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(560px, calc(100% - 32px)); max-height: calc(100% - 48px);
+  overflow-y: auto; background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); padding: 24px; display: grid; gap: 16px;
+}
+.toast {
+  position: fixed; z-index: 45; left: 50%; transform: translateX(-50%); bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  background: var(--ink); color: var(--on-ink); padding: 12px 18px; border-radius: 12px; font-weight: 600; box-shadow: var(--shadow);
+  max-width: calc(100% - 32px);
+}
+.toast.in { animation: rise 260ms var(--ease-out); }
+
+
+/* Mock controls: not part of the app */
+.mockbar {
+  position: fixed; z-index: 35; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 14px; padding: 10px 14px; width: max-content; max-width: calc(100% - 24px);
+  background: var(--mock-bg); color: var(--mock-ink); border-radius: 16px; box-shadow: 0 10px 30px rgba(20, 10, 50, 0.35); font-size: 0.85rem;
+}
+.mockbar .tagm { font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; font-size: 0.72rem; color: var(--mock-dim); }
+.mockbar .grp { display: flex; align-items: center; gap: 6px; }
+.mockbar .grp > span { color: var(--mock-dim); font-weight: 600; }
+.mseg { display: inline-flex; border: 1px solid var(--mock-dim); border-radius: 10px; padding: 2px; }
+.mseg button { border: 0; background: none; color: var(--mock-ink); font-weight: 700; padding: 5px 10px; border-radius: 8px; cursor: pointer; font-size: 0.82rem; white-space: nowrap; }
+.mseg button[aria-pressed="true"] { background: var(--mock-on); color: var(--mock-on-ink); }
+.mreset { border: 1px solid var(--mock-dim); background: none; color: var(--mock-ink); border-radius: 10px; padding: 5px 10px; font-weight: 700; cursor: pointer; font-size: 0.82rem; }
+@media (max-width: 560px) { .mockbar .grp > span, .mockbar .hide-sm { display: none; } }
+
+@media (max-width: 760px) {
+  .wrap { padding-bottom: 210px; }
+  .mockbar { bottom: calc(68px + env(safe-area-inset-bottom, 0px)); }
+  .toast { bottom: calc(160px + env(safe-area-inset-bottom, 0px)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+
+<div id="app"></div>
+
+<script>
+(() => {
+  'use strict';
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const $app = document.getElementById('app');
+
+  /* ---------- Icons ---------- */
+  const I = {
+    check: (s = 16) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>`,
+    x: (s = 16) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>`,
+    shield: (s = 20) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.3-7.5 9.9-4.3-1.6-7.5-5.3-7.5-9.9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5" stroke-linecap="round"/></svg>`,
+    lock: (s = 20) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>`,
+    chat: (s = 20) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg>`,
+    gear: (s = 20) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>`,
+    plus: (s = 18) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>`,
+    left: (s = 18) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>`,
+    right: (s = 18) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>`,
+    alert: (s = 22) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5v.5"/></svg>`,
+    tool: (s = 22) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="M8 10h8M8 14h5" stroke-linecap="round"/></svg>`,
+    clock: (s = 20) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>`,
+    home: (s = 22) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg>`,
+    grid: (s = 22) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>`,
+    box: (s = 22) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M4 7.5L12 3.5l8 4v9l-8 4-8-4z"/><path d="M4 7.5l8 4 8-4M12 11.5v9"/></svg>`,
+    flag: (s = 20) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 21V4M6 4h11l-2 4 2 4H6"/></svg>`,
+    mark: (s = 24) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><rect x="9.5" y="9.5" width="5" height="5" rx="1.2" fill="var(--focus)"/></svg>`,
+  };
+
+  /* ---------- People and agents ---------- */
+  const PEOPLE = {
+    alice: { name: 'Alice', role: 'Operator and Approver', tone: 1, op: true, ap: true },
+    bob: { name: 'Bob', role: 'Approver', tone: 2, op: false, ap: true },
+    carol: { name: 'Carol', role: 'Operator', tone: 4, op: true, ap: false },
+    dana: { name: 'Dana', role: 'Support developer', tone: 3 },
+  };
+  const pav = (id, size = 34) => `<span class="pav t${PEOPLE[id].tone}" style="width:${size}px;height:${size}px" aria-hidden="true">${PEOPLE[id].name[0]}</span>`;
+  const nm = (id) => (PEOPLE[id] ? PEOPLE[id].name : id);
+
+  const AGENTS = {
+    lead: { name: 'Room lead', acc: 'headset', hue: 'var(--lead)', tint: 'var(--lead-tint)' },
+    checker: { name: 'Release checker', acc: 'magnifier', hue: 'var(--checker)', tint: 'var(--checker-tint)' },
+    trouble: { name: 'AI troubleshooter', acc: 'wrench', hue: 'var(--trouble)', tint: 'var(--trouble-tint)' },
+    writer: { name: 'Ticket writer', acc: 'none', hue: 'var(--agent-4)', tint: 'var(--agent-4-tint)' },
+    jira: { name: 'Jira reader', acc: 'none', hue: 'var(--agent-2)', tint: 'var(--agent-2-tint)' },
+    msg: { name: 'Message writer', acc: 'none', hue: 'var(--agent-1)', tint: 'var(--agent-1-tint)' },
+    summary: { name: 'Summary writer', acc: 'none', hue: 'var(--agent-1)', tint: 'var(--agent-1-tint)' },
+    issues: { name: 'Issue reader', acc: 'none', hue: 'var(--agent-3)', tint: 'var(--agent-3-tint)' },
+    access: { name: 'Access checker', acc: 'none', hue: 'var(--agent-3)', tint: 'var(--agent-3-tint)' },
+  };
+  const HEAD = { headset: [24, 26], magnifier: [22, 24], wrench: [22, 24], none: [24, 24] };
+  function face(id, size = 40) {
+    const a = AGENTS[id];
+    const [x, y] = HEAD[a.acc];
+    const h = a.hue;
+    const acc = {
+      headset: `<path d="M7.5 25a16.5 16.5 0 0 1 33 0" fill="none" stroke="${h}" stroke-width="3.2" stroke-linecap="round"/><rect x="4.5" y="21" width="6.5" height="11" rx="3.2" fill="${h}"/><rect x="37" y="21" width="6.5" height="11" rx="3.2" fill="${h}"/><path d="M40 31.5c0 6-4 8.5-9.5 8.5" fill="none" stroke="${h}" stroke-width="2.6" stroke-linecap="round"/><circle cx="30" cy="40" r="2.8" fill="${h}"/>`,
+      magnifier: `<circle cx="34.5" cy="33.5" r="7" fill="var(--face-lens)" stroke="${h}" stroke-width="3.2"/><path d="M39.6 38.6l5 5" stroke="${h}" stroke-width="4.2" stroke-linecap="round"/>`,
+      wrench: `<g transform="rotate(-45 36 36)" fill="${h}"><rect x="33.6" y="33" width="4.8" height="15" rx="2.4"/><path d="M30 31.5a6 6 0 1 1 12 0v1.2h-3.3v-4.4h-5.4v4.4H30z"/></g>`,
+      none: '',
+    }[a.acc];
+    return `<svg class="face" viewBox="0 0 48 48" width="${size}" height="${size}" aria-hidden="true"><circle cx="${x}" cy="${y}" r="15" fill="${a.tint}"/><rect x="${x - 7}" y="${y - 4}" width="4" height="6.5" rx="2" fill="var(--face-ink)"/><rect x="${x + 3}" y="${y - 4}" width="4" height="6.5" rx="2" fill="var(--face-ink)"/>${acc}</svg>`;
+  }
+  const faces = (ids, size = 30) => `<span class="faces" aria-label="Agents: ${ids.map((i) => AGENTS[i].name).join(', ')}">${ids.map((i) => face(i, size)).join('')}</span>`;
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  /* ---------- State ---------- */
+  const EXAMPLE = 'Every Friday, sum up the Jira tickets our team closed this week and update our Weekly summary page in Confluence.';
+  const fresh = () => ({
+    firstDay: false, user: 'alice', view: { name: 'home' },
+    teams: false, modal: null, toast: null,
+    sw: 'waiting', swBy: null,
+    issues: 'failed',
+    nudge: 'failed', report: 0,
+    tool: 'none',
+    conf: 'none', confBy: null,
+    added: [], swOpen: null, swForm: { name: '', repo: '', ours: '' }, swErr: {}, draft: false,
+    wiz: { step: 1, text: EXAMPLE, err: '', extra: '', planning: 0, day: 'Friday', time: '17:00', two: false, name: 'Weekly summary in Confluence' },
+  });
+  let S = fresh();
+  const me = () => PEOPLE[S.user];
+
+  /* ---------- Routines ---------- */
+  const ROUTINES = {
+    sw: { name: 'Keep our software up to date', what: 'Checks 12 tools for new releases and raises a Jira ticket for each one that is behind.', when: 'Every Monday, 9:00', next: 'Mon 2 Nov, 9:00', sort: 4, owner: 'carol', approves: 'Any Approver except Carol', agents: ['lead', 'checker', 'writer'] },
+    issues: { name: 'Morning bug report check', what: 'Looks for new bug reports on a GitHub project we use and raises a Jira ticket for each one.', when: 'Every weekday, 8:00', next: 'Wed 28 Oct, 8:00', sort: 1, owner: 'alice', approves: 'Any Approver except Alice', agents: ['lead', 'issues', 'writer'] },
+    nudge: { name: 'Stale ticket nudge', what: 'Finds Jira tickets with no update for 14 days and asks their owners in Teams if they are still needed.', when: 'Every Wednesday, 10:00', next: 'Wed 28 Oct, 10:00', sort: 2, owner: 'alice', approves: 'Any Approver except Alice', agents: ['lead', 'jira', 'msg'] },
+    conf: { name: 'Weekly summary in Confluence', what: 'Sums up the Jira tickets closed in MOCK this week and updates the Weekly summary page in Confluence.', when: 'Every Friday, 17:00', next: 'Fri 30 Oct, 17:00', sort: 3, owner: 'alice', approves: 'Any Approver except Alice', agents: ['lead', 'jira', 'summary'] },
+    access: { name: 'Quarterly access review', what: 'Lists who can use Entra ID, the admin tools and GitLab, asks managers to confirm, and removes access nobody confirms.', when: 'First Monday of each quarter', next: 'Mon 4 Jan 2027, 9:00', sort: 5, owner: 'carol', approves: '2 Approvers, one after the other', agents: ['lead', 'access', 'writer'] },
+  };
+  const PLANS = {
+    sw: [['Read the newest release of each tool', 'read', 'Reads GitHub'], ['Draft an upgrade ticket for each tool that is behind', null, 'No system access'], ['Create the tickets in Jira project MOCK', 'write', 'Changes data, waits for a yes']],
+    issues: [['Read new bug reports on langchain-ai/langserve', 'read', 'Reads GitHub'], ['Draft a ticket for each one', null, 'No system access'], ['Create the tickets in Jira project MOCK', 'write', 'Changes data, waits for a yes']],
+    nudge: [['Find tickets with no update for 14 days', 'read', 'Reads Jira'], ['Draft a short message to each owner', null, 'No system access'], ['Send the messages in Teams', 'write', 'Changes data, waits for a yes']],
+    conf: [['Find the tickets closed in MOCK this week', 'read', 'Reads Jira'], ['Write a short summary', null, 'No system access'], ['Update the Weekly summary page in Confluence', 'write', 'Changes data, waits for a yes']],
+    access: [['List who can use Entra ID, the admin tools and GitLab', 'read', 'Reads 3 systems'], ['Ask each manager to confirm in Teams', 'write', 'Changes data, waits for a yes'], ['Remove access nobody confirmed', 'write', 'Changes data, 2 Approvers, one after the other']],
+  };
+  const routineIds = () => (S.firstDay ? [] : ['sw', 'issues', 'nudge', 'access']).concat(S.conf !== 'none' ? ['conf'] : []);
+  const has = (id) => routineIds().includes(id);
+  const STARTERS = [
+    ['Keep our software up to date', 'Add the tools your team runs. They are checked for new releases every Monday, with one approval for all the tickets.', null, 'software'],
+    ['Weekly summary in Confluence', 'Sum up the Jira tickets closed this week and update a Confluence page.', EXAMPLE],
+    ['Nudge stale Jira tickets', 'Ask owners in Teams about tickets with no update for 14 days.', 'Every Wednesday, find Jira tickets with no update for 14 days and ask their owners in Teams if they are still needed.'],
+  ];
+
+  /* ---------- Software: one list for every release check ---------- */
+  const TRACKED = ['LangGraph', 'FastAPI', 'Grafana', 'n8n', 'PostgreSQL', 'Terraform', 'Keycloak', 'Redis', 'Nginx', 'Node.js', 'Python', 'Playwright'];
+  const UP_TO_DATE = TRACKED.slice(3);
+  const KNOWN = {
+    langgraph: ['LangGraph', 'langchain-ai/langgraph'], fastapi: ['FastAPI', 'fastapi/fastapi'], grafana: ['Grafana', 'grafana/grafana'],
+    kubernetes: ['Kubernetes', 'kubernetes/kubernetes'], n8n: ['n8n', 'n8n-io/n8n'], postgresql: ['PostgreSQL', 'postgres/postgres'],
+    terraform: ['Terraform', 'hashicorp/terraform'], keycloak: ['Keycloak', 'keycloak/keycloak'], redis: ['Redis', 'redis/redis'],
+    nginx: ['Nginx', 'nginx/nginx'], 'node.js': ['Node.js', 'nodejs/node'], python: ['Python', 'python/cpython'],
+    playwright: ['Playwright', 'microsoft/playwright'], gitlab: ['GitLab', 'gitlabhq/gitlabhq'],
+  };
+  const isReleaseCheck = (t) => /\breleases?\b|\bversions?\b|\bupgrades?\b|\bpatch(es)?\b|\bout of date\b/i.test(t);
+  const namedIn = (t) => { const low = t.toLowerCase(); const k = Object.keys(KNOWN).find((key) => low.includes(key)); return k ? KNOWN[k] : null; };
+  const onList = (name) => (S.firstDay ? [] : TRACKED).concat(S.added.map((a) => a.name)).some((n) => n.toLowerCase() === name.toLowerCase());
+
+  function status(id) {
+    switch (id) {
+      case 'sw':
+        if (S.sw === 'waiting') return { tone: 'wait', label: 'Needs a yes', last: 'Mon 26 Oct: 2 upgrade tickets are waiting for a yes.' };
+        if (S.sw === 'approved') return { tone: 'ok', label: 'On', last: `Mon 26 Oct: 2 tickets created, approved by ${nm(S.swBy)}.` };
+        return { tone: 'ok', label: 'On', last: `Mon 26 Oct: declined by ${nm(S.swBy)}. Nothing was written.` };
+      case 'issues':
+        return S.issues === 'failed' ? { tone: 'bad', label: 'Stopped', last: 'Today 8:00: stopped. GitHub can’t find the project.' } : { tone: 'ok', label: 'On', last: 'Today: no new bug reports. Nothing to write.' };
+      case 'nudge':
+        if (S.nudge === 'fixed') return { tone: 'ok', label: 'On', last: 'Today: done after the fix. Nothing to send.' };
+        if (S.report > 0) return { tone: 'bad', label: 'Stopped', last: 'Wed 21 Oct: stopped. Reported to support.' };
+        return { tone: 'bad', label: 'Stopped', last: 'Wed 21 Oct: stopped on a ticket with no owner.' };
+      case 'conf':
+        if (S.conf === 'waiting') return { tone: 'wait', label: 'Needs a yes', last: 'Test run today: waiting for an Approver.' };
+        if (S.conf === 'approved') return { tone: 'ok', label: 'On', last: `Test run today: page updated, approved by ${nm(S.confBy)}.` };
+        return { tone: 'ok', label: 'On', last: 'Turned on today. First run Friday.' };
+      case 'access':
+        return { tone: 'ok', label: 'On', last: 'Mon 5 Oct: 3 people lost access, approved by Bob, then Alice.' };
+    }
+  }
+  const pill = (st) => `<span class="pill ${st.tone}">${st.tone === 'ok' ? I.check(12) : st.tone === 'bad' ? I.x(12) : I.lock(12)}${st.label}</span>`;
+
+  /* ---------- Who can approve ---------- */
+  const starterOf = { sw: 'carol', conf: 'alice' };
+  const canApprove = (id, user = S.user) => PEOPLE[user].ap && starterOf[id] !== user;
+
+  /* ---------- Runs: the live activity view ---------- */
+  function runModel(id) {
+    if (id === 'sw') {
+      const st = S.sw;
+      const gate = st === 'waiting' ? { tone: 'wait', who: 'gate', text: 'Waiting for an Approver’s yes. Carol can’t approve, because Carol’s schedule started this run.' }
+        : st === 'approved' ? { tone: 'ok', who: 'gate', text: `${nm(S.swBy)} approved 2 tickets.` }
+        : { tone: 'bad', who: 'gate', text: `${nm(S.swBy)} declined. Nothing was written.` };
+      return {
+        routine: 'sw', end: st === 'waiting' ? 4 : 6, state: st === 'waiting' ? 'waiting' : 'done',
+        headline: st === 'waiting' ? '2 tickets are waiting for a yes' : st === 'approved' ? '2 tickets created in Jira' : 'Declined, nothing was written',
+        stations: [
+          { label: 'Started', sub: 'Mon 9:00', who: 'p:carol', msg: { who: 'portal', text: 'Carol’s schedule started the Monday check.' } },
+          { label: 'Pick agents', who: 'lead', msg: { who: 'lead', text: '12 tools to check. I’m bringing in the Release checker and the Ticket writer.' } },
+          { label: 'Read 12 sources', who: 'checker', msg: { who: 'checker', text: 'LangGraph and FastAPI have newer releases. Grafana couldn’t be read, because GitHub’s hourly limit was reached.' } },
+          { label: 'Draft tickets', who: 'writer', msg: { who: 'writer', text: 'I drafted 2 upgrade tickets. Nothing is in Jira yet.' } },
+          { label: 'Approval gate', gate: true, msg: gate },
+          { label: 'Create in Jira', who: 'platform', skip: st === 'declined', msg: { who: 'platform', text: 'Created MOCK-14 and MOCK-15. Only the approved tickets were written.' } },
+          { label: 'Done', msg: { who: 'portal', tone: 'ok', text: st === 'declined' ? 'Done. The tickets will be proposed again next Monday.' : 'Done. 2 upgrade tickets are in Jira.' } },
+        ],
+      };
+    }
+    if (id === 'issues') {
+      const ok = S.issues === 'fixed';
+      return {
+        routine: 'issues', end: ok ? 6 : 2, fail: ok ? null : 2, state: ok ? 'done' : 'failed',
+        headline: ok ? 'Done, nothing new today' : 'Stopped at Read bug reports',
+        stations: [
+          { label: 'Started', sub: ok ? 'Today, retry' : 'Today 8:00', who: 'p:alice', msg: { who: 'portal', text: ok ? 'Alice retried the run with the new project name.' : 'Alice’s schedule started the morning check.' } },
+          { label: 'Pick agents', who: 'lead', msg: { who: 'lead', text: 'I’m bringing in the Issue reader and the Ticket writer.' } },
+          { label: 'Read bug reports', who: 'issues', msg: ok ? { who: 'issues', text: 'Read langchain-ai/langchain. No new bug reports since yesterday.' } : { who: 'issues', tone: 'bad', text: 'GitHub says langchain-ai/langserve doesn’t exist any more. I stopped here.' } },
+          { label: 'Draft tickets', who: 'writer', skip: ok },
+          { label: 'Approval gate', gate: true, skip: ok },
+          { label: 'Create in Jira', who: 'platform', skip: ok },
+          { label: 'Done', msg: { who: 'portal', tone: 'ok', text: 'Done. Nothing to write today.' } },
+        ],
+      };
+    }
+    if (id === 'nudge') {
+      const ok = S.nudge === 'fixed';
+      return {
+        routine: 'nudge', end: ok ? 6 : 2, fail: ok ? null : 2, state: ok ? 'done' : 'failed',
+        headline: ok ? 'Done, nothing to send' : 'Stopped at Read stale tickets',
+        stations: [
+          { label: 'Started', sub: ok ? 'Today, retry' : 'Wed 10:00', who: 'p:alice', msg: { who: 'portal', text: ok ? 'Alice retried the run after the fix went live.' : 'Alice’s schedule started the Wednesday nudge.' } },
+          { label: 'Pick agents', who: 'lead', msg: { who: 'lead', text: 'I’m bringing in the Jira reader and the Message writer.' } },
+          { label: 'Read stale tickets', who: 'jira', msg: ok ? { who: 'jira', text: 'Found 1 stale ticket, MOCK-31. It has no owner, so there’s nobody to ask. I listed it for you instead.' } : { who: 'jira', tone: 'bad', text: 'I stopped while reading MOCK-31. Something went wrong inside the platform.' } },
+          { label: 'Draft messages', who: 'msg', skip: ok },
+          { label: 'Approval gate', gate: true, skip: ok },
+          { label: 'Send in Teams', who: 'platform', skip: ok },
+          { label: 'Done', msg: { who: 'portal', tone: 'ok', text: 'Done. Nothing to send this week.' } },
+        ],
+      };
+    }
+    if (id === 'conf') {
+      const st = S.conf;
+      return {
+        routine: 'conf', end: st === 'waiting' ? 4 : 6, state: st === 'waiting' ? 'waiting' : 'done',
+        headline: st === 'waiting' ? '1 page update is waiting for a yes' : 'Weekly summary updated',
+        stations: [
+          { label: 'Started', sub: 'Today, test', who: 'p:alice', msg: { who: 'portal', text: 'Alice started a test run.' } },
+          { label: 'Pick agents', who: 'lead', msg: { who: 'lead', text: 'I’m bringing in the Jira reader and the Summary writer.' } },
+          { label: 'Find closed tickets', who: 'jira', msg: { who: 'jira', text: '14 tickets were closed in MOCK this week.' } },
+          { label: 'Write summary', who: 'summary', msg: { who: 'summary', text: 'I wrote a short summary. Nothing is in Confluence yet.' } },
+          { label: 'Approval gate', gate: true, msg: st === 'waiting' ? { who: 'gate', tone: 'wait', text: 'Waiting for an Approver’s yes. Alice started this run, so Alice can’t approve it.' } : { who: 'gate', tone: 'ok', text: `${nm(S.confBy)} approved the page update.` } },
+          { label: 'Update Confluence', who: 'platform', msg: { who: 'platform', text: 'Updated Weekly summary in Confluence. Only the approved text was written.' } },
+          { label: 'Done', msg: { who: 'portal', tone: 'ok', text: 'Done. The page is up to date.' } },
+        ],
+      };
+    }
+  }
+
+  const P = { run: null, at: 0, shown: 0, timer: null, speed: reduce ? 'instant' : '1x', feedSeen: 0, feedNext: 0 };
+  const interval = () => (P.speed === '2x' ? 520 : 1050);
+  function stopTimer() { if (P.timer) { clearInterval(P.timer); P.timer = null; } }
+  function playTo(from) {
+    stopTimer();
+    const m = runModel(P.run);
+    P.at = from; P.shown = from;
+    if (from === 0) P.feedSeen = 0;
+    if (P.speed === 'instant') { P.at = m.end; P.shown = m.end; return; }
+    P.timer = setInterval(() => {
+      const end = runModel(P.run).end;
+      if (P.at < end) { P.shown = P.at; P.at += 1; render(); } else stopTimer();
+    }, interval());
+  }
+  function continueRun() {
+    if (S.view.name !== 'run') return;
+    playTo(P.at);
+  }
+
+  /* ---------- Small pieces ---------- */
+  function whoAvatar(w, size = 36) {
+    if (!w) return '';
+    if (w.startsWith('p:')) return pav(w.slice(2), size);
+    if (w === 'platform') return `<span class="sysav" style="width:${size}px;height:${size}px">${I.mark(20)}</span>`;
+    return face(w, size + 12);
+  }
+  function feedAvatar(w) {
+    if (w === 'portal' || w === 'platform') return `<span class="sysav">${I.mark(20)}</span>`;
+    if (w === 'gate') return `<span class="sysav gate">${I.shield(20)}</span>`;
+    return face(w, 36);
+  }
+  const feedName = (w) => (w === 'portal' ? 'Portal' : w === 'platform' ? 'Platform' : w === 'gate' ? 'Approval gate' : AGENTS[w].name);
+  const feedHue = (w) => (AGENTS[w] ? AGENTS[w].hue : 'var(--muted)');
+
+  /* ---------- Views ---------- */
+  function header() {
+    const v = S.view.name;
+    const swRun = v === 'run' && S.view.id === 'sw';
+    const cur = (on) => (on ? ' aria-current="page"' : '');
+    const nav = [
+      `<button class="nav-a" data-act="go" data-arg="home"${cur(v === 'home')}>Home</button>`,
+      `<button class="nav-a" data-act="go" data-arg="routines"${cur(['routines', 'routine'].includes(v) || (v === 'run' && !swRun))}>Routines</button>`,
+      `<button class="nav-a" data-act="go" data-arg="software"${cur(v === 'software' || swRun)}>Software</button>`,
+      me().op ? `<button class="nav-a nav-new" data-act="go" data-arg="new"${cur(['new', 'done'].includes(v))}>${I.plus(16)}New routine</button>` : '',
+    ].join('');
+    const n = teamsCount();
+    return `<header class="hdr"><div class="hdr-in">
+      <button class="brand" data-act="go" data-arg="home">${I.mark(26)}Portal</button>
+      <nav class="nav" aria-label="Main">${nav}</nav>
+      <div class="tools">
+        <button class="iconbtn" data-act="teams" aria-label="Teams, practice copy${n ? `, ${approvalsWord(n)} waiting for you` : ''}" title="${n ? `${approvalsWord(n)} waiting for you` : 'Teams, practice copy'}">${I.chat(20)}<span class="lbl">Teams</span>${n ? `<span class="badge">${n}</span>` : ''}</button>
+        <button class="iconbtn" data-act="go" data-arg="settings" aria-label="Settings"${v === 'settings' ? ' aria-current="page"' : ''}>${I.gear(20)}</button>
+        <div class="me">${pav(S.user)}<span class="me-text"><b>${me().name}</b><small>${me().role}</small></span></div>
+      </div>
+    </div></header>`;
+  }
+
+  const approvalsWord = (n) => (n === 1 ? '1 approval' : `${n} approvals`);
+
+  /* Phones: the same menu as the header, as a tab bar at the bottom. */
+  function tabbar() {
+    const v = S.view.name;
+    const swRun = v === 'run' && S.view.id === 'sw';
+    const tabs = [
+      ['home', 'Home', I.home(22), v === 'home'],
+      ['routines', 'Routines', I.grid(22), ['routines', 'routine'].includes(v) || (v === 'run' && !swRun)],
+      ['software', 'Software', I.box(22), v === 'software' || swRun],
+    ].concat(me().op ? [['new', 'New routine', I.plus(22), ['new', 'done'].includes(v)]] : []);
+    return `<nav class="tabbar" aria-label="Main" style="--tabs:${tabs.length}">${tabs.map(([arg, label, icon, on]) => `<button class="tab" data-act="go" data-arg="${arg}"${on ? ' aria-current="page"' : ''}>${icon}<span>${label}</span></button>`).join('')}</nav>`;
+  }
+
+  /* 6. One main button per screen: only the first card keeps it. */
+  const demote = (html) => html.replace(/btn primary/g, 'btn');
+
+  function needs() {
+    const out = [];
+    const u = S.user;
+    if (has('sw') && S.sw === 'waiting' && canApprove('sw')) out.push({ key: 'sw-appr', kind: 'wait', icon: I.shield(22), title: '2 upgrade tickets are waiting for your yes', meta: 'Software · this week’s check, Mon 26 Oct, 9:00', body: `<ul class="mini-list"><li>LangGraph 1.2.14 → 1.2.17</li><li>FastAPI 0.118.0 → 0.120.1</li></ul>`, actions: `<button class="btn primary" data-act="run" data-arg="sw">Review and decide</button><button class="btn" data-act="teams">Open in Teams</button>` });
+    if (S.conf === 'waiting' && canApprove('conf')) out.push({ key: 'conf-appr', kind: 'wait', icon: I.shield(22), title: '1 Confluence page update is waiting for your yes', meta: 'Weekly summary in Confluence · test run by Alice', body: '', actions: `<button class="btn primary" data-act="run" data-arg="conf">Review and decide</button>` });
+    if (S.tool === 'asked' && PEOPLE[u].ap && u !== 'alice') out.push({ key: 'tool', kind: 'tool', icon: I.tool(22), title: 'OK a new tool: Update a Confluence page', meta: 'Asked by Alice · drafted by the AI from Confluence’s API', body: `<p class="small muted">It changes data, so an Approver must OK it once before any routine can use it.</p>`, actions: `<button class="btn primary" data-act="go" data-arg="tool">Review the tool</button>` });
+    if (PEOPLE[u].op) {
+      if (has('issues') && S.issues === 'failed') out.push({ key: 'issues', kind: 'bad', icon: I.alert(22), title: 'Morning bug report check stopped', meta: 'Today, 8:00', body: says('GitHub can’t find langchain-ai/langserve. It moved to langchain-ai/langchain. You can fix this yourself.'), actions: `<button class="btn primary" data-act="run" data-arg="issues">See why and fix it</button>` });
+      if (has('nudge') && S.nudge === 'failed' && S.report === 0) out.push({ key: 'nudge', kind: 'bad', icon: I.alert(22), title: 'Stale ticket nudge stopped', meta: 'Wed 21 Oct, 10:00', body: says('This is a problem in the platform, not in your routine. You can’t fix it from here. Report it and support gets everything they need.'), actions: `<button class="btn primary" data-act="report">Report to support</button><button class="btn" data-act="run" data-arg="nudge">See the run</button>` });
+      if (has('nudge') && S.nudge === 'failed' && S.report === 4) out.push({ key: 'nudge-fixed', kind: 'ok', icon: I.check(22), title: 'The fix for Stale ticket nudge is live', meta: 'Reported by you · fixed by support', body: `<p class="small muted">Retry the run to catch up on this week.</p>`, actions: `<button class="btn primary" data-act="retryNudge">Retry the run</button>` });
+    }
+    return out;
+  }
+  function says(text) { return `<div class="says">${face('trouble', 32)}<div><b>AI troubleshooter</b>${text}</div></div>`; }
+  function taskCard(t) {
+    return `<article class="task"><span class="ico ${t.kind}">${t.icon}</span><div class="task-body"><h3 class="task-title">${t.title}</h3><div class="task-meta">${t.meta}</div>${t.body}<div class="btns">${t.actions}</div></div></article>`;
+  }
+
+  const REPORT_STAGES = [
+    ['Reported', 'Sent to support with the run and the troubleshooter’s notes.'],
+    ['Agents are writing a fix', 'Coding agents found the cause and are testing a fix.'],
+    ['Fix ready, waiting for the support developer', 'Dana reads the fix and decides. Agents can’t put it live themselves.'],
+    ['Fixed', 'The fix is live. Retry the run.'],
+  ];
+  function reportTrack(compact) {
+    return `<ol class="track4">${REPORT_STAGES.map(([t, d], i) => {
+      const n = i + 1;
+      const cls = n < S.report || S.report === 4 ? 'done' : n === S.report ? 'now' : 'todo';
+      return `<li class="${cls}"><span class="dot">${cls === 'done' ? I.check(13) : ''}</span><div><b>${t}</b>${compact && cls !== 'now' ? '' : `<span>${d}</span>`}</div></li>`;
+    }).join('')}</ol>${S.report < 4 ? `<div><button class="btn mock sm" data-act="advance">Mock: move to the next stage</button></div>` : ''}`;
+  }
+
+  function todayView() {
+    const items = needs();
+    const n = items.length;
+    const waitingOn = [];
+    if (S.user === 'alice') {
+      if (S.tool === 'asked') waitingOn.push(['An Approver to OK the new tool', 'Update a Confluence page']);
+      if (S.conf === 'waiting') waitingOn.push(['An Approver’s yes on your test run', 'Weekly summary in Confluence']);
+    }
+    const coming = routineIds().map((id) => ROUTINES[id]).sort((a, b) => a.sort - b.sort);
+    const dayOne = coming.length === 0;
+    const line = dayOne
+      ? (me().op ? 'Welcome to the Portal. Set up your first routine, and it runs by itself from then on.' : 'Nothing needs you yet. When a routine wants to change something, it shows up here and in Teams.')
+      : n === 0 ? 'Nothing needs you right now. Your routines are running.' : `${n === 1 ? '1 thing needs' : `${n} things need`} you. Everything else is running.`;
+    const main = dayOne && me().op && n === 0 ? firstRoutine() : `<section class="section" aria-labelledby="needs-h">
+          <h2 id="needs-h">Needs you <span class="count">${n}</span></h2>
+          ${n ? items.map((t, i) => taskCard(i === 0 ? t : { ...t, actions: demote(t.actions) })).join('') : `<div class="quiet"><b>All quiet</b>${coming.length ? `Next up: ${coming[0].name}, ${coming[0].next}.` : 'Nothing is scheduled yet.'}</div>`}
+        </section>`;
+    const following = has('nudge') && S.report > 0 && S.report < 4 && S.user === 'alice' ? `<section class="section" aria-labelledby="fu-h"><h2 id="fu-h">Following up</h2>
+          <article class="panel"><div><div class="task-title">Stale ticket nudge: reported to support</div><div class="task-meta">You reported it today. Support has the run and the troubleshooter’s notes.</div></div>${reportTrack(true)}</article></section>` : '';
+    return `<div class="today">
+      <div>
+        <div class="hello" style="margin-bottom:28px">
+          <p class="eyebrow" style="margin:0 0 6px">Tuesday 27 October</p>
+          <h1 tabindex="-1">Good morning, ${me().name}</h1>
+          <p>${line}</p>
+        </div>
+        ${main}
+        ${following}
+      </div>
+      <aside class="side">
+        ${waitingOn.length ? `<div class="side-box"><h2>Waiting on others</h2><div class="rows">${waitingOn.map(([a, b]) => `<div class="row"><div><div class="row-name">${a}</div><div class="row-sub">${b}</div></div>${I.lock(18)}</div>`).join('')}</div></div>` : ''}
+        ${S.draft && S.conf === 'none' && me().op ? `<div class="side-box"><h2>Your drafts</h2><div class="rows"><button class="row-btn" data-act="go" data-arg="new"><div><div class="row-name">${esc(S.wiz.name)}</div><div class="row-sub">Step ${S.wiz.step} of 4. Pick up where you left off.</div></div>${I.right(16)}</button></div></div>` : ''}
+        ${dayOne ? howItWorks() : `<div class="side-box"><h2>Coming up</h2><div class="rows">${coming.map((r) => `<button class="row-btn" data-act="routine" data-arg="${keyOf(r)}"><div><div class="row-name">${r.name}</div><div class="row-sub">${r.next}</div></div>${I.right(16)}</button>`).join('')}</div><div><button class="linkbtn" data-act="go" data-arg="routines">See all routines</button></div></div>`}
+      </aside>
+    </div>`;
+  }
+  function firstRoutine() {
+    return `<section class="section" aria-labelledby="first-h">
+      <h2 id="first-h">Start your first routine</h2>
+      <p class="muted">Pick a ready-made one or describe your own. Nothing runs until you check the plan and turn it on.</p>
+      <div class="starters">${STARTERS.map(([name, what, text, page]) => `<div class="starter"><h3>${name}</h3><p>${what}</p>${page ? `<button class="btn sm" data-act="go" data-arg="${page}">Add your software</button>` : `<button class="btn sm" data-act="starter" data-arg="${esc(text)}">Use this</button>`}</div>`).join('')}</div>
+      <div><button class="btn primary" data-act="go" data-arg="new">${I.plus(18)}Describe your own</button></div>
+    </section>`;
+  }
+  function howItWorks() {
+    const steps = [
+      ['Describe a task', 'In plain English, the way you would ask a colleague.'],
+      ['Check the plan and turn it on', 'See which agents do what, and which steps need a yes.'],
+      ['Say yes in Teams', 'Nothing changes in Jira or Confluence until an Approver agrees.'],
+      ['See the result here', 'If something stops, the AI troubleshooter tells you why.'],
+    ];
+    return `<div class="side-box"><h2>How it works</h2><ol class="steps">${steps.map(([a, b]) => `<li><div><div class="what">${a}</div><div class="how">${b}</div></div></li>`).join('')}</ol></div>`;
+  }
+  const keyOf = (r) => Object.keys(ROUTINES).find((k) => ROUTINES[k] === r);
+
+  function actionFor(id) {
+    if (id === 'sw' && S.sw === 'waiting' && canApprove('sw')) return `<button class="btn primary sm" data-act="run" data-arg="sw">Review and decide</button>`;
+    if (id === 'conf' && S.conf === 'waiting' && canApprove('conf')) return `<button class="btn primary sm" data-act="run" data-arg="conf">Review and decide</button>`;
+    if (!me().op) return '';
+    if (id === 'issues' && S.issues === 'failed') return `<button class="btn primary sm" data-act="run" data-arg="issues">Fix it</button>`;
+    if (id === 'nudge' && S.nudge === 'failed' && S.report === 0) return `<button class="btn primary sm" data-act="report">Report to support</button>`;
+    if (id === 'nudge' && S.nudge === 'failed' && S.report === 4) return `<button class="btn primary sm" data-act="retryNudge">Retry the run</button>`;
+    return '';
+  }
+
+  function boardView() {
+    const ids = routineIds();
+    const order = ids.slice().sort((a, b) => (actionFor(b) ? 1 : 0) - (actionFor(a) ? 1 : 0) || ROUTINES[a].sort - ROUTINES[b].sort);
+    return `<div class="pagehead"><div><h1 tabindex="-1">Routines</h1><p>Your team’s repeated tasks. Each one runs by itself and asks before it changes anything.</p></div></div>
+      ${ids.length === 0 && !me().op ? '<p class="quiet"><b>No routines yet</b>An Operator sets them up. You approve their changes.</p>' : ''}
+      <div class="board">${(() => {
+        let mainUsed = false;
+        return order.map((id) => {
+          const r = ROUTINES[id];
+          const st = status(id);
+          let act = actionFor(id);
+          if (act) { if (mainUsed) act = demote(act); mainUsed = true; }
+          return `<article class="rcard ${act ? (st.tone === 'bad' ? 'broke' : 'needs') : ''}">
+            <div class="rcard-top">${pill(st)}${faces(r.agents, 30)}</div>
+            <h2><button class="rcard-link" data-act="routine" data-arg="${id}">${r.name}</button></h2>
+            <p>${st.last}</p>
+            <div class="rcard-foot"><span>Next: ${r.next}</span>${act}</div>
+          </article>`;
+        }).join('');
+      })()}
+      ${me().op ? `<button class="rcard add" data-act="go" data-arg="new">${I.plus(28)}<b>New routine</b><span>Describe a task in plain English</span></button>` : ''}</div>`;
+  }
+
+  function stepsList(id) {
+    return `<ol class="steps">${PLANS[id].map(([what, kind, how]) => `<li><div><div class="what">${what}</div><div class="how"><span class="tag ${kind || ''}">${how}</span></div></div></li>`).join('')}</ol>`;
+  }
+
+  /* What happened to one tool over time. The backend already records where each "ours" came from. */
+  function history(key) {
+    const by = nm(S.swBy);
+    const found = (v, t) => (S.sw === 'waiting' ? `Found ${v}. Upgrade ticket proposed, waiting for a yes.` : S.sw === 'approved' ? `Found ${v}. ${t} created, approved by ${by}.` : `Found ${v}. Ticket declined by ${by}, so it is proposed again next Monday.`);
+    return {
+      lg: [['Mon 26 Oct', found('1.2.17', 'MOCK-14')], ['Thu 8 Oct', 'Our version set to 1.2.14, because MOCK-6 was marked Done.'], ['Mon 5 Oct', 'Found 1.2.14. MOCK-6 created, approved by Bob.'], ['Thu 1 Oct', 'Added by Alice with our version 1.2.11.']],
+      fa: [['Mon 26 Oct', found('0.120.1', 'MOCK-15')], ['Thu 22 Oct', 'Our version set to 0.118.0, because MOCK-9 was marked Done.'], ['Mon 19 Oct', 'Found 0.118.0. MOCK-9 created, approved by Alice.'], ['Thu 1 Oct', 'Added by Alice. Our version was left empty, so the first check took 0.117.1.']],
+      gr: [['Mon 26 Oct', 'Couldn’t check: GitHub’s hourly limit was reached. It tries again next Monday.'], ['Mon 19 Oct', 'Up to date at 12.1.0.'], ['Thu 1 Oct', 'Added by Carol with our version 12.1.0.']],
+    }[key];
+  }
+
+  /* The end of an input tag, its help text and its error, wired up for screen readers. */
+  function fieldAttrs(id, err, help) {
+    const ids = [help ? `${id}-help` : '', err ? `${id}-err` : ''].filter(Boolean).join(' ');
+    return `${ids ? ` aria-describedby="${ids}"` : ''}${err ? ' aria-invalid="true"' : ''}`;
+  }
+  function fieldNotes(id, err, help) {
+    return (help ? `<span class="help" id="${id}-help">${help}</span>` : '') + (err ? `<span class="err" id="${id}-err">${I.alert(16)}${err}</span>` : '');
+  }
+  const fieldErr = (id, err, help) => `${fieldAttrs(id, err, help)}>${fieldNotes(id, err, help)}`;
+
+  function softwareView() {
+    const day1 = S.firstDay;
+    const st = (t) => (S.sw === 'waiting' ? '<span class="pill wait">Ticket waiting for a yes</span>' : S.sw === 'approved' ? `<span class="pill ok">${t} open</span>` : '<span class="pill off">Proposed again next Monday</span>');
+    const needRows = day1 ? [] : [
+      { key: 'lg', name: 'LangGraph', repo: 'langchain-ai/langgraph', ours: '1.2.14', from: 'From MOCK-6, marked Done', newest: '1.2.17', status: st('MOCK-14') },
+      { key: 'fa', name: 'FastAPI', repo: 'fastapi/fastapi', ours: '0.118.0', from: 'From MOCK-9, marked Done', newest: '0.120.1', status: st('MOCK-15') },
+      { key: 'gr', name: 'Grafana', repo: 'grafana/grafana', ours: '12.1.0', from: 'Given when added', newest: '?', status: `<span class="pill bad">${I.x(12)}Can’t check</span>` },
+    ];
+    const newRows = S.added.map((a, i) => ({
+      key: `add${i}`, name: a.name, repo: a.repo, ours: a.ours || '?', from: a.ours ? 'Given when added' : 'Taken from the first check', newest: '?',
+      status: '<span class="pill off">Checked next Monday</span>',
+      hist: [['Today', `Added by ${nm(a.by)}. ${a.ours ? `Our version ${esc(a.ours)}.` : 'Our version was left empty, so the first check takes the newest.'}`]],
+    }));
+    const table = (rows) => `<div class="scroll-x"><table class="sw-table"><thead><tr><th>Software</th><th>Ours</th><th>Newest</th><th>Status</th><th><span class="vh">History</span></th></tr></thead><tbody>${rows.map((r) => {
+      const open = S.swOpen === r.key;
+      const hist = r.hist || history(r.key);
+      return `<tr><td><b>${esc(r.name)}</b><div class="src">${esc(r.repo)}</div></td><td>${esc(r.ours)}<div class="src">${r.from}</div></td><td>${r.newest}</td><td>${r.status}</td>
+        <td style="text-align:right"><button class="linkbtn" data-act="swHist" data-arg="${r.key}" aria-expanded="${open}">${open ? 'Hide history' : 'History'}</button></td></tr>
+        ${open ? `<tr class="hist"><td colspan="5"><ol class="timeline">${hist.map(([d, t]) => `<li><b>${d}</b><span>${t}</span></li>`).join('')}</ol></td></tr>` : ''}`;
+    }).join('')}</tbody></table></div>`;
+    const appr = has('sw') && S.sw === 'waiting';
+    return `<div class="pagehead"><div><h1 tabindex="-1">Software</h1><p>Everything your team runs, in one list. New releases are checked every Monday, and the week’s upgrade tickets go out in one approval.</p></div>
+        ${day1 ? '' : '<button class="btn" data-act="checkNow">Check now</button>'}</div>
+      <div class="sched">${I.clock(20)}<div>${day1 ? '<b>Checks run every Monday at 9:00 once you add software.</b><span>Each check sends one approval for all its tickets.</span>' : '<b>Checked every Monday at 9:00, set by Carol.</b> Next check Mon 2 Nov, 9:00.<span>Scheduled checks count as Carol’s work, so Carol can’t approve them.</span>'}</div>
+        ${day1 ? '' : '<button class="btn sm" data-act="toast" data-arg="Whoever saves the schedule becomes its owner, so they can’t approve its checks.">Change</button>'}</div>
+      ${appr ? `<div class="apprbar">${I.shield(20)}<div><b>This week’s check wants to raise 2 upgrade tickets.</b><span>Started by Carol’s schedule, Mon 26 Oct, 9:00</span></div>${canApprove('sw') ? '<button class="btn primary sm" data-act="run" data-arg="sw">Review and decide</button>' : '<span class="note">Waiting for an Approver</span>'}</div>` : ''}
+      ${needRows.length ? `<section class="section"><h2>Needs a person <span class="count">${needRows.length}</span></h2><div class="panel">${table(needRows)}</div></section>` : ''}
+      ${newRows.length ? `<section class="section"><h2>Not checked yet <span class="count">${newRows.length}</span></h2><div class="panel">${table(newRows)}</div></section>` : ''}
+      ${day1 ? (newRows.length ? '' : '<div class="quiet"><b>No software yet</b>Add the tools your team runs. Each one is checked for new releases every Monday.</div>')
+        : `<section class="section"><h2>Up to date <span class="count">${UP_TO_DATE.length}</span></h2><details><summary>Show all ${UP_TO_DATE.length}</summary><div class="uptodate">${UP_TO_DATE.map((u) => `<span class="tag">${u}</span>`).join('')}</div></details></section>`}
+      ${me().op ? `<section class="section"><h2>Add software</h2><div class="panel"><div class="addgrid">
+          <div class="field"><label for="sw-name">Name</label><input type="text" id="sw-name" data-sw="name" value="${esc(S.swForm.name)}" placeholder="LangGraph"${fieldErr('sw-name', S.swErr.name)}</div>
+          <div class="field"><label for="sw-repo">GitHub repository</label><input type="text" id="sw-repo" data-sw="repo" value="${esc(S.swForm.repo)}" placeholder="owner/name"${fieldErr('sw-repo', S.swErr.repo, 'A GitHub link works too.')}</div>
+          <div class="field"><label for="sw-ours">Our version <span class="muted">(optional)</span></label><input type="text" id="sw-ours" data-sw="ours" value="${esc(S.swForm.ours)}" placeholder="1.2.14"${fieldErr('sw-ours', '', 'Left empty, the first check takes the newest.')}</div>
+        </div><div class="btns"><button class="btn" data-act="addSoftware">Add</button></div></div></section>` : ''}
+      <p class="note" style="margin-top:24px">Asking for a release check in New routine adds the software here instead of making a new routine. Later, this same list can show package registries, end-of-life dates and security fixes.</p>`;
+  }
+
+  /* New routine, step 2, when the task is a release check: the Room lead sends it to the Software list. */
+  function releaseRedirect(text) {
+    const hit = namedIn(text);
+    const on = hit && onList(hit[0]);
+    const say = on
+      ? `${hit[0]} is already on your Software list, so it’s checked every Monday. You don’t need a new routine.`
+      : `This is a release check. Your team keeps all its software in one list on the Software page. It’s checked every Monday, with one approval for all the tickets. I’ll add ${hit ? hit[0] : 'your software'} there instead of making a new routine.`;
+    const card = hit && !on
+      ? `<div class="panel"><h2>Add to Software</h2><dl class="kv"><dt>Name</dt><dd>${hit[0]}</dd><dt>GitHub repository</dt><dd>${hit[1]}</dd><dt>Our version</dt><dd>Left empty, so the first check takes the newest</dd><dt>Checked</dt><dd>Every Monday at 9:00, with the rest of your software</dd></dl>
+          <div class="btns"><button class="btn primary" data-act="addKnown" data-arg="${hit[0]}">Add ${hit[0]} to Software</button></div></div>`
+      : '<div class="btns"><button class="btn primary" data-act="go" data-arg="software">Open Software</button></div>';
+    return `<div style="display:grid;gap:24px"><div class="bubble">${face('lead', 48)}<p>${say}</p></div>${card}
+        <p class="note">One list means one check and one Teams approval a week, however many tools you add. Separate routines would mean a separate approval for each tool.</p></div>
+      <div class="wfoot"><button class="btn" data-act="wizBack">Back</button></div>`;
+  }
+
+  function routineView(id) {
+    const r = ROUTINES[id];
+    const st = status(id);
+    const hasRun = ['sw', 'issues', 'nudge'].includes(id) || (id === 'conf' && S.conf !== 'on');
+    const recent = {
+      sw: [['Mon 26 Oct, 9:00', st.last.replace(/^Mon 26 Oct: /, ''), true], ['Mon 19 Oct, 9:00', '1 ticket created (MOCK-9)'], ['Mon 12 Oct, 9:00', 'Nothing to write']],
+      issues: [['Today, 8:00', st.last.replace(/^Today( 8:00)?: /, ''), true], ['Mon 26 Oct, 8:00', '1 ticket created (MOCK-12)'], ['Fri 23 Oct, 8:00', 'Nothing to write']],
+      nudge: [['Wed 21 Oct, 10:00', S.nudge === 'fixed' ? 'Retried today: nothing to send' : 'Stopped on a ticket with no owner', true], ['Wed 14 Oct, 10:00', '2 messages sent, approved by Bob']],
+      access: [['Mon 5 Oct, 9:00', '3 people lost access, approved by Bob, then Alice']],
+      conf: S.conf === 'on' ? [] : [['Today, test run', st.last.replace(/^Test run today: /, ''), true]],
+    }[id];
+    return `<button class="back" data-act="go" data-arg="routines">${I.left(16)}Routines</button>
+      <div class="pagehead"><div><div class="btns" style="margin-bottom:8px">${pill(st)}</div><h1 tabindex="-1">${r.name}</h1><p>${r.what}</p></div>${actionFor(id)}</div>
+      <dl class="facts">
+        <div><dt>When</dt><dd>${r.when}</dd></div>
+        <div><dt>Next run</dt><dd>${r.next}</dd></div>
+        <div><dt>Who approves</dt><dd>${r.approves}</dd></div>
+        <div><dt>Agents</dt><dd>${faces(r.agents, 30)}</dd></div>
+      </dl>
+      <div class="runbody" style="margin-top:24px">
+        <div class="panel"><h2>What it does</h2>${stepsList(id)}</div>
+        <div class="panel"><h2>Recent runs</h2>${recent.length ? `<div class="rows">${recent.map(([when, what, live]) => live && hasRun
+          ? `<button class="row-btn" data-act="run" data-arg="${id}"><div><div class="row-name">${when}</div><div class="row-sub">${what}</div></div><span class="btns small" style="font-weight:700">Watch ${I.right(16)}</span></button>`
+          : `<div class="row"><div><div class="row-name">${when}</div><div class="row-sub">${what}</div></div></div>`).join('')}</div>` : `<p class="muted">No runs yet. The first one is ${r.next}.</p>`}</div>
+      </div>`;
+  }
+
+  /* The live activity view of one run. */
+  function runView(id) {
+    const m = runModel(id);
+    const r = ROUTINES[m.routine];
+    const n = m.stations.length;
+    const finished = P.at >= m.end;
+    const stateOf = (s, i) => {
+      if (i === m.fail && P.at >= i) return 'fail';
+      if (s.skip && (P.at >= i || finished)) return 'skip';
+      if (s.gate && i === m.end && m.state === 'waiting' && P.at >= i) return 'wait';
+      if (i < P.at || (finished && i <= m.end)) return 'done';
+      if (i === P.at) return 'now';
+      return 'todo';
+    };
+    const line = m.stations.map((s, i) => {
+      const st = stateOf(s, i);
+      const dot = s.gate ? (st === 'wait' ? I.lock(18) : I.shield(18)) : st === 'done' ? I.check(14) : st === 'fail' ? I.x(14) : '';
+      const sub = st === 'skip' ? 'Not needed' : st === 'fail' ? 'Stopped here' : st === 'wait' ? 'Waiting for a yes' : s.sub || '';
+      return `<li class="st ${st}${s.gate ? ' gate' : ''}"><div class="st-who">${s.gate ? '' : whoAvatar(s.who, 44)}</div><div class="st-dotwrap"><span class="st-dot">${dot}</span></div><div class="st-label">${s.label}${sub ? `<small>${sub}</small>` : ''}</div></li>`;
+    }).join('');
+    const msgs = m.stations.slice(0, Math.min(P.at, m.end) + 1).map((s) => s.msg).filter(Boolean);
+    P.feedNext = msgs.length;
+    P.latest = msgs.length ? `${feedName(msgs[msgs.length - 1].who)}: ${msgs[msgs.length - 1].text}` : '';
+    const feed = msgs.map((g, i) => `<li class="${g.tone || ''}${i >= P.feedSeen ? ' in' : ''}">${feedAvatar(g.who)}<div><div class="who" style="color:${feedHue(g.who)}">${feedName(g.who)}</div><div class="txt">${g.text}</div></div></li>`).join('');
+    const pillTone = m.state === 'waiting' ? { tone: 'wait', label: 'Waiting for a yes' } : m.state === 'failed' ? { tone: 'bad', label: 'Stopped' } : { tone: 'ok', label: 'Done' };
+    const playing = !finished;
+    return `<button class="back" data-act="routine" data-arg="${m.routine}">${I.left(16)}${m.routine === 'sw' ? 'Software' : r.name}</button>
+      <div class="runhead">
+        <div class="runhead-top"><div class="btns">${pill(pillTone)}${playing ? '<span class="tag">Replaying</span>' : ''}</div>
+          <div class="seg" role="group" aria-label="Speed">${['1x', '2x', 'instant'].map((sp) => `<button data-act="speed" data-arg="${sp}" aria-pressed="${P.speed === sp}">${sp === 'instant' ? 'Instant' : sp}</button>`).join('')}</div></div>
+        <h1 tabindex="-1">${m.headline}</h1>
+      </div>
+      <div class="stage"><ol class="line" style="--n:${n}" aria-label="Steps of this run"><span class="line-track"></span><span class="line-fill" style="--f:${P.shown / (n - 1)}"></span>${line}</ol></div>
+      <div class="runbody">
+        <section class="panel"><h2>What the agents said</h2><ol class="feed">${feed}</ol></section>
+        <section class="act">${finished ? actPanel(id, m) : `<p class="muted" style="padding:20px 0">The agents are working. Press Instant to jump to the end.</p>`}</section>
+      </div>`;
+  }
+
+  function approvePanel(id) {
+    const ok = canApprove(id);
+    const self = starterOf[id] === S.user;
+    const sw = id === 'sw';
+    const body = sw
+      ? `<div class="ticket"><b>Upgrade LangGraph from 1.2.14 to 1.2.17</b><span>Release notes link, source langchain-ai/langgraph</span></div><div class="ticket"><b>Upgrade FastAPI from 0.118.0 to 0.120.1</b><span>Release notes link, source fastapi/fastapi</span></div>`
+      : `<div class="preview"><b>Week of 26 Oct: 14 tickets closed</b><ul class="mini-list"><li>6 access requests</li><li>4 licence renewals</li><li>3 software upgrades, including LangGraph and FastAPI</li><li>1 other</li></ul></div>`;
+    return `<div class="panel"><h2>${sw ? '2 tickets will be created in Jira project MOCK' : 'The Weekly summary page in Confluence will be updated'}</h2>
+      ${body}
+      <p class="note">This is exactly what will be written, and nothing else.</p>
+      ${ok ? `<div class="btns"><button class="btn good" data-act="approve" data-arg="${id}">${I.check(16)}${sw ? 'Approve 2 tickets' : 'Approve the update'}</button><button class="btn bad" data-act="decline" data-arg="${id}">Decline</button></div>`
+        : `<div class="lock">${I.lock(20)}<div>${self ? `You started this run, so you can’t approve it. Nobody approves their own work. <b>Bob can.</b>` : 'Only an Approver can decide.'}</div></div>
+           <div class="btns"><button class="btn mock sm" data-act="asBob" data-arg="${id}">Mock: approve as Bob</button></div>`}
+      ${sw ? `<p class="note">Carol’s schedule started this run, so Carol can’t approve it.</p>` : ''}
+    </div>`;
+  }
+
+  function actPanel(id, m) {
+    if (m.state === 'waiting') return approvePanel(id);
+    if (id === 'issues' && S.issues === 'failed') {
+      return `<div class="panel"><div class="tsh">${face('trouble', 44)}<b>AI troubleshooter</b></div>
+        <dl class="qa"><dt>What happened</dt><dd>GitHub says <b>langchain-ai/langserve</b> doesn’t exist any more. Its page now points to <b>langchain-ai/langchain</b>.</dd></dl>
+        <dl class="qa"><dt>What to do</dt><dd>Use the new name and run it again. You can do this yourself.</dd></dl>
+        <div class="btns"><button class="btn primary" data-act="fixIssues">Use langchain-ai/langchain and retry</button></div>
+        ${me().op ? `<button class="linkbtn" data-act="toast" data-arg="In the real Portal this opens the same report as below.">Not right? Report to support</button>` : ''}
+      </div>`;
+    }
+    if (id === 'nudge' && S.nudge === 'failed') {
+      return `<div class="panel"><div class="tsh">${face('trouble', 44)}<b>AI troubleshooter</b></div>
+        <dl class="qa"><dt>What happened</dt><dd>The step that reads tickets stopped on <b>MOCK-31</b>, which has no owner. The platform should skip a ticket like this, but it crashed.</dd></dl>
+        <dl class="qa"><dt>What to do</dt><dd>This is a problem in the platform, not in your routine, so you can’t fix it from here. Report it and support gets the run and this explanation.</dd></dl>
+        ${S.report === 0 ? `<div class="btns">${me().op ? `<button class="btn primary" data-act="report">Report to support</button>` : '<p class="note">An Operator can report this to support.</p>'}</div>`
+          : `<h3>Reported to support</h3>${reportTrack(false)}${S.report === 4 && me().op ? `<div class="btns"><button class="btn primary" data-act="retryNudge">Retry the run</button></div>` : ''}`}
+      </div>`;
+    }
+    const done = {
+      sw: S.sw === 'approved'
+        ? `<h2>Done</h2><p>${nm(S.swBy)} approved, and the platform created the tickets.</p><div class="result-chips"><span class="pill ok">${I.check(12)}MOCK-14 LangGraph</span><span class="pill ok">${I.check(12)}MOCK-15 FastAPI</span></div>`
+        : `<h2>Declined</h2><p>${nm(S.swBy)} declined, so nothing was written. The tickets will be proposed again next Monday.</p>`,
+      issues: `<h2>Fixed</h2><p>The routine now reads <b>langchain-ai/langchain</b>. No new bug reports today, so there was nothing to write.</p>`,
+      nudge: `<h2>Back to normal</h2><p>The fix from support is live. MOCK-31 has no owner, so it was listed for you instead of crashing the run.</p>`,
+      conf: `<h2>Done</h2><p>${nm(S.confBy)} approved, and the platform updated the Weekly summary page.</p><div class="result-chips"><span class="pill ok">${I.check(12)}Weekly summary, Team space</span></div>`,
+    }[id];
+    return `<div class="panel">${done}<div class="btns"><button class="btn" data-act="go" data-arg="home">Back to Home</button></div></div>`;
+  }
+
+  /* ---------- New routine ---------- */
+  function stepper() {
+    const names = ['Describe it', 'Check the plan', 'When and who', 'Turn it on'];
+    return `<ol class="stepper" aria-label="Steps">${names.map((t, i) => `<li class="${i + 1 < S.wiz.step ? 'done' : i + 1 === S.wiz.step ? 'now' : ''}"${i + 1 === S.wiz.step ? ' aria-current="step"' : ''}><div>${i + 1}.<span> ${t}</span></div></li>`).join('')}</ol><p class="stepnow">Step ${S.wiz.step} of 4: ${names[S.wiz.step - 1]}</p>`;
+  }
+  function toolCard() {
+    const ok = S.tool === 'ok';
+    const state = ok ? `${I.check(16)} OK’d by Bob. It’s in your team’s tool list now.` : S.tool === 'asked' ? `${I.lock(16)} Waiting for an Approver to OK it` : `${I.tool(18)} New tool, drafted for you`;
+    return `<div class="toolcard ${ok ? 'ok' : ''}">
+      <div class="toolcard-head"><span class="btns" style="gap:8px">${state}</span>${ok ? '' : '<span class="pill new">Not in your tool list yet</span>'}</div>
+      <div class="toolcard-body">
+        <h3 style="font-size:1.2rem">Update a Confluence page</h3>
+        <dl class="kv">
+          <dt>What it does</dt><dd>Replaces the text of one Confluence page.</dd>
+          <dt>Kind</dt><dd><span class="tag write">Changes data</span> Always waits for an Approver’s yes before it runs.</dd>
+          <dt>Where it can write</dt><dd>Only the page you pick when you set up a routine.</dd>
+          <dt>Built from</dt><dd>One call in Confluence’s published API: update a page.</dd>
+        </dl>
+        <div><div class="eyebrow" style="margin-bottom:8px">The platform checked it</div>
+        <ul class="checks">
+          <li>${I.check(16)}<span>Uses one call from Confluence’s published API.</span></li>
+          <li>${I.check(16)}<span>Counted as a change, so it can never skip approval.</span></li>
+          <li>${I.check(16)}<span>Can only touch the page saved on the routine.</span></li>
+          <li>${I.check(16)}<span>Trial read worked: found Weekly summary in Team space, last edited 23 Oct.</span></li>
+        </ul></div>
+        <div class="nocode"><b>No new code.</b> The platform runs this tool with its own tested runner. Nothing the AI wrote runs as code.</div>
+        ${S.tool === 'none' ? `<div class="btns"><button class="btn primary" data-act="askTool">Ask an Approver to OK it</button></div><p class="note">It changes data, so an Approver who isn’t you must OK it once. After that, anyone in your team can use it.</p>` : ''}
+        ${S.tool === 'asked' ? `<p class="note">Bob and 2 other Approvers can OK it. They get a message in Teams. You can close this page; your draft is kept.</p><div class="btns"><button class="btn mock sm" data-act="okTool">Mock: OK it as Bob</button></div>` : ''}
+      </div></div>`;
+  }
+
+  const TASK_HELP = 'Say which system, what to do, and when. In this mock, a release check goes to the Software list, and any other task gives the same sample plan.';
+
+  function wizardView() {
+    const w = S.wiz;
+    let body = '';
+    if (w.step === 1) {
+      const lines = ['Reading your task', 'Looking through your team’s agents', 'Checking the tool list'];
+      body = `<div class="ask">
+        <div class="field">
+          <label for="task">What should happen?</label>
+          <textarea id="task" data-input="text" rows="6"${fieldAttrs('task', w.err, TASK_HELP)}>${esc(w.text)}</textarea>
+          ${fieldNotes('task', w.err, TASK_HELP)}
+          <div class="field" style="margin-top:10px"><span class="lab small muted">Or start from one of these</span>
+            <div class="chips">
+              <button class="chip" data-act="chip" data-arg="Every Friday, sum up the Jira tickets our team closed this week and update our Weekly summary page in Confluence.">Weekly summary in Confluence</button>
+              <button class="chip" data-act="chip" data-arg="Every Wednesday, find Jira tickets with no update for 14 days and ask their owners in Teams if they are still needed.">Nudge stale Jira tickets</button>
+              <button class="chip" data-act="chip" data-arg="Every Monday, check Kubernetes for new releases and raise a Jira ticket if we are behind.">Check Kubernetes releases</button>
+            </div></div>
+          <div class="btns" style="margin-top:16px"><button class="btn primary" data-act="plan" ${w.planning ? 'disabled' : ''}>Plan it</button></div>
+        </div>
+        <div class="panel">
+          <div class="bubble">${face('lead', 48)}<p>${w.planning ? 'Give me a moment.' : 'Tell me what you want done. I’ll pick the agents and show you the plan before anything runs.'}</p></div>
+          ${w.planning ? `<ul class="thinking">${lines.slice(0, w.planning).map((l, i) => `<li>${i + 1 < w.planning ? `<span style="color:var(--green)">${I.check(18)}</span>` : '<span class="spin"></span>'}${l}</li>`).join('')}</ul>` : ''}
+        </div>
+      </div>`;
+    } else if (w.step === 2 && isReleaseCheck(w.text)) {
+      body = releaseRedirect(w.text);
+    } else if (w.step === 2) {
+      const ok = S.tool === 'ok';
+      body = `<div style="display:grid;gap:24px">
+        <div class="bubble">${face('lead', 48)}<p>I’ll use your <b>Jira reader</b> and a new <b>Summary writer</b>. Step 3 needs a tool you don’t have yet, so I drafted it too. Please check both before anything runs.</p></div>
+        <div class="agentrow">
+          <div class="agentcard">${face('jira', 44)}<div><b>Jira reader</b><small>Saved agent, used in 2 routines</small></div></div>
+          <div class="agentcard">${face('summary', 44)}<div><b>Summary writer</b><small><span class="pill new" style="font-size:.7rem">New</span> drafted for you</small></div></div>
+        </div>
+        <div class="panel"><h2>The plan</h2>
+          <ol class="steps">
+            <li><div><div class="what">Find the tickets closed this week</div><div class="how"><span class="tag read">Reads Jira</span><span>Project</span><select aria-label="Jira project"><option>MOCK</option></select></div></div></li>
+            <li><div><div class="what">Write a short summary</div><div class="how"><span class="tag">No system access</span></div></div></li>
+            <li><div><div class="what">Update the Weekly summary page</div><div class="how"><span class="tag write">Changes data, waits for a yes</span><span>Page</span><select aria-label="Confluence page"><option>Team space › Weekly summary</option></select>${ok ? `<span class="pill ok">${I.check(12)}Tool ready</span>` : '<span class="pill wait">New tool, needs an OK</span>'}</div></div></li>
+          </ol>
+        </div>
+        ${toolCard()}
+      </div>
+      <div class="wfoot"><button class="btn" data-act="wizBack">Back</button>
+        <span class="btns">${ok ? '' : '<span class="note">Next opens when the new tool is OK’d.</span>'}<button class="btn primary" data-act="wizNext" ${ok ? '' : 'disabled'}>Next</button></span></div>`;
+    } else if (w.step === 3) {
+      body = `<div style="display:grid;gap:20px">
+        <div class="panel"><h2>When should it run?</h2>
+          <div class="inline-sel">Every week on
+            <select id="day" data-input="day" aria-label="Day">${['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map((d) => `<option${d === w.day ? ' selected' : ''}>${d}</option>`).join('')}</select> at
+            <select id="time" data-input="time" aria-label="Time">${['9:00', '12:00', '17:00'].map((t) => `<option${t === w.time ? ' selected' : ''}>${t}</option>`).join('')}</select></div></div>
+        <div class="panel"><h2>Who says yes?</h2>
+          <p>Any Approver except you. Nobody approves their own work.</p>
+          <label class="btns" style="font-weight:600"><input type="checkbox" id="two" data-input="two" ${w.two ? 'checked' : ''}> Ask for 2 Approvers, one after the other</label>
+          <p class="note">This tool needs at least 1. You can ask for more, never fewer.</p></div>
+        <div class="panel"><h2>Where do messages go?</h2>
+          <div class="inline-sel">Teams channel <select aria-label="Teams channel"><option>CODESparks Support</option></select></div></div>
+      </div>
+      <div class="wfoot"><button class="btn" data-act="wizBack">Back</button><button class="btn primary" data-act="wizNext">Next</button></div>`;
+    } else {
+      body = `<div style="display:grid;gap:20px">
+        <div class="field"><label for="rname">Name</label><input type="text" id="rname" data-input="name" value="${esc(w.name)}"></div>
+        <p class="sentence">Every <mark>${w.day}</mark> at <mark>${w.time}</mark>, agents find the Jira tickets closed in <mark>MOCK</mark> that week, write a short summary, and ask <mark>${w.two ? '2 Approvers, one after the other,' : 'an Approver'}</mark> in CODESparks Support before they update <mark>Weekly summary</mark> in Confluence.</p>
+        <ul class="checks">
+          <li>${I.check(16)}<span>Nothing changes in Confluence without a yes.</span></li>
+          <li>${I.check(16)}<span>If it stops, the AI troubleshooter tells you why on the Home page.</span></li>
+        </ul>
+      </div>
+      <div class="wfoot"><button class="btn" data-act="wizBack">Back</button><button class="btn primary" data-act="turnOn">Turn it on</button></div>`;
+    }
+    return `<div class="narrow"><div class="pagehead"><div><h1 tabindex="-1">New routine</h1><p>Describe a repeated task. Agents do it, and nothing changes without a yes.</p></div><button class="linkbtn" data-act="saveDraft">Save draft and close</button></div>${stepper()}${body}</div>`;
+  }
+
+  function doneView() {
+    const w = S.wiz;
+    return `<div class="narrow"><div class="done-hero"><span class="big">${I.check(44)}</span>
+      <h1 tabindex="-1">Your routine is on</h1>
+      <p><b>${esc(w.name)}</b> runs next on <b>${w.day === 'Friday' ? 'Fri 30 Oct' : w.day}</b> at <b>${w.time}</b>. When it needs a yes, Approvers get a message in CODESparks Support.</p>
+      <div class="btns" style="justify-content:center;margin-top:8px"><button class="btn primary" data-act="testRun">Do a test run now</button><button class="btn" data-act="go" data-arg="home">Back to Home</button></div>
+    </div></div>`;
+  }
+
+  function toolReviewView() {
+    const done = S.tool === 'ok';
+    return `<div class="narrow"><button class="back" data-act="go" data-arg="home">${I.left(16)}Home</button>
+      <div class="pagehead"><div><h1 tabindex="-1">OK a new tool?</h1><p>Alice is setting up Weekly summary in Confluence. The AI drafted this tool for it. Once you OK it, any routine in your team can use it.</p></div></div>
+      ${toolCard().replace(/<div class="btns"><button class="btn mock sm" data-act="okTool">Mock: OK it as Bob<\/button><\/div>/, '').replace(/<p class="note">Bob and 2 other[^<]*<\/p>/, '')}
+      <div class="wfoot">${done ? `<span class="pill ok">${I.check(12)}You OK’d this tool</span><button class="btn" data-act="go" data-arg="home">Done</button>`
+        : canOkTool() ? `<button class="btn bad" data-act="toast" data-arg="Alice gets a Teams message with your reason.">Not now</button><button class="btn good" data-act="okTool">${I.check(16)}OK this tool</button>`
+        : `<div class="lock">${I.lock(20)}<div>Alice asked for this tool, so Alice can’t OK it.</div></div>`}</div>
+    </div>`;
+  }
+  const canOkTool = () => me().ap && S.user !== 'alice';
+
+  function settingsView() {
+    const tools = [
+      ['Read GitHub releases', 'read', 'Reads', ''],
+      ['Read GitHub issues', 'read', 'Reads', ''],
+      ['Search Jira', 'read', 'Reads', ''],
+      ['Read a Jira ticket', 'read', 'Reads', ''],
+      ['Create a Jira ticket', 'write', 'Changes data', '1 Approver'],
+      ['Post in Teams', 'write', 'Changes data', '1 Approver'],
+      ['Change someone’s access', 'write', 'Changes data', '2 Approvers, one after the other'],
+    ];
+    if (S.tool === 'ok') tools.push(['Update a Confluence page', 'write', 'Changes data', '1 Approver · New, drafted by AI, OK’d by Bob today']);
+    const agents = ['lead', 'checker', 'writer', 'jira', 'msg', 'issues', 'access'].concat(S.conf !== 'none' ? ['summary'] : []);
+    return `<div class="narrow"><div class="pagehead"><div><h1 tabindex="-1">Settings</h1><p>For whoever looks after the platform. Operators rarely need this page.</p></div></div>
+      <div style="display:grid;gap:20px">
+        <div class="panel"><h2>AI model</h2><p><span class="pill ok">${I.check(12)}Connected</span> Every change here is recorded with who made it.</p></div>
+        <div class="panel"><h2>Tool list</h2><p class="note">What agents can do in other systems. Each tool is a tool card the platform runs with its own tested runner. A new tool that changes data needs an Approver’s OK.</p>
+          <div class="rows">${tools.map(([t, k, kl, extra]) => `<div class="row"><div><div class="row-name">${t}</div>${extra ? `<div class="row-sub">${extra}</div>` : ''}</div><span class="tag ${k}">${kl}</span></div>`).join('')}</div></div>
+        <div class="panel"><h2>Agent library</h2><p class="note">The Room lead picks from these when you describe a task.</p>
+          <div class="agentrow">${agents.map((a) => `<div class="agentcard">${face(a, 40)}<div><b>${AGENTS[a].name}</b></div></div>`).join('')}</div></div>
+        <div class="panel"><h2>Practice systems</h2><p class="note">Practice copies of Teams and Jira for demos and training. Nothing reaches the real ones.</p>
+          <div class="btns"><button class="btn" data-act="teams">${I.chat(18)}Open practice Teams</button></div></div>
+      </div></div>`;
+  }
+
+  /* ---------- Teams drawer ---------- */
+  function teamsItems() {
+    const list = [];
+    if (has('sw')) list.push({ time: 'Mon 9:41', who: 'portal', html: `<b>Keep our software up to date</b> wants to create 2 Jira tickets.<ul class="mini-list"><li>Upgrade LangGraph to 1.2.17</li><li>Upgrade FastAPI to 0.120.1</li></ul>`, id: 'sw', decided: S.sw !== 'waiting' ? (S.sw === 'approved' ? `Approved by ${nm(S.swBy)}` : `Declined by ${nm(S.swBy)}`) : null });
+    if (has('nudge') && S.report > 0) list.push({ time: 'Today', who: 'portal', html: `Alice reported a problem with <b>Stale ticket nudge</b>. Support has the run and the troubleshooter’s notes.` });
+    if (S.tool !== 'none') list.push({ time: 'Today', who: 'portal', html: `Alice asked for a new tool: <b>Update a Confluence page</b>. It changes data, so an Approver must OK it once.`, tool: true, decided: S.tool === 'ok' ? 'OK’d by Bob' : null });
+    if (S.conf === 'waiting' || S.conf === 'approved') list.push({ time: 'Today', who: 'portal', html: `<b>Weekly summary in Confluence</b> wants to update 1 Confluence page (test run).`, id: 'conf', decided: S.conf === 'approved' ? `Approved by ${nm(S.confBy)}` : null });
+    return list;
+  }
+  function teamsCount() {
+    let n = 0;
+    if (has('sw') && S.sw === 'waiting' && canApprove('sw')) n++;
+    if (S.conf === 'waiting' && canApprove('conf')) n++;
+    if (S.tool === 'asked' && canOkTool()) n++;
+    return n;
+  }
+  function teamsDrawer() {
+    if (!S.teams) return '';
+    const msgs = teamsItems().map((m) => {
+      let actions = '';
+      if (m.decided) actions = `<span class="pill ok">${I.check(12)}${m.decided}</span>`;
+      else if (m.tool) actions = canOkTool() ? `<div class="btns"><button class="btn good sm" data-act="okTool">OK this tool</button><button class="btn sm" data-act="go" data-arg="tool">Review in Portal</button></div>` : `<span class="note">Waiting for an Approver</span>`;
+      else if (m.id) actions = canApprove(m.id) ? `<div class="btns"><button class="btn good sm" data-act="approve" data-arg="${m.id}">Approve</button><button class="btn sm" data-act="decline" data-arg="${m.id}">Decline</button><button class="btn sm" data-act="run" data-arg="${m.id}">Open in Portal</button></div>` : `<div class="lock">${I.lock(18)}<span class="small">${starterOf[m.id] === S.user ? 'You started this run, so you can’t approve it.' : 'Only an Approver can decide.'}</span></div>`;
+      return `<div class="msg"><span class="sysav">${I.mark(20)}</span><div><div class="msg-meta"><b>Portal</b> · ${m.time}</div><div class="msg-card"><div>${m.html}</div>${actions}</div></div></div>`;
+    }).join('');
+    return `<div class="scrim" data-act="teams"></div><aside class="drawer" role="dialog" aria-modal="true" aria-label="Teams, practice copy">
+      <div class="drawer-head"><div><b>Microsoft Teams</b><small>Practice copy. Nothing reaches the real Teams.</small></div><button class="iconbtn" data-act="teams" aria-label="Close Teams">${I.x(18)}</button></div>
+      <div class="chan"># CODESparks Support <span class="muted small">· signed in as ${me().name}</span></div>
+      <div class="msgs">${msgs}</div></aside>`;
+  }
+
+  /* ---------- Report dialog ---------- */
+  function modal() {
+    if (S.modal !== 'report') return '';
+    return `<div class="scrim" data-act="closeModal"></div><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="rep-h">
+      <h2 id="rep-h" style="font-size:1.4rem">Report to support</h2>
+      <p class="muted">We send this to the support team. You don’t need to add anything.</p>
+      <dl class="kv">
+        <dt>Problem</dt><dd>Stale ticket nudge stops on a Jira ticket with no owner</dd>
+        <dt>Run</dt><dd>Wed 21 Oct, 10:00 · stopped at Read stale tickets</dd>
+        <dt>The AI troubleshooter found</dt><dd>Reading MOCK-31 failed because it has no owner. The platform expects every ticket to have one.</dd>
+        <dt>Attached</dt><dd>The run’s full record</dd>
+      </dl>
+      <div class="field"><label for="extra">Anything to add? <span class="muted">(optional)</span></label><textarea id="extra" data-input="extra" rows="3" style="min-height:80px">${esc(S.wiz.extra)}</textarea></div>
+      <div class="btns" style="justify-content:flex-end"><button class="btn" data-act="closeModal">Cancel</button><button class="btn primary" data-act="sendReport">Send report</button></div>
+    </div>`;
+  }
+
+  function mockBar() {
+    return `<div class="mockbar" role="region" aria-label="Mock controls">
+      <span class="tagm">Mock</span>
+      <span class="grp"><span>Show</span><span class="mseg">
+        <button data-act="day" data-arg="week" aria-pressed="${!S.firstDay}">A normal week</button>
+        <button data-act="day" data-arg="one" aria-pressed="${S.firstDay}">Day one</button></span></span>
+      <span class="grp"><span>Act as</span><span class="mseg">
+        <button data-act="user" data-arg="alice" aria-pressed="${S.user === 'alice'}">Alice</button>
+        <button data-act="user" data-arg="bob" aria-pressed="${S.user === 'bob'}">Bob</button></span></span>
+      <button class="mreset" data-act="reset">Start over</button>
+      <span class="hide-sm" style="color:var(--mock-dim)">Sample data, nothing is connected</span>
+    </div>`;
+  }
+
+  /* ---------- Render ---------- */
+  const $live = document.createElement('div');
+  $live.className = 'vh';
+  $live.setAttribute('aria-live', 'polite');
+  document.body.appendChild($live);
+  const announce = (html) => { $live.textContent = String(html).replace(/<[^>]+>/g, ''); };
+
+  let focusHeading = false;
+  let toastNew = false;
+  let drawerNew = false;
+  function render() {
+    const v = S.view;
+    let main = '';
+    switch (v.name) {
+      case 'home': main = todayView(); break;
+      case 'routines': main = boardView(); break;
+      case 'routine': main = routineView(v.id); break;
+      case 'run': main = runView(v.id); break;
+      case 'new': main = wizardView(); break;
+      case 'done': main = doneView(); break;
+      case 'tool': main = toolReviewView(); break;
+      case 'settings': main = settingsView(); break;
+      case 'software': main = softwareView(); break;
+    }
+    // The mock redraws the whole page, so it puts keyboard focus back where it was.
+    const active = document.activeElement;
+    let refocus = null;
+    if (!focusHeading && active && active !== document.body && $app.contains(active)) {
+      if (active.id) refocus = `#${CSS.escape(active.id)}`;
+      else if (active.dataset.act) refocus = `[data-act="${active.dataset.act}"]${active.dataset.arg !== undefined ? `[data-arg="${CSS.escape(active.dataset.arg)}"]` : ''}`;
+    }
+    $app.innerHTML = header() + `<main class="wrap" id="main">${main}</main>` + tabbar() + teamsDrawer() + modal() + (S.toast ? `<div class="toast${toastNew ? ' in' : ''}">${S.toast}</div>` : '') + mockBar();
+    if (refocus) {
+      const el = $app.querySelector(refocus);
+      if (el) {
+        el.focus({ preventScroll: true });
+        if (typeof el.value === 'string' && el.setSelectionRange && el.type !== 'checkbox') el.setSelectionRange(el.value.length, el.value.length);
+      }
+    }
+    toastNew = false;
+    if (drawerNew) {
+      const d = $app.querySelector('.drawer');
+      if (d) { d.classList.add('in'); d.querySelector('[aria-label="Close Teams"]').focus(); }
+      drawerNew = false;
+    }
+    if (S.view.name === 'run') {
+      if (P.feedNext > P.feedSeen && P.latest) announce(P.latest);
+      P.feedSeen = P.feedNext;
+    }
+    const fill = $app.querySelector('.line-fill');
+    if (fill && P.run) {
+      const n = runModel(P.run).stations.length;
+      const target = Math.min(P.at, runModel(P.run).end) / (n - 1);
+      void fill.offsetWidth;
+      requestAnimationFrame(() => { fill.style.setProperty('--f', target); });
+      P.shown = Math.min(P.at, runModel(P.run).end);
+    }
+    if (focusHeading) {
+      focusHeading = false;
+      const h = $app.querySelector('h1');
+      if (h) h.focus({ preventScroll: true });
+      window.scrollTo(0, 0);
+    }
+  }
+
+  let toastTimer = null;
+  function toast(text) {
+    S.toast = text;
+    toastNew = true;
+    announce(text);
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { S.toast = null; render(); }, 3600);
+  }
+
+  function go(name, id) {
+    if (name !== 'run') { stopTimer(); P.run = null; }
+    S.view = { name, id };
+    S.teams = false;
+    focusHeading = true;
+    if (name === 'run') { P.run = id; playTo(0); }
+    render();
+  }
+
+  /* ---------- Actions ---------- */
+  const A = {
+    go: (a) => go(a),
+    routine: (id) => (id === 'sw' ? go('software') : go('routine', id)),
+    swHist: (k) => { S.swOpen = S.swOpen === k ? null : k; render(); },
+    checkNow: () => { toast('This week’s check already ran on Monday. In the real app, Check now starts a new one.'); render(); },
+    addSoftware: () => {
+      const name = S.swForm.name.trim();
+      const repo = S.swForm.repo.trim();
+      const ours = S.swForm.ours.trim();
+      S.swErr = {};
+      if (!name) S.swErr.name = 'Give the software a name.';
+      else if (onList(name)) S.swErr.name = `${esc(name)} is already on the list.`;
+      if (!repo) S.swErr.repo = 'Give its GitHub repository, as owner/name.';
+      if (S.swErr.name || S.swErr.repo) {
+        render();
+        document.getElementById(S.swErr.name ? 'sw-name' : 'sw-repo').focus();
+        return;
+      }
+      S.added.push({ name, repo, ours, by: S.user });
+      S.swOpen = `add${S.added.length - 1}`;
+      S.swForm = { name: '', repo: '', ours: '' };
+      toast(`Added ${esc(name)}. It’s checked next Monday.`);
+      render();
+    },
+    addKnown: (name) => {
+      const hit = namedIn(name);
+      S.added.push({ name: hit[0], repo: hit[1], ours: '', by: S.user });
+      S.swOpen = `add${S.added.length - 1}`;
+      S.wiz.step = 1; S.wiz.text = EXAMPLE;
+      toast(`Added ${hit[0]} to Software. It’s checked next Monday.`);
+      go('software');
+    },
+    run: (id) => go('run', id),
+    teams: () => {
+      S.teams = !S.teams;
+      drawerNew = S.teams;
+      render();
+      if (!S.teams) $app.querySelector('.hdr [data-act="teams"]').focus();
+    },
+    speed: (sp) => { P.speed = sp; if (sp === 'instant') { stopTimer(); P.at = runModel(P.run).end; P.shown = P.at; } else if (P.at < runModel(P.run).end) playTo(P.at); render(); },
+    approve: (id) => {
+      if (!canApprove(id)) return;
+      if (id === 'sw') { S.sw = 'approved'; S.swBy = S.user; } else { S.conf = 'approved'; S.confBy = S.user; }
+      toast('Approved. The platform is writing now.');
+      if (S.view.name === 'run' && S.view.id === id) continueRun();
+      render();
+    },
+    decline: (id) => {
+      if (!canApprove(id)) return;
+      if (id === 'sw') { S.sw = 'declined'; S.swBy = S.user; } else { S.conf = 'on'; }
+      toast('Declined. Nothing was written.');
+      if (S.view.name === 'run' && S.view.id === id) { if (id === 'conf') { go('routine', 'conf'); return; } continueRun(); }
+      render();
+    },
+    asBob: (id) => { const u = S.user; S.user = 'bob'; A.approve(id); S.user = u; render(); },
+    fixIssues: () => { S.issues = 'fixed'; toast('Saved. Retrying with langchain-ai/langchain.'); P.run = 'issues'; playTo(0); render(); },
+    report: () => { S.modal = 'report'; S.teams = false; render(); const b = $app.querySelector('.dialog .btn.primary'); if (b) b.focus(); },
+    closeModal: () => { S.modal = null; render(); $app.querySelector('h1').focus(); },
+    sendReport: () => { S.modal = null; S.report = 1; toast('Reported. You can follow it on the Home page.'); render(); $app.querySelector('h1').focus(); },
+    advance: () => { if (S.report < 4) S.report += 1; if (S.report === 4) toast('Dana merged the fix. It’s live.'); render(); },
+    retryNudge: () => { S.nudge = 'fixed'; go('run', 'nudge'); },
+    askTool: () => { S.tool = 'asked'; toast('Sent to Approvers in Teams.'); render(); },
+    okTool: () => { S.tool = 'ok'; toast('Bob OK’d the tool. It’s in the tool list now.'); render(); },
+    chip: (text) => { S.wiz.text = text; render(); },
+    plan: () => {
+      const w = S.wiz;
+      if (!w.text.trim()) { w.err = 'Write what should happen first.'; render(); document.getElementById('task').focus(); return; }
+      w.err = '';
+      if (reduce) { w.step = 2; render(); return; }
+      w.planning = 1; render();
+      setTimeout(() => { w.planning = 2; render(); }, 700);
+      setTimeout(() => { w.planning = 3; render(); }, 1400);
+      setTimeout(() => { w.planning = 0; w.step = 2; focusHeading = true; render(); }, 2300);
+    },
+    wizNext: () => { if (S.wiz.step === 2 && S.tool !== 'ok') return; S.wiz.step += 1; focusHeading = true; render(); },
+    wizBack: () => { S.wiz.step -= 1; focusHeading = true; render(); },
+    turnOn: () => { S.conf = 'on'; S.draft = false; S.wiz.step = 1; go('done'); },
+    saveDraft: () => { S.draft = true; toast('Draft saved. Pick it up from Home.'); go('home'); },
+    testRun: () => { S.conf = 'waiting'; go('run', 'conf'); },
+    day: (d) => { S.firstDay = d === 'one'; if (['routine', 'run'].includes(S.view.name)) go('home'); else render(); },
+    starter: (text) => { S.wiz.step = 1; S.wiz.text = text; go('new'); },
+    user: (u) => { S.user = u; if (u === 'bob' && ['new', 'done'].includes(S.view.name)) S.view = { name: 'home' }; render(); },
+    reset: () => { stopTimer(); P.run = null; const d = S.firstDay; S = fresh(); S.firstDay = d; focusHeading = true; render(); },
+    toast: (t) => { toast(t); render(); },
+  };
+
+  document.addEventListener('click', (e) => {
+    const t = e.target.closest('[data-act]');
+    if (!t) return;
+    const fn = A[t.dataset.act];
+    if (fn) { e.preventDefault(); fn(t.dataset.arg); }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { if (S.modal) A.closeModal(); else if (S.teams) A.teams(); return; }
+    // Keep Tab inside an open dialog.
+    if (e.key === 'Tab' && (S.modal || S.teams)) {
+      const box = $app.querySelector(S.modal ? '.dialog' : '.drawer');
+      const items = box ? [...box.querySelectorAll('button, [href], input, textarea, select')].filter((x) => !x.disabled) : [];
+      if (items.length) {
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (!box.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+        else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+      return;
+    }
+    const t = e.target.matches('[role="button"][data-act]') ? e.target : null;
+    if (t && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); A[t.dataset.act](t.dataset.arg); }
+  });
+  document.addEventListener('input', (e) => {
+    const f = e.target.dataset.sw;
+    if (f) { S.swForm[f] = e.target.value; return; }
+    const k = e.target.dataset.input;
+    if (!k) return;
+    S.wiz[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+  });
+  document.addEventListener('change', (e) => {
+    const k = e.target.dataset.input;
+    if (k === 'day' || k === 'time' || k === 'two') { S.wiz[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.value; }
+  });
+
+  render();
+})();
+</script>
