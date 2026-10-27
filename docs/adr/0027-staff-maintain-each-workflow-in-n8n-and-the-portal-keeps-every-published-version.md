@@ -18,6 +18,8 @@ So each use case becomes its own n8n workflow. It is built from our **node pack*
 
 Each node only calls our API. There is one Agent node with a list, not one node per agent, so a new agent card appears in n8n without a new node pack.
 
+Our API's address comes from n8n's environment in our own image, never from a field in a node. Each node also sends only fixed fields. Otherwise staff could point one of our nodes elsewhere and send data out, and our nodes are the only way out of n8n. P6's throwaway nodes had an editable address field. A security review found this, and [the findings](../evidence/prototypes/p6-n8n-node-pack/findings.md) record it.
+
 **n8n loads only an allowed list of node types.** Its `NODES_INCLUDE` setting holds:
 - our node pack;
 - n8n's triggers (Webhook, Schedule, Manual, Error);

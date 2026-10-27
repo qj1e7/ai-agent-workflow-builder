@@ -90,6 +90,21 @@ So on the free edition:
 | After: the platform publishes our nodes and runs the software check with a yes | `success` | lines 10 to 11 |
 | After: staff run either draft by hand in the editor (`POST /rest/workflows/{id}/run`, from `q5_manual.py`) | 400, `Unrecognized node type` for `httpRequest` and for `jira`. Nothing was sent | lines 16 to 19 |
 
+## A gap in this prototype's nodes: NOT FIXED HERE, a rule for the real pack
+
+A security review after the run found a gap.
+- Each of the three nodes has an editable "API URL" field.
+- The Agent node's `agent` field accepts an expression.
+
+With the allow list from Q5, our nodes are the only way out of n8n. So a staff member could point one of them at any address, put data into `agent`, and send it out. That reopens the leak Q5 closes.
+
+The code is left as it ran, so the evidence matches. The real node pack must:
+- read our API's address from n8n's environment in our own image (for example `process.env`), never from a node field. It must not come from a key either, because Q6 showed staff can add keys;
+- send only fixed fields, such as the execution ID and an agent ID that our API checks against its own list;
+- have our API refuse an agent ID it doesn't know.
+
+None of this was tested in P6.
+
 ## Harness notes
 
 - The scripts run with plain `python3`, not `python3 -I`, so they can import `lib.py` beside them.

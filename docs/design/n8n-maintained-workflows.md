@@ -58,6 +58,7 @@ Three choices keep the pack easy to maintain:
 - **One Agent node with a list,** not one node per agent. A new agent card saved in the Portal appears in n8n with no new install. P6 filled the list from our API.
 - **The Planner lays out the agents when the workflow is built,** and every run follows them. Staff can see in n8n exactly who runs. The run chat still opens with the Planner stating the plan.
 - **Each node only calls our API.** The pack holds no rules, so there is little in it to break.
+- **No node has an address field.** Our API's address is set in our n8n image, and each node sends only fixed fields. Our nodes are the only way out of n8n, so an editable address would let staff send data anywhere. P6's throwaway nodes had one, and a security review caught it.
 
 ## How the safety rules hold
 
