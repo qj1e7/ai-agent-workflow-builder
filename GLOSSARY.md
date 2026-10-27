@@ -45,7 +45,7 @@ The web app where Operators build use cases and start runs, watch the live activ
 _Avoid_: Frontend, dashboard
 
 **Node pack**:
-Our own n8n nodes. With them, an n8n workflow can run an agent card, add write actions to a proposal, ask for approval and carry out an approved proposal. Staff see them in n8n beside n8n's own nodes.
+Our own n8n nodes. With them, an n8n workflow can run an agent card, read from another system, add write actions to a proposal, ask for approval and carry out an approved proposal. They are the only way an n8n workflow reaches another system.
 _Avoid_: Plugin, integration, custom nodes
 
 **Published version**:

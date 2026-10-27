@@ -1,0 +1,4 @@
+Q4 timeline (event, who, version): [["activated", "platform@example.com", "8833626e"], ["activated", "platform@example.com", "707bcf60"], ["deactivated", "platform@example.com", "8833626e"], ["deactivated", "staff@example.com", "707bcf60"], ["activated", "staff@example.com", "4971f718"]]
+Q6 staff adds a Jira key: [200, {"id": "o9T8nyWkSrTRmhtg", "name": "Staff's own Jira key", "type": "jiraSoftwareCloudApi"}]
+Q6 staff adds an HTTP header key: [200, {"id": "qoOKIUmzW8gHjpk0", "name": "Staff's own header key", "type": "httpHeaderAuth"}]
+Q6 platform can list every key, including staff's: [200, [["Staff's own Jira key", "jiraSoftwareCloudApi"], ["Staff's own header key", "httpHeaderAuth"]]]

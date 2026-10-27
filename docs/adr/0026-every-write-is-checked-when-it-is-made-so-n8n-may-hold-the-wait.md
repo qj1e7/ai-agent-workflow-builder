@@ -15,6 +15,12 @@ So the check moves to the moment of writing. The write gateway (ADR 0008) carrie
 
 n8n holds no write key. Because the yes is checked at the write, n8n may hold a paused execution again. Our "Ask for a yes" node asks our API to send the approval request, then puts its execution to wait. Our API wakes it with the result: yes, no or no answer. Anyone who wakes it another way gains nothing, because "Make the approved changes" still asks the write gateway, and the gateway reads only our records.
 
+[Prototype P6](../evidence/prototypes/p6-n8n-node-pack/findings.md) showed this on n8n 2.42.6 Community edition. Our own node paused a run with no time limit, and our API woke it. The write refused in both of these cases:
+- the run was woken with only the resume URL;
+- "Ask for a yes" was deleted and the change published.
+
+A resume URL used a second time got a 409.
+
 If this ADR is accepted, it replaces ADR 0007.
 
 ## Considered options
@@ -25,7 +31,9 @@ If this ADR is accepted, it replaces ADR 0007.
 
 ## Consequences
 
-- **n8n holds read-only keys only,** for Jira, Confluence and GitHub. Posting in Teams is a write, so it goes through the gateway too. Only n8n's owner role can add a key. Our API reads n8n's list of keys every day and alerts on any key that is not on the read-only list.
+- **n8n holds no keys for other systems, and it loads only an allowed list of node types** (ADR 0027): our node pack, triggers and simple flow nodes. Reading and writing both go through our node pack. Posting in Teams is a write, so it goes through the gateway too.
+  - P6 showed that ordinary staff can add their own keys on the free edition, including a Jira key.
+  - With the allow list, no node could use those keys. An n8n workflow with an HTTP Request or Jira node could not be published or run by hand.
 - **Our API keeps the clock.** ADR 0024's timer still asks the backup and expires the request. On expiry, our API wakes the run with "no answer". n8n's own wait never decides. If an execution is still waiting a day after its request expired, our API fails the run.
 - **A lost execution doesn't lose an approved change.** If our API can't wake a waiting execution, it marks the run lost. The Operator can still carry out an approved proposal from the Portal, because the gateway doesn't need n8n.
 - **Retries keep the approval.** n8n's own retry of "Make the approved changes", or a retry from the Portal, asks the gateway again. The gateway's idempotency key (ADR 0008) stops a second write.

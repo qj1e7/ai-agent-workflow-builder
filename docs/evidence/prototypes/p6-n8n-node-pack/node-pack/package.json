@@ -1,0 +1,14 @@
+{
+  "name": "n8n-nodes-aiwb-p6",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Throwaway P6 node pack: Agent, Ask for a yes, Make the approved changes. Each node only calls the stand-in API.",
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "nodes": [
+      "nodes/Agent.node.js",
+      "nodes/AskForYes.node.js",
+      "nodes/MakeApprovedChanges.node.js"
+    ]
+  }
+}
