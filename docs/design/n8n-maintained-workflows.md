@@ -123,6 +123,15 @@ The lessons from the October sandbox stay. Our API checks every day that the err
 - The Portal rebuilds "What the workflow will do" from the published version, with a line such as "Changed in n8n by Bob, Tue 10:02".
 - A copy made in n8n that uses our nodes appears on Workflows, marked **Made in n8n**. Its requests go to any Approver on the team until an Operator names Approvers.
 
+The [Portal prototype](portal-routines/prototype.html) shows this:
+1. Open a workflow and press **Open in n8n**.
+2. In the test controls, choose "Carol changes it in n8n and publishes".
+3. Her change removes Ask for a yes, so the workflow page and Home warn, and you can undo it.
+
+![Open in n8n, from a workflow's page](portal-routines/open-in-n8n.png)
+
+![A change made in n8n removed Ask for a yes, with Undo](portal-routines/n8n-change-undo.png)
+
 **Undo:**
 
 - The Portal keeps every published version, with who published it and when. **Undo this change** publishes the previous version again, and the undo is logged too.

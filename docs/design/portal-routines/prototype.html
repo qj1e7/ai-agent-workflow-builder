@@ -847,6 +847,17 @@ a svg { vertical-align: -2px; margin-left: 3px; }
 .apstep legend { font-weight: 700; padding: 0; margin-bottom: 8px; }
 .st.gate.noans .st-dot { background: var(--sunk); border-color: var(--muted); color: var(--ink); outline: 0; }
 .facts dd small { display: block; font-weight: 400; font-size: 0.875rem; color: var(--muted); margin-top: 4px; }
+/* Open in n8n: the workflow as n8n shows it, as boxes in a row. */
+.n8n-canvas { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 6px; margin: 16px 0; padding: 16px; border-radius: var(--r-well); background: var(--sunk); }
+.n8n-canvas li { display: inline-flex; align-items: center; gap: 6px; }
+.n8n-node { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 8px; border: 1px solid var(--hair); border-radius: var(--r-card); background: var(--surface); font-size: 0.875rem; font-weight: 600; }
+.n8n-node > svg, .n8n-node > .face { flex: none; }
+.n8n-node.gate { color: var(--amber-ink); border-color: var(--amber-line); background: var(--amber-soft); }
+.n8n-node.gone { color: var(--muted); border-style: dashed; background: none; text-decoration: line-through; }
+.n8n-arrow { color: var(--muted); display: inline-flex; }
+.n8n-promises { display: grid; gap: 10px; margin-bottom: 20px; }
+.n8n-promises li { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 10px; font-size: 0.95rem; }
+.n8n-promises svg { margin-top: 3px; color: var(--muted); }
 .askline { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; font-size: 0.9rem; color: var(--muted); margin: 0 0 12px; }
 .askline svg { margin-top: 2px; }
 .checkrow { display: flex; gap: 10px; align-items: flex-start; font-weight: 600; margin-bottom: 14px; cursor: pointer; }
@@ -1037,6 +1048,7 @@ details.more .more-body { padding-top: 8px; }
     jiraComp: 'none', jiraCompAsker: null, jiraCompBy: null, jiraCompSeen: false,
     added: [], removed: [], swOpen: null, swForm: { name: '', repo: '', ours: '' }, swErr: {},
     draft: false, paused: {}, deleted: {}, sched: {}, editing: null, schedForm: null, schedErr: {},
+    n8n: {}, n8nChg: {},
     find: { workflows: '', software: '' }, filter: 'all',
     wiz: newWiz(),
   });
@@ -1680,6 +1692,7 @@ details.more .more-body { padding-top: 8px; }
     if (S.modelPending && PEOPLE[u].ap && u !== S.modelPending.byId) out.push({ kind: 'tool', icon: I.shield(22), title: 'Confirm a new AI model address', meta: `${esc(S.modelPending.address)} · entered by ${nm(S.modelPending.byId)}`, body: '<p class="small muted">Agents would send their prompts to this address. Until you confirm it, runs keep using the current model.</p>', actions: '<button class="btn primary" data-act="go" data-arg="settings">Review in Settings</button>' });
     if (S.jiraComp === 'asked' && canOkTool() && u !== S.jiraCompAsker) out.push({ kind: 'tool', icon: I.tool(22), title: `OK a new tool: ${TOOLS.jiraComp[0]}`, meta: `Asked by ${nm(S.jiraCompAsker)} for the Ticket writer`, body: '<p class="small muted">It changes data, so an Approver must OK it once before any agent can use it.</p>', actions: '<button class="btn primary" data-act="toolOpen" data-arg="jiraComp">Review the tool</button>' });
     if (S.jiraComp === 'ok' && u === S.jiraCompAsker && !S.jiraCompSeen) out.push({ kind: 'ok', icon: I.check(22), title: `${nm(S.jiraCompBy)} OK’d the new tool. You can give it to the Ticket writer.`, meta: TOOLS.jiraComp[0], body: '', actions: '<button class="btn primary" data-act="toolAddTo" data-arg="writer">Give it to the Ticket writer</button>' });
+    if (PEOPLE[u].op) Object.entries(S.n8nChg).forEach(([id, c]) => out.push({ kind: 'wait', icon: I.alert(22), title: `${nm(c.by)}’s change in n8n removed Ask for a yes`, meta: `${esc(R(id).name)} · published ${c.when}`, body: '<p class="small muted">The next run will stop before it changes anything. Undo the change, or put the step back in n8n.</p>', actions: `<button class="btn primary" data-act="n8nUndo" data-arg="${id}">Undo ${nm(c.by)}’s change</button><button class="btn" data-act="workflow" data-arg="${id}">See the workflow</button>` }));
     if (PEOPLE[u].op) {
       if (S.tool === 'ok' && !S.toolSeen && S.draft && S.conf === 'none') out.push({ kind: 'ok', icon: I.check(22), title: 'Bob OK’d the new tool. You can finish your workflow.', meta: `${esc(draftNr().name)} · Update a Confluence page`, body: '', actions: `<button class="btn primary" data-act="go" data-arg="new">Continue setting up</button>` });
       if (has('issues') && S.issues === 'failed') out.push({ kind: 'bad', icon: I.alert(22), title: 'Morning bug report check stopped', meta: 'Today, 8:00', body: '', why: 'GitHub can’t find langchain-ai/langserve. It moved to langchain-ai/langchain. You can fix this yourself.', actions: `<button class="btn primary" data-act="run" data-arg="issues">See why and fix it</button>` });
@@ -1945,7 +1958,10 @@ details.more .more-body { padding-top: 8px; }
         ${BASE[id] && BASE[id].fixedSchedule ? '' : `<button class="btn sm" data-act="editSched" data-arg="${id}">${I.edit()}Change schedule</button>`}
         <button class="btn sm" data-act="editAppr" data-arg="${id}">${I.edit()}Change who approves</button>
         <button class="btn sm" data-act="${S.paused[id] ? 'resume' : 'pause'}" data-arg="${id}">${S.paused[id] ? `${I.play()}Resume` : `${I.pause()}Pause`}</button>
+        <button class="btn sm" data-act="n8nAsk" data-arg="${id}">Open in n8n${I.ext(14)}</button>
         <button class="btn sm bad" data-act="askDelete" data-arg="${id}">${I.trash()}Delete</button></div>` : '';
+    const held = S.n8n[id];
+    const chg = S.n8nChg[id];
     return `<button class="back" data-act="go" data-arg="workflows">${I.left(16)}Workflows</button>
       <div class="pagehead"><div><div style="margin-bottom:8px">${pills(id)}</div><h1 tabindex="-1">${esc(r.name)}</h1><p>${r.what}</p></div><div class="btns">${actionFor(id)}</div></div>
       ${manage}
@@ -1954,7 +1970,9 @@ details.more .more-body { padding-top: 8px; }
         <div><dt>Next run</dt><dd>${r.next}</dd></div>
         <div><dt>Who approves</dt><dd>${r.approves}<small>${timingText(apprOf(id))}</small></dd></div>
         <div><dt>Agents</dt><dd>${faces(r.agents, 30)}</dd></div>
+        ${held ? `<div><dt>In n8n</dt><dd>${held.by === S.user ? 'You have it' : `${nm(held.by)} has it`}<small>Since ${held.since}</small></dd></div>` : ''}
       </dl>
+      ${chg ? `<article class="task" style="margin-top:16px"><span class="ico wait">${I.alert(22)}</span><div class="task-body"><h2 class="task-title">${nm(chg.by)}’s change in n8n removed Ask for a yes</h2><div class="task-meta">Published ${chg.when}</div><p>The next run will stop before it changes anything, because nothing is written without a yes.</p><div class="btns">${me().op ? `<button class="btn${actionFor(id) ? '' : ' primary'}" data-act="n8nUndo" data-arg="${id}">Undo ${nm(chg.by)}’s change</button>` : ''}</div></div></article>` : ''}
       ${S.editing === id ? schedEditor(id) : ''}
       ${S.editingAppr === id ? apprEditor(id) : ''}
       ${id === 'nudge' && S.report > 0 && S.nudge === 'failed' ? `<div class="panel" style="margin-top:16px"><h2>Support case</h2>${caseBox()}${reportTrack(true)}</div>` : ''}
@@ -2871,6 +2889,26 @@ details.more .more-body { padding-top: 8px; }
       <p id="dlg-d">It stops running and leaves Workflows. Its past runs stay in the record.</p>
       <div class="btns" style="justify-content:flex-end"><button class="btn" data-act="closeModal">Cancel</button><button class="btn bad" data-act="confirmDelete" data-arg="${id}">${I.trash()}Delete workflow</button></div>`;
   }
+  /* Open in n8n: staff can change a workflow's steps in n8n. One person has it at a time, every published change is kept, and the rules still hold. */
+  function n8nDialog(id) {
+    const r = R(id);
+    const held = S.n8n[id];
+    const other = held && held.by !== S.user;
+    const gone = !!S.n8nChg[id];
+    const boxes = [`${I.clock(16)}${r.when}`, ...r.agents.filter((a) => a !== 'lead').map((a) => `${face(a, 24)}${AGENTS[a].name}`)];
+    /* Each arrow sits inside the step it points to, so a wrapped row never starts or ends on a loose arrow. */
+    const canvas = [...boxes.map((b) => ['', b]), [`gate${gone ? ' gone' : ''}`, `${I.shield(16)}Ask for a yes`], ['', `${I.check(16)}Make the approved changes`]]
+      .map(([cls, b], i) => `<li>${i ? `<span class="n8n-arrow" aria-hidden="true">${I.right(14)}</span>` : ''}<span class="n8n-node${cls ? ` ${cls}` : ''}">${b}</span></li>`).join('');
+    return `<h2 id="dlg-h" style="font-size:1.4rem">Open ${esc(r.name)} in n8n</h2>
+      <p class="muted">In n8n you can change its steps, schedule and conditions yourself. This is how it looks there.</p>
+      <ol class="n8n-canvas" aria-label="Steps in n8n">${canvas}</ol>
+      <ul class="n8n-promises">
+        <li>${I.lock(16)}<span>${other ? `${nm(held.by)} has it now. If you take it, ${nm(held.by)} can’t change it in n8n any more. Changes already published stay.` : 'While you have it, only you can change it in n8n.'}</span></li>
+        <li>${I.clock(16)}<span>A change goes live when you publish it in n8n. Every published change is kept here, and you can undo it.</span></li>
+        <li>${I.shield(16)}<span>Nothing is written without a yes, whatever you change.</span></li>
+      </ul>
+      <div class="btns" style="justify-content:flex-end"><button class="btn" data-act="closeModal">Cancel</button><button class="btn primary" data-act="n8nOpen" data-arg="${id}">${other ? 'Take it and open n8n' : 'Open n8n'}${I.ext(14)}</button></div>`;
+  }
   function ticketDialog(key) {
     const x = RELEASES.find((r) => r.key === key);
     return `<h2 id="dlg-h" style="font-size:1.3rem">${key}: Upgrade ${x.tool} from ${x.from} to ${x.to}</h2>
@@ -2882,8 +2920,8 @@ details.more .more-body { padding-top: 8px; }
   }
   function modal() {
     if (!S.modal) return '';
-    const body = S.modal === 'report' ? reportDialog() : S.modal === 'delete' ? deleteDialog(S.modalArg) : S.modal === 'agent' ? agentDialog(S.modalArg) : S.modal === 'tool' ? toolDialog(S.modalArg) : ticketDialog(S.modalArg);
-    return `<div class="scrim${scrimIn ? ' in' : ''}" data-act="closeModal"></div><div class="dialog${['agent', 'tool'].includes(S.modal) ? ' wide' : ''}${dlgIn ? ' in' : ''}" role="${S.modal === 'delete' ? 'alertdialog' : 'dialog'}" aria-modal="true" aria-labelledby="dlg-h"${S.modal === 'delete' ? ' aria-describedby="dlg-d"' : ''}>${body}</div>`;
+    const body = S.modal === 'report' ? reportDialog() : S.modal === 'n8n' ? n8nDialog(S.modalArg) : S.modal === 'delete' ? deleteDialog(S.modalArg) : S.modal === 'agent' ? agentDialog(S.modalArg) : S.modal === 'tool' ? toolDialog(S.modalArg) : ticketDialog(S.modalArg);
+    return `<div class="scrim${scrimIn ? ' in' : ''}" data-act="closeModal"></div><div class="dialog${['agent', 'tool', 'n8n'].includes(S.modal) ? ' wide' : ''}${dlgIn ? ' in' : ''}" role="${S.modal === 'delete' ? 'alertdialog' : 'dialog'}" aria-modal="true" aria-labelledby="dlg-h"${S.modal === 'delete' ? ' aria-describedby="dlg-d"' : ''}>${body}</div>`;
   }
 
   /* ---------- Test controls: not part of the product ---------- */
@@ -2899,6 +2937,7 @@ details.more .more-body { padding-top: 8px; }
       else sims.push(['expire', '', `Nobody answers until ${at(q.expiresAt)}`]);
     }
     if (S.report > 0 && S.report < 4) sims.push(['advance', '', `Support moves case ${S.supportCase.id} on`]);
+    if (S.view.name === 'workflow' && S.view.id !== 'sw' && me().op && !S.n8nChg[S.view.id]) sims.push(['n8nChange', S.view.id, 'Carol changes it in n8n and publishes']);
     return `<div class="testctl">
       ${S.testOpen ? `<div class="testctl-panel${testNew ? ' in' : ''}" id="testctl-panel" role="region" aria-label="Test controls">
         <p class="testctl-title">Test controls</p>
@@ -3529,6 +3568,10 @@ details.more .more-body { padding-top: 8px; }
       toast(`Saved. Next run ${R(id).next}.${id === 'sw' ? ` You now own this schedule, so you can’t approve its checks.${off ? ' You’re no longer one of its Approvers, so choose a new backup under Change who approves.' : ''}` : ''}`);
       render();
     },
+    n8nAsk: (id) => openModal('n8n', id, '.btn.primary'),
+    n8nOpen: (id) => { S.n8n[id] = { by: S.user, since: 'today, 9:10' }; closeModal(); toast(`Opened in n8n in a new tab. Only you can change ${esc(R(id).name)} there now.`); render(); },
+    n8nChange: (id) => { S.n8n[id] = { by: 'carol', since: 'today, 9:12' }; S.n8nChg[id] = { by: 'carol', when: 'today, 9:12' }; toast(`Carol published a change to ${esc(R(id).name)} in n8n.`); render(); },
+    n8nUndo: (id) => { const c = S.n8nChg[id]; delete S.n8nChg[id]; toast(`Undone. The version before ${nm(c.by)}’s change is live again.`); render(); },
     pause: (id) => { S.paused[id] = true; toast(`Paused. ${esc(R(id).name)} won’t run until you resume it.`); render(); },
     resume: (id) => { delete S.paused[id]; toast(`Resumed. Next run ${R(id).next}.`); render(); },
     askDelete: (id) => openModal('delete', id, '[data-act="closeModal"].btn'),
