@@ -44,6 +44,14 @@ A ready-made agent card that ships with the platform, such as the release checke
 The web app where Operators build use cases and start runs, watch the live activity view, and Approvers decide on approval requests. Users see it under the product's name, AI Workflow Builder.
 _Avoid_: Frontend, dashboard
 
+**Node pack**:
+Our own n8n nodes. With them, an n8n workflow can run an agent card, read from another system, add write actions to a proposal, ask for approval and carry out an approved proposal. They are the only way an n8n workflow reaches another system.
+_Avoid_: Plugin, integration, custom nodes
+
+**Published version**:
+The version of a use case's n8n workflow that runs. Staff change a draft in n8n, and publishing the draft makes it the published version.
+_Avoid_: Live version, active version
+
 ### Keeping software up to date
 
 **Watchlist**:

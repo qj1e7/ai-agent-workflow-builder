@@ -1,0 +1,18 @@
+Q1 agent list from our API: [200, {"data": [{"name": "Version checker", "value": "version_checker"}, {"name": "Ticket writer", "value": "ticket_writer"}]}]
+cleanup old copy: ["gLND2mU1qudvblb7", 200]
+Q1 create with our nodes: [200, "cOnCEMF7W13nWLVZ"]
+Q1 publish with our nodes: [200, true]
+Q1 publication status (n8n waits a moment before the webhook answers): {"status": "published", "liveVersionId": "8833626e-c552-40bb-a480-861fd044ab14", "pendingVersionId": null, "triggers": [{"nodeId": "ask-for-a-yes", "status": "activated", "errorMessage": null}, {"nodeId": "start", "status": "activated", "errorMessage": null}]}
+Q2 A started, execution status while asked: [200, "waiting", "waitTill", "3000-01-01T00:00:00.000Z"]
+Q2 A resume URL shape: "http://n8n:5678/webhook-waiting/2?signature=<redacted>"
+Q2 A decide yes: {"run_id": "run-2", "n8n_status": 200, "n8n_body": "firstEntryJson"}
+Q2 A result: {"status": "success", "nodes_ran": ["Start", "Version checker", "Ticket writer", "Ask for a yes", "Make the approved changes"], "error": null}
+Q2 B forge yes: {"run_id": "run-3", "n8n_status": 200, "n8n_body": "firstEntryJson"}
+Q2 B result: {"status": "error", "nodes_ran": ["Start", "Version checker", "Ticket writer", "Ask for a yes", "Make the approved changes"], "error": "No yes for this run."}
+Q2 C decide no: {"run_id": "run-4", "n8n_status": 200, "n8n_body": "firstEntryJson"}
+Q2 C result: {"status": "success", "nodes_ran": ["Start", "Version checker", "Ticket writer", "Ask for a yes", "Declined"], "error": null}
+Q2 E reuse old resume URL: [409, "{\"code\":409,\"message\":\"The execution \\\"2 has finished already.\"}"]
+Q2 D publish without Ask for a yes: [200, true]
+Q2 D publication status: {"status": "published", "liveVersionId": "707bcf60-7647-4401-a002-b5a2c334e4d6", "pendingVersionId": null, "triggers": [{"nodeId": "start", "status": "activated", "errorMessage": null}]}
+Q2 D result: {"status": "error", "nodes_ran": ["Start", "Version checker", "Ticket writer", "Make the approved changes"], "error": "No yes for this run."}
+stub records: [{"run_id": "run-1", "execution_id": "1", "workflow_id": "gLND2mU1qudvblb7", "proposal": [{"system": "jira", "project": "MOCK", "title": "Upgrade LangGraph to 1.2.17"}], "done": false, "request": "pending"}, {"run_id": "run-2", "execution_id": "2", "workflow_id": "cOnCEMF7W13nWLVZ", "proposal": [{"system": "jira", "project": "MOCK", "title": "Upgrade LangGraph to 1.2.17"}], "done": true, "request": "approved"}, {"run_id": "run-3", "execution_id": "3", "workflow_id": "cOnCEMF7W13nWLVZ", "proposal": [{"system": "jira", "project": "MOCK", "title": "Upgrade LangGraph to 1.2.17"}], "done": false, "

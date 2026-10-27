@@ -7,3 +7,5 @@ node_modules/
 n8n-data/
 .venv/
 .terraform/
+p6-secrets.json
+p6-encryption-key

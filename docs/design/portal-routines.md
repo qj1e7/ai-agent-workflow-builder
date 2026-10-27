@@ -18,7 +18,7 @@ The **Test controls** button at the bottom left opens the mock controls. They ar
 - **Make something happen** acts for someone else, or lets time pass.
 - **Start over** resets everything.
 
-Six things to try:
+Seven things to try:
 
 1. On **Home**, open "2 upgrade tickets are waiting for your yes" and approve them. Bob didn't answer in time, so Alice was asked as the backup.
 2. Open "Morning bug report check stopped" and fix it with one click.
@@ -26,6 +26,7 @@ Six things to try:
 4. In **New workflow**, pick "Weekly summary in Confluence" and press **Plan it**. The Planner drafts a missing tool. Ask for the OK, let Bob OK it from the test controls, then turn the workflow on.
 5. In **New workflow**, pick "Check Kubernetes releases". The Planner adds it to the **Software watchlist** instead of making a new workflow.
 6. Set up a workflow, choose who is asked first and a backup, and do a test run. From the test controls, let 4 working hours pass, then let nobody answer.
+7. Open "Morning bug report check" and press **Open in n8n**. From the test controls, let Carol change it in n8n, then undo her change. The [n8n design note](n8n-maintained-workflows.md) explains this.
 
 ## Why change
 

@@ -1,0 +1,26 @@
+name: protop6
+services:
+  n8n:
+    image: n8nio/n8n:2.42.6
+    environment:
+      N8N_CUSTOM_EXTENSIONS: /custom
+      WEBHOOK_URL: http://n8n:5678/
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
+      N8N_SECURE_COOKIE: "false"
+      N8N_ENCRYPTION_KEY: "${PROTO_ENCRYPTION_KEY}"
+    ports: ["5683:5678"]
+    volumes:
+      - n8ndata:/home/node/.n8n
+      - ./node-pack:/custom/aiwb:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5678/healthz/readiness || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+  stub:
+    image: python:3.12-slim
+    command: ["python", "-u", "/app/stub.py"]
+    volumes: ["./stub.py:/app/stub.py:ro"]
+    ports: ["5693:5690"]
+volumes: {n8ndata: {}}

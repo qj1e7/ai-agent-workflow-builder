@@ -1,0 +1,9 @@
+# Q5: n8n loads only an allowed list of node types: our node pack plus harmless flow and trigger nodes.
+# No node can then use a key that staff add, call an outside address, or run code.
+services:
+  n8n:
+    environment:
+      NODES_INCLUDE: >-
+        ["n8n-nodes-base.webhook","n8n-nodes-base.scheduleTrigger","n8n-nodes-base.manualTrigger",
+        "n8n-nodes-base.errorTrigger","n8n-nodes-base.if","n8n-nodes-base.merge","n8n-nodes-base.noOp",
+        "n8n-nodes-base.stickyNote","CUSTOM.agent","CUSTOM.askForYes","CUSTOM.makeApprovedChanges"]

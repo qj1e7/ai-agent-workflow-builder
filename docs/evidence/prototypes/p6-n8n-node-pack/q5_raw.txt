@@ -1,0 +1,19 @@
+Q5 before: staff publish an n8n workflow with an HTTP Request node: [200, true]
+Q5 before: data reached the outside address: true
+ready=200
+Q5 after: call the staff workflow's webhook: [400, {"code": 0, "message": "Unrecognized node type: n8n-nodes-base.httpRequest"}]
+Q5 after: data reached the outside address: false
+Q5 after: staff's workflows and whether they are live: [200, [["P6 software check", true], ["P6 staff's own", true], ["P6 staff sends data out", true]]]
+Q5 after: staff make a new one with an HTTP Request node: [200, "saved"]
+Q5 after: staff publish it: [400, {"code": 0, "message": "Unrecognized node type: n8n-nodes-base.httpRequest"}]
+Q5 after: staff make one with n8n's Jira node: [200, "saved"]
+Q5 after: platform publishes our nodes: 200
+Q5 after: our software check with a yes: {"status": "success", "nodes_ran": ["Start", "Ticket writer", "Ask for a yes", "Make the approved changes"]}
+Q5 after: staff run the draft 'P6 a new leak' by hand: [400, {"code": 400, "message": "To run the workflow manually, specify either a trigger to start from or a destination node."}]
+Q5 after: 'P6 a new leak' reached the outside address: false
+Q5 after: staff run the draft 'P6 uses staff's Jira key' by hand: [400, {"code": 400, "message": "To run the workflow manually, specify either a trigger to start from or a destination node."}]
+Q5 after: 'P6 uses staff's Jira key' reached the outside address: false
+Q5 after: staff run the draft 'P6 a new leak' by hand: [400, {"code": 0, "message": "Unrecognized node type: n8n-nodes-base.httpRequest"}]
+Q5 after: 'P6 a new leak' reached the outside address: false
+Q5 after: staff run the draft 'P6 uses staff's Jira key' by hand: [400, {"code": 0, "message": "Unrecognized node type: n8n-nodes-base.jira"}]
+Q5 after: 'P6 uses staff's Jira key' reached the outside address: false
