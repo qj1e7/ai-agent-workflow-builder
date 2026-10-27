@@ -1738,10 +1738,14 @@ details.more .more-body { padding-top: 8px; }
       ? (me().op ? 'Welcome. Set up your first workflow, and it runs by itself from then on.' : 'Nothing needs you yet. When a workflow wants to change something, it shows up here and in Teams.')
       : n === 0 ? 'Nothing needs you right now. Your workflows are running.' : `${n === 1 ? '1 thing needs' : `${n} things need`} you. Everything else is running.`;
     const firstLive = coming.find(([id]) => !S.paused[id]);
-    const main = dayOne && me().op && n === 0 ? firstRoutine() : `<section class="section" aria-labelledby="needs-h">
+    /* On day one an Operator's first workflow comes first. Anything that already needs them, such as a key about to expire,
+       follows as short rows, so the page keeps one main button. */
+    const starterFirst = dayOne && me().op;
+    const needsSec = `<section class="section" aria-labelledby="needs-h">
           <h2 id="needs-h">Needs you <span class="count">${n}</span></h2>
-          ${n ? `${taskCard(items[0])}${n > 1 ? `<ul class="queue" aria-label="Also needs you">${items.slice(1).map(queueRow).join('')}</ul>` : ''}` : `<div class="quiet"><b>All quiet</b>${firstLive ? `Next up: <button class="linkbtn" data-act="workflow" data-arg="${firstLive[0]}">${esc(firstLive[1].name)}</button>, ${firstLive[1].next}.` : 'Nothing is scheduled yet.'}</div>`}
+          ${starterFirst ? `<ul class="queue" aria-label="Needs you">${items.map(queueRow).join('')}</ul>` : n ? `${taskCard(items[0])}${n > 1 ? `<ul class="queue" aria-label="Also needs you">${items.slice(1).map(queueRow).join('')}</ul>` : ''}` : `<div class="quiet"><b>All quiet</b>${firstLive ? `Next up: <button class="linkbtn" data-act="workflow" data-arg="${firstLive[0]}">${esc(firstLive[1].name)}</button>, ${firstLive[1].next}.` : 'Nothing is scheduled yet.'}</div>`}
         </section>`;
+    const main = starterFirst ? `${firstRoutine()}${n ? needsSec : ''}` : needsSec;
     const following = has('nudge') && S.report > 0 && S.report < 4 && S.user === 'alice' ? `<section class="section" aria-labelledby="fu-h"><h2 id="fu-h">Following up</h2>
           <article class="panel"><div><div class="task-title">Stale ticket nudge: reported to support</div><div class="task-meta">Support has the run and the troubleshooter’s notes.</div></div>${caseBox()}${reportTrack(true)}</article></section>` : '';
     const draftSub = S.tool === 'asked' && S.wiz.intent && needsTool(draftNr()) ? 'Waiting for an Approver to OK a new tool.' : S.tool === 'ok' && S.wiz.intent && needsTool(draftNr()) ? 'The new tool is OK’d. Ready to carry on.' : `Step ${S.wiz.step} of 4. Pick up where you left off.`;

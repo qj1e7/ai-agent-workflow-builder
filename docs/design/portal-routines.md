@@ -87,7 +87,7 @@ flowchart LR
 
 ### 1. First visit
 
-A new Operator lands on Home. Instead of an empty page, it shows three ready-made workflows, "Describe your own", and how it works in 4 steps.
+A new Operator lands on Home. Instead of an empty page, it shows three ready-made workflows, "Describe your own", and how it works in 4 steps. Anything that already needs them, such as a key about to expire, shows under the ready-made workflows as a short row.
 
 ![Home on day one](portal-routines/day-one.png)
 
