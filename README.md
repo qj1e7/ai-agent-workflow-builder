@@ -2,7 +2,7 @@
 
 NUS-ISS MTech SE final year project, sponsored by CODESparks (NCS).
 
-Support staff describe a repetitive Jira or Confluence task in plain English. A Room lead agent brings in the specialist agents it needs, and the work runs with human approval in Microsoft Teams before any write action.
+Support staff describe a repetitive Jira or Confluence task in plain English. A Planner agent brings in the specialist agents it needs, and the work runs with human approval in Microsoft Teams before any write action.
 
 ## Start here
 

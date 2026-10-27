@@ -1,5 +1,5 @@
 <!--
-Title: type(scope): subject. Example: feat(runtime): add Room lead routing
+Title: type(scope): subject. Example: feat(runtime): add Planner routing
 Scopes: builder, runtime, orchestration, monitoring, infra, ci, docs
 Delete any section with nothing to say. Tradeoffs is optional.
 -->

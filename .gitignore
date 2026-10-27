@@ -6,6 +6,9 @@
 # Personal Claude Code settings
 .claude/settings.local.json
 
+# Superdesign working files: screen snapshots, drafts and run logs, kept local
+.superdesign/
+
 # Secrets
 .env
 .env.*
