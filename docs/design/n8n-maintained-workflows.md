@@ -24,6 +24,23 @@ If the sponsor opened n8n today, he would see short n8n workflows that each call
 
 > **n8n holds the steps. Our platform holds the keys and the rules. Staff can change any step in n8n, but nothing can be written without a yes.**
 
+## The Portal keeps everything, and n8n is an extra place to work
+
+Nothing in the [Portal redesign](portal-routines.md) goes away:
+- describing a task and letting the Planner build the workflow;
+- agent cards, and changing an agent in plain English;
+- the AI troubleshooter and its one-click fixes;
+- Report to support, where coding agents write a fix;
+- new tools drafted from a system's API.
+
+Staff who never open n8n lose nothing. Opening n8n is a choice.
+
+In n8n, staff can rearrange steps, change schedules, add conditions and use our blocks, but not n8n's own connectors or code (see [The node pack](#the-node-pack)). When they need something n8n doesn't load, such as posting to Slack, they ask for it in the Portal. It becomes a tool or a block, and it goes through approvals like every other change.
+
+The team chose this limit on 28 Oct 2026 over two other options:
+- **A second, practice n8n with everything, connected only to the practice copies of Jira and Teams.** There would be one more thing to run.
+- **Full n8n, with unprotected workflows flagged.** Those workflows could write without a yes.
+
 ## Who owns what
 
 | Part | What it owns | Where staff change it |
