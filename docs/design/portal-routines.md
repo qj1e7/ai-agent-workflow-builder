@@ -239,7 +239,7 @@ There is one proposed change to the approval gate: named Approvers, a backup and
 
 - No new service, data store or external dependency.
 - No change to how runs or the watchlist work underneath. Approvals change only as ADR 0024 proposes.
-- No new visual style. The prototype uses the Portal's own colors, font and agent faces, in a light theme on a white page. Body text is at least 4.5:1 against its background, and secondary text is 7:1.
+- No new brand. The prototype keeps the Portal's font (Atkinson Hyperlegible Next), status colours and agent faces, in a light theme. The look is a "framed sheet": a pale blue-grey header and frame around a white page, flat cards, and one teal accent for the current tab, links and data. Body text is at least 4.5:1 against its background, and secondary text is about 7:1.
 
 ## What changes in each context
 
