@@ -26,24 +26,28 @@ One thing an agent can do in another system, such as reading GitHub releases or 
 _Avoid_: Plugin, skill, integration
 
 **Agent library**:
-The agent cards a team has saved. The Room lead chooses from it.
+The agent cards a team has saved. The Planner chooses from it.
 _Avoid_: Agent hub (NCS's agent hub is a separate thing)
 
 **Use case**:
-A saved repetitive task: which agent card runs, with which inputs, and when.
-_Avoid_: Job, recipe
+A saved repetitive task: which agent card runs, with which inputs, and when. Operators see it as a **workflow**.
+_Avoid_: Job, recipe, routine
+
+**Workflow**:
+What Operators see a use case called in the app. Always write "n8n workflow" for n8n's own workflows, and "Jira workflow" for a ticket's statuses.
+_Avoid_: Routine
 
 **Template**:
 A ready-made agent card that ships with the platform, such as the release checker.
 
 **Portal**:
-The web app where Operators build use cases and start runs, watch the live activity view, and Approvers decide on approval requests.
+The web app where Operators build use cases and start runs, watch the live activity view, and Approvers decide on approval requests. Users see it under the product's name, AI Workflow Builder.
 _Avoid_: Frontend, dashboard
 
 ### Keeping software up to date
 
 **Watchlist**:
-The list of software a team runs and keeps up to date. It is checked on a schedule, and one approval request covers each check.
+The list of software a team runs and keeps up to date. It is checked on a schedule, and one approval request covers each check. In the app it is the **Software watchlist**.
 _Avoid_: Inventory, software list
 
 **Watched software**:
@@ -55,7 +59,7 @@ One run of the watchlist that compares every watched software's newest version w
 _Avoid_: Scan, poll
 
 **Source**:
-Where a watched software's releases are published, such as its GitHub releases.
+Where a watched software's releases are published: a package registry such as Maven Central, npm, PyPI, NuGet or Docker Hub, or its GitHub releases.
 _Avoid_: Feed, link
 
 **Our version**:
@@ -66,6 +70,14 @@ _Avoid_: Current version, installed version
 The latest release at the source.
 _Avoid_: Latest, current version
 
+**Known vulnerability**:
+A published security flaw, with a CVE number, that affects a version of a watched software.
+_Avoid_: Bug, issue
+
+**End of life**:
+The date after which a version of a watched software gets no more fixes, including security fixes.
+_Avoid_: EOL, deprecated
+
 **Schedule owner**:
 The person who last saved a watchlist's schedule. Every scheduled check counts as their work.
 
@@ -75,11 +87,12 @@ The person who last saved a watchlist's schedule. Every scheduled check counts a
 One execution of a use case, from trigger to result.
 _Avoid_: Job, execution (n8n uses "execution" for its own internal runs)
 
-**Room lead**:
-The agent that reads a task and decides which saved agents to bring in, or that a new agent card is needed.
+**Planner**:
+The agent that reads a task, says what it understood, and decides which saved agents to bring in, or that a new agent card is needed.
+_Avoid_: Room lead (the old name), orchestrator
 
 **Specialist agent**:
-An agent, defined by an agent card, that the Room lead brings in to do one part of a run.
+An agent, defined by an agent card, that the Planner brings in to do one part of a run.
 
 **Leg**:
 The part of a run that n8n carries in one execution. A run has a work leg up to the approval request and an act leg from the approval to the end. Our platform owns the pause between them.
@@ -93,6 +106,18 @@ _Avoid_: Plan, draft
 
 **Approval gate**:
 The step that pauses a run before a write action until an Approver approves it in Teams.
+
+**Named Approvers**:
+The people a use case names for one approval step: who is asked first and, if the Operator chooses one, a backup. Only they can decide that step.
+_Avoid_: Assignee, reviewer
+
+**Escalation**:
+Asking a step's backup because the first Approver has not answered in time. It changes who is asked, never who may decide.
+_Avoid_: Reassignment, handover
+
+**Expired request**:
+An approval request that nobody answered in time. Nothing is written, as when it is declined, and it never approves itself.
+_Avoid_: Timed out (that means the workflow engine stopped answering)
 
 **Safety checker**:
 The check that every agent action passes before it runs. It denies write actions by default.

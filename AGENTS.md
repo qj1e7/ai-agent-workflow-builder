@@ -4,7 +4,7 @@ This file is the single source of team rules. Claude Code reads it through `CLAU
 
 ## The project
 
-Our sponsor is CODESparks, a team in NCS. Their support staff are not technical and repeat the same Jira and Confluence work. We are building a platform where they describe a task in plain English, a Room lead agent decides which specialist agents to bring in, and the work runs with human approval in Microsoft Teams before any write action.
+Our sponsor is CODESparks, a team in NCS. Their support staff are not technical and repeat the same Jira and Confluence work. We are building a platform where they describe a task in plain English, a Planner agent decides which specialist agents to bring in, and the work runs with human approval in Microsoft Teams before any write action.
 
 - The AI workflow builder is the main product.
 - The live activity view shows agents talking, hand-offs, and where a run failed. It is the demo layer for the professor.
@@ -19,13 +19,14 @@ Four bounded contexts. Code in one context does not reach into another context's
 | Context | Owns | Commit scope |
 |---|---|---|
 | Use case builder | Blocks, templates, use case definitions | `builder` |
-| Agent runtime | LangGraph agents, Room lead, tools | `runtime` |
+| Agent runtime | LangGraph agents, the Planner, tools | `runtime` |
 | Orchestration | n8n workflows, Teams approvals, triggers | `orchestration` |
 | Run monitoring | Event stream, live activity view, AI troubleshooter | `monitoring` |
 
 Other commit scopes: `infra`, `ci`, `docs`.
 
-- n8n does the workflow plumbing. Our own code goes into the builder, the Room lead, the live activity view and the AI troubleshooter.
+- n8n workflows do the plumbing. Our own code goes into the builder, the Planner, the live activity view and the AI troubleshooter.
+- The Planner used to be called the Room lead. Until the code is renamed, the code and the Portal still say `room_lead`, `RoomLead` and "Room lead".
 - Agents use LangChain and LangGraph, traced with LangSmith. The backend is Python.
 - PostgreSQL is the relational store.
 - Infrastructure as code is Terraform, kept working under OpenTofu (ADR 0013).
@@ -71,7 +72,7 @@ Our additions to pstack's playbooks are in `.agents/playbooks/`. Claude Code, Co
 ### Branches and pull requests
 
 - `main` is always in a working state. Work on a short-lived branch and open a PR to `main`. Never push to `main` directly.
-- PR titles use Conventional Commits with a scope from the Architecture table, for example `feat(runtime): add Room lead routing`.
+- PR titles use Conventional Commits with a scope from the Architecture table, for example `feat(runtime): add Planner routing`.
 - PR descriptions use pstack's sections: Why, What changed, Scope, Tradeoffs (only when needed), Blast Radius, Verification. The PR template has them.
 - Start the description with `Closes #<issue>` when the PR closes an issue.
 - Verification names real commands or runs and what they showed. "It compiles" is not verification.
@@ -81,6 +82,7 @@ Our additions to pstack's playbooks are in `.agents/playbooks/`. Claude Code, Co
 
 - A big decision gets an ADR in `docs/adr/` before its code lands: a new service, data store, cloud service or external dependency, or any change to the approval gate or the safety checker. Use the `domain-modeling` skill.
 - Add new domain terms to `GLOSSARY.md`.
+- In the app, "workflow" means the task an Operator sets up (a use case in the code). In code and docs, write "n8n workflow" or "Jira workflow" for those, never "workflow" alone.
 
 ### Evidence
 
