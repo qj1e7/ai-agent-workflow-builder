@@ -26,7 +26,7 @@ Seven things to try:
 4. In **New workflow**, pick "Weekly summary in Confluence" and press **Plan it**. The Planner drafts a missing tool. Ask for the OK, let Bob OK it from the test controls, then turn the workflow on.
 5. In **New workflow**, pick "Check Kubernetes releases". The Planner adds it to the **Software watchlist** instead of making a new workflow.
 6. Set up a workflow, choose who is asked first and a backup, and do a test run. From the test controls, let 4 working hours pass, then let nobody answer.
-7. Open "Morning bug report check" and press **Open in n8n**. From the test controls, let Carol change it in n8n, then undo her change. The [n8n design note](n8n-maintained-workflows.md) explains this.
+7. Open "Morning bug report check" and press **Open in n8n**. From the test controls, let Carol change it in n8n, then let the next run start. It stops before changing anything, and the AI troubleshooter offers Undo or Fix it in n8n. The [n8n design note](n8n-maintained-workflows.md) explains this.
 
 ## Why change
 
@@ -58,6 +58,8 @@ Users own one thing: a **workflow**. In the code, a workflow is a use case as AD
 "Workflow" also means two other things the team works with: n8n's workflows, which carry each run, and Jira's workflows, which are a ticket's statuses. So in the app, "workflow" always means the user's task. In code and docs, always write "n8n workflow" or "Jira workflow" for the other two. `GLOSSARY.md` records this rule.
 
 The app's on-screen name is **AI Workflow Builder**, the project's own name. "Portal" stays as the internal name for the web app in code and ADRs.
+
+The logo is an AI spark and then a tick, because nothing is written without a yes. The tick is drawn in NCS strokes and NCS blue. Its long arm is the NCS mark's right stroke. Its short arm leans back with the same cut and the same gap as the NCS mark. It shows in the header, on the browser tab, and on a white tile wherever the app itself speaks: in the Teams messages, in the run chat, and on the run line. The tile's square corners set it apart from the round agents and people.
 
 The menu becomes:
 
@@ -166,7 +168,9 @@ Each workflow names who is asked first and a backup. Only they can decide. If th
 The AI troubleshooter's reason shows on Home. It says which kind of problem it is:
 
 - **You can fix it,** for example a GitHub project that moved. One click fixes it and retries the run.
-- **Only support can fix it,** for example a bug in the platform. "Report to support" sends the run and the troubleshooter's notes, and you follow the report on Home.
+- **Only support can fix it,** for example a bug in the platform. "Report to support" sends the run and the troubleshooter's notes. The dialog turns straight into a confirmation with the case reference, and you follow the report on Home.
+
+![Reported to support, with the case reference](portal-routines/report-sent.png)
 
 ![A platform bug reported to support](portal-routines/report-to-support.png)
 
@@ -218,6 +222,54 @@ The whole path connects: the Ticket writer can't set a component, so the Planner
 ## Changes after usability testing
 
 Version 1 was tested by an independent evaluator (ChatGPT) and in an internal walkthrough on 27 Oct 2026. Version 2 answers their findings. The report is in [`docs/evidence/usability/2026-10-27-chatgpt-v1-evaluation.md`](../evidence/usability/2026-10-27-chatgpt-v1-evaluation.md), and the changes are listed in [`docs/evidence/usability/2026-10-27-v2-changes.md`](../evidence/usability/2026-10-27-v2-changes.md). Version 1 is kept in [`portal-routines/v1/`](portal-routines/v1/).
+
+## Motion and the agents' faces
+
+Animation should first make it clear what is happening and what changed. Only then is it allowed to be friendly. Nothing waits for an animation: a press, a page change or a save happens at once, and the motion only shows it.
+
+**Timing.** Every animation uses one of five durations:
+
+| What | How long |
+|---|---|
+| A control answers a press, hover or focus | 120 ms |
+| Something small appears, moves or changes | 200 ms |
+| A dialog, the Teams drawer or a section opens | 260 ms. Closing is quicker, 140 to 220 ms |
+| Something needs a look: a new error, a request waiting | 380 ms |
+| A one-off success reaction | 560 ms, never more than 600 |
+
+Only opacity and transform move, with no bounce.
+
+**Where things move.**
+- **A new page.** Its cards arrive one after another, 40 ms apart. This happens once and never loops.
+- **Lists.** In Home, Workflows, the Software watchlist and a plan's steps, an item that moves glides to its new place. A new item fades in. A removed item fades out before the rest close the gap, so the list never jumps.
+- **Changed values.** A changed version, status or count gets a short highlight. That includes a change made since you last looked, for example the ticket statuses on the Software watchlist after an approval.
+- **Panels.** The approval panel, the AI troubleshooter's panel, an editor and a history row unfold from the top. A "Done" panel shows its check once.
+- **Report to support.** The dialog turns into a confirmation at once, with the case reference. A short bar and a check confirm it.
+- **Layers.** Dialogs, the Teams drawer and toasts open and close with short transitions. Expandable sections unfold when opened and fold before closing.
+
+**The agents' faces.** Each face shows the real state of the work, never a random one. Only the agent working now, or one that needs attention, moves. The others stay still. Text and the usual status icons always say the same thing, so the face never carries a status alone.
+
+| State | How it looks | When |
+|---|---|---|
+| Idle | Still. Where one agent is the focus, slow breathing and an occasional blink | Most of the time. Breathing only for the Planner while you set up a workflow, and an agent in its own dialog |
+| Thinking | Eyes look side to side, with 3 dots | The Planner choosing agents in a run, or planning your task |
+| Working | Eyes scan. Its tool moves a little, and writers type | The step running now in a run, and the "is working" line in the chat |
+| Waiting | Eyes up, still, with an amber clock badge | The agent whose work waits for a yes, in the run and on Workflows |
+| Success | One quick check and a small lift, then idle again | The last agent of a run that finished, for example after an approval. Not after a decline |
+| Error | One worried flinch, then a red "!" badge that stays | The step that stopped, in the run, the chat and on Workflows |
+| Stopped | Eyes closed, grey | A paused workflow, a step that wasn't needed, or a request nobody answered |
+| Hover or focus | A small lift | An agent card or button under the pointer or with keyboard focus |
+
+**Accessibility.**
+- With "reduce motion" switched on, nothing moves. New things fade in for a moment, and agents hold their pose with their badges.
+- Nothing flashes or repeats quickly. Loops pause when they scroll off screen or the tab is hidden.
+- Keyboard focus stays visible.
+- No animation causes sideways scrolling on a phone.
+
+**In the real Portal.** The prototype is one HTML file with no framework, so it uses CSS animations and a little plain JavaScript. The Portal is React 19 with Vite, and there:
+- **Motion** (`motion/react`) should do the transitions: entry and exit for dialogs, the drawer and toasts, layout animation for lists, and presence for panels.
+- **Rive** (`@rive-app/react-canvas`) should draw the agents, as a state machine with the 8 states above as its inputs. That needs the agent artwork made in Rive. Until then, keep the SVG faces.
+- Both are new external dependencies, so each needs an ADR first, as `AGENTS.md` says.
 
 ## Safety rules the design keeps
 
@@ -286,5 +338,6 @@ Rough size: 1.5 to 2 sprints, mostly Portal work.
 3. After handover, can someone at CODESparks or NCS review a pull request now and then? This decides whether coding agents can help with fixes later.
 4. Are 4 working hours (ask the backup) and 2 working days (stop waiting) the right defaults? Should public holidays count?
 5. An agent can be used by other people's workflows. Should any Operator be able to change it, as in the prototype, or only the people whose workflows use it? The prototype shows which workflows use it before saving, and keeps every version.
+6. May the logo use NCS strokes and NCS blue? The sponsor would need to check with the NCS brand team before it goes beyond the prototype.
 
 Decided on 27 Oct: users see **workflow** (not "routine" or "use case"), the app is called **AI Workflow Builder**, the software page is **Software watchlist**, and the Room lead is now the **Planner**. If the team agrees with the rest, we open one issue per item in the first slice.

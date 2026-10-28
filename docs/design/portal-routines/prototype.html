@@ -3,6 +3,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Workflow Builder Prototype</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-17 -63.5 270 270'%3E%3Crect x='-17' y='-63.5' width='270' height='270' rx='60' fill='%23fff'/%3E%3Cpath d='M30 57C34.5 75.5 34.5 75.5 53 80C34.5 84.5 34.5 84.5 30 103C25.5 84.5 25.5 84.5 7 80C25.5 75.5 25.5 75.5 30 57Z' fill='%23121417'/%3E%3Cg fill='%2302a7e1' stroke='%2302a7e1' stroke-width='6' stroke-linejoin='round'%3E%3Cpolygon points='52,58 94,58 116.6,89.4 94.4,121.6'/%3E%3Cpolygon points='132.6,140 117.6,97.5 182.7,3.5 226.8,3.5'/%3E%3C/g%3E%3C/svg%3E">
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -32,6 +33,7 @@
   --accent-soft: #e2f0f3;
   --accent-ink: #0f4a59;
   --nav-mark: #1b6c80;
+  --brand: #02a7e1; /* NCS blue, for the logo only */
   --info-bg: #e9f3f5;
   --info-ink: #0f4a59;
   --float: 0 1px 2px rgba(18, 20, 23, 0.06), 0 12px 32px rgba(18, 20, 23, 0.14);
@@ -101,6 +103,13 @@
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
   --ease-move: var(--ease-in-out);
+  /* Motion durations. Every animation and transition uses one of these. */
+  --dur-press: 120ms;   /* a control answers a press, hover or focus */
+  --dur-small: 200ms;   /* something small appears, moves or changes */
+  --dur-panel: 260ms;   /* a dialog, drawer or section opens */
+  --dur-attn: 380ms;    /* something needs a look: a new error, a request waiting */
+  --dur-success: 560ms; /* a one-off positive reaction, never longer than 600ms */
+  --stagger: 40ms;      /* gap between cards arriving on a new screen */
   --move: 400ms;
 }
 * { box-sizing: border-box; }
@@ -131,7 +140,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .nav-a {
   position: relative; display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 0 12px; border: 0; border-radius: var(--r-ctl);
   background: none; color: var(--muted); font-weight: 600; font-size: 0.95rem; cursor: pointer; white-space: nowrap;
-  transition: background-color 150ms ease, color 150ms ease;
+  transition: background-color var(--dur-press) ease, color var(--dur-press) ease;
 }
 .nav-a[aria-current="page"] { color: var(--ink); }
 .nav-a[aria-current="page"]::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -11px; height: 2px; border-radius: 2px; background: var(--nav-mark); }
@@ -143,7 +152,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .iconbtn {
   position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 40px; height: 40px; padding: 0 10px;
   border: 1px solid transparent; border-radius: var(--r-ctl); background: transparent; cursor: pointer; font-weight: 600; font-size: 0.9rem; color: var(--ink);
-  transition: background-color 150ms ease, transform 160ms var(--ease-out);
+  transition: background-color var(--dur-press) ease, transform var(--dur-press) var(--ease-out);
 }
 .iconbtn:active { transform: scale(0.96); }
 .iconbtn[aria-current="page"] { background: var(--active); }
@@ -199,7 +208,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .pagehead { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 28px; }
 .pagehead p { color: var(--muted); margin-top: 6px; font-size: 1.05rem; max-width: 65ch; }
 .eyebrow { font-size: 0.875rem; font-weight: 600; color: var(--muted); }
-.back { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 14px; background: none; border: 0; padding: 4px 0; color: var(--muted); font-weight: 600; cursor: pointer; transition: color 150ms ease; }
+.back { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 14px; background: none; border: 0; padding: 4px 0; color: var(--muted); font-weight: 600; cursor: pointer; transition: color var(--dur-press) ease; }
 .section { display: grid; gap: 12px; }
 .section + .section { margin-top: 40px; }
 .section > h2 { display: flex; align-items: center; gap: 10px; }
@@ -211,7 +220,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 0 16px; border: 1px solid var(--rail);
   border-radius: var(--r-ctl); background: var(--surface); color: var(--ink); font-weight: 600; font-size: 0.95rem; cursor: pointer; white-space: nowrap; text-align: center;
-  transition: transform 160ms var(--ease-out), background-color 150ms ease, border-color 150ms ease;
+  transition: transform var(--dur-press) var(--ease-out), background-color var(--dur-press) ease, border-color var(--dur-press) ease;
 }
 .btn:active:not([disabled]) { transform: scale(0.97); }
 .btn.primary { background: var(--primary); border-color: var(--primary); color: var(--on-ink); }
@@ -222,7 +231,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .btn[disabled] { background: var(--sunk); border-color: var(--hair); color: var(--muted); cursor: not-allowed; }
 .btn.mock { border: 1.5px dashed var(--trouble); color: var(--trouble); background: transparent; }
 .btns { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.linkbtn { display: inline-flex; align-items: center; min-height: 32px; margin: 0 -4px; background: none; border: 0; padding: 0 4px; color: var(--muted); text-decoration: underline; text-decoration-color: var(--rail); text-underline-offset: 3px; font-weight: 600; cursor: pointer; font-size: 0.9rem; transition: color 150ms ease, text-decoration-color 150ms ease; }
+.linkbtn { display: inline-flex; align-items: center; min-height: 32px; margin: 0 -4px; background: none; border: 0; padding: 0 4px; color: var(--muted); text-decoration: underline; text-decoration-color: var(--rail); text-underline-offset: 3px; font-weight: 600; cursor: pointer; font-size: 0.9rem; transition: color var(--dur-press) ease, text-decoration-color var(--dur-press) ease; }
 
 /* Hover only where there is a real pointer, so a tap on a phone doesn't leave a stuck hover. */
 @media (hover: hover) and (pointer: fine) {
@@ -301,7 +310,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 6px; border-bottom: 1px solid var(--rule); }
 .row-name { font-weight: 600; }
 .row-sub { font-size: 0.875rem; color: var(--muted); }
-.row-btn { width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--rule); cursor: pointer; padding: 12px 6px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; transition: background-color 150ms ease; }
+.row-btn { width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--rule); cursor: pointer; padding: 12px 6px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; transition: background-color var(--dur-press) ease; }
 .row-btn svg { color: var(--muted); }
 .quiet { padding: 28px; border: 1px dashed var(--rail); border-radius: var(--r-card); text-align: center; color: var(--muted); }
 .quiet b { display: block; color: var(--ink); font-size: 1.125rem; margin-bottom: 4px; }
@@ -324,13 +333,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* Workflows is one list. Fixed columns, so status, name, agents, next run and the action line up row to row. */
 .wf-list { border: 1px solid var(--hair); border-radius: var(--r-card); background: var(--surface); }
 .wf-list > li:not(:first-child) { border-top: 1px solid var(--rule); }
-.wf-row { position: relative; display: grid; grid-template-columns: 196px minmax(0, 1fr) 104px 196px 172px; gap: 16px; align-items: center; padding: 16px 20px; transition: background-color 150ms ease; }
+.wf-row { position: relative; display: grid; grid-template-columns: 196px minmax(0, 1fr) 104px 196px 172px; gap: 16px; align-items: center; padding: 16px 20px; transition: background-color var(--dur-press) ease; }
 .wf-row.paused { background: var(--sunk); }
 .wf-main h2 { font-size: 1.05rem; }
 .wf-main p { margin-top: 2px; font-size: 0.9rem; color: var(--muted); }
 .wf-next { font-size: 0.875rem; color: var(--muted); white-space: nowrap; }
 .wf-act { justify-self: end; position: relative; z-index: var(--z-raised); }
-.wf-add { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 16px 20px; border: 0; border-radius: 0 0 var(--r-card) var(--r-card); background: none; color: var(--muted); cursor: pointer; transition: background-color 150ms ease, transform 160ms var(--ease-out); }
+.wf-add { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 16px 20px; border: 0; border-radius: 0 0 var(--r-card) var(--r-card); background: none; color: var(--muted); cursor: pointer; transition: background-color var(--dur-press) ease, transform var(--dur-press) var(--ease-out); }
 .wf-add b { color: var(--ink); }
 .wf-add:active { transform: scale(0.99); }
 @media (max-width: 600px) { .wf-add > span { display: none; } }
@@ -380,7 +389,7 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 .runtitle { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; min-width: 0; }
 .runhead h1 { font-size: 1.875rem; font-weight: 700; }
 .seg { display: inline-flex; padding: 3px; border-radius: calc(var(--r-ctl) + 3px); background: var(--sunk); }
-.seg button { border: 0; background: none; padding: 6px 14px; border-radius: var(--r-ctl); font-weight: 600; color: var(--muted); cursor: pointer; min-height: 34px; transition: background-color 150ms ease, color 150ms ease, transform 160ms var(--ease-out); }
+.seg button { border: 0; background: none; padding: 6px 14px; border-radius: var(--r-ctl); font-weight: 600; color: var(--muted); cursor: pointer; min-height: 34px; transition: background-color var(--dur-press) ease, color var(--dur-press) ease, transform var(--dur-press) var(--ease-out); }
 .seg button:active { transform: scale(0.96); }
 .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--hair), 0 1px 2px rgba(18, 20, 23, 0.06); }
 .stage { padding: 24px 20px 20px; background: var(--surface); border: 1px solid var(--hair); border-radius: var(--r-card); margin: 20px 0 24px; }
@@ -403,9 +412,9 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 /* The step happening now gets a crisp ring, not a glow. */
 .st.now .st-dot { border: 2px solid var(--accent); background: var(--surface); outline: 2px solid var(--accent); outline-offset: 3px; }
 .st.now .st-label { color: var(--ink); font-weight: 700; }
-.st.now .st-who .face, .st.now .st-who .pav { animation: bob 1.2s var(--ease-in-out) infinite alternate; }
+.st.now .st-who .pav { animation: bob 1.2s var(--ease-in-out) infinite alternate; }
 /* The bob is a loop, so it stops while the line is scrolled out of view. */
-.stage.offscreen .face, .stage.offscreen .pav { animation-play-state: paused; }
+.stage.offscreen .face *, .stage.offscreen .pav { animation-play-state: paused; }
 .st.gate .st-dot { width: 38px; height: 38px; border: 2px solid var(--ink); background: var(--surface); color: var(--ink); }
 .st.gate.wait .st-dot { background: var(--amber-soft); border-color: var(--amber); color: var(--amber-ink); outline: 2px solid var(--amber); outline-offset: 3px; }
 .st.gate.done .st-dot { background: var(--green); border-color: var(--green); color: var(--on-status); }
@@ -447,7 +456,7 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 .chat-marker.ok { color: var(--green-ink); }
 .chat-marker.bad { color: var(--red-ink); }
 /* A new message arrives: it rises 6px and fades in, once. */
-.cmsg.in, .chat-marker.in { animation: rise 280ms var(--ease-out); }
+.cmsg.in, .chat-marker.in { animation: rise var(--dur-small) var(--ease-out); }
 /* While a run replays, the next speaker shows as working, so the chat never looks stuck. */
 .cmsg.typing .cmsg-who { color: var(--muted); font-weight: 600; }
 .dots { display: inline-flex; gap: 4px; padding: 6px 0; }
@@ -458,8 +467,12 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 @media (max-width: 600px) { .cmsg { grid-template-columns: 32px minmax(0, 1fr); gap: 10px; } .cmsg-av .face, .cmsg-av .sysav { width: 32px; height: 32px; } }
 .sysav { width: 36px; height: 36px; border-radius: 50%; background: var(--sunk); display: grid; place-items: center; color: var(--ink); }
 .sysav.gate { background: var(--amber-soft); color: var(--amber-ink); }
+/* The app itself speaks with its logo on a white tile. The square corners set it apart from the round agents and people. */
+.sysav.app { background: var(--surface); border: 1px solid var(--hair); border-radius: 25%; }
+.sysav.app .mark { width: 78%; height: auto; }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ok-fade { 0%, 100% { opacity: 0; } 20%, 75% { opacity: 1; } }
 .ticket { padding: 12px 14px; border: 1px solid var(--hair); border-radius: var(--r-well); background: var(--surface); display: grid; gap: 2px; }
 .ticket b { font-size: 0.95rem; }
 .ticket span { font-size: 0.875rem; color: var(--muted); }
@@ -491,7 +504,7 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 .risk .risk-more summary { cursor: pointer; font-weight: 700; color: var(--ink); min-height: 32px; display: flex; align-items: center; }
 .risk .risk-more summary { list-style: none; }
 .risk .risk-more summary::-webkit-details-marker { display: none; }
-.risk .risk-more summary::before { content: ''; flex: none; margin-right: 10px; border-left: 7px solid currentColor; border-top: 5px solid transparent; border-bottom: 5px solid transparent; transition: transform 150ms var(--ease-out); }
+.risk .risk-more summary::before { content: ''; flex: none; margin-right: 10px; border-left: 7px solid currentColor; border-top: 5px solid transparent; border-bottom: 5px solid transparent; transition: transform var(--dur-press) var(--ease-out); }
 .risk .risk-more[open] > summary::before { transform: rotate(90deg); }
 .risk .vlist { display: grid; gap: 12px; margin: 10px 0 12px; }
 .risk .vlist li { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 12px; align-items: start; }
@@ -596,7 +609,7 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 .sec-sub { margin: -6px 0 10px; }
 .tool-rows { display: grid; gap: 8px; }
 /* A tool row has no icon: the same glyph on every row says nothing. Whether it changes data is the tag's job. */
-.tool-row { position: relative; display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 1.5fr) minmax(0, 0.9fr); align-items: center; gap: 14px; padding: 12px 18px; border: 1px solid var(--hair); border-radius: var(--r-card); background: var(--surface); transition: border-color 150ms ease; }
+.tool-row { position: relative; display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 1.5fr) minmax(0, 0.9fr); align-items: center; gap: 14px; padding: 12px 18px; border: 1px solid var(--hair); border-radius: var(--r-card); background: var(--surface); transition: border-color var(--dur-press) ease; }
 .tool-row.team { grid-template-columns: minmax(0, 1fr) auto; background: var(--sunk); }
 .tool-name { display: grid; gap: 2px; min-width: 0; }
 .tool-name .rcard-link { font-weight: 700; }
@@ -614,7 +627,7 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 .tool-status > div { display: grid; gap: 4px; flex: 1 1 260px; }
 .checks.cant svg { color: var(--muted); }
 .agent-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
-.agent-chip { display: inline-flex; align-items: center; gap: 8px; padding: 4px 14px 4px 4px; border: 1px solid var(--rail); border-radius: 999px; background: var(--surface); font: inherit; font-weight: 600; cursor: pointer; min-height: 44px; transition: border-color 150ms ease, transform 160ms var(--ease-out); }
+.agent-chip { display: inline-flex; align-items: center; gap: 8px; padding: 4px 14px 4px 4px; border: 1px solid var(--rail); border-radius: 999px; background: var(--surface); font: inherit; font-weight: 600; cursor: pointer; min-height: 44px; transition: border-color var(--dur-press) ease, transform var(--dur-press) var(--ease-out); }
 .agent-chip:active { transform: scale(0.97); }
 .dlg-back { margin-bottom: -6px; }
 .agent-dlg .timeline li { grid-template-columns: 136px minmax(0, 1fr); }
@@ -624,7 +637,7 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 .agentgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 16px; }
 .agentgrid.duo { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (max-width: 700px) { .agentgrid.duo { grid-template-columns: minmax(0, 1fr); } }
-.agent-lg { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 18px 20px; border: 1px solid var(--hair); border-radius: var(--r-card); background: var(--surface); transition: border-color 150ms ease; }
+.agent-lg { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 18px 20px; border: 1px solid var(--hair); border-radius: var(--r-card); background: var(--surface); transition: border-color var(--dur-press) ease; }
 .agent-lg .linkbtn, .agent-lg .btn { position: relative; z-index: var(--z-raised); }
 .agent-lg p { margin: 0; }
 .agent-lg > .btns:last-child { margin-top: auto; padding-top: 4px; }
@@ -673,15 +686,15 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 [aria-invalid="true"] { border-color: var(--red) !important; }
 textarea, input[type="text"], input[type="password"], input[type="url"], select {
   width: 100%; border: 1px solid var(--rail); border-radius: var(--r-ctl); background: var(--surface); padding: 10px 12px; font-size: 1rem; line-height: 1.5;
-  transition: border-color 150ms ease;
+  transition: border-color var(--dur-press) ease;
 }
 textarea { min-height: 150px; resize: vertical; }
 select { padding: 9px 12px; width: auto; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.chip { border: 1px solid var(--rail); background: var(--surface); border-radius: 999px; padding: 6px 14px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: border-color 150ms ease, transform 160ms var(--ease-out); }
+.chip { border: 1px solid var(--rail); background: var(--surface); border-radius: 999px; padding: 6px 14px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: border-color var(--dur-press) ease, transform var(--dur-press) var(--ease-out); }
 .chip:active { transform: scale(0.97); }
 .thinking { display: grid; gap: 12px; }
-.thinking li { display: flex; gap: 10px; align-items: center; font-weight: 600; animation: rise 280ms var(--ease-out); }
+.thinking li { display: flex; gap: 10px; align-items: center; font-weight: 600; animation: rise var(--dur-small) var(--ease-out); }
 /* A spinner reads as faster when it spins faster. */
 .thinking .spin { width: 18px; height: 18px; border-radius: 50%; border: 3px solid var(--lead-tint); border-top-color: var(--lead); animation: spin 0.6s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -709,7 +722,7 @@ select { padding: 9px 12px; width: auto; }
 .sentence mark { background: var(--lead-tint); color: #1b2a6b; padding: 0 4px; border-radius: 4px; }
 /* Turning a workflow on is rare, so it may celebrate: the tick grows from 0.9, never from nothing. */
 .done-hero { text-align: center; display: grid; justify-items: center; gap: 14px; padding: 40px 0 10px; }
-.done-hero .big { width: 80px; height: 80px; border-radius: 50%; background: var(--green); color: var(--on-status); display: grid; place-items: center; animation: pop 420ms var(--ease-out); }
+.done-hero .big { width: 80px; height: 80px; border-radius: 50%; background: var(--green); color: var(--on-status); display: grid; place-items: center; animation: pop var(--dur-success) var(--ease-out); }
 .done-hero h1 { font-size: 2rem; }
 .done-hero p { font-size: 1.1rem; color: var(--muted); max-width: 34em; }
 @keyframes pop { from { transform: scale(0.9); opacity: 0; } to { transform: none; opacity: 1; } }
@@ -723,7 +736,7 @@ select { padding: 9px 12px; width: auto; }
   padding-top: env(safe-area-inset-top, 0px); padding-right: env(safe-area-inset-right, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 /* The drawer slides in by its own width, on the iOS drawer curve. */
-.drawer.in { animation: slide 320ms var(--ease-drawer); }
+.drawer.in { animation: slide var(--dur-panel) var(--ease-drawer); }
 @keyframes slide { from { transform: translateX(100%); } to { transform: none; } }
 .drawer-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px; background: #4b53bc; color: #fff; }
 .drawer-head b { font-size: 1.05rem; }
@@ -740,14 +753,14 @@ select { padding: 9px 12px; width: auto; }
   overflow-y: auto; background: var(--surface); border-radius: 12px; box-shadow: var(--float); padding: 24px; display: grid; gap: 16px;
 }
 /* A dialog has no trigger to grow from, so it stays centred and grows from 0.96. */
-.dialog.in { animation: dlg 220ms var(--ease-out); }
+.dialog.in { animation: dlg var(--dur-panel) var(--ease-out); }
 @keyframes dlg { from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); } to { opacity: 1; transform: translate(-50%, -50%); } }
 .toast {
   position: fixed; z-index: var(--z-toast); left: 50%; transform: translateX(-50%); bottom: calc(96px + env(safe-area-inset-bottom, 0px));
   background: var(--primary); color: var(--on-ink); padding: 12px 18px; border-radius: 10px; font-weight: 600; box-shadow: var(--float);
   max-width: calc(100% - 32px);
 }
-.toast.in { animation: toast 280ms var(--ease-out); }
+.toast.in { animation: toast var(--dur-small) var(--ease-out); }
 @keyframes toast { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
 
@@ -772,7 +785,7 @@ select { padding: 9px 12px; width: auto; }
 }
 
 /* v2: checking what was understood, schedules, search, support cases, test controls */
-a { color: var(--link); font-weight: 600; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 3px; transition: text-decoration-color 150ms ease; }
+a { color: var(--link); font-weight: 600; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 3px; transition: text-decoration-color var(--dur-press) ease; }
 @media (hover: hover) and (pointer: fine) { a:hover { text-decoration-color: currentColor; } }
 a svg { vertical-align: -2px; margin-left: 3px; }
 .links { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 4px; font-size: 0.9rem; }
@@ -782,7 +795,7 @@ a svg { vertical-align: -2px; margin-left: 3px; }
 .asked span { display: block; font-size: 0.8125rem; font-weight: 600; color: var(--muted); margin-bottom: 2px; }
 /* New workflow, step 2: what was understood, as one sentence. Each chip is a real select laid over its text, so it opens the native picker. */
 .sentence-line { font-size: 1.1rem; line-height: 2.3; }
-.schip { position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 1px 10px; border: 1px solid; border-radius: 999px; font-size: 1rem; font-weight: 600; line-height: 1.7; transition: border-color 150ms ease; }
+.schip { position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 1px 10px; border: 1px solid; border-radius: 999px; font-size: 1rem; font-weight: 600; line-height: 1.7; transition: border-color var(--dur-press) ease; }
 .schip > svg { flex: none; opacity: 0.7; }
 .schip select { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; opacity: 0; font-size: 16px; cursor: pointer; }
 .schip:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
@@ -817,7 +830,7 @@ a svg { vertical-align: -2px; margin-left: 3px; }
 .findbox:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 .findbox input:focus-visible { outline: none; }
 .filters { gap: 6px; }
-.filters button { border: 1px solid var(--rail); background: var(--surface); border-radius: 999px; padding: 6px 14px; font-weight: 600; cursor: pointer; min-height: 36px; transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease; }
+.filters button { border: 1px solid var(--rail); background: var(--surface); border-radius: 999px; padding: 6px 14px; font-weight: 600; cursor: pointer; min-height: 36px; transition: background-color var(--dur-press) ease, border-color var(--dur-press) ease, color var(--dur-press) ease; }
 .filters button[aria-pressed="true"] { background: var(--primary); border-color: var(--primary); color: var(--on-ink); }
 .casebox { padding: 14px 16px; border: 1px solid var(--hair); border-radius: var(--r-card); background: var(--sunk); display: grid; gap: 8px; }
 .case-top { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; }
@@ -825,12 +838,12 @@ a svg { vertical-align: -2px; margin-left: 3px; }
 .tech .checks { margin-top: 10px; }
 .toast-act { margin-left: 14px; background: transparent; border: 1px solid var(--on-ink); color: var(--on-ink); border-radius: var(--r-ctl); padding: 4px 12px; font-weight: 700; cursor: pointer; }
 .testctl { position: fixed; z-index: var(--z-mock); left: max(16px, env(safe-area-inset-left, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 8px; justify-items: start; max-width: calc(100% - 32px); }
-.testctl-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--mock-bg); color: var(--mock-ink); font-weight: 700; font-size: 0.85rem; cursor: pointer; box-shadow: 0 6px 18px rgba(20, 10, 50, 0.3); transition: transform 160ms var(--ease-out); }
+.testctl-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--mock-bg); color: var(--mock-ink); font-weight: 700; font-size: 0.85rem; cursor: pointer; box-shadow: 0 6px 18px rgba(20, 10, 50, 0.3); transition: transform var(--dur-press) var(--ease-out); }
 .testctl-toggle:active { transform: scale(0.97); }
 .testctl-dot { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--amber); color: #1d1400; font-size: 0.75rem; }
 /* The panel grows from its button in the bottom-left corner, not from its centre. */
 .testctl-panel { width: min(360px, calc(100vw - 32px)); max-height: 70vh; overflow-y: auto; background: var(--mock-bg); color: var(--mock-ink); border-radius: 14px; padding: 14px 16px; display: grid; gap: 12px; box-shadow: 0 10px 30px rgba(20, 10, 50, 0.35); font-size: 0.85rem; transform-origin: bottom left; }
-.testctl-panel.in { animation: pop-corner 200ms var(--ease-out); }
+.testctl-panel.in { animation: pop-corner var(--dur-small) var(--ease-out); }
 @keyframes pop-corner { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: none; } }
 .testctl-title { margin: 0; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; font-size: 0.75rem; color: var(--mock-dim); }
 .testctl-note { margin: 0; color: var(--mock-dim); }
@@ -868,11 +881,119 @@ details.more > summary { color: var(--ink); font-weight: 700; padding: 10px 0; }
 details.more .more-body { padding-top: 8px; }
 
 /* Reduced motion means gentler, not none (Emil Kowalski): things still fade in, but nothing travels, bounces or spins. */
+
+/* ---------- Motion system ----------
+   The prototype redraws the whole page on every change. Motion compares the page before and after a redraw
+   (see "Motion" in the script), so only what really changed moves. Opacity and transform only, no bounce,
+   no decorative loops. The real Portal (React) should use Motion for these and Rive for the agents. */
+/* A new screen: its cards arrive one after another, 40ms apart, at most 6 steps. Once, never looping. */
+.enter [data-stagger] { animation: rise var(--dur-small) var(--ease-out) both; animation-delay: calc(min(var(--i, 0), 6) * var(--stagger)); }
+/* Within a screen: a new item fades up; a section that opens unfolds from its top. */
+.m-appear { animation: rise var(--dur-small) var(--ease-out) both; animation-delay: var(--ad, 0ms); }
+.m-reveal { animation: unfold var(--dur-panel) var(--ease-out) backwards; animation-delay: var(--ad, 0ms); }
+@keyframes unfold { from { opacity: 0; transform: translateY(-4px); clip-path: inset(0 0 60% 0); } to { opacity: 1; transform: none; clip-path: inset(0 0 0 0); } }
+/* A value that changed while you looked, or since you last looked: a soft tint that fades. Once. */
+.m-changed { animation: changed 980ms ease-out both; animation-delay: var(--ad, 0ms); border-radius: 4px; }
+@keyframes changed { 0%, 55% { background-color: var(--accent-soft); box-shadow: 0 0 0 3px var(--accent-soft); } 100% { background-color: transparent; box-shadow: 0 0 0 3px transparent; } }
+.count.m-changed, .badge.m-changed { animation: bump var(--dur-small) var(--ease-out); }
+@keyframes bump { 50% { transform: scale(1.18); } }
+/* Exits: a closed dialog, drawer or toast leaves quickly, and never blocks the page under it. */
+.leave { pointer-events: none; }
+.dialog.leave { animation: dlg-out 180ms ease-in both; }
+@keyframes dlg-out { from { opacity: 1; transform: translate(-50%, -50%); } to { opacity: 0; transform: translate(-50%, -50%) scale(0.97); } }
+.scrim.leave { animation: fade-out 180ms ease-in both; }
+.drawer.leave { animation: slide-out 220ms var(--ease-drawer) both; }
+@keyframes slide-out { to { transform: translateX(100%); } }
+.toast.leave { animation: toast-out 180ms ease-in both; }
+@keyframes toast-out { from { opacity: 1; transform: translate(-50%, 0); } to { opacity: 0; transform: translate(-50%, 8px); } }
+@keyframes fade-out { to { opacity: 0; } }
+/* Expandable sections (details): the content unfolds on open and folds on close. */
+details > .m-open { animation: rise var(--dur-panel) var(--ease-out) both; }
+details > .m-close { animation: fold 140ms ease-in both; }
+@keyframes fold { to { opacity: 0; transform: translateY(-4px); } }
+/* A finished step: its mark pops once as the panel opens. */
+.ok-mark { display: inline-flex; color: var(--green-ink); margin-right: 6px; vertical-align: -2px; }
+.m-reveal .ok-mark { animation: pop var(--dur-success) var(--ease-out) both; animation-delay: calc(var(--ad, 0ms) + 120ms); }
+/* Report to support, sent: the reference shows at once; the bar and the mark confirm it. */
+.sent { display: grid; justify-items: center; gap: 12px; text-align: center; }
+.sent-mark { width: 56px; height: 56px; border-radius: 50%; background: var(--green); color: var(--on-status); display: grid; place-items: center; animation: pop var(--dur-success) var(--ease-out) both; }
+.sent-ref { font-size: 1.35rem; font-weight: 800; color: var(--ink); }
+.sent-bar { width: min(320px, 100%); height: 6px; border-radius: 999px; background: var(--sunk); overflow: hidden; }
+.sent-bar span { display: block; height: 100%; background: var(--green); transform-origin: left center; animation: fill var(--dur-attn) var(--ease-out) both; }
+@keyframes fill { from { transform: scaleX(0.12); } }
+.sent .kv { text-align: left; width: 100%; }
+
+/* ---------- Agents: one face, eight states, driven by the real state of the work ----------
+   idle      calm. Where one agent is the focus (.live): slow breathing and an occasional blink.
+   thinking  eyes look from side to side, with 3 dots. The Planner choosing agents, or planning a task.
+   working   eyes scan, and its tool moves a little (writers type). The step running now.
+   waiting   eyes up, still, with an amber badge. Its work waits for a yes.
+   success   one quick check and a small lift, then back to idle. Its work went through.
+   error     one worried flinch, then a red badge that stays. Its step stopped.
+   stopped   eyes closed, grey. The workflow is paused, the step wasn't needed, or nobody answered.
+   hover     a small lift when its card or button is hovered or has keyboard focus.
+   Text and the usual status icons always say the same thing; the face never says it alone. */
+.face { overflow: visible; transition: transform var(--dur-press) var(--ease-out); }
+.face .f-b, .face .f-eyes, .face .f-acc, .face .f-badge, .face .f-ok, .face .f-happy { transform-box: fill-box; transform-origin: center; }
+.face .f-type rect { transform-box: fill-box; transform-origin: center bottom; }
+.face.live.fs-idle .f-b { animation: breathe 4.2s var(--ease-in-out) infinite alternate; }
+.face.live.fs-idle .f-eyes { animation: blink 7s linear infinite; animation-delay: var(--blink, 0s); }
+@keyframes breathe { to { transform: scale(1.03); } }
+@keyframes blink { 0%, 95%, 100% { transform: none; } 96.5% { transform: scaleY(0.15); } }
+.face.fs-thinking .f-eyes { animation: look 2.4s var(--ease-in-out) infinite; }
+@keyframes look { 0%, 100% { transform: translate(-1.2px, -0.6px); } 50% { transform: translate(1.2px, -0.6px); } }
+.face .f-think circle { fill: var(--muted); animation: think 1.5s ease-in-out infinite; }
+.face .f-think circle:nth-child(2) { animation-delay: 0.2s; }
+.face .f-think circle:nth-child(3) { animation-delay: 0.4s; }
+@keyframes think { 0%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
+.face.fs-working .f-eyes { animation: scan 1.6s var(--ease-in-out) infinite alternate; }
+@keyframes scan { from { transform: translateX(-1.4px); } to { transform: translateX(1.4px); } }
+.face.fs-working:not(.acc-headset) .f-acc { animation: tool 1.6s var(--ease-in-out) infinite alternate; }
+@keyframes tool { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
+.face .f-type rect { animation: type 0.9s var(--ease-in-out) infinite; }
+.face .f-type rect:nth-child(2) { animation-delay: 0.15s; }
+.face .f-type rect:nth-child(3) { animation-delay: 0.3s; }
+@keyframes type { 0%, 100% { transform: scaleY(0.35); } 50% { transform: none; } }
+.face.react.fs-waiting .f-badge, .face.react.fs-error .f-badge { animation: badge-in var(--dur-attn) var(--ease-out) both; animation-delay: var(--ad, 0ms); }
+@keyframes badge-in { from { opacity: 0; transform: scale(0.4); } to { opacity: 1; transform: none; } }
+.face.react.fs-error .f-b { animation: concern var(--dur-attn) var(--ease-out) both; animation-delay: var(--ad, 0ms); }
+@keyframes concern { 0%, 100% { transform: none; } 30% { transform: translateX(-1.5px) rotate(-5deg); } 65% { transform: translateX(1px) rotate(3deg); } }
+.face .f-ok, .face .f-happy { opacity: 0; }
+.face.react.fs-success .f-ok { animation: ok-badge var(--dur-success) var(--ease-out) both; animation-delay: var(--ad, 0ms); }
+@keyframes ok-badge { 0% { opacity: 0; transform: scale(0.4); } 30%, 75% { opacity: 1; transform: none; } 100% { opacity: 0; transform: none; } }
+.face.react.fs-success .f-happy { animation: shown var(--dur-success) ease-out both; animation-delay: var(--ad, 0ms); }
+.face.react.fs-success .f-eyes { animation: hidden var(--dur-success) ease-out both; animation-delay: var(--ad, 0ms); }
+@keyframes shown { 0%, 100% { opacity: 0; } 15%, 80% { opacity: 1; } }
+@keyframes hidden { 0%, 100% { opacity: 1; } 15%, 80% { opacity: 0; } }
+.face.react.fs-success .f-b { animation: cheer var(--dur-success) var(--ease-out) both; animation-delay: var(--ad, 0ms); }
+@keyframes cheer { 0%, 100% { transform: none; } 35% { transform: translateY(-2px) scale(1.04); } }
+.face.fs-stopped { filter: grayscale(1); opacity: 0.6; }
+.face.react.fs-stopped { animation: doze var(--dur-attn) ease-out both; animation-delay: var(--ad, 0ms); }
+@keyframes doze { from { filter: none; opacity: 1; } }
+.face.react.fs-idle[data-from="stopped"] { animation: wake var(--dur-small) ease-out both; animation-delay: var(--ad, 0ms); }
+@keyframes wake { from { filter: grayscale(1); opacity: 0.6; } }
+@media (hover: hover) and (pointer: fine) {
+  .agent-lg:hover .face, .agent-chip:hover .face, .row-btn:hover .face { transform: translateY(-1px) scale(1.05); }
+}
+.agent-lg:focus-within .face, .agent-chip:focus-visible .face, .row-btn:focus-visible .face { transform: translateY(-1px) scale(1.05); }
+/* Nothing loops where nobody can see it: off screen, or in a hidden tab. */
+.face.off *, .tab-hidden .face *, .tab-hidden .dots i, .tab-hidden .spin { animation-play-state: paused !important; }
+
 @media (prefers-reduced-motion: reduce) {
   .cmsg.in, .chat-marker.in, .thinking li, .toast.in, .drawer.in, .dialog.in, .testctl-panel.in, .done-hero .big { animation: fade 200ms ease-out !important; }
   .dialog.in { transform: translate(-50%, -50%); }
   .toast.in { transform: translateX(-50%); }
-  .st.now .st-who .face, .st.now .st-who .pav, .thinking .spin, .dots i { animation: none !important; }
+  .st.now .st-who .pav, .thinking .spin, .dots i { animation: none !important; }
+  /* Motion system: no movement. New things fade in quickly, closing things fade out, agents hold still. */
+  .enter [data-stagger], .m-appear, .m-reveal, details > .m-open { animation: fade 120ms ease-out both !important; clip-path: none !important; }
+  details > .m-close { animation: none !important; }
+  .leave { animation: fade-out 120ms ease-out both !important; }
+  .count.m-changed, .badge.m-changed { animation: none !important; }
+  .face, .face * { animation: none !important; transition: none !important; transform: none !important; }
+  .face.react.fs-success .f-ok { animation: ok-fade var(--dur-success) ease-out both !important; }
+  .face.react.fs-waiting .f-badge, .face.react.fs-error .f-badge { animation: fade 120ms ease-out both !important; }
+  .sent-mark, .m-reveal .ok-mark { animation: fade 160ms ease-out both !important; }
+  .sent-bar span { animation: none !important; }
   .line-fill, .btn, .iconbtn, .seg button, .chip, .agent-chip, .wf-add, .testctl-toggle, .risk .risk-more summary::before { transition-property: background-color, border-color, color, opacity !important; }
   .btn:active:not([disabled]), .iconbtn:active, .seg button:active, .chip:active, .agent-chip:active, .wf-add:active, .testctl-toggle:active { transform: none; }
   .line-fill { transition: none !important; }
@@ -913,7 +1034,9 @@ details.more .more-body { padding-top: 8px; }
     ext: (s = 14) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M18 14v5H5V6h5"/></svg>`,
     down: (s = 14) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>`,
     info: (s = 20) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>`,
-    mark: (s = 24) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><rect x="9.5" y="9.5" width="5" height="5" rx="1.2" fill="var(--focus)"/></svg>`,
+    /* The app's logo: an AI spark, then a tick, because nothing is written without a yes. The tick is drawn in NCS strokes:
+       the long arm is the NCS mark's right stroke, and the short arm leans back with the same cut and gap. h is the height. */
+    mark: (h = 22) => `<svg class="mark" width="${Math.round((h * 228) / 144)}" height="${h}" viewBox="4 0 228 144" aria-hidden="true"><path d="M30 57C34.5 75.5 34.5 75.5 53 80C34.5 84.5 34.5 84.5 30 103C25.5 84.5 25.5 84.5 7 80C25.5 75.5 25.5 75.5 30 57Z" fill="var(--ink)"/><g fill="var(--brand)" stroke="var(--brand)" stroke-width="6" stroke-linejoin="round"><polygon points="52,58 94,58 116.6,89.4 94.4,121.6"/><polygon points="132.6,140 117.6,97.5 182.7,3.5 226.8,3.5"/></g></svg>`,
   };
 
   /* ---------- People and agents ---------- */
@@ -945,10 +1068,19 @@ details.more .more-body { padding-top: 8px; }
     access: { name: 'Access checker', acc: 'none', hue: 'var(--agent-3)', tint: 'var(--agent-3-tint)' },
   };
   const HEAD = { headset: [24, 26], magnifier: [22, 24], wrench: [22, 24], shield: [22, 24], none: [24, 24] };
-  function face(id, size = 40) {
+  const keyOf = (s) => { let h = 5381; for (const c of String(s)) h = ((h << 5) + h + c.charCodeAt(0)) | 0; return (h >>> 0).toString(36); };
+  /* Status badges sit top right, on a white ring so they read on any tint. Waiting is amber with a clock, error is red with "!". */
+  const BADGE = {
+    waiting: ['var(--amber)', '<path d="M40 5.6v3.6l2.2 1.3" stroke="var(--face-ink)" stroke-width="1.6" stroke-linecap="round" fill="none"/>'],
+    error: ['var(--red)', '<path d="M40 5.4v4.2M40 12.3v.2" stroke="var(--on-status)" stroke-width="1.9" stroke-linecap="round"/>'],
+  };
+  /* An agent's face in one of its states (see "Agents" in the styles). The state always comes from the real state of the work.
+     o.live: this agent is the focus here, so when idle it breathes and blinks. o.k: a stable key, so a change of state reacts once. */
+  function face(id, size = 40, state = 'idle', o = {}) {
     const a = AGENTS[id];
     const [x, y] = HEAD[a.acc];
     const h = a.hue;
+    const ink = 'var(--face-ink)';
     const acc = {
       headset: `<path d="M7.5 25a16.5 16.5 0 0 1 33 0" fill="none" stroke="${h}" stroke-width="3.2" stroke-linecap="round"/><rect x="4.5" y="21" width="6.5" height="11" rx="3.2" fill="${h}"/><rect x="37" y="21" width="6.5" height="11" rx="3.2" fill="${h}"/><path d="M40 31.5c0 6-4 8.5-9.5 8.5" fill="none" stroke="${h}" stroke-width="2.6" stroke-linecap="round"/><circle cx="30" cy="40" r="2.8" fill="${h}"/>`,
       magnifier: `<circle cx="34.5" cy="33.5" r="7" fill="var(--face-lens)" stroke="${h}" stroke-width="3.2"/><path d="M39.6 38.6l5 5" stroke="${h}" stroke-width="4.2" stroke-linecap="round"/>`,
@@ -956,9 +1088,20 @@ details.more .more-body { padding-top: 8px; }
       shield: `<path d="M34.5 26.5l7 2.8v5.1c0 4.3-3 7.6-7 9.1-4-1.5-7-4.8-7-9.1v-5.1z" fill="var(--face-lens)" stroke="${h}" stroke-width="2.8" stroke-linejoin="round"/><path d="M34.5 31.2v4.6M34.5 38.6v.3" stroke="${h}" stroke-width="2.6" stroke-linecap="round"/>`,
       none: '',
     }[a.acc];
-    return `<svg class="face" viewBox="0 0 48 48" width="${size}" height="${size}" aria-hidden="true"><circle cx="${x}" cy="${y}" r="15" fill="${a.tint}"/><rect x="${x - 7}" y="${y - 4}" width="4" height="6.5" rx="2" fill="var(--face-ink)"/><rect x="${x + 3}" y="${y - 4}" width="4" height="6.5" rx="2" fill="var(--face-ink)"/>${acc}</svg>`;
+    const eye = (dx, top, ht) => `<rect x="${x + dx}" y="${y + top}" width="4" height="${ht}" rx="${Math.min(2, ht / 2)}" fill="${ink}"/>`;
+    const eyes = state === 'stopped' ? eye(-7, 0.5, 1.8) + eye(3, 0.5, 1.8) : state === 'waiting' ? eye(-7, -5, 5.5) + eye(3, -5, 5.5) : eye(-7, -4, 6.5) + eye(3, -4, 6.5);
+    const brows = state === 'error' ? `<path d="M${x - 8} ${y - 6.5}l4.5-2.2M${x + 8} ${y - 6.5}l-4.5-2.2" stroke="${ink}" stroke-width="1.8" stroke-linecap="round" fill="none"/>` : '';
+    const happy = state === 'success' ? `<path class="f-happy" d="M${x - 7} ${y + 0.5}q2-3.2 4 0M${x + 3} ${y + 0.5}q2-3.2 4 0" stroke="${ink}" stroke-width="2" stroke-linecap="round" fill="none"/>` : '';
+    const typing = state === 'working' && a.acc === 'none' ? `<g class="f-type" fill="${h}"><rect x="${x - 6}" y="42" width="3" height="4" rx="1"/><rect x="${x - 1.5}" y="42" width="3" height="4" rx="1"/><rect x="${x + 3}" y="42" width="3" height="4" rx="1"/></g>` : '';
+    const think = state === 'thinking' ? '<g class="f-think"><circle cx="36.5" cy="6.5" r="1.3"/><circle cx="40.5" cy="4" r="1.7"/><circle cx="45" cy="2" r="2.1"/></g>' : '';
+    const ring = (fill, mark, cls) => `<g class="${cls}"><circle cx="40" cy="9" r="7.5" fill="var(--surface)"/><circle cx="40" cy="9" r="6" fill="${fill}"/>${mark}</g>`;
+    const badge = BADGE[state] ? ring(BADGE[state][0], BADGE[state][1], 'f-badge') : '';
+    const ok = state === 'success' ? ring('var(--green)', '<path d="M37.3 9.2l1.9 1.9 3.6-3.8" stroke="var(--on-status)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>', 'f-ok') : '';
+    const blink = parseInt(keyOf(id + (o.k || '')), 36) % 7;
+    return `<svg class="face fs-${state} acc-${a.acc}${o.live ? ' live' : ''}" data-state="${state}"${o.k ? ` data-k="${o.k}"` : ''} style="--blink:-${blink}s" viewBox="0 0 48 48" width="${size}" height="${size}" aria-hidden="true"><g class="f-b"><circle cx="${x}" cy="${y}" r="15" fill="${a.tint}"/>${brows}<g class="f-eyes">${eyes}</g>${happy}<g class="f-acc">${acc}</g>${typing}</g>${think}${badge}${ok}</svg>`;
   }
-  const faces = (ids, size = 30) => `<span class="faces" aria-label="Agents: ${ids.map((i) => AGENTS[i].name).join(', ')}">${ids.map((i) => face(i, size)).join('')}</span>`;
+  const STATE_WORD = { waiting: 'waiting for a yes', error: 'stopped with a problem', stopped: 'paused', success: 'done', working: 'working', thinking: 'thinking' };
+  const faces = (ids, size = 30, states = {}, key = '') => `<span class="faces" aria-label="Agents: ${ids.map((i) => `${AGENTS[i].name}${states[i] ? `, ${STATE_WORD[states[i]]}` : ''}`).join('; ')}">${ids.map((i) => face(i, size, states[i] || 'idle', { k: key ? `${key}:${i}` : '' })).join('')}</span>`;
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -1048,7 +1191,7 @@ details.more .more-body { padding-top: 8px; }
     jiraComp: 'none', jiraCompAsker: null, jiraCompBy: null, jiraCompSeen: false,
     added: [], removed: [], swOpen: null, swForm: { name: '', repo: '', ours: '' }, swErr: {},
     draft: false, paused: {}, deleted: {}, sched: {}, editing: null, schedForm: null, schedErr: {},
-    n8n: {}, n8nChg: {},
+    n8n: {}, n8nChg: {}, editRun: null,
     find: { workflows: '', software: '' }, filter: 'all',
     wiz: newWiz(),
   });
@@ -1394,6 +1537,19 @@ details.more .more-body { padding-top: 8px; }
         return { tone: 'ok', last: 'Mon 5 Oct: 3 people lost access, approved by Bob, then Alice.' };
     }
   }
+  /* Which agents on a workflow need a different face, from its real state. Everyone else stays calm. */
+  function agentStates(id) {
+    const out = {};
+    if (S.paused[id]) { R(id).agents.forEach((a) => { out[a] = 'stopped'; }); return out; }
+    const tone = status(id).tone;
+    if (tone !== 'bad' && tone !== 'wait') return out;
+    let m = null;
+    try { m = runModel(id); } catch (e) { m = null; }
+    if (!m || !m.stations) return out;
+    if (tone === 'bad' && m.fail != null && AGENTS[m.stations[m.fail].who]) out[m.stations[m.fail].who] = 'error';
+    if (tone === 'wait') { const g = m.stations.findIndex((s) => s.gate); const w = g > 0 ? m.stations[g - 1].who : null; if (AGENTS[w]) out[w] = 'waiting'; }
+    return out;
+  }
   const pill = (st) => `<span class="pill ${st.tone}">${st.tone === 'ok' ? I.check(12) : st.tone === 'bad' ? I.x(12) : st.tone === 'off' ? I.clock(12) : I.lock(12)}${st.label}</span>`;
   /* Two separate facts: whether the workflow is switched on, and whether its latest run needs someone. */
   const lifePill = (id) => (S.paused[id] ? `<span class="pill off">${I.pause(12)}Paused</span>` : `<span class="pill on">${I.check(12)}On</span>`);
@@ -1467,6 +1623,23 @@ details.more .more-body { padding-top: 8px; }
 
   /* ---------- Runs: the live activity view ---------- */
   function runModel(id) {
+    /* A run that used a version published in n8n without Ask for a yes. It reaches the change step with no yes, and stops there. */
+    if (id === 'edit') {
+      const wf = S.editRun.wf;
+      const helpers = R(wf).agents.filter((a) => a !== 'lead');
+      const names = helpers.map((a) => `the ${AGENTS[a].name}`);
+      return {
+        workflow: wf, end: helpers.length + 2, fail: helpers.length + 2, state: 'failed',
+        headline: 'Stopped before changing anything',
+        stations: [
+          { label: 'Started', sub: 'Today 9:15', who: 'p:carol', msg: { who: 'portal', text: 'The run started at 9:15 with the version Carol published in n8n at 9:12.' } },
+          { label: 'Pick agents', who: 'lead', msg: { who: 'lead', text: `I’m bringing in ${andList(names)}.` } },
+          ...helpers.map((a, i) => ({ label: AGENTS[a].name, who: a, msg: { who: a, text: i === helpers.length - 1 ? 'I drafted the changes. Nothing is written yet.' : 'I gathered what the next step needs.' } })),
+          { label: 'Make the changes', who: 'platform', msg: { who: 'platform', tone: 'bad', text: 'Make the approved changes refused: there was no yes for this run. Nothing was written.' } },
+          { label: 'Done' },
+        ],
+      };
+    }
     if (id === 'sw') {
       const st = S.sw;
       const gate = st === 'waiting' ? { tone: 'wait', who: 'gate', text: gateText(req('sw'), 'Carol can’t approve, because Carol’s schedule started this run.') }
@@ -1564,11 +1737,11 @@ details.more .more-body { padding-top: 8px; }
   }
 
   /* ---------- Small pieces ---------- */
-  function whoAvatar(w, size = 36) {
+  function whoAvatar(w, size = 36, state = 'idle', k = '') {
     if (!w) return '';
     if (w.startsWith('p:')) return pav(w.slice(2), size);
-    if (w === 'platform') return `<span class="sysav" style="width:${size}px;height:${size}px">${I.mark(20)}</span>`;
-    return face(w, size + 12);
+    if (w === 'platform') return `<span class="sysav app" style="width:${size}px;height:${size}px">${I.mark()}</span>`;
+    return face(w, size + 12, state, { k });
   }
   const feedName = (w) => (w === 'portal' ? 'Workflow Builder' : w === 'platform' ? 'Platform' : w === 'gate' ? 'Approval gate' : AGENTS[w].name);
   const feedHue = (w) => (AGENTS[w] ? AGENTS[w].hue : 'var(--muted)');
@@ -1653,10 +1826,10 @@ details.more .more-body { padding-top: 8px; }
     ].join('');
     const n = teamsCount();
     return `<header class="hdr"><div class="hdr-in">
-      <button class="brand" data-act="go" data-arg="home">${I.mark(26)}<span class="brand-text"><span class="brand-ai">AI </span>Workflow Builder</span></button>
+      <button class="brand" data-act="go" data-arg="home">${I.mark(22)}<span class="brand-text"><span class="brand-ai">AI </span>Workflow Builder</span></button>
       <nav class="nav" aria-label="Main">${nav}</nav>
       <div class="tools">
-        <button class="iconbtn" data-act="teams" aria-label="Teams, practice copy${n ? `, ${approvalsWord(n)} waiting for you` : ''}" title="${n ? `${approvalsWord(n)} waiting for you` : 'Teams, practice copy'}">${I.chat(20)}<span class="lbl">Teams</span>${n ? `<span class="badge">${n}</span>` : ''}</button>
+        <button class="iconbtn" data-act="teams" aria-label="Teams, practice copy${n ? `, ${approvalsWord(n)} waiting for you` : ''}" title="${n ? `${approvalsWord(n)} waiting for you` : 'Teams, practice copy'}">${I.chat(20)}<span class="lbl">Teams</span>${n ? `<span class="badge" data-val="teams-n">${n}</span>` : ''}</button>
         <button class="iconbtn" data-act="go" data-arg="settings" aria-label="Settings" title="Settings"${v === 'settings' ? ' aria-current="page"' : ''}>${I.gear(20)}</button>
         <div class="me" title="${me().name}, ${me().role}">${pav(S.user)}<span class="me-text"><b>${me().name}</b><small>${me().role}</small></span></div>
       </div>
@@ -1702,13 +1875,13 @@ details.more .more-body { padding-top: 8px; }
     return out;
   }
   function says(text) { return `<div class="says">${face('trouble', 32)}<div><b>AI troubleshooter</b>${text}</div></div>`; }
-  function taskCard(t) {
-    return `<article class="task"><span class="ico ${t.kind}">${t.icon}</span><div class="task-body"><h3 class="task-title">${t.title}</h3><div class="task-meta">${t.meta}</div>${t.body}${t.why ? says(t.why) : ''}<div class="btns">${t.actions}</div></div></article>`;
+  function taskCard(t, i = 0) {
+    return `<article class="task" data-flip="h:${keyOf(t.title)}" data-stagger style="--i:${i}"><span class="ico ${t.kind}">${t.icon}</span><div class="task-body"><h3 class="task-title">${t.title}</h3><div class="task-meta">${t.meta}</div>${t.body}${t.why ? says(t.why) : ''}<div class="btns">${t.actions}</div></div></article>`;
   }
   /* A compact row keeps only its item's first button, as a small secondary one. */
   const firstButton = (html) => ((html.match(/<button[\s\S]*?<\/button>/) || [''])[0]).replace(/class="btn[^"]*"/, 'class="btn sm"');
-  function queueRow(t) {
-    return `<li class="qrow"><span class="ico ${t.kind}">${t.icon}</span><div class="qrow-text"><b>${t.title}</b><span class="qrow-meta">${t.meta}</span>${t.why ? `<span class="qrow-why"><b>AI troubleshooter:</b> ${t.why}</span>` : ''}</div>${firstButton(t.actions)}</li>`;
+  function queueRow(t, i = 1) {
+    return `<li class="qrow" data-flip="h:${keyOf(t.title)}" data-stagger style="--i:${i}"><span class="ico ${t.kind}">${t.icon}</span><div class="qrow-text"><b>${t.title}</b><span class="qrow-meta">${t.meta}</span>${t.why ? `<span class="qrow-why"><b>AI troubleshooter:</b> ${t.why}</span>` : ''}</div>${firstButton(t.actions)}</li>`;
   }
 
   const REPORT_STAGES = [
@@ -1754,12 +1927,12 @@ details.more .more-body { padding-top: 8px; }
     /* On day one an Operator's first workflow comes first. Anything that already needs them, such as a key about to expire,
        follows as short rows, so the page keeps one main button. */
     const starterFirst = dayOne && me().op;
-    const needsSec = `<section class="section" aria-labelledby="needs-h">
-          <h2 id="needs-h">Needs you <span class="count">${n}</span></h2>
-          ${starterFirst ? `<ul class="queue" aria-label="Needs you">${items.map(queueRow).join('')}</ul>` : n ? `${taskCard(items[0])}${n > 1 ? `<ul class="queue" aria-label="Also needs you">${items.slice(1).map(queueRow).join('')}</ul>` : ''}` : `<div class="quiet"><b>All quiet</b>${firstLive ? `Next up: <button class="linkbtn" data-act="workflow" data-arg="${firstLive[0]}">${esc(firstLive[1].name)}</button>, ${firstLive[1].next}.` : 'Nothing is scheduled yet.'}</div>`}
+    const needsSec = `<section class="section" aria-labelledby="needs-h" data-flip-group="home-needs">
+          <h2 id="needs-h">Needs you <span class="count" data-val="home-needs">${n}</span></h2>
+          ${starterFirst ? `<ul class="queue" aria-label="Needs you" data-flip-group="home-queue">${items.map((x, i) => queueRow(x, i + 1)).join('')}</ul>` : n ? `${taskCard(items[0])}${n > 1 ? `<ul class="queue" aria-label="Also needs you" data-flip-group="home-queue">${items.slice(1).map((x, i) => queueRow(x, i + 1)).join('')}</ul>` : ''}` : `<div class="quiet"><b>All quiet</b>${firstLive ? `Next up: <button class="linkbtn" data-act="workflow" data-arg="${firstLive[0]}">${esc(firstLive[1].name)}</button>, ${firstLive[1].next}.` : 'Nothing is scheduled yet.'}</div>`}
         </section>`;
     const main = starterFirst ? `${firstRoutine()}${n ? needsSec : ''}` : needsSec;
-    const following = has('nudge') && S.report > 0 && S.report < 4 && S.user === 'alice' ? `<section class="section" aria-labelledby="fu-h"><h2 id="fu-h">Following up</h2>
+    const following = has('nudge') && S.report > 0 && S.report < 4 && S.user === 'alice' ? `<section class="section" aria-labelledby="fu-h" data-pres="follow" data-stagger style="--i:3"><h2 id="fu-h">Following up</h2>
           <article class="panel"><div><div class="task-title">Stale ticket nudge: reported to support</div><div class="task-meta">Support has the run and the troubleshooter’s notes.</div></div>${caseBox()}${reportTrack(true)}</article></section>` : '';
     const draftSub = S.tool === 'asked' && S.wiz.intent && needsTool(draftNr()) ? 'Waiting for an Approver to OK a new tool.' : S.tool === 'ok' && S.wiz.intent && needsTool(draftNr()) ? 'The new tool is OK’d. Ready to carry on.' : `Step ${S.wiz.step} of 4. Pick up where you left off.`;
     /* "Coming up" folds into one line under the greeting. When nothing needs you, the "All quiet" box says what runs next instead. */
@@ -1826,25 +1999,26 @@ details.more .more-body { padding-top: 8px; }
       ${ids.length && !order.length ? '<div class="quiet"><b>No workflows match</b>Try other words, or see them all.<div class="btns quiet-act"><button class="btn sm" data-act="clearFind" data-arg="workflows">Show all workflows</button></div></div>' : ''}
       ${(() => {
         let mainUsed = false;
-        const rows = order.map((id) => {
+        const rows = order.map((id, i) => {
           const r = R(id);
           let act = actionFor(id);
           if (act) { if (mainUsed) act = demote(act); mainUsed = true; }
-          return `<li class="wf-row${S.paused[id] ? ' paused' : ''}">
+          return `<li class="wf-row${S.paused[id] ? ' paused' : ''}" data-flip="wf:${id}" data-stagger style="--i:${i}">
             <span class="wf-pills">${pills(id)}</span>
             <div class="wf-main"><h2><button class="rcard-link" data-act="workflow" data-arg="${id}">${esc(r.name)}</button></h2><p>${status(id).last}</p></div>
-            ${faces(r.agents, 26)}
+            ${faces(r.agents, 26, agentStates(id), `wf:${id}`)}
             <span class="wf-next">Next: ${r.next}</span>
             <span class="wf-act">${act}</span>
           </li>`;
         }).join('');
-        const add = me().op && !q && S.filter === 'all' ? `<li><button class="wf-add" data-act="go" data-arg="new">${I.plus(18)}<b>New workflow</b><span>Describe a task in plain English</span></button></li>` : '';
-        return rows || add ? `<ul class="wf-list" aria-label="Workflows">${rows}${add}</ul>` : '';
+        const add = me().op && !q && S.filter === 'all' ? `<li data-flip="wf:add"><button class="wf-add" data-act="go" data-arg="new">${I.plus(18)}<b>New workflow</b><span>Describe a task in plain English</span></button></li>` : '';
+        return rows || add ? `<ul class="wf-list" aria-label="Workflows" data-flip-group="wf-list">${rows}${add}</ul>` : '';
       })()}`;
   }
 
-  function stepsList(steps, inline) {
-    return `<ol class="steps${inline ? ' inline' : ''}">${steps.map(([what, kind, how]) => `<li><div><div class="what">${what}</div><div class="how"><span class="tag ${kind || ''}">${how}</span></div></div></li>`).join('')}</ol>`;
+  /* A plan's steps. Each step keeps its place by position, so a step that changes is highlighted, and an added or removed one slides the rest. */
+  function stepsList(steps, inline, key = 'steps') {
+    return `<ol class="steps${inline ? ' inline' : ''}" data-flip-group="${key}">${steps.map(([what, kind, how], i) => `<li data-flip="${key}:${i}"><div><div class="what" data-val="${key}:${i}">${what}</div><div class="how"><span class="tag ${kind || ''}">${how}</span></div></div></li>`).join('')}</ol>`;
   }
 
   /* What happened to one tool over time. The backend already records where each "ours" came from. */
@@ -1886,12 +2060,12 @@ details.more .more-body { padding-top: 8px; }
       hist: [['Today', `Added by ${nm(a.by)}. ${a.ours ? `Our version ${esc(a.ours)}.` : 'Our version was left empty, so the first check takes the newest.'}`]],
     })).filter((r) => !S.removed.includes(r.key) && hit(r.name, r.repo));
     const upToDate = UP_TO_DATE.filter((u) => hit(u, ''));
-    const table = (rows) => `<div class="scroll-x"><table class="sw-table"><thead><tr><th>Software</th><th>Ours</th><th>Newest</th><th>Status</th><th><span class="vh">Actions</span></th></tr></thead><tbody>${rows.map((r) => {
+    const table = (rows, name) => `<div class="scroll-x"><table class="sw-table"><thead><tr><th>Software</th><th>Ours</th><th>Newest</th><th>Status</th><th><span class="vh">Actions</span></th></tr></thead><tbody data-flip-group="swt:${name}">${rows.map((r) => {
       const open = S.swOpen === r.key;
       const hist = r.hist || history(r.key);
-      return `<tr><td><b>${esc(r.name)}</b><div class="src">${r.kind === 'unknown' ? 'Source not confirmed yet' : `${SOURCES[r.kind || 'github']} · ${srcLink(r.kind, r.repo, esc(r.repo))}`}</div></td><td>${esc(r.ours)}<div class="src">${r.from}</div></td><td>${r.newest}${r.cross ? `<div class="src">${r.cross}</div>` : ''}</td><td>${r.status}</td>
+      return `<tr data-flip="sw:${r.key}"><td><b>${esc(r.name)}</b><div class="src">${r.kind === 'unknown' ? 'Source not confirmed yet' : `${SOURCES[r.kind || 'github']} · ${srcLink(r.kind, r.repo, esc(r.repo))}`}</div></td><td data-val="swv:${r.key}:ours">${esc(r.ours)}<div class="src">${r.from}</div></td><td data-val="swv:${r.key}:new">${r.newest}${r.cross ? `<div class="src">${r.cross}</div>` : ''}</td><td data-val="swv:${r.key}:st">${r.status}</td>
         <td style="text-align:right;white-space:nowrap"><button class="linkbtn" data-act="swHist" data-arg="${r.key}" aria-expanded="${open}"${open ? ` aria-controls="hist-${r.key}"` : ''}>${open ? 'Hide history' : 'History'}</button>${me().op ? ` <button class="linkbtn" data-act="removeSw" data-arg="${r.key}">Remove<span class="vh"> ${esc(r.name)}</span></button>` : ''}</td></tr>
-        ${open ? `<tr class="hist" id="hist-${r.key}"><td colspan="5"><ol class="timeline">${hist.map(([d, t]) => `<li><b>${d}</b><span>${t}</span></li>`).join('')}</ol></td></tr>` : ''}`;
+        ${open ? `<tr class="hist" id="hist-${r.key}" data-flip="swh:${r.key}" data-enter="reveal"><td colspan="5"><ol class="timeline">${hist.map(([d, t]) => `<li><b>${d}</b><span>${t}</span></li>`).join('')}</ol></td></tr>` : ''}`;
     }).join('')}</tbody></table></div>`;
     const appr = has('sw') && S.sw === 'waiting';
     const r = R('sw');
@@ -1900,14 +2074,14 @@ details.more .more-body { padding-top: 8px; }
         ${day1 ? '' : '<button class="btn" data-act="checkNow">Check now</button>'}</div>
       <div class="sched">${I.clock(20)}<div>${day1 ? '<b>Checks run every Monday at 9:00 once you add software.</b><span>Each check sends one approval for all its tickets.</span>' : `<b>Checked ${r.when.charAt(0).toLowerCase()}${r.when.slice(1)}, set by ${owner}.</b> Next check ${r.next}. <span>${TZ}. Scheduled checks count as ${owner}’s work, so ${owner} can’t approve them.</span><span>Who approves: ${apprText(apprOf('sw'))}.</span>`}</div>
         ${day1 || !me().op ? '' : `<div class="btns"><button class="btn sm" data-act="editSched" data-arg="sw">${I.edit()}Change schedule</button><button class="btn sm" data-act="editAppr" data-arg="sw">${I.edit()}Change who approves</button></div>`}</div>
-      ${S.editing === 'sw' ? schedEditor('sw') : ''}
-      ${S.editingAppr === 'sw' ? apprEditor('sw') : ''}
+      ${S.editing === 'sw' ? `<div data-flip="ed:s:sw" data-enter="reveal">${schedEditor('sw')}</div>` : ''}
+      ${S.editingAppr === 'sw' ? `<div data-flip="ed:a:sw" data-enter="reveal">${apprEditor('sw')}</div>` : ''}
       ${appr ? `<div class="apprbar">${I.shield(20)}<div><b>This week’s check wants to raise 3 upgrade tickets, 1 of them urgent.</b><span>Started by Carol’s schedule, Mon 26 Oct, 9:00. ${askLine(req('sw'), S.user)}</span></div>${canApprove('sw') ? '<button class="btn primary sm" data-act="run" data-arg="sw">Review and decide</button>' : `<span class="note">Waiting for ${whoOr(req('sw').may)}</span>`}</div>` : ''}
       ${day1 ? '' : `<div class="findbar"><span class="findbox">${I.search()}<label class="vh" for="find-software">Find software</label><input type="search" id="find-software" data-find="software" placeholder="Find software" value="${esc(S.find.software)}"></span></div>`}
       ${needRows.some((x) => x.key === 'lj') ? `<section class="section"><h2>Security risks <span class="count">1</span></h2>${riskCard('lj', st('MOCK-16'))}</section>` : ''}
-      ${needRows.length ? `<section class="section"><h2>Needs a person <span class="count">${needRows.length}</span></h2><div class="panel">${table(needRows)}</div></section>` : ''}
+      ${needRows.length ? `<section class="section"><h2>Needs a person <span class="count" data-val="sw:need-n">${needRows.length}</span></h2><div class="panel">${table(needRows, 'need')}</div></section>` : ''}
       ${day1 ? '' : (() => { const ending = SUPPORT_ENDING.filter((x) => hit(x.name, '')); return ending.length ? `<section class="section"><h2>Support ending <span class="count">${ending.length}</span></h2><div class="panel"><p class="note">From endoflife.date, read by the Version checker. After these dates, these versions get no more fixes, including security fixes.</p><div class="rows">${ending.map((x) => `<div class="row"><div><div class="row-name">${x.name}</div><div class="row-sub">Security fixes end ${x.ends}, ${x.left}. ${extLink(`https://endoflife.date/${x.slug}`, 'Dates on endoflife.date', 'endoflife.date')}</div></div><span class="pill wait">${I.clock(12)}Plan an upgrade</span></div>`).join('')}</div></div></section>` : ''; })()}
-      ${newRows.length ? `<section class="section"><h2>Not checked yet <span class="count">${newRows.length}</span></h2><div class="panel">${table(newRows)}</div></section>` : ''}
+      ${newRows.length ? `<section class="section"><h2>Not checked yet <span class="count" data-val="sw:new-n">${newRows.length}</span></h2><div class="panel">${table(newRows, 'new')}</div></section>` : ''}
       ${day1 ? (newRows.length ? '' : `<div class="quiet"><b>No software yet</b>Add the tools your team runs. Each one is checked every Monday for new versions and known vulnerabilities.${me().op ? '<div class="btns quiet-act"><button class="btn sm primary" data-act="focusAdd">Add your first software</button></div>' : ''}</div>`)
         : `<section class="section"><h2>Up to date <span class="count">${upToDate.length}</span></h2>${upToDate.length ? `<details${q ? ' open' : ''}><summary>Show all ${upToDate.length}</summary><div class="uptodate">${upToDate.map((u) => `<span class="tag">${u}</span>`).join('')}</div></details>` : '<p class="muted">None match.</p>'}</section>`}
       ${q && !needRows.length && !newRows.length && !upToDate.length ? '<div class="quiet"><b>Nothing matches</b>Try another name, or add it below.<div class="btns quiet-act"><button class="btn sm" data-act="clearFind" data-arg="software">Clear the search</button></div></div>' : ''}
@@ -1932,7 +2106,7 @@ details.more .more-body { padding-top: 8px; }
       ? `<div class="panel"><h2>Add to the Software watchlist</h2><dl class="kv"><dt>Name</dt><dd>${hit[0]}</dd><dt>Published on</dt><dd>${SOURCES[hit[2] || 'github']} · ${srcLink(hit[2], hit[1], hit[1])}</dd><dt>Our version</dt><dd>Left empty, so the first check takes the newest</dd><dt>Checked</dt><dd>Every Monday at 9:00, with the rest of your software</dd></dl>
           <div class="btns"><button class="btn primary" data-act="addKnown" data-arg="${hit[0]}">Add ${hit[0]} to the watchlist</button></div></div>`
       : '<div class="btns"><button class="btn primary" data-act="go" data-arg="software">Open Software watchlist</button></div>';
-    return `<div style="display:grid;gap:24px"><div class="bubble">${face('lead', 48)}<p>${say}</p></div>
+    return `<div style="display:grid;gap:24px"><div class="bubble">${face('lead', 48, 'idle', { live: true })}<p>${say}</p></div>
         <div class="panel who-checks">${faces(['checker', 'vuln'], 36)}<p><b>Who does the checking:</b> the Version checker reads each tool’s newest version from its official registry, cross-checks GitHub and checks support dates. The Vulnerability checker cross-checks OSV, NVD and vendor advisories, and CISA’s list of actively exploited vulnerabilities.</p></div>${card}
         <p class="note">One list means one check and one Teams approval a week, however many tools you add. Separate workflows would mean a separate approval for each tool.</p></div>
       <div class="wfoot"><button class="btn" data-act="wizBack">Back</button></div>`;
@@ -1969,16 +2143,16 @@ details.more .more-body { padding-top: 8px; }
         <div><dt>When</dt><dd>${r.when}</dd></div>
         <div><dt>Next run</dt><dd>${r.next}</dd></div>
         <div><dt>Who approves</dt><dd>${r.approves}<small>${timingText(apprOf(id))}</small></dd></div>
-        <div><dt>Agents</dt><dd>${faces(r.agents, 30)}</dd></div>
+        <div><dt>Agents</dt><dd>${faces(r.agents, 30, agentStates(id), `wfp:${id}`)}</dd></div>
         ${held ? `<div><dt>In n8n</dt><dd>${held.by === S.user ? 'You have it' : `${nm(held.by)} has it`}<small>Since ${held.since}</small></dd></div>` : ''}
       </dl>
-      ${chg ? `<article class="task" style="margin-top:16px"><span class="ico wait">${I.alert(22)}</span><div class="task-body"><h2 class="task-title">${nm(chg.by)}’s change in n8n removed Ask for a yes</h2><div class="task-meta">Published ${chg.when}</div><p>The next run will stop before it changes anything, because nothing is written without a yes.</p><div class="btns">${me().op ? `<button class="btn${actionFor(id) ? '' : ' primary'}" data-act="n8nUndo" data-arg="${id}">Undo ${nm(chg.by)}’s change</button>` : ''}</div></div></article>` : ''}
-      ${S.editing === id ? schedEditor(id) : ''}
-      ${S.editingAppr === id ? apprEditor(id) : ''}
+      ${chg ? `<article class="task" style="margin-top:16px" data-flip="n8nchg:${id}" data-enter="reveal"><span class="ico wait">${I.alert(22)}</span><div class="task-body"><h2 class="task-title">${nm(chg.by)}’s change in n8n removed Ask for a yes</h2><div class="task-meta">Published ${chg.when}</div><p>The next run will stop before it changes anything, because nothing is written without a yes.</p><div class="btns">${me().op ? `<button class="btn${actionFor(id) ? '' : ' primary'}" data-act="n8nUndo" data-arg="${id}">Undo ${nm(chg.by)}’s change</button>` : ''}</div></div></article>` : ''}
+      ${S.editing === id ? `<div data-flip="ed:s:${id}" data-enter="reveal">${schedEditor(id)}</div>` : ''}
+      ${S.editingAppr === id ? `<div data-flip="ed:a:${id}" data-enter="reveal">${apprEditor(id)}</div>` : ''}
       ${id === 'nudge' && S.report > 0 && S.nudge === 'failed' ? `<div class="panel" style="margin-top:16px"><h2>Support case</h2>${caseBox()}${reportTrack(true)}</div>` : ''}
       <div class="runbody" style="margin-top:24px">
-        <div class="panel"><h2>What it does</h2>${stepsList(planFor(id))}</div>
-        <div class="panel"><h2>Recent runs</h2>${recent.length ? `<div class="rows">${recent.map(([when, what, live]) => live && hasRun
+        <div class="panel"><h2>What it does</h2>${stepsList(planFor(id), false, `plan:${id}`)}</div>
+        <div class="panel"><h2>Recent runs</h2>${S.editRun && S.editRun.wf === id ? `<div class="rows"><button class="row-btn" data-act="run" data-arg="edit"><div><div class="row-name">Today, 9:15</div><div class="row-sub">Stopped before changing anything: Carol’s change removed Ask for a yes.</div></div><span class="btns small" style="font-weight:700">Watch ${I.right(16)}</span></button></div>` : ''}${recent.length ? `<div class="rows">${recent.map(([when, what, live]) => live && hasRun
           ? `<button class="row-btn" data-act="run" data-arg="${id}"><div><div class="row-name">${when}</div><div class="row-sub">${what}</div></div><span class="btns small" style="font-weight:700">Watch ${I.right(16)}</span></button>`
           : `<div class="row"><div><div class="row-name">${when}</div><div class="row-sub">${what}</div></div></div>`).join('')}</div>` : `<p class="muted">No runs yet. The first one is ${r.next}.</p>`}</div>
       </div>`;
@@ -1999,11 +2173,25 @@ details.more .more-body { padding-top: 8px; }
       if (i === P.at) return 'now';
       return 'todo';
     };
+    /* Each face says what that agent is doing in this run. Only the step running now moves. */
+    const gi = m.stations.findIndex((s) => s.gate);
+    const declined = m.workflow === 'sw' && S.sw === 'declined';
+    let lastAgent = -1;
+    m.stations.forEach((s, i) => { if (i <= m.end && AGENTS[s.who] && !s.skip) lastAgent = i; });
+    const faceOf = (s, i, st) => {
+      if (st === 'now') return s.who === 'lead' ? 'thinking' : 'working';
+      if (st === 'fail') return 'error';
+      if (st === 'skip') return 'stopped';
+      if (finished && i === gi - 1 && m.state === 'waiting') return 'waiting';
+      if (finished && i === gi - 1 && m.state === 'expired') return 'stopped';
+      if (finished && m.state === 'done' && !declined && i === lastAgent) return 'success';
+      return 'idle';
+    };
     const line = m.stations.map((s, i) => {
       const st = stateOf(s, i);
       const dot = s.gate ? (st === 'wait' ? I.lock(18) : st === 'noans' ? I.clock(18) : I.shield(18)) : st === 'done' ? I.check(14) : st === 'fail' ? I.x(14) : '';
       const sub = st === 'skip' ? 'Not needed' : st === 'fail' ? 'Stopped here' : st === 'wait' ? 'Waiting for a yes' : st === 'noans' ? 'No answer' : s.sub || '';
-      return `<li class="st ${st}${s.gate ? ' gate' : ''}"><div class="st-who">${s.gate ? '' : whoAvatar(s.who, 44)}</div><div class="st-dotwrap"><span class="st-dot">${dot}</span></div><div class="st-label">${s.label}${sub ? `<small>${sub}</small>` : ''}</div></li>`;
+      return `<li class="st ${st}${s.gate ? ' gate' : ''}"><div class="st-who">${s.gate ? '' : whoAvatar(s.who, 44, faceOf(s, i, st), `st:${id}:${i}`)}</div><div class="st-dotwrap"><span class="st-dot">${dot}</span></div><div class="st-label">${s.label}${sub ? `<small>${sub}</small>` : ''}</div></li>`;
     }).join('');
     const msgs = m.stations.slice(0, Math.min(P.at, m.end) + 1).map((s) => s.msg).filter(Boolean);
     P.feedNext = msgs.length;
@@ -2022,7 +2210,7 @@ details.more .more-body { padding-top: 8px; }
   }
 
   const andList = (xs) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
-  const chatAvatar = (w) => (w === 'portal' || w === 'platform' ? `<span class="sysav">${I.mark(20)}</span>` : w === 'gate' ? `<span class="sysav gate">${I.shield(20)}</span>` : face(w, 40));
+  const chatAvatar = (w, state = 'idle') => (w === 'portal' || w === 'platform' ? `<span class="sysav app">${I.mark()}</span>` : w === 'gate' ? `<span class="sysav gate">${I.shield(20)}</span>` : face(w, 40, state));
   /* The run as a group chat. Events from the platform and the approval gate are quiet markers; agents speak in bubbles.
      When the Planner speaks, the agents it brings in join the chat. */
   function chatItem(g, isNew, m) {
@@ -2030,18 +2218,18 @@ details.more .more-body { padding-top: 8px; }
     if (g.who === 'portal' || g.who === 'platform') return `<li class="chat-marker ${cls}"><span>${g.text}</span></li>`;
     if (g.who === 'gate') return `<li class="chat-marker ${cls}"><span>${I.shield(14)}${g.text}</span></li>`;
     const joined = g.who === 'lead' ? R(m.workflow).agents.filter((a) => a !== 'lead') : [];
-    return `<li class="cmsg ${cls}"><span class="cmsg-av">${face(g.who, 40)}</span><div class="cmsg-body"><span class="cmsg-who" style="color:${feedHue(g.who)}">${feedName(g.who)}</span><div class="cmsg-bubble">${g.text}</div></div></li>${joined.length ? `<li class="chat-marker${isNew ? ' in' : ''}"><span>${faces(joined, 22)}${andList(joined.map((a) => AGENTS[a].name))} joined</span></li>` : ''}`;
+    return `<li class="cmsg ${cls}"><span class="cmsg-av">${face(g.who, 40, g.tone === 'bad' ? 'error' : 'idle', { k: `chat:${keyOf(g.text)}` })}</span><div class="cmsg-body"><span class="cmsg-who" style="color:${feedHue(g.who)}">${feedName(g.who)}</span><div class="cmsg-bubble">${g.text}</div></div></li>${joined.length ? `<li class="chat-marker${isNew ? ' in' : ''}"><span>${faces(joined, 22)}${andList(joined.map((a) => AGENTS[a].name))} joined</span></li>` : ''}`;
   }
   /* The last word goes to whoever needs the person: the approval gate with the buttons, the AI troubleshooter with the fix, or Workflow Builder when it's done. */
   function chatAct(id, m) {
     const w = m.state === 'waiting' || m.state === 'expired' ? 'gate' : m.state === 'failed' ? 'trouble' : 'portal';
-    return `<li class="cmsg"><span class="cmsg-av">${chatAvatar(w)}</span><div class="cmsg-body"><span class="cmsg-who"${w === 'trouble' ? ` style="color:${feedHue(w)}"` : ''}>${feedName(w)}</span>${actPanel(id, m)}</div></li>`;
+    return `<li class="cmsg" data-pres="act:${id}:${m.state}:${id === 'sw' ? S.sw : ''}"><span class="cmsg-av">${chatAvatar(w)}</span><div class="cmsg-body"><span class="cmsg-who"${w === 'trouble' ? ` style="color:${feedHue(w)}"` : ''}>${feedName(w)}</span>${actPanel(id, m)}</div></li>`;
   }
   /* While a run replays, the next speaker shows as working. */
   function chatTyping(m) {
     const next = m.stations.slice(P.at + 1, m.end + 1).find((s) => s.msg);
     if (!next) return '';
-    return `<li class="cmsg typing" aria-hidden="true"><span class="cmsg-av">${chatAvatar(next.msg.who)}</span><div class="cmsg-body"><span class="cmsg-who">${feedName(next.msg.who)} is working</span><div class="cmsg-bubble"><span class="dots"><i></i><i></i><i></i></span></div></div></li>`;
+    return `<li class="cmsg typing" aria-hidden="true"><span class="cmsg-av">${chatAvatar(next.msg.who, next.msg.who === 'lead' ? 'thinking' : 'working')}</span><div class="cmsg-body"><span class="cmsg-who">${feedName(next.msg.who)} is working</span><div class="cmsg-bubble"><span class="dots"><i></i><i></i><i></i></span></div></div></li>`;
   }
 
   function approvePanel(id) {
@@ -2070,6 +2258,15 @@ details.more .more-body { padding-top: 8px; }
 
   function actPanel(id, m) {
     if (m.state === 'waiting') return approvePanel(id);
+    if (id === 'edit') {
+      const wf = S.editRun.wf;
+      const live = S.n8nChg[wf];
+      return `<div class="panel">
+        <dl class="qa"><dt>What happened</dt><dd>Carol’s change in n8n at 9:12 removed <b>Ask for a yes</b>. This run reached the step that makes changes without a yes, so it stopped there. Nothing was written.</dd></dl>
+        <dl class="qa"><dt>What to do</dt><dd>${live ? 'Undo Carol’s change, or put the step back yourself in n8n.' : 'Carol’s change has been undone. The next run asks for a yes again.'}</dd></dl>
+        ${live ? (me().op ? `<div class="btns"><button class="btn primary" data-act="n8nUndo" data-arg="${wf}">Undo Carol’s change</button><button class="btn" data-act="n8nAsk" data-arg="${wf}">Fix it in n8n${I.ext(14)}</button></div>` : '<p class="note">An Operator can undo the change.</p>') : ''}
+      </div>`;
+    }
     if (id === 'issues' && S.issues === 'failed') {
       return `<div class="panel">
         <dl class="qa"><dt>What happened</dt><dd>GitHub says <b>langchain-ai/langserve</b> doesn’t exist any more. Its page now points to <b>langchain-ai/langchain</b>.</dd></dl>
@@ -2082,7 +2279,7 @@ details.more .more-body { padding-top: 8px; }
         <dl class="qa"><dt>What happened</dt><dd>The step that reads tickets stopped on <b>MOCK-31</b>, which has no owner. The platform should skip a ticket like this, but it crashed.</dd></dl>
         <dl class="qa"><dt>What to do</dt><dd>This is a problem in the platform, not in your workflow, so you can’t fix it from here. Report it and support gets the run and this explanation.</dd></dl>
         ${S.report === 0 ? `<div class="btns">${me().op ? '<button class="btn primary" data-act="report">Report to support</button>' : '<p class="note">An Operator can report this to support.</p>'}</div>`
-          : `<h3>Reported to support</h3>${caseBox()}${reportTrack(false)}${S.report === 4 && me().op ? '<div class="btns"><button class="btn primary" data-act="retryNudge">Retry the run</button></div>' : ''}`}
+          : `<div data-pres="case:${S.supportCase.id}"><h3>Reported to support</h3>${caseBox()}${reportTrack(false)}${S.report === 4 && me().op ? '<div class="btns"><button class="btn primary" data-act="retryNudge">Retry the run</button></div>' : ''}</div>`}
       </div>`;
     }
     if (id === 'conf' && S.conf === 'expired') {
@@ -2093,11 +2290,11 @@ details.more .more-body { padding-top: 8px; }
     }
     const done = {
       sw: S.sw === 'approved'
-        ? `<h2>Done</h2><p>${nm(S.swBy)} approved, and the platform created the tickets.</p><div class="result-chips">${ticketBtn('MOCK-16', 'Log4j core')}${ticketBtn('MOCK-14', 'LangGraph')}${ticketBtn('MOCK-15', 'FastAPI')}</div>`
+        ? `<h2><span class="ok-mark">${I.check(18)}</span>Done</h2><p>${nm(S.swBy)} approved, and the platform created the tickets.</p><div class="result-chips">${ticketBtn('MOCK-16', 'Log4j core')}${ticketBtn('MOCK-14', 'LangGraph')}${ticketBtn('MOCK-15', 'FastAPI')}</div>`
         : `<h2>Declined</h2><p>${nm(S.swBy)} declined, so nothing was written. The tickets will be proposed again next Monday.</p>`,
-      issues: '<h2>Fixed</h2><p>The workflow now reads <b>langchain-ai/langchain</b>. No new bug reports today, so there was nothing to write.</p>',
-      nudge: '<h2>Back to normal</h2><p>The fix from support is live. MOCK-31 has no owner, so it was listed for you instead of crashing the run.</p>',
-      conf: S.nr ? `<h2>Done</h2><p>${confYesWho()} approved, and the platform ${confWrite(S.nr).doneText}.</p><div class="result-chips"><span class="pill ok">${I.check(12)}${confWrite(S.nr).result}</span></div>` : '',
+      issues: `<h2><span class="ok-mark">${I.check(18)}</span>Fixed</h2><p>The workflow now reads <b>langchain-ai/langchain</b>. No new bug reports today, so there was nothing to write.</p>`,
+      nudge: `<h2><span class="ok-mark">${I.check(18)}</span>Back to normal</h2><p>The fix from support is live. MOCK-31 has no owner, so it was listed for you instead of crashing the run.</p>`,
+      conf: S.nr ? `<h2><span class="ok-mark">${I.check(18)}</span>Done</h2><p>${confYesWho()} approved, and the platform ${confWrite(S.nr).doneText}.</p><div class="result-chips"><span class="pill ok">${I.check(12)}${confWrite(S.nr).result}</span></div>` : '',
     }[id];
     return `<div class="panel">${done}<div class="btns"><button class="btn" data-act="go" data-arg="home">Back to Home</button></div></div>`;
   }
@@ -2138,7 +2335,7 @@ details.more .more-body { padding-top: 8px; }
     const hint = CHIP_HINT[r.state];
     if (!r.options) return `<span class="schip ${r.state}" title="${cap(hint)}">${text}</span>`;
     const inOpts = r.options.some(([v]) => v === r.selected);
-    return `<span class="schip ${r.state}" title="${cap(hint)}"><span>${text}</span>${I.down(14)}<select id="fix-${r.key}" data-fix="${r.key}" aria-label="${r.label}: ${r.value ? esc(r.value) : 'not sure'}, ${hint}. Change it">${opt('', r.value ? 'Change…' : 'Choose…', inOpts ? null : '')}${r.options.map(([v, l]) => opt(v, l, inOpts ? r.selected : null)).join('')}</select></span>`;
+    return `<span class="schip ${r.state}" title="${cap(hint)}"><span data-val="chip:${r.key}">${text}</span>${I.down(14)}<select id="fix-${r.key}" data-fix="${r.key}" aria-label="${r.label}: ${r.value ? esc(r.value) : 'not sure'}, ${hint}. Change it">${opt('', r.value ? 'Change…' : 'Choose…', inOpts ? null : '')}${r.options.map(([v, l]) => opt(v, l, inOpts ? r.selected : null)).join('')}</select></span>`;
   }
   /* What the Planner understood, as one sentence. Notes under it say what's missing, changed or not possible. */
   function understoodSentence(rows) {
@@ -2184,9 +2381,10 @@ details.more .more-body { padding-top: 8px; }
               <button class="chip" data-act="chip" data-arg="Every Monday, check Kubernetes for new releases and raise a Jira ticket if we are behind.">Check Kubernetes releases</button>
             </div></div>
           <div class="btns" style="margin-top:16px"><button class="btn primary" data-act="plan" ${w.planning ? 'disabled' : ''}>Plan it</button></div>
+          <p class="small muted" style="margin-top:16px">Prefer to build it yourself? <button class="linkbtn" data-act="n8nNew">Start in n8n</button></p>
         </div>
         <div class="panel">
-          <div class="bubble">${face('lead', 48)}<p>${w.planning ? 'Give me a moment.' : 'Tell me what you want done. I’ll show you what I understood before anything is set up, and flag anything I’m not sure about.'}</p></div>
+          <div class="bubble">${face('lead', 48, w.planning ? 'thinking' : 'idle', { live: true, k: 'wiz:lead' })}<p>${w.planning ? 'Give me a moment.' : 'Tell me what you want done. I’ll show you what I understood before anything is set up, and flag anything I’m not sure about.'}</p></div>
           ${w.planning ? `<ul class="thinking">${lines.slice(0, w.planning).map((l, i) => `<li>${i + 1 < w.planning ? `<span style="color:var(--green)">${I.check(18)}</span>` : '<span class="spin"></span>'}${l}</li>`).join('')}</ul>` : ''}
         </div>
       </div>`;
@@ -2200,14 +2398,14 @@ details.more .more-body { padding-top: 8px; }
       const similar = f.tickets === 'stale' && has('nudge') && (f.action === 'nudge' || f.dest === 'teams');
       const agents = ['jira', f.action === 'nudge' ? 'msg' : 'summary'];
       body = `<div style="display:grid;gap:20px">
-        <div class="bubble">${face('lead', 48)}<p>${unsure ? 'Here’s what I understood. I’ve marked what I wasn’t sure about or can’t do. Please sort those out before you carry on.' : 'Here’s what I understood, and the plan that follows from it. Please check it matches what you meant.'}</p></div>
+        <div class="bubble">${face('lead', 48, 'idle', { live: true })}<p>${unsure ? 'Here’s what I understood. I’ve marked what I wasn’t sure about or can’t do. Please sort those out before you carry on.' : 'Here’s what I understood, and the plan that follows from it. Please check it matches what you meant.'}</p></div>
         <div class="panel"><h2>What you asked for</h2>
           <blockquote class="asked"><span>Your words</span>${esc(w.text)}</blockquote>
           ${understoodSentence(rows)}
           <p class="note">Click a highlighted part to change it. Your words stay as you wrote them.</p>
         </div>
         ${similar ? `<div class="notice">${I.info(20)}<div><b>You already have a workflow like this.</b> <i>Stale ticket nudge</i> asks owners in Teams about tickets with no update for 14 days, every Wednesday at 10:00. ${f.action === 'nudge' ? 'This would do the same thing again.' : 'This one would post one summary instead.'}<div class="btns"><button class="btn sm" data-act="workflow" data-arg="nudge">Open Stale ticket nudge</button></div></div></div>` : ''}
-        <div class="panel"><h2>What the workflow will do</h2>${stepsList(planOf(f), true)}
+        <div class="panel"><h2>What the workflow will do</h2>${stepsList(planOf(f), true, 'wiz-plan')}
           <p class="note">Done by: ${agents.map((a) => AGENTS[a].name).join(' and ')}. Nothing is changed without an Approver’s yes.</p></div>
         ${needsTool(f) ? toolCard() : ''}
       </div>
@@ -2258,6 +2456,7 @@ details.more .more-body { padding-top: 8px; }
       <p><b>${esc(r.name)}</b> runs next on <b>${r.next}</b>, Singapore time. When it needs a yes, ${nm(apprOf('conf').steps[0].first)} gets a message in CODESparks Support.</p>
       <div class="btns" style="justify-content:center;margin-top:8px"><button class="btn primary" data-act="testRun">Do a test run now</button><button class="btn" data-act="go" data-arg="home">Back to Home</button></div>
       <p class="note">A test run does the real work once, so it still waits for a yes before anything changes.</p>
+      <p class="note">Want to fine-tune it? <button class="linkbtn" data-act="n8nAsk" data-arg="conf">Open in n8n</button></p>
     </div></div>`;
   }
 
@@ -2606,9 +2805,9 @@ details.more .more-body { padding-top: 8px; }
   const visibleAgents = () => LIBRARY.filter((a) => a.id !== 'summary' || (S.nr && S.nr.action !== 'nudge' && has('conf')));
   function libraryView() {
     const list = visibleAgents();
-    const card = (a) => {
+    const card = (a, i) => {
       const tools = agentTools(a);
-      return `<article class="agent-lg">
+      return `<article class="agent-lg" data-stagger style="--i:${i}">
         <div class="agent-top">${face(a.id, 52)}<div><h3><button class="rcard-link" data-act="agent" data-arg="${a.id}">${AGENTS[a.id].name}</button></h3>${AGENTS[a.id].role ? `<span class="agent-role">${AGENTS[a.id].role}</span>` : ''}</div></div>
         <p>${a.what}</p>
         <p class="small">${!tools.length ? '<span class="tag">No access to other systems</span>' : `${tools.some((t) => t[1] === 'write') ? '<span class="tag write">Changes data after a yes</span>' : '<span class="tag read">Reads only</span>'} <span class="muted">${tools.length === 1 ? '1 tool' : `${tools.length} tools`}</span>`}</p>
@@ -2778,7 +2977,7 @@ details.more .more-body { padding-top: 8px; }
     const say = (html) => `<div class="bubble small-bubble">${face('lead', 40)}<p>${html}</p></div>`;
     let result = '';
     if (r && r.type === 'change') {
-      result = `<div class="proposal" id="agent-proposal" tabindex="-1">
+      result = `<div class="proposal" id="agent-proposal" tabindex="-1" data-pres="prop:${id}:${keyOf(d.text)}:${r.type}">
         ${say(`Here’s how I’d change the ${name}. The changed step is marked.`)}
         <ol class="plan">${r.plan.map((step, i) => (i !== r.changed ? `<li>${step}</li>` : r.added ? `<li class="chg"><span class="chip-new">New</span> <ins>${step}</ins></li>` : `<li class="chg"><del>${r.from}</del><ins>${step}</ins></li>`)).join('')}</ol>
         <ul class="checks"><li>${I.check(16)}<span>${r.addTool ? `Adds one tool from the tool list: <b>${TOOLS[r.addTool][0]}</b>. It still waits for a yes, every time` : 'Uses only the tools already on its card'}</span></li><li>${I.check(16)}<span>Doesn’t change what needs a yes, or who approves</span></li><li>${I.check(16)}<span>Doesn’t reach anything it couldn’t reach before</span></li></ul>
@@ -2798,7 +2997,7 @@ details.more .more-body { padding-top: 8px; }
       }[r.type];
       const next = r.type === 'tool' ? `<button class="btn" data-act="toolDraft" data-arg="${r.tool}">${toolState(r.tool) === 'asked' ? 'See the tool request' : 'Draft the tool'}</button>`
         : r.type === 'team' && !sentToTeam(r.sys) ? `<button class="btn" data-act="teamReq" data-arg="${r.sys}|${id}">Send to the team</button>` : '';
-      result = `<div class="proposal" id="agent-proposal" tabindex="-1">${say(msg)}${next ? `<div class="btns">${next}</div>` : ''}</div>`;
+      result = `<div class="proposal" id="agent-proposal" tabindex="-1" data-pres="prop:${id}:${keyOf(d.text)}:${r.type}">${say(msg)}${next ? `<div class="btns">${next}</div>` : ''}</div>`;
     }
     const change = canChangeAgent(id) ? `<section class="agent-change"><h3>Change how it works</h3>
         <p class="small muted">Say what should be different, in plain English. The Planner redrafts the agent, the platform checks the draft, and you decide whether to save it.</p>
@@ -2809,9 +3008,9 @@ details.more .more-body { padding-top: 8px; }
       </section>`
       : `<p class="note">${a.platform ? 'This agent is part of the platform, so it can’t be changed here. To suggest a change, report it to support.' : 'Only Operators can change agents.'}</p>`;
     return `<div class="agent-dlg">${backBtn()}
-      <div class="agent-top">${face(id, 56)}<div><h2 id="dlg-h">${name}</h2>${AGENTS[id].role ? `<span class="agent-role">${AGENTS[id].role}</span>` : ''}<span class="small muted">${versionText(id)}</span></div><button class="iconbtn dlg-close" data-act="closeModal" aria-label="Close">${I.x(18)}</button></div>
+      <div class="agent-top">${face(id, 56, 'idle', { live: true })}<div><h2 id="dlg-h">${name}</h2>${AGENTS[id].role ? `<span class="agent-role">${AGENTS[id].role}</span>` : ''}<span class="small muted">${versionText(id)}</span></div><button class="iconbtn dlg-close" data-act="closeModal" aria-label="Close">${I.x(18)}</button></div>
       <p>${a.what}</p>
-      <section><h3>How it works</h3><ol class="plan">${now.plan.map((step) => `<li>${step}</li>`).join('')}</ol></section>
+      <section><h3>How it works</h3><ol class="plan" data-flip-group="aplan:${id}">${now.plan.map((step) => `<li data-flip="aplan:${id}:${keyOf(step)}">${step}</li>`).join('')}</ol></section>
       ${change}
       <div class="agent-cols">
         <section><h3>Tools it may use</h3>${toolKeysOf(id).length ? toolsList(toolKeysOf(id)) : `<p class="small muted">${a.none}</p>`}</section>
@@ -2863,7 +3062,7 @@ details.more .more-body { padding-top: 8px; }
       else if (m.jtool) actions = canOkTool() && S.user !== S.jiraCompAsker ? '<div class="btns"><button class="btn sm" data-act="toolOpen" data-arg="jiraComp">Open in Workflow Builder</button></div>' : '<span class="note">Waiting for an Approver</span>';
       else if (m.tool) actions = canOkTool() ? '<div class="btns"><button class="btn sm" data-act="go" data-arg="tool">Open in Workflow Builder</button></div>' : '<span class="note">Waiting for an Approver</span>';
       else if (m.id) actions = canApprove(m.id) ? `<div class="btns"><button class="btn good sm" data-act="approve" data-arg="${m.id}">Approve</button><button class="btn sm" data-act="decline" data-arg="${m.id}">Decline</button><button class="btn sm" data-act="run" data-arg="${m.id}">Open in Workflow Builder</button></div>` : `<div class="lock">${I.lock(18)}<span class="small">${starterOf[m.id] === S.user ? 'You started this run, so you can’t approve it.' : me().ap ? `Only ${whoOr(req(m.id).may)} can decide this one.` : 'Only an Approver can decide.'}</span></div>`;
-      return `<div class="msg"><span class="sysav">${I.mark(20)}</span><div><div class="msg-meta"><b>Workflow Builder</b> · ${m.time}</div><div class="msg-card"><div>${m.html}</div>${actions}</div></div></div>`;
+      return `<div class="msg"><span class="sysav app">${I.mark()}</span><div><div class="msg-meta"><b>Workflow Builder</b> · ${m.time}</div><div class="msg-card"><div>${m.html}</div><div data-val="tm:${keyOf(m.time + m.html.slice(0, 60))}">${actions}</div></div></div></div>`;
     }).join('');
     return `<div class="scrim" data-act="teams"></div><aside class="drawer" role="dialog" aria-modal="true" aria-label="Teams, practice copy">
       <div class="drawer-head"><div><b>Microsoft Teams</b><small>Practice copy. Nothing reaches the real Teams.</small></div><button class="iconbtn" data-act="teams" aria-label="Close Teams">${I.x(18)}</button></div>
@@ -2884,6 +3083,17 @@ details.more .more-body { padding-top: 8px; }
       <div class="field"><label for="extra">Anything to add? <span class="muted">(optional)</span></label><textarea id="extra" data-input="extra" rows="3" style="min-height:80px">${esc(S.wiz.extra)}</textarea><span class="help">Support sees your note with the case.</span></div>
       <div class="btns" style="justify-content:flex-end"><button class="btn" data-act="closeModal">Cancel</button><button class="btn primary" data-act="sendReport">Send report</button></div>`;
   }
+  /* Sent. The reference shows at once; the bar and the mark only confirm what the text already says. */
+  function reportSentDialog() {
+    const c = S.supportCase;
+    return `<div class="sent"><span class="sent-mark">${I.check(28)}</span>
+        <h2 id="dlg-h" style="font-size:1.4rem">Reported to support</h2>
+        <p class="muted" style="margin:0">Your case reference</p>
+        <p class="sent-ref" style="margin:0">${c.id}</p>
+        <div class="sent-bar" aria-hidden="true"><span></span></div>
+        <dl class="kv"><dt>Who has it</dt><dd>${c.owner}</dd><dt>First reply by</dt><dd>${c.target}</dd><dt>Updates</dt><dd>A Teams message to you at each stage. You can also follow it on Home.</dd></dl></div>
+      <div class="btns" style="justify-content:flex-end"><button class="btn primary" data-act="closeModal">Done</button></div>`;
+  }
   function deleteDialog(id) {
     return `<h2 id="dlg-h" style="font-size:1.4rem">Delete ${esc(R(id).name)}?</h2>
       <p id="dlg-d">It stops running and leaves Workflows. Its past runs stay in the record.</p>
@@ -2899,7 +3109,7 @@ details.more .more-body { padding-top: 8px; }
     /* Each arrow sits inside the step it points to, so a wrapped row never starts or ends on a loose arrow. */
     const canvas = [...boxes.map((b) => ['', b]), [`gate${gone ? ' gone' : ''}`, `${I.shield(16)}Ask for a yes`], ['', `${I.check(16)}Make the approved changes`]]
       .map(([cls, b], i) => `<li>${i ? `<span class="n8n-arrow" aria-hidden="true">${I.right(14)}</span>` : ''}<span class="n8n-node${cls ? ` ${cls}` : ''}">${b}</span></li>`).join('');
-    return `<h2 id="dlg-h" style="font-size:1.4rem">Open ${esc(r.name)} in n8n</h2>
+    return `<h2 id="dlg-h" style="font-size:1.4rem">Open “${esc(r.name)}” in n8n</h2>
       <p class="muted">In n8n you can change its steps, schedule and conditions yourself. This is how it looks there.</p>
       <ol class="n8n-canvas" aria-label="Steps in n8n">${canvas}</ol>
       <ul class="n8n-promises">
@@ -2908,6 +3118,16 @@ details.more .more-body { padding-top: 8px; }
         <li>${I.shield(16)}<span>Nothing is written without a yes, whatever you change.</span></li>
       </ul>
       <div class="btns" style="justify-content:flex-end"><button class="btn" data-act="closeModal">Cancel</button><button class="btn primary" data-act="n8nOpen" data-arg="${id}">${other ? 'Take it and open n8n' : 'Open n8n'}${I.ext(14)}</button></div>`;
+  }
+  function n8nNewDialog() {
+    return `<h2 id="dlg-h" style="font-size:1.4rem">Start a workflow in n8n</h2>
+      <p class="muted">You build it yourself in n8n, from our blocks and n8n’s steps. The Planner doesn’t draft it, so you won’t see “Check what I understood”.</p>
+      <ul class="n8n-promises">
+        <li>${I.check(16)}<span>When you publish it, it appears on Workflows, marked <b>Made in n8n</b>.</span></li>
+        <li>${I.lock(16)}<span>Until you name Approvers for it here, any Approver on the team can answer its requests.</span></li>
+        <li>${I.shield(16)}<span>Nothing is written without a yes.</span></li>
+      </ul>
+      <div class="btns" style="justify-content:flex-end"><button class="btn" data-act="closeModal">Cancel</button><button class="btn primary" data-act="n8nNewOpen">Open n8n${I.ext(14)}</button></div>`;
   }
   function ticketDialog(key) {
     const x = RELEASES.find((r) => r.key === key);
@@ -2920,7 +3140,7 @@ details.more .more-body { padding-top: 8px; }
   }
   function modal() {
     if (!S.modal) return '';
-    const body = S.modal === 'report' ? reportDialog() : S.modal === 'n8n' ? n8nDialog(S.modalArg) : S.modal === 'delete' ? deleteDialog(S.modalArg) : S.modal === 'agent' ? agentDialog(S.modalArg) : S.modal === 'tool' ? toolDialog(S.modalArg) : ticketDialog(S.modalArg);
+    const body = S.modal === 'report' ? reportDialog() : S.modal === 'reportSent' ? reportSentDialog() : S.modal === 'n8n' ? n8nDialog(S.modalArg) : S.modal === 'n8nNew' ? n8nNewDialog() : S.modal === 'delete' ? deleteDialog(S.modalArg) : S.modal === 'agent' ? agentDialog(S.modalArg) : S.modal === 'tool' ? toolDialog(S.modalArg) : ticketDialog(S.modalArg);
     return `<div class="scrim${scrimIn ? ' in' : ''}" data-act="closeModal"></div><div class="dialog${['agent', 'tool', 'n8n'].includes(S.modal) ? ' wide' : ''}${dlgIn ? ' in' : ''}" role="${S.modal === 'delete' ? 'alertdialog' : 'dialog'}" aria-modal="true" aria-labelledby="dlg-h"${S.modal === 'delete' ? ' aria-describedby="dlg-d"' : ''}>${body}</div>`;
   }
 
@@ -2938,6 +3158,7 @@ details.more .more-body { padding-top: 8px; }
     }
     if (S.report > 0 && S.report < 4) sims.push(['advance', '', `Support moves case ${S.supportCase.id} on`]);
     if (S.view.name === 'workflow' && S.view.id !== 'sw' && me().op && !S.n8nChg[S.view.id]) sims.push(['n8nChange', S.view.id, 'Carol changes it in n8n and publishes']);
+    if (S.view.name === 'workflow' && S.n8nChg[S.view.id] && !S.editRun) sims.push(['n8nRun', S.view.id, 'The next run starts with Carol’s change']);
     return `<div class="testctl">
       ${S.testOpen ? `<div class="testctl-panel${testNew ? ' in' : ''}" id="testctl-panel" role="region" aria-label="Test controls">
         <p class="testctl-title">Test controls</p>
@@ -3012,10 +3233,11 @@ details.more .more-body { padding-top: 8px; }
     }
     const modalKey = S.modal ? `${S.modal}:${S.modalArg}` : null;
     scrimIn = !!modalKey && !shownModal;
-    dlgIn = !!modalKey && modalKey !== shownModal;
+    dlgIn = !!modalKey && modalKey !== shownModal && !(S.modal === 'reportSent' && shownModal === 'report:null');
     shownModal = modalKey;
     const toastHtml = S.toast ? `<div class="toast${toastNew ? ' in' : ''}">${S.toast}${S.toastAct ? `<button class="toast-act" data-act="${S.toastAct.act}" data-arg="${S.toastAct.arg}">${S.toastAct.label}</button>` : ''}</div>` : '';
-    $app.innerHTML = header() + `<main class="sheet" id="main"><div class="wrap">${main}</div></main>` + tabbar() + teamsDrawer() + modal() + toastHtml + testControls();
+    const motion = motionBefore();
+    $app.innerHTML = header() + `<main class="sheet" id="main"><div class="wrap" data-flip-group="page">${main}</div></main>` + tabbar() + teamsDrawer() + modal() + toastHtml + testControls();
     if (refocus) {
       const el = $app.querySelector(refocus);
       if (el) {
@@ -3045,6 +3267,7 @@ details.more .more-body { padding-top: 8px; }
     stageWatch.disconnect();
     const stage = $app.querySelector('.stage');
     if (stage) stageWatch.observe(stage);
+    motionAfter(motion);
     if (focusHeading) {
       focusHeading = false;
       const h = $app.querySelector('h1');
@@ -3052,6 +3275,139 @@ details.more .more-body { padding-top: 8px; }
       window.scrollTo(0, 0);
     }
   }
+
+
+  /* ---------- Motion ----------
+     The mock redraws the whole page on every change, so motion compares the page just before and just after each redraw.
+     - [data-flip] items, placed directly inside a [data-flip-group], keep their place: moved ones glide (FLIP), new ones
+       fade up, removed ones fade out before the rest close up. data-enter="reveal" unfolds a section instead.
+     - [data-val] values that changed, now or since you last looked, get a short highlight.
+     - [data-pres] panels that are new unfold.
+     - .face[data-k] agents whose state changed react once.
+     - A dialog, drawer or toast that closed gets a short exit, as a copy nobody can reach.
+     A one-shot animation carries over a redraw that happens while it plays. Nothing ever waits for an animation.
+     In the real Portal, Motion (motion/react) does this with layout and presence animations. */
+  const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
+  const EASE_OUT = 'cubic-bezier(0.23, 1, 0.32, 1)';
+  const seen = { val: new Map(), face: new Map(), pres: new Set() };
+  const playing = new Map();
+  let shownView = '';
+  const loopWatch = new IntersectionObserver((es) => es.forEach((e) => e.target.classList.toggle('off', !e.isIntersecting)));
+  const viewKey = () => [S.view.name, S.view.id || '', S.view.name === 'new' ? S.wiz.step : '', S.user, S.firstDay ? 'one' : 'week', S.view.name === 'agents' ? S.libTab : '', S.view.name === 'settings' ? S.setTab : ''].join('|');
+  const glide = (el, dx, dy) => { if (Math.abs(dx) + Math.abs(dy) > 1) el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 220, easing: EASE_OUT }); };
+  function motionBefore() {
+    const flips = new Map();
+    $app.querySelectorAll('[data-flip]:not(.m-leaving)').forEach((el) => {
+      const r = el.getBoundingClientRect();
+      const g = el.parentElement;
+      flips.set(el.dataset.flip, { el, x: r.left + scrollX, y: r.top + scrollY, group: g ? g.dataset.flipGroup : null, index: g ? [...g.children].indexOf(el) : -1 });
+    });
+    const layers = [...$app.children].filter((el) => !el.classList.contains('leave') && ['dialog', 'scrim', 'drawer', 'toast'].some((c) => el.classList.contains(c)));
+    return { view: shownView, flips, pres: new Set([...$app.querySelectorAll('[data-pres]')].map((el) => el.dataset.pres)), layers };
+  }
+  /* A removed item goes back where it was, fades out, then the rest of its list glides up into the gap. */
+  function leave(a, calm) {
+    const g = a.group && $app.querySelector(`[data-flip-group="${CSS.escape(a.group)}"]`);
+    if (!g || !a.el) return;
+    const el = a.el;
+    el.classList.remove('m-appear', 'm-reveal');
+    el.classList.add('m-leaving');
+    el.setAttribute('aria-hidden', 'true');
+    el.inert = true;
+    el.style.pointerEvents = 'none';
+    g.insertBefore(el, g.children[a.index] || null);
+    const out = el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: calm ? 100 : 150, easing: 'ease-out', fill: 'forwards' });
+    out.onfinish = () => {
+      if (!g.isConnected || !el.isConnected) return;
+      const rest = [...g.children].filter((s) => s !== el && s.dataset.flip).map((s) => [s, s.getBoundingClientRect()]);
+      el.remove();
+      if (!calm) rest.forEach(([s, r0]) => { const r1 = s.getBoundingClientRect(); glide(s, r0.left - r1.left, r0.top - r1.top); });
+    };
+  }
+  function motionAfter(b) {
+    const view = viewKey();
+    const same = view === b.view;
+    shownView = view;
+    const calm = motionQuery.matches;
+    const now = performance.now();
+    const play = (key, sel, cls, dur, extra = {}) => playing.set(key, { sel, cls, t0: now, dur, ...extra });
+    b.layers.forEach((el) => {
+      const kind = ['dialog', 'drawer', 'toast', 'scrim'].find((c) => el.classList.contains(c));
+      if ($app.querySelector(`:scope > .${kind}:not(.leave)`)) return;
+      el.classList.remove('in');
+      el.classList.add('leave');
+      el.setAttribute('aria-hidden', 'true');
+      el.inert = true;
+      $app.append(el);
+      const gone = () => el.remove();
+      el.addEventListener('animationend', gone, { once: true });
+      setTimeout(gone, 400);
+    });
+    if (!same) {
+      const main = $app.querySelector('#main');
+      if (main) main.classList.add('enter');
+    } else {
+      const cur = new Map([...$app.querySelectorAll('[data-flip]')].map((el) => [el.dataset.flip, el]));
+      b.flips.forEach((a, k) => { if (!cur.has(k)) leave(a, calm); });
+      cur.forEach((el, k) => {
+        const a = b.flips.get(k);
+        if (!a) { play(`n:${k}`, `[data-flip="${CSS.escape(k)}"]`, el.dataset.enter === 'reveal' ? 'm-reveal' : 'm-appear', 320); return; }
+        if (!calm) { const r = el.getBoundingClientRect(); glide(el, a.x - (r.left + scrollX), a.y - (r.top + scrollY)); }
+      });
+    }
+    $app.querySelectorAll('[data-pres]').forEach((el) => {
+      const k = el.dataset.pres;
+      if (!b.pres.has(k) && (same || !seen.pres.has(k))) play(`p:${k}`, `[data-pres="${CSS.escape(k)}"]`, 'm-reveal', 320);
+      seen.pres.add(k);
+    });
+    $app.querySelectorAll('[data-val]').forEach((el) => {
+      const k = el.dataset.val;
+      const v = el.textContent.replace(/\s+/g, ' ').trim();
+      const old = seen.val.get(k);
+      seen.val.set(k, v);
+      if (old !== undefined && old !== v) play(`v:${k}`, `[data-val="${CSS.escape(k)}"]`, 'm-changed', 1000);
+    });
+    $app.querySelectorAll('.face[data-k]').forEach((el) => {
+      const k = el.dataset.k;
+      const st = el.dataset.state;
+      const old = seen.face.get(k);
+      seen.face.set(k, st);
+      if (old !== undefined ? old !== st : same && ['error', 'waiting', 'success'].includes(st)) play(`f:${k}`, `.face[data-k="${CSS.escape(k)}"]`, 'react', 700, { state: st, from: old || '' });
+    });
+    playing.forEach((p, key) => {
+      const age = now - p.t0;
+      if (age >= p.dur) { playing.delete(key); return; }
+      $app.querySelectorAll(p.sel).forEach((el) => {
+        if (p.state && el.dataset.state !== p.state) return;
+        el.classList.add(p.cls);
+        if (p.from) el.dataset.from = p.from;
+        el.style.setProperty('--ad', `${-Math.round(age)}ms`);
+      });
+    });
+    loopWatch.disconnect();
+    $app.querySelectorAll('.face.live, .face.fs-working, .face.fs-thinking').forEach((el) => loopWatch.observe(el));
+  }
+  /* Expandable sections: content unfolds when a person opens one, and folds for 140ms before it closes. */
+  let openedBy = null;
+  document.addEventListener('click', (e) => {
+    const s = e.target instanceof Element && e.target.closest('summary');
+    const d = s && s.parentElement;
+    if (!d || d.tagName !== 'DETAILS') return;
+    openedBy = d;
+    if (!d.open || motionQuery.matches || d.dataset.folding) return;
+    e.preventDefault();
+    d.dataset.folding = '1';
+    const body = [...d.children].filter((c) => c.tagName !== 'SUMMARY');
+    body.forEach((c) => { c.classList.remove('m-open'); c.classList.add('m-close'); });
+    setTimeout(() => { d.open = false; delete d.dataset.folding; body.forEach((c) => c.classList.remove('m-close')); }, 140);
+  }, true);
+  document.addEventListener('toggle', (e) => {
+    const d = e.target;
+    if (!(d instanceof HTMLDetailsElement) || !d.open || d !== openedBy) return;
+    openedBy = null;
+    [...d.children].filter((c) => c.tagName !== 'SUMMARY').forEach((c) => { c.classList.remove('m-open', 'm-close'); void c.offsetWidth; c.classList.add('m-open'); });
+  }, true);
+  document.addEventListener('visibilitychange', () => document.documentElement.classList.toggle('tab-hidden', document.hidden));
 
   let toastTimer = null;
   /* Pauses the run line's looping animation while it is off screen. */
@@ -3491,11 +3847,11 @@ details.more .more-body { padding-top: 8px; }
     sendReport: () => {
       S.report = 1;
       S.supportCase = { id: 'SUP-1042', sent: 'Tue 27 Oct, 9:12', owner: 'Dana, support developer', target: 'Wed 28 Oct, 9:12 (1 working day)', note: S.wiz.extra.trim() };
-      S.modal = null;
-      toast('Reported as case SUP-1042. Follow it on the Home page.');
+      S.modal = 'reportSent';
       render();
-      const h = $app.querySelector('h1');
-      if (h) h.focus({ preventScroll: true });
+      announce('Reported to support. Your case reference is SUP-1042.');
+      const done = $app.querySelector('.dialog .btn.primary');
+      if (done) done.focus();
     },
     advance: () => { if (S.report < 4) S.report += 1; if (S.report === 4) toast(`Dana merged the fix for ${S.supportCase.id}. It’s live.`); render(); },
     retryNudge: () => { S.nudge = 'fixed'; go('run', 'nudge'); },
@@ -3571,7 +3927,10 @@ details.more .more-body { padding-top: 8px; }
     n8nAsk: (id) => openModal('n8n', id, '.btn.primary'),
     n8nOpen: (id) => { S.n8n[id] = { by: S.user, since: 'today, 9:10' }; closeModal(); toast(`Opened in n8n in a new tab. Only you can change ${esc(R(id).name)} there now.`); render(); },
     n8nChange: (id) => { S.n8n[id] = { by: 'carol', since: 'today, 9:12' }; S.n8nChg[id] = { by: 'carol', when: 'today, 9:12' }; toast(`Carol published a change to ${esc(R(id).name)} in n8n.`); render(); },
-    n8nUndo: (id) => { const c = S.n8nChg[id]; delete S.n8nChg[id]; toast(`Undone. The version before ${nm(c.by)}’s change is live again.`); render(); },
+    n8nRun: (id) => { S.editRun = { wf: id }; go('run', 'edit'); },
+    n8nNew: () => openModal('n8nNew', null, '.btn.primary'),
+    n8nNewOpen: () => { closeModal(); toast('Opened n8n in a new tab, with a new, empty workflow in your space.'); render(); },
+    n8nUndo: (id) => { const c = S.n8nChg[id]; if (!c) return; delete S.n8nChg[id]; toast(`Undone. The version before ${nm(c.by)}’s change is live again.`); render(); },
     pause: (id) => { S.paused[id] = true; toast(`Paused. ${esc(R(id).name)} won’t run until you resume it.`); render(); },
     resume: (id) => { delete S.paused[id]; toast(`Resumed. Next run ${R(id).next}.`); render(); },
     askDelete: (id) => openModal('delete', id, '[data-act="closeModal"].btn'),
@@ -3604,7 +3963,7 @@ details.more .more-body { padding-top: 8px; }
     if (e.key === 'Escape') { if (S.modal) closeModal(); else if (S.teams) A.teams(); else if (S.testOpen) A.testToggle(); return; }
     // Keep Tab inside an open dialog.
     if (e.key === 'Tab' && (S.modal || S.teams)) {
-      const box = $app.querySelector(S.modal ? '.dialog' : '.drawer');
+      const box = $app.querySelector(S.modal ? '.dialog:not(.leave)' : '.drawer:not(.leave)');
       const items = box ? [...box.querySelectorAll('button, [href], input, textarea, select, summary')].filter((x) => !x.disabled) : [];
       if (items.length) {
         const first = items[0];

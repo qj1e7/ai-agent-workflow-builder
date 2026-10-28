@@ -127,10 +127,22 @@ The [Portal prototype](portal-routines/prototype.html) shows this:
 1. Open a workflow and press **Open in n8n**.
 2. In the test controls, choose "Carol changes it in n8n and publishes".
 3. Her change removes Ask for a yes, so the workflow page and Home warn, and you can undo it.
+4. In the test controls, choose "The next run starts with Carol's change". The run stops at the change step, and the AI troubleshooter offers **Undo Carol's change** or **Fix it in n8n**.
 
 ![Open in n8n, from a workflow's page](portal-routines/open-in-n8n.png)
 
 ![A change made in n8n removed Ask for a yes, with Undo](portal-routines/n8n-change-undo.png)
+
+![The next run stopped before changing anything, and the AI troubleshooter offers Undo or Fix it in n8n](portal-routines/n8n-run-stopped.png)
+
+**Starting in n8n.**
+- Step 1 of New workflow has a quiet link: "Prefer to build it yourself? Start in n8n". It opens a new, empty n8n workflow in the person's own space.
+- The Planner doesn't draft it.
+- When it is published, it appears on Workflows, marked Made in n8n. Any Approver on the team answers its requests until an Operator names Approvers.
+- The team chose this on 28 Oct 2026. The builder stays the main way in, and n8n is a choice.
+- The "Your workflow is on" screen also links to Open in n8n, for fine-tuning.
+
+![Start a workflow in n8n, from step 1 of New workflow](portal-routines/new-in-n8n.png)
 
 **Undo:**
 
