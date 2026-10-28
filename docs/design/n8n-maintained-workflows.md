@@ -2,7 +2,7 @@
 
 This page proposes letting CODESparks staff maintain their workflows in n8n after handover, without weakening any safety rule. Nothing in the code changes until the team agrees.
 
-**Status:** proposal for team review, 28 Oct 2026. Prototype P6 tested it on n8n's free Community edition the same day. The decisions are in [ADR 0026](../adr/0026-every-write-is-checked-when-it-is-made-so-n8n-may-hold-the-wait.md) and [ADR 0027](../adr/0027-staff-maintain-each-workflow-in-n8n-and-the-portal-keeps-every-published-version.md), and the evidence is in [P6's findings](../evidence/prototypes/p6-n8n-node-pack/findings.md).
+**Status:** proposal for team review, 28 Oct 2026. Prototype P6 tested it on n8n's free Community edition the same day. The decisions are in [ADR 0026](../adr/0026-every-write-is-checked-when-it-is-made-so-n8n-may-hold-the-wait.md) and [ADR 0027](../adr/0027-staff-maintain-each-workflow-in-n8n-and-the-portal-keeps-every-published-version.md), and the evidence is in [P6's findings](../evidence/prototypes/p6-n8n-node-pack/findings.md). An [n8n workflow patterns review](../evidence/usability/2026-10-28-design-skill-audits.md#n8n-design-proposals-now-drafted-into-adrs-0026-and-0027) on 28 Oct made 11 proposals. They are now part of both ADRs and of this page.
 
 ## Why change
 
@@ -61,10 +61,14 @@ Staff see these nodes in n8n:
 | **Agent** | Runs one of our agents, picked from a list (Version checker, Ticket writer…). It shows the agent's name and face, returns the agent's result, and adds any change the agent wants to the run's proposal | Make a change itself |
 | **Read** | Reads from Jira, Confluence or GitHub, for a read step without AI, such as "open tickets older than 14 days" | Read from a place outside the team's allowed list |
 | **Propose a change** | For workflows without AI. Staff fill in a change by hand, such as "Post this text in CODESparks Support", and it joins the proposal | Make a change itself, or target a place outside the team's allowed list |
-| **Ask for a yes** | Sends the proposal to the workflow's Approvers in Teams, then waits. It has three exits: **Yes**, **No** and **No answer** | Decide anything. Our API applies every approval rule |
-| **Make the approved changes** | Carries out exactly the approved proposal, using keys held by our API | Change anything that wasn't approved, or was edited after the yes |
+| **Ask for a yes** | Sends the proposal to the workflow's Approvers in Teams, then waits. It has four exits: **Yes**, **No**, **No answer**, and **Nothing to change** when nothing was proposed, so nobody is asked | Decide anything. Our API applies every approval rule |
+| **Make the approved changes** | Carries out exactly the approved proposal, using keys held by our API. If one change of three fails, it reports "2 of 3 made", and a retry does only the one that failed | Change anything that wasn't approved, or was edited after the yes |
+| **Start from the Portal** | A trigger for Run now and test runs. It accepts only calls our API signed | Answer anyone else |
+| **Report a failure** | Tells our API that a run failed. Our error workflow uses it | Send anything anywhere else |
 
-Beside them, n8n loads only its triggers (Webhook, Schedule, Manual, Error) and simple flow nodes (IF, Merge, No Op, Sticky Note). This is n8n's `NODES_INCLUDE` setting, so n8n itself enforces it for everyone.
+Beside them, n8n loads only its Schedule, Manual and Error triggers and simple flow nodes (IF, Merge, No Op, Sticky Note). This is n8n's `NODES_INCLUDE` setting, so n8n itself enforces it for everyone.
+
+n8n's Webhook trigger is left out. It needs no sign-in unless someone sets one, and it can answer a call with the run's data, so Start from the Portal replaces it. Some of n8n's data nodes only reshape data already in the run, such as Filter, Edit Fields and Summarize. They can join the list once prototype P7 shows that none of them can send data out.
 
 The software check would read in n8n as:
 
@@ -101,17 +105,24 @@ Three choices keep the pack easy to maintain:
 | Adds a staff member's own Jira key and n8n's Jira node | n8n doesn't load the Jira node, so the n8n workflow can't be published or run, even by hand (P6) |
 | Adds an HTTP Request node to send data elsewhere | Same: n8n doesn't load it (P6) |
 | Changes where Propose a change posts | Only places on the team's allowed list work, and the Approver sees the exact target |
+| Adds n8n's Webhook trigger, to hand a run's data to an outside caller | n8n doesn't load it. Our own trigger answers only calls our API signed |
+| Runs the n8n workflow by hand in n8n | A real run, and Approvers get a real request. It counts as the work of whoever holds the n8n workflow, so they can't approve it |
+| Starts a second run while one is waiting for a yes | The second run stops before it reads anything: "An earlier run is still waiting for a yes" |
+| Changes the n8n workflow's error workflow or time zone | Our check warns, and runs of that version stop before they read anything |
 
 P6 showed that staff can add their own keys on the free edition. That is why the allow list matters: a key is useless when no node can use it.
 
-The lessons from the October sandbox stay. Our API checks every day that the error workflow is published and active, and retries wait a short delay first.
+The lessons from the October sandbox stay:
+- Each day our API sends a test failure through the error workflow and checks that the report arrives.
+- Retries wait a short delay first.
+- A repeated call for the same run and node gets its first answer, so a retry never runs an agent twice.
 
 ## Build, edit, publish and undo
 
 **Building a new workflow (in the Portal):**
 
 1. The Operator describes the task, and step 2 reads it back as a sentence.
-2. The Planner drafts an n8n workflow from the nodes n8n loads.
+2. The Planner drafts an n8n workflow from the nodes n8n loads. It names each node by what it does. It adds a Sticky Note with the workflow's purpose, a link to its page in the Portal, and what is safe to change.
 3. Step 3 sets the schedule and the Approvers.
 4. **Turn it on** runs our check, then the platform's account creates and publishes the n8n workflow through n8n's API. The Portal waits until n8n reports every trigger as activated. P6 saw a webhook miss its first call when called straight after publishing. The Portal then records who turned it on and keeps a copy of that version.
 
@@ -120,6 +131,7 @@ The lessons from the October sandbox stay. Our API checks every day that the err
 - Each workflow's page in the Portal has an **Open in n8n** button. It moves the n8n workflow into that person's space, where they can edit and publish it. The Portal shows who has it, and someone else can take it over the same way.
 - On the free edition, whoever can edit an n8n workflow can also publish it (P6). Safety holds either way. What matters is that we see every publish, and we do: n8n records who published each version (P6).
 - Our API notices newly published versions within about a minute and runs the same check. If an edit breaks something, the Portal and Teams warn at once, for example "Bob's change removed Ask for a yes".
+- A run also checks its version before it reads anything, so no run starts on a version that failed. This covers the minute before our check, and drafts run by hand.
 - The Portal rebuilds "What the workflow will do" from the published version, with a line such as "Changed in n8n by Bob, Tue 10:02".
 - A copy made in n8n that uses our nodes appears on Workflows, marked **Made in n8n**. Its requests go to any Approver on the team until an Operator names Approvers.
 
@@ -149,7 +161,10 @@ The [Portal prototype](portal-routines/prototype.html) shows this:
 - The Portal keeps every published version, with who published it and when. **Undo this change** publishes the previous version again, and the undo is logged too.
 - When a run stops soon after a new version, the AI troubleshooter says so: "This stopped after Bob's change at 10:02. Undo it?"
 
-**Who counts as having started a scheduled run:** the person who published the version it used. They can't approve that run. This replaces ADR 0020's schedule owner. It needs n8n users to match our users by email.
+**Whose work a run is.** None of these people can approve that run:
+- **Scheduled run:** the person who published the version it used. This replaces ADR 0020's schedule owner. It needs n8n users to match our users by email.
+- **Run by hand in n8n:** also whoever holds the n8n workflow. It may run a draft that nobody published.
+- **Run now or a test run in the Portal:** also the person who pressed it.
 
 ## Live activity view and AI troubleshooter
 
@@ -169,11 +184,11 @@ Our error workflow tells our API when a run fails. The AI troubleshooter then re
 ADR 0026 changes where the approval gate is enforced: at the write, not along the route. Every rule still holds:
 
 - No write action runs without a yes in Teams. The safety checker still denies by default, and only the write gateway holds keys.
-- Nobody approves their own work. Runs from a published version count as the publisher's work.
+- Nobody approves their own work. Runs from a published version count as the publisher's work. Runs started by hand in n8n also count as the work of whoever holds the n8n workflow.
 - The access review still needs two Approvers, one after the other.
 - Approval requests key off our own request ID, never n8n's execution ID.
-- The error workflow must be active. Our API checks this every day.
-- A retry waits a short delay first, and never writes twice.
+- The error workflow must be active. Each day our API sends a test failure through it.
+- A retry waits a short delay first, and never writes twice. Each change carries a key, so a second run never makes the same change again.
 - Every change is logged with who approved it.
 
 ## Goals
@@ -203,8 +218,8 @@ ADR 0026 changes where the approval gate is enforced: at the write, not along th
 | When | What |
 |---|---|
 | Done, 28 Oct | Prototype P6 on n8n's free Community edition |
-| First week of November | The team reviews ADRs 0026 and 0027 |
-| Next two weeks | The first three nodes (Agent, Ask for a yes and Make the approved changes) and the allow list. Move the software check onto them. Today's path keeps running until the new one passes the same end-to-end tests |
+| First week of November | The team reviews ADRs 0026 and 0027. Prototype P7 tests three things: the signed trigger, how a run started, and whether any data node can send data out |
+| Next two weeks | The first nodes: Agent, Ask for a yes, Make the approved changes, Start from the Portal and Report a failure. Then the allow list and Singapore time. Move the software check onto them. Today's path keeps running until the new one passes the same end-to-end tests |
 | The demo | A staff member opens the software check in n8n, moves a node and changes the schedule. Then they delete Ask for a yes and the write refuses |
 
 ## Later
@@ -222,6 +237,8 @@ ADR 0026 changes where the approval gate is enforced: at the write, not along th
 | Only one person can edit an n8n workflow at a time | The Portal shows who has it, and anyone can take it over. Paid sharing can come later |
 | Staff want n8n nodes we don't load, such as Slack or email | Each one is a decision: add a node to our pack, or put n8n's node on the allow list after checking what it can reach |
 | n8n doesn't catch up on schedules it missed while down | The Portal shows a missed run with "Run now" |
+| n8n runs schedules on New York time unless told otherwise | Our image sets Singapore time, and our check flags any n8n workflow set to another zone |
+| Our error workflow used HTTP Request, which the allow list blocks | It uses our Report a failure node, and a daily test failure proves the path works |
 
 ## Open questions
 

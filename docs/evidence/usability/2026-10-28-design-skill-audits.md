@@ -7,7 +7,7 @@ Four published design skills reviewed the clickable prototype, [`docs/design/por
 | ux-heuristics | `wondelai/skills` | Score 6/10. 14 findings, 4 of them major. | 13 fixed. Not re-scored. |
 | interaction-design | `wshobson/agents` | 12 findings, 4 of them high. | 11 fixed, and part of 1. |
 | accessibility (WCAG 2.2 AA) | `addyosmani/web-quality-skills` | axe: 34 problems under 2 rules across 92 runs. 14 findings. | All 14 fixed. axe now finds none. |
-| n8n-workflow-patterns | `czlonkowski/n8n-skills` | 4 prototype findings and 11 design proposals. | 2 prototype changes. The proposals need a team decision. |
+| n8n-workflow-patterns | `czlonkowski/n8n-skills` | 4 prototype findings and 11 design proposals. | 2 prototype changes. The proposals are drafted into ADRs 0026 and 0027. |
 
 A fifth skill, `vercel-react-best-practices`, was not run. The prototype is plain JavaScript, so the skill has nothing to check there. It applies to the Portal, which already uses React 19 with Vite.
 
@@ -77,9 +77,13 @@ All checks ran in Chrome through Playwright against the edited prototype.
 - **Reflow:** the stopped and waiting run pages fit 320 px with no sideways scroll.
 - **Smoke tests:** 14 usability checks, 10 motion checks and 3 n8n checks pass, with no console errors.
 
-## Needs a team decision: n8n design proposals
+## n8n design proposals, now drafted into ADRs 0026 and 0027
 
-The n8n audit checked the design in [`n8n-maintained-workflows.md`](../../design/n8n-maintained-workflows.md) and ADRs 0026 and 0027 against common n8n workflow patterns. These are proposals, not changes. Each would change the design note or an ADR.
+The n8n audit checked the design in [`n8n-maintained-workflows.md`](../../design/n8n-maintained-workflows.md) and ADRs 0026 and 0027 against common n8n workflow patterns.
+
+On 28 Oct the team lead asked for all 11 proposals, and the data nodes, to go into both ADRs and the design note. Both ADRs stay `proposed`. The ADRs differ from the wording below in two places:
+- **Item 4:** our API makes the check on a run's first call from any of our nodes, not one fixed first node, because staff can reorder nodes.
+- **Item 9:** the Sticky Note links to the workflow's Approvers in the Portal instead of naming them, because Approvers change there without a new version.
 
 1. **The error path breaks under the allow list (high).** Our failure reporter, `run_failure_reporter`, is an Error Trigger followed by an HTTP Request node. The `NODES_INCLUDE` allow list blocks HTTP Request, so failed runs would go unreported while the daily check still says the workflow is published. Proposal: a "Report a failure" node in our pack, and a daily check that sends a test failure all the way through.
 2. **The Webhook trigger is a way out of n8n (high).** n8n's Webhook node is on the allow list. It can reply with the last node's data, and it needs no sign-in by default. Proposal: replace it with our own trigger that only accepts calls signed by our API, and test that in a P7 run.
