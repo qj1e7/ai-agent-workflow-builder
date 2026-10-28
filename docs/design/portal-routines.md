@@ -138,13 +138,13 @@ On the page:
 
 ![Software watchlist page with LangGraph's history open](portal-routines/software.png)
 
-When someone asks for a release check in New workflow, the Planner adds the software to this list instead of making a new workflow. If the software is already on the list, it says so. This stops look-alike release-check use cases from piling up again.
+When someone asks for a release check in New workflow, the Planner adds the software to this list instead of making a new workflow. If the software is already on the list, it says so. This stops look-alike release-check use cases from piling up again. The Planner says which word made it think so, for example "You mentioned upgrades". If it guessed wrong, **No, set it up as a new workflow** carries on as usual.
 
 ![A release check in New workflow goes to the Software watchlist](portal-routines/release-check-redirect.png)
 
 ### 5. Watch and approve
 
-The run page is the live activity view: the run line with each agent's face, then the run as a group chat. The Planner speaks first, and the agents it brings in join the chat. Each agent says what it did. The last message comes from whoever needs you: the approval gate with the buttons, or the AI troubleshooter with the fix. While a run replays, the next agent shows as working. It shows exactly what will be written. You reach it from Home, Workflows, Software watchlist or the Teams message, not from the menu. Nobody approves their own work. If you started the run, you see a lock.
+The run page is the live activity view: the run line with each agent's face, then the run as a group chat. The Planner speaks first, and the agents it brings in join the chat. Each agent says what it did. The last message comes from whoever needs you: the approval gate with the buttons, or the AI troubleshooter with the fix. While a run replays, the next agent shows as working. It shows exactly what will be written. You reach it from Home, Workflows, Software watchlist or the Teams message, not from the menu. When you open a run to decide or to fix it, the page lands on the decision with the run already drawn, and **Replay the run** plays it again. A run you just started plays live: the line reaches each step before that agent speaks, and the page follows the newest message until you scroll. Nobody approves their own work. If you started the run, you see a lock.
 
 ![A run waiting at the approval gate](portal-routines/run-approval.png)
 
@@ -223,6 +223,8 @@ The whole path connects: the Ticket writer can't set a component, so the Planner
 
 Version 1 was tested by an independent evaluator (ChatGPT) and in an internal walkthrough on 27 Oct 2026. Version 2 answers their findings. The report is in [`docs/evidence/usability/2026-10-27-chatgpt-v1-evaluation.md`](../evidence/usability/2026-10-27-chatgpt-v1-evaluation.md), and the changes are listed in [`docs/evidence/usability/2026-10-27-v2-changes.md`](../evidence/usability/2026-10-27-v2-changes.md). Version 1 is kept in [`portal-routines/v1/`](portal-routines/v1/).
 
+On 28 Oct 2026, four published design skills reviewed the prototype: UX heuristics, interaction design, accessibility (WCAG 2.2 AA) and n8n workflow patterns. What they found, what changed and how it was checked is in [`docs/evidence/usability/2026-10-28-design-skill-audits.md`](../evidence/usability/2026-10-28-design-skill-audits.md). It also lists the n8n audit's design proposals, which need a team decision.
+
 ## Motion and the agents' faces
 
 Animation should first make it clear what is happening and what changed. Only then is it allowed to be friendly. Nothing waits for an animation: a press, a page change or a save happens at once, and the motion only shows it.
@@ -245,13 +247,13 @@ Only opacity and transform move, with no bounce.
 - **Changed values.** A changed version, status or count gets a short highlight. That includes a change made since you last looked, for example the ticket statuses on the Software watchlist after an approval.
 - **Panels.** The approval panel, the AI troubleshooter's panel, an editor and a history row unfold from the top. A "Done" panel shows its check once.
 - **Report to support.** The dialog turns into a confirmation at once, with the case reference. A short bar and a check confirm it.
-- **Layers.** Dialogs, the Teams drawer and toasts open and close with short transitions. Expandable sections unfold when opened and fold before closing.
+- **Layers.** Dialogs, the Teams drawer and toasts open and close with short transitions. Going from one dialog to another swaps its content. Expandable sections unfold when opened and fold before closing, and an update never closes one you opened.
 
 **The agents' faces.** Each face shows the real state of the work, never a random one. Only the agent working now, or one that needs attention, moves. The others stay still. Text and the usual status icons always say the same thing, so the face never carries a status alone.
 
 | State | How it looks | When |
 |---|---|---|
-| Idle | Still. Where one agent is the focus, slow breathing and an occasional blink | Most of the time. Breathing only for the Planner while you set up a workflow, and an agent in its own dialog |
+| Idle | Still. Where one agent is the focus, it breathes once when it appears, then holds still | Most of the time. Breathing only for the Planner while you set up a workflow, and an agent in its own dialog |
 | Thinking | Eyes look side to side, with 3 dots | The Planner choosing agents in a run, or planning your task |
 | Working | Eyes scan. Its tool moves a little, and writers type | The step running now in a run, and the "is working" line in the chat |
 | Waiting | Eyes up, still, with an amber clock badge | The agent whose work waits for a yes, in the run and on Workflows |
@@ -262,8 +264,10 @@ Only opacity and transform move, with no bounce.
 
 **Accessibility.**
 - With "reduce motion" switched on, nothing moves. New things fade in for a moment, and agents hold their pose with their badges.
-- Nothing flashes or repeats quickly. Loops pause when they scroll off screen or the tab is hidden.
-- Keyboard focus stays visible.
+- Nothing flashes or repeats quickly. Nothing moves for more than 5 seconds at rest. Loops while an agent works pause when they scroll off screen or the tab is hidden.
+- Keyboard focus stays visible, and after any action it stays on the control or the nearest one. It never jumps back to the top of the page.
+- A message with Undo has no time limit. It stays until you do something else, leave the page or press Escape.
+- Browser Back and Forward move between pages.
 - No animation causes sideways scrolling on a phone.
 
 **In the real Portal.** The prototype is one HTML file with no framework, so it uses CSS animations and a little plain JavaScript. The Portal is React 19 with Vite, and there:

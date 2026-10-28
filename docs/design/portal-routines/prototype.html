@@ -26,6 +26,7 @@
   --primary-hover: #2e3238;
   --muted: #4d535b;
   --rail: #c5cbd2;
+  --edge: #7d858e;  /* edges a person must see, such as form fields: 3:1 or more on white and grey */
   --hair: #e1e5e9;
   --rule: #eaedf0;
   --link: #1b6c80;
@@ -110,9 +111,12 @@
   --dur-attn: 380ms;    /* something needs a look: a new error, a request waiting */
   --dur-success: 560ms; /* a one-off positive reaction, never longer than 600ms */
   --stagger: 40ms;      /* gap between cards arriving on a new screen */
-  --move: 400ms;
+  --move: var(--dur-panel); /* the run line travelling to the next step */
 }
 * { box-sizing: border-box; }
+/* Keeps focused and scrolled-to things clear of the sticky header, and of the tab bar on a phone. */
+html { scroll-padding-top: 84px; }
+@media (max-width: 900px) { html { scroll-padding-top: 76px; scroll-padding-bottom: 84px; } }
 body {
   margin: 0; background: var(--frame); color: var(--ink); font-family: var(--font); font-size: 16px; line-height: 1.5;
   font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased;
@@ -127,6 +131,8 @@ h3 { font-size: 1rem; }
 ul, ol { padding: 0; list-style: none; }
 button, input, select, textarea { font: inherit; color: inherit; }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
+.skiplink { position: fixed; left: 16px; top: -80px; z-index: var(--z-toast); padding: 10px 16px; border: 0; border-radius: var(--r-ctl); background: var(--primary); color: var(--on-ink); font: inherit; font-weight: 700; cursor: pointer; }
+.skiplink:focus { top: 12px; }
 .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* Header: part of the frame. No rule under it in the sheet look; the sheet's own edge does that job. */
@@ -222,13 +228,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border-radius: var(--r-ctl); background: var(--surface); color: var(--ink); font-weight: 600; font-size: 0.95rem; cursor: pointer; white-space: nowrap; text-align: center;
   transition: transform var(--dur-press) var(--ease-out), background-color var(--dur-press) ease, border-color var(--dur-press) ease;
 }
-.btn:active:not([disabled]) { transform: scale(0.97); }
+.btn:active:not([disabled], [aria-disabled="true"]) { transform: scale(0.97); }
 .btn.primary { background: var(--primary); border-color: var(--primary); color: var(--on-ink); }
 .btn.good { background: var(--green); border-color: var(--green); color: var(--on-status); }
 .btn.bad { color: var(--red-ink); border-color: var(--red-line); }
 .btn.sm { min-height: 34px; padding: 0 12px; font-size: 0.875rem; }
 /* Disabled stays readable. The words around it say why. */
-.btn[disabled] { background: var(--sunk); border-color: var(--hair); color: var(--muted); cursor: not-allowed; }
+.btn[disabled], .btn[aria-disabled="true"] { background: var(--sunk); border-color: var(--hair); color: var(--muted); cursor: not-allowed; }
 .btn.mock { border: 1.5px dashed var(--trouble); color: var(--trouble); background: transparent; }
 .btns { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .linkbtn { display: inline-flex; align-items: center; min-height: 32px; margin: 0 -4px; background: none; border: 0; padding: 0 4px; color: var(--muted); text-decoration: underline; text-decoration-color: var(--rail); text-underline-offset: 3px; font-weight: 600; cursor: pointer; font-size: 0.9rem; transition: color var(--dur-press) ease, text-decoration-color var(--dur-press) ease; }
@@ -364,6 +370,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px 24px; padding: 18px 20px; background: var(--surface); border: 1px solid var(--hair); border-radius: var(--r-card); }
 .facts dt { font-size: 0.875rem; font-weight: 600; color: var(--muted); }
 .facts dd { font-weight: 600; margin-top: 2px; }
+.facts .fact-wide { grid-column: 1 / -1; }
+.facts .agent-chips { margin: 6px 0 0; }
 .panel { padding: 20px 24px; background: var(--surface); border: 1px solid var(--hair); border-radius: var(--r-card); display: grid; gap: 14px; min-width: 0; }
 .steps { display: grid; gap: 0; counter-reset: s; }
 .steps li { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; padding: 12px 0; border-top: 1px solid var(--rule); counter-increment: s; }
@@ -380,6 +388,18 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .sw-table .src { font-size: 0.875rem; color: var(--muted); }
 .sw-table .linkbtn + .linkbtn { margin-left: 10px; }
 .scroll-x { overflow-x: auto; position: relative; }
+.sw-table .sw-acts { text-align: right; white-space: nowrap; }
+/* On a phone each row stacks, so status and actions stay in view. The roles keep it a table for screen readers. */
+@media (max-width: 600px) {
+  .sw-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .sw-table, .sw-table tbody, .sw-table tr, .sw-table td { display: block; }
+  .sw-table tr { padding: 12px 0; border-top: 1px solid var(--rule); }
+  .sw-table td { border-top: 0; padding: 2px 0; }
+  .sw-table td[data-label]::before { content: attr(data-label) ": "; color: var(--muted); font-weight: 600; }
+  .sw-table td[data-label] .src { display: inline; margin-left: 6px; }
+  .sw-table .sw-acts { text-align: left; margin-top: 6px; }
+  .sw-table tr.hist { border-top: 0; padding-top: 0; }
+}
 details summary { cursor: pointer; font-weight: 600; color: var(--muted); padding: 8px 0; }
 .uptodate { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 6px; }
 
@@ -391,7 +411,9 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 .seg { display: inline-flex; padding: 3px; border-radius: calc(var(--r-ctl) + 3px); background: var(--sunk); }
 .seg button { border: 0; background: none; padding: 6px 14px; border-radius: var(--r-ctl); font-weight: 600; color: var(--muted); cursor: pointer; min-height: 34px; transition: background-color var(--dur-press) ease, color var(--dur-press) ease, transform var(--dur-press) var(--ease-out); }
 .seg button:active { transform: scale(0.96); }
-.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--hair), 0 1px 2px rgba(18, 20, 23, 0.06); }
+/* Opening a run that needs someone lands here, clear of the sticky header. */
+#decision:focus, .gate-said:focus { outline: none; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink), 0 1px 2px rgba(18, 20, 23, 0.06); }
 .stage { padding: 24px 20px 20px; background: var(--surface); border: 1px solid var(--hair); border-radius: var(--r-card); margin: 20px 0 24px; }
 .line { --ty: 91px; position: relative; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); padding-top: 8px; }
 .line-track, .line-fill { position: absolute; top: var(--ty); height: 3px; border-radius: 3px; left: calc(100% / var(--n) / 2); }
@@ -399,10 +421,14 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 .line-fill { width: calc(100% - 100% / var(--n)); background: var(--ink); transform-origin: left center; transform: scaleX(var(--f)); transition: transform var(--move) var(--ease-move); }
 .line-fill.broken { background: var(--ink); }
 .st { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; min-width: 0; }
-.st-who { height: 56px; display: flex; align-items: flex-end; justify-content: center; transition: opacity 300ms ease; }
+.st-who { height: 56px; display: flex; align-items: flex-end; justify-content: center; }
 .st-dotwrap { height: 38px; display: grid; place-items: center; }
-.st-dot { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--surface); border: 2px dashed var(--rail); color: var(--muted); transition: background-color 300ms ease, border-color 300ms ease, color 300ms ease; }
+.st-dot { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--surface); border: 2px dashed var(--edge); color: var(--muted); }
 .st-label { font-weight: 600; font-size: 0.95rem; line-height: 1.25; padding: 0 4px; }
+/* Cause, then effect: the line travels for --move, then the step it reaches lands and its message arrives. */
+.st.arrive .st-dot, .st.arrive .st-who { animation: land var(--dur-small) var(--ease-out) var(--move) backwards; }
+@keyframes land { from { opacity: 0.45; transform: scale(0.85); } }
+.chat > .in { animation-delay: var(--move); animation-fill-mode: backwards; }
 .st-label small { display: block; font-weight: 400; font-size: 0.85rem; color: var(--muted); margin-top: 3px; }
 .st.todo .st-who { opacity: 0.45; }
 .st.todo .st-label { color: var(--muted); }
@@ -418,7 +444,7 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 .st.gate .st-dot { width: 38px; height: 38px; border: 2px solid var(--ink); background: var(--surface); color: var(--ink); }
 .st.gate.wait .st-dot { background: var(--amber-soft); border-color: var(--amber); color: var(--amber-ink); outline: 2px solid var(--amber); outline-offset: 3px; }
 .st.gate.done .st-dot { background: var(--green); border-color: var(--green); color: var(--on-status); }
-.st.gate.skip .st-dot, .st.gate.todo .st-dot { border-style: dashed; border-color: var(--rail); color: var(--muted); }
+.st.gate.skip .st-dot, .st.gate.todo .st-dot { border-style: dashed; border-color: var(--edge); color: var(--muted); }
 .st.fail .st-dot { background: var(--red); border: 2px solid var(--red); color: var(--on-status); outline: 2px solid var(--red); outline-offset: 3px; }
 .st.fail .st-label { color: var(--red-ink); }
 @keyframes bob { from { transform: translateY(0); } to { transform: translateY(-4px); } }
@@ -460,7 +486,7 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 /* While a run replays, the next speaker shows as working, so the chat never looks stuck. */
 .cmsg.typing .cmsg-who { color: var(--muted); font-weight: 600; }
 .dots { display: inline-flex; gap: 4px; padding: 6px 0; }
-.dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); opacity: 0.35; animation: dot 1.2s var(--ease-in-out) infinite; }
+.dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); opacity: 0.35; animation: dot 1.2s var(--ease-in-out) infinite both; }
 .dots i:nth-child(2) { animation-delay: 150ms; }
 .dots i:nth-child(3) { animation-delay: 300ms; }
 @keyframes dot { 0%, 60%, 100% { opacity: 0.35; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
@@ -480,7 +506,7 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 .src.vuln { display: flex; gap: 6px; align-items: center; margin-top: 6px; color: var(--red-ink); font-weight: 600; }
 .src.vuln .linkbtn { color: var(--red-ink); font-weight: 700; min-height: 28px; }
 /* A security risk: one red fact (how serious), not a red box. */
-.risk { border: 1px solid var(--hair); border-radius: var(--r-card); background: var(--surface); overflow: hidden; scroll-margin-top: 80px; }
+.risk { border: 1px solid var(--hair); border-radius: var(--r-card); background: var(--surface); overflow: hidden; }
 .risk:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .risk .risk-top { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-start; padding: 16px 20px; background: var(--surface); }
 .risk .risk-ic { color: var(--red); flex: none; margin-top: 2px; }
@@ -653,6 +679,8 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 .note { font-size: 0.875rem; color: var(--muted); max-width: 75ch; }
 .qa { display: grid; gap: 4px; }
 .qa dt { font-size: 0.875rem; font-weight: 600; color: var(--muted); }
+.qa dd { overflow-wrap: anywhere; }
+@media (max-width: 480px) { .btn { white-space: normal; } }
 .result-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 
 /* Software */
@@ -685,7 +713,7 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 .err { display: flex; gap: 6px; align-items: center; color: var(--red-ink); font-size: 0.875rem; font-weight: 600; }
 [aria-invalid="true"] { border-color: var(--red) !important; }
 textarea, input[type="text"], input[type="password"], input[type="url"], select {
-  width: 100%; border: 1px solid var(--rail); border-radius: var(--r-ctl); background: var(--surface); padding: 10px 12px; font-size: 1rem; line-height: 1.5;
+  width: 100%; border: 1px solid var(--edge); border-radius: var(--r-ctl); background: var(--surface); padding: 10px 12px; font-size: 1rem; line-height: 1.5;
   transition: border-color var(--dur-press) ease;
 }
 textarea { min-height: 150px; resize: vertical; }
@@ -694,7 +722,8 @@ select { padding: 9px 12px; width: auto; }
 .chip { border: 1px solid var(--rail); background: var(--surface); border-radius: 999px; padding: 6px 14px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: border-color var(--dur-press) ease, transform var(--dur-press) var(--ease-out); }
 .chip:active { transform: scale(0.97); }
 .thinking { display: grid; gap: 12px; }
-.thinking li { display: flex; gap: 10px; align-items: center; font-weight: 600; animation: rise var(--dur-small) var(--ease-out); }
+.thinking li { display: flex; gap: 10px; align-items: center; font-weight: 600; }
+.thinking li.in { animation: rise var(--dur-small) var(--ease-out); }
 /* A spinner reads as faster when it spins faster. */
 .thinking .spin { width: 18px; height: 18px; border-radius: 50%; border: 3px solid var(--lead-tint); border-top-color: var(--lead); animation: spin 0.6s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -722,14 +751,15 @@ select { padding: 9px 12px; width: auto; }
 .sentence mark { background: var(--lead-tint); color: #1b2a6b; padding: 0 4px; border-radius: 4px; }
 /* Turning a workflow on is rare, so it may celebrate: the tick grows from 0.9, never from nothing. */
 .done-hero { text-align: center; display: grid; justify-items: center; gap: 14px; padding: 40px 0 10px; }
-.done-hero .big { width: 80px; height: 80px; border-radius: 50%; background: var(--green); color: var(--on-status); display: grid; place-items: center; animation: pop var(--dur-success) var(--ease-out); }
+.done-hero .big { width: 80px; height: 80px; border-radius: 50%; background: var(--green); color: var(--on-status); display: grid; place-items: center; }
+.done-hero .big.m-reveal { animation: pop var(--dur-success) var(--ease-out) both; animation-delay: var(--ad, 0ms); }
 .done-hero h1 { font-size: 2rem; }
 .done-hero p { font-size: 1.1rem; color: var(--muted); max-width: 34em; }
 @keyframes pop { from { transform: scale(0.9); opacity: 0; } to { transform: none; opacity: 1; } }
 
 /* Teams drawer, modal, toast: the only things that float, so the only things with a shadow. */
 .scrim { position: fixed; inset: 0; background: var(--scrim); z-index: var(--z-scrim); }
-.scrim.in { animation: fade 200ms ease-out; }
+.scrim.in { animation: fade var(--dur-small) var(--ease-out); }
 .drawer {
   position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100%); z-index: var(--z-overlay); background: var(--sunk); border-left: 1px solid var(--hair);
   display: grid; grid-template-rows: auto auto 1fr; box-shadow: var(--float);
@@ -742,6 +772,7 @@ select { padding: 9px 12px; width: auto; }
 .drawer-head b { font-size: 1.05rem; }
 .drawer-head small { display: block; opacity: 0.85; font-size: 0.8rem; }
 .drawer-head .iconbtn { background: transparent; border-color: rgba(255,255,255,.4); color: #fff; }
+.drawer-head .iconbtn:focus-visible { outline-color: #fff; }
 .chan { padding: 10px 18px; font-weight: 700; border-bottom: 1px solid var(--hair); background: var(--surface); }
 .msgs { overflow-y: auto; padding: 16px 18px 40px; display: grid; gap: 16px; align-content: start; }
 .msg { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 10px; }
@@ -754,6 +785,10 @@ select { padding: 9px 12px; width: auto; }
 }
 /* A dialog has no trigger to grow from, so it stays centred and grows from 0.96. */
 .dialog.in { animation: dlg var(--dur-panel) var(--ease-out); }
+/* One dialog leading to another (an agent to its tool, and Back) swaps its content instead of closing and opening. */
+.dialog.swap > * { animation: fade var(--dur-small) var(--ease-out); }
+/* A toast never covers a dialog's buttons. */
+.dialog:not(.leave) ~ .toast { top: calc(16px + env(safe-area-inset-top, 0px)); bottom: auto; }
 @keyframes dlg { from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); } to { opacity: 1; transform: translate(-50%, -50%); } }
 .toast {
   position: fixed; z-index: var(--z-toast); left: 50%; transform: translateX(-50%); bottom: calc(96px + env(safe-area-inset-bottom, 0px));
@@ -821,11 +856,11 @@ a svg { vertical-align: -2px; margin-left: 3px; }
 .sched-grid { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-start; }
 .sched-grid .field { min-width: 170px; }
 .sched-grid select { width: 100%; }
-.sched-grid input[type="time"] { width: auto; padding: 9px 12px; border: 1px solid var(--rail); border-radius: var(--r-ctl); }
+.sched-grid input[type="time"] { width: auto; padding: 9px 12px; border: 1px solid var(--edge); border-radius: var(--r-ctl); }
 .note svg { vertical-align: -3px; }
 .rowacts { display: flex; flex-wrap: wrap; gap: 8px; }
 .findbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 20px; }
-.findbox { display: flex; align-items: center; gap: 8px; padding: 0 12px; border: 1px solid var(--rail); border-radius: var(--r-ctl); background: var(--surface); width: min(100%, 320px); color: var(--muted); }
+.findbox { display: flex; align-items: center; gap: 8px; padding: 0 12px; border: 1px solid var(--edge); border-radius: var(--r-ctl); background: var(--surface); width: min(100%, 320px); color: var(--muted); }
 .findbox input { border: 0; padding: 8px 0; background: transparent; width: 100%; color: var(--ink); }
 .findbox:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 .findbox input:focus-visible { outline: none; }
@@ -865,6 +900,7 @@ a svg { vertical-align: -2px; margin-left: 3px; }
 .n8n-canvas li { display: inline-flex; align-items: center; gap: 6px; }
 .n8n-node { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 8px; border: 1px solid var(--hair); border-radius: var(--r-card); background: var(--surface); font-size: 0.875rem; font-weight: 600; }
 .n8n-node > svg, .n8n-node > .face { flex: none; }
+.n8n-node small { display: block; font-weight: 400; color: var(--muted); }
 .n8n-node.gate { color: var(--amber-ink); border-color: var(--amber-line); background: var(--amber-soft); }
 .n8n-node.gone { color: var(--muted); border-style: dashed; background: none; text-decoration: line-through; }
 .n8n-arrow { color: var(--muted); display: inline-flex; }
@@ -916,15 +952,18 @@ details > .m-close { animation: fold 140ms ease-in both; }
 .m-reveal .ok-mark { animation: pop var(--dur-success) var(--ease-out) both; animation-delay: calc(var(--ad, 0ms) + 120ms); }
 /* Report to support, sent: the reference shows at once; the bar and the mark confirm it. */
 .sent { display: grid; justify-items: center; gap: 12px; text-align: center; }
-.sent-mark { width: 56px; height: 56px; border-radius: 50%; background: var(--green); color: var(--on-status); display: grid; place-items: center; animation: pop var(--dur-success) var(--ease-out) both; }
+.sent-mark { width: 56px; height: 56px; border-radius: 50%; background: var(--green); color: var(--on-status); display: grid; place-items: center; }
+.sent-mark.m-reveal { animation: pop var(--dur-success) var(--ease-out) both; animation-delay: var(--ad, 0ms); }
 .sent-ref { font-size: 1.35rem; font-weight: 800; color: var(--ink); }
 .sent-bar { width: min(320px, 100%); height: 6px; border-radius: 999px; background: var(--sunk); overflow: hidden; }
-.sent-bar span { display: block; height: 100%; background: var(--green); transform-origin: left center; animation: fill var(--dur-attn) var(--ease-out) both; }
+.sent-bar span { display: block; height: 100%; background: var(--green); transform-origin: left center; }
+.sent-bar.m-reveal { animation: none; }
+.sent-bar.m-reveal span { animation: fill var(--dur-attn) var(--ease-out) both; animation-delay: var(--ad, 0ms); }
 @keyframes fill { from { transform: scaleX(0.12); } }
 .sent .kv { text-align: left; width: 100%; }
 
 /* ---------- Agents: one face, eight states, driven by the real state of the work ----------
-   idle      calm. Where one agent is the focus (.live): slow breathing and an occasional blink.
+   idle      calm. Where one agent is the focus (.live): it breathes once when it appears, then holds still.
    thinking  eyes look from side to side, with 3 dots. The Planner choosing agents, or planning a task.
    working   eyes scan, and its tool moves a little (writers type). The step running now.
    waiting   eyes up, still, with an amber badge. Its work waits for a yes.
@@ -936,10 +975,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
 .face { overflow: visible; transition: transform var(--dur-press) var(--ease-out); }
 .face .f-b, .face .f-eyes, .face .f-acc, .face .f-badge, .face .f-ok, .face .f-happy { transform-box: fill-box; transform-origin: center; }
 .face .f-type rect { transform-box: fill-box; transform-origin: center bottom; }
-.face.live.fs-idle .f-b { animation: breathe 4.2s var(--ease-in-out) infinite alternate; }
-.face.live.fs-idle .f-eyes { animation: blink 7s linear infinite; animation-delay: var(--blink, 0s); }
+/* An idle agent breathes once when it appears, then holds still, so nothing moves for more than 5 seconds at rest. */
+.face.live.fs-idle .f-b { animation: breathe 2.1s var(--ease-in-out) 2 alternate; }
 @keyframes breathe { to { transform: scale(1.03); } }
-@keyframes blink { 0%, 95%, 100% { transform: none; } 96.5% { transform: scaleY(0.15); } }
 .face.fs-thinking .f-eyes { animation: look 2.4s var(--ease-in-out) infinite; }
 @keyframes look { 0%, 100% { transform: translate(-1.2px, -0.6px); } 50% { transform: translate(1.2px, -0.6px); } }
 .face .f-think circle { fill: var(--muted); animation: think 1.5s ease-in-out infinite; }
@@ -980,7 +1018,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
 .face.off *, .tab-hidden .face *, .tab-hidden .dots i, .tab-hidden .spin { animation-play-state: paused !important; }
 
 @media (prefers-reduced-motion: reduce) {
-  .cmsg.in, .chat-marker.in, .thinking li, .toast.in, .drawer.in, .dialog.in, .testctl-panel.in, .done-hero .big { animation: fade 200ms ease-out !important; }
+  .cmsg.in, .chat-marker.in, .thinking li.in, .toast.in, .drawer.in, .dialog.in, .testctl-panel.in, .done-hero .big.m-reveal { animation: fade 200ms ease-out !important; }
+  .st.arrive .st-dot, .st.arrive .st-who { animation: fade 120ms ease-out both !important; }
   .dialog.in { transform: translate(-50%, -50%); }
   .toast.in { transform: translateX(-50%); }
   .st.now .st-who .pav, .thinking .spin, .dots i { animation: none !important; }
@@ -989,10 +1028,11 @@ details > .m-close { animation: fold 140ms ease-in both; }
   details > .m-close { animation: none !important; }
   .leave { animation: fade-out 120ms ease-out both !important; }
   .count.m-changed, .badge.m-changed { animation: none !important; }
-  .face, .face * { animation: none !important; transition: none !important; transform: none !important; }
+  .face, .face * { animation: none !important; transition: none !important; }
+  .face { transform: none !important; }
   .face.react.fs-success .f-ok { animation: ok-fade var(--dur-success) ease-out both !important; }
   .face.react.fs-waiting .f-badge, .face.react.fs-error .f-badge { animation: fade 120ms ease-out both !important; }
-  .sent-mark, .m-reveal .ok-mark { animation: fade 160ms ease-out both !important; }
+  .sent-mark.m-reveal, .m-reveal .ok-mark { animation: fade 160ms ease-out both !important; }
   .sent-bar span { animation: none !important; }
   .line-fill, .btn, .iconbtn, .seg button, .chip, .agent-chip, .wf-add, .testctl-toggle, .risk .risk-more summary::before { transition-property: background-color, border-color, color, opacity !important; }
   .btn:active:not([disabled]), .iconbtn:active, .seg button:active, .chip:active, .agent-chip:active, .wf-add:active, .testctl-toggle:active { transform: none; }
@@ -1075,7 +1115,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     error: ['var(--red)', '<path d="M40 5.4v4.2M40 12.3v.2" stroke="var(--on-status)" stroke-width="1.9" stroke-linecap="round"/>'],
   };
   /* An agent's face in one of its states (see "Agents" in the styles). The state always comes from the real state of the work.
-     o.live: this agent is the focus here, so when idle it breathes and blinks. o.k: a stable key, so a change of state reacts once. */
+     o.live: this agent is the focus here, so when idle it breathes once. o.k: a stable key, so a change of state reacts once. */
   function face(id, size = 40, state = 'idle', o = {}) {
     const a = AGENTS[id];
     const [x, y] = HEAD[a.acc];
@@ -1097,11 +1137,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const ring = (fill, mark, cls) => `<g class="${cls}"><circle cx="40" cy="9" r="7.5" fill="var(--surface)"/><circle cx="40" cy="9" r="6" fill="${fill}"/>${mark}</g>`;
     const badge = BADGE[state] ? ring(BADGE[state][0], BADGE[state][1], 'f-badge') : '';
     const ok = state === 'success' ? ring('var(--green)', '<path d="M37.3 9.2l1.9 1.9 3.6-3.8" stroke="var(--on-status)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>', 'f-ok') : '';
-    const blink = parseInt(keyOf(id + (o.k || '')), 36) % 7;
-    return `<svg class="face fs-${state} acc-${a.acc}${o.live ? ' live' : ''}" data-state="${state}"${o.k ? ` data-k="${o.k}"` : ''} style="--blink:-${blink}s" viewBox="0 0 48 48" width="${size}" height="${size}" aria-hidden="true"><g class="f-b"><circle cx="${x}" cy="${y}" r="15" fill="${a.tint}"/>${brows}<g class="f-eyes">${eyes}</g>${happy}<g class="f-acc">${acc}</g>${typing}</g>${think}${badge}${ok}</svg>`;
+    return `<svg class="face fs-${state} acc-${a.acc}${o.live ? ' live' : ''}" data-state="${state}"${o.k ? ` data-k="${o.k}"` : ''} viewBox="0 0 48 48" width="${size}" height="${size}" aria-hidden="true"><g class="f-b"><circle cx="${x}" cy="${y}" r="15" fill="${a.tint}"/>${brows}<g class="f-eyes">${eyes}</g>${happy}<g class="f-acc">${acc}</g>${typing}</g>${think}${badge}${ok}</svg>`;
   }
   const STATE_WORD = { waiting: 'waiting for a yes', error: 'stopped with a problem', stopped: 'paused', success: 'done', working: 'working', thinking: 'thinking' };
-  const faces = (ids, size = 30, states = {}, key = '') => `<span class="faces" aria-label="Agents: ${ids.map((i) => `${AGENTS[i].name}${states[i] ? `, ${STATE_WORD[states[i]]}` : ''}`).join('; ')}">${ids.map((i) => face(i, size, states[i] || 'idle', { k: key ? `${key}:${i}` : '' })).join('')}</span>`;
+  const faces = (ids, size = 30, states = {}, key = '') => `<span class="faces" role="img" aria-label="Agents: ${ids.map((i) => `${AGENTS[i].name}${states[i] ? `, ${STATE_WORD[states[i]]}` : ''}`).join('; ')}">${ids.map((i) => face(i, size, states[i] || 'idle', { k: key ? `${key}:${i}` : '' })).join('')}</span>`;
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -1191,7 +1230,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     jiraComp: 'none', jiraCompAsker: null, jiraCompBy: null, jiraCompSeen: false,
     added: [], removed: [], swOpen: null, swForm: { name: '', repo: '', ours: '' }, swErr: {},
     draft: false, paused: {}, deleted: {}, sched: {}, editing: null, schedForm: null, schedErr: {},
-    n8n: {}, n8nChg: {}, editRun: null,
+    n8n: {}, n8nChg: {}, n8nLog: {}, editRun: null,
     find: { workflows: '', software: '' }, filter: 'all',
     wiz: newWiz(),
   });
@@ -1444,7 +1483,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     jackson: ['Jackson', 'com.fasterxml.jackson.core:jackson-databind', 'maven'], express: ['Express', 'express', 'npm'],
     django: ['Django', 'django', 'pypi'], newtonsoft: ['Newtonsoft.Json', 'Newtonsoft.Json', 'nuget'],
   };
-  const isReleaseCheck = (t) => /\breleases?\b|\bversions?\b|\bupgrades?\b|\bpatch(es)?\b|\bout of date\b|\bcves?\b|vulnerab/i.test(t);
+  const RELEASE_WORDS = /\breleases?\b|\bversions?\b|\bupgrades?\b|\bpatch(es)?\b|\bout of date\b|\bcves?\b|vulnerab\w*/i;
+  const isReleaseCheck = (t) => RELEASE_WORDS.test(t);
   const isSecurityAsk = (t) => /\bcves?\b|vulnerab|\bsecurity\b/i.test(t);
   const namedIn = (t) => { const low = t.toLowerCase(); const k = Object.keys(KNOWN).find((key) => low.includes(key)); return k ? KNOWN[k] : null; };
   const onList = (name) => (S.firstDay ? [] : TRACKED).concat(S.added.map((a) => a.name)).some((n) => n.toLowerCase() === name.toLowerCase());
@@ -1531,6 +1571,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
         if (S.conf === 'waiting') return { tone: 'wait', label: 'Needs a yes', last: `Test run today: waiting for ${whoOr(req('conf').may)}.` };
         if (S.conf === 'expired') return { tone: 'off', label: 'No answer', last: 'Test run today: nobody answered in time, so nothing was written.' };
         if (S.conf === 'approved') return { tone: 'ok', last: `Test run today: ${confWrite(S.nr).shortDone}, approved by ${confYesText()}.` };
+        if (S.conf === 'declined') return { tone: 'ok', last: `Test run today: declined by ${nm(S.confBy)}. Nothing was written.` };
         return { tone: 'ok', last: `Turned on today. First run ${R('conf').next}.` };
       }
       case 'access':
@@ -1635,7 +1676,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
           { label: 'Started', sub: 'Today 9:15', who: 'p:carol', msg: { who: 'portal', text: 'The run started at 9:15 with the version Carol published in n8n at 9:12.' } },
           { label: 'Pick agents', who: 'lead', msg: { who: 'lead', text: `I’m bringing in ${andList(names)}.` } },
           ...helpers.map((a, i) => ({ label: AGENTS[a].name, who: a, msg: { who: a, text: i === helpers.length - 1 ? 'I drafted the changes. Nothing is written yet.' : 'I gathered what the next step needs.' } })),
-          { label: 'Make the changes', who: 'platform', msg: { who: 'platform', tone: 'bad', text: 'Make the approved changes refused: there was no yes for this run. Nothing was written.' } },
+          { label: 'Make the changes', who: 'platform', msg: { who: 'platform', tone: 'bad', text: 'The step Make the approved changes didn’t run, because nobody said yes to this run. Nothing was written.' } },
           { label: 'Done' },
         ],
       };
@@ -1700,28 +1741,31 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const q = req('conf');
       const gateMsg = st === 'waiting' ? { who: 'gate', tone: 'wait', text: gateText(q, 'Alice started this run, so Alice can’t approve it.') }
         : st === 'expired' ? { who: 'gate', text: `Nobody answered by ${at(q.expiresAt)}, so the request stopped. Nothing was written.` }
-          : { who: 'gate', tone: 'ok', text: `${confYesWho()} approved it.` };
+          : st === 'declined' ? { who: 'gate', tone: 'bad', text: `${nm(S.confBy)} declined. Nothing was written.` }
+            : { who: 'gate', tone: 'ok', text: `${confYesWho()} approved it.` };
       return {
         workflow: 'conf', end: st === 'waiting' ? 4 : 6, state: st === 'waiting' ? 'waiting' : st === 'expired' ? 'expired' : 'done',
-        headline: st === 'waiting' ? w.waitHead : st === 'expired' ? 'No answer, nothing was written' : w.doneHead,
+        headline: st === 'waiting' ? w.waitHead : st === 'expired' ? 'No answer, nothing was written' : st === 'declined' ? 'Declined, nothing was written' : w.doneHead,
         stations: [
           { label: 'Started', sub: 'Today, test', who: 'p:alice', msg: { who: 'portal', text: 'Alice started a test run.' } },
           { label: 'Pick agents', who: 'lead', msg: { who: 'lead', text: `I’m bringing in the Jira reader and the ${AGENTS[agent].name}.` } },
           { label: { closed: 'Find closed tickets', stale: 'Find stale tickets', open: 'Find open tickets' }[f.tickets], who: 'jira', msg: { who: 'jira', text: { closed: '14 tickets were closed in MOCK this week.', stale: `4 open tickets in MOCK have had no update for ${f.days} days or more.`, open: '18 tickets are open in MOCK.' }[f.tickets] } },
           { label: f.action === 'nudge' ? 'Draft messages' : 'Write summary', who: agent, msg: { who: agent, text: f.action === 'nudge' ? 'I drafted 3 messages, one for each owner. Nothing is sent yet.' : 'I wrote a short summary. Nothing is posted yet.' } },
           { label: 'Approval gate', gate: true, msg: gateMsg },
-          { label: w.stationWrite, who: 'platform', skip: st === 'expired', msg: st === 'expired' ? null : { who: 'platform', text: w.did } },
-          { label: 'Done', msg: { who: 'portal', tone: 'ok', text: st === 'expired' ? 'Done. Nothing was written, because nobody said yes.' : 'Done.' } },
+          { label: w.stationWrite, who: 'platform', skip: st === 'expired' || st === 'declined', msg: st === 'expired' || st === 'declined' ? null : { who: 'platform', text: w.did } },
+          { label: 'Done', msg: { who: 'portal', tone: 'ok', text: st === 'expired' ? 'Done. Nothing was written, because nobody said yes.' : st === 'declined' ? 'Done. Nothing was written, because it was declined.' : 'Done.' } },
         ],
       };
     }
   }
 
   const P = { run: null, at: 0, shown: 0, timer: null, speed: reduce ? 'instant' : '1x', feedSeen: 0, feedNext: 0 };
+  let follow = false;
   const interval = () => (P.speed === '2x' ? 520 : 1050);
   function stopTimer() { if (P.timer) { clearInterval(P.timer); P.timer = null; } }
   function playTo(from) {
     stopTimer();
+    follow = true;
     const m = runModel(P.run);
     P.at = from; P.shown = from;
     if (from === 0) P.feedSeen = 0;
@@ -1856,8 +1900,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function needs() {
     const out = [];
     const u = S.user;
-    if (has('sw') && S.sw === 'waiting' && canApprove('sw')) out.push({ kind: 'wait', icon: I.shield(22), title: '3 upgrade tickets are waiting for your yes, 1 urgent', meta: 'Software watchlist · this week’s check, Mon 26 Oct, 9:00', body: `<ul class="mini-list"><li><b>Log4j core 2.14.1 → 2.25.2, urgent: critical and actively exploited</b></li><li>LangGraph 1.2.14 → 1.2.17</li><li>FastAPI 0.118.0 → 0.120.1</li></ul>${askLineHtml(req('sw'), u)}`, actions: `<button class="btn primary" data-act="run" data-arg="sw">Review and decide</button><button class="btn" data-act="teams">Open in Teams</button>` });
+    if (has('sw') && S.sw === 'waiting' && canApprove('sw')) out.push({ kind: 'wait', icon: I.shield(22), title: '3 upgrade tickets are waiting for your yes, 1 urgent', meta: 'Keep our software up to date · Software watchlist, Mon 26 Oct, 9:00', body: `<ul class="mini-list"><li><b>Log4j core 2.14.1 → 2.25.2, urgent: critical and actively exploited</b></li><li>LangGraph 1.2.14 → 1.2.17</li><li>FastAPI 0.118.0 → 0.120.1</li></ul>${askLineHtml(req('sw'), u)}`, actions: `<button class="btn primary" data-act="run" data-arg="sw">Review and decide</button><button class="btn" data-act="teams">Open in Teams</button>` });
     if (has('conf') && S.conf === 'waiting' && canApprove('conf')) out.push({ kind: 'wait', icon: I.shield(22), title: confWrite(S.nr).needTitle, meta: `${esc(S.nr.name)} · test run by Alice`, body: askLineHtml(req('conf'), u), actions: `<button class="btn primary" data-act="run" data-arg="conf">Review and decide</button>` });
+    if (has('conf') && S.conf === 'declined' && u === 'alice') out.push({ kind: 'wait', icon: I.x(22), title: `${nm(S.confBy)} declined your test run`, meta: `${esc(S.nr.name)} · nothing was written`, body: '', actions: '<button class="btn primary" data-act="run" data-arg="conf">See the run</button><button class="btn" data-act="testRun">Do a test run again</button>' });
     if (has('conf') && S.conf === 'expired' && u === 'alice') out.push({ kind: 'wait', icon: I.clock(22), title: 'Nobody answered on your test run', meta: `${esc(S.nr.name)} · stopped ${at(req('conf').expiresAt)}`, body: `<p class="small muted">${whoAnd(askedOf(req('conf')))} didn’t answer in time, so nothing was written. Run it again, or choose other Approvers.</p>`, actions: `<button class="btn primary" data-act="testRun">Do a test run again</button><button class="btn" data-act="apprFromRun" data-arg="conf">Change who approves</button>` });
     if (S.tool === 'asked' && PEOPLE[u].ap && u !== 'alice') out.push({ kind: 'tool', icon: I.tool(22), title: 'OK a new tool: Update a Confluence page', meta: `Asked by Alice for ${esc(draftNr().name)}`, body: `<p class="small muted">It changes data, so an Approver must OK it once before any workflow can use it.</p>`, actions: `<button class="btn primary" data-act="go" data-arg="tool">Review the tool</button>` });
     Object.entries(S.roles).filter(([w, r]) => r.pendingAp && PEOPLE[u].ap && u !== r.pendingBy && u !== w).forEach(([w]) => out.push({ kind: 'tool', icon: I.shield(22), title: `Confirm ${nm(w)} as an Approver`, meta: `Asked by ${nm(S.roles[w].pendingBy)}`, body: '<p class="small muted">Approvers can say yes to changes in Jira, Teams and other systems.</p>', actions: '<button class="btn primary" data-act="setGo" data-arg="people">Review in Settings</button>' }));
@@ -1947,7 +1992,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       ${following}
       ${waitingOn.length ? `<section class="section"><h2>Waiting on others</h2><div class="rows">${waitingOn.map(([a, b, act, arg]) => `<button class="row-btn" data-act="${act}" data-arg="${arg}"><div><div class="row-name">${a}</div><div class="row-sub">${b}</div></div>${I.right(16)}</button>`).join('')}</div></section>` : ''}
       ${S.draft && S.conf === 'none' && me().op ? `<section class="section"><h2>Your drafts</h2><div class="rows"><button class="row-btn" data-act="go" data-arg="new"><div><div class="row-name">${S.wiz.intent ? esc(draftNr().name) : 'New workflow'}</div><div class="row-sub">${draftSub}</div></div>${I.right(16)}</button></div></section>` : ''}
-      ${dayOne ? howItWorks() : ''}
+      ${dayOne || S.showHow ? howItWorks() : '<p class="small muted" style="margin-top:32px"><button class="linkbtn" data-act="showHow">How it works</button></p>'}
     </div>`;
   }
   function firstRoutine() {
@@ -1965,7 +2010,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       ['Say yes in Teams', 'Nothing changes in Jira or Confluence until an Approver agrees.'],
       ['See the result here', 'If something stops, the AI troubleshooter tells you why.'],
     ];
-    return `<section class="section"><h2>How it works</h2><ol class="steps">${steps.map(([a, b]) => `<li><div><div class="what">${a}</div><div class="how">${b}</div></div></li>`).join('')}</ol></section>`;
+    return `<section class="section" data-pres="how"><h2 id="how" tabindex="-1">How it works</h2><ol class="steps">${steps.map(([a, b]) => `<li><div><div class="what">${a}</div><div class="how">${b}</div></div></li>`).join('')}</ol></section>`;
   }
 
   function actionFor(id) {
@@ -2060,19 +2105,19 @@ details > .m-close { animation: fold 140ms ease-in both; }
       hist: [['Today', `Added by ${nm(a.by)}. ${a.ours ? `Our version ${esc(a.ours)}.` : 'Our version was left empty, so the first check takes the newest.'}`]],
     })).filter((r) => !S.removed.includes(r.key) && hit(r.name, r.repo));
     const upToDate = UP_TO_DATE.filter((u) => hit(u, ''));
-    const table = (rows, name) => `<div class="scroll-x"><table class="sw-table"><thead><tr><th>Software</th><th>Ours</th><th>Newest</th><th>Status</th><th><span class="vh">Actions</span></th></tr></thead><tbody data-flip-group="swt:${name}">${rows.map((r) => {
+    const table = (rows, name) => `<div class="scroll-x"><table class="sw-table" role="table"><thead role="rowgroup"><tr role="row"><th role="columnheader">Software</th><th role="columnheader">Ours</th><th role="columnheader">Newest</th><th role="columnheader">Status</th><th role="columnheader"><span class="vh">Actions</span></th></tr></thead><tbody role="rowgroup" data-flip-group="swt:${name}">${rows.map((r) => {
       const open = S.swOpen === r.key;
       const hist = r.hist || history(r.key);
-      return `<tr data-flip="sw:${r.key}"><td><b>${esc(r.name)}</b><div class="src">${r.kind === 'unknown' ? 'Source not confirmed yet' : `${SOURCES[r.kind || 'github']} · ${srcLink(r.kind, r.repo, esc(r.repo))}`}</div></td><td data-val="swv:${r.key}:ours">${esc(r.ours)}<div class="src">${r.from}</div></td><td data-val="swv:${r.key}:new">${r.newest}${r.cross ? `<div class="src">${r.cross}</div>` : ''}</td><td data-val="swv:${r.key}:st">${r.status}</td>
-        <td style="text-align:right;white-space:nowrap"><button class="linkbtn" data-act="swHist" data-arg="${r.key}" aria-expanded="${open}"${open ? ` aria-controls="hist-${r.key}"` : ''}>${open ? 'Hide history' : 'History'}</button>${me().op ? ` <button class="linkbtn" data-act="removeSw" data-arg="${r.key}">Remove<span class="vh"> ${esc(r.name)}</span></button>` : ''}</td></tr>
-        ${open ? `<tr class="hist" id="hist-${r.key}" data-flip="swh:${r.key}" data-enter="reveal"><td colspan="5"><ol class="timeline">${hist.map(([d, t]) => `<li><b>${d}</b><span>${t}</span></li>`).join('')}</ol></td></tr>` : ''}`;
+      return `<tr role="row" data-flip="sw:${r.key}"><td role="cell"><b>${esc(r.name)}</b><div class="src">${r.kind === 'unknown' ? 'Source not confirmed yet' : `${SOURCES[r.kind || 'github']} · ${srcLink(r.kind, r.repo, esc(r.repo))}`}</div></td><td role="cell" data-label="Ours" data-val="swv:${r.key}:ours">${esc(r.ours)}<div class="src">${r.from}</div></td><td role="cell" data-label="Newest" data-val="swv:${r.key}:new">${r.newest}${r.cross ? `<div class="src">${r.cross}</div>` : ''}</td><td role="cell" data-val="swv:${r.key}:st">${r.status}</td>
+        <td role="cell" class="sw-acts"><button class="linkbtn" data-act="swHist" data-arg="${r.key}" aria-expanded="${open}"${open ? ` aria-controls="hist-${r.key}"` : ''}>${open ? 'Hide history' : 'History'}<span class="vh"> of ${esc(r.name)}</span></button>${me().op ? ` <button class="linkbtn" data-act="removeSw" data-arg="${r.key}">Remove<span class="vh"> ${esc(r.name)}</span></button>` : ''}</td></tr>
+        ${open ? `<tr role="row" class="hist" id="hist-${r.key}" data-flip="swh:${r.key}" data-enter="reveal"><td role="cell" colspan="5"><ol class="timeline">${hist.map(([d, t]) => `<li><b>${d}</b><span>${t}</span></li>`).join('')}</ol></td></tr>` : ''}`;
     }).join('')}</tbody></table></div>`;
     const appr = has('sw') && S.sw === 'waiting';
     const r = R('sw');
     const owner = nm(S.swOwner);
     return `<div class="pagehead"><div><h1 tabindex="-1">Software watchlist</h1><p>Everything your team runs, in one list. Each check cross-checks versions, support dates and known vulnerabilities across trusted sources, and its upgrade tickets go out in one approval.</p></div>
         ${day1 ? '' : '<button class="btn" data-act="checkNow">Check now</button>'}</div>
-      <div class="sched">${I.clock(20)}<div>${day1 ? '<b>Checks run every Monday at 9:00 once you add software.</b><span>Each check sends one approval for all its tickets.</span>' : `<b>Checked ${r.when.charAt(0).toLowerCase()}${r.when.slice(1)}, set by ${owner}.</b> Next check ${r.next}. <span>${TZ}. Scheduled checks count as ${owner}’s work, so ${owner} can’t approve them.</span><span>Who approves: ${apprText(apprOf('sw'))}.</span>`}</div>
+      <div class="sched">${I.clock(20)}<div>${day1 ? '<b>Checks run every Monday at 9:00 once you add software.</b><span>Each check sends one approval for all its tickets.</span>' : `<b>${esc(r.name)} checks this list ${r.when.charAt(0).toLowerCase()}${r.when.slice(1)}, set by ${owner}.</b> Next check ${r.next}. <span>${TZ}. Scheduled checks count as ${owner}’s work, so ${owner} can’t approve them.</span><span>Who approves: ${apprText(apprOf('sw'))}.</span>`}</div>
         ${day1 || !me().op ? '' : `<div class="btns"><button class="btn sm" data-act="editSched" data-arg="sw">${I.edit()}Change schedule</button><button class="btn sm" data-act="editAppr" data-arg="sw">${I.edit()}Change who approves</button></div>`}</div>
       ${S.editing === 'sw' ? `<div data-flip="ed:s:sw" data-enter="reveal">${schedEditor('sw')}</div>` : ''}
       ${S.editingAppr === 'sw' ? `<div data-flip="ed:a:sw" data-enter="reveal">${apprEditor('sw')}</div>` : ''}
@@ -2098,7 +2143,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function releaseRedirect(text) {
     const hit = namedIn(text);
     const on = hit && onList(hit[0]);
-    const what = isSecurityAsk(text) ? 'This is about known vulnerabilities in the software you run' : 'This is a release check';
+    /* It says which word sent it here, so a person can tell when it guessed wrong. */
+    const word = (text.match(RELEASE_WORDS) || [''])[0];
+    const what = `You mentioned “${esc(word)}”, so I think ${isSecurityAsk(text) ? 'this is about known vulnerabilities in the software you run' : 'this is a release check'}`;
     const say = on
       ? `${hit[0]} is already on your Software watchlist, so it’s checked every Monday for new versions and known vulnerabilities. You don’t need a new workflow.`
       : `${what}. Your team keeps all its software in one list, the Software watchlist. Every Monday it’s checked for new versions and known vulnerabilities, and a critical vulnerability gets an urgent upgrade ticket. ${hit ? `I’ll add ${hit[0]} there instead of making a new workflow.` : 'You don’t need a new workflow.'}`;
@@ -2106,10 +2153,20 @@ details > .m-close { animation: fold 140ms ease-in both; }
       ? `<div class="panel"><h2>Add to the Software watchlist</h2><dl class="kv"><dt>Name</dt><dd>${hit[0]}</dd><dt>Published on</dt><dd>${SOURCES[hit[2] || 'github']} · ${srcLink(hit[2], hit[1], hit[1])}</dd><dt>Our version</dt><dd>Left empty, so the first check takes the newest</dd><dt>Checked</dt><dd>Every Monday at 9:00, with the rest of your software</dd></dl>
           <div class="btns"><button class="btn primary" data-act="addKnown" data-arg="${hit[0]}">Add ${hit[0]} to the watchlist</button></div></div>`
       : '<div class="btns"><button class="btn primary" data-act="go" data-arg="software">Open Software watchlist</button></div>';
-    return `<div style="display:grid;gap:24px"><div class="bubble">${face('lead', 48, 'idle', { live: true })}<p>${say}</p></div>
+    return `<div style="display:grid;gap:24px"><div class="bubble">${face('lead', 48, 'idle', { live: true })}<p><span class="vh">Planner: </span>${say}</p></div>
         <div class="panel who-checks">${faces(['checker', 'vuln'], 36)}<p><b>Who does the checking:</b> the Version checker reads each tool’s newest version from its official registry, cross-checks GitHub and checks support dates. The Vulnerability checker cross-checks OSV, NVD and vendor advisories, and CISA’s list of actively exploited vulnerabilities.</p></div>${card}
         <p class="note">One list means one check and one Teams approval a week, however many tools you add. Separate workflows would mean a separate approval for each tool.</p></div>
-      <div class="wfoot"><button class="btn" data-act="wizBack">Back</button></div>`;
+      <div class="wfoot"><button class="btn" data-act="wizBack">Back</button><button class="btn" data-act="notRelease">No, set it up as a new workflow</button></div>`;
+  }
+
+  /* What happened to a workflow in n8n: the warning when a change removed the yes step, and every published change. */
+  function n8nWarn(id) {
+    const chg = S.n8nChg[id];
+    return chg ? `<article class="task" style="margin-top:16px" data-flip="n8nchg:${id}" data-enter="reveal"><span class="ico wait">${I.alert(22)}</span><div class="task-body"><h2 class="task-title">${nm(chg.by)}’s change in n8n removed Ask for a yes</h2><div class="task-meta">Published ${chg.when}</div><p>The next run will stop before it changes anything, because nothing is written without a yes.</p><div class="btns">${me().op ? `<button class="btn${actionFor(id) ? '' : ' primary'}" data-act="n8nUndo" data-arg="${id}">Undo ${nm(chg.by)}’s change</button>` : ''}</div></div></article>` : '';
+  }
+  function n8nPanel(id) {
+    const held = S.n8n[id];
+    return (S.n8nLog[id] || []).length ? `<div class="panel" style="margin-top:16px" data-pres="n8nlog:${id}"><h2>Changes in n8n</h2><ol class="timeline">${S.n8nLog[id].map((e) => `<li><b>${e.when}</b><span>${e.text}</span></li>`).join('')}</ol>${held && held.by === S.user ? '<div class="btns"><button class="btn sm" data-act="n8nGiveBack" data-arg="' + id + '">Give it back</button></div>' : ''}<p class="note">The Portal keeps every version published in n8n, with who published it.</p></div>` : '';
   }
 
   function routineView(id) {
@@ -2131,7 +2188,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const manage = me().op && id !== 'sw' ? `<div class="rowacts">
         ${BASE[id] && BASE[id].fixedSchedule ? '' : `<button class="btn sm" data-act="editSched" data-arg="${id}">${I.edit()}Change schedule</button>`}
         <button class="btn sm" data-act="editAppr" data-arg="${id}">${I.edit()}Change who approves</button>
-        <button class="btn sm" data-act="${S.paused[id] ? 'resume' : 'pause'}" data-arg="${id}">${S.paused[id] ? `${I.play()}Resume` : `${I.pause()}Pause`}</button>
+        <button class="btn sm" id="pause-${id}" data-act="${S.paused[id] ? 'resume' : 'pause'}" data-arg="${id}">${S.paused[id] ? `${I.play()}Resume` : `${I.pause()}Pause`}</button>
         <button class="btn sm" data-act="n8nAsk" data-arg="${id}">Open in n8n${I.ext(14)}</button>
         <button class="btn sm bad" data-act="askDelete" data-arg="${id}">${I.trash()}Delete</button></div>` : '';
     const held = S.n8n[id];
@@ -2143,17 +2200,18 @@ details > .m-close { animation: fold 140ms ease-in both; }
         <div><dt>When</dt><dd>${r.when}</dd></div>
         <div><dt>Next run</dt><dd>${r.next}</dd></div>
         <div><dt>Who approves</dt><dd>${r.approves}<small>${timingText(apprOf(id))}</small></dd></div>
-        <div><dt>Agents</dt><dd>${faces(r.agents, 30, agentStates(id), `wfp:${id}`)}</dd></div>
+        <div class="fact-wide"><dt>Agents</dt><dd><div class="agent-chips">${r.agents.map((a) => { const st = agentStates(id)[a]; return `<button class="agent-chip" data-act="agent" data-arg="${a}">${face(a, 28, st || 'idle', { k: `wfp:${id}:${a}` })}<span>${AGENTS[a].name}${st ? `<span class="vh">, ${STATE_WORD[st]}</span>` : ''}</span></button>`; }).join('')}</div></dd></div>
         ${held ? `<div><dt>In n8n</dt><dd>${held.by === S.user ? 'You have it' : `${nm(held.by)} has it`}<small>Since ${held.since}</small></dd></div>` : ''}
       </dl>
-      ${chg ? `<article class="task" style="margin-top:16px" data-flip="n8nchg:${id}" data-enter="reveal"><span class="ico wait">${I.alert(22)}</span><div class="task-body"><h2 class="task-title">${nm(chg.by)}’s change in n8n removed Ask for a yes</h2><div class="task-meta">Published ${chg.when}</div><p>The next run will stop before it changes anything, because nothing is written without a yes.</p><div class="btns">${me().op ? `<button class="btn${actionFor(id) ? '' : ' primary'}" data-act="n8nUndo" data-arg="${id}">Undo ${nm(chg.by)}’s change</button>` : ''}</div></div></article>` : ''}
+      ${n8nWarn(id)}
+      ${n8nPanel(id)}
       ${S.editing === id ? `<div data-flip="ed:s:${id}" data-enter="reveal">${schedEditor(id)}</div>` : ''}
       ${S.editingAppr === id ? `<div data-flip="ed:a:${id}" data-enter="reveal">${apprEditor(id)}</div>` : ''}
       ${id === 'nudge' && S.report > 0 && S.nudge === 'failed' ? `<div class="panel" style="margin-top:16px"><h2>Support case</h2>${caseBox()}${reportTrack(true)}</div>` : ''}
       <div class="runbody" style="margin-top:24px">
         <div class="panel"><h2>What it does</h2>${stepsList(planFor(id), false, `plan:${id}`)}</div>
-        <div class="panel"><h2>Recent runs</h2>${S.editRun && S.editRun.wf === id ? `<div class="rows"><button class="row-btn" data-act="run" data-arg="edit"><div><div class="row-name">Today, 9:15</div><div class="row-sub">Stopped before changing anything: Carol’s change removed Ask for a yes.</div></div><span class="btns small" style="font-weight:700">Watch ${I.right(16)}</span></button></div>` : ''}${recent.length ? `<div class="rows">${recent.map(([when, what, live]) => live && hasRun
-          ? `<button class="row-btn" data-act="run" data-arg="${id}"><div><div class="row-name">${when}</div><div class="row-sub">${what}</div></div><span class="btns small" style="font-weight:700">Watch ${I.right(16)}</span></button>`
+        <div class="panel"><h2>Recent runs</h2>${S.editRun && S.editRun.wf === id ? `<div class="rows"><button class="row-btn" data-act="watch" data-arg="edit"><div><div class="row-name">Today, 9:15</div><div class="row-sub">Stopped before changing anything: Carol’s change removed Ask for a yes.</div></div><span class="btns small" style="font-weight:700">Watch ${I.right(16)}</span></button></div>` : ''}${recent.length ? `<div class="rows">${recent.map(([when, what, live]) => live && hasRun
+          ? `<button class="row-btn" data-act="watch" data-arg="${id}"><div><div class="row-name">${when}</div><div class="row-sub">${what}</div></div><span class="btns small" style="font-weight:700">Watch ${I.right(16)}</span></button>`
           : `<div class="row"><div><div class="row-name">${when}</div><div class="row-sub">${what}</div></div></div>`).join('')}</div>` : `<p class="muted">No runs yet. The first one is ${r.next}.</p>`}</div>
       </div>`;
   }
@@ -2175,7 +2233,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     };
     /* Each face says what that agent is doing in this run. Only the step running now moves. */
     const gi = m.stations.findIndex((s) => s.gate);
-    const declined = m.workflow === 'sw' && S.sw === 'declined';
+    const declined = (m.workflow === 'sw' && S.sw === 'declined') || (m.workflow === 'conf' && S.conf === 'declined');
     let lastAgent = -1;
     m.stations.forEach((s, i) => { if (i <= m.end && AGENTS[s.who] && !s.skip) lastAgent = i; });
     const faceOf = (s, i, st) => {
@@ -2191,7 +2249,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const st = stateOf(s, i);
       const dot = s.gate ? (st === 'wait' ? I.lock(18) : st === 'noans' ? I.clock(18) : I.shield(18)) : st === 'done' ? I.check(14) : st === 'fail' ? I.x(14) : '';
       const sub = st === 'skip' ? 'Not needed' : st === 'fail' ? 'Stopped here' : st === 'wait' ? 'Waiting for a yes' : st === 'noans' ? 'No answer' : s.sub || '';
-      return `<li class="st ${st}${s.gate ? ' gate' : ''}"><div class="st-who">${s.gate ? '' : whoAvatar(s.who, 44, faceOf(s, i, st), `st:${id}:${i}`)}</div><div class="st-dotwrap"><span class="st-dot">${dot}</span></div><div class="st-label">${s.label}${sub ? `<small>${sub}</small>` : ''}</div></li>`;
+      const said = { done: 'Done: ', now: 'Now: ', todo: 'Not reached yet: ' }[st];
+      return `<li class="st ${st}${s.gate ? ' gate' : ''}${i === P.at && P.shown < P.at ? ' arrive' : ''}"${st === 'now' ? ' aria-current="step"' : ''}><div class="st-who">${s.gate ? '' : whoAvatar(s.who, 44, faceOf(s, i, st), `st:${id}:${i}`)}</div><div class="st-dotwrap"><span class="st-dot">${dot}</span></div><div class="st-label">${said ? `<span class="vh">${said}</span>` : ''}${s.label}${sub ? `<small>${sub}</small>` : ''}</div></li>`;
     }).join('');
     const msgs = m.stations.slice(0, Math.min(P.at, m.end) + 1).map((s) => s.msg).filter(Boolean);
     P.feedNext = msgs.length;
@@ -2203,9 +2262,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
     return `<button class="back" data-act="workflow" data-arg="${m.workflow}">${I.left(16)}${m.workflow === 'sw' ? 'Software watchlist' : esc(r.name)}</button>
       <div class="runhead">
         <div class="runhead-top"><div class="runtitle"><h1 tabindex="-1">${headline}</h1>${finished ? pill(pillTone) : `<span class="tag">${I.play(12)}Replaying</span>`}</div>
-          <div class="seg" role="group" aria-label="Speed">${['1x', '2x', 'instant'].map((sp) => `<button data-act="speed" data-arg="${sp}" aria-pressed="${P.speed === sp}">${sp === 'instant' ? 'Instant' : sp}</button>`).join('')}</div></div>
+          <div class="btns">${finished ? `<button class="btn sm" data-act="replay">${I.play(12)}Replay the run</button>` : ''}<div class="seg" role="group" aria-label="Speed">${['1x', '2x', 'instant'].map((sp) => `<button data-act="speed" data-arg="${sp}" aria-pressed="${P.speed === sp}">${sp === 'instant' ? 'Instant' : sp}</button>`).join('')}</div></div></div>
       </div>
-      <div class="stage"><ol class="line" style="--n:${n}" aria-label="Steps of this run"><span class="line-track"></span><span class="line-fill" style="--f:${P.shown / (n - 1)}"></span>${line}</ol></div>
+      <div class="stage"><ol class="line" style="--n:${n}" aria-label="Steps of this run"><li class="line-track" aria-hidden="true"></li><li class="line-fill" aria-hidden="true" style="--f:${P.shown / (n - 1)}"></li>${line}</ol></div>
       <ol class="chat" aria-label="What the agents said">${chat}${finished ? chatAct(id, m) : chatTyping(m)}</ol>`;
   }
 
@@ -2216,14 +2275,14 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function chatItem(g, isNew, m) {
     const cls = `${g.tone || ''}${isNew ? ' in' : ''}`;
     if (g.who === 'portal' || g.who === 'platform') return `<li class="chat-marker ${cls}"><span>${g.text}</span></li>`;
-    if (g.who === 'gate') return `<li class="chat-marker ${cls}"><span>${I.shield(14)}${g.text}</span></li>`;
+    if (g.who === 'gate') return `<li class="chat-marker gate-said ${cls}" data-gate="1" tabindex="-1"><span>${I.shield(14)}${g.text}</span></li>`;
     const joined = g.who === 'lead' ? R(m.workflow).agents.filter((a) => a !== 'lead') : [];
     return `<li class="cmsg ${cls}"><span class="cmsg-av">${face(g.who, 40, g.tone === 'bad' ? 'error' : 'idle', { k: `chat:${keyOf(g.text)}` })}</span><div class="cmsg-body"><span class="cmsg-who" style="color:${feedHue(g.who)}">${feedName(g.who)}</span><div class="cmsg-bubble">${g.text}</div></div></li>${joined.length ? `<li class="chat-marker${isNew ? ' in' : ''}"><span>${faces(joined, 22)}${andList(joined.map((a) => AGENTS[a].name))} joined</span></li>` : ''}`;
   }
   /* The last word goes to whoever needs the person: the approval gate with the buttons, the AI troubleshooter with the fix, or Workflow Builder when it's done. */
   function chatAct(id, m) {
     const w = m.state === 'waiting' || m.state === 'expired' ? 'gate' : m.state === 'failed' ? 'trouble' : 'portal';
-    return `<li class="cmsg" data-pres="act:${id}:${m.state}:${id === 'sw' ? S.sw : ''}"><span class="cmsg-av">${chatAvatar(w)}</span><div class="cmsg-body"><span class="cmsg-who"${w === 'trouble' ? ` style="color:${feedHue(w)}"` : ''}>${feedName(w)}</span>${actPanel(id, m)}</div></li>`;
+    return `<li class="cmsg" id="decision" tabindex="-1" data-pres="act:${id}:${m.state}:${id === 'sw' ? S.sw : ''}"><span class="cmsg-av">${chatAvatar(w)}</span><div class="cmsg-body"><span class="cmsg-who"${w === 'trouble' ? ` style="color:${feedHue(w)}"` : ''}>${feedName(w)}</span>${actPanel(id, m)}</div></li>`;
   }
   /* While a run replays, the next speaker shows as working. */
   function chatTyping(m) {
@@ -2294,7 +2353,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
         : `<h2>Declined</h2><p>${nm(S.swBy)} declined, so nothing was written. The tickets will be proposed again next Monday.</p>`,
       issues: `<h2><span class="ok-mark">${I.check(18)}</span>Fixed</h2><p>The workflow now reads <b>langchain-ai/langchain</b>. No new bug reports today, so there was nothing to write.</p>`,
       nudge: `<h2><span class="ok-mark">${I.check(18)}</span>Back to normal</h2><p>The fix from support is live. MOCK-31 has no owner, so it was listed for you instead of crashing the run.</p>`,
-      conf: S.nr ? `<h2><span class="ok-mark">${I.check(18)}</span>Done</h2><p>${confYesWho()} approved, and the platform ${confWrite(S.nr).doneText}.</p><div class="result-chips"><span class="pill ok">${I.check(12)}${confWrite(S.nr).result}</span></div>` : '',
+      conf: S.conf === 'declined' ? `<h2>Declined</h2><p>${nm(S.confBy)} declined, so nothing was written. Change what it does, or run the test again.</p>${me().op ? '<div class="btns"><button class="btn primary" data-act="testRun">Do a test run again</button></div>' : ''}`
+        : S.nr ? `<h2><span class="ok-mark">${I.check(18)}</span>Done</h2><p>${confYesWho()} approved, and the platform ${confWrite(S.nr).doneText}.</p><div class="result-chips"><span class="pill ok">${I.check(12)}${confWrite(S.nr).result}</span></div>` : '',
     }[id];
     return `<div class="panel">${done}<div class="btns"><button class="btn" data-act="go" data-arg="home">Back to Home</button></div></div>`;
   }
@@ -2380,15 +2440,15 @@ details > .m-close { animation: fold 140ms ease-in both; }
               <button class="chip" data-act="chip" data-arg="Every Wednesday, find Jira tickets with no update for 14 days and ask their owners in Teams if they are still needed.">Nudge stale Jira tickets</button>
               <button class="chip" data-act="chip" data-arg="Every Monday, check Kubernetes for new releases and raise a Jira ticket if we are behind.">Check Kubernetes releases</button>
             </div></div>
-          <div class="btns" style="margin-top:16px"><button class="btn primary" data-act="plan" ${w.planning ? 'disabled' : ''}>Plan it</button></div>
+          <div class="btns" style="margin-top:16px"><button class="btn primary" data-act="plan"${w.planning ? ' aria-disabled="true"' : ''}>Plan it</button></div>
           <p class="small muted" style="margin-top:16px">Prefer to build it yourself? <button class="linkbtn" data-act="n8nNew">Start in n8n</button></p>
         </div>
         <div class="panel">
-          <div class="bubble">${face('lead', 48, w.planning ? 'thinking' : 'idle', { live: true, k: 'wiz:lead' })}<p>${w.planning ? 'Give me a moment.' : 'Tell me what you want done. I’ll show you what I understood before anything is set up, and flag anything I’m not sure about.'}</p></div>
-          ${w.planning ? `<ul class="thinking">${lines.slice(0, w.planning).map((l, i) => `<li>${i + 1 < w.planning ? `<span style="color:var(--green)">${I.check(18)}</span>` : '<span class="spin"></span>'}${l}</li>`).join('')}</ul>` : ''}
+          <div class="bubble">${face('lead', 48, w.planning ? 'thinking' : 'idle', { live: true, k: 'wiz:lead' })}<p><span class="vh">Planner: </span>${w.planning ? 'Give me a moment.' : 'Tell me what you want done. I’ll show you what I understood before anything is set up, and flag anything I’m not sure about.'}</p></div>
+          ${w.planning ? `<ul class="thinking">${lines.slice(0, w.planning).map((l, i) => `<li${i + 1 === w.planning ? ' class="in"' : ''}>${i + 1 < w.planning ? `<span style="color:var(--green)">${I.check(18)}</span>` : '<span class="spin"></span>'}${l}</li>`).join('')}</ul>` : ''}
         </div>
       </div>`;
-    } else if (w.step === 2 && isReleaseCheck(w.text)) {
+    } else if (w.step === 2 && isReleaseCheck(w.text) && !w.notRelease) {
       body = releaseRedirect(w.text);
     } else if (w.step === 2) {
       const f = draftNr();
@@ -2398,11 +2458,11 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const similar = f.tickets === 'stale' && has('nudge') && (f.action === 'nudge' || f.dest === 'teams');
       const agents = ['jira', f.action === 'nudge' ? 'msg' : 'summary'];
       body = `<div style="display:grid;gap:20px">
-        <div class="bubble">${face('lead', 48, 'idle', { live: true })}<p>${unsure ? 'Here’s what I understood. I’ve marked what I wasn’t sure about or can’t do. Please sort those out before you carry on.' : 'Here’s what I understood, and the plan that follows from it. Please check it matches what you meant.'}</p></div>
+        <div class="bubble">${face('lead', 48, 'idle', { live: true })}<p><span class="vh">Planner: </span>${unsure ? 'Here’s what I understood. I’ve marked what I wasn’t sure about or can’t do. Please sort those out before you carry on.' : 'Here’s what I understood, and the plan that follows from it. Please check it matches what you meant.'}</p></div>
         <div class="panel"><h2>What you asked for</h2>
           <blockquote class="asked"><span>Your words</span>${esc(w.text)}</blockquote>
           ${understoodSentence(rows)}
-          <p class="note">Click a highlighted part to change it. Your words stay as you wrote them.</p>
+          <p class="note">Green: from your words. Teal: changed by you. Amber: please choose. Red: can’t do this yet. Parts with an arrow can be changed here. Your words stay as you wrote them.</p>
         </div>
         ${similar ? `<div class="notice">${I.info(20)}<div><b>You already have a workflow like this.</b> <i>Stale ticket nudge</i> asks owners in Teams about tickets with no update for 14 days, every Wednesday at 10:00. ${f.action === 'nudge' ? 'This would do the same thing again.' : 'This one would post one summary instead.'}<div class="btns"><button class="btn sm" data-act="workflow" data-arg="nudge">Open Stale ticket nudge</button></div></div></div>` : ''}
         <div class="panel"><h2>What the workflow will do</h2>${stepsList(planOf(f), true, 'wiz-plan')}
@@ -2446,12 +2506,12 @@ details > .m-close { animation: fold 140ms ease-in both; }
       </div>
       <div class="wfoot"><button class="btn" data-act="wizBack">Back</button><button class="btn primary" data-act="turnOn">Turn it on</button></div>`;
     }
-    return `<div class="narrow"><div class="pagehead"><div><h1 tabindex="-1">New workflow</h1><p>Describe a repeated task. Agents do it, and nothing changes without a yes.</p></div><button class="linkbtn" data-act="saveDraft">Save draft and close</button></div>${stepper()}${body}</div>`;
+    return `<div class="narrow"><div class="pagehead"><div><h1 tabindex="-1">New workflow<span class="vh">, step ${S.wiz.step} of 4: ${STEP_NAMES[S.wiz.step - 1]}</span></h1><p>Describe a repeated task. Agents do it, and nothing changes without a yes.</p></div><button class="linkbtn" data-act="saveDraft">Save draft and close</button></div>${stepper()}${body}</div>`;
   }
 
   function doneView() {
     const r = R('conf');
-    return `<div class="narrow"><div class="done-hero"><span class="big">${I.check(44)}</span>
+    return `<div class="narrow"><div class="done-hero"><span class="big" data-pres="done:${keyOf(r.name)}">${I.check(44)}</span>
       <h1 tabindex="-1">Your workflow is on</h1>
       <p><b>${esc(r.name)}</b> runs next on <b>${r.next}</b>, Singapore time. When it needs a yes, ${nm(apprOf('conf').steps[0].first)} gets a message in CODESparks Support.</p>
       <div class="btns" style="justify-content:center;margin-top:8px"><button class="btn primary" data-act="testRun">Do a test run now</button><button class="btn" data-act="go" data-arg="home">Back to Home</button></div>
@@ -2519,12 +2579,12 @@ details > .m-close { animation: fold 140ms ease-in both; }
           ${p.address ? `<div class="field"><label for="mf-address">Address</label><input type="url" id="mf-address" data-mf="address" placeholder="${p.address}" value="${esc(f.address)}"${fieldErr('mf-address', f.err.address, p.confirm ? 'An Approver must confirm a new address once before runs use it.' : '')}</div>` : ''}
           <div class="field model-key"><label for="mf-key">API key</label><span class="keybox"><input type="${f.show ? 'text' : 'password'}" id="mf-key" data-mf="key" autocomplete="off" spellcheck="false" value="${esc(f.key)}" placeholder="${cur ? `Paste a new key to replace the one ending ${cur.keyEnd}` : 'Paste the key from your provider'}"${fieldAttrs('mf-key', f.err.key, true)}><button type="button" class="btn sm" data-act="modelShowKey" aria-pressed="${f.show}" aria-controls="mf-key">${f.show ? 'Hide' : 'Show'}</button></span>${fieldNotes('mf-key', f.err.key, 'Kept encrypted. After saving, nobody can read it back, and only its last 2 characters show.')}</div>
         </div>
-        <div class="btns"><button type="submit" class="btn primary"${f.busy ? ' disabled' : ''}>${f.busy ? 'Connecting…' : 'Connect'}</button></div></form>`;
+        <div class="btns"><button type="submit" class="btn primary"${f.busy ? ' aria-disabled="true"' : ''}>${f.busy ? 'Connecting…' : 'Connect'}</button></div></form>`;
     } else if (me().op) {
       form = `<form class="model-form" data-submit="modelSave" novalidate><h3>${cur ? 'Change the model or key' : 'Connect a model'}</h3>
         <p class="model-found">${I.check(16)}Connected to ${p.name}. It offers ${p.found} models, and ${p.models.length} of them can chat. The suggested one is first.</p>
         <div class="field"><label for="mf-model">Model</label><select id="mf-model" data-mf="model">${p.models.map(([m, note]) => opt(m, `${m}${note ? ` (${note})` : ''}`, f.model)).join('')}</select><span class="help">Test and save sends one short question. It saves only if the model answers within 10 seconds.</span></div>
-        <div class="btns"><button type="submit" class="btn primary"${f.busy ? ' disabled' : ''}>${f.busy ? 'Testing…' : 'Test and save'}</button><button type="button" class="btn" data-act="modelCancel">Cancel</button></div></form>`;
+        <div class="btns"><button type="submit" class="btn primary"${f.busy ? ' aria-disabled="true"' : ''}>${f.busy ? 'Testing…' : 'Test and save'}</button><button type="button" class="btn" data-act="modelCancel">Cancel</button></div></form>`;
     }
     return `<section class="panel"><h2>AI model</h2><p class="note">The model the agents use to plan, write and explain.</p>
       ${now}${pending}${form}
@@ -2533,6 +2593,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
   }
   const setLogOf = (area) => S.setLog.filter((x) => x[1] === area);
   const logSet = (area, text) => S.setLog.push(['Today', area, text]);
+  /* What happened to a workflow in n8n, newest first, so nobody loses track of who has it. */
+  const n8nLog = (id, when, text) => { (S.n8nLog[id] = S.n8nLog[id] || []).unshift({ when, text }); };
   const historyBox = (items, note = '') => `<details class="more"><summary>Change history (${items.length})</summary>${items.length ? `<ol class="timeline">${items.slice().reverse().map(([w, , t]) => `<li><b>${w}</b><span>${t}</span></li>`).join('')}</ol>` : '<p class="small muted">No changes yet.</p>'}${note ? `<p class="small muted">${note}</p>` : ''}</details>`;
   const onlyOps = '<p class="note">Only Operators change settings.</p>';
 
@@ -2552,9 +2614,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const test = S.connTest[k];
       const form = f ? `<form class="model-form" data-submit="connSave" novalidate>
           <div class="field"><label for="ck-key">New key for ${c.name}</label><span class="keybox"><input type="${f.show ? 'text' : 'password'}" id="ck-key" data-ck="key" autocomplete="off" spellcheck="false" value="${esc(f.key)}" placeholder="Paste the new key"${fieldAttrs('ck-key', f.err, true)}><button type="button" class="btn sm" data-act="connShow" aria-pressed="${f.show}" aria-controls="ck-key">${f.show ? 'Hide' : 'Show'}</button></span>${fieldNotes('ck-key', f.err, 'It replaces the old key only if a test with it works. Nobody can read it back.')}</div>
-          <div class="btns"><button type="submit" class="btn primary"${f.busy ? ' disabled' : ''}>${f.busy ? 'Testing…' : 'Test and save'}</button><button type="button" class="btn" data-act="connCancel">Cancel</button></div></form>`
-        : me().op ? `<div class="btns"><button class="btn${soon ? ' primary' : ''} sm" data-act="connReplace" data-arg="${k}">Replace key</button><button class="btn sm" data-act="connTest" data-arg="${k}"${test === 'busy' ? ' disabled' : ''}>${test === 'busy' ? 'Testing…' : 'Test'}</button></div>`
-          : `<div class="btns"><button class="btn sm" data-act="connTest" data-arg="${k}"${test === 'busy' ? ' disabled' : ''}>${test === 'busy' ? 'Testing…' : 'Test'}</button></div>`;
+          <div class="btns"><button type="submit" class="btn primary"${f.busy ? ' aria-disabled="true"' : ''}>${f.busy ? 'Testing…' : 'Test and save'}</button><button type="button" class="btn" data-act="connCancel">Cancel</button></div></form>`
+        : me().op ? `<div class="btns"><button class="btn${soon ? ' primary' : ''} sm" data-act="connReplace" data-arg="${k}">Replace key</button><button class="btn sm" data-act="connTest" data-arg="${k}"${test === 'busy' ? ' aria-disabled="true"' : ''}>${test === 'busy' ? 'Testing…' : 'Test'}</button></div>`
+          : `<div class="btns"><button class="btn sm" data-act="connTest" data-arg="${k}"${test === 'busy' ? ' aria-disabled="true"' : ''}>${test === 'busy' ? 'Testing…' : 'Test'}</button></div>`;
       return `<article class="conn${soon ? ' soon' : ''}">
         <div class="conn-top"><div><h3>${c.name}</h3><span class="small muted">Signs in as ${c.account}</span></div>${c.practice ? '<span class="tag">Practice copy</span>' : ''}<span class="health ok">${I.check(14)}Working</span></div>
         <p class="small">${c.uses}</p>
@@ -2584,8 +2646,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
       return `<li class="person">
         <span class="pav t${p.tone}" aria-hidden="true">${p.name.charAt(0)}</span>
         <div class="person-name"><b>${esc(p.name)}${u === S.user ? ' <span class="tag">You</span>' : ''}</b><span class="small muted">${r.added ? 'Hasn’t signed in yet' : named.length ? `Named as an Approver on ${named.length === 1 ? '1 workflow' : `${named.length} workflows`}` : r.ap ? 'Not named on any workflow' : ''}</span></div>
-        <div class="roles"><label class="checkrow"><input type="checkbox" data-role="${u}:op"${r.op ? ' checked' : ''}${op ? '' : ' disabled'}>Operator</label>
-          <label class="checkrow"><input type="checkbox" data-role="${u}:ap"${r.ap || r.pendingAp ? ' checked' : ''}${op && !r.pendingAp ? '' : ' disabled'}>Approver</label></div>
+        <div class="roles"><label class="checkrow"><input type="checkbox" data-role="${u}:op"${r.op ? ' checked' : ''}${op ? '' : ' disabled'}${err ? ` aria-describedby="role-err-${u}"` : ''}>Operator<span class="vh">, ${esc(p.name)}</span></label>
+          <label class="checkrow"><input type="checkbox" data-role="${u}:ap"${r.ap || r.pendingAp ? ' checked' : ''}${op && !r.pendingAp ? '' : ' disabled'}${err ? ` aria-describedby="role-err-${u}"` : ''}>Approver<span class="vh">, ${esc(p.name)}</span></label></div>
         ${r.pendingAp ? `<div class="person-note"><span class="pill wait">${I.lock(12)}Approver: waiting for another Approver to confirm</span>${canConfirm ? `<span class="btns"><button class="btn bad sm" data-act="roleNotNow" data-arg="${u}">Not now</button><button class="btn good sm" data-act="roleConfirm" data-arg="${u}">Confirm</button></span>` : `<span class="small muted">Asked by ${nm(r.pendingBy)}${S.user === r.pendingBy ? ', so you can’t confirm it' : ''}.</span>`}</div>` : ''}
         ${err ? `<p class="err person-note" id="role-err-${u}">${I.alert(16)}<span>${err}</span></p>` : ''}
       </li>`;
@@ -2895,7 +2957,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function toolAskPanel() {
     const d = S.toolAsk;
     const r = d.result;
-    const say = (html) => `<div class="bubble small-bubble">${face('lead', 40)}<p>${html}</p></div>`;
+    const say = (html) => `<div class="bubble small-bubble">${face('lead', 40)}<p><span class="vh">Planner: </span>${html}</p></div>`;
     let reply = '';
     if (r) {
       const users = r.key ? toolUsers(r.key) : [];
@@ -2974,7 +3036,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const r = d.result;
     const name = AGENTS[id].name;
     const used = agentUsedBy(id);
-    const say = (html) => `<div class="bubble small-bubble">${face('lead', 40)}<p>${html}</p></div>`;
+    const say = (html) => `<div class="bubble small-bubble">${face('lead', 40)}<p><span class="vh">Planner: </span>${html}</p></div>`;
     let result = '';
     if (r && r.type === 'change') {
       result = `<div class="proposal" id="agent-proposal" tabindex="-1" data-pres="prop:${id}:${keyOf(d.text)}:${r.type}">
@@ -3006,7 +3068,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
         <div class="btns"><button class="btn primary" data-act="agentSuggest">Suggest a change</button></div>
         ${result}
       </section>`
-      : `<p class="note">${a.platform ? 'This agent is part of the platform, so it can’t be changed here. To suggest a change, report it to support.' : 'Only Operators can change agents.'}</p>`;
+      : `<p class="note">${a.platform ? 'This agent is part of the platform, so only the team that runs the platform can change it.' : 'Only Operators can change agents.'}</p>`;
     return `<div class="agent-dlg">${backBtn()}
       <div class="agent-top">${face(id, 56, 'idle', { live: true })}<div><h2 id="dlg-h">${name}</h2>${AGENTS[id].role ? `<span class="agent-role">${AGENTS[id].role}</span>` : ''}<span class="small muted">${versionText(id)}</span></div><button class="iconbtn dlg-close" data-act="closeModal" aria-label="Close">${I.x(18)}</button></div>
       <p>${a.what}</p>
@@ -3034,11 +3096,11 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (S.tool !== 'none') list.push({ time: 'Today', html: `Alice asked for a new tool: <b>Update a Confluence page</b>. It changes data, so an Approver must OK it once.`, tool: true, decided: S.tool === 'ok' ? 'OK’d by Bob' : null });
     if (['asked', 'ok'].includes(S.jiraComp)) list.push({ time: 'Today', html: `${nm(S.jiraCompAsker)} asked for a new tool: <b>${TOOLS.jiraComp[0]}</b>. It changes data, so an Approver must OK it once.`, jtool: true, decided: S.jiraComp === 'ok' ? `OK’d by ${nm(S.jiraCompBy)}` : null });
     if (S.tool === 'ok' && S.draft && S.conf === 'none') list.push({ time: 'Today', html: `Bob OK’d <b>Update a Confluence page</b>. Alice can finish setting up <b>${esc(draftNr().name)}</b>.` });
-    if (has('conf') && S.confReq && ['waiting', 'approved', 'expired'].includes(S.conf)) {
+    if (has('conf') && S.confReq && ['waiting', 'approved', 'expired', 'declined'].includes(S.conf)) {
       const steps = S.confReq.steps;
       const at1 = steps[0];
       list.push({ time: 'Today 9:10', html: `<b>@${nm(at1.first)}</b>, <b>${esc(S.nr.name)}</b> wants to ${confWrite(S.nr).teamsVerb} (test run).`, id: 'conf',
-        decided: S.conf === 'approved' ? `Approved by ${confYesText()}` : S.conf === 'expired' ? 'No answer' : null, decidedTone: S.conf === 'expired' ? 'off' : 'ok' });
+        decided: S.conf === 'approved' ? `Approved by ${confYesText()}` : S.conf === 'expired' ? 'No answer' : S.conf === 'declined' ? `Declined by ${nm(S.confBy)}` : null, decidedTone: S.conf === 'expired' ? 'off' : S.conf === 'declined' ? 'bad' : 'ok' });
       const q = req('conf');
       if (S.confYes.length && steps[1] && S.conf === 'waiting') list.push({ time: 'Today', html: `<b>@${nm(steps[1].first)}</b>, ${confYesText()} said yes. You’re asked next, as the second Approver. You can decide on the message above.` });
       if (q && q.escalated) list.push({ time: `Today ${hm(q.backupAt)}`, html: q.backup ? `<b>@${nm(q.backup)}</b>, ${nm(q.first)} hasn’t answered yet, so you’re asked as the backup. You can decide on the message above.` : `<b>@${nm(q.first)}</b>, a reminder: <b>${esc(S.nr.name)}</b> is still waiting for your yes.` });
@@ -3058,13 +3120,13 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (!S.teams) return '';
     const msgs = teamsItems().map((m) => {
       let actions = '';
-      if (m.decided) actions = m.decidedTone === 'off' ? `<span class="pill off">${I.clock(12)}${m.decided}</span>` : `<span class="pill ok">${I.check(12)}${m.decided}</span>`;
+      if (m.decided) actions = m.decidedTone === 'off' ? `<span class="pill off">${I.clock(12)}${m.decided}</span>` : m.decidedTone === 'bad' ? `<span class="pill bad">${I.x(12)}${m.decided}</span>` : `<span class="pill ok">${I.check(12)}${m.decided}</span>`;
       else if (m.jtool) actions = canOkTool() && S.user !== S.jiraCompAsker ? '<div class="btns"><button class="btn sm" data-act="toolOpen" data-arg="jiraComp">Open in Workflow Builder</button></div>' : '<span class="note">Waiting for an Approver</span>';
       else if (m.tool) actions = canOkTool() ? '<div class="btns"><button class="btn sm" data-act="go" data-arg="tool">Open in Workflow Builder</button></div>' : '<span class="note">Waiting for an Approver</span>';
       else if (m.id) actions = canApprove(m.id) ? `<div class="btns"><button class="btn good sm" data-act="approve" data-arg="${m.id}">Approve</button><button class="btn sm" data-act="decline" data-arg="${m.id}">Decline</button><button class="btn sm" data-act="run" data-arg="${m.id}">Open in Workflow Builder</button></div>` : `<div class="lock">${I.lock(18)}<span class="small">${starterOf[m.id] === S.user ? 'You started this run, so you can’t approve it.' : me().ap ? `Only ${whoOr(req(m.id).may)} can decide this one.` : 'Only an Approver can decide.'}</span></div>`;
       return `<div class="msg"><span class="sysav app">${I.mark()}</span><div><div class="msg-meta"><b>Workflow Builder</b> · ${m.time}</div><div class="msg-card"><div>${m.html}</div><div data-val="tm:${keyOf(m.time + m.html.slice(0, 60))}">${actions}</div></div></div></div>`;
     }).join('');
-    return `<div class="scrim" data-act="teams"></div><aside class="drawer" role="dialog" aria-modal="true" aria-label="Teams, practice copy">
+    return `<div class="scrim${drawerNew ? ' in' : ''}" data-act="teams"></div><aside class="drawer" role="dialog" aria-modal="true" aria-label="Teams, practice copy">
       <div class="drawer-head"><div><b>Microsoft Teams</b><small>Practice copy. Nothing reaches the real Teams.</small></div><button class="iconbtn" data-act="teams" aria-label="Close Teams">${I.x(18)}</button></div>
       <div class="chan"># CODESparks Support <span class="muted small">· signed in as ${me().name}</span></div>
       <div class="msgs">${msgs}</div></aside>`;
@@ -3086,11 +3148,11 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* Sent. The reference shows at once; the bar and the mark only confirm what the text already says. */
   function reportSentDialog() {
     const c = S.supportCase;
-    return `<div class="sent"><span class="sent-mark">${I.check(28)}</span>
+    return `<div class="sent"><span class="sent-mark" data-pres="sentmark:${c.id}">${I.check(28)}</span>
         <h2 id="dlg-h" style="font-size:1.4rem">Reported to support</h2>
         <p class="muted" style="margin:0">Your case reference</p>
         <p class="sent-ref" style="margin:0">${c.id}</p>
-        <div class="sent-bar" aria-hidden="true"><span></span></div>
+        <div class="sent-bar" aria-hidden="true" data-pres="sentbar:${c.id}"><span></span></div>
         <dl class="kv"><dt>Who has it</dt><dd>${c.owner}</dd><dt>First reply by</dt><dd>${c.target}</dd><dt>Updates</dt><dd>A Teams message to you at each stage. You can also follow it on Home.</dd></dl></div>
       <div class="btns" style="justify-content:flex-end"><button class="btn primary" data-act="closeModal">Done</button></div>`;
   }
@@ -3107,15 +3169,22 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const gone = !!S.n8nChg[id];
     const boxes = [`${I.clock(16)}${r.when}`, ...r.agents.filter((a) => a !== 'lead').map((a) => `${face(a, 24)}${AGENTS[a].name}`)];
     /* Each arrow sits inside the step it points to, so a wrapped row never starts or ends on a loose arrow. */
-    const canvas = [...boxes.map((b) => ['', b]), [`gate${gone ? ' gone' : ''}`, `${I.shield(16)}Ask for a yes`], ['', `${I.check(16)}Make the approved changes`]]
+    const writes = planFor(id).filter(([, k]) => k === 'write').map(([t]) => t);
+    const two = apprOf(id).steps.length > 1;
+    const pairs = writes.flatMap((t, i) => [
+      [`gate${gone && !i ? ' gone' : ''}`, `${I.shield(16)}Ask for a yes${two && i === writes.length - 1 ? ', 2 people in order' : ''}`],
+      ['', `${I.check(16)}${writes.length > 1 ? `<span>Make the approved changes<small>${esc(t)}</small></span>` : 'Make the approved changes'}`],
+    ]);
+    const canvas = [...boxes.map((b) => ['', b]), ...pairs]
       .map(([cls, b], i) => `<li>${i ? `<span class="n8n-arrow" aria-hidden="true">${I.right(14)}</span>` : ''}<span class="n8n-node${cls ? ` ${cls}` : ''}">${b}</span></li>`).join('');
     return `<h2 id="dlg-h" style="font-size:1.4rem">Open “${esc(r.name)}” in n8n</h2>
-      <p class="muted">In n8n you can change its steps, schedule and conditions yourself. This is how it looks there.</p>
+      <p class="muted">In n8n you can change its schedule, its conditions and the order of its steps, using our blocks. n8n’s own Jira, web and code steps aren’t there. This is how it looks there.</p>
       <ol class="n8n-canvas" aria-label="Steps in n8n">${canvas}</ol>
       <ul class="n8n-promises">
         <li>${I.lock(16)}<span>${other ? `${nm(held.by)} has it now. If you take it, ${nm(held.by)} can’t change it in n8n any more. Changes already published stay.` : 'While you have it, only you can change it in n8n.'}</span></li>
         <li>${I.clock(16)}<span>A change goes live when you publish it in n8n. Every published change is kept here, and you can undo it.</span></li>
-        <li>${I.shield(16)}<span>Nothing is written without a yes, whatever you change.</span></li>
+        <li>${I.shield(16)}<span>Nothing is written without a yes, whatever you change. If <b>Ask for a yes</b> goes missing, the next run stops before it changes anything.</span></li>
+        <li>${I.alert(16)}<span>Trying it in n8n is a real run. Approvers get a real request in Teams.</span></li>
       </ul>
       <div class="btns" style="justify-content:flex-end"><button class="btn" data-act="closeModal">Cancel</button><button class="btn primary" data-act="n8nOpen" data-arg="${id}">${other ? 'Take it and open n8n' : 'Open n8n'}${I.ext(14)}</button></div>`;
   }
@@ -3141,7 +3210,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function modal() {
     if (!S.modal) return '';
     const body = S.modal === 'report' ? reportDialog() : S.modal === 'reportSent' ? reportSentDialog() : S.modal === 'n8n' ? n8nDialog(S.modalArg) : S.modal === 'n8nNew' ? n8nNewDialog() : S.modal === 'delete' ? deleteDialog(S.modalArg) : S.modal === 'agent' ? agentDialog(S.modalArg) : S.modal === 'tool' ? toolDialog(S.modalArg) : ticketDialog(S.modalArg);
-    return `<div class="scrim${scrimIn ? ' in' : ''}" data-act="closeModal"></div><div class="dialog${['agent', 'tool', 'n8n'].includes(S.modal) ? ' wide' : ''}${dlgIn ? ' in' : ''}" role="${S.modal === 'delete' ? 'alertdialog' : 'dialog'}" aria-modal="true" aria-labelledby="dlg-h"${S.modal === 'delete' ? ' aria-describedby="dlg-d"' : ''}>${body}</div>`;
+    return `<div class="scrim${scrimIn ? ' in' : ''}" data-act="closeModal"></div><div class="dialog${['agent', 'tool', 'n8n'].includes(S.modal) ? ' wide' : ''}${dlgIn ? ' in' : ''}${dlgSwap ? ' swap' : ''}" role="${S.modal === 'delete' ? 'alertdialog' : 'dialog'}" aria-modal="true" aria-labelledby="dlg-h"${S.modal === 'delete' ? ' aria-describedby="dlg-d"' : ''}>${body}</div>`;
   }
 
   /* ---------- Test controls: not part of the product ---------- */
@@ -3157,8 +3226,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
       else sims.push(['expire', '', `Nobody answers until ${at(q.expiresAt)}`]);
     }
     if (S.report > 0 && S.report < 4) sims.push(['advance', '', `Support moves case ${S.supportCase.id} on`]);
-    if (S.view.name === 'workflow' && S.view.id !== 'sw' && me().op && !S.n8nChg[S.view.id]) sims.push(['n8nChange', S.view.id, 'Carol changes it in n8n and publishes']);
-    if (S.view.name === 'workflow' && S.n8nChg[S.view.id] && !S.editRun) sims.push(['n8nRun', S.view.id, 'The next run starts with Carol’s change']);
+    const n8nId = S.view.name === 'workflow' && S.view.id !== 'sw' ? S.view.id : null;
+    if (n8nId && me().op && !S.n8nChg[n8nId]) sims.push(['n8nChange', n8nId, 'Carol changes it in n8n and publishes']);
+    if (n8nId && S.n8nChg[n8nId] && !S.editRun) sims.push(['n8nRun', n8nId, 'The next run starts with Carol’s change']);
     return `<div class="testctl">
       ${S.testOpen ? `<div class="testctl-panel${testNew ? ' in' : ''}" id="testctl-panel" role="region" aria-label="Test controls">
         <p class="testctl-title">Test controls</p>
@@ -3191,11 +3261,13 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const announce = (html) => { $live.textContent = String(html).replace(/<[^>]+>/g, ''); };
 
   let focusHeading = false;
+  let focusDecision = false;
   let toastNew = false;
   let drawerNew = false;
   let testNew = false;
   let scrimIn = false;
   let dlgIn = false;
+  let dlgSwap = false;
   let shownModal = null;
 
   /* PEOPLE carries the roles the rest of the prototype reads. Settings changes S.roles, and this copies them across. */
@@ -3209,6 +3281,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     });
   }
   function render() {
+    if (pressing) { pendingRender = true; return; }
     syncRoles();
     const v = S.view;
     let main = '';
@@ -3226,23 +3299,31 @@ details > .m-close { animation: fold 140ms ease-in both; }
     }
     // The mock redraws the whole page, so it puts keyboard focus back where it was.
     const active = document.activeElement;
-    let refocus = null;
-    if (!focusHeading && active && active !== document.body && $app.contains(active)) {
-      if (active.id) refocus = `#${CSS.escape(active.id)}`;
-      else if (active.dataset.act) refocus = `[data-act="${active.dataset.act}"]${active.dataset.arg !== undefined ? `[data-arg="${CSS.escape(active.dataset.arg)}"]` : ''}`;
-    }
+    const plan = !focusHeading && active && active !== document.body && $app.contains(active) && !active.closest('.leave') ? focusPlan(active) : null;
+    const caret = plan && typeof active.selectionStart === 'number' ? [active.selectionStart, active.selectionEnd] : null;
     const modalKey = S.modal ? `${S.modal}:${S.modalArg}` : null;
     scrimIn = !!modalKey && !shownModal;
-    dlgIn = !!modalKey && modalKey !== shownModal && !(S.modal === 'reportSent' && shownModal === 'report:null');
+    dlgIn = !!modalKey && !shownModal;
+    dlgSwap = !!modalKey && !!shownModal && modalKey !== shownModal && !(S.modal === 'reportSent' && shownModal === 'report:null');
+    const sameModal = !!modalKey && modalKey === shownModal;
     shownModal = modalKey;
-    const toastHtml = S.toast ? `<div class="toast${toastNew ? ' in' : ''}">${S.toast}${S.toastAct ? `<button class="toast-act" data-act="${S.toastAct.act}" data-arg="${S.toastAct.arg}">${S.toastAct.label}</button>` : ''}</div>` : '';
+    const toastHtml = toastMarkup(toastNew);
     const motion = motionBefore();
-    $app.innerHTML = header() + `<main class="sheet" id="main"><div class="wrap" data-flip-group="page">${main}</div></main>` + tabbar() + teamsDrawer() + modal() + toastHtml + testControls();
-    if (refocus) {
-      const el = $app.querySelector(refocus);
+    // A redraw keeps what the person opened and where they scrolled.
+    const opened = new Set(detailsKeys().filter(([d]) => d.open && !d.dataset.folding && !d.querySelector(':scope > summary[data-act]')).map(([, k]) => k));
+    const scrolls = [['.msgs', true], ['.dialog:not(.leave)', sameModal]].map(([sel, keep]) => { const el = keep && $app.querySelector(sel); return el ? [sel, el.scrollTop] : null; }).filter(Boolean);
+    $app.innerHTML = '<button class="skiplink" data-act="skipMain">Skip to main content</button>' + header() + `<main class="sheet" id="main"><div class="wrap" data-flip-group="page">${main}</div></main>` + tabbar() + teamsDrawer() + modal() + toastHtml + testControls();
+    detailsKeys().forEach(([d, k]) => { if (!d.open && opened.has(k)) d.open = true; });
+    scrolls.forEach(([sel, top]) => { const el = $app.querySelector(sel); if (el) el.scrollTop = top; });
+    $app.querySelectorAll('#dlg-h:not([tabindex])').forEach((h) => h.setAttribute('tabindex', '-1'));
+    const h1 = $app.querySelector('main h1');
+    document.title = h1 ? `${h1.textContent.trim()} · AI Workflow Builder` : 'AI Workflow Builder';
+    if (plan) {
+      const el = focusBack(plan);
       if (el) {
         el.focus({ preventScroll: true });
-        if (typeof el.value === 'string' && el.setSelectionRange && /^(text|search|textarea)$/.test(el.type)) el.setSelectionRange(el.value.length, el.value.length);
+        const same = plan.keys[0] && el.matches(plan.keys[0].sel);
+        if (same && typeof el.value === 'string' && el.setSelectionRange && /^(text|search|textarea)$/.test(el.type)) el.setSelectionRange(caret ? caret[0] : el.value.length, caret ? caret[1] : el.value.length);
       }
     }
     toastNew = false;
@@ -3252,8 +3333,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
       if (d) { d.classList.add('in'); d.querySelector('[aria-label="Close Teams"]').focus(); }
       drawerNew = false;
     }
+    const grew = S.view.name === 'run' && P.feedNext > P.feedSeen;
     if (S.view.name === 'run') {
-      if (P.feedNext > P.feedSeen && P.latest) announce(P.latest);
+      if (grew && P.latest) announce(P.latest);
       P.feedSeen = P.feedNext;
     }
     const fill = $app.querySelector('.line-fill');
@@ -3268,14 +3350,81 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const stage = $app.querySelector('.stage');
     if (stage) stageWatch.observe(stage);
     motionAfter(motion);
+    keepLoops();
+    if (grew && follow && !focusHeading) { const last = $app.querySelector('.chat > li:last-child'); if (last) last.scrollIntoView({ block: 'nearest', behavior: motionQuery.matches ? 'auto' : 'smooth' }); }
     if (focusHeading) {
       focusHeading = false;
-      const h = $app.querySelector('h1');
-      if (h) h.focus({ preventScroll: true });
-      window.scrollTo(0, 0);
+      const d = focusDecision && $app.querySelector('#decision');
+      focusDecision = false;
+      if (d) { d.focus({ preventScroll: true }); d.scrollIntoView({ block: 'start' }); }
+      else {
+        const h = $app.querySelector('h1');
+        if (h) h.focus({ preventScroll: true });
+        window.scrollTo(0, 0);
+      }
     }
   }
 
+  /* The mock redraws the whole page, so it puts keyboard focus back: on the same control, else the nearest one after or
+     before it in the same layer (a dialog, the Teams panel or the page), else that layer's heading. */
+  const FOCUSABLE = 'button, [href], input, select, textarea, summary, [tabindex]';
+  const shown = (el) => (el.checkVisibility ? el.checkVisibility() : el.getClientRects().length > 0);
+  const usable = (el) => !el.disabled && el.getAttribute('aria-hidden') !== 'true' && !el.closest('.leave, .m-leaving, [inert]') && shown(el);
+  const REGIONS = 'main, .hdr, .tabbar, .testctl';
+  function inLayer(kind) {
+    if (kind === 'dialog' || kind === 'drawer') { const box = $app.querySelector(`.${kind}:not(.leave)`); return box ? [...box.querySelectorAll(FOCUSABLE)] : []; }
+    const box = $app.querySelector(kind);
+    return box ? [...box.querySelectorAll(FOCUSABLE)].filter((x) => !x.closest('.dialog, .drawer')) : [];
+  }
+  /* A control is found again by its id, its action, or its first identifying data- attribute, and its place among matches. */
+  function selOf(el) {
+    if (el.id) return `#${CSS.escape(el.id)}`;
+    if (el.dataset.act) return `[data-act="${el.dataset.act}"]${el.dataset.arg !== undefined ? `[data-arg="${CSS.escape(el.dataset.arg)}"]` : ''}`;
+    const a = [...el.attributes].find((x) => x.name.startsWith('data-') && !/^data-(val|flip|pres|state|k|enter|from)$/.test(x.name));
+    return a ? `${el.tagName.toLowerCase()}[${a.name}="${CSS.escape(a.value)}"]` : null;
+  }
+  function focusPlan(el) {
+    const region = el.closest(REGIONS);
+    const kind = el.closest('.dialog') ? 'dialog' : el.closest('.drawer') ? 'drawer' : region ? (region.tagName === 'MAIN' ? 'main' : `.${region.classList[0]}`) : 'main';
+    const all = inLayer(kind);
+    const items = all.filter(usable);
+    const at = items.indexOf(el);
+    const near = at < 0 ? [el] : [el, ...items.slice(at + 1, at + 4), ...items.slice(Math.max(0, at - 3), at).reverse()];
+    const keys = near.map((x) => { const sel = selOf(x); return sel ? { sel, i: Math.max(0, all.filter((y) => y.matches(sel)).indexOf(x)) } : null; }).filter(Boolean);
+    return { kind, keys };
+  }
+  function focusBack(plan) {
+    for (const k of plan.keys) {
+      const all = inLayer(plan.kind).filter((y) => y.matches(k.sel));
+      const el = [all[k.i], all[0]].find((x) => x && usable(x));
+      if (el) return el;
+    }
+    if (plan.kind === 'dialog') return $app.querySelector('.dialog:not(.leave) #dlg-h');
+    if (plan.kind === 'drawer') return $app.querySelector('.drawer:not(.leave) [aria-label="Close Teams"]');
+    return $app.querySelector('main h1');
+  }
+  /* Details are matched across a redraw by their summary text, numbers aside, and their place among same-named ones. */
+  function detailsKeys() {
+    const n = {};
+    return [...$app.querySelectorAll('details')].filter((d) => !d.closest('.leave, .m-leaving')).map((d) => {
+      const t = (d.querySelector(':scope > summary') || d).textContent.replace(/\d+/g, '#').trim();
+      n[t] = (n[t] || 0) + 1;
+      return [d, `${t}|${n[t]}`];
+    });
+  }
+  /* A redraw during a press would replace the button being pressed and lose the click, so redraws wait for the release. */
+  let pressing = false;
+  let pendingRender = false;
+  let pressTimer = null;
+  const release = () => { pressing = false; clearTimeout(pressTimer); if (pendingRender) { pendingRender = false; setTimeout(render); } };
+  document.addEventListener('pointerdown', () => { pressing = true; clearTimeout(pressTimer); pressTimer = setTimeout(release, 1500); }, true);
+  document.addEventListener('pointerup', release, true);
+  document.addEventListener('pointercancel', release, true);
+  /* During a run the page follows the newest message, until the person scrolls. */
+  const stopFollow = () => { follow = false; };
+  document.addEventListener('wheel', stopFollow, { passive: true });
+  document.addEventListener('touchmove', stopFollow, { passive: true });
+  document.addEventListener('keydown', (e) => { if (['PageDown', 'PageUp', 'ArrowDown', 'ArrowUp', 'Home', 'End', ' '].includes(e.key) && !e.target.closest('input, textarea, select')) stopFollow(); });
 
   /* ---------- Motion ----------
      The mock redraws the whole page on every change, so motion compares the page just before and just after each redraw.
@@ -3292,6 +3441,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const seen = { val: new Map(), face: new Map(), pres: new Set() };
   const playing = new Map();
   let shownView = '';
+  /* New elements would restart every loop. Pinning running loops to the page clock keeps them smooth across redraws. */
+  const keepLoops = () => document.getAnimations().forEach((a) => { if (a.playState === 'running' && a.effect && a.effect.getTiming().iterations === Infinity) a.startTime = 0; });
   const loopWatch = new IntersectionObserver((es) => es.forEach((e) => e.target.classList.toggle('off', !e.isIntersecting)));
   const viewKey = () => [S.view.name, S.view.id || '', S.view.name === 'new' ? S.wiz.step : '', S.user, S.firstDay ? 'one' : 'week', S.view.name === 'agents' ? S.libTab : '', S.view.name === 'settings' ? S.setTab : ''].join('|');
   const glide = (el, dx, dy) => { if (Math.abs(dx) + Math.abs(dy) > 1) el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 220, easing: EASE_OUT }); };
@@ -3412,17 +3563,28 @@ details > .m-close { animation: fold 140ms ease-in both; }
   let toastTimer = null;
   /* Pauses the run line's looping animation while it is off screen. */
   const stageWatch = new IntersectionObserver((entries) => entries.forEach((e) => e.target.classList.toggle('offscreen', !e.isIntersecting)));
+  /* A toast stays long enough to read. One with Undo has no time limit: it stays until the next toast, leaving the page, or Escape. */
+  const readMs = (text) => Math.min(10000, 2000 + String(text).replace(/<[^>]+>/g, '').length * 45);
+  const toastMarkup = (isNew) => (S.toast ? `<div class="toast${isNew ? ' in' : ''}">${S.toast}${S.toastAct ? `<button class="toast-act" data-act="${S.toastAct.act}" data-arg="${S.toastAct.arg}">${S.toastAct.label}</button>` : ''}</div>` : '');
   function toast(text, action) {
+    announce(action ? `${text} ${action.label} is in the message at the bottom of the page.` : text);
     S.toast = text;
     S.toastAct = action || null;
     toastNew = true;
-    announce(text);
-    armToast(action ? 7000 : 3600);
+    armToast(action ? 7000 : readMs(text));
   }
   /* A toast with Undo must not vanish under the pointer or the keyboard: its timer waits while either is on it, and while the tab is hidden. */
   function armToast(ms) {
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { S.toast = null; S.toastAct = null; render(); }, ms);
+    if (S.toastAct) return;
+    toastTimer = setTimeout(hideToast, ms);
+  }
+  /* A toast leaves by itself, without redrawing the page, so nothing the person opened closes. */
+  function hideToast() {
+    S.toast = null;
+    S.toastAct = null;
+    const t = $app.querySelector(':scope > .toast:not(.leave)');
+    if (t) { t.classList.remove('in'); t.classList.add('leave'); t.setAttribute('aria-hidden', 'true'); t.inert = true; const gone = () => t.remove(); t.addEventListener('animationend', gone, { once: true }); setTimeout(gone, 400); }
   }
   const onToast = (e) => e.target instanceof Element && e.target.closest('.toast');
   document.addEventListener('pointerover', (e) => { if (S.toast && onToast(e)) clearTimeout(toastTimer); });
@@ -3431,17 +3593,42 @@ details > .m-close { animation: fold 140ms ease-in both; }
   document.addEventListener('focusout', (e) => { if (S.toast && onToast(e) && !onToast({ target: e.relatedTarget })) armToast(4000); });
   document.addEventListener('visibilitychange', () => { if (!S.toast) return; if (document.hidden) clearTimeout(toastTimer); else armToast(4000); });
 
-  function go(name, id) {
+  /* o.live plays a run from its start, for a run just started or Watch. o.back comes from browser Back or Forward. */
+  function go(name, id, o = {}) {
     if (name !== 'run') { stopTimer(); P.run = null; }
     if (name === 'new' && S.user === 'alice') S.toolSeen = true;
+    if (S.toastAct && !toastNew) { S.toast = null; S.toastAct = null; clearTimeout(toastTimer); }
     S.view = { name, id };
     S.teams = false;
     S.editing = null;
     S.editingAppr = null;
     focusHeading = true;
-    if (name === 'run') { P.run = id; playTo(0); }
+    if (name === 'run') { P.run = id; openRun(o.live); }
+    if (!o.back) { try { window.history.pushState({ name, id }, '', `#${name}${id ? `/${id}` : ''}`); } catch (e) { /* window.history, because history() here is the watchlist's. Some hosts block it; Back then leaves the mock, as before. */ } }
     render();
   }
+  /* Opening a run that needs someone lands on the decision, with the run already drawn. Replay plays it again. */
+  function openRun(live) {
+    const m = runModel(P.run);
+    if (live || !['waiting', 'failed', 'expired'].includes(m.state)) { playTo(0); return; }
+    stopTimer();
+    P.at = m.end;
+    P.shown = m.end;
+    P.feedSeen = Infinity;
+    focusDecision = true;
+  }
+  /* Browser Back and Forward move between pages, as on any site. A page whose state is gone falls back to its list. */
+  window.addEventListener('popstate', (e) => {
+    let v = e.state || { name: 'home' };
+    if (v.name === 'run' && v.id === 'edit' && !S.editRun) v = { name: 'workflows' };
+    if (v.name === 'workflow' && S.deleted[v.id]) v = { name: 'workflows' };
+    if (v.name === 'done' && !S.nr) v = { name: 'home' };
+    S.modal = null;
+    S.modalArg = null;
+    S.modalBack = [];
+    go(v.name, v.id, { back: true });
+  });
+  try { window.history.replaceState({ name: 'home' }, '', '#home'); } catch (e) { /* As above. */ }
   /* The control that opened a dialog or the Teams drawer gets focus back when it closes. */
   let opener = null;
   /* Several controls can share an action (a card's title and its Details button), so the opener is kept as a selector plus its place among the matches. */
@@ -3492,6 +3679,13 @@ details > .m-close { animation: fold 140ms ease-in both; }
     toast(`${mine ? 'Approved' : `${nm(user)} said yes`}. The platform is writing now.`);
     if (S.view.name === 'run' && S.view.id === id) continueRun();
     render();
+    focusGate();
+  }
+  /* After a yes or a no on the run page, focus moves to what the approval gate said, so the page doesn't jump away from it. */
+  function focusGate() {
+    if (S.view.name !== 'run' || S.teams || S.modal) return;
+    const g = [...$app.querySelectorAll('.gate-said')].pop();
+    if (g) g.focus();
   }
 
   /* ---------- Actions ---------- */
@@ -3499,6 +3693,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     go: (a) => go(a),
     workflow: (id) => (id === 'sw' ? go('software') : go('workflow', id)),
     run: (id) => go('run', id),
+    watch: (id) => go('run', id, { live: true }),
+    replay: () => { if (P.speed === 'instant') P.speed = '1x'; focusHeading = true; playTo(0); render(); },
     swHist: (k) => { S.swOpen = S.swOpen === k ? null : k; render(); },
     checkNow: () => { toast(S.sw === 'waiting' ? 'This week’s check is still waiting for a yes. Decide on it first, then check again.' : 'Checked just now. Nothing new since Monday.'); render(); },
     addSoftware: () => {
@@ -3557,7 +3753,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     },
     undoRemove: (key) => { S.removed = S.removed.filter((k) => k !== key); toast('Put back.'); render(); },
     ticket: (key) => openModal('ticket', key, '.btn.primary'),
-    watchFromTicket: () => { S.modal = null; go('run', 'sw'); },
+    watchFromTicket: () => { S.modal = null; go('run', 'sw', { live: true }); },
     teams: () => {
       if (!S.teams && !S.modal) opener = selFor(document.activeElement);
       S.teams = !S.teams;
@@ -3569,10 +3765,11 @@ details > .m-close { animation: fold 140ms ease-in both; }
     approve: (id) => approveAs(id, S.user),
     decline: (id) => {
       if (!canApprove(id)) return;
-      if (id === 'sw') { S.sw = 'declined'; S.swBy = S.user; } else { S.conf = 'on'; }
+      if (id === 'sw') { S.sw = 'declined'; S.swBy = S.user; } else { S.conf = 'declined'; S.confBy = S.user; }
       toast('Declined. Nothing was written.');
-      if (S.view.name === 'run' && S.view.id === id) { if (id === 'conf') { go('workflow', 'conf'); return; } continueRun(); }
+      if (S.view.name === 'run' && S.view.id === id) continueRun();
       render();
+      focusGate();
     },
     yesAs: (u) => approveAs('conf', u),
     escalate: () => {
@@ -3691,10 +3888,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const name = nm(u);
       S.roleErr = {};
       if (kind === 'op') {
-        if (on) { r.op = true; logSet('people', `${me().name} made ${name} an Operator.`); toast(`${name} is now an Operator.`); }
+        if (on) { r.op = true; logSet('people', `${me().name} made ${name} an Operator.`); toast(`${name} is now an Operator.`, { label: 'Undo', act: 'roleUndo', arg: `${u}:0` }); }
         else if (u === S.user) S.roleErr[u] = 'You can’t take away your own Operator role. Ask another Operator.';
         else if (!r.ap) S.roleErr[u] = 'Everyone needs at least one role.';
-        else { r.op = false; logSet('people', `${me().name} took away ${name}’s Operator role.`); toast(`${name} is no longer an Operator.`); }
+        else { r.op = false; logSet('people', `${me().name} took away ${name}’s Operator role.`); toast(`${name} is no longer an Operator.`, { label: 'Undo', act: 'roleUndo', arg: `${u}:1` }); }
       } else if (on) {
         r.pendingAp = true;
         r.pendingBy = S.user;
@@ -3711,6 +3908,13 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const box = $app.querySelector(`[data-role="${arg}"]`);
       if (box) box.focus();
       if (S.roleErr[u]) announce(S.roleErr[u]);
+    },
+    roleUndo: (arg) => {
+      const [u, was] = arg.split(':');
+      S.roles[u].op = was === '1';
+      logSet('people', `${me().name} undid the change to ${nm(u)}’s Operator role.`);
+      toast(`Undone. ${nm(u)} ${was === '1' ? 'is an Operator again' : 'is no longer an Operator'}.`);
+      render();
     },
     roleConfirm: (u) => { const r = S.roles[u]; r.ap = true; r.pendingAp = false; logSet('people', `${me().name} confirmed ${nm(u)} as an Approver.`); toast(`${nm(u)} is now an Approver.`); render(); },
     roleNotNow: (u) => { const r = S.roles[u]; r.pendingAp = false; logSet('people', `${me().name} didn’t confirm ${nm(u)} as an Approver.`); toast(`${nm(r.pendingBy)} gets a Teams message that you didn’t confirm it.`); render(); },
@@ -3830,7 +4034,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     },
     moreAppr: (attr) => { if (attr === 'ap') S.wiz.more = !S.wiz.more; else S.apprMore = !S.apprMore; render(); },
     editAppr: (id) => { S.editingAppr = id; S.editing = null; S.apprForm = copyAppr(apprOf(id)); S.apprErr = {}; S.apprMore = false; render(); const f = document.getElementById('af-first-0'); if (f) f.focus(); },
-    cancelAppr: () => { S.editingAppr = null; render(); },
+    cancelAppr: () => { const id = S.editingAppr; S.editingAppr = null; render(); const b = $app.querySelector(`main [data-act="editAppr"][data-arg="${id}"]`); if (b) b.focus(); },
     saveAppr: (id) => {
       S.apprErr = apprProblems(S.apprForm);
       const keys = Object.keys(S.apprErr);
@@ -3854,7 +4058,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       if (done) done.focus();
     },
     advance: () => { if (S.report < 4) S.report += 1; if (S.report === 4) toast(`Dana merged the fix for ${S.supportCase.id}. It’s live.`); render(); },
-    retryNudge: () => { S.nudge = 'fixed'; go('run', 'nudge'); },
+    retryNudge: () => { S.nudge = 'fixed'; go('run', 'nudge', { live: true }); },
     askTool: () => { S.tool = 'asked'; S.draft = true; toast('Sent to Approvers in Teams. Your draft is saved on Home.'); render(); },
     okTool: () => {
       S.tool = 'ok';
@@ -3869,14 +4073,17 @@ details > .m-close { animation: fold 140ms ease-in both; }
       w.err = '';
       w.intent = parseIntent(w.text);
       w.edits = {};
+      w.notRelease = false;
       w.sched = null;
       w.schedErr = {};
       w.name = '';
-      if (reduce) { w.step = 2; render(); return; }
+      if (motionQuery.matches) { w.step = 2; focusHeading = true; render(); return; }
+      /* Planning carries on if the person leaves, but only redraws and moves focus while they're on New workflow. */
+      const here = () => S.view.name === 'new';
       w.planning = 1; render();
-      setTimeout(() => { w.planning = 2; render(); }, 700);
-      setTimeout(() => { w.planning = 3; render(); }, 1400);
-      setTimeout(() => { w.planning = 0; w.step = 2; focusHeading = true; render(); }, 2300);
+      setTimeout(() => { w.planning = 2; if (here()) render(); }, 700);
+      setTimeout(() => { w.planning = 3; if (here()) render(); }, 1400);
+      setTimeout(() => { w.planning = 0; w.step = 2; if (here()) { focusHeading = true; render(); } }, 2300);
     },
     wizNext: () => {
       const w = S.wiz;
@@ -3893,6 +4100,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
       w.step += 1; focusHeading = true; render();
     },
     wizBack: () => { S.wiz.step -= 1; focusHeading = true; render(); },
+    skipMain: () => { const h = $app.querySelector('main h1'); if (h) { h.focus(); h.scrollIntoView({ block: 'start' }); } },
+    showHow: () => { S.showHow = true; render(); const h = document.getElementById('how'); if (h) h.focus(); },
+    notRelease: () => { S.wiz.notRelease = true; focusHeading = true; render(); },
     turnOn: () => {
       const f = draftNr();
       S.nr = { ...f, sched: { ...S.wiz.sched }, appr: copyAppr(S.wiz.appr), name: (S.wiz.name.trim() || f.name) };
@@ -3903,9 +4113,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
       go('done');
     },
     saveDraft: () => { S.draft = true; toast('Draft saved. Pick it up from Home.'); go('home'); },
-    testRun: () => { S.conf = 'waiting'; S.confYes = []; S.confAsk = 0; S.confReq = copyAppr(apprOf('conf')); go('run', 'conf'); },
+    testRun: () => { S.conf = 'waiting'; S.confYes = []; S.confAsk = 0; S.confReq = copyAppr(apprOf('conf')); go('run', 'conf', { live: true }); },
     editSched: (id) => { S.editing = id; S.editingAppr = null; S.schedForm = { monthDay: '1', ...R(id).sched }; S.schedErr = {}; render(); const f = document.getElementById('sf-freq'); if (f) f.focus(); },
-    cancelSched: () => { S.editing = null; render(); },
+    cancelSched: () => { const id = S.editing; S.editing = null; render(); const b = $app.querySelector(`main [data-act="editSched"][data-arg="${id}"]`); if (b) b.focus(); },
     saveSched: (id) => {
       S.schedErr = schedProblems(S.schedForm);
       const keys = Object.keys(S.schedErr);
@@ -3925,12 +4135,13 @@ details > .m-close { animation: fold 140ms ease-in both; }
       render();
     },
     n8nAsk: (id) => openModal('n8n', id, '.btn.primary'),
-    n8nOpen: (id) => { S.n8n[id] = { by: S.user, since: 'today, 9:10' }; closeModal(); toast(`Opened in n8n in a new tab. Only you can change ${esc(R(id).name)} there now.`); render(); },
-    n8nChange: (id) => { S.n8n[id] = { by: 'carol', since: 'today, 9:12' }; S.n8nChg[id] = { by: 'carol', when: 'today, 9:12' }; toast(`Carol published a change to ${esc(R(id).name)} in n8n.`); render(); },
-    n8nRun: (id) => { S.editRun = { wf: id }; go('run', 'edit'); },
+    n8nGiveBack: (id) => { delete S.n8n[id]; n8nLog(id, 'Today', `${me().name} gave it back. Anyone who may change it can open it in n8n now.`); toast(`Given back. Anyone who may change ${esc(R(id).name)} can open it in n8n now.`); render(); },
+    n8nOpen: (id) => { S.n8n[id] = { by: S.user, since: 'today, 9:10' }; n8nLog(id, 'Today, 9:10', `${me().name} opened it in n8n. Only ${me().name} can change it there now.`); closeModal(); toast(`Opened in n8n in a new tab. Only you can change ${esc(R(id).name)} there now.`); render(); },
+    n8nChange: (id) => { S.n8n[id] = { by: 'carol', since: 'today, 9:12' }; S.n8nChg[id] = { by: 'carol', when: 'today, 9:12' }; n8nLog(id, 'Today, 9:11', 'Carol opened it in n8n. Only Carol can change it there now.'); n8nLog(id, 'Today, 9:12', 'Carol published a change that removed Ask for a yes.'); toast(`Carol published a change to ${esc(R(id).name)} in n8n.`); render(); },
+    n8nRun: (id) => { S.editRun = { wf: id }; go('run', 'edit', { live: true }); },
     n8nNew: () => openModal('n8nNew', null, '.btn.primary'),
     n8nNewOpen: () => { closeModal(); toast('Opened n8n in a new tab, with a new, empty workflow in your space.'); render(); },
-    n8nUndo: (id) => { const c = S.n8nChg[id]; if (!c) return; delete S.n8nChg[id]; toast(`Undone. The version before ${nm(c.by)}’s change is live again.`); render(); },
+    n8nUndo: (id) => { const c = S.n8nChg[id]; if (!c) return; delete S.n8nChg[id]; n8nLog(id, 'Today', `${me().name} undid ${nm(c.by)}’s change. The version before it is live again.`); toast(`Undone. The version before ${nm(c.by)}’s change is live again.`); render(); },
     pause: (id) => { S.paused[id] = true; toast(`Paused. ${esc(R(id).name)} won’t run until you resume it.`); render(); },
     resume: (id) => { delete S.paused[id]; toast(`Resumed. Next run ${R(id).next}.`); render(); },
     askDelete: (id) => openModal('delete', id, '[data-act="closeModal"].btn'),
@@ -3949,22 +4160,24 @@ details > .m-close { animation: fold 140ms ease-in both; }
     day: (d) => { S.firstDay = d === 'one'; if (['workflow', 'run'].includes(S.view.name)) go('home'); else render(); },
     starter: (text) => { S.wiz = { ...newWiz(), text }; go('new'); },
     user: (u) => { S.user = u; if (u === 'bob' && ['new', 'done'].includes(S.view.name)) S.view = { name: 'home' }; render(); },
-    reset: () => { stopTimer(); P.run = null; const d = S.firstDay; S = fresh(); S.firstDay = d; S.testOpen = true; focusHeading = true; render(); },
+    reset: () => { stopTimer(); clearTimeout(toastTimer); P.run = null; const d = S.firstDay; S = fresh(); S.firstDay = d; S.testOpen = true; focusHeading = true; render(); },
     toast: (t) => { toast(t); render(); },
   };
 
   document.addEventListener('click', (e) => {
     const t = e.target.closest('[data-act]');
     if (!t) return;
+    if (e.detail > 1 && t.classList.contains('scrim')) return;
+    if (t.getAttribute('aria-disabled') === 'true') { e.preventDefault(); return; }
     const fn = A[t.dataset.act];
     if (fn) { e.preventDefault(); fn(t.dataset.arg); }
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { if (S.modal) closeModal(); else if (S.teams) A.teams(); else if (S.testOpen) A.testToggle(); return; }
+    if (e.key === 'Escape') { if (S.modal) closeModal(); else if (S.teams) A.teams(); else if (S.toast) hideToast(); else if (S.testOpen) A.testToggle(); return; }
     // Keep Tab inside an open dialog.
     if (e.key === 'Tab' && (S.modal || S.teams)) {
       const box = $app.querySelector(S.modal ? '.dialog:not(.leave)' : '.drawer:not(.leave)');
-      const items = box ? [...box.querySelectorAll('button, [href], input, textarea, select, summary')].filter((x) => !x.disabled) : [];
+      const items = box ? [...box.querySelectorAll('button, [href], input, textarea, select, summary')].filter((x) => !x.disabled && shown(x)) : [];
       if (items.length) {
         const first = items[0];
         const last = items[items.length - 1];
@@ -3974,6 +4187,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
       }
     }
   });
+  let findTimer = null;
+  let findRender = null;
   document.addEventListener('input', (e) => {
     const d = e.target.dataset;
     if (d.sw) { S.swForm[d.sw] = e.target.value; return; }
@@ -3983,13 +4198,25 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (d.ck) { S.connForm.key = e.target.value; return; }
     if (d.np === 'name') { S.newPerson.name = e.target.value; return; }
     if (d.limit) { S.limitForm.value = e.target.value; return; }
-    if (d.find) { S.find[d.find] = e.target.value; render(); return; }
+    if (d.find) {
+      S.find[d.find] = e.target.value;
+      clearTimeout(findRender);
+      findRender = setTimeout(render, 250);
+      clearTimeout(findTimer);
+      findTimer = setTimeout(() => {
+        const main = $app.querySelector('main');
+        const n = d.find === 'workflows' ? new Set([...main.querySelectorAll('[data-act="workflow"]')].map((x) => x.dataset.arg)).size : main.querySelectorAll('tr[data-flip^="sw:"]').length;
+        announce(n ? `${n} ${d.find === 'workflows' ? (n === 1 ? 'workflow' : 'workflows') : 'found'}` : 'Nothing matches');
+      }, 600);
+      return;
+    }
     if (d.sched && e.target.type === 'time') { S.wiz.sched.time = e.target.value; return; }
     if (d.sf && e.target.type === 'time') { S.schedForm.time = e.target.value; return; }
     if (d.input) S.wiz[d.input] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
   });
   document.addEventListener('submit', (e) => {
     e.preventDefault();
+    if (e.submitter && e.submitter.getAttribute('aria-disabled') === 'true') return;
     const a = e.target.dataset.submit;
     if (a && A[a]) A[a]();
   });
