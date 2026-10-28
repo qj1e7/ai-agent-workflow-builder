@@ -31,6 +31,7 @@ n8n then has no node that can reach another system, call an outside address or r
 
 - The Portal's builder drafts the first n8n workflow. The Planner lays out the agent nodes when the workflow is built, and every run follows them.
 - Our API checks the draft. Through n8n's API, the platform's account (n8n's owner) creates the n8n workflow and publishes it. The Portal says the workflow is on once n8n reports every trigger as activated.
+- An Operator may also start a new workflow in n8n instead, from New workflow. The Planner doesn't draft it.
 - To change it, an Operator presses **Open in n8n**. The platform moves the n8n workflow into that person's own space in n8n, and they edit and publish it there.
 - The Portal keeps a copy of every published version, with who published it and when. It shows the plan read back from the published version, warns when a newly published version fails our check, and can undo a change by publishing an earlier version again.
 
@@ -59,7 +60,7 @@ None of this carries the safety rules. ADR 0026 does.
 - **Agents stay in our runtime (extends ADR 0002).** They remain reusable in NCS's agent hub, and staff see them as Agent nodes. ADR 0023's "one generic n8n workflow carries every card's runs" no longer holds.
 - **"Read" and "Propose a change" can only reach the team's allowed places,** meaning the Jira projects, Confluence spaces, GitHub projects and Teams channels set in the Portal. This is `bind()`'s rule applied to steps that staff set up by hand. The Approver still sees the exact target of every change.
 - **Each of n8n's other nodes is a decision.** Staff may ask for one, such as Slack or email. We either add a node to our pack, or put n8n's node on the allow list after checking what it can reach.
-- **A copy made in n8n that uses our nodes is registered as a new use case.** It is marked "Made in n8n". Its requests go to any Approver on the team (ADR 0024) until an Operator names Approvers in the Portal.
+- **A workflow made in n8n that uses our nodes, new or copied, is registered as a new use case.** It is marked "Made in n8n". Its requests go to any Approver on the team (ADR 0024) until an Operator names Approvers in the Portal.
 - **n8n users must match our users by email,** so that a published version maps to a person.
 - **NCS maintains a small TypeScript node pack beside the Python.** P6's nodes were plain JavaScript loaded from a folder. The real pack is baked into our own n8n image at the pinned version, which also works offline in DevNet (ADR 0006). CI tests the pack and the allow list against a new n8n version before the pin moves.
 - **n8n's licence** (the Sustainable Use License) still needs the sponsor's confirmation, as ADR 0002 says.
