@@ -578,3 +578,18 @@ async def test_a_decision_applies_only_to_the_address_confirmation_it_names(
     ]
     named = await decide(client, BOB, second, "not_now")
     assert (named.status_code, named.json()["confirmation_id"]) == (201, second["confirmation_id"])
+
+
+async def test_someone_re_added_under_a_new_email_signs_in_to_the_new_record(
+    client: httpx.AsyncClient, people: People
+):
+    dave = (await add(client, ALICE, "dave@example.test", "Dave", operator=True)).json()
+    first = await people.resolve(ExternalIdentity("oid-dave", "dave@example.test", "Dave"))
+    assert first is not None and first.user_id == dave["id"]
+    assert (await client.delete(f"/api/v1/people/{dave['id']}", headers=ALICE)).status_code == 204
+    assert await people.resolve(ExternalIdentity("oid-dave", None, None)) is None
+    moved = (await add(client, ALICE, "dave.tan@example.test", "Dave Tan", operator=True)).json()
+    assert moved["id"] != dave["id"]
+    again = await people.resolve(ExternalIdentity("oid-dave", "dave.tan@example.test", "Dave"))
+    assert again is not None and (again.user_id, again.display) == (moved["id"], "Dave Tan")
+    assert await people.resolve(ExternalIdentity("oid-dave", None, None)) == again

@@ -282,7 +282,14 @@ def remove_person(
     if person.is_approver and len(approvers(people)) - 1 < MIN_APPROVERS:
         return Refused(PeopleRefusal.TWO_APPROVERS)
     return Changed(
-        replace(person, is_operator=False, is_approver=False, removed_at=now),
+        replace(
+            person,
+            is_operator=False,
+            is_approver=False,
+            entra_oid=None,
+            bound_at=None,
+            removed_at=now,
+        ),
         f"{actor.display} removed {person.display} from the list.",
     )
 

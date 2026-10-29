@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -273,6 +274,11 @@ class TestRemovePerson:
         outcome = changed(rules.remove_person(ALICE, TEAM, DAVE, LATER))
         assert (outcome.person.removed_at, outcome.person.roles) == (LATER, frozenset())
         assert outcome.summary == "Alice removed Dave from the list."
+
+    def test_removing_someone_lets_go_of_their_sign_in(self):
+        bound = replace(DAVE, entra_oid="oid-dave", bound_at=NOW)
+        outcome = changed(rules.remove_person(ALICE, [ALICE, BOB, CAROL, bound], bound, LATER))
+        assert (outcome.person.entra_oid, outcome.person.bound_at) == (None, None)
 
     def test_nobody_removes_themselves(self):
         assert refused(rules.remove_person(ALICE, TEAM, ALICE, LATER)) is PeopleRefusal.YOURSELF

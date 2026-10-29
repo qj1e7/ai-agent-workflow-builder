@@ -90,7 +90,9 @@ class PeopleStore:
     async def by_oid(self, uow: UnitOfWork, oid: str) -> Person | None:
         row = await (
             await uow.conn.execute(
-                f"SELECT {_COLUMNS} FROM orchestration.people WHERE entra_oid = %s", (oid,)
+                f"SELECT {_COLUMNS} FROM orchestration.people "
+                "WHERE entra_oid = %s AND removed_at IS NULL",
+                (oid,),
             )
         ).fetchone()
         return _person(row) if row is not None else None
