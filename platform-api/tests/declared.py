@@ -110,7 +110,6 @@ def declared_status(app: FastAPI, method: str, path: str, response: httpx.Respon
     components = schema["components"]["schemas"]
     if "$ref" in body_schema:
         declared_model = components[body_schema["$ref"].rsplit("/", 1)[1]]
-        # A tagged union is a component that lists its variants under oneOf.
         refs = declared_model.get("oneOf", [])
         models = [components[r["$ref"].rsplit("/", 1)[1]] for r in refs] or [declared_model]
     else:

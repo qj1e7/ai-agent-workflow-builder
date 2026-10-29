@@ -168,20 +168,7 @@ def add_person(
     if existing is not None and existing.on_list:
         return Refused(PeopleRefusal.ALREADY_ON_THE_LIST)
     if existing is not None:
-        # A removed person comes back under the same id, so past runs keep naming them, but
-        # without the old sign-in binding: they bind again by the email the Operator entered.
-        person = replace(
-            existing,
-            email=email,
-            display=display,
-            is_operator=operator,
-            is_approver=False,
-            added_by=actor.id,
-            added_at=now,
-            entra_oid=None,
-            bound_at=None,
-            removed_at=None,
-        )
+        person = _restored(existing, email, display, operator, actor, now)
     else:
         person = Person(
             id=new_person_id(),
@@ -203,6 +190,24 @@ def add_person(
     else:
         summary += "."
     return Added(person, summary, ask_approver=approver)
+
+
+def _restored(
+    removed: Person, email: str, display: str, operator: bool, actor: Person, now: datetime
+) -> Person:
+    """A removed person back on the list under the same id, unbound, so they sign in afresh."""
+    return replace(
+        removed,
+        email=email,
+        display=display,
+        is_operator=operator,
+        is_approver=False,
+        added_by=actor.id,
+        added_at=now,
+        entra_oid=None,
+        bound_at=None,
+        removed_at=None,
+    )
 
 
 def set_operator(

@@ -763,7 +763,6 @@ class Orchestrator:
             assert record is not None
             decisions = await self._store.load_decisions(uow, approval_id)
             if self._people is not None:
-                # The roles as they are now, so a role removed a moment ago already counts.
                 roles = await self._people.roles_now(uow, principal.user_id)
                 principal = replace(principal, roles=roles or frozenset())
             outcome = approvals.decide(

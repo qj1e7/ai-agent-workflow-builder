@@ -135,16 +135,20 @@ class PeopleStore:
 
     async def bind(self, uow: UnitOfWork, identity: ExternalIdentity) -> Person | None:
         """First sign-in: binds the one unbound record whose email is the token's user name,
-        ignoring case. A bound record is never rebound, and the name the Operator entered stays
-        (ADR 0029)."""
-        row = await (
-            await uow.conn.execute(
-                "UPDATE orchestration.people SET entra_oid = %s, bound_at = %s "
-                "WHERE lower(email) = lower(%s) AND entra_oid IS NULL AND removed_at IS NULL "
-                f"RETURNING {_COLUMNS}",
-                (identity.subject, uow.now, identity.user_name),
-            )
-        ).fetchone()
+        ignoring case, or returns the record another request bound a moment ago. A bound record
+        is never rebound, and the name the Operator entered stays (ADR 0029)."""
+        try:
+            async with uow.conn.transaction():
+                row = await (
+                    await uow.conn.execute(
+                        "UPDATE orchestration.people SET entra_oid = %s, bound_at = %s "
+                        "WHERE lower(email) = lower(%s) AND entra_oid IS NULL "
+                        f"AND removed_at IS NULL RETURNING {_COLUMNS}",
+                        (identity.subject, uow.now, identity.user_name),
+                    )
+                ).fetchone()
+        except psycopg.errors.UniqueViolation:
+            return await self.by_oid(uow, identity.subject)
         return _person(row) if row is not None else None
 
     async def mark_signed_in(self, uow: UnitOfWork, person_id: UserId) -> None:
@@ -240,18 +244,10 @@ class People:
                 case ExternalIdentity():
                     person = await self._store.by_oid(uow, identity.subject)
                     if person is None and identity.user_name:
-                        person = await self._bind(uow, identity)
+                        person = await self._store.bind(uow, identity)
                     if person is None or not person.on_list:
                         return None
                     return person.principal
-
-    async def _bind(self, uow: UnitOfWork, identity: ExternalIdentity) -> Person | None:
-        try:
-            async with uow.conn.transaction():
-                return await self._store.bind(uow, identity)
-        except psycopg.errors.UniqueViolation:
-            # Two first requests raced; the other one bound the record.
-            return await self._store.by_oid(uow, identity.subject)
 
     async def person(self, person_id: UserId) -> Principal | None:
         async with self._db.transaction("orchestration") as uow:
