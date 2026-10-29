@@ -21,6 +21,7 @@ interface Row {
   id: string
   name: string
   status: string
+  problem: string | null
   our_version: string | null
   newest_version: string | null
   our_version_source: { kind: string; ticket: string | null } | null
@@ -31,6 +32,7 @@ interface Row {
 interface View {
   use_case_id: string
   software: Row[]
+  last_check: { run_id: string; state: string; started_at: string } | null
   schedule: { day: string; at: string; owner: string; owner_name: string; next_at: string } | null
 }
 
@@ -256,17 +258,20 @@ test('@lane5 bob, an Approver only, sees the list and no add, remove, schedule o
   })
 })
 
-test('@lane6 when the mock GitHub fails during a check, the row says it can’t check and will try at the next check', async ({ browser }) => {
+test('@lane6 when the mock GitHub fails during a check, the row says it can’t check and will try at the next check, and the page says the check stopped', async ({ browser }) => {
   await withBackend(async (backend) => {
     await backend.freshWatchlist('alice', [LANGGRAPH])
+    await backend.send('PUT', 'alice', '/api/v1/watchlist/schedule', { day: 'monday', at: '09:00' })
     await setMockGithubMode('unavailable')
     let runId = ''
     try {
       runId = await backend.checkNow('alice', (await viewOf(backend)).use_case_id)
-      await expect.poll(async () => (await rowNamed(backend, 'LangGraph')).status, { timeout: 120_000, intervals: [1_000] }).toBe('cant_check')
+      await backend.waitForState(runId, ['failed'], 120_000)
     } finally {
       await setMockGithubMode('ok')
     }
+    const view = await viewOf(backend)
+    const api = await rowNamed(backend, 'LangGraph')
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
     const watch = watchPage(page)
@@ -274,8 +279,16 @@ test('@lane6 when the mock GitHub fails during a check, the row says it can’t 
     const row = rowOf(page, 'LangGraph')
     await expect(row).toContainText('Can’t check')
     await expect(row).toContainText('It will try again at the next check.')
+    await expect(page.getByText('The last check stopped', { exact: false })).toHaveText('The last check stopped: an agent could not finish its work.')
+    await expect(page.getByRole('link', { name: 'Open the run' })).toHaveAttribute('href', `/runs/${runId}`)
+    await row.getByRole('button', { name: /^History/ }).click()
+    const history = row.getByRole('list', { name: 'History of LangGraph' })
+    await expect(history).toContainText(`Couldn’t check. ${api.problem ?? 'missing'}`)
     await shotTo(page, 6, 'p6-cant-check.png', true)
-    save(6, 'p6-cant-check.json', { runId, row: await rowNamed(backend, 'LangGraph'), rowOnPage: await text(row) })
+    save(6, 'p6-cant-check.json', { runId, lastCheck: view.last_check, row: api, rowOnPage: await text(row), historyOnPage: await text(history) })
+    expect(api.status).toBe('cant_check')
+    expect(api.problem, 'the row keeps why it could not be checked').toContain('GitHub')
+    expect(view.last_check).toMatchObject({ run_id: runId, state: 'failed' })
     assertClean(watch)
     await context.close()
   })
