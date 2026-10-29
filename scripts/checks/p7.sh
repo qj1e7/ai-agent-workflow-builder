@@ -10,7 +10,8 @@
 #   check <project> [playwright arguments] run portal/e2e/checks/p7.check.ts in the runner image, in that project's Portal network
 #   lane1 <trunk-project> <head-project>   trunk has no Agent library: record it; then lane 1 at head
 #   lanes <project>                        lanes 2 to 9 at head, one browser run per lane
-#   lane10 <worktree> <project>            stop the agent runtime, open the Tools tab, start the runtime again
+#   lane10 <worktree> <project>            stop the agent runtime, open the Tools tab, start the runtime again;
+#                                          the tool list is fixed in platform-api, so the lane passes through its forced 503
 #   size <trunk-worktree> <head-worktree>  gzip bytes of the JavaScript that dist/index.html loads; fails past +30 KB
 #   perf <head-project> [samples]          largest contentful paint of /agents; fails at a median of 2.5 s or more
 #
