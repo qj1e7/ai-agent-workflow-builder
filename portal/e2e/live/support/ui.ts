@@ -15,6 +15,24 @@ export function openContext(browser: Browser, { phone = false } = {}): Promise<B
   })
 }
 
+/** A browser context signed in, with the dev sign-in, as one of the seeded people. */
+export async function devContext(browser: Browser, user: string, { phone = false, reducedMotion = false } = {}): Promise<BrowserContext> {
+  const context = await browser.newContext({
+    ...(phone ? { viewport: PHONE, isMobile: true, hasTouch: true } : { viewport: DESKTOP }),
+    locale: 'en-SG',
+    timezoneId: 'Asia/Singapore',
+    ...(reducedMotion ? { reducedMotion: 'reduce' as const } : {}),
+  })
+  await context.addInitScript((id) => {
+    try {
+      window.localStorage.setItem('portal.dev-user', id)
+    } catch {
+      // A page without storage signs in as the default person.
+    }
+  }, user)
+  return context
+}
+
 /** Saves a shot of the viewport under e2e/out/live/shots, after a pause for CSS transitions. */
 export async function shot(page: Page, info: TestInfo, name: string): Promise<void> {
   const dir = path.join(OUT, 'shots')
