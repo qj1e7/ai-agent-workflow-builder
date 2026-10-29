@@ -202,3 +202,28 @@ describe('tokens.css', () => {
     expect(missing).toEqual([])
   })
 })
+
+function innermostRules(css: string): { selectors: string[]; body: string }[] {
+  return [...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((match) => ({
+    selectors: (match[1] ?? '').split(',').map((selector) => selector.trim()),
+    body: match[2] ?? '',
+  }))
+}
+
+describe('base.css', () => {
+  it('stops under reduced motion every animation and transition, on the pseudo-elements the stylesheets move too', () => {
+    const files = readdirSync(srcDir, { recursive: true, encoding: 'utf8' }).filter((file) => file.endsWith('.css'))
+    const moved = new Set<string>()
+    for (const file of files) {
+      for (const rule of innermostRules(readFileSync(path.join(srcDir, file), 'utf8'))) {
+        if (!/\b(animation|transition)(-name)?\s*:\s*(?!none)/.test(rule.body)) continue
+        for (const selector of rule.selectors) for (const match of selector.matchAll(/::([a-z-]+)/g)) moved.add(match[1] ?? '')
+      }
+    }
+    const base = readFileSync(new URL('./base.css', import.meta.url), 'utf8')
+    const reduced = /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?\})\s*\}/.exec(base)?.[1] ?? ''
+    const stopped = innermostRules(reduced).find((rule) => /animation:\s*none !important/.test(rule.body) && /transition:\s*none !important/.test(rule.body))
+    expect(stopped?.selectors).toContain('*')
+    expect([...moved].filter((pseudo) => !stopped?.selectors.includes(`*::${pseudo}`))).toEqual([])
+  })
+})
