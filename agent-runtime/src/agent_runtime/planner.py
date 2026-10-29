@@ -420,11 +420,16 @@ def _missing(kind: RowKind, note: str = NOT_SAID) -> UnderstoodRow:
     return UnderstoodRow(kind=kind, text="", state="missing", note=note)
 
 
+def no_tool_for(kind: RowKind, text: str) -> bool:
+    """True when a part asks for a write no tool can make, or for a place other than Jira."""
+    if kind not in ("do", "where") or not text.strip():
+        return False
+    first = text.split(maxsplit=1)[0].strip(",.;:!").casefold()
+    return first in NO_TOOL_VERBS or (kind == "where" and OTHER_PLACES.search(text) is not None)
+
+
 def _held_to_the_tools(row: UnderstoodRow) -> UnderstoodRow:
-    if row.kind not in ("do", "where") or row.state not in ("understood", "changed"):
-        return row
-    first = row.text.split(maxsplit=1)[0].strip(",.;:!").casefold()
-    if first in NO_TOOL_VERBS or (row.kind == "where" and OTHER_PLACES.search(row.text)):
+    if row.state in ("understood", "changed") and no_tool_for(row.kind, row.text):
         return row.model_copy(update={"state": "cant_do", "note": ONLY_TICKETS})
     return row
 

@@ -42,8 +42,8 @@ class Job[C: Case]:
         rows = json.loads((CASES / f"{self.name}.json").read_text())
         return [self.case_type.model_validate(row) for row in rows]
 
-    def ask(self, model: BaseChatModel, case: C) -> Answer:
-        prompt = self.prompt(case)
+    def ask(self, model: BaseChatModel, case: C, marker: str = "") -> Answer:
+        prompt = marked(self.prompt(case), marker)
         if self.schema is None:
             raw = model.invoke(prompt)
             text = raw.text.strip()
@@ -51,6 +51,14 @@ class Job[C: Case]:
         structured = model.with_structured_output(self.schema(), include_raw=True)
         reply: dict[str, Any] = structured.invoke(prompt)  # type: ignore[assignment]
         return _structured_answer(reply)
+
+
+def marked(prompt: str, marker: str) -> str:
+    """The prompt with this run's marker before it. The AI Singapore gateway answers a request it
+    has seen before from its store, so a rerun without a new marker would score that store."""
+    if not marker:
+        return prompt
+    return f"Eval run {marker}. This line is not part of the task.\n\n{prompt}"
 
 
 def _structured_answer(reply: dict[str, Any]) -> Answer:
