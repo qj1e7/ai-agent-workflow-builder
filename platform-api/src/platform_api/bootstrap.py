@@ -58,14 +58,14 @@ def main(env: Mapping[str, str] | None = None) -> int:
     except ConfigError as error:
         say(str(error))
         return 1
-    upgrade_all(settings.owner_database_url)
-    say("database migrations are at head")
     unreadable = unreadable_data(settings.owner_database_url)
     if unreadable:
         for line in unreadable:
             say(line)
         say(RESET_HINT)
         return _finish(settings, say, [], [], "the database holds old release-check data")
+    upgrade_all(settings.owner_database_url)
+    say("database migrations are at head")
     definitions = load_all()
     findings = lint(definitions)
     if findings:
@@ -175,15 +175,11 @@ def content_hash_without_credential(
 
 
 def unreadable_data(owner_url: str) -> list[str]:
+    """Runs before the migrations, so a refused stack keeps its schema and can go back to the
+    old code. A fresh database has none of these tables yet."""
     with psycopg.connect(owner_url) as conn:
-        runs = _count(
-            conn,
-            "SELECT count(*) FROM orchestration.runs WHERE spec -> 'task' ->> 'kind' = %s",
-            OLD_TASK_KIND,
-        )
-        versions = _count(
-            conn, "SELECT count(*) FROM builder.use_case_versions WHERE template = %s", OLD_TEMPLATE
-        )
+        runs = _count(conn, "orchestration.runs", "spec -> 'task' ->> 'kind' = %s", OLD_TASK_KIND)
+        versions = _count(conn, "builder.use_case_versions", "template = %s", OLD_TEMPLATE)
     found: list[str] = []
     if runs:
         found.append(f"orchestration.runs holds {runs} run(s) of the old release check")
@@ -195,8 +191,13 @@ def unreadable_data(owner_url: str) -> list[str]:
     return found
 
 
-def _count(conn: psycopg.Connection[Any], query: LiteralString, value: str) -> int:
-    row = conn.execute(query, (value,)).fetchone()
+def _count(
+    conn: psycopg.Connection[Any], table: LiteralString, where: LiteralString, value: str
+) -> int:
+    exists = conn.execute("SELECT to_regclass(%s) IS NOT NULL", (table,)).fetchone()
+    if exists is None or not exists[0]:
+        return 0
+    row = conn.execute(f"SELECT count(*) FROM {table} WHERE {where}", (value,)).fetchone()
     return 0 if row is None else int(row[0])
 
 
