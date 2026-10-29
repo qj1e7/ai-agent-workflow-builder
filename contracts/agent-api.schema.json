@@ -491,7 +491,7 @@
           "type": "string"
         },
         "word": {
-          "description": "The word that made the Planner think so, as the task wrote it.",
+          "description": "The word that made the Planner think so, as the task wrote it: a form of version, release, upgrade, patch or vulnerability.",
           "maxLength": 80,
           "minLength": 1,
           "title": "Word",

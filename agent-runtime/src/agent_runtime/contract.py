@@ -572,7 +572,8 @@ class BelongsOnWatchlist(WireModel):
     word: str = Field(
         min_length=1,
         max_length=80,
-        description="The word that made the Planner think so, as the task wrote it.",
+        description="The word that made the Planner think so, as the task wrote it: a form of "
+        "version, release, upgrade, patch or vulnerability.",
     )
     software: str | None = Field(
         default=None,

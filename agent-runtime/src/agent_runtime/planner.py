@@ -373,6 +373,27 @@ LEADS_IN: Final = frozenset(
     }
 )
 FIRST_WORDS: Final = 5
+WATCHLIST_WORDS: Final = frozenset(
+    {
+        "version",
+        "versions",
+        "release",
+        "releases",
+        "released",
+        "releasing",
+        "upgrade",
+        "upgrades",
+        "upgraded",
+        "upgrading",
+        "patch",
+        "patches",
+        "patched",
+        "patching",
+        "vulnerability",
+        "vulnerabilities",
+        "vulnerable",
+    }
+)
 WORD: Final = re.compile(r"[a-z0-9][a-z0-9'-]*")
 
 
@@ -543,10 +564,11 @@ def _as_the_task_wrote_it(task: str, said: str | None) -> str | None:
 def understood_of(answer: UnderstandAnswer, task: str) -> Understood | BelongsOnWatchlist | None:
     """What the Operator is shown. Every part has a row, a part the model left out is missing,
     and a part that needs a tool we don't have is can't do. None when the answer does not hold
-    together: no rows, or a watchlist word that is not in the task."""
+    together: no rows, or a watchlist word that is not in the task or not one of the words the
+    prompt names."""
     if answer.belongs_on_watchlist:
         word = _as_the_task_wrote_it(task, answer.watchlist_word)
-        if word is None:
+        if word is None or word.casefold() not in WATCHLIST_WORDS:
             return None
         return BelongsOnWatchlist(word=word, software=_as_the_task_wrote_it(task, answer.software))
     if not answer.rows:
@@ -568,6 +590,6 @@ def understand_task(request: UnderstandRequest, chat_for: ChatFor) -> Understand
         return answer
     result = understood_of(answer, request.task)
     if result is None:
-        log.warning("UnderstandAnswer: no rows, or a watchlist word the task does not hold")
+        log.warning("UnderstandAnswer: no rows, or a watchlist word the task or prompt lacks")
         return UNUSABLE
     return result

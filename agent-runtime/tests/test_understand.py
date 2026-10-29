@@ -335,6 +335,35 @@ def test_a_watchlist_word_the_task_does_not_hold_is_unusable():
     assert understood_of(UnderstandAnswer(belongs_on_watchlist=False), FOLLOW_UP_TASK) is None
 
 
+@pytest.mark.parametrize(
+    ("said", "task"),
+    [
+        ("tickets", FOLLOW_UP_TASK),
+        ("bug", FOLLOW_UP_TASK),
+        ("a", "Every Monday at 9am, check the tickets"),
+        ("LangGraph", RELEASE_TASK),
+    ],
+)
+def test_a_watchlist_word_outside_the_prompts_words_is_unusable(said: str, task: str):
+    answer = UnderstandAnswer(belongs_on_watchlist=True, watchlist_word=said, software="bug")
+    assert understood_of(answer, task) is None
+
+
+@pytest.mark.parametrize(
+    ("said", "task", "word"),
+    [
+        ("version", "Is our FastAPI version behind", "version"),
+        ("releases", "Tell me about new Redis releases", "releases"),
+        ("upgrade", "Tell me when Redis is upgraded", "upgraded"),
+        ("patch", "Tell me when Log4j is patched", "patched"),
+        ("vulnerable", "Is Log4j vulnerable", "vulnerable"),
+    ],
+)
+def test_each_form_of_the_prompts_words_is_a_watchlist_word(said: str, task: str, word: str):
+    answer = UnderstandAnswer(belongs_on_watchlist=True, watchlist_word=said)
+    assert understood_of(answer, task) == BelongsOnWatchlist(word=word)
+
+
 def test_a_slow_model_is_too_slow_and_waits_less_than_the_platform():
     waits: list[float] = []
     slow = type("ReadTimeout", (Exception,), {})("took too long")
