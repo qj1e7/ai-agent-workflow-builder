@@ -69,13 +69,15 @@ function startRun(path) {
   })
 }
 
+// The seeded check waits at the approval gate. Every later check of the same watchlist finds that
+// ticket already waiting, proposes nothing and ends succeeded, so both states count as settled.
 function waitForSettled() {
   for (let i = 0; i < 120; i++) {
     const { runs } = http.get(`${origin}/api/v1/runs`, { headers }).json()
-    if (runs.every((run) => run.state === 'awaiting_approval')) return runs.length
+    if (runs.every((run) => run.state === 'awaiting_approval' || run.state === 'succeeded')) return runs.length
     sleep(1)
   }
-  fail('the seeded runs never all reached the approval gate')
+  fail('the seeded runs never all settled')
 }
 
 export function setup() {
@@ -83,7 +85,7 @@ export function setup() {
   const assets = [...String(page).matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map((match) => match[1])
   if (assets.length === 0) fail('the Portal page names no /assets/ file')
   for (let i = 0; i < seedRuns; i++) startRun('seed')
-  console.log(`history before the test: ${waitForSettled()} runs, all waiting at the approval gate`)
+  console.log(`history before the test: ${waitForSettled()} runs, all settled`)
   return { assets }
 }
 

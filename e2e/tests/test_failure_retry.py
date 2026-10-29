@@ -13,7 +13,7 @@ def test_github_outage_fails_the_run_and_a_retry_after_recovery_succeeds(
     api: Api, github: MockGithub
 ) -> None:
     github.set_mode("unavailable")
-    use_case_id = api.create_use_case("alice", "failure")
+    use_case_id = api.watch_langgraph("alice")
     run_id, _ = api.start_run("alice", use_case_id)
 
     failed = api.wait_for_state("alice", run_id, {"failed"})

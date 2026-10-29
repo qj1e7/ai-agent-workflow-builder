@@ -22,15 +22,8 @@ CONTRACTS_DIR = Path(os.environ.get("CONTRACTS_DIR", Path(__file__).parents[2] /
 TERMINAL_STATES = frozenset({"succeeded", "rejected", "failed"})
 TERMINAL_EVENTS = frozenset({"run_succeeded", "run_rejected", "run_failed"})
 
-INSTRUCTION = "Check langchain-ai/langgraph for new releases and open a ticket for the team."
-LAST_SEEN_TAG = "1.2.14"
-EXPECTED_TITLE = "New LangGraph releases: 1.2.16, 1.2.15"
-RELEASE_CHECK_PARAMS = {
-    "repo": "langchain-ai/langgraph",
-    "tag_pattern": r"^\d+\.\d+\.\d+$",
-    "ticket_project": "MOCK",
-    "last_seen_tag": LAST_SEEN_TAG,
-}
+OUR_VERSION = "1.2.14"
+EXPECTED_TITLE = "Upgrade LangGraph from 1.2.14 to 1.2.16"
 
 
 def fail(message: str) -> NoReturn:
@@ -118,17 +111,14 @@ class Api:
     ) -> httpx.Response:
         return self.request(user, "POST", path, expect=expect, headers=headers, json_body=body)
 
-    def create_use_case(self, user: str, label: str) -> str:
-        body = {
-            "template": "release_check",
-            "name": f"e2e {label} {uuid.uuid4().hex[:8]}",
-            "instruction": INSTRUCTION,
-            "params": RELEASE_CHECK_PARAMS,
-        }
-        created = self.post(user, "/api/v1/use-cases", body, expect=(201,)).json()
-        if created.get("version") != 1 or not created.get("use_case_id"):
-            fail(f"create use case: unexpected body {created!r}")
-        return created["use_case_id"]
+    def watch_langgraph(self, user: str) -> str:
+        """The team's watchlist with one software, LangGraph at 1.2.14, which the mock GitHub
+        has at 1.2.16. One watchlist per team, so whatever a kept stack still watches goes first."""
+        self.clear_watchlist(user)
+        added = self.add_software(user, "LangGraph", "langchain-ai/langgraph", OUR_VERSION).json()
+        if [row["name"] for row in added.get("software", [])] != ["LangGraph"]:
+            fail(f"watch LangGraph: unexpected watchlist {added!r}")
+        return added["use_case_id"]
 
     def start_run(
         self, user: str, use_case_id: str, key: str | None = None
