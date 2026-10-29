@@ -15,7 +15,6 @@ export function Menu() {
   )
 }
 
-/** The same menu as a bar at the bottom of the screen, for phones and small tablets. */
 export function TabBar() {
   return (
     <nav className={styles['tabbar']} aria-label="Main">

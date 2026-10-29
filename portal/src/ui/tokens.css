@@ -105,16 +105,13 @@
   --fail-line: var(--red-line);
   --fail-tint: var(--red-soft);
   --radius-button: var(--r-ctl);
-  --radius-panel: var(--r-card);
 
-  --text-12: 0.75rem;
   --text-14: 0.875rem;
   --text-16: 1rem;
   --text-18: 1.125rem;
   --text-22: 1.375rem;
   --text-28: 1.75rem;
 
-  --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
@@ -123,7 +120,6 @@
   --space-7: 48px;
   --space-8: 64px;
 
-  --page-max: 1180px;
   --gutter: var(--space-6);
 }
 

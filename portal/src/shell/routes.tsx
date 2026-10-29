@@ -6,7 +6,6 @@ import { EmptyPage } from './PageHead'
 import { greeting, today } from './today'
 
 export interface PageContext {
-  /** The signed-in person's display name, once the platform has answered. */
   readonly name: string | null
   readonly now: Date
 }

@@ -4,14 +4,13 @@ import { useMe } from './api/queries'
 import { Header } from './shell/Header'
 import { TabBar } from './shell/Menu'
 import { PlatformDown, platformIsDown } from './shell/PlatformDown'
+import { PRODUCT } from './shell/product'
 import { AppRoutes } from './shell/routes'
 import { TestControls } from './shell/TestControls'
 import { ErrorBoundary } from './ui/ErrorBoundary'
 import styles from './shell/Shell.module.css'
 
-const PRODUCT = 'AI Workflow Builder'
-
-/** Names the tab after the page, and after a move to another page puts focus on its heading, so a screen reader starts there. */
+/** Focus stays where it is on first load, so the skip link stays the first Tab stop. */
 function useHeadingFocus(): void {
   const { pathname } = useLocation()
   const previous = useRef<string | null>(null)

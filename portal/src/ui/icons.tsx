@@ -153,14 +153,6 @@ export const IconExternal = drawn(
     <path d="M11 6H7.5A1.5 1.5 0 0 0 6 7.5v9A1.5 1.5 0 0 0 7.5 18h9a1.5 1.5 0 0 0 1.5-1.5V13" />
   </>,
 )
-export const IconSun = drawn(
-  'IconSun',
-  <>
-    <circle cx="12" cy="12" r="4" />
-    <path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4" />
-  </>,
-)
-export const IconMoon = drawn('IconMoon', <path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z" />)
 export const IconDot = drawn('IconDot', <circle cx="12" cy="12" r="4" />)
 export const IconRing = drawn('IconRing', <circle cx="12" cy="12" r="7.5" />)
 export const IconDash = drawn('IconDash', <path d="M7 12h10" />)
@@ -189,12 +181,3 @@ export const GlyphPlatform = drawn(
     <path d="M8 12h8M12 8v8" />
   </>,
 )
-
-export function PortalMark({ size = 26 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 26 26" aria-hidden="true" focusable="false">
-      <path d="M3 9V3h20v20H15M9 23H3V15" fill="none" stroke="var(--ink)" strokeWidth="2.5" />
-      <circle cx="13" cy="13" r="3.2" fill="var(--lead)" />
-    </svg>
-  )
-}

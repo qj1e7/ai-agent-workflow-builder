@@ -17,7 +17,6 @@ export default tseslint.config(
     },
   },
   {
-    // The stream is private to run monitoring; nothing else reaches into it.
     files: ['src/**/*.{ts,tsx}'],
     ignores: ['src/stream/**'],
     rules: {

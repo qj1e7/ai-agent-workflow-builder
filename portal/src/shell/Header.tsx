@@ -4,6 +4,7 @@ import { cx } from '../ui/cx'
 import { Mark, SettingsIcon } from './icons'
 import { Menu } from './Menu'
 import { PersonChip } from './PersonChip'
+import { PRODUCT, PRODUCT_PREFIX } from './product'
 import { PAGES } from './routes'
 import { TeamsButton } from './TeamsPanel'
 import iconButton from './IconButton.module.css'
@@ -16,7 +17,8 @@ export function Header({ person }: { person: Me | null }) {
         <Link to={PAGES.home.path} className={cx(styles['brand'])}>
           <Mark />
           <span className={styles['brandText']}>
-            <span className={styles['brandAi']}>AI </span>Workflow Builder
+            <span className={styles['brandAi']}>{PRODUCT_PREFIX}</span>
+            {PRODUCT.slice(PRODUCT_PREFIX.length)}
           </span>
         </Link>
         <Menu />

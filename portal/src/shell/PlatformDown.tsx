@@ -2,7 +2,7 @@ import { ApiError } from '../api/client'
 import { Button } from '../ui/Button'
 import { PageHead } from './PageHead'
 
-/** A network failure, or the platform answering that it is not well. A 4xx is a different problem and is not called "down". */
+/** A refusal below 500 is a different problem from the platform being down. */
 export function platformIsDown(error: unknown): boolean {
   return error instanceof ApiError ? error.status >= 500 : true
 }

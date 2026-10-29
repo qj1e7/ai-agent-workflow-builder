@@ -9,7 +9,6 @@ export function greeting(now: Date): string {
   return hour >= 12 ? 'Good afternoon' : 'Good morning'
 }
 
-/** For example "Thursday 29 October". */
 export function today(now: Date): string {
   return dateIn.format(now)
 }

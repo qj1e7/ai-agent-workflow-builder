@@ -64,7 +64,6 @@ export const BotIcon = drawn(
   </>,
 )
 
-/** The logo: an AI spark, then a tick drawn in two strokes. */
 export function Mark({ height = 22 }: { height?: number }) {
   return (
     <svg width={Math.round((height * 228) / 144)} height={height} viewBox="4 0 228 144" aria-hidden="true" focusable="false">
