@@ -225,7 +225,7 @@ class Builder:
         return await self._cards.update(principal, card_id, checked.card)
 
     async def plan(self, task: str) -> PlanOut | NoModelConnected | RuntimeNotAnswering:
-        """The Room lead's plan for a task. Nothing is saved."""
+        """The Planner's plan for a task. Nothing is saved."""
         library = (await self._cards.list())[:LIBRARY_LIMIT]
         return await plan(self._planner, library, task)
 

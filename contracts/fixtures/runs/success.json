@@ -56,15 +56,15 @@
     "ts": "2026-11-03T02:14:02.390000Z",
     "actor": {
       "kind": "agent",
-      "id": "room_lead",
-      "display": "Room lead"
+      "id": "planner",
+      "display": "Planner"
     },
-    "summary": "Room lead brought in Release checker to read the GitHub releases.",
+    "summary": "Planner brought in Version checker to read the GitHub releases.",
     "kind": "agent_joined",
     "data": {
       "agent": {
-        "id": "release_checker",
-        "display": "Release checker"
+        "id": "version_checker",
+        "display": "Version checker"
       },
       "reason": "The task asks about releases of a GitHub repo."
     }
@@ -75,20 +75,20 @@
     "ts": "2026-11-03T02:14:02.510000Z",
     "actor": {
       "kind": "agent",
-      "id": "room_lead",
-      "display": "Room lead"
+      "id": "planner",
+      "display": "Planner"
     },
-    "summary": "Room lead asked Release checker to look for releases newer than 1.2.14.",
+    "summary": "Planner asked Version checker to look for releases newer than 1.2.14.",
     "kind": "agent_message",
     "data": {
       "speaker": {
-        "id": "room_lead",
-        "display": "Room lead"
+        "id": "planner",
+        "display": "Planner"
       },
       "addressee": {
         "kind": "agent",
-        "id": "release_checker",
-        "display": "Release checker"
+        "id": "version_checker",
+        "display": "Version checker"
       },
       "text": "Please check langchain-ai/langgraph for releases newer than 1.2.14."
     }
@@ -99,10 +99,10 @@
     "ts": "2026-11-03T02:14:02.640000Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker is fetching releases from langchain-ai/langgraph.",
+    "summary": "Version checker is fetching releases from langchain-ai/langgraph.",
     "kind": "agent_step_started",
     "data": {
       "step": "fetch_releases"
@@ -114,10 +114,10 @@
     "ts": "2026-11-03T02:14:04.873000Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker fetched 30 releases. The latest is 1.2.16.",
+    "summary": "Version checker fetched 30 releases. The latest is 1.2.16.",
     "kind": "agent_step_finished",
     "data": {
       "step": "fetch_releases",
@@ -133,10 +133,10 @@
     "ts": "2026-11-03T02:14:04.901000Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker is comparing them with the last known tag 1.2.14.",
+    "summary": "Version checker is comparing them with the last known tag 1.2.14.",
     "kind": "agent_step_started",
     "data": {
       "step": "find_new"
@@ -148,10 +148,10 @@
     "ts": "2026-11-03T02:14:04.955000Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker found 2 new releases: 1.2.16, 1.2.15.",
+    "summary": "Version checker found 2 new releases: 1.2.16, 1.2.15.",
     "kind": "agent_step_finished",
     "data": {
       "step": "find_new",
@@ -170,15 +170,15 @@
     "ts": "2026-11-03T02:14:05.120000Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker reported 2 new releases to the room and suggested one ticket.",
+    "summary": "Version checker reported 2 new releases to the room and suggested one ticket.",
     "kind": "agent_message",
     "data": {
       "speaker": {
-        "id": "release_checker",
-        "display": "Release checker"
+        "id": "version_checker",
+        "display": "Version checker"
       },
       "addressee": {
         "kind": "room"
@@ -192,20 +192,20 @@
     "ts": "2026-11-03T02:14:05.301000Z",
     "actor": {
       "kind": "agent",
-      "id": "room_lead",
-      "display": "Room lead"
+      "id": "planner",
+      "display": "Planner"
     },
-    "summary": "Room lead agreed and will propose the ticket for approval.",
+    "summary": "Planner agreed and will propose the ticket for approval.",
     "kind": "agent_message",
     "data": {
       "speaker": {
-        "id": "room_lead",
-        "display": "Room lead"
+        "id": "planner",
+        "display": "Planner"
       },
       "addressee": {
         "kind": "agent",
-        "id": "release_checker",
-        "display": "Release checker"
+        "id": "version_checker",
+        "display": "Version checker"
       },
       "text": "Agreed. I'll draft one ticket for an Approver to check."
     }
@@ -216,8 +216,8 @@
     "ts": "2026-11-03T02:14:05.844000Z",
     "actor": {
       "kind": "agent",
-      "id": "room_lead",
-      "display": "Room lead"
+      "id": "planner",
+      "display": "Planner"
     },
     "summary": "The agents proposed 1 write action: create a Jira ticket in MOCK.",
     "kind": "write_action_proposed",

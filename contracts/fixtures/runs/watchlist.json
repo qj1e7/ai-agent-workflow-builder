@@ -56,15 +56,15 @@
     "ts": "2026-11-20T02:14:02.390000Z",
     "actor": {
       "kind": "agent",
-      "id": "room_lead",
-      "display": "Room lead"
+      "id": "planner",
+      "display": "Planner"
     },
-    "summary": "Room lead brought in Release checker to read the sources of 6 watched software.",
+    "summary": "Planner brought in Version checker to read the sources of 6 watched software.",
     "kind": "agent_joined",
     "data": {
       "agent": {
-        "id": "release_checker",
-        "display": "Release checker"
+        "id": "version_checker",
+        "display": "Version checker"
       },
       "reason": "The task asks about releases of several watched software."
     }
@@ -75,20 +75,20 @@
     "ts": "2026-11-20T02:14:02.510000Z",
     "actor": {
       "kind": "agent",
-      "id": "room_lead",
-      "display": "Room lead"
+      "id": "planner",
+      "display": "Planner"
     },
-    "summary": "Room lead asked Release checker to check 6 watched software for new releases.",
+    "summary": "Planner asked Version checker to check 6 watched software for new releases.",
     "kind": "agent_message",
     "data": {
       "speaker": {
-        "id": "room_lead",
-        "display": "Room lead"
+        "id": "planner",
+        "display": "Planner"
       },
       "addressee": {
         "kind": "agent",
-        "id": "release_checker",
-        "display": "Release checker"
+        "id": "version_checker",
+        "display": "Version checker"
       },
       "text": "Please check these for new releases: n8n, LangGraph, Redis, PostgreSQL, FastAPI and Terraform."
     }
@@ -99,10 +99,10 @@
     "ts": "2026-11-20T02:14:02.700000Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker is reading the releases of n8n.",
+    "summary": "Version checker is reading the releases of n8n.",
     "kind": "agent_step_started",
     "data": {
       "step": "read_source"
@@ -114,10 +114,10 @@
     "ts": "2026-11-20T02:14:03.100000Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker read n8n. Nothing is newer than 2.42.6.",
+    "summary": "Version checker read n8n. Nothing is newer than 2.42.6.",
     "kind": "agent_step_finished",
     "data": {
       "step": "read_source",
@@ -134,10 +134,10 @@
     "ts": "2026-11-20T02:14:03.200000Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker is reading the releases of LangGraph.",
+    "summary": "Version checker is reading the releases of LangGraph.",
     "kind": "agent_step_started",
     "data": {
       "step": "read_source"
@@ -149,10 +149,10 @@
     "ts": "2026-11-20T02:14:03.600000Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker read LangGraph. 2 releases newer than 1.2.14.",
+    "summary": "Version checker read LangGraph. 2 releases newer than 1.2.14.",
     "kind": "agent_step_finished",
     "data": {
       "step": "read_source",
@@ -169,10 +169,10 @@
     "ts": "2026-11-20T02:14:03.700000Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker is reading the releases of Redis.",
+    "summary": "Version checker is reading the releases of Redis.",
     "kind": "agent_step_started",
     "data": {
       "step": "read_source"
@@ -184,10 +184,10 @@
     "ts": "2026-11-20T02:14:04.100000Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker read Redis. 1 release newer than 8.2.0.",
+    "summary": "Version checker read Redis. 1 release newer than 8.2.0.",
     "kind": "agent_step_finished",
     "data": {
       "step": "read_source",
@@ -204,10 +204,10 @@
     "ts": "2026-11-20T02:14:04.200000Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker is reading the releases of PostgreSQL.",
+    "summary": "Version checker is reading the releases of PostgreSQL.",
     "kind": "agent_step_started",
     "data": {
       "step": "read_source"
@@ -219,10 +219,10 @@
     "ts": "2026-11-20T02:14:04.600000Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker read PostgreSQL. 1 release newer than 17.2.0.",
+    "summary": "Version checker read PostgreSQL. 1 release newer than 17.2.0.",
     "kind": "agent_step_finished",
     "data": {
       "step": "read_source",
@@ -239,10 +239,10 @@
     "ts": "2026-11-20T02:14:04.700000Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker is reading the releases of FastAPI.",
+    "summary": "Version checker is reading the releases of FastAPI.",
     "kind": "agent_step_started",
     "data": {
       "step": "read_source"
@@ -254,10 +254,10 @@
     "ts": "2026-11-20T02:14:05.100000Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker could not read FastAPI.",
+    "summary": "Version checker could not read FastAPI.",
     "kind": "agent_step_finished",
     "data": {
       "step": "read_source",
@@ -274,15 +274,15 @@
     "ts": "2026-11-20T02:14:05.200000Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker could not check FastAPI and carried on.",
+    "summary": "Version checker could not check FastAPI and carried on.",
     "kind": "agent_message",
     "data": {
       "speaker": {
-        "id": "release_checker",
-        "display": "Release checker"
+        "id": "version_checker",
+        "display": "Version checker"
       },
       "addressee": {
         "kind": "room"
@@ -296,10 +296,10 @@
     "ts": "2026-11-20T02:14:05.300000Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker is reading the releases of Terraform.",
+    "summary": "Version checker is reading the releases of Terraform.",
     "kind": "agent_step_started",
     "data": {
       "step": "read_source"
@@ -311,10 +311,10 @@
     "ts": "2026-11-20T02:14:05.700000Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker read Terraform. No version was given, so 1.9.8 is the starting point.",
+    "summary": "Version checker read Terraform. No version was given, so 1.9.8 is the starting point.",
     "kind": "agent_step_finished",
     "data": {
       "step": "read_source",
@@ -331,15 +331,15 @@
     "ts": "2026-11-20T02:14:06Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker reported 3 of 6 watched software behind and suggested 3 tickets.",
+    "summary": "Version checker reported 3 of 6 watched software behind and suggested 3 tickets.",
     "kind": "agent_message",
     "data": {
       "speaker": {
-        "id": "release_checker",
-        "display": "Release checker"
+        "id": "version_checker",
+        "display": "Version checker"
       },
       "addressee": {
         "kind": "room"
@@ -353,20 +353,20 @@
     "ts": "2026-11-20T02:14:06.200000Z",
     "actor": {
       "kind": "agent",
-      "id": "room_lead",
-      "display": "Room lead"
+      "id": "planner",
+      "display": "Planner"
     },
-    "summary": "Room lead agreed and will propose 3 tickets for approval.",
+    "summary": "Planner agreed and will propose 3 tickets for approval.",
     "kind": "agent_message",
     "data": {
       "speaker": {
-        "id": "room_lead",
-        "display": "Room lead"
+        "id": "planner",
+        "display": "Planner"
       },
       "addressee": {
         "kind": "agent",
-        "id": "release_checker",
-        "display": "Release checker"
+        "id": "version_checker",
+        "display": "Version checker"
       },
       "text": "Agreed. I'll draft 3 tickets for an Approver to check together."
     }
@@ -377,8 +377,8 @@
     "ts": "2026-11-20T02:14:06.700000Z",
     "actor": {
       "kind": "agent",
-      "id": "room_lead",
-      "display": "Room lead"
+      "id": "planner",
+      "display": "Planner"
     },
     "summary": "The agents proposed 3 write actions: Create Jira ticket in MOCK: Upgrade LangGraph from 1.2.14 to 1.2.16; Create Jira ticket in MOCK: Upgrade Redis from 8.2.0 to 8.2.1; Create Jira ticket in MOCK: Upgrade PostgreSQL from 17.2.0 to 17.3.0.",
     "kind": "write_action_proposed",

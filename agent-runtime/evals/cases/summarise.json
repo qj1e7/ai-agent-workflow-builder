@@ -9,6 +9,6 @@
   {"id": "package-prefix", "note": "Monorepo tags that name a package before the version.", "repo": "langchain-ai/langchain", "last_known_tag": "langchain-core==1.6.5", "new_tags": ["langchain-core==1.6.7", "langchain-core==1.6.6"]},
   {"id": "at-prefix", "note": "Tags in the name@version style.", "repo": "n8n-io/n8n", "last_known_tag": "n8n@1.70.0", "new_tags": ["n8n@1.71.0"]},
   {"id": "similar-numbers", "note": "Versions that differ only in the last digits, so a sloppy answer drops or merges one.", "repo": "pydantic/pydantic", "last_known_tag": "2.11.1", "new_tags": ["2.11.10", "2.11.2"]},
-  {"id": "unknown-repo-name", "note": "A repo the Release checker has no display name for.", "repo": "astral-sh/uv", "last_known_tag": "0.12.22", "new_tags": ["0.12.23"]},
+  {"id": "unknown-repo-name", "note": "A repo the Version checker has no display name for.", "repo": "astral-sh/uv", "last_known_tag": "0.12.22", "new_tags": ["0.12.23"]},
   {"id": "across-minor", "note": "Three releases that cross a minor version boundary.", "repo": "langchain-ai/langgraph", "last_known_tag": "1.2.19", "new_tags": ["1.3.1", "1.3.0", "1.2.20"]}
 ]

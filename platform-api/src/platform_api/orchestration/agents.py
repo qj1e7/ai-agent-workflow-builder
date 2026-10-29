@@ -401,7 +401,7 @@ class HttpAgentRuntime:
     async def choose(
         self, request: ChooseRequest
     ) -> ChooseResult | AgentUnavailable | AgentRejected:
-        return await self._model_call("/v1/room/choose", request, choose_result_adapter)
+        return await self._model_call("/v1/planner/choose", request, choose_result_adapter)
 
     async def draft(self, request: DraftRequest) -> DraftResult | AgentUnavailable | AgentRejected:
         return await self._model_call("/v1/cards/draft", request, draft_result_adapter)

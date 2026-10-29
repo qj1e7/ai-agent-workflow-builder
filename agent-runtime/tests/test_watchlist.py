@@ -31,9 +31,9 @@ from agent_runtime.contracts import (
     watchlist_request,
 )
 from agent_runtime.events import EventLog
-from agent_runtime.release_checker import ReleaseChecker
-from agent_runtime.room import FixedRoomLead, run_task
+from agent_runtime.planner import FixedPlanner, run_task
 from agent_runtime.summary import ModelSummarizer, Summarizer, TemplateSummarizer
+from agent_runtime.version_checker import VersionChecker
 from tests.fakes import FakeClock, RepoSource, langgraph_tags
 
 LANGGRAPH = "langchain-ai/langgraph"
@@ -46,12 +46,12 @@ class Room:
     def __init__(self, source: RepoSource, summarizer: Summarizer | None = None) -> None:
         self.clock = FakeClock()
         self.log = EventLog(self.clock, lambda event: None)
-        self.checker = ReleaseChecker(
+        self.checker = VersionChecker(
             source, summarizer or TemplateSummarizer(), sleep=self.clock.sleep
         )
 
     def run(self, request: TaskRequest) -> TaskResult:
-        return run_task(request, FixedRoomLead(), self.checker, self.log)
+        return run_task(request, FixedPlanner(), self.checker, self.log)
 
 
 def request_for(*software: SoftwareToCheck) -> TaskRequest:
@@ -167,7 +167,7 @@ def test_a_software_with_a_ticket_already_raised_gets_no_second_one(held: dict[s
         ["1.2.16", "1.2.15"],
     )
     assert result.output.proposed == []
-    assert result.events[-1].summary == "Room lead noted that there is nothing to propose."
+    assert result.events[-1].summary == "Planner noted that there is nothing to propose."
     assert result.output.summary == (
         "No new tickets are needed, as LangGraph already has a ticket."
     )
@@ -195,7 +195,7 @@ def test_one_source_that_answers_404_is_reported_and_the_rest_carry_on():
     assert finding(result, LANGGRAPH_ID).state == "behind"
     assert source.calls == [FASTAPI, LANGGRAPH]
     said = [
-        e for e in result.events if isinstance(e, AgentMessageEvent) and e.agent.id != "room_lead"
+        e for e in result.events if isinstance(e, AgentMessageEvent) and e.agent.id != "planner"
     ]
     assert [e.data.text for e in said][0] == (
         "I could not read FastAPI's releases: GitHub answered 404 Not Found. "
@@ -216,7 +216,7 @@ def test_a_source_that_stays_down_is_tried_three_times_then_given_up_while_the_r
     assert finding(result, REDIS_ID).state == "behind"
     tries = [s for s in summaries(result.events) if "(try " in s]
     assert tries == [
-        f"Release checker reported that GitHub answered 503 (try {n} of 3)." for n in (1, 2, 3)
+        f"Version checker reported that GitHub answered 503 (try {n} of 3)." for n in (1, 2, 3)
     ]
 
 
@@ -256,7 +256,7 @@ def test_each_software_reports_its_state_in_a_read_source_step_in_input_order():
 def test_two_tickets_are_agreed_together():
     result = finished(Room(RepoSource(TAGS)).run(request_for(langgraph("1.2.14"), redis("8.2.0"))))
     assert len(result.output.proposed) == 2
-    assert result.events[-1].summary == "Room lead agreed and will propose 2 tickets for approval."
+    assert result.events[-1].summary == "Planner agreed and will propose 2 tickets for approval."
     assert result.output.summary == (
         "2 of 2 watched software have new releases: LangGraph 1.2.16 and Redis 8.2.1."
     )
@@ -296,10 +296,10 @@ def test_a_failing_model_falls_back_to_the_template():
 def test_the_tasks_route_runs_a_watchlist():
     clock = FakeClock()
     callbacks = HttpCallbacks(transport=httpx.MockTransport(lambda r: httpx.Response(204)))
-    checker = ReleaseChecker(
+    checker = VersionChecker(
         RepoSource(TAGS, refused={FASTAPI: 404}), TemplateSummarizer(), sleep=clock.sleep
     )
-    runtime = Runtime(checker=checker, lead=FixedRoomLead(), clock=clock, callbacks=callbacks)
+    runtime = Runtime(checker=checker, planner=FixedPlanner(), clock=clock, callbacks=callbacks)
     settings = Settings.from_env(
         {"AGENT_API_KEY": "test-key", "CALLBACK_ALLOWED_ORIGINS": "http://platform-api:8000"}
     )

@@ -3,7 +3,7 @@
 import pytest
 
 from platform_api.builder.cards import (
-    RELEASE_CHECKER,
+    VERSION_CHECKER,
     card_spec,
     check_card,
     check_values,
@@ -25,7 +25,7 @@ PROJECT = CardInput(name="Project", kind="jira_project", what="", example="MOCK"
 
 def definition(**changes: object) -> CardDefinition:
     base: dict[str, object] = {
-        "name": "Release checker",
+        "name": "Version checker",
         "purpose": "Checks a repository.",
         "good_for": ["Check a repo"],
         "inputs": [REPO, PROJECT],
@@ -51,7 +51,7 @@ def test_a_good_card_has_no_problems_and_gets_the_rules_approval():
 
 def test_the_starter_card_passes_its_own_check_unchanged():
     definition_of_starter = CardDefinition.model_validate(
-        RELEASE_CHECKER.model_dump(
+        VERSION_CHECKER.model_dump(
             include={"name", "purpose", "good_for", "inputs", "blocks", "approvals"}
         )
     )
@@ -61,19 +61,19 @@ def test_the_starter_card_passes_its_own_check_unchanged():
 
 
 def test_the_starter_card_reads_as_the_spec_says():
-    assert (RELEASE_CHECKER.card_id, RELEASE_CHECKER.version, RELEASE_CHECKER.starter) == (
-        "crd_release_checker",
+    assert (VERSION_CHECKER.card_id, VERSION_CHECKER.version, VERSION_CHECKER.starter) == (
+        "crd_version_checker",
         1,
         True,
     )
-    assert RELEASE_CHECKER.owner == "platform"
-    assert [i.kind for i in RELEASE_CHECKER.inputs] == ["github_repo", "jira_project"]
-    assert RELEASE_CHECKER.tools == [
+    assert VERSION_CHECKER.owner == "platform"
+    assert [i.kind for i in VERSION_CHECKER.inputs] == ["github_repo", "jira_project"]
+    assert VERSION_CHECKER.tools == [
         "github.read_releases",
         "jira.search",
         "jira.create_ticket",
     ]
-    assert RELEASE_CHECKER.approvals == [CardApprovalView(tool="jira.create_ticket", approvers=1)]
+    assert VERSION_CHECKER.approvals == [CardApprovalView(tool="jira.create_ticket", approvers=1)]
 
 
 @pytest.mark.parametrize("asked", [0, 1, -3])
@@ -200,13 +200,13 @@ def test_length_limits_are_problems(changes: dict[str, object], field: str):
 
 def test_text_is_cleaned_to_one_line_and_an_empty_tool_means_no_tool():
     card = definition(
-        name="  Release \n checker ",
+        name="  Version \n checker ",
         blocks=[CardBlock(say=" Read\n the   releases. ", tool=" ")],
         inputs=[],
     )
     checked = check_card(card)
     assert checked.problems == []
-    assert checked.card.name == "Release checker"
+    assert checked.card.name == "Version checker"
     assert checked.card.blocks == [CardBlock(say="Read the releases.", tool=None)]
 
 
@@ -220,46 +220,46 @@ def test_the_tool_list_has_every_rule_in_order_with_its_target_and_minimum():
 
 
 def test_a_card_reads_as_the_runtimes_spec_and_the_librarys_summary():
-    spec = card_spec(RELEASE_CHECKER)
-    assert (spec.id, spec.version, spec.name) == ("crd_release_checker", 1, "Release checker")
+    spec = card_spec(VERSION_CHECKER)
+    assert (spec.id, spec.version, spec.name) == ("crd_version_checker", 1, "Version checker")
     assert [b.tool for b in spec.blocks] == [
         "github.read_releases",
         "jira.search",
         "jira.create_ticket",
     ]
-    summary = library_card(RELEASE_CHECKER)
-    assert summary.card_id == "crd_release_checker"
+    summary = library_card(VERSION_CHECKER)
+    assert summary.card_id == "crd_version_checker"
     assert [(i.name, i.kind) for i in summary.inputs] == [
         ("GitHub repository", "github_repo"),
         ("Jira project", "jira_project"),
     ]
-    assert summary.tools == RELEASE_CHECKER.tools
+    assert summary.tools == VERSION_CHECKER.tools
 
 
 def test_the_run_line_has_an_agent_block_each_then_the_gate_and_one_block_per_write():
-    plan = plan_for_cards([RELEASE_CHECKER])
+    plan = plan_for_cards([VERSION_CHECKER])
     assert [(b.kind, b.key, b.name) for b in plan] == [
-        ("agent", "crd_release_checker", "Release checker"),
+        ("agent", "crd_version_checker", "Version checker"),
         ("approval", "approval_gate", "Approval gate"),
         ("write_action", "jira_create_ticket", "Create Jira tickets"),
     ]
-    assert plan[0].description == RELEASE_CHECKER.purpose
+    assert plan[0].description == VERSION_CHECKER.purpose
 
 
 def test_two_agents_that_both_write_still_have_one_gate_and_one_write_block():
-    other = RELEASE_CHECKER.model_copy(update={"card_id": "crd_two", "name": "Second"})
-    plan = plan_for_cards([RELEASE_CHECKER, other])
+    other = VERSION_CHECKER.model_copy(update={"card_id": "crd_two", "name": "Second"})
+    plan = plan_for_cards([VERSION_CHECKER, other])
     assert [b.kind for b in plan] == ["agent", "agent", "approval", "write_action"]
 
 
 def test_agents_that_only_read_have_no_gate():
-    reading = RELEASE_CHECKER.model_copy(update={"tools": ["github.read_releases"]})
+    reading = VERSION_CHECKER.model_copy(update={"tools": ["github.read_releases"]})
     assert [b.kind for b in plan_for_cards([reading])] == ["agent"]
 
 
 def test_values_are_trimmed_and_checked_by_kind():
     clean, errors = check_values(
-        RELEASE_CHECKER,
+        VERSION_CHECKER,
         {"GitHub repository": " langchain-ai/langgraph ", "Jira project": "MOCK"},
     )
     assert errors == []
@@ -268,7 +268,7 @@ def test_values_are_trimmed_and_checked_by_kind():
 
 def test_values_that_are_wrong_missing_or_unknown_are_each_reported():
     clean, errors = check_values(
-        RELEASE_CHECKER, {"GitHub repository": "not a repo", "Surprise": "x"}
+        VERSION_CHECKER, {"GitHub repository": "not a repo", "Surprise": "x"}
     )
     assert clean == {}
     by_name = dict(errors)
@@ -280,7 +280,7 @@ def test_values_that_are_wrong_missing_or_unknown_are_each_reported():
 
 def test_a_project_key_that_is_not_one_never_gets_through():
     _, errors = check_values(
-        RELEASE_CHECKER, {"GitHub repository": "a/b", "Jira project": "MOCK-1; x"}
+        VERSION_CHECKER, {"GitHub repository": "a/b", "Jira project": "MOCK-1; x"}
     )
     assert [name for name, _ in errors] == ["Jira project"]
 

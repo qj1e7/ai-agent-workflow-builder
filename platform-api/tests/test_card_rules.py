@@ -23,7 +23,7 @@ from platform_api.orchestration.write_actions import UnboundIntent, WriteAction
 from tests.support import FIXTURES
 
 
-def card(card_id: str = "crd_a", name: str = "Release checker", write: bool = True) -> CardSpec:
+def card(card_id: str = "crd_a", name: str = "Version checker", write: bool = True) -> CardSpec:
     blocks = [CardBlock(say="Read.", tool="github.read_releases")]
     if write:
         blocks.append(CardBlock(say="Raise a ticket.", tool="jira.create_ticket"))

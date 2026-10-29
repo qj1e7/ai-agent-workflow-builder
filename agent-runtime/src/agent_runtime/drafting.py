@@ -1,5 +1,5 @@
 # pyright: reportMissingTypeStubs=false, reportUnknownMemberType=false
-"""Two jobs for the model before any run: draft an agent card for a task, and let the Room lead
+"""Two jobs for the model before any run: draft an agent card for a task, and let the Planner
 choose which saved agents fit a task. Both ask for structured output, so the model answers
 in the shape of the schemas below and nothing else (ADR 0023)."""
 
@@ -68,7 +68,7 @@ DRAFT_SYSTEM = (
     f"- Every input has a kind:\n{INPUT_KINDS}\n"
     "- Set can_do to false only when the task needs tools that are not on the list or is too "
     "risky to automate. Then say why in why_not.\n"
-    '- Name the agent plainly by what it does, such as "Release checker". No made-up or '
+    '- Name the agent plainly by what it does, such as "Version checker". No made-up or '
     "themed names.\n"
     "- inputs are what changes between runs, such as a repository or a Jira project. Do not "
     "list fixed things as inputs.\n"
@@ -80,7 +80,7 @@ DRAFT_SYSTEM = (
 )
 
 CHOOSE_SYSTEM = (
-    "You are the Room lead on a platform used by the support staff of CODESparks, a team in "
+    "You are the Planner on a platform used by the support staff of CODESparks, a team in "
     "NCS. A staff member describes a task. You see the agents the team has saved. Each agent "
     "can only use these tools:\n\n"
     f"{tools_text()}\n\n"
@@ -135,7 +135,7 @@ class DraftAnswer(BaseModel):
     can_do: bool = Field(description="False when this platform should not take the task on.")
     why_not: str | None = Field(default=None, description="When can_do is false, why.")
     name: str = Field(description="2 to 4 plain words saying what the agent does.")
-    purpose: str = Field(description="One sentence. The Room lead matches new tasks against it.")
+    purpose: str = Field(description="One sentence. The Planner matches new tasks against it.")
     good_for: list[str] = Field(
         default_factory=list[str],
         description="3 short requests a staff member might type that this agent fits.",

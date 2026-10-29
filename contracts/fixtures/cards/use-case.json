@@ -9,8 +9,8 @@
   "created_at": "2026-11-04T09:30:00Z",
   "plan": [
     {
-      "key": "crd_release_checker",
-      "name": "Release checker",
+      "key": "crd_version_checker",
+      "name": "Version checker",
       "description": "Checks a public GitHub repository for a new release and proposes a Jira ticket for it.",
       "kind": "agent"
     },
@@ -29,9 +29,9 @@
   ],
   "agents": [
     {
-      "card_id": "crd_release_checker",
+      "card_id": "crd_version_checker",
       "card_version": 1,
-      "name": "Release checker",
+      "name": "Version checker",
       "values": {
         "GitHub repository": "langchain-ai/langgraph",
         "Jira project": "MOCK"

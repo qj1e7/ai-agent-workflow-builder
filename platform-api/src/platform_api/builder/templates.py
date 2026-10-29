@@ -72,7 +72,7 @@ RELEASE_CHECK = Template(
         Block(
             "read_releases",
             "Read GitHub releases",
-            "The Release checker reads the repository's releases.",
+            "The Version checker reads the repository's releases.",
             "agent",
         ),
         Block(
@@ -128,7 +128,7 @@ SOFTWARE_WATCHLIST = Template(
         Block(
             "read_versions",
             "Read every source",
-            "The Release checker reads the newest release of each watched software.",
+            "The Version checker reads the newest release of each watched software.",
             "agent",
         ),
         Block(
@@ -156,7 +156,7 @@ SOFTWARE_WATCHLIST = Template(
 AGENT_CARDS = Template(
     key="agent_cards",
     name="Agents",
-    description="Agents the Room lead brings in, each described by an agent card.",
+    description="Agents the Planner brings in, each described by an agent card.",
     blocks=(),
     params=(),
     workflow="release_check",

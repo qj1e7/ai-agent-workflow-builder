@@ -306,16 +306,16 @@ def card_view(
     return view.model_copy(update={"tools": tools_of(view)})
 
 
-RELEASE_CHECKER_ID = "crd_release_checker"
+VERSION_CHECKER_ID = "crd_version_checker"
 
-RELEASE_CHECKER = card_view(
-    card_id=RELEASE_CHECKER_ID,
+VERSION_CHECKER = card_view(
+    card_id=VERSION_CHECKER_ID,
     version=1,
     starter=True,
     owner=PLATFORM_OWNER,
     created_at=STARTER_CREATED_AT,
     definition=CardDefinition(
-        name="Release checker",
+        name="Version checker",
         purpose="Checks a public GitHub repository for a new release and proposes a Jira "
         "ticket for it.",
         good_for=[
@@ -353,7 +353,7 @@ RELEASE_CHECKER = card_view(
         approvals=[CardApprovalView(tool="jira.create_ticket", approvers=1)],
     ),
 )
-STARTER_CARDS: tuple[CardView, ...] = (RELEASE_CHECKER,)
+STARTER_CARDS: tuple[CardView, ...] = (VERSION_CHECKER,)
 STARTERS: Mapping[tuple[str, int], CardView] = {(c.card_id, c.version): c for c in STARTER_CARDS}
 
 

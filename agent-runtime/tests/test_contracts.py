@@ -47,8 +47,8 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "card-task-finished.json": task_result_adapter,
     "card-draft-request.json": TypeAdapter(DraftRequest),
     "card-drafted.json": TypeAdapter(DraftResult),
-    "room-choose-request.json": TypeAdapter(ChooseRequest),
-    "room-chosen.json": TypeAdapter(ChooseResult),
+    "planner-choose-request.json": TypeAdapter(ChooseRequest),
+    "planner-chosen.json": TypeAdapter(ChooseResult),
 }
 
 

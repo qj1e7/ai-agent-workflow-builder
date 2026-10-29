@@ -8,7 +8,7 @@ test can hold the two side by side.
 from datetime import UTC, datetime
 
 from platform_api.builder.cards import (
-    RELEASE_CHECKER,
+    VERSION_CHECKER,
     card_view,
     check_card,
     plan_for_cards,
@@ -30,12 +30,12 @@ from platform_api.builder.models import (
     UseSaved,
 )
 from platform_api.contracts.stories import (
-    AGENT_ROOM_LEAD,
+    AGENT_PLANNER,
     ALICE,
     BOB,
     CHANNEL,
+    PLANNER,
     PLATFORM,
-    ROOM_LEAD,
     TO_ROOM,
     USER_ALICE,
     USER_BOB,
@@ -99,7 +99,7 @@ SUMMARY = (
     "LangGraph 1.2.16 is the newest release and MOCK has no ticket for it, so I proposed one "
     "ticket for an Approver to check."
 )
-CARD = AgentRef(id=RELEASE_CHECKER.card_id, display=RELEASE_CHECKER.name)
+CARD = AgentRef(id=VERSION_CHECKER.card_id, display=VERSION_CHECKER.name)
 AGENT_CARD = Actor(kind="agent", id=CARD.id, display=CARD.display)
 TO_CARD = AgentAddressee(id=CARD.id, display=CARD.display)
 ACTION = WriteAction(
@@ -147,13 +147,13 @@ def plan_use_one() -> UseSaved:
         decision="use_one",
         agents=[
             PlannedAgent(
-                card=RELEASE_CHECKER,
+                card=VERSION_CHECKER,
                 part="Check LangGraph for a new release and raise a ticket.",
                 values={"GitHub repository": REPO},
                 missing=["Jira project"],
             )
         ],
-        reason="The Release checker already does this for any public repository.",
+        reason="The Version checker already does this for any public repository.",
         questions=["Which Jira project should get the ticket?"],
     )
 
@@ -186,12 +186,12 @@ USE_CASE = UseCaseView(
     params={},
     owner=ALICE,
     created_at=datetime(2026, 11, 4, 9, 30, tzinfo=UTC),
-    plan=plan_for_cards([RELEASE_CHECKER]),
+    plan=plan_for_cards([VERSION_CHECKER]),
     agents=[
         UseCaseAgentView(
-            card_id=RELEASE_CHECKER.card_id,
-            card_version=RELEASE_CHECKER.version,
-            name=RELEASE_CHECKER.name,
+            card_id=VERSION_CHECKER.card_id,
+            card_version=VERSION_CHECKER.version,
+            name=VERSION_CHECKER.name,
             values=VALUES,
         )
     ],
@@ -225,17 +225,17 @@ def card_run_events() -> Timeline:
     tl.add(
         AgentJoined,
         2.1,
-        AGENT_ROOM_LEAD,
-        "Room lead brought in Release checker.",
-        AgentJoinedData(agent=CARD, reason=RELEASE_CHECKER.purpose),
+        AGENT_PLANNER,
+        "Planner brought in Version checker.",
+        AgentJoinedData(agent=CARD, reason=VERSION_CHECKER.purpose),
     )
     tl.add(
         AgentMessage,
         2.3,
-        AGENT_ROOM_LEAD,
-        "Room lead asked Release checker to do its part of the task.",
+        AGENT_PLANNER,
+        "Planner asked Version checker to do its part of the task.",
         AgentMessageData(
-            speaker=ROOM_LEAD,
+            speaker=PLANNER,
             addressee=TO_CARD,
             text="Please run your plan with these inputs. GitHub repository: "
             f"{REPO}; Jira project: MOCK.",
@@ -245,58 +245,58 @@ def card_run_events() -> Timeline:
         AgentStepStarted,
         3.4,
         AGENT_CARD,
-        f"Release checker reads the releases of {REPO}.",
+        f"Version checker reads the releases of {REPO}.",
         AgentStepStartedData(step="github_read_releases"),
     )
     tl.add(
         AgentStepFinished,
         4.2,
         AGENT_CARD,
-        f"Release checker read 8 releases of {REPO}. The newest is 1.2.16.",
+        f"Version checker read 8 releases of {REPO}. The newest is 1.2.16.",
         AgentStepFinishedData(step="github_read_releases", result={"releases": 8, "tags": TAGS}),
     )
     tl.add(
         AgentStepStarted,
         5.6,
         AGENT_CARD,
-        "Release checker searches Jira project MOCK.",
+        "Version checker searches Jira project MOCK.",
         AgentStepStartedData(step="jira_search"),
     )
     tl.add(
         AgentStepFinished,
         5.9,
         AGENT_CARD,
-        "Release checker found no tickets in MOCK.",
+        "Version checker found no tickets in MOCK.",
         AgentStepFinishedData(step="jira_search", result={"count": 0, "tickets": []}),
     )
     tl.add(
         AgentStepStarted,
         7.3,
         AGENT_CARD,
-        f"Release checker drafts a Jira ticket for approval: {TITLE}",
+        f"Version checker drafts a Jira ticket for approval: {TITLE}",
         AgentStepStartedData(step="jira_create_ticket"),
     )
     tl.add(
         AgentStepFinished,
         7.31,
         AGENT_CARD,
-        f"Release checker proposed a ticket for approval: {TITLE}",
+        f"Version checker proposed a ticket for approval: {TITLE}",
         AgentStepFinishedData(step="jira_create_ticket", result={"title": TITLE}),
     )
     tl.add(
         AgentMessage,
         9.0,
         AGENT_CARD,
-        f"Release checker reported to the room: {SUMMARY}",
+        f"Version checker reported to the room: {SUMMARY}",
         AgentMessageData(speaker=CARD, addressee=TO_ROOM, text=SUMMARY),
     )
     tl.add(
         AgentMessage,
         9.2,
-        AGENT_ROOM_LEAD,
-        "Room lead agreed and will propose the ticket for approval.",
+        AGENT_PLANNER,
+        "Planner agreed and will propose the ticket for approval.",
         AgentMessageData(
-            speaker=ROOM_LEAD,
+            speaker=PLANNER,
             addressee=TO_CARD,
             text="Agreed. I'll draft one ticket for an Approver to check.",
         ),
@@ -305,7 +305,7 @@ def card_run_events() -> Timeline:
     tl.add(
         WriteActionProposed,
         9.8,
-        AGENT_ROOM_LEAD,
+        AGENT_PLANNER,
         f"The agents proposed 1 write action: {line.line}.",
         WriteActionProposedData(proposal_id=CARD_RUN.proposal_id, digest=DIGEST, actions=[line]),
     )
@@ -419,7 +419,7 @@ def card_run_events() -> Timeline:
 def card_fixtures() -> dict[str, WireModel | list[WireModel]]:
     return {
         "cards/tools.json": tool_list(),
-        "cards/list.json": CardList(cards=sorted_for_library([RELEASE_CHECKER], [WEEKLY])),
+        "cards/list.json": CardList(cards=sorted_for_library([VERSION_CHECKER], [WEEKLY])),
         "cards/check.json": check_card(BROKEN),
         "cards/plan.use-one.json": plan_use_one(),
         "cards/plan.new-agent.json": plan_new_agent(),

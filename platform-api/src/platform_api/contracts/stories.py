@@ -88,9 +88,9 @@ USER_ALICE = Actor(kind="user", id="alice", display="Alice")
 USER_BOB = Actor(kind="user", id="bob", display="Bob")
 PLATFORM = Actor(kind="platform", id="platform", display="Platform")
 WORKFLOW = Actor(kind="workflow", id="n8n", display="Workflow engine")
-ROOM_LEAD = AgentRef(id="room_lead", display="Room lead")
-CHECKER = AgentRef(id="release_checker", display="Release checker")
-AGENT_ROOM_LEAD = Actor(kind="agent", id=ROOM_LEAD.id, display=ROOM_LEAD.display)
+PLANNER = AgentRef(id="planner", display="Planner")
+CHECKER = AgentRef(id="version_checker", display="Version checker")
+AGENT_PLANNER = Actor(kind="agent", id=PLANNER.id, display=PLANNER.display)
 AGENT_CHECKER = Actor(kind="agent", id=CHECKER.id, display=CHECKER.display)
 TO_CHECKER = AgentAddressee(id=CHECKER.id, display=CHECKER.display)
 TO_ROOM = RoomAddressee()
@@ -230,17 +230,17 @@ def room_opens(tl: Timeline, base: float) -> None:
     tl.add(
         AgentJoined,
         base + 0.29,
-        AGENT_ROOM_LEAD,
-        "Room lead brought in Release checker to read the GitHub releases.",
+        AGENT_PLANNER,
+        "Planner brought in Version checker to read the GitHub releases.",
         AgentJoinedData(agent=CHECKER, reason="The task asks about releases of a GitHub repo."),
     )
     tl.add(
         AgentMessage,
         base + 0.41,
-        AGENT_ROOM_LEAD,
-        "Room lead asked Release checker to look for releases newer than 1.2.14.",
+        AGENT_PLANNER,
+        "Planner asked Version checker to look for releases newer than 1.2.14.",
         AgentMessageData(
-            speaker=ROOM_LEAD,
+            speaker=PLANNER,
             addressee=TO_CHECKER,
             text=f"Please check {REPO} for releases newer than {LAST_KNOWN_TAG}.",
         ),
@@ -249,7 +249,7 @@ def room_opens(tl: Timeline, base: float) -> None:
         AgentStepStarted,
         base + 0.54,
         AGENT_CHECKER,
-        f"Release checker is fetching releases from {REPO}.",
+        f"Version checker is fetching releases from {REPO}.",
         AgentStepStartedData(step="fetch_releases"),
     )
 
@@ -261,7 +261,7 @@ def work_leg_to_announcement(tl: Timeline) -> None:
         AgentStepFinished,
         4.873,
         AGENT_CHECKER,
-        "Release checker fetched 30 releases. The latest is 1.2.16.",
+        "Version checker fetched 30 releases. The latest is 1.2.16.",
         AgentStepFinishedData(
             step="fetch_releases", result={"release_count": 30, "latest": "1.2.16"}
         ),
@@ -270,21 +270,21 @@ def work_leg_to_announcement(tl: Timeline) -> None:
         AgentStepStarted,
         4.901,
         AGENT_CHECKER,
-        "Release checker is comparing them with the last known tag 1.2.14.",
+        "Version checker is comparing them with the last known tag 1.2.14.",
         AgentStepStartedData(step="find_new"),
     )
     tl.add(
         AgentStepFinished,
         4.955,
         AGENT_CHECKER,
-        "Release checker found 2 new releases: 1.2.16, 1.2.15.",
+        "Version checker found 2 new releases: 1.2.16, 1.2.15.",
         AgentStepFinishedData(step="find_new", result={"new_count": 2, "tags": NEW_TAGS}),
     )
     tl.add(
         AgentMessage,
         5.12,
         AGENT_CHECKER,
-        "Release checker reported 2 new releases to the room and suggested one ticket.",
+        "Version checker reported 2 new releases to the room and suggested one ticket.",
         AgentMessageData(
             speaker=CHECKER,
             addressee=TO_ROOM,
@@ -295,10 +295,10 @@ def work_leg_to_announcement(tl: Timeline) -> None:
     tl.add(
         AgentMessage,
         5.301,
-        AGENT_ROOM_LEAD,
-        "Room lead agreed and will propose the ticket for approval.",
+        AGENT_PLANNER,
+        "Planner agreed and will propose the ticket for approval.",
         AgentMessageData(
-            speaker=ROOM_LEAD,
+            speaker=PLANNER,
             addressee=TO_CHECKER,
             text="Agreed. I'll draft one ticket for an Approver to check.",
         ),
@@ -306,7 +306,7 @@ def work_leg_to_announcement(tl: Timeline) -> None:
     tl.add(
         WriteActionProposed,
         5.844,
-        AGENT_ROOM_LEAD,
+        AGENT_PLANNER,
         "The agents proposed 1 write action: create a Jira ticket in MOCK.",
         WriteActionProposedData(
             proposal_id=tl.story.proposal_id, digest=DIGEST, actions=[ACTION_LINE]
@@ -439,7 +439,7 @@ def failure_events() -> Timeline:
             AgentMessage,
             seconds,
             AGENT_CHECKER,
-            f"Release checker reported that GitHub answered 503 (try {try_number} of 3).",
+            f"Version checker reported that GitHub answered 503 (try {try_number} of 3).",
             AgentMessageData(
                 speaker=CHECKER,
                 addressee=TO_ROOM,
@@ -451,7 +451,7 @@ def failure_events() -> Timeline:
         AgentFailed,
         12.961,
         AGENT_CHECKER,
-        "Release checker failed: GitHub was unavailable.",
+        "Version checker failed: GitHub was unavailable.",
         AgentFailedData(
             step="fetch_releases",
             error_type="UpstreamUnavailable",
@@ -469,7 +469,7 @@ def failure_events() -> Timeline:
             n8n_execution_id=FAILURE.work_execution,
             try_number=1,
             outcome="failed",
-            detail=f"Release checker failed: {GITHUB_503}",
+            detail=f"Version checker failed: {GITHUB_503}",
         ),
     )
     tl.add(
@@ -481,7 +481,7 @@ def failure_events() -> Timeline:
             stage="working",
             reason="AgentError",
             retryable=True,
-            message=f"Release checker failed: {GITHUB_503}",
+            message=f"Version checker failed: {GITHUB_503}",
         ),
     )
     return tl

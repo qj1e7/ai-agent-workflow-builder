@@ -254,7 +254,7 @@ class CardsInputs(WireModel):
     kind: Literal["cards"] = "cards"
     agents: Annotated[
         list[CheckedCardToRun], Field(min_length=1, max_length=3), AfterValidator(_distinct_cards)
-    ] = Field(description="The agents the Room lead brings in, in the order they work.")
+    ] = Field(description="The agents the Planner brings in, in the order they work.")
 
 
 type TaskInputs = Annotated[
@@ -569,5 +569,5 @@ class AgentApiSchema(WireModel):
     tool_list: ToolList
     card_draft_request: DraftRequest
     card_draft_result: DraftResult
-    room_choose_request: ChooseRequest
-    room_choose_result: ChooseResult
+    planner_choose_request: ChooseRequest
+    planner_choose_result: ChooseResult

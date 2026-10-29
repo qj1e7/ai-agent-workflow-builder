@@ -4,14 +4,14 @@ import { personTone } from './personTone'
 
 describe('agentIdentity', () => {
   it('gives the three known agents their names and accessories', () => {
-    expect(KNOWN_AGENT_IDS).toEqual(['room_lead', 'release_checker', 'troubleshooter'])
-    expect(agentIdentity('room_lead')).toMatchObject({ name: 'Room lead', accessory: 'headset', hue: 'var(--lead)', tint: 'var(--lead-tint)' })
-    expect(agentIdentity('release_checker')).toMatchObject({ name: 'Release checker', accessory: 'magnifier', hue: 'var(--checker)' })
+    expect(KNOWN_AGENT_IDS).toEqual(['planner', 'version_checker', 'troubleshooter'])
+    expect(agentIdentity('planner')).toMatchObject({ name: 'Planner', accessory: 'headset', hue: 'var(--lead)', tint: 'var(--lead-tint)' })
+    expect(agentIdentity('version_checker')).toMatchObject({ name: 'Version checker', accessory: 'magnifier', hue: 'var(--checker)' })
     expect(agentIdentity('troubleshooter')).toMatchObject({ name: 'AI troubleshooter', accessory: 'wrench', hue: 'var(--trouble)' })
   })
 
   it('keeps a known agent its own name whatever the event calls it', () => {
-    expect(agentIdentity('room_lead', 'Someone else').name).toBe('Room lead')
+    expect(agentIdentity('planner', 'Someone else').name).toBe('Planner')
   })
 
   it('gives an unknown agent a plain face and a name from the event, or from its id', () => {

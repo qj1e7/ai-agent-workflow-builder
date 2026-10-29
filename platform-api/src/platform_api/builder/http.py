@@ -262,7 +262,7 @@ async def update_agent_card(
 
 @router.post(
     "/builder/plan",
-    description="The Room lead reads the task and picks saved agents, or drafts a new one. "
+    description="The Planner reads the task and picks saved agents, or drafts a new one. "
     "Nothing is saved.",
     responses={
         **OPERATORS_ONLY,

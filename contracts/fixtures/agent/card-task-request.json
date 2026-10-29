@@ -7,9 +7,9 @@
     "agents": [
       {
         "card": {
-          "id": "crd_release_checker",
+          "id": "crd_version_checker",
           "version": 1,
-          "name": "Release checker",
+          "name": "Version checker",
           "purpose": "Checks a public GitHub repository for a new release and proposes a Jira ticket for it.",
           "inputs": [
             {

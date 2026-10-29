@@ -23,14 +23,14 @@ from agent_runtime.contract import (
     WatchlistInputs,
 )
 from agent_runtime.events import Draft, EventLog
-from agent_runtime.release_checker import CHECKER, ReleaseChecker
 from agent_runtime.release_source import tag_list
 from agent_runtime.summary import ChatFor
+from agent_runtime.version_checker import CHECKER, VersionChecker
 
 log = logging.getLogger(__name__)
 
 MAX_NAMES = 10
-ROOM_LEAD = AgentRef(id="room_lead", display="Room lead")
+PLANNER = AgentRef(id="planner", display="Planner")
 TO_CHECKER = AgentAddressee(id=CHECKER.id, display=CHECKER.display)
 UNEXPECTED_AGENT = TaskError(
     type="AgentError",
@@ -39,7 +39,7 @@ UNEXPECTED_AGENT = TaskError(
 )
 UNEXPECTED = TaskError(
     type="AgentError",
-    message="The Release checker stopped because of an unexpected error",
+    message="The Version checker stopped because of an unexpected error",
     retryable=False,
 )
 
@@ -58,7 +58,7 @@ class Reply:
     text: str
 
 
-class RoomLead(Protocol):
+class Planner(Protocol):
     def staff(self, request: TaskRequest) -> Staffing: ...
 
     def staff_agent(self, agent: CardToRun, earlier: int, total: int) -> Staffing: ...
@@ -66,7 +66,7 @@ class RoomLead(Protocol):
     def reply(self, output: TaskOutput) -> Reply: ...
 
 
-class FixedRoomLead:
+class FixedPlanner:
     def staff(self, request: TaskRequest) -> Staffing:
         match request.inputs:
             case ReleaseCheckInputs():
@@ -89,29 +89,29 @@ class FixedRoomLead:
         if earlier:
             text += " The reports of the agents before you are in the room."
         return Staffing(
-            joined_summary=f"Room lead brought in {name}."
+            joined_summary=f"Planner brought in {name}."
             if total == 1
-            else f"Room lead brought in {name} ({earlier + 1} of {total}).",
+            else f"Planner brought in {name} ({earlier + 1} of {total}).",
             reason=agent.card.purpose,
-            ask_summary=f"Room lead asked {name} to do its part of the task.",
+            ask_summary=f"Planner asked {name} to do its part of the task.",
             ask_text=text,
         )
 
     def _staff_release_check(self, inputs: ReleaseCheckInputs, last: str | None) -> Staffing:
-        joined = f"Room lead brought in {CHECKER.display} to read the GitHub releases."
+        joined = f"Planner brought in {CHECKER.display} to read the GitHub releases."
         reason = "The task asks about releases of a GitHub repo."
         if last is None:
             return Staffing(
                 joined_summary=joined,
                 reason=reason,
-                ask_summary="Room lead asked Release checker for a starting point.",
+                ask_summary="Planner asked Version checker for a starting point.",
                 ask_text=f"Please check {inputs.repo} for its latest release. There is no last "
                 "known tag yet.",
             )
         return Staffing(
             joined_summary=joined,
             reason=reason,
-            ask_summary=f"Room lead asked Release checker to look for releases newer than {last}.",
+            ask_summary=f"Planner asked Version checker to look for releases newer than {last}.",
             ask_text=f"Please check {inputs.repo} for releases newer than {last}.",
         )
 
@@ -120,10 +120,10 @@ class FixedRoomLead:
         count = len(names)
         shown = names if count <= MAX_NAMES else [*names[:MAX_NAMES], f"{count - MAX_NAMES} more"]
         return Staffing(
-            joined_summary=f"Room lead brought in {CHECKER.display} to read the sources of "
+            joined_summary=f"Planner brought in {CHECKER.display} to read the sources of "
             f"{count} watched software.",
             reason="The task asks about releases of several watched software.",
-            ask_summary=f"Room lead asked Release checker to check {count} watched software "
+            ask_summary=f"Planner asked Version checker to check {count} watched software "
             "for new releases.",
             ask_text=f"Please check these for new releases: {tag_list(shown)}.",
         )
@@ -132,46 +132,46 @@ class FixedRoomLead:
         tickets = len(output.proposed)
         if tickets > 1:
             return Reply(
-                summary=f"Room lead agreed and will propose {tickets} tickets for approval.",
+                summary=f"Planner agreed and will propose {tickets} tickets for approval.",
                 text=f"Agreed. I'll draft {tickets} tickets for an Approver to check together.",
             )
         if tickets:
             return Reply(
-                summary="Room lead agreed and will propose the ticket for approval.",
+                summary="Planner agreed and will propose the ticket for approval.",
                 text="Agreed. I'll draft one ticket for an Approver to check.",
             )
         return Reply(
-            summary="Room lead noted that there is nothing to propose.",
+            summary="Planner noted that there is nothing to propose.",
             text="Understood. There is nothing to propose, so no approval is needed.",
         )
 
 
 def run_task(
-    request: TaskRequest, lead: RoomLead, checker: ReleaseChecker, events: EventLog
+    request: TaskRequest, planner: Planner, checker: VersionChecker, events: EventLog
 ) -> TaskResult:
-    staffing = lead.staff(request)
+    staffing = planner.staff(request)
     events.add(
         Draft(
-            agent=ROOM_LEAD,
+            agent=PLANNER,
             summary=staffing.joined_summary,
             data=AgentJoinedData(agent=CHECKER, reason=staffing.reason),
         )
     )
     events.add(
         Draft(
-            agent=ROOM_LEAD,
+            agent=PLANNER,
             summary=staffing.ask_summary,
-            data=AgentMessageData(speaker=ROOM_LEAD, addressee=TO_CHECKER, text=staffing.ask_text),
+            data=AgentMessageData(speaker=PLANNER, addressee=TO_CHECKER, text=staffing.ask_text),
         )
     )
     try:
         outcome = _check(request, checker, events)
     except Exception:
-        log.exception("release checker crashed on task %s", request.task_id)
+        log.exception("version checker crashed on task %s", request.task_id)
         events.add(
             Draft(
                 agent=CHECKER,
-                summary="Release checker failed: an unexpected error stopped it.",
+                summary="Version checker failed: an unexpected error stopped it.",
                 data=AgentFailedData(
                     step=None,
                     error_type=UNEXPECTED.type,
@@ -183,19 +183,19 @@ def run_task(
         return TaskFailed(task_id=request.task_id, error=UNEXPECTED, events=events.events)
     if isinstance(outcome, TaskError):
         return TaskFailed(task_id=request.task_id, error=outcome, events=events.events)
-    reply = lead.reply(outcome)
+    reply = planner.reply(outcome)
     events.add(
         Draft(
-            agent=ROOM_LEAD,
+            agent=PLANNER,
             summary=reply.summary,
-            data=AgentMessageData(speaker=ROOM_LEAD, addressee=TO_CHECKER, text=reply.text),
+            data=AgentMessageData(speaker=PLANNER, addressee=TO_CHECKER, text=reply.text),
         )
     )
     return TaskFinished(task_id=request.task_id, output=outcome, events=events.events)
 
 
 def _check(
-    request: TaskRequest, checker: ReleaseChecker, events: EventLog
+    request: TaskRequest, checker: VersionChecker, events: EventLog
 ) -> TaskOutput | TaskError:
     match request.inputs:
         case ReleaseCheckInputs():
@@ -209,7 +209,7 @@ def _check(
 def run_cards(
     request: TaskRequest,
     inputs: CardsInputs,
-    lead: RoomLead,
+    planner: Planner,
     runner: CardRunner,
     chat_for: ChatFor,
     today: date,
@@ -218,24 +218,24 @@ def run_cards(
     """Brings in each agent in turn. An agent sees the reports of the ones before it."""
     task = runner.start(request, chat_for, today)
     reports: list[str] = []
-    ref = ROOM_LEAD
+    ref = PLANNER
     total = len(inputs.agents)
     for position, agent in enumerate(inputs.agents):
         ref = agent_ref(agent)
-        staffing = lead.staff_agent(agent, position, total)
+        staffing = planner.staff_agent(agent, position, total)
         events.add(
             Draft(
-                agent=ROOM_LEAD,
+                agent=PLANNER,
                 summary=staffing.joined_summary,
                 data=AgentJoinedData(agent=ref, reason=staffing.reason),
             )
         )
         events.add(
             Draft(
-                agent=ROOM_LEAD,
+                agent=PLANNER,
                 summary=staffing.ask_summary,
                 data=AgentMessageData(
-                    speaker=ROOM_LEAD,
+                    speaker=PLANNER,
                     addressee=AgentAddressee(id=ref.id, display=ref.display),
                     text=staffing.ask_text,
                 ),
@@ -267,13 +267,13 @@ def run_cards(
         proposed=task.proposed,
         carry_forward=CarryForward(),
     )
-    reply = lead.reply(output)
+    reply = planner.reply(output)
     events.add(
         Draft(
-            agent=ROOM_LEAD,
+            agent=PLANNER,
             summary=reply.summary,
             data=AgentMessageData(
-                speaker=ROOM_LEAD,
+                speaker=PLANNER,
                 addressee=AgentAddressee(id=ref.id, display=ref.display),
                 text=reply.text,
             ),

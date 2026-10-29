@@ -13,5 +13,5 @@
   "stage": "working",
   "reason": "AgentError",
   "retryable": true,
-  "message": "Release checker failed: GitHub returned 503 Service Unavailable three times"
+  "message": "Version checker failed: GitHub returned 503 Service Unavailable three times"
 }

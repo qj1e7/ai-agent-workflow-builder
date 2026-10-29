@@ -532,7 +532,7 @@ def created_events(
     return (created, _leg_dispatched(Leg.WORK, attempt))
 
 
-ROOM_LEAD = agent_actor("room_lead", "Room lead")
+PLANNER = agent_actor("planner", "Planner")
 
 
 class Caller(Enum):

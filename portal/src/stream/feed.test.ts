@@ -395,7 +395,7 @@ describe('runFeed', () => {
     const api = fakeApi(success, 17)
     const feed = start(api)
     await take(feed, 3)
-    api.streams[0]?.push({ ...raw(success, 18), kind: 'agent_left', data: { agent: 'release_checker' } })
+    api.streams[0]?.push({ ...raw(success, 18), kind: 'agent_left', data: { agent: 'version_checker' } })
     api.streams[0]?.push(raw(success, 19))
     const items = await take(feed, 2)
     expect(items[0]).toMatchObject({ events: [{ seq: 18, kind: 'opaque', declaredKind: 'agent_left' }] })

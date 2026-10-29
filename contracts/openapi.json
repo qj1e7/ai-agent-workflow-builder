@@ -1657,7 +1657,7 @@
       },
       "CardDefinition": {
         "additionalProperties": false,
-        "description": "What an Operator or the Room lead writes. Nothing here is trusted until it is checked.",
+        "description": "What an Operator or the Planner writes. Nothing here is trusted until it is checked.",
         "properties": {
           "approvals": {
             "description": "Approvers asked for each write tool. The platform raises them to the tool's minimum and drops tools the blocks do not use.",
@@ -3156,7 +3156,7 @@
             "additionalProperties": {
               "type": "string"
             },
-            "description": "Values the Room lead took from the task.",
+            "description": "Values the Planner took from the task.",
             "title": "Values",
             "type": "object"
           }
@@ -6440,7 +6440,7 @@
     },
     "/api/v1/builder/plan": {
       "post": {
-        "description": "The Room lead reads the task and picks saved agents, or drafts a new one. Nothing is saved.",
+        "description": "The Planner reads the task and picks saved agents, or drafts a new one. Nothing is saved.",
         "operationId": "plan_task_api_v1_builder_plan_post",
         "requestBody": {
           "content": {

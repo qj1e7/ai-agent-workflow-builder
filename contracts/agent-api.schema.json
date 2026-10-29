@@ -709,7 +709,7 @@
       "additionalProperties": false,
       "properties": {
         "agents": {
-          "description": "The agents the Room lead brings in, in the order they work.",
+          "description": "The agents the Planner brings in, in the order they work.",
           "items": {
             "$ref": "#/$defs/CheckedCardToRun"
           },
@@ -1893,10 +1893,10 @@
     "model_test_result": {
       "$ref": "#/$defs/ModelTestResult"
     },
-    "room_choose_request": {
+    "planner_choose_request": {
       "$ref": "#/$defs/ChooseRequest"
     },
-    "room_choose_result": {
+    "planner_choose_result": {
       "$ref": "#/$defs/ChooseResult"
     },
     "task_request": {
@@ -1921,8 +1921,8 @@
     "tool_list",
     "card_draft_request",
     "card_draft_result",
-    "room_choose_request",
-    "room_choose_result"
+    "planner_choose_request",
+    "planner_choose_result"
   ],
   "title": "AgentApiSchema",
   "type": "object"

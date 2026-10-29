@@ -8,7 +8,7 @@ import pytest
 
 from platform_api.app import create_app
 from platform_api.builder import Builder, Watchlist
-from platform_api.builder.cards import RELEASE_CHECKER
+from platform_api.builder.cards import VERSION_CHECKER
 from platform_api.builder.models import (
     CardApprovalView,
     CardBlock,
@@ -133,7 +133,7 @@ async def test_the_library_lists_starters_first_then_saved_cards_by_name(builder
     await builder.create_card(ALICE, reader("Zed"))
     await builder.create_card(ALICE, reader("Alpha"))
     listed = await builder.list_cards()
-    assert [c.name for c in listed.cards] == ["Release checker", "Alpha", "Zed"]
+    assert [c.name for c in listed.cards] == ["Version checker", "Alpha", "Zed"]
     assert [c.starter for c in listed.cards] == [True, False, False]
 
 
@@ -171,13 +171,13 @@ async def test_an_edit_is_the_next_version_and_a_use_case_keeps_the_one_it_was_m
 
 
 async def test_a_starter_cannot_be_edited_and_an_unknown_card_is_missing(builder: Builder):
-    starter = await builder.update_card(ALICE, "crd_release_checker", reader())
+    starter = await builder.update_card(ALICE, "crd_version_checker", reader())
     assert type(starter).__name__ == "StarterCard"
     assert type(await builder.update_card(ALICE, "crd_nope", reader())).__name__ == "NoSuchCard"
 
 
 async def test_an_agent_use_case_shows_its_agents_and_the_line_a_run_draws(builder: Builder):
-    made = await use_case(builder, ("crd_release_checker", RELEASES))
+    made = await use_case(builder, ("crd_version_checker", RELEASES))
     view = await builder.get_use_case(made.use_case_id)
     assert view is not None
     assert (view.template, view.params, view.instruction) == (
@@ -187,13 +187,13 @@ async def test_an_agent_use_case_shows_its_agents_and_the_line_a_run_draws(build
     )
     [agent] = view.agents
     assert (agent.card_id, agent.card_version, agent.name, agent.values) == (
-        "crd_release_checker",
+        "crd_version_checker",
         1,
-        "Release checker",
+        "Version checker",
         RELEASES,
     )
     assert [(b.kind, b.key) for b in view.plan] == [
-        ("agent", "crd_release_checker"),
+        ("agent", "crd_version_checker"),
         ("approval", "approval_gate"),
         ("write_action", "jira_create_ticket"),
     ]
@@ -227,7 +227,7 @@ async def test_values_are_checked_by_kind_before_anything_is_saved(builder: Buil
                 "name": "n",
                 "instruction": "i",
                 "agents": [
-                    {"card_id": "crd_release_checker", "values": {REPO: "x", PROJECT: "mock"}},
+                    {"card_id": "crd_version_checker", "values": {REPO: "x", PROJECT: "mock"}},
                     {"card_id": "crd_missing", "values": {}},
                 ],
             }
@@ -248,7 +248,7 @@ async def test_the_same_agent_twice_is_refused(builder: Builder):
         {
             "name": "n",
             "instruction": "i",
-            "agents": [{"card_id": "crd_release_checker", "values": RELEASES}] * 2,
+            "agents": [{"card_id": "crd_version_checker", "values": RELEASES}] * 2,
         }
     )
     bad = await builder.create_agent_use_case(ALICE, body)
@@ -262,7 +262,7 @@ async def test_two_agents_in_two_projects_are_bound_separately_with_the_most_app
     other = await builder.create_card(ALICE, reader(approvers=2))
     made = await use_case(
         builder,
-        ("crd_release_checker", {REPO: "a/b", PROJECT: "AAA"}),
+        ("crd_version_checker", {REPO: "a/b", PROJECT: "AAA"}),
         (other.card_id, {"Where": "BBB"}),  # pyright: ignore[reportAttributeAccessIssue]
     )
     spec = await builder.run_spec_for(UseCaseId(made.use_case_id))
@@ -277,7 +277,7 @@ async def test_two_agents_in_two_projects_are_bound_separately_with_the_most_app
 async def test_a_card_run_without_a_model_is_refused_before_a_run_exists(
     builder: Builder, runs: Runs, planner: Planner
 ):
-    made = await use_case(builder, ("crd_release_checker", RELEASES))
+    made = await use_case(builder, ("crd_version_checker", RELEASES))
     planner.model = False
     result = await builder.start_run(UseCaseId(made.use_case_id), ALICE, "k")
     assert isinstance(result, NoModelToRun) and runs.started == []
@@ -306,8 +306,8 @@ async def test_tools_and_cards_can_be_read_by_anyone_signed_in(client: httpx.Asy
     tools = await client.get("/api/v1/tools", headers=AS_BOB)
     assert [t["id"] for t in tools.json()["tools"]][-1] == "jira.create_ticket"
     cards = await client.get("/api/v1/agent-cards", headers=AS_BOB)
-    assert cards.json()["cards"][0]["card_id"] == "crd_release_checker"
-    one = await client.get("/api/v1/agent-cards/crd_release_checker", headers=AS_BOB)
+    assert cards.json()["cards"][0]["card_id"] == "crd_version_checker"
+    one = await client.get("/api/v1/agent-cards/crd_version_checker", headers=AS_BOB)
     assert one.json()["starter"] is True
     assert (await client.get("/api/v1/agent-cards/crd_nope", headers=AS_BOB)).status_code == 404
     assert (await client.get("/api/v1/tools")).status_code == 401
@@ -347,7 +347,7 @@ async def test_a_starter_card_cannot_be_overwritten_and_an_unknown_one_is_404(
     client: httpx.AsyncClient,
 ):
     starter = await client.put(
-        "/api/v1/agent-cards/crd_release_checker", json=CARD_JSON, headers=AS_ALICE
+        "/api/v1/agent-cards/crd_version_checker", json=CARD_JSON, headers=AS_ALICE
     )
     assert (starter.status_code, starter.json()["detail"]) == (
         409,
@@ -364,7 +364,7 @@ async def test_plan_picks_a_saved_agent_and_saves_nothing(
     planner.chose = Chosen(
         choice=Choice(
             decision="use_one",
-            agents=[ChosenAgent(card_id="crd_release_checker", part="Check", values=RELEASES)],
+            agents=[ChosenAgent(card_id="crd_version_checker", part="Check", values=RELEASES)],
             reason="It fits.",
         )
     )
@@ -400,14 +400,14 @@ async def test_an_agent_use_case_is_made_started_and_refused_without_a_model(
     body = {
         "name": "Releases",
         "instruction": "Check.",
-        "agents": [{"card_id": "crd_release_checker", "values": RELEASES}],
+        "agents": [{"card_id": "crd_version_checker", "values": RELEASES}],
     }
     assert (
         await client.post("/api/v1/agent-use-cases", json=body, headers=AS_BOB)
     ).status_code == 403
     bad = await client.post(
         "/api/v1/agent-use-cases",
-        json={**body, "agents": [{"card_id": "crd_release_checker", "values": {}}]},
+        json={**body, "agents": [{"card_id": "crd_version_checker", "values": {}}]},
         headers=AS_ALICE,
     )
     assert bad.status_code == 422
@@ -422,7 +422,7 @@ async def test_an_agent_use_case_is_made_started_and_refused_without_a_model(
     view = UseCaseView.model_validate(
         (await client.get(f"/api/v1/use-cases/{uc}", headers=AS_BOB)).json()
     )
-    assert view.agents[0].name == "Release checker"
+    assert view.agents[0].name == "Version checker"
     planner.model = False
     start = await client.post(
         f"/api/v1/use-cases/{uc}/runs", headers={**AS_ALICE, "Idempotency-Key": "k"}
@@ -449,4 +449,4 @@ async def test_the_agent_template_cannot_be_built_by_hand(client: httpx.AsyncCli
 
 
 def test_the_starter_is_the_one_the_tests_assume():
-    assert RELEASE_CHECKER.card_id == "crd_release_checker"
+    assert VERSION_CHECKER.card_id == "crd_version_checker"

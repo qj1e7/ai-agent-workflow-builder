@@ -9,7 +9,7 @@
     "reference": {
       "can_do": true,
       "why_not": null,
-      "name": "Release checker",
+      "name": "Version checker",
       "purpose": "Checks a repository for a new release and proposes a ticket.",
       "good_for": [],
       "inputs": [

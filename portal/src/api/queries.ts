@@ -133,7 +133,7 @@ export function useAgentCards() {
   })
 }
 
-/** The Room lead's plan for a task. The platform answers 409 until an AI model is connected. */
+/** The Planner's plan for a task. The platform answers 409 until an AI model is connected. */
 export function usePlan() {
   const client = useApiClient()
   return useMutation({

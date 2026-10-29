@@ -9,7 +9,7 @@ from langchain_core.runnables import Runnable, RunnableLambda
 from pydantic import BaseModel, Field
 
 from agent_runtime.jira import JiraTicket, JiraUnavailable
-from agent_runtime.release_checker import Release, SourceRejected, SourceUnavailable
+from agent_runtime.version_checker import Release, SourceRejected, SourceUnavailable
 
 
 class FakeClock:

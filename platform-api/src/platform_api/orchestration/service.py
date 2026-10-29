@@ -64,7 +64,7 @@ from platform_api.orchestration.dispatch import (
     WorkflowEngine,
 )
 from platform_api.orchestration.runs import (
-    ROOM_LEAD,
+    PLANNER,
     Acting,
     AwaitingApproval,
     Begin,
@@ -528,7 +528,7 @@ class Orchestrator:
                 await self._store.insert_proposal(uow, proposal)
                 lines = tuple(describe(action) for action in actions)
                 moved = working.propose(
-                    proposal.id, proposal.digest, lines, ROOM_LEAD, summary, uow.now
+                    proposal.id, proposal.digest, lines, PLANNER, summary, uow.now
                 )
                 reply = StepReply(True, "proposed", summary)
         if reviewed is not None:

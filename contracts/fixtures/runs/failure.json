@@ -56,15 +56,15 @@
     "ts": "2026-11-04T02:14:02.370000Z",
     "actor": {
       "kind": "agent",
-      "id": "room_lead",
-      "display": "Room lead"
+      "id": "planner",
+      "display": "Planner"
     },
-    "summary": "Room lead brought in Release checker to read the GitHub releases.",
+    "summary": "Planner brought in Version checker to read the GitHub releases.",
     "kind": "agent_joined",
     "data": {
       "agent": {
-        "id": "release_checker",
-        "display": "Release checker"
+        "id": "version_checker",
+        "display": "Version checker"
       },
       "reason": "The task asks about releases of a GitHub repo."
     }
@@ -75,20 +75,20 @@
     "ts": "2026-11-04T02:14:02.490000Z",
     "actor": {
       "kind": "agent",
-      "id": "room_lead",
-      "display": "Room lead"
+      "id": "planner",
+      "display": "Planner"
     },
-    "summary": "Room lead asked Release checker to look for releases newer than 1.2.14.",
+    "summary": "Planner asked Version checker to look for releases newer than 1.2.14.",
     "kind": "agent_message",
     "data": {
       "speaker": {
-        "id": "room_lead",
-        "display": "Room lead"
+        "id": "planner",
+        "display": "Planner"
       },
       "addressee": {
         "kind": "agent",
-        "id": "release_checker",
-        "display": "Release checker"
+        "id": "version_checker",
+        "display": "Version checker"
       },
       "text": "Please check langchain-ai/langgraph for releases newer than 1.2.14."
     }
@@ -99,10 +99,10 @@
     "ts": "2026-11-04T02:14:02.620000Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker is fetching releases from langchain-ai/langgraph.",
+    "summary": "Version checker is fetching releases from langchain-ai/langgraph.",
     "kind": "agent_step_started",
     "data": {
       "step": "fetch_releases"
@@ -114,15 +114,15 @@
     "ts": "2026-11-04T02:14:04.702000Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker reported that GitHub answered 503 (try 1 of 3).",
+    "summary": "Version checker reported that GitHub answered 503 (try 1 of 3).",
     "kind": "agent_message",
     "data": {
       "speaker": {
-        "id": "release_checker",
-        "display": "Release checker"
+        "id": "version_checker",
+        "display": "Version checker"
       },
       "addressee": {
         "kind": "room"
@@ -136,15 +136,15 @@
     "ts": "2026-11-04T02:14:08.811000Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker reported that GitHub answered 503 (try 2 of 3).",
+    "summary": "Version checker reported that GitHub answered 503 (try 2 of 3).",
     "kind": "agent_message",
     "data": {
       "speaker": {
-        "id": "release_checker",
-        "display": "Release checker"
+        "id": "version_checker",
+        "display": "Version checker"
       },
       "addressee": {
         "kind": "room"
@@ -158,15 +158,15 @@
     "ts": "2026-11-04T02:14:12.934000Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker reported that GitHub answered 503 (try 3 of 3).",
+    "summary": "Version checker reported that GitHub answered 503 (try 3 of 3).",
     "kind": "agent_message",
     "data": {
       "speaker": {
-        "id": "release_checker",
-        "display": "Release checker"
+        "id": "version_checker",
+        "display": "Version checker"
       },
       "addressee": {
         "kind": "room"
@@ -180,10 +180,10 @@
     "ts": "2026-11-04T02:14:12.961000Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker failed: GitHub was unavailable.",
+    "summary": "Version checker failed: GitHub was unavailable.",
     "kind": "agent_failed",
     "data": {
       "step": "fetch_releases",
@@ -208,7 +208,7 @@
       "n8n_execution_id": "43",
       "try_number": 1,
       "outcome": "failed",
-      "detail": "Release checker failed: GitHub returned 503 Service Unavailable three times"
+      "detail": "Version checker failed: GitHub returned 503 Service Unavailable three times"
     }
   },
   {
@@ -226,7 +226,7 @@
       "stage": "working",
       "reason": "AgentError",
       "retryable": true,
-      "message": "Release checker failed: GitHub returned 503 Service Unavailable three times"
+      "message": "Version checker failed: GitHub returned 503 Service Unavailable three times"
     }
   }
 ]

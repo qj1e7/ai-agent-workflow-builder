@@ -8,7 +8,7 @@
         {
           "key": "read_releases",
           "name": "Read GitHub releases",
-          "description": "The Release checker reads the repository's releases.",
+          "description": "The Version checker reads the repository's releases.",
           "kind": "agent"
         },
         {
@@ -55,7 +55,7 @@
         {
           "key": "read_versions",
           "name": "Read every source",
-          "description": "The Release checker reads the newest release of each watched software.",
+          "description": "The Version checker reads the newest release of each watched software.",
           "kind": "agent"
         },
         {
@@ -82,7 +82,7 @@
     {
       "key": "agent_cards",
       "name": "Agents",
-      "description": "Agents the Room lead brings in, each described by an agent card.",
+      "description": "Agents the Planner brings in, each described by an agent card.",
       "blocks": [],
       "params": []
     }

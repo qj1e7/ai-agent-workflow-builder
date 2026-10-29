@@ -11,8 +11,8 @@ from agent_runtime.contract import (
     TaskOutput,
 )
 from agent_runtime.events import Draft
-from agent_runtime.release_checker import Release, ReleaseChecker, SourceRejected
 from agent_runtime.summary import TemplateSummarizer
+from agent_runtime.version_checker import Release, SourceRejected, VersionChecker
 from tests.fakes import FakeClock, FakeSource, langgraph_tags
 
 REPO = "langchain-ai/langgraph"
@@ -24,7 +24,7 @@ class Run:
         self.clock = FakeClock()
         self.source = source
         self.drafts: list[Draft] = []
-        self.checker = ReleaseChecker(source, TemplateSummarizer(), sleep=self.clock.sleep)
+        self.checker = VersionChecker(source, TemplateSummarizer(), sleep=self.clock.sleep)
 
     def check(self, last: str | None, inputs: ReleaseCheckInputs = PLAIN) -> TaskOutput | TaskError:
         return self.checker.check(inputs, last, self.drafts.append)

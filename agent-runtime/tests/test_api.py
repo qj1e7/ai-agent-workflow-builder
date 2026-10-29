@@ -36,8 +36,7 @@ from agent_runtime.contract import (
     task_result_adapter,
 )
 from agent_runtime.contracts import task_request
-from agent_runtime.release_checker import ReleaseChecker
-from agent_runtime.room import FixedRoomLead
+from agent_runtime.planner import FixedPlanner
 from agent_runtime.summary import (
     ModelFactory,
     ModelSummarizer,
@@ -45,6 +44,7 @@ from agent_runtime.summary import (
     TemplateSummarizer,
     model_factory,
 )
+from agent_runtime.version_checker import VersionChecker
 from tests.fakes import FakeClock, FakeSource, langgraph_tags
 
 KEY = "test-agent-key-not-a-secret"
@@ -69,10 +69,10 @@ class Posts:
 def make_runtime(source: FakeSource | None = None, posts: Posts | None = None) -> Runtime:
     clock = FakeClock()
     callbacks = HttpCallbacks(transport=httpx.MockTransport(posts or Posts()))
-    checker = ReleaseChecker(
+    checker = VersionChecker(
         source or FakeSource(langgraph_tags()), TemplateSummarizer(), sleep=clock.sleep
     )
-    return Runtime(checker=checker, lead=FixedRoomLead(), clock=clock, callbacks=callbacks)
+    return Runtime(checker=checker, planner=FixedPlanner(), clock=clock, callbacks=callbacks)
 
 
 def make_app(source: FakeSource, posts: Posts) -> TestClient:
@@ -267,7 +267,7 @@ def test_settings_default_to_the_public_api_and_no_model():
     assert settings.summary_model is None
     assert settings.model_base_url is None
     assert settings.model_api_key is None
-    assert isinstance(build_runtime(settings).checker, ReleaseChecker)
+    assert isinstance(build_runtime(settings).checker, VersionChecker)
 
 
 def test_settings_read_the_environment():

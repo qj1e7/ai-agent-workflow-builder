@@ -215,7 +215,7 @@ class CardApprovalView(WireModel):
 
 
 class CardDefinition(WireModel):
-    """What an Operator or the Room lead writes. Nothing here is trusted until it is checked."""
+    """What an Operator or the Planner writes. Nothing here is trusted until it is checked."""
 
     name: str
     purpose: str
@@ -284,7 +284,7 @@ class PlanIn(WireModel):
 class PlannedAgent(WireModel):
     card: CardView
     part: str
-    values: dict[str, str] = Field(description="Values the Room lead took from the task.")
+    values: dict[str, str] = Field(description="Values the Planner took from the task.")
     missing: list[str] = Field(description="Names of inputs that still need a value.")
 
 

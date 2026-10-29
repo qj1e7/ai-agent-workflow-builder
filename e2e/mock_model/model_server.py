@@ -26,7 +26,7 @@ REPO = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+")
 PROJECT = re.compile(r"[A-Z][A-Z0-9]{0,9}")
 VERSION = re.compile(r"\d+\.\d+\.\d+")
 INPUT_LINE = re.compile(r"^- [^:\n]+: (.+)$", re.MULTILINE)
-RELEASE_CHECKER = "crd_release_checker"
+VERSION_CHECKER = "crd_version_checker"
 STEPS = ("github_read_releases", "jira_search", "jira_create_ticket")
 
 DRAFT: dict[str, Any] = {
@@ -108,7 +108,7 @@ def user_text(body: dict[str, Any]) -> str:
 
 
 def task_text(body: dict[str, Any]) -> str:
-    """Only the staff member's task. The Room lead's request also lists the saved agents, whose
+    """Only the staff member's task. The Planner's request also lists the saved agents, whose
     purposes must not steer the mock's choice."""
     return user_text(body).rpartition("The task:\n")[2]
 
@@ -137,8 +137,8 @@ def choice(task: str) -> dict[str, Any]:
         values["Jira project"] = project.group(1)
     return {
         "decision": "use_one",
-        "agents": [{"card_id": RELEASE_CHECKER, "part": "Check the repository.", "values": values}],
-        "reason": "The Release checker already does this.",
+        "agents": [{"card_id": VERSION_CHECKER, "part": "Check the repository.", "values": values}],
+        "reason": "The Version checker already does this.",
         "questions": [],
     }
 

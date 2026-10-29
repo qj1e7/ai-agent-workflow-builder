@@ -45,8 +45,7 @@ from agent_runtime.guarded import GuardedModels
 from agent_runtime.jira import JiraReaderFor, PracticeJiraFor, no_jira
 from agent_runtime.model_access import ModelProbe, chat_for, summarizer_for
 from agent_runtime.origins import Origin, origin_of, parse_origin_list
-from agent_runtime.release_checker import ReleaseChecker
-from agent_runtime.room import FixedRoomLead, RoomLead, run_cards, run_task
+from agent_runtime.planner import FixedPlanner, Planner, run_cards, run_task
 from agent_runtime.summary import (
     ChatFor,
     ModelSummarizer,
@@ -55,6 +54,7 @@ from agent_runtime.summary import (
     model_factory,
 )
 from agent_runtime.tools import tool_list, value_problem
+from agent_runtime.version_checker import VersionChecker
 
 log = logging.getLogger(__name__)
 
@@ -68,14 +68,14 @@ SINGAPORE = timezone(timedelta(hours=8))
 AGENT_CARDS = AgentCards(
     agents=[
         AgentCard(
-            id="room_lead",
-            display="Room lead",
+            id="planner",
+            display="Planner",
             description="Reads the task and decides which specialist agents to bring in.",
             capabilities=["plan a task", "bring in specialists", "hand proposals to the platform"],
         ),
         AgentCard(
-            id="release_checker",
-            display="Release checker",
+            id="version_checker",
+            display="Version checker",
             description="Reads the releases of public GitHub repositories and finds the new ones, "
             "for one repository or for a list of watched software.",
             capabilities=[
@@ -205,8 +205,8 @@ def _chat_under_default_policy(access: ModelAccess | None) -> ChatFor | None:
 
 @dataclass(frozen=True)
 class Runtime:
-    checker: ReleaseChecker
-    lead: RoomLead
+    checker: VersionChecker
+    planner: Planner
     clock: Clock
     callbacks: Callbacks
     summarizer_for: SummarizerFor = field(default=_summarizer_under_default_policy)
@@ -248,8 +248,8 @@ def build_runtime(settings: Settings) -> Runtime:
         PracticeJiraFor(settings.practice_jira_url) if settings.practice_jira_url else no_jira
     )
     return Runtime(
-        checker=ReleaseChecker(source, build_summarizer(settings), sleep=time.sleep),
-        lead=FixedRoomLead(),
+        checker=VersionChecker(source, build_summarizer(settings), sleep=time.sleep),
+        planner=FixedPlanner(),
         clock=utc_now,
         callbacks=HttpCallbacks(),
         summarizer_for=summarizer_under_policy,
@@ -324,7 +324,7 @@ def create_app(
 
         def run() -> TaskResult:
             events = EventLog(active.clock, active.callbacks.sink_for(body))
-            return run_task(body, active.lead, checker, events)
+            return run_task(body, active.planner, checker, events)
 
         try:
             return store.run_once(body, run)
@@ -352,7 +352,7 @@ def create_app(
 
         def run() -> TaskResult:
             events = EventLog(active.clock, active.callbacks.sink_for(body))
-            return run_cards(body, inputs, active.lead, runner, chat, today, events)
+            return run_cards(body, inputs, active.planner, runner, chat, today, events)
 
         try:
             return store.run_once(body, run)
@@ -370,7 +370,7 @@ def create_app(
         chat = active.chat_source(body.model)
         return draft_card(body, chat) if chat else NO_MODEL
 
-    @app.post("/v1/room/choose", dependencies=[Depends(require_key)])
+    @app.post("/v1/planner/choose", dependencies=[Depends(require_key)])
     def choose(body: ChooseRequest) -> ChooseResult:
         chat = active.chat_source(body.model)
         return choose_agents(body, chat) if chat else NO_MODEL

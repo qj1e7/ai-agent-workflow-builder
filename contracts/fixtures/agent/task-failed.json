@@ -11,15 +11,15 @@
       "agent_seq": 1,
       "ts": "2026-11-04T02:14:02.370000Z",
       "agent": {
-        "id": "room_lead",
-        "display": "Room lead"
+        "id": "planner",
+        "display": "Planner"
       },
-      "summary": "Room lead brought in Release checker to read the GitHub releases.",
+      "summary": "Planner brought in Version checker to read the GitHub releases.",
       "kind": "agent_joined",
       "data": {
         "agent": {
-          "id": "release_checker",
-          "display": "Release checker"
+          "id": "version_checker",
+          "display": "Version checker"
         },
         "reason": "The task asks about releases of a GitHub repo."
       }
@@ -28,20 +28,20 @@
       "agent_seq": 2,
       "ts": "2026-11-04T02:14:02.490000Z",
       "agent": {
-        "id": "room_lead",
-        "display": "Room lead"
+        "id": "planner",
+        "display": "Planner"
       },
-      "summary": "Room lead asked Release checker to look for releases newer than 1.2.14.",
+      "summary": "Planner asked Version checker to look for releases newer than 1.2.14.",
       "kind": "agent_message",
       "data": {
         "speaker": {
-          "id": "room_lead",
-          "display": "Room lead"
+          "id": "planner",
+          "display": "Planner"
         },
         "addressee": {
           "kind": "agent",
-          "id": "release_checker",
-          "display": "Release checker"
+          "id": "version_checker",
+          "display": "Version checker"
         },
         "text": "Please check langchain-ai/langgraph for releases newer than 1.2.14."
       }
@@ -50,10 +50,10 @@
       "agent_seq": 3,
       "ts": "2026-11-04T02:14:02.620000Z",
       "agent": {
-        "id": "release_checker",
-        "display": "Release checker"
+        "id": "version_checker",
+        "display": "Version checker"
       },
-      "summary": "Release checker is fetching releases from langchain-ai/langgraph.",
+      "summary": "Version checker is fetching releases from langchain-ai/langgraph.",
       "kind": "agent_step_started",
       "data": {
         "step": "fetch_releases"
@@ -63,15 +63,15 @@
       "agent_seq": 4,
       "ts": "2026-11-04T02:14:04.702000Z",
       "agent": {
-        "id": "release_checker",
-        "display": "Release checker"
+        "id": "version_checker",
+        "display": "Version checker"
       },
-      "summary": "Release checker reported that GitHub answered 503 (try 1 of 3).",
+      "summary": "Version checker reported that GitHub answered 503 (try 1 of 3).",
       "kind": "agent_message",
       "data": {
         "speaker": {
-          "id": "release_checker",
-          "display": "Release checker"
+          "id": "version_checker",
+          "display": "Version checker"
         },
         "addressee": {
           "kind": "room"
@@ -83,15 +83,15 @@
       "agent_seq": 5,
       "ts": "2026-11-04T02:14:08.811000Z",
       "agent": {
-        "id": "release_checker",
-        "display": "Release checker"
+        "id": "version_checker",
+        "display": "Version checker"
       },
-      "summary": "Release checker reported that GitHub answered 503 (try 2 of 3).",
+      "summary": "Version checker reported that GitHub answered 503 (try 2 of 3).",
       "kind": "agent_message",
       "data": {
         "speaker": {
-          "id": "release_checker",
-          "display": "Release checker"
+          "id": "version_checker",
+          "display": "Version checker"
         },
         "addressee": {
           "kind": "room"
@@ -103,15 +103,15 @@
       "agent_seq": 6,
       "ts": "2026-11-04T02:14:12.934000Z",
       "agent": {
-        "id": "release_checker",
-        "display": "Release checker"
+        "id": "version_checker",
+        "display": "Version checker"
       },
-      "summary": "Release checker reported that GitHub answered 503 (try 3 of 3).",
+      "summary": "Version checker reported that GitHub answered 503 (try 3 of 3).",
       "kind": "agent_message",
       "data": {
         "speaker": {
-          "id": "release_checker",
-          "display": "Release checker"
+          "id": "version_checker",
+          "display": "Version checker"
         },
         "addressee": {
           "kind": "room"
@@ -123,10 +123,10 @@
       "agent_seq": 7,
       "ts": "2026-11-04T02:14:12.961000Z",
       "agent": {
-        "id": "release_checker",
-        "display": "Release checker"
+        "id": "version_checker",
+        "display": "Version checker"
       },
-      "summary": "Release checker failed: GitHub was unavailable.",
+      "summary": "Version checker failed: GitHub was unavailable.",
       "kind": "agent_failed",
       "data": {
         "step": "fetch_releases",

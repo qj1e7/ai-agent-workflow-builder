@@ -12,7 +12,7 @@
           "body": "LangGraph 1.2.16 is out on GitHub (langchain-ai/langgraph). MOCK has no ticket for it.\n\nProposed by the AI workflow builder."
         },
         "reason": "If there is none, propose a ticket naming the release, its date and its link.",
-        "subject": "crd_release_checker"
+        "subject": "crd_version_checker"
       }
     ],
     "carry_forward": {
@@ -25,15 +25,15 @@
       "agent_seq": 1,
       "ts": "2026-11-05T02:14:02.100000Z",
       "agent": {
-        "id": "room_lead",
-        "display": "Room lead"
+        "id": "planner",
+        "display": "Planner"
       },
-      "summary": "Room lead brought in Release checker.",
+      "summary": "Planner brought in Version checker.",
       "kind": "agent_joined",
       "data": {
         "agent": {
-          "id": "crd_release_checker",
-          "display": "Release checker"
+          "id": "crd_version_checker",
+          "display": "Version checker"
         },
         "reason": "Checks a public GitHub repository for a new release and proposes a Jira ticket for it."
       }
@@ -42,20 +42,20 @@
       "agent_seq": 2,
       "ts": "2026-11-05T02:14:02.300000Z",
       "agent": {
-        "id": "room_lead",
-        "display": "Room lead"
+        "id": "planner",
+        "display": "Planner"
       },
-      "summary": "Room lead asked Release checker to do its part of the task.",
+      "summary": "Planner asked Version checker to do its part of the task.",
       "kind": "agent_message",
       "data": {
         "speaker": {
-          "id": "room_lead",
-          "display": "Room lead"
+          "id": "planner",
+          "display": "Planner"
         },
         "addressee": {
           "kind": "agent",
-          "id": "crd_release_checker",
-          "display": "Release checker"
+          "id": "crd_version_checker",
+          "display": "Version checker"
         },
         "text": "Please run your plan with these inputs. GitHub repository: langchain-ai/langgraph; Jira project: MOCK."
       }
@@ -64,10 +64,10 @@
       "agent_seq": 3,
       "ts": "2026-11-05T02:14:03.400000Z",
       "agent": {
-        "id": "crd_release_checker",
-        "display": "Release checker"
+        "id": "crd_version_checker",
+        "display": "Version checker"
       },
-      "summary": "Release checker reads the releases of langchain-ai/langgraph.",
+      "summary": "Version checker reads the releases of langchain-ai/langgraph.",
       "kind": "agent_step_started",
       "data": {
         "step": "github_read_releases"
@@ -77,10 +77,10 @@
       "agent_seq": 4,
       "ts": "2026-11-05T02:14:04.200000Z",
       "agent": {
-        "id": "crd_release_checker",
-        "display": "Release checker"
+        "id": "crd_version_checker",
+        "display": "Version checker"
       },
-      "summary": "Release checker read 8 releases of langchain-ai/langgraph. The newest is 1.2.16.",
+      "summary": "Version checker read 8 releases of langchain-ai/langgraph. The newest is 1.2.16.",
       "kind": "agent_step_finished",
       "data": {
         "step": "github_read_releases",
@@ -103,10 +103,10 @@
       "agent_seq": 5,
       "ts": "2026-11-05T02:14:05.600000Z",
       "agent": {
-        "id": "crd_release_checker",
-        "display": "Release checker"
+        "id": "crd_version_checker",
+        "display": "Version checker"
       },
-      "summary": "Release checker searches Jira project MOCK.",
+      "summary": "Version checker searches Jira project MOCK.",
       "kind": "agent_step_started",
       "data": {
         "step": "jira_search"
@@ -116,10 +116,10 @@
       "agent_seq": 6,
       "ts": "2026-11-05T02:14:05.900000Z",
       "agent": {
-        "id": "crd_release_checker",
-        "display": "Release checker"
+        "id": "crd_version_checker",
+        "display": "Version checker"
       },
-      "summary": "Release checker found no tickets in MOCK.",
+      "summary": "Version checker found no tickets in MOCK.",
       "kind": "agent_step_finished",
       "data": {
         "step": "jira_search",
@@ -133,10 +133,10 @@
       "agent_seq": 7,
       "ts": "2026-11-05T02:14:07.300000Z",
       "agent": {
-        "id": "crd_release_checker",
-        "display": "Release checker"
+        "id": "crd_version_checker",
+        "display": "Version checker"
       },
-      "summary": "Release checker drafts a Jira ticket for approval: Upgrade LangGraph to 1.2.16",
+      "summary": "Version checker drafts a Jira ticket for approval: Upgrade LangGraph to 1.2.16",
       "kind": "agent_step_started",
       "data": {
         "step": "jira_create_ticket"
@@ -146,10 +146,10 @@
       "agent_seq": 8,
       "ts": "2026-11-05T02:14:07.310000Z",
       "agent": {
-        "id": "crd_release_checker",
-        "display": "Release checker"
+        "id": "crd_version_checker",
+        "display": "Version checker"
       },
-      "summary": "Release checker proposed a ticket for approval: Upgrade LangGraph to 1.2.16",
+      "summary": "Version checker proposed a ticket for approval: Upgrade LangGraph to 1.2.16",
       "kind": "agent_step_finished",
       "data": {
         "step": "jira_create_ticket",
@@ -162,15 +162,15 @@
       "agent_seq": 9,
       "ts": "2026-11-05T02:14:09Z",
       "agent": {
-        "id": "crd_release_checker",
-        "display": "Release checker"
+        "id": "crd_version_checker",
+        "display": "Version checker"
       },
-      "summary": "Release checker reported to the room: LangGraph 1.2.16 is the newest release and MOCK has no ticket for it, so I proposed one ticket for an Approver to check.",
+      "summary": "Version checker reported to the room: LangGraph 1.2.16 is the newest release and MOCK has no ticket for it, so I proposed one ticket for an Approver to check.",
       "kind": "agent_message",
       "data": {
         "speaker": {
-          "id": "crd_release_checker",
-          "display": "Release checker"
+          "id": "crd_version_checker",
+          "display": "Version checker"
         },
         "addressee": {
           "kind": "room"
@@ -182,20 +182,20 @@
       "agent_seq": 10,
       "ts": "2026-11-05T02:14:09.200000Z",
       "agent": {
-        "id": "room_lead",
-        "display": "Room lead"
+        "id": "planner",
+        "display": "Planner"
       },
-      "summary": "Room lead agreed and will propose the ticket for approval.",
+      "summary": "Planner agreed and will propose the ticket for approval.",
       "kind": "agent_message",
       "data": {
         "speaker": {
-          "id": "room_lead",
-          "display": "Room lead"
+          "id": "planner",
+          "display": "Planner"
         },
         "addressee": {
           "kind": "agent",
-          "id": "crd_release_checker",
-          "display": "Release checker"
+          "id": "crd_version_checker",
+          "display": "Version checker"
         },
         "text": "Agreed. I'll draft one ticket for an Approver to check."
       }

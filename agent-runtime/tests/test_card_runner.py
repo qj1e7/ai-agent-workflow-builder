@@ -27,12 +27,12 @@ from agent_runtime.contracts import (
     CARD_TICKET_TITLE,
     card_finished,
     card_request,
-    release_checker_card,
+    version_checker_card,
 )
 from agent_runtime.events import EventLog
 from agent_runtime.jira import JiraReader, JiraTicket
+from agent_runtime.planner import FixedPlanner, run_cards
 from agent_runtime.release_source import Release
-from agent_runtime.room import FixedRoomLead, run_cards
 from tests.fakes import (
     FakeClock,
     FakeJira,
@@ -74,7 +74,7 @@ class Room:
         return run_cards(
             self.request,
             inputs,
-            FixedRoomLead(),
+            FixedPlanner(),
             self.runner,
             lambda timeout: self.chat,
             TODAY,
@@ -88,7 +88,7 @@ VALUES = {"GitHub repository": REPO, "Jira project": "MOCK"}
 def request_with(*tools: str | None) -> TaskRequest:
     """A task for one agent whose card has one block for each of these tools."""
     blocks = [CardBlock(say=f"Step {n}.", tool=tool) for n, tool in enumerate(tools, 1)]  # type: ignore[arg-type]
-    card = release_checker_card().model_copy(update={"blocks": blocks})
+    card = version_checker_card().model_copy(update={"blocks": blocks})
     inputs = CardsInputs(agents=[CardToRun(card=card, values=VALUES)])
     return card_request("run_01JD1").model_copy(update={"inputs": inputs})
 
@@ -224,8 +224,8 @@ def test_a_write_only_proposes_and_never_carries_a_target():
     [intent] = result.output.proposed
     assert intent.kind == "jira.create_ticket"
     assert set(intent.fields) == {"title", "body"}
-    assert intent.subject == "crd_release_checker"
-    assert intent.reason == release_checker_card().blocks[2].say
+    assert intent.subject == "crd_version_checker"
+    assert intent.reason == version_checker_card().blocks[2].say
     assert "Nothing is written until an Approver approves it" in json.dumps(
         tool_answers(room.chat)[2]
     )
@@ -279,7 +279,7 @@ def test_text_planted_in_a_tool_result_creates_no_extra_intent():
 
 
 def test_an_earlier_agents_report_is_given_to_the_next_agent_as_data():
-    second = release_checker_card().model_copy(update={"id": "crd_second", "name": "Second agent"})
+    second = version_checker_card().model_copy(update={"id": "crd_second", "name": "Second agent"})
     first = card_request("run_01JD1").inputs.agents[0]  # type: ignore[union-attr]
     inputs = CardsInputs(agents=[first, CardToRun(card=second, values=first.values)])
     request = card_request("run_01JD1").model_copy(update={"inputs": inputs})
@@ -292,8 +292,8 @@ def test_an_earlier_agents_report_is_given_to_the_next_agent_as_data():
     assert "First report" not in str(chat.calls[0][0].content)
     joined = [e.summary for e in result.events if e.kind == "agent_joined"]
     assert joined == [
-        "Room lead brought in Release checker (1 of 2).",
-        "Room lead brought in Second agent (2 of 2).",
+        "Planner brought in Version checker (1 of 2).",
+        "Planner brought in Second agent (2 of 2).",
     ]
 
 
@@ -399,7 +399,7 @@ def test_the_releases_the_model_sees_are_the_newest_ten_without_drafts():
 
 
 def test_the_prompt_lists_the_card_the_values_and_the_rules():
-    agent = CardToRun(card=release_checker_card(), values=VALUES)
+    agent = CardToRun(card=version_checker_card(), values=VALUES)
     prompt = system_prompt(agent, ["Earlier: fine."], TODAY)
     assert "Today is Sunday 25 October 2026" in prompt
     assert "1. Read the newest releases of the repository. (tool: github_read_releases)" in prompt
@@ -437,7 +437,7 @@ def test_a_ticket_from_another_project_is_refused_without_calling_jira():
 
 def test_a_card_with_no_jira_project_cannot_read_jira():
     jira = FakeJira()
-    card = release_checker_card()
+    card = version_checker_card()
     card = card.model_copy(update={"inputs": card.inputs[:1], "blocks": card.blocks[1:2]})
     inputs = CardsInputs(agents=[CardToRun(card=card, values={"GitHub repository": REPO})])
     request = card_request("run_01JD1").model_copy(update={"inputs": inputs})

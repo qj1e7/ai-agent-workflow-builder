@@ -40,7 +40,7 @@ from agent_runtime.watchlist import WatchlistChecker
 __all__ = [
     "CHECKER",
     "Release",
-    "ReleaseChecker",
+    "VersionChecker",
     "ReleaseSource",
     "RetryPolicy",
     "SourceRejected",
@@ -65,7 +65,7 @@ class CheckerState:
 type Update = dict[str, object]
 
 
-class ReleaseChecker:
+class VersionChecker:
     def __init__(
         self,
         source: ReleaseSource,
@@ -80,8 +80,8 @@ class ReleaseChecker:
         self._watchlist = WatchlistChecker(source, summarizer, sleep, retry)
         self._graph = self._build()
 
-    def with_summarizer(self, summarizer: Summarizer) -> ReleaseChecker:
-        return ReleaseChecker(self._source, summarizer, self._sleep, self._retry)
+    def with_summarizer(self, summarizer: Summarizer) -> VersionChecker:
+        return VersionChecker(self._source, summarizer, self._sleep, self._retry)
 
     def check(
         self,

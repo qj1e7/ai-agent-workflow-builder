@@ -15,7 +15,7 @@ from agent_runtime.contract import (
 )
 from agent_runtime.events import Draft
 
-CHECKER = AgentRef(id="release_checker", display="Release checker")
+CHECKER = AgentRef(id="version_checker", display="Version checker")
 SOURCE_NAME = "GitHub"
 NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]
 
@@ -118,7 +118,7 @@ def gave_up_message(error: SourceUnavailable) -> str:
 def started(step: str, what: str) -> Draft:
     return Draft(
         agent=CHECKER,
-        summary=f"Release checker is {what}",
+        summary=f"Version checker is {what}",
         data=AgentStepStartedData(step=step),
     )
 
@@ -126,7 +126,7 @@ def started(step: str, what: str) -> Draft:
 def finished(step: str, what: str, result: dict[str, object]) -> Draft:
     return Draft(
         agent=CHECKER,
-        summary=f"Release checker {what}",
+        summary=f"Version checker {what}",
         data=AgentStepFinishedData(step=step, result=result),
     )
 
@@ -152,4 +152,4 @@ def failed(step: str | None, error: TaskError, reason: str) -> Draft:
     data = AgentFailedData(
         step=step, error_type=error.type, message=error.message, retryable=error.retryable
     )
-    return Draft(agent=CHECKER, summary=f"Release checker failed: {reason}", data=data)
+    return Draft(agent=CHECKER, summary=f"Version checker failed: {reason}", data=data)
