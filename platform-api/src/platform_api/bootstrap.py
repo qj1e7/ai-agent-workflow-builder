@@ -27,6 +27,14 @@ from platform_api.settings import BootstrapSettings, bootstrap_settings_from_env
 API_KEY_LABEL = "platform-bootstrap"
 CREDENTIAL_NAME = "X-Step-Key"
 STEP_KEY_HEADER = "X-Step-Key"
+# The name every run's n8n workflow had before it became run. Only this exact name is removed:
+# staff build their own workflows in the same n8n (ADR 0027), and those are theirs to keep.
+OLD_RUN_WORKFLOW = "release_check"
+RESET_HINT = (
+    "This stack holds data from before the release check was retired, which the platform can "
+    "no longer read. Reset a local practice stack with "
+    "`docker compose -p <project> -f deploy/compose.yaml down -v`, then start it again."
+)
 
 type Say = Callable[[str], None]
 
@@ -50,6 +58,12 @@ def main(env: Mapping[str, str] | None = None) -> int:
         return 1
     upgrade_all(settings.owner_database_url)
     say("database migrations are at head")
+    unreadable = unreadable_data(settings.owner_database_url)
+    if unreadable:
+        for line in unreadable:
+            say(line)
+        say(RESET_HINT)
+        return _finish(settings, say, [], [], "the database holds old release-check data")
     definitions = load_all()
     findings = lint(definitions)
     if findings:
@@ -109,6 +123,10 @@ def load_into_n8n(
         for d in other_workflows:
             workflow_id, digest = _load(client, d, values, previous, say)
             hashes[workflow_id] = digest
+        old = client.find_workflow(OLD_RUN_WORKFLOW)
+        if old is not None:
+            client.delete_workflow(old.id)
+            say(f"workflow {OLD_RUN_WORKFLOW} ({old.id}): removed, every run now goes through run")
         stale = [c for c in client.credentials_named(CREDENTIAL_NAME) if c != credential_id]
         for credential in stale:
             client.delete_credential(credential)
@@ -152,6 +170,26 @@ def content_hash_without_credential(
     masked = render(definition, {**values, "STEP_KEY_CREDENTIAL_ID": "<masked>"})
     canonical = json.dumps(masked, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def unreadable_data(owner_url: str) -> list[str]:
+    """Rows the platform can no longer read, as plain lines. Nothing is deleted here."""
+    with psycopg.connect(owner_url) as conn:
+        runs = conn.execute(
+            "SELECT count(*) FROM orchestration.runs WHERE spec -> 'task' ->> 'kind' = 'release'"
+        ).fetchone()
+        versions = conn.execute(
+            "SELECT count(*) FROM builder.use_case_versions WHERE template = 'release_check'"
+        ).fetchone()
+    found: list[str] = []
+    if runs and runs[0]:
+        found.append(f"orchestration.runs holds {runs[0]} run(s) of the old release check")
+    if versions and versions[0]:
+        found.append(
+            f"builder.use_case_versions holds {versions[0]} version(s) of the old release_check "
+            "template"
+        )
+    return found
 
 
 def previous_hashes(owner_url: str) -> dict[str, str]:

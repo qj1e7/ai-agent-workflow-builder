@@ -14,6 +14,7 @@ API_KEY_SCOPES = (
     "workflow:create",
     "workflow:read",
     "workflow:update",
+    "workflow:delete",
     "workflow:list",
     "workflow:activate",
     "workflow:deactivate",
@@ -167,6 +168,9 @@ class N8nClient:
 
     def read_back(self, workflow_id: str) -> WorkflowRecord:
         return _record(self._public("GET", f"/workflows/{workflow_id}"))
+
+    def delete_workflow(self, workflow_id: str) -> None:
+        self._public("DELETE", f"/workflows/{workflow_id}")
 
     def _rest(self, method: str, path: str, json: Any | None = None) -> dict[str, Any]:
         response = self._http.request(method, path, json=json)
