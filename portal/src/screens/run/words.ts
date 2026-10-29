@@ -1,5 +1,6 @@
 import { connectorLabel, refusalLabel, starterName } from '../../api/labels'
 import type { Refusal, Trigger, WriteActionView } from '../../api/types'
+import { PRODUCT } from '../../shell/product'
 import type { AgentRef, ChatItem, RunModel, Station } from './runModel'
 
 export type NameOf = (id: string) => string
@@ -45,7 +46,7 @@ export interface Line {
 export function speakerName(speaker: Speaker): string {
   switch (speaker.kind) {
     case 'app':
-      return 'Workflow Builder'
+      return PRODUCT
     case 'platform':
       return 'Platform'
     case 'gate':

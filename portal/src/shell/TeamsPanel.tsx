@@ -10,6 +10,7 @@ import { useFocusWhenReady } from '../ui/focus'
 import { IconCheck, IconLock, IconX } from '../ui/icons'
 import { motionAllowed } from '../ui/motion'
 import { ChatIcon, Mark } from './icons'
+import { PRODUCT } from './product'
 import iconButton from './IconButton.module.css'
 import styles from './TeamsPanel.module.css'
 
@@ -51,11 +52,16 @@ interface ActionsProps {
 }
 
 export function TeamsActions({ action, link, decision, onOpen }: ActionsProps) {
-  const busy = decision.pending !== null
+  const open = (
+    <ButtonLink to={link} onClick={onOpen}>
+      Open in {PRODUCT}
+    </ButtonLink>
+  )
   switch (action.kind) {
     case 'loading':
-      return null
-    case 'decide':
+      return <div className={styles['buttons']}>{open}</div>
+    case 'decide': {
+      const busy = decision.pending !== null
       return (
         <>
           <div className={styles['buttons']}>
@@ -65,9 +71,7 @@ export function TeamsActions({ action, link, decision, onOpen }: ActionsProps) {
             <Button loading={decision.pending === 'decline'} disabled={busy && decision.pending !== 'decline'} onClick={() => decision.decide('decline')}>
               Decline
             </Button>
-            <ButtonLink to={link} onClick={onOpen}>
-              Open in Workflow Builder
-            </ButtonLink>
+            {open}
           </div>
           {decision.error ? (
             <p className={styles['error']} role="alert">
@@ -76,19 +80,26 @@ export function TeamsActions({ action, link, decision, onOpen }: ActionsProps) {
           ) : null}
         </>
       )
+    }
     case 'locked':
       return (
-        <div className={styles['lock']}>
-          <IconLock size={18} />
-          <span>{action.words}</span>
-        </div>
+        <>
+          <div className={styles['lock']}>
+            <IconLock size={18} />
+            <span>{action.words}</span>
+          </div>
+          <div className={styles['buttons']}>{open}</div>
+        </>
       )
     case 'decided':
       return (
-        <span className={cx(styles['pill'], action.verdict === 'approve' ? styles['ok'] : styles['bad'])} tabIndex={-1} data-decided="">
-          {action.verdict === 'approve' ? <IconCheck size={12} /> : <IconX size={12} />}
-          {action.verdict === 'approve' ? `Approved by ${action.by}` : `Declined by ${action.by}`}
-        </span>
+        <>
+          <span className={cx(styles['pill'], action.verdict === 'approve' ? styles['ok'] : styles['bad'])} tabIndex={-1} data-decided="">
+            {action.verdict === 'approve' ? <IconCheck size={12} /> : <IconX size={12} />}
+            {action.verdict === 'approve' ? `Approved by ${action.by}` : `Declined by ${action.by}`}
+          </span>
+          <div className={styles['buttons']}>{open}</div>
+        </>
       )
   }
 }
@@ -111,7 +122,7 @@ function Message({ message, nameOf, onOpen }: { message: TeamsStubMessage; nameO
       </span>
       <div>
         <p className={styles['meta']}>
-          <b>Workflow Builder</b> · {shortTime(message.ts)}
+          <b>{PRODUCT}</b> · {shortTime(message.ts)}
         </p>
         <div className={styles['card']}>
           <p>{message.text}</p>

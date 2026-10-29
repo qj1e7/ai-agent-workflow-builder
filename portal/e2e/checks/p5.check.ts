@@ -325,7 +325,7 @@ test('@lane8 the Teams link opens a run at the decision, and approving in the pa
     const drawer = page.getByRole('dialog', { name: 'Teams, practice copy' })
     const firstCard = drawer.locator(`li[data-approval-id="${first.approvalId}"]`)
     await expect(firstCard).toBeVisible()
-    await firstCard.getByRole('link', { name: 'Open in Workflow Builder' }).click()
+    await firstCard.getByRole('link', { name: 'Open in AI Workflow Builder' }).click()
     await expect(page).toHaveURL(new RegExp(`/approvals/${first.approvalId}$`))
     await expect(page.locator('#decision')).toBeFocused()
     await expect(page.getByRole('button', { name: 'Approve 1 ticket' })).toBeVisible()

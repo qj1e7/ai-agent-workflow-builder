@@ -23,6 +23,7 @@ function decided(status: 'approved' | 'declined'): ApprovalView {
 }
 
 const idle: Pick<Decision, 'pending' | 'error' | 'decide'> = { pending: null, error: null, decide: () => undefined }
+const OPEN_LINK = /<a\b[^>]*href="\/approvals\/apr_01JB8"[^>]*>Open in AI Workflow Builder<\/a>/
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replace(/\s+/g, ' ').trim()
 
 function draw(action: TeamsAction): string {
@@ -34,12 +35,21 @@ function draw(action: TeamsAction): string {
 }
 
 describe('a Teams message', () => {
-  it('offers bob Approve, Decline and Open in Workflow Builder', () => {
+  it('offers bob Approve, Decline and Open in AI Workflow Builder', () => {
     const action = teamsActionOf(BOB, nameOf)
     expect(action).toEqual({ kind: 'decide' })
     const html = draw(action)
     expect([...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((match) => text(match[1] ?? ''))).toEqual(['Approve', 'Decline'])
-    expect(html).toMatch(/<a\b[^>]*href="\/approvals\/apr_01JB8"[^>]*>Open in Workflow Builder<\/a>/)
+    expect(html).toMatch(OPEN_LINK)
+  })
+
+  it.each([
+    ['still loading', undefined],
+    ['open to decide', BOB],
+    ['locked', ALICE],
+    ['already decided', decided('approved')],
+  ] as const)('links to the run page when %s', (_state, approval) => {
+    expect(draw(teamsActionOf(approval, nameOf))).toMatch(OPEN_LINK)
   })
 
   it.each([
@@ -50,7 +60,7 @@ describe('a Teams message', () => {
     expect(action).toEqual({ kind: 'locked', words })
     const html = draw(action)
     expect(html).not.toContain('<button')
-    expect(text(html)).toBe(words)
+    expect(text(html)).toBe(`${words} Open in AI Workflow Builder`)
   })
 
   it.each([
@@ -59,13 +69,13 @@ describe('a Teams message', () => {
   ] as const)('once %s, says who decided, for everyone', (status, words) => {
     for (const viewer of [decided(status), { ...decided(status), why_not: 'own_work' as const }]) {
       const action = teamsActionOf(viewer, nameOf)
-      expect(text(draw(action))).toBe(words)
+      expect(text(draw(action))).toBe(`${words} Open in AI Workflow Builder`)
       expect(draw(action)).not.toContain('<button')
     }
   })
 
-  it('shows nothing until the platform has answered for this person', () => {
-    expect(draw(teamsActionOf(undefined, nameOf))).toBe('')
+  it('shows only the link until the platform has answered for this person', () => {
+    expect(text(draw(teamsActionOf(undefined, nameOf)))).toBe('Open in AI Workflow Builder')
   })
 
   it('tells anyone tied to the run that it is their own work, without guessing how', () => {

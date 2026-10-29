@@ -82,7 +82,7 @@ test('the link in a Teams message opens the run page at the decision', async ({ 
   const card = drawer.locator(`li[data-approval-id="${approvalId}"]`)
   await expect(card.getByRole('button', { name: 'Approve' })).toBeVisible()
   await shot(page, info, 'p5-02-teams-drawer')
-  await card.getByRole('link', { name: 'Open in Workflow Builder' }).click()
+  await card.getByRole('link', { name: 'Open in AI Workflow Builder' }).click()
   await expect(page).toHaveURL(new RegExp(`/approvals/${approvalId}$`))
   await expect(drawer).toBeHidden()
   await expect(page.locator('#decision')).toBeFocused()
