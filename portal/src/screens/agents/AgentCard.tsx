@@ -130,8 +130,18 @@ function Modal({ face, title, under, onClose, children }: ModalProps) {
     if (!element.open) element.showModal()
     topClose.current?.focus()
     const onKey = (event: KeyboardEvent) => keepTabInside(element, event)
+    const onPress = (event: MouseEvent) => {
+      if (event.target !== element) return
+      const box = element.getBoundingClientRect()
+      const onCard = event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom
+      if (!onCard) element.close()
+    }
     document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
+    element.addEventListener('click', onPress)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      element.removeEventListener('click', onPress)
+    }
   }, [])
   const close = () => dialog.current?.close()
   return (
