@@ -12,7 +12,7 @@ describe('the run chat', () => {
 
 describe('a run page whose live feed has not brought the first events', () => {
   it('waits quietly while it connects', () => {
-    expect(feedTroubleOf({ is: 'connecting' }, 'dev')).toBeNull()
+    expect(feedTroubleOf({ is: 'connecting' }, 'dev')).toEqual({ kind: 'loading' })
   })
 
   it('says it is trying again while it reconnects', () => {

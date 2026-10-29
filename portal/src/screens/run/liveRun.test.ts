@@ -169,7 +169,7 @@ describe('trying again before the first page', () => {
     const stop = watch(store)
     await vi.waitFor(() => expect(server.streams).toHaveLength(1))
     server.stored = 6
-    store.restart()
+    store.tryAgain()
     await vi.waitFor(() => expect(store.getSnapshot().head.seq).toBe(6))
     expect(store.getSnapshot().shown.seq).toBe(6)
     expect(store.getSnapshot().loadedUpTo).toBe(6)

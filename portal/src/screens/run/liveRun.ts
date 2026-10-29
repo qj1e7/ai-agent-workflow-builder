@@ -29,8 +29,9 @@ export interface LiveRunEnv {
 export interface LiveRunStore {
   subscribe(this: void, listener: () => void): () => void
   getSnapshot(this: void): LiveRun
-  /** Reconnect now. After a retry of the run, what comes back plays as live; before the first page, it is drawn at once. */
+  /** After a retry: reconnect now, and play what comes back as live. */
   restart(this: void): void
+  tryAgain(this: void): void
 }
 
 /** How long the next event waits after this one. */
@@ -127,6 +128,12 @@ export function createLiveRun(id: string, env: LiveRunEnv): LiveRunStore {
     if (queue.length > 0 && !cancelBeat) play()
   }
 
+  function reconnect(): void {
+    feed?.abort()
+    feed = null
+    if (listeners.size > 0) start()
+  }
+
   function stop(): void {
     feed?.abort()
     feed = null
@@ -145,11 +152,10 @@ export function createLiveRun(id: string, env: LiveRunEnv): LiveRunStore {
     },
     getSnapshot: () => snapshot,
     restart() {
-      playNextAsLive = loaded
-      feed?.abort()
-      feed = null
-      if (listeners.size > 0) start()
+      playNextAsLive = true
+      reconnect()
     },
+    tryAgain: reconnect,
   }
 }
 
@@ -161,9 +167,9 @@ const browserClock: FeedClock = {
   epochNow: () => Date.now(),
 }
 
-export function useLiveRun(runId: string): { live: LiveRun; restart: () => void } {
+export function useLiveRun(runId: string): { live: LiveRun; restart: () => void; tryAgain: () => void } {
   const fetch = useApiFetch()
   const [store] = useState(() => createLiveRun(runId, { fetch, clock: browserClock, paced: motionAllowed }))
   const live = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
-  return { live, restart: store.restart }
+  return { live, restart: store.restart, tryAgain: store.tryAgain }
 }

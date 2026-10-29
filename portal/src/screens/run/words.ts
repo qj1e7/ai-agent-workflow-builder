@@ -198,7 +198,6 @@ export interface Party {
 
 const NOBODY = ' Nobody approves their own work.'
 
-/** Why this person cannot decide. */
 export function lockWords(whyNot: Refusal | null, party: Party | null): string {
   switch (whyNot) {
     case 'own_work': {
@@ -223,8 +222,7 @@ export function lockWords(whyNot: Refusal | null, party: Party | null): string {
   }
 }
 
-/** For the Teams message, which knows the platform's refusal but not how the person is tied to the run. */
-export function shortLockWords(whyNot: Refusal | null): string {
+export function teamsLockWords(whyNot: Refusal | null): string {
   return whyNot === 'own_work' ? 'This run is your own work, so another Approver must decide.' : lockWords(whyNot, null)
 }
 
@@ -235,6 +233,7 @@ type Connection = LiveRun['connection']
 type ClosedReason = Extract<Connection, { is: 'closed' }>['reason']
 
 export type FeedTrouble =
+  | { readonly kind: 'loading' }
   | { readonly kind: 'waiting'; readonly words: string }
   | { readonly kind: 'stop' | 'retry'; readonly heading: string; readonly lead: string }
 
@@ -251,8 +250,7 @@ function closedTrouble(reason: ClosedReason, signIn: SessionKind): FeedTrouble {
   }
 }
 
-/** What the run page says while its live feed has brought no events yet. Null while it is still connecting. */
-export function feedTroubleOf(connection: Connection, signIn: SessionKind): FeedTrouble | null {
+export function feedTroubleOf(connection: Connection, signIn: SessionKind): FeedTrouble {
   switch (connection.is) {
     case 'reconnecting':
       return { kind: 'waiting', words: 'Can’t reach the platform yet. Trying again.' }
@@ -261,7 +259,7 @@ export function feedTroubleOf(connection: Connection, signIn: SessionKind): Feed
     case 'connecting':
     case 'live':
     case 'settled':
-      return null
+      return { kind: 'loading' }
   }
 }
 

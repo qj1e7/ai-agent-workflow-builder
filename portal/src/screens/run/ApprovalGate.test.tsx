@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import type { ApprovalView } from '../../api/types'
 import { ApprovalGate, EXACT_WORDS } from './ApprovalGate'
 import { decisionFor, type Decision } from './decision'
-import { lockWords, shortLockWords, withCurrentNames, proposalTitle, type Party } from './words'
+import { lockWords, teamsLockWords, withCurrentNames, proposalTitle, type Party } from './words'
 
 const BOB = bob as ApprovalView
 const ALICE = alice as ApprovalView
@@ -103,8 +103,8 @@ describe('why someone cannot decide', () => {
   })
 
   it('has a short form for the Teams message that never guesses how the person is tied to the run', () => {
-    expect(shortLockWords('own_work')).toBe('This run is your own work, so another Approver must decide.')
-    expect(shortLockWords('not_an_approver')).toBe('Only an Approver can decide.')
+    expect(teamsLockWords('own_work')).toBe('This run is your own work, so another Approver must decide.')
+    expect(teamsLockWords('not_an_approver')).toBe('Only an Approver can decide.')
   })
 })
 

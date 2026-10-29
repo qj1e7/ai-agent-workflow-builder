@@ -64,8 +64,8 @@ function Problem({ onRetry }: { onRetry: () => void }) {
 function FeedNotReady({ connection, onRetry }: { connection: LiveRun['connection']; onRetry: () => void }) {
   const { kind } = useSession()
   const trouble = feedTroubleOf(connection, kind)
-  switch (trouble?.kind) {
-    case undefined:
+  switch (trouble.kind) {
+    case 'loading':
       return <Loading />
     case 'waiting':
       return (
@@ -101,14 +101,14 @@ function RunPage({ runId, fromApproval }: { runId: string; fromApproval: boolean
 }
 
 function LiveRunPage({ run, fromApproval }: { run: RunView; fromApproval: boolean }) {
-  const { live, restart } = useLiveRun(run.run_id)
+  const { live, restart, tryAgain } = useLiveRun(run.run_id)
   const failed = live.head.phase.state === 'failed'
   const latest = useRun(run.run_id, { poll: failed ? POLL_FAILED_MS : false }).data ?? run
   const useCase = useUseCase(run.use_case_id)
   useReconnectWhenBehind(failed && live.loaded && latest.last_seq > live.head.seq, restart)
 
   const ready = live.loaded || live.connection.is === 'live' || live.connection.is === 'settled'
-  if (!ready) return <FeedNotReady connection={live.connection} onRetry={restart} />
+  if (!ready) return <FeedNotReady connection={live.connection} onRetry={tryAgain} />
   return <RunView run={latest} useCase={useCase.data} live={live} fromApproval={fromApproval} />
 }
 
