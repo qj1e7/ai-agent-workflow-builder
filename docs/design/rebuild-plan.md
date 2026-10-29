@@ -6,7 +6,7 @@ This plan rebuilds the app from the workflow builder prototype in time for the f
 
 One box is one unit of work. Every box names the evidence that checks it. A nested box is a sub-step of the box above it. Check a box only when its evidence exists, a file, a log line, a screenshot, a test run, or a SHA. The body is a how-to. The appendices explain and record.
 
-The program runs `skills/poteto-mode/playbooks/autopilot-stack.md` from the installed plugin. An owner is a teammate working with their agent, or an agent the coordinator starts. Owners stop at STACK-READY. A teammate who is not the author approves each PR, and the operator, the team lead, lands the stack bottom-up. P14 also stops for the operator, because only a human deploys.
+The program runs `skills/poteto-mode/playbooks/autopilot-stack.md` from the installed plugin. An owner is a teammate working with their agent, or an agent the coordinator starts. Owners stop at STACK-READY. The operator, the team lead, lands the stack bottom-up. P14 also stops for the operator, because only a human deploys.
 
 Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
@@ -17,7 +17,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 - [ ] State the protocol and this plan to the operator, then stop. Start execution only on the operator's explicit go.
 - [ ] Before the go, the team reviews ADRs 0028 to 0032. Record each one as accepted or changed in its own file.
 - [ ] In the first week, the operator runs `deploy.yml` once on today's `main`. It has never run, and region, quota and secret problems show up there long before P14.
-- [ ] On the operator's go, write this exact text into the standing orders and restate it in your todolist. "Plan `docs/design/rebuild-plan.md`. PRs P1 to P15, in order. Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. A teammate who is not the author approves each PR, and the operator lands the stack bottom-up and runs the deploy in P14. Done when every PR not cut under Appendix C has merged, P15 included, and the demo runs on Azure."
+- [ ] On the operator's go, write this exact text into the standing orders and restate it in your todolist. "Plan `docs/design/rebuild-plan.md`. PRs P1 to P15, in order. Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. The operator lands the stack bottom-up and runs the deploy in P14. Done when every PR not cut under Appendix C has merged, P15 included, and the demo runs on Azure."
 - [ ] Read these from the installed plugin at program start. Re-read them at every tick.
   - [ ] `skills/poteto-mode/playbooks/autopilot-stack.md`
   - [ ] `skills/poteto-mode/playbooks/autopilot-full.md`
@@ -34,7 +34,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 ### Spawn owners
 
 - [ ] Spawn one owner per PR with the full lifecycle the execution playbook names.
-- [ ] Give each area one teammate, so each person has commits and reviews of their own for the peer assessment. The operator names who takes each area.
+- [ ] Give each area one teammate, so each person has commits of their own for the peer assessment. The operator names who takes each area.
   - [ ] The Portal area takes P1, P5, P6, P7, P9, P10, P11 and P13.
   - [ ] The backend area takes P2, P3, P4 and P8.
   - [ ] The agents area takes P12, and the model evals in ADR 0032.
@@ -55,7 +55,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
   - [ ] P13 after P9, P11 and P12.
   - [ ] P14 after P3, P4, P5, P10 and P11.
   - [ ] P15 after every other PR that is not cut.
-- [ ] Hold the file boundaries. Any PR may also add review screenshots under `docs/evidence/rebuild/`.
+- [ ] Hold the file boundaries. Any PR may also add its check scripts under `portal/e2e/checks/` and `scripts/checks/`, and review screenshots under `docs/evidence/rebuild/`.
   - [ ] P1, P5, P6, P7, P9, P10 and P13 touch only `portal/**`.
   - [ ] P2 touches `platform-api/**`, `agent-runtime/**`, `contracts/**`, `e2e/**`, `scripts/**`, `load/**`, `deploy/**`, `AGENTS.md`, and in `portal/` only `src/ui/agents*` and the tests in `src/stream/`.
   - [ ] P3 touches `platform-api/**`, `contracts/**`, `deploy/**`, `docs/auth/entra-setup.md` and `GLOSSARY.md`.
@@ -72,7 +72,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 - [ ] Resolve the forge once. Default to `gh`; if `command -v origin` succeeds and Origin can resolve the repository, use `origin pr` for every PR operation. Record any fallback to `gh`. Never require `gt`.
 - [ ] Open the PR ready, never draft, per **Opening a PR**. Use the run's built-in PR tool when it has one, else `origin pr create --status open --base <base-branch>` or `gh pr create --base <base-branch>` according to the resolved forge. A stack child targets its parent branch.
 - [ ] Title the PR with a Conventional Commits type and one of the scopes `builder`, `runtime`, `orchestration`, `monitoring`, `infra`, `ci` or `docs`.
-- [ ] Ask the operator which teammate reviews, and request that review. Never approve a PR yourself.
+- [ ] Never approve a PR yourself.
 - [ ] Run the repo's lint and typecheck once before the PR-facing push. Push with hooks on.
 - [ ] Check the diff for secrets, keys, tokens and `.env` files before each commit. If you find one, stop and tell the operator.
 - [ ] Read every outside address from a setting, never from a value written into the code, so the app can move into DevNet (`docs/design/devnet-move.md`).
@@ -83,24 +83,25 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 
 ### Verdict and merge, for every PR
 
-- [ ] A full swarm runs once, at the code-ready head. Another full swarm runs only for new behavior, a redesign, or a large new diff. A rebase, a merge-conflict resolution, or a minor fix gets a single verifier at the new head. Run each full swarm per `skills/swarm/SKILL.md`. One gates lane. The ten live lanes from the PR's **Verify, live** block. The perf lane from its **Verify, perf** block. Two or more audit lanes, each with its own focus, that read the diff and the receipts and distrust the PR body. The root audits the receipts in the merge-ready report before the verdict.
+- [ ] Two agents that did not write the code check each PR once, at the code-ready head. The checker, on the configured `swarm workers` model, re-runs the gates, then runs the ten lanes from the PR's **Verify, live** block and the check in its **Verify, perf** block. It saves them as scripts, so anyone can rerun them. The auditor reads the diff and the receipts and distrusts the PR body. Both run again only for new behavior, a redesign, or a large new diff. A rebase, a merge-conflict resolution, or a minor fix gets the checker alone at the new head. The root audits the receipts in the merge-ready report before the verdict.
+  - [ ] The operator chose this on 29 Oct 2026, in place of one agent per lane, so the program fits its budget. The lanes and their pass rules are unchanged.
 - [ ] Clean only when every lane is `PASS`. Findings go back to the owner, including a defect that a lane filed as a note. A new head gets a fresh verdict, except for results that stay valid under the patch-id rule in `playbooks/shipping.md`.
-- [ ] The root appends each clean PR to the stack in dependency order, with its base set to its parent's branch. The operator lands the stack bottom-up with squash merges, and only after a teammate who is not the author approves each PR. A verdict carries over to a new head only under the patch-id rule in `playbooks/shipping.md`.
+- [ ] The root appends each clean PR to the stack in dependency order, with its base set to its parent's branch. The operator lands the stack bottom-up with squash merges. A verdict carries over to a new head only under the patch-id rule in `playbooks/shipping.md`.
 
 ### Boot recipe, for every live lane
 
-Each live lane runs in its own worktree at the PR head. Drive through the skill path or exact commands recorded in this boot recipe.
+The checker runs in its own worktree at the PR head. Drive through the skill path or exact commands recorded in this boot recipe.
 
 - [ ] `git fetch origin <head-branch> && git checkout <head SHA>`.
 - [ ] Run `df -h` first, because the Docker disk is small and shared.
-- [ ] The root starts one shared stack per PR head before the lanes start.
+- [ ] The checker starts one shared stack per PR head before the lanes.
   - [ ] For dev sign-in, run `docker compose -p <pr-id> -f deploy/compose.yaml -f deploy/compose.e2e.yaml up --build --wait`. The Portal is on `http://localhost:8080` and the API on `http://localhost:8000`.
   - [ ] For real sign-in, run the same command with project `<pr-id>-oidc`, the extra file `-f deploy/compose.oidc.yaml`, and `PORTAL_HOST_PORT=18080 PLATFORM_API_HOST_PORT=18000`.
   - [ ] Wait until `GET /healthz/ready` answers 200.
 - [ ] A lane that stops or restarts a service, changes the People list, makes a mock fail or writes to the database starts its own stack instead. It uses project `<pr-id>-l<n>` and its own host ports, and it may control those containers and write to that database.
 - [ ] Drive the browser with Playwright from `portal/`, using the helpers in `portal/e2e/live/support/`. Drive the API with `curl` and the `X-Dev-User` header. The dev users are alice (Operator and Approver), bob (Approver) and carol (Operator). On the shared stack, the only diagnostics are read-only. They are `docker compose -p <pr-id> logs <service>`, `GET /healthz/ready` and read-only `psql` queries.
 - [ ] Each lane on the shared stack uses its own workflows and runs, so lanes never change each other's data.
-- [ ] Save every screenshot to `/tmp/swarm-<pr-id>/worker-<n>/<slug>.png` and return the paths with the report. A lane that checks an API saves the response body in the same folder.
+- [ ] Save every screenshot to `/tmp/swarm-<pr-id>/lane-<n>/<slug>.png` and return the paths with the report. A lane that checks an API saves the response body in the same folder.
 
 ## Replace the old Portal with the prototype's shell (P1)
 
@@ -162,7 +163,7 @@ Each live lane runs in its own worktree at the PR head. Drive through the skill 
 - [ ] Root's clean verdict at the exact head SHA.
 - [ ] Bugbot triage done.
 - [ ] Base and verdict are current under the execution playbook and the patch-id rule in `playbooks/shipping.md`.
-- [ ] The root appends P1 to the stack, and the operator lands it after a teammate approves.
+- [ ] The root appends P1 to the stack, and the operator lands it.
 
 ## Retire the release-check template and rename the Room lead to the Planner (P2)
 
@@ -225,7 +226,7 @@ Each live lane runs in its own worktree at the PR head. Drive through the skill 
 - [ ] Root's clean verdict at the exact head SHA.
 - [ ] Bugbot triage done.
 - [ ] Base and verdict are current under the execution playbook and the patch-id rule in `playbooks/shipping.md`.
-- [ ] The root appends P2 to the stack, and the operator lands it after a teammate approves.
+- [ ] The root appends P2 to the stack, and the operator lands it.
 
 ## Keep people and their roles in the platform (P3)
 
@@ -285,7 +286,7 @@ Each live lane runs in its own worktree at the PR head. Drive through the skill 
 - [ ] Root's clean verdict at the exact head SHA.
 - [ ] Bugbot triage done.
 - [ ] Base and verdict are current under the execution playbook and the patch-id rule in `playbooks/shipping.md`.
-- [ ] The root appends P3 to the stack, and the operator lands it after a teammate approves.
+- [ ] The root appends P3 to the stack, and the operator lands it.
 
 ## Copy the activity log to Cosmos DB for its readers (P4)
 
@@ -344,7 +345,7 @@ Each live lane runs in its own worktree at the PR head. Drive through the skill 
 - [ ] Root's clean verdict at the exact head SHA.
 - [ ] Bugbot triage done.
 - [ ] Base and verdict are current under the execution playbook and the patch-id rule in `playbooks/shipping.md`.
-- [ ] The root appends P4 to the stack, and the operator lands it after a teammate approves.
+- [ ] The root appends P4 to the stack, and the operator lands it.
 
 ## Build the run page with the approval gate (P5)
 
@@ -403,7 +404,7 @@ Each live lane runs in its own worktree at the PR head. Drive through the skill 
 - [ ] Root's clean verdict at the exact head SHA.
 - [ ] Bugbot triage done.
 - [ ] Base and verdict are current under the execution playbook and the patch-id rule in `playbooks/shipping.md`.
-- [ ] The root appends P5 to the stack, and the operator lands it after a teammate approves.
+- [ ] The root appends P5 to the stack, and the operator lands it.
 
 ## Build the Software watchlist page (P6)
 
@@ -457,7 +458,7 @@ Each live lane runs in its own worktree at the PR head. Drive through the skill 
 - [ ] Root's clean verdict at the exact head SHA.
 - [ ] Bugbot triage done.
 - [ ] Base and verdict are current under the execution playbook and the patch-id rule in `playbooks/shipping.md`.
-- [ ] The root appends P6 to the stack, and the operator lands it after a teammate approves.
+- [ ] The root appends P6 to the stack, and the operator lands it.
 
 ## Build the Agent library, read only (P7)
 
@@ -510,7 +511,7 @@ Each live lane runs in its own worktree at the PR head. Drive through the skill 
 - [ ] Root's clean verdict at the exact head SHA.
 - [ ] Bugbot triage done.
 - [ ] Base and verdict are current under the execution playbook and the patch-id rule in `playbooks/shipping.md`.
-- [ ] The root appends P7 to the stack, and the operator lands it after a teammate approves.
+- [ ] The root appends P7 to the stack, and the operator lands it.
 
 ## Add pause, resume, delete with Undo, and drafts to workflows (P8)
 
@@ -564,7 +565,7 @@ Each live lane runs in its own worktree at the PR head. Drive through the skill 
 - [ ] Root's clean verdict at the exact head SHA.
 - [ ] Bugbot triage done.
 - [ ] Base and verdict are current under the execution playbook and the patch-id rule in `playbooks/shipping.md`.
-- [ ] The root appends P8 to the stack, and the operator lands it after a teammate approves.
+- [ ] The root appends P8 to the stack, and the operator lands it.
 
 ## Build the Workflows list and the workflow page (P9)
 
@@ -618,7 +619,7 @@ Each live lane runs in its own worktree at the PR head. Drive through the skill 
 - [ ] Root's clean verdict at the exact head SHA.
 - [ ] Bugbot triage done.
 - [ ] Base and verdict are current under the execution playbook and the patch-id rule in `playbooks/shipping.md`.
-- [ ] The root appends P9 to the stack, and the operator lands it after a teammate approves.
+- [ ] The root appends P9 to the stack, and the operator lands it.
 
 ## Build Settings with the AI model and People and roles (P10)
 
@@ -673,7 +674,7 @@ Each live lane runs in its own worktree at the PR head. Drive through the skill 
 - [ ] Root's clean verdict at the exact head SHA.
 - [ ] Bugbot triage done.
 - [ ] Base and verdict are current under the execution playbook and the patch-id rule in `playbooks/shipping.md`.
-- [ ] The root appends P10 to the stack, and the operator lands it after a teammate approves.
+- [ ] The root appends P10 to the stack, and the operator lands it.
 
 ## Build Home with what needs you (P11)
 
@@ -731,7 +732,7 @@ Each live lane runs in its own worktree at the PR head. Drive through the skill 
 - [ ] Root's clean verdict at the exact head SHA.
 - [ ] Bugbot triage done.
 - [ ] Base and verdict are current under the execution playbook and the patch-id rule in `playbooks/shipping.md`.
-- [ ] The root appends P11 to the stack, and the operator lands it after a teammate approves.
+- [ ] The root appends P11 to the stack, and the operator lands it.
 
 ## Teach the Planner to say what it understood (P12)
 
@@ -786,7 +787,7 @@ Each live lane runs in its own worktree at the PR head. Drive through the skill 
 - [ ] Root's clean verdict at the exact head SHA.
 - [ ] Bugbot triage done.
 - [ ] Base and verdict are current under the execution playbook and the patch-id rule in `playbooks/shipping.md`.
-- [ ] The root appends P12 to the stack, and the operator lands it after a teammate approves.
+- [ ] The root appends P12 to the stack, and the operator lands it.
 
 ## Build New workflow in four steps (P13)
 
@@ -841,7 +842,7 @@ Each live lane runs in its own worktree at the PR head. Drive through the skill 
 - [ ] Root's clean verdict at the exact head SHA.
 - [ ] Bugbot triage done.
 - [ ] Base and verdict are current under the execution playbook and the patch-id rule in `playbooks/shipping.md`.
-- [ ] The root appends P13 to the stack, and the operator lands it after a teammate approves.
+- [ ] The root appends P13 to the stack, and the operator lands it.
 
 ## Deploy the rebuilt app to Azure (P14)
 
@@ -894,7 +895,7 @@ Each live lane runs in its own worktree at the PR head. Drive through the skill 
 - [ ] Root's clean verdict at the exact head SHA.
 - [ ] Bugbot triage done.
 - [ ] Base and verdict are current under the execution playbook and the patch-id rule in `playbooks/shipping.md`.
-- [ ] The root appends P14 to the stack, and the operator lands it after a teammate approves and after the operator's deploy.
+- [ ] The root appends P14 to the stack, and the operator lands it after the operator's deploy.
 
 ## Rerun the scans and draw the rubric diagrams on the new app (P15)
 
@@ -947,7 +948,7 @@ Each live lane runs in its own worktree at the PR head. Drive through the skill 
 - [ ] Root's clean verdict at the exact head SHA.
 - [ ] Bugbot triage done.
 - [ ] Base and verdict are current under the execution playbook and the patch-id rule in `playbooks/shipping.md`.
-- [ ] The root appends P15 to the stack, and the operator lands it after a teammate approves.
+- [ ] The root appends P15 to the stack, and the operator lands it.
 
 ## Close the program
 
@@ -990,7 +991,7 @@ Four questions stay unproven, and each is checked inside the PR that needs it:
 | The gateway returns a stored answer for repeated prompts. | P12 | Repeated cases go out at the same time or carry a per-run marker. |
 | Motion and Rive in the React Portal need an ADR. | P5 | Use CSS motion, as the prototype does, until that ADR is accepted. |
 | App Insights shows nothing from the apps, because no app sends telemetry yet. | P14 | Adding the Azure Monitor SDK is a new dependency with its own ADR, after the first presentation. |
-| One person has made every commit so far. | All | Each area has its own owner, and a teammate who is not the author approves each PR. |
+| One person has made every commit so far. | All | Each area has its own owner. |
 | NCS has not yet said what DevNet allows. | P4, P5, P12, P14, P15 | Hold to the four choices in `docs/design/devnet-move.md`, and ask the sponsor its questions in week 1. |
 
 ## Appendix D. Links and reading list

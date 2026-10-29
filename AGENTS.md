@@ -76,7 +76,7 @@ Our additions to pstack's playbooks are in `.agents/playbooks/`. Claude Code, Co
 - PR descriptions use pstack's sections: Why, What changed, Scope, Tradeoffs (only when needed), Blast Radius, Verification. The PR template has them.
 - Start the description with `Closes #<issue>` when the PR closes an issue.
 - Verification names real commands or runs and what they showed. "It compiles" is not verification.
-- One teammate who is not the author reviews and approves every PR. Agents never approve PRs. A PR merges (squash) only after that approval, and only when a human asks for the merge.
+- Agents never approve PRs. A PR merges (squash) only when a human asks for the merge.
 
 ### Decisions and names
 
