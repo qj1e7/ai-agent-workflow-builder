@@ -260,9 +260,15 @@ lane10() {
   mkdir -p "$out"
   people "$src" "$project" oidc >"$out/people-before.txt"
   cat "$out/people-before.txt"
-  # A second platform-api start with other values. The list must stay as it is.
-  FIRST_OPERATOR=carol@example.test FIRST_APPROVERS=carol@example.test,dave@example.test \
-    compose "$src" "$project" oidc up -d --force-recreate --no-deps --wait platform-api >"$out/restart.log" 2>&1
+  # compose.oidc.yaml names alice and bob literally, so other values need an override file.
+  cat >"$out/other-first-people.yaml" <<'YAML'
+services:
+  platform-api:
+    environment:
+      FIRST_OPERATOR: carol@example.test
+      FIRST_APPROVERS: carol@example.test,dave@example.test
+YAML
+  compose "$src" "$project" oidc -f "$out/other-first-people.yaml" up -d --force-recreate --no-deps --wait platform-api >"$out/restart.log" 2>&1
   compose "$src" "$project" oidc exec -T platform-api sh -c 'echo "FIRST_OPERATOR=$FIRST_OPERATOR FIRST_APPROVERS=$FIRST_APPROVERS"' | tee "$out/restart-env.txt"
   people "$src" "$project" oidc >"$out/people-after.txt"
   compose "$src" "$project" oidc logs --no-color platform-api 2>/dev/null | grep -i "seed\|People list" >"$out/seed-log.txt" || true
@@ -273,10 +279,12 @@ out = Path(sys.argv[1])
 before = (out / "people-before.txt").read_text().strip().splitlines()
 after = (out / "people-after.txt").read_text().strip().splitlines()
 env = (out / "restart-env.txt").read_text().strip()
-result = {"before": before, "after": after, "restart_env": env, "unchanged": before == after and len(before) >= 2}
+other_values = "carol@example.test" in env
+result = {"before": before, "after": after, "restart_env": env, "restarted_with_other_values": other_values, "unchanged": before == after and len(before) >= 2}
 (out / "p3-seed-once.json").write_text(json.dumps(result, indent=2) + "\n")
-print("PASS people unchanged after a restart with other values" if result["unchanged"] else "FAIL people changed")
-sys.exit(0 if result["unchanged"] else 1)
+ok = result["unchanged"] and other_values
+print("PASS people unchanged after a restart with other values" if ok else f"FAIL {result}")
+sys.exit(0 if ok else 1)
 PYEOF
 }
 
