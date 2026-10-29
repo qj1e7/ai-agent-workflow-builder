@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
+import { useLocation, useParams, useSearchParams } from 'react-router'
 import { useAgentCards, useTools } from '../../api/queries'
 import { PageHead } from '../../shell/PageHead'
 import { Button } from '../../ui/Button'
-import { CardDialog, CardTile, openedFromList, PlatformDialog, PlatformTile, tileId, type ToolIndex } from './AgentCard'
+import { CardDialog, CardTile, PlatformDialog, PlatformTile, tileId, useCloseWithoutHistoryEntry, type ToolIndex } from './AgentCard'
 import { faceId, PLATFORM_AGENTS, toolsUnavailableWords } from './agents'
 import { ToolsTab } from './ToolsTab'
 import styles from './AgentsPage.module.css'
@@ -13,12 +13,19 @@ export const NOT_FOUND_WORDS = 'That agent is not in the library.'
 
 type Tab = 'agents' | 'tools'
 
+function useFocusBackToTile(shownId: string | null, cardOpen: boolean): boolean {
+  const [lastShown, setLastShown] = useState<string | null>(null)
+  if (shownId !== null && shownId !== lastShown) setLastShown(shownId)
+  useEffect(() => {
+    if (!cardOpen && lastShown !== null) document.getElementById(tileId(lastShown))?.focus()
+  }, [cardOpen, lastShown])
+  return lastShown !== null
+}
+
 export function AgentsPage({ heading, lead }: { heading: string; lead: string }) {
   const { agentId = null } = useParams()
   const [params, setParams] = useSearchParams()
-  const location = useLocation()
-  const { search } = location
-  const navigate = useNavigate()
+  const { search } = useLocation()
   const cards = useAgentCards()
   const tools = useTools()
   const tab: Tab = params.get('tab') === 'tools' ? 'tools' : 'agents'
@@ -27,24 +34,13 @@ export function AgentsPage({ heading, lead }: { heading: string; lead: string })
   const card = agentId === null ? undefined : cards.data?.find((entry) => entry.card_id === agentId)
   const platform = agentId === null ? undefined : PLATFORM_AGENTS.find((entry) => entry.id === agentId)
 
-  // Once a card has shown, the page moves focus itself: into the card, then back to its tile.
-  const shownId = platform ? platform.id : card ? faceId(card) : null
-  const [lastShown, setLastShown] = useState<string | null>(null)
-  if (shownId !== null && shownId !== lastShown) setLastShown(shownId)
-  useEffect(() => {
-    if (agentId === null && lastShown !== null) document.getElementById(tileId(lastShown))?.focus()
-  }, [agentId, lastShown])
-
-  // Back from the list must not reopen the card, so a card opened from the list closes by going back.
-  const close = () => {
-    if (openedFromList(location.state)) void navigate(-1)
-    else void navigate(`/agents${search}`, { replace: true })
-  }
+  const movesFocus = useFocusBackToTile(platform ? platform.id : card ? faceId(card) : null, agentId !== null)
+  const close = useCloseWithoutHistoryEntry()
 
   const specialists = cards.data ?? []
   return (
     <>
-      <PageHead heading={heading} lead={lead} movesFocus={lastShown !== null} />
+      <PageHead heading={heading} lead={lead} movesFocus={movesFocus} />
       <div className={styles['tabs']} role="group" aria-label="Show">
         <button type="button" aria-pressed={tab === 'agents'} onClick={() => setParams({}, { replace: true })}>
           Agents <span className={styles['count']}>{PLATFORM_AGENTS.length + specialists.length}</span>

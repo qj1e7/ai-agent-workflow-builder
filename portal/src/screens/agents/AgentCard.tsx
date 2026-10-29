@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react'
-import { Link } from 'react-router'
+import { Link, useLocation, useNavigate } from 'react-router'
 import type { CardView, ToolId, ToolView } from '../../api/types'
 import { agentIdentity } from '../../ui/agents'
 import { AgentFace } from '../../ui/AgentFace'
@@ -27,8 +27,17 @@ export const tileId = (id: string) => `agent-tile-${id}`
 
 const FROM_LIST = { fromList: true }
 
-export function openedFromList(state: unknown): boolean {
+function openedFromList(state: unknown): boolean {
   return typeof state === 'object' && state !== null && 'fromList' in state
+}
+
+export function useCloseWithoutHistoryEntry(): () => void {
+  const navigate = useNavigate()
+  const location = useLocation()
+  return () => {
+    if (openedFromList(location.state)) void navigate(-1)
+    else void navigate(`/agents${location.search}`, { replace: true })
+  }
 }
 
 export type ToolIndex = ReadonlyMap<ToolId, ToolView>
@@ -109,7 +118,7 @@ interface ModalProps {
 
 const TAB_STOPS = 'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
 
-/** Chromium lets Tab leave a modal dialog for the browser's own controls, so the ends wrap round. */
+/** Browsers let Tab leave a modal dialog for their own controls, so the ends wrap round. */
 function keepTabInside(box: HTMLElement, event: KeyboardEvent): void {
   if (event.key !== 'Tab') return
   const stops = [...box.querySelectorAll<HTMLElement>(TAB_STOPS)]
