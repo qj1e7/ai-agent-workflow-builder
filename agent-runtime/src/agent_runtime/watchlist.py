@@ -156,7 +156,8 @@ class WatchlistChecker:
         inputs = state.inputs
         findings: list[Finding] = []
         read_errors: list[TaskError] = []
-        for item in inputs.software:
+        last = len(inputs.software) - 1
+        for position, item in enumerate(inputs.software):
             write(started("read_source", f"reading the releases of {item.name}."))
             releases = read_releases(self._source, item.source.ref, self._retry, self._sleep, write)
             if isinstance(releases, TaskError):
@@ -168,7 +169,7 @@ class WatchlistChecker:
             findings.append(finding)
             write(_read_finished(item, finding))
             if finding.state == "cant_check":
-                write(_cannot_check(item, finding, isinstance(read, TaskError)))
+                write(_cannot_check(item, finding, isinstance(read, TaskError), position < last))
         return {"findings": findings, "read_errors": read_errors}
 
     def _report(self, state: WatchlistState) -> Update:
@@ -176,13 +177,18 @@ class WatchlistChecker:
         items = state.inputs.software
         findings = state.findings
         if all(f.state == "cant_check" for f in findings):
-            error = _nothing_readable(state.read_errors, len(findings))
-            write(failed(None, error, "none of the watched software could be checked."))
+            error = _nothing_readable(items, findings, state.read_errors)
+            reason = (
+                f"{items[0].name} could not be checked."
+                if len(items) == 1
+                else "none of the watched software could be checked."
+            )
+            write(failed(None, error, reason))
             return {"error": error}
         pairs = list(zip(items, findings, strict=True))
         behind = [(item, f) for item, f in pairs if f.state == "behind"]
         tickets = [ticket_for(item, f) for item, f in behind]
-        write(_report_total(len(items), [item.name for item, _ in behind]))
+        write(_report_total(items, behind))
         checked = [Checked(item.name, f) for item, f in pairs]
         output = TaskOutput(
             summary=self._summarizer.summarise_check(checked),
@@ -194,12 +200,18 @@ class WatchlistChecker:
         return {"output": output}
 
 
-def _nothing_readable(read_errors: list[TaskError], total: int) -> TaskError:
+def _nothing_readable(
+    items: list[SoftwareToCheck], findings: list[Finding], read_errors: list[TaskError]
+) -> TaskError:
     retryable = any(e.retryable for e in read_errors)
-    cause = read_errors[0].message if read_errors else NO_PLAIN_VERSION
+    if len(items) == 1:
+        message = f"Could not check {items[0].name}: {findings[0].detail.removesuffix('.')}"
+    else:
+        cause = read_errors[0].message if read_errors else NO_PLAIN_VERSION.removesuffix(".")
+        message = f"None of the {len(items)} watched software could be checked. {cause}"
     return TaskError(
         type="UpstreamUnavailable" if retryable else "UpstreamRejected",
-        message=f"None of the {total} watched software could be checked. {cause}.",
+        message=message,
         retryable=retryable,
     )
 
@@ -218,31 +230,43 @@ def _read_finished(item: SoftwareToCheck, finding: Finding) -> Draft:
     return finished("read_source", what, result)
 
 
-def _cannot_check(item: SoftwareToCheck, finding: Finding, unreadable: bool) -> Draft:
+def _cannot_check(item: SoftwareToCheck, finding: Finding, unreadable: bool, more: bool) -> Draft:
     start = (
         f"I could not read {item.name}'s releases"
         if unreadable
         else f"I could not check {item.name}"
     )
+    if not more:
+        return to_room(f"could not check {item.name}.", f"{start}: {finding.detail}")
     return to_room(
         f"could not check {item.name} and carried on.",
         f"{start}: {finding.detail} I will carry on with the rest.",
     )
 
 
-def _report_total(total: int, behind: list[str]) -> Draft:
+def _report_total(
+    items: list[SoftwareToCheck], behind: list[tuple[SoftwareToCheck, Finding]]
+) -> Draft:
+    total = len(items)
     if not behind:
+        checked = items[0].name if total == 1 else f"{total} watched software"
         return to_room(
             "reported to the room that nothing needs a ticket.",
-            f"I checked {total} watched software. Nothing needs a ticket, so I have nothing "
-            "to propose.",
+            f"I checked {checked}. Nothing needs a ticket, so I have nothing to propose.",
         )
-    count = len(behind)
+    if total == 1:
+        item, finding = behind[0]
+        return to_room(
+            f"reported that {item.name} is behind and suggested one ticket.",
+            f"{item.name} has a new release: {finding.newest}. I suggest one ticket.",
+        )
+    names = [item.name for item, _ in behind]
+    count = len(names)
     suggestion = "one ticket" if count == 1 else f"{count} tickets, one for each"
     verb = "has" if count == 1 else "have"
     return to_room(
         f"reported {count} of {total} watched software behind and suggested "
         f"{plural(count, 'ticket')}.",
-        f"{count} of {total} watched software {verb} new releases: {tag_list(behind)}. "
+        f"{count} of {total} watched software {verb} new releases: {tag_list(names)}. "
         f"I suggest {suggestion}.",
     )

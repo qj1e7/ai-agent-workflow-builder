@@ -85,9 +85,9 @@ TICKET_BODY = (
     "LangGraph has 2 new releases on GitHub (langchain-ai/langgraph) newer than our version "
     "1.2.14:\n- 1.2.16\n- 1.2.15\n\nProposed by the AI workflow builder."
 )
-SUMMARY = "1 of 1 watched software has new releases: LangGraph 1.2.16."
+SUMMARY = "LangGraph has a new release: 1.2.16."
 GITHUB_503 = "GitHub returned 503 Service Unavailable three times"
-NOTHING_READABLE = f"None of the 1 watched software could be checked. {GITHUB_503}."
+NOTHING_READABLE = f"Could not check LangGraph: {GITHUB_503}"
 
 WATCHLIST_T0 = datetime(2026, 11, 10, 2, 14, tzinfo=UTC)
 SUCCESS_T0 = datetime(2026, 11, 3, 2, 14, tzinfo=UTC)
@@ -175,9 +175,7 @@ def planner_opens(rec: Recorder, base: float) -> None:
         base + 0.29,
         PLANNER,
         "Planner brought in Version checker to read the source of LangGraph.",
-        AgentJoinedData(
-            agent=CHECKER, reason="The task asks about new releases of a watched software."
-        ),
+        AgentJoinedData(agent=CHECKER, reason="The task asks about new releases of LangGraph."),
     )
     rec.add(
         AgentMessageEvent,
@@ -214,11 +212,11 @@ def finished_task() -> TaskFinished:
         AgentMessageEvent,
         5.12,
         CHECKER,
-        "Version checker reported 1 of 1 watched software behind and suggested 1 ticket.",
+        "Version checker reported that LangGraph is behind and suggested one ticket.",
         AgentMessageData(
             speaker=CHECKER,
             addressee=TO_ROOM,
-            text="1 of 1 watched software has new releases: LangGraph. I suggest one ticket.",
+            text="LangGraph has a new release: 1.2.16. I suggest one ticket.",
         ),
     )
     rec.add(
@@ -333,12 +331,11 @@ def watchlist_finished() -> TaskFinished:
         AgentMessageEvent,
         4.8,
         CHECKER,
-        "Version checker could not check FastAPI and carried on.",
+        "Version checker could not check FastAPI.",
         AgentMessageData(
             speaker=CHECKER,
             addressee=TO_ROOM,
-            text="I could not read FastAPI's releases: GitHub answered 404 Not Found. "
-            "I will carry on with the rest.",
+            text="I could not read FastAPI's releases: GitHub answered 404 Not Found.",
         ),
     )
     rec.add(
@@ -437,19 +434,18 @@ def failed_task() -> TaskFailed:
         AgentMessageEvent,
         12.955,
         CHECKER,
-        "Version checker could not check LangGraph and carried on.",
+        "Version checker could not check LangGraph.",
         AgentMessageData(
             speaker=CHECKER,
             addressee=TO_ROOM,
-            text=f"I could not read LangGraph's releases: {GITHUB_503}. I will carry on with "
-            "the rest.",
+            text=f"I could not read LangGraph's releases: {GITHUB_503}.",
         ),
     )
     rec.add(
         AgentFailedEvent,
         12.961,
         CHECKER,
-        "Version checker failed: none of the watched software could be checked.",
+        "Version checker failed: LangGraph could not be checked.",
         AgentFailedData(
             step=None, error_type="UpstreamUnavailable", message=NOTHING_READABLE, retryable=True
         ),

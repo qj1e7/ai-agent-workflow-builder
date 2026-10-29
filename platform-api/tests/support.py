@@ -62,7 +62,7 @@ def watched(
     )
 
 
-SUMMARY = "1 of 1 watched software has new releases: LangGraph 1.2.16."
+SUMMARY = "LangGraph has a new release: 1.2.16."
 TICKET_TITLE = "Upgrade LangGraph from 1.2.14 to 1.2.16"
 INSTRUCTION = (
     "Check the team's watched software for new releases and raise an upgrade ticket for each "

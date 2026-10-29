@@ -14,7 +14,7 @@
         "id": "version_checker",
         "display": "Version checker"
       },
-      "reason": "The task asks about new releases of a watched software."
+      "reason": "The task asks about new releases of LangGraph."
     }
   }
 }

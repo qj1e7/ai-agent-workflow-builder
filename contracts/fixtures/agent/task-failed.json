@@ -3,7 +3,7 @@
   "status": "failed",
   "error": {
     "type": "UpstreamUnavailable",
-    "message": "None of the 1 watched software could be checked. GitHub returned 503 Service Unavailable three times.",
+    "message": "Could not check LangGraph: GitHub returned 503 Service Unavailable three times",
     "retryable": true
   },
   "events": [
@@ -21,7 +21,7 @@
           "id": "version_checker",
           "display": "Version checker"
         },
-        "reason": "The task asks about new releases of a watched software."
+        "reason": "The task asks about new releases of LangGraph."
       }
     },
     {
@@ -144,7 +144,7 @@
         "id": "version_checker",
         "display": "Version checker"
       },
-      "summary": "Version checker could not check LangGraph and carried on.",
+      "summary": "Version checker could not check LangGraph.",
       "kind": "agent_message",
       "data": {
         "speaker": {
@@ -154,7 +154,7 @@
         "addressee": {
           "kind": "room"
         },
-        "text": "I could not read LangGraph's releases: GitHub returned 503 Service Unavailable three times. I will carry on with the rest."
+        "text": "I could not read LangGraph's releases: GitHub returned 503 Service Unavailable three times."
       }
     },
     {
@@ -164,12 +164,12 @@
         "id": "version_checker",
         "display": "Version checker"
       },
-      "summary": "Version checker failed: none of the watched software could be checked.",
+      "summary": "Version checker failed: LangGraph could not be checked.",
       "kind": "agent_failed",
       "data": {
         "step": null,
         "error_type": "UpstreamUnavailable",
-        "message": "None of the 1 watched software could be checked. GitHub returned 503 Service Unavailable three times.",
+        "message": "Could not check LangGraph: GitHub returned 503 Service Unavailable three times",
         "retryable": true
       }
     }

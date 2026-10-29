@@ -92,7 +92,7 @@ async def test_a_due_schedule_starts_a_check_as_its_owner(ticking: Ticking):
     assert run_view(detail).trigger == "schedule"
     [created, *_] = await ticking.h.log.read_after(run_id, 0)
     assert created.kind == "run_created"
-    assert created.summary == "Carol's schedule started a check of Software watchlist."
+    assert created.summary == "Carol's schedule started a check of the Software watchlist."
     assert created.data.trigger == "schedule"  # type: ignore[union-attr]
     assert (created.actor.id, created.data.started_by) == ("carol", "carol")  # type: ignore[union-attr]
 
@@ -102,7 +102,7 @@ async def test_a_person_s_run_says_it_was_started_by_a_person(ticking: Ticking):
     detail = await ticking.h.orchestrator.get_run(started.run_id)
     assert detail is not None and run_view(detail).trigger == "person"
     [created, *_] = await ticking.h.log.read_after(started.run_id, 0)
-    assert created.summary == "Alice started a run of Software watchlist."
+    assert created.summary == "Alice started a run of the Software watchlist."
     assert created.data.trigger == "person"  # type: ignore[union-attr]
 
 

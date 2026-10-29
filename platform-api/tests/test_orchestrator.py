@@ -193,7 +193,7 @@ async def test_the_teams_message_carries_the_model_summary_as_one_sentence(h: Ha
     await h.orchestrator.tick()
     [message] = await h.teams.messages()
     assert message.text == (
-        f"A run of {SPEC.use_case_name} needs an Approver. It would create a Jira "
+        f"A run of the {SPEC.use_case_name} needs an Approver. It would create a Jira "
         f'ticket in MOCK titled "{TICKET_TITLE}". '
         f"Open the approval page to decide. The agents said: {said}"
     )
@@ -230,7 +230,7 @@ async def test_a_notice_queued_without_a_summary_reads_as_before(h: Harness):
     )
     [message] = await h.teams.messages()
     assert message.text == (
-        "A run of LangGraph releases needs an Approver. It would create a Jira ticket. "
+        "A run of the LangGraph releases needs an Approver. It would create a Jira ticket. "
         "Open the approval page to decide."
     )
 

@@ -190,7 +190,7 @@ def test_a_software_that_is_up_to_date_gets_no_ticket():
         "8.2.1",
     )
     assert result.output.proposed == []
-    assert result.output.summary == "All 1 watched software are up to date."
+    assert result.output.summary == "Redis is up to date."
 
 
 def test_no_version_given_makes_the_newest_release_the_starting_point():
@@ -270,7 +270,22 @@ def test_every_software_unreadable_fails_the_task_and_can_be_retried_after_an_ou
     result = Room(source).run(request_for(fastapi("0.115.0"), redis("8.2.1")))
     assert isinstance(result, TaskFailed)
     assert (result.error.type, result.error.retryable) == ("UpstreamUnavailable", True)
+    assert result.error.message == (
+        "None of the 2 watched software could be checked. GitHub answered 404 Not Found"
+    )
     assert result.events[-1].kind == "agent_failed"
+
+
+def test_one_software_that_cannot_be_checked_fails_with_its_own_reason_and_no_rest():
+    source = RepoSource({**TAGS, LANGGRAPH: ["nightly", "v2-beta"]})
+    result = Room(source).run(request_for(langgraph("1.2.14")))
+    assert isinstance(result, TaskFailed)
+    assert result.error.message == (
+        "Could not check LangGraph: No release has a plain version number"
+    )
+    said = [e.data.text for e in result.events if isinstance(e, AgentMessageEvent)]
+    assert said[-1] == "I could not check LangGraph: No release has a plain version number."
+    assert result.events[-1].summary == "Version checker failed: LangGraph could not be checked."
 
 
 def test_every_software_refused_fails_the_task_for_good():
@@ -326,7 +341,7 @@ def test_the_model_writes_the_summary_when_it_answers():
 def test_an_unusable_model_answer_falls_back_to_the_template(reply: str):
     summarizer = ModelSummarizer("any:model", factory=model_saying(reply))
     result = finished(Room(RepoSource(TAGS), summarizer).run(request_for(langgraph("1.2.14"))))
-    assert result.output.summary == "1 of 1 watched software has new releases: LangGraph 1.2.16."
+    assert result.output.summary == "LangGraph has a new release: 1.2.16."
 
 
 def test_a_failing_model_falls_back_to_the_template():
@@ -335,7 +350,7 @@ def test_a_failing_model_falls_back_to_the_template():
 
     summarizer = ModelSummarizer("any:model", factory=broken)
     result = finished(Room(RepoSource(TAGS), summarizer).run(request_for(redis("8.2.1"))))
-    assert result.output.summary == "All 1 watched software are up to date."
+    assert result.output.summary == "Redis is up to date."
 
 
 def test_the_tasks_route_runs_a_watchlist():

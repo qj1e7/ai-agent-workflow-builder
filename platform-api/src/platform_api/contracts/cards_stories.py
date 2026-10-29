@@ -205,7 +205,7 @@ def card_run_events() -> Timeline:
         RunCreated,
         0.0,
         USER_ALICE,
-        f"Alice started a run of {USE_CASE_NAME}.",
+        f"Alice started a run of the {USE_CASE_NAME}.",
         RunCreatedData(use_case_id=USE_CASE_ID, use_case_version=1, started_by=ALICE),
     )
     tl.add(
