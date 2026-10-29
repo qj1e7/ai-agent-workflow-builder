@@ -9,6 +9,7 @@ from platform_api.builder.watchlist import (
     NoSuchSoftware,
     NoWatchlist,
     RepoAlreadyWatched,
+    RepoWatchedAgain,
     Watchlist,
     WatchlistFull,
 )
@@ -35,6 +36,12 @@ async def get_watchlist(principal: CurrentPrincipal, watchlist: CurrentWatchlist
     return WatchlistOut(watchlist=await watchlist.view())
 
 
+def _full(limit: int) -> HTTPException:
+    return HTTPException(
+        422, [{"loc": ["body"], "msg": f"The watchlist holds {limit} software at most"}]
+    )
+
+
 @router.post(
     "/watchlist/software",
     status_code=201,
@@ -50,9 +57,7 @@ async def add_software(
         case RepoAlreadyWatched(ref):
             raise HTTPException(409, f"{ref} is already watched")
         case WatchlistFull(limit):
-            raise HTTPException(
-                422, [{"loc": ["body"], "msg": f"The watchlist holds {limit} software at most"}]
-            )
+            raise _full(limit)
 
 
 @router.delete(
@@ -67,6 +72,36 @@ async def remove_software(
             return left
         case NoSuchSoftware():
             raise HTTPException(404, "No such watched software")
+
+
+@router.post(
+    "/watchlist/software/{software_id}/restore",
+    description=(
+        "Puts removed software back on the watchlist as it was, with the same id, so what the "
+        "platform learned about it comes back too. Software already on the list stays as it is."
+    ),
+    responses={
+        **OPERATORS_ONLY,
+        404: error_response("This software was never on the watchlist"),
+        409: error_response("The repository was added again after it was removed"),
+    },
+)
+async def restore_software(
+    software_id: str, principal: Operator, watchlist: CurrentWatchlist
+) -> WatchlistView:
+    match await watchlist.restore(SoftwareId(software_id)):
+        case WatchlistView() as restored:
+            return restored
+        case NoSuchSoftware():
+            raise HTTPException(404, "This software was never on the watchlist")
+        case RepoWatchedAgain(ref):
+            raise HTTPException(
+                409,
+                f"{ref} was added again after it was removed, so the removed entry cannot come "
+                "back",
+            )
+        case WatchlistFull(limit):
+            raise _full(limit)
 
 
 @router.put(

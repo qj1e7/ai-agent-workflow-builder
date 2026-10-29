@@ -126,6 +126,44 @@ async def test_removing_software_answers_the_list_that_is_left(client: httpx.Asy
     assert (gone.status_code, gone.json()) == (404, {"detail": "No such watched software"})
 
 
+async def test_restoring_puts_removed_software_back_with_the_same_id_once(
+    client: httpx.AsyncClient,
+):
+    await client.post("/api/v1/watchlist/software", json=LANGGRAPH, headers=ALICE)
+    both = (await client.post("/api/v1/watchlist/software", json=REDIS, headers=ALICE)).json()
+    langgraph = next(row for row in both["software"] if row["name"] == "LangGraph")
+    await client.delete(f"/api/v1/watchlist/software/{langgraph['id']}", headers=ALICE)
+
+    back = await client.post(f"/api/v1/watchlist/software/{langgraph['id']}/restore", headers=CAROL)
+    assert back.status_code == 200
+    assert back.json()["version"] == 4
+    assert next(row for row in back.json()["software"] if row["id"] == langgraph["id"]) == langgraph
+    again = await client.post(
+        f"/api/v1/watchlist/software/{langgraph['id']}/restore", headers=ALICE
+    )
+    assert (again.status_code, again.json()) == (200, back.json())
+
+
+async def test_restoring_unknown_software_is_a_404_and_a_repository_added_again_a_409(
+    client: httpx.AsyncClient,
+):
+    never = await client.post("/api/v1/watchlist/software/sw_nope/restore", headers=ALICE)
+    assert (never.status_code, never.json()) == (
+        404,
+        {"detail": "This software was never on the watchlist"},
+    )
+    first = (await client.post("/api/v1/watchlist/software", json=LANGGRAPH, headers=ALICE)).json()
+    old = first["software"][0]["id"]
+    await client.delete(f"/api/v1/watchlist/software/{old}", headers=ALICE)
+    await client.post("/api/v1/watchlist/software", json=LANGGRAPH, headers=ALICE)
+    clash = await client.post(f"/api/v1/watchlist/software/{old}/restore", headers=ALICE)
+    assert clash.status_code == 409
+    assert clash.json() == {
+        "detail": "langchain-ai/langgraph was added again after it was removed, "
+        "so the removed entry cannot come back"
+    }
+
+
 async def test_only_an_operator_changes_the_list_and_anyone_signed_in_reads_it(
     client: httpx.AsyncClient,
 ):
@@ -133,6 +171,8 @@ async def test_only_an_operator_changes_the_list_and_anyone_signed_in_reads_it(
     refused = await client.post("/api/v1/watchlist/software", json=LANGGRAPH, headers=BOB)
     assert refused.status_code == 403
     assert (await client.delete("/api/v1/watchlist/software/sw_x", headers=BOB)).status_code == 403
+    restore = await client.post("/api/v1/watchlist/software/sw_x/restore", headers=BOB)
+    assert restore.status_code == 403
     assert (await client.get("/api/v1/watchlist", headers=BOB)).json() == {"watchlist": None}
 
 

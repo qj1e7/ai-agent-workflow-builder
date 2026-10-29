@@ -85,6 +85,13 @@ class NoSuchSoftware:
 
 
 @dataclass(frozen=True)
+class RepoWatchedAgain:
+    """The repository was added again under a new id after this software was removed."""
+
+    ref: str
+
+
+@dataclass(frozen=True)
 class WatchlistFull:
     limit: int
 
@@ -233,6 +240,19 @@ async def _software_of(
     return tuple(_listed(row) for row in rows)
 
 
+async def _last_listed(
+    conn: Connection, use_case_id: UseCaseId, software_id: SoftwareId
+) -> ListedSoftware | None:
+    row = await (
+        await conn.execute(
+            f"SELECT {_SOFTWARE_COLUMNS} FROM builder.watched_software "
+            "WHERE use_case_id = %s AND software_id = %s ORDER BY version DESC LIMIT 1",
+            (use_case_id, software_id),
+        )
+    ).fetchone()
+    return None if row is None else _listed(row)
+
+
 async def _current(conn: Connection, lock: bool) -> WatchlistRecord | None:
     suffix = " ORDER BY u.created_at LIMIT 1" + (" FOR UPDATE OF u" if lock else "")
     row = await (await conn.execute(_CURRENT + suffix, (SOFTWARE_WATCHLIST.key,))).fetchone()
@@ -338,6 +358,27 @@ class Watchlist:
                 return NoSuchSoftware(software_id)
             kept = tuple(s for s in record.software if s.id != software_id)
             record = await self._next_version(uow, record, kept)
+        return await self._view_of(record)
+
+    async def restore(
+        self, software_id: SoftwareId
+    ) -> WatchlistView | NoSuchSoftware | RepoWatchedAgain | WatchlistFull:
+        """Lists removed software again as it was. Orchestration keeps what it learned by
+        software id, and removing deletes none of it, so the same id brings its history back."""
+        async with self._db.transaction("builder") as uow:
+            record = await _current(uow.conn, lock=True)
+            if record is None:
+                return NoSuchSoftware(software_id)
+            if all(s.id != software_id for s in record.software):
+                earlier = await _last_listed(uow.conn, record.use_case_id, software_id)
+                if earlier is None:
+                    return NoSuchSoftware(software_id)
+                ref = earlier.source.ref.casefold()
+                if any(s.source.ref.casefold() == ref for s in record.software):
+                    return RepoWatchedAgain(earlier.source.ref)
+                if len(record.software) >= WATCHLIST_LIMIT:
+                    return WatchlistFull(WATCHLIST_LIMIT)
+                record = await self._next_version(uow, record, (*record.software, earlier))
         return await self._view_of(record)
 
     async def task_for(self, use_case_id: UseCaseId, version: int) -> WatchlistTask | None:

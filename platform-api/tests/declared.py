@@ -5,7 +5,12 @@ import httpx
 from fastapi import FastAPI
 
 from platform_api.app import create_app
-from platform_api.builder.watchlist import NoSuchSoftware, NoWatchlist
+from platform_api.builder.watchlist import (
+    NoSuchSoftware,
+    NoWatchlist,
+    RepoWatchedAgain,
+    WatchlistFull,
+)
 from platform_api.shared import SoftwareId
 from tests.support import LOCAL_ENV
 
@@ -54,6 +59,13 @@ class FakeWatchlist:
         raise AssertionError("not asked in these tests")
 
     async def remove(self, software_id: str) -> object:
+        return NoSuchSoftware(SoftwareId(software_id))
+
+    async def restore(self, software_id: str) -> object:
+        if software_id == "sw_again":
+            return RepoWatchedAgain("langchain-ai/langgraph")
+        if software_id == "sw_full":
+            return WatchlistFull(100)
         return NoSuchSoftware(SoftwareId(software_id))
 
     async def save_schedule(self, principal: object, body: object) -> object:

@@ -7,7 +7,12 @@ import pytest
 from platform_api.builder import Builder, Watchlist
 from platform_api.builder.models import AddSoftware, WatchlistView
 from platform_api.builder.service import NothingToCheck
-from platform_api.builder.watchlist import NoSuchSoftware, RepoAlreadyWatched, WatchlistFull
+from platform_api.builder.watchlist import (
+    NoSuchSoftware,
+    RepoAlreadyWatched,
+    RepoWatchedAgain,
+    WatchlistFull,
+)
 from platform_api.db import Database
 from platform_api.orchestration import (
     Binding,
@@ -192,6 +197,67 @@ async def test_removing_software_that_is_not_listed_changes_nothing(watchlist: W
     view = await added(watchlist, LANGGRAPH)
     assert await watchlist.remove(SoftwareId("sw_nope")) == NoSuchSoftware(SoftwareId("sw_nope"))
     assert await watchlist.view() == view
+
+
+async def test_restoring_removed_software_lists_it_again_as_it_was(
+    watchlist: Watchlist, facts: FakeFacts
+):
+    first = await added(watchlist, LANGGRAPH)
+    both = await added(watchlist, REDIS)
+    langgraph, redis = ids(both)["LangGraph"], ids(both)["Redis"]
+    facts.known = {
+        langgraph: SoftwareFacts(Given("1.2.14", NOW), Checked(RUN, LATER, "1.2.16"), None, None)
+    }
+    shown = await watchlist.view()
+    assert shown is not None
+    before = next(row for row in shown.software if row.id == langgraph)
+    removed = await watchlist.remove(langgraph)
+    assert isinstance(removed, WatchlistView) and removed.version == 3
+
+    restored = await watchlist.restore(langgraph)
+    assert isinstance(restored, WatchlistView)
+    assert restored.version == 4
+    assert next(row for row in restored.software if row.id == langgraph) == before
+    assert before.newest_version == "1.2.16", "what the platform learned comes back with it"
+    assert facts.asked[-1][1] == {
+        redis: None,
+        langgraph: Given("1.2.14", first.software[0].added_at),
+    }
+    assert await watchlist.restore(langgraph) == restored, "a repeat restore changes nothing"
+    again = await watchlist.view()
+    assert again is not None and again.version == 4
+
+
+async def test_restoring_software_that_was_never_listed_changes_nothing(watchlist: Watchlist):
+    nope = SoftwareId("sw_nope")
+    assert await watchlist.restore(nope) == NoSuchSoftware(nope)
+    view = await added(watchlist, LANGGRAPH)
+    assert await watchlist.restore(nope) == NoSuchSoftware(nope)
+    assert await watchlist.view() == view
+
+
+async def test_a_repository_added_again_since_its_removal_cannot_be_restored(
+    watchlist: Watchlist,
+):
+    first = await added(watchlist, LANGGRAPH)
+    old = first.software[0].id
+    await watchlist.remove(old)
+    again = await added(watchlist, software("LangGraph", "LangChain-AI/LangGraph"))
+    assert ids(again)["LangGraph"] != old
+    assert await watchlist.restore(old) == RepoWatchedAgain("langchain-ai/langgraph")
+    assert await watchlist.view() == again
+
+
+async def test_restoring_into_a_full_list_is_refused(watchlist: Watchlist):
+    for n in range(100):
+        await added(watchlist, software(f"Tool {n}", f"owner/tool-{n}"))
+    full = await watchlist.view()
+    assert full is not None
+    gone = ids(full)["Tool 0"]
+    await watchlist.remove(gone)
+    refilled = await added(watchlist, software("One more", "owner/one-more"))
+    assert await watchlist.restore(gone) == WatchlistFull(100)
+    assert await watchlist.view() == refilled
 
 
 async def test_the_list_holds_a_hundred_software_at_most(watchlist: Watchlist):
