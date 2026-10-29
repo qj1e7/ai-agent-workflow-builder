@@ -35,11 +35,13 @@ from platform_api.orchestration import (
     DraftResult,
     LibraryCard,
     NoModel,
+    NotOn,
     RuntimeDown,
     ScheduleBook,
+    ScheduleTicker,
 )
 from platform_api.orchestration.runs import AwaitingApproval, StepName
-from platform_api.shared import N8nExecutionId, RunId, UserId
+from platform_api.shared import N8nExecutionId, RunId, UseCaseId, UserId
 from tests.conftest import PostgresUrls
 from tests.declared import declared_status
 from tests.support import LOCAL_ENV, NOW
@@ -149,6 +151,7 @@ class Lab:
     h: Harness
     app: FastAPI
     client: httpx.AsyncClient
+    builder: Builder
 
     async def call(
         self, user: str | None, method: str, path: str, body: Any = None, template: str = ""
@@ -193,14 +196,15 @@ async def lab(postgres: PostgresUrls) -> AsyncIterator[Lab]:
     async with open_harness(postgres) as h:
         watchlist = Watchlist(h.db, NothingLearned(), ScheduleBook(h.db))
         app = create_app(LOCAL_ENV)
-        app.state.builder = Builder(
+        builder = Builder(
             h.db, h.orchestrator, watchlist, "http://localhost:8000", ModelConnected()
         )
+        app.state.builder = builder
         app.state.watchlist = watchlist
         app.state.orchestrator = h.orchestrator
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-            yield Lab(h, app, client)
+            yield Lab(h, app, client, builder)
 
 
 async def watchlist_workflow(lab: Lab) -> str:
@@ -469,3 +473,28 @@ async def test_every_lifecycle_route_needs_a_signed_in_user(lab: Lab, action: st
         template="/api/v1/use-cases/{use_case_id}" + suffix,
     )
     assert r.status_code == 401
+
+
+async def test_a_tick_while_the_watchlist_is_paused_starts_no_run(lab: Lab):
+    use_case_id = await watchlist_workflow(lab)
+    ticker = ScheduleTicker(lab.h.db, ScheduleBook(lab.h.db), lab.builder, lab.h.orchestrator)
+    await lab.move("alice", "pause", use_case_id)
+    lab.h.clock["now"] = NEXT_MONDAY + timedelta(minutes=1)
+
+    assert await ticker.tick() == []
+
+    assert await lab.runs() == []
+    await lab.move("alice", "resume", use_case_id)
+    assert await ticker.tick() == []
+    lab.h.clock["now"] = NEXT_MONDAY + timedelta(days=7, minutes=1)
+    [run_id] = await ticker.tick()
+    assert [(r["run_id"], r["trigger"]) for r in await lab.runs()] == [(run_id, "schedule")]
+
+
+async def test_the_tick_is_told_a_paused_or_deleted_workflow_is_not_on(lab: Lab):
+    use_case_id = await agent_workflow(lab)
+    await lab.move("alice", "pause", use_case_id)
+    assert await lab.builder.check_spec(UseCaseId(use_case_id)) == NotOn("paused")
+    await lab.move("alice", "delete", use_case_id)
+    assert await lab.builder.check_spec(UseCaseId(use_case_id)) == NotOn("deleted")
+    assert await lab.builder.check_spec(UseCaseId("uc_nope")) is None

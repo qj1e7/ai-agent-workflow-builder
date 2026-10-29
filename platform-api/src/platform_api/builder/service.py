@@ -63,6 +63,7 @@ from platform_api.db import Database, json
 from platform_api.orchestration import (
     CardRun,
     CardsTask,
+    NotOn,
     RunSpec,
     RunStarted,
     RunStarter,
@@ -420,10 +421,26 @@ class Builder:
             approval_policy=policy,
         )
 
-    async def check_spec(self, use_case_id: UseCaseId) -> RunSpec | None:
+    async def check_spec(self, use_case_id: UseCaseId) -> RunSpec | NotOn | None:
         """What the schedule tick asks for. None means nothing to check."""
-        spec = await self.run_spec_for(use_case_id)
-        return None if isinstance(spec, NothingToCheck) else spec
+        async with self._db.connection("builder") as conn:
+            row = await (
+                await conn.execute(
+                    "SELECT paused_at, paused_by, deleted_at, deleted_by FROM builder.use_cases"
+                    " WHERE use_case_id = %s",
+                    (use_case_id,),
+                )
+            ).fetchone()
+        if row is None:
+            return None
+        match lifecycle_of(row):
+            case Paused():
+                return NotOn("paused")
+            case Deleted():
+                return NotOn("deleted")
+            case On():
+                spec = await self.run_spec_for(use_case_id)
+                return None if isinstance(spec, NothingToCheck) else spec
 
     async def start_run(
         self, use_case_id: UseCaseId, principal: Principal, idempotency_key: str

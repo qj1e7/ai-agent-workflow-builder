@@ -2,7 +2,7 @@ import logging
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 from platform_api.db import Database
 from platform_api.orchestration.schedule import (
@@ -132,11 +132,18 @@ class ScheduleBook:
             )
 
 
+@dataclass(frozen=True)
+class NotOn:
+    """The use case is paused or deleted, so its slots pass without a check."""
+
+    state: Literal["paused", "deleted"]
+
+
 class CheckSpecs(Protocol):
     """What a scheduled check needs from the use case builder, which orchestration may not
     import. None means there is nothing to check, for example an empty watchlist."""
 
-    async def check_spec(self, use_case_id: UseCaseId) -> RunSpec | None: ...
+    async def check_spec(self, use_case_id: UseCaseId) -> RunSpec | NotOn | None: ...
 
 
 class ScheduleTicker:
@@ -167,14 +174,20 @@ class ScheduleTicker:
         return started
 
     async def _start(self, saved: SavedSchedule, slot: datetime) -> RunId | None:
+        """A paused use case uses its slot up, so resuming it never starts a missed check."""
         spec = await self._specs.check_spec(saved.use_case_id)
         run_id: RunId | None = None
-        if spec is not None:
-            result = await self._runs.start_run(
-                replace(spec, trigger="schedule"),
-                saved.principal,
-                f"schedule:{saved.use_case_id}:{slot.isoformat()}",
-            )
-            run_id = result.run_id if result.created else None
+        match spec:
+            case RunSpec():
+                result = await self._runs.start_run(
+                    replace(spec, trigger="schedule"),
+                    saved.principal,
+                    f"schedule:{saved.use_case_id}:{slot.isoformat()}",
+                )
+                run_id = result.run_id if result.created else None
+            case NotOn(state):
+                log.info("skipped the scheduled check of %s, which is %s", saved.use_case_id, state)
+            case None:
+                pass
         await self._book.record_slot(saved.use_case_id, slot)
         return run_id
