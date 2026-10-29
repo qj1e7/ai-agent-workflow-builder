@@ -1,5 +1,7 @@
+import asyncio
 from dataclasses import dataclass, field
 
+import psycopg
 import pytest
 
 from platform_api.db import Database
@@ -25,6 +27,7 @@ from platform_api.orchestration.model_settings import (
     SettingsOff,
 )
 from platform_api.shared import Principal, Role, UserId
+from tests.conftest import PostgresUrls
 
 pytestmark = pytest.mark.anyio
 
@@ -302,3 +305,27 @@ async def test_the_digest_changes_with_every_save(db: Database):
     first = await waiting(settings)
     await save(settings, style="openai", base_url=NCS, model="ncs-llm-small", api_key=NEW_KEY)
     assert await waiting(settings) != first
+
+
+async def test_a_save_and_a_decision_at_the_same_moment_both_finish(
+    db: Database, postgres: PostgresUrls
+):
+    settings = settings_for(db)
+    await save(settings, style="openai", base_url=NCS, model="ncs-llm-small")
+    seen = await waiting(settings)
+    async with await psycopg.AsyncConnection.connect(postgres.owner) as holder:
+        await holder.execute(
+            "SELECT 1 FROM orchestration.model_setting WHERE slot = 'pending' FOR UPDATE"
+        )
+        saving = asyncio.create_task(
+            save(settings, style="openai", base_url="https://elsewhere.example/v1", model="other")
+        )
+        await asyncio.sleep(0.3)
+        deciding = asyncio.create_task(settings.decide(BOB, confirm=True, digest=seen))
+        await asyncio.sleep(0.3)
+        await holder.rollback()
+    saved, decided = await asyncio.gather(saving, deciding)
+    assert isinstance(saved, Saved) and saved.awaiting_confirmation
+    assert isinstance(decided, PendingChanged)
+    pending = (await settings.view()).pending
+    assert pending is not None and pending.base_url == "https://elsewhere.example/v1"

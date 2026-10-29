@@ -344,6 +344,10 @@ class ModelSettings:
                 at=uow.now,
             )
             if known is None and not await self._store.confirmed(uow, host):
+                # The open confirmation before the pending row, in the order decide takes them.
+                await _history.open_one(
+                    uow, confirmations.ConfirmationKind.MODEL_ADDRESS, None, lock=True
+                )
                 await self._store.put(uow, "pending", stored)
                 asked = await _history.ask(
                     uow,
