@@ -101,14 +101,37 @@ interface ModalProps {
   children: ReactNode
 }
 
+const TAB_STOPS = 'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
+
+/** Chromium lets Tab leave a modal dialog for the browser's own controls, so the ends wrap round. */
+function keepTabInside(box: HTMLElement, event: KeyboardEvent): void {
+  if (event.key !== 'Tab') return
+  const stops = [...box.querySelectorAll<HTMLElement>(TAB_STOPS)]
+  const first = stops[0]
+  const last = stops.at(-1)
+  if (!first || !last) return
+  const at = document.activeElement
+  let next: HTMLElement | null = null
+  if (!box.contains(at)) next = event.shiftKey ? last : first
+  else if (event.shiftKey && at === first) next = last
+  else if (!event.shiftKey && at === last) next = first
+  if (!next) return
+  event.preventDefault()
+  next.focus()
+}
+
 function Modal({ face, title, under, onClose, children }: ModalProps) {
   const dialog = useRef<HTMLDialogElement>(null)
   const topClose = useRef<HTMLButtonElement>(null)
   const titleId = useId()
   useEffect(() => {
     const element = dialog.current
-    if (element && !element.open) element.showModal()
+    if (!element) return
+    if (!element.open) element.showModal()
     topClose.current?.focus()
+    const onKey = (event: KeyboardEvent) => keepTabInside(element, event)
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
   }, [])
   const close = () => dialog.current?.close()
   return (
