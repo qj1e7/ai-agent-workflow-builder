@@ -3,7 +3,7 @@ import { unwrap } from './client'
 import { useApiClient, useCacheScope } from './context'
 import type { AddPersonIn, ConfirmationDecisionIn } from './types'
 
-export const settingsKeys = {
+const settingsKeys = {
   people: (user: string) => ['people', user] as const,
   confirmations: (user: string) => ['confirmations', user] as const,
   history: (user: string) => ['settings-history', user] as const,

@@ -24,7 +24,7 @@ import {
 import { FieldError, History, useFocusOnNextRender, useSettingsWords } from './SettingsParts'
 import styles from './Settings.module.css'
 
-export const MODEL_IDS = {
+const MODEL_IDS = {
   now: 'model-now',
   waiting: 'model-waiting',
   provider: 'model-provider',
@@ -82,7 +82,7 @@ export function ModelTab() {
 
 type Verdict = 'confirm' | 'decline'
 
-export function ModelPanel({ view }: { view: ModelSettingsView }) {
+function ModelPanel({ view }: { view: ModelSettingsView }) {
   const [said, setSaid] = useState<string | null>(null)
   const [announced, setAnnounced] = useState('')
   const [pressed, setPressed] = useState<Verdict | null>(null)

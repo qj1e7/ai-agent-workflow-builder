@@ -23,11 +23,11 @@ import {
 import { FieldError, History, useFocusOnNextRender, useSettingsWords } from './SettingsParts'
 import styles from './Settings.module.css'
 
-export const NOTICE_ID = 'people-notice'
+const NOTICE_ID = 'people-notice'
 export const PEOPLE_LEAD = 'Operators set up workflows and change settings. Approvers say yes or no to changes. People sign in with their NCS account.'
 
-export const operatorBoxId = (personId: string) => `person-${personId}-operator`
-export const approverBoxId = (personId: string) => `person-${personId}-approver`
+const operatorBoxId = (personId: string) => `person-${personId}-operator`
+const approverBoxId = (personId: string) => `person-${personId}-approver`
 const rowErrorId = (personId: string) => `person-${personId}-error`
 
 interface Notice {
@@ -39,6 +39,12 @@ interface Notice {
 interface RowProblem {
   readonly personId: string
   readonly words: string
+}
+
+interface Settled {
+  readonly onSuccess: () => void
+  readonly onError: (error: unknown) => void
+  readonly onSettled: () => void
 }
 
 interface Busy {
@@ -79,7 +85,7 @@ interface PanelProps {
   me: Me | undefined
 }
 
-export function PeoplePanel({ people, confirmations, me }: PanelProps) {
+function PeoplePanel({ people, confirmations, me }: PanelProps) {
   const words = useSettingsWords()
   const operator = canChangeSettings(me)
   const setOperator = useSetOperator()
@@ -96,7 +102,7 @@ export function PeoplePanel({ people, confirmations, me }: PanelProps) {
   const names = new Map(people.map((person) => [person.id, person.display]))
   const noticeHasRow = notice !== null && people.some((person) => person.id === notice.personId)
 
-  function change(person: PersonOut, act: Busy['act'], to: boolean | undefined, send: (done: { onSuccess: () => void; onError: (error: unknown) => void; onSettled: () => void }) => void, after: () => void) {
+  function change(person: PersonOut, act: Busy['act'], to: boolean | undefined, send: (done: Settled) => void, after: () => void) {
     latch.run((settled) => {
       setBusy(to === undefined ? { personId: person.id, act } : { personId: person.id, act, to })
       setProblem(null)
