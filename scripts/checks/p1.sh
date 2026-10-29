@@ -7,7 +7,7 @@
 #   gates <worktree>                       typecheck, lint, unit tests, kept modules, nginx render, build
 #   up <worktree> <project> <tag> <portal-port> <api-port> <n8n-port> [oidc]
 #   down <worktree> <project> [oidc]
-#   check <project> [playwright arguments] run portal/e2e/checks in the runner image, in that project's Portal network
+#   check <project> [playwright arguments] run portal/e2e/checks/p1.check.ts in the runner image, in that project's Portal network
 #   lane1 <trunk-project> <head-project> <trunk-sha> <head-sha>
 #                                          old menu at trunk, new menu at head, one side-by-side shot captioned with the SHAs
 #   lane2 <worktree> <oidc-project>        the builder's 06 spec and the checker's own lane 2, real sign-in
@@ -101,20 +101,26 @@ runner_in() {
   [ -n "$portal" ] || die "no running Portal in project $project"
   docker image inspect "$RUNNER" >/dev/null 2>&1 || die "no runner image $RUNNER; build it with E2E_RUNNER_IMAGE=$RUNNER portal/e2e/runner-image.sh"
   mkdir -p "$EVID/.live-out"
+  # Each e2e folder is mounted on its own, so the live output can be mounted beside them. A fresh clone has no
+  # portal/e2e/out, and docker can't make a mount point inside a read-only mount.
+  local e2e_mounts=() folder
+  for folder in checks live support; do
+    e2e_mounts+=(-v "$root/portal/e2e/$folder:/work/e2e/$folder:ro")
+  done
   docker run --rm --network "container:$portal" --ipc=host \
     -e BASE_URL=http://localhost:8080 -e E2E_AUTH="${E2E_AUTH:-dev}" -e EVID=/evidence \
     -e TARGET="${TARGET:-head}" -e SAMPLE="${SAMPLE:-0}" -e EXPECT_DOWN="${EXPECT_DOWN:-0}" \
     -e TRUNK_SHA="${TRUNK_SHA:-}" -e HEAD_SHA="${HEAD_SHA:-}" \
     -e MOCK_OIDC_URL="${MOCK_OIDC_URL:-http://mock-oidc:8080/default}" \
     -e MOCK_GITHUB_URL=http://mock-github:8200 -e PLAIN_HTTP_URL=http://portal:8080 \
-    -v "$root/portal/e2e:/work/e2e:ro" -v "$EVID:/evidence" -v "$EVID/.live-out:/work/e2e/out/live" \
+    "${e2e_mounts[@]}" -v "$EVID:/evidence" -v "$EVID/.live-out:/work/e2e/out/live" \
     -w /work "$RUNNER" "$@"
 }
 
 check() {
   local project=$1
   shift
-  runner_in "$checker_root" "$project" npx playwright test -c e2e/checks/playwright.config.ts "$@"
+  runner_in "$checker_root" "$project" npx playwright test -c e2e/checks/playwright.config.ts p1.check.ts "$@"
 }
 
 lane1() {
@@ -169,6 +175,7 @@ lane9() {
 
 lane10() {
   local worktree=$1 project=$2 out="$EVID/lane-10" dist="$1/portal/dist"
+  [ -d "$dist" ] || die "no $dist; run gates $worktree first, which builds it"
   mkdir -p "$out"
   {
     echo "# Lane 10: retired names in $dist (head $(git -C "$worktree" rev-parse HEAD))"
@@ -197,6 +204,7 @@ size() {
   for pair in "trunk:$1" "head:$2"; do
     name=${pair%%:*}
     dir=${pair#*:}/portal/dist
+    [ -f "$dir/index.html" ] || die "no $dir/index.html; run gates on that worktree first, which builds it"
     total=0
     for src in $(grep -oE '<script[^>]*src="[^"]+"' "$dir/index.html" | sed -E 's/.*src="([^"]+)".*/\1/'); do
       bytes=$(gzip -c "$dir$src" | wc -c | tr -d ' ')

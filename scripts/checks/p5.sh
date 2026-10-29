@@ -7,7 +7,7 @@
 #   gates <worktree>                       typecheck, lint, unit tests, nginx render, build
 #   up <worktree> <project> <tag> <portal-port> <api-port> <n8n-port>
 #   down <worktree> <project>
-#   check <project> [playwright arguments] run portal/e2e/checks in the runner image, in that project's Portal network
+#   check <project> [playwright arguments] run portal/e2e/checks/p5.check.ts in the runner image, in that project's Portal network
 #   live <project> [playwright arguments]  run the builder's live specs (portal/e2e/live) the same way
 #   lane1 <head-project> [trunk-project]   the line moves to the gate at head; trunk has no run page
 #   lane <n> <project>                     lanes 2, 3, 4, 5, 7, 8, 9 and 10, one at a time on a shared stack
@@ -93,18 +93,24 @@ runner_in() {
   [ -n "$portal" ] || die "no running Portal in project $project"
   docker image inspect "$RUNNER" >/dev/null 2>&1 || die "no runner image $RUNNER; build it with E2E_RUNNER_IMAGE=$RUNNER portal/e2e/runner-image.sh"
   mkdir -p "$EVID/.live-out"
+  # Each e2e folder is mounted on its own, so the live output can be mounted beside them. A fresh clone has no
+  # portal/e2e/out, and docker can't make a mount point inside a read-only mount.
+  local e2e_mounts=() folder
+  for folder in checks live support; do
+    e2e_mounts+=(-v "$checker_root/portal/e2e/$folder:/work/e2e/$folder:ro")
+  done
   docker run --rm --network "container:$portal" --ipc=host \
     -e BASE_URL=http://localhost:8080 -e E2E_AUTH=dev -e EVID=/evidence \
     -e TARGET="${TARGET:-head}" -e SAMPLE="${SAMPLE:-0}" -e MOCK_GITHUB_URL=http://mock-github:8200 \
     -e PLAIN_HTTP_URL=http://portal:8080 \
-    -v "$checker_root/portal/e2e:/work/e2e:ro" -v "$EVID:/evidence" -v "$EVID/.live-out:/work/e2e/out/live" \
+    "${e2e_mounts[@]}" -v "$EVID:/evidence" -v "$EVID/.live-out:/work/e2e/out/live" \
     -w /work "$RUNNER" "$@"
 }
 
 check() {
   local project=$1
   shift
-  runner_in "$project" npx playwright test -c e2e/checks/playwright.config.ts "$@"
+  runner_in "$project" npx playwright test -c e2e/checks/playwright.config.ts p5.check.ts "$@"
 }
 
 live() {
@@ -117,11 +123,11 @@ lane1() {
   local head=$1 trunk=${2:-}
   mkdir -p "$EVID/lane-1"
   if [ -n "$trunk" ]; then
-    TARGET=trunk check "$trunk" p5.check.ts --grep @lane1-trunk
+    TARGET=trunk check "$trunk" --grep @lane1-trunk
   else
     echo "no trunk stack given: trunk has no run page after P1, its routes are only the menu pages and Page not found" | tee "$EVID/lane-1/p5-trunk.txt"
   fi
-  TARGET=head check "$head" p5.check.ts --grep '@lane1 '
+  TARGET=head check "$head" --grep '@lane1 '
 }
 
 lane() {
@@ -131,7 +137,7 @@ lane() {
     *) die "lane $n does not run on a shared stack; see lane1 and lane6" ;;
   esac
   mkdir -p "$EVID/lane-$n"
-  check "$project" p5.check.ts --grep "@lane$n " 2>&1 | tee "$EVID/lane-$n/playwright.log"
+  check "$project" --grep "@lane$n " 2>&1 | tee "$EVID/lane-$n/playwright.log"
   return "${PIPESTATUS[0]}"
 }
 
@@ -139,7 +145,7 @@ lane6() {
   local worktree=$1 project=$2 tag=$3 portal_port=$4 api_port=$5 n8n_port=$6 status=0
   up "$worktree" "$project" "$tag" "$portal_port" "$api_port" "$n8n_port"
   mkdir -p "$EVID/lane-6"
-  check "$project" p5.check.ts --grep '@lane6 ' 2>&1 | tee "$EVID/lane-6/playwright.log" || status=$?
+  check "$project" --grep '@lane6 ' 2>&1 | tee "$EVID/lane-6/playwright.log" || status=$?
   down "$worktree" "$project"
   return "$status"
 }
@@ -151,6 +157,7 @@ size() {
   for pair in "trunk:$1" "head:$2"; do
     name=${pair%%:*}
     dir=${pair#*:}/portal/dist
+    [ -f "$dir/index.html" ] || die "no $dir/index.html; run gates on that worktree first, which builds it"
     total=0
     for src in $(grep -oE '<script[^>]*src="[^"]+"' "$dir/index.html" | sed -E 's/.*src="([^"]+)".*/\1/'); do
       bytes=$(gzip -c "$dir$src" | wc -c | tr -d ' ')
@@ -166,7 +173,7 @@ perf() {
   mkdir -p "$EVID/perf"
   rm -f "$EVID"/perf/lcp-*.json
   for i in $(seq 1 "$samples"); do
-    TARGET=head SAMPLE=$i check "$project" p5.check.ts --grep @perf
+    TARGET=head SAMPLE=$i check "$project" --grep @perf
   done
   node -e '
     const fs = require("fs"), dir = process.argv[1]
@@ -182,7 +189,7 @@ perf() {
 
 video() {
   local project=$1
-  check "$project" p5.check.ts --grep @review-video
+  check "$project" --grep @review-video
   if command -v ffmpeg >/dev/null 2>&1; then
     ffmpeg -y -loglevel error -i "$EVID/p5-review.webm" -c:v libx264 -pix_fmt yuv420p -movflags +faststart "$EVID/p5-review.mp4"
   fi
