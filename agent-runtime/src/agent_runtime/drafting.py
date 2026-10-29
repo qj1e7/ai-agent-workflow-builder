@@ -269,7 +269,7 @@ def choice_of(answer: ChoiceAnswer, library: list[LibraryCard]) -> Choice:
 
 
 def draft_card(request: DraftRequest, chat_for: ChatFor) -> DraftResult:
-    answer = _ask(chat_for, DRAFT_SYSTEM, f"The task:\n{request.task}", DraftAnswer)
+    answer = ask_model(chat_for, DRAFT_SYSTEM, f"The task:\n{request.task}", DraftAnswer)
     if isinstance(answer, ModelProblem):
         return answer
     try:
@@ -280,7 +280,7 @@ def draft_card(request: DraftRequest, chat_for: ChatFor) -> DraftResult:
 
 def choose_agents(request: ChooseRequest, chat_for: ChatFor) -> ChooseResult:
     user = f"Saved agents:\n{library_text(request.library)}\n\nThe task:\n{request.task}"
-    answer = _ask(chat_for, CHOOSE_SYSTEM, user, ChoiceAnswer)
+    answer = ask_model(chat_for, CHOOSE_SYSTEM, user, ChoiceAnswer)
     if isinstance(answer, ModelProblem):
         return answer
     try:
@@ -289,20 +289,30 @@ def choose_agents(request: ChooseRequest, chat_for: ChatFor) -> ChooseResult:
         return UNUSABLE
 
 
-def _ask[A: BaseModel](
-    chat_for: ChatFor, system: str, user: str, shape: type[A]
+def ask_model[A: BaseModel](
+    chat_for: ChatFor,
+    system: str,
+    user: str,
+    shape: type[A],
+    timeout: float = CARD_MODEL_TIMEOUT_SECONDS,
 ) -> A | ModelProblem:
+    """One structured answer from the model, in the given shape, or the plain reason it failed."""
     try:
-        model: BaseChatModel = chat_for(CARD_MODEL_TIMEOUT_SECONDS)
+        model: BaseChatModel = chat_for(timeout)
         structured = model.with_structured_output(
             shape, method="function_calling", include_raw=True
         )
         reply = cast(dict[str, Any], structured.invoke([("system", system), ("human", user)]))
     except Exception as error:
         # Only the type is logged: a provider's words can quote the address or the key.
-        log.warning("card model call failed: %s", type(error).__name__)
+        log.warning("%s: the model call failed: %s", shape.__name__, type(error).__name__)
         return problem_for(error, runs_fall_back=False)
     parsed = reply.get("parsed")
     if not isinstance(parsed, shape):
+        log.warning(
+            "%s: the model's answer did not parse: %s",
+            shape.__name__,
+            type(reply.get("parsing_error")).__name__,
+        )
         return UNUSABLE
     return parsed

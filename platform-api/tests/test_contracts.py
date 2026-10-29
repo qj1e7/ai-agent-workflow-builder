@@ -30,11 +30,13 @@ from platform_api.orchestration.agents import (
     ModelAccess,
     TaskFinished,
     TaskRequest,
+    UnderstandRequest,
     choose_result_adapter,
     connect_result_adapter,
     draft_result_adapter,
     model_test_result_adapter,
     task_result_adapter,
+    understand_result_adapter,
 )
 from platform_api.orchestration.agents import ToolList as AgentToolList
 from platform_api.orchestration.approvals import Refusal, Verdict
@@ -83,6 +85,9 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "agent/card-drafted.json": draft_result_adapter,
     "agent/planner-choose-request.json": TypeAdapter(ChooseRequest),
     "agent/planner-chosen.json": choose_result_adapter,
+    "agent/planner-understand-request.json": TypeAdapter(UnderstandRequest),
+    "agent/planner-understood.json": understand_result_adapter,
+    "agent/planner-watchlist.json": understand_result_adapter,
     "views/success.awaiting_approval.json": run_view_adapter,
     "views/success.final.json": run_view_adapter,
     "views/failure.working.json": run_view_adapter,

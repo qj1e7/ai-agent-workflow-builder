@@ -467,6 +467,43 @@
       "title": "AgentStepStartedEvent",
       "type": "object"
     },
+    "BelongsOnWatchlist": {
+      "additionalProperties": false,
+      "properties": {
+        "software": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The software the task names, as the task wrote it.",
+          "title": "Software"
+        },
+        "status": {
+          "const": "watchlist",
+          "default": "watchlist",
+          "title": "Status",
+          "type": "string"
+        },
+        "word": {
+          "description": "The word that made the Planner think so, as the task wrote it.",
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Word",
+          "type": "string"
+        }
+      },
+      "required": [
+        "word"
+      ],
+      "title": "BelongsOnWatchlist",
+      "type": "object"
+    },
     "Callback": {
       "additionalProperties": false,
       "properties": {
@@ -1457,6 +1494,24 @@
       "title": "RoomAddressee",
       "type": "object"
     },
+    "RowKind": {
+      "enum": [
+        "schedule",
+        "look_for",
+        "do",
+        "where"
+      ],
+      "type": "string"
+    },
+    "RowState": {
+      "enum": [
+        "understood",
+        "changed",
+        "missing",
+        "cant_do"
+      ],
+      "type": "string"
+    },
     "SoftwareToCheck": {
       "additionalProperties": false,
       "properties": {
@@ -1798,6 +1853,111 @@
       "title": "ToolSpec",
       "type": "object"
     },
+    "UnderstandRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "$ref": "#/$defs/ModelAccess"
+        },
+        "task": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Task",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task",
+        "model"
+      ],
+      "title": "UnderstandRequest",
+      "type": "object"
+    },
+    "UnderstandResult": {
+      "discriminator": {
+        "mapping": {
+          "problem": "#/$defs/ModelProblem",
+          "understood": "#/$defs/Understood",
+          "watchlist": "#/$defs/BelongsOnWatchlist"
+        },
+        "propertyName": "status"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Understood"
+        },
+        {
+          "$ref": "#/$defs/BelongsOnWatchlist"
+        },
+        {
+          "$ref": "#/$defs/ModelProblem"
+        }
+      ]
+    },
+    "Understood": {
+      "additionalProperties": false,
+      "properties": {
+        "rows": {
+          "description": "One schedule row, then at least one row for what to look for, what to do and where, in that order.",
+          "items": {
+            "$ref": "#/$defs/UnderstoodRow"
+          },
+          "maxItems": 8,
+          "minItems": 4,
+          "title": "Rows",
+          "type": "array"
+        },
+        "status": {
+          "const": "understood",
+          "default": "understood",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rows"
+      ],
+      "title": "Understood",
+      "type": "object"
+    },
+    "UnderstoodRow": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/RowKind"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Why the part is changed, missing or can't be done. Usually None when it is understood.",
+          "title": "Note"
+        },
+        "state": {
+          "$ref": "#/$defs/RowState"
+        },
+        "text": {
+          "description": "What the Planner read, in plain words. Empty when the part is missing.",
+          "maxLength": 200,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "text",
+        "state"
+      ],
+      "title": "UnderstoodRow",
+      "type": "object"
+    },
     "WatchlistInputs": {
       "additionalProperties": false,
       "properties": {
@@ -1860,6 +2020,12 @@
     "planner_choose_result": {
       "$ref": "#/$defs/ChooseResult"
     },
+    "planner_understand_request": {
+      "$ref": "#/$defs/UnderstandRequest"
+    },
+    "planner_understand_result": {
+      "$ref": "#/$defs/UnderstandResult"
+    },
     "task_request": {
       "$ref": "#/$defs/TaskRequest"
     },
@@ -1883,7 +2049,9 @@
     "card_draft_request",
     "card_draft_result",
     "planner_choose_request",
-    "planner_choose_result"
+    "planner_choose_result",
+    "planner_understand_request",
+    "planner_understand_result"
   ],
   "title": "AgentApiSchema",
   "type": "object"
