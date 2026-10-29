@@ -1,0 +1,32 @@
+{
+  "confirmations": [
+    {
+      "confirmation_id": "cfm_01JD4VE",
+      "kind": "approver",
+      "summary": "Make Dave an Approver",
+      "about": {
+        "id": "per_01JD4VE",
+        "display": "Dave",
+        "email": "per_01JD4VE@example.test"
+      },
+      "digest": "sha256:544d418e18df7d6bd6de0f842fdfc612a3b0f4f8cedad8c60b2699048b0f4df5",
+      "asked_by": "alice",
+      "asked_by_name": "Alice",
+      "asked_at": "2026-11-09T03:41:00Z",
+      "you_can_decide": false,
+      "why_not": "you_asked"
+    },
+    {
+      "confirmation_id": "cfm_01JADDR",
+      "kind": "model_address",
+      "summary": "Use ncs-llm-small at ai-gateway.ncs.example",
+      "about": null,
+      "digest": "sha256:a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "asked_by": "alice",
+      "asked_by_name": "Alice",
+      "asked_at": "2026-11-09T03:41:00Z",
+      "you_can_decide": false,
+      "why_not": "you_asked"
+    }
+  ]
+}

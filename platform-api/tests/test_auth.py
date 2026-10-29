@@ -123,8 +123,11 @@ def test_dev_mode_rejects_missing_or_unknown_user(headers: dict[str, str]):
 @pytest.mark.parametrize(
     ("user", "me"),
     [
-        ("alice", {"id": "alice", "display": "Alice", "roles": ["operator", "approver"]}),
-        ("bob", {"id": "bob", "display": "Bob", "roles": ["approver"]}),
+        (
+            "alice",
+            {"id": "alice", "display": "Alice", "roles": ["operator", "approver"], "on_list": True},
+        ),
+        ("bob", {"id": "bob", "display": "Bob", "roles": ["approver"], "on_list": True}),
     ],
 )
 def test_me_answers_who_the_platform_thinks_you_are(user: str, me: dict[str, object]):

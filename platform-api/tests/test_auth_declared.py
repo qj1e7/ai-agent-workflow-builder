@@ -55,6 +55,19 @@ def test_every_signed_in_route_declares_the_401_and_503_it_answers(schema: dict[
     assert missing == []
 
 
+def test_every_signed_in_route_but_me_declares_the_403_for_someone_not_on_the_list(
+    schema: dict[str, object],
+):
+    missing = [
+        f"{method.upper()} {path}"
+        for path, method, op in operations(schema)
+        if op.get("security") and path != "/api/v1/me" and "403" not in op["responses"]
+    ]
+    assert missing == []
+    me = schema["paths"]["/api/v1/me"]["get"]["responses"]  # type: ignore[index]
+    assert "403" not in me
+
+
 def test_a_signed_in_route_answers_401_without_the_header():
     client = TestClient(create_app(LOCAL_ENV))
     response = client.get("/api/v1/runs")

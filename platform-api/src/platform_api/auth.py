@@ -1,13 +1,22 @@
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import Annotated, Protocol
+from typing import Annotated, Any, Protocol
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Security
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import Field
 
 from platform_api.oidc import OidcAuth, OidcAuthenticator, is_trusted_url, origin_of
-from platform_api.shared import Principal, Role, UserId
+from platform_api.shared import (
+    DevIdentity,
+    ExternalIdentity,
+    Identity,
+    Principal,
+    Role,
+    SeedPerson,
+    UserId,
+)
 from platform_api.wire import Responses, WireModel, error_response
 
 LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1"})
@@ -93,7 +102,19 @@ def _oidc_config(env: Mapping[str, str]) -> OidcAuth:
 
 
 class Authenticator(Protocol):
-    async def __call__(self, request: Request) -> Principal: ...
+    """Checks the sign-in and says who the identity provider says this is. It grants no role."""
+
+    async def __call__(self, request: Request) -> Identity: ...
+
+
+class PeopleDirectory(Protocol):
+    """The People list (ADR 0029). An identity becomes a person with roles only through it."""
+
+    async def resolve(self, identity: Identity) -> Principal | None: ...
+
+    async def person(self, person_id: UserId) -> Principal | None: ...
+
+    async def listed(self) -> list[Principal]: ...
 
 
 class DevUser(WireModel):
@@ -106,23 +127,41 @@ class DevUsers(WireModel):
     users: list[DevUser]
 
 
-DEV_USERS = DevUsers(
-    users=[
-        DevUser(id=UserId("alice"), display="Alice", roles=[Role.OPERATOR, Role.APPROVER]),
-        DevUser(id=UserId("bob"), display="Bob", roles=[Role.APPROVER]),
-        DevUser(id=UserId("carol"), display="Carol", roles=[Role.OPERATOR]),
-    ]
+DEV_PEOPLE: tuple[SeedPerson, ...] = (
+    SeedPerson(
+        UserId("alice"), "alice@example.test", "Alice", frozenset({Role.OPERATOR, Role.APPROVER})
+    ),
+    SeedPerson(UserId("bob"), "bob@example.test", "Bob", frozenset({Role.APPROVER})),
+    SeedPerson(UserId("carol"), "carol@example.test", "Carol", frozenset({Role.OPERATOR})),
 )
 
+
+def dev_users(people: Iterable[Principal]) -> DevUsers:
+    return DevUsers(
+        users=[
+            DevUser(id=p.user_id, display=p.display, roles=[r for r in Role if r in p.roles])
+            for p in people
+        ]
+    )
+
+
+DEV_USERS = dev_users(Principal(p.id, p.roles, p.display) for p in DEV_PEOPLE)
+
 DEV_USER_HEADER = "X-Dev-User"
+NOT_ON_THE_LIST = (
+    "You are signed in, but you are not on the People list. Ask an Operator to add you."
+)
 
 
-async def dev_authenticator(request: Request) -> Principal:
+def _unknown_dev_user() -> HTTPException:
+    return HTTPException(status_code=401, detail=f"Unknown or missing {DEV_USER_HEADER}")
+
+
+async def dev_authenticator(request: Request) -> Identity:
     user_id = request.headers.get(DEV_USER_HEADER)
-    user = next((user for user in DEV_USERS.users if user.id == user_id), None)
-    if user is None:
-        raise HTTPException(status_code=401, detail=f"Unknown or missing {DEV_USER_HEADER}")
-    return Principal(user.id, frozenset(user.roles), user.display)
+    if not user_id:
+        raise _unknown_dev_user()
+    return DevIdentity(UserId(user_id))
 
 
 def authenticator_for(config: AuthConfig) -> Authenticator:
@@ -131,6 +170,50 @@ def authenticator_for(config: AuthConfig) -> Authenticator:
             return dev_authenticator
         case OidcAuth():
             return OidcAuthenticator(config)
+
+
+class InMemoryPeople:
+    """The People list before the database opens, and in tests. The same binding rule as the
+    stored one: a token matches a person by their bound subject, or once by email."""
+
+    def __init__(self, seed: Iterable[SeedPerson] = ()) -> None:
+        self._people = {p.id: Principal(p.id, p.roles, p.display) for p in seed}
+        self._emails = {p.email.lower(): p.id for p in seed}
+        self._subjects: dict[str, UserId] = {}
+
+    async def resolve(self, identity: Identity) -> Principal | None:
+        match identity:
+            case DevIdentity(person_id):
+                return self._people.get(person_id)
+            case ExternalIdentity(subject, user_name, name):
+                person_id = self._subjects.get(subject)
+                if person_id is None and user_name:
+                    person_id = self._emails.get(user_name.lower())
+                    if person_id in self._subjects.values():
+                        return None
+                    if person_id is not None:
+                        self._subjects[subject] = person_id
+                        if name:
+                            person = self._people[person_id]
+                            self._people[person_id] = Principal(person_id, person.roles, name)
+                return self._people.get(person_id) if person_id is not None else None
+
+    async def person(self, person_id: UserId) -> Principal | None:
+        return self._people.get(person_id)
+
+    async def listed(self) -> list[Principal]:
+        return list(self._people.values())
+
+    def remove(self, person_id: UserId) -> None:
+        self._people.pop(person_id, None)
+
+
+def people_for(config: AuthConfig) -> PeopleDirectory:
+    match config:
+        case DevAuth():
+            return InMemoryPeople(DEV_PEOPLE)
+        case OidcAuth():
+            return InMemoryPeople()
 
 
 dev_user_scheme = APIKeyHeader(
@@ -149,19 +232,41 @@ oidc_bearer_scheme = HTTPBearer(
     bearerFormat="JWT",
     description=(
         "Real sign-in (AUTH_MODE=oidc). Send an OpenID Connect access token whose audience is "
-        "platform-api. Roles come from its roles claim: Operator and Approver."
+        "platform-api. The token only says who you are. Your roles come from the People list, "
+        "and a roles claim in the token is ignored."
     ),
     auto_error=False,
 )
 
 
-async def current_principal(
+@dataclass(frozen=True)
+class SignedIn:
+    identity: Identity
+    person: Principal | None
+    """None when the sign-in is good but the person is not on the People list."""
+
+
+async def current_sign_in(
     request: Request,
     dev_declared: Annotated[str | None, Security(dev_user_scheme)],
     bearer_declared: Annotated[HTTPAuthorizationCredentials | None, Security(oidc_bearer_scheme)],
-) -> Principal:
+) -> SignedIn:
     authenticator: Authenticator = request.app.state.authenticator
-    return await authenticator(request)
+    identity = await authenticator(request)
+    directory: PeopleDirectory = request.app.state.people
+    person = await directory.resolve(identity)
+    if person is None and isinstance(identity, DevIdentity):
+        raise _unknown_dev_user()
+    return SignedIn(identity, person)
+
+
+CurrentSignIn = Annotated[SignedIn, Depends(current_sign_in)]
+
+
+async def current_principal(signed_in: CurrentSignIn) -> Principal:
+    if signed_in.person is None:
+        raise HTTPException(status_code=403, detail=NOT_ON_THE_LIST)
+    return signed_in.person
 
 
 CurrentPrincipal = Annotated[Principal, Depends(current_principal)]
@@ -170,27 +275,51 @@ SIGNED_IN: Responses = {
     401: error_response(
         f"Not signed in: no valid access token, or in local mode no known {DEV_USER_HEADER}"
     ),
+    403: error_response("Signed in, but not on the People list. Ask an Operator to add you"),
     503: error_response(
         "Sign-in could not be checked because the identity provider's keys are unavailable"
     ),
 }
 OPERATORS_ONLY: Responses = {
     **SIGNED_IN,
-    403: error_response("Only an Operator can do this"),
+    403: error_response("Only an Operator can do this, or the person is not on the People list"),
 }
+
+
+def _without_default(schema: dict[str, Any]) -> None:
+    # The Portal's generated type treats a field with a default as required. Without the
+    # default it stays optional there, so older Me values still type-check.
+    schema.pop("default", None)
 
 
 class Me(WireModel):
     id: UserId
     display: str
     roles: list[Role]
+    on_list: bool = Field(
+        default=True,
+        json_schema_extra=_without_default,
+        description="False when the sign-in is good but no Operator has added this person yet.",
+    )
 
 
 me_router = APIRouter(tags=["sign-in"])
 
 
-@me_router.get("/api/v1/me", responses=SIGNED_IN)
-def who_am_i(principal: CurrentPrincipal) -> Me:
+@me_router.get(
+    "/api/v1/me",
+    responses={status: body for status, body in SIGNED_IN.items() if status != 403},
+    description=(
+        "Who the platform thinks you are. Someone signed in but not on the People list gets "
+        "`on_list: false` and no roles; every other route answers them 403."
+    ),
+)
+def who_am_i(signed_in: CurrentSignIn) -> Me:
+    if signed_in.person is None:
+        identity = signed_in.identity
+        assert isinstance(identity, ExternalIdentity)
+        return Me(id=UserId(identity.subject), display=identity.display, roles=[], on_list=False)
+    principal = signed_in.person
     return Me(
         id=principal.user_id,
         display=principal.display,
@@ -202,5 +331,6 @@ dev_router = APIRouter(tags=["dev"])
 
 
 @dev_router.get("/api/v1/dev/users")
-def list_dev_users() -> DevUsers:
-    return DEV_USERS
+async def list_dev_users(request: Request) -> DevUsers:
+    directory: PeopleDirectory = request.app.state.people
+    return dev_users(await directory.listed())

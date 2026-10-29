@@ -1,0 +1,11 @@
+{
+  "id": "per_01JD4VE",
+  "display": "Dave",
+  "email": "per_01JD4VE@example.test",
+  "operator": true,
+  "approver": true,
+  "pending_approver": null,
+  "signed_in": false,
+  "added_by": "alice",
+  "added_at": "2026-11-09T03:40:00Z"
+}
