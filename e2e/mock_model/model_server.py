@@ -5,7 +5,9 @@ can be tested without a real model:
 
 - GET /v1/models lists one model.
 - A request that forces a tool is a draft, a choice or the Planner reading a task back. The canned
-  answer follows the task's words. A release task belongs on the Software watchlist.
+  answer follows the task's words. A release task belongs on the Software watchlist. Reading a
+  task back, it never says can't do: a Teams post, a delete or a planted order is read back as a
+  part it can do, as a fooled model would, so the tests show the runtime's own rule marks them.
 - A request with tools and no forced tool is a card run. The mock calls github_read_releases,
   then jira_search, then jira_create_ticket, then writes a report, by what the conversation holds.
 - Anything else is a summary or a connection test and gets one plain sentence.
@@ -60,7 +62,6 @@ SUMMARY_TO = re.compile(
 FOOLING_ORDER = re.compile(
     r"\bignore (?:your|all|the|previous) (?:rules|instructions)\b", re.IGNORECASE
 )
-CANNOT = ("close", "delete", "remove", "move", "edit", "update")
 mode = "ok"
 
 DRAFT: dict[str, Any] = {
@@ -205,21 +206,15 @@ def action_rows(act: str | None, task: str) -> list[dict[str, Any]]:
     if act is None:
         return [{"kind": "do", "state": "missing"}, where_row(task)]
     if (place := SUMMARY_TO.search(act)) is not None:
-        name = place.group(1).capitalize()
         return [
             {"kind": "do", "text": "Write a short summary", "state": "understood"},
             {
                 "kind": "where",
-                "text": f"Post it in {name}",
-                "state": "cant_do",
-                "note": f"I can't post in {name} yet. I can only create Jira tickets.",
+                "text": f"Post it in {place.group(1).capitalize()}",
+                "state": "understood",
             },
         ]
-    verb = act.split(maxsplit=1)[0].lower()
-    do: dict[str, Any] = {"kind": "do", "text": first_up(act), "state": "understood"}
-    if verb in CANNOT:
-        do |= {"state": "cant_do", "note": f"No tool can {verb} tickets, so I can't do this."}
-    return [do, where_row(task)]
+    return [{"kind": "do", "text": first_up(act), "state": "understood"}, where_row(task)]
 
 
 def obey_fooling_orders(sentences: list[str]) -> list[dict[str, Any]]:
