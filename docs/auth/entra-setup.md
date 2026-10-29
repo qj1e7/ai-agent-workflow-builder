@@ -22,6 +22,8 @@ platform-api adds nobody to the People list by itself: a person who signs in but
 
 Nothing in Entra says who is an Operator or an Approver. A role change in the Portal takes effect on the person's next request.
 
+One trust assumption remains. An Operator adds a person by their work email, and platform-api matches that email to the token's user name (`preferred_username`, or `upn` in v1 tokens) on the person's first sign-in only. A tenant admin can rename a user before that first sign-in, and a renamed user could then claim a record meant for someone else. After the first sign-in only the account's object id counts, so a later rename changes nothing. platform-api refuses an issuer that serves every tenant (`common`, `organizations`, `consumers`), and a token whose `tid` names another tenant than the issuer. Keep the tenant's admins few, and ask people to sign in soon after they are added.
+
 ## Register the app for the Portal
 
 1. Open **App registrations** and select **New registration**.
