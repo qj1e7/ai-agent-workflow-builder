@@ -7,6 +7,8 @@ on localhost while a scan stack publishes no host ports:
 
 A JSON body may hold {marker}, which becomes a new value on every request, because the model
 gateway answers a repeated prompt from its store.
+
+Only 2xx answers are timed. It exits 1 when any request failed, so a dead route cannot pass.
 """
 
 import argparse
@@ -56,19 +58,18 @@ def measure(
     for _ in range(warm_up):
         send(base_url, method, path, user, body)
     timings: list[float] = []
-    errors = 0
     for _ in range(count):
         elapsed, ok = send(base_url, method, path, user, body)
-        timings.append(elapsed)
-        errors += not ok
+        if ok:
+            timings.append(elapsed)
     return {
         "route": path,
         "method": method.upper(),
         "n": count,
-        "errors": errors,
-        "p50_ms": round(percentile(timings, 0.5), 1),
-        "p95_ms": round(percentile(timings, 0.95), 1),
-        "max_ms": round(max(timings), 1),
+        "errors": count - len(timings),
+        "p50_ms": round(percentile(timings, 0.5), 1) if timings else None,
+        "p95_ms": round(percentile(timings, 0.95), 1) if timings else None,
+        "max_ms": round(max(timings), 1) if timings else None,
     }
 
 
@@ -92,6 +93,9 @@ def main(argv: Sequence[str]) -> int:
     with open(args.out, "w") as out:
         out.write(text + "\n")
     print(text)
+    if result["errors"]:
+        print(f"{result['errors']} of {args.count} requests failed", file=sys.stderr)
+        return 1
     return 0
 
 
