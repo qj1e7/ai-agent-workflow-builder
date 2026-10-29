@@ -187,6 +187,33 @@ def test_a_changed_or_cant_do_row_always_says_why():
     assert result.rows[2].note
 
 
+def test_nul_control_and_zero_width_characters_never_reach_the_portal():
+    result = ask(
+        rows(
+            ("schedule", "Every\x00 weekday​ at 3pm\x07", "understood"),
+            ("look_for", "Bug\ttickets\nin MOCK‮", "understood"),
+            ("do", "Clo​se every ticket", "understood"),
+            ("where", "Jira⁠ project MOCK", "changed", "You said\x00 MOCK﻿."),
+        )
+    )
+    assert shown(result) == [
+        ("schedule", "Every weekday at 3pm", "understood"),
+        ("look_for", "Bug tickets in MOCK", "understood"),
+        ("do", "Close every ticket", "cant_do"),
+        ("where", "Jira project MOCK", "changed"),
+    ]
+    assert isinstance(result, Understood) and result.rows[3].note == "You said MOCK."
+
+
+def test_a_software_name_with_a_hidden_character_is_read_as_the_task_wrote_it():
+    answer = UnderstandAnswer(
+        belongs_on_watchlist=True, watchlist_word="release​", software="Lang​Graph"
+    )
+    assert understood_of(answer, RELEASE_TASK) == BelongsOnWatchlist(
+        word="release", software="LangGraph"
+    )
+
+
 def accepted_by_the_model(kind: str, text: str, state: str = "understood") -> UnderstoodRow:
     answer = rows(
         ("schedule", "Every weekday at 3pm", "understood"),

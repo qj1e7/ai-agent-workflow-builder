@@ -1,5 +1,6 @@
 import logging
 import re
+import unicodedata
 from dataclasses import dataclass
 from datetime import date
 from itertools import pairwise
@@ -395,6 +396,7 @@ WATCHLIST_WORDS: Final = frozenset(
     }
 )
 WORD: Final = re.compile(r"[a-z0-9][a-z0-9'-]*")
+HIDDEN: Final = frozenset({"Cc", "Cf", "Cs"})
 
 
 def _place(name: str, flags: re.RegexFlag = re.IGNORECASE) -> tuple[str, re.Pattern[str]]:
@@ -492,8 +494,15 @@ class UnderstandAnswer(BaseModel):
     )
 
 
+def _clean(text: str | None) -> str:
+    """The text without control characters, zero-width and other format characters, or lone
+    surrogates, and with its whitespace collapsed to single spaces."""
+    kept = (c for c in text or "" if c.isspace() or unicodedata.category(c) not in HIDDEN)
+    return " ".join("".join(kept).split())
+
+
 def _plain(text: str | None, limit: int) -> str:
-    flat = " ".join((text or "").split())
+    flat = _clean(text)
     return flat if len(flat) <= limit else flat[: limit - 1].rstrip() + "…"
 
 
@@ -513,6 +522,7 @@ def why_no_tool(kind: RowKind, text: str) -> str | None:
     then the model's state stands."""
     if kind == "schedule":
         return None
+    text = _clean(text)
     place = next((name for name, pattern in PLACES_WITH_NO_TOOL if pattern.search(text)), None)
     if place is not None:
         return NO_PLACE.format(place)
@@ -550,7 +560,7 @@ def _rows(answers: list[RowAnswer]) -> list[UnderstoodRow]:
 
 
 def _as_the_task_wrote_it(task: str, said: str | None) -> str | None:
-    wanted = (said or "").strip().strip("\"'“”‘’")
+    wanted = _clean(said).strip("\"'“”‘’")
     if not wanted:
         return None
     stems = (wanted.removesuffix(end) for end in ("es", "s", "y")) if len(wanted) > 3 else ()
