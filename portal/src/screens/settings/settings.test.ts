@@ -4,6 +4,7 @@ import confirmationsAlice from '../../../../contracts/fixtures/people/confirmati
 import confirmationsBob from '../../../../contracts/fixtures/people/confirmations.bob.json'
 import decideRefusal from '../../../../contracts/fixtures/people/decide-refusal.you_asked.json'
 import list from '../../../../contracts/fixtures/people/list.json'
+import personApprover from '../../../../contracts/fixtures/people/person.approver.json'
 import ownOperatorRole from '../../../../contracts/fixtures/people/refusal.own_operator_role.json'
 import twoApprovers from '../../../../contracts/fixtures/people/refusal.two_approvers.json'
 import history from '../../../../contracts/fixtures/settings/history.json'
@@ -12,7 +13,9 @@ import { ApiError } from '../../api/client'
 import type { ConfirmationOut, DecideRefusal, Me, ModelOut, PeopleRefusal, PersonOut, SettingsChangeOut } from '../../api/types'
 import {
   approverConfirmationsByPerson,
+  canChangeSettings,
   CHECK_WHAT_YOU_TYPED_WORDS,
+  decidedApproverWords,
   decideRefusalWords,
   fieldOfProblem,
   historyOf,
@@ -139,6 +142,33 @@ describe('a waiting Approver request', () => {
     const byPerson = approverConfirmationsByPerson(FOR_BOB)
     expect([...byPerson.keys()]).toEqual([DAVE.id])
     expect(byPerson.get(DAVE.id)?.kind).toBe('approver')
+  })
+})
+
+describe('a decided Approver request', () => {
+  const confirmed = personApprover as PersonOut
+  const notNow = { ...confirmed, approver: false }
+
+  it('once confirmed, leaves an Approver with nothing waiting', () => {
+    expect(confirmed.approver).toBe(true)
+    expect(confirmed.pending_approver).toBeNull()
+    expect(approverConfirmationsByPerson([]).get(confirmed.id)).toBeUndefined()
+    expect(decidedApproverWords('Dave', true)).toBe('Dave is now an Approver.')
+  })
+
+  it('after not now, leaves someone who is not an Approver, with nothing waiting', () => {
+    expect(notNow.approver).toBe(false)
+    expect(notNow.pending_approver).toBeNull()
+    expect(decidedApproverWords('Dave', false)).toBe('You said not now, so Dave is not an Approver.')
+  })
+})
+
+describe('who can change settings', () => {
+  it('is every Operator, and never an Approver who is not one', () => {
+    expect(canChangeSettings(ALICE)).toBe(true)
+    expect(canChangeSettings(CAROL)).toBe(true)
+    expect(canChangeSettings(BOB)).toBe(false)
+    expect(canChangeSettings(undefined)).toBe(false)
   })
 })
 
