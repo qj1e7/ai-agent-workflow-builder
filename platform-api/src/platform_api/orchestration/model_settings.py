@@ -400,7 +400,14 @@ class ModelSettings:
             )
         return None
 
-    async def decide(self, principal: Principal, confirm: bool, digest: str) -> AddressAnswer:
+    async def decide(
+        self,
+        principal: Principal,
+        confirm: bool,
+        digest: str,
+        confirmation_id: str | None = None,
+    ) -> AddressAnswer:
+        """Decides the address waiting now, or only the confirmation named, when one is."""
         if self._box is None:
             return SettingsOff()
         async with self._db.transaction("orchestration") as uow:
@@ -409,6 +416,8 @@ class ModelSettings:
             )
             pending = await self._store.load(uow, "pending", lock=True)
             if waiting is None or pending is None:
+                return NothingPending()
+            if confirmation_id is not None and waiting.id != confirmation_id:
                 return NothingPending()
             if self._people is not None:
                 roles = await self._people.roles_now(uow, principal.user_id)

@@ -551,3 +551,30 @@ async def test_the_model_address_decision_reads_the_deciders_roles_as_they_are_n
     decided = await settings.decide(signed_in_before, True, pending.digest)
     assert isinstance(decided, NotAnApprover)
     assert (await settings.view()).pending is not None
+
+
+async def test_a_decision_applies_only_to_the_address_confirmation_it_names(
+    client: httpx.AsyncClient, app: FastAPI
+):
+    async def ask_for(base_url: str, model: str) -> dict[str, Any]:
+        saved = await client.put(
+            "/api/v1/settings/model",
+            headers=ALICE,
+            json={"style": "openai", "base_url": base_url, "model": model, "api_key": "k-x"},
+        )
+        assert saved.json()["status"] == "awaiting_confirmation", saved.text
+        [waiting] = await pending_for(client, BOB)
+        return waiting
+
+    first = await ask_for(NCS, "ncs-llm-small")
+    assert (await decide(client, BOB, first, "confirm")).status_code == 201
+    second = await ask_for("https://elsewhere.example/v1", "other")
+    assert second["confirmation_id"] != first["confirmation_id"]
+    stale = await decide(client, BOB, {**first, "digest": second["digest"]}, "confirm")
+    assert (stale.status_code, stale.json()["refusal"]) == (409, "already_decided")
+    declared_status(app, "POST", "/api/v1/confirmations/{confirmation_id}/decisions", stale)
+    assert [c["confirmation_id"] for c in await pending_for(client, BOB)] == [
+        second["confirmation_id"]
+    ]
+    named = await decide(client, BOB, second, "not_now")
+    assert (named.status_code, named.json()["confirmation_id"]) == (201, second["confirmation_id"])

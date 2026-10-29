@@ -396,7 +396,7 @@ async def _decide_address(
     model_settings: CurrentModelSettings,
 ) -> ConfirmationDecidedOut | JSONResponse:
     result = await model_settings.decide(
-        principal, decision is ConfirmationDecision.CONFIRMED, digest
+        principal, decision is ConfirmationDecision.CONFIRMED, digest, confirmation.id
     )
     match result:
         case AddressDecided():
