@@ -195,17 +195,18 @@ portal_of() {
 }
 
 spec06() {
-  local src=$1 project=$2 portal status=0 out="$EVID/spec06"
+  local src=$1 project=$2 portal status=0 out="$EVID/spec06" live="$src/portal/e2e/out/live"
   portal=$(portal_of "$project")
   [ -n "$portal" ] || die "no running Portal in project $project"
   docker image inspect "$RUNNER" >/dev/null 2>&1 || die "no runner image $RUNNER; build it once with portal/e2e/runner-image.sh"
-  rm -rf "$out" && mkdir -p "$out/live"
+  rm -rf "$out" "$live" && mkdir -p "$out" "$live"
   docker run --rm --network "container:$portal" --ipc=host \
     -e CI=1 -e BASE_URL=http://localhost:8080 -e E2E_AUTH=oidc \
     -e MOCK_OIDC_URL="$ISSUER" -e MOCK_GITHUB_URL=http://mock-github:8200 -e PLAIN_HTTP_URL=http://portal:8080 \
-    -v "$src/portal/e2e:/work/e2e:ro" -v "$out/live:/work/e2e/out/live" \
+    -v "$src/portal/e2e:/work/e2e:ro" -v "$live:/work/e2e/out/live" \
     -w /work "$RUNNER" \
     npx playwright test -c e2e/live/playwright.config.ts >"$out/run.log" 2>&1 || status=$?
+  cp -R "$live/." "$out/" 2>/dev/null || true
   grep -E "passed|failed|skipped" "$out/run.log" || tail -n 5 "$out/run.log"
   return "$status"
 }
