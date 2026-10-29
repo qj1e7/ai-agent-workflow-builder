@@ -122,8 +122,7 @@ async function openTeams(page: Page): Promise<Locator> {
   return drawer
 }
 
-/** The card loads its approval once it is in view, so it is scrolled there first. */
-async function teamsCard(drawer: Locator, approvalId: string): Promise<Locator> {
+async function scrollToTeamsCard(drawer: Locator, approvalId: string): Promise<Locator> {
   const card = drawer.locator(`li[data-approval-id="${approvalId}"]`)
   await card.scrollIntoViewIfNeeded()
   await expect(card.getByRole('link', { name: OPEN_LINK })).toBeVisible()
@@ -143,10 +142,10 @@ async function startWhileWatching(page: Page, useCaseId: string, starter = 'alic
   )
 }
 
+const FIRST_WORKING_STEP = 1
 const atGate = (steps: Step[]) => steps.some((s) => s.state === 'wait')
 const finished = (steps: Step[]) => steps.at(-1)?.state === 'done'
 
-/** The step the line is at in each sample: "now" for a working step, "wait" for the gate. */
 function currentSteps(changes: { states: string }[]): { index: number; state: string }[] {
   return changes.map((change) => {
     const states = change.states.split(',')
@@ -189,8 +188,7 @@ test('@lane1 alice watches a new check move through each step in order and stop 
     const steps = await stepsOf(page)
     save(1, 'p5-live-run.json', { runId, changes, current, gate, statesThreeSecondsLater: later, steps, fills })
     expect(gate, 'the run reached the gate').toBeGreaterThan(0)
-    // Step 0 is Started, done with the first event, so each working step after it must be seen as the current one.
-    for (let index = 1; index < gate; index += 1) {
+    for (let index = FIRST_WORKING_STEP; index < gate; index += 1) {
       expect(current.some((c) => c.index === index && c.state === 'now'), `step ${index} was seen as the current step`).toBe(true)
     }
     expect(current.every((c, i) => i === 0 || c.index >= (current[i - 1]?.index ?? 0)), 'the line only moves forward').toBe(true)
@@ -251,7 +249,6 @@ test('@lane3 bob declines a waiting run and nothing is written', async ({ browse
   })
 })
 
-/** Lanes 4 and 5: the person sees the proposal and no Approve or Decline on the run page, the approval link or the Teams card, and the API refuses both. */
 async function cannotDecide(browser: Browser, user: 'alice' | 'carol', lane: 4 | 5, file: string, refusal: string, teamsWords: string) {
   return withBackend(async (backend) => {
     const { runId, approvalId } = await backend.waitingRun('alice')
@@ -270,7 +267,7 @@ async function cannotDecide(browser: Browser, user: 'alice' | 'carol', lane: 4 |
     await expect(h1(page)).toHaveText('1 ticket is waiting for a yes')
     const onApprovalLink = { ...(await decisionButtons(page)), url: page.url() }
 
-    const card = await teamsCard(await openTeams(page), approvalId)
+    const card = await scrollToTeamsCard(await openTeams(page), approvalId)
     await expect(card.getByText(teamsWords)).toBeVisible()
     const inTeams = { ...(await decisionButtons(card)), text: await card.innerText() }
     await shotTo(page, lane, file.replace('.png', '-teams.png'))
@@ -414,7 +411,7 @@ test('@lane8 the Teams link opens a run at the decision, and approving in the pa
     const page = await context.newPage()
     const watch = watchPage(page)
     await page.goto('/')
-    const firstCard = await teamsCard(await openTeams(page), first.approvalId)
+    const firstCard = await scrollToTeamsCard(await openTeams(page), first.approvalId)
     await firstCard.getByRole('link', { name: OPEN_LINK }).click()
     await expect(page).toHaveURL(new RegExp(`/approvals/${first.approvalId}$`))
     await expect(page.locator('#decision')).toBeFocused()
@@ -428,7 +425,7 @@ test('@lane8 the Teams link opens a run at the decision, and approving in the pa
     })
     const posts = decisionPosts(page)
     const forBob = await backend.get<Approval>('bob', `/api/v1/approvals/${second.approvalId}`)
-    const secondCard = await teamsCard(await openTeams(page), second.approvalId)
+    const secondCard = await scrollToTeamsCard(await openTeams(page), second.approvalId)
     await secondCard.getByRole('button', { name: 'Approve' }).click()
     await expect(secondCard.getByText('Approved by Bob')).toBeVisible({ timeout: 30_000 })
     await expect(h1(page)).toHaveText('1 ticket created in Jira', { timeout: 60_000 })
@@ -466,8 +463,7 @@ interface MotionSeen {
   names: string[]
 }
 
-/** Samples every 5 ms which animations run, with what they move, until readMotion. */
-async function sampleMotion(page: Page): Promise<void> {
+async function sampleMotion(page: Page): Promise<() => Promise<MotionSeen>> {
   await page.evaluate(() => {
     const seen = { frames: 0, maxRunning: 0, names: [] as string[] }
     ;(window as unknown as { motionSeen: typeof seen }).motionSeen = seen
@@ -482,10 +478,7 @@ async function sampleMotion(page: Page): Promise<void> {
       }
     }, 5)
   })
-}
-
-async function readMotion(page: Page): Promise<MotionSeen> {
-  return page.evaluate(() => (window as unknown as { motionSeen: MotionSeen }).motionSeen)
+  return () => page.evaluate(() => (window as unknown as { motionSeen: MotionSeen }).motionSeen)
 }
 
 test('@lane9 reduced motion, words for every step, and axe on the run page and the Teams panel', async ({ browser }) => {
@@ -496,7 +489,7 @@ test('@lane9 reduced motion, words for every step, and axe on the run page and t
       const useCaseId = await backend.freshWatchlist('alice')
       await page.goto('/runs/none')
       await expect(h1(page)).toHaveText('Run not found')
-      await sampleMotion(page)
+      const readMotion = await sampleMotion(page)
       const runId = await startWhileWatching(page, useCaseId)
       const toGate = await watchLine(page, atGate)
       const said = await stepsSaid(page)
@@ -505,7 +498,7 @@ test('@lane9 reduced motion, words for every step, and axe on the run page and t
       await backend.post('bob', `/api/v1/approvals/${approvalId}/decisions`, { step: 0, verdict: 'approve', digest: forBob.digest }, {}, [201])
       const toDone = await watchLine(page, finished)
       await page.waitForTimeout(1_000)
-      const seen = await readMotion(page)
+      const seen = await readMotion()
       const saidDone = await stepsSaid(page)
       await context.close()
       return { runId, toGate, toDone, framesSampled: seen.frames, maxRunning: seen.maxRunning, animating: seen.names, said, saidDone }
@@ -526,14 +519,14 @@ test('@lane9 reduced motion, words for every step, and axe on the run page and t
         await page.goto(`/runs/${runId}`)
         await expect(page.getByRole('button', { name: 'Approve 1 ticket' })).toBeVisible()
         await page.waitForTimeout(500)
-        await sampleMotion(page)
+        const readMotion = await sampleMotion(page)
         const drawer = await openTeams(page)
-        await teamsCard(drawer, approvalId)
+        await scrollToTeamsCard(drawer, approvalId)
         await page.waitForTimeout(800)
         await page.keyboard.press('Escape')
         await expect(drawer).toBeHidden()
         await page.waitForTimeout(500)
-        panel.push({ width, reducedMotion, ...(await readMotion(page)) })
+        panel.push({ width, reducedMotion, ...(await readMotion()) })
         await context.close()
       }
       const context = await devContext(browser, 'bob', { phone, reducedMotion: true })
@@ -544,7 +537,7 @@ test('@lane9 reduced motion, words for every step, and axe on the run page and t
         ['run page', false],
         ['Teams panel', true],
       ] as const) {
-        if (open) await teamsCard(await openTeams(page), approvalId)
+        if (open) await scrollToTeamsCard(await openTeams(page), approvalId)
         const result = await new AxeBuilder({ page }).withTags(WCAG_22_AA).analyze()
         runs.push({
           where,
@@ -622,7 +615,6 @@ test('@lane10 pressing Approve twice, however it is pressed, records one decisio
     const both = await backend.waitingRun('alice')
     const tab1 = await approvePage(browser, both.runId)
     const tab2 = await approvePage(browser, both.runId)
-    // Both tabs press at the same moment, so neither has seen the other's decision.
     await Promise.all([tab1.approve.evaluate((b: HTMLButtonElement) => b.click()), tab2.approve.evaluate((b: HTMLButtonElement) => b.click())])
     await expect(h1(tab1.page)).toHaveText('1 ticket created in Jira', { timeout: 60_000 })
     await expect(h1(tab2.page)).toHaveText('1 ticket created in Jira', { timeout: 60_000 })
