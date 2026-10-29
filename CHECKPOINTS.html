@@ -1,0 +1,1252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AI Workflow Builder Checkpoints</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;600&family=Atkinson+Hyperlegible+Next:wght@400;600;700;800&display=swap">
+<style>
+/* Layout: the prototype's framed sheet. A grey frame holds a sticky section bar and one white sheet; the sheet opens with the countdown, then one detailed block per school milestone, then our own checklists and the reference. */
+:root {
+  --frame: #eef1f4;
+  --sheet: #ffffff;
+  --sunk: #f4f6f8;
+  --ink: #121417;
+  --muted: #4d535b;
+  --hair: #e1e5e9;
+  --rule: #eaedf0;
+  --edge: #7d858e;
+  --track: #dde3e8;
+  --accent: #1b6c80;
+  --accent-soft: #e2f0f3;
+  --accent-ink: #0f4a59;
+  --on-accent: #ffffff;
+  --focus: #2f6bff;
+  --amber-ink: #7e4a00;
+  --amber-soft: #fff6e0;
+  --amber-line: #efd08c;
+  --red-ink: #a51f1f;
+  --red-soft: #fdeeed;
+  --red-line: #f2c4c1;
+  --green: #1d7a42;
+  --green-ink: #1b6b3b;
+  --green-soft: #e6f4eb;
+  --green-line: #b2dbbf;
+  --on-status: #ffffff;
+
+  --font: 'Atkinson Hyperlegible Next', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono: 'Atkinson Hyperlegible Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --r-sheet: 16px;
+  --r-card: 10px;
+  --r-ctl: 6px;
+  --pad-x: clamp(16px, 4vw, 40px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --frame: #0e1114; --sheet: #161a1f; --sunk: #1c2127; --ink: #e8ecf0; --muted: #a6afb9;
+    --hair: #2a3139; --rule: #232a31; --edge: #6f7882; --track: #29313a;
+    --accent: #5ab3c9; --accent-soft: #123139; --accent-ink: #a5dbe8; --on-accent: #0b1215; --focus: #7aa2ff;
+    --amber-ink: #f5cd7a; --amber-soft: #2f240e; --amber-line: #5a4416;
+    --red-ink: #f4a6a3; --red-soft: #341819; --red-line: #64292a;
+    --green: #45b87a; --green-ink: #90d9ae; --green-soft: #122d1e; --green-line: #245236; --on-status: #0b1410;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --frame: #0e1114; --sheet: #161a1f; --sunk: #1c2127; --ink: #e8ecf0; --muted: #a6afb9;
+  --hair: #2a3139; --rule: #232a31; --edge: #6f7882; --track: #29313a;
+  --accent: #5ab3c9; --accent-soft: #123139; --accent-ink: #a5dbe8; --on-accent: #0b1215; --focus: #7aa2ff;
+  --amber-ink: #f5cd7a; --amber-soft: #2f240e; --amber-line: #5a4416;
+  --red-ink: #f4a6a3; --red-soft: #341819; --red-line: #64292a;
+  --green: #45b87a; --green-ink: #90d9ae; --green-soft: #122d1e; --green-line: #245236; --on-status: #0b1410;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { scroll-padding-top: 72px; }
+body {
+  margin: 0; background: var(--frame); color: var(--ink);
+  font-family: var(--font); font-size: 16px; line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--frame); }
+h1, h2, h3, h4, p, ul, ol, dl { margin: 0; }
+h1, h2, h3, h4 { line-height: 1.2; text-wrap: balance; }
+p, li { text-wrap: pretty; }
+ul, ol { padding: 0; list-style: none; }
+a { color: var(--accent); text-underline-offset: 2px; }
+button, input { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
+code { font-family: var(--mono); font-size: 0.88em; background: var(--sunk); border: 1px solid var(--rule); padding: 0 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.wrap {
+  max-width: 1000px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 56px;
+}
+
+/* Masthead, on the frame */
+.masthead { display: grid; gap: 10px; padding-bottom: 14px; }
+.eyebrow { font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: clamp(28px, 4.4vw, 38px); font-weight: 800; letter-spacing: -0.02em; }
+.lede { max-width: 66ch; color: var(--muted); }
+.team { font-size: 14.5px; }
+.team b { margin-right: 6px; }
+.links { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 15px; font-weight: 600; }
+
+/* Sticky section bar */
+.nav {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  display: flex; align-items: center; gap: 12px;
+  padding-block: 10px; background: var(--frame);
+}
+.nav-in { display: flex; gap: 6px; overflow-x: auto; min-width: 0; flex: 1; scrollbar-width: none; }
+.nav-in::-webkit-scrollbar { display: none; }
+.nav-in a {
+  flex: none; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--hair);
+  background: var(--sheet); color: var(--ink); text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap;
+}
+.nav-in a:hover { border-color: var(--edge); }
+.nav-in .split { flex: none; width: 1px; margin: 4px; background: var(--edge); opacity: 0.5; }
+.tally { flex: none; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.tally b { color: var(--ink); }
+
+.sheet { background: var(--sheet); border: 1px solid var(--hair); border-radius: var(--r-sheet); overflow: hidden; }
+
+/* Hero: the countdown and what is next */
+.hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 28px 44px; padding: 30px var(--pad-x) 26px; }
+.count { display: grid; align-content: start; gap: 10px; }
+.count .label { font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.big { display: flex; align-items: baseline; gap: 8px; }
+.big b { font-weight: 800; font-size: clamp(68px, 11vw, 108px); line-height: 0.88; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
+.big span { font-size: 24px; font-weight: 700; }
+.count p { max-width: 34ch; }
+.week { font-size: 14px; color: var(--muted); }
+.next h2 { font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.next li { display: grid; grid-template-columns: 4.2rem minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 10px 0; border-top: 1px solid var(--rule); }
+.next li:first-child { border-top: 0; }
+.next .d { font-size: 13.5px; color: var(--muted); }
+.next a { color: var(--ink); text-decoration: none; font-weight: 600; }
+.next a:hover { text-decoration: underline; }
+.next .sub { display: block; font-size: 13.5px; font-weight: 400; color: var(--muted); }
+
+.trackbox { grid-column: 1 / -1; display: grid; gap: 12px; }
+.rail-wrap { position: relative; padding: 22px 6px 22px; }
+.rail { position: relative; height: 8px; border-radius: 999px; background: var(--track); }
+.rail .fill { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--accent); }
+.rail .band { position: absolute; top: -6px; bottom: -6px; border: 2px solid var(--accent); border-radius: 5px; }
+.rail .band span { position: absolute; bottom: calc(100% + 4px); left: -2px; font-size: 12px; font-weight: 600; color: var(--accent-ink); white-space: nowrap; }
+.rail .mk { position: absolute; top: -5px; width: 3px; height: 18px; margin-left: -1.5px; border-radius: 2px; background: var(--ink); }
+.rail .now { position: absolute; top: -9px; width: 14px; height: 26px; margin-left: -7px; }
+.rail .now::before { content: ""; position: absolute; left: 6px; top: 0; bottom: 0; width: 2px; background: var(--ink); }
+.rail-ends { position: relative; height: 18px; margin: 8px 6px 0; font-size: 12px; color: var(--muted); }
+.rail-ends span { position: absolute; top: 0; white-space: nowrap; }
+.rail-ends .s { left: 0; }
+.rail-ends .e { right: 0; }
+.rail-ends .t { transform: translateX(-50%); font-weight: 700; color: var(--ink); }
+.legend { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.legend a { padding: 10px 12px; border: 1px solid var(--hair); border-radius: var(--r-card); display: grid; gap: 2px; color: var(--ink); text-decoration: none; }
+.legend a:hover { border-color: var(--edge); }
+.legend b { font-size: 15px; }
+.legend .mono { font-size: 13px; }
+.legend .r { font-size: 13px; color: var(--muted); }
+.legend li.past a { background: var(--sunk); }
+.legend li.past b, .legend li.past .mono { color: var(--muted); }
+
+/* Save status */
+.sync { display: flex; align-items: center; gap: 8px; margin: 0 var(--pad-x) 4px; padding: 9px 12px; border-radius: var(--r-ctl); background: var(--sunk); font-size: 14px; color: var(--muted); }
+.sync::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--edge); }
+.sync[data-state="live"]::before { background: var(--green); }
+.sync[data-state="readonly"], .sync[data-state="error"] { background: var(--amber-soft); color: var(--amber-ink); }
+.sync[data-state="readonly"]::before, .sync[data-state="error"]::before { background: var(--amber-ink); }
+
+/* Sections */
+.sec { padding: 30px var(--pad-x); border-top: 1px solid var(--rule); scroll-margin-top: 64px; }
+.part { padding: 20px var(--pad-x) 0; border-top: 6px solid var(--frame); }
+.part p { font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-ink); }
+.part + .sec { border-top: 0; padding-top: 10px; }
+.sec-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.sec-h h2 { font-size: 22px; font-weight: 800; letter-spacing: -0.01em; }
+.sec-h .count { font-size: 13.5px; color: var(--muted); }
+.intro { margin-top: 6px; max-width: 70ch; color: var(--muted); }
+.list { margin-top: 10px; }
+.sub-h { margin-top: 26px; font-size: 16px; font-weight: 700; }
+.sub-h + .list { margin-top: 6px; }
+
+/* Milestone blocks */
+.done-strip { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 14px; padding: 10px 14px; border-radius: var(--r-card); background: var(--sunk); font-size: 14px; color: var(--muted); }
+.done-strip b { color: var(--ink); font-weight: 700; }
+.done-strip .mono { font-size: 13px; margin-right: 6px; }
+.ms-list { display: grid; gap: 18px; margin-top: 16px; }
+.ms { border: 1px solid var(--hair); border-radius: var(--r-card); overflow: hidden; scroll-margin-top: 64px; min-width: 0; }
+.ms.is-now { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.ms.is-past { opacity: 0.85; }
+.ms-h { padding: 18px 20px; background: var(--sunk); border-bottom: 1px solid var(--hair); display: grid; gap: 8px; }
+.ms-top { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; }
+.ms-top .mono { font-size: 13.5px; color: var(--muted); }
+.ms-top .pill { margin-left: auto; }
+.ms h3 { font-size: 22px; font-weight: 800; letter-spacing: -0.01em; }
+.ms-sum { color: var(--muted); max-width: 72ch; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px 20px; margin-top: 6px; }
+.facts div { display: grid; gap: 1px; align-content: start; }
+.facts dt { font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.facts dd { margin: 0; font-size: 14.5px; font-weight: 600; }
+.ms-b { padding: 2px 20px 20px; }
+.ms-b h4 { margin-top: 20px; font-size: 16px; font-weight: 700; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.ms-b h4 .mono { font-size: 12px; font-weight: 400; color: var(--muted); }
+.ms-b h4 .count { font-size: 13px; font-weight: 400; color: var(--muted); }
+.ms-b h4 .pill { margin-left: auto; }
+.ms-b .lead { margin-top: 4px; font-size: 14.5px; color: var(--muted); max-width: 74ch; }
+.bul { margin-top: 4px; }
+.bul li { position: relative; padding-left: 16px; font-size: 14.5px; margin-top: 6px; max-width: 76ch; }
+.bul li::before { content: ""; position: absolute; left: 2px; top: 0.62em; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.tbl-wrap { overflow-x: auto; margin-top: 8px; }
+.tbl { border-collapse: collapse; width: 100%; min-width: 480px; font-size: 14.5px; }
+.tbl th, .tbl td { text-align: left; vertical-align: top; padding: 8px 12px 8px 0; border-top: 1px solid var(--rule); }
+.tbl th { font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); border-top: 0; }
+.tbl td:first-child { font-weight: 600; white-space: nowrap; }
+
+/* Checklist rows */
+.item { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 12px; padding: 13px 0; border-top: 1px solid var(--rule); }
+.item:first-child { border-top: 0; }
+.tick { display: block; padding-top: 1px; }
+.tick input {
+  appearance: none; -webkit-appearance: none; margin: 0; width: 22px; height: 22px;
+  border: 2px solid var(--edge); border-radius: 6px; background: var(--sheet);
+  display: grid; place-content: center; cursor: pointer; transition: background-color 120ms ease-out, border-color 120ms ease-out;
+}
+.tick input::after { content: ""; width: 6px; height: 11px; border: solid transparent; border-width: 0 2.5px 2.5px 0; transform: translate(0, -1px) rotate(45deg); }
+.tick input:checked { background: var(--green); border-color: var(--green); }
+.tick input:checked::after { border-color: var(--on-status); }
+.tick input:disabled { cursor: default; opacity: 0.55; }
+
+.line1 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.title { font-weight: 600; cursor: pointer; }
+.line1 .end { margin-left: auto; display: flex; gap: 6px; align-items: baseline; }
+.item.is-done .title { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--edge); }
+.num { font-family: var(--mono); font-size: 13px; color: var(--muted); min-width: 1.6em; }
+.when { display: block; font-family: var(--mono); font-size: 13px; color: var(--muted); margin-bottom: 1px; }
+.detail { margin-top: 3px; max-width: 72ch; font-size: 14.5px; color: var(--muted); }
+.detail .src { color: var(--ink); }
+.meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: 8px; font-size: 13.5px; }
+.meta:empty { display: none; }
+.who { padding: 1px 8px; border-radius: 4px; background: var(--sunk); border: 1px solid var(--rule); color: var(--muted); font-weight: 600; font-size: 12.5px; }
+.by { color: var(--green-ink); }
+.meta a { font-weight: 600; }
+.tag { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 1px 7px; border-radius: 4px; border: 1px solid var(--hair); color: var(--muted); white-space: nowrap; }
+.tag.must { color: var(--accent-ink); background: var(--accent-soft); border-color: var(--accent-soft); }
+.notes { display: grid; gap: 5px; margin-top: 7px; max-width: 72ch; }
+.note { display: flex; gap: 8px; align-items: baseline; font-size: 13.5px; }
+.chip { flex: none; font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 0 6px; border-radius: 4px; border: 1px solid var(--hair); }
+.chip.have { background: var(--green-soft); color: var(--green-ink); border-color: var(--green-line); }
+.chip.changed { background: var(--amber-soft); color: var(--amber-ink); border-color: var(--amber-line); }
+.chip.gap { background: var(--red-soft); color: var(--red-ink); border-color: var(--red-line); }
+.chip.check { background: var(--sunk); color: var(--muted); }
+
+.pill { font-family: var(--mono); font-size: 12.5px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--hair); color: var(--muted); white-space: nowrap; }
+.pill.soon { background: var(--amber-soft); border-color: var(--amber-line); color: var(--amber-ink); }
+.pill.late { background: var(--red-soft); border-color: var(--red-line); color: var(--red-ink); }
+.pill.done { background: var(--green-soft); border-color: var(--green-line); color: var(--green-ink); }
+.pill.now { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
+.pill.min { border-style: dashed; }
+
+.owner { display: inline-flex; align-items: center; gap: 6px; }
+.owner label { color: var(--muted); font-weight: 600; }
+.owner input {
+  width: 17ch; padding: 3px 8px; border: 1px solid var(--edge); border-radius: var(--r-ctl);
+  background: var(--sheet); font-size: 14px;
+}
+.owner input::placeholder { color: var(--muted); opacity: 0.8; }
+.owner input:disabled { border-style: dashed; background: transparent; }
+
+/* Build plan */
+.weeks { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+.wk { border: 1px solid var(--hair); border-radius: var(--r-card); padding: 14px; display: grid; align-content: start; gap: 10px; }
+.wk.now { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.wk h3 { font-size: 16px; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.wk h3 .mono { font-size: 12.5px; font-weight: 400; color: var(--muted); }
+.wk li { display: grid; grid-template-columns: 4.4em minmax(0, 1fr); gap: 8px; font-size: 14px; line-height: 1.35; padding: 3px 0; }
+.wk li .mono { font-size: 12.5px; font-weight: 600; color: var(--accent-ink); }
+.areas { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 10px; }
+.area { background: var(--sunk); border-radius: var(--r-card); padding: 12px 14px; display: grid; gap: 6px; align-content: start; }
+.area b { font-size: 15px; }
+.area p { font-size: 13.5px; color: var(--muted); }
+.area .owner { display: flex; }
+.area .owner input { width: 100%; min-width: 0; }
+.callout { margin-top: 16px; padding: 12px 14px; border: 1px solid var(--amber-line); background: var(--amber-soft); color: var(--amber-ink); border-radius: var(--r-card); font-size: 14.5px; max-width: 78ch; }
+.callout.info { border-color: var(--accent-soft); background: var(--accent-soft); color: var(--accent-ink); }
+
+/* Reference cards */
+.cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+.card { border: 1px solid var(--hair); border-radius: var(--r-card); padding: 14px 16px; display: grid; align-content: start; gap: 4px; min-width: 0; }
+.card h3 { font-size: 15.5px; }
+.card li { position: relative; padding-left: 16px; font-size: 14.5px; margin-top: 6px; }
+.card li::before { content: ""; position: absolute; left: 2px; top: 0.62em; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+
+/* Grading */
+.bar { display: flex; gap: 3px; margin-top: 10px; height: 36px; max-width: 640px; }
+.bar span { display: grid; place-content: center; border-radius: 6px; background: var(--accent-soft); color: var(--accent-ink); font-family: var(--mono); font-size: 13px; font-weight: 600; min-width: 0; }
+.bar span.big45 { background: var(--accent); color: var(--on-accent); }
+.weights { margin-top: 8px; display: grid; max-width: 640px; }
+.weights li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-top: 1px solid var(--rule); font-size: 14.5px; }
+.weights li:first-child { border-top: 0; }
+.weights .mono { font-weight: 600; }
+
+.foot { padding: 22px var(--pad-x) 26px; border-top: 1px solid var(--rule); background: var(--sunk); font-size: 13.5px; color: var(--muted); display: grid; gap: 6px; }
+.foot p { max-width: 82ch; }
+
+@media (max-width: 860px) {
+  .weeks, .areas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .hero { grid-template-columns: minmax(0, 1fr); }
+  .legend { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cards { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 560px) {
+  .weeks, .areas { grid-template-columns: minmax(0, 1fr); }
+  .tally { display: none; }
+  .next li { grid-template-columns: 3.8rem minmax(0, 1fr); }
+  .next li .pill { grid-column: 2; justify-self: start; }
+  .ms-h { padding: 16px 14px; }
+  .ms-b { padding: 2px 14px 16px; }
+  .ms-top .pill, .ms-b h4 .pill { margin-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+<datalist id="team">
+  <option value="Samuel Pang"></option>
+  <option value="Koh Chen Xiang Alvin"></option>
+  <option value="Qian Jie"></option>
+  <option value="Sang Hui Wee"></option>
+  <option value="Zeng Qingtao"></option>
+  <option value="Everyone"></option>
+</datalist>
+
+<div class="wrap">
+  <header class="masthead">
+    <p class="eyebrow">NUS-ISS MTech SE capstone · Sponsor CODESparks, NCS</p>
+    <h1>AI Workflow Builder checkpoints</h1>
+    <p class="lede">Every school milestone with everything the briefing slides say about it, so nobody has to open the deck. Tick an item when it is done, and add a name where it asks for an owner. Everyone who opens this page sees the same ticks.</p>
+    <p class="team"><b>Team</b>Samuel Pang · Koh Chen Xiang Alvin · Qian Jie · Sang Hui Wee · Zeng Qingtao</p>
+    <p class="links">
+      <a href="https://github.com/qj1e7/ai-agent-workflow-builder" target="_blank" rel="noopener">Repo</a>
+      <a href="https://claude.ai/artifact/KDxZZkF6BjHmW92YPa2XzU" target="_blank" rel="noopener">Prototype</a>
+      <a href="https://github.com/qj1e7/ai-agent-workflow-builder/blob/main/docs/design/rebuild-plan.md" target="_blank" rel="noopener">Rebuild plan</a>
+      <a href="https://github.com/qj1e7/ai-agent-workflow-builder/tree/main/docs/adr" target="_blank" rel="noopener">ADRs</a>
+      <a href="https://github.com/qj1e7/ai-agent-workflow-builder/tree/main/docs/evidence" target="_blank" rel="noopener">Evidence</a>
+    </p>
+  </header>
+
+  <nav class="nav" aria-label="Sections">
+    <div class="nav-in">
+      <a href="#m-conduct">Project</a>
+      <a href="#m-reports">Progress reports</a>
+      <a href="#m-present">First presentation</a>
+      <a href="#m-submit">First submission</a>
+      <a href="#m-final-present">Final presentation</a>
+      <a href="#m-final-submit">Final submission</a>
+      <span class="split" aria-hidden="true"></span>
+      <a href="#setup">Before we build</a>
+      <a href="#sponsor">Sponsor tasks</a>
+      <a href="#build">Build plan</a>
+      <span class="split" aria-hidden="true"></span>
+      <a href="#scope">Proposal scope</a>
+      <a href="#needs">Sponsor needs</a>
+      <a href="#habits">How we work</a>
+    </div>
+    <span class="tally" id="tally"></span>
+  </nav>
+
+  <main class="sheet">
+    <section class="hero" aria-label="Countdown">
+      <div class="count">
+        <span class="label">Countdown</span>
+        <div class="big"><b id="bigNum"></b><span id="bigUnit"></span></div>
+        <p id="bigText"></p>
+        <p class="week" id="weekText"></p>
+      </div>
+      <div class="next">
+        <h2>Next up</h2>
+        <ol id="nextList"></ol>
+      </div>
+      <div class="trackbox">
+        <p class="vh" id="trackText"></p>
+        <div class="rail-wrap" aria-hidden="true">
+          <div class="rail" id="rail"></div>
+          <div class="rail-ends" id="railEnds"></div>
+        </div>
+        <ol class="legend" id="legend"></ol>
+      </div>
+    </section>
+
+    <p class="sync" id="sync" role="status" data-state="loading">Loading the team's ticks.</p>
+
+    <div class="part"><p>School milestones</p></div>
+
+    <section class="sec" id="milestones">
+      <div class="sec-h"><h2>Milestones in full</h2></div>
+      <p class="intro">Each block holds everything the NUS-ISS briefing deck (Project Requirements SE33 Admin v3) says about that milestone. Slide numbers are beside each heading in case anyone wants the source.</p>
+      <p class="done-strip"><b>Done</b> <span><span class="mono">21 to 23 Jul</span>Project briefing</span> <span><span class="mono">20 Aug</span>Proposal submitted</span> <span><span class="mono">1 Sep</span>Proposal review and kick-off</span></p>
+
+      <div class="ms-list">
+
+        <article class="ms" id="m-conduct" data-start="2026-09-07" data-end="2027-04-18">
+          <header class="ms-h">
+            <div class="ms-top"><span class="mono">7 Sep 2026 to 18 Apr 2027</span><span class="pill" data-ms-pill></span></div>
+            <h3>Project conduct</h3>
+            <p class="ms-sum">The whole project, in three phases of sprints. We report to the lecturers every month and present twice.</p>
+            <dl class="facts">
+              <div><dt>Length</dt><dd>About 8 months</dd></div>
+              <div><dt>Mode</dt><dd>Off-site</dd></div>
+              <div><dt>Method</dt><dd>Agile, in sprints</dd></div>
+              <div><dt>Pass mark</dt><dd>50% overall</dd></div>
+            </dl>
+          </header>
+          <div class="ms-b">
+            <h4>Rules <span class="mono">slides 4 and 29</span></h4>
+            <ul class="bul">
+              <li>We may start early, but the project must not end before 18 Apr 2027.</li>
+              <li>After accepting the project, changing or withdrawing it costs grades.</li>
+              <li>When something is unclear, it is our job to ask the lecturers or the sponsor. The briefing came from Darryl Ng, darrylng@nus.edu.sg.</li>
+            </ul>
+            <h4>What the project must show <span class="mono">slides 3 and 4</span></h4>
+            <ul class="bul">
+              <li>Bring together what we studied, and use its tools, techniques and methods to architect and build a smart system that is secure and scalable.</li>
+              <li>Add value beyond the basics. The lecturers expect it in areas such as agentic AI, LLMs, machine learning, analytics, safety, real-time behaviour or fault tolerance.</li>
+              <li>Cover the areas of a few of our certificates.</li>
+              <li>Focus on the architecture and on building a significant slice of it. The architecture should allow for a few releases. The slice can target an MVP first.</li>
+            </ul>
+            <h4>Phases <span class="mono">slides 5 and 7</span></h4>
+            <div class="tbl-wrap">
+              <table class="tbl">
+                <thead><tr><th>Phase</th><th>Length</th><th>Work and deliverables</th></tr></thead>
+                <tbody>
+                  <tr><td>Phase 0</td><td>4 weeks, 1 sprint</td><td>Product roadmap with business objectives, strategy, features and scope. Product backlog with user stories or use cases and architecture constraints. Initial solution architecture with risks and mitigations. A feasibility study and prototypes are optional.</td></tr>
+                  <tr><td>Phase 1</td><td>14 weeks, a few sprints</td><td>Sprint planning and conduct, software design, DevOps pipeline design, testing, sprint reviews and retrospectives. Ends with the first presentation and first submission.</td></tr>
+                  <tr><td>Phase 2</td><td>14 weeks, a few sprints</td><td>The same work and deliverables as Phase 1. Ends with the final presentation and final submission.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="lead">The team or the sponsor sets the sprint length. Ours is two weeks.</p>
+            <h4>How the project is graded <span class="mono">slide 16</span></h4>
+            <div class="bar" id="bar" aria-hidden="true"></div>
+            <ul class="weights" id="weights"></ul>
+            <p class="lead">A team of NUS-ISS lecturers grades the presentations and the deliverables. Each of us needs 50% overall to pass. The MTech degree needs 60% across the certificates and the project.</p>
+          </div>
+        </article>
+
+        <article class="ms" id="m-reports" data-start="2026-10-10" data-end="2027-04-10">
+          <header class="ms-h">
+            <div class="ms-top"><span class="mono">Every month from 10 Oct 2026</span><span class="pill" id="reports-pill"></span></div>
+            <h3>Monthly progress report</h3>
+            <p class="ms-sum">A short report to the lecturers on what we did, the hours each of us spent and what comes next.</p>
+            <dl class="facts">
+              <div><dt>Due</dt><dd>Monthly, first on 10 Oct</dd></div>
+              <div><dt>Where</dt><dd>Internship Tracking System</dd></div>
+              <div><dt>Covers</dt><dd>The month since the last report</dd></div>
+              <div><dt>Who</dt><dd>Team lead submits, everyone sends hours</dd></div>
+            </dl>
+          </header>
+          <div class="ms-b">
+            <h4>What goes in <span class="mono">slide 15</span></h4>
+            <div class="tbl-wrap">
+              <table class="tbl">
+                <thead><tr><th>Section</th><th>Content</th></tr></thead>
+                <tbody>
+                  <tr><td>Project title</td><td>The project's title.</td></tr>
+                  <tr><td>Date</td><td>The date of the report.</td></tr>
+                  <tr><td>Summary of work done</td><td>The sprint backlog, as the list of tasks for the sprints we ran.</td></tr>
+                  <tr><td>Effort expended</td><td>The hours each member spent since the last report.</td></tr>
+                  <tr><td>Problems encountered</td><td>Issues that may need help from the ISS lecturers.</td></tr>
+                  <tr><td>Plan for the next month</td><td>The list of tasks planned for the next month.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="lead">Slide 6 says groups report fortnightly, but slide 15 says part-time groups report monthly. This page follows slide 15. The slides give only the first date, so the dates after 10 Oct assume the 10th of each month. Confirm both with the lecturers.</p>
+            <h4>Reports <span class="count" data-count="reports"></span></h4>
+            <ol class="list" id="list-reports"></ol>
+          </div>
+        </article>
+
+        <article class="ms" id="m-present" data-start="2026-11-27" data-end="2026-12-05">
+          <header class="ms-h">
+            <div class="ms-top"><span class="mono">27, 28 or 30 Nov, or 5 Dec 2026 (tentative)</span><span class="pill" data-ms-pill></span></div>
+            <h3>First presentation</h3>
+            <p class="ms-sum">We present Phases 0 and 1 to a team of NUS-ISS lecturers. The slots are tentative, so plan for the earliest one and find out ours early.</p>
+            <dl class="facts">
+              <div><dt>Plan for</dt><dd>27 Nov</dd></div>
+              <div><dt>Covers</dt><dd>Phases 0 and 1</dd></div>
+              <div><dt>Length</dt><dd>26 to 28 timed minutes</dd></div>
+              <div><dt>Counts for</dt><dd>10% of the grade</dd></div>
+            </dl>
+          </header>
+          <div class="ms-b">
+            <h4>Agenda and time limits <span class="mono">slide 27</span> <span class="count" data-count="deck"></span><span class="pill" id="pill-deck"></span></h4>
+            <p class="lead">The lecturers' agenda, in its order. Items 4, 5 and 20 have no time limit. The guideline has no item 14. Add who prepares each item and tick it when the slide and its evidence are ready.</p>
+            <ol class="list" id="list-deck"></ol>
+            <h4>Live demo or videos <span class="mono">slide 27</span></h4>
+            <ul class="bul">
+              <li>Item 17 is a live demo of the app and of CI/CD, 6 to 8 minutes.</li>
+              <li>Instead of the live demo, we may show MVP videos. One shows the working app in 3 to 4 minutes, and one shows CI/CD in 3 to 4 minutes.</li>
+              <li>Videos of 3 to 4 minutes also meet the 3 to 5 minute rule for the first submission, so the same videos can serve both.</li>
+            </ul>
+            <h4>Evidence rules <span class="mono">slides 28 and 29</span></h4>
+            <ul class="bul">
+              <li>Do not just claim an activity happened. Show evidence, briefly in the presentation and in more detail in the report, for one or more architecturally significant use cases.</li>
+              <li>Without evidence in the presentation and the report, the assessors cannot give marks for the activity.</li>
+              <li>Go beyond an architecture overview diagram. Show the functional elements, how they pack into subsystems, and how the subsystems deploy onto nodes.</li>
+              <li>Give a use case diagram as the overview of the functional requirements.</li>
+              <li>Give class and sequence diagrams, at class and object level, for the significant or complex use cases. Design means more than storage. Show how each use case is built with the frontend, backend and communication frameworks.</li>
+              <li>When we explain how we solved an architecture or design problem, show the problem and the solution in detail, with diagrams, not only in words.</li>
+              <li>Confidentiality is no reason to skip evidence. Use synthetic data for the presentation and the submission.</li>
+              <li>Be ready to show these highlights and the ones from the project guidelines the lecturers announced earlier.</li>
+              <li>Apply the techniques and knowledge from our MTech courses.</li>
+            </ul>
+            <h4>Phase 0 and Phase 1 work to show <span class="mono">slide 7</span></h4>
+            <ul class="bul">
+              <li><b>From Phase 0.</b> The product roadmap with business objectives, strategy, features and scope. The product backlog with user stories or use cases and architecture constraints. The initial solution architecture with its risks and mitigations.</li>
+              <li><b>From Phase 1.</b> Every deliverable in the Phase 1 checklist under First submission, including the updated roadmap and the updated solution architecture.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="ms" id="m-submit" data-start="2026-12-15" data-end="2026-12-15">
+          <header class="ms-h">
+            <div class="ms-top"><span class="mono">Tue 15 Dec 2026</span><span class="pill" data-ms-pill></span></div>
+            <h3>First submission</h3>
+            <p class="ms-sum">After the first presentation, we upload our Phase 0 and 1 work to Canvas. The lecturers may ask for changes to our design at the presentation.</p>
+            <dl class="facts">
+              <div><dt>Where</dt><dd>Canvas</dd></div>
+              <div><dt>Who</dt><dd>The team, plus each member for peer assessment</dd></div>
+              <div><dt>Videos</dt><dd>3 to 5 min, at least 800 by 600</dd></div>
+              <div><dt>Counts for</dt><dd>Deliverables 45%, peer assessment 20%</dd></div>
+            </dl>
+          </header>
+          <div class="ms-b">
+            <h4>Upload to Canvas <span class="mono">slides 30 and 31</span> <span class="count" data-count="canvas"></span><span class="pill" id="pill-submit"></span></h4>
+            <ol class="list" id="list-canvas"></ol>
+            <h4>Rules <span class="mono">slides 30 and 31</span></h4>
+            <ul class="bul">
+              <li>Videos must be at least 800 by 600 pixels, or 1920 by 1080, so the lecturers and reviewers can clearly see the demo and the work.</li>
+              <li>The interim report exists so we document as we go. It grows into the final report, which then has substance and quality at the end.</li>
+              <li>Because our team has more than two people, each member submits a peer assessment in the Peer Assessment System.</li>
+              <li>If we cannot submit our source code as proof of work, we ask our supervisor to email the internship manager.</li>
+            </ul>
+            <h4>Phase 1 deliverables <span class="mono">slide 7</span> <span class="count" data-count="phase1"></span></h4>
+            <p class="lead">They go into the interim report and the slides, with evidence. Phase 1 work also means reviewing the product backlog, planning each sprint, a daily stand-up, updating the burndown chart daily, and a review and retrospective at the end of each sprint.</p>
+            <ol class="list" id="list-phase1"></ol>
+          </div>
+        </article>
+
+        <article class="ms" id="m-final-present" data-start="2027-04-05" data-end="2027-04-09">
+          <header class="ms-h">
+            <div class="ms-top"><span class="mono">5 to 9 Apr 2027 (tentative)</span><span class="pill" data-ms-pill></span></div>
+            <h3>Final presentation</h3>
+            <p class="ms-sum">We present Phase 2 to a team of NUS-ISS lecturers.</p>
+            <dl class="facts">
+              <div><dt>Covers</dt><dd>Phase 2</dd></div>
+              <div><dt>Counts for</dt><dd>10% of the grade</dd></div>
+              <div><dt>Graded by</dt><dd>NUS-ISS lecturers</dd></div>
+            </dl>
+          </header>
+          <div class="ms-b">
+            <h4>What to show <span class="mono">slides 6 and 7</span></h4>
+            <ul class="bul">
+              <li>Phase 2 has the same deliverables as Phase 1. Sprint plan, sprint backlog, burndown chart, sprint review, sprint retrospective, software design for critical user stories, DevOps pipeline design, test cases and results, codebase, updated roadmap, updated solution architecture, the presentation and peer assessments.</li>
+              <li>The deck gives a detailed agenda only for the first presentation. Expect the same shape, and ask the lecturers for the final one.</li>
+              <li>The evidence rules under the first presentation still apply.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="ms" id="m-final-submit" data-start="2027-04-17" data-end="2027-04-17">
+          <header class="ms-h">
+            <div class="ms-top"><span class="mono">Sat 17 Apr 2027</span><span class="pill" data-ms-pill></span></div>
+            <h3>Final submission</h3>
+            <p class="ms-sum">The last hand-in, one day before project conduct ends.</p>
+            <dl class="facts">
+              <div><dt>Report</dt><dd>Includes the remarks from the presentations</dd></div>
+              <div><dt>Counts for</dt><dd>Deliverables 45%, with the demo</dd></div>
+            </dl>
+          </header>
+          <div class="ms-b">
+            <h4>What to submit <span class="mono">slide 6</span></h4>
+            <ul class="bul">
+              <li>The presentation deck.</li>
+              <li>The project report, updated with the remarks the lecturers gave during the presentations.</li>
+              <li>Demo videos.</li>
+              <li>Code artifacts.</li>
+            </ul>
+            <p class="lead">The deck gives the upload, video and code rules only for the first submission. Expect the same rules, and confirm with the lecturers.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <div class="part"><p>Our checkpoints</p></div>
+
+    <section class="sec" id="setup">
+      <div class="sec-h"><h2>Before we build</h2><span class="count" data-count="setup"></span></div>
+      <p class="intro">Setup for week 1, 2 to 8 Nov. Most of it blocks the build, so it comes first.</p>
+      <ol class="list" id="list-setup"></ol>
+    </section>
+
+    <section class="sec" id="sponsor">
+      <div class="sec-h"><h2>Sponsor tasks</h2><span class="count" data-count="sponsor"></span></div>
+      <p class="intro">Client feedback is 15% of the grade. A person writes and sends every message to the sponsor, never an AI agent.</p>
+      <ol class="list" id="list-sponsor"></ol>
+    </section>
+
+    <section class="sec" id="build">
+      <div class="sec-h"><h2>Build plan</h2></div>
+      <p class="intro">Fifteen pull requests in four weeks, from the rebuild plan. Each area has one owner, so everyone has commits and reviews of their own for the peer assessment.</p>
+      <div class="weeks" id="weeks"></div>
+      <h3 class="sub-h">Area owners</h3>
+      <div class="areas" id="areas"></div>
+      <p class="callout"><b>Cut check on 20 Nov.</b> If New workflow (P13) is not code-ready, cut P12 and P13 together and show that step in the prototype. Cut P7 next. P15 is never cut, because the rubric needs its scans and diagrams.</p>
+    </section>
+
+    <div class="part"><p>Reference</p></div>
+
+    <section class="sec" id="scope">
+      <div class="sec-h"><h2>Proposal scope</h2><span class="count" data-count="scope"></span></div>
+      <p class="intro">What our approved proposal (v0.2) promised. The lecturers hold us to it. Tick an item when it is met. Where the plan changed course, the report should say what changed and why.</p>
+      <p class="callout info">Each note says where an item stands today. <b>In place</b> means it exists in the repo. <b>Changed</b> means the plan moved away from the proposal. <b>Gap</b> means it is missing. <b>Check</b> means someone needs to confirm it.</p>
+      <div id="scope-lists"></div>
+    </section>
+
+    <section class="sec" id="needs">
+      <div class="sec-h"><h2>Sponsor needs</h2></div>
+      <p class="intro">What CODESparks needs from the product, and the safety rules that come from the sponsor and our October feasibility test. We never weaken a safety rule without an ADR.</p>
+      <div class="cards" id="needs-cards"></div>
+    </section>
+
+    <section class="sec" id="habits">
+      <div class="sec-h"><h2>How we work</h2></div>
+      <div class="cards">
+        <div class="card">
+          <h3>Every week</h3>
+          <ul>
+            <li>Log your hours per task, estimated and actual.</li>
+            <li>Move your issues on the board. The burndown chart comes from it, and the guideline asks for daily updates.</li>
+            <li>Save evidence as it happens. Pipeline runs, scan reports and load test results go in <code>docs/evidence/</code>.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Every sprint</h3>
+          <ul>
+            <li>Sprints are two weeks long. The proposal promised twelve, four in Phase 1 (October and November) and eight in Phase 2 (December to March).</li>
+            <li>Plan the sprint from the product backlog, hold a short daily stand-up, then a sprint review and a retro. Save the notes.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Every month</h3>
+          <ul>
+            <li>Send the team lead your hours before the progress report.</li>
+            <li>The report holds the sprint backlog, every member's hours since the last report, problems that need the lecturers' help, and next month's plan.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Always</h3>
+          <ul>
+            <li>Work on a branch and open a PR to <code>main</code>. A teammate who is not the author approves it. Never push to <code>main</code>.</li>
+            <li>Never commit secrets, keys or tokens. <code>.env</code> files stay out of git.</li>
+            <li>Build from the prototype. <code>docs/design/prototypes/</code> is out of date.</li>
+            <li>Use the names in <code>GLOSSARY.md</code>, never the old themed names.</li>
+            <li>A big decision gets an ADR in <code>docs/adr/</code> before its code lands.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <p>Sources are the NUS-ISS Project Requirements SE33 Admin v3 (slides 3 to 7, 15, 16 and 27 to 31), our approved proposal v0.2 in <code>docs/proposal/</code>, the rebuild plan in <code>docs/design/rebuild-plan.md</code>, <code>AGENTS.md</code>, and the DevNet note in <a href="https://github.com/qj1e7/ai-agent-workflow-builder/pull/42" target="_blank" rel="noopener">PR #42</a>.</p>
+      <p>Our copy of the deck skips slides 9 and 17 to 26. If anyone has the full deck, check those slides for anything this page misses.</p>
+      <p>Written on 29 Oct 2026 from the repo at that date. Countdowns use your device's date.</p>
+    </footer>
+  </main>
+</div>
+
+<script>
+(function () {
+  const PROTO = "https://claude.ai/artifact/KDxZZkF6BjHmW92YPa2XzU";
+  const ADRS = "https://github.com/qj1e7/ai-agent-workflow-builder/tree/main/docs/adr";
+  const PR42 = "https://github.com/qj1e7/ai-agent-workflow-builder/pull/42";
+  const LIVE = "https://claude.ai/artifact/4LsDyqMZGqaT63UWwpbxio";
+  const START = "2026-09-07", END = "2027-04-18";
+
+  const KEYS = [
+    { date: "2026-11-27", end: "2026-12-05", title: "First presentation", href: "#m-present" },
+    { date: "2026-12-15", title: "First submission", href: "#m-submit" },
+    { date: "2027-04-05", end: "2027-04-09", title: "Final presentation", href: "#m-final-present" },
+    { date: "2027-04-17", title: "Final submission", href: "#m-final-submit" }
+  ];
+  const INTERNAL = [{ date: "2026-11-20", title: "Cut check", href: "#build" }];
+
+  const REPORTS = [
+    { id: "rep-1", date: "2026-10-10", title: "Progress report 1", detail: "The first monthly report. Tick it if it is in the Internship Tracking System." },
+    { id: "rep-2", date: "2026-11-10", title: "Progress report 2" },
+    { id: "rep-3", date: "2026-12-10", title: "Progress report 3" },
+    { id: "rep-4", date: "2027-01-10", title: "Progress report 4" },
+    { id: "rep-5", date: "2027-02-10", title: "Progress report 5" },
+    { id: "rep-6", date: "2027-03-10", title: "Progress report 6" },
+    { id: "rep-7", date: "2027-04-10", title: "Progress report 7" }
+  ];
+
+  const SETUP = [
+    { id: "s-prototype", due: "2026-11-02", who: "Everyone", title: "Read the prototype and its design note", detail: "The app is rebuilt from it. Read <code>docs/design/portal-routines/prototype.html</code> and <code>docs/design/portal-routines.md</code>. The older <code>docs/design/prototypes/</code> folder is out of date.", link: ["Open the prototype", PROTO] },
+    { id: "s-pstack", due: "2026-11-02", who: "Everyone", title: "Set up pstack", detail: "Open the repo in Claude Code and trust the folder. Then run <code>/pstack:setup-pstack</code> and pick the models your Claude plan includes." },
+    { id: "s-hours", due: "2026-11-02", who: "Everyone", title: "Start the shared hours log", detail: "Each person logs estimated and actual hours per task, every week. The presentation shows both for every member and every sprint, and every progress report needs each member's hours." },
+    { id: "s-areas", due: "2026-11-02", who: "Team lead", title: "Name an owner for each area", detail: "Portal, backend, agents and platform. Write the names under Area owners in the build plan." },
+    { id: "s-fifth", due: "2026-11-02", who: "Team lead", title: "Add our fifth teammate to the GitHub repo", detail: "Four of the five of us have access today." },
+    { id: "s-board", due: "2026-11-04", who: "Team lead", title: "Put the 15 PRs on a GitHub board", detail: "One issue per PR, each with a sprint and an estimate. The board is our sprint backlog, and the burndown chart comes from it." },
+    { id: "s-adrs", due: "2026-11-08", who: "Everyone", title: "Review ADRs 0028 to 0032", detail: "Mark each one accepted or changed in its own file. P3, P4 and P14 wait on them.", link: ["Open the ADRs", ADRS] },
+    { id: "s-backfill", due: "2026-11-08", who: "Everyone", title: "Fill in September and October hours", detail: "Rebuild them from git history and calendars while we still remember. The proposal planned sprints from October, so the presentation needs effort for those sprints too." },
+    { id: "s-protect", due: "2026-11-08", who: "Team lead", title: "Protect main and turn on Dependabot alerts", detail: "Both are repository settings, so a person changes them. Today nothing stops a direct push to <code>main</code>." },
+    { id: "s-azure", due: "2026-11-08", who: "Team lead and platform", title: "Set up Azure for deploys", detail: "Pick the region. Then create the <code>azure-dev</code> environment and its secrets in GitHub. Environments on a private repo may need GitHub Pro." },
+    { id: "s-trial", due: "2026-11-08", who: "Team lead", title: "Run the trial deploy once", detail: "Run <code>deploy.yml</code> on the current <code>main</code>. It has never run, so region, quota and secret problems show up now instead of in week 4." },
+    { id: "s-budget", due: "2026-11-08", who: "Platform", title: "Set an Azure budget alert", detail: "Azure for Students gives 100 US dollars of credit for 12 months. Stop resources between demos." },
+    { id: "s-slot", due: "2026-11-08", who: "Team lead", title: "Find out our presentation slot", detail: "If it is 27 Nov, week 4 has no spare days." }
+  ];
+
+  const SPONSOR = [
+    { id: "sp-show", due: "2026-11-08", who: "Team lead", title: "Show the sponsor the prototype and the plan", detail: "The sponsor has not seen the rebuild yet. Concerns cost less to hear now than after the build." },
+    { id: "sp-n8n", due: "2026-11-08", who: "Team lead", title: "Tell the sponsor when \"Open in n8n\" arrives", detail: "Editing workflows in n8n answers the sponsor's main worry, upkeep after handover. The plan builds it after the first presentation." },
+    { id: "sp-devnet", due: "2026-11-08", who: "Team lead", title: "Send the DevNet questions", detail: "Nine questions about running the app inside NCS's private network. Answers on hosting, the AI model and Teams matter most.", link: ["Read the DevNet note", PR42] },
+    { id: "sp-code", who: "Team lead", title: "Get a written answer on code ownership", detail: "Who owns the code after handover, and who may reuse it." },
+    { id: "sp-n8nlic", who: "Team lead", title: "Confirm the n8n licence is fine for NCS", detail: "n8n uses its own Sustainable Use License. NCS should confirm it allows internal use." },
+    { id: "sp-brand", who: "Team lead", title: "Ask whether the logo may use the NCS brand", detail: "The prototype's logo uses NCS blue." }
+  ];
+
+  const DECK = [
+    { n: 1, min: "1 min", title: "Project overview and introduction" },
+    { n: 2, min: "1 min", title: "Overall scope, with a use case diagram", detail: "The use case diagram is the overview of the functional requirements.", src: "We have <code>docs/evidence/diagrams/01-use-case-diagram.png</code>. P15 redraws it for the rebuilt app." },
+    { n: 3, min: "1 min", title: "Project roadmap and key milestones" },
+    { n: 4, title: "The complete project backlog", src: "The GitHub board holds it." },
+    { n: 5, title: "Sprint effort to date", detail: "The overall estimated effort against the actual effort of every member, for every sprint so far.", src: "The hours log holds it." },
+    { n: 6, min: "1 min", title: "Tech stack" },
+    { n: 7, min: "1 min", title: "Architecture constraints and decisions", src: "Our 32 ADRs hold them." },
+    { n: 8, min: "1 min", title: "Logical and physical architecture diagrams", detail: "More than an overview. Show the functional elements, how they pack into subsystems, and how the subsystems deploy onto nodes.", src: "P15 draws them." },
+    { n: 9, min: "1 min", title: "Deployment diagram", src: "We have the Docker Compose and planned Azure diagrams, 03 and 04 in <code>docs/evidence/diagrams/</code>. P15 redraws them." },
+    { n: 10, min: "2 min", title: "Microservice architecture, explained with a domain-driven design diagram", detail: "As taught in Platform Engineering.", src: "We have the context map of our four bounded contexts, 02 in <code>docs/evidence/diagrams/</code>." },
+    { n: 11, min: "1 min", title: "Software design for one key use case, from analysis to design", detail: "Class and sequence diagrams at class level. They show how the frontend, backend and communication frameworks carry out the use case, not only how data is stored.", src: "We have two sequence diagrams, 05 and 06. Class diagrams are still missing." },
+    { n: 12, min: "1 min", title: "Database design", detail: "The relational design as an ERD, plus the NoSQL design and its collection objects.", src: "The domain model in <code>docs/design/rebuild-domain-model.md</code> and ADR 0031." },
+    { n: 13, min: "2 min", title: "CI/CD pipelines and the CI/CD diagram", detail: "With the SAST, DAST and unit test results, and the load and stress test results.", src: "CI runs Semgrep, gitleaks, OWASP ZAP and k6. Reports are in <code>docs/evidence/dast/</code> and <code>docs/evidence/load-test/</code>." },
+    { n: 15, min: "1 min", title: "Infrastructure as code", src: "Terraform in <code>infra/</code>, with Checkov and tflint results in <code>docs/evidence/iac/</code>. P14 deploys it." },
+    { n: 16, min: "2 min", title: "Security of the app and platform", detail: "Concerns, mitigations and solutions. The proposal promised tests for prompt injection, least privilege and the approval gate." },
+    { n: 17, min: "6 to 8 min", title: "Live demo of the app and CI/CD", detail: "Or two MVP videos instead, the working app and CI/CD, each 3 to 4 minutes. Record the backup videos in week 4." },
+    { n: 18, min: "2 min", title: "Management concerns, issues and mitigations" },
+    { n: 19, min: "2 min", title: "Technical concerns, issues and mitigations" },
+    { n: 20, title: "Any other business" }
+  ].map(d => Object.assign({ id: "deck-" + d.n }, d));
+
+  const CANVAS = [
+    { id: "c-slides", title: "Presentation slides", detail: "The deck from the first presentation, with any changes the lecturers asked for." },
+    { id: "c-report", title: "Interim project report", detail: "Write it to grow into the final report. Give the detail and evidence the slides only summarize, for at least one architecturally significant use case." },
+    { id: "c-video-app", title: "App demo video", detail: "3 to 5 minutes, at least 800 by 600 pixels, and 1920 by 1080 if we can." },
+    { id: "c-video-cicd", title: "CI/CD demo video", detail: "3 to 5 minutes, at least 800 by 600 pixels, and 1920 by 1080 if we can." },
+    { id: "c-code", title: "Code artifacts and the repo URL", detail: "Our repo is private, so check how the lecturers want access. If we cannot hand over the source code, our supervisor emails the internship manager." },
+    { id: "c-peer", title: "A peer assessment from each of us", detail: "Each member submits their own in the Peer Assessment System. It is 20% of the grade." }
+  ];
+
+  const PHASE1 = [
+    { id: "d-plan", title: "Sprint plan", detail: "Goals, dates and the stories picked for each sprint." },
+    { id: "d-backlog", title: "Sprint backlog", detail: "The tasks in each sprint. The GitHub board holds it." },
+    { id: "d-burndown", title: "Burndown chart", detail: "Drawn from the board as issues close. The guideline asks for daily updates." },
+    { id: "d-review", title: "Sprint review", detail: "One set of notes per sprint." },
+    { id: "d-retro", title: "Sprint retrospective", detail: "One set of notes per sprint." },
+    { id: "d-design", title: "Software design for the critical user stories", detail: "Class and sequence diagrams for the significant use cases." },
+    { id: "d-devops", title: "DevOps pipeline design", detail: "The CI/CD diagram and what each stage checks." },
+    { id: "d-tests", title: "Test cases and results", detail: "Test cases written from the user stories, with their results. Unit, end-to-end, load and stress results go in <code>docs/evidence/</code>." },
+    { id: "d-code", title: "Codebase", detail: "<code>main</code>, deployed to Azure in P14." },
+    { id: "d-roadmap", title: "Updated product roadmap", detail: "Phase 0 made the first one. Update it with the rebuild and Phase 2." },
+    { id: "d-arch", title: "Updated solution architecture", detail: "Phase 0 made the first one, with risks and mitigations. Update both." }
+  ];
+
+  const WEEKS = [
+    { n: 1, a: "2026-11-02", b: "2026-11-08", rows: [["ADRs", "Review ADRs 0028 to 0032"], ["Deploy", "Trial deploy of main"], ["P1", "Portal shell from the prototype"], ["P2", "Rename to Planner and Version checker"]] },
+    { n: 2, a: "2026-11-09", b: "2026-11-15", rows: [["P3", "People and roles"], ["P4", "Activity log copied to Cosmos DB"], ["P5", "Run page and approval gate"], ["P7", "Agent library, read only"], ["P8", "Pause, resume, delete and drafts"], ["P12", "Planner says what it understood"]] },
+    { n: 3, a: "2026-11-16", b: "2026-11-22", rows: [["P6", "Software watchlist page"], ["P9", "Workflows pages"], ["P10", "Settings for the AI model and people"], ["P11", "Home"], ["P13", "New workflow in four steps"]] },
+    { n: 4, a: "2026-11-23", b: "2026-11-27", rows: [["P14", "Deploy to Azure"], ["P15", "Scans and rubric diagrams"], ["Video", "Backup demo video"], ["Rehearse", "Full rehearsal"]] }
+  ];
+
+  const AREAS = [
+    { id: "area-portal", name: "Portal", prs: "P1, P5, P6, P7, P9, P10, P11 and P13" },
+    { id: "area-backend", name: "Backend", prs: "P2, P3, P4 and P8" },
+    { id: "area-agents", name: "Agents", prs: "P12 and the model evals in ADR 0032" },
+    { id: "area-platform", name: "Platform", prs: "P14, P15 and the trial deploy" }
+  ];
+
+  const SCOPE = [
+    { area: "Frontend", items: [
+      { id: "r-live", tag: "Must", title: "Live activity view", detail: "Animates agent states, hand-offs, system calls and approval gates as they happen. Saved workflows also run here on a schedule." },
+      { id: "r-sysview", tag: "Should", title: "One-page system view", detail: "Shows how each request flows through agents, blocks, systems and the approval gate." },
+      { id: "r-approvals", tag: "Must", title: "Approval panel", detail: "Approvers review and authorize workflows, with a summary of the permissions each one needs.", notes: [["check", "P5 puts the approval gate on the run page. Confirm Approvers can also review a new workflow with its permission summary."]] },
+      { id: "r-teams", tag: "Must", title: "Approve or reject from Teams cards", detail: "Adaptive Cards in the Teams channel.", notes: [["changed", "Our baseline is a Teams message that links to the run page. Buttons inside Teams wait on NCS's answer about DevNet."]] },
+      { id: "r-roles", title: "Two roles and Entra ID sign-in", detail: "Operators build and run workflows. Approvers approve writes and new workflows, never their own. One person may hold both roles. Sign-in uses Microsoft Entra ID.", notes: [["have", "Sign-in through OpenID Connect (ADR 0018)."], ["gap", "Roles move into our own database in P3 (ADR 0029)."]] }
+    ] },
+    { area: "Backend", items: [
+      { id: "r-engine", tag: "Must", title: "Agent engine on LangGraph and LangChain", detail: "Runs agents from configuration files with block-based permissions, and pauses safely at each approval.", notes: [["changed", "n8n now carries each run (ADRs 0002 and 0007)."]] },
+      { id: "r-planner", tag: "Must", title: "Planner that uses a large language model", detail: "Reads each request, plans the workflow and brings in the right agents.", notes: [["gap", "Today's Planner is scripted. P12 starts the model-driven one."]] },
+      { id: "r-agents", tag: "Must", title: "Four specialist agents", detail: "One finds new releases by comparing GitHub with the last known release in a Confluence page, and only reads. One summarizes and rates each release. One handles approvals in Teams. One writes, and only after approval." },
+      { id: "r-blocks", tag: "Must", title: "Six MVP blocks", detail: "Read Confluence, Read GitHub, Summarize and rate, Approval, Create Jira ticket and Save evidence. Update Confluence comes in Phase 2." },
+      { id: "r-connectors", tag: "Must", title: "Real and mock connectors", detail: "For GitHub, Confluence, Jira, Teams and evidence storage." },
+      { id: "r-events", tag: "Must", title: "Event-driven design with two databases", detail: "Events stream live to the browser. PostgreSQL keeps app state and saved run checkpoints. Cosmos DB (NoSQL) keeps the event log and evidence records.", notes: [["changed", "ADR 0031 keeps every event in PostgreSQL and copies it to Cosmos DB for readers. P4 builds the copy."]] },
+      { id: "r-tracing", tag: "Must", title: "Agent tracing and monitoring", detail: "The proposal named self-hosted Langfuse on Azure Container Apps, set up with Terraform.", notes: [["changed", "Our team rules name LangSmith instead."], ["gap", "Neither is wired up yet."]] },
+      { id: "r-ddd", title: "Domain-driven design with an ERD and a NoSQL design", detail: "A frontend service, an agent orchestration service and integration connectors. An ERD for PostgreSQL, and a NoSQL design for the event log and evidence records.", notes: [["have", "The context map diagram and <code>docs/design/rebuild-domain-model.md</code>."]] },
+      { id: "r-versions", tag: "Should", title: "Workflow management", detail: "Versions, schedule settings and approval workflows." }
+    ] },
+    { area: "CI/CD and DevOps", items: [
+      { id: "r-pipeline", tag: "Must", title: "Pipeline with unit tests, SAST, DAST and container scanning", notes: [["have", "CI runs the unit tests, Semgrep, gitleaks, OWASP ZAP and k6."], ["gap", "No container image scan runs yet."]] },
+      { id: "r-iac", tag: "Must", title: "Terraform for every Azure part", detail: "Container Apps, PostgreSQL, blob storage, Cosmos DB, the tracing tool and secrets management.", notes: [["have", "Terraform in <code>infra/</code>, checked by Checkov and tflint."], ["gap", "The Cosmos DB module comes in P14."]] },
+      { id: "r-deploys", tag: "Must", title: "Automated deploys to dev and demo", detail: "A development environment and a demo, or staging, environment.", notes: [["gap", "<code>deploy.yml</code> has never run. The trial deploy in week 1 is its first run."]] }
+    ] },
+    { area: "Testing", items: [
+      { id: "r-unit", tag: "Must", title: "Unit tests", detail: "For blocks, agents and connectors.", notes: [["have", "About 1,500 backend unit tests run in CI."]] },
+      { id: "r-integration", tag: "Must", title: "Integration tests", detail: "End-to-end workflows, including approval gates and evidence capture.", notes: [["have", "End-to-end checks run in CI."]] },
+      { id: "r-load", tag: "Should", title: "Load and stress tests", detail: "For the API endpoints and the live event stream.", notes: [["have", "k6 results and runs that look for the limit are in <code>docs/evidence/load-test/</code>."]] },
+      { id: "r-aiquality", tag: "Must", title: "AI quality tests on a 30-case set", detail: "At least 80% correct plans from the Planner, and at least 80% of release ratings within one rating band.", notes: [["check", "Eval sets live in <code>agent-runtime/evals/cases/</code>. Check them against the 30 cases and both targets."]] },
+      { id: "r-security", tag: "Must", title: "Security tests", detail: "Prompt injection, least privilege, and the integrity of the approval gate.", notes: [["check", "Confirm which of these have tests, and add the rest."]] }
+    ] },
+    { area: "Methods and standards", items: [
+      { id: "r-scrum", title: "Scrum in two-week sprints", detail: "Twelve sprints. Four in Phase 1 (October and November 2026) and eight in Phase 2 (December 2026 to March 2027)." },
+      { id: "r-review", title: "Peer code review before merging", detail: "Every change to <code>main</code> goes through a reviewed PR.", notes: [["have", "The rule is in <code>AGENTS.md</code> and the PR template."], ["gap", "<code>main</code> has no branch protection yet."]] },
+      { id: "r-coverage", title: "80% test coverage for backend code", detail: "Agent logic that depends on the model is covered by the AI quality set instead.", notes: [["gap", "CI does not check coverage yet."]] },
+      { id: "r-openapi", title: "API documentation in OpenAPI", notes: [["have", "<code>contracts/openapi.json</code>."]] }
+    ] },
+    { area: "Phase 2 and beyond", items: [
+      { id: "r-phase2", title: "The sponsor's use cases", detail: "Entra ID access reviews of AD groups, and patch and release housekeeping, for example in GitLab. Both are built against mock connectors first, and connect to real systems only if the sponsor grants access." },
+      { id: "r-portable", title: "Portable to AWS by design", detail: "Azure first, with cloud parts behind connectors. No AWS deployment is in scope.", notes: [["have", "ADR 0004."]] },
+      { id: "r-pilot", title: "Ready for a pilot with the sponsor's support team", detail: "Better reliability and more workflows by the end of Phase 2." }
+    ] }
+  ];
+
+  const NEEDS = [
+    { t: "What the sponsor wants", items: [
+      "Automate the boring, repetitive Jira and Confluence work. Nothing critical runs without approval.",
+      "Staff keep workflows running after handover with no coding, and fix problems without a technical person. This was the main concern after the proposal review.",
+      "Information and approvals arrive in Teams chats and channels, including before any Confluence update.",
+      "Agents stay clean and reusable, so they can join NCS's internal agent hub.",
+      "The app ends up inside DevNet, NCS's private network. We build and prove it on the open internet first."] },
+    { t: "Phase 2 use cases", items: [
+      "Quarterly access review across Entra ID groups, admin tools and GitLab. It needs two Approvers, one after the other.",
+      "Software version and patch housekeeping.",
+      "The November MVP is a public release check, for example new releases of LangGraph on GitHub."] },
+    { t: "Safety rules we never weaken", items: [
+      "No write action runs without approval in Teams. The safety checker denies write actions by default.",
+      "An Approver can never approve their own work.",
+      "Approval tokens key off our own request ID, never n8n's execution ID.",
+      "n8n error workflows must be active, or n8n skips them.",
+      "Wait a short delay before a retry.",
+      "Log every agent action with who approved it."] },
+    { t: "What we asked the sponsor for", items: [
+      "DevNet accounts for up to two of us, at the sponsor's discretion.",
+      "Registering our Teams app with bot permissions in the NCS tenant, which needs a tenant admin.",
+      "Entra ID in the NCS tenant for sign-in.",
+      "Access to CODESparks, Jira, Confluence and Teams, and the Sunshine.builder documentation.",
+      "A written answer on who owns the code after handover."] }
+  ];
+
+  const GRADE = [["First presentation", 10], ["Second presentation", 10], ["Project deliverables, including the demo", 45], ["Client feedback, from the sponsor", 15], ["Peer assessments", 20]];
+  const GROUP_DUE = { deck: "2026-11-27", submit: "2026-12-15" };
+
+  // Dates
+  const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const n0 = new Date();
+  const TODAY = new Date(n0.getFullYear(), n0.getMonth(), n0.getDate());
+  const day = s => { const p = s.split("-").map(Number); return new Date(p[0], p[1] - 1, p[2]); };
+  const diff = s => Math.round((day(s) - TODAY) / 864e5);
+  const fmt = (s, yr) => { const x = day(s); return x.getDate() + " " + MON[x.getMonth()] + (yr ? " " + x.getFullYear() : ""); };
+  const fmtRange = (a, b) => day(a).getMonth() === day(b).getMonth() ? day(a).getDate() + " to " + fmt(b) : fmt(a) + " to " + fmt(b);
+  const plural = (n, w) => n + " " + w + (n === 1 ? "" : "s");
+  const rel = n => n === 0 ? "today" : n === 1 ? "tomorrow" : n === -1 ? "yesterday" : n > 0 ? "in " + plural(n, "day") : plural(-n, "day") + " ago";
+  const isoDay = iso => { const x = new Date(iso); return isNaN(x) ? "" : x.getDate() + " " + MON[x.getMonth()]; };
+  const TOTAL = (day(END) - day(START)) / 864e5;
+  const WEEKS_TOTAL = Math.ceil(TOTAL / 7);
+  const WEEK_NOW = Math.min(WEEKS_TOTAL, Math.max(1, Math.floor((TODAY - day(START)) / 864e5 / 7) + 1));
+
+  function h(tag, attrs, ...kids) {
+    const el = document.createElement(tag);
+    for (const k in attrs || {}) {
+      if (k === "html") el.innerHTML = attrs[k];
+      else if (k === "text") el.textContent = attrs[k];
+      else if (attrs[k] !== undefined && attrs[k] !== null && attrs[k] !== false) el.setAttribute(k, attrs[k]);
+    }
+    for (const c of kids) if (c) el.append(c);
+    return el;
+  }
+
+  // Shared state
+  let db = null, user = null, me = null, loaded = false, readOnly = false, available = true;
+  let state = {};
+  const rows = {};
+  const owners = {};
+  const TICKS = [];
+
+  function tickBox(id) {
+    const cb = h("input", { type: "checkbox", id: "c-" + id, disabled: "" });
+    cb.addEventListener("change", () => setDone(id, cb.checked));
+    return [h("span", { class: "tick" }, cb), cb];
+  }
+
+  function ownerField(id) {
+    const inp = h("input", { type: "text", id: "o-" + id, list: "team", maxlength: "40", placeholder: "Add a name", autocomplete: "off", disabled: "" });
+    inp.addEventListener("change", () => save(id, { owner: inp.value.trim().slice(0, 40) }));
+    inp.addEventListener("keydown", e => { if (e.key === "Enter") inp.blur(); });
+    owners[id] = inp;
+    return h("span", { class: "owner" }, h("label", { for: "o-" + id, text: "Owner" }), inp);
+  }
+
+  const CHIP = { have: "In place", changed: "Changed", gap: "Gap", check: "Check" };
+
+  function checkRow(it, opts) {
+    const [tick, cb] = tickBox(it.id);
+    const title = h("label", { class: "title", for: "c-" + it.id, text: it.title });
+    const end = h("span", { class: "end" });
+    if (opts.min) end.append(h("span", { class: "pill min", text: opts.min }));
+    const pill = h("span", { class: "pill" });
+    end.append(pill);
+    const tag = it.tag ? h("span", { class: "tag" + (it.tag === "Must" ? " must" : ""), text: it.tag + " have" }) : null;
+    const line1 = h("div", { class: "line1" }, opts.num ? h("span", { class: "num", text: String(opts.num) }) : null, title, tag, end);
+    let detailHtml = it.detail || "";
+    if (it.src) detailHtml += (detailHtml ? " " : "") + '<span class="src">' + it.src + "</span>";
+    const detail = detailHtml ? h("p", { class: "detail", html: detailHtml }) : null;
+    let notes = null;
+    if (it.notes) {
+      notes = h("div", { class: "notes" });
+      for (const n of it.notes) notes.append(h("p", { class: "note" }, h("span", { class: "chip " + n[0], text: CHIP[n[0]] }), h("span", { html: n[1] })));
+    }
+    const by = h("span", { class: "by", hidden: "" });
+    const meta = h("div", { class: "meta" },
+      it.who ? h("span", { class: "who", text: it.who }) : null,
+      opts.owner ? ownerField(it.id) : null,
+      it.link ? h("a", { href: it.link[1], target: "_blank", rel: "noopener", text: it.link[0] }) : null,
+      by);
+    const body = h("div", { class: "body" }, opts.when || null, line1, detail, notes, meta);
+    const li = h("li", { class: "item" }, tick, body);
+    rows[it.id] = { li, cb, pill, by, due: opts.due || null, quiet: !!opts.quiet };
+    TICKS.push(Object.assign({ group: opts.group, href: opts.href }, it));
+    return li;
+  }
+
+  const add = (listId, items, opts) => { const ol = document.getElementById(listId); for (const it of items) ol.append(checkRow(it, typeof opts === "function" ? opts(it) : opts)); };
+
+  add("list-reports", REPORTS, it => ({ group: "reports", href: "#m-reports", due: it.date, when: h("span", { class: "when", text: DOW[day(it.date).getDay()] + " " + fmt(it.date, true) }) }));
+  add("list-deck", DECK, it => ({ group: "deck", href: "#m-present", owner: true, num: it.n, min: it.min, quiet: true }));
+  add("list-canvas", CANVAS, { group: "canvas", href: "#m-submit", owner: true, quiet: true });
+  add("list-phase1", PHASE1, { group: "phase1", href: "#m-submit", owner: true, quiet: true });
+  add("list-setup", SETUP, it => ({ group: "setup", href: "#setup", due: it.due }));
+  add("list-sponsor", SPONSOR, it => ({ group: "sponsor", href: "#sponsor", due: it.due }));
+
+  // Proposal scope
+  (function buildScope() {
+    const wrap = document.getElementById("scope-lists");
+    for (const g of SCOPE) {
+      wrap.append(h("h3", { class: "sub-h", text: g.area }));
+      const ol = h("ol", { class: "list" });
+      for (const it of g.items) ol.append(checkRow(it, { group: "scope", href: "#scope", owner: true, quiet: true }));
+      wrap.append(ol);
+    }
+  })();
+
+  // Sponsor needs
+  (function buildNeeds() {
+    const wrap = document.getElementById("needs-cards");
+    for (const c of NEEDS) {
+      const ul = h("ul");
+      for (const i of c.items) ul.append(h("li", { text: i }));
+      wrap.append(h("div", { class: "card" }, h("h3", { text: c.t }), ul));
+    }
+  })();
+
+  // Build plan
+  (function buildPlan() {
+    const wrap = document.getElementById("weeks");
+    for (const w of WEEKS) {
+      const nowWeek = diff(w.a) <= 0 && diff(w.b) >= 0;
+      const ul = h("ul");
+      for (const r of w.rows) ul.append(h("li", null, h("span", { class: "mono", text: r[0] }), h("span", { text: r[1] })));
+      wrap.append(h("div", { class: "wk" + (nowWeek ? " now" : "") },
+        h("h3", null, document.createTextNode("Week " + w.n), h("span", { class: "mono", text: fmtRange(w.a, w.b) })), ul));
+    }
+    const areas = document.getElementById("areas");
+    for (const a of AREAS) areas.append(h("div", { class: "area" }, h("b", { text: a.name }), h("p", { text: a.prs }), ownerField(a.id)));
+  })();
+
+  // Grading
+  (function buildGrade() {
+    const bar = document.getElementById("bar"), list = document.getElementById("weights");
+    for (const g of GRADE) {
+      bar.append(h("span", { class: g[1] === 45 ? "big45" : null, style: "flex:" + g[1], text: g[1] + "%" }));
+      list.append(h("li", null, h("span", { text: g[0] }), h("span", { class: "mono", text: g[1] + "%" })));
+    }
+  })();
+
+  // Milestone status pills
+  (function buildMilestones() {
+    document.querySelectorAll(".ms").forEach(ms => {
+      const pill = ms.querySelector("[data-ms-pill]");
+      const first = diff(ms.dataset.start), last = diff(ms.dataset.end);
+      ms.classList.toggle("is-past", last < 0);
+      ms.classList.toggle("is-now", first <= 0 && last >= 0);
+      if (!pill) return;
+      pill.className = "pill";
+      if (ms.id === "m-conduct") { pill.textContent = last < 0 ? "Ended" : first > 0 ? rel(first) : "Week " + WEEK_NOW + " of " + WEEKS_TOTAL; if (first <= 0 && last >= 0) pill.classList.add("now"); return; }
+      if (last < 0) pill.textContent = "Passed";
+      else if (first <= 0) { pill.textContent = "Now"; pill.classList.add("now"); }
+      else { pill.textContent = rel(first); if (first <= 14) pill.classList.add("soon"); }
+    });
+    for (const g in GROUP_DUE) {
+      const n = diff(GROUP_DUE[g]);
+      const p = document.getElementById("pill-" + g);
+      p.textContent = (g === "deck" ? "Ready by " : "Due ") + fmt(GROUP_DUE[g]);
+      if (n >= 0 && n <= 14) p.classList.add("soon");
+    }
+  })();
+
+  // Countdown, week and the semester track
+  (function buildHero() {
+    const m = KEYS.find(t => diff(t.end || t.date) >= 0);
+    const num = document.getElementById("bigNum"), unit = document.getElementById("bigUnit"), text = document.getElementById("bigText");
+    if (!m) { num.textContent = "Done"; text.textContent = "Every school milestone has passed."; }
+    else {
+      const n = diff(m.date);
+      if (n > 0) {
+        num.textContent = String(n); unit.textContent = n === 1 ? "day" : "days";
+        text.textContent = "until the " + m.title.toLowerCase() + (m.end ? ". The earliest slot is " + fmt(m.date) + "." : ", on " + fmt(m.date) + ".");
+      } else {
+        num.textContent = n === 0 ? "Today" : "Now"; unit.textContent = "";
+        text.textContent = m.title + (m.end ? " runs " + fmtRange(m.date, m.end) + "." : " is today.");
+      }
+    }
+    document.getElementById("weekText").textContent = TODAY < day(START) ? "Project conduct starts on 7 Sep." : "Week " + WEEK_NOW + " of " + WEEKS_TOTAL + " of project conduct, which runs 7 Sep 2026 to 18 Apr 2027.";
+
+    const pct = s => Math.min(100, Math.max(0, (day(s) - day(START)) / 864e5 / TOTAL * 100));
+    const tp = Math.min(100, Math.max(0, (TODAY - day(START)) / 864e5 / TOTAL * 100));
+    const rail = document.getElementById("rail");
+    rail.append(h("span", { class: "fill", style: "width:" + tp + "%" }));
+    const b0 = pct("2026-11-02"), b1 = pct("2026-11-27");
+    rail.append(h("span", { class: "band", style: "left:" + b0 + "%;width:" + (b1 - b0) + "%" }, h("span", { text: "Build" })));
+    for (const k of KEYS) rail.append(h("span", { class: "mk", style: "left:" + pct(k.date) + "%" }));
+    rail.append(h("span", { class: "now", style: "left:" + tp + "%" }));
+    const ends = document.getElementById("railEnds");
+    if (tp > 12) ends.append(h("span", { class: "s", text: "7 Sep" }));
+    if (tp < 88) ends.append(h("span", { class: "e", text: "18 Apr" }));
+    ends.append(h("span", { class: "t", style: "left:" + tp + "%", text: "Today" }));
+    document.getElementById("trackText").textContent = "Project conduct runs from 7 Sep 2026 to 18 Apr 2027. The build weeks run from 2 to 27 Nov.";
+
+    const legend = document.getElementById("legend");
+    for (const k of KEYS) {
+      const last = diff(k.end || k.date), first = diff(k.date);
+      const r = last < 0 ? "Passed" : first <= 0 ? "Now" : rel(first);
+      legend.append(h("li", { class: last < 0 ? "past" : null }, h("a", { href: k.href },
+        h("b", { text: k.title }),
+        h("span", { class: "mono", text: k.end ? fmtRange(k.date, k.end) : fmt(k.date, true) }),
+        h("span", { class: "r", text: r }))));
+    }
+  })();
+
+  // Rendering state
+  const isDone = id => !!(state[id] && state[id].done);
+
+  function setPill(r, done) {
+    const p = r.pill;
+    p.className = "pill";
+    p.hidden = false;
+    if (done) { p.textContent = "Done"; p.classList.add("done"); return; }
+    if (r.quiet) { p.hidden = true; p.textContent = ""; return; }
+    if (!r.due) { p.textContent = "No date yet"; return; }
+    const n = diff(r.due);
+    if (n < 0) { p.textContent = plural(-n, "day") + " late"; p.classList.add("late"); }
+    else if (n === 0) { p.textContent = "Due today"; p.classList.add("soon"); }
+    else if (n <= 7) { p.textContent = "Due " + rel(n); p.classList.add("soon"); }
+    else p.textContent = "Due " + fmt(r.due);
+  }
+
+  function counts() {
+    const groups = {};
+    let done = 0;
+    for (const it of TICKS) {
+      const g = groups[it.group] || (groups[it.group] = { done: 0, total: 0 });
+      g.total++;
+      if (isDone(it.id)) { g.done++; done++; }
+    }
+    const words = { reports: "in", setup: "done", sponsor: "done", deck: "ready", canvas: "uploaded", phase1: "done", scope: "met" };
+    document.querySelectorAll("[data-count]").forEach(el => {
+      const g = groups[el.dataset.count];
+      if (g) el.textContent = g.done + " of " + g.total + " " + words[el.dataset.count];
+    });
+    const tally = document.getElementById("tally");
+    tally.textContent = "";
+    tally.append(h("b", { text: String(done) }), document.createTextNode(" of " + TICKS.length + " done"));
+
+    const rp = document.getElementById("reports-pill");
+    const nextRep = REPORTS.find(r => !isDone(r.id));
+    rp.className = "pill";
+    if (!nextRep) { rp.textContent = "All in"; rp.classList.add("done"); }
+    else {
+      const n = diff(nextRep.date);
+      rp.textContent = n < 0 ? "Report " + nextRep.id.slice(4) + " " + plural(-n, "day") + " late" : "Next " + fmt(nextRep.date) + ", " + rel(n);
+      if (n < 0) rp.classList.add("late"); else if (n <= 7) rp.classList.add("soon");
+    }
+  }
+
+  function nextUp() {
+    const out = [];
+    for (const it of TICKS) {
+      const r = rows[it.id];
+      if (r.quiet || !r.due || isDone(it.id)) continue;
+      out.push({ date: r.due, title: it.title, href: it.href });
+    }
+    const groupItems = { deck: ["deck"], submit: ["canvas", "phase1"] };
+    for (const g in GROUP_DUE) {
+      const items = TICKS.filter(t => groupItems[g].includes(t.group));
+      const d = items.filter(t => isDone(t.id)).length;
+      if (d < items.length) out.push({ date: GROUP_DUE[g], title: g === "deck" ? "First presentation" : "First submission", sub: d + " of " + items.length + (g === "deck" ? " items ready" : " items done"), href: g === "deck" ? "#m-present" : "#m-submit" });
+    }
+    for (const t of KEYS.slice(2).concat(INTERNAL)) if (diff(t.end || t.date) >= 0) out.push({ date: t.date, title: t.title, href: t.href });
+    out.sort((a, b) => day(a.date) - day(b.date));
+    const list = document.getElementById("nextList");
+    list.textContent = "";
+    for (const o of out.slice(0, 5)) {
+      const n = diff(o.date);
+      const pill = h("span", { class: "pill" + (n < 0 ? " late" : n <= 7 ? " soon" : ""), text: n < 0 ? plural(-n, "day") + " late" : rel(n) });
+      const a = h("a", { href: o.href }, document.createTextNode(o.title), o.sub ? h("span", { class: "sub", text: o.sub }) : null);
+      list.append(h("li", null, h("span", { class: "d mono", text: fmt(o.date) }), h("span", null, a), pill));
+    }
+    if (!list.children.length) list.append(h("li", null, h("span", { class: "d" }), h("span", { text: "Nothing open." })));
+  }
+
+  async function fillNames() {
+    if (!user) return;
+    const els = Array.from(document.querySelectorAll(".by[data-uid]"));
+    const ids = Array.from(new Set(els.map(e => e.dataset.uid)));
+    if (!ids.length) return;
+    let ps;
+    try { ps = await user.profiles(ids); } catch (e) { return; }
+    for (const e of els) {
+      const p = ps[e.dataset.uid];
+      const name = p && p.name;
+      e.textContent = name ? "Ticked by " + name + " on " + e.dataset.on : "Ticked on " + e.dataset.on;
+    }
+  }
+
+  function applyState() {
+    const off = !loaded || readOnly || !available;
+    for (const it of TICKS) {
+      const r = rows[it.id];
+      const s = state[it.id] || {};
+      const done = !!s.done;
+      r.cb.checked = done;
+      r.cb.disabled = off;
+      r.li.classList.toggle("is-done", done);
+      setPill(r, done);
+      if (done && s.doneAt) {
+        r.by.hidden = false;
+        r.by.dataset.on = isoDay(s.doneAt);
+        if (s.doneBy) r.by.dataset.uid = s.doneBy; else delete r.by.dataset.uid;
+        if (!r.by.textContent) r.by.textContent = "Ticked on " + r.by.dataset.on;
+      } else {
+        r.by.hidden = true; r.by.textContent = ""; delete r.by.dataset.uid;
+      }
+    }
+    for (const id in owners) {
+      const inp = owners[id];
+      if (document.activeElement !== inp) inp.value = (state[id] && state[id].owner) || "";
+      inp.disabled = off;
+      inp.placeholder = off ? "No owner yet" : "Add a name";
+    }
+    counts();
+    nextUp();
+    fillNames();
+  }
+
+  const SYNC = {
+    loading: "Loading the team's ticks.",
+    live: "Ticks and owners save for the whole team as you change them.",
+    readonly: "You can see the team's ticks but not change them. Ask the team lead to share this page with you as an Editor.",
+    none: "Ticks and owners live on the shared page, for teammates signed in to Claude. Every date and detail is here without them.",
+    error: "That change did not save. Check your connection and try again."
+  };
+  let syncTimer = 0;
+  function setSync(k) {
+    const el = document.getElementById("sync");
+    el.dataset.state = k;
+    el.textContent = SYNC[k];
+    if (k === "none") el.append(" ", h("a", { href: LIVE, target: "_blank", rel: "noopener", text: "Open the shared page" }));
+    clearTimeout(syncTimer);
+    if (k === "error") syncTimer = setTimeout(() => setSync(readOnly ? "readonly" : "live"), 6000);
+  }
+
+  // Writes: one at a time per document
+  const chains = {};
+  function save(id, patch) {
+    if (!db || readOnly || !loaded) return;
+    const run = async () => {
+      const ref = db.doc("checks/" + id);
+      try {
+        if (state[id]) await ref.update(patch); else await ref.set(patch);
+      } catch (e) {
+        const code = e && e.code;
+        if (code === "invalid_argument" || code === "unavailable") {
+          if (code === "unavailable") await new Promise(r => setTimeout(r, 300 + Math.random() * 700));
+          try { await ref.set(Object.assign({}, state[id] || {}, patch)); return; }
+          catch (e2) {
+            if (e2 && e2.code === "invalid_argument") { readOnly = true; setSync("readonly"); applyState(); return; }
+            throw e2;
+          }
+        }
+        throw e;
+      }
+    };
+    chains[id] = (chains[id] || Promise.resolve()).then(run).catch(() => { setSync("error"); applyState(); });
+  }
+
+  function setDone(id, done) {
+    const patch = done
+      ? { done: true, doneAt: new Date().toISOString(), doneBy: (me && me.id) || null }
+      : { done: false, doneAt: null, doneBy: null };
+    rows[id].li.classList.toggle("is-done", done);
+    setPill(rows[id], done);
+    save(id, patch);
+  }
+
+  applyState();
+
+  (async function connect() {
+    const cl = window.claude;
+    if (!cl || typeof cl.use !== "function") { available = false; setSync("none"); applyState(); return; }
+    let dbns = null;
+    try { [dbns, user] = await Promise.all([cl.use("db"), cl.use("user")]); } catch (e) { dbns = null; }
+    if (!dbns) { available = false; setSync("none"); applyState(); return; }
+    db = dbns;
+    if (user) {
+      me = await user.me();
+      const can = await user.can("data.write");
+      if (can === false) readOnly = true;
+    }
+    db.collection("checks").onSnapshot(snap => {
+      const next = {};
+      for (const d of snap.docs) if (d.exists) next[d.id] = d.data();
+      state = next;
+      if (!loaded) { loaded = true; setSync(readOnly ? "readonly" : "live"); }
+      applyState();
+    }, () => { available = false; setSync("none"); applyState(); });
+  })();
+})();
+</script>
+</body>
+</html>

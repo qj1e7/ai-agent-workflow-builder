@@ -6,6 +6,7 @@ Support staff describe a repetitive Jira or Confluence task in plain English. A 
 
 ## Start here
 
+- [CHECKPOINTS.html](CHECKPOINTS.html): every school milestone and what it needs, so nobody has to open the briefing slides. Download it and open it in a browser, or use the [shared page](https://claude.ai/artifact/4LsDyqMZGqaT63UWwpbxio), where the team ticks items and adds owners
 - [CONTRIBUTING.md](CONTRIBUTING.md): set up your machine, and how we work day to day
 - [AGENTS.md](AGENTS.md): team rules for humans and AI agents
 - [GLOSSARY.md](GLOSSARY.md): the names we use
