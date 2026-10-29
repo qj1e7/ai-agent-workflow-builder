@@ -104,7 +104,8 @@
 
 .pill {
   display: inline-flex;
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
   align-items: center;
   gap: 6px;
   padding: 1px 10px 1px 8px;
@@ -114,7 +115,10 @@
   font-size: 0.8125rem;
   font-weight: 600;
   line-height: 1.6;
-  white-space: nowrap;
+}
+
+.pill > svg {
+  flex: none;
 }
 
 .pill[data-tone='ok'] {
