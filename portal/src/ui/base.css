@@ -14,8 +14,16 @@
 
 html {
   color-scheme: light;
+  scroll-padding-top: 84px;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+}
+
+@media (max-width: 900px) {
+  html {
+    scroll-padding-top: 76px;
+    scroll-padding-bottom: 84px;
+  }
 }
 
 body {

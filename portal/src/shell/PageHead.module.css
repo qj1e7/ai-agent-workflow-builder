@@ -1,0 +1,10 @@
+.head {
+  margin-bottom: 28px;
+}
+
+.head p {
+  max-width: 65ch;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 1.05rem;
+}

@@ -6,7 +6,7 @@ export const CALLBACK_PATH = '/auth/callback'
 export const SIGNED_OUT_PATH = '/signed-out'
 export const RENEW_BEFORE_MS = 30_000
 
-export const INSECURE_WORDS = 'Open the Portal over https or on localhost to sign in.'
+export const INSECURE_WORDS = 'Open AI Workflow Builder over https, or on localhost, to sign in.'
 export const CALLBACK_FAILED_WORDS = 'Sign-in did not finish. Try again.'
 
 export interface OidcUser {

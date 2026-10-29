@@ -1,0 +1,109 @@
+.root {
+  position: fixed;
+  z-index: var(--z-mock);
+  left: max(16px, env(safe-area-inset-left, 0px));
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  max-width: calc(100% - 32px);
+}
+
+@media (max-width: 900px) {
+  .root {
+    bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--mock-bg);
+  color: var(--mock-ink);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(20, 10, 50, 0.3);
+  transition: transform var(--dur-press) var(--ease-out);
+}
+
+.toggle:active {
+  transform: scale(0.97);
+}
+
+.panel {
+  display: grid;
+  gap: 12px;
+  width: min(360px, calc(100vw - 32px));
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--mock-bg);
+  color: var(--mock-ink);
+  font-size: 0.85rem;
+  box-shadow: 0 10px 30px rgba(20, 10, 50, 0.35);
+  transform-origin: bottom left;
+  animation: grow var(--dur-small) var(--ease-out);
+}
+
+@keyframes grow {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+.title {
+  margin: 0;
+  color: var(--mock-dim);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.note {
+  margin: 0;
+  color: var(--mock-dim);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.row > span:first-child {
+  min-width: 52px;
+  color: var(--mock-dim);
+  font-weight: 600;
+}
+
+.segmented {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--mock-dim);
+  border-radius: 10px;
+}
+
+.segmented button {
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--mock-ink);
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.segmented button[aria-pressed='true'] {
+  background: var(--mock-on);
+  color: var(--mock-on-ink);
+}
