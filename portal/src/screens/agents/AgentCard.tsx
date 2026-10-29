@@ -25,6 +25,12 @@ import styles from './AgentsPage.module.css'
 
 export const tileId = (id: string) => `agent-tile-${id}`
 
+const FROM_LIST = { fromList: true }
+
+export function openedFromList(state: unknown): boolean {
+  return typeof state === 'object' && state !== null && 'fromList' in state
+}
+
 export type ToolIndex = ReadonlyMap<ToolId, ToolView>
 
 function AccessTag({ access }: { access: Access }) {
@@ -48,7 +54,7 @@ function Tile({ id, name, what, access, toolCount, platform, to }: TileProps) {
         <AgentFace id={id} size={52} />
         <div>
           <h3>
-            <Link id={tileId(id)} to={to} className={styles['tileLink']}>
+            <Link id={tileId(id)} to={to} state={FROM_LIST} className={styles['tileLink']}>
               {name}
             </Link>
           </h3>

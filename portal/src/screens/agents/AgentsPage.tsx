@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams, useSearchParams } from 'react-rout
 import { useAgentCards, useTools } from '../../api/queries'
 import { PageHead } from '../../shell/PageHead'
 import { Button } from '../../ui/Button'
-import { CardDialog, CardTile, PlatformDialog, PlatformTile, tileId, type ToolIndex } from './AgentCard'
+import { CardDialog, CardTile, openedFromList, PlatformDialog, PlatformTile, tileId, type ToolIndex } from './AgentCard'
 import { faceId, PLATFORM_AGENTS, TOOLS_UNAVAILABLE_WORDS } from './agents'
 import { ToolsTab } from './ToolsTab'
 import styles from './AgentsPage.module.css'
@@ -16,7 +16,8 @@ type Tab = 'agents' | 'tools'
 export function AgentsPage({ heading, lead }: { heading: string; lead: string }) {
   const { agentId = null } = useParams()
   const [params, setParams] = useSearchParams()
-  const { search } = useLocation()
+  const location = useLocation()
+  const { search } = location
   const navigate = useNavigate()
   const cards = useAgentCards()
   const tools = useTools()
@@ -34,7 +35,11 @@ export function AgentsPage({ heading, lead }: { heading: string; lead: string })
     if (agentId === null && lastShown !== null) document.getElementById(tileId(lastShown))?.focus()
   }, [agentId, lastShown])
 
-  const close = () => void navigate(`/agents${search}`)
+  // Back from the list must not reopen the card, so a card opened from the list closes by going back.
+  const close = () => {
+    if (openedFromList(location.state)) void navigate(-1)
+    else void navigate(`/agents${search}`, { replace: true })
+  }
 
   const specialists = cards.data ?? []
   return (
