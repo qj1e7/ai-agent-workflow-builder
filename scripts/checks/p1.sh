@@ -94,8 +94,8 @@ portal_of() {
 }
 
 runner_in() {
-  local project=$1
-  shift
+  local root=$1 project=$2
+  shift 2
   local portal
   portal=$(portal_of "$project")
   [ -n "$portal" ] || die "no running Portal in project $project"
@@ -107,14 +107,14 @@ runner_in() {
     -e TRUNK_SHA="${TRUNK_SHA:-}" -e HEAD_SHA="${HEAD_SHA:-}" \
     -e MOCK_OIDC_URL="${MOCK_OIDC_URL:-http://mock-oidc:8080/default}" \
     -e MOCK_GITHUB_URL=http://mock-github:8200 -e PLAIN_HTTP_URL=http://portal:8080 \
-    -v "$checker_root/portal/e2e:/work/e2e:ro" -v "$EVID:/evidence" -v "$EVID/.live-out:/work/e2e/out/live" \
+    -v "$root/portal/e2e:/work/e2e:ro" -v "$EVID:/evidence" -v "$EVID/.live-out:/work/e2e/out/live" \
     -w /work "$RUNNER" "$@"
 }
 
 check() {
   local project=$1
   shift
-  runner_in "$project" npx playwright test -c e2e/checks/playwright.config.ts "$@"
+  runner_in "$checker_root" "$project" npx playwright test -c e2e/checks/playwright.config.ts "$@"
 }
 
 lane1() {
@@ -129,8 +129,7 @@ lane2() {
   local worktree=$1 project=$2
   mkdir -p "$EVID/lane-2"
   local builder=0 own=0 run=${LANE2_RUN:-1}
-  # The builder's spec runs from the checked-out worktree, in the same runner, so nothing is built here.
-  E2E_AUTH=oidc checker_root=$worktree runner_in "$project" npx playwright test -c e2e/live/playwright.config.ts >"$EVID/lane-2/builder-06-oidc-$run.log" 2>&1 || builder=$?
+  E2E_AUTH=oidc runner_in "$worktree" "$project" npx playwright test -c e2e/live/playwright.config.ts >"$EVID/lane-2/builder-06-oidc-$run.log" 2>&1 || builder=$?
   rm -rf "$EVID/lane-2/builder-06-shots-$run" && cp -R "$EVID/.live-out/shots" "$EVID/lane-2/builder-06-shots-$run" 2>/dev/null || true
   E2E_AUTH=oidc check "$project" --grep @lane2 >"$EVID/lane-2/checker-lane2-$run.log" 2>&1 || own=$?
   grep -E "passed|failed" "$EVID/lane-2/builder-06-oidc-$run.log" "$EVID/lane-2/checker-lane2-$run.log" || true
