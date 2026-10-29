@@ -116,12 +116,17 @@ def test_old_release_data_stops_bootstrap_before_n8n_and_deletes_nothing(
 
 
 class FakeN8n:
+    """Like n8n 2.42.6, it refuses to delete a published workflow, and it finishes an unpublish
+    in the background, so the first delete after one still answers 409."""
+
     def __init__(self, existing: list[str]) -> None:
         self.workflows: dict[str, dict[str, Any]] = {
             f"W{n}": {"id": f"W{n}", "name": name, "active": True, "nodes": [], "settings": {}}
             for n, name in enumerate(existing, start=1)
         }
         self.deleted: list[str] = []
+        self.unpublishing: set[str] = set()
+        self.calls: list[str] = []
         self.scopes: list[str] = []
         self.next_id = len(existing) + 1
 
@@ -152,11 +157,33 @@ class FakeN8n:
             return httpx.Response(200, json=self.workflows[workflow_id])
         if path.startswith("/api/v1/workflows/"):
             workflow_id = path.split("/")[4]
+            self.calls.append(f"{method} {path.removeprefix('/api/v1/workflows/')}")
             if path.endswith("/activate"):
                 self.workflows[workflow_id]["active"] = True
+            elif path.endswith("/deactivate"):
+                if self.workflows[workflow_id]["active"]:
+                    self.workflows[workflow_id]["active"] = False
+                    self.unpublishing.add(workflow_id)
             elif method == "PUT":
                 self.workflows[workflow_id].update(body)
             elif method == "DELETE":
+                if self.workflows[workflow_id]["active"]:
+                    return httpx.Response(
+                        409,
+                        json={
+                            "message": "Cannot delete a published workflow. "
+                            "Unpublish it before deleting."
+                        },
+                    )
+                if workflow_id in self.unpublishing:
+                    self.unpublishing.discard(workflow_id)
+                    return httpx.Response(
+                        409,
+                        json={
+                            "message": "Workflow is still being unpublished. "
+                            "Please try again in a few moments."
+                        },
+                    )
                 self.deleted.append(workflow_id)
                 del self.workflows[workflow_id]
             return httpx.Response(200, json=self.workflows.get(workflow_id, {}))
@@ -191,6 +218,11 @@ def test_bootstrap_removes_the_old_run_workflow_by_its_exact_name_and_nothing_el
     assert sorted(w.name for w in loaded) == ["run", "run_failure_reporter", "schedule_tick"]
     assert all(w.active for w in loaded)
     assert n8n.deleted == ["W1"]
+    assert [c for c in n8n.calls if c.split()[1].split("/")[0] == "W1"] == [
+        "POST W1/deactivate",
+        "DELETE W1",
+        "DELETE W1",
+    ]
     assert sorted(w["name"] for w in n8n.workflows.values()) == [
         "Staff access review",
         f"{OLD_RUN_WORKFLOW} copy",
