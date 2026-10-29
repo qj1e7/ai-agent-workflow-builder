@@ -294,3 +294,18 @@ async def test_the_default_schedule_is_monday_nine_and_never_replaces_a_saved_on
     await book.delete(WATCHLIST)
     await book.delete(WATCHLIST)
     assert await book.get(WATCHLIST) is None
+
+
+async def test_using_up_the_slots_until_a_moment_takes_the_latest_and_never_moves_back(
+    db: Database,
+):
+    book = ScheduleBook(db)
+    await book.use_up_slots_until(WATCHLIST, NEXT_MONDAY)
+    assert await book.get(WATCHLIST) is None
+
+    await book.save(WATCHLIST, MONDAY_9, CAROL)
+    await book.use_up_slots_until(WATCHLIST, NEXT_MONDAY + timedelta(minutes=7))
+    await book.use_up_slots_until(WATCHLIST, NEXT_MONDAY - timedelta(minutes=5))
+
+    saved = await book.get(WATCHLIST)
+    assert saved is not None and saved.last_slot_started == NEXT_MONDAY

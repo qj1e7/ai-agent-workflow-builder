@@ -1,6 +1,6 @@
 import asyncio
 import uuid
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
@@ -22,6 +22,7 @@ from platform_api.builder.lifecycle import (
     On,
     Paused,
     TooLate,
+    comes_on,
     delete,
     from_columns,
     is_on,
@@ -37,6 +38,7 @@ from platform_api.orchestration import (
     NoModel,
     NotOn,
     RuntimeDown,
+    Schedule,
     ScheduleBook,
     ScheduleTicker,
 )
@@ -44,7 +46,7 @@ from platform_api.orchestration.runs import AwaitingApproval, StepName
 from platform_api.shared import N8nExecutionId, RunId, UseCaseId, UserId
 from tests.conftest import PostgresUrls
 from tests.declared import declared_status
-from tests.support import LOCAL_ENV, NOW
+from tests.support import CAROL, LOCAL_ENV, NOW
 from tests.test_builder_http import NothingLearned
 from tests.test_card_runs import output, ticket
 from tests.test_orchestrator import Harness, open_harness
@@ -109,6 +111,22 @@ def test_restoring_one_that_is_not_deleted_changes_nothing():
 )
 def test_only_a_use_case_that_is_on_runs(state: Lifecycle, running: bool):
     assert is_on(state) is running
+
+
+@pytest.mark.parametrize(
+    ("before", "after", "back_on"),
+    [
+        (Paused(NOW, ALICE_ID), On(), True),
+        (Deleted(NOW, ALICE_ID, On()), On(), True),
+        (On(), On(), False),
+        (Deleted(LATER, ALICE_ID, Paused(NOW, CAROL_ID)), Paused(NOW, CAROL_ID), False),
+        (On(), Paused(NOW, ALICE_ID), False),
+    ],
+)
+def test_a_move_comes_on_only_when_it_turns_a_paused_or_deleted_use_case_on(
+    before: Lifecycle, after: Lifecycle, back_on: bool
+):
+    assert comes_on(before, after) is back_on
 
 
 @pytest.mark.parametrize(
@@ -483,6 +501,40 @@ async def test_a_tick_while_the_watchlist_is_paused_starts_no_run(lab: Lab):
     assert await lab.runs() == []
     await lab.move("alice", "resume", use_case_id)
     assert await ticker.tick() == []
+    lab.h.clock["now"] = FIRST_MONDAY_SLOT + timedelta(days=7, minutes=1)
+    [run_id] = await ticker.tick()
+    assert [(r["run_id"], r["trigger"]) for r in await lab.runs()] == [(run_id, "schedule")]
+
+
+async def scheduled_agent_workflow(lab: Lab) -> str:
+    use_case_id = await agent_workflow(lab)
+    await ScheduleBook(lab.h.db).save(UseCaseId(use_case_id), Schedule("monday", "09:00"), CAROL)
+    return use_case_id
+
+
+@pytest.mark.parametrize(
+    ("away", "back", "make"),
+    [
+        pytest.param("pause", "resume", watchlist_workflow, id="resume"),
+        pytest.param("delete", "restore", scheduled_agent_workflow, id="restore"),
+    ],
+)
+async def test_a_slot_that_falls_while_it_is_off_never_starts_even_with_no_tick_before_it_is_back(
+    lab: Lab, away: str, back: str, make: Callable[[Lab], Awaitable[str]]
+):
+    use_case_id = await make(lab)
+    ticker = ScheduleTicker(lab.h.db, ScheduleBook(lab.h.db), lab.builder, lab.h.orchestrator)
+    lab.h.clock["now"] = FIRST_MONDAY_SLOT - timedelta(minutes=5)
+    assert (await lab.move("alice", away, use_case_id)).status_code == 200
+    lab.h.clock["now"] = FIRST_MONDAY_SLOT + timedelta(minutes=7)
+
+    back_on = await lab.move("alice", back, use_case_id)
+
+    assert back_on.json()["state"] == "on"
+    assert at(back_on.json()["next_run_at"]) == FIRST_MONDAY_SLOT + timedelta(days=7)
+    lab.h.clock["now"] = FIRST_MONDAY_SLOT + timedelta(minutes=12)
+    assert await ticker.tick() == []
+    assert await lab.runs() == []
     lab.h.clock["now"] = FIRST_MONDAY_SLOT + timedelta(days=7, minutes=1)
     [run_id] = await ticker.tick()
     assert [(r["run_id"], r["trigger"]) for r in await lab.runs()] == [(run_id, "schedule")]

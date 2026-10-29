@@ -45,6 +45,10 @@ def is_on(state: Lifecycle) -> bool:
     return isinstance(state, On)
 
 
+def comes_on(before: Lifecycle, after: Lifecycle) -> bool:
+    return is_on(after) and not is_on(before)
+
+
 def pause(state: Lifecycle, now: datetime, by: UserId) -> Lifecycle | AlreadyDeleted:
     match state:
         case On():

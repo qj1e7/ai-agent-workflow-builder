@@ -21,6 +21,7 @@ from platform_api.builder.lifecycle import (
     On,
     Paused,
     TooLate,
+    comes_on,
     delete,
     from_columns,
     is_on,
@@ -302,6 +303,11 @@ class Builder:
                         use_case_id,
                     ),
                 )
+                if comes_on(before, after):
+                    # The builder's role cannot write orchestration's schedules, so this is its
+                    # own transaction. It commits before the move does: a move that then fails
+                    # leaves the workflow off, missing only a slot the tick would have skipped.
+                    await self._schedules.use_up_slots_until(UseCaseId(use_case_id), uow.now)
         return after
 
     async def save_draft(
