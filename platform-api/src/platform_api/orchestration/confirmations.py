@@ -21,12 +21,12 @@ type Area = Literal["people", "model"]
 HISTORY_SHOWN = 50
 
 
-class Kind(Enum):
+class ConfirmationKind(Enum):
     APPROVER = "approver"
     MODEL_ADDRESS = "model_address"
 
 
-class Decision(Enum):
+class ConfirmationDecision(Enum):
     CONFIRMED = "confirmed"
     NOT_NOW = "not_now"
 
@@ -34,14 +34,14 @@ class Decision(Enum):
 @dataclass(frozen=True)
 class Confirmation:
     id: ConfirmationId
-    kind: Kind
+    kind: ConfirmationKind
     about: UserId | None
     change: Mapping[str, Any]
     digest: str
     asked_by: UserId
     asked_at: datetime
     decided_by: UserId | None = None
-    decision: Decision | None = None
+    decision: ConfirmationDecision | None = None
     decided_at: datetime | None = None
 
     @property
@@ -84,7 +84,7 @@ class DecideRefused:
 
 
 def digest_of(
-    kind: Kind,
+    kind: ConfirmationKind,
     about: UserId | None,
     asked_by: UserId,
     asked_at: datetime,
@@ -130,7 +130,7 @@ def _same_person(confirmation: Confirmation, about_added_at: datetime | None) ->
 def decide(
     confirmation: Confirmation,
     decider: Principal,
-    decision: Decision,
+    decision: ConfirmationDecision,
     seen_digest: str,
     now: datetime,
     about_on_list: bool = True,
@@ -158,14 +158,14 @@ class SettingsChange:
 def _confirmation(row: Mapping[str, Any]) -> Confirmation:
     return Confirmation(
         id=ConfirmationId(row["id"]),
-        kind=Kind(row["kind"]),
+        kind=ConfirmationKind(row["kind"]),
         about=UserId(row["about"]) if row["about"] is not None else None,
         change=row["change"],
         digest=row["digest"],
         asked_by=UserId(row["asked_by"]),
         asked_at=row["asked_at"],
         decided_by=UserId(row["decided_by"]) if row["decided_by"] is not None else None,
-        decision=Decision(row["decision"]) if row["decision"] is not None else None,
+        decision=ConfirmationDecision(row["decision"]) if row["decision"] is not None else None,
         decided_at=row["decided_at"],
     )
 
@@ -214,7 +214,7 @@ class ConfirmationStore:
         return _confirmation(row) if row is not None else None
 
     async def open_one(
-        self, uow: UnitOfWork, kind: Kind, about: UserId | None, lock: bool = False
+        self, uow: UnitOfWork, kind: ConfirmationKind, about: UserId | None, lock: bool = False
     ) -> Confirmation | None:
         row = await (
             await uow.conn.execute(
@@ -261,7 +261,7 @@ class ConfirmationStore:
                 "UPDATE orchestration.confirmations "
                 "SET decided_by = %s, decision = %s, decided_at = %s "
                 f"WHERE about = %s AND decided_at IS NULL RETURNING {_COLUMNS}",
-                (closed_by, Decision.NOT_NOW.value, uow.now, person_id),
+                (closed_by, ConfirmationDecision.NOT_NOW.value, uow.now, person_id),
             )
         ).fetchall()
         return [_confirmation(r) for r in rows]

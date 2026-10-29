@@ -9,10 +9,10 @@ from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
 from platform_api.orchestration.confirmations import (
     HISTORY_SHOWN,
     Confirmation,
+    ConfirmationDecision,
+    ConfirmationKind,
     DecideRefusal,
     DecideRefused,
-    Decision,
-    Kind,
 )
 from platform_api.orchestration.http import Operator
 from platform_api.orchestration.model_settings import (
@@ -45,29 +45,6 @@ from platform_api.wire import WireModel, error_response
 
 router = APIRouter()
 
-type PeopleRefusalName = Literal[
-    "bad_email",
-    "already_on_the_list",
-    "no_role",
-    "own_operator_role",
-    "last_operator",
-    "two_approvers",
-    "already_an_approver",
-    "already_asked",
-    "confirmation_waiting",
-    "yourself",
-]
-type DecideRefusalName = Literal[
-    "not_an_approver",
-    "you_asked",
-    "about_you",
-    "already_decided",
-    "digest_changed",
-    "person_removed",
-    "asker_gone",
-]
-type ConfirmationKind = Literal["approver", "model_address"]
-type ConfirmationDecision = Literal["confirmed", "not_now"]
 type SettingsArea = Literal["people", "model"]
 
 
@@ -109,7 +86,7 @@ class OperatorIn(WireModel):
 
 
 class PeopleRefusalOut(WireModel):
-    refusal: PeopleRefusalName
+    refusal: PeopleRefusal
     message: str
 
 
@@ -129,7 +106,7 @@ class ConfirmationOut(WireModel):
     asked_by_name: str
     asked_at: datetime
     you_can_decide: bool
-    why_not: DecideRefusalName | None
+    why_not: DecideRefusal | None
 
 
 class ConfirmationsOut(WireModel):
@@ -150,7 +127,7 @@ class ConfirmationDecidedOut(WireModel):
 
 
 class DecideRefusalOut(WireModel):
-    refusal: DecideRefusalName
+    refusal: DecideRefusal
     message: str
 
 
@@ -209,10 +186,10 @@ def person_out(row: PersonRow) -> PersonOut:
 
 def confirmation_summary(confirmation: Confirmation, about: Person | None) -> str:
     match confirmation.kind:
-        case Kind.APPROVER:
+        case ConfirmationKind.APPROVER:
             name = about.display if about is not None else str(confirmation.change.get("display"))
             return f"Make {name} an Approver"
-        case Kind.MODEL_ADDRESS:
+        case ConfirmationKind.MODEL_ADDRESS:
             change = confirmation.change
             return f"Use {change.get('model')} at {change.get('host')}"
 
@@ -221,7 +198,7 @@ def confirmation_out(row: ConfirmationRow) -> ConfirmationOut:
     c = row.confirmation
     return ConfirmationOut(
         confirmation_id=c.id,
-        kind=c.kind.value,  # type: ignore[arg-type]
+        kind=c.kind,
         summary=confirmation_summary(c, row.about),
         about=(
             AboutPersonOut(id=row.about.id, display=row.about.display, email=row.about.email)
@@ -233,7 +210,7 @@ def confirmation_out(row: ConfirmationRow) -> ConfirmationOut:
         asked_by_name=row.asked_by_name,
         asked_at=c.asked_at,
         you_can_decide=row.why_not is None,
-        why_not=row.why_not.value if row.why_not is not None else None,  # type: ignore[arg-type]
+        why_not=row.why_not,
     )
 
 
@@ -255,11 +232,15 @@ def history_out(lines: list[HistoryLine]) -> SettingsHistoryOut:
     )
 
 
-def _refused(refused: Refused) -> JSONResponse | HTTPException:
-    if refused.reason is PeopleRefusal.NOT_AN_OPERATOR:
-        return HTTPException(status_code=403, detail=refused.message)
-    body = PeopleRefusalOut(refusal=refused.reason.value, message=refused.message)  # type: ignore[arg-type]
-    return JSONResponse(status_code=409, content=body.model_dump(mode="json"))
+def _refusal(outcome: Refused | NotFound) -> JSONResponse:
+    match outcome:
+        case NotFound():
+            raise HTTPException(status_code=404, detail="No such person on the list")
+        case Refused(reason=PeopleRefusal.NOT_AN_OPERATOR):
+            raise HTTPException(status_code=403, detail=outcome.message)
+        case Refused():
+            body = PeopleRefusalOut(refusal=outcome.reason, message=outcome.message)
+            return JSONResponse(status_code=409, content=body.model_dump(mode="json"))
 
 
 def _answer(outcome: Person | PersonRow | Refused | NotFound) -> PersonOut | JSONResponse:
@@ -268,13 +249,8 @@ def _answer(outcome: Person | PersonRow | Refused | NotFound) -> PersonOut | JSO
             return person_out(PersonRow(outcome, None))
         case PersonRow():
             return person_out(outcome)
-        case NotFound():
-            raise HTTPException(status_code=404, detail="No such person on the list")
-        case Refused():
-            answer = _refused(outcome)
-            if isinstance(answer, HTTPException):
-                raise answer
-            return answer
+        case _:
+            return _refusal(outcome)
 
 
 @router.get("/api/v1/people", tags=["people"], responses=SIGNED_IN)
@@ -346,9 +322,7 @@ async def remove_person(person_id: UserId, principal: Operator, people: CurrentP
     outcome = await people.remove(principal, person_id)
     if isinstance(outcome, Person):
         return Response(status_code=204)
-    answer = _answer(outcome)
-    assert isinstance(answer, JSONResponse)
-    return answer
+    return _refusal(outcome)
 
 
 @router.get(
@@ -367,9 +341,8 @@ async def list_confirmations(
 
 def _decide_refused(refused: DecideRefused) -> JSONResponse:
     conflict = refused.reason in (DecideRefusal.ALREADY_DECIDED, DecideRefusal.DIGEST_CHANGED)
-    status = 409 if conflict else 403
-    body = DecideRefusalOut(refusal=refused.reason.value, message=refused.message)  # type: ignore[arg-type]
-    return JSONResponse(status_code=status, content=body.model_dump(mode="json"))
+    body = DecideRefusalOut(refusal=refused.reason, message=refused.message)
+    return JSONResponse(status_code=409 if conflict else 403, content=body.model_dump(mode="json"))
 
 
 @router.post(
@@ -392,7 +365,11 @@ async def decide_confirmation(
     people: CurrentPeople,
     model_settings: CurrentModelSettings,
 ) -> ConfirmationDecidedOut | JSONResponse:
-    decision = Decision.CONFIRMED if body.verdict == "confirm" else Decision.NOT_NOW
+    decision = (
+        ConfirmationDecision.CONFIRMED
+        if body.verdict == "confirm"
+        else ConfirmationDecision.NOT_NOW
+    )
     outcome = await people.decide(principal, confirmation_id, decision, body.digest)
     match outcome:
         case Decided(confirmation):
@@ -410,12 +387,14 @@ async def decide_confirmation(
 async def _decide_address(
     confirmation: Confirmation,
     principal: Principal,
-    decision: Decision,
+    decision: ConfirmationDecision,
     digest: str,
     people: People,
     model_settings: CurrentModelSettings,
 ) -> ConfirmationDecidedOut | JSONResponse:
-    result = await model_settings.decide(principal, decision is Decision.CONFIRMED, digest)
+    result = await model_settings.decide(
+        principal, decision is ConfirmationDecision.CONFIRMED, digest
+    )
     match result:
         case AddressDecided():
             decided = await people.confirmation(confirmation.id)
@@ -439,8 +418,8 @@ def decided_out(confirmation: Confirmation) -> ConfirmationDecidedOut:
     assert confirmation.decided_at is not None
     return ConfirmationDecidedOut(
         confirmation_id=confirmation.id,
-        kind=confirmation.kind.value,  # type: ignore[arg-type]
-        decision=confirmation.decision.value,  # type: ignore[arg-type]
+        kind=confirmation.kind,
+        decision=confirmation.decision,
         decided_by=confirmation.decided_by,
         decided_at=confirmation.decided_at,
     )

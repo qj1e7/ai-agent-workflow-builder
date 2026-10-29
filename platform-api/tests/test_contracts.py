@@ -38,6 +38,7 @@ from platform_api.orchestration.agents import (
 )
 from platform_api.orchestration.agents import ToolList as AgentToolList
 from platform_api.orchestration.approvals import Refusal, Verdict
+from platform_api.orchestration.confirmations import DecideRefusal
 from platform_api.orchestration.http import (
     ApprovalView,
     DecisionOut,
@@ -333,11 +334,11 @@ def test_the_people_fixtures_follow_the_second_person_rule():
     alice = ConfirmationsOut.model_validate(load("people/confirmations.alice.json"))
     bob = ConfirmationsOut.model_validate(load("people/confirmations.bob.json"))
     assert [(c.you_can_decide, c.why_not) for c in alice.confirmations] == [
-        (False, "you_asked"),
-        (False, "you_asked"),
+        (False, DecideRefusal.YOU_ASKED),
+        (False, DecideRefusal.YOU_ASKED),
     ]
     assert all(c.you_can_decide for c in bob.confirmations)
-    assert [c.kind for c in bob.confirmations] == ["approver", "model_address"]
+    assert [c.kind.value for c in bob.confirmations] == ["approver", "model_address"]
     people = PeopleOut.model_validate(load("people/list.json"))
     dave = next(p for p in people.people if p.display == "Dave")
     assert dave.approver is False and dave.pending_approver is not None

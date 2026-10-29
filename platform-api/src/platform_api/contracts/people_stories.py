@@ -3,14 +3,14 @@ from datetime import UTC, datetime, timedelta
 
 from platform_api.orchestration.confirmations import (
     Confirmation,
+    ConfirmationDecision,
     ConfirmationId,
+    ConfirmationKind,
     DecideRefusal,
-    Decision,
-    Kind,
     SettingsChange,
     digest_of,
 )
-from platform_api.orchestration.people import DEPLOY, Person
+from platform_api.orchestration.people import DEPLOY, PeopleRefusal, Person
 from platform_api.orchestration.people_http import (
     AddPersonIn,
     ConfirmationDecisionIn,
@@ -68,15 +68,15 @@ DAVE_CHANGE = {
 }
 DAVE_ASKED = Confirmation(
     id=ConfirmationId("cfm_01JD4VE"),
-    kind=Kind.APPROVER,
+    kind=ConfirmationKind.APPROVER,
     about=DAVE.id,
     change=DAVE_CHANGE,
-    digest=digest_of(Kind.APPROVER, DAVE.id, ALICE.id, ASKED, DAVE_CHANGE),
+    digest=digest_of(ConfirmationKind.APPROVER, DAVE.id, ALICE.id, ASKED, DAVE_CHANGE),
     asked_by=ALICE.id,
     asked_at=ASKED,
 )
 DAVE_CONFIRMED = replace(
-    DAVE_ASKED, decided_by=BOB.id, decision=Decision.CONFIRMED, decided_at=CONFIRMED
+    DAVE_ASKED, decided_by=BOB.id, decision=ConfirmationDecision.CONFIRMED, decided_at=CONFIRMED
 )
 ADDRESS_CHANGE = {
     "host": "ai-gateway.ncs.example",
@@ -87,7 +87,7 @@ ADDRESS_CHANGE = {
 }
 ADDRESS_ASKED = Confirmation(
     id=ConfirmationId("cfm_01JADDR"),
-    kind=Kind.MODEL_ADDRESS,
+    kind=ConfirmationKind.MODEL_ADDRESS,
     about=None,
     change=ADDRESS_CHANGE,
     digest="sha256:" + "a1" * 32,
@@ -172,11 +172,12 @@ def people_fixtures() -> dict[str, WireModel]:
         "people/person.pending.json": person_out(PersonRow(DAVE, DAVE_ASKED)),
         "people/person.approver.json": person_out(PersonRow(replace(DAVE, is_approver=True), None)),
         "people/refusal.two_approvers.json": PeopleRefusalOut(
-            refusal="two_approvers",
+            refusal=PeopleRefusal.TWO_APPROVERS,
             message="At least two people must stay Approvers, so nobody approves their own work.",
         ),
         "people/refusal.own_operator_role.json": PeopleRefusalOut(
-            refusal="own_operator_role", message="You cannot remove your own Operator role."
+            refusal=PeopleRefusal.OWN_OPERATOR_ROLE,
+            message="You cannot remove your own Operator role.",
         ),
         "people/confirmations.alice.json": ConfirmationsOut(
             confirmations=[
@@ -195,7 +196,7 @@ def people_fixtures() -> dict[str, WireModel]:
         ),
         "people/decision.confirmed.json": decided_out(DAVE_CONFIRMED),
         "people/decide-refusal.you_asked.json": DecideRefusalOut(
-            refusal="you_asked",
+            refusal=DecideRefusal.YOU_ASKED,
             message="You asked for this change, so another Approver must confirm it.",
         ),
         "settings/history.json": history_out(HISTORY),

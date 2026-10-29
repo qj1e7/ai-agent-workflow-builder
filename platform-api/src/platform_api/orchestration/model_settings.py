@@ -349,7 +349,7 @@ class ModelSettings:
                     uow,
                     confirmations.Confirmation(
                         id=confirmations.ConfirmationId(new_id("cfm")),
-                        kind=confirmations.Kind.MODEL_ADDRESS,
+                        kind=confirmations.ConfirmationKind.MODEL_ADDRESS,
                         about=None,
                         change=_address_change(stored),
                         digest=stored.digest,
@@ -393,13 +393,15 @@ class ModelSettings:
             return SettingsOff()
         async with self._db.transaction("orchestration") as uow:
             waiting = await _history.open_one(
-                uow, confirmations.Kind.MODEL_ADDRESS, None, lock=True
+                uow, confirmations.ConfirmationKind.MODEL_ADDRESS, None, lock=True
             )
             pending = await self._store.load(uow, "pending", lock=True)
             if waiting is None or pending is None:
                 return NothingPending()
             decision = (
-                confirmations.Decision.CONFIRMED if confirm else confirmations.Decision.NOT_NOW
+                confirmations.ConfirmationDecision.CONFIRMED
+                if confirm
+                else confirmations.ConfirmationDecision.NOT_NOW
             )
             decided = confirmations.decide(waiting, principal, decision, digest, uow.now)
             match decided:

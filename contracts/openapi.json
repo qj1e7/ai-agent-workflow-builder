@@ -2012,6 +2012,7 @@
           "confirmed",
           "not_now"
         ],
+        "title": "ConfirmationDecision",
         "type": "string"
       },
       "ConfirmationDecisionIn": {
@@ -2042,6 +2043,7 @@
           "approver",
           "model_address"
         ],
+        "title": "ConfirmationKind",
         "type": "string"
       },
       "ConfirmationOut": {
@@ -2090,7 +2092,7 @@
           "why_not": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/DecideRefusalName"
+                "$ref": "#/components/schemas/DecideRefusal"
               },
               {
                 "type": "null"
@@ -2308,7 +2310,7 @@
         ],
         "type": "string"
       },
-      "DecideRefusalName": {
+      "DecideRefusal": {
         "enum": [
           "not_an_approver",
           "you_asked",
@@ -2318,6 +2320,7 @@
           "person_removed",
           "asker_gone"
         ],
+        "title": "DecideRefusal",
         "type": "string"
       },
       "DecideRefusalOut": {
@@ -2328,7 +2331,7 @@
             "type": "string"
           },
           "refusal": {
-            "$ref": "#/components/schemas/DecideRefusalName"
+            "$ref": "#/components/schemas/DecideRefusal"
           }
         },
         "required": [
@@ -3414,8 +3417,9 @@
         "title": "PeopleOut",
         "type": "object"
       },
-      "PeopleRefusalName": {
+      "PeopleRefusal": {
         "enum": [
+          "not_an_operator",
           "bad_email",
           "already_on_the_list",
           "no_role",
@@ -3427,6 +3431,7 @@
           "confirmation_waiting",
           "yourself"
         ],
+        "title": "PeopleRefusal",
         "type": "string"
       },
       "PeopleRefusalOut": {
@@ -3437,7 +3442,7 @@
             "type": "string"
           },
           "refusal": {
-            "$ref": "#/components/schemas/PeopleRefusalName"
+            "$ref": "#/components/schemas/PeopleRefusal"
           }
         },
         "required": [

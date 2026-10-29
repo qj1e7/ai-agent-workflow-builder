@@ -6,11 +6,11 @@ from platform_api.auth import DEV_PEOPLE
 from platform_api.orchestration import people as rules
 from platform_api.orchestration.confirmations import (
     Confirmation,
+    ConfirmationDecision,
     ConfirmationId,
+    ConfirmationKind,
     DecideRefusal,
     DecideRefused,
-    Decision,
-    Kind,
     decide,
     digest_of,
     why_not,
@@ -296,10 +296,10 @@ class TestRemovePerson:
 ASKED_CHANGE = {"person_id": "dave", "role": "approver", "added_at": NOW.isoformat()}
 ASKED = Confirmation(
     id=ConfirmationId("cfm_1"),
-    kind=Kind.APPROVER,
+    kind=ConfirmationKind.APPROVER,
     about=DAVE.id,
     change=ASKED_CHANGE,
-    digest=digest_of(Kind.APPROVER, DAVE.id, ALICE.id, NOW, ASKED_CHANGE),
+    digest=digest_of(ConfirmationKind.APPROVER, DAVE.id, ALICE.id, NOW, ASKED_CHANGE),
     asked_by=ALICE.id,
     asked_at=NOW,
 )
@@ -307,57 +307,79 @@ ASKED = Confirmation(
 
 class TestDecideConfirmation:
     def test_another_approver_confirms_once(self):
-        decided = decide(ASKED, BOB.principal, Decision.CONFIRMED, ASKED.digest, LATER)
+        decided = decide(ASKED, BOB.principal, ConfirmationDecision.CONFIRMED, ASKED.digest, LATER)
         assert isinstance(decided, Confirmation)
         assert (decided.decided_by, decided.decision, decided.decided_at) == (
             "bob",
-            Decision.CONFIRMED,
+            ConfirmationDecision.CONFIRMED,
             LATER,
         )
-        again = decide(decided, ERIN.principal, Decision.CONFIRMED, ASKED.digest, LATER)
+        again = decide(decided, ERIN.principal, ConfirmationDecision.CONFIRMED, ASKED.digest, LATER)
         assert isinstance(again, DecideRefused)
         assert again.reason is DecideRefusal.ALREADY_DECIDED
 
     def test_the_asker_and_the_person_it_is_about_cannot_decide(self):
-        asker = decide(ASKED, ALICE.principal, Decision.CONFIRMED, ASKED.digest, LATER)
-        about = decide(ASKED, DAVE.principal, Decision.CONFIRMED, ASKED.digest, LATER)
+        asker = decide(ASKED, ALICE.principal, ConfirmationDecision.CONFIRMED, ASKED.digest, LATER)
+        about = decide(ASKED, DAVE.principal, ConfirmationDecision.CONFIRMED, ASKED.digest, LATER)
         assert isinstance(asker, DecideRefused) and asker.reason is DecideRefusal.YOU_ASKED
         assert isinstance(about, DecideRefused) and about.reason is DecideRefusal.NOT_AN_APPROVER
         dave_approver = Principal(DAVE.id, frozenset({Role.APPROVER}), "Dave")
-        about = decide(ASKED, dave_approver, Decision.CONFIRMED, ASKED.digest, LATER)
+        about = decide(ASKED, dave_approver, ConfirmationDecision.CONFIRMED, ASKED.digest, LATER)
         assert isinstance(about, DecideRefused) and about.reason is DecideRefusal.ABOUT_YOU
 
     def test_only_an_approver_decides(self):
-        outcome = decide(ASKED, CAROL.principal, Decision.NOT_NOW, ASKED.digest, LATER)
+        outcome = decide(ASKED, CAROL.principal, ConfirmationDecision.NOT_NOW, ASKED.digest, LATER)
         assert isinstance(outcome, DecideRefused)
         assert outcome.reason is DecideRefusal.NOT_AN_APPROVER
 
     def test_a_changed_digest_is_refused(self):
-        outcome = decide(ASKED, BOB.principal, Decision.CONFIRMED, "sha256:" + "0" * 64, LATER)
+        outcome = decide(
+            ASKED, BOB.principal, ConfirmationDecision.CONFIRMED, "sha256:" + "0" * 64, LATER
+        )
         assert isinstance(outcome, DecideRefused)
         assert outcome.reason is DecideRefusal.DIGEST_CHANGED
 
     def test_a_removed_person_is_not_made_an_approver(self):
         outcome = decide(
-            ASKED, BOB.principal, Decision.CONFIRMED, ASKED.digest, LATER, about_on_list=False
+            ASKED,
+            BOB.principal,
+            ConfirmationDecision.CONFIRMED,
+            ASKED.digest,
+            LATER,
+            about_on_list=False,
         )
         assert isinstance(outcome, DecideRefused)
         assert outcome.reason is DecideRefusal.PERSON_REMOVED
 
     def test_a_request_about_a_re_added_person_does_not_match(self):
         outcome = decide(
-            ASKED, BOB.principal, Decision.CONFIRMED, ASKED.digest, LATER, about_added_at=LATER
+            ASKED,
+            BOB.principal,
+            ConfirmationDecision.CONFIRMED,
+            ASKED.digest,
+            LATER,
+            about_added_at=LATER,
         )
         assert isinstance(outcome, DecideRefused)
         assert outcome.reason is DecideRefusal.PERSON_REMOVED
         fine = decide(
-            ASKED, BOB.principal, Decision.CONFIRMED, ASKED.digest, LATER, about_added_at=NOW
+            ASKED,
+            BOB.principal,
+            ConfirmationDecision.CONFIRMED,
+            ASKED.digest,
+            LATER,
+            about_added_at=NOW,
         )
         assert isinstance(fine, Confirmation)
 
     def test_a_request_whose_asker_is_no_longer_an_operator_cannot_be_confirmed(self):
         outcome = decide(
-            ASKED, BOB.principal, Decision.CONFIRMED, ASKED.digest, LATER, asker_is_operator=False
+            ASKED,
+            BOB.principal,
+            ConfirmationDecision.CONFIRMED,
+            ASKED.digest,
+            LATER,
+            asker_is_operator=False,
         )
         assert isinstance(outcome, DecideRefused)
         assert outcome.reason is DecideRefusal.ASKER_GONE
@@ -369,6 +391,6 @@ class TestDecideConfirmation:
         assert why_not(ASKED, CAROL.principal) is DecideRefusal.NOT_AN_APPROVER
 
     def test_the_digest_names_this_request_only(self):
-        other = digest_of(Kind.APPROVER, DAVE.id, ALICE.id, LATER, dict(ASKED.change))
+        other = digest_of(ConfirmationKind.APPROVER, DAVE.id, ALICE.id, LATER, dict(ASKED.change))
         assert other != ASKED.digest
         assert ASKED.digest.startswith("sha256:")

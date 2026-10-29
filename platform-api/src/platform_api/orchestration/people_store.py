@@ -10,12 +10,12 @@ from platform_api.db import Database, UnitOfWork
 from platform_api.orchestration import people as rules
 from platform_api.orchestration.confirmations import (
     Confirmation,
+    ConfirmationDecision,
     ConfirmationId,
+    ConfirmationKind,
     ConfirmationStore,
     DecideRefusal,
     DecideRefused,
-    Decision,
-    Kind,
     SettingsChange,
     decide,
     digest_of,
@@ -302,7 +302,7 @@ class People:
             pending = {
                 c.about: c
                 for c in await self._confirmations.open_ones(uow)
-                if c.kind is Kind.APPROVER
+                if c.kind is ConfirmationKind.APPROVER
             }
         return [PersonRow(p, pending.get(p.id)) for p in people]
 
@@ -418,7 +418,7 @@ class People:
         return frozenset(
             c.about
             for c in await self._confirmations.open_ones(uow)
-            if c.kind is Kind.APPROVER and c.about is not None
+            if c.kind is ConfirmationKind.APPROVER and c.about is not None
         )
 
     async def _ask(self, uow: UnitOfWork, asker: Person, about: Person) -> Confirmation:
@@ -433,10 +433,10 @@ class People:
             uow,
             Confirmation(
                 id=ConfirmationId(new_id("cfm")),
-                kind=Kind.APPROVER,
+                kind=ConfirmationKind.APPROVER,
                 about=about.id,
                 change=change,
-                digest=digest_of(Kind.APPROVER, about.id, asker.id, uow.now, change),
+                digest=digest_of(ConfirmationKind.APPROVER, about.id, asker.id, uow.now, change),
                 asked_by=asker.id,
                 asked_at=uow.now,
             ),
@@ -465,14 +465,18 @@ class People:
             return await self._confirmations.load(uow, confirmation_id)
 
     async def decide(
-        self, decider: Principal, confirmation_id: str, decision: Decision, seen_digest: str
+        self,
+        decider: Principal,
+        confirmation_id: str,
+        decision: ConfirmationDecision,
+        seen_digest: str,
     ) -> DecideResult:
         async with self._db.transaction("orchestration") as uow:
             await self._store.lock(uow)
             confirmation = await self._confirmations.load(uow, confirmation_id, lock=True)
             if confirmation is None:
                 return NotFound()
-            if confirmation.kind is Kind.MODEL_ADDRESS:
+            if confirmation.kind is ConfirmationKind.MODEL_ADDRESS:
                 return ModelAddress(confirmation)
             people = await self._store.all(uow)
             me = _target(people, decider.user_id)
@@ -498,7 +502,7 @@ class People:
             if not await self._confirmations.record_decision(uow, outcome):
                 return DecideRefused(DecideRefusal.ALREADY_DECIDED)
             asked_by = _name(dict((p.id, p) for p in people), confirmation.asked_by)
-            if decision is Decision.CONFIRMED:
+            if decision is ConfirmationDecision.CONFIRMED:
                 about = rules.grant_approver(about)
                 await self._store.save(uow, about)
                 summary = (
@@ -558,7 +562,7 @@ def _target(people: Sequence[Person], person_id: str) -> Person | None:
 
 
 def _asker_is_operator(people: Mapping[UserId, Person], confirmation: Confirmation) -> bool:
-    if confirmation.kind is not Kind.APPROVER:
+    if confirmation.kind is not ConfirmationKind.APPROVER:
         return True
     asker = people.get(confirmation.asked_by)
     return asker is not None and asker.on_list and asker.is_operator
