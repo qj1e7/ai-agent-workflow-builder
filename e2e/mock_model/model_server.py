@@ -5,9 +5,7 @@ can be tested without a real model:
 
 - GET /v1/models lists one model.
 - A request that forces a tool is a draft, a choice or the Planner reading a task back. The canned
-  answer follows the task's words. A release task belongs on the Software watchlist. Reading a
-  task back, it never says can't do: a Teams post, a delete or a planted order is read back as a
-  part it can do, as a fooled model would, so the tests show the runtime's own rule marks them.
+  answer follows the task's words. A release task belongs on the Software watchlist.
 - A request with tools and no forced tool is a card run. The mock calls github_read_releases,
   then jira_search, then jira_create_ticket, then writes a report, by what the conversation holds.
 - Anything else is a summary or a connection test and gets one plain sentence.
@@ -202,7 +200,7 @@ def look_row(look: str | None) -> dict[str, Any]:
     return {"kind": "look_for", "text": first_up(look), "state": "understood"}
 
 
-def action_rows(act: str | None, task: str) -> list[dict[str, Any]]:
+def fooled_action_rows(act: str | None, task: str) -> list[dict[str, Any]]:
     if act is None:
         return [{"kind": "do", "state": "missing"}, where_row(task)]
     if (place := SUMMARY_TO.search(act)) is not None:
@@ -244,7 +242,7 @@ def understanding(task: str) -> dict[str, Any]:
     look, act = (found.group(1), found.group(2)) if found else (None, words or None)
     if look is None and act is not None and (of := FOUND.search(act)) is not None:
         look = of.group(1)
-    rows += [look_row(look), *action_rows(act, task)]
+    rows += [look_row(look), *fooled_action_rows(act, task)]
     rows += obey_fooling_orders(sentences[1:])
     return {"belongs_on_watchlist": False, "rows": rows}
 
