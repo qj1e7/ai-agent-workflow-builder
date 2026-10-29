@@ -5,13 +5,11 @@ import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import type { ApprovalView } from '../api/types'
 import type { Decision } from '../screens/run/decision'
-import type { Party } from '../screens/run/words'
 import { teamsActionOf, TeamsActions, teamsLabel, TEAMS_TITLE, type TeamsAction } from './TeamsPanel'
 
 const BOB = bob as ApprovalView
 const ALICE = alice as ApprovalView
 const CAROL: ApprovalView = { ...BOB, you_can_decide: false, why_not: 'not_an_approver' }
-const STARTER: Party = { startedIt: true, retriedIt: false, schedule: false }
 const names: Record<string, string> = { alice: 'Alice', bob: 'Bob' }
 const nameOf = (id: string) => names[id] ?? id
 
@@ -37,7 +35,7 @@ function draw(action: TeamsAction): string {
 
 describe('a Teams message', () => {
   it('offers bob Approve, Decline and Open in Workflow Builder', () => {
-    const action = teamsActionOf(BOB, null, nameOf)
+    const action = teamsActionOf(BOB, nameOf)
     expect(action).toEqual({ kind: 'decide' })
     const html = draw(action)
     expect([...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((match) => text(match[1] ?? ''))).toEqual(['Approve', 'Decline'])
@@ -45,10 +43,10 @@ describe('a Teams message', () => {
   })
 
   it.each([
-    ['alice, who started the run', ALICE, STARTER, 'You started this run, so you can’t approve it.'],
-    ['carol, who is not an Approver', CAROL, null, 'Only an Approver can decide.'],
-  ])('shows %s a lock line and no buttons', (_who, approval, party, words) => {
-    const action = teamsActionOf(approval, party, nameOf)
+    ['alice, who started the run', ALICE, 'This run is your own work, so another Approver must decide.'],
+    ['carol, who is not an Approver', CAROL, 'Only an Approver can decide.'],
+  ])('shows %s a lock line and no buttons', (_who, approval, words) => {
+    const action = teamsActionOf(approval, nameOf)
     expect(action).toEqual({ kind: 'locked', words })
     const html = draw(action)
     expect(html).not.toContain('<button')
@@ -60,14 +58,20 @@ describe('a Teams message', () => {
     ['declined', 'Declined by Bob'],
   ] as const)('once %s, says who decided, for everyone', (status, words) => {
     for (const viewer of [decided(status), { ...decided(status), why_not: 'own_work' as const }]) {
-      const action = teamsActionOf(viewer, STARTER, nameOf)
+      const action = teamsActionOf(viewer, nameOf)
       expect(text(draw(action))).toBe(words)
       expect(draw(action)).not.toContain('<button')
     }
   })
 
   it('shows nothing until the platform has answered for this person', () => {
-    expect(draw(teamsActionOf(undefined, null, nameOf))).toBe('')
+    expect(draw(teamsActionOf(undefined, nameOf))).toBe('')
+  })
+
+  it('tells anyone tied to the run that it is their own work, without guessing how', () => {
+    // carol started the check and owns the workflow, alice retried it, so the platform answers own_work to alice.
+    const retrier: ApprovalView = { ...BOB, you_can_decide: false, why_not: 'own_work' }
+    expect(teamsActionOf(retrier, nameOf)).toEqual({ kind: 'locked', words: 'This run is your own work, so another Approver must decide.' })
   })
 })
 

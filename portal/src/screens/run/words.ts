@@ -194,15 +194,15 @@ export interface Party {
 
 const NOBODY = ' Nobody approves their own work.'
 
-/** Why this person cannot decide. The short form is for the Teams message. */
-export function lockWords(whyNot: Refusal | null, party: Party | null, short = false): string {
+/** Why this person cannot decide. */
+export function lockWords(whyNot: Refusal | null, party: Party | null): string {
   switch (whyNot) {
     case 'own_work': {
       let why = 'This run is your own work, so you can’t approve it.'
       if (party?.startedIt) why = party.schedule ? 'Your schedule started this run, so you can’t approve it.' : 'You started this run, so you can’t approve it.'
       else if (party?.retriedIt) why = 'You retried this run, so you can’t approve it.'
       else if (party) why = 'You own this workflow, so you can’t approve its runs.'
-      return short ? why : `${why}${NOBODY}`
+      return `${why}${NOBODY}`
     }
     case 'not_an_approver':
       return 'Only an Approver can decide.'
@@ -217,6 +217,11 @@ export function lockWords(whyNot: Refusal | null, party: Party | null, short = f
     default:
       return refusalLabel[whyNot]
   }
+}
+
+/** For the Teams message, which knows the platform's refusal but not how the person is tied to the run. */
+export function shortLockWords(whyNot: Refusal | null): string {
+  return whyNot === 'own_work' ? 'This run is your own work, so another Approver must decide.' : lockWords(whyNot, null)
 }
 
 export const CONFLICT_WORDS = 'Another Approver decided this step first.'

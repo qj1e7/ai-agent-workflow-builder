@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type SyntheticEvent } from 'react'
 import { displayName, usePeople } from '../api/people'
-import { POLL_MS, useApproval, useApprovals, useRun, useRuns, useTeamsMessages } from '../api/queries'
+import { POLL_MS, useApproval, useApprovals, useRuns, useTeamsMessages } from '../api/queries'
 import type { ApprovalView, Me, TeamsStubMessage } from '../api/types'
 import { useDecision, type Decision } from '../screens/run/decision'
-import { andList, lockWords, shortTime, type NameOf, type Party } from '../screens/run/words'
+import { andList, shortLockWords, shortTime, type NameOf } from '../screens/run/words'
 import { Button, ButtonLink } from '../ui/Button'
 import { cx } from '../ui/cx'
 import { useFocusWhenReady } from '../ui/focus'
@@ -32,7 +32,7 @@ export type TeamsAction =
   | { readonly kind: 'locked'; readonly words: string }
   | { readonly kind: 'decided'; readonly verdict: 'approve' | 'decline'; readonly by: string }
 
-export function teamsActionOf(approval: ApprovalView | undefined, party: Party | null, nameOf: NameOf): TeamsAction {
+export function teamsActionOf(approval: ApprovalView | undefined, nameOf: NameOf): TeamsAction {
   if (!approval) return { kind: 'loading' }
   const declined = approval.steps.find((step) => step.status === 'declined')
   if (declined) return { kind: 'decided', verdict: 'decline', by: nameOf(declined.decided_by ?? '') }
@@ -40,7 +40,7 @@ export function teamsActionOf(approval: ApprovalView | undefined, party: Party |
     return { kind: 'decided', verdict: 'approve', by: andList(approval.steps.map((step) => nameOf(step.decided_by ?? ''))) }
   }
   if (approval.you_can_decide) return { kind: 'decide' }
-  return { kind: 'locked', words: lockWords(approval.why_not, party, true) }
+  return { kind: 'locked', words: shortLockWords(approval.why_not) }
 }
 
 interface ActionsProps {
@@ -97,17 +97,12 @@ function linkOf(message: TeamsStubMessage): string {
   return message.link.startsWith('/') ? message.link : `/approvals/${message.approval_id}`
 }
 
-function Message({ message, me, nameOf, onOpen }: { message: TeamsStubMessage; me: Me; nameOf: NameOf; onOpen: () => void }) {
+function Message({ message, nameOf, onOpen }: { message: TeamsStubMessage; nameOf: NameOf; onOpen: () => void }) {
   const approval = useApproval(message.approval_id, { poll: POLL_MS })
-  const ownWork = approval.data?.why_not === 'own_work'
-  const run = useRun(ownWork ? message.run_id : '')
-  const party: Party | null = run.data
-    ? { startedIt: run.data.started_by === me.id, retriedIt: false, schedule: run.data.trigger === 'schedule' }
-    : null
   const item = useRef<HTMLLIElement>(null)
-  const action = teamsActionOf(approval.data, party, nameOf)
+  const action = teamsActionOf(approval.data, nameOf)
   const focusPill = useFocusWhenReady(action.kind === 'decided', () => item.current?.querySelector<HTMLElement>('[data-decided]'))
-  const decision = useDecision(approval.data, party, focusPill)
+  const decision = useDecision(approval.data, null, focusPill)
 
   return (
     <li className={styles['message']} ref={item} data-approval-id={message.approval_id}>
@@ -181,7 +176,7 @@ function Drawer({ me, onClose, onOpen }: { me: Me; onClose: () => void; onOpen: 
         {shown.length > 0 ? (
           <ol className={styles['messages']} aria-label="Messages">
             {shown.map((message) => (
-              <Message key={message.id} message={message} me={me} nameOf={nameOf} onOpen={onOpen} />
+              <Message key={message.id} message={message} nameOf={nameOf} onOpen={onOpen} />
             ))}
           </ol>
         ) : (
