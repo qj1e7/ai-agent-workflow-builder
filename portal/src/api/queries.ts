@@ -339,6 +339,7 @@ export function useAddSoftware() {
   })
 }
 
+/** A 404 means someone removed it already, so the list is read again. */
 export function useRemoveSoftware() {
   const client = useApiClient()
   const queryClient = useQueryClient()
@@ -347,6 +348,20 @@ export function useRemoveSoftware() {
     mutationFn: async (softwareId: string) =>
       unwrap(
         await client.DELETE('/api/v1/watchlist/software/{software_id}', { params: { path: { software_id: softwareId } } }),
+      ),
+    onSuccess: (view) => queryClient.setQueryData(keys.watchlist(user), view),
+    onError: (error) => (isNotFound(error) ? queryClient.invalidateQueries({ queryKey: keys.watchlist(user) }) : undefined),
+  })
+}
+
+export function useRestoreSoftware() {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  return useMutation({
+    mutationFn: async (softwareId: string) =>
+      unwrap(
+        await client.POST('/api/v1/watchlist/software/{software_id}/restore', { params: { path: { software_id: softwareId } } }),
       ),
     onSuccess: (view) => queryClient.setQueryData(keys.watchlist(user), view),
   })
@@ -392,6 +407,10 @@ export function refusalOf(error: unknown): RefusalOut | null {
 
 export function isConflict(error: unknown): boolean {
   return error instanceof ApiError && error.status === 409
+}
+
+function isNotFound(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 404
 }
 
 export function useModelSettings() {

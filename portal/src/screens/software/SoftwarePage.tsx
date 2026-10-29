@@ -1,64 +1,36 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useReducer, useRef, useState, type KeyboardEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useErrorWords } from '../../api/context'
 import { newIdempotencyKey } from '../../api/idempotency'
-import { useDisplayName } from '../../api/people'
 import { failureReasonLabel } from '../../api/labels'
-import { useMe, useRemoveSoftware, useRun, useStartRun, useWatchlist } from '../../api/queries'
+import { useLatch } from '../../api/latch'
+import { useDisplayName } from '../../api/people'
+import { useMe, useRemoveSoftware, useRestoreSoftware, useRun, useStartRun, useWatchlist } from '../../api/queries'
 import type { LastCheckView, WatchedSoftwareView, WatchlistView } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { IconExternal } from '../../ui/icons'
 import { AddSoftware } from './AddSoftware'
 import { Schedule } from './Schedule'
+import { board, EMPTY_BOARD, noticeWords, pressRemove, pressUndo, removeButtonId, UNDO_ID, type Board, type Named } from './removal'
 import { SoftwareHistory } from './SoftwareHistory'
 import { CANT_CHECK_WORDS, countIn, groupsOf, matches, singaporeTime, statusLabel, statusTone, stoppedWords, versionSourceWords } from './software'
 import styles from './Software.module.css'
 
-const UNDO_MS = 8000
 const REFRESH_MS = 15_000
 
-interface Pending {
-  readonly id: string
-  readonly name: string
+/** Moves focus once the element the last change named is on the page, as when Undo brings a row back. */
+function useFocusFrom(state: Board) {
+  const moved = useRef<Board | null>(null)
+  useEffect(() => {
+    if (state.focus === null || moved.current === state) return
+    const target = document.getElementById(state.focus)
+    if (!target) return
+    target.focus()
+    moved.current = state
+  })
 }
 
-/** A removal waits a few seconds before it reaches the platform, so Undo brings the row back exactly as it was. */
-function useUndoableRemoval(remove: (id: string) => void) {
-  const [pending, setPending] = useState<Pending | null>(null)
-  const held = useRef<Pending | null>(null)
-  const timer = useRef<number | undefined>(undefined)
-
-  function flush() {
-    window.clearTimeout(timer.current)
-    const waiting = held.current
-    held.current = null
-    setPending(null)
-    if (waiting) remove(waiting.id)
-  }
-  function begin(row: Pending) {
-    flush()
-    held.current = row
-    setPending(row)
-    timer.current = window.setTimeout(flush, UNDO_MS)
-  }
-  function undo() {
-    window.clearTimeout(timer.current)
-    held.current = null
-    setPending(null)
-  }
-  useEffect(
-    () => () => {
-      window.clearTimeout(timer.current)
-      const waiting = held.current
-      held.current = null
-      if (waiting) remove(waiting.id)
-    },
-    [remove],
-  )
-  return { pending, begin, undo }
-}
-
-function Row({ row, operator, open, nameOf, onToggle, onRemove }: { row: WatchedSoftwareView; operator: boolean; open: boolean; nameOf: (id: string) => string; onToggle: () => void; onRemove: () => void }) {
+function Row({ row, operator, open, removing, nameOf, onToggle, onRemove }: { row: WatchedSoftwareView; operator: boolean; open: boolean; removing: boolean; nameOf: (id: string) => string; onToggle: () => void; onRemove: () => void }) {
   const historyId = `history-${row.id}`
   return (
     <li className={styles['row']} data-status={row.status}>
@@ -104,7 +76,7 @@ function Row({ row, operator, open, nameOf, onToggle, onRemove }: { row: Watched
           <span className="visually-hidden"> of {row.name}</span>
         </Button>
         {operator ? (
-          <Button onClick={onRemove}>
+          <Button id={removeButtonId(row.id)} loading={removing} onClick={onRemove}>
             Remove<span className="visually-hidden"> {row.name}</span>
           </Button>
         ) : null}
@@ -114,7 +86,7 @@ function Row({ row, operator, open, nameOf, onToggle, onRemove }: { row: Watched
   )
 }
 
-function Section({ title, rows, ...rest }: { title: string; rows: readonly WatchedSoftwareView[]; operator: boolean; opened: string | null; nameOf: (id: string) => string; onToggle: (id: string) => void; onRemove: (row: WatchedSoftwareView) => void }) {
+function Section({ title, rows, ...rest }: { title: string; rows: readonly WatchedSoftwareView[]; operator: boolean; opened: string | null; removing: string | null; nameOf: (id: string) => string; onToggle: (id: string) => void; onRemove: (row: WatchedSoftwareView) => void }) {
   if (rows.length === 0) return null
   return (
     <section className={styles['section']} aria-label={title}>
@@ -123,7 +95,7 @@ function Section({ title, rows, ...rest }: { title: string; rows: readonly Watch
       </h2>
       <ul className={styles['list']}>
         {rows.map((row) => (
-          <Row key={row.id} row={row} operator={rest.operator} open={rest.opened === row.id} nameOf={rest.nameOf} onToggle={() => rest.onToggle(row.id)} onRemove={() => rest.onRemove(row)} />
+          <Row key={row.id} row={row} operator={rest.operator} open={rest.opened === row.id} removing={rest.removing === row.id} nameOf={rest.nameOf} onToggle={() => rest.onToggle(row.id)} onRemove={() => rest.onRemove(row)} />
         ))}
       </ul>
     </section>
@@ -165,16 +137,55 @@ function LastCheckStopped({ last }: { last: LastCheckView }) {
   )
 }
 
+/** The status line stays on the page when it is empty, so a screen reader hears each new message. */
+function Notice({ state, onUndo, onDismiss }: { state: Board; onUndo: (row: Named) => void; onDismiss: () => void }) {
+  const { notice } = state
+  const undoing = notice?.kind === 'removed' ? notice.row : null
+  const escape = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') onDismiss()
+  }
+  return (
+    <>
+      <div className={styles['notice']}>
+        <p role="status">{notice ? noticeWords(notice) : ''}</p>
+        {undoing ? (
+          <div className={styles['actions']}>
+            <Button id={UNDO_ID} loading={state.busy?.act === 'restore'} onClick={() => onUndo(undoing)} onKeyDown={escape}>
+              Undo
+            </Button>
+            <Button onClick={onDismiss} onKeyDown={escape}>
+              Dismiss
+            </Button>
+          </div>
+        ) : null}
+      </div>
+      {state.problem ? (
+        <p className={styles['error']} role="alert">
+          {state.problem}
+        </p>
+      ) : null}
+    </>
+  )
+}
+
 function Loaded({ view, operator }: { view: WatchlistView | null; operator: boolean }) {
   const [query, setQuery] = useState('')
   const [opened, setOpened] = useState<string | null>(null)
-  const [added, setAdded] = useState<string | null>(null)
+  const [state, dispatch] = useReducer(board, EMPTY_BOARD)
   const nameOf = useDisplayName()
   const words = useErrorWords()
   const removal = useRemoveSoftware()
-  const { pending, begin, undo } = useUndoableRemoval(removal.mutate)
+  const restore = useRestoreSoftware()
+  const changes = useLatch()
+  useFocusFrom(state)
 
-  const software = (view?.software ?? []).filter((row) => row.id !== pending?.id)
+  function dismiss() {
+    const next = document.getElementById('find-software') ?? document.querySelector<HTMLElement>('main h1')
+    next?.focus()
+    dispatch({ type: 'dismissed' })
+  }
+
+  const software = view?.software ?? []
   const groups = groupsOf(software, query)
   const shown = countIn(groups)
   const searching = query.trim() !== ''
@@ -184,20 +195,7 @@ function Loaded({ view, operator }: { view: WatchlistView | null; operator: bool
       {operator && view && software.length > 0 ? <CheckNow useCaseId={view.use_case_id} /> : null}
       {view?.last_check?.state === 'failed' ? <LastCheckStopped last={view.last_check} /> : null}
       {view ? <Schedule schedule={view.schedule} operator={operator} /> : null}
-      <div role="status" className={styles['notice']}>
-        {pending ? (
-          <>
-            Removed {pending.name}.<Button onClick={undo}>Undo</Button>
-          </>
-        ) : added ? (
-          `Added ${added}. It is checked at the next check.`
-        ) : null}
-      </div>
-      {removal.isError ? (
-        <p className={styles['error']} role="alert">
-          {words(removal.error)}
-        </p>
-      ) : null}
+      <Notice state={state} onUndo={(row) => pressUndo(changes, restore.mutate, row, dispatch, words)} onDismiss={dismiss} />
       {software.length > 0 || searching ? (
         <div className={styles['find']}>
           <label htmlFor="find-software">Find software</label>
@@ -227,10 +225,20 @@ function Loaded({ view, operator }: { view: WatchlistView | null; operator: bool
         { title: 'Not checked yet', rows: groups.notChecked },
         { title: 'Up to date', rows: groups.upToDate },
       ].map(({ title, rows }) => (
-        <Section key={title} title={title} rows={rows} operator={operator} opened={opened} nameOf={nameOf} onToggle={(id) => setOpened((current) => (current === id ? null : id))} onRemove={(row) => begin({ id: row.id, name: row.name })} />
+        <Section
+          key={title}
+          title={title}
+          rows={rows}
+          operator={operator}
+          opened={opened}
+          removing={state.busy?.act === 'remove' ? state.busy.id : null}
+          nameOf={nameOf}
+          onToggle={(id) => setOpened((current) => (current === id ? null : id))}
+          onRemove={(row) => pressRemove(changes, removal.mutate, row, dispatch, words)}
+        />
       ))}
       {operator ? (
-        <AddSoftware names={software.map((row) => row.name)} repos={software.map((row) => row.source.ref)} onAdded={setAdded} />
+        <AddSoftware names={software.map((row) => row.name)} repos={software.map((row) => row.source.ref)} onAdded={(name) => dispatch({ type: 'added', name })} />
       ) : null}
     </>
   )

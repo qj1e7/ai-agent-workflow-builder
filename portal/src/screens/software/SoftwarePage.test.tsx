@@ -89,6 +89,10 @@ describe('the Software watchlist page', () => {
     expect(labels.some((label) => label.startsWith('History'))).toBe(true)
   })
 
+  it('keeps an empty status line on the page, so a screen reader hears each change to the list', () => {
+    expect(render(statuses, ALICE)).toContain('<p role="status"></p>')
+  })
+
   it('has a search box that announces its result count', () => {
     const html = render(statuses, ALICE)
     expect(html).toContain('type="search"')

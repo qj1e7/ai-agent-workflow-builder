@@ -55,12 +55,10 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3);
-  margin-top: var(--space-3);
-  min-height: 0;
 }
 
-.notice:empty {
-  display: none;
+.notice:has(> p:not(:empty)) {
+  margin-top: var(--space-3);
 }
 
 .find {
