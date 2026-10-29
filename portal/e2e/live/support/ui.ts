@@ -7,7 +7,6 @@ export const OUT = path.resolve('e2e/out/live')
 export const DESKTOP = { width: 1440, height: 900 }
 const PHONE = { width: 390, height: 844 }
 
-/** A second browser context at desktop or phone size, with the suite's locale and time zone. */
 export function openContext(browser: Browser, { phone = false } = {}): Promise<BrowserContext> {
   return browser.newContext({
     ...(phone ? { viewport: PHONE, isMobile: true, hasTouch: true } : { viewport: DESKTOP }),

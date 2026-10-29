@@ -5,7 +5,6 @@ import path from 'node:path'
 
 const WCAG_22_AA = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']
 
-/** Runs axe against WCAG 2.2 AA, saves the whole result as <outDir>/<name>.json, and fails on any violation. */
 export async function expectAccessible(page: Page, outDir: string, name: string): Promise<void> {
   const result = await new AxeBuilder({ page }).withTags(WCAG_22_AA).analyze()
   await mkdir(outDir, { recursive: true })
