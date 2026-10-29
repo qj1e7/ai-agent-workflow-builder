@@ -25,7 +25,7 @@ export type Phase =
       readonly message: string
     }
 
-/** Where the run is on its line. An agent is placed by the order it joined in. */
+/** An agent is placed by the order it joined in. */
 export type Spot =
   | { readonly at: 'started' }
   | { readonly at: 'planner' }
@@ -68,7 +68,6 @@ export interface RunModel {
   readonly useCaseId: string | null
   readonly phase: Phase
   readonly spot: Spot
-  /** The event that last moved the spot, so a page can tell a step reached just now from one it loaded. */
   readonly spotSeq: number
   readonly agents: readonly AgentRef[]
   readonly failedAt: Spot | null
@@ -79,7 +78,6 @@ export interface RunModel {
   readonly written: readonly Written[]
   readonly approvedBy: readonly string[]
   readonly retriedBy: readonly string[]
-  /** Display names of the people the events name, by id. */
   readonly people: Readonly<Record<string, string>>
   readonly chat: readonly ChatItem[]
 }
@@ -116,8 +114,7 @@ export function sameSpot(a: Spot | null, b: Spot | null): boolean {
   return a.at === b.at && (a.at !== 'agent' || (b.at === 'agent' && a.index === b.index))
 }
 
-/** The spot only moves forward. A Planner that speaks again after its agents does not pull the line back. */
-function moveTo(model: RunModel, spot: Spot, seq: number): RunModel {
+function advanceTo(model: RunModel, spot: Spot, seq: number): RunModel {
   return rank(spot) > rank(model.spot) ? { ...model, spot, spotSeq: seq } : model
 }
 
@@ -128,10 +125,9 @@ function placeAgent(model: RunModel, agent: AgentRef): { model: RunModel; spot: 
   return { model: { ...model, agents: [...model.agents, agent] }, spot: { at: 'agent', index: model.agents.length } }
 }
 
-/** An agent did something, so the line reaches its step. */
 function touch(model: RunModel, agent: AgentRef, seq: number): RunModel {
   const placed = placeAgent(model, agent)
-  return working(moveTo(placed.model, placed.spot, seq))
+  return working(advanceTo(placed.model, placed.spot, seq))
 }
 
 function working(model: RunModel): RunModel {
@@ -142,7 +138,6 @@ function say(model: RunModel, item: ChatItem): RunModel {
   return { ...model, chat: [...model.chat, item] }
 }
 
-/** Replaces the newest chat item of a kind, or adds one when there is none. */
 function amendLast<K extends ChatItem['kind']>(
   model: RunModel,
   kind: K,
@@ -204,7 +199,7 @@ function decided(model: RunModel, event: EventOf<'approval_decided'>): RunModel 
   if (verdict === 'approve') {
     next = { ...next, approvedBy: next.approvedBy.includes(by) ? next.approvedBy : [...next.approvedBy, by] }
     const allApproved = steps.length === 0 || steps.every((s) => s.status === 'approved')
-    if (allApproved) next = moveTo({ ...next, phase: { state: 'acting' } }, { at: 'write' }, event.seq)
+    if (allApproved) next = advanceTo({ ...next, phase: { state: 'acting' } }, { at: 'write' }, event.seq)
   }
   return next
 }
@@ -212,7 +207,7 @@ function decided(model: RunModel, event: EventOf<'approval_decided'>): RunModel 
 function wrote(model: RunModel, event: EventOf<'write_action_done'>): RunModel {
   const { connector, operation, external_reference: ref } = event.data
   let next: RunModel = { ...model, connector, written: [...model.written, { connector, operation, ref }], phase: { state: 'acting' } }
-  next = moveTo(next, { at: 'write' }, event.seq)
+  next = advanceTo(next, { at: 'write' }, event.seq)
   const last = next.chat.at(-1)
   if (last?.kind === 'written' && last.connector === connector && last.operation === operation) {
     return { ...next, chat: [...next.chat.slice(0, -1), { ...last, refs: [...last.refs, ref] }] }
@@ -268,7 +263,7 @@ function apply(model: RunModel, event: RunEvent): RunModel {
     }
     case 'approval_requested': {
       const steps = event.data.steps.map((s) => ({ index: s.index, label: s.label, status: s.status, by: s.decided_by ?? null }))
-      const next = moveTo({ ...model, approvalId: event.data.approval_id, steps, phase: { state: 'awaiting_approval' } }, { at: 'gate' }, event.seq)
+      const next = advanceTo({ ...model, approvalId: event.data.approval_id, steps, phase: { state: 'awaiting_approval' } }, { at: 'gate' }, event.seq)
       return say(next, { kind: 'asked', seq: event.seq, channel: null, posted: null })
     }
     case 'approval_announced':
@@ -282,7 +277,7 @@ function apply(model: RunModel, event: RunEvent): RunModel {
     case 'write_action_done':
       return wrote(model, event)
     case 'run_succeeded': {
-      const next = moveTo({ ...model, phase: { state: 'succeeded', outcome: event.data.outcome } }, { at: 'done' }, event.seq)
+      const next = advanceTo({ ...model, phase: { state: 'succeeded', outcome: event.data.outcome } }, { at: 'done' }, event.seq)
       return say(next, {
         kind: 'finished',
         seq: event.seq,
@@ -292,7 +287,7 @@ function apply(model: RunModel, event: RunEvent): RunModel {
       })
     }
     case 'run_rejected': {
-      const next = moveTo({ ...model, phase: { state: 'rejected', by: event.data.by, step: event.data.step } }, { at: 'done' }, event.seq)
+      const next = advanceTo({ ...model, phase: { state: 'rejected', by: event.data.by, step: event.data.step } }, { at: 'done' }, event.seq)
       return say(next, { kind: 'declined', seq: event.seq })
     }
     case 'run_failed': {
@@ -353,7 +348,7 @@ export interface Station {
   readonly key: string
   readonly spot: Spot
   readonly label: string
-  /** The agent's name under a step the plan named, or nothing. The page puts state words here instead. */
+  /** The agent's name under a step the plan named, or nothing. */
   readonly sub: string | null
   readonly who: StationWho
   readonly state: StationState
@@ -397,11 +392,10 @@ function skeleton(model: RunModel, plan: readonly PlanBlock[] | null, writeLabel
   ]
 }
 
-function indexOf(stations: readonly Skeleton[], spot: Spot | null): number {
+function stationAtOrAfter(stations: readonly Skeleton[], spot: Spot | null): number {
   if (spot === null) return -1
   const exact = stations.findIndex((station) => sameSpot(station.spot, spot))
   if (exact >= 0) return exact
-  // A plan without a gate has no gate station, so a spot there falls to the next one along.
   return stations.findIndex((station) => rank(station.spot) > rank(spot))
 }
 
@@ -459,8 +453,8 @@ export function stationsOf(
   writeLabel: (connector: string | null) => string,
 ): Station[] {
   const stations = skeleton(model, plan, writeLabel)
-  const current = indexOf(stations, model.spot)
-  const failed = model.phase.state === 'failed' ? indexOf(stations, model.failedAt) : -1
+  const current = stationAtOrAfter(stations, model.spot)
+  const failed = model.phase.state === 'failed' ? stationAtOrAfter(stations, model.failedAt) : -1
   const states = stations.map((station, index) => stateOf(model, station, index, current, failed))
   const gate = stations.findIndex((station) => station.spot.at === 'gate')
   const waitingAgent = lastAgentBefore(stations, states, gate < 0 ? stations.length : gate)

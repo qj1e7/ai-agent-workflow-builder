@@ -28,7 +28,7 @@ const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;'
 
 function line(model: RunModel): string {
   const stations = stationsOf(model, PLAN, writeLabel)
-  return renderToStaticMarkup(<RunLine stations={stations} reach={reachOf(stations)} arrived={null} startedAt="Tue 10:14" nameOf={nameOf} />)
+  return renderToStaticMarkup(<RunLine stations={stations} reach={reachOf(stations)} arrivedLive={null} startedAt="Tue 10:14" nameOf={nameOf} />)
 }
 
 function stepsSaid(html: string): string[] {
@@ -83,7 +83,7 @@ describe('the run line', () => {
   it('lands the step reached while the page watched, and no other', () => {
     const model = replay(success, 15)
     const stations = stationsOf(model, PLAN, writeLabel)
-    const html = renderToStaticMarkup(<RunLine stations={stations} reach={reachOf(stations)} arrived="gate" startedAt="" nameOf={nameOf} />)
+    const html = renderToStaticMarkup(<RunLine stations={stations} reach={reachOf(stations)} arrivedLive="gate" startedAt="" nameOf={nameOf} />)
     expect(html.match(/arrive/g)).toHaveLength(1)
     expect(html).toMatch(/class="[^"]*arrive[^"]*"[^>]*data-state="wait"/)
   })
@@ -94,8 +94,8 @@ describe('the run line', () => {
 })
 
 describe('the chat', () => {
-  function chat(model: RunModel, quietUpTo = model.seq): string {
-    return renderToStaticMarkup(<Chat items={model.chat} quietUpTo={quietUpTo} nameOf={nameOf} trigger="person" last={null} />)
+  function chat(model: RunModel, loadedUpTo = model.seq): string {
+    return renderToStaticMarkup(<Chat items={model.chat} loadedUpTo={loadedUpTo} nameOf={nameOf} trigger="person" last={null} />)
   }
 
   it('tells a done run with the gate’s words in its own markers', () => {

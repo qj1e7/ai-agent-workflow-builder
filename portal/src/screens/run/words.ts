@@ -20,7 +20,7 @@ export function writeLabel(connector: string | null): string {
 const TIME_ZONE = 'Asia/Singapore'
 const dayAndTime = new Intl.DateTimeFormat('en-GB', { weekday: 'short', hour: 'numeric', minute: '2-digit', hourCycle: 'h23', timeZone: TIME_ZONE })
 
-/** "Fri 9:14", in Singapore time like the rest of the Portal. */
+/** "Fri 9:14", in Singapore time. */
 export function shortTime(iso: string): string {
   const at = new Date(iso)
   if (Number.isNaN(at.getTime())) return ''
@@ -64,7 +64,6 @@ function wroteWords(operation: string | null, connector: string, refs: readonly 
   return operation?.startsWith('create_') ? `Created ${andList(refs)} in ${where}.` : `Wrote ${andList(refs)} in ${where}.`
 }
 
-/** One chat item as the person reads it: who says it, the words and their tone. */
 export function lineOf(item: ChatItem, nameOf: NameOf, trigger: Trigger): Line {
   switch (item.kind) {
     case 'started':
@@ -125,7 +124,6 @@ export interface Headline {
   readonly pill: { readonly label: string; readonly tone: 'wait' | 'bad' | 'ok' | 'off' | 'new' }
 }
 
-/** The run page's heading and its status pill. */
 export function headlineOf(model: RunModel, stations: readonly Station[], proposal: readonly WriteActionView[] | null): Headline {
   const { phase } = model
   switch (phase.state) {
@@ -176,7 +174,6 @@ function sameTicketProject(actions: readonly WriteActionView[]): string | null {
   return projects.size === 1 && typeof only === 'string' ? only : null
 }
 
-/** "1 ticket will be created in Jira project MOCK", the heading over exactly what will be written. */
 export function proposalTitle(actions: readonly WriteActionView[]): string {
   const project = sameTicketProject(actions)
   if (project) return `${count(actions.length, 'ticket')} will be created in Jira project ${project}`
@@ -188,7 +185,7 @@ export function approveLabel(actions: readonly WriteActionView[]): string {
   return sameTicketProject(actions) ? `Approve ${count(actions.length, 'ticket')}` : 'Approve'
 }
 
-/** How the signed-in person is tied to the run, for the words that say why they cannot approve it. */
+/** How the signed-in person is tied to the run. */
 export interface Party {
   readonly startedIt: boolean
   readonly retriedIt: boolean
@@ -197,7 +194,7 @@ export interface Party {
 
 const NOBODY = ' Nobody approves their own work.'
 
-/** Why this person cannot decide, in the prototype's words. The short form is for the Teams message. */
+/** Why this person cannot decide. The short form is for the Teams message. */
 export function lockWords(whyNot: Refusal | null, party: Party | null, short = false): string {
   switch (whyNot) {
     case 'own_work': {
@@ -233,8 +230,7 @@ const RETIRED: readonly (readonly [RegExp, string])[] = [
   [/\brelease checkers?\b/gi, 'Version checker'],
 ]
 
-/** The troubleshooter's words with the names the app no longer uses swapped for the ones it does. */
-export function plainWords(text: string): string {
+export function withCurrentNames(text: string): string {
   return RETIRED.reduce(
     (words, [pattern, plain]) =>
       words.replace(pattern, (found) => {

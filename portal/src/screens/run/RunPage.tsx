@@ -8,9 +8,10 @@ import { PageHead } from '../../shell/PageHead'
 import { PRODUCT } from '../../shell/product'
 import { Button } from '../../ui/Button'
 import { cx } from '../../ui/cx'
+import { useFocusWhenReady } from '../../ui/focus'
 import { motionAllowed } from '../../ui/motion'
 import { ApprovalGate } from './ApprovalGate'
-import { Chat, LastWord, Typing } from './Chat'
+import { Chat, DECISION_ID, LastWord, Typing } from './Chat'
 import { useDecision } from './decision'
 import { useLiveRun, type LiveRun } from './liveRun'
 import { Outcome, Troubleshooting } from './Outcome'
@@ -19,7 +20,6 @@ import { isFinished, PLANNER_ID, reachOf, stationsOf, type PlanBlock, type RunMo
 import { headlineOf, lineOf, lockWords, shortTime, speakerName, writeLabel, type NameOf, type Party, type Speaker } from './words'
 import styles from './RunPage.module.css'
 
-/** Opening a run that needs someone lands on the decision, with the run already drawn. */
 const LANDS_ON_DECISION = new Set(['awaiting_approval', 'failed', 'rejected'])
 
 const POLL_FAILED_MS = 10_000
@@ -61,7 +61,6 @@ export function RunRoute() {
   return <RunPage key={runId} runId={runId} fromApproval={false} />
 }
 
-/** The link in every Teams approval message. It opens the run page at the decision. */
 export function ApprovalRoute() {
   const { approvalId = '' } = useParams()
   const approval = useApproval(approvalId)
@@ -82,16 +81,18 @@ function LiveRunPage({ run, fromApproval }: { run: RunView; fromApproval: boolea
   const failed = live.head.phase.state === 'failed'
   const latest = useRun(run.run_id, { poll: failed ? POLL_FAILED_MS : false }).data ?? run
   const useCase = useUseCase(run.use_case_id)
-  const behind = failed && live.loaded && latest.last_seq > live.head.seq
-
-  // The stream can close after a failure. If the run moved on without it, as after a retry, reconnect now.
-  useEffect(() => {
-    if (behind) restart()
-  }, [behind, restart])
+  useReconnectWhenBehind(failed && live.loaded && latest.last_seq > live.head.seq, restart)
 
   const ready = live.loaded || live.connection.is === 'live' || live.connection.is === 'settled'
   if (!ready) return <Loading />
   return <RunView run={latest} useCase={useCase.data} live={live} fromApproval={fromApproval} />
+}
+
+/** After a failure the stream may close. When the run has moved on without it, as after a retry, reconnect now. */
+function useReconnectWhenBehind(behind: boolean, restart: () => void): void {
+  useEffect(() => {
+    if (behind) restart()
+  }, [behind, restart])
 }
 
 function approvalIdOf(run: RunView, model: RunModel): string | null {
@@ -112,7 +113,6 @@ function backTo(useCase: UseCaseView | undefined): string {
   return useCase?.template === 'software_watchlist' ? '/software' : '/workflows'
 }
 
-/** Who is working now, for the typing row at the end of the chat. */
 function workingNow(model: RunModel): { speaker: Speaker; thinking: boolean } {
   const { spot, agents, phase } = model
   if (phase.state === 'acting') return { speaker: { kind: 'platform' }, thinking: false }
@@ -123,8 +123,7 @@ function workingNow(model: RunModel): { speaker: Speaker; thinking: boolean } {
   return { speaker: { kind: 'agent', agent: { id: PLANNER_ID, display: 'Planner' } }, thinking: true }
 }
 
-/** Follows the newest message while the run plays, until the person scrolls the page themselves. */
-function useFollow(newest: number, quietUpTo: number, list: RefObject<HTMLOListElement | null>): void {
+function useFollowUntilScrolled(newest: number, loadedUpTo: number, list: RefObject<HTMLOListElement | null>): void {
   const following = useRef(true)
   useEffect(() => {
     const stop = () => {
@@ -143,9 +142,9 @@ function useFollow(newest: number, quietUpTo: number, list: RefObject<HTMLOListE
     }
   }, [])
   useEffect(() => {
-    if (!following.current || newest <= quietUpTo) return
+    if (!following.current || newest <= loadedUpTo) return
     list.current?.lastElementChild?.scrollIntoView({ block: 'nearest', behavior: motionAllowed() ? 'smooth' : 'auto' })
-  }, [newest, quietUpTo, list])
+  }, [newest, loadedUpTo, list])
 }
 
 interface RunViewProps {
@@ -156,12 +155,11 @@ interface RunViewProps {
 }
 
 function RunView({ run, useCase, live, fromApproval }: RunViewProps) {
-  const { shown, head, quietUpTo } = live
+  const { shown, head, loadedUpTo } = live
   const me = useMe().data
   const nameOf = useNameOf(head)
   const [lands] = useState(() => fromApproval || LANDS_ON_DECISION.has(shown.phase.state))
   const chatList = useRef<HTMLOListElement>(null)
-  const focusDecided = useRef(false)
 
   const approvalId = approvalIdOf(run, head)
   const waiting = shown.phase.state === 'awaiting_approval'
@@ -173,17 +171,19 @@ function RunView({ run, useCase, live, fromApproval }: RunViewProps) {
   const party: Party | null = me
     ? { startedIt: run.started_by === me.id, retriedIt: head.retriedBy.includes(me.id), schedule: run.trigger === 'schedule' }
     : null
-  const decision = useDecision(approval.data, party, () => {
-    focusDecided.current = true
-  })
+  const saidByMe = me ? shown.chat.findLast((item) => item.kind === 'decided' && item.by === me.id) : undefined
+  const focusGateLine = useFocusWhenReady(saidByMe !== undefined, () =>
+    chatList.current?.querySelector<HTMLElement>(`[data-gate-said="${saidByMe?.seq ?? ''}"]`),
+  )
+  const decision = useDecision(approval.data, party, focusGateLine)
 
   const stations = stationsOf(shown, planOf(useCase), writeLabel)
   const reach = reachOf(stations)
   const proposal = approval.data && waiting ? approval.data.actions : null
   const headline = headlineOf(shown, stations, proposal)
-  const arrived = shown.spotSeq > quietUpTo ? (stations.find((station) => station.state === 'now' || station.state === 'wait')?.key ?? null) : null
+  const arrivedLive = shown.spotSeq > loadedUpTo ? (stations.find((station) => station.state === 'now' || station.state === 'wait')?.key ?? null) : null
   const newest = shown.chat.at(-1)
-  const announce = newest && newest.seq > quietUpTo ? lineOf(newest, nameOf, run.trigger) : null
+  const announce = newest && newest.seq > loadedUpTo ? lineOf(newest, nameOf, run.trigger) : null
 
   useEffect(() => {
     document.title = `${headline.text} · ${PRODUCT}`
@@ -191,7 +191,7 @@ function RunView({ run, useCase, live, fromApproval }: RunViewProps) {
 
   useEffect(() => {
     if (!lands) return
-    const decisionArea = document.getElementById('decision')
+    const decisionArea = document.getElementById(DECISION_ID)
     if (!decisionArea) {
       document.querySelector<HTMLElement>('main h1')?.focus({ preventScroll: true })
       return
@@ -200,16 +200,8 @@ function RunView({ run, useCase, live, fromApproval }: RunViewProps) {
     decisionArea.scrollIntoView({ block: 'start' })
   }, [lands])
 
-  // After a yes or a no here, focus moves to what the approval gate said, so the page does not jump away from it.
-  useEffect(() => {
-    if (!focusDecided.current || !me) return
-    const said = shown.chat.findLast((item) => item.kind === 'decided' && item.by === me.id)
-    if (!said) return
-    focusDecided.current = false
-    chatList.current?.querySelector<HTMLElement>(`[data-gate-said="${said.seq}"]`)?.focus()
-  }, [shown.chat, me])
 
-  useFollow(newest?.seq ?? 0, quietUpTo, chatList)
+  useFollowUntilScrolled(newest?.seq ?? 0, loadedUpTo, chatList)
 
   return (
     <div className={styles['page']}>
@@ -218,7 +210,7 @@ function RunView({ run, useCase, live, fromApproval }: RunViewProps) {
         {run.use_case_name}
       </Link>
       <div className={styles['head']}>
-        <h1 tabIndex={-1} data-focus={lands ? 'page' : undefined}>
+        <h1 tabIndex={-1} data-page-moves-focus={lands || undefined}>
           {headline.text}
         </h1>
         <span className={cx(styles['pill'], styles[headline.pill.tone])}>{headline.pill.label}</span>
@@ -226,14 +218,14 @@ function RunView({ run, useCase, live, fromApproval }: RunViewProps) {
       <p className={styles['status']} role="status">
         {statusWords(decision.recorded, live)}
       </p>
-      <RunLine stations={stations} reach={reach} arrived={arrived} startedAt={shortTime(run.started_at)} nameOf={nameOf} />
+      <RunLine stations={stations} reach={reach} arrivedLive={arrivedLive} startedAt={shortTime(run.started_at)} nameOf={nameOf} />
       <Chat
         ref={chatList}
         items={shown.chat}
-        quietUpTo={quietUpTo}
+        loadedUpTo={loadedUpTo}
         nameOf={nameOf}
         trigger={run.trigger}
-        last={<LastWordFor model={shown} approval={approval.data} lock={lockWords(approval.data?.why_not ?? null, party)} decision={decision} troubleshoot={troubleshoot} nameOf={nameOf} />}
+        last={<LastWordFor model={shown} approval={approval.data} cannotDecide={lockWords(approval.data?.why_not ?? null, party)} decision={decision} troubleshoot={troubleshoot} nameOf={nameOf} />}
       />
       <div className="visually-hidden" aria-live="polite">
         {announce ? `${speakerName(announce.speaker)}: ${announce.text}` : ''}
@@ -253,21 +245,20 @@ function statusWords(recorded: Verdict | null, live: LiveRun): string {
 interface LastWordForProps {
   readonly model: RunModel
   readonly approval: ApprovalView | undefined
-  readonly lock: string
+  readonly cannotDecide: string
   readonly decision: ReturnType<typeof useDecision>
   readonly troubleshoot: ReturnType<typeof useTroubleshoot>
   readonly nameOf: NameOf
 }
 
-/** The last word goes to whoever needs the person: the gate with the decision, the troubleshooter with the reason, or Workflow Builder with the outcome. */
-function LastWordFor({ model, approval, lock, decision, troubleshoot, nameOf }: LastWordForProps) {
+function LastWordFor({ model, approval, cannotDecide, decision, troubleshoot, nameOf }: LastWordForProps) {
   const { phase } = model
   switch (phase.state) {
     case 'awaiting_approval':
       return (
         <LastWord speaker={{ kind: 'gate' }}>
           {approval ? (
-            <ApprovalGate approval={approval} lock={lock} decision={decision} />
+            <ApprovalGate approval={approval} cannotDecide={cannotDecide} decision={decision} />
           ) : (
             <p className="muted" role="status">
               Loading what will be written

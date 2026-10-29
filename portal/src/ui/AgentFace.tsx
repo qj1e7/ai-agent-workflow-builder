@@ -2,7 +2,6 @@ import { useState, type ReactNode } from 'react'
 import { agentIdentity, type Accessory } from './agents'
 import styles from './AgentFace.module.css'
 
-/** What the agent is doing, always from the real state of the work. The words beside the face say the same. */
 export type FaceState = 'idle' | 'thinking' | 'working' | 'waiting' | 'success' | 'error' | 'stopped'
 
 /** Where the head sits in the 48 by 48 box. An accessory that hangs off one side moves the head away from it. */
@@ -68,11 +67,7 @@ interface AgentFaceProps {
   state?: FaceState
 }
 
-/**
- * A round head in the agent's tint, two eyes, and one accessory in its hue, in one of seven states. Only the
- * agent working now loops; a change of state after the face first appears reacts once. The name beside it is
- * the text, so the face is hidden from screen readers.
- */
+/** A round head in the agent's tint, two eyes, and one accessory in its hue. The name beside it is the text, so the face is hidden from screen readers. */
 export function AgentFace({ id, display, size = 54, state = 'idle' }: AgentFaceProps) {
   const { accessory, hue, tint } = agentIdentity(id, display)
   const [x, y] = HEAD[accessory]

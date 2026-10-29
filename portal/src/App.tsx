@@ -10,11 +10,7 @@ import { TestControls } from './shell/TestControls'
 import { ErrorBoundary } from './ui/ErrorBoundary'
 import styles from './shell/Shell.module.css'
 
-/**
- * Focus stays where it is on first load, so the skip link stays the first Tab stop. A page that loads on demand draws
- * its heading later, so this waits for it. A heading marked data-focus="page" belongs to a page that moves focus
- * itself, as the run page does when it lands on a decision.
- */
+/** Focus stays where it is on first load, so the skip link stays the first Tab stop. */
 function useHeadingFocus(): void {
   const { pathname } = useLocation()
   const previous = useRef<string | null>(null)
@@ -23,7 +19,7 @@ function useHeadingFocus(): void {
       document.title = `${heading.textContent.trim()} · ${PRODUCT}`
       const moved = previous.current !== null && previous.current !== pathname
       previous.current = pathname
-      if (moved && heading.dataset['focus'] !== 'page') heading.focus({ preventScroll: true })
+      if (moved && !heading.hasAttribute('data-page-moves-focus')) heading.focus({ preventScroll: true })
     }
     const main = document.getElementById('main')
     const heading = main?.querySelector<HTMLElement>('h1')

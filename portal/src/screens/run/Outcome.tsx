@@ -3,7 +3,7 @@ import type { TroubleshootingOut } from '../../api/types'
 import { ButtonLink } from '../../ui/Button'
 import { IconCheck } from '../../ui/icons'
 import type { Phase, RunModel } from './runModel'
-import { andList, plainWords, type NameOf } from './words'
+import { andList, withCurrentNames, type NameOf } from './words'
 import styles from './panels.module.css'
 
 function BackHome() {
@@ -14,7 +14,6 @@ function BackHome() {
   )
 }
 
-/** Done or Declined: what the platform did after the decision, or that there was nothing to do. */
 export function Outcome({ model, nameOf }: { model: RunModel; nameOf: NameOf }) {
   const { phase } = model
   if (phase.state === 'rejected') {
@@ -57,7 +56,6 @@ export function Outcome({ model, nameOf }: { model: RunModel; nameOf: NameOf }) 
 
 type Failed = Extract<Phase, { state: 'failed' }>
 
-/** The AI troubleshooter's reading of a failed run: what happened and what to do. */
 export function Troubleshooting({ failure, advice, loading }: { failure: Failed; advice: TroubleshootingOut | undefined; loading: boolean }) {
   if (!advice) {
     return (
@@ -77,11 +75,11 @@ export function Troubleshooting({ failure, advice, loading }: { failure: Failed;
     <div className={styles['panel']}>
       <dl className={styles['qa']}>
         <dt>What happened</dt>
-        <dd>{plainWords(`${explanation} ${cause}`)}</dd>
+        <dd>{withCurrentNames(`${explanation} ${cause}`)}</dd>
       </dl>
       <dl className={styles['qa']}>
         <dt>What to do</dt>
-        <dd>{plainWords(suggestion)}</dd>
+        <dd>{withCurrentNames(suggestion)}</dd>
       </dl>
     </div>
   )

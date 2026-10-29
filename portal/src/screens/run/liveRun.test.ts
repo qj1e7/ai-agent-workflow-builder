@@ -28,7 +28,6 @@ function openStream(): Stream {
   return stream
 }
 
-/** The events route: a page of what is stored, and a stream the test pushes into. */
 function fakeServer(recording: readonly Raw[], stored: number) {
   const server = {
     stored,
@@ -46,7 +45,6 @@ function fakeServer(recording: readonly Raw[], stored: number) {
       const events = recording.filter((raw) => raw.seq > after && raw.seq <= server.stored)
       return Promise.resolve(new Response(JSON.stringify({ events }), { status: 200 }))
     }) as FetchLike,
-    /** Stores the next events and sends them down the newest stream. */
     send(upTo: number) {
       const stream = server.streams.at(-1)
       for (const raw of recording.filter((r) => r.seq > server.stored && r.seq <= upTo)) stream?.push(raw)
@@ -56,7 +54,6 @@ function fakeServer(recording: readonly Raw[], stored: number) {
   return server
 }
 
-/** A clock the test moves by hand, so pacing is exact. */
 function handClock() {
   let now = 1_000
   let timers: { at: number; fn: () => void }[] = []
@@ -96,7 +93,7 @@ describe('the live run store', () => {
     const stop = watch(store)
     await vi.waitFor(() => expect(store.getSnapshot().loaded).toBe(true))
     expect(store.getSnapshot().shown.seq).toBe(6)
-    expect(store.getSnapshot().quietUpTo).toBe(6)
+    expect(store.getSnapshot().loadedUpTo).toBe(6)
     expect(store.getSnapshot().shown).toBe(store.getSnapshot().head)
     stop()
   })
@@ -119,7 +116,7 @@ describe('the live run store', () => {
     }
     expect(store.getSnapshot().shown.seq).toBe(15)
     expect(new Set(seen).size, 'the page moved in several steps').toBeGreaterThan(3)
-    expect(store.getSnapshot().quietUpTo).toBe(6)
+    expect(store.getSnapshot().loadedUpTo).toBe(6)
     stop()
   })
 
@@ -157,7 +154,7 @@ describe('the live run store', () => {
     store.restart()
     await vi.waitFor(() => expect(store.getSnapshot().head.seq).toBe(15))
     expect(store.getSnapshot().shown.seq).toBeLessThan(15)
-    expect(store.getSnapshot().quietUpTo).toBe(6)
+    expect(store.getSnapshot().loadedUpTo).toBe(6)
     time.advance(10_000)
     expect(store.getSnapshot().shown.seq).toBe(15)
     stop()

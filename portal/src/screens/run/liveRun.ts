@@ -6,7 +6,6 @@ import { runFeed, type Connection, type FeedClock, type FetchLike, type Origin }
 import type { RunEvent } from '../../stream/parse'
 import { emptyModel, fold, sameSpot, type RunModel } from './runModel'
 
-/** --move and --dur-small in tokens.css: the line travels, then the step it reaches lands. */
 export const MOVE_MS = 260
 export const SMALL_MS = 200
 
@@ -17,14 +16,13 @@ export interface LiveRun {
   readonly head: RunModel
   readonly connection: Connection
   /** Events up to here were drawn without motion, because they happened before the page was watching. */
-  readonly quietUpTo: number
+  readonly loadedUpTo: number
   readonly loaded: boolean
 }
 
 export interface LiveRunEnv {
   readonly fetch: FetchLike
   readonly clock: FeedClock
-  /** Read at each event, so switching on reduced motion stops the pacing at once. */
   readonly paced: () => boolean
 }
 
@@ -35,7 +33,7 @@ export interface LiveRunStore {
   restart(this: void): void
 }
 
-/** How long the next event waits after this one. A new step gets the line's travel and its landing; a message, a short pause. */
+/** How long the next event waits after this one. */
 export function beatAfter(before: RunModel, after: RunModel): number {
   if (!sameSpot(before.spot, after.spot) || before.phase.state !== after.phase.state) return MOVE_MS + SMALL_MS
   if (after.chat !== before.chat) return SMALL_MS + 100
@@ -51,7 +49,7 @@ export function createLiveRun(id: string, env: LiveRunEnv): LiveRunStore {
   let head = emptyModel
   let shown = emptyModel
   let connection: Connection = { is: 'connecting' }
-  let quietUpTo = 0
+  let loadedUpTo = 0
   let loaded = false
   let playNextAsLive = false
   let readyAt = 0
@@ -59,10 +57,10 @@ export function createLiveRun(id: string, env: LiveRunEnv): LiveRunStore {
   let cancelBeat: (() => void) | null = null
   let feed: AbortController | null = null
   const listeners = new Set<() => void>()
-  let snapshot: LiveRun = { shown, head, connection, quietUpTo, loaded }
+  let snapshot: LiveRun = { shown, head, connection, loadedUpTo, loaded }
 
   function publish(): void {
-    snapshot = { shown, head, connection, quietUpTo, loaded }
+    snapshot = { shown, head, connection, loadedUpTo, loaded }
     for (const listener of listeners) listener()
   }
 
@@ -92,7 +90,7 @@ export function createLiveRun(id: string, env: LiveRunEnv): LiveRunStore {
       cancelBeat = null
       queue.length = 0
       shown = head
-      quietUpTo = head.seq
+      loadedUpTo = head.seq
       publish()
       return
     }

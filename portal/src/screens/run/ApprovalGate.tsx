@@ -21,16 +21,14 @@ function Change({ action }: { action: WriteActionView }) {
 
 interface ApprovalGateProps {
   readonly approval: ApprovalView
-  /** Why this person cannot decide, shown in place of the buttons. */
-  readonly lock: string
+  readonly cannotDecide: string
   readonly decision: Pick<Decision, 'pending' | 'error' | 'decide'>
 }
 
 /**
- * Exactly what will be written, from the approval route, so a slow stream never shows an old proposal. Everyone sees
- * it. Approve and Decline show only when the platform says this person may decide.
+ * Exactly what will be written, from the approval route, so a slow stream never shows an old proposal.
  */
-export function ApprovalGate({ approval, lock, decision }: ApprovalGateProps) {
+export function ApprovalGate({ approval, cannotDecide, decision }: ApprovalGateProps) {
   const open = openStep(approval) !== null
   const canDecide = approval.you_can_decide && open
   const busy = decision.pending !== null
@@ -64,7 +62,7 @@ export function ApprovalGate({ approval, lock, decision }: ApprovalGateProps) {
       ) : open ? (
         <div className={styles['lock']}>
           <IconLock size={20} />
-          <p>{lock}</p>
+          <p>{cannotDecide}</p>
         </div>
       ) : null}
       {decision.error ? (

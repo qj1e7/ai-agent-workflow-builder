@@ -79,23 +79,20 @@ function Item({ item, fresh, nameOf, trigger }: { item: ChatItem; fresh: boolean
 
 interface ChatProps {
   readonly items: readonly ChatItem[]
-  /** Items up to here were loaded, not watched, so they do not animate in. */
-  readonly quietUpTo: number
+  readonly loadedUpTo: number
   readonly nameOf: NameOf
   readonly trigger: Trigger
-  /** The last word: whoever needs the person, or who is working now. */
   readonly last: ReactNode
   readonly ref?: Ref<HTMLOListElement>
 }
 
-/** The run as a group chat: the platform and the gate speak in quiet markers, agents in bubbles. */
-export function Chat({ items, quietUpTo, nameOf, trigger, last, ref }: ChatProps) {
+export function Chat({ items, loadedUpTo, nameOf, trigger, last, ref }: ChatProps) {
   const pauseUnseen = usePauseUnseen()
   return (
     <div ref={pauseUnseen}>
       <ol className={styles['chat']} aria-label="What the agents said" ref={ref}>
         {items.map((item) => (
-          <Item key={item.seq} item={item} fresh={item.seq > quietUpTo} nameOf={nameOf} trigger={trigger} />
+          <Item key={item.seq} item={item} fresh={item.seq > loadedUpTo} nameOf={nameOf} trigger={trigger} />
         ))}
         {last}
       </ol>
@@ -108,12 +105,13 @@ interface LastWordProps {
   readonly children: ReactNode
 }
 
-/** The message that holds the decision, the outcome or the troubleshooter's reading. Opening a run can land here. */
+export const DECISION_ID = 'decision'
+
 export function LastWord({ speaker, children }: LastWordProps) {
   const name = speaker.kind === 'troubleshooter' ? 'AI troubleshooter' : speakerName(speaker)
   const hue = speaker.kind === 'troubleshooter' ? agentIdentity('troubleshooter').hue : undefined
   return (
-    <li className={styles['msg']} id="decision" tabIndex={-1}>
+    <li className={styles['msg']} id={DECISION_ID} tabIndex={-1}>
       <span className={styles['av']}>
         <SpeakerAvatar speaker={speaker} />
       </span>
@@ -127,7 +125,6 @@ export function LastWord({ speaker, children }: LastWordProps) {
   )
 }
 
-/** Shows who is working now, so the chat never looks stuck. Hidden from screen readers; the steps say it. */
 export function Typing({ speaker, thinking }: { speaker: Speaker; thinking: boolean }) {
   return (
     <li className={cx(styles['msg'], styles['typing'])} aria-hidden="true">

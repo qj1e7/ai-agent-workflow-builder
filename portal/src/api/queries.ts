@@ -213,7 +213,6 @@ export function useStartRun() {
   })
 }
 
-/** Every step decided: the approval never changes again, so polling it stops. */
 function decided(approval: ApprovalView | undefined): boolean {
   return approval !== undefined && approval.steps.every((step) => step.status === 'approved' || step.status === 'declined')
 }
@@ -230,7 +229,7 @@ export function useApproval(approvalId: string, options?: QueryOptions) {
   })
 }
 
-/** The same cache entries as useApproval, one per id, for a list that shows several. */
+/** The same cache entries as useApproval, one per id. */
 export function useApprovals(approvalIds: readonly string[], options?: QueryOptions) {
   const client = useApiClient()
   const user = useCacheScope()

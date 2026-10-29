@@ -5,11 +5,10 @@ import { describe, expect, it } from 'vitest'
 import type { ApprovalView } from '../../api/types'
 import { ApprovalGate, EXACT_WORDS } from './ApprovalGate'
 import { decisionFor, type Decision } from './decision'
-import { lockWords, plainWords, proposalTitle, type Party } from './words'
+import { lockWords, withCurrentNames, proposalTitle, type Party } from './words'
 
 const BOB = bob as ApprovalView
 const ALICE = alice as ApprovalView
-/** carol is an Operator and not an Approver. The platform answers her the same proposal with not_an_approver. */
 const CAROL: ApprovalView = { ...BOB, you_can_decide: false, why_not: 'not_an_approver' }
 const DECIDED: ApprovalView = {
   ...BOB,
@@ -26,7 +25,7 @@ const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;'
 const buttons = (html: string) => [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((match) => text(match[1] ?? ''))
 
 function draw(approval: ApprovalView, party: Party | null, decision = idle): string {
-  return renderToStaticMarkup(<ApprovalGate approval={approval} lock={lockWords(approval.why_not, party)} decision={decision} />)
+  return renderToStaticMarkup(<ApprovalGate approval={approval} cannotDecide={lockWords(approval.why_not, party)} decision={decision} />)
 }
 
 describe('the approval gate', () => {
@@ -111,14 +110,14 @@ describe('why someone cannot decide', () => {
 
 describe('the troubleshooter’s words', () => {
   it('use the names the app uses today', () => {
-    expect(plainWords('The use case names a repository that does not exist. Check the token in the use case.')).toBe(
+    expect(withCurrentNames('The use case names a repository that does not exist. Check the token in the use case.')).toBe(
       'The workflow names a repository that does not exist. Check the token in the workflow.',
     )
-    expect(plainWords('The template has no connector binding. Ask a maintainer to add the binding to the template.')).toBe(
+    expect(withCurrentNames('The template has no connector binding. Ask a maintainer to add the binding to the template.')).toBe(
       'The workflow has no connector binding. Ask a maintainer to add the binding to the workflow.',
     )
-    expect(plainWords('The agents proposed an action this use case cannot carry out.')).toBe('The agents proposed an action this workflow cannot carry out.')
-    expect(plainWords('the room lead and the Release checker')).toBe('the Planner and the Version checker')
-    expect(plainWords('An agent could not finish its work.')).toBe('An agent could not finish its work.')
+    expect(withCurrentNames('The agents proposed an action this use case cannot carry out.')).toBe('The agents proposed an action this workflow cannot carry out.')
+    expect(withCurrentNames('the room lead and the Release checker')).toBe('the Planner and the Version checker')
+    expect(withCurrentNames('An agent could not finish its work.')).toBe('An agent could not finish its work.')
   })
 })

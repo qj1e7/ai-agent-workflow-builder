@@ -74,7 +74,6 @@ export const PAGES: Readonly<Record<PageId, PageEntry>> = {
   },
 }
 
-// The run page is the largest screen and not a menu page, so it loads only when a run is opened.
 const RunRoute = lazy(() => import('../screens/run/RunPage').then((module) => ({ default: module.RunRoute })))
 const ApprovalRoute = lazy(() => import('../screens/run/RunPage').then((module) => ({ default: module.ApprovalRoute })))
 

@@ -17,7 +17,6 @@ export function decisionFor(approval: ApprovalView | undefined, verdict: Verdict
 }
 
 export interface Decision {
-  /** The verdict on its way to the platform, or null. */
   readonly pending: Verdict | null
   /** The verdict the platform recorded for this person on this page. */
   readonly recorded: Verdict | null
@@ -26,9 +25,8 @@ export interface Decision {
 }
 
 /**
- * Approve or decline, the same way on the run page and in the practice Teams panel. It posts only when the platform
- * said this person may decide, with the open step and the digest of the proposal they are looking at. A second press
- * before the first answer is dropped. A dev user switch starts clean, because it remembers who sent it.
+ * It posts only when the platform said this person may decide. A second press before the first answer is dropped.
+ * A dev user switch starts clean, because it remembers who sent it.
  */
 export function useDecision(approval: ApprovalView | undefined, party: Party | null, onRecorded?: (verdict: Verdict) => void): Decision {
   const mutation = useDecide(approval?.approval_id ?? '')

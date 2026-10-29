@@ -1,7 +1,7 @@
 import { personTone } from './personTone'
 import styles from './PersonInitial.module.css'
 
-/** A person's initial on their own colours. The name is said beside it, so it is hidden from screen readers. */
+/** The name is said beside it, so it is hidden from screen readers. */
 export function PersonInitial({ name, size = 34 }: { name: string; size?: number }) {
   const tone = personTone(name)
   return (

@@ -1,5 +1,3 @@
-/* Faces follow "Motion and the agents' faces" in docs/design/portal-routines.md: only the agent working now loops,
-   and a change of state reacts once. base.css stops all of it under reduced motion. */
 .face {
   flex: none;
   overflow: visible;
@@ -93,7 +91,6 @@
   animation: doze var(--dur-attn) ease-out both;
 }
 
-/* Nothing loops where nobody can see it: a container sets data-paused when it is off screen or the tab is hidden. */
 :global([data-paused]) .face * {
   animation-play-state: paused;
 }

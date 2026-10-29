@@ -4,6 +4,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import indexHtml from '../../index.html?raw'
+import { MOVE_MS, SMALL_MS } from '../screens/run/liveRun'
 import { agentIdentity, KNOWN_AGENT_IDS } from './agents'
 import { personTone } from './personTone'
 
@@ -177,6 +178,11 @@ describe('tokens.css', () => {
       }
     }
     expect([...undefinedNames]).toEqual([])
+  })
+
+  it('times the run page’s pacing with the same --move and --dur-small its CSS travels and lands with', () => {
+    expect(value(light, 'move')).toBe(`${MOVE_MS}ms`)
+    expect(value(light, 'dur-small')).toBe(`${SMALL_MS}ms`)
   })
 
   it('declares every token the agent faces and the initials draw from', () => {

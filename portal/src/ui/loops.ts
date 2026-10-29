@@ -1,8 +1,8 @@
 import { useCallback } from 'react'
 
 /**
- * A ref for a container whose loops should rest while nobody can see them. It sets data-paused when the container
- * is scrolled out of view or the tab is hidden, and the face and dot styles pause under it.
+ * It sets data-paused when the container is scrolled out of view or the tab is hidden, and the face and dot styles
+ * pause under it.
  */
 export function usePauseUnseen(): (node: HTMLElement | null) => (() => void) | undefined {
   return useCallback((node: HTMLElement | null) => {

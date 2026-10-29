@@ -29,7 +29,6 @@
   background: var(--hair);
 }
 
-/* The line travels for --move, then the step it reaches lands. */
 .fill {
   width: calc(100% - 100% / var(--n));
   background: var(--ink);
@@ -111,7 +110,6 @@
   color: var(--on-ink);
 }
 
-/* The step happening now gets a crisp ring, not a glow. */
 .now .dot {
   border: 2px solid var(--accent);
   background: var(--surface);
@@ -195,7 +193,6 @@
   }
 }
 
-/* Phones: the line runs down the page. */
 @media (max-width: 760px) {
   .line {
     grid-template-columns: minmax(0, 1fr);

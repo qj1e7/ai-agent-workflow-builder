@@ -98,7 +98,6 @@
   color: var(--red-ink);
 }
 
-/* A new message rises 6px and fades in once, after the line has travelled to its step. */
 .in {
   animation: rise var(--dur-small) var(--ease-out) var(--move) backwards;
 }
@@ -150,7 +149,6 @@
   color: var(--amber-ink);
 }
 
-/* The app speaks with its logo on a square white tile, apart from the round agents and people. */
 .app {
   border: 1px solid var(--hair);
   border-radius: 25%;
