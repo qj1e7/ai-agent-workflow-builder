@@ -15,7 +15,7 @@ import { useDecision } from './decision'
 import { useLiveRun, type LiveRun } from './liveRun'
 import { Outcome, Troubleshooting } from './Outcome'
 import { RunLine } from './RunLine'
-import { PLANNER_ID, reachOf, stationsOf, type PlanBlock, type RunModel } from './runModel'
+import { isFinished, PLANNER_ID, reachOf, stationsOf, type PlanBlock, type RunModel } from './runModel'
 import { headlineOf, lineOf, lockWords, shortTime, speakerName, writeLabel, type NameOf, type Party, type Speaker } from './words'
 import styles from './RunPage.module.css'
 
@@ -71,22 +71,27 @@ export function ApprovalRoute() {
 }
 
 function RunPage({ runId, fromApproval }: { runId: string; fromApproval: boolean }) {
-  const { live, restart } = useLiveRun(runId)
+  const run = useRun(runId)
+  if (run.isError) return notFound(run.error) ? <Missing what="run" /> : <Problem onRetry={() => void run.refetch()} />
+  if (!run.data) return <Loading />
+  return <LiveRunPage run={run.data} fromApproval={fromApproval} />
+}
+
+function LiveRunPage({ run, fromApproval }: { run: RunView; fromApproval: boolean }) {
+  const { live, restart } = useLiveRun(run.run_id)
   const failed = live.head.phase.state === 'failed'
-  const run = useRun(runId, { poll: failed ? POLL_FAILED_MS : false })
-  const useCase = useUseCase(run.data?.use_case_id ?? live.head.useCaseId ?? '')
-  const lastSeq = run.data?.last_seq ?? 0
-  const behind = failed && live.loaded && lastSeq > live.head.seq
+  const latest = useRun(run.run_id, { poll: failed ? POLL_FAILED_MS : false }).data ?? run
+  const useCase = useUseCase(run.use_case_id)
+  const behind = failed && live.loaded && latest.last_seq > live.head.seq
 
   // The stream can close after a failure. If the run moved on without it, as after a retry, reconnect now.
   useEffect(() => {
     if (behind) restart()
   }, [behind, restart])
 
-  if (run.isError) return notFound(run.error) ? <Missing what="run" /> : <Problem onRetry={() => void run.refetch()} />
-  const ready = run.data !== undefined && (live.loaded || live.connection.is === 'live' || live.connection.is === 'settled')
+  const ready = live.loaded || live.connection.is === 'live' || live.connection.is === 'settled'
   if (!ready) return <Loading />
-  return <RunView run={run.data} useCase={useCase.data} live={live} fromApproval={fromApproval} />
+  return <RunView run={latest} useCase={useCase.data} live={live} fromApproval={fromApproval} />
 }
 
 function approvalIdOf(run: RunView, model: RunModel): string | null {
@@ -239,6 +244,7 @@ function RunView({ run, useCase, live, fromApproval }: RunViewProps) {
 
 function statusWords(recorded: Verdict | null, live: LiveRun): string {
   if (live.connection.is === 'reconnecting') return 'Lost the live connection. Trying again.'
+  if (isFinished(live.shown.phase)) return ''
   if (recorded === 'approve') return 'Approved. The platform is writing now.'
   if (recorded === 'decline') return 'Declined. Nothing will be written.'
   return ''

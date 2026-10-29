@@ -18,12 +18,14 @@ export function writeLabel(connector: string | null): string {
 }
 
 const TIME_ZONE = 'Asia/Singapore'
-const dayAndTime = new Intl.DateTimeFormat('en-GB', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: TIME_ZONE })
+const dayAndTime = new Intl.DateTimeFormat('en-GB', { weekday: 'short', hour: 'numeric', minute: '2-digit', hourCycle: 'h23', timeZone: TIME_ZONE })
 
-/** "Fri 10:14", in Singapore time like the rest of the Portal. */
+/** "Fri 9:14", in Singapore time like the rest of the Portal. */
 export function shortTime(iso: string): string {
   const at = new Date(iso)
-  return Number.isNaN(at.getTime()) ? '' : dayAndTime.format(at).replace(',', '')
+  if (Number.isNaN(at.getTime())) return ''
+  const part = (type: Intl.DateTimeFormatPartTypes) => dayAndTime.formatToParts(at).find((p) => p.type === type)?.value ?? ''
+  return `${part('weekday')} ${Number(part('hour'))}:${part('minute')}`
 }
 
 export type Speaker =

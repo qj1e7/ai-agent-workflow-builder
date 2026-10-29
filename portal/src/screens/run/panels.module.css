@@ -111,6 +111,12 @@
   overflow-wrap: anywhere;
 }
 
+@media (max-width: 600px) {
+  .panel {
+    padding: 16px;
+  }
+}
+
 @keyframes unfold {
   from {
     opacity: 0;
