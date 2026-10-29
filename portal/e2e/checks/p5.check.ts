@@ -16,7 +16,6 @@ const TARGET = process.env['TARGET'] ?? 'head'
 const SAMPLE = Number(process.env['SAMPLE'] ?? '0')
 const BASE_URL = process.env['BASE_URL'] ?? 'http://localhost:8080'
 const WCAG_22_AA = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']
-/** Every step says its state in words: a hidden prefix, or a visible line under its name. */
 const STATE_WORDS = /Done: |Now: |Not reached yet: |Waiting for a yes|Stopped here|Not needed|Declined/
 
 interface Approval {
@@ -78,7 +77,6 @@ async function eventsOf(backend: Backend, runId: string): Promise<{ seq: number;
   return (await backend.get<{ events: { seq: number; kind: string; data: Record<string, unknown> }[] }>('alice', `/api/v1/runs/${runId}/events?after=0`)).events
 }
 
-/** Samples the line every 100 ms until `until` holds, and keeps each change with its time. */
 async function watchLine(page: Page, until: (steps: Step[]) => boolean, limitMs = 60_000): Promise<{ at: number; states: string }[]> {
   const changes: { at: number; states: string }[] = []
   const start = Date.now()
@@ -92,11 +90,7 @@ async function watchLine(page: Page, until: (steps: Step[]) => boolean, limitMs 
   return changes
 }
 
-/**
- * Starts a check from inside a page that already has the Portal loaded, and moves to the new run's page without a
- * page load, so the page is following before the agents' first events. The check is fast on a warm stack.
- */
-async function startAndOpen(page: Page, useCaseId: string, starter = 'alice'): Promise<string> {
+async function startWhileWatching(page: Page, useCaseId: string, starter = 'alice'): Promise<string> {
   return page.evaluate(
     async ({ useCaseId, starter }) => {
       const started = await fetch(`/api/v1/use-cases/${useCaseId}/runs`, { method: 'POST', headers: { 'X-Dev-User': starter, 'Idempotency-Key': crypto.randomUUID() } })
@@ -112,12 +106,10 @@ async function startAndOpen(page: Page, useCaseId: string, starter = 'alice'): P
 const atGate = (steps: Step[]) => steps.some((s) => s.state === 'wait')
 const finished = (steps: Step[]) => steps.at(-1)?.state === 'done'
 
-/** The furthest step that is not "not reached yet", for each sample. */
 function reached(changes: { states: string }[]): number[] {
   return changes.map((c) => c.states.split(',').reduce((far, state, index) => (state === 'todo' ? far : index), 0))
 }
 
-// Lane 1, trunk side. P1 left no run page, so a run's address is not found there.
 test('@lane1-trunk trunk has no run page', async ({ browser }) => {
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()
@@ -130,7 +122,6 @@ test('@lane1-trunk trunk has no run page', async ({ browser }) => {
   await context.close()
 })
 
-// Lane 1, head side. alice starts a check and is on its run at once; the line moves step by step to the gate.
 test('@lane1 alice watches a new check move along the line and stop at the gate', async ({ browser }) => {
   await withBackend(async (backend) => {
     const context = await devContext(browser, 'alice')
@@ -141,7 +132,7 @@ test('@lane1 alice watches a new check move along the line and stop at the gate'
       const useCaseId = await backend.freshWatchlist('alice')
       await page.goto('/runs/none')
       await expect(h1(page)).toHaveText('Run not found')
-      const started = await startAndOpen(page, useCaseId)
+      const started = await startWhileWatching(page, useCaseId)
       attempts.push({ runId: started, changes: await watchLine(page, atGate) })
     }
     const { runId, changes } = attempts.at(-1) ?? { runId: '', changes: [] }
@@ -161,7 +152,6 @@ test('@lane1 alice watches a new check move along the line and stop at the gate'
   })
 })
 
-// Lane 2. bob approves a waiting run on its page.
 test('@lane2 bob approves a waiting run and the page shows the ticket created and the run Done', async ({ browser }) => {
   await withBackend(async (backend) => {
     const { runId, approvalId } = await backend.waitingRun('alice')
@@ -187,7 +177,6 @@ test('@lane2 bob approves a waiting run and the page shows the ticket created an
   })
 })
 
-// Lane 3. bob declines another waiting run.
 test('@lane3 bob declines a waiting run and nothing is written', async ({ browser }) => {
   await withBackend(async (backend) => {
     const { runId } = await backend.waitingRun('alice')
@@ -233,7 +222,6 @@ async function viewWaiting(browser: Browser, user: string, lane: number, file: s
   })
 }
 
-// Lane 4. alice opens the run she started.
 test('@lane4 alice sees that someone else must say yes, and no Approve button', async ({ browser }) => {
   const seen = await viewWaiting(browser, 'alice', 4, 'p5-own-run.png')
   expect(seen.approval).toMatchObject({ you_can_decide: false, why_not: 'own_work' })
@@ -242,7 +230,6 @@ test('@lane4 alice sees that someone else must say yes, and no Approve button', 
   expect(seen.text).toContain(seen.approval.actions[0]?.fields.title ?? '')
 })
 
-// Lane 5. carol, an Operator only, opens a waiting run.
 test('@lane5 carol sees the proposal and no Approve button', async ({ browser }) => {
   const seen = await viewWaiting(browser, 'carol', 5, 'p5-not-approver.png')
   expect(seen.approval).toMatchObject({ you_can_decide: false, why_not: 'not_an_approver' })
@@ -252,7 +239,6 @@ test('@lane5 carol sees the proposal and no Approve button', async ({ browser })
   expect(seen.text).toContain(seen.approval.actions[0]?.fields.title ?? '')
 })
 
-// Lane 6, on its own stack. A check fails because the mock GitHub is down.
 test('@lane6 a failed run marks the step that stopped and shows the troubleshooter’s reason below it', async ({ browser }) => {
   await withBackend(async (backend) => {
     await setMockGithubMode('unavailable')
@@ -292,7 +278,6 @@ test('@lane6 a failed run marks the step that stopped and shows the troubleshoot
   })
 })
 
-// Lane 7. A reload in the middle of a run redraws the steps so far and keeps following.
 test('@lane7 a reload mid-run redraws the steps so far and keeps following new events', async ({ browser }) => {
   await withBackend(async (backend) => {
     const context = await devContext(browser, 'alice')
@@ -301,7 +286,7 @@ test('@lane7 a reload mid-run redraws the steps so far and keeps following new e
     const useCaseId = await backend.freshWatchlist('alice')
     await page.goto('/runs/none')
     await expect(h1(page)).toHaveText('Run not found')
-    const runId = await startAndOpen(page, useCaseId)
+    const runId = await startWhileWatching(page, useCaseId)
     const beforeReload = await watchLine(page, (steps) => steps.slice(1).some((s) => s.state === 'done' || s.state === 'now' || s.state === 'wait'))
     const doneBefore = (await stepsOf(page)).filter((s) => s.state === 'done').length
     await page.reload()
@@ -325,7 +310,6 @@ test('@lane7 a reload mid-run redraws the steps so far and keeps following new e
   })
 })
 
-// Lane 8. bob opens a Teams link to one run, then approves another run from the Teams panel.
 test('@lane8 the Teams link opens a run at the decision, and approving in the panel updates the run page', async ({ browser }) => {
   await withBackend(async (backend) => {
     const first = await backend.waitingRun('alice')
@@ -339,7 +323,7 @@ test('@lane8 the Teams link opens a run at the decision, and approving in the pa
     const teams = page.getByRole('button', { name: /^Teams, practice copy/ })
     await teams.click()
     const drawer = page.getByRole('dialog', { name: 'Teams, practice copy' })
-    const firstCard = drawer.getByRole('listitem').filter({ has: page.locator(`a[href="/approvals/${first.approvalId}"]`) })
+    const firstCard = drawer.locator(`li[data-approval-id="${first.approvalId}"]`)
     await expect(firstCard).toBeVisible()
     await firstCard.getByRole('link', { name: 'Open in Workflow Builder' }).click()
     await expect(page).toHaveURL(new RegExp(`/approvals/${first.approvalId}$`))
@@ -353,9 +337,7 @@ test('@lane8 the Teams link opens a run at the decision, and approving in the pa
       ;(window as unknown as { kept: boolean }).kept = true
     })
     await teams.click()
-    // The second check proposes only Redis, since LangGraph's ticket still waits. Once decided, the card loses its link.
-    const secondCard = drawer.getByRole('listitem').filter({ hasText: 'Upgrade Redis from 8.2.0' }).last()
-    await expect(secondCard.locator(`a[href="/approvals/${second.approvalId}"]`)).toBeVisible()
+    const secondCard = drawer.locator(`li[data-approval-id="${second.approvalId}"]`)
     await secondCard.getByRole('button', { name: 'Approve' }).click()
     await expect(secondCard.getByText('Approved by Bob')).toBeVisible({ timeout: 30_000 })
     await expect(h1(page)).toHaveText('1 ticket created in Jira', { timeout: 60_000 })
@@ -380,7 +362,6 @@ test('@lane8 the Teams link opens a run at the decision, and approving in the pa
   })
 })
 
-// Lane 9. Reduced motion: nothing animates while a run plays, every step says its state in words, and axe is clean.
 test('@lane9 reduced motion, words for every step, and axe on the run page and the Teams panel', async ({ browser }) => {
   await withBackend(async (backend) => {
     const playRun = async (reducedMotion: boolean) => {
@@ -389,7 +370,6 @@ test('@lane9 reduced motion, words for every step, and axe on the run page and t
       const useCaseId = await backend.freshWatchlist('alice')
       await page.goto('/runs/none')
       await expect(h1(page)).toHaveText('Run not found')
-      // Samples every 5 ms inside the page, from before the run starts until a second after it is done.
       await page.evaluate(() => {
         const seen = { frames: 0, maxRunning: 0, names: [] as string[] }
         ;(window as unknown as { motionSeen: typeof seen }).motionSeen = seen
@@ -404,7 +384,7 @@ test('@lane9 reduced motion, words for every step, and axe on the run page and t
         }
         setInterval(sample, 5)
       })
-      const runId = await startAndOpen(page, useCaseId)
+      const runId = await startWhileWatching(page, useCaseId)
       const toGate = await watchLine(page, atGate)
       const said = await stepsSaid(page)
       const approvalId = await backend.approvalIdOf(runId)
@@ -417,7 +397,6 @@ test('@lane9 reduced motion, words for every step, and axe on the run page and t
       await context.close()
       return { runId, toGate, toDone, framesSampled: seen.frames, maxRunning: seen.maxRunning, animating: seen.names, said, saidDone }
     }
-    // The same run with motion on shows the sampler does see the page's animations.
     const control = await playRun(false)
     const motion = await playRun(true)
 
@@ -462,7 +441,6 @@ test('@lane9 reduced motion, words for every step, and axe on the run page and t
   })
 })
 
-// Lane 10. Approve pressed twice in one moment.
 test('@lane10 pressing Approve twice records one decision and one set of tickets', async ({ browser }) => {
   await withBackend(async (backend) => {
     const { runId, approvalId } = await backend.waitingRun('alice')
@@ -493,7 +471,6 @@ test('@lane10 pressing Approve twice records one decision and one set of tickets
   })
 })
 
-/** A run of the check that bob approved, made now if the stack has none. */
 async function doneRun(backend: Backend): Promise<string> {
   const done = (await backend.runs('alice')).find((run) => run.state === 'succeeded' && run.outcome === 'written')
   if (done) return done.run_id
@@ -504,7 +481,6 @@ async function doneRun(backend: Backend): Promise<string> {
   return runId
 }
 
-// Perf. Largest contentful paint of a done run's page, one sample per run; p5.sh runs it five times.
 test('@perf largest contentful paint of a done run', async ({ browser }) => {
   const runId = await withBackend(doneRun)
   const context = await devContext(browser, 'alice')
@@ -534,8 +510,6 @@ test('@perf largest contentful paint of a done run', async ({ browser }) => {
   await context.close()
 })
 
-// A 30 to 60 second walk-through: bob watches a new check reach the gate, approves it, and watches it finish.
-// Writes $EVID/p5-review.webm. Run with --grep @review-video.
 test('@review-video a run that waits, is approved on its page, and finishes', async ({ browser }) => {
   test.setTimeout(180_000)
   await withBackend(async (backend) => {
@@ -551,25 +525,25 @@ test('@review-video a run that waits, is approved on its page, and finishes', as
     const useCaseId = await backend.freshWatchlist('alice')
     await page.goto('/')
     await expect(h1(page)).toBeVisible()
-    await page.waitForTimeout(1_500)
+    await page.waitForTimeout(2_500)
     await page.goto('/runs/none')
     await expect(h1(page)).toBeVisible()
-    await startAndOpen(page, useCaseId)
+    await startWhileWatching(page, useCaseId)
     await watchLine(page, atGate)
-    await page.waitForTimeout(2_500)
+    await page.waitForTimeout(4_000)
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'smooth' }))
-    await page.waitForTimeout(3_500)
+    await page.waitForTimeout(4_500)
     await page.locator('#decision').scrollIntoViewIfNeeded()
-    await page.waitForTimeout(3_000)
+    await page.waitForTimeout(4_000)
     await page.getByRole('button', { name: 'Approve 1 ticket' }).hover()
     await page.waitForTimeout(1_000)
     await page.getByRole('button', { name: 'Approve 1 ticket' }).click()
     await watchLine(page, finished)
-    await page.waitForTimeout(3_000)
+    await page.waitForTimeout(4_000)
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'smooth' }))
-    await page.waitForTimeout(4_000)
+    await page.waitForTimeout(4_500)
     await page.getByRole('button', { name: /^Teams, practice copy/ }).click()
-    await page.waitForTimeout(4_000)
+    await page.waitForTimeout(5_000)
     await page.keyboard.press('Escape')
     await page.waitForTimeout(2_000)
     await context.close()

@@ -15,7 +15,6 @@ export function openContext(browser: Browser, { phone = false } = {}): Promise<B
   })
 }
 
-/** A browser context signed in, with the dev sign-in, as one of the seeded people. */
 export async function devContext(browser: Browser, user: string, { phone = false, reducedMotion = false } = {}): Promise<BrowserContext> {
   const context = await browser.newContext({
     ...(phone ? { viewport: PHONE, isMobile: true, hasTouch: true } : { viewport: DESKTOP }),

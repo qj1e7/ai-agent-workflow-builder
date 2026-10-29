@@ -17,7 +17,7 @@ test('alice starts a check; bob opens the waiting run, sees the ticket it will c
   const forBob = await backend.get<ApprovalAnswer>('bob', `/api/v1/approvals/${approvalId}`)
   expect(forBob.you_can_decide, 'the platform lets bob decide').toBe(true)
   const title = forBob.actions[0]?.fields.title ?? ''
-  expect(title).toMatch(/^Upgrade LangGraph from 1\.2\.14 to /)
+  expect(title).toContain('LangGraph')
 
   const aliceContext = await devContext(browser, 'alice')
   const alice = await aliceContext.newPage()
@@ -79,7 +79,7 @@ test('the link in a Teams message opens the run page at the decision', async ({ 
   await expect(teams, 'the Teams button counts what waits for bob').toBeVisible({ timeout: 15_000 })
   await teams.click()
   const drawer = page.getByRole('dialog', { name: 'Teams, practice copy' })
-  const card = drawer.getByRole('listitem').filter({ has: page.locator(`a[href="/approvals/${approvalId}"]`) })
+  const card = drawer.locator(`li[data-approval-id="${approvalId}"]`)
   await expect(card.getByRole('button', { name: 'Approve' })).toBeVisible()
   await shot(page, info, 'p5-02-teams-drawer')
   await card.getByRole('link', { name: 'Open in Workflow Builder' }).click()

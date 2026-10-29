@@ -131,7 +131,6 @@ export class Backend {
     return started.run_id
   }
 
-  /** A fresh check that waits at the approval gate, with its approval id. */
   async waitingRun(user = 'alice', software: readonly Software[] = [LANGGRAPH]): Promise<WaitingRun> {
     const runId = await this.startCheck(user, software)
     await this.waitForState(runId, ['awaiting_approval'])
