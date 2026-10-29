@@ -15,6 +15,10 @@ services:
       OIDC_ISSUER: http://mock-oidc:8080/default
       OIDC_AUDIENCE: platform-api
       OIDC_TEST_ONLY_HTTP_ISSUER: http://mock-oidc:8080/default
+      # The mock provider's alice and bob, so a fresh stack has an Operator and two Approvers.
+      # carol, dave and erin can sign in but are not on the list until an Operator adds them.
+      FIRST_OPERATOR: alice@example.test
+      FIRST_APPROVERS: alice@example.test,bob@example.test
     ports: !reset []
 
   portal:
