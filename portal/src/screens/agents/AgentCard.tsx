@@ -13,7 +13,7 @@ import {
   CHANGE_LATER_NOTE,
   kindLabel,
   PLATFORM_NOTE,
-  platformAgentMark,
+  PLATFORM_AGENT_MARK,
   toolCountWords,
   versionWords,
   cardAccess,
@@ -58,7 +58,7 @@ function Tile({ id, name, what, access, toolCount, platform, to }: TileProps) {
               {name}
             </Link>
           </h3>
-          {platform ? <span className={styles['mark']}>{platformAgentMark(id)}</span> : null}
+          {platform ? <span className={styles['mark']}>{PLATFORM_AGENT_MARK}</span> : null}
         </div>
       </div>
       <p>{what}</p>
@@ -196,7 +196,7 @@ function Rules({ rules }: { rules: readonly string[] }) {
 
 export function PlatformDialog({ agent, onClose }: { agent: PlatformAgent; onClose: () => void }) {
   return (
-    <Modal face={agent.id} title={agentIdentity(agent.id).name} under={<span className={styles['mark']}>{platformAgentMark(agent.id)}</span>} onClose={onClose}>
+    <Modal face={agent.id} title={agentIdentity(agent.id).name} under={<span className={styles['mark']}>{PLATFORM_AGENT_MARK}</span>} onClose={onClose}>
       <p>{agent.what}</p>
       <Steps steps={agent.steps} />
       <section>

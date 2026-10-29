@@ -31,8 +31,6 @@ export const PLATFORM_AGENTS: readonly PlatformAgent[] = [
   },
 ]
 
-export const PLATFORM_AGENT_IDS: readonly string[] = PLATFORM_AGENTS.map((agent) => agent.id)
-
 export const PLATFORM_NOTE = 'This agent is part of the platform, so only the team that runs the platform can change it.'
 export const CHANGE_LATER_NOTE = 'Changing an agent in plain English is coming later.'
 const TOOLS_UNAVAILABLE_WORDS = 'The tool list is not available right now.'
@@ -41,13 +39,7 @@ export function toolsUnavailableWords(cardsBelow: boolean): string {
   return cardsBelow ? `${TOOLS_UNAVAILABLE_WORDS} The agent cards below are still here.` : TOOLS_UNAVAILABLE_WORDS
 }
 
-export function isPlatformAgent(id: string): boolean {
-  return PLATFORM_AGENT_IDS.includes(id)
-}
-
-export function platformAgentMark(id: string): string | null {
-  return isPlatformAgent(id) ? 'Platform agent' : null
-}
+export const PLATFORM_AGENT_MARK = 'Platform agent'
 
 export function systemOf(tool: ToolId): string {
   const [system = tool] = tool.split('.')
@@ -87,8 +79,4 @@ export function faceId(card: Pick<CardView, 'card_id'>): string {
 
 export function versionWords(card: Pick<CardView, 'starter' | 'version'>): string {
   return card.starter ? `Version ${card.version}. Ships with the platform` : `Version ${card.version}`
-}
-
-export function toolKinds(tools: readonly ToolView[] | undefined): ReadonlyMap<ToolId, ToolView['kind']> {
-  return new Map((tools ?? []).map((tool) => [tool.id, tool.kind]))
 }

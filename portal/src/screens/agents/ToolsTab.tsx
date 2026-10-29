@@ -1,10 +1,9 @@
 import type { CardView, ToolView } from '../../api/types'
-import { agentIdentity } from '../../ui/agents'
-import { approvalWords, faceId, kindLabel, systemOf } from './agents'
+import { approvalWords, kindLabel, systemOf } from './agents'
 import styles from './AgentsPage.module.css'
 
 function usedBy(tool: ToolView, cards: readonly CardView[]): string {
-  const names = cards.filter((card) => card.tools.includes(tool.id)).map((card) => agentIdentity(faceId(card), card.name).name)
+  const names = cards.filter((card) => card.tools.includes(tool.id)).map((card) => card.name)
   return names.length > 0 ? `Used by ${names.join(', ')}` : 'No agent uses it yet'
 }
 

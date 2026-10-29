@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ToolView } from '../../api/types'
-import { accessLabel, approvalWords, cardAccess, faceId, isPlatformAgent, kindLabel, PLATFORM_AGENTS, platformAgentMark, systemOf, toolCountWords, toolKinds, toolsUnavailableWords, versionWords } from './agents'
+import { accessLabel, approvalWords, cardAccess, faceId, kindLabel, PLATFORM_AGENT_MARK, PLATFORM_AGENTS, systemOf, toolCountWords, toolsUnavailableWords, versionWords } from './agents'
 
 const TOOLS: ToolView[] = [
   { id: 'jira.search', kind: 'read', name: 'Search Jira', description: '', target_input: null, min_approvers: null },
@@ -20,7 +20,7 @@ describe('read and write labels', () => {
   })
 
   it('labels a card by the strongest thing its tools can do', () => {
-    const kinds = toolKinds(TOOLS)
+    const kinds = new Map(TOOLS.map((tool) => [tool.id, tool.kind]))
     expect(cardAccess({ tools: [], approvals: [] }, kinds)).toBe('none')
     expect(cardAccess({ tools: ['jira.search'], approvals: [] }, kinds)).toBe('reads')
     expect(cardAccess({ tools: ['jira.search', 'jira.create_ticket'], approvals: [] }, kinds)).toBe('writes')
@@ -29,7 +29,7 @@ describe('read and write labels', () => {
   })
 
   it('still marks a write when the tool list is down, because the card carries its approvals', () => {
-    expect(cardAccess({ tools: ['jira.create_ticket'], approvals: [{ tool: 'jira.create_ticket', approvers: 1 }] }, toolKinds(undefined))).toBe('writes')
+    expect(cardAccess({ tools: ['jira.create_ticket'], approvals: [{ tool: 'jira.create_ticket', approvers: 1 }] }, new Map())).toBe('writes')
   })
 
   it('counts tools', () => {
@@ -39,14 +39,13 @@ describe('read and write labels', () => {
 })
 
 describe('platform agents', () => {
-  it('lists the Planner and the AI troubleshooter, and marks only them', () => {
-    expect(PLATFORM_AGENTS.map((agent) => agent.id)).toEqual(['planner', 'troubleshooter'])
-    expect(platformAgentMark('planner')).toBe('Platform agent')
-    expect(platformAgentMark('troubleshooter')).toBe('Platform agent')
-    expect(platformAgentMark('version_checker')).toBeNull()
-    expect(isPlatformAgent('crd_version_checker')).toBe(false)
+  it('lists the Planner and the AI troubleshooter, each with what it reaches instead of other systems', () => {
+    expect(PLATFORM_AGENTS.map((agent) => [agent.id, agent.reach])).toEqual([
+      ['planner', 'It only plans.'],
+      ['troubleshooter', 'It reads the run’s own record.'],
+    ])
+    expect(PLATFORM_AGENT_MARK).toBe('Platform agent')
   })
-
 })
 
 describe('tools', () => {
