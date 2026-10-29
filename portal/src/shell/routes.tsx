@@ -1,3 +1,4 @@
+import { lazy, Suspense, type ReactNode } from 'react'
 import { Route, Routes } from 'react-router'
 import { SettingsPage } from '../screens/settings/SettingsPage'
 import type { Icon } from '../ui/icons'
@@ -74,6 +75,23 @@ export const PAGES: Readonly<Record<PageId, PageEntry>> = {
   },
 }
 
+const RunRoute = lazy(() => import('../screens/run/RunPage').then((module) => ({ default: module.RunRoute })))
+const ApprovalRoute = lazy(() => import('../screens/run/RunPage').then((module) => ({ default: module.ApprovalRoute })))
+
+function Lazy({ children }: { children: ReactNode }) {
+  return (
+    <Suspense
+      fallback={
+        <p className="muted" role="status">
+          Loading
+        </p>
+      }
+    >
+      {children}
+    </Suspense>
+  )
+}
+
 export const MENU_PAGE_IDS: readonly PageId[] = PAGE_IDS.filter((id) => PAGES[id].inMenu)
 
 export function wordsOf(words: Words, context: PageContext): string {
@@ -88,6 +106,8 @@ export function AppRoutes({ context }: { context: PageContext }) {
         const Page = id === 'settings' ? SettingsPage : EmptyPage
         return <Route key={id} path={path} element={<Page heading={wordsOf(heading, context)} lead={wordsOf(lead, context)} />} />
       })}
+      <Route path="/runs/:runId" element={<Lazy><RunRoute /></Lazy>} />
+      <Route path="/approvals/:approvalId" element={<Lazy><ApprovalRoute /></Lazy>} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   )

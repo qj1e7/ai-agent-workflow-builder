@@ -82,10 +82,12 @@ test('the Settings gear opens Settings, and a path that does not exist says so',
 
 test('Teams opens a dialog, Escape closes it, and focus goes back to the Teams button', async ({ page }, info) => {
   await page.goto('/')
-  const teams = page.getByRole('button', { name: 'Teams, practice copy' })
+  const teams = page.getByRole('button', { name: /^Teams, practice copy/ })
   await teams.click()
   const dialog = page.getByRole('dialog', { name: 'Teams, practice copy' })
-  await expect(dialog).toContainText('No messages yet. When a run needs a yes, its message shows here.')
+  await expect(dialog).toContainText('Microsoft Teams')
+  await expect(dialog).toContainText('Practice copy. Nothing reaches the real Teams.')
+  await expect(dialog.getByRole('button', { name: 'Close Teams' })).toBeFocused()
   await shot(page, info, 'p1-04-teams')
   await page.keyboard.press('Escape')
   await expect(dialog).toBeHidden()
@@ -155,7 +157,7 @@ for (const [size, options] of [
     await expect(page.getByRole('region', { name: 'Test controls' })).toBeVisible()
     await settled(page)
     await expectAccessible(page, path.join(OUT, 'axe'), `home-test-controls-${size}`)
-    await page.getByRole('button', { name: 'Teams, practice copy' }).click()
+    await page.getByRole('button', { name: /^Teams, practice copy/ }).click()
     await expect(page.getByRole('dialog')).toBeVisible()
     await settled(page)
     await expectAccessible(page, path.join(OUT, 'axe'), `home-teams-${size}`)

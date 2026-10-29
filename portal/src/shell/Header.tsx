@@ -23,7 +23,7 @@ export function Header({ person }: { person: Me | null }) {
         </Link>
         <Menu />
         <div className={styles['tools']}>
-          <TeamsButton />
+          <TeamsButton person={person} />
           <NavLink to={PAGES.settings.path} className={cx(iconButton['button'])} aria-label="Settings" title="Settings">
             <SettingsIcon />
           </NavLink>
