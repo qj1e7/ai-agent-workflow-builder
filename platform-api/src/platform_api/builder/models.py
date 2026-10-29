@@ -1,7 +1,8 @@
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import Field, StringConstraints
+from pydantic import Field, StringConstraints, field_validator
+from pydantic_core import PydanticCustomError
 
 from platform_api.builder.templates import TAG_PATTERN
 from platform_api.orchestration import (
@@ -348,8 +349,18 @@ class CreateAgentUseCase(WireModel):
     agents: Annotated[list[AgentChoice], Field(min_length=1, max_length=3)]
 
 
+NUL_IN_TEXT = "This text holds a NUL character (\\u0000). Remove it."
+
+
 class UnderstandIn(WireModel):
     text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
+
+    @field_validator("text")
+    @classmethod
+    def _no_nul(cls, text: str) -> str:
+        if "\x00" in text:
+            raise PydanticCustomError("nul_character", NUL_IN_TEXT)
+        return text
 
 
 class UnderstoodRowView(WireModel):

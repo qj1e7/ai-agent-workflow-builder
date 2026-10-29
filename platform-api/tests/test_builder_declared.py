@@ -128,3 +128,12 @@ def test_the_route_answers_the_status_and_declares_it(
     )
     assert response.status_code == status
     declared_status(app, method, path.replace("sw_x", "{software_id}"), response)
+
+
+def test_understand_refuses_a_nul_byte_with_a_422_naming_the_field():
+    response = TestClient(app_with()).post(
+        "/api/v1/builder/understand", headers=ALICE, json={"text": "close\u0000 every ticket"}
+    )
+    assert response.status_code == 422
+    assert [error["loc"] for error in response.json()["detail"]] == [["body", "text"]]
+    assert "NUL" in response.json()["detail"][0]["msg"]
