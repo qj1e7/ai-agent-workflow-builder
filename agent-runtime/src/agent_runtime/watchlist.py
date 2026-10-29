@@ -169,7 +169,8 @@ class WatchlistChecker:
             findings.append(finding)
             write(_read_finished(item, finding))
             if finding.state == "cant_check":
-                write(_cannot_check(item, finding, isinstance(read, TaskError), position < last))
+                unreadable = isinstance(read, TaskError)
+                write(_cannot_check(item, finding, unreadable=unreadable, more=position < last))
         return {"findings": findings, "read_errors": read_errors}
 
     def _report(self, state: WatchlistState) -> Update:
@@ -230,7 +231,9 @@ def _read_finished(item: SoftwareToCheck, finding: Finding) -> Draft:
     return finished("read_source", what, result)
 
 
-def _cannot_check(item: SoftwareToCheck, finding: Finding, unreadable: bool, more: bool) -> Draft:
+def _cannot_check(
+    item: SoftwareToCheck, finding: Finding, *, unreadable: bool, more: bool
+) -> Draft:
     start = (
         f"I could not read {item.name}'s releases"
         if unreadable
