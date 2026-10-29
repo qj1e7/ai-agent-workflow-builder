@@ -1,7 +1,6 @@
 import { useEffect, useReducer, useRef, useState, type KeyboardEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useErrorWords } from '../../api/context'
-import { newIdempotencyKey } from '../../api/idempotency'
 import { failureReasonLabel } from '../../api/labels'
 import { useLatch } from '../../api/latch'
 import { useDisplayName } from '../../api/people'
@@ -10,6 +9,7 @@ import type { LastCheckView, WatchedSoftwareView, WatchlistView } from '../../ap
 import { Button } from '../../ui/Button'
 import { IconExternal } from '../../ui/icons'
 import { AddSoftware } from './AddSoftware'
+import { pressCheckNow } from './checkNow'
 import { Schedule } from './Schedule'
 import { board, EMPTY_BOARD, noticeWords, pressRemove, pressUndo, removeButtonId, UNDO_ID, type Board, type Named } from './removal'
 import { SoftwareHistory } from './SoftwareHistory'
@@ -104,15 +104,12 @@ function Section({ title, rows, ...rest }: { title: string; rows: readonly Watch
 
 function CheckNow({ useCaseId }: { useCaseId: string }) {
   const start = useStartRun()
+  const latch = useLatch()
   const navigate = useNavigate()
   const words = useErrorWords()
   return (
     <div className={styles['checkNow']}>
-      <Button
-        variant="primary"
-        loading={start.isPending}
-        onClick={() => start.mutate({ useCaseId, idempotencyKey: newIdempotencyKey() }, { onSuccess: (started) => void navigate(`/runs/${started.run_id}`) })}
-      >
+      <Button variant="primary" loading={start.isPending} onClick={() => pressCheckNow(latch, start.mutate, useCaseId, (runId) => void navigate(`/runs/${runId}`))}>
         Check now
       </Button>
       {start.isError ? (

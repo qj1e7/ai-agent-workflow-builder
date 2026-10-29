@@ -1,6 +1,7 @@
 import { useRef, useState, type FormEvent, type RefObject } from 'react'
 import { ApiError } from '../../api/client'
 import { useErrorWords } from '../../api/context'
+import { useLatch } from '../../api/latch'
 import { useAddSoftware } from '../../api/queries'
 import { Button } from '../../ui/Button'
 import { checkName, checkRepo, checkVersion, REPO_HELP, SOURCES_NOTE, VERSION_HELP } from './software'
@@ -126,12 +127,12 @@ export function AddSoftware({ names, repos, onAdded }: { names: readonly string[
   const [values, setValues] = useState<FormValues>(EMPTY_VALUES)
   const [errors, setErrors] = useState<FormErrors>({})
   const add = useAddSoftware()
+  const sending = useLatch()
   const words = useErrorWords()
   const refs = { name: useRef<HTMLInputElement>(null), repo: useRef<HTMLInputElement>(null), version: useRef<HTMLInputElement>(null) }
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (add.isPending) return
     const name = checkName(values.name, names)
     const repo = checkRepo(values.repo, repos)
     const version = checkVersion(values.version)
@@ -146,20 +147,23 @@ export function AddSoftware({ names, repos, onAdded }: { names: readonly string[
       first.current?.focus()
       return
     }
-    add.mutate(
-      { name: name.value, repo: repo.value, ...(version.value === null ? {} : { our_version: version.value }) },
-      {
-        onSuccess: () => {
-          setValues(EMPTY_VALUES)
-          onAdded(name.value)
+    sending.run((settled) =>
+      add.mutate(
+        { name: name.value, repo: repo.value, ...(version.value === null ? {} : { our_version: version.value }) },
+        {
+          onSuccess: () => {
+            setValues(EMPTY_VALUES)
+            onAdded(name.value)
+          },
+          onError: (error) => {
+            if (error instanceof ApiError && error.status === 409) {
+              setErrors({ repo: `${repo.value} is already on the list.` })
+              refs.repo.current?.focus()
+            } else setErrors({ form: words(error) })
+          },
+          onSettled: settled,
         },
-        onError: (error) => {
-          if (error instanceof ApiError && error.status === 409) {
-            setErrors({ repo: `${repo.value} is already on the list.` })
-            refs.repo.current?.focus()
-          } else setErrors({ form: words(error) })
-        },
-      },
+      ),
     )
   }
 
