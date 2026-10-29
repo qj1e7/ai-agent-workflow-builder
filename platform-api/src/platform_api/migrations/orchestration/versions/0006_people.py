@@ -83,7 +83,6 @@ def downgrade() -> None:
         GRANT USAGE, SELECT ON SEQUENCE orchestration.model_setting_changes_id_seq
             TO wab_orchestration;
 
-        DELETE FROM orchestration.model_setting WHERE slot = 'pending';
         DROP TABLE orchestration.settings_changes;
         DROP TABLE orchestration.confirmations;
         DROP TABLE orchestration.people;

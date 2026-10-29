@@ -233,3 +233,22 @@ def test_migration_0006_adds_the_people_tables_and_folds_the_model_history_into_
         orchestration.execute("SELECT count(*) FROM orchestration.people")
         orchestration.execute("LOCK TABLE orchestration.people IN SHARE ROW EXCLUSIVE MODE")
         orchestration.rollback()
+
+
+def test_migration_0006_downgrade_keeps_a_waiting_address(postgres: PostgresUrls):
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        conn.execute("DELETE FROM orchestration.model_setting")
+        conn.execute(
+            "INSERT INTO orchestration.model_setting (slot, provider, style, base_url, model, "
+            "sealed_key, key_hint, test_seconds, saved_by, saved_by_name, saved_at) VALUES "
+            "('pending', 'ai-gateway.ncs.example', 'openai', 'https://ai-gateway.ncs.example/v1', "
+            "'ncs-llm-small', 'sealed', 'x7', 1.4, 'alice', 'Alice', %s)",
+            (NOW,),
+        )
+        downgrade("orchestration", postgres.owner, "0005")
+        try:
+            kept = conn.execute("SELECT slot, model FROM orchestration.model_setting").fetchall()
+            assert kept == [("pending", "ncs-llm-small")]
+        finally:
+            conn.execute("DELETE FROM orchestration.model_setting")
+            upgrade("orchestration", postgres.owner)
