@@ -13,7 +13,7 @@ from platform_api.auth import DEV_PEOPLE
 from platform_api.db import Database
 from platform_api.orchestration.approvals import Refusal, Verdict
 from platform_api.orchestration.confirmations import ConfirmationDecision
-from platform_api.orchestration.model_settings import KeyBox, ModelSettings
+from platform_api.orchestration.model_settings import KeyBox, ModelSettings, NotAnApprover, Saved
 from platform_api.orchestration.people_store import People
 from platform_api.orchestration.service import DecisionRefused
 from platform_api.settings import FirstPeople
@@ -44,12 +44,17 @@ async def people(db: Database) -> People:
 def app(db: Database, people: People) -> FastAPI:
     application = create_app(LOCAL_ENV)
     application.state.people = people
-    application.state.model_settings = ModelSettings(
+    application.state.model_settings = model_settings_for(db, people)
+    return application
+
+
+def model_settings_for(db: Database, people: People) -> ModelSettings:
+    return ModelSettings(
         db,
         FakeChecks(),  # type: ignore[arg-type]
         KeyBox("test-settings-secret-not-real"),
+        people=people,
     )
-    return application
 
 
 @pytest.fixture
@@ -527,3 +532,22 @@ async def test_two_first_sign_ins_at_the_same_moment_both_find_the_person(
         await holder.rollback()
     resolved = await asyncio.gather(first, second)
     assert [p.user_id if p is not None else None for p in resolved] == [dave["id"], dave["id"]]
+
+
+async def test_the_model_address_decision_reads_the_deciders_roles_as_they_are_now(
+    db: Database, client: httpx.AsyncClient, people: People
+):
+    settings = model_settings_for(db, people)
+    dave_id = await confirmed_approver(client, "dave@example.test", "Dave")
+    alice = Principal(UserId("alice"), frozenset({Role.OPERATOR, Role.APPROVER}), "Alice")
+    saved = await settings.save(alice, "openai", NCS, "ncs-llm-small", "k-not-real", False)
+    assert isinstance(saved, Saved) and saved.awaiting_confirmation
+    pending = (await settings.view()).pending
+    assert pending is not None
+    signed_in_before = Principal(UserId(dave_id), frozenset({Role.OPERATOR, Role.APPROVER}), "Dave")
+    assert (
+        await client.delete(f"/api/v1/people/{dave_id}/approver", headers=CAROL)
+    ).status_code == 200
+    decided = await settings.decide(signed_in_before, True, pending.digest)
+    assert isinstance(decided, NotAnApprover)
+    assert (await settings.view()).pending is not None

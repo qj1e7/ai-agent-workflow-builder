@@ -84,7 +84,7 @@ async def build(settings: Settings) -> Services:
 
     agents = HttpAgentRuntime(settings.agent_runtime_url, settings.agent_api_key)
     secret = settings.settings_encryption_key
-    model_settings = ModelSettings(db, agents, KeyBox(secret) if secret else None)
+    model_settings = ModelSettings(db, agents, KeyBox(secret) if secret else None, people=people)
     orchestrator = Orchestrator(
         db,
         activity,

@@ -1,7 +1,7 @@
 import base64
 import hashlib
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Literal, Protocol, cast
 from urllib.parse import urlsplit
@@ -21,6 +21,7 @@ from platform_api.orchestration.agents import (
     ModelTestPassed,
     ModelTestResult,
 )
+from platform_api.orchestration.service import RolesNow
 from platform_api.shared import Principal, UserId, new_id
 
 log = logging.getLogger(__name__)
@@ -253,10 +254,17 @@ def _address_change(stored: StoredModel) -> dict[str, str]:
 class ModelSettings:
     """The AI model Operators set in the Portal, and the one each run's task carries (ADR 0022)."""
 
-    def __init__(self, db: Database, checks: ModelChecks, box: KeyBox | None) -> None:
+    def __init__(
+        self,
+        db: Database,
+        checks: ModelChecks,
+        box: KeyBox | None,
+        people: RolesNow | None = None,
+    ) -> None:
         self._db = db
         self._checks = checks
         self._box = box
+        self._people = people
         self._store = ModelStore()
 
     async def view(self) -> SettingsState:
@@ -402,6 +410,9 @@ class ModelSettings:
             pending = await self._store.load(uow, "pending", lock=True)
             if waiting is None or pending is None:
                 return NothingPending()
+            if self._people is not None:
+                roles = await self._people.roles_now(uow, principal.user_id)
+                principal = replace(principal, roles=roles or frozenset())
             decision = (
                 confirmations.ConfirmationDecision.CONFIRMED
                 if confirm
