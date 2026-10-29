@@ -150,7 +150,7 @@ async def test_the_first_deploy_names_the_first_people(
     assert await fresh.seed_first(again) is False
     assert {p.display for p in await fresh.listed()} == {"Jo Tan", "Mei"}
     jo = await fresh.resolve(ExternalIdentity("oid-jo", "JO.TAN@ncs.example", "Jo Tan Wei"))
-    assert jo is not None and (jo.display, jo.roles) == ("Jo Tan Wei", listed["Jo Tan"])
+    assert jo is not None and (jo.display, jo.roles) == ("Jo Tan", listed["Jo Tan"])
     assert await fresh.resolve(ExternalIdentity("oid-jo", None, None)) == jo
     assert await fresh.resolve(ExternalIdentity("oid-other", "jo.tan@ncs.example", "Imp")) is None
 
@@ -400,3 +400,71 @@ async def test_the_dev_identity_resolves_only_people_on_the_list(people: People)
     assert await people.resolve(DevIdentity(UserId("mallory"))) is None
     assert await people.person(UserId("bob")) is not None
     assert await people.person(UserId("mallory")) is None
+
+
+async def test_removing_a_person_closes_the_request_about_them(
+    client: httpx.AsyncClient, app: FastAPI
+):
+    dave = (
+        await add(client, ALICE, "dave@example.test", "Dave", operator=True, approver=True)
+    ).json()
+    [waiting] = await pending_for(client, BOB)
+    assert (await client.delete(f"/api/v1/people/{dave['id']}", headers=ALICE)).status_code == 204
+    assert await pending_for(client, BOB) == []
+    lines = await history(client)
+    assert lines[0]["summary"] == "Alice removed Dave from the list."
+    assert lines[1]["summary"] == (
+        "The request to make Dave an Approver was closed, because Alice removed Dave from the list."
+    )
+    assert lines[1]["confirmation_id"] == waiting["confirmation_id"]
+    back = await add(client, CAROL, "dave@example.test", "Dave", operator=True)
+    assert back.status_code == 201
+    stale = await decide(client, BOB, waiting, "confirm")
+    assert (stale.status_code, stale.json()["refusal"]) == (409, "already_decided")
+    declared_status(app, "POST", "/api/v1/confirmations/{confirmation_id}/decisions", stale)
+    assert (await roster(client))[dave["id"]]["approver"] is False
+    asked = await client.post(f"/api/v1/people/{dave['id']}/approver", headers=CAROL)
+    assert asked.status_code == 202
+    [fresh] = await pending_for(client, BOB)
+    assert fresh["digest"] != waiting["digest"]
+
+
+async def test_a_request_whose_asker_left_the_list_cannot_be_confirmed(
+    client: httpx.AsyncClient, app: FastAPI
+):
+    dave = (await add(client, ALICE, "dave@example.test", "Dave", operator=True)).json()
+    erin = (await add(client, ALICE, "erin@example.test", "Erin", operator=True)).json()
+    asked = await client.post(
+        f"/api/v1/people/{erin['id']}/approver", headers={"X-Dev-User": dave["id"]}
+    )
+    assert asked.status_code == 202
+    assert (await client.delete(f"/api/v1/people/{dave['id']}", headers=ALICE)).status_code == 204
+    [waiting] = await pending_for(client, BOB)
+    assert (waiting["you_can_decide"], waiting["why_not"]) == (False, "asker_gone")
+    refused = await decide(client, BOB, waiting, "confirm")
+    assert (refused.status_code, refused.json()["refusal"]) == (403, "asker_gone")
+    declared_status(app, "POST", "/api/v1/confirmations/{confirmation_id}/decisions", refused)
+    assert (await roster(client))[erin["id"]]["approver"] is False
+
+
+async def test_a_re_added_person_signs_in_afresh(client: httpx.AsyncClient, people: People):
+    dave = (await add(client, ALICE, "dave@example.test", "Dave", operator=True)).json()
+    first = await people.resolve(ExternalIdentity("oid-dave", "dave@example.test", "Dave T"))
+    assert first is not None and first.user_id == dave["id"]
+    assert first.display == "Dave"
+    assert (await roster(client))[dave["id"]]["signed_in"] is True
+    assert (await client.delete(f"/api/v1/people/{dave['id']}", headers=ALICE)).status_code == 204
+    back = await add(client, ALICE, "Dave@example.test", "Dave T", operator=True)
+    assert (back.status_code, back.json()["id"], back.json()["signed_in"]) == (
+        201,
+        dave["id"],
+        False,
+    )
+    assert await people.resolve(ExternalIdentity("oid-dave", None, None)) is None
+    again = await people.resolve(ExternalIdentity("oid-dave-2", "dave@example.test", "Dave T"))
+    assert again is not None and (again.user_id, again.display) == (dave["id"], "Dave T")
+    assert (await roster(client))[dave["id"]]["signed_in"] is True
+    assert (await client.delete(f"/api/v1/people/{dave['id']}", headers=ALICE)).status_code == 204
+    other = (await add(client, ALICE, "dave.t@example.test", "Dave T", operator=True)).json()
+    assert other["id"] != dave["id"]
+    assert await people.resolve(ExternalIdentity("oid-dave-2", None, None)) is None

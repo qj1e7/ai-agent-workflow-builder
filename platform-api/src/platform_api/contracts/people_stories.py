@@ -64,6 +64,7 @@ DAVE_CHANGE = {
     "email": DAVE.email,
     "display": DAVE.display,
     "role": "approver",
+    "added_at": ADDED.isoformat(),
 }
 DAVE_ASKED = Confirmation(
     id=ConfirmationId("cfm_01JD4VE"),

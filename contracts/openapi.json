@@ -2315,7 +2315,8 @@
           "about_you",
           "already_decided",
           "digest_changed",
-          "person_removed"
+          "person_removed",
+          "asker_gone"
         ],
         "type": "string"
       },

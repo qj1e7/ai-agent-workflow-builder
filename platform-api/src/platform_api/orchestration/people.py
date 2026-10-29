@@ -168,7 +168,8 @@ def add_person(
     if existing is not None and existing.on_list:
         return Refused(PeopleRefusal.ALREADY_ON_THE_LIST)
     if existing is not None:
-        # A removed person comes back under the same id, so past runs keep naming them.
+        # A removed person comes back under the same id, so past runs keep naming them, but
+        # without the old sign-in binding: they bind again by the email the Operator entered.
         person = replace(
             existing,
             email=email,
@@ -177,6 +178,8 @@ def add_person(
             is_approver=False,
             added_by=actor.id,
             added_at=now,
+            entra_oid=None,
+            bound_at=None,
             removed_at=None,
         )
     else:

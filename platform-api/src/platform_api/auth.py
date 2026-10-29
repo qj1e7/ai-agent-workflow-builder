@@ -20,6 +20,8 @@ from platform_api.shared import (
 from platform_api.wire import Responses, WireModel, error_response
 
 LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1"})
+# Entra's issuers that serve every tenant at once. A user name is only unique within one tenant.
+ANY_TENANT = frozenset({"common", "organizations", "consumers"})
 
 
 class ConfigError(Exception):
@@ -98,6 +100,11 @@ def _oidc_config(env: Mapping[str, str]) -> OidcAuth:
                 f"{name} must be an absolute https URL with a host and no query or fragment, "
                 f"not {url!r}."
             )
+    if any(segment.lower() in ANY_TENANT for segment in urlsplit(issuer).path.split("/")):
+        raise ConfigError(
+            f"OIDC_ISSUER must name one tenant, not {issuer!r}. People are matched to the list "
+            "by their user name, which is only unique within one tenant."
+        )
     return OidcAuth(base_url, issuer, audience, jwks_url, http_origin)
 
 
@@ -185,7 +192,7 @@ class InMemoryPeople:
         match identity:
             case DevIdentity(person_id):
                 return self._people.get(person_id)
-            case ExternalIdentity(subject, user_name, name):
+            case ExternalIdentity(subject, user_name):
                 person_id = self._subjects.get(subject)
                 if person_id is None and user_name:
                     person_id = self._emails.get(user_name.lower())
@@ -193,9 +200,6 @@ class InMemoryPeople:
                         return None
                     if person_id is not None:
                         self._subjects[subject] = person_id
-                        if name:
-                            person = self._people[person_id]
-                            self._people[person_id] = Principal(person_id, person.roles, name)
                 return self._people.get(person_id) if person_id is not None else None
 
     async def person(self, person_id: UserId) -> Principal | None:

@@ -117,7 +117,8 @@ class PeopleStore:
     async def save(self, uow: UnitOfWork, person: Person) -> None:
         await uow.conn.execute(
             "UPDATE orchestration.people SET email = %s, display = %s, is_operator = %s, "
-            "is_approver = %s, added_by = %s, added_at = %s, removed_at = %s WHERE id = %s",
+            "is_approver = %s, added_by = %s, added_at = %s, entra_oid = %s, bound_at = %s, "
+            "removed_at = %s WHERE id = %s",
             (
                 person.email,
                 person.display,
@@ -125,6 +126,8 @@ class PeopleStore:
                 person.is_approver,
                 person.added_by,
                 person.added_at,
+                person.entra_oid,
+                person.bound_at,
                 person.removed_at,
                 person.id,
             ),
@@ -132,14 +135,14 @@ class PeopleStore:
 
     async def bind(self, uow: UnitOfWork, identity: ExternalIdentity) -> Person | None:
         """First sign-in: binds the one unbound record whose email is the token's user name,
-        ignoring case. A bound record is never rebound (ADR 0029)."""
+        ignoring case. A bound record is never rebound, and the name the Operator entered stays
+        (ADR 0029)."""
         row = await (
             await uow.conn.execute(
-                "UPDATE orchestration.people SET entra_oid = %s, bound_at = %s, "
-                "display = coalesce(%s, display) "
+                "UPDATE orchestration.people SET entra_oid = %s, bound_at = %s "
                 "WHERE lower(email) = lower(%s) AND entra_oid IS NULL AND removed_at IS NULL "
                 f"RETURNING {_COLUMNS}",
-                (identity.subject, uow.now, identity.name, identity.user_name),
+                (identity.subject, uow.now, identity.user_name),
             )
         ).fetchone()
         return _person(row) if row is not None else None
@@ -369,11 +372,30 @@ class People:
         )
 
     async def remove(self, actor: Principal, person_id: str) -> ChangeResult:
-        return await self._change(
-            actor,
-            person_id,
-            lambda me, people, person, _, now: rules.remove_person(me, people, person, now),
-        )
+        async with self._db.transaction("orchestration") as uow:
+            await self._store.lock(uow)
+            people = await self._store.all(uow)
+            me = _actor(people, actor)
+            person = _target(people, person_id)
+            if person is None:
+                return NotFound()
+            outcome = rules.remove_person(me, people, person, uow.now)
+            if isinstance(outcome, Refused):
+                return outcome
+            assert outcome.summary is not None
+            await self._store.save(uow, outcome.person)
+            for closed in await self._confirmations.close_about(uow, person.id, me.id):
+                await self._confirmations.record_change(
+                    uow,
+                    "people",
+                    closed.asked_by,
+                    f"The request to make {person.display} an Approver was closed, because "
+                    f"{me.display} removed {person.display} from the list.",
+                    confirmed_by=me.id,
+                    confirmation_id=closed.id,
+                )
+            await self._confirmations.record_change(uow, "people", me.id, outcome.summary)
+            return outcome.person
 
     async def _change(self, actor: Principal, person_id: str, rule: Rule) -> ChangeResult:
         async with self._db.transaction("orchestration") as uow:
@@ -405,6 +427,7 @@ class People:
             "email": about.email,
             "display": about.display,
             "role": "approver",
+            "added_at": about.added_at.isoformat(),
         }
         return await self._confirmations.ask(
             uow,
@@ -428,7 +451,13 @@ class People:
             about = people.get(c.about) if c.about is not None else None
             if c.about is not None and (about is None or not about.on_list):
                 continue
-            rows.append(ConfirmationRow(c, _name(people, c.asked_by), about, why_not(c, viewer)))
+            reason = why_not(
+                c,
+                viewer,
+                about_added_at=about.added_at if about is not None else None,
+                asker_is_operator=_asker_is_operator(people, c),
+            )
+            rows.append(ConfirmationRow(c, _name(people, c.asked_by), about, reason))
         return rows
 
     async def confirmation(self, confirmation_id: str) -> Confirmation | None:
@@ -460,6 +489,8 @@ class People:
                 seen_digest,
                 uow.now,
                 about_on_list=about is not None and about.on_list,
+                about_added_at=about.added_at if about is not None else None,
+                asker_is_operator=_asker_is_operator({p.id: p for p in people}, confirmation),
             )
             if isinstance(outcome, DecideRefused):
                 return outcome
@@ -524,6 +555,13 @@ def _actor(people: Sequence[Person], actor: Principal) -> Person:
 
 def _target(people: Sequence[Person], person_id: str) -> Person | None:
     return next((p for p in people if p.id == person_id and p.on_list), None)
+
+
+def _asker_is_operator(people: Mapping[UserId, Person], confirmation: Confirmation) -> bool:
+    if confirmation.kind is not Kind.APPROVER:
+        return True
+    asker = people.get(confirmation.asked_by)
+    return asker is not None and asker.on_list and asker.is_operator
 
 
 def _name(people: Mapping[UserId, Person], person_id: UserId) -> str:

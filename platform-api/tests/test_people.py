@@ -42,7 +42,18 @@ BOB = person("bob", approver=True)
 CAROL = person("carol", operator=True)
 DAVE = person("dave", operator=True)
 ERIN = person("erin", approver=True)
-GONE = person("gone", removed=True)
+GONE = Person(
+    id=UserId("gone"),
+    email="gone@example.test",
+    display="Gone",
+    is_operator=False,
+    is_approver=False,
+    added_by=rules.DEPLOY,
+    added_at=NOW,
+    entra_oid="oid-gone",
+    bound_at=NOW,
+    removed_at=NOW,
+)
 TEAM = [ALICE, BOB, CAROL, DAVE, GONE]
 
 next_id = iter(f"per_{n}" for n in range(1, 100))
@@ -156,6 +167,13 @@ class TestAddPerson:
             True,
         )
         assert outcome.person.added_at == LATER
+
+    def test_a_removed_person_comes_back_unbound_and_signs_in_afresh(self):
+        outcome = rules.add_person(
+            ALICE, TEAM, "gone@example.test", "Gone", True, False, LATER, new_id
+        )
+        assert isinstance(outcome, Added)
+        assert (outcome.person.entra_oid, outcome.person.bound_at) == (None, None)
 
 
 class TestOperatorRole:
@@ -275,14 +293,13 @@ class TestRemovePerson:
         assert refused(rules.remove_person(BOB, TEAM, DAVE, LATER)) is PeopleRefusal.NOT_AN_OPERATOR
 
 
+ASKED_CHANGE = {"person_id": "dave", "role": "approver", "added_at": NOW.isoformat()}
 ASKED = Confirmation(
     id=ConfirmationId("cfm_1"),
     kind=Kind.APPROVER,
     about=DAVE.id,
-    change={"person_id": "dave", "role": "approver"},
-    digest=digest_of(
-        Kind.APPROVER, DAVE.id, ALICE.id, NOW, {"person_id": "dave", "role": "approver"}
-    ),
+    change=ASKED_CHANGE,
+    digest=digest_of(Kind.APPROVER, DAVE.id, ALICE.id, NOW, ASKED_CHANGE),
     asked_by=ALICE.id,
     asked_at=NOW,
 )
@@ -321,9 +338,30 @@ class TestDecideConfirmation:
         assert outcome.reason is DecideRefusal.DIGEST_CHANGED
 
     def test_a_removed_person_is_not_made_an_approver(self):
-        outcome = decide(ASKED, BOB.principal, Decision.CONFIRMED, ASKED.digest, LATER, False)
+        outcome = decide(
+            ASKED, BOB.principal, Decision.CONFIRMED, ASKED.digest, LATER, about_on_list=False
+        )
         assert isinstance(outcome, DecideRefused)
         assert outcome.reason is DecideRefusal.PERSON_REMOVED
+
+    def test_a_request_about_a_re_added_person_does_not_match(self):
+        outcome = decide(
+            ASKED, BOB.principal, Decision.CONFIRMED, ASKED.digest, LATER, about_added_at=LATER
+        )
+        assert isinstance(outcome, DecideRefused)
+        assert outcome.reason is DecideRefusal.PERSON_REMOVED
+        fine = decide(
+            ASKED, BOB.principal, Decision.CONFIRMED, ASKED.digest, LATER, about_added_at=NOW
+        )
+        assert isinstance(fine, Confirmation)
+
+    def test_a_request_whose_asker_is_no_longer_an_operator_cannot_be_confirmed(self):
+        outcome = decide(
+            ASKED, BOB.principal, Decision.CONFIRMED, ASKED.digest, LATER, asker_is_operator=False
+        )
+        assert isinstance(outcome, DecideRefused)
+        assert outcome.reason is DecideRefusal.ASKER_GONE
+        assert why_not(ASKED, BOB.principal, asker_is_operator=False) is DecideRefusal.ASKER_GONE
 
     def test_why_not_matches_the_decision(self):
         assert why_not(ASKED, BOB.principal) is None

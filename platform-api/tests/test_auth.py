@@ -60,6 +60,21 @@ def without(env: dict[str, str], name: str) -> dict[str, str]:
             id="http JWKS URL",
         ),
         pytest.param(
+            {**OIDC, "OIDC_ISSUER": "https://login.microsoftonline.com/common/v2.0"},
+            "OIDC_ISSUER must name one tenant",
+            id="common issuer",
+        ),
+        pytest.param(
+            {**OIDC, "OIDC_ISSUER": "https://login.microsoftonline.com/Organizations/v2.0"},
+            "OIDC_ISSUER must name one tenant",
+            id="organizations issuer",
+        ),
+        pytest.param(
+            {**OIDC, "OIDC_ISSUER": "https://login.microsoftonline.com/consumers/v2.0"},
+            "OIDC_ISSUER must name one tenant",
+            id="consumers issuer",
+        ),
+        pytest.param(
             {**OIDC, "OIDC_ISSUER": HTTP_ISSUER, "OIDC_TEST_ONLY_HTTP_ISSUER": HTTP_ISSUER + "/"},
             "must equal OIDC_ISSUER",
             id="allowance not equal to the issuer",

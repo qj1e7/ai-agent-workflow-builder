@@ -56,6 +56,7 @@ class DecideRefusal(Enum):
     ALREADY_DECIDED = "already_decided"
     DIGEST_CHANGED = "digest_changed"
     PERSON_REMOVED = "person_removed"
+    ASKER_GONE = "asker_gone"
 
 
 DECIDE_MESSAGES: dict[DecideRefusal, str] = {
@@ -66,7 +67,10 @@ DECIDE_MESSAGES: dict[DecideRefusal, str] = {
     DecideRefusal.DIGEST_CHANGED: (
         "This changed after you looked at it. Look again before deciding."
     ),
-    DecideRefusal.PERSON_REMOVED: "This person was removed from the list.",
+    DecideRefusal.PERSON_REMOVED: (
+        "This person was removed from the list since this was asked. Ask again."
+    ),
+    DecideRefusal.ASKER_GONE: "The person who asked is no longer an Operator. Ask again.",
 }
 
 
@@ -93,12 +97,18 @@ def digest_of(
 
 
 def why_not(
-    confirmation: Confirmation, decider: Principal, about_on_list: bool = True
+    confirmation: Confirmation,
+    decider: Principal,
+    about_on_list: bool = True,
+    about_added_at: datetime | None = None,
+    asker_is_operator: bool = True,
 ) -> DecideRefusal | None:
     if not confirmation.open:
         return DecideRefusal.ALREADY_DECIDED
-    if not about_on_list:
+    if not about_on_list or not _same_person(confirmation, about_added_at):
         return DecideRefusal.PERSON_REMOVED
+    if not asker_is_operator:
+        return DecideRefusal.ASKER_GONE
     if Role.APPROVER not in decider.roles:
         return DecideRefusal.NOT_AN_APPROVER
     if confirmation.asked_by == decider.user_id:
@@ -108,6 +118,15 @@ def why_not(
     return None
 
 
+def _same_person(confirmation: Confirmation, about_added_at: datetime | None) -> bool:
+    """A person removed and added again has a new added_at, so an old request about them no
+    longer matches."""
+    asked_about = confirmation.change.get("added_at")
+    if about_added_at is None or asked_about is None:
+        return True
+    return about_added_at.isoformat() == asked_about
+
+
 def decide(
     confirmation: Confirmation,
     decider: Principal,
@@ -115,8 +134,10 @@ def decide(
     seen_digest: str,
     now: datetime,
     about_on_list: bool = True,
+    about_added_at: datetime | None = None,
+    asker_is_operator: bool = True,
 ) -> Confirmation | DecideRefused:
-    reason = why_not(confirmation, decider, about_on_list)
+    reason = why_not(confirmation, decider, about_on_list, about_added_at, asker_is_operator)
     if reason is not None:
         return DecideRefused(reason)
     if not hmac.compare_digest(confirmation.digest, seen_digest):
@@ -230,6 +251,20 @@ class ConfirmationStore:
             ),
         )
         return result.rowcount == 1
+
+    async def close_about(
+        self, uow: UnitOfWork, person_id: UserId, closed_by: UserId
+    ) -> list[Confirmation]:
+        """Closes every open confirmation about a person, as the one who removed them."""
+        rows = await (
+            await uow.conn.execute(
+                "UPDATE orchestration.confirmations "
+                "SET decided_by = %s, decision = %s, decided_at = %s "
+                f"WHERE about = %s AND decided_at IS NULL RETURNING {_COLUMNS}",
+                (closed_by, Decision.NOT_NOW.value, uow.now, person_id),
+            )
+        ).fetchall()
+        return [_confirmation(r) for r in rows]
 
     async def record_change(
         self,

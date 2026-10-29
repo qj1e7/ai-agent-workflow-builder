@@ -64,6 +64,7 @@ type DecideRefusalName = Literal[
     "already_decided",
     "digest_changed",
     "person_removed",
+    "asker_gone",
 ]
 type ConfirmationKind = Literal["approver", "model_address"]
 type ConfirmationDecision = Literal["confirmed", "not_now"]

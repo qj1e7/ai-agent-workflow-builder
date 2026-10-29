@@ -64,6 +64,7 @@ class Rejection(Enum):
     ISSUER = "issuer"
     AUDIENCE = "audience"
     NO_USER = "no_user"
+    TENANT = "tenant"
 
 
 class TokenRejected(Exception):
@@ -74,6 +75,13 @@ class TokenRejected(Exception):
 
 class KeysUnavailable(Exception):
     pass
+
+
+def tenant_of(issuer: str) -> str | None:
+    """The tenant an Entra issuer names: https://login.microsoftonline.com/<tenant>/v2.0.
+    None when the issuer has no path, such as a provider that serves one tenant at its root."""
+    segments = [s for s in urlsplit(issuer).path.split("/") if s]
+    return segments[0].lower() if segments else None
 
 
 def origin_of(url: str) -> str:
@@ -409,4 +417,8 @@ class OidcAuthenticator:
             )
         except jwt.InvalidTokenError as error:
             raise TokenRejected(_rejection(error)) from None
+        tenant = tenant_of(self._config.issuer)
+        tid = _text(claims.get("tid"))
+        if tenant is not None and tid is not None and tid.lower() != tenant:
+            raise TokenRejected(Rejection.TENANT)
         return identity_from_claims(claims)

@@ -555,8 +555,17 @@ def test_a_person_not_on_the_list_is_told_to_ask_an_operator(issuer: FakeIssuer,
 def test_the_first_sign_in_binds_by_email_once_and_then_only_the_subject_counts(
     client: TestClient,
 ):
-    first = bearer(token(claims={**ALICE_CLAIMS, "preferred_username": "ALICE@Example.Test"}))
-    assert client.get(ME, headers=first).json()["id"] == "alice"
+    first = bearer(
+        token(
+            claims={
+                **ALICE_CLAIMS,
+                "preferred_username": "ALICE@Example.Test",
+                "name": "Alice Liddell",
+            }
+        )
+    )
+    me = client.get(ME, headers=first).json()
+    assert (me["id"], me["display"]) == ("alice", "Alice")
     renamed = bearer(token(claims={**ALICE_CLAIMS, "preferred_username": "al@example.test"}))
     assert client.get(ME, headers=renamed).json()["id"] == "alice"
     impostor = bearer(token(claims={**ALICE_CLAIMS, "oid": "0000beef-0000-4000-8000-00000000000f"}))
@@ -613,3 +622,23 @@ async def test_concurrent_first_requests_share_one_key_load(issuer: FakeIssuer, 
         )
     assert [r.status_code for r in responses] == [200] * 5
     assert (issuer.discovery_fetches, issuer.jwks_fetches) == (1, 1)
+
+
+TENANT_ISSUER = "https://login.test/tenant-a/v2.0"
+
+
+@pytest.mark.parametrize(
+    ("tid", "status"),
+    [("tenant-a", 200), ("TENANT-A", 200), ("tenant-b", 401), (None, 200)],
+    ids=["same tenant", "same tenant, other case", "other tenant", "no tid"],
+)
+def test_a_token_binds_only_from_the_issuers_tenant(clock: Clock, tid: str | None, status: int):
+    issuer = FakeIssuer(TENANT_ISSUER)
+    app = oidc_app(issuer, clock, {**OIDC_ENV, "OIDC_ISSUER": TENANT_ISSUER})
+    client = TestClient(app)
+    claims = {**ALICE_CLAIMS, **({"tid": tid} if tid is not None else {})}
+    response = client.get(ME, headers=bearer(token(claims=claims, issuer=TENANT_ISSUER)))
+    assert response.status_code == status
+    if status == 401:
+        assert response.headers["www-authenticate"] == INVALID_TOKEN
+        declared_status(app, "GET", ME, response)
