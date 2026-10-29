@@ -1,0 +1,103 @@
+.page {
+  display: grid;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  min-height: 32px;
+  margin-bottom: 14px;
+  padding: 4px 0;
+  color: var(--muted);
+  font-weight: 600;
+  text-decoration: none;
+  transition: color var(--dur-press) ease;
+}
+
+.back span {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .back:hover {
+    color: var(--ink);
+  }
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  min-width: 0;
+}
+
+.head h1 {
+  font-size: 1.875rem;
+  font-weight: 700;
+}
+
+.pill {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  padding: 1px 10px;
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.wait {
+  border-color: var(--amber-line);
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+}
+
+.bad {
+  border-color: var(--red-line);
+  background: var(--red-soft);
+  color: var(--red-ink);
+}
+
+.ok {
+  border-color: var(--green-line);
+  background: var(--green-soft);
+  color: var(--green-ink);
+}
+
+.off {
+  border-color: var(--hair);
+  background: var(--sunk);
+  color: var(--muted);
+}
+
+.new {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.status {
+  min-height: 1.5em;
+  margin-top: 8px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.status:empty {
+  margin-top: 0;
+  min-height: 0;
+}
+
+@media (max-width: 760px) {
+  .head h1 {
+    font-size: 1.5rem;
+  }
+}

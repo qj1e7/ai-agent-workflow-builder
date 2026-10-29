@@ -1,4 +1,5 @@
 import { expect, request, type APIRequestContext } from '@playwright/test'
+import { randomUUID } from 'node:crypto'
 
 export const MOCK_GITHUB_URL = process.env['MOCK_GITHUB_URL'] ?? 'http://mock-github:8200'
 /** platform-api waits this long before it re-runs a failed leg (operator_retry_delay in orchestration/dispatch.py). */
@@ -35,6 +36,26 @@ export interface TeamsMessage {
 
 export type Proof = Readonly<Record<string, string>>
 
+export interface Software {
+  readonly name: string
+  readonly repo: string
+  readonly our_version: string
+}
+
+/** The mock GitHub has newer releases for both, so a check of either proposes a ticket. */
+export const LANGGRAPH: Software = { name: 'LangGraph', repo: 'langchain-ai/langgraph', our_version: '1.2.14' }
+export const REDIS: Software = { name: 'Redis', repo: 'redis/redis', our_version: '8.2.0' }
+
+export interface Answer<T> {
+  readonly status: number
+  readonly body: T
+}
+
+export interface WaitingRun {
+  readonly runId: string
+  readonly approvalId: string
+}
+
 /** The backend as the Portal sees it: through the Portal's own address, so the nginx proxy is part of the check. */
 export class Backend {
   private readonly http: APIRequestContext
@@ -66,6 +87,56 @@ export class Backend {
     return (await response.json()) as T
   }
 
+  async send<T = Json>(method: 'POST' | 'DELETE', user: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<Answer<T>> {
+    const response = await this.http.fetch(path, { method, headers: { ...this.proofOf(user), ...headers }, ...(body === undefined ? {} : { data: body }) })
+    const text = await response.text()
+    return { status: response.status(), body: (text ? JSON.parse(text) : null) as T }
+  }
+
+  async post<T = Json>(user: string, path: string, body?: unknown, headers?: Record<string, string>, expected: readonly number[] = [200, 201]): Promise<T> {
+    const answer = await this.send<T>('POST', user, path, body, headers)
+    expect(expected, `POST ${path} as ${user} answered ${answer.status}: ${JSON.stringify(answer.body)}`).toContain(answer.status)
+    return answer.body
+  }
+
+  async delete<T = Json>(user: string, path: string, expected: readonly number[] = [200, 204]): Promise<T> {
+    const answer = await this.send<T>('DELETE', user, path)
+    expect(expected, `DELETE ${path} as ${user} answered ${answer.status}`).toContain(answer.status)
+    return answer.body
+  }
+
+  /** Empties the watchlist, adds the software afresh with no ticket history and turns the schedule off. Answers the check's id. */
+  async freshWatchlist(user = 'alice', software: readonly Software[] = [LANGGRAPH]): Promise<string> {
+    const { watchlist } = await this.get<{ watchlist: { software: { id: string }[] } | null }>(user, '/api/v1/watchlist')
+    for (const item of watchlist?.software ?? []) await this.delete(user, `/api/v1/watchlist/software/${item.id}`)
+    let useCaseId = ''
+    for (const item of software) useCaseId = (await this.post<{ use_case_id: string }>(user, '/api/v1/watchlist/software', item, {}, [201])).use_case_id
+    await this.delete(user, '/api/v1/watchlist/schedule', [200, 404])
+    return useCaseId
+  }
+
+  async startCheck(user = 'alice', software: readonly Software[] = [LANGGRAPH]): Promise<string> {
+    return this.checkNow(user, await this.freshWatchlist(user, software))
+  }
+
+  /** Adds one more software to the watchlist as it is, so a second check proposes it while the first still waits. */
+  async addAndCheck(user: string, software: Software): Promise<string> {
+    const { use_case_id: useCaseId } = await this.post<{ use_case_id: string }>(user, '/api/v1/watchlist/software', software, {}, [201])
+    await this.delete(user, '/api/v1/watchlist/schedule', [200, 404])
+    return this.checkNow(user, useCaseId)
+  }
+
+  async checkNow(user: string, useCaseId: string): Promise<string> {
+    const started = await this.post<{ run_id: string }>(user, `/api/v1/use-cases/${useCaseId}/runs`, undefined, { 'Idempotency-Key': randomUUID() }, [201])
+    return started.run_id
+  }
+
+  async waitingRun(user = 'alice', software: readonly Software[] = [LANGGRAPH]): Promise<WaitingRun> {
+    const runId = await this.startCheck(user, software)
+    await this.waitForState(runId, ['awaiting_approval'])
+    return { runId, approvalId: await this.approvalIdOf(runId) }
+  }
+
   async runs(user = 'alice'): Promise<RunSnapshot[]> {
     return (await this.get<{ runs: RunSnapshot[] }>(user, '/api/v1/runs')).runs
   }
@@ -90,7 +161,6 @@ export class Backend {
     const requested = events.find((event) => event.kind === 'approval_requested')
     expect(requested, `run ${runId} has asked for an approval`).toBeDefined()
     return requested?.data.approval_id ?? ''
-
   }
 
   /** Polls until the run has left a state, for the moment between a click on Retry and the platform acting on it. */

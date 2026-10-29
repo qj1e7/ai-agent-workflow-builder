@@ -15,11 +15,27 @@ function useHeadingFocus(): void {
   const { pathname } = useLocation()
   const previous = useRef<string | null>(null)
   useEffect(() => {
-    const heading = document.querySelector<HTMLElement>('main h1')
-    if (!heading) return
-    document.title = `${heading.textContent.trim()} · ${PRODUCT}`
-    if (previous.current !== null && previous.current !== pathname && !heading.hasAttribute('data-page-moves-focus')) heading.focus({ preventScroll: true })
-    previous.current = pathname
+    const arrive = (heading: HTMLElement) => {
+      document.title = `${heading.textContent.trim()} · ${PRODUCT}`
+      const moved = previous.current !== null && previous.current !== pathname
+      previous.current = pathname
+      if (moved && !heading.hasAttribute('data-page-moves-focus')) heading.focus({ preventScroll: true })
+    }
+    const main = document.getElementById('main')
+    const heading = main?.querySelector<HTMLElement>('h1')
+    if (heading) {
+      arrive(heading)
+      return
+    }
+    if (!main) return
+    const watch = new MutationObserver(() => {
+      const drawn = main.querySelector<HTMLElement>('h1')
+      if (!drawn) return
+      watch.disconnect()
+      arrive(drawn)
+    })
+    watch.observe(main, { childList: true, subtree: true })
+    return () => watch.disconnect()
   })
 }
 
