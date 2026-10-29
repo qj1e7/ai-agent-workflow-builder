@@ -108,7 +108,7 @@ TICKET_BODY = (
     "LangGraph has 2 new releases on GitHub (langchain-ai/langgraph) newer than our version "
     "1.2.14:\n- 1.2.16\n- 1.2.15\n\nProposed by the AI workflow builder."
 )
-SUMMARY = "1 of 1 watched software has new releases: LangGraph 1.2.16."
+SUMMARY = "LangGraph has a new release: 1.2.16."
 INSTRUCTION = WATCHLIST_INSTRUCTION
 CHANNEL = "CODESparks Ops"
 TICKET_KEY = "MOCK-142"
@@ -210,7 +210,7 @@ def run_created(tl: Timeline) -> None:
         RunCreated,
         0.0,
         USER_ALICE,
-        f"Alice started a run of {USE_CASE_NAME}.",
+        f"Alice started a run of the {USE_CASE_NAME}.",
         RunCreatedData(use_case_id=USE_CASE_ID, use_case_version=1, started_by=ALICE),
     )
     tl.add(
@@ -235,9 +235,7 @@ def planner_opens(tl: Timeline, base: float) -> None:
         base + 0.29,
         AGENT_PLANNER,
         "Planner brought in Version checker to read the source of LangGraph.",
-        AgentJoinedData(
-            agent=CHECKER, reason="The task asks about new releases of a watched software."
-        ),
+        AgentJoinedData(agent=CHECKER, reason="The task asks about new releases of LangGraph."),
     )
     tl.add(
         AgentMessage,
@@ -274,11 +272,11 @@ def work_leg_to_announcement(tl: Timeline) -> None:
         AgentMessage,
         5.12,
         AGENT_CHECKER,
-        "Version checker reported 1 of 1 watched software behind and suggested 1 ticket.",
+        "Version checker reported that LangGraph is behind and suggested one ticket.",
         AgentMessageData(
             speaker=CHECKER,
             addressee=TO_ROOM,
-            text="1 of 1 watched software has new releases: LangGraph. I suggest one ticket.",
+            text="LangGraph has a new release: 1.2.16. I suggest one ticket.",
         ),
     )
     tl.add(
@@ -416,7 +414,7 @@ def success_events() -> Timeline:
 
 
 GITHUB_503 = "GitHub returned 503 Service Unavailable three times"
-NOTHING_READABLE = f"None of the 1 watched software could be checked. {GITHUB_503}."
+NOTHING_READABLE = f"Could not check LangGraph: {GITHUB_503}"
 
 
 def failure_events() -> Timeline:
@@ -451,19 +449,18 @@ def failure_events() -> Timeline:
         AgentMessage,
         12.955,
         AGENT_CHECKER,
-        "Version checker could not check LangGraph and carried on.",
+        "Version checker could not check LangGraph.",
         AgentMessageData(
             speaker=CHECKER,
             addressee=TO_ROOM,
-            text=f"I could not read LangGraph's releases: {GITHUB_503}. I will carry on with "
-            "the rest.",
+            text=f"I could not read LangGraph's releases: {GITHUB_503}.",
         ),
     )
     tl.add(
         AgentFailed,
         12.961,
         AGENT_CHECKER,
-        "Version checker failed: none of the watched software could be checked.",
+        "Version checker failed: LangGraph could not be checked.",
         AgentFailedData(
             step=None, error_type="UpstreamUnavailable", message=NOTHING_READABLE, retryable=True
         ),
@@ -650,9 +647,7 @@ SUGGESTION = Builder.suggest(INSTRUCTION)
 
 STEP_RESPONSES = [
     StepResponseOut(proceed=True, outcome="proposed", detail=SUMMARY),
-    StepResponseOut(
-        proceed=False, outcome="nothing_to_write", detail="All 1 watched software are up to date."
-    ),
+    StepResponseOut(proceed=False, outcome="nothing_to_write", detail="LangGraph is up to date."),
     StepResponseOut(proceed=False, outcome="superseded", detail="Execution 40 holds this leg"),
     StepResponseOut(
         proceed=False,
@@ -679,7 +674,7 @@ def teams_messages(tl: Timeline) -> TeamsStubMessages:
                 id="tm_01JB8",
                 ts=announced.ts,
                 channel=CHANNEL,
-                text=f"A run of {USE_CASE_NAME} needs an Approver. It would create a Jira "
+                text=f"A run of the {USE_CASE_NAME} needs an Approver. It would create a Jira "
                 f'ticket in MOCK titled "{TICKET_TITLE}". Open the approval page to decide. '
                 f"The agents said: {SUMMARY}",
                 link=SUCCESS.approval_link,

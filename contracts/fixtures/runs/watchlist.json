@@ -8,7 +8,7 @@
       "id": "alice",
       "display": "Alice"
     },
-    "summary": "Alice started a run of Software watchlist.",
+    "summary": "Alice started a run of the Software watchlist.",
     "kind": "run_created",
     "data": {
       "use_case_id": "uc_01JBW",

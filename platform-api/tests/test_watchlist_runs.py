@@ -201,8 +201,9 @@ async def test_the_teams_message_names_every_ticket_of_the_check(h: Harness):
     await work_leg(h)
     [message] = await h.teams.messages()
     assert message.text == (
-        "A run of Software watchlist needs an Approver. It would create 2 Jira tickets in MOCK: "
-        '"Upgrade LangGraph from 1.2.14 to 1.2.16" and "Upgrade PostgreSQL from 17.2.0 to 17.3.0". '
+        "A run of the Software watchlist needs an Approver. It would create 2 Jira tickets in "
+        'MOCK: "Upgrade LangGraph from 1.2.14 to 1.2.16" and '
+        '"Upgrade PostgreSQL from 17.2.0 to 17.3.0". '
         f"Open the approval page to decide. The agents said: {SUMMARY}"
     )
 

@@ -19,7 +19,7 @@ describe('parseEvent', () => {
     const first = ok(success[0])
     expect(first.seq).toBe(1)
     expect(first.at).toBe(Date.parse('2026-11-03T02:14:00Z'))
-    expect(first.summary).toBe('Alice started a run of Software watchlist.')
+    expect(first.summary).toBe('Alice started a run of the Software watchlist.')
     expect(first.actor.display).toBe('Alice')
   })
 

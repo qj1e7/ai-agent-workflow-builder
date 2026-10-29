@@ -349,7 +349,7 @@ def check_events() -> Timeline:
         RunCreated,
         0.0,
         USER_ALICE,
-        f"Alice started a run of {USE_CASE_NAME}.",
+        f"Alice started a run of the {USE_CASE_NAME}.",
         RunCreatedData(
             use_case_id=USE_CASE_ID, use_case_version=USE_CASE_VERSION, started_by=ALICE
         ),

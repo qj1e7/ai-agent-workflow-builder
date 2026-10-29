@@ -8,7 +8,7 @@
       "id": "alice",
       "display": "Alice"
     },
-    "summary": "Alice started a run of Software watchlist.",
+    "summary": "Alice started a run of the Software watchlist.",
     "kind": "run_created",
     "data": {
       "use_case_id": "uc_01JB7",
@@ -66,7 +66,7 @@
         "id": "version_checker",
         "display": "Version checker"
       },
-      "reason": "The task asks about new releases of a watched software."
+      "reason": "The task asks about new releases of LangGraph."
     }
   },
   {
@@ -137,7 +137,7 @@
       "id": "version_checker",
       "display": "Version checker"
     },
-    "summary": "Version checker reported 1 of 1 watched software behind and suggested 1 ticket.",
+    "summary": "Version checker reported that LangGraph is behind and suggested one ticket.",
     "kind": "agent_message",
     "data": {
       "speaker": {
@@ -147,7 +147,7 @@
       "addressee": {
         "kind": "room"
       },
-      "text": "1 of 1 watched software has new releases: LangGraph. I suggest one ticket."
+      "text": "LangGraph has a new release: 1.2.16. I suggest one ticket."
     }
   },
   {
@@ -206,14 +206,14 @@
       "id": "n8n",
       "display": "Workflow engine"
     },
-    "summary": "Workflow step run_agents finished: 1 of 1 watched software has new releases: LangGraph 1.2.16.",
+    "summary": "Workflow step run_agents finished: LangGraph has a new release: 1.2.16.",
     "kind": "step_finished",
     "data": {
       "step": "run_agents",
       "n8n_execution_id": "44",
       "try_number": 1,
       "outcome": "proposed",
-      "detail": "1 of 1 watched software has new releases: LangGraph 1.2.16."
+      "detail": "LangGraph has a new release: 1.2.16."
     }
   },
   {

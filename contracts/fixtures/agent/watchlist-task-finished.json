@@ -183,7 +183,7 @@
         "id": "version_checker",
         "display": "Version checker"
       },
-      "summary": "Version checker could not check FastAPI and carried on.",
+      "summary": "Version checker could not check FastAPI.",
       "kind": "agent_message",
       "data": {
         "speaker": {
@@ -193,7 +193,7 @@
         "addressee": {
           "kind": "room"
         },
-        "text": "I could not read FastAPI's releases: GitHub answered 404 Not Found. I will carry on with the rest."
+        "text": "I could not read FastAPI's releases: GitHub answered 404 Not Found."
       }
     },
     {

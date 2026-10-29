@@ -57,7 +57,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
   - [ ] P15 after every other PR that is not cut.
 - [ ] Hold the file boundaries. Any PR may also add its check scripts under `portal/e2e/checks/` and `scripts/checks/`, and review screenshots under `docs/evidence/rebuild/`.
   - [ ] P1, P5, P6, P7, P9, P10 and P13 touch only `portal/**`.
-  - [ ] P2 touches `platform-api/**`, `agent-runtime/**`, `contracts/**`, `e2e/**`, `scripts/**`, `load/**`, `deploy/**`, `AGENTS.md`, and in `portal/` only `src/ui/agents*` and the tests in `src/stream/`.
+  - [ ] P2 touches `platform-api/**`, `agent-runtime/**`, `contracts/**`, `e2e/**`, `scripts/**`, `load/**`, `deploy/**`, `AGENTS.md`, `GLOSSARY.md`, and in `portal/` only `src/ui/agents*`, the tests in `src/stream/` and one comment in `src/api/queries.ts`.
   - [ ] P3 touches `platform-api/**`, `contracts/**`, `deploy/**`, `docs/auth/entra-setup.md` and `GLOSSARY.md`.
   - [ ] P4 touches `platform-api/**`, `deploy/**`, `scripts/p95.py` and `.github/workflows/ci.yml`.
   - [ ] P8 touches `platform-api/**` and `contracts/**`.
@@ -172,36 +172,39 @@ The checker runs in its own worktree at the PR head. Drive through the skill pat
 **Files.**
 
 - [ ] Rename `agent-runtime/src/agent_runtime/room.py` to `planner.py`, and `agent-runtime/tests/test_room.py` to `test_planner.py`.
-- [ ] Rename `agent-runtime/src/agent_runtime/release_checker.py` to `version_checker.py`, keeping `Release`, `SourceRejected` and `SourceUnavailable`, which `github.py` imports. Remove only the single-repo release check and its tests.
-- [ ] Edit `agent-runtime/src/agent_runtime/api.py`, `contracts.py`, `drafting.py`, `card_runner.py` and `github.py`.
-- [ ] Edit `platform-api/src/platform_api/builder/templates.py`, `builder/cards.py`, `orchestration/runs.py`, `orchestration/agents.py`, `monitoring/agent_events.py`, `contracts/stories.py` and `contracts/watchlist_run.py`.
+- [ ] Rename `agent-runtime/src/agent_runtime/release_checker.py` to `version_checker.py`. `Release`, `SourceRejected` and `SourceUnavailable` live in `release_source.py` and stay. Remove only the single-repo release check and its tests.
+- [ ] Edit `agent-runtime/src/agent_runtime/api.py`, `contract.py`, `contracts.py`, `drafting.py`, `release_source.py`, `github.py` and the evals in `agent-runtime/evals/`. Delete the `match` eval, because no offered template is left.
+- [ ] Edit `platform-api/src/platform_api/builder/templates.py`, `builder/cards.py`, `builder/service.py`, `builder/http.py`, `builder/models.py`, `builder/planning.py`, `orchestration/spec.py`, `orchestration/__init__.py`, `orchestration/runs.py`, `orchestration/agents.py`, `orchestration/service.py`, `orchestration/planning.py`, `orchestration/n8n.py`, `contracts/stories.py`, `contracts/watchlist_run.py` and `contracts/cards_stories.py`.
+- [ ] Create `platform-api/src/platform_api/migrations/orchestration/versions/0005_run_workflow.py`, which renames the n8n workflow saved on each run and each waiting outbox row to `run`, and `platform-api/src/platform_api/migrations/builder/versions/0004_version_checker.py`, which renames the starter card id. Both have a downgrade. The activity log is history and keeps its old names.
 - [ ] Rename `platform-api/src/platform_api/orchestration/workflows/release_check.n8n.json` to `run.n8n.json`, and edit `platform-api/src/platform_api/bootstrap.py` to delete `release_check` from n8n.
 - [ ] Delete `deploy/fake-agent/` and `deploy/compose.fake-agent.yaml`, and the command in `deploy/README.md` that uses them.
-- [ ] Edit `scripts/lib/seed.py`, `load/team.js`, and the tests and harness in `e2e/tests/`.
+- [ ] Edit `scripts/lib/seed.py`, `scripts/dast.sh`, `load/team.js`, the tests and harness in `e2e/tests/`, `e2e/mock_model/`, `e2e/README.md` and `contracts/README.md`.
 - [ ] Edit `portal/src/ui/agents.ts`, `portal/src/ui/agents.test.ts` and the tests in `portal/src/stream/` for the new agent ids.
 - [ ] Create `scripts/p95.py`, the probe that the perf blocks use.
 - [ ] Regenerate `contracts/`.
-- [ ] Edit `AGENTS.md` to remove the line that says the code still says `room_lead`.
+- [ ] Edit `AGENTS.md` to remove the line that says the code still says `room_lead`, and `GLOSSARY.md` where it names the release checker.
 
 **Build.**
 
 - [ ] Rename `RoomLead` to `Planner`, `room_lead` to `planner` and the route `/v1/room/choose` to `/v1/planner/choose`. Rename the Release checker card to the Version checker.
-- [ ] Remove the `RELEASE_CHECK` template. Rename the n8n workflow that carries every run to `run`, with webhook paths `run/work` and `run/act`. Bootstrap deletes the old `release_check` n8n workflow, so an n8n that ran before keeps only `run`.
+- [ ] Remove the `RELEASE_CHECK` template. Rename the n8n workflow that carries every run to `run`, with webhook paths `run/work` and `run/act`. Bootstrap removes the old `release_check` n8n workflow by that exact name, and no other, so an n8n that ran before keeps only `run` and any workflow staff made.
+- [ ] Delete no data. Where a local stack holds a release-check run or workflow that the new code cannot read, bootstrap stops and says how to reset that stack. No deployed environment has held data yet.
+- [ ] Move the four e2e tests and the contract stories that drove the release-check template onto a one-software watchlist, so the approval gate, a decline, a failure with retry and the stale-digest refusal stay covered.
 - [ ] Move the DAST, k6 and e2e seeds to a Software watchlist with one watched software, so the scans keep a waiting run to attack.
 
 **You see.**
 
-- [ ] `grep -rniE "room_lead|roomlead|room lead|release_check" platform-api agent-runtime contracts e2e scripts load portal/src` prints nothing. The e2e watchlist test passes on the renamed n8n workflow.
+- [ ] `grep -rniE "room_lead|roomlead|room lead|release_check" platform-api agent-runtime contracts e2e scripts load portal/src` prints only the migrations, the migration test that plants the old names, the bootstrap lines that rename or remove them, and the check scripts under `scripts/checks/` that look for them. The e2e watchlist test passes on the renamed n8n workflow.
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] `agent-runtime/tests/test_planner.py` keeps every case from `test_room.py` under the new names. Run `cd agent-runtime && uv run pytest`.
+- [ ] `agent-runtime/tests/test_planner.py` keeps every case from `test_room.py` under the new names, each one now on a watchlist or cards request. Run `cd agent-runtime && uv run pytest`.
 - [ ] `platform-api/tests/test_builder_templates.py` gains a case that the release-check template is gone, and `test_workflows.py` lints `run.n8n.json`. Run the unit tests as CI runs them, with `PLATFORM_TEST_DATABASE_URL` set, so the database tests run too.
 - [ ] Run `uv run lint-imports` and `uv run pyright` in `platform-api`, the contract tests in both projects, and `cd portal && npm test`.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on the configured `swarm workers` model at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run `scripts/e2e.sh` with `E2E_SUITES=api` at trunk and at head. Save `p2-e2e-trunk-head.txt`. Pass when every test passes on both, and head's count equals trunk's less the tests that drove the release-check template.
+- [ ] Lane 1. Regression lane against trunk. Run `scripts/e2e.sh` with `E2E_SUITES=api` at trunk and at head. Save `p2-e2e-trunk-head.txt`. Pass when every test passes on both, and head's count is at least trunk's, because the release-check tests now drive a watchlist.
 - [ ] Lane 2. As alice, add LangGraph to a Software watchlist and press Check now with `curl`. Save `p2-check.json`. Pass when the run's events name the Planner and the Version checker and never the Room lead.
 - [ ] Lane 3. On its own stack, start trunk, run one check, then switch the stack to head without removing its volumes. Read the n8n workflows through n8n's API. Save `p2-n8n-workflows.json`. Pass when `run` and `run_failure_reporter` are active and `release_check` is gone.
 - [ ] Lane 4. As bob, approve the watchlist run's proposal. Save `p2-approved.json`. Pass when the practice Jira holds one new ticket and the run ends Done.
@@ -234,7 +237,7 @@ The checker runs in its own worktree at the PR head. Drive through the skill pat
 
 **Files.**
 
-- [ ] Create `platform-api/src/platform_api/migrations/orchestration/versions/0005_people.py` with the tables `people`, `confirmations` and `settings_changes`.
+- [ ] Create `platform-api/src/platform_api/migrations/orchestration/versions/0006_people.py` with the tables `people`, `confirmations` and `settings_changes`.
 - [ ] Create `platform-api/src/platform_api/orchestration/people.py`, `people_store.py` and `people_http.py`.
 - [ ] Edit `platform-api/src/platform_api/auth.py`, `oidc.py`, `settings.py`, `wiring.py` and `monitoring/http.py`.
 - [ ] Edit `platform-api/src/platform_api/orchestration/model_settings.py` to use the shared confirmation record.
@@ -519,7 +522,7 @@ The checker runs in its own worktree at the PR head. Drive through the skill pat
 
 **Files.**
 
-- [ ] Create `platform-api/src/platform_api/migrations/builder/versions/0004_lifecycle.py`, with a paused flag, a deleted time and a `drafts` table.
+- [ ] Create `platform-api/src/platform_api/migrations/builder/versions/0005_lifecycle.py`, with a paused flag, a deleted time and a `drafts` table.
 - [ ] Edit `platform-api/src/platform_api/builder/service.py`, `builder/http.py`, `builder/models.py` and `builder/views.py`.
 - [ ] Edit `platform-api/src/platform_api/orchestration/schedule_store.py`, so a paused or deleted workflow starts no scheduled run.
 - [ ] Create `platform-api/tests/test_builder_lifecycle.py`.

@@ -2,12 +2,12 @@
   {
     "proceed": true,
     "outcome": "proposed",
-    "detail": "1 of 1 watched software has new releases: LangGraph 1.2.16."
+    "detail": "LangGraph has a new release: 1.2.16."
   },
   {
     "proceed": false,
     "outcome": "nothing_to_write",
-    "detail": "All 1 watched software are up to date."
+    "detail": "LangGraph is up to date."
   },
   {
     "proceed": false,

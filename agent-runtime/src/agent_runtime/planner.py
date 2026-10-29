@@ -99,7 +99,7 @@ class FixedPlanner:
             return Staffing(
                 joined_summary=f"Planner brought in {CHECKER.display} to read the source of "
                 f"{names[0]}.",
-                reason="The task asks about new releases of a watched software.",
+                reason=f"The task asks about new releases of {names[0]}.",
                 ask_summary=f"Planner asked {CHECKER.display} to check {names[0]} for new "
                 "releases.",
                 ask_text=f"Please check {names[0]} for new releases.",

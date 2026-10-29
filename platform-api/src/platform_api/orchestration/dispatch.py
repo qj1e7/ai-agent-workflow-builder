@@ -94,7 +94,7 @@ class TeamsStub:
 
     async def announce(self, notice: ApprovalNotice) -> None:
         text = (
-            f"A run of {notice.use_case_name} needs an Approver. "
+            f"A run of the {notice.use_case_name} needs an Approver. "
             f"It would {listed(notice.actions)}. "
             f"Open the approval page to decide.{_agents_said(notice.summary)}"
         )

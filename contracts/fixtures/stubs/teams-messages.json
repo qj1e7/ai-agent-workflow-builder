@@ -4,7 +4,7 @@
       "id": "tm_01JB8",
       "ts": "2026-11-03T02:14:10.612000Z",
       "channel": "CODESparks Ops",
-      "text": "A run of Software watchlist needs an Approver. It would create a Jira ticket in MOCK titled \"Upgrade LangGraph from 1.2.14 to 1.2.16\". Open the approval page to decide. The agents said: 1 of 1 watched software has new releases: LangGraph 1.2.16.",
+      "text": "A run of the Software watchlist needs an Approver. It would create a Jira ticket in MOCK titled \"Upgrade LangGraph from 1.2.14 to 1.2.16\". Open the approval page to decide. The agents said: LangGraph has a new release: 1.2.16.",
       "link": "/approvals/apr_01JB8",
       "run_id": "run_01JB8",
       "approval_id": "apr_01JB8"

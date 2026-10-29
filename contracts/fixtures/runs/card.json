@@ -8,7 +8,7 @@
       "id": "alice",
       "display": "Alice"
     },
-    "summary": "Alice started a run of LangGraph release check.",
+    "summary": "Alice started a run of the LangGraph release check.",
     "kind": "run_created",
     "data": {
       "use_case_id": "uc_01JD0",

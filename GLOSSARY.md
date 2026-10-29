@@ -106,6 +106,10 @@ _Avoid_: Room lead (the old name), orchestrator
 **Specialist agent**:
 An agent, defined by an agent card, that the Planner brings in to do one part of a run.
 
+**Version checker**:
+The specialist agent that reads each watched software's releases at its source, compares the newest version with our version, and suggests an upgrade ticket for each one that is behind. It ships as a template.
+_Avoid_: Release checker (the old name), scanner
+
 **Leg**:
 The part of a run that n8n carries in one execution. A run has a work leg up to the approval request and an act leg from the approval to the end. Our platform owns the pause between them.
 

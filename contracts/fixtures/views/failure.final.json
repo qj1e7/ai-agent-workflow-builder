@@ -13,5 +13,5 @@
   "stage": "working",
   "reason": "AgentError",
   "retryable": true,
-  "message": "UpstreamUnavailable: None of the 1 watched software could be checked. GitHub returned 503 Service Unavailable three times."
+  "message": "UpstreamUnavailable: Could not check LangGraph: GitHub returned 503 Service Unavailable three times"
 }

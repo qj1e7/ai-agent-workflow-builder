@@ -58,16 +58,20 @@ def template_check_summary(checked: Sequence[Checked]) -> str:
     behind = [c for c in checked if c.finding.state == "behind"]
     raised = [c.name for c in checked if c.finding.state == "already_raised"]
     cannot = [c.name for c in checked if c.finding.state == "cant_check"]
-    readable = len(checked) - len(cannot)
-    if behind:
+    readable = [c.name for c in checked if c.finding.state != "cant_check"]
+    if behind and len(checked) == 1:
+        sentence = f"{behind[0].name} has a new release: {behind[0].finding.newest}."
+    elif behind:
         news = _names_and([f"{c.name} {c.finding.newest}" for c in behind])
         verb = "has" if len(behind) == 1 else "have"
         sentence = f"{len(behind)} of {len(checked)} watched software {verb} new releases: {news}."
     elif raised:
         verb = "has a ticket" if len(raised) == 1 else "have tickets"
         sentence = f"No new tickets are needed, as {_names_and(raised)} already {verb}."
+    elif len(readable) == 1:
+        sentence = f"{readable[0]} is up to date."
     elif cannot:
-        sentence = f"All {readable} watched software we could read are up to date."
+        sentence = f"All {len(readable)} watched software we could read are up to date."
     else:
         sentence = f"All {len(checked)} watched software are up to date."
     return f"{sentence} {_names_and(cannot)} could not be checked." if cannot else sentence

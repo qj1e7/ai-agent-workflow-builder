@@ -2,7 +2,7 @@
   "task_id": "run_01JB8/work/1/1",
   "status": "finished",
   "output": {
-    "summary": "1 of 1 watched software has new releases: LangGraph 1.2.16.",
+    "summary": "LangGraph has a new release: 1.2.16.",
     "new_tags": [],
     "proposed": [
       {
@@ -44,7 +44,7 @@
           "id": "version_checker",
           "display": "Version checker"
         },
-        "reason": "The task asks about new releases of a watched software."
+        "reason": "The task asks about new releases of LangGraph."
       }
     },
     {
@@ -107,7 +107,7 @@
         "id": "version_checker",
         "display": "Version checker"
       },
-      "summary": "Version checker reported 1 of 1 watched software behind and suggested 1 ticket.",
+      "summary": "Version checker reported that LangGraph is behind and suggested one ticket.",
       "kind": "agent_message",
       "data": {
         "speaker": {
@@ -117,7 +117,7 @@
         "addressee": {
           "kind": "room"
         },
-        "text": "1 of 1 watched software has new releases: LangGraph. I suggest one ticket."
+        "text": "LangGraph has a new release: 1.2.16. I suggest one ticket."
       }
     },
     {

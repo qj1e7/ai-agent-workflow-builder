@@ -266,6 +266,17 @@ def test_failing_keeps_where_to_resume(state, stage, resume):
     }
 
 
+@pytest.mark.parametrize(
+    "message",
+    ["UpstreamUnavailable: Could not check LangGraph: GitHub returned 503", "n8n said no."],
+)
+def test_a_failure_reads_with_one_closing_full_stop(message: str):
+    moved = WORKING.fail(Failure(FailureReason.AGENT_ERROR, message, retryable=True))
+    summary = moved.events[0].summary
+    assert summary.endswith(". You can retry.")
+    assert ".." not in summary
+
+
 def test_retry_after_a_work_leg_failure_starts_the_work_leg_again():
     moved = FAILED.retry(ALICE, LATER)
     assert isinstance(moved.state, Pending)
