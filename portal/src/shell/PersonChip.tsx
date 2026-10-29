@@ -24,6 +24,11 @@ function Who({ person }: { person: Me }) {
   )
 }
 
+// Safari does not focus a button on click, so a press on "Sign out" blurs with no related target. Only a move to a real element elsewhere counts as leaving.
+export function focusMovedOutside(root: Pick<Node, 'contains'> | null, next: EventTarget | null): boolean {
+  return next !== null && !root?.contains(next as Node)
+}
+
 function titleOf(person: Me): string {
   return `${person.display}, ${rolesLabel(person.roles) || 'No role'}`
 }
@@ -72,7 +77,7 @@ function SignOutChip({ person, session }: { person: Me; session: OidcSession }) 
       className={styles['root']}
       onKeyDown={onKeyDown}
       onBlur={(event) => {
-        if (!root.current?.contains(event.relatedTarget)) setOpen(false)
+        if (focusMovedOutside(root.current, event.relatedTarget)) setOpen(false)
       }}
     >
       <button

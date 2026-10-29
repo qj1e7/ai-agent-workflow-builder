@@ -7,6 +7,7 @@ import { ApiError } from '../api/client'
 import { ApiProvider } from '../api/context'
 import { createDevSession, SIGNED_IN, type Session } from '../api/session'
 import type { Me } from '../api/types'
+import { focusMovedOutside } from './PersonChip'
 import { TEAMS_EMPTY_WORDS, TEAMS_TITLE } from './TeamsPanel'
 import { TEST_NOTE } from './TestControls'
 import { MENU_PAGE_IDS, PAGES } from './routes'
@@ -124,7 +125,9 @@ describe('an unknown path', () => {
 describe('the pages', () => {
   it('give every heading a tabindex so focus can move to it', () => {
     for (const path of [...MENU_PAGE_IDS.map((id) => PAGES[id].path), '/settings', '/nowhere']) {
-      expect([...render({ path }).matchAll(/<h1\b[^>]*>/g)].every((tag) => tag[0].includes('tabindex="-1"')), path).toBe(true)
+      const tags = [...render({ path }).matchAll(/<h1\b[^>]*>/g)]
+      expect(tags.length, path).toBeGreaterThan(0)
+      expect(tags.every((tag) => tag[0].includes('tabindex="-1"')), path).toBe(true)
     }
   })
 
@@ -164,10 +167,26 @@ describe('the person', () => {
     expect(headerOf(render())).not.toContain('aria-expanded')
   })
 
-  it('is a button that can open Sign out with real sign-in', () => {
+  it('is a collapsed button with real sign-in, and Sign out is not shown yet', () => {
     const header = headerOf(render({ oidc: true }))
     expect(header).toMatch(/<button\b[^>]*aria-expanded="false"[^>]*>/)
     expect(header).not.toContain('Sign out')
+  })
+})
+
+describe('the person chip panel', () => {
+  const root = { contains: (node: unknown) => node === 'inside' } as unknown as Pick<Node, 'contains'>
+
+  it('stays open when focus is lost with no target, as Safari does on a press of Sign out', () => {
+    expect(focusMovedOutside(root, null)).toBe(false)
+  })
+
+  it('stays open when focus moves inside', () => {
+    expect(focusMovedOutside(root, 'inside' as unknown as EventTarget)).toBe(false)
+  })
+
+  it('closes when focus moves to an element outside', () => {
+    expect(focusMovedOutside(root, 'outside' as unknown as EventTarget)).toBe(true)
   })
 })
 
@@ -199,7 +218,7 @@ describe('the frame', () => {
     expect(html.indexOf('Skip to main content')).toBeLessThan(html.indexOf('<header'))
   })
 
-  it('names the product, reading "AI" out on every width', () => {
+  it('names the product in the header', () => {
     expect(text(headerOf(render()))).toContain('AI Workflow Builder')
   })
 })

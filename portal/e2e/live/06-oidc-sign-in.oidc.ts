@@ -30,9 +30,13 @@ async function signIn(browser: Browser, backend: Backend, user: string, path: st
   }
   page.on('response', (response) => void record(response))
   page.on('request', (request) => {
-    void request.allHeaders().then((headers) => {
-      if ('x-dev-user' in headers) person.devHeaders.push(request.url())
-    })
+    request
+      .allHeaders()
+      .then((headers) => {
+        if ('x-dev-user' in headers) person.devHeaders.push(request.url())
+      })
+      // A request still in flight when the context closes cannot be read, and it has nothing left to send.
+      .catch(() => undefined)
   })
 
   await page.goto(path)
@@ -102,7 +106,16 @@ test('alice signs in and sees her name, bob signs in at a deep link, and signing
   await expect(bob.page.getByRole('banner')).not.toContainText('Operator')
   await shot(bob.page, info, 'oidc-03-bob-deep-link')
 
-  await bob.page.getByRole('banner').getByRole('button', { name: /Bob/ }).click()
+  const chip = bob.page.getByRole('banner').getByRole('button', { name: /Bob/ })
+  await chip.focus()
+  await bob.page.keyboard.press('Enter')
+  await expect(chip, 'Enter on the chip opens the panel').toHaveAttribute('aria-expanded', 'true')
+  await expect(bob.page.getByRole('button', { name: 'Sign out' })).toBeVisible()
+  await bob.page.keyboard.press('Escape')
+  await expect(bob.page.getByRole('button', { name: 'Sign out' }), 'Escape closes the panel').toHaveCount(0)
+  await expect(chip, 'Escape puts focus back on the chip').toBeFocused()
+  await bob.page.keyboard.press('Enter')
+  await expect(bob.page.getByRole('button', { name: 'Sign out' })).toBeVisible()
   await shot(bob.page, info, 'oidc-04-sign-out-panel')
   await bob.page.getByRole('button', { name: 'Sign out' }).click()
   await expect(bob.page, 'sign-out comes back to the Portal').toHaveURL(/\/signed-out(\?|$)/)
