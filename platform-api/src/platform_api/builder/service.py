@@ -18,7 +18,6 @@ from platform_api.builder.models import (
     CardRefused,
     CardView,
     CreateAgentUseCase,
-    CreateUseCase,
     PlanOut,
     SuggestOut,
     ToolList,
@@ -34,13 +33,7 @@ from platform_api.builder.planning import (
     RuntimeNotAnswering,
     plan,
 )
-from platform_api.builder.templates import (
-    AGENT_CARDS,
-    TEMPLATES,
-    TemplateNotOffered,
-    UnknownTemplate,
-    suggest_template,
-)
+from platform_api.builder.templates import AGENT_CARDS, TEMPLATES, suggest_template
 from platform_api.builder.views import template_view
 from platform_api.builder.watchlist import Watchlist
 from platform_api.db import Database, json
@@ -131,15 +124,6 @@ class Builder:
         self._cards = CardLibrary(db)
         self._planner = planner or NoPlanner()
         self.public_base_url = public_base_url
-
-    @staticmethod
-    def create_use_case(body: CreateUseCase) -> UnknownTemplate | TemplateNotOffered:
-        """No template is made by hand any more: the watchlist comes from the Software page and
-        agent use cases from the Builder page. The route stays so the answer names why."""
-        template = TEMPLATES.get(body.template)
-        if template is None:
-            return UnknownTemplate(body.template)
-        return TemplateNotOffered(template.key)
 
     async def list_use_cases(self) -> UseCaseList:
         """Team-wide by design: one team, two roles, and Approvers need the context.

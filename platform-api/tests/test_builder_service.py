@@ -4,8 +4,7 @@ from dataclasses import dataclass, field
 import pytest
 
 from platform_api.builder import Builder, Watchlist
-from platform_api.builder.models import AddSoftware, CreateUseCase, WatchlistView
-from platform_api.builder.templates import TemplateNotOffered, UnknownTemplate
+from platform_api.builder.models import AddSoftware, WatchlistView
 from platform_api.db import Database
 from platform_api.orchestration import (
     Given,
@@ -67,22 +66,6 @@ async def watch_langgraph(watchlist: Watchlist) -> WatchlistView:
     )
     assert isinstance(added, WatchlistView)
     return added
-
-
-@pytest.mark.parametrize(
-    ("template", "answer"),
-    [
-        ("nope", UnknownTemplate("nope")),
-        ("software_watchlist", TemplateNotOffered("software_watchlist")),
-        ("agent_cards", TemplateNotOffered("agent_cards")),
-    ],
-)
-async def test_no_use_case_is_made_from_a_template_by_hand(
-    builder: Builder, template: str, answer: UnknownTemplate | TemplateNotOffered
-):
-    body = CreateUseCase(template=template, name="n", instruction="i", params={})
-    assert builder.create_use_case(body) == answer
-    assert (await builder.list_use_cases()).use_cases == []
 
 
 async def test_the_watchlist_reads_back_as_a_use_case_owned_by_who_added_the_first_software(

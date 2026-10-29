@@ -8,9 +8,8 @@ Runs inside the platform-api container, which has python and reaches the API on 
 with those ids as the example value of each path parameter, so a scanner calls real resources.
 `openapi-public` keeps only the /api/ routes, the ones the Portal's nginx publishes.
 
-One watchlist per team: a run already waiting is reused, LangGraph already watched is fine, and
-the schedule is turned off so a tick cannot start a second check. The software id stays out of
-the ids, or a scanner would delete the watched software through the example value.
+The software id stays out of the ids: a scanner fires DELETE on example values and would remove
+the watched software.
 """
 
 import json

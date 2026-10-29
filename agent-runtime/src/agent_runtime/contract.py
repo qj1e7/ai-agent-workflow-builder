@@ -255,7 +255,7 @@ type TaskInputs = Annotated[WatchlistInputs | CardsInputs, Field(discriminator="
 
 
 class CarryForward(WireModel):
-    """What a run hands to the next run of its use case. Nothing yet."""
+    """What a run hands to the next run of its use case."""
 
 
 class Callback(WireModel):

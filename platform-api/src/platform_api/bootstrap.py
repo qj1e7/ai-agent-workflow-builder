@@ -4,6 +4,7 @@ import os
 import sys
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass
+from typing import Any, LiteralString
 
 import httpx
 import psycopg
@@ -27,8 +28,7 @@ from platform_api.settings import BootstrapSettings, bootstrap_settings_from_env
 API_KEY_LABEL = "platform-bootstrap"
 CREDENTIAL_NAME = "X-Step-Key"
 STEP_KEY_HEADER = "X-Step-Key"
-# The name every run's n8n workflow had before it became run. Only this exact name is removed:
-# staff build their own workflows in the same n8n (ADR 0027), and those are theirs to keep.
+# Only this exact name is removed: staff build their own workflows in the same n8n (ADR 0027).
 OLD_RUN_WORKFLOW = "release_check"
 OLD_TEMPLATE = "release_check"
 OLD_TASK_KIND = "release"
@@ -175,24 +175,29 @@ def content_hash_without_credential(
 
 
 def unreadable_data(owner_url: str) -> list[str]:
-    """Rows the platform can no longer read, as plain lines. Nothing is deleted here."""
     with psycopg.connect(owner_url) as conn:
-        runs = conn.execute(
+        runs = _count(
+            conn,
             "SELECT count(*) FROM orchestration.runs WHERE spec -> 'task' ->> 'kind' = %s",
-            (OLD_TASK_KIND,),
-        ).fetchone()
-        versions = conn.execute(
-            "SELECT count(*) FROM builder.use_case_versions WHERE template = %s", (OLD_TEMPLATE,)
-        ).fetchone()
+            OLD_TASK_KIND,
+        )
+        versions = _count(
+            conn, "SELECT count(*) FROM builder.use_case_versions WHERE template = %s", OLD_TEMPLATE
+        )
     found: list[str] = []
-    if runs and runs[0]:
-        found.append(f"orchestration.runs holds {runs[0]} run(s) of the old release check")
-    if versions and versions[0]:
+    if runs:
+        found.append(f"orchestration.runs holds {runs} run(s) of the old release check")
+    if versions:
         found.append(
-            f"builder.use_case_versions holds {versions[0]} version(s) of the old {OLD_TEMPLATE} "
+            f"builder.use_case_versions holds {versions} version(s) of the old {OLD_TEMPLATE} "
             "template"
         )
     return found
+
+
+def _count(conn: psycopg.Connection[Any], query: LiteralString, value: str) -> int:
+    row = conn.execute(query, (value,)).fetchone()
+    return 0 if row is None else int(row[0])
 
 
 def previous_hashes(owner_url: str) -> dict[str, str]:

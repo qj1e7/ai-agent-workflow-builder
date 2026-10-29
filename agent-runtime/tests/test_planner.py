@@ -7,6 +7,7 @@ from agent_runtime.contract import (
     TaskFinished,
     TaskRequest,
     TaskResult,
+    WatchlistInputs,
 )
 from agent_runtime.contracts import failed_task, finished_task, task_request
 from agent_runtime.events import EventLog
@@ -35,7 +36,8 @@ def without_timestamps(result: TaskResult) -> dict[str, Any]:
 
 
 def up_to_date(request: TaskRequest) -> TaskRequest:
-    software = request.inputs.software[0].model_copy(update={"our_version": "1.2.16"})  # type: ignore[union-attr]
+    assert isinstance(request.inputs, WatchlistInputs)
+    software = request.inputs.software[0].model_copy(update={"our_version": "1.2.16"})
     inputs = request.inputs.model_copy(update={"software": [software]})
     return request.model_copy(update={"inputs": inputs})
 

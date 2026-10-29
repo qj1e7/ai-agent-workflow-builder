@@ -5,8 +5,6 @@ down_revision = "0004"
 
 
 def upgrade() -> None:
-    # Every run used the n8n workflow release_check. It is now called run, and a waiting run
-    # names its workflow when it is approved or retried, so the saved name moves with it.
     op.execute("""
         UPDATE orchestration.runs
         SET spec = jsonb_set(spec, '{workflow}', '"run"')

@@ -1,6 +1,3 @@
-"""Bootstrap against the real database and a fake n8n: what it refuses to start on, and what it
-removes from n8n."""
-
 import json
 from typing import Any
 
@@ -119,8 +116,6 @@ def test_old_release_data_stops_bootstrap_before_n8n_and_deletes_nothing(
 
 
 class FakeN8n:
-    """Enough of n8n's REST and public API for one bootstrap, with workflows that were there."""
-
     def __init__(self, existing: list[str]) -> None:
         self.workflows: dict[str, dict[str, Any]] = {
             f"W{n}": {"id": f"W{n}", "name": name, "active": True, "nodes": [], "settings": {}}

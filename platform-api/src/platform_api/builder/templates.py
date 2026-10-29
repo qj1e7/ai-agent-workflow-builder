@@ -122,16 +122,6 @@ WATCHLIST_PARAMS: Mapping[str, str] = {"ticket_project": "MOCK"}
 WATCHLIST_LIMIT = 100
 
 
-@dataclass(frozen=True)
-class UnknownTemplate:
-    key: str
-
-
-@dataclass(frozen=True)
-class TemplateNotOffered:
-    key: str
-
-
 _WORD = re.compile(r"[a-z0-9]+")
 
 

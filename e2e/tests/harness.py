@@ -112,8 +112,6 @@ class Api:
         return self.request(user, "POST", path, expect=expect, headers=headers, json_body=body)
 
     def watch_langgraph(self, user: str) -> str:
-        """The team's watchlist with one software, LangGraph at 1.2.14, which the mock GitHub
-        has at 1.2.16. One watchlist per team, so whatever a kept stack still watches goes first."""
         self.clear_watchlist(user)
         added = self.add_software(user, "LangGraph", "langchain-ai/langgraph", OUR_VERSION).json()
         if [row["name"] for row in added.get("software", [])] != ["LangGraph"]:

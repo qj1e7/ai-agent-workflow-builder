@@ -69,15 +69,17 @@ function startRun(path) {
   })
 }
 
-// The seeded check waits at the approval gate. Every later check of the same watchlist finds that
-// ticket already waiting, proposes nothing and ends succeeded, so both states count as settled.
+function settled(run) {
+  return run.state === 'awaiting_approval' || run.state === 'succeeded'
+}
+
 function waitForSettled() {
   for (let i = 0; i < 120; i++) {
     const { runs } = http.get(`${origin}/api/v1/runs`, { headers }).json()
-    if (runs.every((run) => run.state === 'awaiting_approval' || run.state === 'succeeded')) return runs.length
+    if (runs.every(settled)) return runs.length
     sleep(1)
   }
-  fail('the seeded runs never all settled')
+  fail('the seeded runs never all settled: waiting at the approval gate, or ended with nothing to write')
 }
 
 export function setup() {

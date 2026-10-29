@@ -733,7 +733,7 @@
     },
     "CarryForward": {
       "additionalProperties": false,
-      "description": "What a run hands to the next run of its use case. Nothing yet.",
+      "description": "What a run hands to the next run of its use case.",
       "properties": {},
       "title": "CarryForward",
       "type": "object"

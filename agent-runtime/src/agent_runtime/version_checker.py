@@ -10,8 +10,6 @@ __all__ = ["CHECKER", "VersionChecker"]
 
 
 class VersionChecker:
-    """The agent that reads the sources of the team's watched software and finds what is behind."""
-
     def __init__(
         self,
         source: ReleaseSource,

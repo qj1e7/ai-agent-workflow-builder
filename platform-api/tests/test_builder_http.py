@@ -64,7 +64,6 @@ async def client(db: Database) -> AsyncIterator[httpx.AsyncClient]:
 
 
 async def save(client: httpx.AsyncClient) -> str:
-    """The watchlist is the one use case a person can still make: by adding software."""
     r = await client.post("/api/v1/watchlist/software", json=LANGGRAPH, headers=ALICE)
     assert r.status_code == 201
     return r.json()["use_case_id"]

@@ -101,7 +101,6 @@ def langgraph() -> SoftwareToCheck:
 
 
 def task_request(run_id: str) -> TaskRequest:
-    """A check of a watchlist that holds one software, LangGraph at 1.2.14."""
     task_id = f"{run_id}/work/1/1"
     return TaskRequest(
         task_id=task_id,

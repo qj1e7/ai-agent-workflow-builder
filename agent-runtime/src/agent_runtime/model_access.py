@@ -33,7 +33,6 @@ from agent_runtime.summary import (
 
 ANTHROPIC_VERSION = "2023-06-01"
 LIST_TIMEOUT_SECONDS = 10.0
-# The question the model test asks: the summary of a check that found LangGraph behind.
 SAMPLE_CHECK = [
     Checked(
         "LangGraph",

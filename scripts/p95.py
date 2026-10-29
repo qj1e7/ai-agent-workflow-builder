@@ -6,8 +6,7 @@ on localhost while a scan stack publishes no host ports:
         /tmp/runs.json --count 500 --user alice < scripts/p95.py
 
 A JSON body may hold {marker}, which becomes a new value on every request, because the model
-gateway answers a repeated prompt from its store. Warm-up requests are sent first and not timed.
-Streaming (--stream) is not here yet.
+gateway answers a repeated prompt from its store.
 """
 
 import argparse

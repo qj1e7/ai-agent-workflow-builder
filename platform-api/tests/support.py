@@ -83,9 +83,6 @@ SPEC = RunSpec(
     bindings={"create_ticket": Binding("jira", "create_ticket", {"project": "MOCK"})},
     approval_policy=ApprovalPolicy((ApprovalStep("Team approver", AnyApprover()),)),
 )
-"""A check of a watchlist that holds one software, LangGraph at 1.2.14. The recorded stories in
-contracts/ follow this run."""
-
 WATCHLIST_TASK = WatchlistTask(
     tag_pattern=r"^\d+\.\d+\.\d+$",
     software=(
