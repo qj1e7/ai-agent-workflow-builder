@@ -15,6 +15,7 @@
 /* The drawer floats, so it is one of the few things with a shadow. It slides in by its own width. */
 .drawer {
   position: fixed;
+  overflow: hidden;
   inset: 0 0 0 auto;
   width: min(440px, 100%);
   max-width: 100%;
@@ -49,13 +50,17 @@
   animation: fade-out 180ms ease-in both;
 }
 
+/* The whole panel scrolls, with its head held at the top, so the scrolling region holds the close button. */
 .inner {
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
   height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .head {
+  position: sticky;
+  z-index: var(--z-raised);
+  top: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -110,7 +115,6 @@
   gap: 16px;
   margin: 0;
   padding: 16px 18px 40px;
-  overflow-y: auto;
 }
 
 .empty {

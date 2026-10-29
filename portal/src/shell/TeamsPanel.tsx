@@ -143,14 +143,22 @@ function Drawer({ me, onClose, onOpen }: { me: Me; onClose: () => void; onOpen: 
   const nameOf: NameOf = (id) => displayName(people, id)
   const shown = (messages.data ?? []).slice(-SHOWN_MESSAGES)
   const channel = shown.at(-1)?.channel
+  const inner = useRef<HTMLDivElement>(null)
+  const loaded = shown.length > 0
+
+  // Like a Teams channel, the newest message is at the bottom, so the panel opens there.
+  useEffect(() => {
+    if (loaded && inner.current) inner.current.scrollTop = inner.current.scrollHeight
+  }, [loaded])
+
   return (
-    <div className={styles['inner']}>
+    <div className={styles['inner']} ref={inner}>
       <div className={styles['head']}>
         <div>
           <h2>Microsoft Teams</h2>
           <small>{TEAMS_NOTE}</small>
         </div>
-        <button type="button" className={styles['close']} aria-label="Close Teams" onClick={onClose}>
+        <button type="button" className={styles['close']} aria-label="Close Teams" onClick={onClose} data-close="">
           <IconX size={18} />
         </button>
       </div>
@@ -193,9 +201,12 @@ export function TeamsButton({ person }: { person: Me | null }) {
   const waiting = useWaitingForYou(person !== null, open)
   const label = teamsLabel(waiting)
 
+  // Chrome may put first focus on the panel's scrolling area, so focus goes to Close itself.
   useEffect(() => {
     const node = dialog.current
-    if (open && node && !node.open) node.showModal()
+    if (!open || !node || node.open) return
+    node.showModal()
+    node.querySelector<HTMLElement>('[data-close]')?.focus()
   }, [open])
 
   function close(focusButton = true): void {
