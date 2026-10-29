@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type SyntheticEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type SyntheticEvent } from 'react'
 import { displayName, usePeople } from '../api/people'
 import { POLL_MS, useApproval, useApprovals, useRun, useRuns, useTeamsMessages } from '../api/queries'
 import type { ApprovalView, Me, TeamsStubMessage } from '../api/types'
@@ -6,6 +6,7 @@ import { useDecision, type Decision } from '../screens/run/decision'
 import { andList, lockWords, shortTime, type NameOf, type Party } from '../screens/run/words'
 import { Button, ButtonLink } from '../ui/Button'
 import { cx } from '../ui/cx'
+import { useFocusWhenReady } from '../ui/focus'
 import { IconCheck, IconLock, IconX } from '../ui/icons'
 import { motionAllowed } from '../ui/motion'
 import { ChatIcon, Mark } from './icons'
@@ -14,9 +15,8 @@ import styles from './TeamsPanel.module.css'
 
 export const TEAMS_TITLE = 'Teams, practice copy'
 export const TEAMS_EMPTY_WORDS = 'No messages yet. When a run needs a yes, its message shows here.'
-export const TEAMS_NOTE = 'Practice copy. Nothing reaches the real Teams.'
+const TEAMS_NOTE = 'Practice copy. Nothing reaches the real Teams.'
 
-/** The badge checks this often while the panel is closed. Open, it follows every POLL_MS. */
 const BADGE_POLL_MS = 10_000
 const SHOWN_MESSAGES = 20
 const CLOSE_MS = 220
@@ -32,7 +32,6 @@ export type TeamsAction =
   | { readonly kind: 'locked'; readonly words: string }
   | { readonly kind: 'decided'; readonly verdict: 'approve' | 'decline'; readonly by: string }
 
-/** What a Teams message offers the signed-in person, from the approval route's answer for them. */
 export function teamsActionOf(approval: ApprovalView | undefined, party: Party | null, nameOf: NameOf): TeamsAction {
   if (!approval) return { kind: 'loading' }
   const declined = approval.steps.find((step) => step.status === 'declined')
@@ -106,21 +105,12 @@ function Message({ message, me, nameOf, onOpen }: { message: TeamsStubMessage; m
     ? { startedIt: run.data.started_by === me.id, retriedIt: false, schedule: run.data.trigger === 'schedule' }
     : null
   const item = useRef<HTMLLIElement>(null)
-  const focusPill = useRef(false)
-  const decision = useDecision(approval.data, party, () => {
-    focusPill.current = true
-  })
   const action = teamsActionOf(approval.data, party, nameOf)
-
-  // The pressed button goes away once the answer is in, so focus moves to what replaced it.
-  useEffect(() => {
-    if (!focusPill.current || action.kind !== 'decided') return
-    focusPill.current = false
-    item.current?.querySelector<HTMLElement>('[data-decided]')?.focus()
-  }, [action.kind])
+  const focusPill = useFocusWhenReady(action.kind === 'decided', () => item.current?.querySelector<HTMLElement>('[data-decided]'))
+  const decision = useDecision(approval.data, party, focusPill)
 
   return (
-    <li className={styles['message']} ref={item}>
+    <li className={styles['message']} ref={item} data-approval-id={message.approval_id}>
       <span className={styles['app']}>
         <Mark height={14} />
       </span>
@@ -137,19 +127,38 @@ function Message({ message, me, nameOf, onOpen }: { message: TeamsStubMessage; m
   )
 }
 
+/** Like a Teams channel, the panel shows its newest message at the bottom, and stays there as messages load, until the person scrolls. */
+function useStuckToBottom(): (node: HTMLDivElement | null) => (() => void) | undefined {
+  return useCallback((node: HTMLDivElement | null) => {
+    const grows = node?.querySelector('[data-grows]')
+    if (!node || !grows || typeof ResizeObserver !== 'function') return undefined
+    let stuck = true
+    const release = () => {
+      stuck = false
+    }
+    const watch = new ResizeObserver(() => {
+      if (stuck) node.scrollTop = node.scrollHeight
+    })
+    watch.observe(grows)
+    node.addEventListener('wheel', release, { passive: true })
+    node.addEventListener('touchmove', release, { passive: true })
+    node.addEventListener('keydown', release)
+    return () => {
+      watch.disconnect()
+      node.removeEventListener('wheel', release)
+      node.removeEventListener('touchmove', release)
+      node.removeEventListener('keydown', release)
+    }
+  }, [])
+}
+
 function Drawer({ me, onClose, onOpen }: { me: Me; onClose: () => void; onOpen: () => void }) {
   const messages = useTeamsMessages({ poll: true })
   const people = usePeople()
   const nameOf: NameOf = (id) => displayName(people, id)
   const shown = (messages.data ?? []).slice(-SHOWN_MESSAGES)
   const channel = shown.at(-1)?.channel
-  const inner = useRef<HTMLDivElement>(null)
-  const loaded = shown.length > 0
-
-  // Like a Teams channel, the newest message is at the bottom, so the panel opens there.
-  useEffect(() => {
-    if (loaded && inner.current) inner.current.scrollTop = inner.current.scrollHeight
-  }, [loaded])
+  const inner = useStuckToBottom()
 
   return (
     <div className={styles['inner']} ref={inner}>
@@ -168,20 +177,21 @@ function Drawer({ me, onClose, onOpen }: { me: Me; onClose: () => void; onOpen: 
           {channel ? ' · ' : ''}signed in as {me.display}
         </span>
       </p>
-      {shown.length > 0 ? (
-        <ol className={styles['messages']} aria-label="Messages">
-          {shown.map((message) => (
-            <Message key={message.id} message={message} me={me} nameOf={nameOf} onOpen={onOpen} />
-          ))}
-        </ol>
-      ) : (
-        <p className={styles['empty']}>{messages.isPending ? 'Loading messages' : TEAMS_EMPTY_WORDS}</p>
-      )}
+      <div data-grows="">
+        {shown.length > 0 ? (
+          <ol className={styles['messages']} aria-label="Messages">
+            {shown.map((message) => (
+              <Message key={message.id} message={message} me={me} nameOf={nameOf} onOpen={onOpen} />
+            ))}
+          </ol>
+        ) : (
+          <p className={styles['empty']}>{messages.isPending ? 'Loading messages' : TEAMS_EMPTY_WORDS}</p>
+        )}
+      </div>
     </div>
   )
 }
 
-/** How many approvals the signed-in person may decide now: only runs that wait are asked about. */
 function useWaitingForYou(enabled: boolean, open: boolean): number {
   const poll = open ? POLL_MS : BADGE_POLL_MS
   const messages = useTeamsMessages({ poll, enabled })
@@ -192,7 +202,6 @@ function useWaitingForYou(enabled: boolean, open: boolean): number {
   return approvals.filter((query) => query.data?.you_can_decide === true).length
 }
 
-/** The header's Teams button and the practice Teams panel it opens, a drawer on the right. */
 export function TeamsButton({ person }: { person: Me | null }) {
   const [open, setOpen] = useState(false)
   const dialog = useRef<HTMLDialogElement>(null)
