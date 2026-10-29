@@ -103,8 +103,9 @@ export function AppRoutes({ context }: { context: PageContext }) {
     <Routes>
       {PAGE_IDS.map((id) => {
         const { path, heading, lead } = PAGES[id]
-        const [h, l] = [wordsOf(heading, context), wordsOf(lead, context)]
-        return <Route key={id} path={path} element={id === 'software' ? <><PageHead heading={h} lead={l} /><Lazy><SoftwareRoute /></Lazy></> : <EmptyPage heading={h} lead={l} />} />
+        const title = wordsOf(heading, context)
+        const intro = wordsOf(lead, context)
+        return <Route key={id} path={path} element={id === 'software' ? <><PageHead heading={title} lead={intro} /><Lazy><SoftwareRoute /></Lazy></> : <EmptyPage heading={title} lead={intro} />} />
       })}
       <Route path="/runs/:runId" element={<Lazy><RunRoute /></Lazy>} />
       <Route path="/approvals/:approvalId" element={<Lazy><ApprovalRoute /></Lazy>} />

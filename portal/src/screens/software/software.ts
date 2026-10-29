@@ -102,10 +102,6 @@ export function matches(count: number): string {
   return count === 1 ? '1 match' : `${count} matches`
 }
 
-export function itemsCount(count: number): string {
-  return count === 1 ? '1 item' : `${count} items`
-}
-
 export interface Groups {
   readonly needs: readonly WatchedSoftwareView[]
   readonly notChecked: readonly WatchedSoftwareView[]
