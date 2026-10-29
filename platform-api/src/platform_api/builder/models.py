@@ -1,7 +1,8 @@
+import json
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import Field, StringConstraints
+from pydantic import Field, JsonValue, StringConstraints, field_validator
 
 from platform_api.builder.templates import TAG_PATTERN
 from platform_api.orchestration import AT_PATTERN, Day, InputKind, Status, ToolId, ToolKind
@@ -357,3 +358,40 @@ class CreateAgentUseCase(WireModel):
         str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)
     ]
     agents: Annotated[list[AgentChoice], Field(min_length=1, max_length=3)]
+
+
+DRAFT_ID_PATTERN = r"^[A-Za-z0-9_-]{1,64}$"
+DRAFT_STEPS = 4
+DRAFT_LIMIT_BYTES = 32 * 1024
+
+
+class DraftIn(WireModel):
+    step: Annotated[int, Field(ge=1, le=DRAFT_STEPS)] = Field(
+        description="The New workflow step the draft was saved at, from 1 to 4."
+    )
+    content: dict[str, JsonValue] = Field(
+        description="The New workflow form as the Portal keeps it, at most 32 KB as JSON. "
+        "The platform stores it as it is and never reads it."
+    )
+
+    @field_validator("content")
+    @classmethod
+    def _fits(cls, content: dict[str, JsonValue]) -> dict[str, JsonValue]:
+        size = len(json.dumps(content, ensure_ascii=False, separators=(",", ":")).encode())
+        if size > DRAFT_LIMIT_BYTES:
+            raise ValueError("The draft is too big to save. Keep it under 32 KB.")
+        return content
+
+
+class DraftView(WireModel):
+    draft_id: str
+    step: int
+    content: dict[str, JsonValue]
+    created_at: datetime
+    saved_at: datetime
+
+
+class DraftList(WireModel):
+    drafts: list[DraftView] = Field(
+        description="The signed-in person's own drafts, the last saved first."
+    )

@@ -2220,6 +2220,89 @@
         "title": "DevUsers",
         "type": "object"
       },
+      "DraftIn": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "description": "The New workflow form as the Portal keeps it, at most 32 KB as JSON. The platform stores it as it is and never reads it.",
+            "title": "Content",
+            "type": "object"
+          },
+          "step": {
+            "description": "The New workflow step the draft was saved at, from 1 to 4.",
+            "maximum": 4.0,
+            "minimum": 1.0,
+            "title": "Step",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "step",
+          "content"
+        ],
+        "title": "DraftIn",
+        "type": "object"
+      },
+      "DraftList": {
+        "additionalProperties": false,
+        "properties": {
+          "drafts": {
+            "description": "The signed-in person's own drafts, the last saved first.",
+            "items": {
+              "$ref": "#/components/schemas/DraftView"
+            },
+            "title": "Drafts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "drafts"
+        ],
+        "title": "DraftList",
+        "type": "object"
+      },
+      "DraftView": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Content",
+            "type": "object"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "draft_id": {
+            "title": "Draft Id",
+            "type": "string"
+          },
+          "saved_at": {
+            "format": "date-time",
+            "title": "Saved At",
+            "type": "string"
+          },
+          "step": {
+            "title": "Step",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "draft_id",
+          "step",
+          "content",
+          "created_at",
+          "saved_at"
+        ],
+        "title": "DraftView",
+        "type": "object"
+      },
       "ErrorBody": {
         "additionalProperties": false,
         "properties": {
@@ -2415,6 +2498,7 @@
         ],
         "type": "string"
       },
+      "JsonValue": {},
       "KnownProviderId": {
         "enum": [
           "aisg",
@@ -6600,6 +6684,254 @@
         "summary": "List Dev Users",
         "tags": [
           "dev"
+        ]
+      }
+    },
+    "/api/v1/drafts": {
+      "get": {
+        "description": "The signed-in Operator's own drafts. Nobody else's are listed.",
+        "operationId": "list_drafts_api_v1_drafts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "List Drafts",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/drafts/{draft_id}": {
+      "delete": {
+        "operationId": "delete_draft_api_v1_drafts__draft_id__delete",
+        "parameters": [
+          {
+            "description": "Chosen by the Portal, such as a UUID. A draft id belongs to its author, so two people can use the same one.",
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "description": "Chosen by the Portal, such as a UUID. A draft id belongs to its author, so two people can use the same one.",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such draft"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Delete Draft",
+        "tags": [
+          "builder"
+        ]
+      },
+      "put": {
+        "description": "Saves a New workflow draft for the signed-in Operator. Saving again replaces it.",
+        "operationId": "save_draft_api_v1_drafts__draft_id__put",
+        "parameters": [
+          {
+            "description": "Chosen by the Portal, such as a UUID. A draft id belongs to its author, so two people can use the same one.",
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "description": "Chosen by the Portal, such as a UUID. A draft id belongs to its author, so two people can use the same one.",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The Operator has the most drafts kept"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Save Draft",
+        "tags": [
+          "builder"
         ]
       }
     },

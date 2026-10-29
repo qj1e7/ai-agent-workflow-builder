@@ -59,6 +59,8 @@ NEXT_MONDAY = datetime(2026, 11, 9, 1, 0, tzinfo=NOW.tzinfo)
 LANGGRAPH = {"name": "LangGraph", "repo": "langchain-ai/langgraph", "our_version": "1.2.14"}
 VALUES = {"GitHub repository": "langchain-ai/langgraph", "Jira project": "MOCK"}
 WORK = N8nExecutionId("41")
+DRAFT = {"step": 2, "content": {"intent": "Nudge owners of stale tickets", "days": 14}}
+DRAFT_PATH = "/api/v1/drafts/{draft_id}"
 
 
 def test_pausing_keeps_who_paused_and_when_and_a_second_pause_changes_nothing():
@@ -498,3 +500,133 @@ async def test_the_tick_is_told_a_paused_or_deleted_workflow_is_not_on(lab: Lab)
     await lab.move("alice", "delete", use_case_id)
     assert await lab.builder.check_spec(UseCaseId(use_case_id)) == NotOn("deleted")
     assert await lab.builder.check_spec(UseCaseId("uc_nope")) is None
+
+
+def stamp(moment: datetime) -> str:
+    return moment.isoformat().replace("+00:00", "Z")
+
+
+async def save_draft(lab: Lab, user: str, draft_id: str, body: Any = DRAFT) -> httpx.Response:
+    return await lab.call(user, "PUT", f"/api/v1/drafts/{draft_id}", body, template=DRAFT_PATH)
+
+
+async def drafts_of(lab: Lab, user: str) -> list[dict[str, Any]]:
+    r = await lab.call(user, "GET", "/api/v1/drafts", template="/api/v1/drafts")
+    assert r.status_code == 200
+    return r.json()["drafts"]
+
+
+async def test_a_draft_is_saved_for_its_author_and_listed_only_for_them(lab: Lab):
+    saved = await save_draft(lab, "alice", "d1")
+
+    assert (saved.status_code, saved.json()) == (
+        200,
+        {"draft_id": "d1", **DRAFT, "created_at": stamp(NOW), "saved_at": stamp(NOW)},
+    )
+    assert await drafts_of(lab, "alice") == [saved.json()]
+    assert await drafts_of(lab, "carol") == []
+
+
+async def test_saving_again_replaces_the_draft_and_keeps_when_it_was_started(lab: Lab):
+    await save_draft(lab, "alice", "d1")
+    lab.h.advance(timedelta(minutes=3))
+
+    again = await save_draft(lab, "alice", "d1", {"step": 3, "content": {"intent": "Changed"}})
+
+    assert again.json() == {
+        "draft_id": "d1",
+        "step": 3,
+        "content": {"intent": "Changed"},
+        "created_at": stamp(NOW),
+        "saved_at": stamp(NOW + timedelta(minutes=3)),
+    }
+    assert await drafts_of(lab, "alice") == [again.json()]
+
+
+async def test_the_same_draft_id_is_separate_for_each_author(lab: Lab):
+    await save_draft(lab, "alice", "d1")
+    await save_draft(lab, "carol", "d1", {"step": 4, "content": {"intent": "Carol's"}})
+
+    [alices] = await drafts_of(lab, "alice")
+    [carols] = await drafts_of(lab, "carol")
+    assert (alices["step"], alices["content"]) == (DRAFT["step"], DRAFT["content"])
+    assert (carols["step"], carols["content"]) == (4, {"intent": "Carol's"})
+
+
+async def test_deleting_someone_else_s_draft_is_404_and_leaves_it(lab: Lab):
+    await save_draft(lab, "alice", "d1")
+
+    theirs = await lab.call("carol", "DELETE", "/api/v1/drafts/d1", template=DRAFT_PATH)
+    assert (theirs.status_code, theirs.json()) == (404, {"detail": "No such draft"})
+    assert len(await drafts_of(lab, "alice")) == 1
+
+    mine = await lab.call("alice", "DELETE", "/api/v1/drafts/d1")
+    assert (mine.status_code, mine.content) == (204, b"")
+    assert await drafts_of(lab, "alice") == []
+    gone = await lab.call("alice", "DELETE", "/api/v1/drafts/d1", template=DRAFT_PATH)
+    assert gone.status_code == 404
+
+
+async def test_drafts_list_the_last_saved_first(lab: Lab):
+    await save_draft(lab, "alice", "older")
+    lab.h.advance(timedelta(minutes=1))
+    await save_draft(lab, "alice", "newer")
+    assert [d["draft_id"] for d in await drafts_of(lab, "alice")] == ["newer", "older"]
+    lab.h.advance(timedelta(minutes=1))
+    await save_draft(lab, "alice", "older")
+    assert [d["draft_id"] for d in await drafts_of(lab, "alice")] == ["older", "newer"]
+
+
+async def test_a_draft_over_32_kb_is_refused_and_nothing_is_saved(lab: Lab):
+    big = {"step": 1, "content": {"intent": "a" * (32 * 1024)}}
+    r = await save_draft(lab, "alice", "d1", big)
+    [problem] = r.json()["detail"]
+    assert (r.status_code, problem["loc"]) == (422, ["body", "content"])
+    assert "under 32 KB" in problem["msg"]
+    assert await drafts_of(lab, "alice") == []
+
+
+@pytest.mark.parametrize(
+    ("draft_id", "body", "where"),
+    [
+        ("d1", {"step": 0, "content": {}}, ["body", "step"]),
+        ("d1", {"step": 5, "content": {}}, ["body", "step"]),
+        ("d1", {"step": 1, "content": []}, ["body", "content"]),
+        ("not ok", DRAFT, ["path", "draft_id"]),
+        ("x" * 65, DRAFT, ["path", "draft_id"]),
+    ],
+)
+async def test_a_bad_step_content_or_id_is_refused(
+    lab: Lab, draft_id: str, body: Any, where: list[str]
+):
+    r = await save_draft(lab, "alice", draft_id, body)
+    assert r.status_code == 422
+    assert [p["loc"] for p in r.json()["detail"]] == [where]
+
+
+async def test_an_operator_keeps_at_most_twenty_drafts(lab: Lab):
+    for n in range(20):
+        assert (await save_draft(lab, "alice", f"d{n}")).status_code == 200
+
+    refused = await save_draft(lab, "alice", "d20")
+
+    assert (refused.status_code, refused.json()) == (
+        409,
+        {"detail": "You have 20 drafts. Delete one before you save another."},
+    )
+    assert (await save_draft(lab, "alice", "d3")).status_code == 200
+    assert (await save_draft(lab, "carol", "d20")).status_code == 200
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "template"),
+    [
+        ("PUT", "/api/v1/drafts/d1", DRAFT_PATH),
+        ("GET", "/api/v1/drafts", "/api/v1/drafts"),
+        ("DELETE", "/api/v1/drafts/d1", DRAFT_PATH),
+    ],
+)
+async def test_drafts_are_for_operators_only(lab: Lab, method: str, path: str, template: str):
+    body = DRAFT if method == "PUT" else None
+    assert (await lab.call("bob", method, path, body, template=template)).status_code == 403
+    assert (await lab.call(None, method, path, body, template=template)).status_code == 401

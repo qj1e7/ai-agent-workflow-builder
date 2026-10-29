@@ -12,6 +12,7 @@ from platform_api.builder.cards import (
     plan_for_cards,
     tool_list,
 )
+from platform_api.builder.drafts import Drafts, TooManyDrafts
 from platform_api.builder.lifecycle import (
     Columns,
     Deleted,
@@ -35,6 +36,9 @@ from platform_api.builder.models import (
     CardRefused,
     CardView,
     CreateAgentUseCase,
+    DraftIn,
+    DraftList,
+    DraftView,
     PlanOut,
     SuggestOut,
     ToolList,
@@ -176,6 +180,7 @@ class Builder:
         self._watchlist = watchlist
         self._cards = CardLibrary(db)
         self._schedules = ScheduleBook(db)
+        self._drafts = Drafts(db)
         self._planner = planner or NoPlanner()
         self.public_base_url = public_base_url
 
@@ -299,6 +304,18 @@ class Builder:
                     ),
                 )
         return after
+
+    async def save_draft(
+        self, principal: Principal, draft_id: str, draft: DraftIn
+    ) -> DraftView | TooManyDrafts:
+        return await self._drafts.save(principal.user_id, draft_id, draft)
+
+    async def list_drafts(self, principal: Principal) -> DraftList:
+        return DraftList(drafts=await self._drafts.list(principal.user_id))
+
+    async def delete_draft(self, principal: Principal, draft_id: str) -> bool:
+        """False for a draft that is someone else's, as for one that does not exist."""
+        return await self._drafts.delete(principal.user_id, draft_id)
 
     @staticmethod
     def tools() -> ToolList:
