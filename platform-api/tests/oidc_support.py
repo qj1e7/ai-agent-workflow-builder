@@ -21,6 +21,7 @@ from fastapi import FastAPI
 from jwt.algorithms import ECAlgorithm, RSAAlgorithm
 
 from platform_api.app import create_app
+from platform_api.auth import DEV_PEOPLE, InMemoryPeople
 from platform_api.oidc import OidcAuth, OidcAuthenticator
 from platform_api.shared import Principal, Role, UserId
 from tests.support import LOCAL_ENV
@@ -35,15 +36,20 @@ ALICE_CLAIMS: dict[str, object] = {
     "oid": ALICE_ID,
     "name": "Alice",
     "preferred_username": "alice@example.test",
-    "roles": ["Operator", "Approver"],
 }
 BOB_CLAIMS: dict[str, object] = {
     "oid": BOB_ID,
     "name": "Bob",
     "preferred_username": "bob@example.test",
-    "roles": ["Approver"],
 }
-OIDC_ALICE = Principal(UserId(ALICE_ID), frozenset({Role.OPERATOR, Role.APPROVER}), "Alice")
+NOBODY_ID = "n0b0dy00-0000-4000-8000-000000000009"
+NOBODY_CLAIMS: dict[str, object] = {
+    "oid": NOBODY_ID,
+    "name": "Nobody",
+    "preferred_username": "nobody@example.test",
+    "roles": ["Operator", "Approver"],
+}
+OIDC_ALICE = Principal(UserId("alice"), frozenset({Role.OPERATOR, Role.APPROVER}), "Alice")
 
 
 @dataclass(frozen=True)
@@ -133,8 +139,10 @@ class FakeIssuer:
 
 
 def oidc_app(issuer: FakeIssuer, clock: Clock, env: Mapping[str, str] = OIDC_ENV) -> FastAPI:
+    """An OIDC app whose People list holds the dev people, as the dev seed would."""
     app = create_app(env)
     app.state.authenticator = issuer.authenticator(app.state.settings.auth, clock)
+    app.state.people = InMemoryPeople(DEV_PEOPLE)
     return app
 
 

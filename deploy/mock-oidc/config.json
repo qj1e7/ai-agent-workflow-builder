@@ -12,8 +12,9 @@
             "oid": "0a11ce00-0000-4000-8000-000000000001",
             "name": "Alice",
             "preferred_username": "alice@example.test",
-            "roles": ["Operator", "Approver"],
-            "aud": ["platform-api"]
+            "aud": [
+              "platform-api"
+            ]
           }
         },
         {
@@ -23,8 +24,9 @@
             "oid": "0b0b0000-0000-4000-8000-000000000002",
             "name": "Bob",
             "preferred_username": "bob@example.test",
-            "roles": ["Approver"],
-            "aud": ["platform-api"]
+            "aud": [
+              "platform-api"
+            ]
           }
         },
         {
@@ -34,8 +36,49 @@
             "oid": "0ca201e0-0000-4000-8000-000000000003",
             "name": "Carol",
             "preferred_username": "carol@example.test",
-            "roles": ["Operator"],
-            "aud": ["platform-api"]
+            "aud": [
+              "platform-api"
+            ]
+          }
+        },
+        {
+          "requestParam": "subject",
+          "match": "dave",
+          "claims": {
+            "oid": "0da7e000-0000-4000-8000-000000000004",
+            "name": "Dave",
+            "preferred_username": "dave@example.test",
+            "aud": [
+              "platform-api"
+            ]
+          }
+        },
+        {
+          "requestParam": "subject",
+          "match": "erin",
+          "claims": {
+            "oid": "0e21e000-0000-4000-8000-000000000005",
+            "name": "Erin",
+            "preferred_username": "erin@example.test",
+            "aud": [
+              "platform-api"
+            ]
+          }
+        },
+        {
+          "requestParam": "subject",
+          "match": "mallory",
+          "claims": {
+            "oid": "0a110e70-0000-4000-8000-000000000006",
+            "name": "Mallory",
+            "preferred_username": "mallory@example.test",
+            "roles": [
+              "Operator",
+              "Approver"
+            ],
+            "aud": [
+              "platform-api"
+            ]
           }
         }
       ]

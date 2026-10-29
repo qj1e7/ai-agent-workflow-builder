@@ -113,6 +113,10 @@ services:
       CALLBACK_SIGNING_KEY: ${CALLBACK_SIGNING_KEY:?run deploy/make-env.sh}
       # Optional: without it the Portal's AI model settings are off (ADR 0022).
       SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:-}
+      # The first deploy's people (ADR 0030). Read only while the People list is empty, and only
+      # with real sign-in; dev mode seeds alice, bob and carol instead.
+      FIRST_OPERATOR: ${FIRST_OPERATOR:-}
+      FIRST_APPROVERS: ${FIRST_APPROVERS:-}
     ports:
       - "${PLATFORM_API_HOST_PORT:-8000}:8000"
     healthcheck:

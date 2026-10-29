@@ -4,13 +4,13 @@ from collections.abc import AsyncIterator
 import httpx
 import pytest
 
-from platform_api.auth import DEV_USERS
-from platform_api.oidc import principal_from_claims
+from platform_api.auth import DEV_PEOPLE
+from platform_api.oidc import identity_from_claims
 from tests.conftest import PostgresUrls
 from tests.oidc_support import (
     ALICE_CLAIMS,
     BOB_CLAIMS,
-    BOB_ID,
+    NOBODY_CLAIMS,
     OIDC_ALICE,
     Clock,
     FakeIssuer,
@@ -20,8 +20,6 @@ from tests.oidc_support import (
 )
 from tests.support import MOCK_OIDC_CONFIG
 from tests.test_orchestrator import Harness, open_harness, work_leg_to_approval
-
-NOBODY_CLAIMS: dict[str, object] = {"oid": "n0b0dy00-0000-4000-8000-000000000009", "roles": []}
 
 
 @pytest.fixture
@@ -61,30 +59,38 @@ async def test_an_approver_who_started_the_run_cannot_approve_it(
     assert (refused.status_code, refused.json()["refusal"]) == (403, "own_work")
     bob = bearer(token(claims=BOB_CLAIMS))
     approved = await decide(client, approval_id, bob, view["digest"])
-    assert (approved.status_code, approved.json()["decision"]["by"]) == (201, BOB_ID)
+    assert (approved.status_code, approved.json()["decision"]["by"]) == (201, "bob")
 
 
 @pytest.mark.anyio
-async def test_a_person_without_a_known_role_cannot_decide(
+async def test_a_person_not_on_the_list_cannot_read_or_decide_whatever_the_token_claims(
     harness: Harness, client: httpx.AsyncClient
 ):
     _, _, approval_id = await work_leg_to_approval(harness, by=OIDC_ALICE)
     nobody = bearer(token(claims=NOBODY_CLAIMS))
-    view = (await client.get(f"/api/v1/approvals/{approval_id}", headers=nobody)).json()
-    assert (view["you_can_decide"], view["why_not"]) == (False, "not_an_approver")
-    refused = await decide(client, approval_id, nobody, view["digest"])
-    assert (refused.status_code, refused.json()["refusal"]) == (403, "not_an_approver")
+    me = (await client.get("/api/v1/me", headers=nobody)).json()
+    assert (me["roles"], me["on_list"]) == ([], False)
+    read = await client.get(f"/api/v1/approvals/{approval_id}", headers=nobody)
+    assert read.status_code == 403
+    assert "Ask an Operator" in read.json()["detail"]
+    alice = bearer(token(claims=ALICE_CLAIMS))
+    digest = (await client.get(f"/api/v1/approvals/{approval_id}", headers=alice)).json()["digest"]
+    refused = await decide(client, approval_id, nobody, digest)
+    assert refused.status_code == 403
+    assert "Ask an Operator" in refused.json()["detail"]
 
 
-def test_the_mock_identity_provider_issues_the_dev_users_with_their_roles():
+def test_the_mock_identity_provider_issues_the_dev_people_and_two_more():
     config = json.loads(MOCK_OIDC_CONFIG.read_text())
     mappings = config["tokenCallbacks"][0]["requestMappings"]
     claims_by_subject = {
         m["match"]: m["claims"] for m in mappings if m["requestParam"] == "subject"
     }
-    assert set(claims_by_subject) == {user.id for user in DEV_USERS.users}
-    for user in DEV_USERS.users:
-        claims = claims_by_subject[user.id]
-        principal = principal_from_claims(claims)
-        assert (principal.display, principal.roles) == (user.display, frozenset(user.roles))
+    assert set(claims_by_subject) == {"alice", "bob", "carol", "dave", "erin", "mallory"}
+    for person in DEV_PEOPLE:
+        claims = claims_by_subject[person.id]
+        identity = identity_from_claims(claims)
+        assert (identity.user_name, identity.name) == (person.email, person.display)
         assert claims["aud"] == ["platform-api"]
+    oids = [identity_from_claims(c).subject for c in claims_by_subject.values()]
+    assert len(set(oids)) == len(oids)

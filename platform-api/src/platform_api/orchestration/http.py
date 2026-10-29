@@ -59,6 +59,7 @@ from platform_api.shared import (
 )
 from platform_api.wire import (
     ApprovalStepView,
+    ErrorBody,
     FailureReason,
     FailureStage,
     RunOutcome,
@@ -520,7 +521,10 @@ async def get_approval(
     responses={
         **SIGNED_IN,
         200: {"model": DecisionOut, "description": "The same decision was already recorded"},
-        403: {"model": RefusalOut, "description": "This person cannot decide this step"},
+        403: {
+            "model": RefusalOut | ErrorBody,
+            "description": "This person cannot decide this step, or is not on the People list",
+        },
         404: error_response("No such approval"),
         409: error_response("Another Approver decided this step first"),
     },
