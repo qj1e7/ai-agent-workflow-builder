@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
@@ -14,20 +15,19 @@ from platform_api.builder import Builder, Watchlist
 from platform_api.builder.cards import VERSION_CHECKER_ID
 from platform_api.builder.lifecycle import (
     RESTORE_WINDOW,
+    AlreadyDeleted,
     Columns,
     Deleted,
-    Gone,
     Lifecycle,
     On,
     Paused,
     TooLate,
     delete,
     from_columns,
-    name_of,
+    is_on,
     pause,
     restore,
     resume,
-    runs,
     to_columns,
 )
 from platform_api.orchestration import (
@@ -54,8 +54,7 @@ pytestmark = pytest.mark.anyio
 ALICE_ID = UserId("alice")
 CAROL_ID = UserId("carol")
 LATER = NOW + timedelta(minutes=5)
-# NOW is Tuesday 3 Nov 2026, 10:14 in Singapore. The watchlist's first schedule is Mondays 9:00.
-NEXT_MONDAY = datetime(2026, 11, 9, 1, 0, tzinfo=NOW.tzinfo)
+FIRST_MONDAY_SLOT = datetime(2026, 11, 9, 9, 0, tzinfo=ZoneInfo("Asia/Singapore"))
 LANGGRAPH = {"name": "LangGraph", "repo": "langchain-ai/langgraph", "our_version": "1.2.14"}
 VALUES = {"GitHub repository": "langchain-ai/langgraph", "Jira project": "MOCK"}
 WORK = N8nExecutionId("41")
@@ -76,8 +75,8 @@ def test_resuming_turns_it_on_and_resuming_one_that_is_on_changes_nothing():
 
 def test_a_deleted_use_case_cannot_be_paused_or_resumed():
     deleted = Deleted(NOW, ALICE_ID, On())
-    assert pause(deleted, LATER, ALICE_ID) == Gone()
-    assert resume(deleted) == Gone()
+    assert pause(deleted, LATER, ALICE_ID) == AlreadyDeleted()
+    assert resume(deleted) == AlreadyDeleted()
 
 
 def test_deleting_twice_keeps_the_first_time():
@@ -105,15 +104,11 @@ def test_restoring_one_that_is_not_deleted_changes_nothing():
 
 
 @pytest.mark.parametrize(
-    ("state", "name", "running"),
-    [
-        (On(), "on", True),
-        (Paused(NOW, ALICE_ID), "paused", False),
-        (Deleted(NOW, ALICE_ID, On()), "deleted", False),
-    ],
+    ("state", "running"),
+    [(On(), True), (Paused(NOW, ALICE_ID), False), (Deleted(NOW, ALICE_ID, On()), False)],
 )
-def test_only_a_use_case_that_is_on_runs(state: Lifecycle, name: str, running: bool):
-    assert (name_of(state), runs(state)) == (name, running)
+def test_only_a_use_case_that_is_on_runs(state: Lifecycle, running: bool):
+    assert is_on(state) is running
 
 
 @pytest.mark.parametrize(
@@ -239,7 +234,7 @@ def at(text: str | None) -> datetime | None:
 async def test_alice_pauses_a_workflow_and_its_next_run_reads_paused(lab: Lab):
     use_case_id = await watchlist_workflow(lab)
     [before] = await lab.listed()
-    assert (before["state"], at(before["next_run_at"])) == ("on", NEXT_MONDAY)
+    assert (before["state"], at(before["next_run_at"])) == ("on", FIRST_MONDAY_SLOT)
 
     paused = await lab.move("alice", "pause", use_case_id)
 
@@ -259,7 +254,7 @@ async def test_resuming_shows_the_next_run_again(lab: Lab):
 
     assert resumed.status_code == 200
     assert resumed.json()["state"] == "on"
-    assert at(resumed.json()["next_run_at"]) == NEXT_MONDAY + timedelta(days=7)
+    assert at(resumed.json()["next_run_at"]) == FIRST_MONDAY_SLOT + timedelta(days=7)
     assert await lab.paused_columns(use_case_id) == (None, None, None, None)
     again = await lab.move("carol", "resume", use_case_id)
     assert (again.status_code, again.json()) == (200, resumed.json())
@@ -481,14 +476,14 @@ async def test_a_tick_while_the_watchlist_is_paused_starts_no_run(lab: Lab):
     use_case_id = await watchlist_workflow(lab)
     ticker = ScheduleTicker(lab.h.db, ScheduleBook(lab.h.db), lab.builder, lab.h.orchestrator)
     await lab.move("alice", "pause", use_case_id)
-    lab.h.clock["now"] = NEXT_MONDAY + timedelta(minutes=1)
+    lab.h.clock["now"] = FIRST_MONDAY_SLOT + timedelta(minutes=1)
 
     assert await ticker.tick() == []
 
     assert await lab.runs() == []
     await lab.move("alice", "resume", use_case_id)
     assert await ticker.tick() == []
-    lab.h.clock["now"] = NEXT_MONDAY + timedelta(days=7, minutes=1)
+    lab.h.clock["now"] = FIRST_MONDAY_SLOT + timedelta(days=7, minutes=1)
     [run_id] = await ticker.tick()
     assert [(r["run_id"], r["trigger"]) for r in await lab.runs()] == [(run_id, "schedule")]
 

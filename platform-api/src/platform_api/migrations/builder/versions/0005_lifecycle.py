@@ -16,7 +16,6 @@ def upgrade() -> None:
             ADD CONSTRAINT use_cases_deleted_by_someone
                 CHECK ((deleted_at IS NULL) = (deleted_by IS NULL));
 
-        -- Nothing is hard-deleted: a deleted use case keeps its rows, so it can be restored.
         REVOKE DELETE ON builder.use_cases, builder.use_case_versions FROM wab_builder;
 
         CREATE TABLE builder.drafts (

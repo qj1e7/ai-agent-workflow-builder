@@ -14,19 +14,19 @@ from platform_api.builder.cards import (
 )
 from platform_api.builder.drafts import Drafts, TooManyDrafts
 from platform_api.builder.lifecycle import (
+    AlreadyDeleted,
     Columns,
     Deleted,
-    Gone,
     Lifecycle,
     On,
     Paused,
     TooLate,
     delete,
     from_columns,
+    is_on,
     pause,
     restore,
     resume,
-    runs,
     to_columns,
 )
 from platform_api.builder.models import (
@@ -101,7 +101,7 @@ def _view(
     now: datetime,
 ) -> UseCaseView:
     template = TEMPLATES[row["template"]]
-    on = runs(lifecycle_of(row))
+    on = is_on(lifecycle_of(row))
     plan = (
         plan_for_cards([a.card for a in agents])
         if template.key == AGENT_CARDS.key
@@ -155,15 +155,16 @@ class CardsRefused:
 
 @dataclass(frozen=True)
 class UseCasePaused:
-    """A paused use case starts no run until an Operator resumes it."""
+    pass
 
 
 @dataclass(frozen=True)
 class WatchlistStays:
-    """The Software watchlist is the team's one watchlist, so it is never deleted."""
+    pass
 
 
-type Move = Callable[[Lifecycle, str, datetime], Lifecycle | Gone | TooLate | WatchlistStays]
+type Moved = Lifecycle | AlreadyDeleted | TooLate | WatchlistStays
+type Move = Callable[[Lifecycle, str, datetime], Moved]
 
 
 class Builder:
@@ -234,11 +235,15 @@ class Builder:
         moved = await self._move(
             use_case_id, lambda state, _, now: pause(state, now, principal.user_id)
         )
-        return None if moved is None else await self.get_use_case(use_case_id)
+        if moved is None or isinstance(moved, AlreadyDeleted):
+            return None
+        return await self.get_use_case(use_case_id)
 
     async def resume_use_case(self, use_case_id: str) -> UseCaseView | None:
         moved = await self._move(use_case_id, lambda state, _template, _now: resume(state))
-        return None if moved is None else await self.get_use_case(use_case_id)
+        if moved is None or isinstance(moved, AlreadyDeleted):
+            return None
+        return await self.get_use_case(use_case_id)
 
     async def delete_use_case(
         self, use_case_id: str, principal: Principal
@@ -269,11 +274,7 @@ class Builder:
             case _:
                 return await self.get_use_case(use_case_id)
 
-    async def _move(
-        self, use_case_id: str, move: Move
-    ) -> Lifecycle | TooLate | WatchlistStays | None:
-        """Applies one move under the use case's row lock, so two at once end in one state.
-        None when there is no such use case, or a deleted one is paused or resumed."""
+    async def _move(self, use_case_id: str, move: Move) -> Moved | None:
         async with self._db.transaction("builder") as uow:
             row = await (
                 await uow.conn.execute(
@@ -288,8 +289,6 @@ class Builder:
                 return None
             before = lifecycle_of(row)
             after = move(before, row["template"], uow.now)
-            if isinstance(after, Gone):
-                return None
             if isinstance(after, On | Paused | Deleted) and after != before:
                 columns = to_columns(after)
                 await uow.conn.execute(
@@ -314,7 +313,6 @@ class Builder:
         return DraftList(drafts=await self._drafts.list(principal.user_id))
 
     async def delete_draft(self, principal: Principal, draft_id: str) -> bool:
-        """False for a draft that is someone else's, as for one that does not exist."""
         return await self._drafts.delete(principal.user_id, draft_id)
 
     @staticmethod

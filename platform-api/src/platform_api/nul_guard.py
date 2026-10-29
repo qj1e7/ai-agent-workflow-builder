@@ -1,8 +1,4 @@
-"""Refuses a NUL byte in a request's path or query string, which PostgreSQL text cannot hold.
-
-A path that holds one names nothing, so it is a 404 like any unknown path. A query string that
-holds one is a 422 naming the parameter, in FastAPI's own shape. WireIn checks request bodies.
-"""
+"""Refuses a NUL byte in a request's path or query string, which PostgreSQL text cannot hold."""
 
 from urllib.parse import parse_qsl
 

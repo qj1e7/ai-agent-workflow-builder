@@ -1,19 +1,9 @@
-"""Whether a use case runs: on, paused, or deleted and restorable for a day.
-
-Pure. The list, the routes and the schedule tick all read a use case's lifecycle through this
-module. Nothing is hard-deleted: a deleted use case keeps its rows and its past runs, and
-restoring it puts back the state it had, so a paused use case comes back paused.
-"""
-
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Literal
 
 from platform_api.shared import UserId
 
 RESTORE_WINDOW = timedelta(days=1)
-
-type StateName = Literal["on", "paused", "deleted"]
 
 
 @dataclass(frozen=True)
@@ -42,48 +32,35 @@ type Lifecycle = On | Paused | Deleted
 
 
 @dataclass(frozen=True)
-class Gone:
-    """The use case is deleted, so it cannot be paused or resumed."""
+class AlreadyDeleted:
+    pass
 
 
 @dataclass(frozen=True)
 class TooLate:
-    """The day to restore a deleted use case has passed."""
-
     until: datetime
 
 
-def name_of(state: Lifecycle) -> StateName:
-    match state:
-        case On():
-            return "on"
-        case Paused():
-            return "paused"
-        case Deleted():
-            return "deleted"
-
-
-def runs(state: Lifecycle) -> bool:
-    """Only a use case that is on starts runs, by hand or on its schedule."""
+def is_on(state: Lifecycle) -> bool:
     return isinstance(state, On)
 
 
-def pause(state: Lifecycle, now: datetime, by: UserId) -> Lifecycle | Gone:
+def pause(state: Lifecycle, now: datetime, by: UserId) -> Lifecycle | AlreadyDeleted:
     match state:
         case On():
             return Paused(now, by)
         case Paused():
             return state
         case Deleted():
-            return Gone()
+            return AlreadyDeleted()
 
 
-def resume(state: Lifecycle) -> Lifecycle | Gone:
+def resume(state: Lifecycle) -> Lifecycle | AlreadyDeleted:
     match state:
         case On() | Paused():
             return On()
         case Deleted():
-            return Gone()
+            return AlreadyDeleted()
 
 
 def delete(state: Lifecycle, now: datetime, by: UserId) -> Deleted:

@@ -122,8 +122,9 @@ class ScheduleBook:
             ).fetchall()
         return [_saved(row) for row in rows]
 
-    async def record_slot(self, use_case_id: UseCaseId, slot: datetime) -> None:
-        """Remembers the newest slot started. An older slot never moves it back."""
+    async def use_up_slot(self, use_case_id: UseCaseId, slot: datetime) -> None:
+        """Remembers the newest slot used up, by a check or by a skip while paused. An older slot
+        never moves it back."""
         async with self._db.transaction("orchestration") as uow:
             await uow.conn.execute(
                 "UPDATE orchestration.schedules SET last_slot_started = %s "
@@ -134,8 +135,6 @@ class ScheduleBook:
 
 @dataclass(frozen=True)
 class NotOn:
-    """The use case is paused or deleted, so its slots pass without a check."""
-
     state: Literal["paused", "deleted"]
 
 
@@ -174,7 +173,6 @@ class ScheduleTicker:
         return started
 
     async def _start(self, saved: SavedSchedule, slot: datetime) -> RunId | None:
-        """A paused use case uses its slot up, so resuming it never starts a missed check."""
         spec = await self._specs.check_spec(saved.use_case_id)
         run_id: RunId | None = None
         match spec:
@@ -189,5 +187,5 @@ class ScheduleTicker:
                 log.info("skipped the scheduled check of %s, which is %s", saved.use_case_id, state)
             case None:
                 pass
-        await self._book.record_slot(saved.use_case_id, slot)
+        await self._book.use_up_slot(saved.use_case_id, slot)
         return run_id
