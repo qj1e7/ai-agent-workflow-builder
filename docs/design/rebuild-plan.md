@@ -194,7 +194,7 @@ The checker runs in its own worktree at the PR head. Drive through the skill pat
 
 **You see.**
 
-- [ ] `grep -rniE "room_lead|roomlead|room lead|release_check" platform-api agent-runtime contracts e2e scripts load portal/src` prints only the migrations, the migration test that plants the old names, and the bootstrap lines that rename or remove them. The e2e watchlist test passes on the renamed n8n workflow.
+- [ ] `grep -rniE "room_lead|roomlead|room lead|release_check" platform-api agent-runtime contracts e2e scripts load portal/src` prints only the migrations, the migration test that plants the old names, the bootstrap lines that rename or remove them, and the check scripts under `scripts/checks/` that look for them. The e2e watchlist test passes on the renamed n8n workflow.
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
