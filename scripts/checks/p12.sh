@@ -15,7 +15,10 @@
 #   shared <api>                           lanes 1, 2, 3, 4, 7, 9 and 10 on a shared head stack
 #   trunk <api>                            lane 1's trunk half: trunk has no understand route
 #   own <src> <project> <tag> <portal> <api> <n8n>   lanes 6, 8 and 5 on a stack of their own, then down
-#   perf <api> <side> [mock|haiku]         p95 of 50 understand and 50 suggest requests; side is trunk or head
+#   perf <api> trunk                       p95 of 50 suggest requests, the baseline
+#   perf <api> head [mock|haiku]           p95 of 50 understand requests and the share from the model;
+#                                          mock connects the mock model and also times suggest,
+#                                          haiku uses Claude Haiku 5.5 once it is connected in Settings
 #   perf-table                             the plan's perf rule over $EVID/perf
 #   evals <src>                            the bake-off against the mock model, through the gateway provider
 #   evals-gateway <src>                    the bake-off against the AI Singapore gateway; needs the key in the shell
@@ -124,7 +127,6 @@ e2e() {
   local src=$1 project=$2 tag=$3 portal=$4 api=$5 n8n=$6 out="$EVID/lane-1/e2e-$2" status=0
   disk
   mkdir -p "$out"
-  # shellcheck disable=SC2046
   (cd "$src" && env E2E_SUITES=api E2E_PROJECT="$project" $(stack_env "$tag" "$portal" "$api" "$n8n") scripts/e2e.sh) >"$out/run.log" 2>&1 || status=$?
   cp -R "$src/e2e/out/." "$out/" 2>/dev/null || true
   tail -n 4 "$out/run.log"
@@ -136,7 +138,6 @@ up() {
   disk
   mkdir -p "$EVID/stacks"
   log="$EVID/stacks/$project-up.log"
-  # shellcheck disable=SC2046
   (export $(stack_env "$tag" "$portal" "$api" "$n8n") && compose "$src" "$project" up --build --wait --wait-timeout 300) >"$log" 2>&1 || status=$?
   if [ "$status" -ne 0 ]; then
     tail -n 20 "$log" >&2
@@ -171,8 +172,6 @@ shared() {
 
 trunk() { lanes trunk "http://localhost:$1" "$EVID/lane-1"; }
 
-# Lanes 6, 8 and 5 change the model or its mock, so they share one stack of their own, in the order
-# that leaves each one's change behind it.
 own() {
   local src=$1 project=$2 tag=$3 portal=$4 api=$5 n8n=$6 status=0
   up "$src" "$project" "$tag" "$portal" "$api" "$n8n" || return 1
@@ -202,8 +201,6 @@ own() {
   return "$status"
 }
 
-# With model mock, the mock model is connected first. With model haiku, whatever Settings holds
-# answers, so connect Claude Haiku 5.5 through the gateway in Settings before.
 perf() {
   local api=$1 side=$2 model=${3:-mock} out="$EVID/perf"
   mkdir -p "$out"
@@ -249,8 +246,6 @@ print(text)
 PYEOF
 }
 
-# The bake-off image against the mock model, on a network of its own. The gateway provider reads
-# the runtime's own settings, so the mock stands where the gateway would.
 evals() {
   local src=$1 net=p12-evals mock=p12-evals-mock out="$EVID/evals"
   disk
@@ -270,12 +265,9 @@ evals() {
   return "$status"
 }
 
-# Claude Haiku 5.5 through the AI Singapore gateway. Put the key in the shell first:
-#   read -s AGENT_MODEL_API_KEY && export AGENT_MODEL_API_KEY
-#   export AGENT_MODEL_BASE_URL=https://llm-gateway.aisg.sg
 evals_gateway() {
   local src=$1 out="$EVID/evals"
-  [ -n "${AGENT_MODEL_API_KEY:-}" ] && [ -n "${AGENT_MODEL_BASE_URL:-}" ] || die "set AGENT_MODEL_API_KEY and AGENT_MODEL_BASE_URL first"
+  [ -n "${AGENT_MODEL_API_KEY:-}" ] && [ -n "${AGENT_MODEL_BASE_URL:-}" ] || die "first run: read -s AGENT_MODEL_API_KEY && export AGENT_MODEL_API_KEY; export AGENT_MODEL_BASE_URL=https://llm-gateway.aisg.sg"
   disk
   mkdir -p "$out" && chmod a+rwx "$out"
   docker build -q --target evals --tag p12build-evals:local "$src/agent-runtime" >/dev/null

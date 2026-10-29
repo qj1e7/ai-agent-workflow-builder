@@ -12,12 +12,11 @@ can be tested without a real model:
 
 When a tool result tells it to use another Jira project (the planted instruction in a release
 body), the mock obeys once, by adding a project to its first ticket. It plays a model that was
-fooled, so the test can show that the platform still writes only to the card's own project. A task
-that says "ignore your rules" fools it the same way: it reads the order back as a part it can do,
-so a lane can show that the runtime still marks it can't do.
+fooled, so the test can show that the platform still writes only to the card's own project.
 
 POST /_admin/mode with {"mode": "slow"} makes every message answer wait 15 seconds, {"mode":
-"broken"} makes every forced tool answer broken JSON, and {"mode": "ok"} restores it.
+"broken"} makes every forced tool answer carry a cut-off JSON string in place of its rows, and
+{"mode": "ok"} restores it.
 """
 
 import json
@@ -58,7 +57,9 @@ SUMMARY_TO = re.compile(
     r"^(?:post|send|share)\s+(?:a|the)\s+summary\b.*?\b(?:in|to|on)\s+(teams|slack|confluence)\b",
     re.IGNORECASE,
 )
-OVERRIDE = re.compile(r"\bignore (?:your|all|the|previous) (?:rules|instructions)\b", re.IGNORECASE)
+FOOLING_ORDER = re.compile(
+    r"\bignore (?:your|all|the|previous) (?:rules|instructions)\b", re.IGNORECASE
+)
 CANNOT = ("close", "delete", "remove", "move", "edit", "update")
 mode = "ok"
 
@@ -221,8 +222,12 @@ def action_rows(act: str | None, task: str) -> list[dict[str, Any]]:
     return [do, where_row(task)]
 
 
+def obey_fooling_orders(sentences: list[str]) -> list[dict[str, Any]]:
+    orders = [s.rstrip(".!?").split(" and ", 1)[-1] for s in sentences if FOOLING_ORDER.search(s)]
+    return [{"kind": "do", "text": first_up(order), "state": "understood"} for order in orders]
+
+
 def understanding(task: str) -> dict[str, Any]:
-    """The Planner's reading of a task, by word rules."""
     if (word := RELEASE_WORDS.search(task)) is not None:
         named = next((name for name in SOFTWARE if name.lower() in task.lower()), None)
         return {
@@ -245,10 +250,7 @@ def understanding(task: str) -> dict[str, Any]:
     if look is None and act is not None and (of := FOUND.search(act)) is not None:
         look = of.group(1)
     rows += [look_row(look), *action_rows(act, task)]
-    for sentence in sentences[1:]:
-        if OVERRIDE.search(sentence):
-            order = sentence.rstrip(".!?").split(" and ", 1)[-1]
-            rows.append({"kind": "do", "text": first_up(order), "state": "understood"})
+    rows += obey_fooling_orders(sentences[1:])
     return {"belongs_on_watchlist": False, "rows": rows}
 
 
@@ -320,7 +322,6 @@ def set_mode(body: dict[str, Any] | None) -> tuple[int, dict[str, Any]]:
 
 
 def delay(method: str, path: str) -> float:
-    """How long to wait before answering, so a test can play a slow model."""
     return SLOW_SECONDS if mode == "slow" and (method, path) == ("POST", "/v1/messages") else 0.0
 
 

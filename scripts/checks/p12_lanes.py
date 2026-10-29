@@ -121,10 +121,10 @@ def first(answer: Any, kind: str) -> dict[str, Any]:
 
 
 def plain_words(answer: Any) -> list[tuple[bool, str]]:
-    words = json.dumps(answer)
+    words = json.dumps(answer, ensure_ascii=False)
     return [
         (not RETIRED.search(words), "no retired name in the answer"),
-        ("—" not in words and "–" not in words, "no em or en dash in the answer"),
+        ("\u2014" not in words and "\u2013" not in words, "no em or en dash in the answer"),
     ]
 
 
