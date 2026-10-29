@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { useLatch } from '../../api/latch'
 import { useAddPerson, useAskApprover, useConfirmations, useDecideConfirmation, usePeopleList, useRemoveApprover, useSetOperator } from '../../api/settingsQueries'
 import type { ConfirmationOut, Me, PersonOut } from '../../api/types'
@@ -24,6 +24,7 @@ import { FieldError, History, useFocusOnNextRender, useSettingsWords } from './S
 import styles from './Settings.module.css'
 
 const NOTICE_ID = 'people-notice'
+const PROBLEM_ID = 'people-problem'
 export const PEOPLE_LEAD = 'Operators set up workflows and change settings. Approvers say yes or no to changes. People sign in with their NCS account.'
 
 const operatorBoxId = (personId: string) => `person-${personId}-operator`
@@ -101,6 +102,11 @@ function PeoplePanel({ people, confirmations, me }: PanelProps) {
   const waiting = approverConfirmationsByPerson(confirmations)
   const names = new Map(people.map((person) => [person.id, person.display]))
   const noticeHasRow = notice !== null && people.some((person) => person.id === notice.personId)
+  // A row that left the list takes its own error with it, so that error moves to the page.
+  const problemLostRow = problem !== null && !people.some((person) => person.id === problem.personId)
+  useEffect(() => {
+    if (problemLostRow) document.getElementById(PROBLEM_ID)?.focus()
+  }, [problemLostRow])
 
   function change(person: PersonOut, act: Busy['act'], to: boolean | undefined, send: (done: Settled) => void, after: () => void) {
     latch.run((settled) => {
@@ -134,9 +140,11 @@ function PeoplePanel({ people, confirmations, me }: PanelProps) {
   }
 
   function onApprover(person: PersonOut, to: boolean) {
-    change(person, 'approver', to, (done) => (to ? askApprover.mutate(person.id, done) : removeApprover.mutate(person.id, done)), () =>
-      setNotice({ personId: person.id, words: to ? askedApproverWords(person.display) : approverRemovedWords(person.display), undo: null }),
-    )
+    change(person, 'approver', to, (done) => (to ? askApprover.mutate(person.id, done) : removeApprover.mutate(person.id, done)), () => {
+      setNotice({ personId: person.id, words: to ? askedApproverWords(person.display) : approverRemovedWords(person.display), undo: null })
+      // The box is disabled while the request waits, so focus would otherwise fall to the page.
+      focus(NOTICE_ID)
+    })
   }
 
   function onDecide(person: PersonOut, confirmation: ConfirmationOut, verdict: 'confirm' | 'not_now') {
@@ -176,6 +184,11 @@ function PeoplePanel({ people, confirmations, me }: PanelProps) {
         {problem?.words ?? notice?.words ?? ''}
       </p>
       {notice && !noticeHasRow ? noticeFor(null) : null}
+      {problemLostRow ? (
+        <div id={PROBLEM_ID} tabIndex={-1}>
+          <FieldError id={rowErrorId(problem.personId)} words={problem.words} />
+        </div>
+      ) : null}
       <ul className={styles['people']} aria-label="People on the list">
         {people.map((person) => (
           <PersonRow

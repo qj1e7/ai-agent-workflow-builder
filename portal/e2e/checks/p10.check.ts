@@ -184,6 +184,7 @@ test('@lane5 alice ticks Approver for dave, and bob confirms it in Settings', as
     await openSettings(alice.page, 'people')
     await roleBox(alice.page, 'Approver', 'Dave').click()
     await expect(alice.page.locator('#people-notice')).toContainText('Another Approver must confirm Dave as an Approver.')
+    await expect(alice.page.locator('#people-notice'), 'the box is disabled now, so focus moves to the notice').toBeFocused()
     await expect(personRow(alice.page, 'dave@example.test')).toContainText('Approver: waiting for another Approver to confirm')
     await expect(personRow(alice.page, 'dave@example.test')).toContainText('Asked by you, so another Approver must confirm it.')
     await shotTo(alice.page, 5, 'p10-confirm-approver-asked.png')
@@ -302,6 +303,8 @@ test('@lane8 bob sees every control read-only, and the page says only Operators 
 
 test('@lane9 axe finds no WCAG 2.2 AA problems on either tab at 1440 and 390 px', async ({ browser }) => {
   const runs: Record<string, unknown>[] = []
+  // A long waiting line is the widest thing on the People tab, so the 390 px run needs one.
+  await withApi((api) => api.ensurePerson('wide-pending@example.test', 'Wide Pending', { operator: true, approver: true }))
   for (const user of ['alice', 'bob']) {
     for (const phone of [false, true]) {
       const { context, page } = await as(browser, user, phone)
