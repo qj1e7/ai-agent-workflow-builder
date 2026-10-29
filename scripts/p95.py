@@ -8,7 +8,7 @@ on localhost while a scan stack publishes no host ports:
 A JSON body may hold {marker}, which becomes a new value on every request, because the model
 gateway answers a repeated prompt from its store.
 
-Only 2xx answers are timed. It exits 1 when any request failed, so a dead route cannot pass.
+Only 2xx answers are timed. It exits 1 when any timed request failed.
 """
 
 import argparse
