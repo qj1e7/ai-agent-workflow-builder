@@ -2,6 +2,7 @@
   "use_case_id": "uc_01JBW",
   "version": 8,
   "ticket_project": "MOCK",
+  "state": "on",
   "software": [],
   "last_check": {
     "run_id": "run_01JBB",

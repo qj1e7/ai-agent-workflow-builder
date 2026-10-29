@@ -4257,10 +4257,17 @@
             "$ref": "#/components/schemas/Day"
           },
           "next_at": {
-            "description": "The next time a check starts.",
-            "format": "date-time",
-            "title": "Next At",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The next time a check starts. Null while the watchlist is paused.",
+            "title": "Next At"
           },
           "owner": {
             "description": "The schedule owner. Only another Approver can approve.",
@@ -5474,6 +5481,10 @@
             "title": "Software",
             "type": "array"
           },
+          "state": {
+            "$ref": "#/components/schemas/UseCaseState",
+            "description": "on, or paused until an Operator resumes it, as on its use case view. A paused watchlist starts no check, on its schedule or by hand."
+          },
           "ticket_project": {
             "title": "Ticket Project",
             "type": "string"
@@ -5491,6 +5502,7 @@
           "use_case_id",
           "version",
           "ticket_project",
+          "state",
           "software",
           "last_check",
           "schedule"

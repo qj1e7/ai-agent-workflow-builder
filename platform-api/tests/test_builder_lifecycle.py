@@ -31,6 +31,7 @@ from platform_api.builder.lifecycle import (
     resume,
     to_columns,
 )
+from platform_api.builder.watchlist import schedule_view
 from platform_api.orchestration import (
     ChooseResult,
     DraftResult,
@@ -38,6 +39,7 @@ from platform_api.orchestration import (
     NoModel,
     NotOn,
     RuntimeDown,
+    SavedSchedule,
     Schedule,
     ScheduleBook,
     ScheduleTicker,
@@ -58,6 +60,7 @@ CAROL_ID = UserId("carol")
 LATER = NOW + timedelta(minutes=5)
 FIRST_MONDAY_SLOT = datetime(2026, 11, 9, 9, 0, tzinfo=ZoneInfo("Asia/Singapore"))
 LANGGRAPH = {"name": "LangGraph", "repo": "langchain-ai/langgraph", "our_version": "1.2.14"}
+REDIS = {"name": "Redis", "repo": "redis/redis"}
 VALUES = {"GitHub repository": "langchain-ai/langgraph", "Jira project": "MOCK"}
 WORK = N8nExecutionId("41")
 DRAFT = {"step": 2, "content": {"intent": "Nudge owners of stale tickets", "days": 14}}
@@ -146,6 +149,18 @@ def test_the_columns_of_a_deleted_paused_use_case_keep_both_times():
     assert to_columns(Deleted(LATER, CAROL_ID, Paused(NOW, ALICE_ID))) == Columns(
         NOW, ALICE_ID, LATER, CAROL_ID
     )
+
+
+def test_a_paused_watchlist_s_schedule_shows_no_next_check():
+    saved = SavedSchedule(
+        UseCaseId("uc_w"), Schedule("monday", "09:00"), CAROL_ID, "Carol", NOW, None
+    )
+
+    on = schedule_view(saved, NOW, on=True)
+    paused = schedule_view(saved, NOW, on=False)
+
+    assert on is not None and on.next_at == FIRST_MONDAY_SLOT
+    assert paused == on.model_copy(update={"next_at": None})
 
 
 class ModelConnected:
@@ -538,6 +553,20 @@ async def test_a_slot_that_falls_while_it_is_off_never_starts_even_with_no_tick_
     lab.h.clock["now"] = FIRST_MONDAY_SLOT + timedelta(days=7, minutes=1)
     [run_id] = await ticker.tick()
     assert [(r["run_id"], r["trigger"]) for r in await lab.runs()] == [(run_id, "schedule")]
+
+
+async def test_while_the_watchlist_is_paused_its_view_reads_paused_with_no_next_check(lab: Lab):
+    use_case_id = await watchlist_workflow(lab)
+    await lab.move("alice", "pause", use_case_id)
+
+    paused = (await lab.call("alice", "GET", "/api/v1/watchlist")).json()["watchlist"]
+
+    assert (paused["state"], paused["schedule"]["next_at"]) == ("paused", None)
+    added = (await lab.call("alice", "POST", "/api/v1/watchlist/software", REDIS)).json()
+    assert (added["state"], added["schedule"]["next_at"]) == ("paused", None)
+    await lab.move("alice", "resume", use_case_id)
+    resumed = (await lab.call("alice", "GET", "/api/v1/watchlist")).json()["watchlist"]
+    assert (resumed["state"], at(resumed["schedule"]["next_at"])) == ("on", FIRST_MONDAY_SLOT)
 
 
 async def test_the_tick_is_told_a_paused_or_deleted_workflow_is_not_on(lab: Lab):

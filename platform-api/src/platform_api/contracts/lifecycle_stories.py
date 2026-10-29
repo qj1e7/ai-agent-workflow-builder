@@ -1,4 +1,5 @@
-"""A workflow paused and deleted, and a New workflow draft, as the API answers them."""
+"""A workflow paused and deleted, the watchlist paused, and a New workflow draft, as the API
+answers them."""
 
 from datetime import UTC, datetime, timedelta
 
@@ -6,9 +7,13 @@ from platform_api.builder.lifecycle import RESTORE_WINDOW
 from platform_api.builder.models import DraftIn, DraftList, DraftView, UseCaseDeleted
 from platform_api.contracts.cards_stories import USE_CASE as AGENT_USE_CASE
 from platform_api.contracts.stories import USE_CASE
+from platform_api.contracts.watchlist_stories import SCHEDULE, STATUSES
 from platform_api.wire import WireModel
 
 PAUSED = USE_CASE.model_copy(update={"state": "paused", "next_run_at": None})
+PAUSED_WATCHLIST = STATUSES.model_copy(
+    update={"state": "paused", "schedule": SCHEDULE.model_copy(update={"next_at": None})}
+)
 
 DELETED_AT = datetime(2026, 11, 5, 3, 0, tzinfo=UTC)
 DELETED = UseCaseDeleted(
@@ -43,6 +48,7 @@ DRAFTS = DraftList(
 def lifecycle_fixtures() -> dict[str, WireModel | list[WireModel]]:
     return {
         "builder/use-case.paused.json": PAUSED,
+        "watchlist/paused.json": PAUSED_WATCHLIST,
         "builder/use-case.deleted.json": DELETED,
         "builder/draft.in.json": DRAFT_IN,
         "builder/drafts.json": DRAFTS,

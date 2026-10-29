@@ -139,6 +139,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "watchlist/schedule.in.json": TypeAdapter(ScheduleIn),
     "watchlist/schedule.saved.json": TypeAdapter(WatchlistView),
     "watchlist/schedule.off.json": TypeAdapter(WatchlistView),
+    "watchlist/paused.json": TypeAdapter(WatchlistView),
     "internal/tick.started.json": TypeAdapter(TickOut),
     "internal/tick.nothing-due.json": TypeAdapter(TickOut),
     "views/scheduled.pending.json": run_view_adapter,
@@ -270,6 +271,7 @@ def test_the_schedule_fixtures_show_the_owner_and_the_next_check():
     statuses = WatchlistView.model_validate(load("watchlist/statuses.json"))
     saved = WatchlistView.model_validate(load("watchlist/schedule.saved.json"))
     off = WatchlistView.model_validate(load("watchlist/schedule.off.json"))
+    paused = WatchlistView.model_validate(load("watchlist/paused.json"))
     assert statuses.schedule is not None and saved.schedule is not None
     assert (statuses.schedule.day, statuses.schedule.owner_name) == ("monday", "Alice")
     assert (saved.schedule.day, saved.schedule.at, saved.schedule.owner) == (
@@ -277,8 +279,11 @@ def test_the_schedule_fixtures_show_the_owner_and_the_next_check():
         "06:30",
         "carol",
     )
+    assert saved.schedule.next_at is not None
     assert saved.schedule.next_at > saved.schedule.saved_at
     assert off.schedule is None
+    assert (statuses.state, paused.state) == ("on", "paused")
+    assert paused.schedule is not None and paused.schedule.next_at is None
     scheduled = run_view_adapter.validate_python(load("views/scheduled.pending.json"))
     assert (scheduled.trigger, scheduled.started_by) == ("schedule", "alice")
     ran = run_view_adapter.validate_python(load("views/success.final.json"))

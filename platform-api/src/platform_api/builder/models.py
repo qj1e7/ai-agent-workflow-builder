@@ -184,13 +184,19 @@ class ScheduleView(WireModel):
     owner: UserId = Field(description="The schedule owner. Only another Approver can approve.")
     owner_name: str
     saved_at: datetime
-    next_at: datetime = Field(description="The next time a check starts.")
+    next_at: datetime | None = Field(
+        description="The next time a check starts. Null while the watchlist is paused."
+    )
 
 
 class WatchlistView(WireModel):
     use_case_id: str
     version: int
     ticket_project: str
+    state: UseCaseState = Field(
+        description="on, or paused until an Operator resumes it, as on its use case view. A "
+        "paused watchlist starts no check, on its schedule or by hand."
+    )
     software: list[WatchedSoftwareView] = Field(
         description="Rows that need a person first: cannot check, behind, awaiting approval, "
         "ticket open, not checked; then up to date. Rows with one status sort by name."

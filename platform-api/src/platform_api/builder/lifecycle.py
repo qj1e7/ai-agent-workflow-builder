@@ -1,5 +1,7 @@
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import Any
 
 from platform_api.shared import UserId
 
@@ -109,3 +111,9 @@ def from_columns(columns: Columns) -> Lifecycle:
     if columns.deleted_at is not None and columns.deleted_by is not None:
         return Deleted(columns.deleted_at, columns.deleted_by, before)
     return before
+
+
+def lifecycle_of(row: Mapping[str, Any]) -> Lifecycle:
+    return from_columns(
+        Columns(row["paused_at"], row["paused_by"], row["deleted_at"], row["deleted_by"])
+    )

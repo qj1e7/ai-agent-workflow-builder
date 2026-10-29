@@ -15,7 +15,6 @@ from platform_api.builder.cards import (
 from platform_api.builder.drafts import Drafts, TooManyDrafts
 from platform_api.builder.lifecycle import (
     AlreadyDeleted,
-    Columns,
     Deleted,
     Lifecycle,
     On,
@@ -23,8 +22,8 @@ from platform_api.builder.lifecycle import (
     TooLate,
     comes_on,
     delete,
-    from_columns,
     is_on,
+    lifecycle_of,
     pause,
     restore,
     resume,
@@ -87,12 +86,6 @@ _CURRENT_VERSION = """
     JOIN builder.use_case_versions v
       ON v.use_case_id = u.use_case_id AND v.version = u.current_version
 """
-
-
-def lifecycle_of(row: Mapping[str, Any]) -> Lifecycle:
-    return from_columns(
-        Columns(row["paused_at"], row["paused_by"], row["deleted_at"], row["deleted_by"])
-    )
 
 
 def _view(
