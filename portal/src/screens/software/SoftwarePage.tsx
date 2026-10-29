@@ -10,10 +10,11 @@ import { Button } from '../../ui/Button'
 import { IconExternal } from '../../ui/icons'
 import { AddSoftware } from './AddSoftware'
 import { pressCheckNow } from './checkNow'
+import { FindSoftware } from './FindSoftware'
 import { Schedule } from './Schedule'
 import { board, EMPTY_BOARD, noticeWords, pressRemove, pressUndo, removeButtonId, UNDO_ID, type Board, type Named } from './removal'
 import { SoftwareHistory } from './SoftwareHistory'
-import { cantCheckWords, countIn, groupsOf, matches, singaporeTime, statusLabel, statusTone, stoppedWords, versionSourceWords } from './software'
+import { cantCheckWords, countIn, groupsOf, singaporeTime, statusLabel, statusTone, stoppedWords, versionSourceWords } from './software'
 import styles from './Software.module.css'
 
 const REFRESH_MS = 15_000
@@ -234,15 +235,7 @@ function Loaded({ view, operator }: { view: WatchlistView | null; operator: bool
       {view?.last_check?.state === 'failed' ? <LastCheckStopped last={view.last_check} /> : null}
       {view ? <Schedule schedule={view.schedule} operator={operator} /> : null}
       <Notice state={state} scheduled={scheduled} onUndo={(row) => pressUndo(changes, restore.mutate, row, dispatch, words)} onDismiss={dismiss} />
-      {software.length > 0 || searching ? (
-        <div className={styles['find']}>
-          <label htmlFor="find-software">Find software</label>
-          <input id="find-software" type="search" value={query} placeholder="Find software" autoComplete="off" onChange={(event) => setQuery(event.target.value)} />
-          <p className="visually-hidden" role="status">
-            {searching ? matches(shown) : ''}
-          </p>
-        </div>
-      ) : null}
+      {software.length > 0 || searching ? <FindSoftware query={query} shown={shown} onChange={setQuery} /> : null}
       {software.length === 0 && !searching ? (
         <div className={styles['empty']}>
           <b>No software yet</b>

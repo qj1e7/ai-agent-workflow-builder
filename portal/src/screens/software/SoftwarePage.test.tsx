@@ -10,6 +10,7 @@ import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
 import type { Me, WatchlistView } from '../../api/types'
 import { AddSoftwareFields, EMPTY_VALUES } from './AddSoftware'
+import { FindSoftware } from './FindSoftware'
 import { SoftwareRoute } from './SoftwarePage'
 import { ScheduleEditor, ScheduleNote } from './Schedule'
 
@@ -100,12 +101,6 @@ describe('the Software watchlist page', () => {
     expect(render(statuses, ALICE)).toContain('<p role="status"></p>')
   })
 
-  it('has a search box that announces its result count', () => {
-    const html = render(statuses, ALICE)
-    expect(html).toContain('type="search"')
-    expect(html).toMatch(/role="status"/)
-  })
-
   it('invites an Operator to add the first software when the list is empty', () => {
     const html = render({ ...empty, schedule: null }, ALICE)
     expect(text(html)).toContain('No software yet')
@@ -117,6 +112,28 @@ describe('the Software watchlist page', () => {
     const words = text(render(null, BOB))
     expect(words).toContain('No software yet')
     expect(words).toContain('An Operator can add')
+  })
+})
+
+describe('the search box', () => {
+  const find = (query: string, shown: number) => renderToStaticMarkup(<FindSoftware query={query} shown={shown} onChange={() => undefined} />)
+  const heard = (said: string) => `<p class="visually-hidden" role="status">${said}</p>`
+
+  it('tells a screen reader the count of matching rows, and nothing before a search', () => {
+    expect(find('', 14)).toContain(heard(''))
+    expect(find('lang', 1)).toContain(heard('1 match'))
+    expect(find('Tool 0', 9)).toContain(heard('9 matches'))
+    expect(find('zzz', 0)).toContain(heard('No matches'))
+  })
+
+  it('is a search field with its own label', () => {
+    const html = find('', 14)
+    expect(html).toContain('<label for="find-software">Find software</label>')
+    expect(html).toContain('id="find-software" type="search"')
+  })
+
+  it('is on the page with the list', () => {
+    expect(render(statuses, ALICE)).toContain(find('', 6))
   })
 })
 
