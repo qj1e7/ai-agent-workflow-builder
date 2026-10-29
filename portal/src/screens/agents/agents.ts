@@ -1,3 +1,4 @@
+import { connectorLabel } from '../../api/labels'
 import type { CardView, ToolId, ToolView } from '../../api/types'
 
 export interface PlatformAgent {
@@ -46,6 +47,11 @@ export function isPlatformAgent(id: string): boolean {
 
 export function platformAgentMark(id: string): string | null {
   return isPlatformAgent(id) ? 'Platform agent' : null
+}
+
+export function systemOf(tool: ToolId): string {
+  const [system = tool] = tool.split('.')
+  return connectorLabel(system)
 }
 
 export function kindLabel(kind: ToolView['kind']): string {

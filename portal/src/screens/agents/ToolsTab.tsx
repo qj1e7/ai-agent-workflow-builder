@@ -1,6 +1,6 @@
 import type { CardView, ToolView } from '../../api/types'
 import { agentIdentity } from '../../ui/agents'
-import { approvalWords, faceId, kindLabel } from './agents'
+import { approvalWords, faceId, kindLabel, systemOf } from './agents'
 import styles from './AgentsPage.module.css'
 
 function usedBy(tool: ToolView, cards: readonly CardView[]): string {
@@ -14,7 +14,7 @@ function ToolRow({ tool, cards }: { tool: ToolView; cards: readonly CardView[] |
     <li className={styles['toolRow']} data-tool-id={tool.id}>
       <div>
         <b>{tool.name}</b>
-        <span className={styles['small'] + ' muted'}>{tool.id}</span>
+        <span className={styles['small'] + ' muted'}>{systemOf(tool.id)}</span>
       </div>
       <p className={styles['small']}>{tool.description}</p>
       <p className={styles['small']}>
