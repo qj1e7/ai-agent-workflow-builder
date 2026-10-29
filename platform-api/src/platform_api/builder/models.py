@@ -7,7 +7,7 @@ from pydantic import Field, JsonValue, StringConstraints, field_validator
 from platform_api.builder.templates import TAG_PATTERN
 from platform_api.orchestration import AT_PATTERN, Day, InputKind, Status, ToolId, ToolKind
 from platform_api.shared import ApprovalId, RunId, SoftwareId, UserId
-from platform_api.wire import RepoName, WireModel
+from platform_api.wire import RepoName, WireIn, WireModel
 from platform_api.wire import RunState as RunStateName
 
 type BlockKind = Literal["agent", "approval", "write_action"]
@@ -38,7 +38,7 @@ class TemplateList(WireModel):
     templates: list[TemplateView]
 
 
-class CreateUseCase(WireModel):
+class CreateUseCase(WireIn):
     template: str
     name: str
     instruction: str
@@ -101,7 +101,7 @@ class UseCaseDeleted(WireModel):
     )
 
 
-class SuggestIn(WireModel):
+class SuggestIn(WireIn):
     text: str
 
 
@@ -122,7 +122,7 @@ type SoftwareName = Annotated[
 type Version = Annotated[str, Field(pattern=TAG_PATTERN)]
 
 
-class AddSoftware(WireModel):
+class AddSoftware(WireIn):
     name: SoftwareName
     repo: RepoName
     our_version: Version | None = Field(
@@ -172,7 +172,7 @@ class LastCheckView(WireModel):
 type ClockTime = Annotated[str, Field(pattern=AT_PATTERN, examples=["09:00"])]
 
 
-class ScheduleIn(WireModel):
+class ScheduleIn(WireIn):
     day: Day
     at: ClockTime = Field(description="Time of day in Singapore, HH:MM on a 5-minute step.")
 
@@ -218,24 +218,24 @@ class ToolList(WireModel):
     tools: list[ToolView]
 
 
-class CardInput(WireModel):
+class CardInput(WireIn):
     name: str
     kind: str = Field(description="github_repo, jira_project or text.")
     what: str = ""
     example: str = ""
 
 
-class CardBlock(WireModel):
+class CardBlock(WireIn):
     say: str
     tool: str | None = Field(default=None, description="A tool id from GET /tools, or null.")
 
 
-class CardApprovalView(WireModel):
+class CardApprovalView(WireIn):
     tool: str
     approvers: int
 
 
-class CardDefinition(WireModel):
+class CardDefinition(WireIn):
     """What an Operator or the Planner writes. Nothing here is trusted until it is checked."""
 
     name: str
@@ -298,7 +298,7 @@ class CardList(WireModel):
     cards: list[CardView]
 
 
-class PlanIn(WireModel):
+class PlanIn(WireIn):
     task: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
 
 
@@ -347,12 +347,12 @@ type PlanOut = Annotated[
 ]
 
 
-class AgentChoice(WireModel):
+class AgentChoice(WireIn):
     card_id: str
     values: dict[str, str]
 
 
-class CreateAgentUseCase(WireModel):
+class CreateAgentUseCase(WireIn):
     name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
     instruction: Annotated[
         str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)
@@ -365,7 +365,7 @@ DRAFT_STEPS = 4
 DRAFT_LIMIT_BYTES = 32 * 1024
 
 
-class DraftIn(WireModel):
+class DraftIn(WireIn):
     step: Annotated[int, Field(ge=1, le=DRAFT_STEPS)] = Field(
         description="The New workflow step the draft was saved at, from 1 to 4."
     )
