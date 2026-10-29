@@ -26,7 +26,6 @@ Four bounded contexts. Code in one context does not reach into another context's
 Other commit scopes: `infra`, `ci`, `docs`.
 
 - n8n workflows do the plumbing. Our own code goes into the builder, the Planner, the live activity view and the AI troubleshooter.
-- The Planner used to be called the Room lead. Until the code is renamed, the code and the Portal still say `room_lead`, `RoomLead` and "Room lead".
 - Agents use LangChain and LangGraph, traced with LangSmith. The backend is Python.
 - PostgreSQL is the relational store.
 - Infrastructure as code is Terraform, kept working under OpenTofu (ADR 0013).

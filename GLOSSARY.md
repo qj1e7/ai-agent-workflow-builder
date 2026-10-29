@@ -38,7 +38,7 @@ What Operators see a use case called in the app. Always write "n8n workflow" for
 _Avoid_: Routine
 
 **Template**:
-A ready-made agent card that ships with the platform, such as the release checker.
+A ready-made agent card that ships with the platform, such as the Version checker.
 
 **Portal**:
 The web app where Operators build use cases and start runs, watch the live activity view, and Approvers decide on approval requests. Users see it under the product's name, AI Workflow Builder.
