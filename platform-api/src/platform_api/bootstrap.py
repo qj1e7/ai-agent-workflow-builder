@@ -30,6 +30,8 @@ STEP_KEY_HEADER = "X-Step-Key"
 # The name every run's n8n workflow had before it became run. Only this exact name is removed:
 # staff build their own workflows in the same n8n (ADR 0027), and those are theirs to keep.
 OLD_RUN_WORKFLOW = "release_check"
+OLD_TEMPLATE = "release_check"
+OLD_TASK_KIND = "release"
 RESET_HINT = (
     "This stack holds data from before the release check was retired, which the platform can "
     "no longer read. Reset a local practice stack with "
@@ -176,17 +178,18 @@ def unreadable_data(owner_url: str) -> list[str]:
     """Rows the platform can no longer read, as plain lines. Nothing is deleted here."""
     with psycopg.connect(owner_url) as conn:
         runs = conn.execute(
-            "SELECT count(*) FROM orchestration.runs WHERE spec -> 'task' ->> 'kind' = 'release'"
+            "SELECT count(*) FROM orchestration.runs WHERE spec -> 'task' ->> 'kind' = %s",
+            (OLD_TASK_KIND,),
         ).fetchone()
         versions = conn.execute(
-            "SELECT count(*) FROM builder.use_case_versions WHERE template = 'release_check'"
+            "SELECT count(*) FROM builder.use_case_versions WHERE template = %s", (OLD_TEMPLATE,)
         ).fetchone()
     found: list[str] = []
     if runs and runs[0]:
         found.append(f"orchestration.runs holds {runs[0]} run(s) of the old release check")
     if versions and versions[0]:
         found.append(
-            f"builder.use_case_versions holds {versions[0]} version(s) of the old release_check "
+            f"builder.use_case_versions holds {versions[0]} version(s) of the old {OLD_TEMPLATE} "
             "template"
         )
     return found

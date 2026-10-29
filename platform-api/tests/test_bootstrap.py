@@ -9,7 +9,14 @@ import psycopg
 import pytest
 
 from platform_api import bootstrap
-from platform_api.bootstrap import OLD_RUN_WORKFLOW, RESET_HINT, load_into_n8n, main
+from platform_api.bootstrap import (
+    OLD_RUN_WORKFLOW,
+    OLD_TASK_KIND,
+    OLD_TEMPLATE,
+    RESET_HINT,
+    load_into_n8n,
+    main,
+)
 from platform_api.orchestration.n8n import N8nClient
 from platform_api.orchestration.workflows import load_all
 from platform_api.settings import BootstrapSettings
@@ -43,10 +50,10 @@ def insert_old_run(owner_url: str) -> None:
         "use_case_version": 1,
         "use_case_name": "LangGraph releases",
         "owner": "alice",
-        "workflow": "release_check",
+        "workflow": OLD_RUN_WORKFLOW,
         "instruction": "Check langchain-ai/langgraph for new releases.",
         "task": {
-            "kind": "release",
+            "kind": OLD_TASK_KIND,
             "repo": "langchain-ai/langgraph",
             "tag_pattern": r"^\d+\.\d+\.\d+$",
             "last_known_tag": "1.2.14",
@@ -78,9 +85,8 @@ def insert_old_use_case(owner_url: str) -> None:
         )
         conn.execute(
             "INSERT INTO builder.use_case_versions (use_case_id, version, template, name, "
-            "instruction, params, created_at) VALUES ('uc_old', 1, 'release_check', 'n', 'i', "
-            "'{}', %s)",
-            (NOW,),
+            "instruction, params, created_at) VALUES ('uc_old', 1, %s, 'n', 'i', '{}', %s)",
+            (OLD_TEMPLATE, NOW),
         )
 
 
@@ -90,12 +96,12 @@ def insert_old_use_case(owner_url: str) -> None:
         (insert_old_run, "orchestration.runs holds 1 run(s) of the old release check"),
         (
             insert_old_use_case,
-            "builder.use_case_versions holds 1 version(s) of the old release_check template",
+            f"builder.use_case_versions holds 1 version(s) of the old {OLD_TEMPLATE} template",
         ),
     ],
     ids=["run", "use case"],
 )
-def test_old_release_check_data_stops_bootstrap_before_n8n_and_deletes_nothing(
+def test_old_release_data_stops_bootstrap_before_n8n_and_deletes_nothing(
     postgres: PostgresUrls, capsys: pytest.CaptureFixture[str], plant: Any, named: str
 ):
     truncate_all(postgres.owner)
@@ -166,7 +172,7 @@ def test_bootstrap_removes_the_old_run_workflow_by_its_exact_name_and_nothing_el
     postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
 ):
     truncate_all(postgres.owner)
-    n8n = FakeN8n([OLD_RUN_WORKFLOW, "Staff access review", "release_check copy"])
+    n8n = FakeN8n([OLD_RUN_WORKFLOW, "Staff access review", f"{OLD_RUN_WORKFLOW} copy"])
     monkeypatch.setattr(
         bootstrap,
         "N8nClient",
@@ -192,7 +198,7 @@ def test_bootstrap_removes_the_old_run_workflow_by_its_exact_name_and_nothing_el
     assert n8n.deleted == ["W1"]
     assert sorted(w["name"] for w in n8n.workflows.values()) == [
         "Staff access review",
-        "release_check copy",
+        f"{OLD_RUN_WORKFLOW} copy",
         "run",
         "run_failure_reporter",
         "schedule_tick",

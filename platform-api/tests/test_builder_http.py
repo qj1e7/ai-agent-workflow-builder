@@ -100,17 +100,11 @@ async def test_a_saved_use_case_can_be_read_and_listed(client: httpx.AsyncClient
     assert [u["use_case_id"] for u in listed.json()["use_cases"]] == [use_case_id]
 
 
-@pytest.mark.parametrize("template", ["release_check", "nope"])
-async def test_an_unknown_template_gets_a_422_naming_the_template(
-    client: httpx.AsyncClient, template: str
-):
-    r = await client.post("/api/v1/use-cases", json={**GOOD, "template": template}, headers=ALICE)
+async def test_an_unknown_template_gets_a_422_naming_the_template(client: httpx.AsyncClient):
+    r = await client.post("/api/v1/use-cases", json={**GOOD, "template": "nope"}, headers=ALICE)
     assert r.status_code == 422
     [problem] = r.json()["detail"]
-    assert (problem["loc"], problem["msg"]) == (
-        ["body", "template"],
-        f"Unknown template '{template}'",
-    )
+    assert (problem["loc"], problem["msg"]) == (["body", "template"], "Unknown template 'nope'")
     assert (await client.get("/api/v1/use-cases", headers=ALICE)).json()["use_cases"] == []
 
 

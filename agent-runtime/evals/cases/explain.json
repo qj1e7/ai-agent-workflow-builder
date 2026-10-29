@@ -388,7 +388,7 @@
     "outcome": "failed",
     "stage": "working",
     "reason": "WorkflowNodeError",
-    "message": "release_check failed at Run agents: The service refused the connection",
+    "message": "The n8n workflow 'run' failed at its step 'Run agents': The service refused the connection",
     "events": [
       "Alice started a run of LangGraph releases.",
       "The work leg was queued for the workflow engine (attempt 1).",

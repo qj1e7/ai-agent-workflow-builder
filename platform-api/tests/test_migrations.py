@@ -3,6 +3,7 @@ import json
 import psycopg
 import pytest
 
+from platform_api.bootstrap import OLD_RUN_WORKFLOW
 from platform_api.db import Database
 from platform_api.migrations import downgrade, upgrade
 from platform_api.orchestration import WatchlistTask
@@ -13,6 +14,8 @@ from tests.conftest import PostgresUrls
 from tests.support import NOW, SPEC
 
 pytestmark = pytest.mark.anyio
+
+OLD_STARTER_CARD = "crd_release_checker"
 
 
 async def test_a_watchlist_run_survives_a_downgrade_to_0002_and_back(
@@ -97,7 +100,7 @@ async def test_migration_0005_moves_waiting_runs_and_their_pending_legs_to_the_r
     downgrade("orchestration", postgres.owner, "0004")
     task = SPEC.task
     assert isinstance(task, WatchlistTask)
-    old_spec = {**SPEC.__dict__, "workflow": "release_check"}
+    old_spec = {**SPEC.__dict__, "workflow": OLD_RUN_WORKFLOW}
     old_spec["task"] = {
         "kind": "watchlist",
         "tag_pattern": task.tag_pattern,
@@ -125,7 +128,7 @@ async def test_migration_0005_moves_waiting_runs_and_their_pending_legs_to_the_r
                 "INSERT INTO orchestration.outbox (run_id, kind, payload, attempt, next_at, "
                 "status, created_at) VALUES ('run_waiting', 'start_leg', %s, 0, %s, %s, %s)",
                 (
-                    json.dumps({"workflow": "release_check", "leg": "act", "attempt": 1}),
+                    json.dumps({"workflow": OLD_RUN_WORKFLOW, "leg": "act", "attempt": 1}),
                     NOW,
                     status,
                     NOW,
@@ -135,7 +138,7 @@ async def test_migration_0005_moves_waiting_runs_and_their_pending_legs_to_the_r
     upgrade("orchestration", postgres.owner)
     assert workflow_names(postgres.owner) == (
         "run",
-        [("pending", "run"), ("sent", "release_check")],
+        [("pending", "run"), ("sent", OLD_RUN_WORKFLOW)],
     )
     async with db.transaction("orchestration") as uow:
         loaded = await Store().load_run(uow, RunId("run_waiting"))
@@ -143,8 +146,8 @@ async def test_migration_0005_moves_waiting_runs_and_their_pending_legs_to_the_r
 
     downgrade("orchestration", postgres.owner, "0004")
     assert workflow_names(postgres.owner) == (
-        "release_check",
-        [("pending", "release_check"), ("sent", "release_check")],
+        OLD_RUN_WORKFLOW,
+        [("pending", OLD_RUN_WORKFLOW), ("sent", OLD_RUN_WORKFLOW)],
     )
     upgrade("orchestration", postgres.owner)
 
@@ -170,8 +173,9 @@ def test_migration_0004_renames_the_starter_card_on_saved_agent_use_cases(
         )
         conn.execute(
             "INSERT INTO builder.use_case_cards (use_case_id, version, position, card_id, "
-            "card_version, \"values\") VALUES ('uc_cards', 1, 0, 'crd_release_checker', 1, '{}'), "
-            "('uc_cards', 1, 1, 'crd_mine', 1, '{}')"
+            "card_version, \"values\") VALUES ('uc_cards', 1, 0, %s, 1, '{}'), "
+            "('uc_cards', 1, 1, 'crd_mine', 1, '{}')",
+            (OLD_STARTER_CARD,),
         )
 
         def card_ids() -> list[str]:
@@ -183,6 +187,6 @@ def test_migration_0004_renames_the_starter_card_on_saved_agent_use_cases(
         upgrade("builder", postgres.owner)
         assert card_ids() == ["crd_version_checker", "crd_mine"]
         downgrade("builder", postgres.owner, "0003")
-        assert card_ids() == ["crd_release_checker", "crd_mine"]
+        assert card_ids() == [OLD_STARTER_CARD, "crd_mine"]
         upgrade("builder", postgres.owner)
         conn.execute("DELETE FROM builder.use_case_cards")

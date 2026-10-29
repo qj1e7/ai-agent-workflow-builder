@@ -2,8 +2,7 @@ from platform_api.builder import TEMPLATES
 from platform_api.builder.templates import suggest_template
 
 
-def test_the_release_check_template_is_gone_and_nothing_is_offered():
-    assert "release_check" not in TEMPLATES
+def test_only_the_watchlist_and_agent_cards_templates_remain_and_neither_is_offered():
     assert [t.key for t in TEMPLATES.values()] == ["software_watchlist", "agent_cards"]
     assert all(not t.offered for t in TEMPLATES.values())
 

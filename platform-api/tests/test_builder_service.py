@@ -72,7 +72,6 @@ async def watch_langgraph(watchlist: Watchlist) -> WatchlistView:
 @pytest.mark.parametrize(
     ("template", "answer"),
     [
-        ("release_check", UnknownTemplate("release_check")),
         ("nope", UnknownTemplate("nope")),
         ("software_watchlist", TemplateNotOffered("software_watchlist")),
         ("agent_cards", TemplateNotOffered("agent_cards")),

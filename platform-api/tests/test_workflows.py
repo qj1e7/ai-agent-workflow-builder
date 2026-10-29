@@ -57,7 +57,7 @@ def test_the_files_ship_three_workflows():
     assert by_name(load_all(), "run_failure_reporter").is_error_workflow
 
 
-def test_the_release_check_has_two_legs_with_the_steps_in_the_referees_order():
+def test_the_run_workflow_has_two_legs_with_the_steps_in_the_referees_order():
     run = by_name(load_all(), "run")
     two_seconds = timedelta(seconds=2)
     assert run.steps(Leg.WORK) == (
