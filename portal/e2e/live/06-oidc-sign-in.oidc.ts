@@ -65,14 +65,21 @@ test('alice signs in and sees her name, bob signs in at a deep link, and signing
   const alice = await signIn(browser, backend, 'alice', '/', info, 'oidc-01-sign-in-form')
   const header = alice.page.getByRole('banner')
   await expect(header, 'the header names the person the token belongs to').toContainText('Alice')
-  await expect(header, 'the header shows her roles from the roles claim').toContainText('Operator and Approver')
+  await expect(header, 'the header shows her roles from the People list').toContainText('Operator and Approver')
   await expect(alice.page.getByRole('heading', { level: 1 })).toContainText('Alice')
   await expect(alice.page.getByRole('button', { name: /Test controls/ }), 'real sign-in has no test controls').toHaveCount(0)
   await expect(alice.page.getByText('Act as'), 'real sign-in has no way to act as someone else').toHaveCount(0)
   await shot(alice.page, info, 'oidc-02-signed-in-alice')
 
-  const me = await backend.get<{ id: string; display: string; roles: string[] }>('alice', '/api/v1/me')
-  expect(me, 'the platform maps the token to alice').toEqual({ id: '0a11ce00-0000-4000-8000-000000000001', display: 'Alice', roles: ['operator', 'approver'] })
+  const me = await backend.get<{ id: string; display: string; roles: string[]; on_list: boolean }>('alice', '/api/v1/me')
+  expect(me.id, 'the platform matched the token to the seeded alice by email and gave her our own id').toMatch(/^per_/)
+  expect(me, 'alice is on the list with the roles the first deploy named').toMatchObject({ display: 'Alice', roles: ['operator', 'approver'], on_list: true })
+  const people = await backend.get<{ people: { email: string; signed_in: boolean; operator: boolean; approver: boolean }[] }>('alice', '/api/v1/people')
+  const seeded = people.people.map((p) => [p.email, p.operator, p.approver, p.signed_in]).sort()
+  expect(seeded, 'the first deploy seeded alice and bob, and alice has now signed in').toEqual([
+    ['alice@example.test', true, true, true],
+    ['bob@example.test', false, true, false],
+  ])
 
   for (const label of ['Workflows', 'Software watchlist', 'Agent library', 'Home']) {
     await alice.page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: label, exact: true }).click()
