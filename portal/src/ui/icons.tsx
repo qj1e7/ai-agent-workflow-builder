@@ -37,3 +37,5 @@ export const IconExternal = drawn(
     <path d="M11 6H7.5A1.5 1.5 0 0 0 6 7.5v9A1.5 1.5 0 0 0 7.5 18h9a1.5 1.5 0 0 0 1.5-1.5V13" />
   </>,
 )
+
+export const IconX = drawn('IconX', <path d="M6 6l12 12M18 6L6 18" />)

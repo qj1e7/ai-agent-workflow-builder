@@ -224,6 +224,16 @@
   justify-self: stretch;
 }
 
+.dialogTop {
+  align-items: flex-start;
+  justify-self: stretch;
+}
+
+.dialogClose {
+  flex: none;
+  margin-left: auto;
+}
+
 .steps {
   margin: 0;
   padding-left: 1.3em;

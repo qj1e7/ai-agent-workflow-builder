@@ -89,6 +89,16 @@ describe('a card', () => {
     expect(dialog).toContain('Close')
   })
 
+  it('has a Close button at the top, beside its title, and another after the card', () => {
+    for (const path of ['/agents/crd_version_checker', '/agents/planner']) {
+      const dialog = dialogOf(render({ path }))
+      const top = dialog.indexOf('aria-label="Close"')
+      expect(top).toBeGreaterThan(dialog.indexOf('<h2'))
+      expect(top).toBeLessThan(dialog.indexOf('How it works'))
+      expect(dialog.lastIndexOf('>Close</button>')).toBeGreaterThan(dialog.indexOf('How it works'))
+    }
+  })
+
   it('labels the dialog with its title', () => {
     const dialog = dialogOf(render({ path: '/agents/crd_version_checker' }))
     const labelled = /aria-labelledby="([^"]+)"/.exec(dialog)?.[1]

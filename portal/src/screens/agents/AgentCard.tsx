@@ -4,6 +4,9 @@ import type { CardView, ToolId, ToolView } from '../../api/types'
 import { agentIdentity } from '../../ui/agents'
 import { AgentFace } from '../../ui/AgentFace'
 import { Button } from '../../ui/Button'
+import { cx } from '../../ui/cx'
+import { IconX } from '../../ui/icons'
+import iconButton from '../../shell/IconButton.module.css'
 import {
   accessLabel,
   approvalWords,
@@ -91,26 +94,37 @@ export function CardTile({ card, tools, search }: { card: CardView; tools: ToolI
 }
 
 interface ModalProps {
-  titleId: string
+  face: string
+  title: string
+  under: ReactNode
   onClose: () => void
   children: ReactNode
 }
 
-function Modal({ titleId, onClose, children }: ModalProps) {
+function Modal({ face, title, under, onClose, children }: ModalProps) {
   const dialog = useRef<HTMLDialogElement>(null)
+  const topClose = useRef<HTMLButtonElement>(null)
+  const titleId = useId()
   useEffect(() => {
     const element = dialog.current
     if (element && !element.open) element.showModal()
+    topClose.current?.focus()
   }, [])
+  const close = () => dialog.current?.close()
   return (
-    <dialog
-      ref={dialog}
-      className={styles['dialog']}
-      aria-labelledby={titleId}
-      onClose={onClose}
-    >
+    <dialog ref={dialog} className={styles['dialog']} aria-labelledby={titleId} onClose={onClose}>
+      <div className={cx(styles['tileTop'], styles['dialogTop'])}>
+        <AgentFace id={face} size={56} />
+        <div>
+          <h2 id={titleId}>{title}</h2>
+          {under}
+        </div>
+        <button ref={topClose} type="button" className={cx(iconButton['button'], styles['dialogClose'])} aria-label="Close" onClick={close}>
+          <IconX size={18} strokeWidth={3} />
+        </button>
+      </div>
       {children}
-      <Button onClick={() => dialog.current?.close()}>Close</Button>
+      <Button onClick={close}>Close</Button>
     </dialog>
   )
 }
@@ -142,17 +156,8 @@ function Rules({ rules }: { rules: readonly string[] }) {
 }
 
 export function PlatformDialog({ agent, onClose }: { agent: PlatformAgent; onClose: () => void }) {
-  const titleId = useId()
-  const { name } = agentIdentity(agent.id)
   return (
-    <Modal titleId={titleId} onClose={onClose}>
-      <div className={styles['tileTop']}>
-        <AgentFace id={agent.id} size={56} />
-        <div>
-          <h2 id={titleId}>{name}</h2>
-          <span className={styles['mark']}>{platformAgentMark(agent.id)}</span>
-        </div>
-      </div>
+    <Modal face={agent.id} title={agentIdentity(agent.id).name} under={<span className={styles['mark']}>{platformAgentMark(agent.id)}</span>} onClose={onClose}>
       <p>{agent.what}</p>
       <Steps steps={agent.steps} />
       <section>
@@ -166,17 +171,9 @@ export function PlatformDialog({ agent, onClose }: { agent: PlatformAgent; onClo
 }
 
 export function CardDialog({ card, tools, onClose }: { card: CardView; tools: ToolIndex; onClose: () => void }) {
-  const titleId = useId()
   const nameOf = (id: ToolId) => tools.get(id)?.name ?? id
   return (
-    <Modal titleId={titleId} onClose={onClose}>
-      <div className={styles['tileTop']}>
-        <AgentFace id={faceId(card)} size={56} />
-        <div>
-          <h2 id={titleId}>{card.name}</h2>
-          <span className="muted">{versionWords(card)}</span>
-        </div>
-      </div>
+    <Modal face={faceId(card)} title={card.name} under={<span className="muted">{versionWords(card)}</span>} onClose={onClose}>
       <p>{card.purpose}</p>
       <Steps steps={card.blocks.map((block) => block.say)} />
       <section>
