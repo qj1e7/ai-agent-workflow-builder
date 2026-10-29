@@ -12,46 +12,43 @@ type Notice =
   | { readonly kind: 'restored'; readonly row: Named }
   | { readonly kind: 'gone'; readonly name: string }
 
-/** What the page says after a change to the list, and where focus goes next. */
-export interface Board {
+export interface ChangeFeedback {
   readonly notice: Notice | null
   readonly problem: string | null
   readonly busy: { readonly id: string; readonly act: 'remove' | 'restore' } | null
-  /** The id of the element to focus once it is on the page. Only the event that moves focus sets it. */
-  readonly focus: string | null
+  readonly focusTargetId: string | null
 }
 
-export type BoardEvent =
+export type FeedbackEvent =
   | { readonly type: 'added'; readonly name: string }
   | { readonly type: 'removing' | 'removed' | 'gone' | 'restoring' | 'restored'; readonly row: Named }
   | { readonly type: 'failed'; readonly words: string }
   | { readonly type: 'dismissed' }
 
-export const EMPTY_BOARD: Board = { notice: null, problem: null, busy: null, focus: null }
+export const NO_FEEDBACK: ChangeFeedback = { notice: null, problem: null, busy: null, focusTargetId: null }
 
 export const UNDO_ID = 'undo-removal'
 
 export const removeButtonId = (id: string) => `remove-${id}`
 
-/** An Undo message has no time limit: it stays until the next message replaces it or the person dismisses it. */
-export function board(state: Board, event: BoardEvent): Board {
+export function changeFeedback(state: ChangeFeedback, event: FeedbackEvent): ChangeFeedback {
   switch (event.type) {
     case 'added':
-      return { ...state, notice: { kind: 'added', name: event.name }, problem: null, focus: null }
+      return { ...state, notice: { kind: 'added', name: event.name }, problem: null, focusTargetId: null }
     case 'removing':
-      return { notice: null, problem: null, busy: { id: event.row.id, act: 'remove' }, focus: null }
+      return { notice: null, problem: null, busy: { id: event.row.id, act: 'remove' }, focusTargetId: null }
     case 'removed':
-      return { notice: { kind: 'removed', row: event.row }, problem: null, busy: null, focus: UNDO_ID }
+      return { notice: { kind: 'removed', row: event.row }, problem: null, busy: null, focusTargetId: UNDO_ID }
     case 'gone':
-      return { notice: { kind: 'gone', name: event.row.name }, problem: null, busy: null, focus: null }
+      return { notice: { kind: 'gone', name: event.row.name }, problem: null, busy: null, focusTargetId: null }
     case 'restoring':
-      return { ...state, problem: null, busy: { id: event.row.id, act: 'restore' }, focus: null }
+      return { ...state, problem: null, busy: { id: event.row.id, act: 'restore' }, focusTargetId: null }
     case 'restored':
-      return { notice: { kind: 'restored', row: event.row }, problem: null, busy: null, focus: removeButtonId(event.row.id) }
+      return { notice: { kind: 'restored', row: event.row }, problem: null, busy: null, focusTargetId: removeButtonId(event.row.id) }
     case 'failed':
-      return { ...state, problem: event.words, busy: null, focus: null }
+      return { ...state, problem: event.words, busy: null, focusTargetId: null }
     case 'dismissed':
-      return { ...state, notice: null, focus: null }
+      return { ...state, notice: null, focusTargetId: null }
   }
 }
 
@@ -68,14 +65,13 @@ export function noticeWords(notice: Notice, scheduled: boolean): string {
   }
 }
 
-/** The callbacks a TanStack mutate takes, as far as these presses use them. */
-export interface Outcome {
+export interface MutateCallbacks {
   onSuccess?: (value: unknown) => void
   onError?: (error: unknown) => void
   onSettled?: () => void
 }
 
-type Send = (id: string, outcome: Outcome) => void
+type Send = (id: string, outcome: MutateCallbacks) => void
 type Words = (error: unknown) => string
 
 const answered = (error: unknown, status: number) => error instanceof ApiError && error.status === status
@@ -88,8 +84,7 @@ function restoreProblem(name: string, error: unknown, words: Words): string {
   return `${start} ${words(error)}`
 }
 
-/** Removes at once, so the list on the page is the list the platform checks. Undo puts the same entry back. */
-export function pressRemove(latch: Latch, send: Send, row: Named, dispatch: (event: BoardEvent) => void, words: Words): void {
+export function pressRemove(latch: Latch, send: Send, row: Named, dispatch: (event: FeedbackEvent) => void, words: Words): void {
   latch.run((settled) => {
     dispatch({ type: 'removing', row })
     send(row.id, {
@@ -100,7 +95,7 @@ export function pressRemove(latch: Latch, send: Send, row: Named, dispatch: (eve
   })
 }
 
-export function pressUndo(latch: Latch, send: Send, row: Named, dispatch: (event: BoardEvent) => void, words: Words): void {
+export function pressUndo(latch: Latch, send: Send, row: Named, dispatch: (event: FeedbackEvent) => void, words: Words): void {
   latch.run((settled) => {
     dispatch({ type: 'restoring', row })
     send(row.id, {

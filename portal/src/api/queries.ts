@@ -339,18 +339,18 @@ export function useAddSoftware() {
   })
 }
 
-/** A 404 means someone removed it already, so the list is read again. */
 export function useRemoveSoftware() {
   const client = useApiClient()
   const queryClient = useQueryClient()
   const user = useCacheScope()
+  const rereadIfAlreadyRemoved = (error: Error) => (isNotFound(error) ? queryClient.invalidateQueries({ queryKey: keys.watchlist(user) }) : undefined)
   return useMutation({
     mutationFn: async (softwareId: string) =>
       unwrap(
         await client.DELETE('/api/v1/watchlist/software/{software_id}', { params: { path: { software_id: softwareId } } }),
       ),
     onSuccess: (view) => queryClient.setQueryData(keys.watchlist(user), view),
-    onError: (error) => (isNotFound(error) ? queryClient.invalidateQueries({ queryKey: keys.watchlist(user) }) : undefined),
+    onError: rereadIfAlreadyRemoved,
   })
 }
 

@@ -9,8 +9,8 @@ from platform_api.builder.models import AddSoftware, WatchlistView
 from platform_api.builder.service import NothingToCheck
 from platform_api.builder.watchlist import (
     NoSuchSoftware,
+    RepoAddedAgainSinceRemoval,
     RepoAlreadyWatched,
-    RepoWatchedAgain,
     WatchlistFull,
 )
 from platform_api.db import Database
@@ -244,7 +244,7 @@ async def test_a_repository_added_again_since_its_removal_cannot_be_restored(
     await watchlist.remove(old)
     again = await added(watchlist, software("LangGraph", "LangChain-AI/LangGraph"))
     assert ids(again)["LangGraph"] != old
-    assert await watchlist.restore(old) == RepoWatchedAgain("langchain-ai/langgraph")
+    assert await watchlist.restore(old) == RepoAddedAgainSinceRemoval("langchain-ai/langgraph")
     assert await watchlist.view() == again
 
 

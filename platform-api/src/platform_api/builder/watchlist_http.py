@@ -8,8 +8,8 @@ from platform_api.builder.models import AddSoftware, ScheduleIn, WatchlistOut, W
 from platform_api.builder.watchlist import (
     NoSuchSoftware,
     NoWatchlist,
+    RepoAddedAgainSinceRemoval,
     RepoAlreadyWatched,
-    RepoWatchedAgain,
     Watchlist,
     WatchlistFull,
 )
@@ -97,7 +97,7 @@ async def restore_software(
             return restored
         case NoSuchSoftware():
             raise HTTPException(404, "This software was never on the watchlist")
-        case RepoWatchedAgain(ref):
+        case RepoAddedAgainSinceRemoval(ref):
             raise HTTPException(
                 409,
                 f"{ref} was added again after it was removed, so the removed entry cannot come "

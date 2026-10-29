@@ -1,7 +1,6 @@
 import { useEffect, useReducer, useRef, useState, type KeyboardEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useErrorWords } from '../../api/context'
-import { failureReasonLabel } from '../../api/labels'
 import { useLatch } from '../../api/latch'
 import { useDisplayName } from '../../api/people'
 import { useMe, useRemoveSoftware, useRestoreSoftware, useRun, useStartRun, useWatchlist } from '../../api/queries'
@@ -12,22 +11,21 @@ import { AddSoftware } from './AddSoftware'
 import { pressCheckNow } from './checkNow'
 import { FindSoftware } from './FindSoftware'
 import { Schedule } from './Schedule'
-import { board, EMPTY_BOARD, noticeWords, pressRemove, pressUndo, removeButtonId, UNDO_ID, type Board, type Named } from './removal'
+import { changeFeedback, NO_FEEDBACK, noticeWords, pressRemove, pressUndo, removeButtonId, UNDO_ID, type ChangeFeedback, type Named } from './removal'
 import { SoftwareHistory } from './SoftwareHistory'
 import { cantCheckWords, countIn, groupsOf, singaporeTime, statusLabel, statusTone, stoppedWords, versionSourceWords } from './software'
 import styles from './Software.module.css'
 
 const REFRESH_MS = 15_000
 
-/** Moves focus once the element the last change named is on the page, as when Undo brings a row back. */
-function useFocusFrom(state: Board) {
-  const moved = useRef<Board | null>(null)
+function useFocusOnceRendered(feedback: ChangeFeedback) {
+  const focusedFor = useRef<ChangeFeedback | null>(null)
   useEffect(() => {
-    if (state.focus === null || moved.current === state) return
-    const target = document.getElementById(state.focus)
+    if (feedback.focusTargetId === null || focusedFor.current === feedback) return
+    const target = document.getElementById(feedback.focusTargetId)
     if (!target) return
     target.focus()
-    moved.current = state
+    focusedFor.current = feedback
   })
 }
 
@@ -157,7 +155,7 @@ function CheckNow({ useCaseId }: { useCaseId: string }) {
 
 function LastCheckStopped({ last }: { last: LastCheckView }) {
   const run = useRun(last.run_id)
-  const reason = run.data?.state === 'failed' ? failureReasonLabel[run.data.reason] : null
+  const reason = run.data?.state === 'failed' ? run.data.reason : null
   return (
     <div className={styles['stopped']}>
       <p>
@@ -168,16 +166,15 @@ function LastCheckStopped({ last }: { last: LastCheckView }) {
   )
 }
 
-/** Before the first add there is no watchlist, and the first add sets the default schedule. */
 function emptyWords(view: WatchlistView | null, operator: boolean): string {
   if (!operator) return 'An Operator can add the tools your team runs.'
-  if (view !== null && view.schedule === null) return 'Add the tools your team runs, then press Check now to check them.'
-  return 'Add the tools your team runs. Each one is checked at the next check.'
+  const willBeScheduled = view === null || view.schedule !== null
+  return willBeScheduled ? 'Add the tools your team runs. Each one is checked at the next check.' : 'Add the tools your team runs, then press Check now to check them.'
 }
 
 /** The status line stays on the page when it is empty, so a screen reader hears each new message. */
-function Notice({ state, scheduled, onUndo, onDismiss }: { state: Board; scheduled: boolean; onUndo: (row: Named) => void; onDismiss: () => void }) {
-  const { notice } = state
+function Notice({ feedback, scheduled, onUndo, onDismiss }: { feedback: ChangeFeedback; scheduled: boolean; onUndo: (row: Named) => void; onDismiss: () => void }) {
+  const { notice } = feedback
   const undoing = notice?.kind === 'removed' ? notice.row : null
   const escape = (event: KeyboardEvent) => {
     if (event.key === 'Escape') onDismiss()
@@ -188,7 +185,7 @@ function Notice({ state, scheduled, onUndo, onDismiss }: { state: Board; schedul
         <p role="status">{notice ? noticeWords(notice, scheduled) : ''}</p>
         {undoing ? (
           <div className={styles['actions']}>
-            <Button id={UNDO_ID} loading={state.busy?.act === 'restore'} onClick={() => onUndo(undoing)} onKeyDown={escape}>
+            <Button id={UNDO_ID} loading={feedback.busy?.act === 'restore'} onClick={() => onUndo(undoing)} onKeyDown={escape}>
               Undo
             </Button>
             <Button onClick={onDismiss} onKeyDown={escape}>
@@ -197,9 +194,9 @@ function Notice({ state, scheduled, onUndo, onDismiss }: { state: Board; schedul
           </div>
         ) : null}
       </div>
-      {state.problem ? (
+      {feedback.problem ? (
         <p className={styles['error']} role="alert">
-          {state.problem}
+          {feedback.problem}
         </p>
       ) : null}
     </>
@@ -209,13 +206,13 @@ function Notice({ state, scheduled, onUndo, onDismiss }: { state: Board; schedul
 function Loaded({ view, operator }: { view: WatchlistView | null; operator: boolean }) {
   const [query, setQuery] = useState('')
   const [opened, setOpened] = useState<string | null>(null)
-  const [state, dispatch] = useReducer(board, EMPTY_BOARD)
+  const [feedback, dispatch] = useReducer(changeFeedback, NO_FEEDBACK)
   const nameOf = useDisplayName()
   const words = useErrorWords()
   const removal = useRemoveSoftware()
   const restore = useRestoreSoftware()
   const changes = useLatch()
-  useFocusFrom(state)
+  useFocusOnceRendered(feedback)
 
   function dismiss() {
     const next = document.getElementById('find-software') ?? document.querySelector<HTMLElement>('main h1')
@@ -234,7 +231,7 @@ function Loaded({ view, operator }: { view: WatchlistView | null; operator: bool
       {operator && view && software.length > 0 ? <CheckNow useCaseId={view.use_case_id} /> : null}
       {view?.last_check?.state === 'failed' ? <LastCheckStopped last={view.last_check} /> : null}
       {view ? <Schedule schedule={view.schedule} operator={operator} /> : null}
-      <Notice state={state} scheduled={scheduled} onUndo={(row) => pressUndo(changes, restore.mutate, row, dispatch, words)} onDismiss={dismiss} />
+      <Notice feedback={feedback} scheduled={scheduled} onUndo={(row) => pressUndo(changes, restore.mutate, row, dispatch, words)} onDismiss={dismiss} />
       {software.length > 0 || searching ? <FindSoftware query={query} shown={shown} onChange={setQuery} /> : null}
       {software.length === 0 && !searching ? (
         <div className={styles['empty']}>
@@ -263,7 +260,7 @@ function Loaded({ view, operator }: { view: WatchlistView | null; operator: bool
           operator={operator}
           scheduled={scheduled}
           opened={opened}
-          removing={state.busy?.act === 'remove' ? state.busy.id : null}
+          removing={feedback.busy?.act === 'remove' ? feedback.busy.id : null}
           nameOf={nameOf}
           onToggle={(id) => setOpened((current) => (current === id ? null : id))}
           onRemove={(row) => pressRemove(changes, removal.mutate, row, dispatch, words)}

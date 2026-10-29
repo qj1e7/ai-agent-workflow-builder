@@ -1,5 +1,6 @@
 import { ApiError } from '../../api/client'
-import type { Day, ScheduleView, SoftwareStatus, VersionSourceView, WatchedSoftwareView } from '../../api/types'
+import { failureReasonLabel } from '../../api/labels'
+import type { Day, FailureReason, ScheduleView, SoftwareStatus, VersionSourceView, WatchedSoftwareView } from '../../api/types'
 
 export const SOURCES_NOTE =
   'GitHub is the only place we can check today. Other places, such as npm or PyPI, are not available yet.'
@@ -53,7 +54,6 @@ export const dayOption: Record<Day, string> = {
 }
 
 const REPO = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9._-]{1,100}$/
-/** The platform refuses a name of . or .., which GitHub would read as a path. */
 const DOT_SEGMENT = /\/\.\.?$/
 const VERSION = /^\d+\.\d+\.\d+$/
 const CLOCK = /^([01][0-9]|2[0-3]):[0-5][05]$/
@@ -193,9 +193,10 @@ export function scheduleWords(schedule: ScheduleView): string {
   return `Checked ${dayLabel[schedule.day]} at ${clockWords(schedule.at)}, set by ${schedule.owner_name}.`
 }
 
-/** "The last check stopped: an agent could not finish its work." The reason is one of the run page's labels. */
-export function stoppedWords(reason: string | null): string {
-  return reason ? `The last check stopped: ${reason.charAt(0).toLowerCase()}${reason.slice(1)}.` : 'The last check stopped.'
+export function stoppedWords(reason: FailureReason | null): string {
+  if (reason === null) return 'The last check stopped.'
+  const label = failureReasonLabel[reason]
+  return `The last check stopped: ${label.charAt(0).toLowerCase()}${label.slice(1)}.`
 }
 
 export function scheduleOwnerWords(schedule: ScheduleView): string {
@@ -207,7 +208,7 @@ interface HistoryLine {
   readonly words: string
 }
 
-/** What the platform has kept about one row, newest first. It stores the latest facts, not every earlier check. */
+/** What the platform has kept about one row. It stores the latest facts, not every earlier check. */
 export function historyOf(row: WatchedSoftwareView, nameOf: (id: string) => string): HistoryLine[] {
   const now: HistoryLine[] = []
   if (row.open_ticket) now.push({ when: 'Now', words: `${row.open_ticket} is open in Jira for the upgrade.` })

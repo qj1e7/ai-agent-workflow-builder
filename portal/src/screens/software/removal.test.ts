@@ -2,24 +2,24 @@ import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../api/client'
 import { errorWords } from '../../api/errors'
 import { createLatch } from '../../api/latch'
-import { board, EMPTY_BOARD, noticeWords, pressRemove, pressUndo, UNDO_ID, type Board, type BoardEvent, type Outcome } from './removal'
+import { changeFeedback, NO_FEEDBACK, noticeWords, pressRemove, pressUndo, UNDO_ID, type ChangeFeedback, type FeedbackEvent, type MutateCallbacks } from './removal'
 
 const LANGGRAPH = { id: 'sw_lang', name: 'LangGraph' }
 const REDIS = { id: 'sw_redis', name: 'Redis' }
 const words = (error: unknown) => errorWords(error, 'dev')
 
-function harness(start: Board = EMPTY_BOARD) {
+function harness(start: ChangeFeedback = NO_FEEDBACK) {
   const sent: string[] = []
-  const answers: Outcome[] = []
+  const answers: MutateCallbacks[] = []
   let state = start
-  const send = (id: string, outcome: Outcome) => {
+  const send = (id: string, outcome: MutateCallbacks) => {
     sent.push(id)
     answers.push(outcome)
   }
-  const dispatch = (event: BoardEvent) => {
-    state = board(state, event)
+  const dispatch = (event: FeedbackEvent) => {
+    state = changeFeedback(state, event)
   }
-  const answer = (settle: (outcome: Outcome) => void) => {
+  const answer = (settle: (outcome: MutateCallbacks) => void) => {
     const outcome = answers.at(-1)
     if (!outcome) throw new Error('nothing was sent')
     settle(outcome)
@@ -38,13 +38,13 @@ describe('removing software', () => {
     expect(h.sent).toEqual(['sw_lang'])
 
     h.answer((outcome) => outcome.onSuccess?.(undefined))
-    expect(h.state()).toEqual({ notice: { kind: 'removed', row: LANGGRAPH }, problem: null, busy: null, focus: UNDO_ID })
+    expect(h.state()).toEqual({ notice: { kind: 'removed', row: LANGGRAPH }, problem: null, busy: null, focusTargetId: UNDO_ID })
     pressRemove(h.latch, h.send, REDIS, h.dispatch, words)
     expect(h.sent).toEqual(['sw_lang', 'sw_redis'])
   })
 
   it('clears an earlier message when a removal starts', () => {
-    const h = harness({ ...EMPTY_BOARD, notice: { kind: 'added', name: 'Redis' }, problem: 'Something went wrong.' })
+    const h = harness({ ...NO_FEEDBACK, notice: { kind: 'added', name: 'Redis' }, problem: 'Something went wrong.' })
     pressRemove(h.latch, h.send, LANGGRAPH, h.dispatch, words)
     expect(h.state().notice).toBeNull()
     expect(h.state().problem).toBeNull()
@@ -62,12 +62,12 @@ describe('removing software', () => {
     const h = harness()
     pressRemove(h.latch, h.send, LANGGRAPH, h.dispatch, words)
     h.answer((outcome) => outcome.onError?.(new ApiError(503, null)))
-    expect(h.state()).toEqual({ notice: null, problem: 'Could not remove LangGraph. The platform had a problem. Try again in a moment.', busy: null, focus: null })
+    expect(h.state()).toEqual({ notice: null, problem: 'Could not remove LangGraph. The platform had a problem. Try again in a moment.', busy: null, focusTargetId: null })
   })
 })
 
 describe('Undo', () => {
-  const removed: Board = { notice: { kind: 'removed', row: LANGGRAPH }, problem: null, busy: null, focus: null }
+  const removed: ChangeFeedback = { notice: { kind: 'removed', row: LANGGRAPH }, problem: null, busy: null, focusTargetId: null }
 
   it('asks the platform to put the same software back, then says so and moves focus to its row', () => {
     const h = harness(removed)
@@ -77,7 +77,7 @@ describe('Undo', () => {
     pressUndo(h.latch, h.send, LANGGRAPH, h.dispatch, words)
     expect(h.sent).toEqual(['sw_lang'])
     h.answer((outcome) => outcome.onSuccess?.(undefined))
-    expect(h.state()).toEqual({ notice: { kind: 'restored', row: LANGGRAPH }, problem: null, busy: null, focus: 'remove-sw_lang' })
+    expect(h.state()).toEqual({ notice: { kind: 'restored', row: LANGGRAPH }, problem: null, busy: null, focusTargetId: 'remove-sw_lang' })
   })
 
   it('says in plain words why the software could not come back, and keeps Undo', () => {
@@ -97,9 +97,9 @@ describe('Undo', () => {
   })
 
   it('stays until it is dismissed or the next message replaces it', () => {
-    expect(board(removed, { type: 'dismissed' }).notice).toBeNull()
-    expect(board(removed, { type: 'added', name: 'Redis' }).notice).toEqual({ kind: 'added', name: 'Redis' })
-    expect(board({ ...removed, focus: UNDO_ID }, { type: 'added', name: 'Redis' }).focus).toBeNull()
+    expect(changeFeedback(removed, { type: 'dismissed' }).notice).toBeNull()
+    expect(changeFeedback(removed, { type: 'added', name: 'Redis' }).notice).toEqual({ kind: 'added', name: 'Redis' })
+    expect(changeFeedback({ ...removed, focusTargetId: UNDO_ID }, { type: 'added', name: 'Redis' }).focusTargetId).toBeNull()
   })
 })
 

@@ -75,22 +75,27 @@ export function ScheduleEditor({ schedule, onDone }: { schedule: ScheduleView | 
   )
 }
 
-/** Opening the editor hides the button that opened it, so closing the editor puts focus back on that button. */
-export function Schedule({ schedule, operator }: { schedule: ScheduleView | null; operator: boolean }) {
+function useEditorThatRefocusesItsOpener() {
   const [editing, setEditing] = useState(false)
-  const off = useTurnOffSchedule()
-  const words = useErrorWords()
   const opener = useRef<HTMLButtonElement>(null)
-  const returning = useRef(false)
+  const closing = useRef(false)
   useEffect(() => {
-    if (editing || !returning.current) return
-    returning.current = false
+    if (editing || !closing.current) return
+    closing.current = false
     opener.current?.focus()
   }, [editing])
-  function close() {
-    returning.current = true
+  const open = () => setEditing(true)
+  const close = () => {
+    closing.current = true
     setEditing(false)
   }
+  return { editing, opener, open, close }
+}
+
+export function Schedule({ schedule, operator }: { schedule: ScheduleView | null; operator: boolean }) {
+  const { editing, opener, open, close } = useEditorThatRefocusesItsOpener()
+  const off = useTurnOffSchedule()
+  const words = useErrorWords()
   return (
     <section className={styles['schedule']} aria-labelledby="schedule-heading">
       <h2 id="schedule-heading" className="visually-hidden">
@@ -101,7 +106,7 @@ export function Schedule({ schedule, operator }: { schedule: ScheduleView | null
       </div>
       {operator && !editing ? (
         <div className={styles['actions']}>
-          <Button ref={opener} onClick={() => setEditing(true)}>
+          <Button ref={opener} onClick={open}>
             {schedule ? 'Change schedule' : 'Set a schedule'}
           </Button>
           {schedule ? (
