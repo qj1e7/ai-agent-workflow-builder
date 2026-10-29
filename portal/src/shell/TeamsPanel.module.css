@@ -1,32 +1,239 @@
-.dialog {
-  width: min(440px, calc(100% - 32px));
-  padding: var(--space-5);
-  border: 1px solid var(--hair);
-  border-radius: var(--r-sheet);
-  background: var(--surface);
+.badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--amber);
+  color: #1d1400;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.drawer {
+  position: fixed;
+  overflow: hidden;
+  inset: 0 0 0 auto;
+  width: min(440px, 100%);
+  max-width: 100%;
+  height: 100%;
+  max-height: 100%;
+  margin: 0;
+  padding: 0;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  border: 0;
+  border-left: 1px solid var(--hair);
+  background: var(--sunk);
   color: var(--ink);
   box-shadow: var(--float);
 }
 
-.dialog[open] {
-  display: grid;
-  gap: var(--space-3);
-  justify-items: start;
-  animation: open var(--dur-panel) var(--ease-out);
+.drawer[open] {
+  animation: slide var(--dur-panel) var(--ease-drawer);
 }
 
-.dialog::backdrop {
+.drawer[data-leaving] {
+  animation: slide-out 220ms var(--ease-drawer) both;
+}
+
+.drawer::backdrop {
   background: var(--scrim);
+  animation: fade var(--dur-small) var(--ease-out);
 }
 
-.dialog p {
+.drawer[data-leaving]::backdrop {
+  animation: fade-out 180ms ease-in both;
+}
+
+.inner {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.head {
+  position: sticky;
+  z-index: var(--z-raised);
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 18px;
+  background: #4b53bc;
+  color: #fff;
+}
+
+.head h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.head small {
+  display: block;
+  font-size: 0.8rem;
+  opacity: 0.9;
+}
+
+.close {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: var(--r-ctl);
+  background: transparent;
+  color: #fff;
+}
+
+.close:focus-visible {
+  outline-color: #fff;
+}
+
+.channel {
   margin: 0;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--hair);
+  background: var(--surface);
+}
+
+.signedIn {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.messages {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  margin: 0;
+  padding: 16px 18px 40px;
+}
+
+.empty {
+  margin: 0;
+  padding: 16px 18px;
   color: var(--muted);
 }
 
-@keyframes open {
+.message {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.app {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--hair);
+  border-radius: 25%;
+  background: var(--surface);
+}
+
+.meta {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.meta b {
+  color: var(--ink);
+}
+
+.card {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--hair);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+
+.card p {
+  margin: 0;
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lock {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--r-well);
+  background: var(--sunk);
+  font-size: 0.875rem;
+}
+
+.error {
+  color: var(--red-ink);
+  font-weight: 600;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  padding: 1px 10px 1px 8px;
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.pill:focus {
+  outline: none;
+}
+
+.ok {
+  border-color: var(--green-line);
+  background: var(--green-soft);
+  color: var(--green-ink);
+}
+
+.bad {
+  border-color: var(--red-line);
+  background: var(--red-soft);
+  color: var(--red-ink);
+}
+
+@keyframes slide {
+  from {
+    transform: translateX(100%);
+  }
+
+  to {
+    transform: none;
+  }
+}
+
+@keyframes slide-out {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes fade {
   from {
     opacity: 0;
-    transform: scale(0.96);
+  }
+}
+
+@keyframes fade-out {
+  to {
+    opacity: 0;
   }
 }
