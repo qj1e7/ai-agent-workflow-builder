@@ -10,7 +10,7 @@ import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
 import type { CardView, Me, ToolView } from '../../api/types'
 import { CARDS_UNAVAILABLE_WORDS, NOT_FOUND_WORDS } from './AgentsPage'
-import { CHANGE_LATER_NOTE, PLATFORM_NOTE, TOOLS_UNAVAILABLE_WORDS } from './agents'
+import { CHANGE_LATER_NOTE, PLATFORM_NOTE, toolsUnavailableWords } from './agents'
 
 const CARDS = cardsFixture.cards as unknown as CardView[]
 const TOOLS = toolsFixture.tools as unknown as ToolView[]
@@ -152,14 +152,23 @@ describe('when the agent runtime is down', () => {
   it('says the tool list is not available and keeps the cards', () => {
     const html = render({ tools: down })
     const main = mainOf(html)
-    expect(main).toContain(TOOLS_UNAVAILABLE_WORDS)
+    expect(main).toContain(toolsUnavailableWords(true))
     expect(tileNames(html)).toEqual(['Planner', 'AI troubleshooter', 'Version checker', 'Weekly summary'])
   })
 
-  it('says it on the Tools tab too, with no tool rows', () => {
+  it('says it on the Tools tab too, with no tool rows and no cards below to point at', () => {
     const html = render({ path: '/agents?tab=tools', tools: down })
-    expect(mainOf(html)).toContain(TOOLS_UNAVAILABLE_WORDS)
+    const main = mainOf(html)
+    expect(main).toContain(toolsUnavailableWords(false))
+    expect(main).not.toContain('below')
     expect(html).not.toContain('data-tool-id')
+  })
+
+  it('does not point at the cards when they failed too', () => {
+    const main = mainOf(render({ tools: down, cards: down }))
+    expect(main).toContain(toolsUnavailableWords(false))
+    expect(main).toContain(CARDS_UNAVAILABLE_WORDS)
+    expect(main).not.toContain('below')
   })
 
   it('keeps the platform agents when the cards fail', () => {

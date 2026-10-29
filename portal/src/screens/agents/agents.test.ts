@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ToolView } from '../../api/types'
-import { accessLabel, approvalWords, cardAccess, faceId, isPlatformAgent, kindLabel, PLATFORM_AGENTS, platformAgentMark, toolCountWords, toolKinds, versionWords } from './agents'
+import { accessLabel, approvalWords, cardAccess, faceId, isPlatformAgent, kindLabel, PLATFORM_AGENTS, platformAgentMark, toolCountWords, toolKinds, toolsUnavailableWords, versionWords } from './agents'
 
 const TOOLS: ToolView[] = [
   { id: 'jira.search', kind: 'read', name: 'Search Jira', description: '', target_input: null, min_approvers: null },
@@ -47,6 +47,13 @@ describe('platform agents', () => {
     expect(isPlatformAgent('crd_version_checker')).toBe(false)
   })
 
+})
+
+describe('when the tool list is down', () => {
+  it('points at the agent cards only when they show below', () => {
+    expect(toolsUnavailableWords(true)).toBe('The tool list is not available right now. The agent cards below are still here.')
+    expect(toolsUnavailableWords(false)).toBe('The tool list is not available right now.')
+  })
 })
 
 describe('cards', () => {

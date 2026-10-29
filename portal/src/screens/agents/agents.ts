@@ -31,7 +31,11 @@ export const PLATFORM_AGENT_IDS: readonly string[] = PLATFORM_AGENTS.map((agent)
 
 export const PLATFORM_NOTE = 'This agent is part of the platform, so only the team that runs the platform can change it.'
 export const CHANGE_LATER_NOTE = 'Changing an agent in plain English is coming later.'
-export const TOOLS_UNAVAILABLE_WORDS = 'The tool list is not available right now. The agent cards below are still here.'
+const TOOLS_UNAVAILABLE_WORDS = 'The tool list is not available right now.'
+
+export function toolsUnavailableWords(cardsBelow: boolean): string {
+  return cardsBelow ? `${TOOLS_UNAVAILABLE_WORDS} The agent cards below are still here.` : TOOLS_UNAVAILABLE_WORDS
+}
 
 export function isPlatformAgent(id: string): boolean {
   return PLATFORM_AGENT_IDS.includes(id)

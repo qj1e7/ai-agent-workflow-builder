@@ -4,7 +4,7 @@ import { useAgentCards, useTools } from '../../api/queries'
 import { PageHead } from '../../shell/PageHead'
 import { Button } from '../../ui/Button'
 import { CardDialog, CardTile, openedFromList, PlatformDialog, PlatformTile, tileId, type ToolIndex } from './AgentCard'
-import { faceId, PLATFORM_AGENTS, TOOLS_UNAVAILABLE_WORDS } from './agents'
+import { faceId, PLATFORM_AGENTS, toolsUnavailableWords } from './agents'
 import { ToolsTab } from './ToolsTab'
 import styles from './AgentsPage.module.css'
 
@@ -55,7 +55,7 @@ export function AgentsPage({ heading, lead }: { heading: string; lead: string })
       </div>
       {tools.isError ? (
         <p className={styles['notice']} role="status">
-          {TOOLS_UNAVAILABLE_WORDS}{' '}
+          {toolsUnavailableWords(tab === 'agents' && cards.isSuccess)}{' '}
           <Button onClick={() => void tools.refetch()}>Try again</Button>
         </p>
       ) : null}
