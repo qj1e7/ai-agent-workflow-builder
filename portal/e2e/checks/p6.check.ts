@@ -247,7 +247,7 @@ test('@lane3 Remove reaches the platform at once, and Undo, which has no time li
   })
 })
 
-test('@lane4 carol sets the schedule to every Monday at 9:00 and the page shows the next check in Singapore time with carol as owner', async ({ browser }) => {
+test('@lane4 carol sets the schedule to every Monday at 9:00, warned that she becomes its owner, and the page shows the next check in Singapore time with carol as owner', async ({ browser }) => {
   await withBackend(async (backend) => {
     await backend.freshWatchlist('alice', [LANGGRAPH])
     const context = await devContext(browser, 'carol')
@@ -255,10 +255,15 @@ test('@lane4 carol sets the schedule to every Monday at 9:00 and the page shows 
     const watch = watchPage(page)
     await openSoftware(page)
     await page.getByRole('button', { name: 'Set a schedule' }).click()
+    await expect(page.getByLabel('Day'), 'focus moves into the editor').toBeFocused()
+    const warning = 'Saving makes you the owner of this schedule. Its checks then count as your work, so you won’t be able to approve them.'
+    await expect(page.getByText(warning)).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Save schedule' })).toHaveAccessibleDescription(warning)
     await page.getByLabel('Day').selectOption('monday')
     await page.getByLabel('Time, Singapore').fill('09:00')
     await page.getByRole('button', { name: 'Save schedule' }).click()
     await expect(page.getByText('Checked every Monday at 9:00, set by Carol.')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Change schedule' }), 'focus returns to the button that opened the editor').toBeFocused()
     const api = (await viewOf(backend)).schedule
     const parts = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Singapore' }).formatToParts(new Date(api?.next_at ?? ''))
     const get = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
