@@ -99,6 +99,14 @@ describe('a card', () => {
     }
   })
 
+  it('tells the shell that the page moves focus itself once a card has shown, and not before', () => {
+    const heading = (html: string) => /<h1\b[^>]*>/.exec(html)?.[0] ?? ''
+    expect(heading(render())).not.toContain('data-page-moves-focus')
+    expect(heading(render({ path: '/agents/crd_nothing' }))).not.toContain('data-page-moves-focus')
+    expect(heading(render({ path: '/agents/crd_version_checker' }))).toContain('data-page-moves-focus')
+    expect(heading(render({ path: '/agents/planner' }))).toContain('data-page-moves-focus')
+  })
+
   it('labels the dialog with its title', () => {
     const dialog = dialogOf(render({ path: '/agents/crd_version_checker' }))
     const labelled = /aria-labelledby="([^"]+)"/.exec(dialog)?.[1]

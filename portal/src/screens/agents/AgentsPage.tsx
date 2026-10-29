@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import { useAgentCards, useTools } from '../../api/queries'
 import { PageHead } from '../../shell/PageHead'
@@ -26,25 +26,20 @@ export function AgentsPage({ heading, lead }: { heading: string; lead: string })
   const card = agentId === null ? undefined : cards.data?.find((entry) => entry.card_id === agentId)
   const platform = agentId === null ? undefined : PLATFORM_AGENTS.find((entry) => entry.id === agentId)
 
-  // Closing a card puts focus back on its tile, also when the page was opened straight on the card's address.
-  const opened = useRef<string | null>(null)
+  // Once a card has shown, the page moves focus itself: into the card, then back to its tile.
+  const shownId = platform ? platform.id : card ? faceId(card) : null
+  const [lastShown, setLastShown] = useState<string | null>(null)
+  if (shownId !== null && shownId !== lastShown) setLastShown(shownId)
   useEffect(() => {
-    if (agentId !== null) {
-      opened.current = platform ? platform.id : card ? faceId(card) : null
-      return
-    }
-    const last = opened.current
-    opened.current = null
-    if (last === null) return
-    document.getElementById(tileId(last))?.focus()
-  }, [agentId, card, platform])
+    if (agentId === null && lastShown !== null) document.getElementById(tileId(lastShown))?.focus()
+  }, [agentId, lastShown])
 
   const close = () => void navigate(`/agents${search}`)
 
   const specialists = cards.data ?? []
   return (
     <>
-      <PageHead heading={heading} lead={lead} />
+      <PageHead heading={heading} lead={lead} movesFocus={lastShown !== null} />
       <div className={styles['tabs']} role="group" aria-label="Show">
         <button type="button" aria-pressed={tab === 'agents'} onClick={() => setParams({}, { replace: true })}>
           Agents <span className={styles['count']}>{PLATFORM_AGENTS.length + specialists.length}</span>

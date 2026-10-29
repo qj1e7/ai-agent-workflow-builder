@@ -14,14 +14,12 @@ import styles from './shell/Shell.module.css'
 function useHeadingFocus(): void {
   const { pathname } = useLocation()
   const previous = useRef<string | null>(null)
-  // A card opening or closing on the same page keeps focus where the page put it.
-  const page = pathname.split('/')[1] ?? ''
   useEffect(() => {
     const heading = document.querySelector<HTMLElement>('main h1')
     if (!heading) return
     document.title = `${heading.textContent.trim()} · ${PRODUCT}`
-    if (previous.current !== null && previous.current !== page) heading.focus({ preventScroll: true })
-    previous.current = page
+    if (previous.current !== null && previous.current !== pathname && !heading.hasAttribute('data-page-moves-focus')) heading.focus({ preventScroll: true })
+    previous.current = pathname
   })
 }
 
