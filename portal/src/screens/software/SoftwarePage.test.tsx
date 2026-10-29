@@ -2,6 +2,7 @@ import failedRun from '@contracts/fixtures/views/failure.final.json'
 import empty from '@contracts/fixtures/watchlist/empty.json'
 import statuses from '@contracts/fixtures/watchlist/statuses.json'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
@@ -10,12 +11,12 @@ import { createDevSession } from '../../api/session'
 import type { Me, WatchlistView } from '../../api/types'
 import { AddSoftwareFields, EMPTY_VALUES } from './AddSoftware'
 import { SoftwareRoute } from './SoftwarePage'
-import { ScheduleNote } from './Schedule'
+import { ScheduleEditor, ScheduleNote } from './Schedule'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
 const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
 
-function render(view: unknown, me: Me, runs: readonly { run_id: string }[] = []): string {
+function render(view: unknown, me: Me, runs: readonly { run_id: string }[] = [], page: ReactNode = <SoftwareRoute />): string {
   const session = createDevSession(null)
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   queryClient.setQueryData(['me', session.cacheScope()], me)
@@ -25,9 +26,7 @@ function render(view: unknown, me: Me, runs: readonly { run_id: string }[] = [])
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
-        <MemoryRouter>
-          <SoftwareRoute />
-        </MemoryRouter>
+        <MemoryRouter>{page}</MemoryRouter>
       </ApiProvider>
     </QueryClientProvider>,
   )
@@ -133,6 +132,14 @@ describe('the add form', () => {
     const html = fields({})
     expect(html).not.toContain('aria-invalid')
     expect(html).toContain('id="sw-version-help"')
+  })
+})
+
+describe('the schedule editor', () => {
+  it('warns before saving that the person saving becomes the owner and cannot approve its checks', () => {
+    const html = render(statuses, ALICE, [], <ScheduleEditor schedule={(statuses as WatchlistView).schedule} onDone={() => undefined} />)
+    expect(text(html)).toContain('Saving makes you the owner of this schedule. Its checks then count as your work, so you won’t be able to approve them.')
+    expect(html).toMatch(/<button[^>]*type="submit"[^>]*aria-describedby="sched-owner-note"/)
   })
 })
 

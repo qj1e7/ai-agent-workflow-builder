@@ -44,6 +44,12 @@
   gap: var(--space-3) var(--space-4);
 }
 
+.ownerNote {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: var(--text-14);
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;
