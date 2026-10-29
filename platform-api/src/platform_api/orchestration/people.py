@@ -282,15 +282,29 @@ def remove_person(
     if person.is_approver and len(approvers(people)) - 1 < MIN_APPROVERS:
         return Refused(PeopleRefusal.TWO_APPROVERS)
     return Changed(
-        replace(
-            person,
-            is_operator=False,
-            is_approver=False,
-            entra_oid=None,
-            bound_at=None,
-            removed_at=now,
-        ),
-        f"{actor.display} removed {person.display} from the list.",
+        _removed(person, now), f"{actor.display} removed {person.display} from the list."
+    )
+
+
+def drop_if_roleless(person: Person, now: datetime) -> Changed | None:
+    """Everyone keeps at least one role. Someone left with none, once no request about them is
+    waiting, leaves the list."""
+    if person.roles or not person.on_list:
+        return None
+    return Changed(
+        _removed(person, now),
+        f"{person.display} was removed from the list, because {person.display} has no other role.",
+    )
+
+
+def _removed(person: Person, now: datetime) -> Person:
+    return replace(
+        person,
+        is_operator=False,
+        is_approver=False,
+        entra_oid=None,
+        bound_at=None,
+        removed_at=now,
     )
 
 

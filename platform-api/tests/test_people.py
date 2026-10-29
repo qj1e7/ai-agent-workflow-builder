@@ -298,6 +298,16 @@ class TestRemovePerson:
     def test_only_an_operator_removes(self):
         assert refused(rules.remove_person(BOB, TEAM, DAVE, LATER)) is PeopleRefusal.NOT_AN_OPERATOR
 
+    def test_someone_left_with_no_role_leaves_the_list(self):
+        dropped = rules.drop_if_roleless(person("erin"), LATER)
+        assert dropped is not None
+        assert (dropped.person.removed_at, dropped.summary) == (
+            LATER,
+            "Erin was removed from the list, because Erin has no other role.",
+        )
+        assert rules.drop_if_roleless(CAROL, LATER) is None
+        assert rules.drop_if_roleless(GONE, LATER) is None
+
 
 ASKED_CHANGE = {"person_id": "dave", "role": "approver", "added_at": NOW.isoformat()}
 ASKED = Confirmation(

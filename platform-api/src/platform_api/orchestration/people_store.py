@@ -413,19 +413,20 @@ class People:
         """Closes the open Approver requests nobody can decide any more: those about someone
         removed, and those asked by someone removed or no longer an Operator."""
         for c in await self._confirmations.open_ones(uow):
-            if c.kind is not ConfirmationKind.APPROVER:
+            if c.kind is not ConfirmationKind.APPROVER or c.about is None:
                 continue
+            about = _target(people, c.about)
             if removed and c.about == left.id:
                 summary = (
                     f"The request to make {left.display} an Approver was closed, because "
                     f"{left.display} left the list."
                 )
             elif c.asked_by == left.id:
-                about = next((p.display for p in people if p.id == c.about), "someone")
+                about_name = about.display if about is not None else "someone"
                 why = "left the list" if removed else "is no longer an Operator"
                 summary = (
-                    f"{left.display}'s request to make {about} an Approver was closed, because "
-                    f"{left.display} {why}."
+                    f"{left.display}'s request to make {about_name} an Approver was closed, "
+                    f"because {left.display} {why}."
                 )
             else:
                 continue
@@ -433,6 +434,18 @@ class People:
             await self._confirmations.record_change(
                 uow, "people", me.id, summary, confirmation_id=c.id
             )
+            if about is not None and about.id != left.id:
+                await self._drop_if_roleless(uow, me.id, about)
+
+    async def _drop_if_roleless(self, uow: UnitOfWork, by: UserId, person: Person) -> None:
+        if person.id in await self._pending(uow):
+            return
+        dropped = rules.drop_if_roleless(person, uow.now)
+        if dropped is None:
+            return
+        assert dropped.summary is not None
+        await self._store.save(uow, dropped.person)
+        await self._confirmations.record_change(uow, "people", by, dropped.summary)
 
     async def _pending(self, uow: UnitOfWork) -> frozenset[UserId]:
         return frozenset(
@@ -542,6 +555,7 @@ class People:
                 confirmed_by=fresh.user_id,
                 confirmation_id=confirmation.id,
             )
+            await self._drop_if_roleless(uow, fresh.user_id, about)
             return Decided(outcome, about)
 
     async def history(self, limit: int) -> list[HistoryLine]:

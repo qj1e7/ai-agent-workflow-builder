@@ -261,7 +261,9 @@ async def test_a_new_approver_waits_for_another_approver(client: httpx.AsyncClie
 
 
 async def test_not_now_leaves_the_role_off(client: httpx.AsyncClient):
-    dave = (await add(client, ALICE, "dave@example.test", "Dave", approver=True)).json()
+    dave = (
+        await add(client, ALICE, "dave@example.test", "Dave", operator=True, approver=True)
+    ).json()
     assert dave["pending_approver"] is not None
     [waiting] = await pending_for(client, BOB)
     declined = await decide(client, BOB, waiting, "not_now")
@@ -272,6 +274,42 @@ async def test_not_now_leaves_the_role_off(client: httpx.AsyncClient):
     )
     asked_again = await client.post(f"/api/v1/people/{dave['id']}/approver", headers=CAROL)
     assert asked_again.status_code == 202
+
+
+async def test_not_now_to_someone_with_no_other_role_takes_them_off_the_list(
+    client: httpx.AsyncClient,
+):
+    dave = (await add(client, ALICE, "dave@example.test", "Dave", approver=True)).json()
+    assert (await me(client, {"X-Dev-User": dave["id"]}))["roles"] == []
+    [waiting] = await pending_for(client, BOB)
+    assert (await decide(client, BOB, waiting, "not_now")).status_code == 201
+    assert dave["id"] not in await roster(client)
+    gone = await client.get("/api/v1/me", headers={"X-Dev-User": dave["id"]})
+    assert gone.status_code == 401
+    lines = await history(client)
+    assert [line["summary"] for line in lines[:2]] == [
+        "Dave was removed from the list, because Dave has no other role.",
+        "Bob said not now to making Dave an Approver, as Alice asked.",
+    ]
+    assert (lines[0]["by"], lines[0]["confirmed_by"]) == ("bob", None)
+    back = await add(client, CAROL, "dave@example.test", "Dave", operator=True)
+    assert (back.status_code, back.json()["id"]) == (201, dave["id"])
+
+
+async def test_a_closed_request_takes_off_someone_left_with_no_role(client: httpx.AsyncClient):
+    gina = (await add(client, ALICE, "gina@example.test", "Gina", operator=True)).json()
+    hal = (
+        await add(client, {"X-Dev-User": gina["id"]}, "hal@example.test", "Hal", approver=True)
+    ).json()
+    assert hal["pending_approver"] is not None
+    assert (await client.delete(f"/api/v1/people/{gina['id']}", headers=ALICE)).status_code == 204
+    assert hal["id"] not in await roster(client)
+    assert await pending_for(client, BOB) == []
+    assert [line["summary"] for line in (await history(client))[:3]] == [
+        "Alice removed Gina from the list.",
+        "Hal was removed from the list, because Hal has no other role.",
+        "Gina's request to make Hal an Approver was closed, because Gina left the list.",
+    ]
 
 
 async def test_nobody_removes_their_own_operator_role(client: httpx.AsyncClient, app: FastAPI):
