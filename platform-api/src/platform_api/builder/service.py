@@ -1,5 +1,6 @@
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 from platform_api.builder.card_store import CardLibrary, NoSuchCard, PinnedAgent, StarterCard
@@ -10,6 +11,22 @@ from platform_api.builder.cards import (
     check_values,
     plan_for_cards,
     tool_list,
+)
+from platform_api.builder.lifecycle import (
+    Columns,
+    Deleted,
+    Gone,
+    Lifecycle,
+    On,
+    Paused,
+    TooLate,
+    delete,
+    from_columns,
+    pause,
+    restore,
+    resume,
+    runs,
+    to_columns,
 )
 from platform_api.builder.models import (
     CardChecked,
@@ -23,6 +40,7 @@ from platform_api.builder.models import (
     ToolList,
     UseCaseAgentView,
     UseCaseCreated,
+    UseCaseDeleted,
     UseCaseList,
     UseCaseView,
 )
@@ -33,7 +51,12 @@ from platform_api.builder.planning import (
     RuntimeNotAnswering,
     plan,
 )
-from platform_api.builder.templates import AGENT_CARDS, TEMPLATES, suggest_template
+from platform_api.builder.templates import (
+    AGENT_CARDS,
+    SOFTWARE_WATCHLIST,
+    TEMPLATES,
+    suggest_template,
+)
 from platform_api.builder.views import template_view
 from platform_api.builder.watchlist import Watchlist
 from platform_api.db import Database, json
@@ -43,6 +66,8 @@ from platform_api.orchestration import (
     RunSpec,
     RunStarted,
     RunStarter,
+    SavedSchedule,
+    ScheduleBook,
     Task,
     card_bindings,
     cards_policy,
@@ -50,16 +75,28 @@ from platform_api.orchestration import (
 from platform_api.shared import Principal, UseCaseId, UserId, new_id
 
 _CURRENT_VERSION = """
-    SELECT u.use_case_id, u.owner, v.version, v.template, v.name, v.instruction, v.params,
-           v.created_at
+    SELECT u.use_case_id, u.owner, u.paused_at, u.paused_by, u.deleted_at, u.deleted_by,
+           v.version, v.template, v.name, v.instruction, v.params, v.created_at
     FROM builder.use_cases u
     JOIN builder.use_case_versions v
       ON v.use_case_id = u.use_case_id AND v.version = u.current_version
 """
 
 
-def _view(row: Mapping[str, Any], agents: Sequence[PinnedAgent]) -> UseCaseView:
+def lifecycle_of(row: Mapping[str, Any]) -> Lifecycle:
+    return from_columns(
+        Columns(row["paused_at"], row["paused_by"], row["deleted_at"], row["deleted_by"])
+    )
+
+
+def _view(
+    row: Mapping[str, Any],
+    agents: Sequence[PinnedAgent],
+    schedule: SavedSchedule | None,
+    now: datetime,
+) -> UseCaseView:
     template = TEMPLATES[row["template"]]
+    on = runs(lifecycle_of(row))
     plan = (
         plan_for_cards([a.card for a in agents])
         if template.key == AGENT_CARDS.key
@@ -74,6 +111,8 @@ def _view(row: Mapping[str, Any], agents: Sequence[PinnedAgent]) -> UseCaseView:
         params=row["params"],
         owner=UserId(row["owner"]),
         created_at=row["created_at"],
+        state="on" if on else "paused",
+        next_run_at=schedule.slots(now).next if on and schedule is not None else None,
         plan=plan,
         agents=[
             UseCaseAgentView(
@@ -109,6 +148,19 @@ class CardsRefused:
     refused: CardRefused
 
 
+@dataclass(frozen=True)
+class UseCasePaused:
+    """A paused use case starts no run until an Operator resumes it."""
+
+
+@dataclass(frozen=True)
+class WatchlistStays:
+    """The Software watchlist is the team's one watchlist, so it is never deleted."""
+
+
+type Move = Callable[[Lifecycle, str, datetime], Lifecycle | Gone | TooLate | WatchlistStays]
+
+
 class Builder:
     def __init__(
         self,
@@ -122,6 +174,7 @@ class Builder:
         self._runs = runs
         self._watchlist = watchlist
         self._cards = CardLibrary(db)
+        self._schedules = ScheduleBook(db)
         self._planner = planner or NoPlanner()
         self.public_base_url = public_base_url
 
@@ -130,27 +183,121 @@ class Builder:
         Per-team scoping comes with Entra ID, if more teams join."""
         async with self._db.connection("builder") as conn:
             cursor = await conn.execute(
-                _CURRENT_VERSION + " ORDER BY u.created_at DESC, u.use_case_id DESC"
+                _CURRENT_VERSION
+                + " WHERE u.deleted_at IS NULL ORDER BY u.created_at DESC, u.use_case_id DESC"
             )
             rows = await cursor.fetchall()
-        return UseCaseList(use_cases=await self._views(rows))
+        schedules = {saved.use_case_id: saved for saved in await self._schedules.all()}
+        return UseCaseList(use_cases=await self._views(rows, schedules))
 
     async def get_use_case(self, use_case_id: str) -> UseCaseView | None:
+        """None for a deleted use case too: it has left the list until it is restored."""
         async with self._db.connection("builder") as conn:
             cursor = await conn.execute(
-                _CURRENT_VERSION + " WHERE u.use_case_id = %s", (use_case_id,)
+                _CURRENT_VERSION + " WHERE u.use_case_id = %s AND u.deleted_at IS NULL",
+                (use_case_id,),
             )
             row = await cursor.fetchone()
-        return None if row is None else (await self._views([row]))[0]
+        if row is None:
+            return None
+        saved = await self._schedules.get(UseCaseId(use_case_id))
+        schedules = {} if saved is None else {saved.use_case_id: saved}
+        return (await self._views([row], schedules))[0]
 
-    async def _views(self, rows: Sequence[Mapping[str, Any]]) -> list[UseCaseView]:
+    async def _views(
+        self, rows: Sequence[Mapping[str, Any]], schedules: Mapping[UseCaseId, SavedSchedule]
+    ) -> list[UseCaseView]:
         agent_cases = [
             (row["use_case_id"], row["version"])
             for row in rows
             if row["template"] == AGENT_CARDS.key
         ]
         agents = await self._cards.agents_of(agent_cases)
-        return [_view(row, agents.get((row["use_case_id"], row["version"]), [])) for row in rows]
+        now = self._db.clock()
+        return [
+            _view(
+                row,
+                agents.get((row["use_case_id"], row["version"]), []),
+                schedules.get(row["use_case_id"]),
+                now,
+            )
+            for row in rows
+        ]
+
+    async def pause_use_case(self, use_case_id: str, principal: Principal) -> UseCaseView | None:
+        moved = await self._move(
+            use_case_id, lambda state, _, now: pause(state, now, principal.user_id)
+        )
+        return None if moved is None else await self.get_use_case(use_case_id)
+
+    async def resume_use_case(self, use_case_id: str) -> UseCaseView | None:
+        moved = await self._move(use_case_id, lambda state, _template, _now: resume(state))
+        return None if moved is None else await self.get_use_case(use_case_id)
+
+    async def delete_use_case(
+        self, use_case_id: str, principal: Principal
+    ) -> UseCaseDeleted | WatchlistStays | None:
+        def move(state: Lifecycle, template: str, now: datetime) -> Lifecycle | WatchlistStays:
+            if template == SOFTWARE_WATCHLIST.key:
+                return WatchlistStays()
+            return delete(state, now, principal.user_id)
+
+        match await self._move(use_case_id, move):
+            case Deleted() as deleted:
+                return UseCaseDeleted(
+                    use_case_id=use_case_id,
+                    deleted_at=deleted.at,
+                    restore_until=deleted.restore_until,
+                )
+            case WatchlistStays() as stays:
+                return stays
+            case _:
+                return None
+
+    async def restore_use_case(self, use_case_id: str) -> UseCaseView | TooLate | None:
+        match await self._move(use_case_id, lambda state, _, now: restore(state, now)):
+            case TooLate() as late:
+                return late
+            case None:
+                return None
+            case _:
+                return await self.get_use_case(use_case_id)
+
+    async def _move(
+        self, use_case_id: str, move: Move
+    ) -> Lifecycle | TooLate | WatchlistStays | None:
+        """Applies one move under the use case's row lock, so two at once end in one state.
+        None when there is no such use case, or a deleted one is paused or resumed."""
+        async with self._db.transaction("builder") as uow:
+            row = await (
+                await uow.conn.execute(
+                    "SELECT u.paused_at, u.paused_by, u.deleted_at, u.deleted_by, v.template"
+                    " FROM builder.use_cases u JOIN builder.use_case_versions v"
+                    " ON v.use_case_id = u.use_case_id AND v.version = u.current_version"
+                    " WHERE u.use_case_id = %s FOR UPDATE OF u",
+                    (use_case_id,),
+                )
+            ).fetchone()
+            if row is None:
+                return None
+            before = lifecycle_of(row)
+            after = move(before, row["template"], uow.now)
+            if isinstance(after, Gone):
+                return None
+            if isinstance(after, On | Paused | Deleted) and after != before:
+                columns = to_columns(after)
+                await uow.conn.execute(
+                    "UPDATE builder.use_cases SET paused_at = %s, paused_by = %s,"
+                    " deleted_at = %s, deleted_by = %s WHERE use_case_id = %s",
+                    (
+                        columns.paused_at,
+                        columns.paused_by,
+                        columns.deleted_at,
+                        columns.deleted_by,
+                        use_case_id,
+                    ),
+                )
+        return after
 
     @staticmethod
     def tools() -> ToolList:
@@ -235,8 +382,10 @@ class Builder:
 
     async def run_spec_for(self, use_case_id: UseCaseId) -> RunSpec | None | NothingToCheck:
         view = await self.get_use_case(use_case_id)
-        if view is None:
-            return None
+        return None if view is None else await self._spec_of(view)
+
+    async def _spec_of(self, view: UseCaseView) -> RunSpec | NothingToCheck:
+        use_case_id = UseCaseId(view.use_case_id)
         template = TEMPLATES[view.template]
         params = view.params
         task: Task
@@ -278,9 +427,14 @@ class Builder:
 
     async def start_run(
         self, use_case_id: UseCaseId, principal: Principal, idempotency_key: str
-    ) -> RunStarted | None | NothingToCheck | NoModelToRun:
-        spec = await self.run_spec_for(use_case_id)
-        if spec is None or isinstance(spec, NothingToCheck):
+    ) -> RunStarted | None | NothingToCheck | NoModelToRun | UseCasePaused:
+        view = await self.get_use_case(use_case_id)
+        if view is None:
+            return None
+        if view.state == "paused":
+            return UseCasePaused()
+        spec = await self._spec_of(view)
+        if isinstance(spec, NothingToCheck):
             return spec
         if isinstance(spec.task, CardsTask) and not await self._planner.has_model():
             return NoModelToRun()

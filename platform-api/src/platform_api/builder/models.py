@@ -56,6 +56,9 @@ class UseCaseAgentView(WireModel):
     values: dict[str, str]
 
 
+type UseCaseState = Literal["on", "paused"]
+
+
 class UseCaseView(WireModel):
     use_case_id: str
     version: int
@@ -65,6 +68,14 @@ class UseCaseView(WireModel):
     params: dict[str, str]
     owner: UserId
     created_at: datetime
+    state: UseCaseState = Field(
+        description="on, or paused until an Operator resumes it. A paused workflow starts no "
+        "run, on its schedule or by hand. A deleted workflow is not shown."
+    )
+    next_run_at: datetime | None = Field(
+        description="When the workflow next runs on its own. Null while it is paused, and for "
+        "a workflow with no schedule."
+    )
     plan: list[BlockView] = Field(
         description="The blocks a run of this use case draws, in order. A template use case "
         "has its template's blocks. An agent use case has one agent block for each agent, "
@@ -77,7 +88,16 @@ class UseCaseView(WireModel):
 
 
 class UseCaseList(WireModel):
-    use_cases: list[UseCaseView]
+    use_cases: list[UseCaseView] = Field(description="Every workflow that is not deleted.")
+
+
+class UseCaseDeleted(WireModel):
+    use_case_id: str
+    deleted_at: datetime
+    restore_until: datetime = Field(
+        description="Until then, POST /api/v1/use-cases/{use_case_id}/restore puts the workflow "
+        "back as it was. Its past runs stay readable either way."
+    )
 
 
 class SuggestIn(WireModel):

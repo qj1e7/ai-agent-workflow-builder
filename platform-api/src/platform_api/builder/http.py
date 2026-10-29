@@ -34,6 +34,7 @@ from platform_api.builder.service import (
     CardsRefused,
     NoModelToRun,
     NothingToCheck,
+    UseCasePaused,
 )
 from platform_api.builder.templates import (
     AGENT_CARDS,
@@ -148,8 +149,8 @@ async def get_use_case(
         200: {"model": RunStarted, "description": "This Idempotency-Key started the run before"},
         404: NOT_FOUND,
         409: error_response(
-            "The watchlist is empty, so there is nothing to check, or an agent use case has no "
-            "AI model connected"
+            "The watchlist is empty, so there is nothing to check, an agent use case has no "
+            "AI model connected, or the workflow is paused"
         ),
     },
 )
@@ -167,6 +168,8 @@ async def start_run(
         raise HTTPException(409, "The watchlist is empty. Add software before starting a check.")
     if isinstance(started, NoModelToRun):
         raise HTTPException(409, NO_MODEL_TO_RUN)
+    if isinstance(started, UseCasePaused):
+        raise HTTPException(409, "This workflow is paused. Resume it to start a run.")
     if not started.created:
         response.status_code = 200
     return RunStarted(run_id=started.run_id, events_url=f"/api/v1/runs/{started.run_id}/events")

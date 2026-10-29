@@ -4944,10 +4944,38 @@
         "title": "UseCaseCreated",
         "type": "object"
       },
+      "UseCaseDeleted": {
+        "additionalProperties": false,
+        "properties": {
+          "deleted_at": {
+            "format": "date-time",
+            "title": "Deleted At",
+            "type": "string"
+          },
+          "restore_until": {
+            "description": "Until then, POST /api/v1/use-cases/{use_case_id}/restore puts the workflow back as it was. Its past runs stay readable either way.",
+            "format": "date-time",
+            "title": "Restore Until",
+            "type": "string"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "use_case_id",
+          "deleted_at",
+          "restore_until"
+        ],
+        "title": "UseCaseDeleted",
+        "type": "object"
+      },
       "UseCaseList": {
         "additionalProperties": false,
         "properties": {
           "use_cases": {
+            "description": "Every workflow that is not deleted.",
             "items": {
               "$ref": "#/components/schemas/UseCaseView"
             },
@@ -4960,6 +4988,13 @@
         ],
         "title": "UseCaseList",
         "type": "object"
+      },
+      "UseCaseState": {
+        "enum": [
+          "on",
+          "paused"
+        ],
+        "type": "string"
       },
       "UseCaseView": {
         "additionalProperties": false,
@@ -4985,6 +5020,19 @@
             "title": "Name",
             "type": "string"
           },
+          "next_run_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the workflow next runs on its own. Null while it is paused, and for a workflow with no schedule.",
+            "title": "Next Run At"
+          },
           "owner": {
             "title": "Owner",
             "type": "string"
@@ -5003,6 +5051,10 @@
             },
             "title": "Plan",
             "type": "array"
+          },
+          "state": {
+            "$ref": "#/components/schemas/UseCaseState",
+            "description": "on, or paused until an Operator resumes it. A paused workflow starts no run, on its schedule or by hand. A deleted workflow is not shown."
           },
           "template": {
             "title": "Template",
@@ -5026,6 +5078,8 @@
           "params",
           "owner",
           "created_at",
+          "state",
+          "next_run_at",
           "plan",
           "agents"
         ],
@@ -7908,6 +7962,105 @@
       }
     },
     "/api/v1/use-cases/{use_case_id}": {
+      "delete": {
+        "description": "Takes the workflow out of the list and stops it running. Nothing is erased: its past runs stay readable, a run waiting for a yes can still be decided, and it can be restored for a day. Deleting it again answers the same.",
+        "operationId": "delete_use_case_api_v1_use_cases__use_case_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "use_case_id",
+            "required": true,
+            "schema": {
+              "title": "Use Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UseCaseDeleted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such workflow"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The Software watchlist can't be deleted. Remove its software instead."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Delete Use Case",
+        "tags": [
+          "builder"
+        ]
+      },
       "get": {
         "operationId": "get_use_case_api_v1_use_cases__use_case_id__get",
         "parameters": [
@@ -7982,6 +8135,289 @@
           }
         ],
         "summary": "Get Use Case",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/use-cases/{use_case_id}/pause": {
+      "post": {
+        "description": "Stops the workflow starting runs, on its schedule or by hand, until an Operator resumes it. A run that has started carries on. Pausing a paused workflow changes nothing.",
+        "operationId": "pause_use_case_api_v1_use_cases__use_case_id__pause_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "use_case_id",
+            "required": true,
+            "schema": {
+              "title": "Use Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UseCaseView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such workflow, or it is deleted"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Pause Use Case",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/use-cases/{use_case_id}/restore": {
+      "post": {
+        "description": "Puts a deleted workflow back as it was, paused or on, within a day of the delete. Restoring a workflow that is not deleted changes nothing.",
+        "operationId": "restore_use_case_api_v1_use_cases__use_case_id__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "use_case_id",
+            "required": true,
+            "schema": {
+              "title": "Use Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UseCaseView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such workflow"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The workflow was deleted more than a day ago"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Restore Use Case",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/use-cases/{use_case_id}/resume": {
+      "post": {
+        "description": "Turns a paused workflow back on. Its next run is the next slot of its schedule. Resuming a workflow that is on changes nothing.",
+        "operationId": "resume_use_case_api_v1_use_cases__use_case_id__resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "use_case_id",
+            "required": true,
+            "schema": {
+              "title": "Use Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UseCaseView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such workflow, or it is deleted"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Resume Use Case",
         "tags": [
           "builder"
         ]
@@ -8069,7 +8505,7 @@
                 }
               }
             },
-            "description": "The watchlist is empty, so there is nothing to check, or an agent use case has no AI model connected"
+            "description": "The watchlist is empty, so there is nothing to check, an agent use case has no AI model connected, or the workflow is paused"
           },
           "422": {
             "content": {
