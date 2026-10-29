@@ -7,7 +7,7 @@ import { Button } from '../../ui/Button'
 import { addProblems, checkName, checkRepo, checkVersion, REPO_HELP, SOURCES_NOTE, VERSION_HELP, type FormErrors } from './software'
 import styles from './Software.module.css'
 
-export interface FormValues {
+interface FormValues {
   readonly name: string
   readonly repo: string
   readonly version: string

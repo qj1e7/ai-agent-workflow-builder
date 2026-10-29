@@ -6,7 +6,7 @@ export interface Named {
   readonly name: string
 }
 
-export type Notice =
+type Notice =
   | { readonly kind: 'added'; readonly name: string }
   | { readonly kind: 'removed'; readonly row: Named }
   | { readonly kind: 'restored'; readonly row: Named }

@@ -17,7 +17,7 @@ export const statusLabel: Record<SoftwareStatus, string> = {
   not_checked: 'Not checked yet',
 }
 
-export type StatusTone = 'bad' | 'wait' | 'open' | 'good' | 'quiet'
+type StatusTone = 'bad' | 'wait' | 'open' | 'good' | 'quiet'
 
 export const statusTone: Record<SoftwareStatus, StatusTone> = {
   cant_check: 'bad',
@@ -28,7 +28,7 @@ export const statusTone: Record<SoftwareStatus, StatusTone> = {
   not_checked: 'quiet',
 }
 
-export const dayLabel: Record<Day, string> = {
+const dayLabel: Record<Day, string> = {
   every_day: 'every day',
   monday: 'every Monday',
   tuesday: 'every Tuesday',
@@ -60,10 +60,10 @@ const CLOCK = /^([01][0-9]|2[0-3]):[0-5][05]$/
 const NAME_LIMIT = 80
 
 export const REPO_HELP = 'Paste the project’s GitHub link, or type owner/name.'
-export const REPO_BAD = 'That doesn’t look like a GitHub project. Paste its GitHub link, or type owner/name.'
-export const REPO_EMPTY = `Type its GitHub repository. ${REPO_HELP}`
+const REPO_BAD = 'That doesn’t look like a GitHub project. Paste its GitHub link, or type owner/name.'
+const REPO_EMPTY = `Type its GitHub repository. ${REPO_HELP}`
 
-export type Checked<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly words: string }
+type Checked<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly words: string }
 
 /** A pasted GitHub link or owner/name, as the owner/name the platform wants. */
 export function repoOf(text: string): string {
@@ -138,13 +138,13 @@ export function matches(count: number): string {
   return count === 1 ? '1 match' : `${count} matches`
 }
 
-export interface Groups {
+interface Groups {
   readonly needs: readonly WatchedSoftwareView[]
   readonly notChecked: readonly WatchedSoftwareView[]
   readonly upToDate: readonly WatchedSoftwareView[]
 }
 
-export function matchesQuery(row: WatchedSoftwareView, query: string): boolean {
+function matchesQuery(row: WatchedSoftwareView, query: string): boolean {
   const q = query.trim().toLowerCase()
   return q === '' || `${row.name} ${row.source.ref}`.toLowerCase().includes(q)
 }
@@ -185,7 +185,7 @@ export function singaporeTime(iso: string): string {
   return `${day.format(at).replace(',', '')}, ${clock.format(at).replace(/^0/, '')}`
 }
 
-export function clockWords(at: string): string {
+function clockWords(at: string): string {
   return at.replace(/^0/, '')
 }
 
@@ -203,7 +203,7 @@ export function scheduleOwnerWords(schedule: ScheduleView): string {
   return `Scheduled checks count as ${schedule.owner_name}’s work, so ${schedule.owner_name} can’t approve them.`
 }
 
-export interface HistoryLine {
+interface HistoryLine {
   readonly when: string
   readonly words: string
 }
