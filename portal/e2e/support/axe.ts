@@ -1,22 +1,15 @@
-import type { Page } from '@playwright/test'
-import axeCore, { type AxeResults } from 'axe-core'
+import AxeBuilder from '@axe-core/playwright'
+import { expect, type Page } from '@playwright/test'
+import { mkdir, writeFile } from 'node:fs/promises'
+import path from 'node:path'
 
-const RESULT_TYPES: axeCore.resultGroups[] = ['violations', 'passes', 'incomplete', 'inapplicable']
+const WCAG_22_AA = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']
 
-/**
- * Runs axe inside the page under test and nowhere else. @axe-core/playwright opens a blank page in the same browser context to finish its run, and a clock
- * pump that runs while that page closes is rejected with "Target page, context or browser has been closed", because the clock belongs to the context.
- * The script is the one @axe-core/playwright injects, so the result has the same shape. It does not enter child frames, and the Portal has none.
- */
-export async function analyzeInPage(page: Page): Promise<AxeResults> {
-  const loaded = await page.evaluate(() => 'axe' in window)
-  if (!loaded) await page.evaluate(axeCore.source)
-  return page.evaluate((resultTypes) => (window as unknown as { axe: typeof axeCore }).axe.run(document, { resultTypes }), RESULT_TYPES)
-}
-
-/** The violations that fail a run: serious or critical, each with the nodes it names. Minor and moderate ones stay in the saved result. */
-export function blockingViolations(axe: AxeResults): string[] {
-  return axe.violations
-    .filter((violation) => violation.impact === 'serious' || violation.impact === 'critical')
-    .map((violation) => `${violation.id} (${violation.impact}): ${violation.nodes.map((node) => node.target.join(' ')).join(' | ')}`)
+/** Runs axe against WCAG 2.2 AA, saves the whole result as <outDir>/<name>.json, and fails on any violation. */
+export async function expectAccessible(page: Page, outDir: string, name: string): Promise<void> {
+  const result = await new AxeBuilder({ page }).withTags(WCAG_22_AA).analyze()
+  await mkdir(outDir, { recursive: true })
+  await writeFile(path.join(outDir, `${name}.json`), JSON.stringify(result, null, 2))
+  const found = result.violations.map((violation) => `${violation.id} (${violation.impact ?? 'unknown'}): ${violation.nodes.map((node) => node.target.join(' ')).join(' | ')}`)
+  expect(found, `${name}: WCAG 2.2 AA violations`).toEqual([])
 }
