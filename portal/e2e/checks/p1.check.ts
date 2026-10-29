@@ -131,8 +131,8 @@ test('@lane1-combine side by side', async ({ browser }) => {
   await composite(
     browser,
     [
-      { label: 'Trunk d09eefb, signed in as alice', file: path.join(dir, 'p1-home-trunk.png') },
-      { label: 'Head 9b1fb01, signed in as alice', file: path.join(dir, 'p1-home-head.png') },
+      { label: `Trunk ${process.env['TRUNK_SHA'] ?? ''}, signed in as alice`.replace(' ,', ','), file: path.join(dir, 'p1-home-trunk.png') },
+      { label: `Head ${process.env['HEAD_SHA'] ?? ''}, signed in as alice`.replace(' ,', ','), file: path.join(dir, 'p1-home-head.png') },
     ],
     path.join(dir, 'p1-home-trunk-head.png'),
     2,
@@ -644,9 +644,15 @@ test('@lane2 alice signs in through the mock identity provider and no X-Dev-User
   const dir = laneDir(2)
   const context = await browser.newContext({ viewport: DESKTOP, locale: 'en-SG', timezoneId: 'Asia/Singapore' })
   const page = await context.newPage()
-  const pending: Promise<{ url: string; method: string; devUser: string | null; bearer: boolean }>[] = []
+  const pending: Promise<{ url: string; method: string; devUser: string | null; bearer: boolean } | null>[] = []
   page.on('request', (r) => {
-    pending.push(r.allHeaders().then((h) => ({ url: r.url(), method: r.method(), devUser: h['x-dev-user'] ?? null, bearer: (h['authorization'] ?? '').startsWith('Bearer ') })))
+    pending.push(
+      r
+        .allHeaders()
+        .then((h) => ({ url: r.url(), method: r.method(), devUser: h['x-dev-user'] ?? null, bearer: (h['authorization'] ?? '').startsWith('Bearer ') }))
+        // A request still in flight when the page closes cannot be read, and it has nothing left to send.
+        .catch(() => null),
+    )
   })
   const meBodies: unknown[] = []
   page.on('response', (r) => {
@@ -673,7 +679,7 @@ test('@lane2 alice signs in through the mock identity provider and no X-Dev-User
   await expect(h1(page)).toHaveText('Settings')
   await page.reload()
   await expect(page.getByRole('banner')).toContainText('Alice')
-  const requests = await Promise.all(pending)
+  const requests = (await Promise.all(pending)).filter((r) => r !== null)
   const api = requests.filter((r) => new URL(r.url).pathname.startsWith('/api/'))
   save(2, 'p1-oidc-requests.json', { total: requests.length, api, withDevUser: requests.filter((r) => r.devUser !== null), me: meBodies })
   expect(requests.filter((r) => r.devUser !== null), 'requests that carry X-Dev-User').toEqual([])
