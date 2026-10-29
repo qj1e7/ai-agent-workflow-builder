@@ -14,6 +14,8 @@ from platform_api.orchestration.agents import (
     AgentReply,
     AgentUnavailable,
     ModelAccess,
+    TaskError,
+    TaskFailed,
     TaskFinished,
     TaskOutput,
     TaskRequest,
@@ -78,6 +80,7 @@ class FakeAgent:
     mode: str = "finished"
     summary: str | None = None
     output: TaskOutput | None = None
+    error: TaskError | None = None
     requests: list[TaskRequest] = field(default_factory=list)
 
     async def run_task(self, request: TaskRequest) -> AgentReply:
@@ -88,6 +91,8 @@ class FakeAgent:
         result = task_result_adapter.validate_python(fixture(f"agent/{name}.json"))
         if self.output is not None and isinstance(result, TaskFinished):
             result = result.model_copy(update={"output": self.output})
+        if self.error is not None and isinstance(result, TaskFailed):
+            result = result.model_copy(update={"error": self.error})
         if self.summary is not None and isinstance(result, TaskFinished):
             output = result.output.model_copy(update={"summary": self.summary})
             result = result.model_copy(update={"output": output})

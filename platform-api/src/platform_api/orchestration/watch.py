@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
 
-from platform_api.orchestration.agents import Finding, ProposedIntentIn
+from platform_api.orchestration.agents import Finding, ProposedIntentIn, TaskError
 from platform_api.orchestration.spec import WatchlistTask
 from platform_api.shared import ApprovalId, ProposalId, RunId, SoftwareId
 
@@ -262,3 +262,16 @@ def review(
             )
         tickets.append(TicketToPropose(index, software_id, finding.newest))
     return Reviewed(tuple(learned), tuple(tickets))
+
+
+UNREADABLE = frozenset({"UpstreamUnavailable", "UpstreamRejected"})
+"""The error types the agents answer with when no listed source could be read."""
+
+
+def nothing_read(task: WatchlistTask, error: TaskError) -> Reviewed | None:
+    """A check that could read no source fails, and says so for every listed software, so no
+    row keeps a status this check could not confirm. Any other failure leaves the rows alone."""
+    if error.type not in UNREADABLE:
+        return None
+    problem = error.message if error.message.endswith(".") else f"{error.message}."
+    return Reviewed(tuple(CouldNotRead(software.id, problem) for software in task.software), ())

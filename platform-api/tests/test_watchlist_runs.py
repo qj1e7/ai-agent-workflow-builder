@@ -10,6 +10,7 @@ from platform_api.orchestration.agents import (
     GithubSource,
     ProposedIntentIn,
     SoftwareToCheck,
+    TaskError,
     TaskOutput,
     WatchlistInputs,
 )
@@ -328,19 +329,23 @@ async def test_a_run_that_fails_after_proposing_drops_its_tickets(h: Harness):
     assert (await standings(h)).software[LANGGRAPH].status == "behind"
 
 
+NOTHING_BEHIND = TaskOutput(
+    summary="All 4 watched software are up to date.",
+    new_tags=[],
+    proposed=[],
+    carry_forward=CarryForward(),
+    findings=[
+        finding(LANGGRAPH, "up_to_date", "1.2.14"),
+        finding(REDIS, "starting_point", "8.2.1"),
+        finding(FASTAPI, "up_to_date", "0.115.0"),
+        finding(POSTGRES, "up_to_date", "17.2.0"),
+    ],
+)
+UNREADABLE = "Could not check LangGraph: GitHub returned 503 Service Unavailable three times"
+
+
 async def test_a_check_with_nothing_behind_records_the_findings_and_writes_nothing(h: Harness):
-    h.agent.output = TaskOutput(
-        summary="All 4 watched software are up to date.",
-        new_tags=[],
-        proposed=[],
-        carry_forward=CarryForward(),
-        findings=[
-            finding(LANGGRAPH, "up_to_date", "1.2.14"),
-            finding(REDIS, "starting_point", "8.2.1"),
-            finding(FASTAPI, "up_to_date", "0.115.0"),
-            finding(POSTGRES, "up_to_date", "17.2.0"),
-        ],
-    )
+    h.agent.output = NOTHING_BEHIND
     run_id = await start_check(h)
     reply = await h.orchestrator.on_step(run_id, StepName.RUN_AGENTS, WORK)
     assert reply == StepReply(False, "nothing_to_write", "All 4 watched software are up to date.")
@@ -353,6 +358,49 @@ async def test_a_check_with_nothing_behind_records_the_findings_and_writes_nothi
     }
     assert found.software[REDIS].facts.our_version == FromFirstCheck("8.2.1", NOW)
     assert found.last_check is not None and found.last_check.state == "succeeded"
+
+
+async def checked_once_then_failed(
+    h: Harness, error: TaskError | None = None
+) -> tuple[RunId, RunId]:
+    h.agent.output = NOTHING_BEHIND
+    first = await start_check(h)
+    await h.orchestrator.on_step(first, StepName.RUN_AGENTS, WORK)
+    h.advance(timedelta(hours=1))
+    h.agent.mode = "failed"
+    h.agent.error = error
+    second = await start_check(h, key="check-2")
+    reply = await h.orchestrator.on_step(second, StepName.RUN_AGENTS, N8nExecutionId("42"))
+    assert (reply.proceed, reply.outcome) == (False, "failed")
+    assert isinstance(await h.state(second), Failed)
+    return first, second
+
+
+async def test_a_check_that_reads_no_source_marks_every_software_cant_check_and_says_why(
+    h: Harness,
+):
+    _, failed = await checked_once_then_failed(h)
+    found = await standings(h)
+    later = NOW + timedelta(hours=1)
+    assert {sid: s.facts.latest_check for sid, s in found.software.items()} == {
+        sid: CouldNotCheck(failed, later, f"{UNREADABLE}.") for sid in GIVEN
+    }
+    assert {s.status for s in found.software.values()} == {"cant_check"}
+    assert found.software[REDIS].facts.our_version == FromFirstCheck("8.2.1", NOW)
+    assert found.last_check is not None
+    assert (found.last_check.run_id, found.last_check.state) == (failed, "failed")
+
+
+async def test_a_check_that_fails_for_another_reason_keeps_what_the_last_check_found(
+    h: Harness,
+):
+    crashed = TaskError(type="AgentError", message="The agent stopped", retryable=False)
+    first, failed = await checked_once_then_failed(h, crashed)
+    found = await standings(h)
+    assert {s.status for s in found.software.values()} == {"up_to_date"}
+    assert found.software[FASTAPI].facts.latest_check == Checked(first, NOW, "0.115.0")
+    assert found.last_check is not None
+    assert (found.last_check.run_id, found.last_check.state) == (failed, "failed")
 
 
 HELD_SPEC = replace(
