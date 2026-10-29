@@ -9,8 +9,8 @@ from harness import (
 )
 
 
-def test_release_check_runs_through_approval_to_one_ticket(api: Api) -> None:
-    use_case_id = api.create_use_case("alice", "happy")
+def test_a_watchlist_check_runs_through_approval_to_one_ticket(api: Api) -> None:
+    use_case_id = api.watch_langgraph("alice")
     key = "e2e-happy-key-0001"
     run_id, first = api.start_run("alice", use_case_id, key)
     again_id, _ = api.start_run("alice", use_case_id, key)

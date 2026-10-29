@@ -33,7 +33,7 @@ KEY = "sk-example-key-not-real-x7"
 def answer(**overrides: object) -> DraftAnswer:
     fields: dict[str, object] = {
         "can_do": True,
-        "name": "Release checker",
+        "name": "Version checker",
         "purpose": "Checks a repository.",
         "blocks": [{"say": "Read releases.", "tool": "github.read_releases"}],
     }
@@ -142,7 +142,7 @@ def test_an_answer_that_did_not_parse_is_unusable():
 
 def test_the_library_is_listed_with_ids_inputs_and_tools():
     text = library_text(library())
-    assert "id crd_release_checker: Release checker" in text
+    assert "id crd_version_checker: Version checker" in text
     assert '"GitHub repository" (a github_repo), "Jira project" (a jira_project)' in text
     assert "github.read_releases, jira.search, jira.create_ticket" in text
     assert library_text([]) == "(no saved agents)"
@@ -153,7 +153,7 @@ def choice(**overrides: object) -> ChoiceAnswer:
     return ChoiceAnswer.model_validate(fields | overrides)
 
 
-def agent(card_id: str = "crd_release_checker", **values: str) -> AgentAnswer:
+def agent(card_id: str = "crd_version_checker", **values: str) -> AgentAnswer:
     return AgentAnswer(card_id=card_id, part="Do it.", values=values)
 
 
@@ -167,7 +167,7 @@ def test_a_choice_keeps_only_saved_agents_and_their_own_inputs():
     assert result.decision == "use_one"
     assert result.agents == [
         ChosenAgent(
-            card_id="crd_release_checker",
+            card_id="crd_version_checker",
             part="Do it.",
             values={"GitHub repository": "fastapi/fastapi"},
         )
@@ -243,7 +243,7 @@ def test_choosing_asks_with_the_library_and_the_task():
     result = choose_agents(choose_request(), lambda t: chat)
     assert result.status == "chosen"
     human = str(chat.calls[0][1])
-    assert "crd_release_checker" in human and choose_request().task in human
+    assert "crd_version_checker" in human and choose_request().task in human
     assert chat.asked == [ChoiceAnswer]
 
 

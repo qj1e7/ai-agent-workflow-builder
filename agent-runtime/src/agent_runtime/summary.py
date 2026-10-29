@@ -26,17 +26,7 @@ class Checked:
 
 
 class Summarizer(Protocol):
-    def summarise(self, repo: str, last_known_tag: str, new_tags: Sequence[str]) -> str: ...
-
     def summarise_check(self, checked: Sequence[Checked]) -> str: ...
-
-
-def summary_prompt(repo: str, last_known_tag: str, new_tags: Sequence[str]) -> str:
-    return (
-        f"Write one plain sentence for non-technical support staff. Say which new releases "
-        f"of the project {repo} appeared after {last_known_tag}. The new release tags are: "
-        f"{', '.join(new_tags)}. Reply with the sentence only."
-    )
 
 
 def check_prompt(checked: Sequence[Checked]) -> str:
@@ -64,25 +54,24 @@ def usable_summary(text: str) -> bool:
     return bool(text) and "\n" not in text and len(text) <= MAX_SUMMARY_LENGTH
 
 
-def template_summary(new_tags: Sequence[str]) -> str:
-    noun = "release" if len(new_tags) == 1 else "releases"
-    return f"{len(new_tags)} new {noun}: {', '.join(new_tags)}"
-
-
 def template_check_summary(checked: Sequence[Checked]) -> str:
     behind = [c for c in checked if c.finding.state == "behind"]
     raised = [c.name for c in checked if c.finding.state == "already_raised"]
     cannot = [c.name for c in checked if c.finding.state == "cant_check"]
-    readable = len(checked) - len(cannot)
-    if behind:
+    readable = [c.name for c in checked if c.finding.state != "cant_check"]
+    if behind and len(checked) == 1:
+        sentence = f"{behind[0].name} has a new release: {behind[0].finding.newest}."
+    elif behind:
         news = _names_and([f"{c.name} {c.finding.newest}" for c in behind])
         verb = "has" if len(behind) == 1 else "have"
         sentence = f"{len(behind)} of {len(checked)} watched software {verb} new releases: {news}."
     elif raised:
         verb = "has a ticket" if len(raised) == 1 else "have tickets"
         sentence = f"No new tickets are needed, as {_names_and(raised)} already {verb}."
+    elif len(readable) == 1:
+        sentence = f"{readable[0]} is up to date."
     elif cannot:
-        sentence = f"All {readable} watched software we could read are up to date."
+        sentence = f"All {len(readable)} watched software we could read are up to date."
     else:
         sentence = f"All {len(checked)} watched software are up to date."
     return f"{sentence} {_names_and(cannot)} could not be checked." if cannot else sentence
@@ -93,9 +82,6 @@ def _names_and(names: Sequence[str]) -> str:
 
 
 class TemplateSummarizer:
-    def summarise(self, repo: str, last_known_tag: str, new_tags: Sequence[str]) -> str:
-        return template_summary(new_tags)
-
     def summarise_check(self, checked: Sequence[Checked]) -> str:
         return template_check_summary(checked)
 
@@ -135,10 +121,6 @@ class ModelSummarizer:
         self._model_name = model_name
         self._factory = factory
         self._fallback = fallback or TemplateSummarizer()
-
-    def summarise(self, repo: str, last_known_tag: str, new_tags: Sequence[str]) -> str:
-        prompt = summary_prompt(repo, last_known_tag, new_tags)
-        return self._answer(prompt) or self._fallback.summarise(repo, last_known_tag, new_tags)
 
     def summarise_check(self, checked: Sequence[Checked]) -> str:
         return self._answer(check_prompt(checked)) or self._fallback.summarise_check(checked)

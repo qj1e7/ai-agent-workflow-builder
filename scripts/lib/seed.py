@@ -1,4 +1,4 @@
-"""Makes a use case and a run that waits at the approval gate, so a test has real ids.
+"""Makes sure a check of the Software watchlist waits at the approval gate, so a test has real ids.
 
 Runs inside the platform-api container, which has python and reaches the API on localhost:
     docker compose exec -T platform-api python - ids < scripts/lib/seed.py
@@ -7,16 +7,21 @@ Runs inside the platform-api container, which has python and reaches the API on 
 `ids` prints {"use_case_id", "run_id", "approval_id"}. `openapi` prints the API's OpenAPI document
 with those ids as the example value of each path parameter, so a scanner calls real resources.
 `openapi-public` keeps only the /api/ routes, the ones the Portal's nginx publishes.
+
+The software id stays out of the ids: a scanner fires DELETE on example values and would remove
+the watched software.
 """
 
 import json
 import sys
 import time
+import urllib.error
 import urllib.request
 import uuid
 
 BASE = "http://localhost:8000"
 USER = "alice"
+LANGGRAPH = {"name": "LangGraph", "repo": "langchain-ai/langgraph", "our_version": "1.2.14"}
 
 
 def call(method: str, path: str, body: object = None, headers: dict[str, str] | None = None):
@@ -31,25 +36,26 @@ def call(method: str, path: str, body: object = None, headers: dict[str, str] | 
         return json.load(response)
 
 
+def ids_of(use_case_id: str, run: dict) -> dict[str, str]:
+    return {
+        "use_case_id": use_case_id,
+        "run_id": run["run_id"],
+        "approval_id": run["approval"]["approval_id"],
+    }
+
+
 def seed() -> dict[str, str]:
-    created = call(
-        "POST",
-        "/api/v1/use-cases",
-        {
-            "template": "release_check",
-            "name": f"scan seed {uuid.uuid4().hex[:8]}",
-            "instruction": (
-                "Check langchain-ai/langgraph for new releases and open a ticket for the team."
-            ),
-            "params": {
-                "repo": "langchain-ai/langgraph",
-                "tag_pattern": r"^\d+\.\d+\.\d+$",
-                "ticket_project": "MOCK",
-                "last_seen_tag": "1.2.14",
-            },
-        },
-    )
-    use_case_id = created["use_case_id"]
+    watchlist = call("GET", "/api/v1/watchlist")["watchlist"]
+    last = None if watchlist is None else watchlist["last_check"]
+    if last is not None and last["state"] == "awaiting_approval":
+        return ids_of(watchlist["use_case_id"], call("GET", f"/api/v1/runs/{last['run_id']}"))
+    try:
+        watchlist = call("POST", "/api/v1/watchlist/software", LANGGRAPH)
+    except urllib.error.HTTPError as error:
+        if error.code != 409:
+            raise
+    use_case_id = watchlist["use_case_id"]
+    call("DELETE", "/api/v1/watchlist/schedule")
     started = call(
         "POST",
         f"/api/v1/use-cases/{use_case_id}/runs",
@@ -60,11 +66,7 @@ def seed() -> dict[str, str]:
     while time.monotonic() < deadline:
         run = call("GET", f"/api/v1/runs/{run_id}")
         if run["state"] == "awaiting_approval":
-            return {
-                "use_case_id": use_case_id,
-                "run_id": run_id,
-                "approval_id": run["approval"]["approval_id"],
-            }
+            return ids_of(use_case_id, run)
         if run["state"] in ("failed", "rejected", "succeeded"):
             raise SystemExit(f"seed run ended as {run['state']}")
         time.sleep(1)

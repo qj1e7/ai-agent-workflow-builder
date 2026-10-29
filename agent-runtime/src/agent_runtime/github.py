@@ -3,7 +3,7 @@ from urllib.parse import quote
 import httpx
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
-from agent_runtime.release_checker import Release, SourceRejected, SourceUnavailable
+from agent_runtime.release_source import Release, SourceRejected, SourceUnavailable
 
 PAGE_SIZE = 30
 NOTES_LENGTH = 400
@@ -32,7 +32,7 @@ class GitHubReleaseSource:
         self._headers = {
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "ai-workflow-builder-release-checker",
+            "User-Agent": "ai-workflow-builder-version-checker",
         }
         if token:
             self._headers["Authorization"] = f"Bearer {token}"

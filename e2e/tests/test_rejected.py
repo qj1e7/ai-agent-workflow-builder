@@ -3,7 +3,7 @@ from harness import Api, approval_requested, assert_gapless, bob_decides, fixtur
 
 def test_declined_run_ends_rejected_and_writes_nothing(api: Api) -> None:
     before = len(api.tickets())
-    use_case_id = api.create_use_case("alice", "rejected")
+    use_case_id = api.watch_langgraph("alice")
     run_id, _ = api.start_run("alice", use_case_id)
     events = api.stream_until("alice", run_id, {"approval_requested"})
     approval_id = approval_requested(events)["approval_id"]

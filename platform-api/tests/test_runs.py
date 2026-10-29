@@ -8,8 +8,8 @@ from platform_api.orchestration.runs import (
     CALLBACK_LIFETIME,
     DEADLINES,
     LEG_STEPS,
+    PLANNER,
     REFEREE_TABLE,
-    ROOM_LEAD,
     STEP_LEG,
     Acting,
     AwaitingApproval,
@@ -183,19 +183,19 @@ def test_working_retries_the_step_on_the_same_execution():
 
 def test_working_proposes_then_finishes_the_step():
     line = ActionLine(connector="jira", operation="create_ticket", line="Create Jira ticket")
-    moved = WORKING.propose(PROPOSAL, Digest("sha256:x"), (line,), ROOM_LEAD, "2 new releases", NOW)
+    moved = WORKING.propose(PROPOSAL, Digest("sha256:x"), (line,), PLANNER, "2 new releases", NOW)
     assert moved.state == Proposed(
         RUN, PROPOSAL, HOLDER, 1, NOW + DEADLINES[Proposed], summary="2 new releases"
     )
     assert kinds(moved.events) == ["write_action_proposed", "step_finished"]
-    assert moved.events[0].actor == ROOM_LEAD
+    assert moved.events[0].actor == PLANNER
     assert moved.events[1].data.model_dump()["outcome"] == "proposed"
 
 
 def test_a_summary_that_is_already_a_sentence_keeps_one_full_stop():
     line = ActionLine(connector="jira", operation="create_ticket", line="Create Jira ticket")
     said = "langchain-ai/langgraph has 2 new releases since 1.2.14: 1.2.16 and 1.2.15."
-    moved = WORKING.propose(PROPOSAL, Digest("sha256:x"), (line,), ROOM_LEAD, said, NOW)
+    moved = WORKING.propose(PROPOSAL, Digest("sha256:x"), (line,), PLANNER, said, NOW)
     assert moved.events[1].summary == f"Workflow step run_agents finished: {said}"
     nothing = WORKING.finish_with_nothing_to_write("Nothing new since 1.2.16.")
     assert [event.summary for event in nothing.events] == [
@@ -264,6 +264,17 @@ def test_failing_keeps_where_to_resume(state, stage, resume):
         "retryable": True,
         "message": "GitHub was unavailable",
     }
+
+
+@pytest.mark.parametrize(
+    "message",
+    ["UpstreamUnavailable: Could not check LangGraph: GitHub returned 503", "n8n said no."],
+)
+def test_a_failure_reads_with_one_closing_full_stop(message: str):
+    moved = WORKING.fail(Failure(FailureReason.AGENT_ERROR, message, retryable=True))
+    summary = moved.events[0].summary
+    assert summary.endswith(". You can retry.")
+    assert ".." not in summary
 
 
 def test_retry_after_a_work_leg_failure_starts_the_work_leg_again():

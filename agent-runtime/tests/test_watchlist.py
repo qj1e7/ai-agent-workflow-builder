@@ -1,3 +1,4 @@
+import time
 from collections.abc import Callable, Sequence
 from typing import Any
 
@@ -31,10 +32,11 @@ from agent_runtime.contracts import (
     watchlist_request,
 )
 from agent_runtime.events import EventLog
-from agent_runtime.release_checker import ReleaseChecker
-from agent_runtime.room import FixedRoomLead, run_task
+from agent_runtime.planner import FixedPlanner, run_task
+from agent_runtime.release_source import Release, ReleaseSource
 from agent_runtime.summary import ModelSummarizer, Summarizer, TemplateSummarizer
-from tests.fakes import FakeClock, RepoSource, langgraph_tags
+from agent_runtime.version_checker import VersionChecker
+from tests.fakes import FakeClock, FakeSource, RepoSource, langgraph_tags
 
 LANGGRAPH = "langchain-ai/langgraph"
 REDIS = "redis/redis"
@@ -43,15 +45,15 @@ TAGS = {LANGGRAPH: langgraph_tags(), REDIS: ["8.2.1", "8.2.0", "8.1.0"], FASTAPI
 
 
 class Room:
-    def __init__(self, source: RepoSource, summarizer: Summarizer | None = None) -> None:
+    def __init__(self, source: ReleaseSource, summarizer: Summarizer | None = None) -> None:
         self.clock = FakeClock()
         self.log = EventLog(self.clock, lambda event: None)
-        self.checker = ReleaseChecker(
+        self.checker = VersionChecker(
             source, summarizer or TemplateSummarizer(), sleep=self.clock.sleep
         )
 
     def run(self, request: TaskRequest) -> TaskResult:
-        return run_task(request, FixedRoomLead(), self.checker, self.log)
+        return run_task(request, FixedPlanner(), self.checker, self.log)
 
 
 def request_for(*software: SoftwareToCheck) -> TaskRequest:
@@ -135,7 +137,50 @@ def test_a_software_behind_gets_one_ticket_naming_it():
     )
     assert ticket.reason == "LangGraph 1.2.16 is out, and we run 1.2.14"
     assert result.output.new_tags == []
-    assert result.output.carry_forward.last_known_tag is None
+
+
+def test_releases_of_another_tag_family_never_count():
+    source = RepoSource({**TAGS, LANGGRAPH: ["cli==0.9.0", "sdk==1.0.0", *langgraph_tags()]})
+    behind = finished(Room(source).run(request_for(langgraph("1.2.15"))))
+    assert finding(behind, LANGGRAPH_ID).new_versions == ["1.2.16"]
+    other = finished(Room(source).run(request_for(langgraph("cli==0.4.37"))))
+    assert (finding(other, LANGGRAPH_ID).state, finding(other, LANGGRAPH_ID).new_versions) == (
+        "up_to_date",
+        [],
+    )
+
+
+def test_drafts_and_prereleases_are_skipped():
+    source = FakeSource([])
+    source.releases = [
+        Release(tag="1.2.18", draft=True),
+        Release(tag="1.2.17", prerelease=True),
+        Release(tag="1.2.16"),
+    ]
+    result = finished(Room(source).run(request_for(langgraph("1.2.15"))))
+    assert finding(result, LANGGRAPH_ID).new_versions == ["1.2.16"]
+
+
+def test_a_network_error_is_retried_the_same_way_as_a_5xx():
+    source = RepoSource(TAGS, down={LANGGRAPH: None})
+    room = Room(source)
+    result = finished(room.run(request_for(langgraph("1.2.14"), redis("8.2.1"))))
+    assert room.clock.slept == [2.0, 2.0]
+    assert finding(result, LANGGRAPH_ID).detail == "GitHub could not be reached three times."
+    said = [
+        e.data.text
+        for e in result.events
+        if isinstance(e, AgentMessageEvent) and e.agent.id == "version_checker"
+    ]
+    assert said[0].startswith("GitHub could not be reached (try 1 of 3).")
+
+
+def test_events_are_emitted_while_the_source_is_read_not_after_it():
+    room = Room(RepoSource(TAGS, down={LANGGRAPH: 503}))
+    seen_when_sleeping: list[int] = []
+    room.clock.on_sleep = lambda: (time.sleep(0.2), seen_when_sleeping.append(len(room.log.events)))
+    room.run(request_for(langgraph("1.2.14")))
+    assert seen_when_sleeping == [4, 5]
 
 
 def test_a_software_that_is_up_to_date_gets_no_ticket():
@@ -145,7 +190,7 @@ def test_a_software_that_is_up_to_date_gets_no_ticket():
         "8.2.1",
     )
     assert result.output.proposed == []
-    assert result.output.summary == "All 1 watched software are up to date."
+    assert result.output.summary == "Redis is up to date."
 
 
 def test_no_version_given_makes_the_newest_release_the_starting_point():
@@ -167,7 +212,7 @@ def test_a_software_with_a_ticket_already_raised_gets_no_second_one(held: dict[s
         ["1.2.16", "1.2.15"],
     )
     assert result.output.proposed == []
-    assert result.events[-1].summary == "Room lead noted that there is nothing to propose."
+    assert result.events[-1].summary == "Planner noted that there is nothing to propose."
     assert result.output.summary == (
         "No new tickets are needed, as LangGraph already has a ticket."
     )
@@ -195,7 +240,7 @@ def test_one_source_that_answers_404_is_reported_and_the_rest_carry_on():
     assert finding(result, LANGGRAPH_ID).state == "behind"
     assert source.calls == [FASTAPI, LANGGRAPH]
     said = [
-        e for e in result.events if isinstance(e, AgentMessageEvent) and e.agent.id != "room_lead"
+        e for e in result.events if isinstance(e, AgentMessageEvent) and e.agent.id != "planner"
     ]
     assert [e.data.text for e in said][0] == (
         "I could not read FastAPI's releases: GitHub answered 404 Not Found. "
@@ -216,7 +261,7 @@ def test_a_source_that_stays_down_is_tried_three_times_then_given_up_while_the_r
     assert finding(result, REDIS_ID).state == "behind"
     tries = [s for s in summaries(result.events) if "(try " in s]
     assert tries == [
-        f"Release checker reported that GitHub answered 503 (try {n} of 3)." for n in (1, 2, 3)
+        f"Version checker reported that GitHub answered 503 (try {n} of 3)." for n in (1, 2, 3)
     ]
 
 
@@ -225,7 +270,22 @@ def test_every_software_unreadable_fails_the_task_and_can_be_retried_after_an_ou
     result = Room(source).run(request_for(fastapi("0.115.0"), redis("8.2.1")))
     assert isinstance(result, TaskFailed)
     assert (result.error.type, result.error.retryable) == ("UpstreamUnavailable", True)
+    assert result.error.message == (
+        "None of the 2 watched software could be checked. GitHub answered 404 Not Found"
+    )
     assert result.events[-1].kind == "agent_failed"
+
+
+def test_one_software_that_cannot_be_checked_fails_with_its_own_reason_and_no_rest():
+    source = RepoSource({**TAGS, LANGGRAPH: ["nightly", "v2-beta"]})
+    result = Room(source).run(request_for(langgraph("1.2.14")))
+    assert isinstance(result, TaskFailed)
+    assert result.error.message == (
+        "Could not check LangGraph: No release has a plain version number"
+    )
+    said = [e.data.text for e in result.events if isinstance(e, AgentMessageEvent)]
+    assert said[-1] == "I could not check LangGraph: No release has a plain version number."
+    assert result.events[-1].summary == "Version checker failed: LangGraph could not be checked."
 
 
 def test_every_software_refused_fails_the_task_for_good():
@@ -256,7 +316,7 @@ def test_each_software_reports_its_state_in_a_read_source_step_in_input_order():
 def test_two_tickets_are_agreed_together():
     result = finished(Room(RepoSource(TAGS)).run(request_for(langgraph("1.2.14"), redis("8.2.0"))))
     assert len(result.output.proposed) == 2
-    assert result.events[-1].summary == "Room lead agreed and will propose 2 tickets for approval."
+    assert result.events[-1].summary == "Planner agreed and will propose 2 tickets for approval."
     assert result.output.summary == (
         "2 of 2 watched software have new releases: LangGraph 1.2.16 and Redis 8.2.1."
     )
@@ -281,7 +341,7 @@ def test_the_model_writes_the_summary_when_it_answers():
 def test_an_unusable_model_answer_falls_back_to_the_template(reply: str):
     summarizer = ModelSummarizer("any:model", factory=model_saying(reply))
     result = finished(Room(RepoSource(TAGS), summarizer).run(request_for(langgraph("1.2.14"))))
-    assert result.output.summary == "1 of 1 watched software has new releases: LangGraph 1.2.16."
+    assert result.output.summary == "LangGraph has a new release: 1.2.16."
 
 
 def test_a_failing_model_falls_back_to_the_template():
@@ -290,16 +350,16 @@ def test_a_failing_model_falls_back_to_the_template():
 
     summarizer = ModelSummarizer("any:model", factory=broken)
     result = finished(Room(RepoSource(TAGS), summarizer).run(request_for(redis("8.2.1"))))
-    assert result.output.summary == "All 1 watched software are up to date."
+    assert result.output.summary == "Redis is up to date."
 
 
 def test_the_tasks_route_runs_a_watchlist():
     clock = FakeClock()
     callbacks = HttpCallbacks(transport=httpx.MockTransport(lambda r: httpx.Response(204)))
-    checker = ReleaseChecker(
+    checker = VersionChecker(
         RepoSource(TAGS, refused={FASTAPI: 404}), TemplateSummarizer(), sleep=clock.sleep
     )
-    runtime = Runtime(checker=checker, lead=FixedRoomLead(), clock=clock, callbacks=callbacks)
+    runtime = Runtime(checker=checker, planner=FixedPlanner(), clock=clock, callbacks=callbacks)
     settings = Settings.from_env(
         {"AGENT_API_KEY": "test-key", "CALLBACK_ALLOWED_ORIGINS": "http://platform-api:8000"}
     )

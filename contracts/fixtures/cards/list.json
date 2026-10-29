@@ -1,12 +1,12 @@
 {
   "cards": [
     {
-      "card_id": "crd_release_checker",
+      "card_id": "crd_version_checker",
       "version": 1,
       "starter": true,
       "owner": "platform",
       "created_at": "2026-11-01T00:00:00Z",
-      "name": "Release checker",
+      "name": "Version checker",
       "purpose": "Checks a public GitHub repository for a new release and proposes a Jira ticket for it.",
       "good_for": [
         "Check langchain-ai/langgraph for new releases",

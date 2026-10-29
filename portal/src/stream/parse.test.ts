@@ -19,7 +19,7 @@ describe('parseEvent', () => {
     const first = ok(success[0])
     expect(first.seq).toBe(1)
     expect(first.at).toBe(Date.parse('2026-11-03T02:14:00Z'))
-    expect(first.summary).toBe('Alice started a run of LangGraph releases.')
+    expect(first.summary).toBe('Alice started a run of the Software watchlist.')
     expect(first.actor.display).toBe('Alice')
   })
 
@@ -27,12 +27,12 @@ describe('parseEvent', () => {
     const message = ok(success[4])
     expect(message.kind).toBe('agent_message')
     if (message.kind !== 'agent_message') throw new Error('expected agent_message')
-    expect(message.data.text).toMatch(/^Please check langchain-ai\/langgraph/)
-    expect(message.data.addressee).toEqual({ kind: 'agent', id: 'release_checker', display: 'Release checker' })
+    expect(message.data.text).toMatch(/^Please check LangGraph for new releases/)
+    expect(message.data.addressee).toEqual({ kind: 'agent', id: 'version_checker', display: 'Version checker' })
   })
 
   it('makes an unknown kind opaque but keeps its seq and summary', () => {
-    const event = ok({ ...success[17], seq: 18, kind: 'agent_left', data: { agent: 'release_checker' } })
+    const event = ok({ ...success[17], seq: 18, kind: 'agent_left', data: { agent: 'version_checker' } })
     expect(event.kind).toBe('opaque')
     expect(event.seq).toBe(18)
     expect(event.summary).toBe(success[17]?.summary)
@@ -40,12 +40,12 @@ describe('parseEvent', () => {
   })
 
   it('makes a known kind with a missing required key opaque', () => {
-    const event = ok({ ...success[4], data: { speaker: { id: 'room_lead', display: 'Room lead' } } })
+    const event = ok({ ...success[4], data: { speaker: { id: 'planner', display: 'Planner' } } })
     expect(event.kind).toBe('opaque')
   })
 
   it('never rejects an unexpected enum value', () => {
-    const raw = failure[11]
+    const raw = failure[failure.length - 1]
     const event = ok({ ...raw, data: { ...(raw?.data as object), reason: 'SomethingNew' } }, runId('run_01JB9'))
     expect(event.kind).toBe('run_failed')
     if (event.kind === 'run_failed') expect(event.data.reason).toBe('SomethingNew')

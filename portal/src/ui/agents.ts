@@ -18,14 +18,14 @@ interface Colours {
 }
 
 const known: Readonly<Record<string, Omit<AgentIdentity, 'id'>>> = {
-  room_lead: {
-    name: 'Room lead',
+  planner: {
+    name: 'Planner',
     accessory: 'headset',
     hue: 'var(--lead)',
     tint: 'var(--lead-tint)',
   },
-  release_checker: {
-    name: 'Release checker',
+  version_checker: {
+    name: 'Version checker',
     accessory: 'magnifier',
     hue: 'var(--checker)',
     tint: 'var(--checker-tint)',

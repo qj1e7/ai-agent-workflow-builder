@@ -4,17 +4,17 @@
     "agent_seq": 1,
     "ts": "2026-11-03T02:14:02.390000Z",
     "agent": {
-      "id": "room_lead",
-      "display": "Room lead"
+      "id": "planner",
+      "display": "Planner"
     },
-    "summary": "Room lead brought in Release checker to read the GitHub releases.",
+    "summary": "Planner brought in Version checker to read the source of LangGraph.",
     "kind": "agent_joined",
     "data": {
       "agent": {
-        "id": "release_checker",
-        "display": "Release checker"
+        "id": "version_checker",
+        "display": "Version checker"
       },
-      "reason": "The task asks about releases of a GitHub repo."
+      "reason": "The task asks about new releases of LangGraph."
     }
   }
 }

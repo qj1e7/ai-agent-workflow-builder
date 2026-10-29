@@ -20,12 +20,12 @@ from platform_api.builder.models import (
 from platform_api.builder.watchlist import attention_first
 from platform_api.contracts.stories import (
     AGENT_CHECKER,
-    AGENT_ROOM_LEAD,
+    AGENT_PLANNER,
     BOB,
     CHANNEL,
     CHECKER,
+    PLANNER,
     PLATFORM,
-    ROOM_LEAD,
     TO_CHECKER,
     TO_ROOM,
     USER_ALICE,
@@ -309,7 +309,7 @@ def _read_sources(tl: Timeline, base: float) -> float:
             AgentStepStarted,
             at,
             AGENT_CHECKER,
-            f"Release checker is reading the releases of {w.name}.",
+            f"Version checker is reading the releases of {w.name}.",
             AgentStepStartedData(step="read_source"),
         )
         unreadable = w.state == "cant_check"
@@ -317,9 +317,9 @@ def _read_sources(tl: Timeline, base: float) -> float:
             AgentStepFinished,
             at + 0.4,
             AGENT_CHECKER,
-            f"Release checker could not read {w.name}."
+            f"Version checker could not read {w.name}."
             if unreadable
-            else f"Release checker read {w.name}. {_detail(w)}",
+            else f"Version checker read {w.name}. {_detail(w)}",
             AgentStepFinishedData(
                 step="read_source",
                 result={"software_id": w.id, "state": w.state, "newest": w.newest},
@@ -331,7 +331,7 @@ def _read_sources(tl: Timeline, base: float) -> float:
                 AgentMessage,
                 at,
                 AGENT_CHECKER,
-                f"Release checker could not check {w.name} and carried on.",
+                f"Version checker could not check {w.name} and carried on.",
                 AgentMessageData(
                     speaker=CHECKER,
                     addressee=TO_ROOM,
@@ -349,7 +349,7 @@ def check_events() -> Timeline:
         RunCreated,
         0.0,
         USER_ALICE,
-        f"Alice started a run of {USE_CASE_NAME}.",
+        f"Alice started a run of the {USE_CASE_NAME}.",
         RunCreatedData(
             use_case_id=USE_CASE_ID, use_case_version=USE_CASE_VERSION, started_by=ALICE
         ),
@@ -372,8 +372,8 @@ def check_events() -> Timeline:
     tl.add(
         AgentJoined,
         2.39,
-        AGENT_ROOM_LEAD,
-        f"Room lead brought in Release checker to read the sources of {count} watched software.",
+        AGENT_PLANNER,
+        f"Planner brought in Version checker to read the sources of {count} watched software.",
         AgentJoinedData(
             agent=CHECKER, reason="The task asks about releases of several watched software."
         ),
@@ -381,10 +381,10 @@ def check_events() -> Timeline:
     tl.add(
         AgentMessage,
         2.51,
-        AGENT_ROOM_LEAD,
-        f"Room lead asked Release checker to check {count} watched software for new releases.",
+        AGENT_PLANNER,
+        f"Planner asked Version checker to check {count} watched software for new releases.",
         AgentMessageData(
-            speaker=ROOM_LEAD,
+            speaker=PLANNER,
             addressee=TO_CHECKER,
             text=f"Please check these for new releases: {_names([w.name for w in WATCHED])}.",
         ),
@@ -395,7 +395,7 @@ def check_events() -> Timeline:
         AgentMessage,
         at + 0.2,
         AGENT_CHECKER,
-        f"Release checker reported {tickets} of {count} watched software behind and suggested "
+        f"Version checker reported {tickets} of {count} watched software behind and suggested "
         f"{tickets} tickets.",
         AgentMessageData(
             speaker=CHECKER,
@@ -407,10 +407,10 @@ def check_events() -> Timeline:
     tl.add(
         AgentMessage,
         at + 0.4,
-        AGENT_ROOM_LEAD,
-        f"Room lead agreed and will propose {tickets} tickets for approval.",
+        AGENT_PLANNER,
+        f"Planner agreed and will propose {tickets} tickets for approval.",
         AgentMessageData(
-            speaker=ROOM_LEAD,
+            speaker=PLANNER,
             addressee=TO_CHECKER,
             text=f"Agreed. I'll draft {tickets} tickets for an Approver to check together.",
         ),
@@ -419,7 +419,7 @@ def check_events() -> Timeline:
     tl.add(
         WriteActionProposed,
         at + 0.9,
-        AGENT_ROOM_LEAD,
+        AGENT_PLANNER,
         f"The agents proposed {tickets} write actions: "
         + "; ".join(line.line for line in lines)
         + ".",

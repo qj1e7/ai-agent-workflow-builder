@@ -1,11 +1,11 @@
-"""The Room lead's plan, with a fake planner standing in for the model."""
+"""The Planner's plan, with a fake planner standing in for the model."""
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 import pytest
 
-from platform_api.builder.cards import RELEASE_CHECKER
+from platform_api.builder.cards import VERSION_CHECKER
 from platform_api.builder.models import (
     CannotDo,
     ModelTrouble,
@@ -35,7 +35,7 @@ from platform_api.orchestration.agents import DraftApproval, DraftBlock, DraftIn
 
 pytestmark = pytest.mark.anyio
 
-LIBRARY = [RELEASE_CHECKER]
+LIBRARY = [VERSION_CHECKER]
 REPO = "GitHub repository"
 PROJECT = "Jira project"
 
@@ -70,7 +70,7 @@ def chosen(decision: str, *agents: ChosenAgent, reason: str = "Because.", **more
     )
 
 
-def agent(card_id: str = "crd_release_checker", **values: str) -> ChosenAgent:
+def agent(card_id: str = "crd_version_checker", **values: str) -> ChosenAgent:
     return ChosenAgent(card_id=card_id, part="Check it.", values=values)
 
 
@@ -91,7 +91,7 @@ async def test_the_library_is_sent_as_summaries():
     planner = FakePlanner()
     await plan(planner, LIBRARY, "check langgraph")
     [sent] = planner.asked
-    assert [c.card_id for c in sent] == ["crd_release_checker"]
+    assert [c.card_id for c in sent] == ["crd_version_checker"]
     assert sent[0].tools == ["github.read_releases", "jira.search", "jira.create_ticket"]
 
 
@@ -103,7 +103,7 @@ async def test_one_saved_agent_with_values_from_the_task():
     assert isinstance(result, UseSaved)
     assert result.decision == "use_one"
     [planned] = result.agents
-    assert planned.card.card_id == "crd_release_checker"
+    assert planned.card.card_id == "crd_version_checker"
     assert planned.values == {REPO: "langchain-ai/langgraph", PROJECT: "MOCK"}
     assert planned.missing == []
     assert planner.drafts == 0
@@ -134,7 +134,7 @@ async def test_agents_not_in_the_library_are_dropped_and_a_repeat_is_kept_once()
     )
     result = await plan(planner, LIBRARY, "x")
     assert isinstance(result, UseSaved)
-    assert [a.card.card_id for a in result.agents] == ["crd_release_checker"]
+    assert [a.card.card_id for a in result.agents] == ["crd_version_checker"]
     assert result.decision == "use_one"
 
 
@@ -146,7 +146,7 @@ async def test_no_real_agent_left_means_a_new_agent_is_drafted():
 
 
 async def test_at_most_three_agents():
-    cards = [RELEASE_CHECKER.model_copy(update={"card_id": f"crd_{n}"}) for n in range(5)]
+    cards = [VERSION_CHECKER.model_copy(update={"card_id": f"crd_{n}"}) for n in range(5)]
     planner = FakePlanner(chose=chosen("use_several", *[agent(c.card_id) for c in cards]))
     result = await plan(planner, cards, "x")
     assert isinstance(result, UseSaved)
@@ -212,7 +212,7 @@ async def test_a_draft_that_cannot_be_done_is_a_refusal_with_the_missing_tools()
     assert [m.need for m in result.missing_tools] == ["Confluence"]
 
 
-async def test_the_room_lead_can_refuse_without_a_draft():
+async def test_the_planner_can_refuse_without_a_draft():
     planner = FakePlanner(chose=chosen("cannot_do", reason="Too risky to automate."))
     result = await plan(planner, LIBRARY, "x")
     assert isinstance(result, CannotDo) and result.reason == "Too risky to automate."

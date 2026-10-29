@@ -28,7 +28,6 @@ from platform_api.shared import (
     N8nExecutionId,
     ProposalId,
     RunId,
-    UseCaseId,
     UserId,
 )
 
@@ -169,11 +168,9 @@ class Store:
         state: RunState,
         *,
         retried_by: UserId | None = None,
-        carry_forward: str | None = None,
     ) -> RunRecord:
         name, data = dump_state(state)
         new_retried = record.retried_by + ((retried_by,) if retried_by else ())
-        new_carry = carry_forward if carry_forward is not None else record.carry_forward
         updated = await (
             await uow.conn.execute(
                 "UPDATE orchestration.runs SET state = %s, state_data = %s, deadline_at = %s, "
@@ -185,7 +182,7 @@ class Store:
                     _deadline_of(state),
                     uow.now,
                     json(list(new_retried)),
-                    new_carry,
+                    record.carry_forward,
                     record.run_id,
                     record.version,
                 ),
@@ -199,7 +196,6 @@ class Store:
             version=int(updated["version"]),
             updated_at=uow.now,
             retried_by=new_retried,
-            carry_forward=new_carry,
         )
 
     async def list_runs(self, uow: UnitOfWork) -> list[RunRecord]:
@@ -220,17 +216,6 @@ class Store:
             )
         ).fetchall()
         return [RunId(row["run_id"]) for row in rows]
-
-    async def latest_carry_forward(self, uow: UnitOfWork, use_case_id: UseCaseId) -> str | None:
-        row = await (
-            await uow.conn.execute(
-                "SELECT carry_forward FROM orchestration.runs WHERE use_case_id = %s "
-                "AND state = 'Succeeded' AND carry_forward IS NOT NULL "
-                "ORDER BY updated_at DESC LIMIT 1",
-                (use_case_id,),
-            )
-        ).fetchone()
-        return None if row is None else str(row["carry_forward"])
 
     async def record_leg_attempt(
         self,

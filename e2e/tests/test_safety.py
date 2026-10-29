@@ -12,7 +12,7 @@ def test_missing_dev_user_gets_401(api: Api) -> None:
 
 
 def test_stale_digest_is_refused_and_the_step_stays_open(api: Api) -> None:
-    use_case_id = api.create_use_case("alice", "stale")
+    use_case_id = api.watch_langgraph("alice")
     run_id, _ = api.start_run("alice", use_case_id)
     events = api.stream_until("alice", run_id, {"approval_requested"})
     approval_id = approval_requested(events)["approval_id"]

@@ -4,6 +4,7 @@ import os
 import sys
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass
+from typing import Any, LiteralString
 
 import httpx
 import psycopg
@@ -27,6 +28,15 @@ from platform_api.settings import BootstrapSettings, bootstrap_settings_from_env
 API_KEY_LABEL = "platform-bootstrap"
 CREDENTIAL_NAME = "X-Step-Key"
 STEP_KEY_HEADER = "X-Step-Key"
+# Only this exact name is removed: staff build their own workflows in the same n8n (ADR 0027).
+OLD_RUN_WORKFLOW = "release_check"
+OLD_TEMPLATE = "release_check"
+OLD_TASK_KIND = "release"
+RESET_HINT = (
+    "This stack holds data from before the release check was retired, which the platform can "
+    "no longer read. Reset a local practice stack with "
+    "`docker compose -p <project> -f deploy/compose.yaml down -v`, then start it again."
+)
 
 type Say = Callable[[str], None]
 
@@ -48,6 +58,12 @@ def main(env: Mapping[str, str] | None = None) -> int:
     except ConfigError as error:
         say(str(error))
         return 1
+    unreadable = unreadable_data(settings.owner_database_url)
+    if unreadable:
+        for line in unreadable:
+            say(line)
+        say(RESET_HINT)
+        return _finish(settings, say, [], [], "the database holds old release-check data")
     upgrade_all(settings.owner_database_url)
     say("database migrations are at head")
     definitions = load_all()
@@ -109,6 +125,10 @@ def load_into_n8n(
         for d in other_workflows:
             workflow_id, digest = _load(client, d, values, previous, say)
             hashes[workflow_id] = digest
+        old = client.find_workflow(OLD_RUN_WORKFLOW)
+        if old is not None:
+            client.delete_workflow(old.id)
+            say(f"workflow {OLD_RUN_WORKFLOW} ({old.id}): removed, every run now goes through run")
         stale = [c for c in client.credentials_named(CREDENTIAL_NAME) if c != credential_id]
         for credential in stale:
             client.delete_credential(credential)
@@ -152,6 +172,35 @@ def content_hash_without_credential(
     masked = render(definition, {**values, "STEP_KEY_CREDENTIAL_ID": "<masked>"})
     canonical = json.dumps(masked, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def unreadable_data(owner_url: str) -> list[str]:
+    with psycopg.connect(owner_url) as conn:
+        runs = _count_if_table_exists(
+            conn, "orchestration.runs", "spec -> 'task' ->> 'kind' = %s", OLD_TASK_KIND
+        )
+        versions = _count_if_table_exists(
+            conn, "builder.use_case_versions", "template = %s", OLD_TEMPLATE
+        )
+    found: list[str] = []
+    if runs:
+        found.append(f"orchestration.runs holds {runs} run(s) of the old release check")
+    if versions:
+        found.append(
+            f"builder.use_case_versions holds {versions} version(s) of the old {OLD_TEMPLATE} "
+            "template"
+        )
+    return found
+
+
+def _count_if_table_exists(
+    conn: psycopg.Connection[Any], table: LiteralString, where: LiteralString, value: str
+) -> int:
+    exists = conn.execute("SELECT to_regclass(%s) IS NOT NULL", (table,)).fetchone()
+    if exists is None or not exists[0]:
+        return 0
+    row = conn.execute(f"SELECT count(*) FROM {table} WHERE {where}", (value,)).fetchone()
+    return 0 if row is None else int(row[0])
 
 
 def previous_hashes(owner_url: str) -> dict[str, str]:

@@ -91,7 +91,7 @@ async def test_choose_and_draft_post_with_the_agent_key_and_read_either_answer()
         ChooseRequest(task="book a room", library=[], model=ACCESS)
     )
     assert isinstance(result, Chosen)
-    assert seen[0].url.path == "/v1/room/choose"
+    assert seen[0].url.path == "/v1/planner/choose"
     assert seen[0].headers["X-Agent-Key"] == "agent-key-not-real"
 
     drafted = {"status": "drafted", "draft": {"can_do": False, "name": "", "purpose": ""}}

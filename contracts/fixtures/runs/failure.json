@@ -8,7 +8,7 @@
       "id": "alice",
       "display": "Alice"
     },
-    "summary": "Alice started a run of LangGraph releases.",
+    "summary": "Alice started a run of the Software watchlist.",
     "kind": "run_created",
     "data": {
       "use_case_id": "uc_01JB7",
@@ -56,17 +56,17 @@
     "ts": "2026-11-04T02:14:02.370000Z",
     "actor": {
       "kind": "agent",
-      "id": "room_lead",
-      "display": "Room lead"
+      "id": "planner",
+      "display": "Planner"
     },
-    "summary": "Room lead brought in Release checker to read the GitHub releases.",
+    "summary": "Planner brought in Version checker to read the source of LangGraph.",
     "kind": "agent_joined",
     "data": {
       "agent": {
-        "id": "release_checker",
-        "display": "Release checker"
+        "id": "version_checker",
+        "display": "Version checker"
       },
-      "reason": "The task asks about releases of a GitHub repo."
+      "reason": "The task asks about new releases of LangGraph."
     }
   },
   {
@@ -75,22 +75,22 @@
     "ts": "2026-11-04T02:14:02.490000Z",
     "actor": {
       "kind": "agent",
-      "id": "room_lead",
-      "display": "Room lead"
+      "id": "planner",
+      "display": "Planner"
     },
-    "summary": "Room lead asked Release checker to look for releases newer than 1.2.14.",
+    "summary": "Planner asked Version checker to check LangGraph for new releases.",
     "kind": "agent_message",
     "data": {
       "speaker": {
-        "id": "room_lead",
-        "display": "Room lead"
+        "id": "planner",
+        "display": "Planner"
       },
       "addressee": {
         "kind": "agent",
-        "id": "release_checker",
-        "display": "Release checker"
+        "id": "version_checker",
+        "display": "Version checker"
       },
-      "text": "Please check langchain-ai/langgraph for releases newer than 1.2.14."
+      "text": "Please check LangGraph for new releases."
     }
   },
   {
@@ -99,13 +99,13 @@
     "ts": "2026-11-04T02:14:02.620000Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker is fetching releases from langchain-ai/langgraph.",
+    "summary": "Version checker is reading the releases of LangGraph.",
     "kind": "agent_step_started",
     "data": {
-      "step": "fetch_releases"
+      "step": "read_source"
     }
   },
   {
@@ -114,15 +114,15 @@
     "ts": "2026-11-04T02:14:04.702000Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker reported that GitHub answered 503 (try 1 of 3).",
+    "summary": "Version checker reported that GitHub answered 503 (try 1 of 3).",
     "kind": "agent_message",
     "data": {
       "speaker": {
-        "id": "release_checker",
-        "display": "Release checker"
+        "id": "version_checker",
+        "display": "Version checker"
       },
       "addressee": {
         "kind": "room"
@@ -136,15 +136,15 @@
     "ts": "2026-11-04T02:14:08.811000Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker reported that GitHub answered 503 (try 2 of 3).",
+    "summary": "Version checker reported that GitHub answered 503 (try 2 of 3).",
     "kind": "agent_message",
     "data": {
       "speaker": {
-        "id": "release_checker",
-        "display": "Release checker"
+        "id": "version_checker",
+        "display": "Version checker"
       },
       "addressee": {
         "kind": "room"
@@ -158,15 +158,15 @@
     "ts": "2026-11-04T02:14:12.934000Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker reported that GitHub answered 503 (try 3 of 3).",
+    "summary": "Version checker reported that GitHub answered 503 (try 3 of 3).",
     "kind": "agent_message",
     "data": {
       "speaker": {
-        "id": "release_checker",
-        "display": "Release checker"
+        "id": "version_checker",
+        "display": "Version checker"
       },
       "addressee": {
         "kind": "room"
@@ -177,24 +177,66 @@
   {
     "run_id": "run_01JB9",
     "seq": 10,
-    "ts": "2026-11-04T02:14:12.961000Z",
+    "ts": "2026-11-04T02:14:12.950000Z",
     "actor": {
       "kind": "agent",
-      "id": "release_checker",
-      "display": "Release checker"
+      "id": "version_checker",
+      "display": "Version checker"
     },
-    "summary": "Release checker failed: GitHub was unavailable.",
-    "kind": "agent_failed",
+    "summary": "Version checker could not read LangGraph.",
+    "kind": "agent_step_finished",
     "data": {
-      "step": "fetch_releases",
-      "error_type": "UpstreamUnavailable",
-      "message": "GitHub returned 503 Service Unavailable three times",
-      "retryable": true
+      "step": "read_source",
+      "result": {
+        "software_id": "sw_01JC2A3B4C5D6E7F8G9H0J1K2M",
+        "state": "cant_check",
+        "newest": null
+      }
     }
   },
   {
     "run_id": "run_01JB9",
     "seq": 11,
+    "ts": "2026-11-04T02:14:12.955000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "version_checker",
+      "display": "Version checker"
+    },
+    "summary": "Version checker could not check LangGraph.",
+    "kind": "agent_message",
+    "data": {
+      "speaker": {
+        "id": "version_checker",
+        "display": "Version checker"
+      },
+      "addressee": {
+        "kind": "room"
+      },
+      "text": "I could not read LangGraph's releases: GitHub returned 503 Service Unavailable three times."
+    }
+  },
+  {
+    "run_id": "run_01JB9",
+    "seq": 12,
+    "ts": "2026-11-04T02:14:12.961000Z",
+    "actor": {
+      "kind": "agent",
+      "id": "version_checker",
+      "display": "Version checker"
+    },
+    "summary": "Version checker failed: LangGraph could not be checked.",
+    "kind": "agent_failed",
+    "data": {
+      "step": null,
+      "error_type": "UpstreamUnavailable",
+      "message": "Could not check LangGraph: GitHub returned 503 Service Unavailable three times",
+      "retryable": true
+    }
+  },
+  {
+    "run_id": "run_01JB9",
+    "seq": 13,
     "ts": "2026-11-04T02:14:13.020000Z",
     "actor": {
       "kind": "workflow",
@@ -208,12 +250,12 @@
       "n8n_execution_id": "43",
       "try_number": 1,
       "outcome": "failed",
-      "detail": "Release checker failed: GitHub returned 503 Service Unavailable three times"
+      "detail": "UpstreamUnavailable: Could not check LangGraph: GitHub returned 503 Service Unavailable three times"
     }
   },
   {
     "run_id": "run_01JB9",
-    "seq": 12,
+    "seq": 14,
     "ts": "2026-11-04T02:14:13.031000Z",
     "actor": {
       "kind": "platform",
@@ -226,7 +268,7 @@
       "stage": "working",
       "reason": "AgentError",
       "retryable": true,
-      "message": "Release checker failed: GitHub returned 503 Service Unavailable three times"
+      "message": "UpstreamUnavailable: Could not check LangGraph: GitHub returned 503 Service Unavailable three times"
     }
   }
 ]

@@ -32,7 +32,6 @@ from platform_api.orchestration.agents import (
     CarryForward,
     GithubSource,
     ModelAccess,
-    ReleaseCheckInputs,
     SoftwareToCheck,
     TaskFailed,
     TaskFinished,
@@ -64,7 +63,7 @@ from platform_api.orchestration.dispatch import (
     WorkflowEngine,
 )
 from platform_api.orchestration.runs import (
-    ROOM_LEAD,
+    PLANNER,
     Acting,
     AwaitingApproval,
     Begin,
@@ -93,7 +92,6 @@ from platform_api.orchestration.runs import (
 )
 from platform_api.orchestration.spec import (
     CardsTask,
-    ReleaseTask,
     RunSpec,
     RunStarted,
     WatchlistTask,
@@ -129,7 +127,6 @@ from platform_api.shared import (
     ProposalId,
     RunId,
     TaskId,
-    UseCaseId,
     UserId,
     new_id,
 )
@@ -365,10 +362,6 @@ class Orchestrator:
         self.nudge()
         return RunStarted(run_id, True)
 
-    async def latest_carry_forward(self, use_case_id: UseCaseId) -> str | None:
-        async with self._db.transaction("orchestration") as uow:
-            return await self._store.latest_carry_forward(uow, use_case_id)
-
     async def on_step(self, run_id: RunId, step: StepName, execution: N8nExecutionId) -> StepReply:
         match step:
             case StepName.RUN_AGENTS:
@@ -490,7 +483,6 @@ class Orchestrator:
     ) -> StepReply:
         reviewed: Reviewed | None = None
         task = record.spec.task
-        carry = output.carry_forward.last_known_tag
         if isinstance(task, CardsTask):
             match review_cards(task, output.proposed):
                 case Unusable(detail):
@@ -499,16 +491,14 @@ class Orchestrator:
                     )
                 case ReviewedCards() as checked:
                     bound = bind_cards(task, checked)
-            carry = None
         else:
-            if isinstance(task, WatchlistTask):
-                match review(task, output.findings, output.proposed):
-                    case Unusable(detail):
-                        return await self._fail_work(
-                            uow, record, working, FailureReason.AGENT_ERROR, detail
-                        )
-                    case Reviewed() as reviewed:
-                        pass
+            match review(task, output.findings, output.proposed):
+                case Unusable(detail):
+                    return await self._fail_work(
+                        uow, record, working, FailureReason.AGENT_ERROR, detail
+                    )
+                case Reviewed() as reviewed:
+                    pass
             intents = [ProposedIntent(p.kind, dict(p.fields), p.reason) for p in output.proposed]
             bound = bind(intents, record.spec.bindings)
         proposal: Proposal | None = None
@@ -528,14 +518,14 @@ class Orchestrator:
                 await self._store.insert_proposal(uow, proposal)
                 lines = tuple(describe(action) for action in actions)
                 moved = working.propose(
-                    proposal.id, proposal.digest, lines, ROOM_LEAD, summary, uow.now
+                    proposal.id, proposal.digest, lines, PLANNER, summary, uow.now
                 )
                 reply = StepReply(True, "proposed", summary)
         if reviewed is not None:
             await self._watch.record_review(
                 uow, record, reviewed, None if proposal is None else proposal.id
             )
-        await self._commit(uow, record, moved, carry_forward=carry)
+        await self._commit(uow, record, moved)
         return reply
 
     async def _fail_work(
@@ -560,11 +550,8 @@ class Orchestrator:
             record.run_id, working.task_id, working.callback_expires_at
         )
         spec = record.spec
-        inputs: ReleaseCheckInputs | WatchlistInputs | CardsInputs
+        inputs: WatchlistInputs | CardsInputs
         match spec.task:
-            case ReleaseTask(repo, tag_pattern, last_known_tag):
-                inputs = ReleaseCheckInputs(repo=repo, tag_pattern=tag_pattern)
-                carry = CarryForward(last_known_tag=last_known_tag)
             case WatchlistTask(tag_pattern, software):
                 inputs = WatchlistInputs(
                     tag_pattern=tag_pattern,
@@ -580,18 +567,16 @@ class Orchestrator:
                         for s in software
                     ],
                 )
-                carry = CarryForward()
             case CardsTask(agents):
                 inputs = CardsInputs(
                     agents=[CardToRun(card=a.card, values=dict(a.values)) for a in agents]
                 )
-                carry = CarryForward()
         return TaskRequest(
             task_id=working.task_id,
             run_id=record.run_id,
             instruction=spec.instruction,
             inputs=inputs,
-            carry_forward=carry,
+            carry_forward=CarryForward(),
             callback=Callback(url=url, token=token),
             model=model,
         )
@@ -716,7 +701,8 @@ class Orchestrator:
                         return
                     failure = Failure(
                         FailureReason.WORKFLOW_NODE_ERROR,
-                        f"{workflow} failed at {last_node}: {message}",
+                        f"The n8n workflow '{workflow}' failed at its step '{last_node}': "
+                        f"{message}",
                         retryable=True,
                     )
                     await self._commit(uow, record, fail(state, failure))
@@ -1014,11 +1000,8 @@ class Orchestrator:
         moved: Moved[Any],
         *,
         retried_by: UserId | None = None,
-        carry_forward: str | None = None,
     ) -> RunRecord:
-        saved = await self._store.save_run(
-            uow, record, moved.state, retried_by=retried_by, carry_forward=carry_forward
-        )
+        saved = await self._store.save_run(uow, record, moved.state, retried_by=retried_by)
         await self._activity.append(uow, record.run_id, moved.events)
         await self._watch.run_moved(uow, record, moved.state)
         return saved

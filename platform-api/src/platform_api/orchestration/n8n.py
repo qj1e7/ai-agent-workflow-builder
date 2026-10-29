@@ -14,6 +14,7 @@ API_KEY_SCOPES = (
     "workflow:create",
     "workflow:read",
     "workflow:update",
+    "workflow:delete",
     "workflow:list",
     "workflow:activate",
     "workflow:deactivate",
@@ -168,6 +169,18 @@ class N8nClient:
     def read_back(self, workflow_id: str) -> WorkflowRecord:
         return _record(self._public("GET", f"/workflows/{workflow_id}"))
 
+    def delete_workflow(self, workflow_id: str, timeout: float = 30) -> None:
+        """n8n refuses to delete a published workflow, and finishes an unpublish in the
+        background, so the delete answers 409 until that is done."""
+        self._public("POST", f"/workflows/{workflow_id}/deactivate")
+        deadline = time.monotonic() + timeout
+        while True:
+            response = self._send("DELETE", f"/workflows/{workflow_id}")
+            if response.status_code != 409 or time.monotonic() > deadline:
+                _ok(response)
+                return
+            self._sleep(1)
+
     def _rest(self, method: str, path: str, json: Any | None = None) -> dict[str, Any]:
         response = self._http.request(method, path, json=json)
         if response.status_code != 200:
@@ -181,18 +194,32 @@ class N8nClient:
         json: Any | None = None,
         params: dict[str, str] | None = None,
     ) -> dict[str, Any]:
+        return _ok(self._send(method, path, json, params))
+
+    def _send(
+        self,
+        method: str,
+        path: str,
+        json: Any | None = None,
+        params: dict[str, str] | None = None,
+    ) -> httpx.Response:
         if self._api_key is None:
             raise N8nError("no API key yet, call fresh_api_key first")
-        response = self._http.request(
+        return self._http.request(
             method,
             f"/api/v1{path}",
             json=json,
             params=params,
             headers={"X-N8N-API-KEY": self._api_key},
         )
-        if response.status_code != 200:
-            raise N8nError(f"{method} /api/v1{path} failed: {_short(response)}")
-        return response.json()
+
+
+def _ok(response: httpx.Response) -> dict[str, Any]:
+    if response.status_code != 200:
+        raise N8nError(
+            f"{response.request.method} {response.request.url.path} failed: {_short(response)}"
+        )
+    return response.json()
 
 
 def _record(item: dict[str, Any]) -> WorkflowRecord:

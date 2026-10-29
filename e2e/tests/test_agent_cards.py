@@ -33,7 +33,7 @@ def test_without_a_model_nothing_plans_or_runs(api: Api) -> None:
     body: Json = {
         "name": "No model",
         "instruction": "Run the agent.",
-        "agents": [{"card_id": "crd_release_checker", "values": PLANTED}],
+        "agents": [{"card_id": "crd_version_checker", "values": PLANTED}],
     }
     made = api.post("alice", "/api/v1/agent-use-cases", body, expect=(201,)).json()
     stopped = api.post(
@@ -55,7 +55,7 @@ def test_a_drafted_agent_is_saved_then_run_approved_and_written(api: Api, mock_m
     assert (saved["version"], saved["starter"], saved["owner"]) == (1, False, "alice")
     api.post("bob", "/api/v1/agent-cards", plan["draft"], expect=(403,))
     library = api.get("bob", "/api/v1/agent-cards")["cards"]
-    assert [c["card_id"] for c in library][0] == "crd_release_checker"
+    assert [c["card_id"] for c in library][0] == "crd_version_checker"
     assert saved["card_id"] in [c["card_id"] for c in library]
 
     run_id = run_agents(api, saved["card_id"], {"Jira project": "MOCK"}, "e2e summary")
@@ -80,10 +80,10 @@ def test_a_saved_agent_is_picked_and_a_planted_order_in_a_release_changes_nothin
     plan = api.post("alice", "/api/v1/builder/plan", {"task": RELEASE_TASK}, expect=(200,)).json()
     assert plan["decision"] == "use_one"
     [planned] = plan["agents"]
-    assert planned["card"]["card_id"] == "crd_release_checker"
+    assert planned["card"]["card_id"] == "crd_version_checker"
     assert planned["values"] == PLANTED and planned["missing"] == []
 
-    run_id = run_agents(api, "crd_release_checker", planned["values"], "e2e planted")
+    run_id = run_agents(api, "crd_version_checker", planned["values"], "e2e planted")
     view = approve(api, run_id)
     assert [a["target"]["project"] for a in view["actions"]] == ["MOCK"], (
         "the project is the card's own value, whatever the release notes said"

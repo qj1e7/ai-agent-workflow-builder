@@ -11,6 +11,8 @@ from platform_api.orchestration import (
     RunSpec,
     RunStarted,
     ScheduleBook,
+    SoftwareFacts,
+    Standing,
     WatchlistStanding,
 )
 from platform_api.shared import Principal, RunId, SoftwareId, UseCaseId
@@ -19,11 +21,12 @@ from tests.support import LOCAL_ENV
 pytestmark = pytest.mark.anyio
 
 ALICE = {"X-Dev-User": "alice"}
+LANGGRAPH = {"name": "LangGraph", "repo": "langchain-ai/langgraph", "our_version": "1.2.14"}
 GOOD = {
-    "template": "release_check",
-    "name": "LangGraph releases",
-    "instruction": "Check langchain-ai/langgraph for new releases and open a ticket for the team.",
-    "params": {"repo": "langchain-ai/langgraph", "ticket_project": "MOCK"},
+    "template": "software_watchlist",
+    "name": "Software watchlist",
+    "instruction": "Check the team's watched software for new releases.",
+    "params": {"ticket_project": "MOCK"},
 }
 
 
@@ -35,51 +38,49 @@ class SecondCallRepeats:
         self.calls += 1
         return RunStarted(RunId("run_1"), created=self.calls == 1)
 
-    async def latest_carry_forward(self, use_case_id: UseCaseId) -> str | None:
-        return None
 
-
-class NoFacts:
+class NothingLearned:
     async def standings(
         self, use_case_id: UseCaseId, given: Mapping[SoftwareId, Given | None]
     ) -> WatchlistStanding:
-        raise AssertionError("a release check never asks for watchlist facts")
+        return WatchlistStanding(
+            {
+                software_id: Standing(SoftwareFacts(typed, None, None, None), "not_checked")
+                for software_id, typed in given.items()
+            },
+            None,
+        )
 
 
 @pytest.fixture
 async def client(db: Database) -> AsyncIterator[httpx.AsyncClient]:
     app = create_app(LOCAL_ENV)
-    app.state.builder = Builder(
-        db, SecondCallRepeats(), Watchlist(db, NoFacts(), ScheduleBook(db)), "http://localhost:8000"
-    )
+    watchlist = Watchlist(db, NothingLearned(), ScheduleBook(db))
+    app.state.builder = Builder(db, SecondCallRepeats(), watchlist, "http://localhost:8000")
+    app.state.watchlist = watchlist
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
 
 
 async def save(client: httpx.AsyncClient) -> str:
-    r = await client.post("/api/v1/use-cases", json=GOOD, headers=ALICE)
+    r = await client.post("/api/v1/watchlist/software", json=LANGGRAPH, headers=ALICE)
     assert r.status_code == 201
     return r.json()["use_case_id"]
 
 
-async def test_templates_are_listed_with_the_last_seen_tag_param(client: httpx.AsyncClient):
+async def test_the_two_templates_are_listed_and_neither_takes_a_repository(
+    client: httpx.AsyncClient,
+):
     r = await client.get("/api/v1/templates", headers=ALICE)
-    release_check, watchlist, agents = r.json()["templates"]
-    assert [p["name"] for p in release_check["params"]] == [
-        "repo",
-        "tag_pattern",
-        "ticket_project",
-        "last_seen_tag",
-    ]
+    watchlist, agents = r.json()["templates"]
     assert watchlist["key"] == "software_watchlist"
     assert [p["name"] for p in watchlist["params"]] == ["ticket_project"]
     assert (agents["key"], agents["blocks"], agents["params"]) == ("agent_cards", [], [])
 
 
 async def test_the_watchlist_template_is_listed_but_not_built_by_hand(client: httpx.AsyncClient):
-    body = {**GOOD, "template": "software_watchlist", "params": {"ticket_project": "MOCK"}}
-    r = await client.post("/api/v1/use-cases", json=body, headers=ALICE)
+    r = await client.post("/api/v1/use-cases", json=GOOD, headers=ALICE)
     assert r.status_code == 422
     [problem] = r.json()["detail"]
     assert (problem["loc"], problem["msg"]) == (
@@ -98,19 +99,12 @@ async def test_a_saved_use_case_can_be_read_and_listed(client: httpx.AsyncClient
     assert [u["use_case_id"] for u in listed.json()["use_cases"]] == [use_case_id]
 
 
-async def test_a_bad_repo_gets_a_422_naming_the_field(client: httpx.AsyncClient):
-    bad = {**GOOD, "params": {**GOOD["params"], "repo": "owner/.."}}
-    r = await client.post("/api/v1/use-cases", json=bad, headers=ALICE)
-    assert r.status_code == 422
-    [problem] = r.json()["detail"]
-    assert problem["loc"] == ["body", "params", "repo"]
-    assert isinstance(problem["msg"], str)
-
-
 async def test_an_unknown_template_gets_a_422_naming_the_template(client: httpx.AsyncClient):
     r = await client.post("/api/v1/use-cases", json={**GOOD, "template": "nope"}, headers=ALICE)
     assert r.status_code == 422
-    assert r.json()["detail"][0]["loc"] == ["body", "template"]
+    [problem] = r.json()["detail"]
+    assert (problem["loc"], problem["msg"]) == (["body", "template"], "Unknown template 'nope'")
+    assert (await client.get("/api/v1/use-cases", headers=ALICE)).json()["use_cases"] == []
 
 
 async def test_an_unknown_use_case_is_a_404(client: httpx.AsyncClient):
@@ -138,12 +132,11 @@ async def test_a_repeated_idempotency_key_gets_200_with_the_same_body(client: ht
     )
 
 
-async def test_suggest_matches_the_instruction(client: httpx.AsyncClient):
-    r = await client.post(
-        "/api/v1/use-cases/suggest", json={"text": GOOD["instruction"]}, headers=ALICE
-    )
-    assert r.json()["template"]["key"] == "release_check"
-    assert r.json()["matched_terms"] == ["releases", "ticket"]
+async def test_suggest_answers_no_template_now_that_none_is_offered(client: httpx.AsyncClient):
+    text = "Check langchain-ai/langgraph for new releases and open a ticket for the team."
+    r = await client.post("/api/v1/use-cases/suggest", json={"text": text}, headers=ALICE)
+    assert r.status_code == 200
+    assert r.json() == {"template": None, "matched_terms": []}
 
 
 async def test_every_builder_route_needs_a_signed_in_user(client: httpx.AsyncClient):

@@ -4,7 +4,7 @@ from typing import Any
 import model_server as server
 
 SYSTEM = (
-    "Agent card: Release checker\nInputs for this run:\n"
+    "Agent card: Version checker\nInputs for this run:\n"
     "- GitHub repository: langchain-ai/langgraph\n- Jira project: MOCK\n"
 )
 TOOLS = [{"name": "github_read_releases"}, {"name": "jira_search"}, {"name": "jira_create_ticket"}]

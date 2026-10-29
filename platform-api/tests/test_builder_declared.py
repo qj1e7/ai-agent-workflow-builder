@@ -7,10 +7,10 @@ from platform_api.shared import RunId
 from tests.declared import ALICE, BOB, FakeBuilder, app_with, declared_status
 
 USE_CASE = {
-    "template": "release_check",
-    "name": "LangGraph releases",
-    "instruction": "Check langchain-ai/langgraph for new releases.",
-    "params": {"repo": "langchain-ai/langgraph", "ticket_project": "MOCK"},
+    "template": "software_watchlist",
+    "name": "Software watchlist",
+    "instruction": "Check the team's watched software for new releases.",
+    "params": {"ticket_project": "MOCK"},
 }
 KEY = {"Idempotency-Key": "k"}
 REPEATED = FakeBuilder(started=RunStarted(RunId("run_1"), created=False))

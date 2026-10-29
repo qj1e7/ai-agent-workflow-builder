@@ -1,4 +1,4 @@
-"""Planning a task: the Room lead picks saved agents, or drafts a new one for the Operator.
+"""Planning a task: the Planner picks saved agents, or drafts a new one for the Operator.
 
 The model's answer is untrusted. It can only point at cards in the library and fill their
 inputs, and every value and every draft is checked here before the Portal shows it. Planning
@@ -152,7 +152,7 @@ def _missing(draft: CardDraft) -> list[MissingTool]:
 async def plan(
     planner: CardPlanner, library: Sequence[CardView], task: str
 ) -> PlanOut | NoModelConnected | RuntimeNotAnswering:
-    """The Room lead's plan for a task, from the library of saved agents."""
+    """The Planner's plan for a task, from the library of saved agents."""
     by_id = {card.card_id: card for card in library}
     chosen = await planner.choose(task, [library_card(card) for card in library])
     match chosen:
@@ -199,7 +199,7 @@ async def _draft(
     if not draft.can_do:
         return CannotDo(
             reason=_short(
-                draft.why_not or reason or "The Room lead cannot do this task.", REASON_LIMIT
+                draft.why_not or reason or "The Planner cannot do this task.", REASON_LIMIT
             ),
             missing_tools=_missing(draft),
         )

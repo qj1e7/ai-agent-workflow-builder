@@ -7,9 +7,9 @@
     "agents": [
       {
         "card": {
-          "id": "crd_release_checker",
+          "id": "crd_version_checker",
           "version": 1,
-          "name": "Release checker",
+          "name": "Version checker",
           "purpose": "Checks a public GitHub repository for a new release and proposes a Jira ticket for it.",
           "inputs": [
             {
@@ -47,9 +47,7 @@
       }
     ]
   },
-  "carry_forward": {
-    "last_known_tag": null
-  },
+  "carry_forward": {},
   "callback": {
     "url": "http://platform-api:8000/internal/v1/runs/run_01JD1/agent-events?task=run_01JD1/work/1/1",
     "token": "example-callback-token-not-a-secret"

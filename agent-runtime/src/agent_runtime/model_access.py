@@ -11,6 +11,7 @@ from agent_runtime.contract import (
     Connected,
     ConnectRequest,
     ConnectResult,
+    Finding,
     FoundModel,
     ModelAccess,
     ModelProblem,
@@ -22,18 +23,28 @@ from agent_runtime.guarded import GuardedModels, GuardedTransport
 from agent_runtime.summary import (
     SUMMARY_TIMEOUT_SECONDS,
     ChatFor,
+    Checked,
     ModelFactory,
     ModelSummarizer,
     Summarizer,
-    summary_prompt,
+    check_prompt,
     usable_summary,
 )
 
 ANTHROPIC_VERSION = "2023-06-01"
 LIST_TIMEOUT_SECONDS = 10.0
-SAMPLE_REPO = "langchain-ai/langgraph"
-SAMPLE_LAST_TAG = "1.2.14"
-SAMPLE_NEW_TAGS = ("1.2.16", "1.2.15")
+SAMPLE_CHECK = [
+    Checked(
+        "LangGraph",
+        Finding(
+            software_id="sw_sample",
+            state="behind",
+            newest="1.2.16",
+            new_versions=["1.2.16", "1.2.15"],
+            detail="2 releases newer than 1.2.14.",
+        ),
+    )
+]
 # A name with one of these words marks a model that cannot write text.
 NOT_TEXT = re.compile(
     r"embed|whisper|tts|dall-e|moderation|rerank|transcribe|speech|image|audio", re.IGNORECASE
@@ -139,7 +150,7 @@ class ModelProbe:
         refused = self._policy.check(access.base_url)
         if refused is not None:
             return ModelProblem(reason=refused.reason, message=refused.message)
-        prompt = summary_prompt(SAMPLE_REPO, SAMPLE_LAST_TAG, SAMPLE_NEW_TAGS)
+        prompt = check_prompt(SAMPLE_CHECK)
         started = self._clock()
         try:
             text = self._factory_for(access)(access.model).invoke(prompt).text.strip()

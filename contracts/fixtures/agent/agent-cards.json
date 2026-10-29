@@ -1,8 +1,8 @@
 {
   "agents": [
     {
-      "id": "room_lead",
-      "display": "Room lead",
+      "id": "planner",
+      "display": "Planner",
       "description": "Reads the task and decides which specialist agents to bring in.",
       "capabilities": [
         "plan a task",
@@ -11,13 +11,13 @@
       ]
     },
     {
-      "id": "release_checker",
-      "display": "Release checker",
-      "description": "Reads the releases of public GitHub repositories and finds the new ones, for one repository or for a list of watched software.",
+      "id": "version_checker",
+      "display": "Version checker",
+      "description": "Reads the GitHub releases of each watched software, compares them with the version the team runs, and suggests an upgrade ticket for each one that is behind.",
       "capabilities": [
         "read GitHub releases",
-        "compare with the last known tag",
-        "check a list of watched software"
+        "compare with the version the team runs",
+        "suggest upgrade tickets"
       ]
     }
   ]

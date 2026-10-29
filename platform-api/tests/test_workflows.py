@@ -49,7 +49,7 @@ def by_name(definitions: tuple[WorkflowDefinition, ...], name: str) -> WorkflowD
 
 def test_the_files_ship_three_workflows():
     assert {d.name for d in load_all()} == {
-        "release_check",
+        "run",
         "run_failure_reporter",
         "schedule_tick",
     }
@@ -57,18 +57,18 @@ def test_the_files_ship_three_workflows():
     assert by_name(load_all(), "run_failure_reporter").is_error_workflow
 
 
-def test_the_release_check_has_two_legs_with_the_steps_in_the_referees_order():
-    release_check = by_name(load_all(), "release_check")
+def test_the_run_workflow_has_two_legs_with_the_steps_in_the_referees_order():
+    run = by_name(load_all(), "run")
     two_seconds = timedelta(seconds=2)
-    assert release_check.steps(Leg.WORK) == (
+    assert run.steps(Leg.WORK) == (
         StepNode(StepName.RUN_AGENTS, "Run agents", 3, two_seconds, timedelta(seconds=120)),
         StepNode(StepName.ASK_APPROVAL, "Ask for approval", 3, two_seconds, timedelta(seconds=30)),
     )
-    assert release_check.steps(Leg.ACT) == (
+    assert run.steps(Leg.ACT) == (
         StepNode(StepName.WRITE_ACTION, "Do write action", 3, two_seconds, timedelta(seconds=60)),
     )
-    assert release_check.webhook_path(Leg.WORK) == "release-check/work"
-    assert release_check.webhook_path(Leg.ACT) == "release-check/act"
+    assert run.webhook_path(Leg.WORK) == "run/work"
+    assert run.webhook_path(Leg.ACT) == "run/act"
 
 
 def test_the_committed_files_pass_the_lint():
@@ -81,13 +81,13 @@ def test_render_fills_every_placeholder_and_keeps_only_the_api_body():
         rendered = render(definition, VALUES)
         assert set(rendered) == {"name", "nodes", "connections", "settings"}
         assert "${" not in json.dumps(rendered)
-    release_check = by_name(load_all(), "release_check")
-    assert placeholders(release_check) == {
+    run = by_name(load_all(), "run")
+    assert placeholders(run) == {
         "PLATFORM_INTERNAL_URL",
         "ERROR_WORKFLOW_ID",
         "STEP_KEY_CREDENTIAL_ID",
     }
-    rendered = render(release_check, VALUES)
+    rendered = render(run, VALUES)
     assert rendered["settings"]["errorWorkflow"] == "ERR1"
     assert node(rendered, "Run agents")["credentials"]["httpHeaderAuth"]["id"] == "CRED1"
     assert node(rendered, "Run agents")["parameters"]["url"].startswith(
@@ -97,11 +97,11 @@ def test_render_fills_every_placeholder_and_keeps_only_the_api_body():
 
 def test_render_refuses_a_missing_placeholder():
     with pytest.raises(ValueError, match="ERROR_WORKFLOW_ID"):
-        render(by_name(load_all(), "release_check"), {"PLATFORM_INTERNAL_URL": "x"})
+        render(by_name(load_all(), "run"), {"PLATFORM_INTERNAL_URL": "x"})
 
 
 def test_render_escapes_the_value_for_json():
-    definition = by_name(load_all(), "release_check")
+    definition = by_name(load_all(), "run")
     rendered = render(definition, {**VALUES, "ERROR_WORKFLOW_ID": 'quote" and \\ slash'})
     assert rendered["settings"]["errorWorkflow"] == 'quote" and \\ slash'
 
@@ -113,7 +113,7 @@ def test_render_drops_id_and_active_from_a_read_back_document():
 
 
 def wrong_webhook_path(docs: dict[str, Document]) -> None:
-    node(docs["release_check"], "Start act")["parameters"]["path"] = "release-check/write"
+    node(docs["run"], "Start act")["parameters"]["path"] = "run/write"
 
 
 def reporter_calls_the_internet(docs: dict[str, Document]) -> None:
@@ -123,51 +123,49 @@ def reporter_calls_the_internet(docs: dict[str, Document]) -> None:
 
 
 def run_id_read_from_json(docs: dict[str, Document]) -> None:
-    node(docs["release_check"], "Run agents")["parameters"]["url"] = (
+    node(docs["run"], "Run agents")["parameters"]["url"] = (
         f"={PLATFORM_INTERNAL_URL}/internal/v1/runs/{{{{ $json.run_id }}}}/steps/run_agents"
     )
 
 
 def approval_step_missing(docs: dict[str, Document]) -> None:
-    docs["release_check"]["nodes"] = [
-        n for n in docs["release_check"]["nodes"] if n["name"] != "Ask for approval"
-    ]
-    docs["release_check"]["connections"]["Continue?"] = {"main": [[], []]}
+    docs["run"]["nodes"] = [n for n in docs["run"]["nodes"] if n["name"] != "Ask for approval"]
+    docs["run"]["connections"]["Continue?"] = {"main": [[], []]}
 
 
 def run_id_read_from_the_other_leg(docs: dict[str, Document]) -> None:
-    node(docs["release_check"], "Run agents")["parameters"]["url"] = (
+    node(docs["run"], "Run agents")["parameters"]["url"] = (
         f"={PLATFORM_INTERNAL_URL}/internal/v1/runs/"
         "{{ $('Start act').first().json.body.run_id }}/steps/run_agents"
     )
 
 
 def short_retry_wait(docs: dict[str, Document]) -> None:
-    node(docs["release_check"], "Run agents")["waitBetweenTries"] = 500
+    node(docs["run"], "Run agents")["waitBetweenTries"] = 500
 
 
 def no_retry(docs: dict[str, Document]) -> None:
-    node(docs["release_check"], "Do write action")["retryOnFail"] = False
+    node(docs["run"], "Do write action")["retryOnFail"] = False
 
 
 def run_agents_outlasts_working(docs: dict[str, Document]) -> None:
-    node(docs["release_check"], "Run agents")["parameters"]["options"]["timeout"] = 200_000
+    node(docs["run"], "Run agents")["parameters"]["options"]["timeout"] = 200_000
 
 
 def write_action_outlasts_acting(docs: dict[str, Document]) -> None:
-    node(docs["release_check"], "Do write action")["parameters"]["options"]["timeout"] = 200_000
+    node(docs["run"], "Do write action")["parameters"]["options"]["timeout"] = 200_000
 
 
 def write_action_shorter_than_the_connector(docs: dict[str, Document]) -> None:
-    node(docs["release_check"], "Do write action")["parameters"]["options"]["timeout"] = 20_000
+    node(docs["run"], "Do write action")["parameters"]["options"]["timeout"] = 20_000
 
 
 def no_timeout(docs: dict[str, Document]) -> None:
-    del node(docs["release_check"], "Ask for approval")["parameters"]["options"]["timeout"]
+    del node(docs["run"], "Ask for approval")["parameters"]["options"]["timeout"]
 
 
 def no_error_workflow_setting(docs: dict[str, Document]) -> None:
-    del docs["release_check"]["settings"]["errorWorkflow"]
+    del docs["run"]["settings"]["errorWorkflow"]
 
 
 def error_workflow_file_missing(docs: dict[str, Document]) -> None:
@@ -175,7 +173,7 @@ def error_workflow_file_missing(docs: dict[str, Document]) -> None:
 
 
 def a_set_node(docs: dict[str, Document]) -> None:
-    docs["release_check"]["nodes"].append(
+    docs["run"]["nodes"].append(
         {
             "id": "set",
             "name": "Set fields",
@@ -292,7 +290,7 @@ def test_a_tick_workflow_that_calls_the_internet_fails_the_url_and_shape_rules()
 
 def test_a_run_workflow_with_a_schedule_trigger_is_held_to_the_tick_rules():
     docs = copy.deepcopy(documents())
-    docs["release_check"]["nodes"].append(
+    docs["run"]["nodes"].append(
         {
             "id": "timer",
             "name": "Timer",
@@ -326,7 +324,7 @@ def test_the_live_lint_passes_when_the_error_workflow_is_wired_and_active():
         VALUES["PLATFORM_INTERNAL_URL"],
         {
             "run_failure_reporter": LiveWorkflow("ERR1", True),
-            "release_check": LiveWorkflow("W1", True),
+            "run": LiveWorkflow("W1", True),
             "schedule_tick": LiveWorkflow("W2", True),
         },
     )
@@ -346,12 +344,12 @@ def test_the_live_lint_fails_rule_6_on_a_bad_error_workflow(
 ):
     live = LiveState(
         VALUES["PLATFORM_INTERNAL_URL"],
-        {"run_failure_reporter": reporter, "release_check": LiveWorkflow("W1", True)},
+        {"run_failure_reporter": reporter, "run": LiveWorkflow("W1", True)},
     )
     findings = lint(rendered_definitions(error_workflow_id), live=live)
     assert {f.rule for f in findings} == {Rule.ERROR_WORKFLOW}
 
 
 def test_the_file_lint_uses_the_placeholders_as_written():
-    assert STEP_KEY_CREDENTIAL_ID in json.dumps(documents()["release_check"])
-    assert documents()["release_check"]["settings"]["errorWorkflow"] == ERROR_WORKFLOW_ID
+    assert STEP_KEY_CREDENTIAL_ID in json.dumps(documents()["run"])
+    assert documents()["run"]["settings"]["errorWorkflow"] == ERROR_WORKFLOW_ID

@@ -1,15 +1,25 @@
 {
   "task_id": "run_01JB8/work/1/1",
   "run_id": "run_01JB8",
-  "instruction": "Check langchain-ai/langgraph for new releases and open a ticket for the team.",
+  "instruction": "Check the team's watched software for new releases and raise an upgrade ticket for each one that is behind.",
   "inputs": {
-    "kind": "release_check",
-    "repo": "langchain-ai/langgraph",
-    "tag_pattern": "^\\d+\\.\\d+\\.\\d+$"
+    "kind": "watchlist",
+    "tag_pattern": "^\\d+\\.\\d+\\.\\d+$",
+    "software": [
+      {
+        "id": "sw_01JC2A3B4C5D6E7F8G9H0J1K2M",
+        "name": "LangGraph",
+        "source": {
+          "kind": "github",
+          "ref": "langchain-ai/langgraph"
+        },
+        "our_version": "1.2.14",
+        "open_ticket": null,
+        "awaiting_approval": false
+      }
+    ]
   },
-  "carry_forward": {
-    "last_known_tag": "1.2.14"
-  },
+  "carry_forward": {},
   "callback": {
     "url": "http://platform-api:8000/internal/v1/runs/run_01JB8/agent-events?task=run_01JB8/work/1/1",
     "token": "example-callback-token-not-a-secret"

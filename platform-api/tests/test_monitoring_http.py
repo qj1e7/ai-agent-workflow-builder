@@ -236,7 +236,7 @@ async def test_a_signed_callback_is_stored_once(client: httpx.AsyncClient, app: 
 
     log: ActivityLog = app.state.activity_log
     stored = await log.read_after(RUN, 0)
-    assert [(e.seq, e.kind, e.actor.id) for e in stored] == [(1, "agent_joined", "room_lead")]
+    assert [(e.seq, e.kind, e.actor.id) for e in stored] == [(1, "agent_joined", "planner")]
 
 
 @pytest.mark.parametrize(

@@ -49,7 +49,7 @@ from platform_api.orchestration.store import Store
 from platform_api.orchestration.write_actions import MockJiraConnector, WriteGateway
 from platform_api.shared import ApprovalId, Digest, N8nExecutionId, Principal, RunId, TaskId
 from tests.conftest import PostgresUrls, truncate_all
-from tests.support import ALICE, BOB, CAROL, NOW, SPEC, fixture
+from tests.support import ALICE, BOB, CAROL, NOW, SPEC, SUMMARY, TICKET_TITLE, fixture
 
 pytestmark = pytest.mark.anyio
 
@@ -170,7 +170,7 @@ async def work_leg_to_approval(
     await h.orchestrator.tick()
     execution = N8nExecutionId("41")
     assert await h.orchestrator.on_step(run_id, RUN_AGENTS, execution) == StepReply(
-        True, "proposed", "2 new releases: 1.2.16, 1.2.15"
+        True, "proposed", SUMMARY
     )
     reply = await h.orchestrator.on_step(run_id, ASK_APPROVAL, execution)
     assert (reply.proceed, reply.outcome) == (False, "approval_opened")
@@ -181,7 +181,7 @@ async def work_leg_to_approval(
 
 
 async def test_the_teams_message_carries_the_model_summary_as_one_sentence(h: Harness):
-    said = "langchain-ai/langgraph has 2 new releases since 1.2.14: 1.2.16 and 1.2.15."
+    said = "LangGraph has 2 new releases since 1.2.14: 1.2.16 and 1.2.15."
     h.agent.summary = said
     run_id = await start(h)
     await h.orchestrator.tick()
@@ -193,8 +193,8 @@ async def test_the_teams_message_carries_the_model_summary_as_one_sentence(h: Ha
     await h.orchestrator.tick()
     [message] = await h.teams.messages()
     assert message.text == (
-        f"A run of {SPEC.use_case_name} needs an Approver. It would create a Jira "
-        'ticket in MOCK titled "New LangGraph releases: 1.2.16, 1.2.15". '
+        f"A run of the {SPEC.use_case_name} needs an Approver. It would create a Jira "
+        f'ticket in MOCK titled "{TICKET_TITLE}". '
         f"Open the approval page to decide. The agents said: {said}"
     )
 
@@ -230,7 +230,7 @@ async def test_a_notice_queued_without_a_summary_reads_as_before(h: Harness):
     )
     [message] = await h.teams.messages()
     assert message.text == (
-        "A run of LangGraph releases needs an Approver. It would create a Jira ticket. "
+        "A run of the LangGraph releases needs an Approver. It would create a Jira ticket. "
         "Open the approval page to decide."
     )
 
@@ -269,7 +269,7 @@ async def test_the_outbox_survives_a_crash_between_commit_and_dispatch(h: Harnes
     run_id = await start(h)
     restarted = h.new_orchestrator()
     await restarted.tick()
-    assert h.engine.legs == [("release_check", Leg.WORK, run_id)]
+    assert h.engine.legs == [("run", Leg.WORK, run_id)]
     await restarted.tick()
     assert len(h.engine.legs) == 1
 
@@ -280,7 +280,6 @@ async def test_the_whole_success_path_matches_the_recorded_run(h: Harness):
     request = h.agent.requests[0]
     assert request.task_id == f"{run_id}/work/1"
     assert request.callback.token == f"token-{run_id}/work/1"
-    assert request.carry_forward.last_known_tag == "1.2.14"
     messages = await h.teams.messages()
     assert len(messages) == 1
     assert messages[0].text == fixture("stubs/teams-messages.json")["messages"][0]["text"]
@@ -300,7 +299,7 @@ async def test_the_whole_success_path_matches_the_recorded_run(h: Harness):
     acting = await h.state(run_id)
     assert isinstance(acting, Acting)
     await h.orchestrator.tick()
-    assert h.engine.legs[-1] == ("release_check", Leg.ACT, run_id)
+    assert h.engine.legs[-1] == ("run", Leg.ACT, run_id)
 
     reply = await h.orchestrator.on_step(run_id, WRITE_ACTION, N8nExecutionId("42"))
     assert reply == StepReply(True, "written", "Created MOCK-1")
@@ -314,7 +313,6 @@ async def test_the_whole_success_path_matches_the_recorded_run(h: Harness):
         e.summary for e in await h.log.read_after(run_id, 0) if e.kind == "approval_decided"
     )
     assert decided_summary == "Bob approved the request (Team approver)."
-    assert await h.orchestrator.latest_carry_forward(SPEC.use_case_id) == "1.2.16"
 
 
 async def test_a_second_approval_by_bob_is_the_same_decision(h: Harness):
@@ -500,14 +498,17 @@ async def test_n8n_error_reports_map_back_by_execution_id(h: Harness):
     run_id = await start(h)
     await h.orchestrator.tick()
     await h.orchestrator.on_workflow_failure(
-        N8nExecutionId("41"), "release_check", "Run agents", "The service refused the connection"
+        N8nExecutionId("41"), "run", "Run agents", "The service refused the connection"
     )
     state = await h.state(run_id)
     assert isinstance(state, Failed)
     assert state.failure.reason is FailureReason.WORKFLOW_NODE_ERROR
-    await h.orchestrator.on_workflow_failure(N8nExecutionId("41"), "release_check", "x", "again")
+    assert state.failure.message == (
+        "The n8n workflow 'run' failed at its step 'Run agents': The service refused the connection"
+    )
+    await h.orchestrator.on_workflow_failure(N8nExecutionId("41"), "run", "x", "again")
     assert await h.state(run_id) == state
-    await h.orchestrator.on_workflow_failure(N8nExecutionId("404"), "release_check", "x", "y")
+    await h.orchestrator.on_workflow_failure(N8nExecutionId("404"), "run", "x", "y")
 
 
 async def test_a_failed_write_is_retried_as_acting_and_makes_one_ticket(h: Harness):
@@ -517,7 +518,7 @@ async def test_a_failed_write_is_retried_as_acting_and_makes_one_ticket(h: Harne
     await h.orchestrator.decide(approval_id, BOB, 0, Verdict.APPROVE, detail.request.digest)
     await h.orchestrator.tick()
     await h.orchestrator.on_workflow_failure(
-        N8nExecutionId("42"), "release_check", "Do write action", "timed out"
+        N8nExecutionId("42"), "run", "Do write action", "timed out"
     )
     failed = await h.state(run_id)
     assert isinstance(failed, Failed)

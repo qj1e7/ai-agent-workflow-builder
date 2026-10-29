@@ -8,12 +8,6 @@ from platform_api.monitoring import AgentEvent
 from platform_api.wire import RepoName, WireModel
 
 
-class ReleaseCheckInputs(WireModel):
-    kind: Literal["release_check"] = "release_check"
-    repo: RepoName
-    tag_pattern: str
-
-
 class GithubSource(WireModel):
     kind: Literal["github"] = "github"
     ref: RepoName
@@ -72,13 +66,11 @@ class CardsInputs(WireModel):
     agents: list[CardToRun]
 
 
-type TaskInputs = Annotated[
-    ReleaseCheckInputs | WatchlistInputs | CardsInputs, Field(discriminator="kind")
-]
+type TaskInputs = Annotated[WatchlistInputs | CardsInputs, Field(discriminator="kind")]
 
 
 class CarryForward(WireModel):
-    last_known_tag: str | None = None
+    pass
 
 
 class Callback(WireModel):
@@ -401,7 +393,7 @@ class HttpAgentRuntime:
     async def choose(
         self, request: ChooseRequest
     ) -> ChooseResult | AgentUnavailable | AgentRejected:
-        return await self._model_call("/v1/room/choose", request, choose_result_adapter)
+        return await self._model_call("/v1/planner/choose", request, choose_result_adapter)
 
     async def draft(self, request: DraftRequest) -> DraftResult | AgentUnavailable | AgentRejected:
         return await self._model_call("/v1/cards/draft", request, draft_result_adapter)

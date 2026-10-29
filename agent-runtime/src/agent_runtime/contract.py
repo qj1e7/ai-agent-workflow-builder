@@ -138,12 +138,6 @@ type TagPattern = Annotated[
 ]
 
 
-class ReleaseCheckInputs(WireModel):
-    kind: Literal["release_check"] = "release_check"
-    repo: RepoName
-    tag_pattern: TagPattern
-
-
 SOFTWARE_ID_PATTERN = r"^sw_[0-9A-Z]{26}$"
 
 
@@ -254,16 +248,14 @@ class CardsInputs(WireModel):
     kind: Literal["cards"] = "cards"
     agents: Annotated[
         list[CheckedCardToRun], Field(min_length=1, max_length=3), AfterValidator(_distinct_cards)
-    ] = Field(description="The agents the Room lead brings in, in the order they work.")
+    ] = Field(description="The agents the Planner brings in, in the order they work.")
 
 
-type TaskInputs = Annotated[
-    ReleaseCheckInputs | WatchlistInputs | CardsInputs, Field(discriminator="kind")
-]
+type TaskInputs = Annotated[WatchlistInputs | CardsInputs, Field(discriminator="kind")]
 
 
 class CarryForward(WireModel):
-    last_known_tag: str | None = None
+    """What a run hands to the next run of its use case."""
 
 
 class Callback(WireModel):
@@ -344,8 +336,7 @@ class TaskOutput(WireModel):
     carry_forward: CarryForward
     findings: list[Finding] = Field(
         default_factory=list[Finding],
-        description="One per watched software, in the order of the inputs. Empty for a release "
-        "check.",
+        description="One per watched software, in the order of the inputs. Empty for a card run.",
     )
 
 
@@ -569,5 +560,5 @@ class AgentApiSchema(WireModel):
     tool_list: ToolList
     card_draft_request: DraftRequest
     card_draft_result: DraftResult
-    room_choose_request: ChooseRequest
-    room_choose_result: ChooseResult
+    planner_choose_request: ChooseRequest
+    planner_choose_result: ChooseResult

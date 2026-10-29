@@ -169,7 +169,7 @@ def _run_failed(stage: Stage, failure: Failure) -> PendingEvent:
     return PendingEvent(
         PLATFORM,
         "run_failed",
-        f"The run failed ({failure.reason.value}): {failure.message}.{tail}",
+        f"The run failed ({failure.reason.value}): {sentence(failure.message)}{tail}",
         RunFailedData(
             stage=stage.value,
             reason=failure.reason.value,
@@ -514,9 +514,9 @@ def created_events(
     trigger: Trigger = "person",
 ) -> tuple[PendingEvent, ...]:
     summary = (
-        f"{by.display} started a run of {use_case_name}."
+        f"{by.display} started a run of the {use_case_name}."
         if trigger == "person"
-        else f"{by.display}'s schedule started a check of {use_case_name}."
+        else f"{by.display}'s schedule started a check of the {use_case_name}."
     )
     created = PendingEvent(
         by,
@@ -532,7 +532,7 @@ def created_events(
     return (created, _leg_dispatched(Leg.WORK, attempt))
 
 
-ROOM_LEAD = agent_actor("room_lead", "Room lead")
+PLANNER = agent_actor("planner", "Planner")
 
 
 class Caller(Enum):

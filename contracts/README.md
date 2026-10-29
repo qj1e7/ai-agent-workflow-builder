@@ -30,13 +30,15 @@ Each generator deletes and rewrites the fixture folders it owns, so a removed fi
 
 ## What the fixtures record
 
-Three runs of the `release_check` template on `langchain-ai/langgraph`, each as the full ordered activity event list with realistic timestamps.
+Three checks of a Software watchlist that holds one software, LangGraph at our version 1.2.14, each as the full ordered activity event list with realistic timestamps.
 
-- `runs/success.json`. Alice starts the run. The Room lead brings in the Release checker, the two agents exchange messages, the checker finds 1.2.16 and 1.2.15 (newer than 1.2.14), and a Jira ticket in MOCK is proposed. The approval is requested and announced in the Teams channel "CODESparks Ops". About six minutes later Bob approves, the act leg runs, the ticket is written as MOCK-142, and the run succeeds.
-- `runs/failure.json`. GitHub answers 503 three times, the Release checker gives up, and the run fails with reason `AgentError`, retryable.
+- `runs/success.json`. Alice starts the check. The Planner brings in the Version checker, the two agents exchange messages, the checker reads LangGraph's releases, finds 1.2.16 and 1.2.15 newer than 1.2.14, and an upgrade ticket in MOCK is proposed. The approval is requested and announced in the Teams channel "CODESparks Ops". About six minutes later Bob approves, the act leg runs, the ticket is written as MOCK-142, and the run succeeds.
+- `runs/failure.json`. GitHub answers 503 three times, the Version checker gives up on the one software it has, and the run fails with reason `AgentError`, retryable.
 - `runs/rejected.json`. The same work leg, then Bob declines.
 
-`views/` holds the `GET /api/v1/runs/{run_id}` answer for each run at the end and at the approval pause (for the failure, while the agents are working). `approvals/` holds `GET /api/v1/approvals/apr_01JB8` as Alice sees it (refused, own work) and as Bob sees it (can decide), plus one recorded decision and one refusal body. `agent/` holds the Agent API task request, a finished result, a failed result, one callback post and the agent cards, and the four tools (`tools.json`), a card task (`card-task-request.json`, `card-task-finished.json`), a draft (`card-draft-request.json`, `card-drafted.json`), a Room lead choice (`room-choose-request.json`, `room-chosen.json`), and a watchlist check of three software (one behind, one up to date, one that cannot be read) as `watchlist-task-request.json` and `watchlist-task-finished.json`. Apart from the watchlist result, the agent events inside the results are the same events, with the same timestamps, as the agent-actor events in `runs/`. `troubleshooting/failure.json` is the AI troubleshooter's answer for the failed run.
+`views/` holds the `GET /api/v1/runs/{run_id}` answer for each run at the end and at the approval pause (for the failure, while the agents are working). `approvals/` holds `GET /api/v1/approvals/apr_01JB8` as Alice sees it (refused, own work) and as Bob sees it (can decide), plus one recorded decision and one refusal body. `agent/` holds the Agent API task request, a finished result, a failed result, one callback post and the agent cards, and the four tools (`tools.json`), a card task (`card-task-request.json`, `card-task-finished.json`), a draft (`card-draft-request.json`, `card-drafted.json`), a Planner choice (`planner-choose-request.json`, `planner-chosen.json`), and a watchlist check of three software (one behind, one up to date, one that cannot be read) as `watchlist-task-request.json` and `watchlist-task-finished.json`. Apart from the three-software result, the agent events inside the results are the same events, with the same timestamps, as the agent-actor events in `runs/`. `troubleshooting/failure.json` is the AI troubleshooter's answer for the failed run.
+
+`builder/templates.json` lists the two templates that remain, neither offered to be built by hand: the Software watchlist, which the Software page makes, and agent cards, which the Builder page makes. `builder/use-case.json` is the watchlist as a use case. `builder/suggest.json` is the answer of `POST /api/v1/use-cases/suggest`, which names no template now.
 
 ### The software watchlist
 
@@ -46,13 +48,13 @@ The schedule ([ADR 0020](../docs/adr/0020-our-api-keeps-schedules-and-one-n8n-wo
 
 A scheduled check is started by the schedule owner, so `started_by` is the owner, who cannot approve it. Every run view and `run_created` event says how it started: `trigger` is `person` or `schedule`. `views/scheduled.pending.json` is a scheduled run, and its `run_created` summary reads "Alice's schedule started a check of Software watchlist." The `schedule_tick` workflow asks `POST /internal/v1/schedules/tick` (step key, not a signed-in route) every 5 minutes; it answers the runs it started (`internal/tick.started.json`, or `internal/tick.nothing-due.json`).
 
-`runs/watchlist.json` is one recorded check, which the Portal's demo replays. `watchlist/before-check.json` is the watchlist just before it: six software with the results of Monday's scheduled check, and Alice's schedule for Mondays at 9:00. On Friday Alice starts a check by hand. The Release checker reads each source in list order: n8n is up to date, LangGraph, Redis and PostgreSQL are behind, FastAPI's source answers 404 and the checker carries on, and Terraform, added without a version, gets its starting point. The agents propose three upgrade tickets in one proposal (`views/watchlist.awaiting_approval.json`), Bob approves them with one decision, and they are written as MOCK-143, MOCK-144 and MOCK-145.
+`runs/watchlist.json` is one recorded check, which the Portal's demo replays. `watchlist/before-check.json` is the watchlist just before it: six software with the results of Monday's scheduled check, and Alice's schedule for Mondays at 9:00. On Friday Alice starts a check by hand. The Version checker reads each source in list order: n8n is up to date, LangGraph, Redis and PostgreSQL are behind, FastAPI's source answers 404 and the checker carries on, and Terraform, added without a version, gets its starting point. The agents propose three upgrade tickets in one proposal (`views/watchlist.awaiting_approval.json`), Bob approves them with one decision, and they are written as MOCK-143, MOCK-144 and MOCK-145.
 
 `stubs/mock-jira-tickets.json` shows a practice Jira ticket with its `status` (`To Do` or `Done`) and `done_at`. `stubs/mock-jira-ticket.done.json` is the answer of `POST /api/v1/mock-jira/tickets/{key}/done`, which an Operator uses as a person would in Jira; marking a Done ticket again answers the same. The watchlist moves our version to the version a Done ticket named.
 
 ## Agent cards
 
-An agent card is data: a name, a purpose, inputs and numbered blocks, each block naming at most one of four tools (`github.read_releases`, `jira.search`, `jira.read_ticket`, `jira.create_ticket`). [ADR 0023](../docs/adr/0023-agents-are-cards-the-model-drafts-and-use-only-tools-we-build.md) has the decision. The agent runtime serves `GET /v1/tools`, `POST /v1/cards/draft`, `POST /v1/room/choose`, and runs card tasks (`inputs.kind` is `cards`) through `POST /v1/tasks`.
+An agent card is data: a name, a purpose, inputs and numbered blocks, each block naming at most one of four tools (`github.read_releases`, `jira.search`, `jira.read_ticket`, `jira.create_ticket`). [ADR 0023](../docs/adr/0023-agents-are-cards-the-model-drafts-and-use-only-tools-we-build.md) has the decision. The agent runtime serves `GET /v1/tools`, `POST /v1/cards/draft`, `POST /v1/planner/choose`, and runs card tasks (`inputs.kind` is `cards`) through `POST /v1/tasks`.
 
 - A running agent is offered only its card's tools. A write tool takes `title` and `body` and never a target. It only records a proposal: `kind` is the tool id and `subject` is the card id.
 - Each tool call is a step pair. `step` is the tool id with `_` for `.`, such as `jira_search`. A finished read has one list of text in `result` for the live view (`tags`, or ticket keys with titles).
@@ -69,7 +71,7 @@ Every event has `run_id`, `seq` (gapless from 1 per run), `ts`, `actor {kind, id
 | `leg_dispatched` | platform | `leg`, `attempt` |
 | `step_started`, `step_retried` | workflow | `step`, `n8n_execution_id`, `try_number` |
 | `step_finished` | workflow | `step`, `n8n_execution_id`, `try_number`, `outcome`, `detail` |
-| `agent_joined` | agent (the Room lead) | `agent {id, display}`, `reason` |
+| `agent_joined` | agent (the Planner) | `agent {id, display}`, `reason` |
 | `agent_step_started` | agent | `step` |
 | `agent_step_finished` | agent | `step`, `result` (free-form object) |
 | `agent_failed` | agent | `step`, `error_type`, `message`, `retryable` |

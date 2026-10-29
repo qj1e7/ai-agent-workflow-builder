@@ -2,8 +2,8 @@
   "task": "Check fastapi/fastapi for a new release and raise a ticket in project MOCK.",
   "library": [
     {
-      "card_id": "crd_release_checker",
-      "name": "Release checker",
+      "card_id": "crd_version_checker",
+      "name": "Version checker",
       "purpose": "Checks a public GitHub repository for a new release and proposes a Jira ticket for it.",
       "good_for": [
         "Check a repository for new releases",

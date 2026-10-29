@@ -12,12 +12,6 @@ docker compose -f deploy/compose.yaml down -v   # stop and delete the data
 
 To sign in for real against a mock identity provider instead of the dev user switcher, add `compose.oidc.yaml`. It runs `navikt/mock-oauth2-server` with the users alice, bob and carol, sets `AUTH_MODE=oidc`, and publishes no host ports, because the provider's address only resolves inside the compose network. It removes those ports with the `!reset` tag, so it needs Docker Compose 2.24.0 or later. `E2E_AUTH=oidc scripts/e2e.sh` uses it. [docs/auth/entra-setup.md](../docs/auth/entra-setup.md) covers the real provider in Azure.
 
-To run without the real agent, add the fake agent. It replays the contract fixtures, and `POST /_admin/mode` with `{"mode": "failed"}` switches it to the failure case.
-
-```sh
-docker compose -f deploy/compose.yaml -f deploy/compose.fake-agent.yaml up --build --wait
-```
-
 | Service | Host port |
 |---|---|
 | platform-api | `PLATFORM_API_HOST_PORT`, default 8000 |

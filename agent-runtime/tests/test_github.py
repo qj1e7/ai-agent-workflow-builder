@@ -2,7 +2,7 @@ import httpx
 import pytest
 
 from agent_runtime.github import GitHubReleaseSource
-from agent_runtime.release_checker import Release, SourceRejected, SourceUnavailable
+from agent_runtime.release_source import Release, SourceRejected, SourceUnavailable
 
 BASE = "https://github.test"
 

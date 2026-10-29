@@ -158,48 +158,48 @@ afterEach(() => vi.useRealTimers())
 
 describe('runFeed', () => {
   it('yields the backlog page as one item, then follows live with Last-Event-ID', async () => {
-    const api = fakeApi(success, 17)
+    const api = fakeApi(success, 15)
     const feed = start(api)
     expect(await next(feed)).toEqual(connection({ is: 'connecting' }))
     const backlog = await next(feed)
     expect(backlog).toMatchObject({ type: 'events', origin: 'backlog' })
-    expect(seqs(backlog)).toEqual(range(1, 17))
+    expect(seqs(backlog)).toEqual(range(1, 15))
     expect(await next(feed)).toEqual(connection({ is: 'live' }))
     expect(api.requests).toEqual([
       { accept: 'application/json', after: 0, lastEventId: null },
-      { accept: 'text/event-stream', after: null, lastEventId: '17' },
+      { accept: 'text/event-stream', after: null, lastEventId: '15' },
     ])
-    api.emitted = 18
-    api.streams[0]?.push(raw(success, 18))
+    api.emitted = 16
+    api.streams[0]?.push(raw(success, 16))
     const live = await next(feed)
     expect(live).toMatchObject({ type: 'events', origin: 'live' })
-    expect(seqs(live)).toEqual([18])
+    expect(seqs(live)).toEqual([16])
   })
 
   it('drops frames at or below the last seq it yielded', async () => {
-    const api = fakeApi(success, 17)
+    const api = fakeApi(success, 15)
     const feed = start(api)
     await take(feed, 3)
-    for (const seq of [17, 18, 18, 19]) api.streams[0]?.push(raw(success, seq))
-    api.streams[0]?.push(raw(success, 20))
-    expect((await take(feed, 3)).map(seqs)).toEqual([[18], [19], [20]])
+    for (const seq of [15, 16, 16, 17]) api.streams[0]?.push(raw(success, seq))
+    api.streams[0]?.push(raw(success, 18))
+    expect((await take(feed, 3)).map(seqs)).toEqual([[16], [17], [18]])
   })
 
   it('fills a gap from the JSON page before yielding the frame that revealed it', async () => {
-    const api = fakeApi(success, 17)
-    const feed = start(api, { after: 17 })
+    const api = fakeApi(success, 15)
+    const feed = start(api, { after: 15 })
     expect(await take(feed, 2)).toEqual([connection({ is: 'connecting' }), connection({ is: 'live' })])
-    api.emitted = 21
-    api.streams[0]?.push(raw(success, 18))
-    api.streams[0]?.push(raw(success, 21))
+    api.emitted = 19
+    api.streams[0]?.push(raw(success, 16))
+    api.streams[0]?.push(raw(success, 19))
     const items = await take(feed, 3)
-    expect(items.map(seqs)).toEqual([[18], [19, 20], [21]])
+    expect(items.map(seqs)).toEqual([[16], [17, 18], [19]])
     expect(items.every((item) => item.type === 'events' && item.origin === 'live')).toBe(true)
-    expect(api.requests).toContainEqual({ accept: 'application/json', after: 18, lastEventId: null })
+    expect(api.requests).toContainEqual({ accept: 'application/json', after: 16, lastEventId: null })
   })
 
   it('reconnects when a page has a hole, rather than yielding a gap', async () => {
-    const api = fakeApi(success, 17)
+    const api = fakeApi(success, 15)
     api.hidden.add(6)
     const feed = start(api)
     expect(await take(feed, 2)).toEqual([
@@ -209,25 +209,25 @@ describe('runFeed', () => {
   })
 
   it('reconnects when the gap fill does not reach the frame, rather than yielding a gap', async () => {
-    const api = fakeApi(success, 17)
-    api.hidden.add(20)
-    const feed = start(api, { after: 17 })
+    const api = fakeApi(success, 15)
+    api.hidden.add(18)
+    const feed = start(api, { after: 15 })
     await take(feed, 2)
-    api.emitted = 21
-    api.streams[0]?.push(raw(success, 18))
-    api.streams[0]?.push(raw(success, 21))
+    api.emitted = 19
+    api.streams[0]?.push(raw(success, 16))
+    api.streams[0]?.push(raw(success, 19))
     const items = await take(feed, 2)
-    expect(items.map(seqs)).toEqual([[18], []])
+    expect(items.map(seqs)).toEqual([[16], []])
     expect(items[1]).toEqual(connection({ is: 'reconnecting', attempt: 1, inMs: 500 }))
   })
 
   it('resumes after a drop from the last seq it yielded, with no seq repeated', async () => {
-    const api = fakeApi(success, 17)
+    const api = fakeApi(success, 15)
     const feed = start(api)
     const before = await take(feed, 3)
-    api.emitted = 19
-    api.streams[0]?.push(raw(success, 18))
-    api.streams[0]?.push(raw(success, 19))
+    api.emitted = 17
+    api.streams[0]?.push(raw(success, 16))
+    api.streams[0]?.push(raw(success, 17))
     before.push(...(await take(feed, 2)))
     api.streams[0]?.close()
     expect(await next(feed)).toEqual(connection({ is: 'reconnecting', attempt: 1, inMs: 500 }))
@@ -237,17 +237,17 @@ describe('runFeed', () => {
     await vi.advanceTimersByTimeAsync(1)
     expect(await resumed.result).toEqual(connection({ is: 'live' }))
     expect(api.requests.slice(2)).toEqual([
-      { accept: 'application/json', after: 19, lastEventId: null },
-      { accept: 'text/event-stream', after: null, lastEventId: '19' },
+      { accept: 'application/json', after: 17, lastEventId: null },
+      { accept: 'text/event-stream', after: null, lastEventId: '17' },
     ])
-    api.emitted = 20
-    api.streams[1]?.push(raw(success, 20))
+    api.emitted = 18
+    api.streams[1]?.push(raw(success, 18))
     const all = [...before.flatMap(seqs), ...seqs(await next(feed))]
-    expect(all).toEqual(range(1, 20))
+    expect(all).toEqual(range(1, 18))
   })
 
   it('backs off 500, 1000, 2000, 4000, 8000, 15000 and starts again at 500 after a success', async () => {
-    const api = fakeApi(success, 17)
+    const api = fakeApi(success, 15)
     api.failNext(6)
     const feed = start(api)
     expect(await next(feed)).toEqual(connection({ is: 'connecting' }))
@@ -260,13 +260,13 @@ describe('runFeed', () => {
       await vi.advanceTimersByTimeAsync(1)
       item = await woke.result
     }
-    expect(seqs(item)).toEqual(range(1, 17))
+    expect(seqs(item)).toEqual(range(1, 15))
     api.failNext(1)
     expect(await next(feed)).toEqual(connection({ is: 'reconnecting', attempt: 1, inMs: 500 }))
   })
 
   it('shortens a wait by up to half with the jitter source', async () => {
-    const api = fakeApi(success, 17)
+    const api = fakeApi(success, 15)
     api.failNext(2)
     const feed = start(api, { random: () => 1 })
     expect(await take(feed, 2)).toEqual([
@@ -276,13 +276,13 @@ describe('runFeed', () => {
   })
 
   it('settles after run_succeeded arrives live, drops the stream and finishes', async () => {
-    const api = fakeApi(success, 22)
+    const api = fakeApi(success, 20)
     const feed = start(api)
     await take(feed, 3)
-    api.emitted = 23
-    api.streams[0]?.push(raw(success, 23))
+    api.emitted = 21
+    api.streams[0]?.push(raw(success, 21))
     const items = await take(feed, 2)
-    expect(seqs(items[0] as FeedItem)).toEqual([23])
+    expect(seqs(items[0] as FeedItem)).toEqual([21])
     expect(items[1]).toEqual(connection({ is: 'settled' }))
     expect(await feed.next()).toEqual({ done: true, value: undefined })
     expect(api.requests).toHaveLength(2)
@@ -290,10 +290,10 @@ describe('runFeed', () => {
   })
 
   it('settles straight after a backlog that already ends the run, without opening a stream', async () => {
-    const api = fakeApi(success, 23)
+    const api = fakeApi(success, 21)
     const feed = start(api)
     const items = await take(feed, 3)
-    expect(seqs(items[1] as FeedItem)).toEqual(range(1, 23))
+    expect(seqs(items[1] as FeedItem)).toEqual(range(1, 21))
     expect(items[2]).toEqual(connection({ is: 'settled' }))
     expect(await feed.next()).toEqual({ done: true, value: undefined })
     expect(api.requests).toHaveLength(1)
@@ -301,8 +301,8 @@ describe('runFeed', () => {
 
   describe('a failed run', () => {
     const retried = {
-      ...raw(failure, 12),
-      seq: 13,
+      ...raw(failure, 14),
+      seq: 15,
       ts: '2026-11-04T02:20:00Z',
       actor: { kind: 'user', id: 'alice', display: 'Alice' },
       summary: 'Alice retried the run.',
@@ -311,24 +311,24 @@ describe('runFeed', () => {
     }
 
     it('keeps the stream open after run_failed so run_retried still arrives live', async () => {
-      const api = fakeApi(failure, 11)
+      const api = fakeApi(failure, 13)
       const feed = start(api, { runId: FAILURE })
       await take(feed, 3)
-      api.streams[0]?.push(raw(failure, 12))
+      api.streams[0]?.push(raw(failure, 14))
       api.streams[0]?.push(retried)
       const items = await take(feed, 2)
-      expect(items.map(seqs)).toEqual([[12], [13]])
+      expect(items.map(seqs)).toEqual([[14], [15]])
       expect(items[1]).toMatchObject({ origin: 'live', events: [{ kind: 'run_retried' }] })
       expect(api.requests).toHaveLength(2)
     })
 
     it('waits 30 s before checking back when the stream closes after run_failed', async () => {
-      const api = fakeApi(failure, 11)
+      const api = fakeApi(failure, 13)
       const feed = start(api, { runId: FAILURE })
       await take(feed, 3)
-      api.streams[0]?.push(raw(failure, 12))
+      api.streams[0]?.push(raw(failure, 14))
       api.streams[0]?.close()
-      expect(seqs(await next(feed))).toEqual([12])
+      expect(seqs(await next(feed))).toEqual([14])
       expect(await next(feed)).toEqual(connection({ is: 'reconnecting', attempt: 0, inMs: 30_000 }))
       const woke = pull(feed)
       await vi.advanceTimersByTimeAsync(29_999)
@@ -336,15 +336,15 @@ describe('runFeed', () => {
       await vi.advanceTimersByTimeAsync(1)
       expect(await woke.result).toEqual(connection({ is: 'live' }))
       expect(api.requests.slice(2)).toEqual([
-        { accept: 'application/json', after: 12, lastEventId: null },
-        { accept: 'text/event-stream', after: null, lastEventId: '12' },
+        { accept: 'application/json', after: 14, lastEventId: null },
+        { accept: 'text/event-stream', after: null, lastEventId: '14' },
       ])
     })
   })
 
   describe('a 4xx answer is final', () => {
     it('closes for good when the events page answers 404, and never asks again', async () => {
-      const api = fakeApi(success, 17)
+      const api = fakeApi(success, 15)
       api.answerNext(404, 1)
       const feed = start(api)
       expect(await take(feed, 2)).toEqual([
@@ -358,7 +358,7 @@ describe('runFeed', () => {
     })
 
     it('closes for good when the stream answers 403 after a good backlog', async () => {
-      const api = fakeApi(success, 17)
+      const api = fakeApi(success, 15)
       const feed = start(api)
       expect(await take(feed, 2)).toMatchObject([connection({ is: 'connecting' }), { type: 'events', origin: 'backlog' }])
       api.answerNext(403, 1)
@@ -371,14 +371,14 @@ describe('runFeed', () => {
       [401, 'signed_out'],
       [422, 'rejected'],
     ] as const)('names the reason for %s as %s', async (status, reason) => {
-      const api = fakeApi(success, 17)
+      const api = fakeApi(success, 15)
       api.answerNext(status, 1)
       const feed = start(api)
       expect(await take(feed, 2)).toEqual([connection({ is: 'connecting' }), connection({ is: 'closed', status, reason })])
     })
 
     it('keeps backing off on a 500, since the server may come back', async () => {
-      const api = fakeApi(success, 17)
+      const api = fakeApi(success, 15)
       api.answerNext(500, 1)
       const feed = start(api)
       expect(await take(feed, 2)).toEqual([
@@ -387,38 +387,38 @@ describe('runFeed', () => {
       ])
       const back = pull(feed)
       await vi.advanceTimersByTimeAsync(500)
-      expect(seqs(await back.result)).toEqual(range(1, 17))
+      expect(seqs(await back.result)).toEqual(range(1, 15))
     })
   })
 
   it('yields an unknown kind as an opaque event at its seq and continues', async () => {
-    const api = fakeApi(success, 17)
+    const api = fakeApi(success, 15)
     const feed = start(api)
     await take(feed, 3)
-    api.streams[0]?.push({ ...raw(success, 18), kind: 'agent_left', data: { agent: 'release_checker' } })
-    api.streams[0]?.push(raw(success, 19))
+    api.streams[0]?.push({ ...raw(success, 16), kind: 'agent_left', data: { agent: 'version_checker' } })
+    api.streams[0]?.push(raw(success, 17))
     const items = await take(feed, 2)
-    expect(items[0]).toMatchObject({ events: [{ seq: 18, kind: 'opaque', declaredKind: 'agent_left' }] })
-    expect(seqs(items[1] as FeedItem)).toEqual([19])
+    expect(items[0]).toMatchObject({ events: [{ seq: 16, kind: 'opaque', declaredKind: 'agent_left' }] })
+    expect(seqs(items[1] as FeedItem)).toEqual([17])
   })
 
   it.each([
-    ['bad JSON', 'id: 18\nevent: activity\ndata: not json\n\n'],
-    ['a broken envelope', `id: 18\nevent: activity\ndata: ${JSON.stringify({ ...raw(success, 18), seq: 'x' })}\n\n`],
-    ['another event name', `id: 18\nevent: ping\ndata: ${JSON.stringify(raw(success, 18))}\n\n`],
+    ['bad JSON', 'id: 16\nevent: activity\ndata: not json\n\n'],
+    ['a broken envelope', `id: 16\nevent: activity\ndata: ${JSON.stringify({ ...raw(success, 16), seq: 'x' })}\n\n`],
+    ['another event name', `id: 16\nevent: ping\ndata: ${JSON.stringify(raw(success, 16))}\n\n`],
   ])('skips a frame with %s and reads the next one', async (_name, text) => {
-    const api = fakeApi(success, 17)
+    const api = fakeApi(success, 15)
     const feed = start(api)
     await take(feed, 3)
     api.streams[0]?.chunk(text)
-    api.streams[0]?.push(raw(success, 18))
-    expect(seqs(await next(feed))).toEqual([18])
+    api.streams[0]?.push(raw(success, 16))
+    expect(seqs(await next(feed))).toEqual([16])
     expect(api.requests).toHaveLength(2)
   })
 
   it('treats 45 s without bytes as a dead socket, but keep-alive comments count as bytes', async () => {
-    const api = fakeApi(success, 17)
-    const feed = start(api, { after: 17 })
+    const api = fakeApi(success, 15)
+    const feed = start(api, { after: 15 })
     await take(feed, 2)
     const idle = pull(feed)
     await vi.advanceTimersByTimeAsync(15_000)
@@ -436,8 +436,8 @@ describe('runFeed', () => {
     await vi.advanceTimersByTimeAsync(500)
     expect(await back.result).toEqual(connection({ is: 'live' }))
     expect(api.requests.slice(2)).toEqual([
-      { accept: 'application/json', after: 17, lastEventId: null },
-      { accept: 'text/event-stream', after: null, lastEventId: '17' },
+      { accept: 'application/json', after: 15, lastEventId: null },
+      { accept: 'text/event-stream', after: null, lastEventId: '15' },
     ])
   })
 
@@ -447,7 +447,7 @@ describe('runFeed', () => {
 
     it('yields the server clock offset once, from the first page', async () => {
       vi.setSystemTime(NOW)
-      const api = fakeApi(success, 17)
+      const api = fakeApi(success, 15)
       api.dateHeader = new Date(NOW + 4000).toUTCString()
       const feed = start(api)
       const items = await take(feed, 4)
@@ -465,7 +465,7 @@ describe('runFeed', () => {
       ['25 h behind', new Date(NOW - 25 * 3_600_000).toUTCString()],
     ])('yields nothing when the header is %s', async (_name, header) => {
       vi.setSystemTime(NOW)
-      const api = fakeApi(success, 17)
+      const api = fakeApi(success, 15)
       api.dateHeader = header
       const feed = start(api)
       const items = await take(feed, 3)
@@ -476,7 +476,7 @@ describe('runFeed', () => {
 
   describe('abort', () => {
     it('ends the feed mid-stream without further items or requests', async () => {
-      const api = fakeApi(success, 17)
+      const api = fakeApi(success, 15)
       const controller = new AbortController()
       const feed = start(api, { signal: controller.signal })
       await take(feed, 3)
@@ -488,7 +488,7 @@ describe('runFeed', () => {
     })
 
     it('ends the feed mid-backoff and cancels the timer', async () => {
-      const api = fakeApi(success, 17)
+      const api = fakeApi(success, 15)
       api.failNext(1)
       const controller = new AbortController()
       const feed = start(api, { signal: controller.signal })

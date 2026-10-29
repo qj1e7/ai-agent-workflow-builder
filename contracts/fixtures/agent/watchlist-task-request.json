@@ -41,9 +41,7 @@
       }
     ]
   },
-  "carry_forward": {
-    "last_known_tag": null
-  },
+  "carry_forward": {},
   "callback": {
     "url": "http://platform-api:8000/internal/v1/runs/run_01JC2/agent-events?task=run_01JC2/work/1/1",
     "token": "example-callback-token-not-a-secret"

@@ -4,7 +4,7 @@
     "stage": "working",
     "reason": "AgentError",
     "retryable": true,
-    "message": "Release checker failed: GitHub returned 503 Service Unavailable three times"
+    "message": "UpstreamUnavailable: Could not check LangGraph: GitHub returned 503 Service Unavailable three times"
   },
   "advice": {
     "explanation": "An agent could not finish its work.",

@@ -9,7 +9,7 @@ from langchain_core.runnables import Runnable, RunnableLambda
 from pydantic import BaseModel, Field
 
 from agent_runtime.jira import JiraTicket, JiraUnavailable
-from agent_runtime.release_checker import Release, SourceRejected, SourceUnavailable
+from agent_runtime.release_source import Release, SourceRejected, SourceUnavailable
 
 
 class FakeClock:
@@ -48,7 +48,7 @@ class RepoSource:
         self,
         tags: dict[str, list[str]],
         refused: dict[str, int] | None = None,
-        down: dict[str, int] | None = None,
+        down: dict[str, int | None] | None = None,
     ) -> None:
         self.tags = tags
         self.refused = refused or {}

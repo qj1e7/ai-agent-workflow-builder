@@ -39,9 +39,6 @@ from platform_api.builder.templates import (
     AGENT_CARDS,
     SOFTWARE_WATCHLIST,
     TEMPLATES,
-    ParamErrors,
-    TemplateNotOffered,
-    UnknownTemplate,
 )
 from platform_api.builder.views import template_view
 from platform_api.shared import Principal, Role, UseCaseId
@@ -111,23 +108,14 @@ def list_templates(principal: CurrentPrincipal) -> TemplateList:
 async def create_use_case(
     body: CreateUseCase, principal: Operator, builder: CurrentBuilder
 ) -> UseCaseCreated:
-    match await builder.create_use_case(principal, body):
-        case UseCaseCreated() as created:
-            return created
-        case UnknownTemplate():
-            raise HTTPException(
-                422,
-                [{"loc": ["body", "template"], "msg": f"Unknown template {body.template!r}"}],
-            )
-        case TemplateNotOffered(key):
-            raise HTTPException(
-                422, [{"loc": ["body", "template"], "msg": NOT_OFFERED.get(key, "Not offered")}]
-            )
-        case ParamErrors(errors):
-            raise HTTPException(
-                422,
-                [{"loc": ["body", "params", name], "msg": message} for name, message in errors],
-            )
+    template = TEMPLATES.get(body.template)
+    if template is None:
+        raise HTTPException(
+            422, [{"loc": ["body", "template"], "msg": f"Unknown template {body.template!r}"}]
+        )
+    raise HTTPException(
+        422, [{"loc": ["body", "template"], "msg": NOT_OFFERED.get(template.key, "Not offered")}]
+    )
 
 
 @router.get("/use-cases", responses=SIGNED_IN)
@@ -262,7 +250,7 @@ async def update_agent_card(
 
 @router.post(
     "/builder/plan",
-    description="The Room lead reads the task and picks saved agents, or drafts a new one. "
+    description="The Planner reads the task and picks saved agents, or drafts a new one. "
     "Nothing is saved.",
     responses={
         **OPERATORS_ONLY,

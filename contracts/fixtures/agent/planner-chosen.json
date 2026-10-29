@@ -4,7 +4,7 @@
     "decision": "use_one",
     "agents": [
       {
-        "card_id": "crd_release_checker",
+        "card_id": "crd_version_checker",
         "part": "Check fastapi/fastapi for a new release and propose the ticket.",
         "values": {
           "GitHub repository": "fastapi/fastapi",
@@ -13,7 +13,7 @@
       }
     ],
     "new_agent": null,
-    "reason": "The Release checker already does this for any public repository.",
+    "reason": "The Version checker already does this for any public repository.",
     "questions": []
   }
 }

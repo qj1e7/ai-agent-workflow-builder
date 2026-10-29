@@ -19,9 +19,9 @@ from agent_runtime.contracts import (
 )
 from agent_runtime.drafting import AgentAnswer, ChoiceAnswer
 from agent_runtime.jira import PracticeJiraFor
-from agent_runtime.release_checker import ReleaseChecker
-from agent_runtime.room import FixedRoomLead
+from agent_runtime.planner import FixedPlanner
 from agent_runtime.summary import ChatFor, TemplateSummarizer
+from agent_runtime.version_checker import VersionChecker
 from tests.fakes import FakeClock, FakeJira, FakeSource, ScriptedChat, langgraph_tags
 from tests.test_api import BASE_ENV, KEY, ORIGIN, SETTINGS, Posts
 from tests.test_card_runner import releases_then_search_then_create
@@ -31,7 +31,7 @@ from tests.test_drafting import answer as draft_answer
 def make_app(chat: ScriptedChat | None, posts: Posts | None = None) -> TestClient:
     clock = FakeClock()
     callbacks = HttpCallbacks(transport=httpx.MockTransport(posts or Posts()))
-    checker = ReleaseChecker(FakeSource(langgraph_tags()), TemplateSummarizer(), sleep=clock.sleep)
+    checker = VersionChecker(FakeSource(langgraph_tags()), TemplateSummarizer(), sleep=clock.sleep)
     runner = CardRunner(FakeSource(langgraph_tags()[:8]), lambda _: FakeJira(), sleep=clock.sleep)
 
     def chat_source(access: ModelAccess | None) -> ChatFor | None:
@@ -42,7 +42,7 @@ def make_app(chat: ScriptedChat | None, posts: Posts | None = None) -> TestClien
 
     runtime = Runtime(
         checker=checker,
-        lead=FixedRoomLead(),
+        planner=FixedPlanner(),
         clock=clock,
         callbacks=callbacks,
         cards=runner,
@@ -82,7 +82,7 @@ def test_a_card_task_runs_and_returns_the_proposed_ticket():
     assert result["output"]["summary"] == CARD_REPORT
     [intent] = result["output"]["proposed"]
     assert intent["fields"] == {"title": CARD_TICKET_TITLE, "body": CARD_TICKET_BODY}
-    assert intent["subject"] == "crd_release_checker"
+    assert intent["subject"] == "crd_version_checker"
 
 
 def test_a_card_task_posts_every_event_to_the_callback():
@@ -121,7 +121,7 @@ def test_a_value_that_does_not_fit_its_input_kind_is_refused_before_anything_run
 def test_drafting_returns_the_draft_and_needs_the_key():
     answer = {
         "can_do": True,
-        "name": "Release checker",
+        "name": "Version checker",
         "purpose": "Checks a repository.",
         "blocks": [{"say": "Read.", "tool": "github.read_releases"}],
     }
@@ -142,12 +142,12 @@ def test_choosing_returns_the_choice():
             ChoiceAnswer(
                 decision="use_one",
                 reason="It fits.",
-                agents=[AgentAnswer(card_id="crd_release_checker", part="Do it.")],
+                agents=[AgentAnswer(card_id="crd_version_checker", part="Do it.")],
             )
         ]
     )
     body = json.loads(choose_request().model_dump_json())
-    reply = make_app(chat).post("/v1/room/choose", json=body).json()
+    reply = make_app(chat).post("/v1/planner/choose", json=body).json()
     assert reply["status"] == "chosen"
     assert reply["choice"]["decision"] == "use_one"
 

@@ -12,14 +12,6 @@ from platform_api.wire import Trigger
 
 
 @dataclass(frozen=True)
-class ReleaseTask:
-    repo: str
-    tag_pattern: str
-    last_known_tag: str | None
-    kind: Literal["release"] = "release"
-
-
-@dataclass(frozen=True)
 class SoftwareSource:
     ref: str
     kind: Literal["github"] = "github"
@@ -61,7 +53,7 @@ class CardsTask:
     kind: Literal["cards"] = "cards"
 
 
-type Task = Annotated[ReleaseTask | WatchlistTask | CardsTask, Field(discriminator="kind")]
+type Task = Annotated[WatchlistTask | CardsTask, Field(discriminator="kind")]
 
 
 @dataclass(frozen=True)
@@ -88,5 +80,3 @@ class RunStarter(Protocol):
     async def start_run(
         self, spec: RunSpec, principal: Principal, idempotency_key: str
     ) -> RunStarted: ...
-
-    async def latest_carry_forward(self, use_case_id: UseCaseId) -> str | None: ...

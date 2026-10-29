@@ -1,7 +1,7 @@
 {
   "run_id": "run_01JB9",
   "use_case_id": "uc_01JB7",
-  "use_case_name": "LangGraph releases",
+  "use_case_name": "Software watchlist",
   "use_case_version": 1,
   "started_by": "alice",
   "trigger": "person",

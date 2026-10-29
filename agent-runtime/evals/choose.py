@@ -7,8 +7,8 @@ from evals.jobs import Answer, Case, Job
 
 LIBRARY = [
     LibraryCard(
-        card_id="crd_release_checker",
-        name="Release checker",
+        card_id="crd_version_checker",
+        name="Version checker",
         purpose="Checks a public GitHub repository for a new release and proposes a Jira "
         "ticket for it.",
         good_for=["Check a repository for new releases", "Raise a ticket for a new release"],

@@ -1,14 +1,14 @@
 import pytest
 from pydantic import ValidationError
 
-from agent_runtime.contract import ReleaseCheckInputs
+from agent_runtime.contract import WatchlistInputs
+from agent_runtime.contracts import langgraph
 
-REPO = "langchain-ai/langgraph"
 VETTED = r"^\d+\.\d+\.\d+$"
 
 
 def test_the_vetted_pattern_is_accepted():
-    assert ReleaseCheckInputs(repo=REPO, tag_pattern=VETTED).tag_pattern == VETTED
+    assert WatchlistInputs(tag_pattern=VETTED, software=[langgraph()]).tag_pattern == VETTED
 
 
 @pytest.mark.parametrize(
@@ -18,4 +18,4 @@ def test_the_vetted_pattern_is_accepted():
 )
 def test_any_other_pattern_is_refused(pattern: str):
     with pytest.raises(ValidationError, match="tag_pattern"):
-        ReleaseCheckInputs(repo=REPO, tag_pattern=pattern)
+        WatchlistInputs(tag_pattern=pattern, software=[langgraph()])

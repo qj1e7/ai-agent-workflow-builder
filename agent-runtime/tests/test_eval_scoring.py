@@ -9,18 +9,13 @@ from evals.choose import CHOOSE, ChooseCase
 from evals.draft import DRAFT, DraftCase
 from evals.explain import EXPLAIN, ExplainCase, Explanation
 from evals.jobs import Answer
-from evals.match import MATCH, TEMPLATES, MatchCase, schema
 from evals.providers import Target, plan
 from evals.runner import JOBS, Outcome, main, model_for, redact, run_case, summarise_job
-from evals.summarise import SUMMARISE, SummariseCase
+from evals.summarise import SUMMARISE, SummariseCase, checked
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 
-from agent_runtime.summary import SUMMARY_TIMEOUT_SECONDS, template_summary
-
-needs_contracts = pytest.mark.skipif(
-    not TEMPLATES.exists(), reason="contracts/ is not in the test image. CI runs this on the host."
-)
+from agent_runtime.summary import SUMMARY_TIMEOUT_SECONDS, ModelSummarizer, template_check_summary
 
 
 def failed(checks: list[Any]) -> set[str]:
@@ -31,33 +26,25 @@ def text(value: str) -> Answer:
     return Answer(value, value, None)
 
 
-def match_answer(template: str | None, **params: str) -> Answer:
-    value = schema().model_validate({"template": template, "params": params})
-    return Answer(value, value.model_dump_json(), None)
+LANGGRAPH_BEHIND = {
+    "name": "LangGraph",
+    "state": "behind",
+    "newest": "1.2.16",
+    "new_versions": ["1.2.16", "1.2.15"],
+}
 
 
-def summarise_case(**overrides: Any) -> SummariseCase:
-    fields = {
-        "id": "t",
-        "note": "",
-        "repo": "langchain-ai/langgraph",
-        "last_known_tag": "1.2.14",
-        "new_tags": ["1.2.16", "1.2.15"],
-    }
-    return SummariseCase.model_validate(fields | overrides)
+def summarise_case(*software: dict[str, Any]) -> SummariseCase:
+    return SummariseCase.model_validate(
+        {"id": "t", "note": "", "software": list(software) or [LANGGRAPH_BEHIND]}
+    )
 
 
 def explain_case(name: str) -> ExplainCase:
     return next(c for c in EXPLAIN.cases() if c.id == name)
 
 
-def match_case(name: str) -> MatchCase:
-    return next(c for c in MATCH.cases() if c.id == name)
-
-
-@pytest.mark.parametrize(
-    "job", [SUMMARISE, EXPLAIN, pytest.param(MATCH, marks=needs_contracts), DRAFT, CHOOSE]
-)
+@pytest.mark.parametrize("job", [SUMMARISE, EXPLAIN, DRAFT, CHOOSE])
 def test_each_job_has_10_to_15_cases_with_unique_ids(job: Any) -> None:
     ids = [case.id for case in job.cases()]
     assert 10 <= len(ids) <= 15
@@ -66,7 +53,21 @@ def test_each_job_has_10_to_15_cases_with_unique_ids(job: Any) -> None:
 
 @pytest.mark.parametrize("case", SUMMARISE.cases(), ids=lambda c: c.id)
 def test_the_runtime_template_summary_passes_every_summary_case(case: SummariseCase) -> None:
-    assert failed(SUMMARISE.score(case, text(template_summary(case.new_tags)))) == set()
+    assert failed(SUMMARISE.score(case, text(template_check_summary(checked(case))))) == set()
+
+
+def test_the_eval_asks_exactly_what_the_product_asks() -> None:
+    case = next(c for c in SUMMARISE.cases() if c.id == "fixture-six-mixed")
+    sent: list[str] = []
+
+    class Recording(GenericFakeChatModel):
+        def invoke(self, prompt: Any, *args: Any, **kwargs: Any) -> Any:
+            sent.append(prompt)
+            return super().invoke(prompt, *args, **kwargs)
+
+    model = Recording(messages=iter([AIMessage(content="LangGraph has a new release.")]))
+    ModelSummarizer("any:model", factory=lambda name: model).summarise_check(checked(case))
+    assert sent == [SUMMARISE.prompt(case)]
 
 
 @pytest.mark.parametrize("case", EXPLAIN.cases(), ids=lambda c: c.id)
@@ -75,22 +76,17 @@ def test_each_explain_reference_passes_its_own_case(case: ExplainCase) -> None:
     assert failed(EXPLAIN.score(case, answer)) == set()
 
 
-@needs_contracts
-@pytest.mark.parametrize("case", MATCH.cases(), ids=lambda c: c.id)
-def test_each_match_truth_passes_its_own_case(case: MatchCase) -> None:
-    assert failed(MATCH.score(case, match_answer(case.template, **case.params))) == set()
-
-
 @pytest.mark.parametrize(
     ("answer", "broken"),
     [
-        ("2 new releases: 1.2.16", {"every_new_version"}),
-        ("2 new releases: 1.2.16, 1.2.15 and 1.2.17", {"no_invented_version"}),
-        ("LangGraph on PyPI has 1.2.16 and 1.2.15", {"no_invented_system"}),
-        ("I created a Jira ticket for 1.2.16 and 1.2.15", {"no_write_claim", "no_invented_system"}),
-        ("New releases:\n1.2.16\n1.2.15", {"usable_by_product"}),
-        ("The Scout found 1.2.16 and 1.2.15", {"no_themed_names"}),
-        ("The API lists 1.2.16 and 1.2.15", {"no_jargon"}),
+        ("LangGraph has new releases.", {"every_newest_version"}),
+        ("There is a new release: 1.2.16.", {"names_behind_and_unchecked"}),
+        ("LangGraph has new releases: 1.2.16 and 1.2.17.", {"no_invented_version"}),
+        ("LangGraph on PyPI has 1.2.16.", {"no_invented_system"}),
+        ("I created a Jira ticket for LangGraph 1.2.16.", {"no_write_claim", "no_invented_system"}),
+        ("New releases:\nLangGraph 1.2.16", {"usable_by_product"}),
+        ("The Scout found LangGraph 1.2.16.", {"no_themed_names"}),
+        ("The API lists LangGraph 1.2.16.", {"no_jargon"}),
     ],
 )
 def test_a_flawed_summary_fails_the_check_that_names_its_flaw(
@@ -100,14 +96,24 @@ def test_a_flawed_summary_fails_the_check_that_names_its_flaw(
 
 
 def test_a_prefixed_tag_counts_by_its_version_number() -> None:
-    case = summarise_case(last_known_tag="v1.9.8", new_tags=["v1.10.1", "v1.10.0"])
-    answer = text("Terraform has two new releases after 1.9.8: 1.10.1 and 1.10.0.")
+    case = summarise_case(
+        {"name": "Terraform", "state": "behind", "newest": "v1.10.1", "new_versions": ["v1.10.1"]}
+    )
+    answer = text("Terraform has a new release, 1.10.1.")
     assert failed(SUMMARISE.score(case, answer)) == set()
 
 
-def test_a_word_from_the_repo_name_is_not_jargon_in_a_summary() -> None:
-    case = summarise_case(repo="n8n-io/n8n", last_known_tag="n8n@1.70.0", new_tags=["n8n@1.71.0"])
+def test_a_software_name_is_not_jargon_in_a_summary() -> None:
+    case = summarise_case(
+        {"name": "n8n", "state": "behind", "newest": "n8n@1.71.0", "new_versions": ["n8n@1.71.0"]}
+    )
     assert failed(SUMMARISE.score(case, text("n8n has a new release, 1.71.0."))) == set()
+
+
+def test_a_summary_must_name_the_software_that_could_not_be_checked() -> None:
+    case = summarise_case(LANGGRAPH_BEHIND, {"name": "FastAPI", "state": "cant_check"})
+    answer = text("LangGraph has a new release: 1.2.16.")
+    assert failed(SUMMARISE.score(case, answer)) == {"names_behind_and_unchecked"}
 
 
 @pytest.mark.parametrize(
@@ -169,58 +175,6 @@ def test_a_past_write_is_a_write_claim(sentence: str) -> None:
 def test_jargon_finds_codes_identifiers_and_enum_names() -> None:
     found = jargon("GitHub gave 503 in run_agents, an AgentError, version 1.2.503")
     assert found == ["AgentError", "503", "run_agents"]
-
-
-@needs_contracts
-@pytest.mark.parametrize(
-    ("case", "answer", "broken"),
-    [
-        ("project-named", match_answer(None), {"right_template", "required_params"}),
-        (
-            "v-prefixed-tag",
-            match_answer(
-                "release_check",
-                repo="hashicorp/terraform",
-                ticket_project="INFRA",
-                last_seen_tag="v1.9.8",
-            ),
-            {"params_valid", "required_params"},
-        ),
-        (
-            "fixture-instruction",
-            match_answer("release_check", repo="langchain-ai/langgraph", ticket_project="MOCK"),
-            {"no_invented_params"},
-        ),
-        ("meeting-room", match_answer("release_check"), {"right_template"}),
-        (
-            "vague-product-name",
-            match_answer("release_check", repo="langchain-ai/langgraph"),
-            set(),
-        ),
-        (
-            "fixture-instruction",
-            match_answer(
-                "release_check", repo="langchain-ai/langgraph", tag_pattern=r"^\d+\.\d+\.\d+$"
-            ),
-            set(),
-        ),
-    ],
-)
-def test_template_matches_are_scored_against_the_builder_rules(
-    case: str, answer: Answer, broken: set[str]
-) -> None:
-    assert failed(MATCH.score(match_case(case), answer)) == broken
-
-
-@needs_contracts
-def test_the_mirrored_rules_cover_every_parameter_the_builder_publishes() -> None:
-    from evals.match import NOT_OFFERED, RULES, catalog
-
-    published = json.loads(TEMPLATES.read_text())["templates"]
-    assert {t["key"] for t in published} == set(RULES) | NOT_OFFERED
-    assert {t["key"]: {p["name"] for p in t["params"]} for t in catalog()} == {
-        key: set(rules) for key, rules in RULES.items()
-    }
 
 
 def test_a_model_that_raises_is_scored_as_not_answered_without_leaking_the_key() -> None:
@@ -292,7 +246,7 @@ def test_a_cloud_provider_with_a_key_runs_its_default_models() -> None:
 
 
 def test_every_job_is_registered_once() -> None:
-    assert [job.name for job in JOBS] == ["summarise", "explain", "match", "draft", "choose"]
+    assert [job.name for job in JOBS] == ["summarise", "explain", "draft", "choose"]
 
 
 @pytest.mark.parametrize(

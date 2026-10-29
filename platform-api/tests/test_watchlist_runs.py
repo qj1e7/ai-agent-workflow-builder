@@ -179,7 +179,7 @@ async def test_a_check_asks_the_agents_about_every_watched_software(h: Harness):
             ),
         ],
     )
-    assert request.carry_forward == CarryForward(last_known_tag=None)
+    assert request.carry_forward == CarryForward()
     assert request.instruction == WATCHLIST_SPEC.instruction
 
 
@@ -201,8 +201,9 @@ async def test_the_teams_message_names_every_ticket_of_the_check(h: Harness):
     await work_leg(h)
     [message] = await h.teams.messages()
     assert message.text == (
-        "A run of Software watchlist needs an Approver. It would create 2 Jira tickets in MOCK: "
-        '"Upgrade LangGraph from 1.2.14 to 1.2.16" and "Upgrade PostgreSQL from 17.2.0 to 17.3.0". '
+        "A run of the Software watchlist needs an Approver. It would create 2 Jira tickets in "
+        'MOCK: "Upgrade LangGraph from 1.2.14 to 1.2.16" and '
+        '"Upgrade PostgreSQL from 17.2.0 to 17.3.0". '
         f"Open the approval page to decide. The agents said: {SUMMARY}"
     )
 
@@ -302,7 +303,7 @@ async def test_declining_drops_the_tickets_and_the_software_shows_behind(h: Harn
 async def test_a_failed_write_drops_the_tickets_and_a_retry_still_writes_them(h: Harness):
     run_id = await work_leg(h)
     await bob_decides(h, run_id, Verdict.APPROVE)
-    await h.orchestrator.on_workflow_failure(ACT, "release_check", "Do write action", "timed out")
+    await h.orchestrator.on_workflow_failure(ACT, "run", "Do write action", "timed out")
     assert isinstance(await h.state(run_id), Failed)
     assert (await standings(h)).software[LANGGRAPH].status == "behind"
 
@@ -322,7 +323,7 @@ async def test_a_run_that_fails_after_proposing_drops_its_tickets(h: Harness):
     await h.orchestrator.on_step(run_id, StepName.RUN_AGENTS, WORK)
     assert isinstance(await h.state(run_id), Proposed)
     assert (await standings(h)).software[LANGGRAPH].status == "awaiting_approval"
-    await h.orchestrator.on_workflow_failure(WORK, "release_check", "Ask approval", "boom")
+    await h.orchestrator.on_workflow_failure(WORK, "run", "Ask approval", "boom")
     assert isinstance(await h.state(run_id), Failed)
     assert (await standings(h)).software[LANGGRAPH].status == "behind"
 
