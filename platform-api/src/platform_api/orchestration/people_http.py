@@ -41,7 +41,7 @@ from platform_api.orchestration.people_store import (
 )
 from platform_api.orchestration.settings_http import CurrentModelSettings
 from platform_api.shared import Principal, UserId
-from platform_api.wire import WireModel, error_response
+from platform_api.wire import ErrorBody, WireModel, error_response
 
 router = APIRouter()
 
@@ -352,7 +352,10 @@ def _decide_refused(refused: DecideRefused) -> JSONResponse:
     response_model=ConfirmationDecidedOut,
     responses={
         **SIGNED_IN,
-        403: DECIDE_REFUSED,
+        403: {
+            "model": DecideRefusalOut | ErrorBody,
+            "description": "This person cannot decide this, or is not on the People list",
+        },
         404: error_response("No such confirmation"),
         409: DECIDE_REFUSED,
         503: error_response("Settings are off until SETTINGS_ENCRYPTION_KEY is set"),

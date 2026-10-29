@@ -7212,11 +7212,19 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DecideRefusalOut"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/DecideRefusalOut"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorBody"
+                    }
+                  ],
+                  "title": "Response 403 Decide Confirmation Api V1 Confirmations  Confirmation Id  Decisions Post"
                 }
               }
             },
-            "description": "This person cannot decide this"
+            "description": "This person cannot decide this, or is not on the People list"
           },
           "404": {
             "content": {

@@ -57,13 +57,23 @@ def test_every_signed_in_route_declares_the_401_and_503_it_answers(schema: dict[
     assert missing == []
 
 
+ERROR_BODY = {"$ref": "#/components/schemas/ErrorBody"}
+
+
+def admits_error_body(response: dict[str, Any]) -> bool:
+    body = response.get("content", {}).get("application/json", {}).get("schema", {})
+    return body == ERROR_BODY or ERROR_BODY in body.get("anyOf", [])
+
+
 def test_every_signed_in_route_but_me_declares_the_403_for_someone_not_on_the_list(
     schema: dict[str, Any],
 ):
     missing = [
         f"{method.upper()} {path}"
         for path, method, op in operations(schema)
-        if op.get("security") and path != "/api/v1/me" and "403" not in op["responses"]
+        if op.get("security")
+        and path != "/api/v1/me"
+        and not admits_error_body(op["responses"].get("403", {}))
     ]
     assert missing == []
     me = schema["paths"]["/api/v1/me"]["get"]["responses"]

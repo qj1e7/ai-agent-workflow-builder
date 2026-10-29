@@ -539,12 +539,19 @@ def test_a_person_not_on_the_list_is_told_to_ask_an_operator(issuer: FakeIssuer,
     assert me.status_code == 200
     assert me.json() == {"id": NOBODY_ID, "display": "Nobody", "roles": [], "on_list": False}
     declared_status(app, "GET", ME, me)
-    for method, path, declared in (
-        ("GET", "/api/v1/runs", "/api/v1/runs"),
-        ("POST", "/api/v1/runs/run_1/retry", "/api/v1/runs/{run_id}/retry"),
-        ("GET", "/api/v1/people", "/api/v1/people"),
+    decision = {"verdict": "confirm", "digest": "sha256:0"}
+    for method, path, declared, body in (
+        ("GET", "/api/v1/runs", "/api/v1/runs", None),
+        ("POST", "/api/v1/runs/run_1/retry", "/api/v1/runs/{run_id}/retry", None),
+        ("GET", "/api/v1/people", "/api/v1/people", None),
+        (
+            "POST",
+            "/api/v1/confirmations/cfm_1/decisions",
+            "/api/v1/confirmations/{confirmation_id}/decisions",
+            decision,
+        ),
     ):
-        response = client.request(method, path, headers=nobody)
+        response = client.request(method, path, headers=nobody, json=body)
         assert response.status_code == 403, (method, path)
         assert "Ask an Operator to add you" in response.json()["detail"]
         declared_status(app, method, declared, response)
