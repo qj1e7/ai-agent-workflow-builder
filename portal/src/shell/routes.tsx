@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router'
+import { SettingsPage } from '../screens/settings/SettingsPage'
 import type { Icon } from '../ui/icons'
 import { BotIcon, BoxIcon, GridIcon, HomeIcon, SettingsIcon } from './icons'
 import { NotFoundPage } from './NotFoundPage'
@@ -84,7 +85,8 @@ export function AppRoutes({ context }: { context: PageContext }) {
     <Routes>
       {PAGE_IDS.map((id) => {
         const { path, heading, lead } = PAGES[id]
-        return <Route key={id} path={path} element={<EmptyPage heading={wordsOf(heading, context)} lead={wordsOf(lead, context)} />} />
+        const Page = id === 'settings' ? SettingsPage : EmptyPage
+        return <Route key={id} path={path} element={<Page heading={wordsOf(heading, context)} lead={wordsOf(lead, context)} />} />
       })}
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
