@@ -25,6 +25,7 @@ ROUTES = {
     ("GET", "/api/v1/agent-cards/{card_id}"),
     ("PUT", "/api/v1/agent-cards/{card_id}"),
     ("POST", "/api/v1/builder/plan"),
+    ("POST", "/api/v1/builder/understand"),
     ("POST", "/api/v1/agent-use-cases"),
     ("GET", "/api/v1/watchlist"),
     ("POST", "/api/v1/watchlist/software"),

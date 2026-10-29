@@ -6,6 +6,7 @@ from platform_api.auth import DEV_USERS
 from platform_api.builder import TEMPLATES as TEMPLATES_BY_KEY
 from platform_api.builder import Builder
 from platform_api.builder.models import TemplateList, UseCaseView
+from platform_api.builder.planning import starters, understood_out
 from platform_api.builder.templates import SOFTWARE_WATCHLIST, WATCHLIST_INSTRUCTION
 from platform_api.builder.views import template_view
 from platform_api.monitoring.agent_events import (
@@ -55,6 +56,7 @@ from platform_api.monitoring.events import (
 )
 from platform_api.monitoring.http import TroubleshootingOut
 from platform_api.monitoring.troubleshooter import explain
+from platform_api.orchestration import BelongsOnWatchlist, Understood, UnderstoodRow
 from platform_api.orchestration.approvals import Refusal, Verdict
 from platform_api.orchestration.http import (
     ApprovalRef,
@@ -712,6 +714,25 @@ def troubleshooting(tl: Timeline) -> TroubleshootingOut:
     )
 
 
+UNDERSTOOD = understood_out(
+    Understood(
+        rows=[
+            UnderstoodRow(kind="schedule", text="Every weekday at 3pm", state="understood"),
+            UnderstoodRow(
+                kind="look_for",
+                text="Bug tickets in MOCK with no update for 10 days",
+                state="understood",
+            ),
+            UnderstoodRow(
+                kind="do", text="Create one follow-up ticket that lists them", state="understood"
+            ),
+            UnderstoodRow(kind="where", text="Jira project MOCK", state="understood"),
+        ]
+    )
+)
+ON_THE_WATCHLIST = understood_out(BelongsOnWatchlist(word="release", software="LangGraph"))
+
+
 def fixtures() -> dict[str, WireModel | list[WireModel]]:
     success = success_events()
     failure = failure_events()
@@ -733,6 +754,9 @@ def fixtures() -> dict[str, WireModel | list[WireModel]]:
         "builder/templates.json": TEMPLATES,
         "builder/use-case.json": USE_CASE,
         "builder/suggest.json": SUGGESTION,
+        "builder/understand.rows.json": UNDERSTOOD,
+        "builder/understand.watchlist.json": ON_THE_WATCHLIST,
+        "builder/understand.starters.json": starters("no_model"),
         "internal/step-responses.json": list(STEP_RESPONSES),
         "internal/workflow-failure.json": WORKFLOW_FAILURE,
         "stubs/dev-users.json": DEV_USERS,

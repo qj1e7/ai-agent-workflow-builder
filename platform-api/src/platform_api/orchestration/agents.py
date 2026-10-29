@@ -432,6 +432,11 @@ class HttpAgentRuntime:
     async def draft(self, request: DraftRequest) -> DraftResult | AgentUnavailable | AgentRejected:
         return await self._model_call("/v1/cards/draft", request, draft_result_adapter)
 
+    async def understand(
+        self, request: UnderstandRequest
+    ) -> UnderstandResult | AgentUnavailable | AgentRejected:
+        return await self._model_call("/v1/planner/understand", request, understand_result_adapter)
+
     async def _model_call[T](
         self, path: str, body: WireModel, adapter: TypeAdapter[T]
     ) -> T | AgentUnavailable | AgentRejected:

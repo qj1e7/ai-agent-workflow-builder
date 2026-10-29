@@ -4,7 +4,16 @@ from typing import Annotated, Literal
 from pydantic import Field, StringConstraints
 
 from platform_api.builder.templates import TAG_PATTERN
-from platform_api.orchestration import AT_PATTERN, Day, InputKind, Status, ToolId, ToolKind
+from platform_api.orchestration import (
+    AT_PATTERN,
+    Day,
+    InputKind,
+    RowKind,
+    RowState,
+    Status,
+    ToolId,
+    ToolKind,
+)
 from platform_api.shared import ApprovalId, RunId, SoftwareId, UserId
 from platform_api.wire import RepoName, WireModel
 from platform_api.wire import RunState as RunStateName
@@ -337,3 +346,58 @@ class CreateAgentUseCase(WireModel):
         str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)
     ]
     agents: Annotated[list[AgentChoice], Field(min_length=1, max_length=3)]
+
+
+class UnderstandIn(WireModel):
+    text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
+
+
+class UnderstoodRowView(WireModel):
+    kind: RowKind = Field(
+        description="schedule: when it runs. look_for: what to look for. do: what to do with "
+        "it. where: where the result goes."
+    )
+    text: str = Field(description="What the Planner read, in plain words. Empty when missing.")
+    state: RowState = Field(
+        description="understood: from the task's words. changed: the Planner read something "
+        "into the words, and the note says what the task said. missing: the task does not say. "
+        "cant_do: no tool does it yet, and the note says why."
+    )
+    note: str | None
+
+
+class UnderstoodRows(WireModel):
+    answer: Literal["rows"] = "rows"
+    rows: list[UnderstoodRowView] = Field(
+        description="One schedule row, then at least one row for what to look for, what to do "
+        "and where, in that order. At most 8."
+    )
+
+
+class WatchlistRedirect(WireModel):
+    answer: Literal["watchlist"] = "watchlist"
+    word: str = Field(description="The word in the task that made the Planner think so.")
+    software: str | None = Field(description="The software the task names, as it wrote it.")
+    note: str = Field(description="What the Planner says, in plain words.")
+
+
+class StarterView(WireModel):
+    name: str
+    what: str
+    task: str | None = Field(
+        description="The task to start New workflow with. Null when the starter opens a page."
+    )
+    opens: Literal["software_watchlist"] | None = Field(
+        description="The page this starter opens instead of a task."
+    )
+
+
+class Starters(WireModel):
+    answer: Literal["starters"] = "starters"
+    message: str = Field(description="Why the Planner could not read the task, in plain words.")
+    starters: list[StarterView]
+
+
+type UnderstandOut = Annotated[
+    UnderstoodRows | WatchlistRedirect | Starters, Field(discriminator="answer")
+]

@@ -103,6 +103,15 @@ CASES = [
         422,
         id="schedule-422",
     ),
+    pytest.param(
+        "POST", "/api/v1/builder/understand", {}, {"text": "x"}, None, 401, id="understand-401"
+    ),
+    pytest.param(
+        "POST", "/api/v1/builder/understand", BOB, {"text": "x"}, None, 403, id="understand-403"
+    ),
+    pytest.param(
+        "POST", "/api/v1/builder/understand", ALICE, {"text": ""}, None, 422, id="understand-422"
+    ),
     pytest.param("DELETE", "/api/v1/watchlist/schedule", {}, None, None, 401, id="off-401"),
     pytest.param("DELETE", "/api/v1/watchlist/schedule", BOB, None, None, 403, id="off-403"),
     pytest.param("DELETE", "/api/v1/watchlist/schedule", ALICE, None, None, 404, id="off-404"),

@@ -1,0 +1,24 @@
+{
+  "answer": "starters",
+  "message": "No AI model is connected, so the Planner can't read your task yet. Start from one of these, or connect a model in Settings.",
+  "starters": [
+    {
+      "name": "Keep our software up to date",
+      "what": "Add the software your team runs. The Software watchlist checks each one for new releases, with one approval for all the upgrade tickets.",
+      "task": null,
+      "opens": "software_watchlist"
+    },
+    {
+      "name": "Weekly summary of closed tickets",
+      "what": "Sum up the Jira tickets closed this week in one new ticket for the team.",
+      "task": "Every Friday at 4pm, find the tickets in MOCK closed this week and create one ticket that sums them up",
+      "opens": null
+    },
+    {
+      "name": "Follow up stale bug tickets",
+      "what": "Find bug tickets with no update for 10 days and list them in one follow-up ticket.",
+      "task": "Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days and create one follow-up ticket that lists them",
+      "opens": null
+    }
+  ]
+}

@@ -1,5 +1,8 @@
 """The Planner's plan, with a fake planner standing in for the model."""
 
+import asyncio
+import logging
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
@@ -10,15 +13,25 @@ from platform_api.builder.models import (
     CannotDo,
     ModelTrouble,
     NewAgent,
+    Starters,
+    UnderstoodRows,
     UseSaved,
+    WatchlistRedirect,
 )
 from platform_api.builder.planning import (
+    FALLBACK_WORDS,
+    FOLLOW_UP_TASK,
     PROBLEM_WORDS,
+    STARTERS,
+    UNDERSTAND_LIMIT_SECONDS,
+    FallbackWhy,
     NoModelConnected,
     RuntimeNotAnswering,
     plan,
+    understand,
 )
 from platform_api.orchestration import (
+    BelongsOnWatchlist,
     CardDraft,
     Choice,
     ChooseResult,
@@ -30,6 +43,9 @@ from platform_api.orchestration import (
     ModelProblem,
     NoModel,
     RuntimeDown,
+    UnderstandResult,
+    Understood,
+    UnderstoodRow,
 )
 from platform_api.orchestration.agents import DraftApproval, DraftBlock, DraftInput, MissingTool
 
@@ -255,3 +271,93 @@ async def test_the_models_long_text_is_cut_and_its_questions_trimmed():
     )
     result = await plan(planner, LIBRARY, "x")
     assert isinstance(result, CannotDo) and len(result.reason) <= 500
+
+
+ROWS = Understood(
+    rows=[
+        UnderstoodRow(kind="schedule", text="Every weekday at 3pm", state="understood"),
+        UnderstoodRow(kind="look_for", text="Bug tickets in MOCK", state="understood"),
+        UnderstoodRow(kind="do", text="Close every ticket", state="cant_do", note="No tool."),
+        UnderstoodRow(kind="where", text="Jira project MOCK", state="understood"),
+    ]
+)
+
+
+@dataclass
+class FakeReader:
+    answer: UnderstandResult | NoModel | RuntimeDown = field(default_factory=lambda: ROWS)
+    wait: float = 0.0
+    asked: list[str] = field(default_factory=lambda: [])
+
+    async def understand(self, task: str) -> UnderstandResult | NoModel | RuntimeDown:
+        self.asked.append(task)
+        await asyncio.sleep(self.wait)
+        return self.answer
+
+
+async def test_the_planners_rows_are_shown_as_it_read_them():
+    reader = FakeReader()
+    result = await understand(reader, "the task")
+    assert reader.asked == ["the task"]
+    assert isinstance(result, UnderstoodRows)
+    assert [(r.kind, r.state, r.note) for r in result.rows] == [
+        ("schedule", "understood", None),
+        ("look_for", "understood", None),
+        ("do", "cant_do", "No tool."),
+        ("where", "understood", None),
+    ]
+
+
+async def test_a_release_task_belongs_on_the_software_watchlist_naming_the_word():
+    result = await understand(FakeReader(BelongsOnWatchlist(word="release")), "x")
+    assert isinstance(result, WatchlistRedirect)
+    assert (result.word, result.software) == ("release", None)
+    assert "You mentioned “release”" in result.note
+    assert "belongs on the Software watchlist" in result.note
+
+
+@pytest.mark.parametrize(
+    ("answer", "why", "logged"),
+    [
+        (NoModel(), "no_model", "no AI model is connected"),
+        (RuntimeDown("The agent runtime answered 502"), "trouble", "answered 502"),
+        (ModelProblem(reason="unusable_answer", message="x"), "trouble", "unusable_answer"),
+        (ModelProblem(reason="too_slow", message="x"), "too_slow", "too_slow"),
+    ],
+)
+async def test_without_a_usable_answer_the_starters_show_and_the_reason_is_logged(
+    answer: UnderstandResult | NoModel | RuntimeDown,
+    why: FallbackWhy,
+    logged: str,
+    caplog: pytest.LogCaptureFixture,
+):
+    with caplog.at_level(logging.WARNING):
+        result = await understand(FakeReader(answer), "x")
+    assert result == Starters(message=FALLBACK_WORDS[why], starters=list(STARTERS))
+    assert "fell back to the starter workflows" in caplog.text and logged in caplog.text
+
+
+async def test_an_answer_slower_than_the_limit_shows_the_starters_in_time(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+):
+    assert UNDERSTAND_LIMIT_SECONDS == 10
+    monkeypatch.setattr("platform_api.builder.planning.UNDERSTAND_LIMIT_SECONDS", 0.05)
+    started = time.monotonic()
+    with caplog.at_level(logging.WARNING):
+        result = await understand(FakeReader(wait=5), "x")
+    assert time.monotonic() - started < 1
+    assert isinstance(result, Starters) and result.message == FALLBACK_WORDS["too_slow"]
+    assert "no answer within 0.05 seconds" in caplog.text
+
+
+def test_the_starters_are_the_prototypes_three_phrased_with_the_jira_tools_we_have():
+    assert [(s.name, s.opens) for s in STARTERS] == [
+        ("Keep our software up to date", "software_watchlist"),
+        ("Weekly summary of closed tickets", None),
+        ("Follow up stale bug tickets", None),
+    ]
+    assert STARTERS[0].task is None
+    assert STARTERS[2].task == FOLLOW_UP_TASK
+    for starter in STARTERS[1:]:
+        assert starter.task and "MOCK" in starter.task and "ticket" in starter.task
+        assert not any(word in starter.task for word in ("Teams", "Confluence", "email"))

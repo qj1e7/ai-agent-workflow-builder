@@ -1,4 +1,5 @@
-"""The Planner's planning, as the builder sees it: choose saved agents, or draft a new one.
+"""The Planner's planning, as the builder sees it: read a task back, choose saved agents, or
+draft a new one.
 
 The builder owns the library and the checks. This side owns the model and the runtime, so the
 model key goes from the settings store into the request to the runtime and nowhere else.
@@ -17,6 +18,8 @@ from platform_api.orchestration.agents import (
     DraftResult,
     HttpAgentRuntime,
     LibraryCard,
+    UnderstandRequest,
+    UnderstandResult,
 )
 from platform_api.orchestration.service import ActiveModel
 
@@ -63,6 +66,16 @@ class CardPlanning:
         if model is None:
             return NoModel()
         reply = await self._agents.draft(DraftRequest(task=task, model=model))
+        if isinstance(reply, AgentUnavailable | AgentRejected):
+            return RuntimeDown(reply.detail)
+        return reply
+
+    async def understand(self, task: str) -> UnderstandResult | NoModel | RuntimeDown:
+        async with self._db.transaction("orchestration") as uow:
+            model = await self._models.access(uow)
+        if model is None:
+            return NoModel()
+        reply = await self._agents.understand(UnderstandRequest(task=task, model=model))
         if isinstance(reply, AgentUnavailable | AgentRejected):
             return RuntimeDown(reply.detail)
         return reply

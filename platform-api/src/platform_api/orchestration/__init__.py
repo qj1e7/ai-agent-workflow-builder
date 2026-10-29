@@ -1,4 +1,5 @@
 from platform_api.orchestration.agents import (
+    BelongsOnWatchlist,
     CardBlock,
     CardDraft,
     CardInput,
@@ -13,8 +14,13 @@ from platform_api.orchestration.agents import (
     LibraryCard,
     LibraryInput,
     ModelProblem,
+    RowKind,
+    RowState,
     ToolId,
     ToolKind,
+    UnderstandResult,
+    Understood,
+    UnderstoodRow,
 )
 from platform_api.orchestration.approvals import AnyApprover, ApprovalPolicy, ApprovalStep
 from platform_api.orchestration.cards import (
@@ -84,6 +90,7 @@ __all__ = [
     "AnyApprover",
     "ApprovalPolicy",
     "ApprovalStep",
+    "BelongsOnWatchlist",
     "Binding",
     "CardBlock",
     "CardDraft",
@@ -103,10 +110,15 @@ __all__ = [
     "LibraryInput",
     "ModelProblem",
     "NoModel",
+    "RowKind",
+    "RowState",
     "RuntimeDown",
     "ToolId",
     "ToolKind",
     "ToolRule",
+    "UnderstandResult",
+    "Understood",
+    "UnderstoodRow",
     "approvers_needed",
     "card_bindings",
     "cards_policy",
