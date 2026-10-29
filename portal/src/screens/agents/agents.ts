@@ -3,6 +3,7 @@ import type { CardView, ToolId, ToolView } from '../../api/types'
 export interface PlatformAgent {
   readonly id: string
   readonly what: string
+  readonly reach: string
   readonly steps: readonly string[]
   readonly rules: readonly string[]
 }
@@ -12,6 +13,7 @@ export const PLATFORM_AGENTS: readonly PlatformAgent[] = [
   {
     id: 'planner',
     what: 'Reads each task, says what it understood, and picks the agents for each workflow. When none of them fits, it drafts a new agent card for you to check.',
+    reach: 'It only plans.',
     steps: [
       'Read the task and say what it understood',
       'Pick saved agents that fit, or draft a new agent card',
@@ -22,6 +24,7 @@ export const PLATFORM_AGENTS: readonly PlatformAgent[] = [
   {
     id: 'troubleshooter',
     what: 'When a run stops, it explains why in plain words, and says whether you can fix it or support should.',
+    reach: 'It reads the run’s own record.',
     steps: ['Read the stopped run’s record', 'Explain what went wrong in plain words', 'Say whether you can fix it, or support should'],
     rules: ['Only explains. It never changes a run'],
   },

@@ -120,6 +120,11 @@ describe('a card', () => {
     expect(dialog).not.toContain(CHANGE_LATER_NOTE)
   })
 
+  it('says what each platform agent reaches instead of other systems, in the prototype’s words', () => {
+    expect(text(dialogOf(render({ path: '/agents/planner' })))).toContain('Tools it may use No access to other systems. It only plans. Rules')
+    expect(text(dialogOf(render({ path: '/agents/troubleshooter' })))).toContain('Tools it may use No access to other systems. It reads the run’s own record. Rules')
+  })
+
   it('says so when the address names no agent, as a status above the agents', () => {
     const html = render({ path: '/agents/crd_nothing' })
     expect(dialogOf(html)).toBe('')

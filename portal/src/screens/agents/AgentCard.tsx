@@ -201,7 +201,9 @@ export function PlatformDialog({ agent, onClose }: { agent: PlatformAgent; onClo
       <Steps steps={agent.steps} />
       <section>
         <h3>Tools it may use</h3>
-        <p className="muted">{accessLabel('none')}. It only plans and explains.</p>
+        <p className="muted">
+          {accessLabel('none')}. {agent.reach}
+        </p>
       </section>
       <Rules rules={agent.rules} />
       <p className={styles['note']}>{PLATFORM_NOTE}</p>
