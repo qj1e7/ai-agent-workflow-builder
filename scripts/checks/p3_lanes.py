@@ -346,7 +346,7 @@ def lane3(api: Api, out: Path, issuer: str) -> bool:
     erin = bearer(erin_token)
     me1 = api.get(erin, "/api/v1/me")
     lines.append((me1["on_list"] is True and me1["id"] == erin_before["id"], f"erin's first sign-in matched her record by email: {me1}"))
-    lines.append((me1["display"] == "Erin", f"her display now comes from the token's name: {me1['display']}"))
+    lines.append((me1["display"] == "Erin (added by Alice)", f"her display stays as the Operator entered it: {me1['display']}"))
     erin_after = people_by_email(api, alice)["erin@example.test"]
     lines.append((erin_after["signed_in"] is True, "the People list shows erin signed in"))
     me2 = api.get(bearer(token_for(issuer, "erin")), "/api/v1/me")
