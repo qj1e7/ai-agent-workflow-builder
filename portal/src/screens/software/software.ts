@@ -206,24 +206,24 @@ export interface HistoryLine {
   readonly words: string
 }
 
-/** What the platform has kept about one row. It stores the latest facts, not every earlier check. */
+/** What the platform has kept about one row, newest first. It stores the latest facts, not every earlier check. */
 export function historyOf(row: WatchedSoftwareView, nameOf: (id: string) => string): HistoryLine[] {
-  const lines: HistoryLine[] = []
-  if (row.open_ticket) lines.push({ when: 'Now', words: `${row.open_ticket} is open in Jira for the upgrade.` })
-  else if (row.status === 'awaiting_approval') lines.push({ when: 'Now', words: 'An upgrade ticket is waiting for a yes.' })
+  const now: HistoryLine[] = []
+  if (row.open_ticket) now.push({ when: 'Now', words: `${row.open_ticket} is open in Jira for the upgrade.` })
+  else if (row.status === 'awaiting_approval') now.push({ when: 'Now', words: 'An upgrade ticket is waiting for a yes.' })
+  const dated: { readonly at: string; readonly words: string }[] = []
   if (row.checked_at) {
-    lines.push({
-      when: singaporeTime(row.checked_at),
-      words: row.status === 'cant_check' ? (row.problem ? `Couldn’t check. ${row.problem}` : 'Couldn’t check.') : `Checked. The newest version is ${row.newest_version ?? 'unknown'}.`,
-    })
+    const failed = row.status === 'cant_check'
+    dated.push({ at: row.checked_at, words: failed ? (row.problem ? `Couldn’t check. ${row.problem}` : 'Couldn’t check.') : `Checked. The newest version is ${row.newest_version ?? 'unknown'}.` })
   } else {
-    lines.push({ when: 'Not yet', words: 'Not checked yet.' })
+    now.push({ when: 'Not yet', words: 'Not checked yet.' })
   }
   const source = row.our_version_source
   if (source && row.our_version) {
-    const where = source.kind === 'ticket_done' ? `Our version moved to ${row.our_version}. It came from ${source.ticket ?? 'a ticket'}, marked Done.` : `Our version is ${row.our_version}. ${versionSourceWords(source)}.`
-    lines.push({ when: singaporeTime(source.at), words: where })
+    const words = source.kind === 'ticket_done' ? `Our version moved to ${row.our_version}. It came from ${source.ticket ?? 'a ticket'}, marked Done.` : `Our version is ${row.our_version}. ${versionSourceWords(source)}.`
+    dated.push({ at: source.at, words })
   }
-  lines.push({ when: singaporeTime(row.added_at), words: `Added by ${nameOf(row.added_by)}.` })
-  return lines
+  dated.push({ at: row.added_at, words: `Added by ${nameOf(row.added_by)}.` })
+  const newestFirst = [...dated].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
+  return [...now, ...newestFirst.map(({ at, words }) => ({ when: singaporeTime(at), words }))]
 }

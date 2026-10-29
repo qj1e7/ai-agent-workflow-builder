@@ -162,6 +162,20 @@ describe('a row’s history', () => {
     expect(words.at(-1)).toBe('Added by Alice.')
   })
 
+  it('lists what happened newest first, after what is true now', () => {
+    const row: WatchedSoftwareView = {
+      ...(ROWS.find((r) => r.name === 'LangGraph') as WatchedSoftwareView),
+      status: 'ticket_open',
+      open_ticket: 'MOCK-150',
+      checked_at: '2026-11-10T01:00:00Z',
+      our_version: '1.2.16',
+      our_version_source: { kind: 'ticket_done', at: '2026-11-17T03:00:00Z', ticket: 'MOCK-143' },
+    }
+    expect(historyOf(row, nameOf).map((line) => line.when)).toEqual(['Now', 'Tue 17 Nov, 11:00', 'Tue 10 Nov, 9:00', 'Mon 2 Nov, 18:00'])
+    const given = ROWS.find((r) => r.name === 'FastAPI') as WatchedSoftwareView
+    expect(historyOf(given, nameOf).map((line) => line.words).slice(-2)).toEqual(['Our version is 0.115.0. Given when added.', 'Added by Alice.'])
+  })
+
   it('says why a check failed and when it will try again', () => {
     const row = ROWS.find((r) => r.status === 'cant_check') as WatchedSoftwareView
     expect(historyOf(row, nameOf).map((line) => line.words)).toContain('Couldn’t check. GitHub answered 404 Not Found.')
