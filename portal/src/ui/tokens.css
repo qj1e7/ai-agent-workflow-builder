@@ -98,7 +98,7 @@
   --dur-success: 560ms; /* a one-off positive reaction, never longer than 600ms */
   --stagger: 40ms;      /* gap between cards arriving on a new screen */
   --move: var(--dur-panel); /* the run line travelling to the next step */
-  /* Names kept code still uses. Each points at a prototype token. */
+  /* Short names for prototype tokens, used by the CSS modules. */
   --mist: var(--sunk);
   --line: var(--rail);
   --fail: var(--red-ink);
