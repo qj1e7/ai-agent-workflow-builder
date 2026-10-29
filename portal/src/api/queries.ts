@@ -217,7 +217,6 @@ function decided(approval: ApprovalView | undefined): boolean {
   return approval !== undefined && approval.steps.every((step) => step.status === 'approved' || step.status === 'declined')
 }
 
-/** One approval. It stops polling once every step is decided. */
 export function approvalQuery(client: ApiClient, user: string, approvalId: string, options?: QueryOptions) {
   return queryOptions({
     queryKey: keys.approval(user, approvalId),

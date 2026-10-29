@@ -8,10 +8,10 @@ import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createApiClient } from '../api/client'
 import { approvalQuery } from '../api/queries'
-import type { SignedFetch } from '../api/session'
+import { authorizedFetch, createDevSession } from '../api/session'
 import type { ApprovalView, RunView, RunViewOf, TeamsStubMessage } from '../api/types'
 import type { Decision } from '../screens/run/decision'
-import { BADGE_MOST, BADGE_POLL_MS, badgeAsks, badgeText, teamsActionOf, TeamsActions, teamsLabel, TEAMS_TITLE, type TeamsAction } from './TeamsPanel'
+import { BADGE_MAX_ASKS, BADGE_POLL_MS, badgeAsks, badgeText, teamsActionOf, TeamsActions, teamsLabel, TEAMS_TITLE, type TeamsAction } from './TeamsPanel'
 
 const BOB = bob as ApprovalView
 const ALICE = alice as ApprovalView
@@ -85,7 +85,6 @@ describe('a Teams message', () => {
   })
 
   it('tells anyone tied to the run that it is their own work, without guessing how', () => {
-    // carol started the check and owns the workflow, alice retried it, so the platform answers own_work to alice.
     const retrier: ApprovalView = { ...BOB, you_can_decide: false, why_not: 'own_work' }
     expect(teamsActionOf(retrier, nameOf)).toEqual({ kind: 'locked', words: 'This run is your own work, so another Approver must decide.' })
   })
@@ -93,16 +92,16 @@ describe('a Teams message', () => {
 
 describe('the Teams button', () => {
   it('says how many approvals wait for the signed-in person', () => {
-    expect(teamsLabel(0, false)).toBe(TEAMS_TITLE)
-    expect(teamsLabel(1, false)).toBe('Teams, practice copy, 1 approval waiting for you')
-    expect(teamsLabel(3, false)).toBe('Teams, practice copy, 3 approvals waiting for you')
-    expect(teamsLabel(BADGE_MOST, true)).toBe(`Teams, practice copy, ${BADGE_MOST} or more approvals waiting for you`)
+    expect(teamsLabel({ count: 0, atLeast: false })).toBe(TEAMS_TITLE)
+    expect(teamsLabel({ count: 1, atLeast: false })).toBe('Teams, practice copy, 1 approval waiting for you')
+    expect(teamsLabel({ count: 3, atLeast: false })).toBe('Teams, practice copy, 3 approvals waiting for you')
+    expect(teamsLabel({ count: BADGE_MAX_ASKS, atLeast: true })).toBe(`Teams, practice copy, ${BADGE_MAX_ASKS} or more approvals waiting for you`)
   })
 
   it('shows a count, or the most it counts with a plus', () => {
-    expect(badgeText(0, false)).toBeNull()
-    expect(badgeText(3, false)).toBe('3')
-    expect(badgeText(BADGE_MOST, true)).toBe(`${BADGE_MOST}+`)
+    expect(badgeText({ count: 0, atLeast: false })).toBeNull()
+    expect(badgeText({ count: 3, atLeast: false })).toBe('3')
+    expect(badgeText({ count: BADGE_MAX_ASKS, atLeast: true })).toBe(`${BADGE_MAX_ASKS}+`)
   })
 })
 
@@ -131,7 +130,7 @@ describe('what the badge asks the platform', () => {
   it('asks about the newest waiting runs with a Teams message, and no more than it shows', () => {
     const { runs, messages } = manyWaiting(40, 'carol')
     const asks = badgeAsks(runs, messages.slice(1), 'bob')
-    expect(asks.ids).toEqual(Array.from({ length: BADGE_MOST }, (_, i) => `apr_${39 - i}`))
+    expect(asks.ids).toEqual(Array.from({ length: BADGE_MAX_ASKS }, (_, i) => `apr_${39 - i}`))
     expect(asks.more).toBe(true)
     expect(badgeAsks(runs.slice(0, 3), messages, 'bob')).toEqual({ ids: ['apr_2', 'apr_1', 'apr_0'], more: false })
   })
@@ -147,12 +146,12 @@ describe('what the badge asks the platform', () => {
     environmentManager.setIsServer(() => false)
     const { runs, messages } = manyWaiting(200, 'carol')
     const asked: string[] = []
-    const fetchImpl = ((input: Request) => {
-      const id = new URL(input.url).pathname.split('/').at(-1) ?? ''
+    const fetchImpl: typeof fetch = (input) => {
+      const id = new URL(input instanceof Request ? input.url : String(input)).pathname.split('/').at(-1) ?? ''
       asked.push(id)
       return Promise.resolve(new Response(JSON.stringify({ ...BOB, approval_id: id }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
-    }) as unknown as SignedFetch
-    const client = createApiClient(fetchImpl, 'http://portal.test')
+    }
+    const client = createApiClient(authorizedFetch(createDevSession(null), fetchImpl, 'http://portal.test'), 'http://portal.test')
     const queryClient = new QueryClient()
     const asks = badgeAsks(runs, messages, 'bob')
     const observer = new QueriesObserver(queryClient, asks.ids.map((id) => approvalQuery(client, 'bob', id, { poll: BADGE_POLL_MS })))
@@ -165,7 +164,7 @@ describe('what the badge asks the platform', () => {
       perPoll.push(asked.length - before)
     }
     stop()
-    expect(perPoll).toEqual([BADGE_MOST, BADGE_MOST, BADGE_MOST, BADGE_MOST])
+    expect(perPoll).toEqual([BADGE_MAX_ASKS, BADGE_MAX_ASKS, BADGE_MAX_ASKS, BADGE_MAX_ASKS])
     expect(BADGE_POLL_MS).toBeGreaterThanOrEqual(30_000)
   })
 })

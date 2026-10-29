@@ -3,7 +3,7 @@ import { displayName, usePeople } from '../api/people'
 import { POLL_MS, useApproval, useApprovals, useRuns, useTeamsMessages } from '../api/queries'
 import type { ApprovalView, Me, RunView, TeamsStubMessage } from '../api/types'
 import { useDecision, type Decision } from '../screens/run/decision'
-import { andList, shortLockWords, shortTime, type NameOf } from '../screens/run/words'
+import { andList, shortTime, teamsLockWords, type NameOf } from '../screens/run/words'
 import { Button, ButtonLink } from '../ui/Button'
 import { cx } from '../ui/cx'
 import { useFocusWhenReady } from '../ui/focus'
@@ -19,21 +19,24 @@ export const TEAMS_EMPTY_WORDS = 'No messages yet. When a run needs a yes, its m
 const TEAMS_NOTE = 'Practice copy. Nothing reaches the real Teams.'
 
 export const BADGE_POLL_MS = 30_000
-/** The badge asks about this many waiting runs at most, so its requests don't grow with the runs. */
-export const BADGE_MOST = 9
+export const BADGE_MAX_ASKS = 9
 const SHOWN_MESSAGES = 20
 const CLOSE_MS = 220
 
-/** `more` means the badge counted BADGE_MOST and stopped asking. */
-export function teamsLabel(waiting: number, more: boolean): string {
-  if (waiting === 0) return TEAMS_TITLE
-  if (more) return `${TEAMS_TITLE}, ${waiting} or more approvals waiting for you`
-  return `${TEAMS_TITLE}, ${waiting === 1 ? '1 approval' : `${waiting} approvals`} waiting for you`
+export interface WaitingCount {
+  readonly count: number
+  readonly atLeast: boolean
 }
 
-export function badgeText(waiting: number, more: boolean): string | null {
-  if (waiting === 0) return null
-  return more ? `${waiting}+` : String(waiting)
+export function teamsLabel({ count, atLeast }: WaitingCount): string {
+  if (count === 0) return TEAMS_TITLE
+  if (atLeast) return `${TEAMS_TITLE}, ${count} or more approvals waiting for you`
+  return `${TEAMS_TITLE}, ${count === 1 ? '1 approval' : `${count} approvals`} waiting for you`
+}
+
+export function badgeText({ count, atLeast }: WaitingCount): string | null {
+  if (count === 0) return null
+  return atLeast ? `${count}+` : String(count)
 }
 
 export interface BadgeAsks {
@@ -41,15 +44,17 @@ export interface BadgeAsks {
   readonly more: boolean
 }
 
-/** The approvals of the newest waiting runs that have a Teams message. A run's starter can never approve it, so those are skipped. */
+const notStartedBy = (me: string) => (run: RunView) => run.started_by !== me
+
 export function badgeAsks(runs: readonly RunView[], messages: readonly TeamsStubMessage[], me: string): BadgeAsks {
   const posted = new Set(messages.map((message) => message.approval_id))
   const ids = runs
+    .filter(notStartedBy(me))
     .filter((run) => run.state === 'awaiting_approval')
-    .filter((run) => run.started_by !== me && posted.has(run.approval.approval_id))
+    .filter((run) => posted.has(run.approval.approval_id))
     .sort((a, b) => b.started_at.localeCompare(a.started_at))
     .map((run) => run.approval.approval_id)
-  return { ids: ids.slice(0, BADGE_MOST), more: ids.length > BADGE_MOST }
+  return { ids: ids.slice(0, BADGE_MAX_ASKS), more: ids.length > BADGE_MAX_ASKS }
 }
 
 export type TeamsAction =
@@ -66,7 +71,7 @@ export function teamsActionOf(approval: ApprovalView | undefined, nameOf: NameOf
     return { kind: 'decided', verdict: 'approve', by: andList(approval.steps.map((step) => nameOf(step.decided_by ?? ''))) }
   }
   if (approval.you_can_decide) return { kind: 'decide' }
-  return { kind: 'locked', words: shortLockWords(approval.why_not) }
+  return { kind: 'locked', words: teamsLockWords(approval.why_not) }
 }
 
 interface ActionsProps {
@@ -140,7 +145,6 @@ interface OnScreen {
 
 const ALWAYS_ON_SCREEN: OnScreen = { now: true, ever: true }
 
-/** Without IntersectionObserver, everything counts as on screen. */
 function useOnScreen(ref: RefObject<Element | null>): OnScreen {
   const [seen, setSeen] = useState<OnScreen>(() => (typeof IntersectionObserver === 'function' ? { now: false, ever: false } : ALWAYS_ON_SCREEN))
   useEffect(() => {
@@ -156,7 +160,6 @@ function useOnScreen(ref: RefObject<Element | null>): OnScreen {
   return seen
 }
 
-/** A card asks for its approval once it scrolls into view, and keeps asking only while it stays there. */
 function Message({ message, nameOf, onOpen }: { message: TeamsStubMessage; nameOf: NameOf; onOpen: () => void }) {
   const item = useRef<HTMLLIElement>(null)
   const onScreen = useOnScreen(item)
@@ -248,14 +251,14 @@ function Drawer({ me, onClose, onOpen }: { me: Me; onClose: () => void; onOpen: 
   )
 }
 
-function useWaitingForYou(person: Me | null): { count: number; more: boolean } {
+function useWaitingForYou(person: Me | null): WaitingCount {
   const enabled = person !== null
   const messages = useTeamsMessages({ poll: BADGE_POLL_MS, enabled })
   const runs = useRuns({ poll: BADGE_POLL_MS, enabled })
   const asks = badgeAsks(runs.data ?? [], messages.data ?? [], person?.id ?? '')
   const approvals = useApprovals(asks.ids, { poll: BADGE_POLL_MS })
   const count = approvals.filter((query) => query.data?.you_can_decide === true).length
-  return { count, more: asks.more && count === asks.ids.length }
+  return { count, atLeast: asks.more && count === asks.ids.length }
 }
 
 export function TeamsButton({ person }: { person: Me | null }) {
@@ -264,8 +267,8 @@ export function TeamsButton({ person }: { person: Me | null }) {
   const button = useRef<HTMLButtonElement>(null)
   const returnFocus = useRef(true)
   const waiting = useWaitingForYou(person)
-  const label = teamsLabel(waiting.count, waiting.more)
-  const badge = badgeText(waiting.count, waiting.more)
+  const label = teamsLabel(waiting)
+  const badge = badgeText(waiting)
 
   // Chrome may put first focus on the panel's scrolling area, so focus goes to Close itself.
   useEffect(() => {
