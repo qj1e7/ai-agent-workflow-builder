@@ -4,7 +4,12 @@ from dataclasses import dataclass, field
 import pytest
 
 from platform_api.builder import Builder, Watchlist
-from platform_api.builder.models import AddSoftware, WatchlistView
+from platform_api.builder.models import (
+    AddSoftware,
+    CreateAgentUseCase,
+    UseCaseCreated,
+    WatchlistView,
+)
 from platform_api.db import Database
 from platform_api.orchestration import (
     Given,
@@ -85,6 +90,44 @@ async def test_the_watchlist_reads_back_as_a_use_case_owned_by_who_added_the_fir
     assert [b.key for b in view.plan] == ["read_versions", "approval_gate", "create_tickets"]
     listed = await builder.list_use_cases()
     assert [u.use_case_id for u in listed.use_cases] == [added.use_case_id]
+
+
+async def agent_use_case(builder: Builder, name: str) -> UseCaseCreated:
+    body = CreateAgentUseCase.model_validate(
+        {
+            "name": name,
+            "instruction": "Check releases.",
+            "agents": [
+                {
+                    "card_id": "crd_version_checker",
+                    "values": {
+                        "GitHub repository": "langchain-ai/langgraph",
+                        "Jira project": "MOCK",
+                    },
+                }
+            ],
+        }
+    )
+    created = await builder.create_agent_use_case(ALICE, body)
+    assert isinstance(created, UseCaseCreated)
+    return created
+
+
+async def test_listing_shows_every_use_case_newest_first(builder: Builder, watchlist: Watchlist):
+    watched = await watch_langgraph(watchlist)
+    first = await agent_use_case(builder, "First")
+    second = await agent_use_case(builder, "Second")
+    listed = await builder.list_use_cases()
+    assert [u.use_case_id for u in listed.use_cases] == [
+        second.use_case_id,
+        first.use_case_id,
+        watched.use_case_id,
+    ]
+    assert [u.template for u in listed.use_cases] == [
+        "agent_cards",
+        "agent_cards",
+        "software_watchlist",
+    ]
 
 
 async def test_a_missing_use_case_is_none(builder: Builder):
