@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createOidcSession } from '../api/oidc'
 import { authorizedFetch, SIGNED_IN } from '../api/session'
 import { fakeOidcClient, fakeUser } from '../api/testing'
-import { runId } from '../run/brand'
+import { runId } from './brand'
 import { runFeed, type FeedClock, type FeedItem } from './feed'
 
 const NOW = Date.parse('2026-11-27T02:00:00Z')

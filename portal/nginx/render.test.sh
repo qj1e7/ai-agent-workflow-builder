@@ -80,7 +80,6 @@ CLIENT='66666666-7777-8888-9999-000000000000'
 SCOPE='openid profile offline_access api://platform-api/.default'
 
 expect_golden live
-expect_golden demo
 
 expect_oidc entra 'https://login.microsoftonline.com' \
   ",\"auth\":{\"authority\":\"$ENTRA\",\"client_id\":\"$CLIENT\",\"scope\":\"$SCOPE\"}" \
@@ -93,6 +92,7 @@ expect_refused only-authority OIDC_CLIENT_ID -e "OIDC_AUTHORITY=$ENTRA"
 expect_refused only-client-id OIDC_AUTHORITY -e "OIDC_CLIENT_ID=$CLIENT"
 expect_refused only-scope OIDC_AUTHORITY -e "OIDC_SCOPE=$SCOPE"
 expect_refused no-scope OIDC_SCOPE -e "OIDC_AUTHORITY=$ENTRA" -e "OIDC_CLIENT_ID=$CLIENT"
+expect_refused demo-mode PORTAL_MODE -e PORTAL_MODE=demo
 expect_refused demo-with-auth PORTAL_MODE -e PORTAL_MODE=demo -e "OIDC_AUTHORITY=$ENTRA" -e "OIDC_CLIENT_ID=$CLIENT" -e "OIDC_SCOPE=$SCOPE"
 expect_refused http-authority OIDC_AUTHORITY -e "OIDC_AUTHORITY=$MOCK" -e OIDC_CLIENT_ID=portal -e "OIDC_SCOPE=$SCOPE"
 expect_refused http-allowance-mismatch OIDC_AUTHORITY -e "OIDC_AUTHORITY=$MOCK" -e 'OIDC_TEST_ONLY_HTTP_AUTHORITY=http://other:8080/default' -e OIDC_CLIENT_ID=portal -e "OIDC_SCOPE=$SCOPE"

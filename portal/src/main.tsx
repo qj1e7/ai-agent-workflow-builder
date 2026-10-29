@@ -4,8 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router'
 import { App } from './App'
 import { ApiError } from './api/client'
-import { wallClock, type RunClock } from './api/clock'
-import { loadConfig, PortalConfigError, type PortalConfig, type PortalMode } from './api/config'
+import { loadConfig, PortalConfigError, type PortalConfig } from './api/config'
 import { ApiProvider } from './api/context'
 import { createDevSession, type Boot } from './api/session'
 import { ErrorBoundary, ErrorScreen } from './ui/ErrorBoundary'
@@ -13,20 +12,8 @@ import { SignInGate } from './ui/SignInGate'
 import './ui/tokens.css'
 import './ui/base.css'
 
-interface Platform {
-  fetch: typeof fetch
-  clock: RunClock
-}
-
-async function choosePlatform(mode: PortalMode): Promise<Platform> {
-  if (mode === 'live') return { fetch: (input, init) => window.fetch(input, init), clock: wallClock }
-  const { createDemoPlatform } = await import('./mock')
-  const demo = createDemoPlatform()
-  return { fetch: demo.fetch, clock: demo.clock }
-}
-
 async function chooseSession(config: PortalConfig): Promise<Boot> {
-  if (config.mode === 'demo' || config.signIn.kind === 'dev') return { kind: 'session', session: createDevSession() }
+  if (config.signIn.kind === 'dev') return { kind: 'session', session: createDevSession() }
   const { bootOidc, oidcClientFor } = await import('./api/oidc')
   return bootOidc(oidcClientFor(config.signIn, window.location.origin), {
     pathname: window.location.pathname,
@@ -51,13 +38,12 @@ function mount(tree: ReactNode): void {
 
 async function start(): Promise<void> {
   const config = await loadConfig()
-  const platform = await choosePlatform(config.mode)
   const boot = await chooseSession(config)
   if (boot.kind === 'redirecting') return
   mount(
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <ApiProvider mode={config.mode} session={boot.session} platformFetch={platform.fetch} clock={platform.clock}>
+        <ApiProvider session={boot.session} platformFetch={(input, init) => window.fetch(input, init)}>
           <BrowserRouter>
             <SignInGate>
               <App />
