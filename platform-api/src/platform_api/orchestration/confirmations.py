@@ -30,7 +30,6 @@ class ConfirmationDecision(Enum):
     CONFIRMED = "confirmed"
     NOT_NOW = "not_now"
     CLOSED = "closed"
-    """Nobody decided it: the person it is about, or who asked, left first."""
 
 
 @dataclass(frozen=True)
@@ -261,18 +260,13 @@ class ConfirmationStore:
 
     async def close(
         self, uow: UnitOfWork, confirmation_id: ConfirmationId, closed_by: UserId
-    ) -> Confirmation | None:
-        """Closes an open confirmation that nobody can decide any more. None when it was not
-        open."""
-        row = await (
-            await uow.conn.execute(
-                "UPDATE orchestration.confirmations "
-                "SET decided_by = %s, decision = %s, decided_at = %s "
-                f"WHERE id = %s AND decided_at IS NULL RETURNING {_COLUMNS}",
-                (closed_by, ConfirmationDecision.CLOSED.value, uow.now, confirmation_id),
-            )
-        ).fetchone()
-        return _confirmation(row) if row is not None else None
+    ) -> None:
+        await uow.conn.execute(
+            "UPDATE orchestration.confirmations "
+            "SET decided_by = %s, decision = %s, decided_at = %s "
+            "WHERE id = %s AND decided_at IS NULL",
+            (closed_by, ConfirmationDecision.CLOSED.value, uow.now, confirmation_id),
+        )
 
     async def record_change(
         self,

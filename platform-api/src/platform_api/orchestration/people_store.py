@@ -150,10 +150,8 @@ class PeopleStore:
                     )
                 ).fetchone()
         except psycopg.errors.UniqueViolation:
-            return await self.by_oid(uow, identity.subject)
-        if row is None:
-            return await self.by_oid(uow, identity.subject)
-        return _person(row)
+            row = None
+        return _person(row) if row is not None else await self.by_oid(uow, identity.subject)
 
     async def mark_signed_in(self, uow: UnitOfWork, person_id: UserId) -> None:
         await uow.conn.execute(
@@ -410,8 +408,6 @@ class People:
     async def _close_stale(
         self, uow: UnitOfWork, me: Person, people: Sequence[Person], left: Person, removed: bool
     ) -> None:
-        """Closes the open Approver requests nobody can decide any more: those about someone
-        removed, and those asked by someone removed or no longer an Operator."""
         for c in await self._confirmations.open_ones(uow):
             if c.kind is not ConfirmationKind.APPROVER or c.about is None:
                 continue
@@ -438,9 +434,7 @@ class People:
                 await self._drop_if_roleless(uow, me.id, about)
 
     async def _drop_if_roleless(self, uow: UnitOfWork, by: UserId, person: Person) -> None:
-        if person.id in await self._pending(uow):
-            return
-        dropped = rules.drop_if_roleless(person, uow.now)
+        dropped = rules.drop_if_roleless(person, await self._pending(uow), uow.now)
         if dropped is None:
             return
         assert dropped.summary is not None

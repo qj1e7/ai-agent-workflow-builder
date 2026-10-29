@@ -286,10 +286,8 @@ def remove_person(
     )
 
 
-def drop_if_roleless(person: Person, now: datetime) -> Changed | None:
-    """Everyone keeps at least one role. Someone left with none, once no request about them is
-    waiting, leaves the list."""
-    if person.roles or not person.on_list:
+def drop_if_roleless(person: Person, pending: Iterable[UserId], now: datetime) -> Changed | None:
+    if person.roles or not person.on_list or person.id in set(pending):
         return None
     return Changed(
         _removed(person, now),

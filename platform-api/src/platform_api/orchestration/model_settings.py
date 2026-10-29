@@ -352,10 +352,7 @@ class ModelSettings:
                 at=uow.now,
             )
             if known is None and not await self._store.confirmed(uow, host):
-                # The open confirmation before the pending row, in the order decide takes them.
-                await _history.open_one(
-                    uow, confirmations.ConfirmationKind.MODEL_ADDRESS, None, lock=True
-                )
+                await self._lock_confirmation_then_pending(uow)
                 await self._store.put(uow, "pending", stored)
                 asked = await _history.ask(
                     uow,
@@ -411,10 +408,7 @@ class ModelSettings:
         if self._box is None:
             return SettingsOff()
         async with self._db.transaction("orchestration") as uow:
-            waiting = await _history.open_one(
-                uow, confirmations.ConfirmationKind.MODEL_ADDRESS, None, lock=True
-            )
-            pending = await self._store.load(uow, "pending", lock=True)
+            waiting, pending = await self._lock_confirmation_then_pending(uow)
             if waiting is None or pending is None:
                 return NothingPending()
             if confirmation_id is not None and waiting.id != confirmation_id:
@@ -458,6 +452,14 @@ class ModelSettings:
                 confirmation_id=waiting.id,
             )
             return AddressDecided(confirmed=confirm)
+
+    async def _lock_confirmation_then_pending(
+        self, uow: UnitOfWork
+    ) -> tuple[confirmations.Confirmation | None, StoredModel | None]:
+        waiting = await _history.open_one(
+            uow, confirmations.ConfirmationKind.MODEL_ADDRESS, None, lock=True
+        )
+        return waiting, await self._store.load(uow, "pending", lock=True)
 
     async def _key_for(
         self, uow: UnitOfWork, box: KeyBox, base_url: str, api_key: str | None, use_saved_key: bool
