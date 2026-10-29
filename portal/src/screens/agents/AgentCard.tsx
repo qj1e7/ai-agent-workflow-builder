@@ -103,16 +103,11 @@ function Modal({ titleId, onClose, children }: ModalProps) {
     if (element && !element.open) element.showModal()
   }, [])
   return (
-    // Escape is the dialog's own key; a click on the backdrop is a mouse shortcut for the Close button.
-    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
     <dialog
       ref={dialog}
       className={styles['dialog']}
       aria-labelledby={titleId}
       onClose={onClose}
-      onClick={(event) => {
-        if (event.target === dialog.current) dialog.current?.close()
-      }}
     >
       {children}
       <Button onClick={() => dialog.current?.close()}>Close</Button>
