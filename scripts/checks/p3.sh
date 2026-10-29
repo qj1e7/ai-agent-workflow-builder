@@ -340,7 +340,7 @@ services:
       FIRST_OPERATOR: carol@example.test
       FIRST_APPROVERS: carol@example.test,dave@example.test
 YAML
-  oidc_up "$src" "$project" "$TAG"
+  oidc_up "$src" "$project" "$TAG" || { down "$src" "$project" oidc >/dev/null 2>&1; return 1; }
   people "$src" "$project" oidc >"$out/people-before.txt"
   deploy_lines "$src" "$project" >"$out/deploy-before.txt"
   compose "$src" "$project" oidc -f "$out/other-first-people.yaml" up -d --force-recreate --no-deps --wait platform-api >"$out/restart.log" 2>&1
@@ -348,7 +348,8 @@ YAML
   people "$src" "$project" oidc >"$out/people-after.txt"
   deploy_lines "$src" "$project" >"$out/deploy-after.txt"
   down "$src" "$project" oidc >/dev/null
-  oidc_up "$src" "$project" "$TAG" "$out/other-first-people.yaml" >/dev/null
+  oidc_up "$src" "$project" "$TAG" "$out/other-first-people.yaml" >/dev/null ||
+    { down "$src" "$project" oidc >/dev/null 2>&1; return 1; }
   people "$src" "$project" oidc >"$out/control-people.txt"
   deploy_lines "$src" "$project" >"$out/control-deploy.txt"
   down "$src" "$project" oidc >/dev/null
