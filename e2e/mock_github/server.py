@@ -8,6 +8,7 @@ from urllib.parse import parse_qs, urlparse
 
 REPO = "langchain-ai/langgraph"
 REDIS = "redis/redis"
+FASTAPI = "fastapi/fastapi"
 MODES = ("ok", "unavailable")
 DEFAULT_PER_PAGE = 30
 MAX_PER_PAGE = 100
@@ -28,6 +29,9 @@ OTHER_FAMILY_TAGS = {
     22: "cli==0.4.35",
 }
 REDIS_TAGS = ["8.2.1", "8.2.0", "8.0.3", "8.0.2", "7.4.5", "7.4.4"]
+FASTAPI_TAGS = [
+    "0.115.6", "0.115.5", "0.115.4", "0.115.3", "0.115.2", "0.115.1", "0.115.0", "0.114.2",
+]  # fmt: skip
 LATEST_PUBLISHED = datetime(2026, 10, 28, 9, 0, tzinfo=UTC)
 
 
@@ -88,6 +92,7 @@ def planted_releases() -> list[dict[str, Any]]:
 RELEASES_BY_REPO: dict[str, list[dict[str, Any]]] = {
     REPO: build_releases(REPO, release_order(), LATEST_PUBLISHED),
     REDIS: build_releases(REDIS, REDIS_TAGS, LATEST_PUBLISHED - timedelta(days=2)),
+    FASTAPI: build_releases(FASTAPI, FASTAPI_TAGS, LATEST_PUBLISHED - timedelta(days=1)),
     PLANTED: planted_releases(),
 }
 """The repositories the mock knows. Any other repository answers 404, as GitHub does."""
