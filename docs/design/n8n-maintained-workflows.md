@@ -107,7 +107,7 @@ Three choices keep the pack easy to maintain:
 | Changes where Propose a change posts | Only places on the team's allowed list work, and the Approver sees the exact target |
 | Adds n8n's Webhook trigger, to hand a run's data to an outside caller | n8n doesn't load it. Our own trigger answers only calls our API signed |
 | Runs the n8n workflow by hand in n8n | A real run, and Approvers get a real request. It counts as the work of whoever holds the n8n workflow, so they can't approve it |
-| Starts a second run while one is waiting for a yes | The second run stops before it reads anything: "An earlier run is still waiting for a yes" |
+| Starts a second run, with Run now or by hand, while one is waiting for a yes | The second run stops before it reads anything: "An earlier run is still waiting for a yes". Scheduled runs never overlap, because a request stops before the next run (ADR 0024) |
 | Changes the n8n workflow's error workflow or time zone | Our check warns, and runs of that version stop before they read anything |
 
 P6 showed that staff can add their own keys on the free edition. That is why the allow list matters: a key is useless when no node can use it.

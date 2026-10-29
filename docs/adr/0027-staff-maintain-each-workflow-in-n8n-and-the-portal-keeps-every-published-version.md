@@ -39,7 +39,7 @@ n8n then has no node that can reach another system, call an outside address, ans
   - a link to its page in the Portal, where its Approvers are set;
   - what is safe to change.
 
-  The note links to the Approvers instead of naming them, because they change in the Portal without a new version.
+  The note links to the Approvers instead of naming them. Approvers live in our API, not in the n8n workflow. Changing them makes a new use case version in the Portal (ADR 0024), but it publishes nothing in n8n, so a name in the note would go stale.
 - Our API checks the draft. The check also confirms two settings: the n8n workflow runs on Singapore time, and it still names our error workflow. Through n8n's API, the platform's account (n8n's owner) creates the n8n workflow and publishes it. The Portal says the workflow is on once n8n reports every trigger as activated.
 - An Operator may also start a new workflow in n8n instead, from New workflow. The Planner doesn't draft it.
 - To change it, an Operator presses **Open in n8n**. The platform moves the n8n workflow into that person's own space in n8n, and they edit and publish it there.

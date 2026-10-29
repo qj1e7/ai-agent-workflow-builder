@@ -82,8 +82,8 @@ All checks ran in Chrome through Playwright against the edited prototype.
 The n8n audit checked the design in [`n8n-maintained-workflows.md`](../../design/n8n-maintained-workflows.md) and ADRs 0026 and 0027 against common n8n workflow patterns.
 
 On 28 Oct the team lead asked for all 11 proposals, and the data nodes, to go into both ADRs and the design note. Both ADRs stay `proposed`. The ADRs differ from the wording below in two places:
-- **Item 4:** our API makes the check on a run's first call from any of our nodes, not one fixed first node, because staff can reorder nodes.
-- **Item 9:** the Sticky Note links to the workflow's Approvers in the Portal instead of naming them, because Approvers change there without a new version.
+- **Item 4:** our API makes the check on a run's first call from any of our nodes, not one fixed first node, because staff can reorder nodes. It backs up ADR 0024, which already ends a request before the next scheduled run. So the check only stops runs started some other way, such as Run now.
+- **Item 9:** the Sticky Note links to the workflow's Approvers in the Portal instead of naming them. Approvers live in our API, so changing them publishes nothing in n8n, and a name in the note would go stale.
 
 1. **The error path breaks under the allow list (high).** Our failure reporter, `run_failure_reporter`, is an Error Trigger followed by an HTTP Request node. The `NODES_INCLUDE` allow list blocks HTTP Request, so failed runs would go unreported while the daily check still says the workflow is published. Proposal: a "Report a failure" node in our pack, and a daily check that sends a test failure all the way through.
 2. **The Webhook trigger is a way out of n8n (high).** n8n's Webhook node is on the allow list. It can reply with the last node's data, and it needs no sign-in by default. Proposal: replace it with our own trigger that only accepts calls signed by our API, and test that in a P7 run.
