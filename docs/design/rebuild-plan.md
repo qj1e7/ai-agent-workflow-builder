@@ -64,7 +64,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
   - [ ] P11 touches `portal/**`, `platform-api/**` and `contracts/**`.
   - [ ] P12 touches `platform-api/**`, `agent-runtime/**`, `contracts/**`, `e2e/**` and `docs/evidence/model-bakeoff/**`.
   - [ ] P14 touches only `infra/**`, `.github/workflows/deploy.yml` and `docs/evidence/deploy/**`.
-  - [ ] P15 touches only `docs/**` and `scripts/render-diagrams.sh`.
+  - [ ] P15 touches only `docs/**`, `scripts/render-diagrams.sh` and `deploy/compose.lockdown.yaml`.
 - [ ] Hold the review gate. P1, P5, P6, P7, P9, P10, P11 and P13 change an interaction. They wait for the operator's review in chat with screenshots and a video before merge.
 
 ### PR mechanics, for every PR
@@ -75,6 +75,8 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 - [ ] Ask the operator which teammate reviews, and request that review. Never approve a PR yourself.
 - [ ] Run the repo's lint and typecheck once before the PR-facing push. Push with hooks on.
 - [ ] Check the diff for secrets, keys, tokens and `.env` files before each commit. If you find one, stop and tell the operator.
+- [ ] Read every outside address from a setting, never from a value written into the code, so the app can move into DevNet (`docs/design/devnet-move.md`).
+- [ ] Run every new CI step in a pinned container, so the pipeline can move to GitLab CI.
 - [ ] Run `/deslop` before each commit and `/no-comments` before review.
 - [ ] Triage every review-bot and security-reviewer comment per `../references/bugbot-triage.md`.
 - [ ] Before the code-ready report and babysit, and again after merge prep, record the base and head SHAs prepared by the topology owner under the execution playbook.
@@ -304,6 +306,7 @@ Each live lane runs in its own worktree at the PR head. Drive through the skill 
 
 - [ ] Copy each new row of `monitoring.run_events` to the `run_events` container in Cosmos DB, in `monitoring/copier.py`. One copier at a time holds a lock on each run, copies its events in sequence order, and records the highest number copied. PostgreSQL keeps every row, with today's grants.
 - [ ] Read the stream, its replay and the troubleshooter's events from Cosmos DB through `ActivityLog`. Each wake-up names the highest number copied, and a reader stops before any gap. The account uses Strong consistency.
+- [ ] Keep the PostgreSQL reader working. The setting `ACTIVITY_READER` picks `cosmos` or `postgres`, so a DevNet without Cosmos DB still runs.
 
 **You see.**
 
@@ -312,7 +315,7 @@ Each live lane runs in its own worktree at the PR head. Drive through the skill 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
 - [ ] `test_copier.py` covers a copy that runs twice, a copy that fails halfway, two copiers on one run, and an event added to a run after its first copy. `test_cosmos_log.py` covers reading after a sequence number, the sort on `seq` past 9, and the stop at a gap. Run them against the emulator with `COSMOS_ENDPOINT` set.
-- [ ] `test_activity_log.py` and `test_monitoring_http.py` still pass. Run the full unit suite as CI runs it.
+- [ ] `test_activity_log.py` and `test_monitoring_http.py` pass with each reader. Run the full unit suite as CI runs it.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on the configured `swarm workers` model at the PR head, per the boot recipe.
 
@@ -325,7 +328,7 @@ Each live lane runs in its own worktree at the PR head. Drive through the skill 
 - [ ] Lane 7. Approve a run as bob. Save `p4-decision-item.json`. Pass when the decision's item in Cosmos DB names bob and the digest he saw.
 - [ ] Lane 8. On its own stack, leave a run waiting for a yes, move the stack's clock forward two days, then approve it. Save `p4-long-run.json`. Pass when the new events number on from the old ones, with no repeat in PostgreSQL or Cosmos DB.
 - [ ] Lane 9. On its own stack, run two platform-api processes against one database, and stream one run from each. Save `p4-two-replicas.txt`. Pass when both get every event once, in order.
-- [ ] Lane 10. Run `scripts/load.sh`. Save `p4-k6-summary.json`. Pass when every k6 threshold passes.
+- [ ] Lane 10. On its own stack, set `ACTIVITY_READER=postgres`, stop the emulator, and stream a watchlist run. Save `p4-postgres-reader.json`. Pass when the stream holds the same events as lane 1's head stream.
 
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
@@ -358,6 +361,7 @@ Each live lane runs in its own worktree at the PR head. Drive through the skill 
 - [ ] Draw a run from its events in `portal/src/screens/run/runModel.ts`, as a reducer over activity events. The page shows the run line, the agents' messages, the proposal as "exactly what will be written", and the approval gate with Approve and Decline. The motion is CSS only, as in the prototype.
 - [ ] Take the proposal and its digest that an Approver sees from the run's approval route, not from the event stream, so a slow stream can never show an out-of-date proposal.
 - [ ] Open the practice Teams panel from the header's Teams button. It lists the Teams stub messages and decides through the same route as the run page.
+- [ ] Keep the route `/approvals/{id}`, which every Teams approval message already links to (`platform-api/src/platform_api/orchestration/service.py:239`), and open the run page at the decision from it. The link is the baseline that works in DevNet (ADR 0009). The buttons in the practice panel are an extra.
 
 **You see.**
 
@@ -377,7 +381,7 @@ Each live lane runs in its own worktree at the PR head. Drive through the skill 
 - [ ] Lane 5. As carol, an Operator only, open a waiting run. Save `p5-not-approver.png`. Pass when carol sees the proposal but no Approve button.
 - [ ] Lane 6. Open a failed run. Save `p5-failed.png`. Pass when the failed step is marked and the troubleshooter's reason shows below it.
 - [ ] Lane 7. Reload the page in the middle of a run. Save `p5-reload.png`. Pass when the page redraws the steps so far and keeps following new events.
-- [ ] Lane 8. Approve from the practice Teams panel as bob. Save `p5-teams-approve.png`. Pass when the run page updates to Done without a reload.
+- [ ] Lane 8. As bob, open the link in a practice Teams message, then approve from the practice panel on another run. Save `p5-teams-approve.png`. Pass when the link opens the first run's page at the decision, and the second run's page updates to Done without a reload.
 - [ ] Lane 9. Turn on reduced motion and open a running run, then run axe on the run page and the Teams panel at 1440 and 390 px. Save `p5-reduced-motion-axe.json`. Pass when no element animates, every step shows its state in words, and axe reports no WCAG 2.2 AA problems.
 - [ ] Lane 10. Press Approve twice quickly as bob. Save `p5-double-click.json`. Pass when the API records one decision and the practice Jira holds one set of tickets.
 
@@ -901,10 +905,12 @@ Each live lane runs in its own worktree at the PR head. Drive through the skill 
 - [ ] Create `docs/evidence/dast/2026-11-rebuild/`, `docs/evidence/load-test/2026-11-rebuild/` and `docs/evidence/unit-tests/2026-11-rebuild/`.
 - [ ] Edit `docs/design/diagrams.md` for the use case, class, ER, NoSQL, CI/CD and sequence diagrams.
 - [ ] Edit `scripts/render-diagrams.sh` and add the new PNGs in `docs/evidence/diagrams/`.
+- [ ] Create `deploy/compose.lockdown.yaml` and `docs/evidence/devnet/lockdown.md`.
 
 **Build.**
 
 - [ ] Run DAST, the load test and the unit tests on the new app, and save their reports. Draw the class diagram from the domain model, the ER diagram from the migrations, and the NoSQL design from ADR 0031.
+- [ ] Run the lock-down test from `docs/design/devnet-move.md`. `deploy/compose.lockdown.yaml` cuts the stack's route to the internet except through a proxy that allows only the listed hosts.
 
 **You see.**
 
@@ -925,7 +931,7 @@ Each live lane runs in its own worktree at the PR head. Drive through the skill 
 - [ ] Lane 7. Compare the CI/CD diagram with `.github/workflows/`. Save `p15-cicd-check.txt`. Pass when every job appears in order.
 - [ ] Lane 8. Walk the use case diagram against the new Portal's pages. Save `p15-use-cases.png`. Pass when each use case maps to a page that exists.
 - [ ] Lane 9. Search every diagram for the retired names. Save `p15-names.txt`. Pass when none appears.
-- [ ] Lane 10. Open each PNG in `docs/evidence/diagrams/`. Save `p15-pngs.png`. Pass when each is readable at slide size.
+- [ ] Lane 10. On its own stack, start the stack with `deploy/compose.lockdown.yaml` and run a watchlist check to Done. Save `p15-lockdown.md`. Pass when every call to a host off the allow list is refused and logged, the check still finishes, and `docs/evidence/devnet/lockdown.md` lists what broke.
 
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
@@ -985,6 +991,7 @@ Four questions stay unproven, and each is checked inside the PR that needs it:
 | Motion and Rive in the React Portal need an ADR. | P5 | Use CSS motion, as the prototype does, until that ADR is accepted. |
 | App Insights shows nothing from the apps, because no app sends telemetry yet. | P14 | Adding the Azure Monitor SDK is a new dependency with its own ADR, after the first presentation. |
 | One person has made every commit so far. | All | Each area has its own owner, and a teammate who is not the author approves each PR. |
+| NCS has not yet said what DevNet allows. | P4, P5, P12, P14, P15 | Hold to the four choices in `docs/design/devnet-move.md`, and ask the sponsor its questions in week 1. |
 
 ## Appendix D. Links and reading list
 
@@ -992,4 +999,5 @@ Four questions stay unproven, and each is checked inside the PR that needs it:
 - The decisions are in ADRs [0028](../adr/0028-rebuild-the-portal-from-the-prototype-and-reshape-the-backend-in-place.md), [0029](../adr/0029-entra-id-signs-people-in-and-the-platform-keeps-their-roles.md), [0030](../adr/0030-operators-look-after-setup-and-the-first-deploy-names-the-first-people.md), [0031](../adr/0031-keep-the-activity-log-in-azure-cosmos-db-for-nosql.md) and [0032](../adr/0032-the-demo-runs-on-claude-haiku-and-the-eval-picks-each-jobs-model-for-handover.md).
 - P2, P3, P4 and P8 get `skills/how/SKILL.md` before they change the backend, and `skills/interrogate/SKILL.md` before review, because they touch the approval gate, the log or the workflow lifecycle.
 - P5 and P11 get `skills/interrogate/SKILL.md`, because they show who may approve.
+- [The DevNet move](devnet-move.md) lists what each part needs inside NCS's network, and the questions for NCS.
 - The coordinator keeps its decision trail per `skills/show-me-your-work/SKILL.md`.
