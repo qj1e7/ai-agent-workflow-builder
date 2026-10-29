@@ -1,4 +1,4 @@
-import type { Ms, RunId } from '../run/brand'
+import type { Ms, RunId } from './brand'
 import { parseEvent, parsePage, type RunEvent } from './parse'
 import { createSseParser, textChunks, type SseFrame } from './sse'
 

@@ -18,8 +18,9 @@ portal_auth_one_line() {
   esac
 }
 
+[ "${PORTAL_MODE:-live}" = "live" ] || portal_auth_refuse "PORTAL_MODE must be live, not '${PORTAL_MODE:-}'"
+
 if [ -n "${OIDC_AUTHORITY:-}${OIDC_CLIENT_ID:-}${OIDC_SCOPE:-}" ]; then
-  [ "${PORTAL_MODE:-live}" = "live" ] || portal_auth_refuse "PORTAL_MODE must be live when sign-in is configured, not '${PORTAL_MODE:-}'"
   [ -n "${OIDC_AUTHORITY:-}" ] || portal_auth_refuse "OIDC_AUTHORITY is not set, but OIDC_CLIENT_ID or OIDC_SCOPE is"
   [ -n "${OIDC_CLIENT_ID:-}" ] || portal_auth_refuse "OIDC_CLIENT_ID is not set"
   [ -n "${OIDC_SCOPE:-}" ] || portal_auth_refuse "OIDC_SCOPE is not set"

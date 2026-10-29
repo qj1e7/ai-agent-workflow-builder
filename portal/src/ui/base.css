@@ -14,18 +14,22 @@
 
 html {
   color-scheme: light;
+  scroll-padding-top: 84px;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
 
-html[data-theme='dark'] {
-  color-scheme: dark;
+@media (max-width: 900px) {
+  html {
+    scroll-padding-top: 76px;
+    scroll-padding-bottom: 84px;
+  }
 }
 
 body {
   margin: 0;
   min-height: 100dvh;
-  background: var(--bg);
+  background: var(--frame);
   color: var(--ink);
   font-family: var(--font);
   font-size: var(--text-16);
@@ -133,79 +137,8 @@ main[tabindex='-1']:focus {
   border: 0;
 }
 
-.page {
-  width: 100%;
-  max-width: var(--page-max);
-  margin-inline: auto;
-  padding: var(--space-5) var(--gutter) var(--space-7);
-}
-
-.panel {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-panel);
-}
-
 .muted {
   color: var(--muted);
-}
-
-.plan-voice {
-  font-weight: 560;
-}
-
-.disclosure {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  font-size: var(--text-14);
-  font-weight: 600;
-  list-style: none;
-  cursor: pointer;
-}
-
-.disclosure::-webkit-details-marker {
-  display: none;
-}
-
-.disclosure::after {
-  content: '';
-  width: 7px;
-  height: 7px;
-  margin: -3px 0 0 var(--space-2);
-  border-right: 2px solid currentColor;
-  border-bottom: 2px solid currentColor;
-  transform: rotate(45deg);
-}
-
-.disclosure[aria-expanded='true']::after,
-details[open] > .disclosure::after {
-  margin-top: 3px;
-  transform: rotate(225deg);
-}
-
-/* The latest entry of a story list: So far on the overview and Minutes on the run page share it. */
-.story-latest {
-  position: relative;
-}
-
-.story-latest::before {
-  content: '';
-  position: absolute;
-  top: 2px;
-  bottom: 2px;
-  left: -10px;
-  width: 2px;
-  border-radius: 1px;
-  background: var(--lead);
-}
-
-.story-latest .story-summary {
-  font-weight: 600;
 }
 
 @media (prefers-reduced-motion: reduce) {

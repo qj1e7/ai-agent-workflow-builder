@@ -1,12 +1,13 @@
-export type PortalMode = 'live' | 'demo'
-
 export type SignInConfig =
   | { readonly kind: 'dev' }
   | { readonly kind: 'oidc'; readonly authority: string; readonly clientId: string; readonly scope: string }
 
 export type OidcSignIn = Extract<SignInConfig, { kind: 'oidc' }>
 
-export type PortalConfig = { readonly mode: 'demo' } | { readonly mode: 'live'; readonly signIn: SignInConfig }
+export interface PortalConfig {
+  readonly mode: 'live'
+  readonly signIn: SignInConfig
+}
 
 export class PortalConfigError extends Error {
   constructor(message: string) {
@@ -16,7 +17,6 @@ export class PortalConfigError extends Error {
 }
 
 const LIVE_DEV: PortalConfig = { mode: 'live', signIn: { kind: 'dev' } }
-const DEMO: PortalConfig = { mode: 'demo' }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -45,12 +45,7 @@ function parseSignIn(auth: unknown): SignInConfig {
 
 export function parseConfig(raw: unknown): PortalConfig {
   if (!isRecord(raw)) return LIVE_DEV
-  const hasAuth = raw['auth'] !== undefined
-  if (raw['mode'] === 'demo') {
-    if (hasAuth) throw new PortalConfigError('Demo mode cannot have sign-in settings in /config.json.')
-    return DEMO
-  }
-  return hasAuth ? { mode: 'live', signIn: parseSignIn(raw['auth']) } : LIVE_DEV
+  return raw['auth'] === undefined ? LIVE_DEV : { mode: 'live', signIn: parseSignIn(raw['auth']) }
 }
 
 export async function loadConfig(fetchConfig: typeof fetch = (input, init) => fetch(input, init)): Promise<PortalConfig> {

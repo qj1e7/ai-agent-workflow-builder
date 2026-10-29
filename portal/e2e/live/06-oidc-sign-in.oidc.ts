@@ -1,12 +1,10 @@
 import { expect, request, type Browser, type Page, type Response, type TestInfo } from '@playwright/test'
-import { headline } from '../support/flows'
 import { assertClean, watchPage, type Watch } from '../support/test'
 import type { Backend } from './support/stack'
 import { test } from './support/test'
-import { CATCH_UP_MS, openContext, runExampleFromBuilder, shot } from './support/ui'
+import { openContext, shot } from './support/ui'
 
 const AUTHORITY = process.env['MOCK_OIDC_URL'] ?? 'http://mock-oidc:8080/default'
-const OWN_WORK = 'You started this run, so another Approver must decide.'
 const RENEWAL_MS = 120_000
 
 interface Person {
@@ -14,12 +12,13 @@ interface Person {
   readonly watch: Watch
   readonly grants: string[]
   readonly tokens: string[]
+  readonly devHeaders: string[]
 }
 
 async function signIn(browser: Browser, backend: Backend, user: string, path: string, info: TestInfo, formShot?: string): Promise<Person> {
   const context = await openContext(browser)
   const page = await context.newPage()
-  const person: Person = { page, watch: watchPage(page), grants: [], tokens: [] }
+  const person: Person = { page, watch: watchPage(page), grants: [], tokens: [], devHeaders: [] }
   const record = async (response: Response): Promise<void> => {
     if (response.request().method() !== 'POST' || response.url() !== `${AUTHORITY}/token` || !response.ok()) return
     const { access_token: token } = (await response.json()) as { access_token?: string }
@@ -30,6 +29,15 @@ async function signIn(browser: Browser, backend: Backend, user: string, path: st
     }
   }
   page.on('response', (response) => void record(response))
+  page.on('request', (request) => {
+    request
+      .allHeaders()
+      .then((headers) => {
+        if ('x-dev-user' in headers) person.devHeaders.push(request.url())
+      })
+      // A request still in flight when the context closes cannot be read, and it has nothing left to send.
+      .catch(() => undefined)
+  })
 
   await page.goto(path)
   const username = page.locator('input[name="username"]')
@@ -43,7 +51,7 @@ async function signIn(browser: Browser, backend: Backend, user: string, path: st
   return person
 }
 
-test('alice signs in and starts a run, cannot approve it herself, and bob signs in and approves it once', async ({ browser, backend }, info) => {
+test('alice signs in and sees her name, bob signs in at a deep link, and signing out ends the session', async ({ browser, backend }, info) => {
   test.setTimeout(360_000)
   const provider = await request.newContext()
   await expect
@@ -58,30 +66,21 @@ test('alice signs in and starts a run, cannot approve it herself, and bob signs 
   const header = alice.page.getByRole('banner')
   await expect(header, 'the header names the person the token belongs to').toContainText('Alice')
   await expect(header, 'the header shows her roles from the roles claim').toContainText('Operator and Approver')
-  await expect(header.getByRole('button', { name: /Switch user/ }), 'real sign-in has no dev switcher').toHaveCount(0)
+  await expect(alice.page.getByRole('heading', { level: 1 })).toContainText('Alice')
+  await expect(alice.page.getByRole('button', { name: /Test controls/ }), 'real sign-in has no test controls').toHaveCount(0)
+  await expect(alice.page.getByText('Act as'), 'real sign-in has no way to act as someone else').toHaveCount(0)
   await shot(alice.page, info, 'oidc-02-signed-in-alice')
 
   const me = await backend.get<{ id: string; display: string; roles: string[] }>('alice', '/api/v1/me')
   expect(me, 'the platform maps the token to alice').toEqual({ id: '0a11ce00-0000-4000-8000-000000000001', display: 'Alice', roles: ['operator', 'approver'] })
 
-  const ticketsBefore = await backend.tickets()
-  const runId = await runExampleFromBuilder(alice.page, info, backend, 'oidc-run')
-  await backend.waitForState(runId, ['awaiting_approval'])
-  expect((await backend.tickets()).filter((ticket) => ticket.run_id === runId), 'nothing is written while the run waits').toEqual([])
-
-  const approval = alice.page.getByRole('region', { name: 'Approval' })
-  await expect(approval.getByText(OWN_WORK), 'alice is told why she cannot decide').toBeVisible({ timeout: CATCH_UP_MS })
-  await expect(approval.getByRole('button', { name: 'Approve', exact: true }), 'alice has no Approve button').toHaveCount(0)
-  await shot(alice.page, info, 'oidc-03-alice-cannot-approve')
-
-  const approvalId = await backend.approvalIdOf(runId)
-  const { digest } = await backend.get<{ digest: string }>('alice', `/api/v1/approvals/${approvalId}`)
-  const refusal = await alice.page.request.post(`/api/v1/approvals/${approvalId}/decisions`, {
-    headers: backend.proofOf('alice'),
-    data: { step: 0, verdict: 'approve', digest },
-  })
-  expect(refusal.status(), 'the backend refuses alice with her own token').toBe(403)
-  expect(((await refusal.json()) as { refusal: string }).refusal).toBe('own_work')
+  for (const label of ['Workflows', 'Software watchlist', 'Agent library', 'Home']) {
+    await alice.page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: label, exact: true }).click()
+    await expect(alice.page.getByRole('heading', { level: 1 })).toBeVisible()
+  }
+  await alice.page.reload()
+  await expect(header, 'a reload keeps alice signed in').toContainText('Alice')
+  expect(alice.devHeaders, 'no request from the page carries X-Dev-User').toEqual([])
 
   const devHeader = await alice.page.request.get('/api/v1/runs', { headers: { 'X-Dev-User': 'bob' } })
   expect(devHeader.status(), 'the dev header means nothing with real sign-in').toBe(401)
@@ -96,31 +95,33 @@ test('alice signs in and starts a run, cannot approve it herself, and bob signs 
   expect(new Set(alice.tokens).size, 'the renewal brought a new access token').toBeGreaterThan(1)
   expect((await backend.get<{ id: string }>('alice', '/api/v1/me')).id, 'the renewed token still signs alice in').toBe(me.id)
   await alice.page.reload()
-  await expect(alice.page.getByRole('banner'), 'a reload keeps alice signed in').toContainText('Alice')
+  await expect(header, 'a reload after the renewal keeps alice signed in').toContainText('Alice')
+  expect(alice.devHeaders, 'still no request carries X-Dev-User').toEqual([])
 
-  const bob = await signIn(browser, backend, 'bob', `/runs/${runId}`, info)
+  const bob = await signIn(browser, backend, 'bob', '/agents', info)
+  await expect(bob.page, 'bob lands on the deep link he asked for').toHaveURL(/\/agents$/)
+  await expect(bob.page.getByRole('heading', { level: 1 })).toHaveText('Agent library')
   await expect(bob.page.getByRole('banner')).toContainText('Bob')
   await expect(bob.page.getByRole('banner')).toContainText('Approver')
-  const bobsApproval = bob.page.getByRole('region', { name: 'Approval' })
-  const approve = bobsApproval.getByRole('button', { name: 'Approve', exact: true })
-  await expect(approve, 'bob can decide').toBeVisible({ timeout: CATCH_UP_MS })
-  await shot(bob.page, info, 'oidc-04-signed-in-bob')
-  await approve.click()
+  await expect(bob.page.getByRole('banner')).not.toContainText('Operator')
+  await shot(bob.page, info, 'oidc-03-bob-deep-link')
 
-  const finished = await backend.waitForState(runId, ['succeeded'])
-  expect(finished.outcome).toBe('written')
-  const written = (await backend.tickets()).filter((ticket) => ticket.run_id === runId)
-  expect(written, 'exactly one ticket for this run').toHaveLength(1)
-  const key = written[0]?.key ?? ''
-  expect(key).toMatch(/^MOCK-\d+$/)
-  expect((await backend.tickets()).length - ticketsBefore.length, 'one ticket more than before the run').toBe(1)
-  await expect(headline(bob.page), 'the Tracker ends on the ticket key').toHaveText(`${key} is in Jira`, { timeout: CATCH_UP_MS })
-  await shot(bob.page, info, 'oidc-05-run-written')
-
+  const chip = bob.page.getByRole('banner').getByRole('button', { name: /Bob/ })
+  await chip.focus()
+  await bob.page.keyboard.press('Enter')
+  await expect(chip, 'Enter on the chip opens the panel').toHaveAttribute('aria-expanded', 'true')
+  await expect(bob.page.getByRole('button', { name: 'Sign out' })).toBeVisible()
+  await bob.page.keyboard.press('Escape')
+  await expect(bob.page.getByRole('button', { name: 'Sign out' }), 'Escape closes the panel').toHaveCount(0)
+  await expect(chip, 'Escape puts focus back on the chip').toBeFocused()
+  await bob.page.keyboard.press('Enter')
+  await expect(bob.page.getByRole('button', { name: 'Sign out' })).toBeVisible()
+  await shot(bob.page, info, 'oidc-04-sign-out-panel')
   await bob.page.getByRole('button', { name: 'Sign out' }).click()
   await expect(bob.page, 'sign-out comes back to the Portal').toHaveURL(/\/signed-out(\?|$)/)
   await expect(bob.page.getByRole('button', { name: 'Sign in' }), 'a signed-out person is offered sign-in, not sent straight back').toBeVisible()
-  await shot(bob.page, info, 'oidc-06-signed-out')
+  await shot(bob.page, info, 'oidc-05-signed-out')
+  expect(bob.devHeaders, 'bob sent no X-Dev-User either').toEqual([])
 
   assertClean(alice.watch)
   assertClean(bob.watch)

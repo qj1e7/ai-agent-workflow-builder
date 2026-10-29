@@ -1,5 +1,5 @@
 import type { ActivityEvent, Actor } from '../api/types'
-import type { RunId, RunTime, Seq } from '../run/brand'
+import type { RunId, RunTime, Seq } from './brand'
 
 export type EventKind = ActivityEvent['kind']
 type WireOf<K extends EventKind> = Extract<ActivityEvent, { kind: K }>

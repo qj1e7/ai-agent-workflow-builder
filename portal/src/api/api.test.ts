@@ -1,5 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createDemoPlatform } from '../mock'
+import { describe, expect, it } from 'vitest'
 import { ApiError, createApiClient, unwrap } from './client'
 import { loadConfig, parseConfig, PortalConfigError } from './config'
 import { fetchEventPage, refusalOf } from './queries'
@@ -9,10 +8,9 @@ const LIVE_DEV = { mode: 'live', signIn: { kind: 'dev' } }
 const AUTH = { authority: 'https://login.example.test/tenant/v2.0', client_id: 'portal', scope: 'openid profile offline_access' }
 
 describe('parseConfig', () => {
-  it('reads demo mode, and live mode with dev sign-in when there are no sign-in settings', () => {
-    expect(parseConfig({ mode: 'demo' })).toEqual({ mode: 'demo' })
+  it('reads live mode with dev sign-in when there are no sign-in settings', () => {
     expect(parseConfig({ mode: 'live' })).toEqual(LIVE_DEV)
-    for (const junk of [null, 42, 'demo', [], {}, { mode: 'DEMO' }, { mode: 7 }]) {
+    for (const junk of [null, 42, 'live', [], {}, { mode: 'demo' }, { mode: 7 }]) {
       expect(parseConfig(junk)).toEqual(LIVE_DEV)
     }
   })
@@ -40,9 +38,6 @@ describe('parseConfig', () => {
     expect(() => parseConfig({ mode: 'live', auth })).toThrow(PortalConfigError)
   })
 
-  it('refuses sign-in settings in demo mode', () => {
-    expect(() => parseConfig({ mode: 'demo', auth: AUTH })).toThrow(PortalConfigError)
-  })
 })
 
 describe('loadConfig', () => {
@@ -50,7 +45,6 @@ describe('loadConfig', () => {
     expect(await loadConfig(() => Promise.resolve(new Response('nope', { status: 404 })))).toEqual(LIVE_DEV)
     expect(await loadConfig(() => Promise.resolve(new Response('{oops')))).toEqual(LIVE_DEV)
     expect(await loadConfig(() => Promise.reject(new Error('offline')))).toEqual(LIVE_DEV)
-    expect(await loadConfig(() => Promise.resolve(new Response('{"mode":"demo"}')))).toEqual({ mode: 'demo' })
   })
 
   it('reads sign-in settings, and lets a bad set through as an error', async () => {
@@ -61,41 +55,44 @@ describe('loadConfig', () => {
   })
 })
 
-describe('the API client against the demo platform', () => {
-  beforeEach(() => {
-    vi.useFakeTimers({ now: Date.parse('2026-11-27T02:00:00Z') })
-  })
-  afterEach(() => {
-    vi.useRealTimers()
-  })
+describe('the API client', () => {
+  const json = (body: unknown, status = 200) =>
+    Promise.resolve(new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }))
 
-  function clientFor(user: string) {
-    const demo = createDemoPlatform()
+  function clientFor(user: string, fetchImpl: typeof fetch) {
     const session = createDevSession(null)
     session.choose(user)
-    return createApiClient(authorizedFetch(session, demo.fetch, 'http://portal.test'), 'http://portal.test')
+    return createApiClient(authorizedFetch(session, fetchImpl, 'http://portal.test'), 'http://portal.test')
   }
 
   it('sends the dev user and gets typed answers back', async () => {
-    const client = clientFor('bob')
-    await vi.advanceTimersByTimeAsync(20_000)
-    const approval = unwrap(
-      await client.GET('/api/v1/approvals/{approval_id}', { params: { path: { approval_id: 'apr_01JB8' } } }),
-    )
-    expect(approval.you_can_decide).toBe(true)
-    expect(unwrap(await client.GET('/api/v1/runs')).runs).toHaveLength(3)
+    const seen: (string | null)[] = []
+    const client = clientFor('bob', (input, init) => {
+      seen.push(new Request(input, init).headers.get('X-Dev-User'))
+      return json({ runs: [] })
+    })
+    expect(unwrap(await client.GET('/api/v1/runs')).runs).toEqual([])
+    expect(seen).toEqual(['bob'])
   })
 
   it('reads a page of events as JSON', async () => {
-    const client = clientFor('alice')
-    await vi.advanceTimersByTimeAsync(20_000)
+    let accept: string | null = null
+    let url = ''
+    const client = clientFor('alice', (input, init) => {
+      const request = new Request(input, init)
+      accept = request.headers.get('accept')
+      url = request.url
+      return json({ events: [{ seq: 16 }, { seq: 17 }] })
+    })
     const page = await fetchEventPage(client, 'run_01JB8', 15)
     expect(page.events.map((event) => event.seq)).toEqual([16, 17])
+    expect(accept).toBe('application/json')
+    expect(url).toBe('http://portal.test/api/v1/runs/run_01JB8/events?after=15')
   })
 
   it('turns a refusal into an ApiError that refusalOf can read', async () => {
-    const client = clientFor('alice')
-    await vi.advanceTimersByTimeAsync(20_000)
+    const message = 'You started this run, so another Approver must decide.'
+    const client = clientFor('alice', () => json({ refusal: 'own_work', message }, 403))
     const attempt = async () =>
       unwrap(
         await client.POST('/api/v1/approvals/{approval_id}/decisions', {
@@ -106,6 +103,6 @@ describe('the API client against the demo platform', () => {
     const error = await attempt().catch((caught: unknown) => caught)
     expect(error).toBeInstanceOf(ApiError)
     expect(refusalOf(error)?.refusal).toBe('own_work')
-    expect((error as ApiError).message).toBe('You started this run, so another Approver must decide.')
+    expect((error as ApiError).message).toBe(message)
   })
 })

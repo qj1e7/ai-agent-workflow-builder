@@ -1,0 +1,32 @@
+.dialog {
+  width: min(440px, calc(100% - 32px));
+  padding: var(--space-5);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-sheet);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--float);
+}
+
+.dialog[open] {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+  animation: open var(--dur-panel) var(--ease-out);
+}
+
+.dialog::backdrop {
+  background: var(--scrim);
+}
+
+.dialog p {
+  margin: 0;
+  color: var(--muted);
+}
+
+@keyframes open {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}

@@ -1,7 +1,7 @@
 import success from '@contracts/fixtures/runs/success.json'
 import failure from '@contracts/fixtures/runs/failure.json'
 import { describe, expect, it } from 'vitest'
-import { runId } from '../run/brand'
+import { runId } from './brand'
 import { parseEvent, parsePage } from './parse'
 
 const RUN = runId('run_01JB8')

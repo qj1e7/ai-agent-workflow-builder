@@ -1,31 +1,57 @@
-import { Route, Routes } from 'react-router'
-import { ApprovalPage } from './screens/approval/ApprovalPage'
-import { ApprovalsPage } from './screens/approval/ApprovalsPage'
-import { BuilderPage } from './screens/builder/BuilderPage'
-import { JiraPage } from './screens/jira/JiraPage'
-import { NotFoundPage } from './screens/NotFoundPage'
-import { OverviewPage } from './screens/overview/OverviewPage'
-import { RunPage } from './screens/run/RunPage'
-import { SettingsPage } from './screens/settings/SettingsPage'
-import { SoftwarePage } from './screens/software/SoftwarePage'
-import { TeamsPage } from './screens/teams/TeamsPage'
-import { AppShell } from './ui/AppShell'
+import { useEffect, useRef } from 'react'
+import { useLocation } from 'react-router'
+import { useMe } from './api/queries'
+import { Header } from './shell/Header'
+import { TabBar } from './shell/Menu'
+import { PlatformDown, platformIsDown } from './shell/PlatformDown'
+import { PRODUCT } from './shell/product'
+import { AppRoutes } from './shell/routes'
+import { TestControls } from './shell/TestControls'
+import { ErrorBoundary } from './ui/ErrorBoundary'
+import styles from './shell/Shell.module.css'
 
-export function App() {
+/** Focus stays where it is on first load, so the skip link stays the first Tab stop. */
+function useHeadingFocus(): void {
+  const { pathname } = useLocation()
+  const previous = useRef<string | null>(null)
+  useEffect(() => {
+    const heading = document.querySelector<HTMLElement>('main h1')
+    if (!heading) return
+    document.title = `${heading.textContent.trim()} · ${PRODUCT}`
+    if (previous.current !== null && previous.current !== pathname) heading.focus({ preventScroll: true })
+    previous.current = pathname
+  })
+}
+
+function skipToMain(): void {
+  const main = document.getElementById('main')
+  const target = main?.querySelector<HTMLElement>('h1') ?? main
+  target?.focus()
+}
+
+export function App({ now = () => new Date() }: { now?: () => Date }) {
+  const me = useMe()
+  const { pathname } = useLocation()
+  useHeadingFocus()
+
+  let content
+  if (me.isPending) content = <p className="muted" role="status">Loading</p>
+  else if (me.isError && platformIsDown(me.error)) content = <PlatformDown onRetry={() => void me.refetch()} />
+  else content = <AppRoutes context={{ name: me.data?.display ?? null, now: now() }} />
+
   return (
-    <Routes>
-      <Route element={<AppShell />}>
-        <Route index element={<OverviewPage />} />
-        <Route path="runs/:runId" element={<RunPage />} />
-        <Route path="builder" element={<BuilderPage />} />
-        <Route path="software" element={<SoftwarePage />} />
-        <Route path="approvals" element={<ApprovalsPage />} />
-        <Route path="approvals/:approvalId" element={<ApprovalPage />} />
-        <Route path="teams" element={<TeamsPage />} />
-        <Route path="jira" element={<JiraPage />} />
-        <Route path="settings" element={<SettingsPage />} />
-        <Route path="*" element={<NotFoundPage />} />
-      </Route>
-    </Routes>
+    <>
+      <button type="button" className={styles['skip']} onClick={skipToMain}>
+        Skip to main content
+      </button>
+      <Header person={me.data ?? null} />
+      <main id="main" tabIndex={-1} className={styles['sheet']}>
+        <div className={styles['wrap']}>
+          <ErrorBoundary resetKey={pathname}>{content}</ErrorBoundary>
+        </div>
+      </main>
+      <TabBar />
+      <TestControls />
+    </>
   )
 }

@@ -1,12 +1,10 @@
 import { createContext, useContext, useMemo, useSyncExternalStore, type ReactNode } from 'react'
 import { createApiClient, type ApiClient } from './client'
 import { wallClock, type RunClock } from './clock'
-import type { PortalMode } from './config'
 import { errorWords } from './errors'
 import { authorizedFetch, type Session, type SessionStatus, type SignedFetch } from './session'
 
 export interface ApiEnvironment {
-  readonly mode: PortalMode
   readonly session: Session
   readonly fetch: SignedFetch
   readonly client: ApiClient
@@ -16,7 +14,6 @@ export interface ApiEnvironment {
 const ApiContext = createContext<ApiEnvironment | null>(null)
 
 interface ApiProviderProps {
-  mode: PortalMode
   session: Session
   platformFetch: typeof fetch
   clock?: RunClock
@@ -26,7 +23,6 @@ interface ApiProviderProps {
 }
 
 export function ApiProvider({
-  mode,
   session,
   platformFetch,
   clock = wallClock,
@@ -36,8 +32,8 @@ export function ApiProvider({
 }: ApiProviderProps) {
   const value = useMemo<ApiEnvironment>(() => {
     const fetchImpl = authorizedFetch(session, platformFetch, origin)
-    return { mode, session, fetch: fetchImpl, clock, client: createApiClient(fetchImpl, baseUrl) }
-  }, [mode, session, platformFetch, clock, baseUrl, origin])
+    return { session, fetch: fetchImpl, clock, client: createApiClient(fetchImpl, baseUrl) }
+  }, [session, platformFetch, clock, baseUrl, origin])
   return <ApiContext.Provider value={value}>{children}</ApiContext.Provider>
 }
 
@@ -57,10 +53,6 @@ export function useApiFetch(): SignedFetch {
 
 export function useRunClock(): RunClock {
   return useEnvironment().clock
-}
-
-export function usePortalMode(): PortalMode {
-  return useEnvironment().mode
 }
 
 export function useSession(): Session {

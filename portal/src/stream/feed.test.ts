@@ -1,7 +1,7 @@
 import failure from '@contracts/fixtures/runs/failure.json'
 import success from '@contracts/fixtures/runs/success.json'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { runId } from '../run/brand'
+import { runId } from './brand'
 import { runFeed, type Connection, type FeedClock, type FeedItem, type FeedOptions, type FetchLike } from './feed'
 
 const SUCCESS = runId('run_01JB8')

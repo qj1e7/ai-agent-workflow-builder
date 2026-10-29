@@ -29,7 +29,7 @@ export function SignInGate({ children }: { children: ReactNode }) {
     case 'signed-out':
       return (
         <SignInPage session={session} title={SIGNED_OUT_TITLE}>
-          Sign in to see the runs and approvals.
+          Sign in to use AI Workflow Builder.
         </SignInPage>
       )
     case 'failed':

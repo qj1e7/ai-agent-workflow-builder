@@ -1,0 +1,58 @@
+.button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--r-ctl);
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-press) ease,
+    transform var(--dur-press) var(--ease-out);
+}
+
+.button:active {
+  transform: scale(0.96);
+}
+
+.button[aria-current='page'] {
+  background: var(--active);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .button:hover {
+    background: var(--active);
+  }
+}
+
+@media (pointer: coarse) {
+  .button {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 900px) {
+  .label {
+    display: none;
+  }
+}

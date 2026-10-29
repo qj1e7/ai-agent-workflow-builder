@@ -1,11 +1,14 @@
 /// <reference types="node" />
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import indexHtml from '../../index.html?raw'
 import { agentIdentity, KNOWN_AGENT_IDS } from './agents'
 import { personTone } from './personTone'
 
 // Vitest blanks a CSS import, even with ?raw.
+const srcDir = fileURLToPath(new URL('..', import.meta.url))
 const tokensCss = readFileSync(new URL('./tokens.css', import.meta.url), 'utf8')
 
 type Tokens = ReadonlyMap<string, string>
@@ -41,10 +44,8 @@ function rulesAtTopLevel(css: string): { selector: string; body: string }[] {
 const stripped = tokensCss.replace(/\/\*[\s\S]*?\*\//g, '')
 const rules = rulesAtTopLevel(stripped)
 const lightRules = rules.filter((rule) => rule.selector === ':root')
-const darkRules = rules.filter((rule) => rule.selector === ":root[data-theme='dark']")
+const darkRules = rules.filter((rule) => /\[data-theme|prefers-color-scheme/.test(rule.selector))
 const light: Tokens = new Map(lightRules.flatMap((rule) => declarations(rule.body)))
-const darkOverrides: Tokens = new Map(darkRules.flatMap((rule) => declarations(rule.body)))
-const dark: Tokens = new Map([...light, ...darkOverrides])
 
 function value(tokens: Tokens, name: string): string {
   const raw = tokens.get(name)
@@ -73,6 +74,16 @@ function contrast(tokens: Tokens, foreground: string, background: string): numbe
 
 const TEXT_ON: readonly (readonly [text: string, background: string])[] = [
   ['ink', 'bg'],
+  ['ink', 'frame'],
+  ['muted', 'frame'],
+  ['link', 'surface'],
+  ['link', 'frame'],
+  ['accent-ink', 'accent-soft'],
+  ['info-ink', 'info-bg'],
+  ['mock-ink', 'mock-bg'],
+  ['mock-dim', 'mock-bg'],
+  ['mock-on-ink', 'mock-on'],
+  ['on-ink', 'primary'],
   ['ink', 'surface'],
   ['ink', 'hair'],
   ['muted', 'bg'],
@@ -106,47 +117,59 @@ const TEXT_ON: readonly (readonly [text: string, background: string])[] = [
   ['face-ink', 'lead-tint'],
   ['face-ink', 'checker-tint'],
   ['face-ink', 'trouble-tint'],
-  ['chip-ink', 'chip-bg'],
 ]
 
 const TEXT_RATIO = 4.5
 const RING_RATIO = 3
 
-describe.each([
-  ['light', light],
-  ['dark', dark],
-] as const)('the %s tokens', (_theme, tokens) => {
+describe('the tokens', () => {
   it.each(TEXT_ON)('--%s on --%s is at least 4.5:1', (text, background) => {
-    expect(contrast(tokens, text, background)).toBeGreaterThanOrEqual(TEXT_RATIO)
+    expect(contrast(light, text, background)).toBeGreaterThanOrEqual(TEXT_RATIO)
   })
 
-  it.each([['bg'], ['surface']])('the focus ring is at least 3:1 against --%s', (background) => {
-    expect(contrast(tokens, 'focus', background)).toBeGreaterThanOrEqual(RING_RATIO)
+  it.each([['bg'], ['surface'], ['frame']])('the focus ring is at least 3:1 against --%s', (background) => {
+    expect(contrast(light, 'focus', background)).toBeGreaterThanOrEqual(RING_RATIO)
   })
 })
 
 describe('tokens.css', () => {
-  it('has one light block and one dark block', () => {
+  it('has one :root block and no dark block', () => {
     expect(lightRules.length).toBe(1)
-    expect(darkRules.length).toBe(1)
+    expect(darkRules).toEqual([])
+    expect(tokensCss).not.toMatch(/data-theme|prefers-color-scheme: dark/)
   })
 
-  it('overrides in the dark block only what the light block declares', () => {
-    const orphans = [...darkOverrides.keys()].filter((name) => !light.has(name))
-    expect(orphans).toEqual([])
+  it('matches the single theme-color meta in index.html to the page background', () => {
+    expect(/<meta name="theme-color" content="(#[0-9a-fA-F]{6})"/.exec(indexHtml)?.[1]?.toLowerCase()).toBe(value(light, 'frame'))
+    expect(indexHtml.match(/name="theme-color"/g)).toHaveLength(1)
+    expect(indexHtml).toContain('<meta name="color-scheme" content="light" />')
+    expect(indexHtml).not.toContain('theme-boot')
   })
 
-  it('keeps the status colours and the page colours different between the themes', () => {
-    for (const name of ['bg', 'surface', 'ink', 'on-ink', 'amber', 'red', 'green', 'lead', 'focus']) {
-      expect(value(dark, name), `--${name}`).not.toBe(value(light, name))
+  it('defines every var(--x) that the stylesheets use', () => {
+    const undefinedNames = new Set<string>()
+    for (const file of readdirSync(srcDir, { recursive: true, encoding: 'utf8' })) {
+      if (!file.endsWith('.css')) continue
+      const css = readFileSync(path.join(srcDir, file), 'utf8')
+      for (const match of css.matchAll(/var\(--([a-z0-9-]+)/g)) {
+        const name = match[1] ?? ''
+        if (!light.has(name)) undefinedNames.add(`--${name} in ${file}`)
+      }
     }
+    expect([...undefinedNames]).toEqual([])
   })
 
-  it('matches the theme-color metas in index.html to the page background of each theme', () => {
-    const meta = (scheme: string) =>
-      new RegExp(`<meta name="theme-color" media="\\(prefers-color-scheme: ${scheme}\\)" content="(#[0-9a-fA-F]{6})"`).exec(indexHtml)?.[1]
-    expect(meta('light')?.toLowerCase()).toBe(value(light, 'bg'))
-    expect(meta('dark')?.toLowerCase()).toBe(value(dark, 'bg'))
+  it('defines every var(--x) that the TypeScript sources hand to a style', () => {
+    const undefinedNames = new Set<string>()
+    for (const file of readdirSync(srcDir, { recursive: true, encoding: 'utf8' })) {
+      if (!/\.tsx?$/.test(file) || file.endsWith('.test.ts') || file.endsWith('.test.tsx')) continue
+      const code = readFileSync(path.join(srcDir, file), 'utf8')
+      for (const match of code.matchAll(/var\(--([a-z0-9-]+)/g)) {
+        const name = match[1] ?? ''
+        if (!light.has(name)) undefinedNames.add(`--${name} in ${file}`)
+      }
+    }
+    expect([...undefinedNames]).toEqual([])
   })
 
   it('declares every token the agent faces and the initials draw from', () => {

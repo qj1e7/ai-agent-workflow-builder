@@ -1,31 +1,46 @@
-/* Light values live in this block. The dark block at the end overrides only the colours that change with the theme. */
+/* Values come from the prototype in docs/design/portal-routines/prototype.html. Light only, on purpose. */
 :root {
-  --bg: #f4f6f9;
+  color-scheme: light;
+  --frame: #eef1f4;
+  --bg: #ffffff;
   --surface: #ffffff;
-  --ink: #16233a;
-  --on-ink: #f4f6f9;
-  --muted: #55657d;
-  --rail: #cbd3de;
-  --hair: #dce2ea;
-  --hover: rgba(255, 255, 255, 0.55);
-  --shadow: 0 1px 2px rgba(22, 35, 58, 0.06), 0 6px 18px rgba(22, 35, 58, 0.08);
+  --sunk: #f3f5f7;
+  --active: #e7ebef;
+  --ink: #121417;
+  --on-ink: #ffffff;
+  --primary: #121417;
+  --primary-hover: #2e3238;
+  --muted: #4d535b;
+  --rail: #c5cbd2;
+  --edge: #7d858e;  /* edges a person must see, such as form fields: 3:1 or more on white and grey */
+  --hair: #e1e5e9;
+  --rule: #eaedf0;
+  --link: #1b6c80;
+  --accent: #1b6c80;
+  --accent-soft: #e2f0f3;
+  --accent-ink: #0f4a59;
+  --nav-mark: #1b6c80;
+  --brand: #02a7e1; /* NCS blue, for the logo only */
+  --info-bg: #e9f3f5;
+  --info-ink: #0f4a59;
+  --float: 0 1px 2px rgba(18, 20, 23, 0.06), 0 12px 32px rgba(18, 20, 23, 0.14);
   --focus: #2f6bff;
-
   --amber: #e89a0c;
   --amber-ink: #7e4a00;
-  --amber-soft: #fff4da;
-  --red: #c62f2f;
+  --amber-soft: #fff6e0;
+  --amber-line: #efd08c;
+  --red: #c4242a;
   --red-ink: #a51f1f;
-  --red-soft: #fdecec;
-  --green: #23854a;
+  --red-soft: #fdeeed;
+  --red-line: #f2c4c1;
+  --green: #1d7a42;
   --green-ink: #1b6b3b;
-  --green-soft: #e4f4ea;
+  --green-soft: #e6f4eb;
+  --green-line: #b2dbbf;
   --on-status: #ffffff;
-
-  /* An agent's hue draws its accessory, its ring and its name. Its tint is the head and stays light in both themes. */
   --lead: #3e5bd8;
   --lead-tint: #dfe5ff;
-  --checker: #0b7d76;
+  --checker: #0a7068;
   --checker-tint: #d3f0ec;
   --trouble: #7a4bd6;
   --trouble-tint: #ece3ff;
@@ -33,13 +48,12 @@
   --agent-1-tint: #fbe3ee;
   --agent-2: #1f6f9f;
   --agent-2-tint: #ddeffb;
-  --agent-3: #5c7a12;
+  --agent-3: #526d10;
   --agent-3-tint: #ebf2d3;
   --agent-4: #b2520a;
   --agent-4-tint: #ffe7d3;
   --face-ink: #16233a;
   --face-lens: rgba(255, 255, 255, 0.55);
-
   --person-1-bg: #ffe0cc;
   --person-1-ink: #7a3410;
   --person-2-bg: #d7e3ff;
@@ -48,39 +62,56 @@
   --person-3-ink: #1d5a33;
   --person-4-bg: #f9dde8;
   --person-4-ink: #7a1f45;
+  --mock-bg: #2a2140;
+  --mock-ink: #f3efff;
+  --mock-dim: #b9addb;
+  --mock-on: #f3efff;
+  --mock-on-ink: #2a2140;
+  --scrim: rgba(15, 20, 28, 0.4);
 
-  --chip-bg: var(--checker-tint);
-  --chip-ink: #0a4f4a;
+  /* Radius is tight and chosen once: cards 8, controls and wells 6, the sheet 16. */
+  --r-card: 8px;
+  --r-ctl: 6px;
+  --r-well: 6px;
+  --r-sheet: 16px;
 
-  /* Names the screens already use. Each points at one token above, so the dark block never repeats it. */
-  --mist: var(--bg);
-  --line: var(--rail);
-  --line-soft: var(--hair);
-  --wait: var(--amber-ink);
-  --wait-line: var(--amber);
-  --wait-tint: var(--amber-soft);
-  --fail: var(--red-ink);
-  --fail-line: var(--red);
-  --fail-tint: var(--red-soft);
-  --done: var(--green-ink);
-  --done-line: var(--green);
-  --done-tint: var(--green-soft);
-  --lead-line: var(--lead);
-  --safety: var(--ink);
-  --paper-shadow: var(--shadow);
-  --floor: var(--hair);
+  /* One stacking scale; nothing uses a z-index outside it. */
+  --z-raised: 1;
+  --z-nav: 20;
+  --z-safe-area: 30;
+  --z-mock: 35;
+  --z-scrim: 40;
+  --z-overlay: 41;
+  --z-toast: 45;
 
   --font: 'Atkinson Hyperlegible Next', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* Emil Kowalski's curves: a strong ease-out for anything entering or answering a press, ease-in-out for things moving on screen. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-move: var(--ease-in-out);
+  /* Motion durations. Every animation and transition uses one of these. */
+  --dur-press: 120ms;   /* a control answers a press, hover or focus */
+  --dur-small: 200ms;   /* something small appears, moves or changes */
+  --dur-panel: 260ms;   /* a dialog, drawer or section opens */
+  --dur-attn: 380ms;    /* something needs a look: a new error, a request waiting */
+  --dur-success: 560ms; /* a one-off positive reaction, never longer than 600ms */
+  --stagger: 40ms;      /* gap between cards arriving on a new screen */
+  --move: var(--dur-panel); /* the run line travelling to the next step */
+  /* Short names for prototype tokens, used by the CSS modules. */
+  --mist: var(--sunk);
+  --line: var(--rail);
+  --fail: var(--red-ink);
+  --fail-line: var(--red-line);
+  --fail-tint: var(--red-soft);
+  --radius-button: var(--r-ctl);
 
-  --text-12: 0.75rem;
   --text-14: 0.875rem;
   --text-16: 1rem;
   --text-18: 1.125rem;
   --text-22: 1.375rem;
   --text-28: 1.75rem;
-  --text-40: 2.5rem;
 
-  --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
@@ -89,62 +120,11 @@
   --space-7: 48px;
   --space-8: 64px;
 
-  --radius-pill: 999px;
-  --radius-button: 10px;
-  --radius-object: 10px;
-  --radius-panel: 14px;
-
-  --ease-move: cubic-bezier(0.65, 0, 0.35, 1);
-  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --duration-fade: 180ms;
-  --duration-move: 800ms;
-
-  --header-height: 56px;
-  --tabbar-height: 56px;
-  --page-max: 1440px;
   --gutter: var(--space-6);
-
-  --z-header: 20;
-  --z-glow: 24;
-  --z-tour: 25;
-  --z-menu: 30;
-  --z-skip: 40;
 }
 
 @media (max-width: 759px) {
   :root {
     --gutter: var(--space-4);
   }
-}
-
-:root[data-theme='dark'] {
-  --bg: #0f1828;
-  --surface: #182439;
-  --ink: #e6edf7;
-  --on-ink: #0f1828;
-  --muted: #a6b4c8;
-  --rail: #34465f;
-  --hair: #26354c;
-  --hover: rgba(255, 255, 255, 0.07);
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 22px rgba(0, 0, 0, 0.35);
-  --focus: #7fa6ff;
-
-  --amber: #f2b23a;
-  --amber-ink: #ffd58a;
-  --amber-soft: #33280f;
-  --red: #ff7d7d;
-  --red-ink: #ffa3a3;
-  --red-soft: #3a1c22;
-  --green: #5ccb8a;
-  --green-ink: #8be0ae;
-  --green-soft: #14301f;
-  --on-status: #0f1828;
-
-  --lead: #8fa4ff;
-  --checker: #4fc9bf;
-  --trouble: #b79bff;
-  --agent-1: #ff8fc2;
-  --agent-2: #6cc0f0;
-  --agent-3: #b5d94c;
-  --agent-4: #ffa05c;
 }
