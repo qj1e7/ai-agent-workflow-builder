@@ -374,6 +374,38 @@ LEADS_IN: Final = frozenset(
     }
 )
 FIRST_WORDS: Final = 5
+WORD: Final = re.compile(r"[a-z0-9][a-z0-9'-]*")
+CONTROL, FORMAT, SURROGATE = "Cc", "Cf", "Cs"
+
+
+def _place(name: str, case_sensitive: bool = False) -> tuple[str, re.Pattern[str]]:
+    flags = re.NOFLAG if case_sensitive else re.IGNORECASE
+    return name, re.compile(rf"(?<!\w){re.escape(name)}(?!\w)", flags)
+
+
+PLACES_WITH_NO_TOOL: Final = (
+    _place("Teams", case_sensitive=True),
+    *(
+        _place(name)
+        for name in (
+            "Confluence",
+            "Slack",
+            "Outlook",
+            "SharePoint",
+            "OneDrive",
+            "Excel",
+            "GitLab",
+            "Bitbucket",
+            "Entra",
+            "Active Directory",
+            "Azure AD",
+            "ServiceNow",
+            "email",
+            "e-mail",
+        )
+    ),
+)
+
 WATCHLIST_WORDS: Final = frozenset(
     {
         "version",
@@ -394,37 +426,6 @@ WATCHLIST_WORDS: Final = frozenset(
         "vulnerabilities",
         "vulnerable",
     }
-)
-WORD: Final = re.compile(r"[a-z0-9][a-z0-9'-]*")
-HIDDEN: Final = frozenset({"Cc", "Cf", "Cs"})
-
-
-def _place(name: str, flags: re.RegexFlag = re.IGNORECASE) -> tuple[str, re.Pattern[str]]:
-    return name, re.compile(rf"(?<!\w){re.escape(name)}(?!\w)", flags)
-
-
-PLACES_WITH_NO_TOOL: Final = (
-    # Only with a capital: "the support teams" is not Microsoft Teams.
-    _place("Teams", re.NOFLAG),
-    *(
-        _place(name)
-        for name in (
-            "Confluence",
-            "Slack",
-            "Outlook",
-            "SharePoint",
-            "OneDrive",
-            "Excel",
-            "GitLab",
-            "Bitbucket",
-            "Entra",
-            "Active Directory",
-            "Azure AD",
-            "ServiceNow",
-            "email",
-            "e-mail",
-        )
-    ),
 )
 
 UNDERSTAND_SYSTEM: Final = (
@@ -494,15 +495,14 @@ class UnderstandAnswer(BaseModel):
     )
 
 
-def _clean(text: str | None) -> str:
-    """The text without control characters, zero-width and other format characters, or lone
-    surrogates, and with its whitespace collapsed to single spaces."""
-    kept = (c for c in text or "" if c.isspace() or unicodedata.category(c) not in HIDDEN)
+def _visible_words(text: str | None) -> str:
+    hidden = (CONTROL, FORMAT, SURROGATE)
+    kept = (c for c in text or "" if c.isspace() or unicodedata.category(c) not in hidden)
     return " ".join("".join(kept).split())
 
 
 def _plain(text: str | None, limit: int) -> str:
-    flat = _clean(text)
+    flat = _visible_words(text)
     return flat if len(flat) <= limit else flat[: limit - 1].rstrip() + "…"
 
 
@@ -518,11 +518,11 @@ def _no_tool_action(text: str) -> bool:
 
 def why_no_tool(kind: RowKind, text: str) -> str | None:
     """Why no tool can do this part, from its words alone: it names a place we have no tool for,
-    or one of its first words is an action no tool takes. None when the words name neither, and
-    then the model's state stands."""
+    or one of its first words is an action no tool takes. None for a schedule part, and when the
+    words name neither."""
     if kind == "schedule":
         return None
-    text = _clean(text)
+    text = _visible_words(text)
     place = next((name for name, pattern in PLACES_WITH_NO_TOOL if pattern.search(text)), None)
     if place is not None:
         return NO_PLACE.format(place)
@@ -560,7 +560,7 @@ def _rows(answers: list[RowAnswer]) -> list[UnderstoodRow]:
 
 
 def _as_the_task_wrote_it(task: str, said: str | None) -> str | None:
-    wanted = _clean(said).strip("\"'“”‘’")
+    wanted = _visible_words(said).strip("\"'“”‘’")
     if not wanted:
         return None
     stems = (wanted.removesuffix(end) for end in ("es", "s", "y")) if len(wanted) > 3 else ()
