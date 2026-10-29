@@ -65,6 +65,7 @@ VALUES = {"GitHub repository": "langchain-ai/langgraph", "Jira project": "MOCK"}
 WORK = N8nExecutionId("41")
 DRAFT = {"step": 2, "content": {"intent": "Nudge owners of stale tickets", "days": 14}}
 DRAFT_PATH = "/api/v1/drafts/{draft_id}"
+OPERATORS_ONLY = {"detail": "Only an Operator can change workflows."}
 
 
 def test_pausing_keeps_who_paused_and_when_and_a_second_pause_changes_nothing():
@@ -481,7 +482,7 @@ async def test_deleting_while_a_run_waits_for_a_yes_leaves_the_run_decidable(lab
 async def test_an_approver_only_caller_gets_403(lab: Lab, action: str):
     use_case_id = await agent_workflow(lab)
     r = await lab.move("bob", action, use_case_id)
-    assert r.status_code == 403
+    assert (r.status_code, r.json()) == (403, OPERATORS_ONLY)
     assert await lab.paused_columns(use_case_id) == (None, None, None, None)
 
 
@@ -704,5 +705,6 @@ async def test_an_operator_keeps_at_most_twenty_drafts(lab: Lab):
 )
 async def test_drafts_are_for_operators_only(lab: Lab, method: str, path: str, template: str):
     body = DRAFT if method == "PUT" else None
-    assert (await lab.call("bob", method, path, body, template=template)).status_code == 403
+    refused = await lab.call("bob", method, path, body, template=template)
+    assert (refused.status_code, refused.json()) == (403, OPERATORS_ONLY)
     assert (await lab.call(None, method, path, body, template=template)).status_code == 401

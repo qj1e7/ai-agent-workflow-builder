@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
 from platform_api.auth import OPERATORS_ONLY
-from platform_api.builder.http import CurrentBuilder, Operator
+from platform_api.builder.http import CurrentBuilder, WorkflowOperator
 from platform_api.builder.lifecycle import TooLate
 from platform_api.builder.models import UseCaseDeleted, UseCaseView
 from platform_api.builder.service import WatchlistStays
@@ -22,7 +22,7 @@ WATCHLIST_STAYS = "The Software watchlist can't be deleted. Remove its software 
     responses={**OPERATORS_ONLY, 404: NOT_FOUND},
 )
 async def pause_use_case(
-    use_case_id: str, principal: Operator, builder: CurrentBuilder
+    use_case_id: str, principal: WorkflowOperator, builder: CurrentBuilder
 ) -> UseCaseView:
     view = await builder.pause_use_case(use_case_id, principal)
     if view is None:
@@ -37,7 +37,7 @@ async def pause_use_case(
     responses={**OPERATORS_ONLY, 404: NOT_FOUND},
 )
 async def resume_use_case(
-    use_case_id: str, principal: Operator, builder: CurrentBuilder
+    use_case_id: str, principal: WorkflowOperator, builder: CurrentBuilder
 ) -> UseCaseView:
     view = await builder.resume_use_case(use_case_id)
     if view is None:
@@ -57,7 +57,7 @@ async def resume_use_case(
     },
 )
 async def delete_use_case(
-    use_case_id: str, principal: Operator, builder: CurrentBuilder
+    use_case_id: str, principal: WorkflowOperator, builder: CurrentBuilder
 ) -> UseCaseDeleted:
     match await builder.delete_use_case(use_case_id, principal):
         case UseCaseDeleted() as deleted:
@@ -79,7 +79,7 @@ async def delete_use_case(
     },
 )
 async def restore_use_case(
-    use_case_id: str, principal: Operator, builder: CurrentBuilder
+    use_case_id: str, principal: WorkflowOperator, builder: CurrentBuilder
 ) -> UseCaseView:
     match await builder.restore_use_case(use_case_id):
         case TooLate():

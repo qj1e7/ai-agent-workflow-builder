@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Path, Response
 
 from platform_api.auth import OPERATORS_ONLY
 from platform_api.builder.drafts import TooManyDrafts
-from platform_api.builder.http import CurrentBuilder, Operator
+from platform_api.builder.http import CurrentBuilder, WorkflowOperator
 from platform_api.builder.models import DRAFT_ID_PATTERN, DraftIn, DraftList, DraftView
 from platform_api.wire import error_response
 
@@ -27,7 +27,7 @@ NO_SUCH = "No such draft"
     responses={**OPERATORS_ONLY, 409: error_response("The Operator has the most drafts kept")},
 )
 async def save_draft(
-    draft_id: DraftId, body: DraftIn, principal: Operator, builder: CurrentBuilder
+    draft_id: DraftId, body: DraftIn, principal: WorkflowOperator, builder: CurrentBuilder
 ) -> DraftView:
     match await builder.save_draft(principal, draft_id, body):
         case TooManyDrafts(limit):
@@ -43,7 +43,7 @@ async def save_draft(
     description="The signed-in Operator's own drafts. Nobody else's are listed.",
     responses=OPERATORS_ONLY,
 )
-async def list_drafts(principal: Operator, builder: CurrentBuilder) -> DraftList:
+async def list_drafts(principal: WorkflowOperator, builder: CurrentBuilder) -> DraftList:
     return await builder.list_drafts(principal)
 
 
@@ -53,7 +53,9 @@ async def list_drafts(principal: Operator, builder: CurrentBuilder) -> DraftList
     response_class=Response,
     responses={**OPERATORS_ONLY, 404: error_response(NO_SUCH)},
 )
-async def delete_draft(draft_id: DraftId, principal: Operator, builder: CurrentBuilder) -> Response:
+async def delete_draft(
+    draft_id: DraftId, principal: WorkflowOperator, builder: CurrentBuilder
+) -> Response:
     if not await builder.delete_draft(principal, draft_id):
         raise HTTPException(404, NO_SUCH)
     return Response(status_code=204)
