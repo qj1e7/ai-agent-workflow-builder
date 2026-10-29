@@ -1,5 +1,6 @@
 import { useState, useSyncExternalStore } from 'react'
 import { useApiFetch } from '../../api/context'
+import { motionAllowed } from '../../ui/motion'
 import { runId as asRunId } from '../../stream/brand'
 import { runFeed, type Connection, type FeedClock, type FetchLike, type Origin } from '../../stream/feed'
 import type { RunEvent } from '../../stream/parse'
@@ -160,12 +161,6 @@ const browserClock: FeedClock = {
     return () => clearTimeout(timer)
   },
   epochNow: () => Date.now(),
-}
-
-const REDUCED_MOTION = '(prefers-reduced-motion: reduce)'
-
-export function motionAllowed(): boolean {
-  return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && !window.matchMedia(REDUCED_MOTION).matches
 }
 
 export function useLiveRun(runId: string): { live: LiveRun; restart: () => void } {

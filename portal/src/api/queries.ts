@@ -4,6 +4,7 @@ import { useApiClient, useSession, useCacheScope } from './context'
 import type {
   AddSoftware,
   AddressDecisionIn,
+  ApprovalView,
   CardDefinition,
   ConnectIn,
   CreateAgentUseCase,
@@ -38,6 +39,7 @@ export const keys = {
 interface QueryOptions {
   /** true polls every POLL_MS; a number polls that often. */
   poll?: boolean | number
+  enabled?: boolean
 }
 
 function pollEvery(options: QueryOptions | undefined): number | false {
@@ -74,6 +76,7 @@ export function useRuns(options?: QueryOptions) {
     queryKey: keys.runs(user),
     queryFn: async () => unwrap(await client.GET('/api/v1/runs')).runs,
     refetchInterval: pollEvery(options),
+    enabled: options?.enabled ?? true,
   })
 }
 
@@ -210,14 +213,19 @@ export function useStartRun() {
   })
 }
 
-export function useApproval(approvalId: string, options?: QueryOptions & { enabled?: boolean }) {
+/** Every step decided: the approval never changes again, so polling it stops. */
+function decided(approval: ApprovalView | undefined): boolean {
+  return approval !== undefined && approval.steps.every((step) => step.status === 'approved' || step.status === 'declined')
+}
+
+export function useApproval(approvalId: string, options?: QueryOptions) {
   const client = useApiClient()
   const user = useCacheScope()
   return useQuery({
     queryKey: keys.approval(user, approvalId),
     queryFn: async () =>
       unwrap(await client.GET('/api/v1/approvals/{approval_id}', { params: { path: { approval_id: approvalId } } })),
-    refetchInterval: pollEvery(options),
+    refetchInterval: (query) => (decided(query.state.data) ? false : pollEvery(options)),
     enabled: options?.enabled ?? true,
   })
 }
@@ -231,7 +239,7 @@ export function useApprovals(approvalIds: readonly string[], options?: QueryOpti
       queryKey: keys.approval(user, approvalId),
       queryFn: async () =>
         unwrap(await client.GET('/api/v1/approvals/{approval_id}', { params: { path: { approval_id: approvalId } } })),
-      refetchInterval: pollEvery(options),
+      refetchInterval: (query: { state: { data: ApprovalView | undefined } }) => (decided(query.state.data) ? false : pollEvery(options)),
     })),
   })
 }
@@ -288,6 +296,7 @@ export function useTeamsMessages(options?: QueryOptions) {
     queryKey: keys.teamsMessages(user),
     queryFn: async () => unwrap(await client.GET('/api/v1/teams-stub/messages')).messages,
     refetchInterval: pollEvery(options),
+    enabled: options?.enabled ?? true,
   })
 }
 
