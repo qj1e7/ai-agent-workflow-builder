@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx
+import psycopg
 import pytest
 from fastapi import FastAPI
 
@@ -468,3 +469,20 @@ async def test_a_re_added_person_signs_in_afresh(client: httpx.AsyncClient, peop
     other = (await add(client, ALICE, "dave.t@example.test", "Dave T", operator=True)).json()
     assert other["id"] != dave["id"]
     assert await people.resolve(ExternalIdentity("oid-dave-2", None, None)) is None
+
+
+async def test_two_first_sign_ins_at_the_same_moment_both_find_the_person(
+    postgres: PostgresUrls, client: httpx.AsyncClient, people: People
+):
+    dave = (await add(client, ALICE, "dave@example.test", "Dave", operator=True)).json()
+    identity = ExternalIdentity("oid-dave", "dave@example.test", "Dave")
+    async with await psycopg.AsyncConnection.connect(postgres.owner) as holder:
+        await holder.execute(
+            "SELECT 1 FROM orchestration.people WHERE id = %s FOR UPDATE", (dave["id"],)
+        )
+        first = asyncio.create_task(people.resolve(identity))
+        second = asyncio.create_task(people.resolve(identity))
+        await asyncio.sleep(0.5)
+        await holder.rollback()
+    resolved = await asyncio.gather(first, second)
+    assert [p.user_id if p is not None else None for p in resolved] == [dave["id"], dave["id"]]

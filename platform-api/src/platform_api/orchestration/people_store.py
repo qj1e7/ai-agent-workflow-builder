@@ -149,7 +149,9 @@ class PeopleStore:
                 ).fetchone()
         except psycopg.errors.UniqueViolation:
             return await self.by_oid(uow, identity.subject)
-        return _person(row) if row is not None else None
+        if row is None:
+            return await self.by_oid(uow, identity.subject)
+        return _person(row)
 
     async def mark_signed_in(self, uow: UnitOfWork, person_id: UserId) -> None:
         await uow.conn.execute(
