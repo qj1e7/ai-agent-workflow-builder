@@ -95,6 +95,10 @@ The person who last saved a watchlist's schedule. Every scheduled check counts a
 One execution of a use case, from trigger to result.
 _Avoid_: Job, execution (n8n uses "execution" for its own internal runs)
 
+**Test run**:
+A run an Operator starts by hand to try a workflow. It asks for a yes and writes like any other run.
+_Avoid_: Dry run (nothing is skipped)
+
 **Planner**:
 The agent that reads a task, says what it understood, and decides which saved agents to bring in, or that a new agent card is needed.
 _Avoid_: Room lead (the old name), orchestrator
@@ -141,6 +145,20 @@ _Avoid_: Log line, n8n event
 
 **AI troubleshooter**:
 The agent that explains why a run failed and helps the Operator fix it.
+
+### Setting up
+
+**Connection**:
+The platform's account in another system, such as GitHub, Jira or Teams, with its key. Agents read through it. Only the write gateway holds a key that writes.
+_Avoid_: Integration, credential
+
+**Practice copy**:
+A stand-in for Jira or Teams that the platform runs itself, so demos and tests write without touching a real system.
+_Avoid_: Mock (in the app), sandbox
+
+**Confirmation**:
+A second person's yes to a setup change before it takes effect, such as making someone an Approver or using a new AI model address. Any Approver may confirm, except the person who asked and the person it is about.
+_Avoid_: Approval (that is for a run's proposal), sign-off
 
 ### Roles
 
