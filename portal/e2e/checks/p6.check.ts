@@ -15,7 +15,7 @@ const EVID = process.env['EVID'] ?? '/tmp/swarm-p6'
 const TARGET = process.env['TARGET'] ?? 'head'
 const SAMPLE = Number(process.env['SAMPLE'] ?? '0')
 const BASE_URL = process.env['BASE_URL'] ?? 'http://localhost:8080'
-const UNDO_WINDOW_MS = 8_000
+const UNDO_STAYS_MS = 10_000
 
 interface Row {
   id: string
@@ -174,36 +174,58 @@ test('@lane2 a badly formed GitHub reference says what is wrong and saves nothin
   })
 })
 
-test('@lane3 a removed row comes back with its history after Undo, and a removal left alone goes through', async ({ browser }) => {
+test('@lane3 Remove reaches the platform at once, and Undo, which has no time limit, brings the same row back with its history', async ({ browser }) => {
   await withBackend(async (backend) => {
     const runId = await backend.startCheck('alice', [LANGGRAPH, REDIS])
     await backend.waitForState(runId, ['awaiting_approval'])
     const before = await rowNamed(backend, 'LangGraph')
+    const redis = await rowNamed(backend, 'Redis')
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
     const watch = watchPage(page)
-    const deletes: string[] = []
+    const changes: string[] = []
     page.on('request', (request) => {
-      if (request.method() === 'DELETE' && request.url().includes('/watchlist/software/')) deletes.push(request.url())
+      const { pathname } = new URL(request.url())
+      if (/\/watchlist\/software\/[^/]+(\/restore)?$/.test(pathname)) changes.push(`${request.method()} ${pathname}`)
     })
     await openSoftware(page)
     await rowOf(page, 'LangGraph').getByRole('button', { name: /^Remove/ }).click()
     await expect(rowOf(page, 'LangGraph')).toHaveCount(0)
     await expect(page.getByRole('status').filter({ hasText: 'Removed LangGraph.' })).toBeVisible()
-    await page.getByRole('button', { name: 'Undo' }).click()
-    await expect(rowOf(page, 'LangGraph')).toBeVisible()
-    await rowOf(page, 'LangGraph').getByRole('button', { name: /^History/ }).click()
-    const history = rowOf(page, 'LangGraph').getByRole('list', { name: 'History of LangGraph' })
+    const undo = page.getByRole('button', { name: 'Undo' })
+    await expect(undo, 'focus moves to Undo').toBeFocused()
+    const removed = (await viewOf(backend)).software.map((r) => r.name)
+    await page.waitForTimeout(UNDO_STAYS_MS)
+    await expect(undo, 'Undo has no time limit').toBeFocused()
+    await page.keyboard.press('Enter')
+    const row = rowOf(page, 'LangGraph')
+    await expect(row).toBeVisible()
+    await expect(page.getByRole('status').filter({ hasText: 'Put LangGraph back on the list.' })).toBeVisible()
+    await expect(row.getByRole('button', { name: /^Remove/ }), 'focus returns to the row').toBeFocused()
+    await expect(row).toContainText('Ticket waiting for a yes')
+    await row.getByRole('button', { name: /^History/ }).click()
+    const history = row.getByRole('list', { name: 'History of LangGraph' })
     await expect(history).toContainText('Checked. The newest version is')
-    await page.waitForTimeout(UNDO_WINDOW_MS + 2_000)
     const kept = await rowNamed(backend, 'LangGraph')
     await shotTo(page, 3, 'p6-undo.png', true)
+
     await rowOf(page, 'Redis').getByRole('button', { name: /^Remove/ }).click()
     await expect(rowOf(page, 'Redis')).toHaveCount(0)
-    await expect.poll(async () => (await viewOf(backend)).software.map((r) => r.name), { timeout: UNDO_WINDOW_MS + 8_000 }).toEqual(['LangGraph'])
-    save(3, 'p6-undo.json', { before, kept, deletesAfterUndo: deletes, historyOnPage: await text(history) })
+    await expect(undo).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(undo, 'Escape dismisses Undo').toHaveCount(0)
+    const after = (await viewOf(backend)).software.map((r) => r.name)
+    save(3, 'p6-undo.json', { before, kept, removed, after, changes, historyOnPage: await text(history) })
+    expect(removed, 'the platform dropped LangGraph before Undo').toEqual(['Redis'])
     expect(kept.id, 'the same row, not a copy').toBe(before.id)
-    expect(deletes, 'only Redis was deleted, after its wait').toHaveLength(1)
+    expect(kept.status, 'its history came back whole').toBe(before.status)
+    expect(kept.newest_version).toBe(before.newest_version)
+    expect(after).toEqual(['LangGraph'])
+    expect(changes).toEqual([
+      `DELETE /api/v1/watchlist/software/${before.id}`,
+      `POST /api/v1/watchlist/software/${before.id}/restore`,
+      `DELETE /api/v1/watchlist/software/${redis.id}`,
+    ])
     assertClean(watch)
     await context.close()
   })
