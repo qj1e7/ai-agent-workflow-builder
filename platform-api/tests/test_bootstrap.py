@@ -163,9 +163,6 @@ def test_old_release_data_stops_bootstrap_before_any_migration_or_n8n_and_delete
 
 
 class FakeN8n:
-    """Like n8n 2.42.6, it refuses to delete a published workflow, and it finishes an unpublish
-    in the background, so the first delete after one still answers 409."""
-
     def __init__(self, existing: list[str]) -> None:
         self.workflows: dict[str, dict[str, Any]] = {
             f"W{n}": {"id": f"W{n}", "name": name, "active": True, "nodes": [], "settings": {}}

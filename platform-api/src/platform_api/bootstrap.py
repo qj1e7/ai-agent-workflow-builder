@@ -175,11 +175,13 @@ def content_hash_without_credential(
 
 
 def unreadable_data(owner_url: str) -> list[str]:
-    """Runs before the migrations, so a refused stack keeps its schema and can go back to the
-    old code. A fresh database has none of these tables yet."""
     with psycopg.connect(owner_url) as conn:
-        runs = _count(conn, "orchestration.runs", "spec -> 'task' ->> 'kind' = %s", OLD_TASK_KIND)
-        versions = _count(conn, "builder.use_case_versions", "template = %s", OLD_TEMPLATE)
+        runs = _count_if_table_exists(
+            conn, "orchestration.runs", "spec -> 'task' ->> 'kind' = %s", OLD_TASK_KIND
+        )
+        versions = _count_if_table_exists(
+            conn, "builder.use_case_versions", "template = %s", OLD_TEMPLATE
+        )
     found: list[str] = []
     if runs:
         found.append(f"orchestration.runs holds {runs} run(s) of the old release check")
@@ -191,7 +193,7 @@ def unreadable_data(owner_url: str) -> list[str]:
     return found
 
 
-def _count(
+def _count_if_table_exists(
     conn: psycopg.Connection[Any], table: LiteralString, where: LiteralString, value: str
 ) -> int:
     exists = conn.execute("SELECT to_regclass(%s) IS NOT NULL", (table,)).fetchone()
