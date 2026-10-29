@@ -225,7 +225,6 @@ test('@lane6 a card opens from its URL and closing returns focus to its tile', a
 })
 
 // Lane 7. Tab stays inside an open card, and Escape closes it.
-// With one focusable element, Tab could never show focus moving inside, so the lane first proves there are more.
 const TAB_STOPS = 'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
 test('@lane7 Tab stays inside an open card and Escape closes it', async ({ browser }) => {
   onlyDev()
