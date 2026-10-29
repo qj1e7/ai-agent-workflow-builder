@@ -1,6 +1,5 @@
 import base64
 import hashlib
-import hmac
 import logging
 from dataclasses import dataclass
 from datetime import datetime
@@ -10,6 +9,7 @@ from urllib.parse import urlsplit
 from cryptography.fernet import Fernet, InvalidToken
 
 from platform_api.db import Database, UnitOfWork
+from platform_api.orchestration import confirmations
 from platform_api.orchestration.agents import (
     AgentRejected,
     AgentUnavailable,
@@ -21,7 +21,7 @@ from platform_api.orchestration.agents import (
     ModelTestPassed,
     ModelTestResult,
 )
-from platform_api.shared import Principal, UserId
+from platform_api.shared import Principal, UserId, new_id
 
 log = logging.getLogger(__name__)
 
@@ -97,6 +97,7 @@ class ModelChange:
     at: datetime
     by: UserId
     summary: str
+    confirmed_by: UserId | None = None
 
 
 @dataclass(frozen=True)
@@ -144,11 +145,19 @@ class PendingChanged:
 
 
 @dataclass(frozen=True)
+class NotAnApprover:
+    message: str = "Only an Approver can confirm an address. Ask an Approver."
+
+
+@dataclass(frozen=True)
 class AddressDecided:
     confirmed: bool
 
 
 type ChecksAnswer[T] = T | AgentUnavailable | AgentRejected
+type AddressAnswer = (
+    AddressDecided | NothingPending | OwnAddress | PendingChanged | NotAnApprover | SettingsOff
+)
 
 
 class ModelChecks(Protocol):
@@ -221,22 +230,24 @@ class ModelStore:
             (host, by, uow.now),
         )
 
-    async def record(self, uow: UnitOfWork, by: UserId, summary: str) -> None:
-        await uow.conn.execute(
-            "INSERT INTO orchestration.model_setting_changes (changed_at, changed_by, summary) "
-            "VALUES (%s, %s, %s)",
-            (uow.now, by, summary),
-        )
-
     async def changes(self, uow: UnitOfWork) -> list[ModelChange]:
-        rows = await (
-            await uow.conn.execute(
-                "SELECT changed_at, changed_by, summary FROM orchestration.model_setting_changes "
-                "ORDER BY id DESC LIMIT %s",
-                (CHANGES_SHOWN,),
-            )
-        ).fetchall()
-        return [ModelChange(r["changed_at"], UserId(r["changed_by"]), r["summary"]) for r in rows]
+        return [
+            ModelChange(c.at, c.changed_by, c.summary, c.confirmed_by)
+            for c in await _history.changes(uow, "model", CHANGES_SHOWN)
+        ]
+
+
+_history = confirmations.ConfirmationStore()
+
+
+def _address_change(stored: StoredModel) -> dict[str, str]:
+    return {
+        "host": host_of(stored.base_url),
+        "base_url": stored.base_url,
+        "model": stored.model,
+        "style": stored.style,
+        "key_hint": stored.key_hint,
+    }
 
 
 class ModelSettings:
@@ -334,18 +345,32 @@ class ModelSettings:
             )
             if known is None and not await self._store.confirmed(uow, host):
                 await self._store.put(uow, "pending", stored)
-                await self._store.record(
+                asked = await _history.ask(
                     uow,
+                    confirmations.Confirmation(
+                        id=confirmations.ConfirmationId(new_id("cfm")),
+                        kind=confirmations.Kind.MODEL_ADDRESS,
+                        about=None,
+                        change=_address_change(stored),
+                        digest=stored.digest,
+                        asked_by=principal.user_id,
+                        asked_at=uow.now,
+                    ),
+                )
+                await _history.record_change(
+                    uow,
+                    "model",
                     principal.user_id,
                     f"{principal.display} asked to use {model} at {host}. "
                     "An Approver must confirm the new address.",
+                    confirmation_id=asked.id,
                 )
                 return Saved(answer, awaiting_confirmation=True)
             before = await self._store.load(uow, "active", lock=True)
             await self._store.put(uow, "active", stored)
             summary = _change_summary(principal.display, before, stored, not use_saved_key)
             if summary is not None:
-                await self._store.record(uow, principal.user_id, summary)
+                await _history.record_change(uow, "model", principal.user_id, summary)
             return Saved(answer, awaiting_confirmation=False)
 
     async def turn_off(self, principal: Principal) -> SettingsOff | None:
@@ -355,26 +380,41 @@ class ModelSettings:
             if await self._store.load(uow, "active", lock=True) is None:
                 return None
             await self._store.remove(uow, "active")
-            await self._store.record(
+            await _history.record_change(
                 uow,
+                "model",
                 principal.user_id,
                 f"{principal.display} turned the AI model off, and the saved key was deleted.",
             )
         return None
 
-    async def decide(
-        self, principal: Principal, confirm: bool, digest: str
-    ) -> AddressDecided | NothingPending | OwnAddress | PendingChanged | SettingsOff:
+    async def decide(self, principal: Principal, confirm: bool, digest: str) -> AddressAnswer:
         if self._box is None:
             return SettingsOff()
         async with self._db.transaction("orchestration") as uow:
+            waiting = await _history.open_one(
+                uow, confirmations.Kind.MODEL_ADDRESS, None, lock=True
+            )
             pending = await self._store.load(uow, "pending", lock=True)
-            if pending is None:
+            if waiting is None or pending is None:
                 return NothingPending()
-            if pending.by == principal.user_id:
-                return OwnAddress()
-            if not hmac.compare_digest(pending.digest, digest):
-                return PendingChanged()
+            decision = (
+                confirmations.Decision.CONFIRMED if confirm else confirmations.Decision.NOT_NOW
+            )
+            decided = confirmations.decide(waiting, principal, decision, digest, uow.now)
+            match decided:
+                case confirmations.DecideRefused(confirmations.DecideRefusal.NOT_AN_APPROVER):
+                    return NotAnApprover()
+                case confirmations.DecideRefused(confirmations.DecideRefusal.DIGEST_CHANGED):
+                    return PendingChanged()
+                case confirmations.DecideRefused(confirmations.DecideRefusal.ALREADY_DECIDED):
+                    return NothingPending()
+                case confirmations.DecideRefused():
+                    return OwnAddress()
+                case _:
+                    pass
+            if not await _history.record_decision(uow, decided):
+                return NothingPending()
             host = host_of(pending.base_url)
             await self._store.remove(uow, "pending")
             if confirm:
@@ -383,7 +423,14 @@ class ModelSettings:
                 summary = f"{principal.display} confirmed {host}. Runs now use {pending.model}."
             else:
                 summary = f"{principal.display} declined {host}, and its key was deleted."
-            await self._store.record(uow, principal.user_id, summary)
+            await _history.record_change(
+                uow,
+                "model",
+                waiting.asked_by,
+                summary,
+                confirmed_by=principal.user_id,
+                confirmation_id=waiting.id,
+            )
             return AddressDecided(confirmed=confirm)
 
     async def _key_for(

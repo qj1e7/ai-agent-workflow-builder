@@ -120,9 +120,7 @@ async def test_the_key_is_stored_sealed_and_never_in_plain_text(db: Database):
     await save(settings)
     async with db.connection("orchestration") as conn:
         rows = await (await conn.execute("SELECT * FROM orchestration.model_setting")).fetchall()
-        log = await (
-            await conn.execute("SELECT * FROM orchestration.model_setting_changes")
-        ).fetchall()
+        log = await (await conn.execute("SELECT * FROM orchestration.settings_changes")).fetchall()
     assert rows
     assert KEY not in str(rows)
     assert KEY not in str(log)

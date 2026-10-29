@@ -190,3 +190,46 @@ def test_migration_0004_renames_the_starter_card_on_saved_agent_use_cases(
         assert card_ids() == [OLD_STARTER_CARD, "crd_mine"]
         upgrade("builder", postgres.owner)
         conn.execute("DELETE FROM builder.use_case_cards")
+
+
+def test_migration_0006_adds_the_people_tables_and_folds_the_model_history_into_them(
+    postgres: PostgresUrls,
+):
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        conn.execute("DELETE FROM orchestration.settings_changes")
+        conn.execute("DELETE FROM orchestration.confirmations")
+        conn.execute("DELETE FROM orchestration.people")
+        conn.execute(
+            "INSERT INTO orchestration.settings_changes (changed_at, area, changed_by, summary) "
+            "VALUES (%s, 'model', 'alice', 'Alice turned on a model.'), "
+            "(%s, 'people', 'deploy', 'The deploy put people on the list.')",
+            (NOW, NOW),
+        )
+
+        def tables() -> list[str]:
+            rows = conn.execute(
+                "SELECT table_name FROM information_schema.tables WHERE table_schema = "
+                "'orchestration' AND table_name IN ('people', 'confirmations', "
+                "'settings_changes', 'model_setting_changes') ORDER BY 1"
+            ).fetchall()
+            return [r[0] for r in rows]
+
+        assert tables() == ["confirmations", "people", "settings_changes"]
+        downgrade("orchestration", postgres.owner, "0005")
+        assert tables() == ["model_setting_changes"]
+        old = conn.execute(
+            "SELECT changed_by, summary FROM orchestration.model_setting_changes"
+        ).fetchall()
+        assert old == [("alice", "Alice turned on a model.")]
+        upgrade("orchestration", postgres.owner)
+        assert tables() == ["confirmations", "people", "settings_changes"]
+        kept = conn.execute(
+            "SELECT area, changed_by, summary FROM orchestration.settings_changes"
+        ).fetchall()
+        assert kept == [("model", "alice", "Alice turned on a model.")]
+        assert conn.execute("SELECT count(*) FROM orchestration.people").fetchone() == (0,)
+
+    with psycopg.connect(postgres.contexts.orchestration) as orchestration:
+        orchestration.execute("SELECT count(*) FROM orchestration.people")
+        orchestration.execute("LOCK TABLE orchestration.people IN SHARE ROW EXCLUSIVE MODE")
+        orchestration.rollback()
