@@ -1,6 +1,9 @@
+import { OPEN_RUN_AGAIN_WORDS } from '../../api/errors'
 import { connectorLabel, refusalLabel, starterName } from '../../api/labels'
+import type { SessionKind } from '../../api/session'
 import type { Refusal, Trigger, WriteActionView } from '../../api/types'
 import { PRODUCT } from '../../shell/product'
+import type { LiveRun } from './liveRun'
 import type { AgentRef, ChatItem, RunModel, Station } from './runModel'
 
 export type NameOf = (id: string) => string
@@ -223,6 +226,43 @@ export function lockWords(whyNot: Refusal | null, party: Party | null): string {
 /** For the Teams message, which knows the platform's refusal but not how the person is tied to the run. */
 export function shortLockWords(whyNot: Refusal | null): string {
   return whyNot === 'own_work' ? 'This run is your own work, so another Approver must decide.' : lockWords(whyNot, null)
+}
+
+export const RUN_MISSING = { heading: 'Run not found', lead: 'There is no run at this address.' } as const
+export const RUN_PROBLEM = { heading: 'We couldn’t load this run', lead: 'Check your connection, or try again in a moment.' } as const
+
+type Connection = LiveRun['connection']
+type ClosedReason = Extract<Connection, { is: 'closed' }>['reason']
+
+export type FeedTrouble =
+  | { readonly kind: 'waiting'; readonly words: string }
+  | { readonly kind: 'stop' | 'retry'; readonly heading: string; readonly lead: string }
+
+function closedTrouble(reason: ClosedReason, signIn: SessionKind): FeedTrouble {
+  switch (reason) {
+    case 'not_found':
+      return { kind: 'stop', ...RUN_MISSING }
+    case 'forbidden':
+      return { kind: 'stop', heading: 'You can’t see this run', lead: 'This account does not have access to it.' }
+    case 'signed_out':
+      return { kind: 'stop', heading: 'You’re signed out', lead: OPEN_RUN_AGAIN_WORDS[signIn] }
+    case 'rejected':
+      return { kind: 'retry', ...RUN_PROBLEM }
+  }
+}
+
+/** What the run page says while its live feed has brought no events yet. Null while it is still connecting. */
+export function feedTroubleOf(connection: Connection, signIn: SessionKind): FeedTrouble | null {
+  switch (connection.is) {
+    case 'reconnecting':
+      return { kind: 'waiting', words: 'Can’t reach the platform yet. Trying again.' }
+    case 'closed':
+      return closedTrouble(connection.reason, signIn)
+    case 'connecting':
+    case 'live':
+    case 'settled':
+      return null
+  }
 }
 
 export const CONFLICT_WORDS = 'Another Approver decided this step first.'

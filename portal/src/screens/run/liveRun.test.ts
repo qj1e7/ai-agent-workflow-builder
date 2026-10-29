@@ -161,6 +161,22 @@ describe('the live run store', () => {
   })
 })
 
+describe('trying again before the first page', () => {
+  it('draws what comes back at once, as a first load does', async () => {
+    const server = fakeServer(success, 0)
+    const time = handClock()
+    const store = createLiveRun('run_01JB8', { fetch: server.fetch, clock: time.clock, paced: () => true })
+    const stop = watch(store)
+    await vi.waitFor(() => expect(server.streams).toHaveLength(1))
+    server.stored = 6
+    store.restart()
+    await vi.waitFor(() => expect(store.getSnapshot().head.seq).toBe(6))
+    expect(store.getSnapshot().shown.seq).toBe(6)
+    expect(store.getSnapshot().loadedUpTo).toBe(6)
+    stop()
+  })
+})
+
 describe('the beat between events', () => {
   it('gives a new step the line’s travel and its landing, and a message a short pause', () => {
     expect(MOVE_MS + SMALL_MS).toBe(460)

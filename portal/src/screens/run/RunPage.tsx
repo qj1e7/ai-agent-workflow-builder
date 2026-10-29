@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { Link, useParams } from 'react-router'
 import { ApiError } from '../../api/client'
+import { useSession } from '../../api/context'
 import { displayName, usePeople } from '../../api/people'
 import { useApproval, useMe, useRun, useTroubleshoot, useUseCase } from '../../api/queries'
 import type { ApprovalView, RunView, UseCaseView, Verdict } from '../../api/types'
@@ -17,7 +18,7 @@ import { useLiveRun, type LiveRun } from './liveRun'
 import { Outcome, Troubleshooting } from './Outcome'
 import { RunLine } from './RunLine'
 import { isFinished, PLANNER_ID, reachOf, stationsOf, type PlanBlock, type RunModel } from './runModel'
-import { headlineOf, lineOf, lockWords, shortTime, speakerName, writeLabel, type NameOf, type Party, type Speaker } from './words'
+import { feedTroubleOf, headlineOf, lineOf, lockWords, RUN_MISSING, RUN_PROBLEM, shortTime, speakerName, writeLabel, type NameOf, type Party, type Speaker } from './words'
 import styles from './RunPage.module.css'
 
 const LANDS_ON_DECISION = new Set(['awaiting_approval', 'failed', 'rejected'])
@@ -36,10 +37,10 @@ function Loading() {
   )
 }
 
-function Missing({ what }: { what: 'run' | 'approval' }) {
+function Stopped({ heading, lead }: { heading: string; lead: string }) {
   return (
     <>
-      <PageHead heading={what === 'run' ? 'Run not found' : 'Approval not found'} lead={`There is no ${what} at this address.`} />
+      <PageHead heading={heading} lead={lead} />
       <p>
         <Link to="/">Go to Home</Link>
       </p>
@@ -47,13 +48,36 @@ function Missing({ what }: { what: 'run' | 'approval' }) {
   )
 }
 
+function Missing({ what }: { what: 'run' | 'approval' }) {
+  return what === 'run' ? <Stopped {...RUN_MISSING} /> : <Stopped heading="Approval not found" lead="There is no approval at this address." />
+}
+
 function Problem({ onRetry }: { onRetry: () => void }) {
   return (
     <>
-      <PageHead heading="We couldn't load this run" lead="Check your connection, or try again in a moment." />
+      <PageHead {...RUN_PROBLEM} />
       <Button onClick={onRetry}>Try again</Button>
     </>
   )
+}
+
+function FeedNotReady({ connection, onRetry }: { connection: LiveRun['connection']; onRetry: () => void }) {
+  const { kind } = useSession()
+  const trouble = feedTroubleOf(connection, kind)
+  switch (trouble?.kind) {
+    case undefined:
+      return <Loading />
+    case 'waiting':
+      return (
+        <p className="muted" role="status">
+          {trouble.words}
+        </p>
+      )
+    case 'stop':
+      return <Stopped heading={trouble.heading} lead={trouble.lead} />
+    case 'retry':
+      return <Problem onRetry={onRetry} />
+  }
 }
 
 export function RunRoute() {
@@ -84,7 +108,7 @@ function LiveRunPage({ run, fromApproval }: { run: RunView; fromApproval: boolea
   useReconnectWhenBehind(failed && live.loaded && latest.last_seq > live.head.seq, restart)
 
   const ready = live.loaded || live.connection.is === 'live' || live.connection.is === 'settled'
-  if (!ready) return <Loading />
+  if (!ready) return <FeedNotReady connection={live.connection} onRetry={restart} />
   return <RunView run={latest} useCase={useCase.data} live={live} fromApproval={fromApproval} />
 }
 
@@ -236,6 +260,7 @@ function RunView({ run, useCase, live, fromApproval }: RunViewProps) {
 
 function statusWords(recorded: Verdict | null, live: LiveRun): string {
   if (live.connection.is === 'reconnecting') return 'Lost the live connection. Trying again.'
+  if (live.connection.is === 'closed') return 'Stopped following this run. Reload the page to see what changed.'
   if (isFinished(live.shown.phase)) return ''
   if (recorded === 'approve') return 'Approved. The platform is writing now.'
   if (recorded === 'decline') return 'Declined. Nothing will be written.'

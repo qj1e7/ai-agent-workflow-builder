@@ -29,7 +29,7 @@ export interface LiveRunEnv {
 export interface LiveRunStore {
   subscribe(this: void, listener: () => void): () => void
   getSnapshot(this: void): LiveRun
-  /** After a retry: reconnect now, and play what comes back as live. */
+  /** Reconnect now. After a retry of the run, what comes back plays as live; before the first page, it is drawn at once. */
   restart(this: void): void
 }
 
@@ -145,7 +145,7 @@ export function createLiveRun(id: string, env: LiveRunEnv): LiveRunStore {
     },
     getSnapshot: () => snapshot,
     restart() {
-      playNextAsLive = true
+      playNextAsLive = loaded
       feed?.abort()
       feed = null
       if (listeners.size > 0) start()
