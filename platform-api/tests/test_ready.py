@@ -44,7 +44,7 @@ def test_not_ready_when_bootstrap_recorded_a_failure(postgres: PostgresUrls):
 
 def test_ready_after_a_good_bootstrap(postgres: PostgresUrls):
     truncate_all(postgres.owner)
-    loaded = [LoadedWorkflow("release_check", "W1", True, "abc")]
+    loaded = [LoadedWorkflow("run", "W1", True, "abc")]
     record_status(postgres.owner, ready=True, detail="all workflows loaded", workflows=loaded)
     with TestClient(create_app(env_for(postgres))) as client:
         response = client.get("/healthz/ready")
@@ -52,7 +52,7 @@ def test_ready_after_a_good_bootstrap(postgres: PostgresUrls):
     body = response.json()
     assert body["ready"] is True
     assert [c["name"] for c in body["checks"] if c["ok"]] == ["activity_log", "workflows"]
-    assert previous_hashes(postgres.owner) == {"release_check": "abc"}
+    assert previous_hashes(postgres.owner) == {"run": "abc"}
 
 
 def test_the_workflows_check_names_each_loaded_workflow_and_whether_it_is_active(
@@ -60,7 +60,7 @@ def test_the_workflows_check_names_each_loaded_workflow_and_whether_it_is_active
 ):
     truncate_all(postgres.owner)
     loaded = [
-        LoadedWorkflow("release_check", "W1", True, "abc"),
+        LoadedWorkflow("run", "W1", True, "abc"),
         LoadedWorkflow("schedule_tick", "W2", True, "def"),
         LoadedWorkflow("run_failure_reporter", "W3", False, "ghi"),
     ]
@@ -68,5 +68,5 @@ def test_the_workflows_check_names_each_loaded_workflow_and_whether_it_is_active
     with TestClient(create_app(env_for(postgres))) as client:
         detail = workflows_check(client.get("/healthz/ready").json())["detail"]
     assert detail.endswith(
-        "; loaded: release_check active, schedule_tick active, run_failure_reporter inactive"
+        "; loaded: run active, schedule_tick active, run_failure_reporter inactive"
     )

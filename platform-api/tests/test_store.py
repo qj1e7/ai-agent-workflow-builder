@@ -123,40 +123,6 @@ async def test_save_is_compare_and_swap_on_version(db: Database):
     assert loaded.spec == SPEC
 
 
-async def test_the_watermark_comes_from_the_newest_succeeded_run(db: Database):
-    store = Store()
-    async with db.transaction("orchestration") as uow:
-        assert await store.latest_carry_forward(uow, SPEC.use_case_id) is None
-        first, _ = await store.insert_run(uow, record(), "k1")
-        await store.save_run(
-            uow, first, Succeeded(RUN, Outcome.NOTHING_TO_WRITE, ()), carry_forward="1.2.15"
-        )
-        failed = RunRecord(
-            RunId("run_2"),
-            SPEC,
-            ALICE.user_id,
-            LATER,
-            LATER,
-            1,
-            Pending(RunId("run_2"), 1, None, NOW),
-            (),
-            None,
-        )
-        second, _ = await store.insert_run(uow, failed, "k2")
-        await store.save_run(
-            uow,
-            second,
-            Failed(
-                RunId("run_2"),
-                Stage.WORKING,
-                Failure(FailureReason.AGENT_ERROR, "x", True),
-                ResumeWork(2),
-            ),
-            carry_forward="9.9.9",
-        )
-        assert await store.latest_carry_forward(uow, SPEC.use_case_id) == "1.2.15"
-
-
 async def test_a_second_decision_on_one_step_conflicts(db: Database):
     store = Store()
     policy = ApprovalPolicy(

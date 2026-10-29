@@ -9,18 +9,13 @@ from evals.choose import CHOOSE, ChooseCase
 from evals.draft import DRAFT, DraftCase
 from evals.explain import EXPLAIN, ExplainCase, Explanation
 from evals.jobs import Answer
-from evals.match import MATCH, TEMPLATES, MatchCase, schema
 from evals.providers import Target, plan
 from evals.runner import JOBS, Outcome, main, model_for, redact, run_case, summarise_job
-from evals.summarise import SUMMARISE, SummariseCase
+from evals.summarise import SUMMARISE, SummariseCase, template_summary
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 
-from agent_runtime.summary import SUMMARY_TIMEOUT_SECONDS, template_summary
-
-needs_contracts = pytest.mark.skipif(
-    not TEMPLATES.exists(), reason="contracts/ is not in the test image. CI runs this on the host."
-)
+from agent_runtime.summary import SUMMARY_TIMEOUT_SECONDS
 
 
 def failed(checks: list[Any]) -> set[str]:
@@ -29,11 +24,6 @@ def failed(checks: list[Any]) -> set[str]:
 
 def text(value: str) -> Answer:
     return Answer(value, value, None)
-
-
-def match_answer(template: str | None, **params: str) -> Answer:
-    value = schema().model_validate({"template": template, "params": params})
-    return Answer(value, value.model_dump_json(), None)
 
 
 def summarise_case(**overrides: Any) -> SummariseCase:
@@ -51,13 +41,7 @@ def explain_case(name: str) -> ExplainCase:
     return next(c for c in EXPLAIN.cases() if c.id == name)
 
 
-def match_case(name: str) -> MatchCase:
-    return next(c for c in MATCH.cases() if c.id == name)
-
-
-@pytest.mark.parametrize(
-    "job", [SUMMARISE, EXPLAIN, pytest.param(MATCH, marks=needs_contracts), DRAFT, CHOOSE]
-)
+@pytest.mark.parametrize("job", [SUMMARISE, EXPLAIN, DRAFT, CHOOSE])
 def test_each_job_has_10_to_15_cases_with_unique_ids(job: Any) -> None:
     ids = [case.id for case in job.cases()]
     assert 10 <= len(ids) <= 15
@@ -73,12 +57,6 @@ def test_the_runtime_template_summary_passes_every_summary_case(case: SummariseC
 def test_each_explain_reference_passes_its_own_case(case: ExplainCase) -> None:
     answer = Answer(case.reference, case.reference.model_dump_json(), None)
     assert failed(EXPLAIN.score(case, answer)) == set()
-
-
-@needs_contracts
-@pytest.mark.parametrize("case", MATCH.cases(), ids=lambda c: c.id)
-def test_each_match_truth_passes_its_own_case(case: MatchCase) -> None:
-    assert failed(MATCH.score(case, match_answer(case.template, **case.params))) == set()
 
 
 @pytest.mark.parametrize(
@@ -171,58 +149,6 @@ def test_jargon_finds_codes_identifiers_and_enum_names() -> None:
     assert found == ["AgentError", "503", "run_agents"]
 
 
-@needs_contracts
-@pytest.mark.parametrize(
-    ("case", "answer", "broken"),
-    [
-        ("project-named", match_answer(None), {"right_template", "required_params"}),
-        (
-            "v-prefixed-tag",
-            match_answer(
-                "release_check",
-                repo="hashicorp/terraform",
-                ticket_project="INFRA",
-                last_seen_tag="v1.9.8",
-            ),
-            {"params_valid", "required_params"},
-        ),
-        (
-            "fixture-instruction",
-            match_answer("release_check", repo="langchain-ai/langgraph", ticket_project="MOCK"),
-            {"no_invented_params"},
-        ),
-        ("meeting-room", match_answer("release_check"), {"right_template"}),
-        (
-            "vague-product-name",
-            match_answer("release_check", repo="langchain-ai/langgraph"),
-            set(),
-        ),
-        (
-            "fixture-instruction",
-            match_answer(
-                "release_check", repo="langchain-ai/langgraph", tag_pattern=r"^\d+\.\d+\.\d+$"
-            ),
-            set(),
-        ),
-    ],
-)
-def test_template_matches_are_scored_against_the_builder_rules(
-    case: str, answer: Answer, broken: set[str]
-) -> None:
-    assert failed(MATCH.score(match_case(case), answer)) == broken
-
-
-@needs_contracts
-def test_the_mirrored_rules_cover_every_parameter_the_builder_publishes() -> None:
-    from evals.match import NOT_OFFERED, RULES, catalog
-
-    published = json.loads(TEMPLATES.read_text())["templates"]
-    assert {t["key"] for t in published} == set(RULES) | NOT_OFFERED
-    assert {t["key"]: {p["name"] for p in t["params"]} for t in catalog()} == {
-        key: set(rules) for key, rules in RULES.items()
-    }
-
-
 def test_a_model_that_raises_is_scored_as_not_answered_without_leaking_the_key() -> None:
     class Boom(GenericFakeChatModel):
         def invoke(self, *args: Any, **kwargs: Any) -> Any:
@@ -292,7 +218,7 @@ def test_a_cloud_provider_with_a_key_runs_its_default_models() -> None:
 
 
 def test_every_job_is_registered_once() -> None:
-    assert [job.name for job in JOBS] == ["summarise", "explain", "match", "draft", "choose"]
+    assert [job.name for job in JOBS] == ["summarise", "explain", "draft", "choose"]
 
 
 @pytest.mark.parametrize(

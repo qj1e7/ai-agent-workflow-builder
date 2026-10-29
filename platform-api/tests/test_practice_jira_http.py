@@ -58,7 +58,7 @@ def card_spec() -> RunSpec:
         use_case_version=1,
         use_case_name="Cards",
         owner=UserId("alice"),
-        workflow="release_check",
+        workflow="run",
         instruction="Read.",
         task=CardsTask((CardRun(card, values, card_bindings(card, values)),)),
         bindings={},

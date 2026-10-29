@@ -71,9 +71,6 @@ class FakeRuns:
     async def start_run(self, spec: RunSpec, principal: Principal, idempotency_key: str):
         return RunStarted(RunId("run_1"), created=True)
 
-    async def latest_carry_forward(self, use_case_id: UseCaseId) -> str | None:
-        raise AssertionError("a watchlist check carries nothing forward")
-
 
 @pytest.fixture
 def facts() -> FakeFacts:
@@ -326,7 +323,7 @@ async def test_a_check_carries_our_version_the_open_ticket_and_the_waiting_appro
         3,
         "Software watchlist",
         "alice",
-        "release_check",
+        "run",
     )
     assert spec.bindings == {"create_ticket": Binding("jira", "create_ticket", {"project": "MOCK"})}
     assert spec.task == WatchlistTask(

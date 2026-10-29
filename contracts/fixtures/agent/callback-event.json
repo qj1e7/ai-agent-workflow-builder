@@ -7,14 +7,14 @@
       "id": "planner",
       "display": "Planner"
     },
-    "summary": "Planner brought in Version checker to read the GitHub releases.",
+    "summary": "Planner brought in Version checker to read the source of LangGraph.",
     "kind": "agent_joined",
     "data": {
       "agent": {
         "id": "version_checker",
         "display": "Version checker"
       },
-      "reason": "The task asks about releases of a GitHub repo."
+      "reason": "The task asks about new releases of a watched software."
     }
   }
 }

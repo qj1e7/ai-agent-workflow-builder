@@ -8,7 +8,7 @@
       "id": "alice",
       "display": "Alice"
     },
-    "summary": "Alice started a run of LangGraph releases.",
+    "summary": "Alice started a run of Software watchlist.",
     "kind": "run_created",
     "data": {
       "use_case_id": "uc_01JB7",
@@ -59,14 +59,14 @@
       "id": "planner",
       "display": "Planner"
     },
-    "summary": "Planner brought in Version checker to read the GitHub releases.",
+    "summary": "Planner brought in Version checker to read the source of LangGraph.",
     "kind": "agent_joined",
     "data": {
       "agent": {
         "id": "version_checker",
         "display": "Version checker"
       },
-      "reason": "The task asks about releases of a GitHub repo."
+      "reason": "The task asks about new releases of a watched software."
     }
   },
   {
@@ -78,7 +78,7 @@
       "id": "planner",
       "display": "Planner"
     },
-    "summary": "Planner asked Version checker to look for releases newer than 1.2.14.",
+    "summary": "Planner asked Version checker to check LangGraph for new releases.",
     "kind": "agent_message",
     "data": {
       "speaker": {
@@ -90,7 +90,7 @@
         "id": "version_checker",
         "display": "Version checker"
       },
-      "text": "Please check langchain-ai/langgraph for releases newer than 1.2.14."
+      "text": "Please check LangGraph for new releases."
     }
   },
   {
@@ -102,10 +102,10 @@
       "id": "version_checker",
       "display": "Version checker"
     },
-    "summary": "Version checker is fetching releases from langchain-ai/langgraph.",
+    "summary": "Version checker is reading the releases of LangGraph.",
     "kind": "agent_step_started",
     "data": {
-      "step": "fetch_releases"
+      "step": "read_source"
     }
   },
   {
@@ -117,63 +117,27 @@
       "id": "version_checker",
       "display": "Version checker"
     },
-    "summary": "Version checker fetched 30 releases. The latest is 1.2.16.",
+    "summary": "Version checker read LangGraph. 2 releases newer than 1.2.14.",
     "kind": "agent_step_finished",
     "data": {
-      "step": "fetch_releases",
+      "step": "read_source",
       "result": {
-        "release_count": 30,
-        "latest": "1.2.16"
+        "software_id": "sw_01JC2A3B4C5D6E7F8G9H0J1K2M",
+        "state": "behind",
+        "newest": "1.2.16"
       }
     }
   },
   {
     "run_id": "run_01JB8",
     "seq": 8,
-    "ts": "2026-11-03T02:14:04.901000Z",
-    "actor": {
-      "kind": "agent",
-      "id": "version_checker",
-      "display": "Version checker"
-    },
-    "summary": "Version checker is comparing them with the last known tag 1.2.14.",
-    "kind": "agent_step_started",
-    "data": {
-      "step": "find_new"
-    }
-  },
-  {
-    "run_id": "run_01JB8",
-    "seq": 9,
-    "ts": "2026-11-03T02:14:04.955000Z",
-    "actor": {
-      "kind": "agent",
-      "id": "version_checker",
-      "display": "Version checker"
-    },
-    "summary": "Version checker found 2 new releases: 1.2.16, 1.2.15.",
-    "kind": "agent_step_finished",
-    "data": {
-      "step": "find_new",
-      "result": {
-        "new_count": 2,
-        "tags": [
-          "1.2.16",
-          "1.2.15"
-        ]
-      }
-    }
-  },
-  {
-    "run_id": "run_01JB8",
-    "seq": 10,
     "ts": "2026-11-03T02:14:05.120000Z",
     "actor": {
       "kind": "agent",
       "id": "version_checker",
       "display": "Version checker"
     },
-    "summary": "Version checker reported 2 new releases to the room and suggested one ticket.",
+    "summary": "Version checker reported 1 of 1 watched software behind and suggested 1 ticket.",
     "kind": "agent_message",
     "data": {
       "speaker": {
@@ -183,12 +147,12 @@
       "addressee": {
         "kind": "room"
       },
-      "text": "Two releases are newer than 1.2.14: 1.2.16 and 1.2.15. I suggest one ticket for both."
+      "text": "1 of 1 watched software has new releases: LangGraph. I suggest one ticket."
     }
   },
   {
     "run_id": "run_01JB8",
-    "seq": 11,
+    "seq": 9,
     "ts": "2026-11-03T02:14:05.301000Z",
     "actor": {
       "kind": "agent",
@@ -212,7 +176,7 @@
   },
   {
     "run_id": "run_01JB8",
-    "seq": 12,
+    "seq": 10,
     "ts": "2026-11-03T02:14:05.844000Z",
     "actor": {
       "kind": "agent",
@@ -223,38 +187,38 @@
     "kind": "write_action_proposed",
     "data": {
       "proposal_id": "prp_01JB8",
-      "digest": "sha256:0be2129632d1283e015efcae22757aa3e182793e0153503bdd30dc0327a42576",
+      "digest": "sha256:4e2d624727277e914cdb7b2402d88bfacb4d26c12287fcd8cc3f7f8e4173e7c9",
       "actions": [
         {
           "connector": "jira",
           "operation": "create_ticket",
-          "line": "Create Jira ticket in MOCK: New LangGraph releases: 1.2.16, 1.2.15"
+          "line": "Create Jira ticket in MOCK: Upgrade LangGraph from 1.2.14 to 1.2.16"
         }
       ]
     }
   },
   {
     "run_id": "run_01JB8",
-    "seq": 13,
+    "seq": 11,
     "ts": "2026-11-03T02:14:05.902000Z",
     "actor": {
       "kind": "workflow",
       "id": "n8n",
       "display": "Workflow engine"
     },
-    "summary": "Workflow step run_agents finished: 2 new releases: 1.2.16, 1.2.15.",
+    "summary": "Workflow step run_agents finished: 1 of 1 watched software has new releases: LangGraph 1.2.16.",
     "kind": "step_finished",
     "data": {
       "step": "run_agents",
       "n8n_execution_id": "41",
       "try_number": 1,
       "outcome": "proposed",
-      "detail": "2 new releases: 1.2.16, 1.2.15"
+      "detail": "1 of 1 watched software has new releases: LangGraph 1.2.16."
     }
   },
   {
     "run_id": "run_01JB8",
-    "seq": 14,
+    "seq": 12,
     "ts": "2026-11-03T02:14:08.217000Z",
     "actor": {
       "kind": "workflow",
@@ -271,7 +235,7 @@
   },
   {
     "run_id": "run_01JB8",
-    "seq": 15,
+    "seq": 13,
     "ts": "2026-11-03T02:14:08.244000Z",
     "actor": {
       "kind": "platform",
@@ -296,7 +260,7 @@
   },
   {
     "run_id": "run_01JB8",
-    "seq": 16,
+    "seq": 14,
     "ts": "2026-11-03T02:14:08.260000Z",
     "actor": {
       "kind": "workflow",
@@ -315,7 +279,7 @@
   },
   {
     "run_id": "run_01JB8",
-    "seq": 17,
+    "seq": 15,
     "ts": "2026-11-03T02:14:10.612000Z",
     "actor": {
       "kind": "platform",
@@ -332,7 +296,7 @@
   },
   {
     "run_id": "run_01JB8",
-    "seq": 18,
+    "seq": 16,
     "ts": "2026-11-03T02:20:23.447000Z",
     "actor": {
       "kind": "user",
@@ -350,7 +314,7 @@
   },
   {
     "run_id": "run_01JB8",
-    "seq": 19,
+    "seq": 17,
     "ts": "2026-11-03T02:20:23.610000Z",
     "actor": {
       "kind": "platform",
@@ -366,7 +330,7 @@
   },
   {
     "run_id": "run_01JB8",
-    "seq": 20,
+    "seq": 18,
     "ts": "2026-11-03T02:20:25.902000Z",
     "actor": {
       "kind": "workflow",
@@ -383,7 +347,7 @@
   },
   {
     "run_id": "run_01JB8",
-    "seq": 21,
+    "seq": 19,
     "ts": "2026-11-03T02:20:26.344000Z",
     "actor": {
       "kind": "platform",
@@ -403,7 +367,7 @@
   },
   {
     "run_id": "run_01JB8",
-    "seq": 22,
+    "seq": 20,
     "ts": "2026-11-03T02:20:26.371000Z",
     "actor": {
       "kind": "workflow",
@@ -422,7 +386,7 @@
   },
   {
     "run_id": "run_01JB8",
-    "seq": 23,
+    "seq": 21,
     "ts": "2026-11-03T02:20:26.380000Z",
     "actor": {
       "kind": "platform",

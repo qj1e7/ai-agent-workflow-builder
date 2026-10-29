@@ -13,7 +13,6 @@ from agent_runtime.contract import (
     CardsInputs,
     CardToRun,
     CarryForward,
-    ReleaseCheckInputs,
     TaskError,
     TaskFailed,
     TaskFinished,
@@ -69,10 +68,6 @@ class Planner(Protocol):
 class FixedPlanner:
     def staff(self, request: TaskRequest) -> Staffing:
         match request.inputs:
-            case ReleaseCheckInputs():
-                return self._staff_release_check(
-                    request.inputs, request.carry_forward.last_known_tag
-                )
             case WatchlistInputs():
                 return self._staff_watchlist(request.inputs)
             case CardsInputs():
@@ -97,33 +92,24 @@ class FixedPlanner:
             ask_text=text,
         )
 
-    def _staff_release_check(self, inputs: ReleaseCheckInputs, last: str | None) -> Staffing:
-        joined = f"Planner brought in {CHECKER.display} to read the GitHub releases."
-        reason = "The task asks about releases of a GitHub repo."
-        if last is None:
-            return Staffing(
-                joined_summary=joined,
-                reason=reason,
-                ask_summary="Planner asked Version checker for a starting point.",
-                ask_text=f"Please check {inputs.repo} for its latest release. There is no last "
-                "known tag yet.",
-            )
-        return Staffing(
-            joined_summary=joined,
-            reason=reason,
-            ask_summary=f"Planner asked Version checker to look for releases newer than {last}.",
-            ask_text=f"Please check {inputs.repo} for releases newer than {last}.",
-        )
-
     def _staff_watchlist(self, inputs: WatchlistInputs) -> Staffing:
         names = [item.name for item in inputs.software]
         count = len(names)
+        if count == 1:
+            return Staffing(
+                joined_summary=f"Planner brought in {CHECKER.display} to read the source of "
+                f"{names[0]}.",
+                reason="The task asks about new releases of a watched software.",
+                ask_summary=f"Planner asked {CHECKER.display} to check {names[0]} for new "
+                "releases.",
+                ask_text=f"Please check {names[0]} for new releases.",
+            )
         shown = names if count <= MAX_NAMES else [*names[:MAX_NAMES], f"{count - MAX_NAMES} more"]
         return Staffing(
             joined_summary=f"Planner brought in {CHECKER.display} to read the sources of "
             f"{count} watched software.",
             reason="The task asks about releases of several watched software.",
-            ask_summary=f"Planner asked Version checker to check {count} watched software "
+            ask_summary=f"Planner asked {CHECKER.display} to check {count} watched software "
             "for new releases.",
             ask_text=f"Please check these for new releases: {tag_list(shown)}.",
         )
@@ -198,8 +184,6 @@ def _check(
     request: TaskRequest, checker: VersionChecker, events: EventLog
 ) -> TaskOutput | TaskError:
     match request.inputs:
-        case ReleaseCheckInputs():
-            return checker.check(request.inputs, request.carry_forward.last_known_tag, events.add)
         case WatchlistInputs():
             return checker.check_watchlist(request.inputs, events.add)
         case CardsInputs():

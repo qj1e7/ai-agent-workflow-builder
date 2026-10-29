@@ -2,26 +2,32 @@
   "task_id": "run_01JB8/work/1/1",
   "status": "finished",
   "output": {
-    "summary": "2 new releases: 1.2.16, 1.2.15",
-    "new_tags": [
-      "1.2.16",
-      "1.2.15"
-    ],
+    "summary": "1 of 1 watched software has new releases: LangGraph 1.2.16.",
+    "new_tags": [],
     "proposed": [
       {
         "kind": "create_ticket",
         "fields": {
-          "title": "New LangGraph releases: 1.2.16, 1.2.15",
-          "body": "Releases newer than 1.2.14 on langchain-ai/langgraph:\n- 1.2.16\n- 1.2.15\n\nProposed by the AI workflow builder."
+          "title": "Upgrade LangGraph from 1.2.14 to 1.2.16",
+          "body": "LangGraph has 2 new releases on GitHub (langchain-ai/langgraph) newer than our version 1.2.14:\n- 1.2.16\n- 1.2.15\n\nProposed by the AI workflow builder."
         },
-        "reason": "New plain-version releases since 1.2.14",
-        "subject": null
+        "reason": "LangGraph 1.2.16 is out, and we run 1.2.14",
+        "subject": "sw_01JC2A3B4C5D6E7F8G9H0J1K2M"
       }
     ],
-    "carry_forward": {
-      "last_known_tag": "1.2.16"
-    },
-    "findings": []
+    "carry_forward": {},
+    "findings": [
+      {
+        "software_id": "sw_01JC2A3B4C5D6E7F8G9H0J1K2M",
+        "state": "behind",
+        "newest": "1.2.16",
+        "new_versions": [
+          "1.2.16",
+          "1.2.15"
+        ],
+        "detail": "2 releases newer than 1.2.14."
+      }
+    ]
   },
   "events": [
     {
@@ -31,14 +37,14 @@
         "id": "planner",
         "display": "Planner"
       },
-      "summary": "Planner brought in Version checker to read the GitHub releases.",
+      "summary": "Planner brought in Version checker to read the source of LangGraph.",
       "kind": "agent_joined",
       "data": {
         "agent": {
           "id": "version_checker",
           "display": "Version checker"
         },
-        "reason": "The task asks about releases of a GitHub repo."
+        "reason": "The task asks about new releases of a watched software."
       }
     },
     {
@@ -48,7 +54,7 @@
         "id": "planner",
         "display": "Planner"
       },
-      "summary": "Planner asked Version checker to look for releases newer than 1.2.14.",
+      "summary": "Planner asked Version checker to check LangGraph for new releases.",
       "kind": "agent_message",
       "data": {
         "speaker": {
@@ -60,7 +66,7 @@
           "id": "version_checker",
           "display": "Version checker"
         },
-        "text": "Please check langchain-ai/langgraph for releases newer than 1.2.14."
+        "text": "Please check LangGraph for new releases."
       }
     },
     {
@@ -70,10 +76,10 @@
         "id": "version_checker",
         "display": "Version checker"
       },
-      "summary": "Version checker is fetching releases from langchain-ai/langgraph.",
+      "summary": "Version checker is reading the releases of LangGraph.",
       "kind": "agent_step_started",
       "data": {
-        "step": "fetch_releases"
+        "step": "read_source"
       }
     },
     {
@@ -83,57 +89,25 @@
         "id": "version_checker",
         "display": "Version checker"
       },
-      "summary": "Version checker fetched 30 releases. The latest is 1.2.16.",
+      "summary": "Version checker read LangGraph. 2 releases newer than 1.2.14.",
       "kind": "agent_step_finished",
       "data": {
-        "step": "fetch_releases",
+        "step": "read_source",
         "result": {
-          "release_count": 30,
-          "latest": "1.2.16"
+          "software_id": "sw_01JC2A3B4C5D6E7F8G9H0J1K2M",
+          "state": "behind",
+          "newest": "1.2.16"
         }
       }
     },
     {
       "agent_seq": 5,
-      "ts": "2026-11-03T02:14:04.901000Z",
-      "agent": {
-        "id": "version_checker",
-        "display": "Version checker"
-      },
-      "summary": "Version checker is comparing them with the last known tag 1.2.14.",
-      "kind": "agent_step_started",
-      "data": {
-        "step": "find_new"
-      }
-    },
-    {
-      "agent_seq": 6,
-      "ts": "2026-11-03T02:14:04.955000Z",
-      "agent": {
-        "id": "version_checker",
-        "display": "Version checker"
-      },
-      "summary": "Version checker found 2 new releases: 1.2.16, 1.2.15.",
-      "kind": "agent_step_finished",
-      "data": {
-        "step": "find_new",
-        "result": {
-          "new_count": 2,
-          "tags": [
-            "1.2.16",
-            "1.2.15"
-          ]
-        }
-      }
-    },
-    {
-      "agent_seq": 7,
       "ts": "2026-11-03T02:14:05.120000Z",
       "agent": {
         "id": "version_checker",
         "display": "Version checker"
       },
-      "summary": "Version checker reported 2 new releases to the room and suggested one ticket.",
+      "summary": "Version checker reported 1 of 1 watched software behind and suggested 1 ticket.",
       "kind": "agent_message",
       "data": {
         "speaker": {
@@ -143,11 +117,11 @@
         "addressee": {
           "kind": "room"
         },
-        "text": "Two releases are newer than 1.2.14: 1.2.16 and 1.2.15. I suggest one ticket for both."
+        "text": "1 of 1 watched software has new releases: LangGraph. I suggest one ticket."
       }
     },
     {
-      "agent_seq": 8,
+      "agent_seq": 6,
       "ts": "2026-11-03T02:14:05.301000Z",
       "agent": {
         "id": "planner",

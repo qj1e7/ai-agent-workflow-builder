@@ -50,7 +50,6 @@ from agent_runtime.contract import (
     ModelProblem,
     ModelTestPassed,
     ProposedIntent,
-    ReleaseCheckInputs,
     RoomAddressee,
     SoftwareToCheck,
     TaskError,
@@ -71,35 +70,45 @@ TO_CHECKER = AgentAddressee(id=CHECKER.id, display=CHECKER.display)
 TO_ROOM = RoomAddressee()
 
 REPO = "langchain-ai/langgraph"
-LAST_KNOWN_TAG = "1.2.14"
+OUR_VERSION = "1.2.14"
+NEWEST = "1.2.16"
 NEW_TAGS = ["1.2.16", "1.2.15"]
-TICKET_TITLE = "New LangGraph releases: 1.2.16, 1.2.15"
-TICKET_BODY = (
-    "Releases newer than 1.2.14 on langchain-ai/langgraph:\n- 1.2.16\n- 1.2.15\n\n"
-    "Proposed by the AI workflow builder."
-)
 LANGGRAPH_ID = "sw_01JC2A3B4C5D6E7F8G9H0J1K2M"
 REDIS_ID = "sw_01JC2A3B4C5D6E7F8G9H0J1K2N"
 FASTAPI_ID = "sw_01JC2A3B4C5D6E7F8G9H0J1K2P"
-WATCHLIST_TICKET_BODY = (
+INSTRUCTION = (
+    "Check the team's watched software for new releases and raise an upgrade ticket for each "
+    "one that is behind."
+)
+TICKET_TITLE = "Upgrade LangGraph from 1.2.14 to 1.2.16"
+TICKET_BODY = (
     "LangGraph has 2 new releases on GitHub (langchain-ai/langgraph) newer than our version "
     "1.2.14:\n- 1.2.16\n- 1.2.15\n\nProposed by the AI workflow builder."
 )
+SUMMARY = "1 of 1 watched software has new releases: LangGraph 1.2.16."
 GITHUB_503 = "GitHub returned 503 Service Unavailable three times"
+NOTHING_READABLE = f"None of the 1 watched software could be checked. {GITHUB_503}."
 
 WATCHLIST_T0 = datetime(2026, 11, 10, 2, 14, tzinfo=UTC)
 SUCCESS_T0 = datetime(2026, 11, 3, 2, 14, tzinfo=UTC)
 FAILURE_T0 = datetime(2026, 11, 4, 2, 14, tzinfo=UTC)
 
 
+def langgraph() -> SoftwareToCheck:
+    return SoftwareToCheck(
+        id=LANGGRAPH_ID, name="LangGraph", source=GithubSource(ref=REPO), our_version=OUR_VERSION
+    )
+
+
 def task_request(run_id: str) -> TaskRequest:
+    """A check of a watchlist that holds one software, LangGraph at 1.2.14."""
     task_id = f"{run_id}/work/1/1"
     return TaskRequest(
         task_id=task_id,
         run_id=run_id,
-        instruction="Check langchain-ai/langgraph for new releases and open a ticket for the team.",
-        inputs=ReleaseCheckInputs(repo=REPO, tag_pattern=r"^\d+\.\d+\.\d+$"),
-        carry_forward=CarryForward(last_known_tag=LAST_KNOWN_TAG),
+        instruction=INSTRUCTION,
+        inputs=WatchlistInputs(tag_pattern=r"^\d+\.\d+\.\d+$", software=[langgraph()]),
+        carry_forward=CarryForward(),
         callback=Callback(
             url=f"http://platform-api:8000/internal/v1/runs/{run_id}/agent-events?task={task_id}",
             token="example-callback-token-not-a-secret",
@@ -109,12 +118,7 @@ def task_request(run_id: str) -> TaskRequest:
 
 def watchlist_software() -> list[SoftwareToCheck]:
     return [
-        SoftwareToCheck(
-            id=LANGGRAPH_ID,
-            name="LangGraph",
-            source=GithubSource(ref=REPO),
-            our_version=LAST_KNOWN_TAG,
-        ),
+        langgraph(),
         SoftwareToCheck(
             id=REDIS_ID,
             name="Redis",
@@ -135,10 +139,9 @@ def watchlist_request(run_id: str) -> TaskRequest:
     return TaskRequest(
         task_id=task_id,
         run_id=run_id,
-        instruction="Check the team's watched software for new releases and raise an upgrade "
-        "ticket for each one that is behind.",
+        instruction=INSTRUCTION,
         inputs=WatchlistInputs(tag_pattern=r"^\d+\.\d+\.\d+$", software=watchlist_software()),
-        carry_forward=CarryForward(last_known_tag=None),
+        carry_forward=CarryForward(),
         callback=Callback(
             url=f"http://platform-api:8000/internal/v1/runs/{run_id}/agent-events?task={task_id}",
             token="example-callback-token-not-a-secret",
@@ -167,70 +170,56 @@ class Recorder:
         return event
 
 
-def room_opens(rec: Recorder, base: float) -> None:
+def planner_opens(rec: Recorder, base: float) -> None:
     rec.add(
         AgentJoinedEvent,
         base + 0.29,
         PLANNER,
-        "Planner brought in Version checker to read the GitHub releases.",
-        AgentJoinedData(agent=CHECKER, reason="The task asks about releases of a GitHub repo."),
+        "Planner brought in Version checker to read the source of LangGraph.",
+        AgentJoinedData(
+            agent=CHECKER, reason="The task asks about new releases of a watched software."
+        ),
     )
     rec.add(
         AgentMessageEvent,
         base + 0.41,
         PLANNER,
-        "Planner asked Version checker to look for releases newer than 1.2.14.",
+        "Planner asked Version checker to check LangGraph for new releases.",
         AgentMessageData(
-            speaker=PLANNER,
-            addressee=TO_CHECKER,
-            text=f"Please check {REPO} for releases newer than {LAST_KNOWN_TAG}.",
+            speaker=PLANNER, addressee=TO_CHECKER, text="Please check LangGraph for new releases."
         ),
     )
     rec.add(
         AgentStepStartedEvent,
         base + 0.54,
         CHECKER,
-        f"Version checker is fetching releases from {REPO}.",
-        AgentStepStartedData(step="fetch_releases"),
+        "Version checker is reading the releases of LangGraph.",
+        AgentStepStartedData(step="read_source"),
     )
 
 
 def finished_task() -> TaskFinished:
     rec = Recorder(SUCCESS_T0)
-    room_opens(rec, 2.1)
+    planner_opens(rec, 2.1)
     rec.add(
         AgentStepFinishedEvent,
         4.873,
         CHECKER,
-        "Version checker fetched 30 releases. The latest is 1.2.16.",
+        "Version checker read LangGraph. 2 releases newer than 1.2.14.",
         AgentStepFinishedData(
-            step="fetch_releases", result={"release_count": 30, "latest": "1.2.16"}
+            step="read_source",
+            result={"software_id": LANGGRAPH_ID, "state": "behind", "newest": NEWEST},
         ),
-    )
-    rec.add(
-        AgentStepStartedEvent,
-        4.901,
-        CHECKER,
-        "Version checker is comparing them with the last known tag 1.2.14.",
-        AgentStepStartedData(step="find_new"),
-    )
-    rec.add(
-        AgentStepFinishedEvent,
-        4.955,
-        CHECKER,
-        "Version checker found 2 new releases: 1.2.16, 1.2.15.",
-        AgentStepFinishedData(step="find_new", result={"new_count": 2, "tags": NEW_TAGS}),
     )
     rec.add(
         AgentMessageEvent,
         5.12,
         CHECKER,
-        "Version checker reported 2 new releases to the room and suggested one ticket.",
+        "Version checker reported 1 of 1 watched software behind and suggested 1 ticket.",
         AgentMessageData(
             speaker=CHECKER,
             addressee=TO_ROOM,
-            text="Two releases are newer than 1.2.14: 1.2.16 and 1.2.15. "
-            "I suggest one ticket for both.",
+            text="1 of 1 watched software has new releases: LangGraph. I suggest one ticket.",
         ),
     )
     rec.add(
@@ -247,16 +236,26 @@ def finished_task() -> TaskFinished:
     return TaskFinished(
         task_id="run_01JB8/work/1/1",
         output=TaskOutput(
-            summary="2 new releases: 1.2.16, 1.2.15",
-            new_tags=NEW_TAGS,
+            summary=SUMMARY,
+            new_tags=[],
             proposed=[
                 ProposedIntent(
                     kind="create_ticket",
                     fields={"title": TICKET_TITLE, "body": TICKET_BODY},
-                    reason="New plain-version releases since 1.2.14",
+                    reason="LangGraph 1.2.16 is out, and we run 1.2.14",
+                    subject=LANGGRAPH_ID,
                 )
             ],
-            carry_forward=CarryForward(last_known_tag="1.2.16"),
+            carry_forward=CarryForward(),
+            findings=[
+                Finding(
+                    software_id=LANGGRAPH_ID,
+                    state="behind",
+                    newest=NEWEST,
+                    new_versions=NEW_TAGS,
+                    detail="2 releases newer than 1.2.14.",
+                )
+            ],
         ),
         events=rec.events,
     )
@@ -374,15 +373,12 @@ def watchlist_finished() -> TaskFinished:
             proposed=[
                 ProposedIntent(
                     kind="create_ticket",
-                    fields={
-                        "title": "Upgrade LangGraph from 1.2.14 to 1.2.16",
-                        "body": WATCHLIST_TICKET_BODY,
-                    },
+                    fields={"title": TICKET_TITLE, "body": TICKET_BODY},
                     reason="LangGraph 1.2.16 is out, and we run 1.2.14",
                     subject=LANGGRAPH_ID,
                 )
             ],
-            carry_forward=CarryForward(last_known_tag=None),
+            carry_forward=CarryForward(),
             findings=[
                 Finding(
                     software_id=LANGGRAPH_ID,
@@ -413,7 +409,7 @@ def watchlist_finished() -> TaskFinished:
 
 def failed_task() -> TaskFailed:
     rec = Recorder(FAILURE_T0)
-    room_opens(rec, 2.08)
+    planner_opens(rec, 2.08)
     for try_number, seconds in enumerate((4.702, 8.811, 12.934), start=1):
         last = try_number == 3
         rec.add(
@@ -429,20 +425,39 @@ def failed_task() -> TaskFailed:
             ),
         )
     rec.add(
+        AgentStepFinishedEvent,
+        12.95,
+        CHECKER,
+        "Version checker could not read LangGraph.",
+        AgentStepFinishedData(
+            step="read_source",
+            result={"software_id": LANGGRAPH_ID, "state": "cant_check", "newest": None},
+        ),
+    )
+    rec.add(
+        AgentMessageEvent,
+        12.955,
+        CHECKER,
+        "Version checker could not check LangGraph and carried on.",
+        AgentMessageData(
+            speaker=CHECKER,
+            addressee=TO_ROOM,
+            text=f"I could not read LangGraph's releases: {GITHUB_503}. I will carry on with "
+            "the rest.",
+        ),
+    )
+    rec.add(
         AgentFailedEvent,
         12.961,
         CHECKER,
-        "Version checker failed: GitHub was unavailable.",
+        "Version checker failed: none of the watched software could be checked.",
         AgentFailedData(
-            step="fetch_releases",
-            error_type="UpstreamUnavailable",
-            message=GITHUB_503,
-            retryable=True,
+            step=None, error_type="UpstreamUnavailable", message=NOTHING_READABLE, retryable=True
         ),
     )
     return TaskFailed(
         task_id="run_01JB9/work/1/1",
-        error=TaskError(type="UpstreamUnavailable", message=GITHUB_503, retryable=True),
+        error=TaskError(type="UpstreamUnavailable", message=NOTHING_READABLE, retryable=True),
         events=rec.events,
     )
 
@@ -514,7 +529,7 @@ def card_request(run_id: str) -> TaskRequest:
                 )
             ]
         ),
-        carry_forward=CarryForward(last_known_tag=None),
+        carry_forward=CarryForward(),
         callback=Callback(
             url=f"http://platform-api:8000/internal/v1/runs/{run_id}/agent-events?task={task_id}",
             token="example-callback-token-not-a-secret",
@@ -623,7 +638,7 @@ def card_finished() -> TaskFinished:
                     subject=CARD_ID,
                 )
             ],
-            carry_forward=CarryForward(last_known_tag=None),
+            carry_forward=CarryForward(),
         ),
         events=rec.events,
     )

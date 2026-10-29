@@ -138,12 +138,6 @@ type TagPattern = Annotated[
 ]
 
 
-class ReleaseCheckInputs(WireModel):
-    kind: Literal["release_check"] = "release_check"
-    repo: RepoName
-    tag_pattern: TagPattern
-
-
 SOFTWARE_ID_PATTERN = r"^sw_[0-9A-Z]{26}$"
 
 
@@ -257,13 +251,11 @@ class CardsInputs(WireModel):
     ] = Field(description="The agents the Planner brings in, in the order they work.")
 
 
-type TaskInputs = Annotated[
-    ReleaseCheckInputs | WatchlistInputs | CardsInputs, Field(discriminator="kind")
-]
+type TaskInputs = Annotated[WatchlistInputs | CardsInputs, Field(discriminator="kind")]
 
 
 class CarryForward(WireModel):
-    last_known_tag: str | None = None
+    """What a run hands to the next run of its use case. Nothing yet."""
 
 
 class Callback(WireModel):
@@ -344,8 +336,7 @@ class TaskOutput(WireModel):
     carry_forward: CarryForward
     findings: list[Finding] = Field(
         default_factory=list[Finding],
-        description="One per watched software, in the order of the inputs. Empty for a release "
-        "check.",
+        description="One per watched software, in the order of the inputs. Empty for a card run.",
     )
 
 

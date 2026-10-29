@@ -9,7 +9,6 @@ from platform_api.orchestration import (
     ApprovalPolicy,
     ApprovalStep,
     Binding,
-    ReleaseTask,
     RunSpec,
     SoftwareSource,
     WatchedSoftware,
@@ -44,22 +43,7 @@ BOB = Principal(UserId("bob"), frozenset({Role.APPROVER}), "Bob")
 CAROL = Principal(UserId("carol"), frozenset({Role.OPERATOR}), "Carol")
 NOW = datetime(2026, 11, 3, 2, 14, tzinfo=UTC)
 
-SPEC = RunSpec(
-    use_case_id=UseCaseId("uc_01JB7"),
-    use_case_version=1,
-    use_case_name="LangGraph releases",
-    owner=UserId("alice"),
-    workflow="release_check",
-    instruction="Check langchain-ai/langgraph for new releases and open a ticket for the team.",
-    task=ReleaseTask(
-        repo="langchain-ai/langgraph", tag_pattern=r"^\d+\.\d+\.\d+$", last_known_tag="1.2.14"
-    ),
-    bindings={"create_ticket": Binding("jira", "create_ticket", {"project": "MOCK"})},
-    approval_policy=ApprovalPolicy((ApprovalStep("Team approver", AnyApprover()),)),
-)
-
-
-LANGGRAPH = SoftwareId("sw_01LANGGRAPH")
+LANGGRAPH = SoftwareId("sw_01JC2A3B4C5D6E7F8G9H0J1K2M")
 REDIS = SoftwareId("sw_01REDIS")
 FASTAPI = SoftwareId("sw_01FASTAPI")
 POSTGRES = SoftwareId("sw_01POSTGRES")
@@ -78,6 +62,30 @@ def watched(
     )
 
 
+SUMMARY = "1 of 1 watched software has new releases: LangGraph 1.2.16."
+TICKET_TITLE = "Upgrade LangGraph from 1.2.14 to 1.2.16"
+INSTRUCTION = (
+    "Check the team's watched software for new releases and raise an upgrade ticket for each "
+    "one that is behind."
+)
+
+SPEC = RunSpec(
+    use_case_id=UseCaseId("uc_01JB7"),
+    use_case_version=1,
+    use_case_name="Software watchlist",
+    owner=UserId("alice"),
+    workflow="run",
+    instruction=INSTRUCTION,
+    task=WatchlistTask(
+        tag_pattern=r"^\d+\.\d+\.\d+$",
+        software=(watched(LANGGRAPH, "LangGraph", "langchain-ai/langgraph", "1.2.14"),),
+    ),
+    bindings={"create_ticket": Binding("jira", "create_ticket", {"project": "MOCK"})},
+    approval_policy=ApprovalPolicy((ApprovalStep("Team approver", AnyApprover()),)),
+)
+"""A check of a watchlist that holds one software, LangGraph at 1.2.14. The recorded stories in
+contracts/ follow this run."""
+
 WATCHLIST_TASK = WatchlistTask(
     tag_pattern=r"^\d+\.\d+\.\d+$",
     software=(
@@ -93,9 +101,8 @@ WATCHLIST_SPEC = RunSpec(
     use_case_version=3,
     use_case_name="Software watchlist",
     owner=UserId("alice"),
-    workflow="release_check",
-    instruction="Check the team's watched software for new releases and raise an upgrade "
-    "ticket for each one that is behind.",
+    workflow="run",
+    instruction=INSTRUCTION,
     task=WATCHLIST_TASK,
     bindings={"create_ticket": Binding("jira", "create_ticket", {"project": "MOCK"})},
     approval_policy=ApprovalPolicy((ApprovalStep("Team approver", AnyApprover()),)),

@@ -733,20 +733,8 @@
     },
     "CarryForward": {
       "additionalProperties": false,
-      "properties": {
-        "last_known_tag": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Last Known Tag"
-        }
-      },
+      "description": "What a run hands to the next run of its use case. Nothing yet.",
+      "properties": {},
       "title": "CarryForward",
       "type": "object"
     },
@@ -1452,29 +1440,6 @@
       "title": "ProposedIntent",
       "type": "object"
     },
-    "ReleaseCheckInputs": {
-      "additionalProperties": false,
-      "properties": {
-        "kind": {
-          "const": "release_check",
-          "default": "release_check",
-          "title": "Kind",
-          "type": "string"
-        },
-        "repo": {
-          "$ref": "#/$defs/RepoName"
-        },
-        "tag_pattern": {
-          "$ref": "#/$defs/TagPattern"
-        }
-      },
-      "required": [
-        "repo",
-        "tag_pattern"
-      ],
-      "title": "ReleaseCheckInputs",
-      "type": "object"
-    },
     "RepoName": {
       "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$",
       "type": "string"
@@ -1646,15 +1611,11 @@
       "discriminator": {
         "mapping": {
           "cards": "#/$defs/CardsInputs",
-          "release_check": "#/$defs/ReleaseCheckInputs",
           "watchlist": "#/$defs/WatchlistInputs"
         },
         "propertyName": "kind"
       },
       "oneOf": [
-        {
-          "$ref": "#/$defs/ReleaseCheckInputs"
-        },
         {
           "$ref": "#/$defs/WatchlistInputs"
         },
@@ -1670,7 +1631,7 @@
           "$ref": "#/$defs/CarryForward"
         },
         "findings": {
-          "description": "One per watched software, in the order of the inputs. Empty for a release check.",
+          "description": "One per watched software, in the order of the inputs. Empty for a card run.",
           "items": {
             "$ref": "#/$defs/Finding"
           },

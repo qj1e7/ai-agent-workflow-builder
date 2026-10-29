@@ -102,7 +102,7 @@ async def test_a_person_s_run_says_it_was_started_by_a_person(ticking: Ticking):
     detail = await ticking.h.orchestrator.get_run(started.run_id)
     assert detail is not None and run_view(detail).trigger == "person"
     [created, *_] = await ticking.h.log.read_after(started.run_id, 0)
-    assert created.summary == "Alice started a run of LangGraph releases."
+    assert created.summary == "Alice started a run of Software watchlist."
     assert created.data.trigger == "person"  # type: ignore[union-attr]
 
 

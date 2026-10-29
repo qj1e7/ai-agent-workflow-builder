@@ -35,7 +35,7 @@ from agent_runtime.contract import (
     TaskRequest,
     task_result_adapter,
 )
-from agent_runtime.contracts import task_request
+from agent_runtime.contracts import SUMMARY, TICKET_TITLE, task_request
 from agent_runtime.planner import FixedPlanner
 from agent_runtime.summary import (
     ModelFactory,
@@ -92,8 +92,8 @@ def test_a_task_returns_the_full_result_with_every_event():
     result = task_result_adapter.validate_python(response.json())
     assert result.status == "finished"
     assert result.task_id == "run_01JB8/work/1/1"
-    assert len(result.events) == 8
-    assert result.output.new_tags == ["1.2.16", "1.2.15"]
+    assert len(result.events) == 6
+    assert [p.fields["title"] for p in result.output.proposed] == [TICKET_TITLE]
 
 
 def test_a_dead_upstream_is_a_failed_result_not_an_http_error():
@@ -134,8 +134,8 @@ def test_a_failing_callback_never_fails_the_task(posts: Posts):
     response = client.post("/v1/tasks", json=request_body())
     assert response.status_code == 200
     assert response.json()["status"] == "finished"
-    assert len(response.json()["events"]) == 8
-    assert len(posts.requests) == 8
+    assert len(response.json()["events"]) == 6
+    assert len(posts.requests) == 6
 
 
 def test_the_same_task_id_returns_the_stored_result_without_running_again():
@@ -145,7 +145,7 @@ def test_the_same_task_id_returns_the_stored_result_without_running_again():
     second = client.post("/v1/tasks", json=request_body())
     assert second.json() == first.json()
     assert len(source.calls) == 1
-    assert len(posts.requests) == 8
+    assert len(posts.requests) == 6
 
 
 def with_change(change: Callable[[dict[str, Any]], None]) -> dict[str, Any]:
@@ -159,13 +159,13 @@ def with_change(change: Callable[[dict[str, Any]], None]) -> dict[str, Any]:
     [
         with_change(lambda b: b.update(instruction="Check it twice.")),
         with_change(lambda b: b.update(run_id="run_other")),
-        with_change(lambda b: b["inputs"].update(repo="langchain-ai/langchain")),
-        with_change(lambda b: b["carry_forward"].update(last_known_tag="1.2.15")),
-        with_change(lambda b: b["carry_forward"].update(last_known_tag=None)),
+        with_change(lambda b: b["inputs"]["software"][0]["source"].update(ref="o/other")),
+        with_change(lambda b: b["inputs"]["software"][0].update(our_version="1.2.15")),
+        with_change(lambda b: b["inputs"]["software"][0].update(our_version=None)),
         with_change(lambda b: b["callback"].update(token="another-token")),
         with_change(lambda b: b["callback"].update(url=ORIGIN + "/elsewhere")),
     ],
-    ids=["instruction", "run id", "repo", "last tag", "no last tag", "token", "callback url"],
+    ids=["instruction", "run id", "repo", "our version", "no version", "token", "callback url"],
 )
 def test_the_same_task_id_with_a_different_body_gets_409_and_does_not_run(
     changed: dict[str, Any],
@@ -176,7 +176,7 @@ def test_the_same_task_id_with_a_different_body_gets_409_and_does_not_run(
     second = client.post("/v1/tasks", json=changed)
     assert second.status_code == 409
     assert len(source.calls) == 1
-    assert len(posts.requests) == 8
+    assert len(posts.requests) == 6
     assert client.post("/v1/tasks", json=request_body()).json() == first.json()
 
 
@@ -414,7 +414,7 @@ def test_a_redirect_from_the_callback_is_never_followed():
     assert response.status_code == 200
     assert response.json()["status"] == "finished"
     assert {request.url.host for request in seen} == {"platform-api"}
-    assert len(seen) == 8
+    assert len(seen) == 6
 
 
 @pytest.mark.parametrize(
@@ -574,7 +574,7 @@ def test_a_task_without_a_model_keeps_the_runtimes_own_summary():
         client.post("/v1/tasks", json=request_body()).json()
     )
     assert isinstance(result, TaskFinished)
-    assert result.output.summary == "2 new releases: 1.2.16, 1.2.15"
+    assert result.output.summary == SUMMARY
     assert used == []
 
 

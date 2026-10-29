@@ -43,7 +43,6 @@ from platform_api.orchestration.schedule_store import (
 from platform_api.orchestration.spec import (
     CardRun,
     CardsTask,
-    ReleaseTask,
     RunSpec,
     RunStarted,
     RunStarter,
@@ -124,7 +123,6 @@ __all__ = [
     "LastCheck",
     "OpenTicket",
     "PendingTicket",
-    "ReleaseTask",
     "RunSpec",
     "RunStarted",
     "RunStarter",

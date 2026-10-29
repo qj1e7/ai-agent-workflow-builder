@@ -4,7 +4,7 @@
     "stage": "working",
     "reason": "AgentError",
     "retryable": true,
-    "message": "Version checker failed: GitHub returned 503 Service Unavailable three times"
+    "message": "UpstreamUnavailable: None of the 1 watched software could be checked. GitHub returned 503 Service Unavailable three times."
   },
   "advice": {
     "explanation": "An agent could not finish its work.",

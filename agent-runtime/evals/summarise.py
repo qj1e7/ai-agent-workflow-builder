@@ -1,11 +1,8 @@
+from collections.abc import Sequence
+
 from pydantic import Field
 
-from agent_runtime.summary import (
-    MAX_SUMMARY_LENGTH,
-    SUMMARY_TIMEOUT_SECONDS,
-    summary_prompt,
-    usable_summary,
-)
+from agent_runtime.summary import MAX_SUMMARY_LENGTH, SUMMARY_TIMEOUT_SECONDS, usable_summary
 from evals.checks import (
     Check,
     check,
@@ -22,6 +19,19 @@ class SummariseCase(Case):
     repo: str
     last_known_tag: str
     new_tags: list[str] = Field(min_length=1)
+
+
+def summary_prompt(repo: str, last_known_tag: str, new_tags: Sequence[str]) -> str:
+    return (
+        f"Write one plain sentence for non-technical support staff. Say which new releases "
+        f"of the project {repo} appeared after {last_known_tag}. The new release tags are: "
+        f"{', '.join(new_tags)}. Reply with the sentence only."
+    )
+
+
+def template_summary(new_tags: Sequence[str]) -> str:
+    noun = "release" if len(new_tags) == 1 else "releases"
+    return f"{len(new_tags)} new {noun}: {', '.join(new_tags)}"
 
 
 def prompt(case: SummariseCase) -> str:

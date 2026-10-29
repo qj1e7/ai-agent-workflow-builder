@@ -179,7 +179,7 @@ async def test_a_check_asks_the_agents_about_every_watched_software(h: Harness):
             ),
         ],
     )
-    assert request.carry_forward == CarryForward(last_known_tag=None)
+    assert request.carry_forward == CarryForward()
     assert request.instruction == WATCHLIST_SPEC.instruction
 
 
@@ -302,7 +302,7 @@ async def test_declining_drops_the_tickets_and_the_software_shows_behind(h: Harn
 async def test_a_failed_write_drops_the_tickets_and_a_retry_still_writes_them(h: Harness):
     run_id = await work_leg(h)
     await bob_decides(h, run_id, Verdict.APPROVE)
-    await h.orchestrator.on_workflow_failure(ACT, "release_check", "Do write action", "timed out")
+    await h.orchestrator.on_workflow_failure(ACT, "run", "Do write action", "timed out")
     assert isinstance(await h.state(run_id), Failed)
     assert (await standings(h)).software[LANGGRAPH].status == "behind"
 
@@ -322,7 +322,7 @@ async def test_a_run_that_fails_after_proposing_drops_its_tickets(h: Harness):
     await h.orchestrator.on_step(run_id, StepName.RUN_AGENTS, WORK)
     assert isinstance(await h.state(run_id), Proposed)
     assert (await standings(h)).software[LANGGRAPH].status == "awaiting_approval"
-    await h.orchestrator.on_workflow_failure(WORK, "release_check", "Ask approval", "boom")
+    await h.orchestrator.on_workflow_failure(WORK, "run", "Ask approval", "boom")
     assert isinstance(await h.state(run_id), Failed)
     assert (await standings(h)).software[LANGGRAPH].status == "behind"
 

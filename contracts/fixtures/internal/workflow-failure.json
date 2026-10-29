@@ -1,6 +1,6 @@
 {
   "execution_id": "41",
-  "workflow": "release_check",
+  "workflow": "run",
   "last_node": "Run agents",
   "message": "The service refused the connection",
   "execution_url": "http://n8n:5678/execution/41"

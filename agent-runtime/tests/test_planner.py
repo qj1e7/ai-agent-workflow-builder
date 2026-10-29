@@ -34,7 +34,13 @@ def without_timestamps(result: TaskResult) -> dict[str, Any]:
     return dumped
 
 
-def test_a_release_check_tells_the_story_the_contract_fixture_records():
+def up_to_date(request: TaskRequest) -> TaskRequest:
+    software = request.inputs.software[0].model_copy(update={"our_version": "1.2.16"})  # type: ignore[union-attr]
+    inputs = request.inputs.model_copy(update={"software": [software]})
+    return request.model_copy(update={"inputs": inputs})
+
+
+def test_a_check_of_one_software_tells_the_story_the_contract_fixture_records():
     result = Room(FakeSource(langgraph_tags())).run(task_request("run_01JB8"))
     assert isinstance(result, TaskFinished)
     assert without_timestamps(result) == without_timestamps(finished_task())
@@ -56,10 +62,8 @@ def test_every_event_is_delivered_to_the_sink_in_order_as_it_is_logged():
     assert stamps == sorted(stamps)
 
 
-def test_no_new_releases_ends_with_the_planner_saying_there_is_nothing_to_propose():
-    request = task_request("run_01JB8")
-    request.carry_forward.last_known_tag = "1.2.16"
-    result = Room(FakeSource(langgraph_tags())).run(request)
+def test_nothing_behind_ends_with_the_planner_saying_there_is_nothing_to_propose():
+    result = Room(FakeSource(langgraph_tags())).run(up_to_date(task_request("run_01JB8")))
     assert isinstance(result, TaskFinished)
     assert result.output.proposed == []
     assert [e.kind for e in result.events][-2:] == ["agent_message", "agent_message"]

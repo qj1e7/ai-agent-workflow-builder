@@ -8,12 +8,6 @@ from platform_api.monitoring import AgentEvent
 from platform_api.wire import RepoName, WireModel
 
 
-class ReleaseCheckInputs(WireModel):
-    kind: Literal["release_check"] = "release_check"
-    repo: RepoName
-    tag_pattern: str
-
-
 class GithubSource(WireModel):
     kind: Literal["github"] = "github"
     ref: RepoName
@@ -72,13 +66,11 @@ class CardsInputs(WireModel):
     agents: list[CardToRun]
 
 
-type TaskInputs = Annotated[
-    ReleaseCheckInputs | WatchlistInputs | CardsInputs, Field(discriminator="kind")
-]
+type TaskInputs = Annotated[WatchlistInputs | CardsInputs, Field(discriminator="kind")]
 
 
 class CarryForward(WireModel):
-    last_known_tag: str | None = None
+    pass
 
 
 class Callback(WireModel):

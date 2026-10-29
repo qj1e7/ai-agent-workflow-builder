@@ -15,9 +15,7 @@
         "subject": "crd_version_checker"
       }
     ],
-    "carry_forward": {
-      "last_known_tag": null
-    },
+    "carry_forward": {},
     "findings": []
   },
   "events": [

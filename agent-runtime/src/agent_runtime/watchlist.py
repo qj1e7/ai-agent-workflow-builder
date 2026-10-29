@@ -188,7 +188,7 @@ class WatchlistChecker:
             summary=self._summarizer.summarise_check(checked),
             new_tags=[],
             proposed=tickets,
-            carry_forward=CarryForward(last_known_tag=None),
+            carry_forward=CarryForward(),
             findings=findings,
         )
         return {"output": output}

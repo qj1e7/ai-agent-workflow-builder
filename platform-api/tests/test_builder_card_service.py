@@ -34,6 +34,8 @@ from platform_api.orchestration import (
     RunStarted,
     RuntimeDown,
     ScheduleBook,
+    SoftwareFacts,
+    Standing,
     WatchlistStanding,
 )
 from platform_api.shared import Principal, Role, RunId, SoftwareId, UseCaseId, UserId
@@ -56,9 +58,6 @@ class Runs:
     async def start_run(self, spec: RunSpec, principal: Principal, idempotency_key: str):
         self.started.append(spec)
         return RunStarted(RunId("run_1"), created=True)
-
-    async def latest_carry_forward(self, use_case_id: UseCaseId) -> str | None:
-        return None
 
 
 class NoFacts:
@@ -201,22 +200,30 @@ async def test_an_agent_use_case_shows_its_agents_and_the_line_a_run_draws(build
     assert listed.use_cases[0] == view
 
 
-async def test_a_template_use_case_has_its_templates_blocks_and_no_agents(builder: Builder):
-    from platform_api.builder.models import CreateUseCase
+async def test_the_watchlist_use_case_has_its_templates_blocks_and_no_agents(
+    builder: Builder, db: Database
+):
+    from platform_api.builder.models import AddSoftware, WatchlistView
 
-    made = await builder.create_use_case(
-        ALICE,
-        CreateUseCase(
-            template="release_check",
-            name="n",
-            instruction="i",
-            params={"repo": "a/b", "ticket_project": "MOCK"},
-        ),
+    class NothingLearned:
+        async def standings(
+            self, use_case_id: UseCaseId, given: Mapping[SoftwareId, Given | None]
+        ) -> WatchlistStanding:
+            return WatchlistStanding(
+                {
+                    software_id: Standing(SoftwareFacts(typed, None, None, None), "not_checked")
+                    for software_id, typed in given.items()
+                },
+                None,
+            )
+
+    added = await Watchlist(db, NothingLearned(), ScheduleBook(db)).add(
+        ALICE, AddSoftware(name="LangGraph", repo="langchain-ai/langgraph", our_version="1.2.14")
     )
-    assert isinstance(made, UseCaseCreated)
-    view = await builder.get_use_case(made.use_case_id)
+    assert isinstance(added, WatchlistView)
+    view = await builder.get_use_case(added.use_case_id)
     assert view is not None and view.agents == []
-    assert [b.key for b in view.plan] == ["read_releases", "approval_gate", "create_ticket"]
+    assert [b.key for b in view.plan] == ["read_versions", "approval_gate", "create_tickets"]
 
 
 async def test_values_are_checked_by_kind_before_anything_is_saved(builder: Builder):

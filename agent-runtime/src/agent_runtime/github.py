@@ -3,7 +3,7 @@ from urllib.parse import quote
 import httpx
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
-from agent_runtime.version_checker import Release, SourceRejected, SourceUnavailable
+from agent_runtime.release_source import Release, SourceRejected, SourceUnavailable
 
 PAGE_SIZE = 30
 NOTES_LENGTH = 400

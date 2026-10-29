@@ -37,11 +37,9 @@ from platform_api.builder.planning import (
 from platform_api.builder.templates import (
     AGENT_CARDS,
     TEMPLATES,
-    ParamErrors,
     TemplateNotOffered,
     UnknownTemplate,
     suggest_template,
-    validate_params,
 )
 from platform_api.builder.views import template_view
 from platform_api.builder.watchlist import Watchlist
@@ -49,7 +47,6 @@ from platform_api.db import Database, json
 from platform_api.orchestration import (
     CardRun,
     CardsTask,
-    ReleaseTask,
     RunSpec,
     RunStarted,
     RunStarter,
@@ -135,37 +132,14 @@ class Builder:
         self._planner = planner or NoPlanner()
         self.public_base_url = public_base_url
 
-    async def create_use_case(
-        self, principal: Principal, body: CreateUseCase
-    ) -> UseCaseCreated | ParamErrors | UnknownTemplate | TemplateNotOffered:
+    @staticmethod
+    def create_use_case(body: CreateUseCase) -> UnknownTemplate | TemplateNotOffered:
+        """No template is made by hand any more: the watchlist comes from the Software page and
+        agent use cases from the Builder page. The route stays so the answer names why."""
         template = TEMPLATES.get(body.template)
         if template is None:
             return UnknownTemplate(body.template)
-        if not template.offered:
-            return TemplateNotOffered(template.key)
-        checked = validate_params(template, body.params)
-        if isinstance(checked, ParamErrors):
-            return checked
-        use_case_id = new_id("uc")
-        async with self._db.transaction("builder") as uow:
-            await uow.conn.execute(
-                "INSERT INTO builder.use_cases (use_case_id, owner, created_at, current_version)"
-                " VALUES (%s, %s, %s, 1)",
-                (use_case_id, principal.user_id, uow.now),
-            )
-            await uow.conn.execute(
-                "INSERT INTO builder.use_case_versions (use_case_id, version, template, name,"
-                " instruction, params, created_at) VALUES (%s, 1, %s, %s, %s, %s, %s)",
-                (
-                    use_case_id,
-                    template.key,
-                    body.name,
-                    body.instruction,
-                    json(dict(checked.values)),
-                    uow.now,
-                ),
-            )
-        return UseCaseCreated(use_case_id=use_case_id, version=1)
+        return TemplateNotOffered(template.key)
 
     async def list_use_cases(self) -> UseCaseList:
         """Team-wide by design: one team, two roles, and Approvers need the context.
@@ -296,13 +270,6 @@ class Builder:
             task = CardsTask(cards)
             asked = max((x.approvers for a in pinned for x in a.card.approvals), default=1)
             policy = cards_policy([run.card for run in cards], asked)
-        elif template.offered:
-            carried = await self._runs.latest_carry_forward(use_case_id)
-            task = ReleaseTask(
-                repo=params["repo"],
-                tag_pattern=params["tag_pattern"],
-                last_known_tag=carried or params.get("last_seen_tag"),
-            )
         else:
             listed = await self._watchlist.task_for(use_case_id, view.version)
             if listed is None:

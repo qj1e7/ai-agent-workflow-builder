@@ -1,3 +1,4 @@
+import time
 from collections.abc import Callable, Sequence
 from typing import Any
 
@@ -32,9 +33,10 @@ from agent_runtime.contracts import (
 )
 from agent_runtime.events import EventLog
 from agent_runtime.planner import FixedPlanner, run_task
+from agent_runtime.release_source import Release, ReleaseSource
 from agent_runtime.summary import ModelSummarizer, Summarizer, TemplateSummarizer
 from agent_runtime.version_checker import VersionChecker
-from tests.fakes import FakeClock, RepoSource, langgraph_tags
+from tests.fakes import FakeClock, FakeSource, RepoSource, langgraph_tags
 
 LANGGRAPH = "langchain-ai/langgraph"
 REDIS = "redis/redis"
@@ -43,7 +45,7 @@ TAGS = {LANGGRAPH: langgraph_tags(), REDIS: ["8.2.1", "8.2.0", "8.1.0"], FASTAPI
 
 
 class Room:
-    def __init__(self, source: RepoSource, summarizer: Summarizer | None = None) -> None:
+    def __init__(self, source: ReleaseSource, summarizer: Summarizer | None = None) -> None:
         self.clock = FakeClock()
         self.log = EventLog(self.clock, lambda event: None)
         self.checker = VersionChecker(
@@ -135,7 +137,50 @@ def test_a_software_behind_gets_one_ticket_naming_it():
     )
     assert ticket.reason == "LangGraph 1.2.16 is out, and we run 1.2.14"
     assert result.output.new_tags == []
-    assert result.output.carry_forward.last_known_tag is None
+
+
+def test_releases_of_another_tag_family_never_count():
+    source = RepoSource({**TAGS, LANGGRAPH: ["cli==0.9.0", "sdk==1.0.0", *langgraph_tags()]})
+    behind = finished(Room(source).run(request_for(langgraph("1.2.15"))))
+    assert finding(behind, LANGGRAPH_ID).new_versions == ["1.2.16"]
+    other = finished(Room(source).run(request_for(langgraph("cli==0.4.37"))))
+    assert (finding(other, LANGGRAPH_ID).state, finding(other, LANGGRAPH_ID).new_versions) == (
+        "up_to_date",
+        [],
+    )
+
+
+def test_drafts_and_prereleases_are_skipped():
+    source = FakeSource([])
+    source.releases = [
+        Release(tag="1.2.18", draft=True),
+        Release(tag="1.2.17", prerelease=True),
+        Release(tag="1.2.16"),
+    ]
+    result = finished(Room(source).run(request_for(langgraph("1.2.15"))))
+    assert finding(result, LANGGRAPH_ID).new_versions == ["1.2.16"]
+
+
+def test_a_network_error_is_retried_the_same_way_as_a_5xx():
+    source = RepoSource(TAGS, down={LANGGRAPH: None})
+    room = Room(source)
+    result = finished(room.run(request_for(langgraph("1.2.14"), redis("8.2.1"))))
+    assert room.clock.slept == [2.0, 2.0]
+    assert finding(result, LANGGRAPH_ID).detail == "GitHub could not be reached three times."
+    said = [
+        e.data.text
+        for e in result.events
+        if isinstance(e, AgentMessageEvent) and e.agent.id == "version_checker"
+    ]
+    assert said[0].startswith("GitHub could not be reached (try 1 of 3).")
+
+
+def test_events_are_emitted_while_the_source_is_read_not_after_it():
+    room = Room(RepoSource(TAGS, down={LANGGRAPH: 503}))
+    seen_when_sleeping: list[int] = []
+    room.clock.on_sleep = lambda: (time.sleep(0.2), seen_when_sleeping.append(len(room.log.events)))
+    room.run(request_for(langgraph("1.2.14")))
+    assert seen_when_sleeping == [4, 5]
 
 
 def test_a_software_that_is_up_to_date_gets_no_ticket():

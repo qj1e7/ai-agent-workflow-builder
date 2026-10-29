@@ -6,6 +6,7 @@ from platform_api.auth import DEV_USERS
 from platform_api.builder import TEMPLATES as TEMPLATES_BY_KEY
 from platform_api.builder import Builder
 from platform_api.builder.models import TemplateList, UseCaseView
+from platform_api.builder.templates import SOFTWARE_WATCHLIST, WATCHLIST_INSTRUCTION
 from platform_api.builder.views import template_view
 from platform_api.monitoring.agent_events import (
     AgentAddressee,
@@ -96,17 +97,19 @@ TO_CHECKER = AgentAddressee(id=CHECKER.id, display=CHECKER.display)
 TO_ROOM = RoomAddressee()
 
 USE_CASE_ID = "uc_01JB7"
-USE_CASE_NAME = "LangGraph releases"
+USE_CASE_NAME = "Software watchlist"
 REPO = "langchain-ai/langgraph"
-TAG_PATTERN = r"^\d+\.\d+\.\d+$"
-LAST_KNOWN_TAG = "1.2.14"
+LANGGRAPH_ID = "sw_01JC2A3B4C5D6E7F8G9H0J1K2M"
+OUR_VERSION = "1.2.14"
+NEWEST = "1.2.16"
 NEW_TAGS = ["1.2.16", "1.2.15"]
-TICKET_TITLE = "New LangGraph releases: 1.2.16, 1.2.15"
+TICKET_TITLE = "Upgrade LangGraph from 1.2.14 to 1.2.16"
 TICKET_BODY = (
-    "Releases newer than 1.2.14 on langchain-ai/langgraph:\n- 1.2.16\n- 1.2.15\n\n"
-    "Proposed by the AI workflow builder."
+    "LangGraph has 2 new releases on GitHub (langchain-ai/langgraph) newer than our version "
+    "1.2.14:\n- 1.2.16\n- 1.2.15\n\nProposed by the AI workflow builder."
 )
-INSTRUCTION = "Check langchain-ai/langgraph for new releases and open a ticket for the team."
+SUMMARY = "1 of 1 watched software has new releases: LangGraph 1.2.16."
+INSTRUCTION = WATCHLIST_INSTRUCTION
 CHANNEL = "CODESparks Ops"
 TICKET_KEY = "MOCK-142"
 
@@ -226,70 +229,56 @@ def run_created(tl: Timeline) -> None:
     )
 
 
-def room_opens(tl: Timeline, base: float) -> None:
+def planner_opens(tl: Timeline, base: float) -> None:
     tl.add(
         AgentJoined,
         base + 0.29,
         AGENT_PLANNER,
-        "Planner brought in Version checker to read the GitHub releases.",
-        AgentJoinedData(agent=CHECKER, reason="The task asks about releases of a GitHub repo."),
+        "Planner brought in Version checker to read the source of LangGraph.",
+        AgentJoinedData(
+            agent=CHECKER, reason="The task asks about new releases of a watched software."
+        ),
     )
     tl.add(
         AgentMessage,
         base + 0.41,
         AGENT_PLANNER,
-        "Planner asked Version checker to look for releases newer than 1.2.14.",
+        "Planner asked Version checker to check LangGraph for new releases.",
         AgentMessageData(
-            speaker=PLANNER,
-            addressee=TO_CHECKER,
-            text=f"Please check {REPO} for releases newer than {LAST_KNOWN_TAG}.",
+            speaker=PLANNER, addressee=TO_CHECKER, text="Please check LangGraph for new releases."
         ),
     )
     tl.add(
         AgentStepStarted,
         base + 0.54,
         AGENT_CHECKER,
-        f"Version checker is fetching releases from {REPO}.",
-        AgentStepStartedData(step="fetch_releases"),
+        "Version checker is reading the releases of LangGraph.",
+        AgentStepStartedData(step="read_source"),
     )
 
 
 def work_leg_to_announcement(tl: Timeline) -> None:
     run_created(tl)
-    room_opens(tl, 2.1)
+    planner_opens(tl, 2.1)
     tl.add(
         AgentStepFinished,
         4.873,
         AGENT_CHECKER,
-        "Version checker fetched 30 releases. The latest is 1.2.16.",
+        "Version checker read LangGraph. 2 releases newer than 1.2.14.",
         AgentStepFinishedData(
-            step="fetch_releases", result={"release_count": 30, "latest": "1.2.16"}
+            step="read_source",
+            result={"software_id": LANGGRAPH_ID, "state": "behind", "newest": NEWEST},
         ),
-    )
-    tl.add(
-        AgentStepStarted,
-        4.901,
-        AGENT_CHECKER,
-        "Version checker is comparing them with the last known tag 1.2.14.",
-        AgentStepStartedData(step="find_new"),
-    )
-    tl.add(
-        AgentStepFinished,
-        4.955,
-        AGENT_CHECKER,
-        "Version checker found 2 new releases: 1.2.16, 1.2.15.",
-        AgentStepFinishedData(step="find_new", result={"new_count": 2, "tags": NEW_TAGS}),
     )
     tl.add(
         AgentMessage,
         5.12,
         AGENT_CHECKER,
-        "Version checker reported 2 new releases to the room and suggested one ticket.",
+        "Version checker reported 1 of 1 watched software behind and suggested 1 ticket.",
         AgentMessageData(
             speaker=CHECKER,
             addressee=TO_ROOM,
-            text="Two releases are newer than 1.2.14: 1.2.16 and 1.2.15. "
-            "I suggest one ticket for both.",
+            text="1 of 1 watched software has new releases: LangGraph. I suggest one ticket.",
         ),
     )
     tl.add(
@@ -316,13 +305,13 @@ def work_leg_to_announcement(tl: Timeline) -> None:
         StepFinished,
         5.902,
         WORKFLOW,
-        "Workflow step run_agents finished: 2 new releases: 1.2.16, 1.2.15.",
+        f"Workflow step run_agents finished: {SUMMARY}",
         StepFinishedData(
             step="run_agents",
             n8n_execution_id=tl.story.work_execution,
             try_number=1,
             outcome="proposed",
-            detail="2 new releases: 1.2.16, 1.2.15",
+            detail=SUMMARY,
         ),
     )
     tl.add(
@@ -427,12 +416,13 @@ def success_events() -> Timeline:
 
 
 GITHUB_503 = "GitHub returned 503 Service Unavailable three times"
+NOTHING_READABLE = f"None of the 1 watched software could be checked. {GITHUB_503}."
 
 
 def failure_events() -> Timeline:
     tl = Timeline(FAILURE)
     run_created(tl)
-    room_opens(tl, 2.08)
+    planner_opens(tl, 2.08)
     for try_number, seconds in enumerate((4.702, 8.811, 12.934), start=1):
         last = try_number == 3
         tl.add(
@@ -448,15 +438,34 @@ def failure_events() -> Timeline:
             ),
         )
     tl.add(
+        AgentStepFinished,
+        12.95,
+        AGENT_CHECKER,
+        "Version checker could not read LangGraph.",
+        AgentStepFinishedData(
+            step="read_source",
+            result={"software_id": LANGGRAPH_ID, "state": "cant_check", "newest": None},
+        ),
+    )
+    tl.add(
+        AgentMessage,
+        12.955,
+        AGENT_CHECKER,
+        "Version checker could not check LangGraph and carried on.",
+        AgentMessageData(
+            speaker=CHECKER,
+            addressee=TO_ROOM,
+            text=f"I could not read LangGraph's releases: {GITHUB_503}. I will carry on with "
+            "the rest.",
+        ),
+    )
+    tl.add(
         AgentFailed,
         12.961,
         AGENT_CHECKER,
-        "Version checker failed: GitHub was unavailable.",
+        "Version checker failed: none of the watched software could be checked.",
         AgentFailedData(
-            step="fetch_releases",
-            error_type="UpstreamUnavailable",
-            message=GITHUB_503,
-            retryable=True,
+            step=None, error_type="UpstreamUnavailable", message=NOTHING_READABLE, retryable=True
         ),
     )
     tl.add(
@@ -469,7 +478,7 @@ def failure_events() -> Timeline:
             n8n_execution_id=FAILURE.work_execution,
             try_number=1,
             outcome="failed",
-            detail=f"Version checker failed: {GITHUB_503}",
+            detail=f"UpstreamUnavailable: {NOTHING_READABLE}",
         ),
     )
     tl.add(
@@ -481,7 +490,7 @@ def failure_events() -> Timeline:
             stage="working",
             reason="AgentError",
             retryable=True,
-            message=f"Version checker failed: {GITHUB_503}",
+            message=f"UpstreamUnavailable: {NOTHING_READABLE}",
         ),
     )
     return tl
@@ -622,29 +631,27 @@ OWN_WORK_REFUSAL = RefusalOut(
     refusal=Refusal.OWN_WORK, message="You started this run, so another Approver must decide."
 )
 
-RELEASE_CHECK_TEMPLATE = template_view(TEMPLATES_BY_KEY["release_check"])
-
 TEMPLATES = TemplateList(templates=[template_view(t) for t in TEMPLATES_BY_KEY.values()])
 
 USE_CASE = UseCaseView(
     use_case_id=USE_CASE_ID,
     version=1,
-    template="release_check",
+    template=SOFTWARE_WATCHLIST.key,
     name=USE_CASE_NAME,
     instruction=INSTRUCTION,
-    params={"repo": REPO, "tag_pattern": TAG_PATTERN, "ticket_project": "MOCK"},
+    params={"ticket_project": "MOCK"},
     owner=ALICE,
     created_at=datetime(2026, 11, 2, 9, 30, tzinfo=UTC),
-    plan=RELEASE_CHECK_TEMPLATE.blocks,
+    plan=template_view(SOFTWARE_WATCHLIST).blocks,
     agents=[],
 )
 
 SUGGESTION = Builder.suggest(INSTRUCTION)
 
 STEP_RESPONSES = [
-    StepResponseOut(proceed=True, outcome="proposed", detail="2 new releases: 1.2.16, 1.2.15"),
+    StepResponseOut(proceed=True, outcome="proposed", detail=SUMMARY),
     StepResponseOut(
-        proceed=False, outcome="nothing_to_write", detail="No new releases since 1.2.16"
+        proceed=False, outcome="nothing_to_write", detail="All 1 watched software are up to date."
     ),
     StepResponseOut(proceed=False, outcome="superseded", detail="Execution 40 holds this leg"),
     StepResponseOut(
@@ -657,7 +664,7 @@ STEP_RESPONSES = [
 
 WORKFLOW_FAILURE = WorkflowFailureIn(
     execution_id="41",
-    workflow="release_check",
+    workflow="run",
     last_node="Run agents",
     message="The service refused the connection",
     execution_url="http://n8n:5678/execution/41",
@@ -674,7 +681,7 @@ def teams_messages(tl: Timeline) -> TeamsStubMessages:
                 channel=CHANNEL,
                 text=f"A run of {USE_CASE_NAME} needs an Approver. It would create a Jira "
                 f'ticket in MOCK titled "{TICKET_TITLE}". Open the approval page to decide. '
-                "The agents said: 2 new releases: 1.2.16, 1.2.15.",
+                f"The agents said: {SUMMARY}",
                 link=SUCCESS.approval_link,
                 run_id=SUCCESS.run_id,
                 approval_id=SUCCESS.approval_id,
