@@ -33,6 +33,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """Drops the lifecycle columns, so every paused or deleted workflow comes back on under the
+    old code, and who paused or deleted it, and when, is lost. The drafts are lost too."""
     op.execute("""
         DROP TABLE builder.drafts;
         GRANT DELETE ON builder.use_cases, builder.use_case_versions TO wab_builder;
