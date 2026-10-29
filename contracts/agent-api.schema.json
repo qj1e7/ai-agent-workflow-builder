@@ -1944,7 +1944,7 @@
           "$ref": "#/$defs/RowState"
         },
         "text": {
-          "description": "What the Planner read, in plain words. Empty when the part is missing.",
+          "description": "What the Planner read, in plain words. Empty when the part is missing, and can be empty when it can't be done.",
           "maxLength": 200,
           "title": "Text",
           "type": "string"

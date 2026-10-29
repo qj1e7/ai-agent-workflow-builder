@@ -357,7 +357,10 @@ class UnderstoodRowView(WireModel):
         description="schedule: when it runs. look_for: what to look for. do: what to do with "
         "it. where: where the result goes."
     )
-    text: str = Field(description="What the Planner read, in plain words. Empty when missing.")
+    text: str = Field(
+        description="What the Planner read, in plain words. Empty when missing, and can be empty "
+        "when cant_do."
+    )
     state: RowState = Field(
         description="understood: from the task's words. changed: the Planner read something "
         "into the words, and the note says what the task said. missing: the task does not say. "

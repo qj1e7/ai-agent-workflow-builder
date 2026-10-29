@@ -538,12 +538,12 @@ def _row(answer: RowAnswer) -> UnderstoodRow:
     text = _plain(answer.text, TEXT_LIMIT)
     note = _plain(answer.note, NOTE_LIMIT) or None
     state: RowState = answer.state
+    if state == "cant_do":
+        return UnderstoodRow(kind=answer.kind, text=text, state=state, note=note or CANT_YET)
     if state == "missing" or not text:
         return _missing(answer.kind, note if state == "missing" and note else NOT_SAID)
     if state == "changed":
         note = note or READ_IN
-    elif state == "cant_do":
-        note = note or CANT_YET
     return _held_to_the_tools(UnderstoodRow(kind=answer.kind, text=text, state=state, note=note))
 
 

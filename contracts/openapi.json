@@ -5046,7 +5046,7 @@
             "description": "understood: from the task's words. changed: the Planner read something into the words, and the note says what the task said. missing: the task does not say. cant_do: no tool does it yet, and the note says why."
           },
           "text": {
-            "description": "What the Planner read, in plain words. Empty when missing.",
+            "description": "What the Planner read, in plain words. Empty when missing, and can be empty when cant_do.",
             "title": "Text",
             "type": "string"
           }

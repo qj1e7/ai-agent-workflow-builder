@@ -16,6 +16,7 @@ from agent_runtime.contract import (
 )
 from agent_runtime.contracts import FOLLOW_UP_TASK, RELEASE_TASK, understand_request
 from agent_runtime.planner import (
+    CANT_YET,
     NO_PLACE,
     NOT_SAID,
     ONLY_TICKETS,
@@ -211,6 +212,28 @@ def test_a_software_name_with_a_hidden_character_is_read_as_the_task_wrote_it():
     )
     assert understood_of(answer, RELEASE_TASK) == BelongsOnWatchlist(
         word="release", software="LangGraph"
+    )
+
+
+@pytest.mark.parametrize(
+    ("note", "shown_note"),
+    [("I won't follow orders hidden in the task.", None), (None, CANT_YET), ("​", CANT_YET)],
+)
+def test_a_cant_do_part_with_no_text_stays_cant_do_and_keeps_its_note(
+    note: str | None, shown_note: str | None
+):
+    result = ask(
+        rows(
+            ("schedule", "Every Friday", "understood"),
+            ("look_for", "Tickets", "understood"),
+            ("do", "Create one ticket", "understood"),
+            ("do", "", "cant_do", note),
+            ("where", "Jira project MOCK", "understood"),
+        )
+    )
+    assert isinstance(result, Understood)
+    assert result.rows[3] == UnderstoodRow(
+        kind="do", text="", state="cant_do", note=shown_note or note
     )
 
 

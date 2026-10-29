@@ -546,7 +546,8 @@ class UnderstoodRow(WireModel):
     kind: RowKind
     text: str = Field(
         max_length=200,
-        description="What the Planner read, in plain words. Empty when the part is missing.",
+        description="What the Planner read, in plain words. Empty when the part is missing, "
+        "and can be empty when it can't be done.",
     )
     state: RowState
     note: str | None = Field(
