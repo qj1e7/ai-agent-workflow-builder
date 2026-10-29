@@ -4,18 +4,25 @@ It answers by what a request asks for, so the real runtime, with its real prompt
 can be tested without a real model:
 
 - GET /v1/models lists one model.
-- A request that forces a tool is a draft or a choice. The canned answer follows the task's words.
+- A request that forces a tool is a draft, a choice or the Planner reading a task back. The canned
+  answer follows the task's words. A release task belongs on the Software watchlist.
 - A request with tools and no forced tool is a card run. The mock calls github_read_releases,
   then jira_search, then jira_create_ticket, then writes a report, by what the conversation holds.
 - Anything else is a summary or a connection test and gets one plain sentence.
 
 When a tool result tells it to use another Jira project (the planted instruction in a release
 body), the mock obeys once, by adding a project to its first ticket. It plays a model that was
-fooled, so the test can show that the platform still writes only to the card's own project.
+fooled, so the test can show that the platform still writes only to the card's own project. A task
+that says "ignore your rules" fools it the same way: it reads the order back as a part it can do,
+so a lane can show that the runtime still marks it can't do.
+
+POST /_admin/mode with {"mode": "slow"} makes every message answer wait 15 seconds, {"mode":
+"broken"} makes every forced tool answer broken JSON, and {"mode": "ok"} restores it.
 """
 
 import json
 import re
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, cast
 
@@ -28,6 +35,32 @@ VERSION = re.compile(r"\d+\.\d+\.\d+")
 INPUT_LINE = re.compile(r"^- [^:\n]+: (.+)$", re.MULTILINE)
 VERSION_CHECKER = "crd_version_checker"
 STEPS = ("github_read_releases", "jira_search", "jira_create_ticket")
+MODES = ("ok", "slow", "broken")
+SLOW_SECONDS = 15.0
+BROKEN: dict[str, Any] = {
+    "belongs_on_watchlist": False,
+    "rows": '[{"kind": "schedule", "text": "Every',
+}
+RELEASE_WORDS = re.compile(
+    r"\b(?:releases?|versions?|upgrades?|patch(?:es)?|cves?|vulnerabilit\w*)\b", re.IGNORECASE
+)
+SOFTWARE = ("LangGraph", "Redis", "FastAPI", "PostgreSQL", "Terraform", "Log4j", "Kubernetes")
+SCHEDULE = re.compile(
+    r"\b(?:every|each)\s+(?:week ?day|day|morning|monday|tuesday|wednesday|thursday|friday|"
+    r"saturday|sunday|week|month)s?(?:\s+at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)?"
+    r"|\b(?:daily|weekly|monthly)\b",
+    re.IGNORECASE,
+)
+FIND = re.compile(r"(?:find|look for|list|search for)\s+(.+?)(?:\s+and\s+(.+))?$", re.IGNORECASE)
+FOUND = re.compile(r"\b(?:of|every|all)\s+(.+?tickets?)\b", re.IGNORECASE)
+IN_PROJECT = re.compile(r"\bin ([A-Z][A-Z0-9]{1,9})\b")
+SUMMARY_TO = re.compile(
+    r"^(?:post|send|share)\s+(?:a|the)\s+summary\b.*?\b(?:in|to|on)\s+(teams|slack|confluence)\b",
+    re.IGNORECASE,
+)
+OVERRIDE = re.compile(r"\bignore (?:your|all|the|previous) (?:rules|instructions)\b", re.IGNORECASE)
+CANNOT = ("close", "delete", "remove", "move", "edit", "update")
+mode = "ok"
 
 DRAFT: dict[str, Any] = {
     "can_do": True,
@@ -143,12 +176,92 @@ def choice(task: str) -> dict[str, Any]:
     }
 
 
+def first_up(text: str) -> str:
+    return text[:1].upper() + text[1:]
+
+
+def where_row(task: str) -> dict[str, Any]:
+    project = IN_PROJECT.search(task)
+    if project is None:
+        return {"kind": "where", "state": "missing", "note": "You didn't say which Jira project."}
+    return {"kind": "where", "text": f"Jira project {project.group(1)}", "state": "understood"}
+
+
+def look_row(look: str | None) -> dict[str, Any]:
+    if look is None:
+        return {"kind": "look_for", "state": "missing", "note": "You didn't say what to look for."}
+    if "stale" in look.lower() and not re.search(r"\d+\s+days?", look):
+        return {
+            "kind": "look_for",
+            "text": first_up(look.replace("stale ", "")) + " with no update for 14 days",
+            "state": "changed",
+            "note": 'You said "stale", so I used 14 days without an update.',
+        }
+    return {"kind": "look_for", "text": first_up(look), "state": "understood"}
+
+
+def action_rows(act: str | None, task: str) -> list[dict[str, Any]]:
+    if act is None:
+        return [{"kind": "do", "state": "missing"}, where_row(task)]
+    if (place := SUMMARY_TO.search(act)) is not None:
+        name = place.group(1).capitalize()
+        return [
+            {"kind": "do", "text": "Write a short summary", "state": "understood"},
+            {
+                "kind": "where",
+                "text": f"Post it in {name}",
+                "state": "cant_do",
+                "note": f"I can't post in {name} yet. I can only create Jira tickets.",
+            },
+        ]
+    verb = act.split(maxsplit=1)[0].lower()
+    do: dict[str, Any] = {"kind": "do", "text": first_up(act), "state": "understood"}
+    if verb in CANNOT:
+        do |= {"state": "cant_do", "note": f"No tool can {verb} tickets, so I can't do this."}
+    return [do, where_row(task)]
+
+
+def understanding(task: str) -> dict[str, Any]:
+    """The Planner's reading of a task, by word rules."""
+    if (word := RELEASE_WORDS.search(task)) is not None:
+        named = next((name for name in SOFTWARE if name.lower() in task.lower()), None)
+        return {
+            "belongs_on_watchlist": True,
+            "watchlist_word": word.group(0),
+            "software": named,
+            "rows": [],
+        }
+    sentences = [part for part in re.split(r"(?<=[.!?])\s+", task.strip()) if part]
+    first = sentences[0].rstrip(".!?") if sentences else ""
+    when = SCHEDULE.search(first)
+    rows: list[dict[str, Any]] = [
+        {"kind": "schedule", "text": first_up(when.group(0)), "state": "understood"}
+        if when
+        else {"kind": "schedule", "state": "missing", "note": "You didn't say when it runs."}
+    ]
+    words = (SCHEDULE.sub("", first) if when else first).strip(" ,")
+    found = FIND.match(words)
+    look, act = (found.group(1), found.group(2)) if found else (None, words or None)
+    if look is None and act is not None and (of := FOUND.search(act)) is not None:
+        look = of.group(1)
+    rows += [look_row(look), *action_rows(act, task)]
+    for sentence in sentences[1:]:
+        if OVERRIDE.search(sentence):
+            order = sentence.rstrip(".!?").split(" and ", 1)[-1]
+            rows.append({"kind": "do", "text": first_up(order), "state": "understood"})
+    return {"belongs_on_watchlist": False, "rows": rows}
+
+
 def forced(body: dict[str, Any], name: str) -> dict[str, Any]:
     lowered = name.lower()
+    if mode == "broken":
+        return call(name, BROKEN, 0)
     if "draft" in lowered:
         return call(name, DRAFT, 0)
     if "choice" in lowered:
         return call(name, choice(task_text(body)), 0)
+    if "understand" in lowered:
+        return call(name, understanding(task_text(body)), 0)
     return say(SENTENCE)
 
 
@@ -197,10 +310,26 @@ def run_step(body: dict[str, Any]) -> dict[str, Any]:
     return say(f"I finished my plan for {project}. I proposed one ticket for it.")
 
 
+def set_mode(body: dict[str, Any] | None) -> tuple[int, dict[str, Any]]:
+    global mode
+    wanted = (body or {}).get("mode")
+    if wanted not in MODES:
+        return 400, {"error": f"mode must be one of {', '.join(MODES)}"}
+    mode = str(wanted)
+    return 200, {"mode": mode}
+
+
+def delay(method: str, path: str) -> float:
+    """How long to wait before answering, so a test can play a slow model."""
+    return SLOW_SECONDS if mode == "slow" and (method, path) == ("POST", "/v1/messages") else 0.0
+
+
 def answer(method: str, path: str, body: dict[str, Any] | None) -> tuple[int, dict[str, Any]]:
     """The mock's whole behaviour: no sockets, so tests can call it directly."""
     if method == "GET" and path == "/healthz":
         return 200, {"status": "ok"}
+    if method == "POST" and path == "/_admin/mode":
+        return set_mode(body)
     if method == "GET" and path == "/v1/models":
         return 200, {
             "data": [
@@ -244,6 +373,7 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             self.reply(400, {"type": "error", "error": {"type": "invalid_request_error"}})
             return
+        time.sleep(delay("POST", self.path))
         self.reply(*answer("POST", self.path, body if isinstance(body, dict) else None))  # pyright: ignore[reportUnknownArgumentType]
 
     def log_message(self, format: str, *args: Any) -> None:
