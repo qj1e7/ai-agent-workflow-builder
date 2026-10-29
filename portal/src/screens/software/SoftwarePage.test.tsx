@@ -1,3 +1,4 @@
+import failedRun from '@contracts/fixtures/views/failure.final.json'
 import empty from '@contracts/fixtures/watchlist/empty.json'
 import statuses from '@contracts/fixtures/watchlist/statuses.json'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -14,11 +15,12 @@ import { ScheduleNote } from './Schedule'
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
 const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
 
-function render(view: unknown, me: Me): string {
+function render(view: unknown, me: Me, runs: readonly { run_id: string }[] = []): string {
   const session = createDevSession(null)
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   queryClient.setQueryData(['me', session.cacheScope()], me)
   queryClient.setQueryData(['watchlist', session.cacheScope()], view)
+  for (const run of runs) queryClient.setQueryData(['run', session.cacheScope(), run.run_id], run)
   queryClient.setQueryData(['dev-users'], [ALICE, BOB])
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
@@ -49,6 +51,18 @@ describe('the Software watchlist page', () => {
 
   it('says a check could not reach the source and will try at the next check', () => {
     expect(text(render(statuses, ALICE))).toContain('Can’t check right now. It will try again at the next check.')
+  })
+
+  it('says the last check stopped, why, and when, and links to its run', () => {
+    const stopped = { ...statuses, last_check: { run_id: failedRun.run_id, state: 'failed', started_at: failedRun.started_at } }
+    const html = render(stopped, BOB, [failedRun])
+    expect(text(html)).toContain('The last check stopped: an agent could not finish its work. Started Wed 4 Nov, 10:14, Singapore time.')
+    expect(html).toContain(`href="/runs/${failedRun.run_id}"`)
+    expect(text(render(stopped, BOB))).toContain('The last check stopped. Started Wed 4 Nov, 10:14')
+  })
+
+  it('says nothing about the last check while it has not stopped', () => {
+    expect(text(render(statuses, ALICE))).not.toContain('The last check stopped')
   })
 
   it('shows the schedule in Singapore time and names its owner', () => {

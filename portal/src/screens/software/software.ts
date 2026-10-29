@@ -158,6 +158,11 @@ export function scheduleWords(schedule: ScheduleView): string {
   return `Checked ${dayLabel[schedule.day]} at ${clockWords(schedule.at)}, set by ${schedule.owner_name}.`
 }
 
+/** "The last check stopped: an agent could not finish its work." The reason is one of the run page's labels. */
+export function stoppedWords(reason: string | null): string {
+  return reason ? `The last check stopped: ${reason.charAt(0).toLowerCase()}${reason.slice(1)}.` : 'The last check stopped.'
+}
+
 export function scheduleOwnerWords(schedule: ScheduleView): string {
   return `Scheduled checks count as ${schedule.owner_name}’s work, so ${schedule.owner_name} can’t approve them.`
 }

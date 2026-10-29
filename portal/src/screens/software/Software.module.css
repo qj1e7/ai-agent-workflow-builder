@@ -5,6 +5,23 @@
   margin-top: var(--space-4);
 }
 
+.stopped {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--red-line);
+  border-radius: var(--r-card);
+  background: var(--red-soft);
+  color: var(--red-ink);
+}
+
+.stopped a {
+  color: inherit;
+  font-weight: 600;
+}
+
 .schedule {
   display: grid;
   gap: var(--space-3);

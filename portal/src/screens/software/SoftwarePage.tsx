@@ -3,14 +3,15 @@ import { Link, useNavigate } from 'react-router'
 import { useErrorWords } from '../../api/context'
 import { newIdempotencyKey } from '../../api/idempotency'
 import { useDisplayName } from '../../api/people'
-import { useMe, useRemoveSoftware, useStartRun, useWatchlist } from '../../api/queries'
-import type { WatchedSoftwareView, WatchlistView } from '../../api/types'
+import { failureReasonLabel } from '../../api/labels'
+import { useMe, useRemoveSoftware, useRun, useStartRun, useWatchlist } from '../../api/queries'
+import type { LastCheckView, WatchedSoftwareView, WatchlistView } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { IconExternal } from '../../ui/icons'
 import { AddSoftware } from './AddSoftware'
 import { Schedule } from './Schedule'
 import { SoftwareHistory } from './SoftwareHistory'
-import { CANT_CHECK_WORDS, countIn, groupsOf, matches, statusLabel, statusTone, versionSourceWords } from './software'
+import { CANT_CHECK_WORDS, countIn, groupsOf, matches, singaporeTime, statusLabel, statusTone, stoppedWords, versionSourceWords } from './software'
 import styles from './Software.module.css'
 
 const UNDO_MS = 8000
@@ -151,6 +152,19 @@ function CheckNow({ useCaseId }: { useCaseId: string }) {
   )
 }
 
+function LastCheckStopped({ last }: { last: LastCheckView }) {
+  const run = useRun(last.run_id)
+  const reason = run.data?.state === 'failed' ? failureReasonLabel[run.data.reason] : null
+  return (
+    <div className={styles['stopped']}>
+      <p>
+        <b>{stoppedWords(reason)}</b> Started {singaporeTime(last.started_at)}, Singapore time.
+      </p>
+      <Link to={`/runs/${last.run_id}`}>Open the run</Link>
+    </div>
+  )
+}
+
 function Loaded({ view, operator }: { view: WatchlistView | null; operator: boolean }) {
   const [query, setQuery] = useState('')
   const [opened, setOpened] = useState<string | null>(null)
@@ -168,6 +182,7 @@ function Loaded({ view, operator }: { view: WatchlistView | null; operator: bool
   return (
     <>
       {operator && view && software.length > 0 ? <CheckNow useCaseId={view.use_case_id} /> : null}
+      {view?.last_check?.state === 'failed' ? <LastCheckStopped last={view.last_check} /> : null}
       {view ? <Schedule schedule={view.schedule} operator={operator} /> : null}
       <div role="status" className={styles['notice']}>
         {pending ? (
