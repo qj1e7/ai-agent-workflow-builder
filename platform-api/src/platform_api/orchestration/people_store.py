@@ -382,15 +382,7 @@ class People:
                 return outcome
             assert outcome.summary is not None
             await self._store.save(uow, outcome.person)
-            for closed in await self._confirmations.close_about(uow, person.id, me.id):
-                await self._confirmations.record_change(
-                    uow,
-                    "people",
-                    me.id,
-                    f"The request to make {person.display} an Approver was closed, because "
-                    f"{person.display} left the list.",
-                    confirmation_id=closed.id,
-                )
+            await self._close_stale(uow, me, people, person, removed=True)
             await self._confirmations.record_change(uow, "people", me.id, outcome.summary)
             return outcome.person
 
@@ -408,8 +400,37 @@ class People:
             if outcome.summary is None:
                 return outcome.person
             await self._store.save(uow, outcome.person)
+            if person.is_operator and not outcome.person.is_operator:
+                await self._close_stale(uow, me, people, person, removed=False)
             await self._confirmations.record_change(uow, "people", me.id, outcome.summary)
             return outcome.person
+
+    async def _close_stale(
+        self, uow: UnitOfWork, me: Person, people: Sequence[Person], left: Person, removed: bool
+    ) -> None:
+        """Closes the open Approver requests nobody can decide any more: those about someone
+        removed, and those asked by someone removed or no longer an Operator."""
+        for c in await self._confirmations.open_ones(uow):
+            if c.kind is not ConfirmationKind.APPROVER:
+                continue
+            if removed and c.about == left.id:
+                summary = (
+                    f"The request to make {left.display} an Approver was closed, because "
+                    f"{left.display} left the list."
+                )
+            elif c.asked_by == left.id:
+                about = next((p.display for p in people if p.id == c.about), "someone")
+                why = "left the list" if removed else "is no longer an Operator"
+                summary = (
+                    f"{left.display}'s request to make {about} an Approver was closed, because "
+                    f"{left.display} {why}."
+                )
+            else:
+                continue
+            await self._confirmations.close(uow, c.id, me.id)
+            await self._confirmations.record_change(
+                uow, "people", me.id, summary, confirmation_id=c.id
+            )
 
     async def _pending(self, uow: UnitOfWork) -> frozenset[UserId]:
         return frozenset(

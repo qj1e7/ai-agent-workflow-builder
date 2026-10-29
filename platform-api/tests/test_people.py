@@ -385,6 +385,27 @@ class TestDecideConfirmation:
         assert outcome.reason is DecideRefusal.ASKER_GONE
         assert why_not(ASKED, BOB.principal, asker_is_operator=False) is DecideRefusal.ASKER_GONE
 
+    def test_not_now_still_closes_a_request_whose_asker_is_gone(self):
+        outcome = decide(
+            ASKED,
+            BOB.principal,
+            ConfirmationDecision.NOT_NOW,
+            ASKED.digest,
+            LATER,
+            asker_is_operator=False,
+        )
+        assert isinstance(outcome, Confirmation)
+        assert outcome.decision is ConfirmationDecision.NOT_NOW
+        carol = decide(
+            ASKED,
+            CAROL.principal,
+            ConfirmationDecision.NOT_NOW,
+            ASKED.digest,
+            LATER,
+            asker_is_operator=False,
+        )
+        assert isinstance(carol, DecideRefused) and carol.reason is DecideRefusal.NOT_AN_APPROVER
+
     def test_why_not_matches_the_decision(self):
         assert why_not(ASKED, BOB.principal) is None
         assert why_not(ASKED, ALICE.principal) is DecideRefusal.YOU_ASKED

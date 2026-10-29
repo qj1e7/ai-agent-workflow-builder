@@ -438,8 +438,8 @@ async def test_removing_a_person_closes_the_request_about_them(
     assert fresh["digest"] != waiting["digest"]
 
 
-async def test_a_request_whose_asker_left_the_list_cannot_be_confirmed(
-    client: httpx.AsyncClient, app: FastAPI
+async def test_a_request_whose_asker_left_the_list_is_closed_and_can_be_asked_again(
+    client: httpx.AsyncClient, people: People
 ):
     dave = (await add(client, ALICE, "dave@example.test", "Dave", operator=True)).json()
     erin = (await add(client, ALICE, "erin@example.test", "Erin", operator=True)).json()
@@ -447,13 +447,46 @@ async def test_a_request_whose_asker_left_the_list_cannot_be_confirmed(
         f"/api/v1/people/{erin['id']}/approver", headers={"X-Dev-User": dave["id"]}
     )
     assert asked.status_code == 202
+    waiting = asked.json()["pending_approver"]
     assert (await client.delete(f"/api/v1/people/{dave['id']}", headers=ALICE)).status_code == 204
-    [waiting] = await pending_for(client, BOB)
-    assert (waiting["you_can_decide"], waiting["why_not"]) == (False, "asker_gone")
-    refused = await decide(client, BOB, waiting, "confirm")
-    assert (refused.status_code, refused.json()["refusal"]) == (403, "asker_gone")
-    declared_status(app, "POST", "/api/v1/confirmations/{confirmation_id}/decisions", refused)
-    assert (await roster(client))[erin["id"]]["approver"] is False
+    assert await pending_for(client, BOB) == []
+    assert (await roster(client))[erin["id"]]["pending_approver"] is None
+    lines = await history(client)
+    assert [line["summary"] for line in lines[:2]] == [
+        "Alice removed Dave from the list.",
+        "Dave's request to make Erin an Approver was closed, because Dave left the list.",
+    ]
+    assert (lines[1]["by"], lines[1]["confirmed_by"]) == ("alice", None)
+    closed = await people.confirmation(waiting["confirmation_id"])
+    assert closed is not None and closed.decision is ConfirmationDecision.CLOSED
+    again = await client.post(f"/api/v1/people/{erin['id']}/approver", headers=ALICE)
+    assert again.status_code == 202, again.text
+    [fresh] = await pending_for(client, BOB)
+    assert (await decide(client, BOB, fresh, "confirm")).status_code == 201
+    assert (await roster(client))[erin["id"]]["approver"] is True
+
+
+async def test_a_request_whose_asker_lost_the_operator_role_is_closed(
+    client: httpx.AsyncClient,
+):
+    dave = (await add(client, CAROL, "dave@example.test", "Dave", operator=True)).json()
+    assert (
+        await client.post(f"/api/v1/people/{dave['id']}/approver", headers=ALICE)
+    ).status_code == 202
+    lost = await client.put(
+        "/api/v1/people/alice/operator", headers=CAROL, json={"operator": False}
+    )
+    assert lost.status_code == 200
+    assert await pending_for(client, BOB) == []
+    lines = await history(client)
+    assert [line["summary"] for line in lines[:2]] == [
+        "Carol removed Alice's Operator role.",
+        "Alice's request to make Dave an Approver was closed, because Alice is no longer an "
+        "Operator.",
+    ]
+    assert (lines[1]["by"], lines[1]["confirmed_by"]) == ("carol", None)
+    again = await client.post(f"/api/v1/people/{dave['id']}/approver", headers=CAROL)
+    assert again.status_code == 202, again.text
 
 
 async def test_a_re_added_person_signs_in_afresh(client: httpx.AsyncClient, people: People):

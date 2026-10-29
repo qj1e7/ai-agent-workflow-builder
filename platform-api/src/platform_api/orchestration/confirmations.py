@@ -72,7 +72,9 @@ DECIDE_MESSAGES: dict[DecideRefusal, str] = {
     DecideRefusal.PERSON_REMOVED: (
         "This person was removed from the list since this was asked. Ask again."
     ),
-    DecideRefusal.ASKER_GONE: "The person who asked is no longer an Operator. Ask again.",
+    DecideRefusal.ASKER_GONE: (
+        "The person who asked is no longer an Operator. Say not now, and an Operator can ask again."
+    ),
 }
 
 
@@ -104,12 +106,13 @@ def why_not(
     about_on_list: bool = True,
     about_added_at: datetime | None = None,
     asker_is_operator: bool = True,
+    decision: ConfirmationDecision | None = None,
 ) -> DecideRefusal | None:
     if not confirmation.open:
         return DecideRefusal.ALREADY_DECIDED
     if not about_on_list or not _same_person(confirmation, about_added_at):
         return DecideRefusal.PERSON_REMOVED
-    if not asker_is_operator:
+    if not asker_is_operator and decision is not ConfirmationDecision.NOT_NOW:
         return DecideRefusal.ASKER_GONE
     if Role.APPROVER not in decider.roles:
         return DecideRefusal.NOT_AN_APPROVER
@@ -139,7 +142,9 @@ def decide(
     about_added_at: datetime | None = None,
     asker_is_operator: bool = True,
 ) -> Confirmation | DecideRefused:
-    reason = why_not(confirmation, decider, about_on_list, about_added_at, asker_is_operator)
+    reason = why_not(
+        confirmation, decider, about_on_list, about_added_at, asker_is_operator, decision
+    )
     if reason is not None:
         return DecideRefused(reason)
     if not hmac.compare_digest(confirmation.digest, seen_digest):
@@ -254,19 +259,20 @@ class ConfirmationStore:
         )
         return result.rowcount == 1
 
-    async def close_about(
-        self, uow: UnitOfWork, person_id: UserId, closed_by: UserId
-    ) -> list[Confirmation]:
-        """Closes every open confirmation about a person, as the one who removed them."""
-        rows = await (
+    async def close(
+        self, uow: UnitOfWork, confirmation_id: ConfirmationId, closed_by: UserId
+    ) -> Confirmation | None:
+        """Closes an open confirmation that nobody can decide any more. None when it was not
+        open."""
+        row = await (
             await uow.conn.execute(
                 "UPDATE orchestration.confirmations "
                 "SET decided_by = %s, decision = %s, decided_at = %s "
-                f"WHERE about = %s AND decided_at IS NULL RETURNING {_COLUMNS}",
-                (closed_by, ConfirmationDecision.CLOSED.value, uow.now, person_id),
+                f"WHERE id = %s AND decided_at IS NULL RETURNING {_COLUMNS}",
+                (closed_by, ConfirmationDecision.CLOSED.value, uow.now, confirmation_id),
             )
-        ).fetchall()
-        return [_confirmation(r) for r in rows]
+        ).fetchone()
+        return _confirmation(row) if row is not None else None
 
     async def record_change(
         self,
