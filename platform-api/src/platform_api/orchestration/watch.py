@@ -264,14 +264,11 @@ def review(
     return Reviewed(tuple(learned), tuple(tickets))
 
 
-UNREADABLE = frozenset({"UpstreamUnavailable", "UpstreamRejected"})
-"""The error types the agents answer with when no listed source could be read."""
+NOTHING_READABLE_TYPES = frozenset({"UpstreamUnavailable", "UpstreamRejected"})
 
 
-def nothing_read(task: WatchlistTask, error: TaskError) -> Reviewed | None:
-    """A check that could read no source fails, and says so for every listed software, so no
-    row keeps a status this check could not confirm. Any other failure leaves the rows alone."""
-    if error.type not in UNREADABLE:
+def all_could_not_read(task: WatchlistTask, error: TaskError) -> Reviewed | None:
+    if error.type not in NOTHING_READABLE_TYPES:
         return None
     problem = error.message if error.message.endswith(".") else f"{error.message}."
     return Reviewed(tuple(CouldNotRead(software.id, problem) for software in task.software), ())
