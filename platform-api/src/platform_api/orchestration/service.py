@@ -2,7 +2,7 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any, Protocol
 
@@ -125,6 +125,7 @@ from platform_api.shared import (
     N8nExecutionId,
     Principal,
     ProposalId,
+    Role,
     RunId,
     TaskId,
     UserId,
@@ -299,6 +300,12 @@ class ActiveModel(Protocol):
     async def access(self, uow: UnitOfWork) -> ModelAccess | None: ...
 
 
+class RolesNow(Protocol):
+    """The People list, read inside the deciding transaction (ADR 0029)."""
+
+    async def roles_now(self, uow: UnitOfWork, person_id: UserId) -> frozenset[Role] | None: ...
+
+
 class Orchestrator:
     def __init__(
         self,
@@ -311,9 +318,11 @@ class Orchestrator:
         mint_callback: CallbackMinter,
         retry_policy: RetryPolicy = RETRY_POLICY,
         models: ActiveModel | None = None,
+        people: RolesNow | None = None,
     ) -> None:
         self._db = db
         self._models = models
+        self._people = people
         self._store = Store()
         self._watch = WatchStore()
         self._activity = activity
@@ -753,6 +762,10 @@ class Orchestrator:
             record = await self._store.load_run(uow, request.run_id, lock=True)
             assert record is not None
             decisions = await self._store.load_decisions(uow, approval_id)
+            if self._people is not None:
+                # The roles as they are now, so a role removed a moment ago already counts.
+                roles = await self._people.roles_now(uow, principal.user_id)
+                principal = replace(principal, roles=roles or frozenset())
             outcome = approvals.decide(
                 request, decisions, principal, step_index, verdict, seen_digest, uow.now
             )

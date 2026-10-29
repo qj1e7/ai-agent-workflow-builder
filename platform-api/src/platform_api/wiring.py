@@ -94,6 +94,7 @@ async def build(settings: Settings) -> Services:
         WriteGateway(db, [jira]),
         mint,
         models=model_settings,
+        people=people,
     )
     schedules = ScheduleBook(db)
     watchlist = Watchlist(db, WatchFacts(db, jira), schedules)

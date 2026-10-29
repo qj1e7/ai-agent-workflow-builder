@@ -10,13 +10,17 @@ from fastapi import FastAPI
 from platform_api.app import create_app
 from platform_api.auth import DEV_PEOPLE
 from platform_api.db import Database
+from platform_api.orchestration.approvals import Refusal, Verdict
 from platform_api.orchestration.model_settings import KeyBox, ModelSettings
 from platform_api.orchestration.people_store import People
+from platform_api.orchestration.service import DecisionRefused
 from platform_api.settings import FirstPeople
 from platform_api.shared import DevIdentity, ExternalIdentity, Principal, Role, UserId
+from tests.conftest import PostgresUrls
 from tests.declared import declared_status
 from tests.support import LOCAL_ENV
 from tests.test_model_settings import FakeChecks
+from tests.test_orchestrator import open_harness, work_leg_to_approval
 
 pytestmark = pytest.mark.anyio
 
@@ -332,6 +336,31 @@ async def test_removing_a_person_takes_effect_at_once(client: httpx.AsyncClient,
         dave["id"],
         "Dave T",
     )
+
+
+async def test_a_removed_approver_cannot_decide_a_run_in_the_same_minute(
+    postgres: PostgresUrls, client: httpx.AsyncClient, people: People
+):
+    dave_id = await confirmed_approver(client, "dave@example.test", "Dave")
+    dave = Principal(UserId(dave_id), frozenset({Role.APPROVER, Role.OPERATOR}), "Dave")
+    async with open_harness(postgres, people=people, keep_data=True) as h:
+        alice = Principal(UserId("alice"), frozenset({Role.OPERATOR, Role.APPROVER}), "Alice")
+        _, _, approval_id = await work_leg_to_approval(h, by=alice)
+        detail = await h.orchestrator.get_approval(approval_id, dave)
+        assert detail is not None and detail.why_not is None
+        assert (
+            await client.delete(f"/api/v1/people/{dave_id}/approver", headers=CAROL)
+        ).status_code == 200
+        outcome = await h.orchestrator.decide(
+            approval_id, dave, 0, Verdict.APPROVE, detail.request.digest
+        )
+        assert outcome == DecisionRefused(Refusal.NOT_AN_APPROVER)
+        bob = Principal(UserId("bob"), frozenset({Role.APPROVER}), "Bob")
+        assert (await client.delete("/api/v1/people/bob", headers=ALICE)).status_code == 409
+        decided = await h.orchestrator.decide(
+            approval_id, bob, 0, Verdict.APPROVE, detail.request.digest
+        )
+        assert not isinstance(decided, DecisionRefused)
 
 
 async def test_the_model_address_is_a_confirmation_too(client: httpx.AsyncClient, people: People):
