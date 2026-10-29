@@ -106,34 +106,50 @@ test('@lane1-trunk trunk has no Software watchlist page', async ({ browser }) =>
   await context.close()
 })
 
-test('@lane1 alice adds software, presses Check now, lands on the run, and the row shows the newest version and a ticket waiting for a yes', async ({ browser }) => {
+test('@lane1 alice adds software, presses Check now, lands on the run, and the row shows the newest version and a ticket waiting for a yes; two presses in one tick send once', async ({ browser }) => {
   await withBackend(async (backend) => {
     await backend.freshWatchlist('alice', [])
+    const runsBefore = (await backend.runs()).length
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
     const watch = watchPage(page)
     const keys: string[] = []
+    const adds: string[] = []
     page.on('request', (request) => {
-      if (request.method() === 'POST' && /\/use-cases\/[^/]+\/runs$/.test(request.url())) keys.push(request.headers()['idempotency-key'] ?? '')
+      if (request.method() !== 'POST') return
+      if (/\/use-cases\/[^/]+\/runs$/.test(request.url())) keys.push(request.headers()['idempotency-key'] ?? '')
+      if (new URL(request.url()).pathname === '/api/v1/watchlist/software') adds.push(request.postData() ?? '')
     })
+    const pressTwiceInOneTick = (button: Locator) =>
+      button.evaluate((element: HTMLButtonElement) => {
+        element.click()
+        element.click()
+      })
     await openSoftware(page)
     await expect(page.getByText('No software yet')).toBeVisible()
-    await addInForm(page, LANGGRAPH)
+    await page.getByLabel('Name', { exact: true }).fill(LANGGRAPH.name)
+    await page.getByLabel('GitHub repository').fill(LANGGRAPH.repo)
+    await page.getByLabel(/^Our version/).fill(LANGGRAPH.our_version)
+    await pressTwiceInOneTick(page.getByRole('button', { name: 'Add', exact: true }))
     await expect(rowOf(page, 'LangGraph')).toBeVisible()
     await expect(rowOf(page, 'LangGraph')).toContainText('Not checked yet')
-    await page.getByRole('button', { name: 'Check now' }).click()
+    await expect(page.locator('#sw-repo-error')).toHaveCount(0)
+    await pressTwiceInOneTick(page.getByRole('button', { name: 'Check now' }))
     await expect(page).toHaveURL(/\/runs\/[^/]+$/)
     const runId = page.url().split('/').at(-1) ?? ''
     await backend.waitForState(runId, ['awaiting_approval'])
+    const runsStarted = (await backend.runs()).length - runsBefore
     await openSoftware(page)
     const row = rowOf(page, 'LangGraph')
     await expect(row).toContainText('Ticket waiting for a yes', { timeout: 30_000 })
     const api = await rowNamed(backend, 'LangGraph')
     await expect(row).toContainText(api.newest_version ?? 'missing')
     await shotTo(page, 1, 'p6-check.png', true)
-    save(1, 'p6-check.json', { runId, idempotencyKeys: keys, row: api, rowOnPage: await text(row) })
-    expect(keys, 'one check started with one key').toHaveLength(1)
+    save(1, 'p6-check.json', { runId, idempotencyKeys: keys, adds, runsStarted, row: api, rowOnPage: await text(row) })
+    expect(adds, 'two presses of Add sent one add').toHaveLength(1)
+    expect(keys, 'two presses of Check now started one check with one key').toHaveLength(1)
     expect(keys[0]).toMatch(/^[0-9a-f-]{36}$/)
+    expect(runsStarted, 'the platform has one new run').toBe(1)
     expect(api.newest_version, 'the mock GitHub has a newer release').not.toBeNull()
     assertClean(watch)
     await context.close()
