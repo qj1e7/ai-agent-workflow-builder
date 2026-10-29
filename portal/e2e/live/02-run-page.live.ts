@@ -75,7 +75,7 @@ test('the link in a Teams message opens the run page at the decision', async ({ 
   const page = await context.newPage()
   const watch = watchPage(page)
   await page.goto('/')
-  const teams = page.getByRole('button', { name: /^Teams, practice copy, \d+ approvals? waiting for you$/ })
+  const teams = page.getByRole('button', { name: /^Teams, practice copy, \d+ (or more )?approvals? waiting for you$/ })
   await expect(teams, 'the Teams button counts what waits for bob').toBeVisible({ timeout: 15_000 })
   await teams.click()
   const drawer = page.getByRole('dialog', { name: 'Teams, practice copy' })

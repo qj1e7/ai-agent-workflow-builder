@@ -1,4 +1,4 @@
-import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { keepPreviousData, queryOptions, useMutation, useQueries, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { ApiError, unwrap, type ApiClient } from './client'
 import { useApiClient, useSession, useCacheScope } from './context'
 import type {
@@ -217,10 +217,9 @@ function decided(approval: ApprovalView | undefined): boolean {
   return approval !== undefined && approval.steps.every((step) => step.status === 'approved' || step.status === 'declined')
 }
 
-export function useApproval(approvalId: string, options?: QueryOptions) {
-  const client = useApiClient()
-  const user = useCacheScope()
-  return useQuery({
+/** One approval. It stops polling once every step is decided. */
+export function approvalQuery(client: ApiClient, user: string, approvalId: string, options?: QueryOptions) {
+  return queryOptions({
     queryKey: keys.approval(user, approvalId),
     queryFn: async () =>
       unwrap(await client.GET('/api/v1/approvals/{approval_id}', { params: { path: { approval_id: approvalId } } })),
@@ -229,18 +228,15 @@ export function useApproval(approvalId: string, options?: QueryOptions) {
   })
 }
 
+export function useApproval(approvalId: string, options?: QueryOptions) {
+  return useQuery(approvalQuery(useApiClient(), useCacheScope(), approvalId, options))
+}
+
 /** The same cache entries as useApproval, one per id. */
 export function useApprovals(approvalIds: readonly string[], options?: QueryOptions) {
   const client = useApiClient()
   const user = useCacheScope()
-  return useQueries({
-    queries: approvalIds.map((approvalId) => ({
-      queryKey: keys.approval(user, approvalId),
-      queryFn: async () =>
-        unwrap(await client.GET('/api/v1/approvals/{approval_id}', { params: { path: { approval_id: approvalId } } })),
-      refetchInterval: (query: { state: { data: ApprovalView | undefined } }) => (decided(query.state.data) ? false : pollEvery(options)),
-    })),
-  })
+  return useQueries({ queries: approvalIds.map((approvalId) => approvalQuery(client, user, approvalId, options)) })
 }
 
 function refreshAfterChange(queryClient: QueryClient): Promise<unknown> {
