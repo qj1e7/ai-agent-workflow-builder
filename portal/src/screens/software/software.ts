@@ -1,3 +1,4 @@
+import { ApiError } from '../../api/client'
 import type { Day, ScheduleView, SoftwareStatus, VersionSourceView, WatchedSoftwareView } from '../../api/types'
 
 export const SOURCES_NOTE =
@@ -50,6 +51,8 @@ export const dayOption: Record<Day, string> = {
 }
 
 const REPO = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9._-]{1,100}$/
+/** The platform refuses a name of . or .., which GitHub would read as a path. */
+const DOT_SEGMENT = /\/\.\.?$/
 const VERSION = /^\d+\.\d+\.\d+$/
 const CLOCK = /^([01][0-9]|2[0-3]):[0-5][05]$/
 const NAME_LIMIT = 80
@@ -70,7 +73,7 @@ export function repoOf(text: string): string {
 export function checkRepo(text: string, watched: readonly string[] = []): Checked<string> {
   const repo = repoOf(text)
   if (repo === '') return { ok: false, words: REPO_EMPTY }
-  if (!REPO.test(repo)) return { ok: false, words: REPO_BAD }
+  if (!REPO.test(repo) || DOT_SEGMENT.test(repo)) return { ok: false, words: REPO_BAD }
   if (watched.some((ref) => ref.toLowerCase() === repo.toLowerCase())) return { ok: false, words: `${repo} is already on the list.` }
   return { ok: true, value: repo }
 }
@@ -85,11 +88,42 @@ export function checkName(text: string, watched: readonly string[] = []): Checke
 
 export const VERSION_HELP = 'Left empty, the first check takes the newest.'
 
+const VERSION_BAD = 'Type the version as three numbers, such as 1.2.14.'
+
 export function checkVersion(text: string): Checked<string | null> {
   const version = text.trim()
   if (version === '') return { ok: true, value: null }
-  if (!VERSION.test(version)) return { ok: false, words: 'Type the version as three numbers, such as 1.2.14.' }
+  if (!VERSION.test(version)) return { ok: false, words: VERSION_BAD }
   return { ok: true, value: version }
+}
+
+export interface FormErrors {
+  readonly name?: string
+  readonly repo?: string
+  readonly version?: string
+  readonly form?: string
+}
+
+const REFUSED_FIELD: Record<string, keyof FormErrors> = { name: 'name', repo: 'repo', our_version: 'version' }
+const REFUSED_WORDS: Record<keyof FormErrors, string> = {
+  name: `Give the software a name of ${NAME_LIMIT} letters or fewer.`,
+  repo: REPO_BAD,
+  version: VERSION_BAD,
+  form: 'The list is full. Remove software you no longer run, then add this one.',
+}
+
+/** The platform's 422 on an add, as words beside each field. A problem with no field is the full list. */
+export function addProblems(error: unknown): FormErrors | null {
+  if (!(error instanceof ApiError) || error.status !== 422) return null
+  const detail = (error.body as { detail?: unknown } | null)?.detail
+  if (!Array.isArray(detail)) return null
+  const found: Partial<Record<keyof FormErrors, string>> = {}
+  for (const problem of detail as { loc?: unknown }[]) {
+    const loc = Array.isArray(problem.loc) ? problem.loc : []
+    const field = loc.length === 1 ? 'form' : REFUSED_FIELD[String(loc.at(-1))]
+    if (field) found[field] = REFUSED_WORDS[field]
+  }
+  return Object.keys(found).length > 0 ? found : null
 }
 
 export function checkClock(text: string): Checked<string> {

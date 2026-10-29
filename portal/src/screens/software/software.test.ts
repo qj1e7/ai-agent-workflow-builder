@@ -1,7 +1,9 @@
 import statuses from '@contracts/fixtures/watchlist/statuses.json'
 import { describe, expect, it } from 'vitest'
+import { ApiError } from '../../api/client'
 import type { ScheduleView, WatchedSoftwareView } from '../../api/types'
 import {
+  addProblems,
   checkClock,
   checkName,
   checkRepo,
@@ -34,7 +36,7 @@ describe('the GitHub reference check', () => {
   })
 
   it('says what is wrong for each badly formed reference and accepts none of them', () => {
-    for (const bad of ['fastapi', 'fastapi/', '/fastapi', 'a b/c', 'https://example.com/a/b', '-x/y', 'a/b/c']) {
+    for (const bad of ['fastapi', 'fastapi/', '/fastapi', 'a b/c', 'https://example.com/a/b', '-x/y', 'a/b/c', 'owner/..', 'owner/.', 'https://github.com/owner/..']) {
       const checked = checkRepo(bad)
       expect(checked.ok, bad).toBe(false)
       if (!checked.ok) expect(checked.words).toMatch(/GitHub/)
@@ -50,6 +52,30 @@ describe('the GitHub reference check', () => {
   it('refuses a repository that is already watched, whatever its case', () => {
     const checked = checkRepo('FastAPI/FastAPI', ['fastapi/fastapi'])
     expect(checked).toEqual({ ok: false, words: 'FastAPI/FastAPI is already on the list.' })
+  })
+})
+
+describe('what the platform refused when adding', () => {
+  const refused = (...loc: string[][]) => new ApiError(422, { detail: loc.map((where) => ({ loc: where, msg: 'refused', type: 'value_error' })) })
+
+  it('puts each field the platform refused beside that field, in plain words', () => {
+    expect(addProblems(refused(['body', 'name']))).toEqual({ name: 'Give the software a name of 80 letters or fewer.' })
+    expect(addProblems(refused(['body', 'repo']))).toEqual({ repo: 'That doesn’t look like a GitHub project. Paste its GitHub link, or type owner/name.' })
+    expect(addProblems(refused(['body', 'our_version'], ['body', 'name']))).toEqual({
+      version: 'Type the version as three numbers, such as 1.2.14.',
+      name: 'Give the software a name of 80 letters or fewer.',
+    })
+  })
+
+  it('says the list is full when the platform refused the whole add', () => {
+    const full = new ApiError(422, { detail: [{ loc: ['body'], msg: 'The watchlist holds 100 software at most' }] })
+    expect(addProblems(full)).toEqual({ form: 'The list is full. Remove software you no longer run, then add this one.' })
+  })
+
+  it('leaves any other answer to the general words', () => {
+    expect(addProblems(new ApiError(409, { detail: 'langchain-ai/langgraph is already watched' }))).toBeNull()
+    expect(addProblems(new ApiError(422, { detail: 'not a list' }))).toBeNull()
+    expect(addProblems(new Error('offline'))).toBeNull()
   })
 })
 

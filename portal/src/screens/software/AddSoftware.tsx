@@ -4,20 +4,13 @@ import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { useAddSoftware } from '../../api/queries'
 import { Button } from '../../ui/Button'
-import { checkName, checkRepo, checkVersion, REPO_HELP, SOURCES_NOTE, VERSION_HELP } from './software'
+import { addProblems, checkName, checkRepo, checkVersion, REPO_HELP, SOURCES_NOTE, VERSION_HELP, type FormErrors } from './software'
 import styles from './Software.module.css'
 
 export interface FormValues {
   readonly name: string
   readonly repo: string
   readonly version: string
-}
-
-export interface FormErrors {
-  readonly name?: string
-  readonly repo?: string
-  readonly version?: string
-  readonly form?: string
 }
 
 export const EMPTY_VALUES: FormValues = { name: '', repo: '', version: '' }
@@ -156,9 +149,14 @@ export function AddSoftware({ names, repos, onAdded }: { names: readonly string[
             onAdded(name.value)
           },
           onError: (error) => {
+            const refused = addProblems(error)
             if (error instanceof ApiError && error.status === 409) {
               setErrors({ repo: `${repo.value} is already on the list.` })
               refs.repo.current?.focus()
+            } else if (refused) {
+              setErrors(refused)
+              const field = refused.name ? refs.name : refused.repo ? refs.repo : refused.version ? refs.version : null
+              field?.current?.focus()
             } else setErrors({ form: words(error) })
           },
           onSettled: settled,
