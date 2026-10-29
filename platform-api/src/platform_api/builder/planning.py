@@ -317,6 +317,10 @@ def understood_out(answer: UnderstandResult | NoModel | RuntimeDown) -> Understa
 
 
 async def understand(planner: TaskReader, text: str) -> UnderstandOut:
+    """What the Planner understood of a task. Model trouble answers the starters: no model
+    connected, the runtime down or refusing, a model problem, or no answer within the limit. A
+    failure to read the model settings from the database is not model trouble, so it is raised
+    and the route answers 500."""
     limit = UNDERSTAND_LIMIT_SECONDS
     try:
         async with asyncio.timeout(limit):

@@ -350,6 +350,16 @@ async def test_an_answer_slower_than_the_limit_shows_the_starters_in_time(
     assert "no answer within 0.05 seconds" in caplog.text
 
 
+class SettingsUnreadable:
+    async def understand(self, task: str) -> UnderstandResult | NoModel | RuntimeDown:
+        raise ConnectionError("the database is down")
+
+
+async def test_a_failure_reading_the_model_settings_is_raised_not_shown_as_starters():
+    with pytest.raises(ConnectionError):
+        await understand(SettingsUnreadable(), "x")
+
+
 def test_the_starters_are_the_prototypes_three_phrased_with_the_jira_tools_we_have():
     assert [(s.name, s.opens) for s in STARTERS] == [
         ("Keep our software up to date", "software_watchlist"),
