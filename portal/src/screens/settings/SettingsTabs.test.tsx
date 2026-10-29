@@ -116,11 +116,11 @@ describe('the AI model tab', () => {
   })
 
   it('never shows more of a key than its last 2 characters', () => {
-    const longHint = { ...modelActive, active: { ...modelActive.active, key_hint: 'sk-live-7f3a9c' } }
+    const longHint = { ...modelActive, active: { ...modelActive.active, key_hint: 'not-a-key-xyz9c' } }
     const html = render({ model: longHint })
     expect(html).toContain('API key ending 9c')
-    expect(html).not.toContain('sk-live')
-    expect(html).not.toContain('7f3a9c')
+    expect(html).not.toContain('not-a-key')
+    expect(html).not.toContain('xyz9c')
   })
 
   it('offers Connect with every known provider and another address, and a key field that holds no value', () => {
