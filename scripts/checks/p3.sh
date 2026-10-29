@@ -18,7 +18,8 @@
 #   lane1 <trunk-src> <head-src>          trunk then head dev stacks: alice runs, bob approves (p3-approve-trunk-head.json)
 #   lane2 <src> <project>                 on a running OIDC stack: mallory is not on the list
 #   lane3 <src> <project>                 on a running OIDC stack: alice adds erin, erin's first sign-in binds
-#   lanes4to9 <api-port>                  lanes 4 to 9 on one running dev stack, in order (4, 5, 6, 7, 8, 9)
+#   lanes4to9 <api-port>                  lanes 4 to 9 on one fresh dev stack, in the order 4, 7, 6, 5, 8, 9: lane 7
+#                                         needs alice and bob as the only Approvers, so it runs before bob confirms dave
 #   lane10 <src> <project>                restart platform-api of a running OIDC stack with other FIRST_* values
 #   perf <trunk-src> <head-src> [rounds]  p95 of GET /api/v1/me, 500 requests, interleaved; both dev stacks must be up
 #   perf-table <dir>                      the p95 medians and the pass/fail against trunk + 20 ms
@@ -240,7 +241,7 @@ lane3() { in_stack "$1" "$2" lane-3 lane3 http://localhost:8000 /tmp/p3-out "$IS
 
 lanes4to9() {
   local port=$1 status=0
-  for lane in lane4 lane5 lane6 lane7 lane8 lane9; do
+  for lane in lane4 lane7 lane6 lane5 lane8 lane9; do
     echo "== $lane"
     lanes_py "$lane" "http://localhost:$port" "$EVID/lanes-4-9" || status=1
   done

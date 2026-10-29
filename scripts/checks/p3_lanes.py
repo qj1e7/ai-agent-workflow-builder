@@ -16,7 +16,7 @@ usage: python3 -I scripts/checks/p3_lanes.py <command> <api-base-url> <out-dir> 
   lane6 <api> <out>                    alice removes her own Operator role: refused
   lane7 <api> <out>                    carol removes bob's Approver role with two Approvers: refused
   lane8 <api> <out>                    three Approvers; two removals at the same moment; two remain
-  lane9 <api> <out>                    dave loses the Approver role, then decides a waiting request: refused
+  lane9 <api> <out>                    dave (with erin as a third Approver) loses the role, then decides: refused
   people <api> <out> <file>            save GET /api/v1/people as alice (dev) for before/after comparisons
   token <issuer> <user>                print an access token for <user> from the mock identity provider
 """
@@ -449,6 +449,7 @@ def lane8(api: Api, out: Path) -> bool:
 
 def lane9(api: Api, out: Path) -> bool:
     dave = confirmed_approver(api, "dave@example.test", "Dave")
+    erin = confirmed_approver(api, "erin@example.test", "Erin")
     dave_hdr = {"X-Dev-User": dave["id"]}
     status, added = api.call(
         "alice",
@@ -486,7 +487,7 @@ def lane9(api: Api, out: Path) -> bool:
         "bob", "POST", f"/api/v1/approvals/{approval_id}/decisions", {"step": 0, "verdict": "approve", "digest": view["digest"]}
     )
     lines.append((status == 201, f"bob approves instead: HTTP {status}"))
-    save(out, "p3-removed.json", {"run": run, "removed": removed, "refused": refused, "bob": decided, "calls": api.log})
+    save(out, "p3-removed.json", {"run": run, "erin": erin, "removed": removed, "refused": refused, "bob": decided, "calls": api.log})
     return verdict(lines)
 
 
