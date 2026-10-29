@@ -1,5 +1,4 @@
-"""Planning a task: the Planner reads it back, then picks saved agents, or drafts a new one for
-the Operator.
+"""Planning a task: the Planner picks saved agents, or drafts a new one for the Operator.
 
 The model's answer is untrusted. It can only point at cards in the library and fill their
 inputs, and every value and every draft is checked here before the Portal shows it. Planning
@@ -73,8 +72,7 @@ class TaskReader(Protocol):
     async def understand(self, task: str) -> UnderstandResult | NoModel | RuntimeDown: ...
 
 
-class Planning(CardPlanner, TaskReader, Protocol):
-    """Everything the builder asks of the Planner."""
+class Planning(CardPlanner, TaskReader, Protocol): ...
 
 
 class NoPlanner:
@@ -243,7 +241,6 @@ def _trouble(problem: ModelProblem) -> ModelTrouble:
     return ModelTrouble(message=PROBLEM_WORDS.get(problem.reason, PROBLEM_WORDS["failed"]))
 
 
-# The Operator waits on this answer, so after this long the starter workflows show instead.
 UNDERSTAND_LIMIT_SECONDS: Final = 10.0
 FOLLOW_UP_TASK: Final = (
     "Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days and create one "
@@ -320,8 +317,6 @@ def understood_out(answer: UnderstandResult | NoModel | RuntimeDown) -> Understa
 
 
 async def understand(planner: TaskReader, text: str) -> UnderstandOut:
-    """What the Planner understood of a task, or the starter workflows when it can't say in
-    time. Nothing is saved or written."""
     limit = UNDERSTAND_LIMIT_SECONDS
     try:
         async with asyncio.timeout(limit):

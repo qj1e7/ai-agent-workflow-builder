@@ -1,5 +1,4 @@
-"""The Planner's planning, as the builder sees it: read a task back, choose saved agents, or
-draft a new one.
+"""The Planner's planning, as the builder sees it: choose saved agents, or draft a new one.
 
 The builder owns the library and the checks. This side owns the model and the runtime, so the
 model key goes from the settings store into the request to the runtime and nowhere else.
