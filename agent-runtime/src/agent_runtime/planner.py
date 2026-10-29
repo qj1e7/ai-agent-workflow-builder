@@ -279,8 +279,6 @@ def run_cards(
     return TaskFinished(task_id=request.task_id, output=output, events=events.events)
 
 
-# The platform waits 10 s for the whole answer, then shows the starter workflows, so the model
-# gets less than that and the platform still hears why.
 UNDERSTAND_TIMEOUT_SECONDS: Final = 8.0
 ORDER: Final[tuple[RowKind, ...]] = ("schedule", "look_for", "do", "where")
 MAX_ROWS: Final = 8
@@ -293,7 +291,6 @@ CANT_YET: Final = "I can't do this yet."
 ONLY_TICKETS: Final = (
     "I can't do this yet. The only change I can make is a new Jira ticket, after a yes."
 )
-# No tool does any of these. A part that starts with one is can't do, whatever the model said.
 NO_TOOL_VERBS: Final = frozenset(
     {
         "approve",
@@ -338,8 +335,7 @@ NO_TOOL_VERBS: Final = frozenset(
         "upload",
     }
 )
-# The only place a result can go is a Jira ticket.
-OTHER_PLACES: Final = re.compile(
+NON_JIRA_PLACES: Final = re.compile(
     r"\b(?:teams|confluence|slack|outlook|sharepoint|gitlab|entra|servicenow|e-?mail)\b",
     re.IGNORECASE,
 )
@@ -421,11 +417,10 @@ def _missing(kind: RowKind, note: str = NOT_SAID) -> UnderstoodRow:
 
 
 def no_tool_for(kind: RowKind, text: str) -> bool:
-    """True when a part asks for a write no tool can make, or for a place other than Jira."""
     if kind not in ("do", "where") or not text.strip():
         return False
     first = text.split(maxsplit=1)[0].strip(",.;:!").casefold()
-    return first in NO_TOOL_VERBS or (kind == "where" and OTHER_PLACES.search(text) is not None)
+    return first in NO_TOOL_VERBS or (kind == "where" and NON_JIRA_PLACES.search(text) is not None)
 
 
 def _held_to_the_tools(row: UnderstoodRow) -> UnderstoodRow:
@@ -459,8 +454,7 @@ def _rows(answers: list[RowAnswer]) -> list[UnderstoodRow]:
     return sorted(kept, key=lambda row: ORDER.index(row.kind))
 
 
-def _in_task(task: str, said: str | None) -> str | None:
-    """The words as the task wrote them, or None when the task does not hold them."""
+def _as_the_task_wrote_it(task: str, said: str | None) -> str | None:
     wanted = (said or "").strip().strip("\"'“”‘’")
     if not wanted:
         return None
@@ -477,10 +471,10 @@ def understood_of(answer: UnderstandAnswer, task: str) -> Understood | BelongsOn
     and a part that needs a tool we don't have is can't do. None when the answer does not hold
     together: no rows, or a watchlist word that is not in the task."""
     if answer.belongs_on_watchlist:
-        word = _in_task(task, answer.watchlist_word)
+        word = _as_the_task_wrote_it(task, answer.watchlist_word)
         if word is None:
             return None
-        return BelongsOnWatchlist(word=word, software=_in_task(task, answer.software))
+        return BelongsOnWatchlist(word=word, software=_as_the_task_wrote_it(task, answer.software))
     if not answer.rows:
         return None
     return Understood(rows=_rows(answer.rows))

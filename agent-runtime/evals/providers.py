@@ -112,8 +112,6 @@ PROVIDERS = (
         default_models=(),
         settings=_cloud,
     ),
-    # An Anthropic-style gateway, read from the runtime's own settings (ADR 0021): the AI
-    # Singapore gateway for the demo model, or the mock model for a dry run.
     Provider(
         "gateway",
         needs=("AGENT_MODEL_BASE_URL", "AGENT_MODEL_API_KEY"),

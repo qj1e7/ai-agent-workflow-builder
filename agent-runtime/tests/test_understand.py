@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Any
 
 import pytest
@@ -58,8 +59,6 @@ def ask(answer: object) -> object:
 
 
 class ToolCallingChat(BaseChatModel):
-    """Answers with one tool call, so the real structured output parser reads the arguments."""
-
     arguments: dict[str, Any]
 
     @property
@@ -77,10 +76,10 @@ class ToolCallingChat(BaseChatModel):
         message = AIMessage(content="", tool_calls=[call])
         return ChatResult(generations=[ChatGeneration(message=message)])
 
-    def bind_tools(self, tools: Any, **kwargs: Any) -> Runnable[Any, Any]:  # type: ignore[override]
-        return self  # type: ignore[return-value]
+    def bind_tools(self, tools: Any, **kwargs: Any) -> Runnable[Any, Any]:
+        return self
 
-    def with_structured_output(  # type: ignore[override]
+    def with_structured_output(
         self, schema: Any, *, include_raw: bool = False, method: str = "", **kwargs: Any
     ) -> Runnable[Any, Any]:
         return super().with_structured_output(schema, include_raw=include_raw)
@@ -310,8 +309,9 @@ def test_the_prompt_lists_the_tools_and_the_rules_and_no_old_names():
         "never guess",
     ):
         assert words in UNDERSTAND_SYSTEM
-    for old in ("Flint", "Forge", "Scout", "Analyst", "Room lead", "Release checker"):
+    for old in ("Flint", "Forge", "Scout", "Analyst"):
         assert old not in UNDERSTAND_SYSTEM
+    assert not re.search(r"room[ _]lead|release[ _]checker", UNDERSTAND_SYSTEM, re.IGNORECASE)
 
 
 def test_the_route_needs_the_key_and_says_when_no_model_is_connected():

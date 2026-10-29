@@ -296,7 +296,6 @@ def ask_model[A: BaseModel](
     shape: type[A],
     timeout: float = CARD_MODEL_TIMEOUT_SECONDS,
 ) -> A | ModelProblem:
-    """One structured answer from the model, in the given shape, or the plain reason it failed."""
     try:
         model: BaseChatModel = chat_for(timeout)
         structured = model.with_structured_output(
