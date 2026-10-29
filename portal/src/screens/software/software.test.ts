@@ -68,8 +68,9 @@ describe('what the platform refused when adding', () => {
   })
 
   it('says the list is full when the platform refused the whole add', () => {
-    const full = new ApiError(422, { detail: [{ loc: ['body'], msg: 'The watchlist holds 100 software at most' }] })
+    const full = new ApiError(422, { detail: [{ type: 'watchlist_full', loc: ['body'], msg: 'The watchlist holds 100 software at most' }] })
     expect(addProblems(full)).toEqual({ form: 'The list is full. Remove software you no longer run, then add this one.' })
+    expect(addProblems(new ApiError(422, { detail: [{ type: 'missing', loc: ['body'], msg: 'Field required' }] }))).toBeNull()
   })
 
   it('leaves any other answer to the general words', () => {

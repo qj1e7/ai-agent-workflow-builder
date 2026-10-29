@@ -37,9 +37,12 @@ async def get_watchlist(principal: CurrentPrincipal, watchlist: CurrentWatchlist
 
 
 def _full(limit: int) -> HTTPException:
-    return HTTPException(
-        422, [{"loc": ["body"], "msg": f"The watchlist holds {limit} software at most"}]
-    )
+    problem = {
+        "type": "watchlist_full",
+        "loc": ["body"],
+        "msg": f"The watchlist holds {limit} software at most",
+    }
+    return HTTPException(422, [problem])
 
 
 @router.post(

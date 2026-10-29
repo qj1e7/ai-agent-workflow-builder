@@ -127,3 +127,16 @@ def test_the_route_answers_the_status_and_declares_it(
     )
     assert response.status_code == status
     declared_status(app, method, re.sub(r"/sw_[a-z]+", "/{software_id}", path), response)
+
+
+def test_a_full_watchlist_is_a_422_of_its_own_type():
+    response = TestClient(app_with()).post(RESTORE.format("sw_full"), headers=ALICE)
+    assert response.json() == {
+        "detail": [
+            {
+                "type": "watchlist_full",
+                "loc": ["body"],
+                "msg": "The watchlist holds 100 software at most",
+            }
+        ]
+    }

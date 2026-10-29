@@ -114,15 +114,14 @@ const REFUSED_WORDS: Record<keyof FormErrors, string> = {
   form: 'The list is full. Remove software you no longer run, then add this one.',
 }
 
-/** The platform's 422 on an add, as words beside each field. A problem with no field is the full list. */
 export function addProblems(error: unknown): FormErrors | null {
   if (!(error instanceof ApiError) || error.status !== 422) return null
   const detail = (error.body as { detail?: unknown } | null)?.detail
   if (!Array.isArray(detail)) return null
   const found: Partial<Record<keyof FormErrors, string>> = {}
-  for (const problem of detail as { loc?: unknown }[]) {
+  for (const problem of detail as { type?: unknown; loc?: unknown }[]) {
     const loc = Array.isArray(problem.loc) ? problem.loc : []
-    const field = loc.length === 1 ? 'form' : REFUSED_FIELD[String(loc.at(-1))]
+    const field = problem.type === 'watchlist_full' ? 'form' : REFUSED_FIELD[String(loc.at(-1))]
     if (field) found[field] = REFUSED_WORDS[field]
   }
   return Object.keys(found).length > 0 ? found : null
