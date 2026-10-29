@@ -120,10 +120,12 @@ describe('a card', () => {
     expect(dialog).not.toContain(CHANGE_LATER_NOTE)
   })
 
-  it('says so when the address names no agent', () => {
+  it('says so when the address names no agent, as a status above the agents', () => {
     const html = render({ path: '/agents/crd_nothing' })
     expect(dialogOf(html)).toBe('')
-    expect(mainOf(html)).toContain(NOT_FOUND_WORDS)
+    const notice = html.indexOf(`role="status">${NOT_FOUND_WORDS}`)
+    expect(notice).toBeGreaterThan(-1)
+    expect(notice).toBeLessThan(html.indexOf('Platform agents'))
   })
 
   it('lists tool ids when the tool list is down', () => {

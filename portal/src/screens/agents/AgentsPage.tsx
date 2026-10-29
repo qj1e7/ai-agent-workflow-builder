@@ -53,6 +53,11 @@ export function AgentsPage({ heading, lead }: { heading: string; lead: string })
           Tools {tools.data ? <span className={styles['count']}>{tools.data.length}</span> : null}
         </button>
       </div>
+      {agentId !== null && !platform && !card && cards.isSuccess ? (
+        <p className={styles['notice']} role="status">
+          {NOT_FOUND_WORDS}
+        </p>
+      ) : null}
       {tools.isError ? (
         <p className={styles['notice']} role="status">
           {toolsUnavailableWords(tab === 'agents' && cards.isSuccess)}{' '}
@@ -99,7 +104,6 @@ export function AgentsPage({ heading, lead }: { heading: string; lead: string })
           </section>
         </>
       )}
-      {agentId !== null && !platform && !card && cards.isSuccess ? <p className={styles['notice']}>{NOT_FOUND_WORDS}</p> : null}
       {platform ? <PlatformDialog key={platform.id} agent={platform} onClose={close} /> : null}
       {card ? <CardDialog key={card.card_id} card={card} tools={toolIndex} onClose={close} /> : null}
     </>
