@@ -22,7 +22,6 @@ Closes #
 
 ---
 
-- [ ] A teammate who is not the author will review
 - [ ] Big decision? ADR added in `docs/adr/`
 - [ ] New domain terms added to `GLOSSARY.md`
 - [ ] No secrets in the diff

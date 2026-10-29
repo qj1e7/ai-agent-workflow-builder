@@ -67,7 +67,7 @@ Install pstack from Cursor's plugin marketplace ([source](https://github.com/cur
 3. Give your agent the task, for example: "Use poteto-mode to add the release check trigger. Issue #12."
 4. pstack plans, builds, verifies, and opens a PR in our format.
 5. Read the whole diff yourself. You own what you ship, not the agent.
-6. A teammate reviews and approves. Then the PR is squash-merged into `main`.
+6. When CI passes and you are happy with it, ask for the merge. The PR is squash-merged into `main`.
 
 ## Upgrading pstack (once per sprint)
 
