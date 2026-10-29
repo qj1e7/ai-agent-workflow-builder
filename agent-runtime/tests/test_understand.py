@@ -16,6 +16,7 @@ from agent_runtime.contract import (
 )
 from agent_runtime.contracts import FOLLOW_UP_TASK, RELEASE_TASK, understand_request
 from agent_runtime.planner import (
+    NO_PLACE,
     NOT_SAID,
     ONLY_TICKETS,
     READ_IN,
@@ -186,26 +187,82 @@ def test_a_changed_or_cant_do_row_always_says_why():
     assert result.rows[2].note
 
 
+def accepted_by_the_model(kind: str, text: str, state: str = "understood") -> UnderstoodRow:
+    answer = rows(
+        ("schedule", "Every weekday at 3pm", "understood"),
+        ("look_for", "Bug tickets in MOCK", "understood"),
+        ("do", "Create one ticket that lists them", "understood"),
+        ("where", "Jira project MOCK", "understood"),
+        (kind, text, state),
+    )
+    result = ask(answer)
+    assert isinstance(result, Understood)
+    [row] = [r for r in result.rows if r.text == text]
+    return row
+
+
 @pytest.mark.parametrize(
     ("kind", "text"),
     [
         ("do", "Close every ticket"),
         ("do", "Delete every closed ticket"),
         ("do", "Ask each owner if it is still needed"),
-        ("where", "Post it in Teams"),
-        ("where", "The Weekly summary page in Confluence"),
+        ("do", "Please close every ticket"),
+        ("do", "Then delete them"),
+        ("do", '"Close" every ticket'),
+        ("do", "“Close” every ticket"),
+        ("do", "Add a comment to each ticket"),
+        ("do", "Comment on each ticket"),
+        ("do", "Attach the list to each ticket"),
+        ("do", "Link each ticket to the epic"),
+        ("do", "Escalate them to the team lead"),
+        ("do", "Flag each one as urgent"),
+        ("do", "Create one ticket and close the old ones"),
+        ("look_for", "Close tickets with no update"),
+        ("where", "Post it in the channel"),
     ],
 )
-def test_a_write_no_tool_can_do_is_cant_do_even_when_the_model_accepts_it(kind: str, text: str):
-    answer = rows(
-        ("schedule", "Every weekday at 3pm", "understood"),
-        ("look_for", "Bug tickets in MOCK", "understood"),
-        (kind, text, "understood"),
-    )
-    result = ask(answer)
-    assert isinstance(result, Understood)
-    [row] = [r for r in result.rows if r.text == text]
+def test_an_action_no_tool_takes_is_cant_do_even_when_the_model_accepts_it(kind: str, text: str):
+    row = accepted_by_the_model(kind, text)
     assert (row.state, row.note) == ("cant_do", ONLY_TICKETS)
+
+
+@pytest.mark.parametrize(
+    ("kind", "text", "place"),
+    [
+        ("look_for", "Who has admin access in GitLab", "GitLab"),
+        ("look_for", "Open merge requests in GitLab", "GitLab"),
+        ("look_for", "Pages in Confluence changed this week", "Confluence"),
+        ("do", "Write them to the Weekly summary page in Confluence", "Confluence"),
+        ("do", "Create a Confluence page listing them", "Confluence"),
+        ("do", "Also post a summary in Teams", "Teams"),
+        ("do", "Sum them up in an email", "email"),
+        ("where", "Post it in Teams", "Teams"),
+        ("where", "The Weekly summary page in Confluence", "Confluence"),
+        ("where", "GitLab", "GitLab"),
+    ],
+)
+def test_a_place_no_tool_reaches_is_cant_do_and_the_note_names_it(kind: str, text: str, place: str):
+    row = accepted_by_the_model(kind, text, "changed")
+    assert (row.state, row.note) == ("cant_do", NO_PLACE.format(place))
+
+
+@pytest.mark.parametrize(
+    ("kind", "text"),
+    [
+        ("look_for", "Tickets with no update for 10 days"),
+        ("look_for", "Tickets without an update this week"),
+        ("look_for", "Tickets with the label urgent"),
+        ("look_for", "Tickets raised by the support teams"),
+        ("look_for", "Closed tickets"),
+        ("do", "Write an update for the team"),
+        ("do", "Create one change ticket that lists them"),
+        ("do", "Sum them up"),
+        ("where", "A new ticket in Jira project SUP"),
+    ],
+)
+def test_a_part_the_rule_cannot_place_stays_as_the_model_said(kind: str, text: str):
+    assert accepted_by_the_model(kind, text).state == "understood"
 
 
 def test_injected_text_adds_no_write_the_platform_would_accept():

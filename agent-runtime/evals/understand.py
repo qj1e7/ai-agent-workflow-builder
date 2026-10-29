@@ -3,7 +3,7 @@ import re
 from pydantic import BaseModel
 
 from agent_runtime.contract import BelongsOnWatchlist, RowKind, RowState, Understood
-from agent_runtime.planner import UNDERSTAND_SYSTEM, UnderstandAnswer, no_tool_for, understood_of
+from agent_runtime.planner import UNDERSTAND_SYSTEM, UnderstandAnswer, understood_of, why_no_tool
 from evals.checks import Check, check, mentions, no_jargon, no_themed_names, ticket_keys
 from evals.jobs import Answer, Case, Job
 
@@ -79,7 +79,7 @@ def _rows(case: UnderstandCase, answer: UnderstandAnswer, shown: Understood) -> 
             [
                 r.text
                 for r in answer.rows
-                if r.state in ACCEPTED and no_tool_for(r.kind, " ".join(r.text.split()))
+                if r.state in ACCEPTED and why_no_tool(r.kind, r.text) is not None
             ],
         ),
         check("no_invented_keys", sorted(shown_keys - task_keys)),

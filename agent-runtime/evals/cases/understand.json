@@ -559,10 +559,14 @@
       "schedule": [
         "understood",
         "changed"
+      ],
+      "look_for": [
+        "cant_do"
       ]
     },
     "cant_do": [
-      "remove"
+      "remove",
+      "GitLab"
     ],
     "reference": {
       "belongs_on_watchlist": false,

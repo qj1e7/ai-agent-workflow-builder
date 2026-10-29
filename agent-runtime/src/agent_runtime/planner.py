@@ -2,6 +2,7 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import date
+from itertools import pairwise
 from typing import Final, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -291,23 +292,38 @@ CANT_YET: Final = "I can't do this yet."
 ONLY_TICKETS: Final = (
     "I can't do this yet. The only change I can make is a new Jira ticket, after a yes."
 )
+NO_PLACE: Final = (
+    "I can't use {} yet. I can only read Jira tickets and GitHub releases, and create a Jira "
+    "ticket after a yes."
+)
 NO_TOOL_VERBS: Final = frozenset(
     {
+        "add",
         "approve",
         "archive",
         "ask",
         "assign",
-        "chase",
+        "attach",
+        "cancel",
         "change",
+        "chase",
         "close",
         "comment",
         "delete",
         "deploy",
+        "disable",
         "e-mail",
         "edit",
         "email",
+        "enable",
+        "escalate",
+        "flag",
+        "forward",
         "grant",
+        "invite",
         "label",
+        "link",
+        "lock",
         "mark",
         "merge",
         "message",
@@ -318,8 +334,10 @@ NO_TOOL_VERBS: Final = frozenset(
         "post",
         "publish",
         "reassign",
+        "reject",
         "remind",
         "remove",
+        "rename",
         "reopen",
         "reply",
         "reset",
@@ -328,16 +346,62 @@ NO_TOOL_VERBS: Final = frozenset(
         "send",
         "set",
         "share",
+        "submit",
+        "suspend",
         "tag",
         "tell",
         "transition",
+        "unassign",
         "update",
         "upload",
     }
 )
-NON_JIRA_PLACES: Final = re.compile(
-    r"\b(?:teams|confluence|slack|outlook|sharepoint|gitlab|entra|servicenow|e-?mail)\b",
-    re.IGNORECASE,
+LEADS_IN: Final = frozenset(
+    {
+        "also",
+        "and",
+        "finally",
+        "just",
+        "kindly",
+        "next",
+        "now",
+        "or",
+        "please",
+        "so",
+        "then",
+        "to",
+    }
+)
+FIRST_WORDS: Final = 5
+WORD: Final = re.compile(r"[a-z0-9][a-z0-9'-]*")
+
+
+def _place(name: str, flags: re.RegexFlag = re.IGNORECASE) -> tuple[str, re.Pattern[str]]:
+    return name, re.compile(rf"(?<!\w){re.escape(name)}(?!\w)", flags)
+
+
+PLACES_WITH_NO_TOOL: Final = (
+    # Only with a capital: "the support teams" is not Microsoft Teams.
+    _place("Teams", re.NOFLAG),
+    *(
+        _place(name)
+        for name in (
+            "Confluence",
+            "Slack",
+            "Outlook",
+            "SharePoint",
+            "OneDrive",
+            "Excel",
+            "GitLab",
+            "Bitbucket",
+            "Entra",
+            "Active Directory",
+            "Azure AD",
+            "ServiceNow",
+            "email",
+            "e-mail",
+        )
+    ),
 )
 
 UNDERSTAND_SYSTEM: Final = (
@@ -416,17 +480,27 @@ def _missing(kind: RowKind, note: str = NOT_SAID) -> UnderstoodRow:
     return UnderstoodRow(kind=kind, text="", state="missing", note=note)
 
 
-def no_tool_for(kind: RowKind, text: str) -> bool:
-    if kind not in ("do", "where") or not text.strip():
-        return False
-    first = text.split(maxsplit=1)[0].strip(",.;:!").casefold()
-    return first in NO_TOOL_VERBS or (kind == "where" and NON_JIRA_PLACES.search(text) is not None)
+def _no_tool_action(text: str) -> bool:
+    words = WORD.findall(text.casefold())[:FIRST_WORDS]
+    led_in = [word for before, word in pairwise(words) if before in LEADS_IN]
+    return any(word in NO_TOOL_VERBS for word in words[:1] + led_in)
+
+
+def why_no_tool(kind: RowKind, text: str) -> str | None:
+    """Why no tool can do this part, from its words alone: it names a place we have no tool for,
+    or one of its first words is an action no tool takes. None when the words name neither, and
+    then the model's state stands."""
+    if kind == "schedule":
+        return None
+    place = next((name for name, pattern in PLACES_WITH_NO_TOOL if pattern.search(text)), None)
+    if place is not None:
+        return NO_PLACE.format(place)
+    return ONLY_TICKETS if _no_tool_action(text) else None
 
 
 def _held_to_the_tools(row: UnderstoodRow) -> UnderstoodRow:
-    if row.state in ("understood", "changed") and no_tool_for(row.kind, row.text):
-        return row.model_copy(update={"state": "cant_do", "note": ONLY_TICKETS})
-    return row
+    why = why_no_tool(row.kind, row.text) if row.state in ("understood", "changed") else None
+    return row if why is None else row.model_copy(update={"state": "cant_do", "note": why})
 
 
 def _row(answer: RowAnswer) -> UnderstoodRow:

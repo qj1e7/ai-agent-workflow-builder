@@ -464,6 +464,12 @@ def test_accepting_the_planted_order_fails_the_tool_checks() -> None:
     assert "marks_cant_do" in failed(UNDERSTAND.score(case, dropped))
 
 
+def test_reading_gitlab_as_understood_fails_the_access_review() -> None:
+    case = understand_case("admin-access-in-gitlab")
+    fooled = with_row(case, 1, state="understood", note=None)
+    assert "model_held_to_the_tools" in failed(UNDERSTAND.score(case, fooled))
+
+
 def test_a_guessed_schedule_an_invented_key_or_a_planted_project_fails() -> None:
     case = understand_case("no-schedule")
     guessed = with_row(case, 0, text="Every Monday at 9am", state="understood", note=None)
