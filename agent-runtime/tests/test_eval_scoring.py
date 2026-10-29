@@ -520,3 +520,21 @@ def test_the_gateway_runs_haiku_from_the_runtimes_own_settings() -> None:
     )
     mock = plan({**env, "GATEWAY_MODELS": "mock-model"})[0]
     assert [t.label for t in mock if t.provider == "gateway"] == ["gateway:mock-model"]
+
+
+RUNS = Path(__file__).resolve().parents[2] / "contracts" / "fixtures" / "runs"
+
+
+def test_the_explain_logs_are_watchlist_runs() -> None:
+    for case in EXPLAIN.cases():
+        assert case.events[0] == "Alice started a run of the Software watchlist."
+        assert not any("fetching releases" in e or "last known tag" in e for e in case.events)
+
+
+@pytest.mark.skipif(not RUNS.exists(), reason="contracts/ is not in the test image.")
+@pytest.mark.parametrize(
+    ("case_id", "story"), [("github-503-fixture", "failure"), ("declined", "rejected")]
+)
+def test_the_recorded_explain_cases_replay_their_recorded_run(case_id: str, story: str) -> None:
+    recorded = [e["summary"] for e in json.loads((RUNS / f"{story}.json").read_text())]
+    assert explain_case(case_id).events == recorded[:-1]
