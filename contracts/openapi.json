@@ -2010,7 +2010,8 @@
       "ConfirmationDecision": {
         "enum": [
           "confirmed",
-          "not_now"
+          "not_now",
+          "closed"
         ],
         "title": "ConfirmationDecision",
         "type": "string"

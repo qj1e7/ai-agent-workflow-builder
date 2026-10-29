@@ -12,6 +12,7 @@ from platform_api.app import create_app
 from platform_api.auth import DEV_PEOPLE
 from platform_api.db import Database
 from platform_api.orchestration.approvals import Refusal, Verdict
+from platform_api.orchestration.confirmations import ConfirmationDecision
 from platform_api.orchestration.model_settings import KeyBox, ModelSettings
 from platform_api.orchestration.people_store import People
 from platform_api.orchestration.service import DecisionRefused
@@ -404,7 +405,7 @@ async def test_the_dev_identity_resolves_only_people_on_the_list(people: People)
 
 
 async def test_removing_a_person_closes_the_request_about_them(
-    client: httpx.AsyncClient, app: FastAPI
+    client: httpx.AsyncClient, app: FastAPI, people: People
 ):
     dave = (
         await add(client, ALICE, "dave@example.test", "Dave", operator=True, approver=True)
@@ -415,9 +416,16 @@ async def test_removing_a_person_closes_the_request_about_them(
     lines = await history(client)
     assert lines[0]["summary"] == "Alice removed Dave from the list."
     assert lines[1]["summary"] == (
-        "The request to make Dave an Approver was closed, because Alice removed Dave from the list."
+        "The request to make Dave an Approver was closed, because Dave left the list."
     )
-    assert lines[1]["confirmation_id"] == waiting["confirmation_id"]
+    assert (lines[1]["by"], lines[1]["confirmed_by"], lines[1]["confirmation_id"]) == (
+        "alice",
+        None,
+        waiting["confirmation_id"],
+    )
+    closed = await people.confirmation(waiting["confirmation_id"])
+    assert closed is not None
+    assert (closed.decision, closed.decided_by) == (ConfirmationDecision.CLOSED, "alice")
     back = await add(client, CAROL, "dave@example.test", "Dave", operator=True)
     assert back.status_code == 201
     stale = await decide(client, BOB, waiting, "confirm")

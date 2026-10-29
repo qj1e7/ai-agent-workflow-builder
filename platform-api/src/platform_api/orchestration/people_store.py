@@ -386,10 +386,9 @@ class People:
                 await self._confirmations.record_change(
                     uow,
                     "people",
-                    closed.asked_by,
+                    me.id,
                     f"The request to make {person.display} an Approver was closed, because "
-                    f"{me.display} removed {person.display} from the list.",
-                    confirmed_by=me.id,
+                    f"{person.display} left the list.",
                     confirmation_id=closed.id,
                 )
             await self._confirmations.record_change(uow, "people", me.id, outcome.summary)

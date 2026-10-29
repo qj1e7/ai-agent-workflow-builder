@@ -29,7 +29,7 @@ def upgrade() -> None:
             asked_by text NOT NULL,
             asked_at timestamptz NOT NULL,
             decided_by text,
-            decision text CHECK (decision IN ('confirmed', 'not_now')),
+            decision text CHECK (decision IN ('confirmed', 'not_now', 'closed')),
             decided_at timestamptz,
             CHECK (
                 (decided_by IS NULL AND decision IS NULL AND decided_at IS NULL)

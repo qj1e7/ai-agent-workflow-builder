@@ -29,6 +29,8 @@ class ConfirmationKind(Enum):
 class ConfirmationDecision(Enum):
     CONFIRMED = "confirmed"
     NOT_NOW = "not_now"
+    CLOSED = "closed"
+    """Nobody decided it: the person it is about, or who asked, left first."""
 
 
 @dataclass(frozen=True)
@@ -261,7 +263,7 @@ class ConfirmationStore:
                 "UPDATE orchestration.confirmations "
                 "SET decided_by = %s, decision = %s, decided_at = %s "
                 f"WHERE about = %s AND decided_at IS NULL RETURNING {_COLUMNS}",
-                (closed_by, ConfirmationDecision.NOT_NOW.value, uow.now, person_id),
+                (closed_by, ConfirmationDecision.CLOSED.value, uow.now, person_id),
             )
         ).fetchall()
         return [_confirmation(r) for r in rows]
