@@ -38,7 +38,7 @@ TEAMS_TASK = "post a summary of stale tickets in Teams"
 FIELDS = ("kind", "text", "state", "note")
 
 
-def rows(*parts: tuple[str, ...]) -> UnderstandAnswer:
+def rows(*parts: tuple[str | None, ...]) -> UnderstandAnswer:
     answers = [RowAnswer.model_validate(dict(zip(FIELDS, p, strict=False))) for p in parts]
     return UnderstandAnswer(belongs_on_watchlist=False, rows=answers)
 
