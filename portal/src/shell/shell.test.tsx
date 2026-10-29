@@ -116,9 +116,18 @@ describe('the Settings gear', () => {
 
 describe('an unknown path', () => {
   it('says Page not found and offers Home', () => {
-    const html = render({ path: '/runs/abc' })
+    const html = render({ path: '/nowhere/abc' })
     expect(headings(html)).toEqual(['Page not found'])
     expect(mainOf(html)).toMatch(/<a\b[^>]*href="\/"[^>]*>Go to Home<\/a>/)
+  })
+})
+
+describe('a run or an approval link', () => {
+  it.each(['/runs/run_01JB8', '/approvals/apr_01JB8'])('%s opens the run page, which loads on demand', (path) => {
+    const html = render({ path })
+    expect(headings(html)).toEqual([])
+    expect(text(mainOf(html))).toBe('Loading')
+    expect(currentLinks(html)).toEqual([])
   })
 })
 

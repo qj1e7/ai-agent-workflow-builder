@@ -1,0 +1,257 @@
+.stage {
+  margin: 20px 0 24px;
+  padding: 24px 20px 20px;
+  border: 1px solid var(--hair);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+
+.line {
+  --ty: 91px;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+  margin: 0;
+  padding: 8px 0 0;
+}
+
+.track,
+.fill {
+  position: absolute;
+  top: var(--ty);
+  left: calc(100% / var(--n) / 2);
+  height: 3px;
+  border-radius: 3px;
+}
+
+.track {
+  right: calc(100% / var(--n) / 2);
+  background: var(--hair);
+}
+
+/* The line travels for --move, then the step it reaches lands. */
+.fill {
+  width: calc(100% - 100% / var(--n));
+  background: var(--ink);
+  transform: scaleX(var(--f));
+  transform-origin: left center;
+  transition: transform var(--move) var(--ease-move);
+}
+
+.station {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  text-align: center;
+}
+
+.who {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: 56px;
+}
+
+.dotWrap {
+  display: grid;
+  place-items: center;
+  height: 38px;
+}
+
+.dot {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 2px dashed var(--edge);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.label {
+  padding: 0 4px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.label small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+
+.arrive .dot,
+.arrive .who {
+  animation: land var(--dur-small) var(--ease-out) var(--move) backwards;
+}
+
+.todo .who {
+  opacity: 0.45;
+}
+
+.todo .label,
+.skip .label {
+  color: var(--muted);
+}
+
+.skip .who {
+  opacity: 0.25;
+}
+
+.done .dot {
+  border: 2px solid var(--ink);
+  background: var(--ink);
+  color: var(--on-ink);
+}
+
+/* The step happening now gets a crisp ring, not a glow. */
+.now .dot {
+  border: 2px solid var(--accent);
+  background: var(--surface);
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.now .label {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.gate .dot {
+  width: 38px;
+  height: 38px;
+  border: 2px solid var(--ink);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.gate.wait .dot {
+  border-color: var(--amber);
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+  outline: 2px solid var(--amber);
+  outline-offset: 3px;
+}
+
+.gate.done .dot {
+  border-color: var(--green);
+  background: var(--green);
+  color: var(--on-status);
+}
+
+.gate.declined .dot {
+  border-color: var(--red-line);
+  background: var(--red-soft);
+  color: var(--red-ink);
+}
+
+.gate.skip .dot,
+.gate.todo .dot {
+  border-style: dashed;
+  border-color: var(--edge);
+  color: var(--muted);
+}
+
+.fail .dot {
+  border: 2px solid var(--red);
+  background: var(--red);
+  color: var(--on-status);
+  outline: 2px solid var(--red);
+  outline-offset: 3px;
+}
+
+.fail .label {
+  color: var(--red-ink);
+}
+
+.app {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--hair);
+  border-radius: 25%;
+  background: var(--surface);
+}
+
+.nobody {
+  width: 40px;
+  height: 40px;
+  border: 2px dashed var(--rail);
+  border-radius: 50%;
+}
+
+@keyframes land {
+  from {
+    opacity: 0.45;
+    transform: scale(0.85);
+  }
+}
+
+/* Phones: the line runs down the page. */
+@media (max-width: 760px) {
+  .line {
+    grid-template-columns: minmax(0, 1fr);
+    padding-top: 0;
+  }
+
+  .track,
+  .fill {
+    top: 32px;
+    right: auto;
+    left: 17px;
+    width: 3px;
+    height: auto;
+  }
+
+  .track {
+    bottom: 32px;
+  }
+
+  .fill {
+    height: calc(100% - 64px);
+    transform: scaleY(var(--f));
+    transform-origin: center top;
+  }
+
+  .station {
+    flex-direction: row;
+    gap: 12px;
+    height: 64px;
+    text-align: left;
+  }
+
+  .dotWrap {
+    flex: none;
+    order: 1;
+    width: 38px;
+  }
+
+  .who {
+    flex: none;
+    order: 2;
+    width: 40px;
+    height: auto;
+  }
+
+  .who svg {
+    width: 36px;
+    height: 36px;
+  }
+
+  .who > span {
+    width: 32px !important;
+    height: 32px !important;
+  }
+
+  .label {
+    order: 3;
+  }
+}

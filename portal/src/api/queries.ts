@@ -1,4 +1,4 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { ApiError, unwrap, type ApiClient } from './client'
 import { useApiClient, useSession, useCacheScope } from './context'
 import type {
@@ -36,10 +36,12 @@ export const keys = {
 }
 
 interface QueryOptions {
-  poll?: boolean
+  /** true polls every POLL_MS; a number polls that often. */
+  poll?: boolean | number
 }
 
 function pollEvery(options: QueryOptions | undefined): number | false {
+  if (typeof options?.poll === 'number') return options.poll
   return options?.poll ? POLL_MS : false
 }
 
@@ -217,6 +219,20 @@ export function useApproval(approvalId: string, options?: QueryOptions & { enabl
       unwrap(await client.GET('/api/v1/approvals/{approval_id}', { params: { path: { approval_id: approvalId } } })),
     refetchInterval: pollEvery(options),
     enabled: options?.enabled ?? true,
+  })
+}
+
+/** The same cache entries as useApproval, one per id, for a list that shows several. */
+export function useApprovals(approvalIds: readonly string[], options?: QueryOptions) {
+  const client = useApiClient()
+  const user = useCacheScope()
+  return useQueries({
+    queries: approvalIds.map((approvalId) => ({
+      queryKey: keys.approval(user, approvalId),
+      queryFn: async () =>
+        unwrap(await client.GET('/api/v1/approvals/{approval_id}', { params: { path: { approval_id: approvalId } } })),
+      refetchInterval: pollEvery(options),
+    })),
   })
 }
 

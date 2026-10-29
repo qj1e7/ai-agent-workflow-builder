@@ -146,14 +146,21 @@ describe('tokens.css', () => {
     expect(indexHtml).not.toContain('theme-boot')
   })
 
-  it('defines every var(--x) that the stylesheets use', () => {
+  it('defines every var(--x) that the stylesheets use, in tokens.css, in the same stylesheet or in a style a component sets', () => {
+    const files = readdirSync(srcDir, { recursive: true, encoding: 'utf8' })
+    const setByComponents = new Set(
+      files
+        .filter((file) => file.endsWith('.tsx') && !file.endsWith('.test.tsx'))
+        .flatMap((file) => [...readFileSync(path.join(srcDir, file), 'utf8').matchAll(/'--([a-z0-9-]+)':/g)].map((match) => match[1] ?? '')),
+    )
     const undefinedNames = new Set<string>()
-    for (const file of readdirSync(srcDir, { recursive: true, encoding: 'utf8' })) {
+    for (const file of files) {
       if (!file.endsWith('.css')) continue
       const css = readFileSync(path.join(srcDir, file), 'utf8')
+      const local = new Set(declarations(css).map(([name]) => name))
       for (const match of css.matchAll(/var\(--([a-z0-9-]+)/g)) {
         const name = match[1] ?? ''
-        if (!light.has(name)) undefinedNames.add(`--${name} in ${file}`)
+        if (!light.has(name) && !local.has(name) && !setByComponents.has(name)) undefinedNames.add(`--${name} in ${file}`)
       }
     }
     expect([...undefinedNames]).toEqual([])

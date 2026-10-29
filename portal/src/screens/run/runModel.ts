@@ -1,5 +1,6 @@
 import type { ApprovalStepStatus, BlockKind, FailureReason, FailureStage, RunOutcome, Trigger, Verdict } from '../../api/types'
-import type { EventOf, RunEvent } from '../../stream/parse'
+import { runId as asRunId } from '../../stream/brand'
+import { parseEvent, type EventOf, type RunEvent } from '../../stream/parse'
 
 export const PLANNER_ID = 'planner'
 
@@ -323,6 +324,15 @@ export function fold(model: RunModel, event: RunEvent): RunModel {
 
 export function foldAll(model: RunModel, events: readonly RunEvent[]): RunModel {
   return events.reduce(fold, model)
+}
+
+/** Folds events as the platform sends them. An event whose envelope does not parse is skipped, as the feed skips it. */
+export function foldWire(model: RunModel, raw: readonly unknown[], runId: string): RunModel {
+  const id = asRunId(runId)
+  return raw.reduce<RunModel>((folded, item) => {
+    const parsed = parseEvent(item, id)
+    return parsed.ok ? fold(folded, parsed.event) : folded
+  }, model)
 }
 
 export interface PlanBlock {

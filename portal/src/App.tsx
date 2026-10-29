@@ -10,16 +10,36 @@ import { TestControls } from './shell/TestControls'
 import { ErrorBoundary } from './ui/ErrorBoundary'
 import styles from './shell/Shell.module.css'
 
-/** Focus stays where it is on first load, so the skip link stays the first Tab stop. */
+/**
+ * Focus stays where it is on first load, so the skip link stays the first Tab stop. A page that loads on demand draws
+ * its heading later, so this waits for it. A heading marked data-focus="page" belongs to a page that moves focus
+ * itself, as the run page does when it lands on a decision.
+ */
 function useHeadingFocus(): void {
   const { pathname } = useLocation()
   const previous = useRef<string | null>(null)
   useEffect(() => {
-    const heading = document.querySelector<HTMLElement>('main h1')
-    if (!heading) return
-    document.title = `${heading.textContent.trim()} · ${PRODUCT}`
-    if (previous.current !== null && previous.current !== pathname) heading.focus({ preventScroll: true })
-    previous.current = pathname
+    const arrive = (heading: HTMLElement) => {
+      document.title = `${heading.textContent.trim()} · ${PRODUCT}`
+      const moved = previous.current !== null && previous.current !== pathname
+      previous.current = pathname
+      if (moved && heading.dataset['focus'] !== 'page') heading.focus({ preventScroll: true })
+    }
+    const main = document.getElementById('main')
+    const heading = main?.querySelector<HTMLElement>('h1')
+    if (heading) {
+      arrive(heading)
+      return
+    }
+    if (!main) return
+    const watch = new MutationObserver(() => {
+      const drawn = main.querySelector<HTMLElement>('h1')
+      if (!drawn) return
+      watch.disconnect()
+      arrive(drawn)
+    })
+    watch.observe(main, { childList: true, subtree: true })
+    return () => watch.disconnect()
   })
 }
 

@@ -1,0 +1,138 @@
+.panel {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 20px 24px;
+  border: 1px solid var(--hair);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  animation: unfold var(--dur-panel) var(--ease-out) backwards;
+}
+
+.panel h2 {
+  display: flex;
+  align-items: center;
+  font-size: 1.125rem;
+}
+
+.panel p {
+  margin: 0;
+}
+
+.ticket {
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid var(--hair);
+  border-radius: var(--r-well);
+  background: var(--surface);
+}
+
+.ticket b {
+  font-size: 0.95rem;
+}
+
+.body {
+  color: var(--muted);
+  font-size: 0.875rem;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.note {
+  max-width: 75ch;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.lock {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--r-well);
+  background: var(--sunk);
+  font-size: 0.95rem;
+}
+
+.error {
+  color: var(--red-ink);
+  font-weight: 600;
+}
+
+.okMark {
+  display: inline-flex;
+  margin-right: 6px;
+  color: var(--green-ink);
+  animation: pop var(--dur-success) var(--ease-out) 120ms both;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 10px 1px 8px;
+  border: 1px solid var(--green-line);
+  border-radius: 999px;
+  background: var(--green-soft);
+  color: var(--green-ink);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.qa {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.qa dt {
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.qa dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+@keyframes unfold {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+    clip-path: inset(0 0 60% 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

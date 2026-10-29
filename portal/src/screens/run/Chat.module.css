@@ -1,0 +1,197 @@
+.chat {
+  display: grid;
+  gap: 20px;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0;
+}
+
+.msg {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.msg:focus {
+  outline: none;
+}
+
+.av {
+  display: grid;
+  justify-items: center;
+}
+
+.body {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.who {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.bubble {
+  padding: 12px 16px;
+  border: 1px solid var(--hair);
+  border-radius: 4px var(--r-card) var(--r-card) var(--r-card);
+  background: var(--surface);
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+.bad .bubble {
+  border-color: var(--red-line);
+  color: var(--red-ink);
+  font-weight: 600;
+}
+
+.marker {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.marker:focus {
+  outline: none;
+}
+
+.marker::before,
+.marker::after {
+  content: '';
+  flex: 1 1 24px;
+  height: 1px;
+  background: var(--rule);
+}
+
+.marker > span {
+  max-width: 560px;
+}
+
+.marker > span > svg {
+  display: inline-block;
+  margin-right: 6px;
+  vertical-align: -2px;
+}
+
+.faces {
+  display: inline-flex;
+  margin-right: 8px;
+  vertical-align: -5px;
+}
+
+.wait {
+  color: var(--amber-ink);
+}
+
+.ok {
+  color: var(--green-ink);
+}
+
+.bad.marker {
+  color: var(--red-ink);
+}
+
+/* A new message rises 6px and fades in once, after the line has travelled to its step. */
+.in {
+  animation: rise var(--dur-small) var(--ease-out) var(--move) backwards;
+}
+
+.typing .who {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.dots {
+  display: inline-flex;
+  gap: 4px;
+  padding: 6px 0;
+}
+
+.dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+  opacity: 0.35;
+  animation: dot 1.2s var(--ease-in-out) infinite both;
+}
+
+.dots i:nth-child(2) {
+  animation-delay: 150ms;
+}
+
+.dots i:nth-child(3) {
+  animation-delay: 300ms;
+}
+
+:global([data-paused]) .dots i {
+  animation-play-state: paused;
+}
+
+.sysav {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--sunk);
+  color: var(--ink);
+}
+
+.gateAv {
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+}
+
+/* The app speaks with its logo on a square white tile, apart from the round agents and people. */
+.app {
+  border: 1px solid var(--hair);
+  border-radius: 25%;
+  background: var(--surface);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: none;
+  }
+
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+@media (max-width: 600px) {
+  .msg {
+    grid-template-columns: 32px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .av svg,
+  .av > span {
+    width: 32px;
+    height: 32px;
+  }
+}
