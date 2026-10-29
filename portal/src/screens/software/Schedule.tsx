@@ -6,8 +6,8 @@ import { Button } from '../../ui/Button'
 import { checkClock, DAYS, dayOption, scheduleOwnerWords, scheduleWords, singaporeTime } from './software'
 import styles from './Software.module.css'
 
-export function ScheduleNote({ schedule }: { schedule: ScheduleView | null }) {
-  if (schedule === null) return <p>No schedule yet. Checks start only when an Operator presses Check now.</p>
+export function ScheduleNote({ schedule, operator }: { schedule: ScheduleView | null; operator: boolean }) {
+  if (schedule === null) return <p>{operator ? 'No schedule. Press Check now to check by hand.' : 'No schedule. An Operator can press Check now to check by hand.'}</p>
   return (
     <>
       <p>
@@ -97,7 +97,7 @@ export function Schedule({ schedule, operator }: { schedule: ScheduleView | null
         Schedule
       </h2>
       <div className={styles['scheduleText']}>
-        <ScheduleNote schedule={schedule} />
+        <ScheduleNote schedule={schedule} operator={operator} />
       </div>
       {operator && !editing ? (
         <div className={styles['actions']}>

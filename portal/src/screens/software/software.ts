@@ -4,7 +4,9 @@ import type { Day, ScheduleView, SoftwareStatus, VersionSourceView, WatchedSoftw
 export const SOURCES_NOTE =
   'GitHub is the only place we can check today. Other places, such as npm or PyPI, are not available yet.'
 
-export const CANT_CHECK_WORDS = 'Can’t check right now. It will try again at the next check.'
+export function cantCheckWords(scheduled: boolean): string {
+  return scheduled ? 'Can’t check right now. It will try again at the next check.' : 'Can’t check right now. With no schedule, it is checked again when an Operator presses Check now.'
+}
 
 export const statusLabel: Record<SoftwareStatus, string> = {
   cant_check: 'Can’t check',

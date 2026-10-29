@@ -55,10 +55,10 @@ export function board(state: Board, event: BoardEvent): Board {
   }
 }
 
-export function noticeWords(notice: Notice): string {
+export function noticeWords(notice: Notice, scheduled: boolean): string {
   switch (notice.kind) {
     case 'added':
-      return `Added ${notice.name}. It is checked at the next check.`
+      return scheduled ? `Added ${notice.name}. It is checked at the next check.` : `Added ${notice.name}. Press Check now to check it.`
     case 'removed':
       return `Removed ${notice.row.name}. It won’t be checked any more.`
     case 'restored':

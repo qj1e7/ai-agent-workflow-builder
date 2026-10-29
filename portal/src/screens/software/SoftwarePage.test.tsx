@@ -52,6 +52,14 @@ describe('the Software watchlist page', () => {
     expect(text(render(statuses, ALICE))).toContain('Can’t check right now. It will try again at the next check.')
   })
 
+  it('promises no next check when no schedule is set', () => {
+    const words = text(render({ ...statuses, schedule: null }, ALICE))
+    expect(words).not.toContain('next check')
+    expect(words).toContain('Can’t check right now. With no schedule, it is checked again when an Operator presses Check now.')
+    expect(words).toContain('No schedule. Press Check now to check by hand.')
+    expect(text(render({ ...empty, schedule: null }, ALICE))).toContain('Add the tools your team runs, then press Check now to check them.')
+  })
+
   it('says the last check stopped, why, and when, and links to its run', () => {
     const stopped = { ...statuses, last_check: { run_id: failedRun.run_id, state: 'failed', started_at: failedRun.started_at } }
     const html = render(stopped, BOB, [failedRun])
@@ -144,7 +152,8 @@ describe('the schedule editor', () => {
 })
 
 describe('the schedule note', () => {
-  it('says no schedule is set', () => {
-    expect(text(renderToStaticMarkup(<ScheduleNote schedule={null} />))).toContain('No schedule yet')
+  it('says no schedule is set and how a check starts then', () => {
+    expect(text(renderToStaticMarkup(<ScheduleNote schedule={null} operator />))).toBe('No schedule. Press Check now to check by hand.')
+    expect(text(renderToStaticMarkup(<ScheduleNote schedule={null} operator={false} />))).toBe('No schedule. An Operator can press Check now to check by hand.')
   })
 })

@@ -105,9 +105,10 @@ describe('Undo', () => {
 
 describe('the message after a change to the list', () => {
   it('says what happened in plain words', () => {
-    expect(noticeWords({ kind: 'removed', row: LANGGRAPH })).toBe('Removed LangGraph. It won’t be checked any more.')
-    expect(noticeWords({ kind: 'restored', row: LANGGRAPH })).toBe('Put LangGraph back on the list.')
-    expect(noticeWords({ kind: 'gone', name: 'LangGraph' })).toBe('LangGraph was already removed.')
-    expect(noticeWords({ kind: 'added', name: 'Redis' })).toBe('Added Redis. It is checked at the next check.')
+    expect(noticeWords({ kind: 'removed', row: LANGGRAPH }, true)).toBe('Removed LangGraph. It won’t be checked any more.')
+    expect(noticeWords({ kind: 'restored', row: LANGGRAPH }, true)).toBe('Put LangGraph back on the list.')
+    expect(noticeWords({ kind: 'gone', name: 'LangGraph' }, true)).toBe('LangGraph was already removed.')
+    expect(noticeWords({ kind: 'added', name: 'Redis' }, true)).toBe('Added Redis. It is checked at the next check.')
+    expect(noticeWords({ kind: 'added', name: 'Redis' }, false)).toBe('Added Redis. Press Check now to check it.')
   })
 })
