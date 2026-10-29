@@ -8,7 +8,7 @@ import { ApiProvider } from '../api/context'
 import { createDevSession, SIGNED_IN, type Session } from '../api/session'
 import type { Me } from '../api/types'
 import { focusMovedOutside } from './PersonChip'
-import { TEAMS_EMPTY_WORDS, TEAMS_TITLE } from './TeamsPanel'
+import { TEAMS_TITLE } from './TeamsPanel'
 import { TEST_NOTE } from './TestControls'
 import { MENU_PAGE_IDS, PAGES } from './routes'
 
@@ -116,9 +116,18 @@ describe('the Settings gear', () => {
 
 describe('an unknown path', () => {
   it('says Page not found and offers Home', () => {
-    const html = render({ path: '/runs/abc' })
+    const html = render({ path: '/nowhere/abc' })
     expect(headings(html)).toEqual(['Page not found'])
     expect(mainOf(html)).toMatch(/<a\b[^>]*href="\/"[^>]*>Go to Home<\/a>/)
+  })
+})
+
+describe('a run or an approval link', () => {
+  it.each(['/runs/run_01JB8', '/approvals/apr_01JB8'])('%s opens the run page, which loads on demand', (path) => {
+    const html = render({ path })
+    expect(headings(html)).toEqual([])
+    expect(text(mainOf(html))).toBe('Loading')
+    expect(currentLinks(html)).toEqual([])
   })
 })
 
@@ -203,11 +212,11 @@ describe('the test controls', () => {
 })
 
 describe('the Teams button', () => {
-  it('opens a dialog that says there are no messages yet', () => {
+  it('is named the practice copy, and its panel is a dialog of the same name that stays empty until opened', () => {
     const html = render()
     expect(html).toMatch(new RegExp(`<button\\b[^>]*aria-label="${TEAMS_TITLE}"`))
-    expect(html).toMatch(/<dialog\b[^>]*aria-labelledby/)
-    expect(text(/<dialog\b[\s\S]*<\/dialog>/.exec(html)?.[0] ?? '')).toBe(`${TEAMS_TITLE} ${TEAMS_EMPTY_WORDS} Close`)
+    expect(html).toMatch(new RegExp(`<dialog\\b[^>]*aria-label="${TEAMS_TITLE}"`))
+    expect(text(/<dialog\b[\s\S]*?<\/dialog>/.exec(html)?.[0] ?? '')).toBe('')
   })
 })
 

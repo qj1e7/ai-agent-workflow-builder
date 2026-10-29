@@ -1,3 +1,236 @@
 .face {
   flex: none;
+  overflow: visible;
+}
+
+.body,
+.eyes,
+.accessory,
+.badge,
+.ok,
+.happy {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.typing rect {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: type 0.9s var(--ease-in-out) infinite;
+}
+
+.typing rect:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.typing rect:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.face[data-state='thinking'] .eyes {
+  animation: look 2.4s var(--ease-in-out) infinite;
+}
+
+.think circle {
+  fill: var(--muted);
+  animation: think 1.5s ease-in-out infinite;
+}
+
+.think circle:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.think circle:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+.face[data-state='working'] .eyes {
+  animation: scan 1.6s var(--ease-in-out) infinite alternate;
+}
+
+.face[data-state='working']:not([data-accessory='headset']) .accessory {
+  animation: tool 1.6s var(--ease-in-out) infinite alternate;
+}
+
+.ok,
+.happy {
+  opacity: 0;
+}
+
+.face[data-react][data-state='waiting'] .badge,
+.face[data-react][data-state='error'] .badge {
+  animation: badge-in var(--dur-attn) var(--ease-out) both;
+}
+
+.face[data-react][data-state='error'] .body {
+  animation: concern var(--dur-attn) var(--ease-out) both;
+}
+
+.face[data-react][data-state='success'] .ok {
+  animation: ok-badge var(--dur-success) var(--ease-out) both;
+}
+
+.face[data-react][data-state='success'] .happy {
+  animation: shown var(--dur-success) ease-out both;
+}
+
+.face[data-react][data-state='success'] .eyes {
+  animation: hidden var(--dur-success) ease-out both;
+}
+
+.face[data-react][data-state='success'] .body {
+  animation: cheer var(--dur-success) var(--ease-out) both;
+}
+
+.face[data-state='stopped'] {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+
+.face[data-react][data-state='stopped'] {
+  animation: doze var(--dur-attn) ease-out both;
+}
+
+:global([data-paused]) .face * {
+  animation-play-state: paused;
+}
+
+@keyframes look {
+  0%,
+  100% {
+    transform: translate(-1.2px, -0.6px);
+  }
+
+  50% {
+    transform: translate(1.2px, -0.6px);
+  }
+}
+
+@keyframes think {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+
+  40% {
+    opacity: 1;
+  }
+}
+
+@keyframes scan {
+  from {
+    transform: translateX(-1.4px);
+  }
+
+  to {
+    transform: translateX(1.4px);
+  }
+}
+
+@keyframes tool {
+  from {
+    transform: rotate(-6deg);
+  }
+
+  to {
+    transform: rotate(6deg);
+  }
+}
+
+@keyframes type {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+
+  50% {
+    transform: none;
+  }
+}
+
+@keyframes badge-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes concern {
+  0%,
+  100% {
+    transform: none;
+  }
+
+  30% {
+    transform: translateX(-1.5px) rotate(-5deg);
+  }
+
+  65% {
+    transform: translateX(1px) rotate(3deg);
+  }
+}
+
+@keyframes ok-badge {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+
+  30%,
+  75% {
+    opacity: 1;
+    transform: none;
+  }
+
+  100% {
+    opacity: 0;
+    transform: none;
+  }
+}
+
+@keyframes shown {
+  0%,
+  100% {
+    opacity: 0;
+  }
+
+  15%,
+  80% {
+    opacity: 1;
+  }
+}
+
+@keyframes hidden {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  15%,
+  80% {
+    opacity: 0;
+  }
+}
+
+@keyframes cheer {
+  0%,
+  100% {
+    transform: none;
+  }
+
+  35% {
+    transform: translateY(-2px) scale(1.04);
+  }
+}
+
+@keyframes doze {
+  from {
+    filter: none;
+    opacity: 1;
+  }
 }

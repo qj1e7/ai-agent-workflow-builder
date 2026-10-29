@@ -27,6 +27,22 @@ export default tseslint.config(
     },
   },
   {
+    files: ['src/screens/run/runModel{,.test}.ts', 'src/screens/run/liveRun{,.test}.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '^(\\.\\.?/)+stream/(?!(feed|parse|brand)$)',
+              message: 'The run page reads the stream only through feed, parse and brand.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['eslint.config.js'],
     ...tseslint.configs.disableTypeChecked,
   },

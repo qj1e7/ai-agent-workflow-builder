@@ -4,6 +4,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import indexHtml from '../../index.html?raw'
+import { MOVE_MS, SMALL_MS } from '../screens/run/liveRun'
 import { agentIdentity, KNOWN_AGENT_IDS } from './agents'
 import { personTone } from './personTone'
 
@@ -146,14 +147,21 @@ describe('tokens.css', () => {
     expect(indexHtml).not.toContain('theme-boot')
   })
 
-  it('defines every var(--x) that the stylesheets use', () => {
+  it('defines every var(--x) that the stylesheets use, in tokens.css, in the same stylesheet or in a style a component sets', () => {
+    const files = readdirSync(srcDir, { recursive: true, encoding: 'utf8' })
+    const setByComponents = new Set(
+      files
+        .filter((file) => file.endsWith('.tsx') && !file.endsWith('.test.tsx'))
+        .flatMap((file) => [...readFileSync(path.join(srcDir, file), 'utf8').matchAll(/'--([a-z0-9-]+)':/g)].map((match) => match[1] ?? '')),
+    )
     const undefinedNames = new Set<string>()
-    for (const file of readdirSync(srcDir, { recursive: true, encoding: 'utf8' })) {
+    for (const file of files) {
       if (!file.endsWith('.css')) continue
       const css = readFileSync(path.join(srcDir, file), 'utf8')
+      const local = new Set(declarations(css).map(([name]) => name))
       for (const match of css.matchAll(/var\(--([a-z0-9-]+)/g)) {
         const name = match[1] ?? ''
-        if (!light.has(name)) undefinedNames.add(`--${name} in ${file}`)
+        if (!light.has(name) && !local.has(name) && !setByComponents.has(name)) undefinedNames.add(`--${name} in ${file}`)
       }
     }
     expect([...undefinedNames]).toEqual([])
@@ -172,6 +180,11 @@ describe('tokens.css', () => {
     expect([...undefinedNames]).toEqual([])
   })
 
+  it('times the run page’s pacing with the same --move and --dur-small its CSS travels and lands with', () => {
+    expect(value(light, 'move')).toBe(`${MOVE_MS}ms`)
+    expect(value(light, 'dur-small')).toBe(`${SMALL_MS}ms`)
+  })
+
   it('declares every token the agent faces and the initials draw from', () => {
     const names = new Set<string>()
     const ids = [...KNOWN_AGENT_IDS, ...Array.from({ length: 200 }, (_, index) => `agent_${index}`)]
@@ -187,5 +200,30 @@ describe('tokens.css', () => {
     names.add('face-lens')
     const missing = [...names].filter((name) => !light.has(name))
     expect(missing).toEqual([])
+  })
+})
+
+function innermostRules(css: string): { selectors: string[]; body: string }[] {
+  return [...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((match) => ({
+    selectors: (match[1] ?? '').split(',').map((selector) => selector.trim()),
+    body: match[2] ?? '',
+  }))
+}
+
+describe('base.css', () => {
+  it('stops under reduced motion every animation and transition, on the pseudo-elements the stylesheets move too', () => {
+    const files = readdirSync(srcDir, { recursive: true, encoding: 'utf8' }).filter((file) => file.endsWith('.css'))
+    const moved = new Set<string>()
+    for (const file of files) {
+      for (const rule of innermostRules(readFileSync(path.join(srcDir, file), 'utf8'))) {
+        if (!/\b(animation|transition)(-name)?\s*:\s*(?!none)/.test(rule.body)) continue
+        for (const selector of rule.selectors) for (const match of selector.matchAll(/::([a-z-]+)/g)) moved.add(match[1] ?? '')
+      }
+    }
+    const base = readFileSync(new URL('./base.css', import.meta.url), 'utf8')
+    const reduced = /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?\})\s*\}/.exec(base)?.[1] ?? ''
+    const stopped = innermostRules(reduced).find((rule) => /animation:\s*none !important/.test(rule.body) && /transition:\s*none !important/.test(rule.body))
+    expect(stopped?.selectors).toContain('*')
+    expect([...moved].filter((pseudo) => !stopped?.selectors.includes(`*::${pseudo}`))).toEqual([])
   })
 })
