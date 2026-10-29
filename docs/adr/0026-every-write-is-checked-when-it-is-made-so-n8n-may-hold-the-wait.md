@@ -21,7 +21,13 @@ None of these people may approve that run.
 
 n8n holds no write key. Because the yes is checked at the write, n8n may hold a paused execution again. Our "Ask for a yes" node asks our API to send the approval request, then puts its execution to wait. Our API wakes it with the result: yes, no or no answer. Anyone who wakes it another way gains nothing, because "Make the approved changes" still asks the write gateway, and the gateway reads only our records. When the proposal is empty, "Ask for a yes" asks nobody and leaves at once by a fourth exit, "Nothing to change".
 
-**One run of a workflow waits at a time.** A run's first call to our API, from any of our nodes, may come while an earlier run of the same workflow is still waiting for a yes. Our API then stops the new run before it reads anything, with "An earlier run is still waiting for a yes", and the Portal shows the skipped run. Otherwise Approvers could get two requests about the same changes. The check sits in our API, not in one node, because staff can reorder nodes.
+**One run of a workflow waits at a time.** ADR 0024 already ends a request before the workflow's next scheduled run, so scheduled runs never overlap. Under ADR 0027 the schedule lives in n8n, so our API reads the next run from the published version's Schedule Trigger. This rule is the backstop for every other run that can start while a request still waits:
+- Run now;
+- a test run;
+- a run started by hand in n8n;
+- the first run after someone moves the schedule earlier.
+
+On such a run's first call to our API, from any of our nodes, our API stops it before it reads anything, with "An earlier run is still waiting for a yes". The Portal shows the skipped run. Otherwise Approvers could get two requests about the same changes. The check sits in our API, not in one node, because staff can reorder nodes.
 
 [Prototype P6](../evidence/prototypes/p6-n8n-node-pack/findings.md) showed the wait and the check at the write on n8n 2.42.6 Community edition. Our own node paused a run with no time limit, and our API woke it. The write refused in both of these cases:
 - the run was woken with only the resume URL;

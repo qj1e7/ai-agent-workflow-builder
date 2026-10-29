@@ -1263,10 +1263,13 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const hasBackup = (s) => s.backup && s.backup !== 'none';
   const pairText = (s) => (hasBackup(s) ? `${nm(s.first)}, with ${nm(s.backup)} as backup` : `${nm(s.first)}, no backup`);
   const apprText = (a) => (a.steps.length === 1 ? pairText(a.steps[0]) : `First ${pairText(a.steps[0])}. Then ${pairText(a.steps[1])}.`);
-  const timingText = (a) => `${a.steps.some(hasBackup) ? `A backup is asked after ${afterWord(a.after)} with no answer.` : `A reminder goes out after ${afterWord(a.after)} with no answer.`} If nobody says yes within ${expireWord(a.expire)}, it stops and nothing changes.`;
-  function escalationSentence(a) {
+  /* A request always stops before the workflow's next run (ADR 0024), so a daily workflow never waits the full time. */
+  const stopsAtNextRun = (a, sched) => !!sched && (sched.freq === 'day' || sched.freq === 'weekday') && a.expire > 1;
+  const stopWords = (a, sched) => (stopsAtNextRun(a, sched) ? 'before the next run' : `within ${expireWord(a.expire)}`);
+  const timingText = (a, sched) => `${a.steps.some(hasBackup) ? `A backup is asked after ${afterWord(a.after)} with no answer.` : `A reminder goes out after ${afterWord(a.after)} with no answer.`} If nobody says yes ${stopWords(a, sched)}, it stops and nothing changes.`;
+  function escalationSentence(a, sched) {
     const parts = a.steps.map((s) => `If ${nm(s.first)} hasn’t answered after ${afterWord(a.after)}, ${hasBackup(s) ? `${nm(s.backup)} is asked too` : `${nm(s.first)} gets a reminder`}.`);
-    return `${parts.join(' ')} If nobody says yes within ${expireWord(a.expire)}, it stops and nothing changes.`;
+    return `${parts.join(' ')} If nobody says yes ${stopWords(a, sched)}, it stops and nothing changes.`;
   }
   const whoOr = (ids) => ids.map(nm).join(' or ');
   const whoAnd = (ids) => ids.map(nm).join(' and ');
@@ -1809,7 +1812,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     </div>`;
   }
   /* The same Approver fields in New workflow and when changing a workflow. The owner is never offered. */
-  function apprFields(attr, a, err, owner, extra = '') {
+  function apprFields(attr, a, err, owner, extra = '', sched) {
     const id = (k) => `${attr}-${k}`;
     const pool = approverPool().filter((u) => u !== owner);
     const steps = a.steps.map((s, i) => {
@@ -1828,29 +1831,29 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const optional = !!extra;
     const more = (attr === 'ap' ? S.wiz.more : S.apprMore) || !!(err.after || err['first-1'] || err['backup-1']);
     return `${(optional ? steps.slice(0, 1) : steps).join('')}
-      <p class="apsum">${I.info(16)}<span>${apprSummary(a)}</span></p>
+      <p class="apsum">${I.info(16)}<span>${apprSummary(a, sched)}</span></p>
       <details class="more"${more ? ' open' : ''}><summary data-act="moreAppr" data-arg="${attr}">More approval options</summary><div class="more-body">
         ${extra}${optional ? steps.slice(1).join('') : ''}
         <div class="sched-grid">
           <div class="field"><label for="${id('after')}">Ask the backup after</label><select id="${id('after')}" data-${attr}="after"${fieldAttrs(id('after'), err.after)}>${AFTER.map(([v, l]) => opt(v, l, a.after)).join('')}</select>${fieldNotes(id('after'), err.after)}</div>
           <div class="field"><label for="${id('expire')}">Stop waiting after</label><select id="${id('expire')}" data-${attr}="expire">${EXPIRE.map(([v, l]) => opt(v, l, a.expire)).join('')}</select></div>
         </div>
-        <p class="note">Working hours are Monday to Friday, 9:00 to 18:00, ${TZ}. Either the first person or the backup can say yes. A request never says yes by itself.</p>
+        <p class="note">Working hours are Monday to Friday, 9:00 to 18:00, ${TZ}. Either the first person or the backup can say yes. A request never says yes by itself, and it always stops before the next run, so two never wait at once.</p>
       </div></details>`;
   }
   /* The whole approval rule in one sentence, so the default needs no extra reading. */
-  function apprSummary(a) {
+  function apprSummary(a, sched) {
     const [s0, s1] = a.steps;
     if (!s0.first || !s0.backup) return 'Choose who is asked first, and a backup or Nobody else.';
     if (s1 && (!s1.first || !s1.backup)) return 'Choose who gives the second yes, and their backup or Nobody else.';
     const who = s1 ? `${nm(s0.first)} is asked first, then ${nm(s1.first)} gives the second yes.` : `${nm(s0.first)} is asked first.`;
-    return `${who} ${escalationSentence(a)}`;
+    return `${who} ${escalationSentence(a, sched)}`;
   }
   function apprEditor(id) {
     const steps = apprOf(id).steps.length;
     return `<div class="panel" style="margin-top:16px"><h2>Change who approves</h2>
       ${steps > 1 ? '<p class="note">This workflow needs 2 Approvers, one after the other.</p>' : ''}
-      ${apprFields('af', S.apprForm, S.apprErr, OWNER[id]())}
+      ${apprFields('af', S.apprForm, S.apprErr, OWNER[id](), '', R(id).sched)}
       <div class="btns"><button class="btn primary sm" data-act="saveAppr" data-arg="${id}">Save</button><button class="btn sm" data-act="cancelAppr">Cancel</button></div>
       <p class="note">${waitingReq(id) ? 'The request that’s waiting now keeps the people it was sent to. Your change starts with the next run.'
         : req(id) ? 'This change starts with the next run. The stopped test run isn’t started again by itself.' : 'This change starts with the next run.'}</p></div>`;
@@ -2199,7 +2202,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       <dl class="facts" style="margin-top:16px">
         <div><dt>When</dt><dd>${r.when}</dd></div>
         <div><dt>Next run</dt><dd>${r.next}</dd></div>
-        <div><dt>Who approves</dt><dd>${r.approves}<small>${timingText(apprOf(id))}</small></dd></div>
+        <div><dt>Who approves</dt><dd>${r.approves}<small>${timingText(apprOf(id), r.sched)}</small></dd></div>
         <div class="fact-wide"><dt>Agents</dt><dd><div class="agent-chips">${r.agents.map((a) => { const st = agentStates(id)[a]; return `<button class="agent-chip" data-act="agent" data-arg="${a}">${face(a, 28, st || 'idle', { k: `wfp:${id}:${a}` })}<span>${AGENTS[a].name}${st ? `<span class="vh">, ${STATE_WORD[st]}</span>` : ''}</span></button>`; }).join('')}</div></dd></div>
         ${held ? `<div><dt>In n8n</dt><dd>${held.by === S.user ? 'You have it' : `${nm(held.by)} has it`}<small>Since ${held.since}</small></dd></div>` : ''}
       </dl>
@@ -2482,7 +2485,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
         </div>
         <div class="panel"><h2>Who says yes?</h2>
           <p>Choose who gets the message in Teams, and a backup in case they’re away. You can’t choose yourself, because nobody approves their own work.</p>
-          ${apprFields('ap', w.appr, w.apprErr, 'alice', `<label class="checkrow"><input type="checkbox" id="two" data-input="two" ${w.two ? 'checked' : ''}><span>Ask for 2 Approvers, one after the other</span></label><p class="note" style="margin:-6px 0 14px 28px">This workflow needs at least 1 Approver. You can ask for more, never fewer.</p>`)}</div>
+          ${apprFields('ap', w.appr, w.apprErr, 'alice', `<label class="checkrow"><input type="checkbox" id="two" data-input="two" ${w.two ? 'checked' : ''}><span>Ask for 2 Approvers, one after the other</span></label><p class="note" style="margin:-6px 0 14px 28px">This workflow needs at least 1 Approver. You can ask for more, never fewer.</p>`, w.sched)}</div>
         <div class="panel"><h2>Where do messages go?</h2>
           <div class="inline-sel">Teams channel <select aria-label="Teams channel"><option>CODESparks Support</option></select></div></div>
       </div>
@@ -2496,7 +2499,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
         <p class="sentence"><mark>${schedText(w.sched)}</mark> Singapore time, agents ${doing}. Then they ask ${w.appr.steps.map((s) => `<mark>${nm(s.first)}</mark>`).join(', then ')} for a yes before they ${then}.</p>
         <dl class="kv"><dt>Approval requests</dt><dd>CODESparks Support, in Teams</dd>
           <dt>Result</dt><dd>${f.action === 'nudge' ? 'Each ticket owner, in a Teams message' : f.dest === 'confluence' ? 'The Weekly summary page, in Confluence' : 'CODESparks Support, in Teams'}</dd></dl>
-        <p class="muted">${escalationSentence(w.appr)}</p>
+        <p class="muted">${escalationSentence(w.appr, w.sched)}</p>
         <div class="panel"><h2>Checked against your request</h2>${checkList()}</div>
         <ul class="checks">
           <li>${I.check(16)}<span>Nothing changes without a yes. A request never says yes by itself.</span></li>
