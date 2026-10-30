@@ -69,7 +69,7 @@ export interface ItemWords {
 }
 
 function approvalWords(item: ApprovalItem, now: Date): ItemWords {
-  const tickets = item.first_changes.length > 0 && item.first_changes.every((change) => change.operation === 'create_ticket')
+  const tickets = item.first_changes.length === item.changes && item.first_changes.every((change) => change.operation === 'create_ticket')
   const title = item.changes === 0 ? 'A run is waiting for your yes' : `${count(item.changes, tickets ? 'ticket' : 'change')} ${item.changes === 1 ? 'is' : 'are'} waiting for your yes`
   const step = item.steps > 1 ? ` · Step ${item.step + 1} of ${item.steps}` : ''
   const lines = item.first_changes.map((change) => change.title ?? `A change in ${connectorLabel(change.connector)}`)
@@ -166,7 +166,7 @@ function whyNotYours(item: WaitingItem): string {
     case 'owns':
       return 'It is your workflow'
     case 'decided_earlier':
-      return `You said yes to step ${item.step} of ${item.steps}`
+      return 'You already said yes to an earlier step'
   }
 }
 
