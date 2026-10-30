@@ -15,6 +15,16 @@ usage: python3 -I scripts/checks/p12_lanes.py <command> <api-base-url> <out-dir>
   lane10 <api> <out>              bob, not an Operator, gets 403
   starters <api> <out> <file> <max-seconds>   the answer is the starter workflows within the time
   share <api> <out> <file> [count]   how many of count answers came from the model, not the starters
+  no-tool <api> <out> <cases.json> [mock.json]   the checker's live tasks: each write is can't do,
+                                  each Jira search stays understood, and the mock accepted them all
+  mock-raw <mock-url> - <cases json>   what the mock model itself answers for each task, as JSON
+                                  on stdout; runs on the stack network: docker exec -i ... python -
+  ask <api> <out> <name> <rows|starters|500> [max-seconds] [min-seconds]   one read-back of the
+                                  follow-up task, for the trouble lane
+  oidc <api> <out> <issuer>       the route's sign-in over OIDC; runs inside the platform-api
+                                  container of an OIDC stack, as in docker exec -i ... python -
+  evals-check <results.json> <out> <cases.json>   the fooled mock fails every write case of the
+                                  eval on model_held_to_the_tools and passes the Jira searches
 """
 
 import json
@@ -22,8 +32,10 @@ import re
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
@@ -53,11 +65,20 @@ class Api:
         self.base = base.rstrip("/")
         self.log: list[dict[str, Any]] = []
 
-    def call(self, user: str | None, method: str, path: str, body: Any = None) -> tuple[int, Any]:
+    def call(
+        self,
+        user: str | None,
+        method: str,
+        path: str,
+        body: Any = None,
+        token: str | None = None,
+    ) -> tuple[int, Any]:
         data = None if body is None else json.dumps(body).encode()
         headers = {"Accept": "application/json", "Content-Type": "application/json"}
         if user is not None:
             headers["X-Dev-User"] = user
+        if token is not None:
+            headers["Authorization"] = f"Bearer {token}"
         url = self.base + path
         request = urllib.request.Request(url, data=data, method=method, headers=headers)
         started = time.perf_counter()
@@ -71,7 +92,9 @@ class Api:
             parsed: Any = json.loads(raw) if raw else None
         except json.JSONDecodeError:
             parsed = raw.decode(errors="replace")
-        shown = body if "api_key" not in (body or {}) else {**body, "api_key": "[not shown]"}
+        shown = body
+        if isinstance(body, dict) and "api_key" in body:
+            shown = {**body, "api_key": "[not shown]"}
         self.log.append(
             {
                 "user": user,
@@ -305,6 +328,202 @@ def share(api: Api, out: Path, name: str, count: int) -> bool:
     return verdict([(from_model >= 0.95 * count, f"{from_model} of {count} from the model")])
 
 
+def hits(answer: Any, case: dict[str, str]) -> list[dict[str, Any]]:
+    word = case["word"].lower()
+    return [r for r in rows(answer) if r["kind"] == case["kind"] and word in r["text"].lower()]
+
+
+def no_tool(api: Api, out: Path, cases_file: str, mock_file: str | None) -> bool:
+    cases: list[dict[str, str]] = json.loads(Path(cases_file).read_text())
+    mock: dict[str, Any] | None = json.loads(Path(mock_file).read_text()) if mock_file else None
+    evals = Path(cases_file).resolve().parents[2] / "agent-runtime/evals/cases/understand.json"
+    scored = {c["id"]: c["task"] for c in json.loads(evals.read_text())}
+    lines: list[tuple[bool, str]] = []
+    seen: list[dict[str, Any]] = []
+    for case in cases:
+        status, answer = api.understand(case["task"])
+        found = hits(answer, case)
+        states = [r["state"] for r in found]
+        refused = case["wanted"] == "cant_do"
+        notes = [r.get("note") or "" for r in found]
+        held = status == 200 and bool(found)
+        held = held and all((state == "cant_do") == refused for state in states)
+        if refused:
+            held = held and all(n.startswith("I can't") and "I can only" in n for n in notes)
+        lines.append(
+            (held, f"{case['kind']} with '{case['word']}': wanted {case['wanted']}, got {states}")
+        )
+        if mock is not None:
+            said = hits({"rows": mock.get(case["task"], [])}, case)
+            fooled = bool(said) and {r["state"] for r in said} == {"understood"}
+            lines.append(
+                (fooled, f"  the mock model itself marked it {[r['state'] for r in said]}")
+            )
+        seen.append({**case, "status": status, "states": states, "notes": notes, "answer": answer})
+    same = all(scored.get(case["eval"]) == case["task"] for case in cases)
+    lines.append((same, "each task is the task of its case in the understand eval"))
+    lines.append((mock is not None, "the mock model's own answers were read"))
+    save(out, "p12-no-tool.json", {"cases": seen, "mock": mock, "calls": api.log})
+    return verdict(lines)
+
+
+def mock_raw(base: str, cases: list[dict[str, str]]) -> None:
+    said: dict[str, Any] = {}
+    for case in cases:
+        body = {
+            "model": "mock-model",
+            "max_tokens": 100,
+            "system": "The Planner reads a task back.",
+            "tool_choice": {"type": "tool", "name": "UnderstandAnswer"},
+            "tools": [{"name": "UnderstandAnswer", "input_schema": {"type": "object"}}],
+            "messages": [{"role": "user", "content": f"The task:\n{case['task']}"}],
+        }
+        request = urllib.request.Request(
+            base.rstrip("/") + "/v1/messages",
+            data=json.dumps(body).encode(),
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(request, timeout=30) as reply:
+            said[case["task"]] = json.loads(reply.read())["content"][0]["input"]["rows"]
+    print(json.dumps(said, indent=1))
+
+
+def ask(api: Api, out: Path, name: str, want: str, most: float | None, least: float | None) -> bool:
+    status, answer = api.understand(FOLLOW_UP)
+    seconds = api.log[-1]["seconds"]
+    save(out, f"{name}.json", api.log)
+    shape = answer.get("answer") if isinstance(answer, dict) else None
+    got = shape if status == 200 else str(status)
+    said = answer.get("message") if isinstance(answer, dict) else None
+    lines = [(got == want, f"{name}: HTTP {status}, {shape}, {seconds} s, wanted {want}: {said}")]
+    if most is not None:
+        lines.append((seconds <= most, f"{seconds} s, at most {most} s"))
+    if least is not None:
+        lines.append((seconds >= least, f"{seconds} s, at least {least} s"))
+    return verdict(lines)
+
+
+class _Form(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.action: str | None = None
+        self.fields: dict[str, str] = {}
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        named = dict(attrs)
+        if tag == "form" and self.action is None:
+            self.action = named.get("action") or ""
+        if tag == "input" and named.get("name"):
+            self.fields[str(named["name"])] = named.get("value") or ""
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args: Any, **kwargs: Any) -> None:
+        return None
+
+
+def token_for(issuer: str, user: str) -> str:
+    """Signs in at the mock identity provider as a person would, and returns the access token."""
+    back = "http://localhost:8080/auth/callback"
+    opener = urllib.request.build_opener(_NoRedirect)
+    query = urllib.parse.urlencode(
+        {
+            "client_id": "portal",
+            "response_type": "code",
+            "redirect_uri": back,
+            "scope": "openid profile platform-api",
+            "state": uuid.uuid4().hex,
+            "nonce": uuid.uuid4().hex,
+        }
+    )
+    authorize = f"{issuer}/authorize?{query}"
+    with opener.open(authorize, timeout=30) as page:
+        form = _Form()
+        form.feed(page.read().decode())
+    action = urllib.parse.urljoin(authorize, form.action or authorize)
+    fields = urllib.parse.urlencode({**form.fields, "username": user, "claims": ""}).encode()
+    try:
+        with opener.open(
+            urllib.request.Request(action, data=fields, method="POST"), timeout=30
+        ) as r:
+            location = r.headers.get("Location", "")
+    except urllib.error.HTTPError as error:
+        location = error.headers.get("Location", "")
+    code = urllib.parse.parse_qs(urllib.parse.urlsplit(location).query).get("code", [""])[0]
+    grant = urllib.parse.urlencode(
+        {
+            "grant_type": "authorization_code",
+            "code": code,
+            "client_id": "portal",
+            "client_secret": "not-checked",
+            "redirect_uri": back,
+        }
+    ).encode()
+    with opener.open(urllib.request.Request(f"{issuer}/token", data=grant), timeout=30) as r:
+        return str(json.loads(r.read())["access_token"])
+
+
+def oidc(api: Api, out: Path, issuer: str) -> bool:
+    tokens = {user: token_for(issuer, user) for user in ("alice", "bob", "carol", "mallory")}
+
+    def asks(token: str | None, text: str = FOLLOW_UP, user: str | None = None) -> tuple[int, Any]:
+        return api.call(user, "POST", ROUTE, {"text": text}, token=token)
+
+    alice, answer = asks(tokens["alice"])
+    bob, _ = asks(tokens["bob"])
+    carol, _ = asks(tokens["carol"])
+    mallory, _ = asks(tokens["mallory"])
+    nobody, _ = asks(None)
+    forged, _ = asks(
+        tokens["alice"][:-4] + ("AAAA" if not tokens["alice"].endswith("AAAA") else "BBBB")
+    )
+    header, _ = asks(None, user="alice")
+    nul, refusal = asks(tokens["alice"], "Every weekday\u0000 at 3pm")
+    where = refusal["detail"][0]["loc"] if nul == 422 else None
+    save(out, "p12-oidc.json", api.log)
+    shape = answer.get("answer") if isinstance(answer, dict) else None
+    return verdict(
+        [
+            (
+                alice == 200 and shape in ("rows", "starters"),
+                f"alice, an Operator: {alice} {shape}",
+            ),
+            (bob == 403, f"bob, an Approver only: {bob}"),
+            (carol == 403, f"carol, signed in but not on the People list: {carol}"),
+            (
+                mallory == 403,
+                f"mallory, whose token claims both roles but who is not on the list: {mallory}",
+            ),
+            (nobody == 401, f"no token: {nobody}"),
+            (forged == 401, f"a token with a changed signature: {forged}"),
+            (header == 401, f"the dev X-Dev-User header in OIDC mode: {header}"),
+            (nul == 422 and where == ["body", "text"], f"a NUL in the text: {nul} at {where}"),
+        ]
+    )
+
+
+def evals_check(results_file: str, out: Path, cases_file: str) -> bool:
+    cases: list[dict[str, str]] = json.loads(Path(cases_file).read_text())
+    results = json.loads(Path(results_file).read_text())["results"]
+    job = next(r for r in results if r["job"] == "understand" and r["model"] == "mock-model")
+    outcomes = {o["case"]: o for o in job["outcomes"]}
+    lines: list[tuple[bool, str]] = []
+    for case in cases:
+        outcome = outcomes.get(case["eval"], {})
+        failed = outcome.get("failed", {})
+        if case["wanted"] == "cant_do":
+            ok = outcome.get("passed") is False and "model_held_to_the_tools" in failed
+            lines.append((ok, f"{case['eval']}: the fooled mock fails it, {sorted(failed)}"))
+        else:
+            ok = outcome.get("passed") is True
+            lines.append(
+                (ok, f"{case['eval']}: the mock passes this Jira search, {sorted(failed)}")
+            )
+    save(out, "p12-evals-check.json", {"understand": job})
+    return verdict(lines)
+
+
 def main(argv: list[str]) -> int:
     if len(argv) < 3:
         print(__doc__)
@@ -329,6 +548,18 @@ def main(argv: list[str]) -> int:
         return 0 if starters(api, out, rest[0], float(rest[1])) else 1
     if command == "share":
         return 0 if share(api, out, rest[0], int(rest[1]) if len(rest) > 1 else 50) else 1
+    if command == "no-tool":
+        return 0 if no_tool(api, out, rest[0], rest[1] if len(rest) > 1 else None) else 1
+    if command == "mock-raw":
+        mock_raw(base, json.loads(rest[0]))
+        return 0
+    if command == "ask":
+        limits = [float(x) for x in rest[2:4]] + [None, None]
+        return 0 if ask(api, out, rest[0], rest[1], limits[0], limits[1]) else 1
+    if command == "oidc":
+        return 0 if oidc(api, out, rest[0]) else 1
+    if command == "evals-check":
+        return 0 if evals_check(base, out, rest[0]) else 1
     print(__doc__)
     return 2
 
