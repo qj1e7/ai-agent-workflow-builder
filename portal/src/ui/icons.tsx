@@ -59,3 +59,29 @@ export const IconLock = drawn(
   </>,
   2.2,
 )
+
+export const IconPause = drawn('IconPause', <path d="M9 6v12M15 6v12" />, 3)
+
+export const IconPlay = drawn('IconPlay', <path d="M8 5.5v13l10.5-6.5z" />, 2.2)
+
+export const IconTrash = drawn(
+  'IconTrash',
+  <>
+    <path d="M4.5 7h15M10 7V4.5h4V7M6.5 7l1 12.5h9l1-12.5" />
+    <path d="M10.5 11v5M13.5 11v5" />
+  </>,
+  2,
+)
+
+export const IconSearch = drawn(
+  'IconSearch',
+  <>
+    <circle cx="11" cy="11" r="6.5" />
+    <path d="M16 16l4 4" />
+  </>,
+  2,
+)
+
+export const IconChevronRight = drawn('IconChevronRight', <path d="M9.5 6l6 6-6 6" />, 2.2)
+
+export const IconChevronLeft = drawn('IconChevronLeft', <path d="M14.5 6l-6 6 6 6" />, 2.2)

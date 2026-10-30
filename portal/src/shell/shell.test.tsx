@@ -146,8 +146,8 @@ describe('the pages', () => {
   })
 
   it('say they are not built yet, under a lead line', () => {
-    const html = render({ path: '/workflows' })
-    expect(text(mainOf(html))).toContain('Your team’s repeated tasks.')
+    const html = render({ path: '/software' })
+    expect(text(mainOf(html))).toContain('Everything your team runs, in one list.')
     expect(text(mainOf(html))).toContain('This page is not built yet.')
   })
 

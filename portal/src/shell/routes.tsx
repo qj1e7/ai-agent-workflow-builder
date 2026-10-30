@@ -1,6 +1,8 @@
 import { lazy, Suspense, type ReactNode } from 'react'
 import { Route, Routes } from 'react-router'
 import { AgentsPage } from '../screens/agents/AgentsPage'
+import { WorkflowRoute } from '../screens/workflows/WorkflowPage'
+import { WorkflowsPage } from '../screens/workflows/WorkflowsPage'
 import type { Icon } from '../ui/icons'
 import { BotIcon, BoxIcon, GridIcon, HomeIcon, SettingsIcon } from './icons'
 import { NotFoundPage } from './NotFoundPage'
@@ -105,7 +107,12 @@ export function AppRoutes({ context }: { context: PageContext }) {
         path={`${PAGES.agents.path}/:agentId?`}
         element={<AgentsPage heading={wordsOf(PAGES.agents.heading, context)} lead={wordsOf(PAGES.agents.lead, context)} />}
       />
-      {PAGE_IDS.filter((id) => id !== 'agents').map((id) => {
+      <Route
+        path={PAGES.workflows.path}
+        element={<WorkflowsPage heading={wordsOf(PAGES.workflows.heading, context)} lead={wordsOf(PAGES.workflows.lead, context)} now={context.now} />}
+      />
+      <Route path={`${PAGES.workflows.path}/:useCaseId`} element={<WorkflowRoute now={context.now} />} />
+      {PAGE_IDS.filter((id) => id !== 'agents' && id !== 'workflows').map((id) => {
         const { path, heading, lead } = PAGES[id]
         return <Route key={id} path={path} element={<EmptyPage heading={wordsOf(heading, context)} lead={wordsOf(lead, context)} />} />
       })}

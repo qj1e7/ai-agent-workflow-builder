@@ -1,0 +1,566 @@
+/* The Workflows list and the workflow page, from the prototype's .wf-row, .facts, .panel and .steps. Light only. */
+
+.pills {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.pill {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 10px 1px 8px;
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  background: var(--sunk);
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.pill[data-tone='wait'] {
+  border-color: var(--amber-line);
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+}
+
+.pill[data-tone='bad'] {
+  border-color: var(--red-line);
+  background: var(--red-soft);
+  color: var(--red-ink);
+}
+
+.pill[data-tone='new'] {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+/* A value that changed while you looked: a soft tint that fades, once. */
+.changed {
+  border-radius: 4px;
+  animation: changed 980ms ease-out both;
+}
+
+@keyframes changed {
+  0%,
+  55% {
+    background-color: var(--accent-soft);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+}
+
+/* A new page: its rows arrive one after another, 40ms apart, at most 6 steps. Once. */
+.arrive {
+  animation: rise var(--dur-small) var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), 6) * var(--stagger));
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.faces {
+  display: inline-flex;
+}
+
+.faces > svg + svg {
+  margin-left: -8px;
+}
+
+/* ---------- The list ---------- */
+
+.findbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.findbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(100%, 320px);
+  padding: 0 12px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-ctl);
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.findbox:focus-within {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.findbox input {
+  width: 100%;
+  min-height: 42px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+}
+
+.findbox input:focus-visible {
+  outline: none;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.filters button {
+  min-height: 44px;
+  padding: 6px 14px;
+  border: 1px solid var(--rail);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-press) ease,
+    border-color var(--dur-press) ease,
+    color var(--dur-press) ease;
+}
+
+.filters button[aria-pressed='true'] {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--on-ink);
+}
+
+.list {
+  border: 1px solid var(--hair);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+
+.list > li + li {
+  border-top: 1px solid var(--rule);
+}
+
+.row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 196px minmax(0, 1fr) 104px 196px 172px;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 20px;
+  transition: background-color var(--dur-press) ease;
+}
+
+.row[data-paused] {
+  background: var(--sunk);
+}
+
+.main h2 {
+  font-size: 1.05rem;
+}
+
+.main p {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.rowLink {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* The whole row is the link's hit area; the button at its end sits above it. */
+.rowLink::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-card);
+}
+
+.rowLink:focus-visible {
+  outline: none;
+}
+
+.rowLink:focus-visible::after {
+  outline: 3px solid var(--focus);
+  outline-offset: -3px;
+}
+
+.next {
+  color: var(--muted);
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.act {
+  position: relative;
+  z-index: var(--z-raised);
+  justify-self: end;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .row:hover {
+    background: var(--sunk);
+  }
+
+  .filters button:hover {
+    border-color: var(--ink);
+  }
+}
+
+/* On a wide screen the next run and the button are cells of the row; on a narrow one they share its last line. */
+.foot {
+  display: contents;
+}
+
+@media (max-width: 1100px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'pills faces'
+      'main main'
+      'foot foot';
+    gap: 8px 12px;
+  }
+
+  .row > .pills {
+    grid-area: pills;
+  }
+
+  .main {
+    grid-area: main;
+  }
+
+  .row > .faces {
+    grid-area: faces;
+    justify-self: end;
+  }
+
+  .foot {
+    display: flex;
+    flex-wrap: wrap;
+    grid-area: foot;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 12px;
+  }
+
+  .next {
+    white-space: normal;
+  }
+}
+
+.quiet {
+  padding: 28px;
+  border: 1px dashed var(--rail);
+  border-radius: var(--r-card);
+  color: var(--muted);
+  text-align: center;
+}
+
+.quiet b {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--ink);
+  font-size: 1.125rem;
+}
+
+.quiet button {
+  margin-top: 14px;
+}
+
+.problem {
+  margin-bottom: 16px;
+  color: var(--red-ink);
+  font-weight: 600;
+}
+
+/* ---------- The workflow page ---------- */
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  margin-bottom: 14px;
+  padding: 4px 0;
+  color: var(--muted);
+  font-weight: 600;
+  text-decoration: none;
+  transition: color var(--dur-press) ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .back:hover {
+    color: var(--ink);
+  }
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.head h1 {
+  margin-top: 8px;
+}
+
+.head p {
+  max-width: 65ch;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 1.05rem;
+}
+
+.btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px 24px;
+  margin-top: 16px;
+  padding: 18px 20px;
+  border: 1px solid var(--hair);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+
+.facts dt {
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.facts dd {
+  margin: 2px 0 0;
+  font-weight: 600;
+}
+
+.facts dd small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+
+.wide {
+  grid-column: 1 / -1;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 4px 14px 4px 4px;
+  border: 1px solid var(--rail);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+  transition:
+    border-color var(--dur-press) ease,
+    transform var(--dur-press) var(--ease-out);
+}
+
+.chip:active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .chip:hover {
+    border-color: var(--ink);
+  }
+}
+
+.body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: 24px;
+  align-items: start;
+  margin-top: 24px;
+}
+
+@media (max-width: 960px) {
+  .body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.panel {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 20px 24px;
+  border: 1px solid var(--hair);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+
+.panel h2 {
+  font-size: 1.125rem;
+}
+
+.steps {
+  counter-reset: step;
+}
+
+.steps li {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px 0;
+  counter-increment: step;
+}
+
+.steps li + li {
+  border-top: 1px solid var(--rule);
+}
+
+.steps li::before {
+  content: counter(step);
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--sunk);
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.what {
+  font-weight: 600;
+}
+
+.how {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.tag {
+  display: inline-flex;
+  margin-top: 6px;
+  padding: 1px 8px;
+  border-radius: 4px;
+  background: var(--sunk);
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.tag[data-writes] {
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+}
+
+.runs {
+  border-top: 1px solid var(--rule);
+}
+
+.runs > li {
+  border-bottom: 1px solid var(--rule);
+}
+
+.runLink {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 6px;
+  color: inherit;
+  text-decoration: none;
+  transition: background-color var(--dur-press) ease;
+}
+
+.runLink b {
+  display: block;
+}
+
+.runLink span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.runLink .open {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .runLink:hover {
+    background: var(--sunk);
+  }
+}
+
+.dialog {
+  width: min(480px, calc(100% - 32px));
+  padding: var(--space-5);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-sheet);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--float);
+}
+
+.dialog[open] {
+  display: grid;
+  gap: var(--space-4);
+  animation: dialog-in var(--dur-panel) var(--ease-out);
+}
+
+.dialog::backdrop {
+  background: var(--scrim);
+}
+
+.dialog h2 {
+  font-size: 1.4rem;
+}
+
+.dialog .btns {
+  justify-content: flex-end;
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
