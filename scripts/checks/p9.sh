@@ -1,26 +1,38 @@
 #!/usr/bin/env bash
 # Checker probes for P9 of docs/design/rebuild-plan.md: the Workflows list and the workflow page. Rerun any step on its own.
 # Works from a fresh `git archive` export: nothing here needs git, and each e2e folder is mounted on its own.
+# The checks run from this script's own tree, whatever stack they point at. Trunk's tree has no p9.sh or p9.check.ts,
+# so run this head copy of p9.sh for a trunk stack too, as lane1 does.
 #
 # usage: scripts/checks/p9.sh <command> [arguments]
 #
 #   disk                                   free space on the Docker disk; fails under 1.5 GB
 #   gates <worktree>                       npm ci when needed, typecheck, lint, unit tests, nginx render, build
+#   pygates <worktree>                     both contract generators change nothing in contracts/; platform-api ruff, pyright,
+#                                          lint-imports and its tests on a throwaway PostgreSQL ($PG_NAME on $PG_PORT, removed
+#                                          after); agent-runtime ruff, pyright and tests
 #   up <worktree> <project> <tag> <portal-port> <api-port> <n8n-port> [--reuse]
 #                                          --reuse starts a second stack on the images an earlier up built with that tag;
 #                                          it still builds this project's mock-github and mock-model, which have no tag
-#   down <worktree> <project>              stops the stack and deletes its volumes (down -v)
+#   down <worktree> <project> [<tag>]      stops the stack, deletes its volumes (down -v), and removes the images named after
+#                                          the project (mock-github, mock-model, e2e) and its dangling ones; with a tag, also
+#                                          wab/*:<tag> unless another stack still uses them
 #   check <project> [playwright arguments] run portal/e2e/checks/p9.check.ts in the runner image, in that project's Portal network
 #   live <project> [playwright arguments]  run portal/e2e/live, such as 04-workflows.live.ts, the same way
-#   lane1 <head-project> [trunk-project]   trunk has no Workflows page: record it; then two seeded rows at head
-#   lane <n> <project>                     lanes 2, 3, 5, 6, 7, 9 and 10, one at a time on a shared stack
+#   lane1 <head-project> [trunk-project]   trunk has no Workflows page: record it; then two seeded rows at head. The trunk
+#                                          stack is checked with this head script and its checks, as trunk has none
+#   lane <n> <project>                     lanes 2, 3, 5, 6, 7, 9 and 10, one at a time on a shared stack. Lane 9 also lists
+#                                          each check axe could not decide in lane-9/p9-axe-undecided.txt, for a person to read
 #   lane4 <worktree> <project> <tag> <portal-port> <api-port> <n8n-port> [--reuse]
 #                                          lane 4 brings up its own stack, writes a schedule into orchestration.schedules
-#                                          with psql, and down -v
+#                                          with psql, and takes it down with its images (and the tag's, unless --reuse)
 #   lane8 <worktree> <project> <tag> <portal-port> <api-port> <n8n-port> [--reuse]
-#                                          lane 8 brings up its own stack, stops mock-model before the run, and down -v
-#   probes <project>                       the checker's probes: focus, a stale Run now, the watchlist, roles,
-#                                          own runs, Delete and Undo, messages, reduced motion and retired words
+#                                          lane 8 brings up its own stack, stops mock-model before the run, and takes it down
+#                                          with its images (and the tag's, unless --reuse)
+#   probes <project>                       the checker's probes: focus from every page at 1440 and 390 px, presses on a
+#                                          workflow someone else paused or deleted, the watchlist and its Resume on the
+#                                          Software page, roles, own runs, Delete and Undo, messages, reduced motion, and
+#                                          retired words in the pages and in every message a press brings
 #   size <trunk-worktree> <head-worktree>  gzip bytes of the JavaScript each built dist/index.html loads; fails past +30 KB
 #   perf <project> [samples]               largest contentful paint of a workflow page with 20 runs; fails at a median of 2.5 s or more
 #   video <project>                        the review video, as $EVID/p9-review.webm and, with ffmpeg, .mp4
@@ -31,6 +43,8 @@
 #   DISK_CONTAINER    a running container whose disk is the Docker VM's disk (default wab-postgres-1); falls back to a throwaway alpine
 #   E2E_RUNNER_IMAGE  browser runner image (default portal-e2e-runner:p1shell); never built here, so build it first with
 #                     portal/e2e/runner-image.sh if it is missing
+#   PG_NAME           container name of the throwaway PostgreSQL that pygates starts (default p9-gates-pg)
+#   PG_PORT           its host port (default 56940)
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -40,6 +54,9 @@ ENV_FILE=${ENV_FILE:-$EVID/env/.env}
 RUNNER=${E2E_RUNNER_IMAGE:-portal-e2e-runner:p1shell}
 DISK_CONTAINER=${DISK_CONTAINER:-wab-postgres-1}
 GROWTH_LIMIT=30720
+PG_NAME=${PG_NAME:-p9-gates-pg}
+PG_PORT=${PG_PORT:-56940}
+PG_IMAGE=postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
 
 die() { echo "p9.sh: $*" >&2; exit 2; }
 
@@ -73,6 +90,46 @@ gates() {
   tail -n 8 "$out/build-head.log"
 }
 
+pygates() {
+  local worktree=$1 out="$EVID/gates" status=0
+  mkdir -p "$out"
+  step() {
+    local name=$1
+    shift
+    if (cd "$worktree" && eval "$*") >"$out/$name.log" 2>&1; then
+      echo "PASS $name: $(tail -n 1 "$out/$name.log")"
+    else
+      echo "FAIL $name (see $out/$name.log): $(tail -n 3 "$out/$name.log" | tr '\n' ' ')"
+      status=1
+    fi
+  }
+  docker rm -fv "$PG_NAME" >/dev/null 2>&1 || true
+  docker run -d --rm --name "$PG_NAME" -e POSTGRES_PASSWORD=test -p "127.0.0.1:$PG_PORT:5432" "$PG_IMAGE" >/dev/null
+  for _ in $(seq 1 60); do
+    docker exec "$PG_NAME" pg_isready -U postgres >/dev/null 2>&1 && break
+    sleep 1
+  done
+  rm -rf "$out/contracts-before"
+  cp -R "$worktree/contracts" "$out/contracts-before"
+  step contracts-generate "(cd platform-api && uv sync --locked && uv run python -m platform_api.contracts ../contracts) && (cd agent-runtime && uv sync --locked && uv run python -m agent_runtime.contracts ../contracts)"
+  if diff -r "$out/contracts-before" "$worktree/contracts" >"$out/contracts-diff.txt"; then
+    echo "PASS contracts-unchanged: both generators wrote what contracts/ already held"
+  else
+    echo "FAIL contracts-unchanged (see $out/contracts-diff.txt): $(head -n 3 "$out/contracts-diff.txt" | tr '\n' ' ')"
+    status=1
+  fi
+  step pa-ruff "cd platform-api && uv run ruff check . && uv run ruff format --check ."
+  step pa-pyright "cd platform-api && uv run pyright"
+  step pa-lint-imports "cd platform-api && uv run lint-imports"
+  step pa-pytest "cd platform-api && PLATFORM_TEST_DATABASE_URL=postgresql://postgres:test@127.0.0.1:$PG_PORT/postgres uv run pytest -q"
+  step ar-ruff "cd agent-runtime && uv run ruff check . && uv run ruff format --check ."
+  step ar-pyright "cd agent-runtime && uv run pyright"
+  step ar-pytest "cd agent-runtime && uv run pytest -q"
+  docker rm -fv "$PG_NAME" >/dev/null 2>&1 || true
+  echo "throwaway PostgreSQL $PG_NAME removed: $(docker ps -aq --filter "name=^$PG_NAME\$" | wc -l | tr -d ' ') left"
+  return "$status"
+}
+
 up() {
   local worktree=$1 project=$2 tag=$3 portal_port=$4 api_port=$5 n8n_port=$6 build=--build
   case "${7:-}" in
@@ -94,10 +151,25 @@ up() {
 }
 
 down() {
-  local worktree=$1 project=$2
+  local worktree=$1 project=$2 tag=${3:-} image
   mkdir -p "$EVID/stacks"
   compose "$worktree" "$project" --profile e2e logs --no-color >"$EVID/stacks/$project-compose.log" 2>&1 || true
   compose "$worktree" "$project" --profile e2e down -v --remove-orphans
+  docker image ls --format '{{.Repository}}:{{.Tag}}' --filter "reference=$project-*" | while read -r image; do
+    docker image rm "$image" >/dev/null || echo "kept $image, which a container still uses"
+  done
+  docker image prune -f --filter "label=com.docker.compose.project=$project" >/dev/null
+  if [ -n "$tag" ]; then
+    for image in wab/platform-api wab/agent-runtime wab/portal; do
+      docker image inspect "$image:$tag" >/dev/null 2>&1 || continue
+      docker image rm "$image:$tag" >/dev/null 2>&1 || echo "kept $image:$tag, which another stack still uses"
+    done
+  fi
+  echo "images named after $project left: $(docker image ls -q --filter "reference=$project-*" | wc -l | tr -d ' ')"
+}
+
+built_tag() {
+  if [ "${2:-}" = --reuse ]; then echo ''; else echo "$1"; fi
 }
 
 portal_of() {
@@ -186,7 +258,7 @@ lane4() {
   mkdir -p "$EVID/lane-4"
   schedule_agent_workflow_in_database "$worktree" "$project" "$api_port" || status=$?
   [ "$status" -ne 0 ] || check "$project" --grep '@lane4 ' 2>&1 | tee "$EVID/lane-4/playwright.log" || status=$?
-  down "$worktree" "$project"
+  down "$worktree" "$project" "$(built_tag "$tag" "${7:-}")"
   return "$status"
 }
 
@@ -199,14 +271,14 @@ lane8() {
     compose "$worktree" "$project" stop mock-model | tee "$EVID/lane-8/mock-model-stopped.txt"
     check "$project" --grep '@lane8 ' 2>&1 | tee "$EVID/lane-8/playwright.log" || status=$?
   fi
-  down "$worktree" "$project"
+  down "$worktree" "$project" "$(built_tag "$tag" "${7:-}")"
   return "$status"
 }
 
 probes() {
   local project=$1
   mkdir -p "$EVID/safety" "$EVID/probe-focus"
-  check "$project" --grep '@focus |@stale |@watchlist |@roles |@own-run |@delete-undo |@toast |@reduced |@words ' 2>&1 | tee "$EVID/safety/playwright.log"
+  check "$project" --grep '@focus |@stale |@watchlist |@watchlist-resume |@roles |@own-run |@delete-undo |@toast |@reduced |@words ' 2>&1 | tee "$EVID/safety/playwright.log"
   return "${PIPESTATUS[0]}"
 }
 
@@ -261,9 +333,9 @@ video() {
 }
 
 command=${1:-}
-[ -n "$command" ] || die "usage: p9.sh <disk|gates|up|down|check|live|lane1|lane|lane4|lane8|probes|size|perf|video> ..."
+[ -n "$command" ] || die "usage: p9.sh <disk|gates|pygates|up|down|check|live|lane1|lane|lane4|lane8|probes|size|perf|video> ..."
 shift
 case "$command" in
-  disk | gates | up | down | check | live | lane1 | lane | lane4 | lane8 | probes | size | perf | video) "$command" "$@" ;;
+  disk | gates | pygates | up | down | check | live | lane1 | lane | lane4 | lane8 | probes | size | perf | video) "$command" "$@" ;;
   *) die "unknown command $command" ;;
 esac

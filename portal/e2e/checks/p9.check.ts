@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright'
-import { expect, request, test, type APIRequestContext, type Browser, type Page, type Request } from '@playwright/test'
+import { expect, request, test, type APIRequestContext, type Browser, type BrowserContext, type Page, type Request } from '@playwright/test'
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -495,7 +495,12 @@ async function axeOn(page: Page, view: string, width: string, runs: Record<strin
     width,
     sideways,
     violations: result.violations.map((v) => ({ id: v.id, impact: v.impact, help: v.help, nodes: v.nodes.map((n) => ({ target: n.target, summary: n.failureSummary })) })),
-    incomplete: result.incomplete.map((v) => ({ id: v.id, nodes: v.nodes.length })),
+    incomplete: result.incomplete.map((v) => ({
+      id: v.id,
+      impact: v.impact,
+      help: v.help,
+      nodes: v.nodes.map((n) => ({ target: n.target, html: n.html.slice(0, 160), why: [...n.any, ...n.all, ...n.none].map((check) => check.message) })),
+    })),
     passes: result.passes.length,
   })
 }
@@ -552,8 +557,27 @@ test('@lane9 axe finds no WCAG 2.2 AA problem on either page, in each state, at 
       await expect(h1(bobPage)).toHaveText(workflow.name)
       await axeOn(bobPage, 'bob, workflow page', width, runs)
       await bob.close()
+
+      const watchlist = await backend.freshWatchlist('alice')
+      expect((await call(api, 'alice', 'POST', `/api/v1/use-cases/${watchlist}/pause`)).status).toBe(200)
+      const software = await devContext(browser, 'alice', { phone })
+      const softwarePage = await software.newPage()
+      await softwarePage.goto('/software')
+      await expect(softwarePage.getByRole('button', { name: 'Resume' })).toBeVisible()
+      await axeOn(softwarePage, 'software page, paused, with Resume', width, runs)
+      await softwarePage.getByRole('button', { name: 'Resume' }).click()
+      await expect(softwarePage.getByRole('button', { name: 'Resume' })).toHaveCount(0)
+      await axeOn(softwarePage, 'software page, resumed, with its message', width, runs)
+      await software.close()
     }
     save(9, 'p9-axe.json', { tags: WCAG_22_AA, runs })
+    const undecided = runs.flatMap((run) =>
+      (run['incomplete'] as { id: string; nodes: { target: unknown; why: string[] }[] }[]).flatMap((check) =>
+        check.nodes.map((node) => `${String(run['view'])} @${String(run['width'])}: ${check.id} on ${JSON.stringify(node.target)}: ${node.why.join(' ')}`),
+      ),
+    )
+    save(9, 'p9-axe-undecided.txt', undecided.length ? `${undecided.join('\n')}\n` : 'axe left no check undecided\n')
+    console.log(`axe left ${undecided.length} check(s) undecided, listed in lane-9/p9-axe-undecided.txt; a person reads each one${undecided.length ? `:\n${undecided.join('\n')}` : ''}`)
     expect(runs.flatMap((run) => (run['violations'] as { id: string }[]).map((v) => `${String(run['view'])} @${String(run['width'])}: ${v.id}`))).toEqual([])
     expect(runs.filter((run) => (run['sideways'] as number) > 0).map((run) => `${String(run['view'])} @${String(run['width'])}`), 'no sideways scroll').toEqual([])
   })
@@ -624,55 +648,151 @@ async function focusNow(page: Page): Promise<{ tag: string | null; text: string 
   return page.evaluate(() => ({ tag: document.activeElement?.tagName ?? null, text: (document.activeElement?.textContent ?? '').trim().slice(0, 40) }))
 }
 
-test('@focus every page change puts focus on the new heading, with nothing cached', async ({ browser }) => {
-  test.setTimeout(300_000)
+async function focusOrigins(): Promise<{ label: string; path: string }[]> {
+  return withBackend(async (backend, api) => {
+    await connectMockModel(api)
+    const workflow = await agentWorkflow(api, 'focus origin')
+    const runId = await backend.checkNow('alice', workflow.id)
+    return [
+      { label: 'Home', path: '/' },
+      { label: 'Software watchlist', path: '/software' },
+      { label: 'Agent library', path: '/agents' },
+      { label: 'Settings', path: '/settings' },
+      { label: 'a workflow page', path: `/workflows/${workflow.id}` },
+      { label: 'a run page', path: `/runs/${runId}` },
+    ]
+  })
+}
+
+test('@focus opening Workflows from every page, at 1440 and 390 px, puts focus on its heading, and so do a workflow page and Back', async ({ browser }) => {
+  test.setTimeout(600_000)
+  const origins = await focusOrigins()
   const rows: Record<string, unknown>[] = []
-  for (const from of ['/settings', '/', '/agents']) {
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      const context = await devContext(browser, 'alice')
-      const page = await context.newPage()
-      await page.goto(from)
-      await expect(h1(page)).toBeVisible()
-      await page.waitForTimeout(500)
-      await mainMenu(page).getByRole('link', { name: 'Workflows', exact: true }).click()
-      await expect(h1(page)).toHaveText('Workflows')
-      await page.waitForTimeout(1_200)
-      rows.push({ from, to: '/workflows', attempt, ...(await focusNow(page)) })
-      await page.locator('li[data-workflow-id] h2 a[href^="/workflows/"]').first().click()
-      await expect(page.getByRole('main').getByRole('link', { name: 'Workflows', exact: true })).toBeVisible()
-      await page.waitForTimeout(1_200)
-      rows.push({ from: '/workflows', to: 'a workflow page', attempt, ...(await focusNow(page)) })
-      await page.goBack()
-      await expect(h1(page)).toHaveText('Workflows')
-      await page.waitForTimeout(1_200)
-      rows.push({ from: 'a workflow page', to: '/workflows, by Back', attempt, ...(await focusNow(page)) })
-      await context.close()
+  for (const phone of [false, true]) {
+    const width = phone ? 390 : 1440
+    for (const origin of origins) {
+      for (let attempt = 1; attempt <= (phone ? 1 : 3); attempt++) {
+        const context = await devContext(browser, 'alice', { phone })
+        const page = await context.newPage()
+        await page.goto(origin.path)
+        await expect(h1(page)).toBeVisible()
+        await page.waitForTimeout(500)
+        await mainMenu(page).getByRole('link', { name: 'Workflows', exact: true }).click()
+        await expect(h1(page)).toHaveText('Workflows')
+        await expect(page.locator('li[data-workflow-id]').first()).toBeVisible()
+        await page.waitForTimeout(1_200)
+        rows.push({ width, from: origin.label, to: '/workflows', attempt, ...(await focusNow(page)) })
+        if (origin.label === 'Home') {
+          await page.locator('li[data-workflow-id] h2 a[href^="/workflows/"]').first().click()
+          await expect(page.getByRole('main').getByRole('link', { name: 'Workflows', exact: true })).toBeVisible()
+          await page.waitForTimeout(1_200)
+          rows.push({ width, from: '/workflows', to: 'a workflow page', attempt, ...(await focusNow(page)) })
+          await page.goBack()
+          await expect(h1(page)).toHaveText('Workflows')
+          await page.waitForTimeout(1_200)
+          rows.push({ width, from: 'a workflow page', to: '/workflows, by Back', attempt, ...(await focusNow(page)) })
+        }
+        await context.close()
+      }
     }
   }
   save('probe-focus', `focus-${TARGET}.json`, rows)
-  expect(rows.filter((row) => row['tag'] !== 'H1').map((row) => `${String(row['from'])} -> ${String(row['to'])} #${String(row['attempt'])}: ${String(row['tag'])}`), 'focus is on the new heading after every page change').toEqual([])
+  expect(rows.filter((row) => row['tag'] !== 'H1').map((row) => `${String(row['width'])} ${String(row['from'])} -> ${String(row['to'])} #${String(row['attempt'])}: ${String(row['tag'])}`), 'focus is on the new heading after every page change').toEqual([])
 })
 
-test('@stale Run now on a page that still shows On after someone else paused it shows the paused workflow', async ({ browser }) => {
+interface Stale {
+  readonly name: string
+  readonly setup?: (api: APIRequestContext, id: string) => Promise<unknown>
+  readonly other: (api: APIRequestContext, id: string) => Promise<{ status: number }>
+  readonly press: (page: Page) => Promise<void>
+  readonly expected: { readonly url: 'page' | 'list'; readonly heading: 'name' | 'Workflow not found' | 'Workflows'; readonly focus: string }
+}
+
+const pressByName = (name: string) => (page: Page) => page.getByRole('button', { name, exact: true }).click()
+const carol = (method: 'POST' | 'DELETE', action: string) => (api: APIRequestContext, id: string) => call(api, 'carol', method, `/api/v1/use-cases/${id}${action}`)
+
+const STALE: readonly Stale[] = [
+  { name: 'carol pauses, alice presses Run now', other: carol('POST', '/pause'), press: pressByName('Run now'), expected: { url: 'page', heading: 'name', focus: 'Resume' } },
+  {
+    name: 'carol pauses, alice presses Run now by Enter',
+    other: carol('POST', '/pause'),
+    press: async (page) => {
+      await page.getByRole('button', { name: 'Run now' }).focus()
+      await page.keyboard.press('Enter')
+    },
+    expected: { url: 'page', heading: 'name', focus: 'Resume' },
+  },
+  { name: 'carol pauses, alice presses Pause', other: carol('POST', '/pause'), press: pressByName('Pause'), expected: { url: 'page', heading: 'name', focus: 'Resume' } },
+  {
+    name: 'carol resumes, alice presses Resume',
+    setup: (api, id) => call(api, 'alice', 'POST', `/api/v1/use-cases/${id}/pause`),
+    other: carol('POST', '/resume'),
+    press: pressByName('Resume'),
+    expected: { url: 'page', heading: 'name', focus: 'Pause' },
+  },
+  { name: 'carol deletes, alice presses Run now', other: carol('DELETE', ''), press: pressByName('Run now'), expected: { url: 'page', heading: 'Workflow not found', focus: 'Workflow not found' } },
+  { name: 'carol deletes, alice presses Pause', other: carol('DELETE', ''), press: pressByName('Pause'), expected: { url: 'page', heading: 'Workflow not found', focus: 'Workflow not found' } },
+  {
+    name: 'carol deletes, alice presses Delete',
+    other: carol('DELETE', ''),
+    press: async (page) => {
+      await page.getByRole('button', { name: 'Delete', exact: true }).click()
+      await page.getByRole('alertdialog').getByRole('button', { name: 'Delete workflow' }).click()
+    },
+    expected: { url: 'list', heading: 'Workflows', focus: 'Undo' },
+  },
+]
+
+test('@stale another Operator changes a workflow while alice has its page open: the page rereads, and focus stays on the page', async ({ browser }) => {
+  test.setTimeout(600_000)
   await withBackend(async (_backend, api) => {
     await connectMockModel(api)
-    const workflow = await agentWorkflow(api, 'stale run now')
-    const context = await devContext(browser, 'alice')
-    const page = await context.newPage()
-    await page.goto(`/workflows/${workflow.id}`)
-    await expect(page.getByRole('button', { name: 'Run now' })).toBeVisible()
-    expect((await call(api, 'carol', 'POST', `/api/v1/use-cases/${workflow.id}/pause`)).status, 'carol pauses it').toBe(200)
-    await page.getByRole('button', { name: 'Run now' }).click()
-    await expect(page.getByRole('alert')).toContainText('paused')
-    await expect(page.getByRole('button', { name: 'Resume' })).toBeVisible()
-    await expect(nextRunOf(page)).toHaveText('Paused')
-    const facts = { workflow, alert: await page.getByRole('alert').allInnerTexts(), url: page.url(), buttons: await mainButtons(page), pills: await page.locator('[data-life]').innerText() }
-    await shotTo(page, 'safety', 'stale-run-now.png')
-    save('safety', 'stale-run-now.json', facts)
-    expect(facts.buttons).not.toContain('Run now')
-    expect(facts.pills).toBe('Paused')
-    expect(await runsOf(api, workflow.id)).toEqual([])
-    await context.close()
+    const cases: Record<string, unknown>[] = []
+    for (const phone of [false, true]) {
+      for (const [i, variant] of STALE.entries()) {
+        if (phone && !variant.name.includes('Run now')) continue
+        const width = phone ? 390 : 1440
+        const workflow = await agentWorkflow(api, `stale ${i} ${width}`)
+        if (variant.setup) await variant.setup(api, workflow.id)
+        const context = await devContext(browser, 'alice', { phone })
+        const page = await context.newPage()
+        const answers: { path: string; method: string; status: number; body: string }[] = []
+        page.on('response', async (response) => {
+          const req = response.request()
+          if (req.method() !== 'GET' && req.url().includes('/use-cases/')) answers.push({ path: new URL(req.url()).pathname, method: req.method(), status: response.status(), body: (await response.text().catch(() => '')).slice(0, 200) })
+        })
+        await page.goto(`/workflows/${workflow.id}`)
+        await expect(h1(page)).toHaveText(workflow.name)
+        await page.waitForTimeout(500)
+        const other = await variant.other(api, workflow.id)
+        await variant.press(page)
+        const heading = variant.expected.heading === 'name' ? workflow.name : variant.expected.heading
+        await expect(h1(page)).toHaveText(heading)
+        await page.waitForTimeout(1_500)
+        const after = {
+          url: new URL(page.url()).pathname,
+          alerts: await page.getByRole('alert').allInnerTexts(),
+          buttons: (await mainButtons(page)).filter((label) => MANAGE.includes(label)),
+          focus: await focusNow(page),
+          runs: (await runsOf(api, workflow.id)).length,
+        }
+        await shotTo(page, 'safety', `stale-${width}-${i}.png`)
+        cases.push({ width, variant: variant.name, workflow, other: other.status, answers, after })
+        await context.close()
+      }
+    }
+    save('safety', 'stale.json', cases)
+    for (const row of cases) {
+      const variant = STALE.find((item) => item.name === row['variant'])
+      const after = row['after'] as { url: string; focus: { text: string }; runs: number; alerts: string[] }
+      const label = `${String(row['width'])} ${String(row['variant'])}`
+      const workflow = row['workflow'] as Workflow
+      expect(after.url, label).toBe(variant?.expected.url === 'list' ? '/workflows' : `/workflows/${workflow.id}`)
+      expect(after.focus.text, `${label}: focus`).toBe(variant?.expected.focus)
+      expect(after.runs, `${label}: no run started`).toBe(0)
+      for (const answer of row['answers'] as { body: string }[]) expect(answer.body, `${label}: the platform’s words`).not.toMatch(RETIRED)
+      for (const alert of after.alerts) expect(alert, `${label}: the page’s words`).not.toMatch(RETIRED)
+    }
   })
 })
 
@@ -705,6 +825,66 @@ test('@watchlist the watchlist row and address open the Software page, and the W
       expect(facts[`${user} address lands on`]).toBe('/software')
     }
     expect(platform.status, 'the platform keeps the watchlist').toBe(409)
+  })
+})
+
+test('@watchlist-resume a watchlist paused through the API can be resumed on the Software page by an Operator, once per press', async ({ browser }) => {
+  test.setTimeout(300_000)
+  await withBackend(async (backend, api) => {
+    const watchlist = await backend.freshWatchlist('alice')
+    expect((await call(api, 'alice', 'PUT', '/api/v1/watchlist/schedule', { day: 'monday', at: '09:00' })).status).toBe(200)
+    const facts: Record<string, unknown> = { watchlist }
+    for (const phone of [false, true]) {
+      const width = phone ? 390 : 1440
+      expect((await call(api, 'carol', 'POST', `/api/v1/use-cases/${watchlist}/pause`)).status, 'carol pauses the watchlist through the API').toBe(200)
+      const bob = await devContext(browser, 'bob', { phone })
+      const bobPage = await bob.newPage()
+      await bobPage.goto('/software')
+      await expect(bobPage.getByText('Paused. No check runs until an Operator resumes it.')).toBeVisible()
+      facts[`${width} bob buttons`] = await mainButtons(bobPage)
+      await bob.close()
+
+      const context = await devContext(browser, 'alice', { phone })
+      const page = await context.newPage()
+      const resumes: number[] = []
+      page.on('request', (req) => {
+        if (req.method() === 'POST' && req.url().endsWith(`/use-cases/${watchlist}/resume`)) resumes.push(Date.now())
+      })
+      await slowAnswers(page, `**/api/v1/use-cases/${watchlist}/resume`, 'POST', 1_000)
+      await page.goto('/software')
+      const resume = page.getByRole('button', { name: 'Resume' })
+      await expect(resume).toBeVisible()
+      facts[`${width} alice buttons, paused`] = await mainButtons(page)
+      await resume.focus()
+      await page.keyboard.press('Enter')
+      await page.keyboard.press('Enter')
+      await expect(resume).toHaveCount(0, { timeout: 15_000 })
+      await expect(page.getByRole('button', { name: 'Check now' })).toBeVisible()
+      await page.waitForTimeout(800)
+      facts[`${width} after`] = {
+        resumes: resumes.length,
+        state: ((await call(api, 'alice', 'GET', '/api/v1/watchlist')).body as { watchlist: { state: string } }).watchlist.state,
+        schedule: await page.locator('section[aria-labelledby="schedule-heading"]').innerText(),
+        status: (await page.getByRole('status').allInnerTexts()).filter(Boolean),
+        focus: await focusNow(page),
+        buttons: await mainButtons(page),
+      }
+      await shotTo(page, 'safety', `watchlist-resumed-${width}.png`, true)
+      await context.close()
+    }
+    save('safety', 'watchlist-resume.json', facts)
+    for (const width of [1440, 390]) {
+      const after = facts[`${width} after`] as { resumes: number; state: string; schedule: string; status: string[]; focus: { text: string }; buttons: string[] }
+      expect(facts[`${width} bob buttons`], `${width}: bob gets no Resume`).not.toContain('Resume')
+      expect(facts[`${width} alice buttons, paused`], `${width}: alice gets Resume`).toContain('Resume')
+      expect(facts[`${width} alice buttons, paused`], `${width}: there is no Pause on the Software page`).not.toContain('Pause')
+      expect(after.resumes, `${width}: two presses send one resume`).toBe(1)
+      expect(after.state).toBe('on')
+      expect(after.schedule).toContain('Next check ')
+      expect(after.status).toContain('Resumed. Checks run on the schedule again.')
+      expect(after.focus.text, `${width}: focus moves to the control that took Resume’s place`).toBe('Change schedule')
+      expect(after.buttons).not.toContain('Pause')
+    }
   })
 })
 
@@ -989,19 +1169,46 @@ test('@reduced reduced motion stops the animation on the list, the page, the dia
   })
 })
 
-test('@words the Workflows pages use no retired name in their own words, apart from what people named and wrote', async ({ browser }) => {
-  await withBackend(async (_backend, api) => {
-    await agentWorkflow(api, 'words')
-    const typedByPeople = (await listedWorkflows(api)).flatMap((item) => [item.name, item.instruction])
+async function recordWordsShown(context: BrowserContext): Promise<void> {
+  await context.addInitScript(() => {
+    const w = window as unknown as { __shown: string[] }
+    w.__shown = []
+    const keep = (node: Node) => {
+      const words = (node.textContent ?? '').trim()
+      if (words) w.__shown.push(words)
+    }
+    new MutationObserver((changes) => {
+      for (const change of changes) {
+        if (change.type === 'characterData') keep(change.target)
+        change.addedNodes.forEach(keep)
+      }
+    }).observe(document, { childList: true, subtree: true, characterData: true })
+  })
+}
+
+test('@words the Workflows pages, and every message a press brings, use no retired name, apart from what people named and wrote', async ({ browser }) => {
+  test.setTimeout(400_000)
+  await withBackend(async (backend, api) => {
+    await connectMockModel(api)
+    const pressed = await agentWorkflow(api, 'words pressed')
+    const pausedByCarol = await agentWorkflow(api, 'words paused by carol')
+    const deletedByCarol = await agentWorkflow(api, 'words deleted by carol')
+    const watchlist = await backend.freshWatchlist('alice')
+    const typedByPeople = (await listedWorkflows(api)).flatMap((item) => [item.name, item.instruction]).concat([pausedByCarol.name, deletedByCarol.name, pressed.name])
     const context = await devContext(browser, 'alice')
+    await recordWordsShown(context)
     const page = await context.newPage()
+    const refusals: string[] = []
+    page.on('response', async (response) => {
+      if (response.url().includes('/api/') && response.status() >= 400) refusals.push(await response.text().catch(() => ''))
+    })
     const hits: Record<string, string[]> = {}
     const text = async () =>
       `${await page.locator('body').innerText()} ${await page.evaluate(() => [...document.querySelectorAll('[aria-label],[title],[placeholder],[alt]')].map((e) => ['aria-label', 'title', 'placeholder', 'alt'].map((a) => e.getAttribute(a) ?? '').join(' ')).join(' '))} ${await page.title()}`
     const scan = (where: string, all: string) => {
       const words = typedByPeople.filter(Boolean).reduce((left, typed) => left.replaceAll(typed, ' '), all)
       const found = [...words.matchAll(new RegExp(RETIRED, 'gi'))].map((m) => m[0])
-      if (found.length) hits[where] = found
+      if (found.length) hits[where] = [...(hits[where] ?? []), ...found]
     }
     await page.goto('/workflows')
     await expect(page.locator('li[data-workflow-id]').first()).toBeVisible()
@@ -1013,8 +1220,49 @@ test('@words the Workflows pages use no retired name in their own words, apart f
       await page.waitForTimeout(300)
       scan(href, await text())
     }
-    save('safety', 'words.json', { pagesScanned: Math.min(links.length, 8) + 1, hits })
+
+    await page.goto(`/workflows/${pressed.id}`)
+    await expect(h1(page)).toHaveText(pressed.name)
+    await page.getByRole('button', { name: 'Pause' }).click()
+    await expect(page.getByRole('button', { name: 'Resume' })).toBeVisible()
+    await page.getByRole('button', { name: 'Resume' }).click()
+    await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible()
+    await page.getByRole('button', { name: 'Delete', exact: true }).click()
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel' }).click()
+    await page.getByRole('button', { name: 'Delete', exact: true }).click()
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Delete workflow' }).click()
+    await page.getByRole('button', { name: 'Undo' }).click()
+    await expect(rowOf(page, pressed.id)).toBeVisible()
+
+    await page.goto(`/workflows/${pausedByCarol.id}`)
+    await expect(h1(page)).toHaveText(pausedByCarol.name)
+    await call(api, 'carol', 'POST', `/api/v1/use-cases/${pausedByCarol.id}/pause`)
+    await page.getByRole('button', { name: 'Run now' }).click()
+    await expect(page.getByRole('alert')).toBeVisible()
+
+    for (const press of ['Run now', 'Pause']) {
+      const gone = await agentWorkflow(api, `words deleted ${press}`)
+      typedByPeople.push(gone.name)
+      await page.goto(`/workflows/${gone.id}`)
+      await expect(h1(page)).toHaveText(gone.name)
+      await call(api, 'carol', 'DELETE', `/api/v1/use-cases/${gone.id}`)
+      await page.getByRole('button', { name: press, exact: true }).click()
+      await expect(h1(page)).toHaveText('Workflow not found')
+    }
+
+    expect((await call(api, 'carol', 'POST', `/api/v1/use-cases/${watchlist}/pause`)).status).toBe(200)
+    await page.goto('/software')
+    await page.getByRole('button', { name: 'Resume' }).click()
+    await expect(page.getByRole('button', { name: 'Resume' })).toHaveCount(0)
+    await page.waitForTimeout(500)
+
+    const shown = await page.evaluate(() => (window as unknown as { __shown: string[] }).__shown)
+    const afterPresses = [...new Set(shown)]
+    scan('messages shown after a press', afterPresses.join(' \n '))
+    scan('the platform’s refusals', refusals.join(' \n '))
+    save('safety', 'words.json', { pagesScanned: Math.min(links.length, 8) + 1, messagesSeen: afterPresses.length, refusals, hits })
     await context.close()
+    expect(refusals.length, 'the presses met the platform’s refusals').toBeGreaterThan(0)
     expect(hits).toEqual({})
   })
 })
