@@ -119,6 +119,10 @@ _Avoid_: Dry run (nothing is skipped)
 The agent that reads a task, says what it understood, and decides which saved agents to bring in, or that a new agent card is needed.
 _Avoid_: Room lead (the old name), orchestrator
 
+**Ability**:
+One thing the platform can do, in the fixed table the Planner reads a task back against: run on a schedule, read Jira tickets, sum up what it finds, check software for new releases, or create a Jira ticket after a yes. The Planner names an ability and its details for each part of a task, and the platform writes what it understood in its own words. A part no ability does is can't do.
+_Avoid_: Skill, capability
+
 **Specialist agent**:
 An agent, defined by an agent card, that the Planner brings in to do one part of a run.
 

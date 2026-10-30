@@ -5,5 +5,8 @@
     "base_url": "https://llm-gateway.example",
     "model": "claude-sonnet-5-5",
     "api_key": "example-key-not-a-secret"
-  }
+  },
+  "jira_projects": [
+    "MOCK"
+  ]
 }

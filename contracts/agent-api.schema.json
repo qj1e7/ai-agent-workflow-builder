@@ -1237,6 +1237,10 @@
       ],
       "type": "string"
     },
+    "JiraProject": {
+      "pattern": "^[A-Z][A-Z0-9]{0,9}$",
+      "type": "string"
+    },
     "LibraryCard": {
       "additionalProperties": false,
       "properties": {
@@ -1864,6 +1868,23 @@
     "UnderstandRequest": {
       "additionalProperties": false,
       "properties": {
+        "jira_projects": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/JiraProject"
+              },
+              "maxItems": 1000,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The keys of the Jira projects the platform can see, so the Planner can check a project the task names. Left out when the platform cannot list them; then every part that names a project is changed, never understood.",
+          "title": "Jira Projects"
+        },
         "model": {
           "$ref": "#/$defs/ModelAccess"
         },

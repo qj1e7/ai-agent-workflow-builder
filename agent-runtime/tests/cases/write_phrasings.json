@@ -1,0 +1,392 @@
+[
+ {
+  "check": "p12",
+  "kind": "look_for",
+  "phrase": "Who has admin access in GitLab"
+ },
+ {
+  "check": "p12",
+  "kind": "look_for",
+  "phrase": "Open merge requests in GitLab"
+ },
+ {
+  "check": "p12",
+  "kind": "do",
+  "phrase": "Write them to the Weekly summary page in Confluence"
+ },
+ {
+  "check": "p12",
+  "kind": "do",
+  "phrase": "Create a Confluence page listing them"
+ },
+ {
+  "check": "p12",
+  "kind": "do",
+  "phrase": "Add a comment to each ticket"
+ },
+ {
+  "check": "p12",
+  "kind": "do",
+  "phrase": "Please close every ticket"
+ },
+ {
+  "check": "p12",
+  "kind": "do",
+  "phrase": "Then delete them"
+ },
+ {
+  "check": "p12",
+  "kind": "do",
+  "phrase": "Also post a summary in Teams"
+ },
+ {
+  "check": "p12",
+  "kind": "do",
+  "phrase": "\"Close\" every ticket"
+ },
+ {
+  "check": "p12",
+  "kind": "do",
+  "phrase": "Create one follow-up ticket, then close the stale ones"
+ },
+ {
+  "check": "p12",
+  "kind": "do",
+  "phrase": "Permanently delete every closed ticket"
+ },
+ {
+  "check": "p12",
+  "kind": "do",
+  "phrase": "Bulk close them"
+ },
+ {
+  "check": "p12",
+  "kind": "do",
+  "phrase": "Closes every ticket"
+ },
+ {
+  "check": "p12",
+  "kind": "do",
+  "phrase": "Deleting every closed ticket"
+ },
+ {
+  "check": "p12",
+  "kind": "do",
+  "phrase": "Create a GitHub issue for each"
+ },
+ {
+  "check": "p12",
+  "kind": "do",
+  "phrase": "Open a pull request on GitHub"
+ },
+ {
+  "check": "p12",
+  "kind": "where",
+  "phrase": "GitHub repo langchain-ai/langgraph"
+ },
+ {
+  "check": "p12",
+  "kind": "where",
+  "phrase": "The support teams channel"
+ },
+ {
+  "check": "p12",
+  "kind": "where",
+  "phrase": "A Google Sheet"
+ },
+ {
+  "check": "p12",
+  "kind": "where",
+  "phrase": "The WhatsApp group"
+ },
+ {
+  "check": "p12",
+  "kind": "where",
+  "phrase": "A Notion page"
+ },
+ {
+  "check": "p12",
+  "kind": "do",
+  "phrase": "Text the on-call engineer"
+ },
+ {
+  "check": "p12",
+  "kind": "do",
+  "phrase": "Restart the server"
+ },
+ {
+  "check": "p12",
+  "kind": "do",
+  "phrase": "Run the deploy pipeline"
+ },
+ {
+  "check": "p12",
+  "kind": "do",
+  "phrase": "Create a ticket in project OPS and assign it to Bob"
+ },
+ {
+  "check": "p12",
+  "kind": "do",
+  "phrase": "Write them to a spreadsheet"
+ },
+ {
+  "check": "p12",
+  "kind": "schedule",
+  "phrase": "Every weekday at 3pm, then delete every closed ticket"
+ },
+ {
+  "check": "p12",
+  "kind": "schedule",
+  "phrase": "Every day, and post the list in Teams"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Get rid of the old tickets"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Get rid of every ticket older than 90 days"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Clear out the closed tickets"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Wipe out the backlog"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Resolve them"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Mark them as done"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Get them closed"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Note them as done"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Approve the access requests"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Create one ticket and give it to Bob"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Create one ticket that lists them, and nuke the rest"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Create one ticket that lists them and approve the rest"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Create one ticket in MOCK and approve the access requests"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Create one ticket for each and reject the rest"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Create one ticket for each server and apply the latest patch"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Create one ticket listing them and approving each one"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Create one ticket and get rid of the rest"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "DeLeTe every ticket"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Create one ticket that lists them and Close the rest"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Create One Ticket That Lists Them And Delete The Rest"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Create one ticket that lists them and DeLeTe the rest"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Clоse every ticket"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Create one ticket that lists them and clоse the rest"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Ｄｅｌｅｔｅ every closed ticket"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "删除 every closed ticket"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Délete every ticket"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Create one ticket that lists them and de-lete the rest"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Create one ticket that lists them and de\u200blete the rest"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "D e l e t e every ticket"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Put the summary in teams"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Put the summary in the ops room"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Create one ticket in Linear"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Write a summary in Basecamp"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Write a summary to Monday.com"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Put the summary on the intranet"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Write them to the ops channel"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "do",
+  "phrase": "Create one ticket and drop a note in the ops channel"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "where",
+  "phrase": "The ops room"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "where",
+  "phrase": "teams"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "where",
+  "phrase": "Linear"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "schedule",
+  "phrase": "Every Friday, approve pending access requests"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "schedule",
+  "phrase": "Every weekday at 3pm, Close every ticket"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "schedule",
+  "phrase": "Every weekday at 3pm, nuke the backlog"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "schedule",
+  "phrase": "Every weekday at 3pm then get rid of old tickets"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "schedule",
+  "phrase": "Every weekday at 3pm and wipe the board"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "schedule",
+  "phrase": "Every weekday at 3pm: delete every closed ticket"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "look_for",
+  "phrase": "Bug tickets in MOCK and nuke them"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "look_for",
+  "phrase": "Bug tickets in MOCK, Close them"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "look_for",
+  "phrase": "Bug tickets in MOCK and get rid of them"
+ },
+ {
+  "check": "p12-recheck",
+  "kind": "look_for",
+  "phrase": "Bug tickets in MOCK, then approve them"
+ }
+]
