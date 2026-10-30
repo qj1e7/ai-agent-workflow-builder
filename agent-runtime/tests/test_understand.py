@@ -417,6 +417,37 @@ def test_each_form_of_the_prompts_words_is_a_watchlist_word(said: str, task: str
 
 
 @pytest.mark.parametrize(
+    ("software", "task", "shown"),
+    [
+        ("Go", "Tell me when Google has a new release", None),
+        ("a", "Tell me about the new release", None),
+        ("Lang", "Tell me when LangGraph has a new release", None),
+        ("go", "Tell me when Go has a new release", "Go"),
+        ("langgraph", RELEASE_TASK, "LangGraph"),
+    ],
+)
+def test_the_software_is_a_whole_word_of_the_task(software: str, task: str, shown: str | None):
+    answer = UnderstandAnswer(
+        belongs_on_watchlist=True, watchlist_word="release", software=software
+    )
+    assert understood_of(answer, task) == BelongsOnWatchlist(word="release", software=shown)
+
+
+@pytest.mark.parametrize(
+    ("said", "task", "word"),
+    [
+        ("version", "Our versioned docs need the new version of FastAPI", "version"),
+        ("versions", "Our versioned docs need the new version of FastAPI", "version"),
+        ("release", "The released notes list every new release", "release"),
+        ("patch", "A patching window for the new patch of Log4j", "patch"),
+    ],
+)
+def test_the_watchlist_word_is_the_vocabulary_word_the_task_wrote(said: str, task: str, word: str):
+    answer = UnderstandAnswer(belongs_on_watchlist=True, watchlist_word=said)
+    assert understood_of(answer, task) == BelongsOnWatchlist(word=word)
+
+
+@pytest.mark.parametrize(
     "mark",
     [
         "\u034f",

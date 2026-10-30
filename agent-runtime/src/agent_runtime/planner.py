@@ -296,6 +296,7 @@ INVISIBLE: Final = frozenset(
     + "".join(map(chr, range(0xFE00, 0xFE10)))
     + "".join(map(chr, range(0xE0100, 0xE01F0)))
 )
+QUOTES: Final = "\"'“”‘’"
 
 UNDERSTAND_SYSTEM: Final = (
     "You are the Planner on a platform used by the support staff of CODESparks, a team in "
@@ -418,16 +419,24 @@ def _rows(answers: list[RowAnswer]) -> list[UnderstoodRow]:
     return sorted(kept, key=lambda row: ORDER.index(row.kind))
 
 
-def _as_the_task_wrote_it(task: str, said: str | None) -> str | None:
-    wanted = _visible_words(said).strip("\"'“”‘’")
-    if not wanted:
+def _software_in(task: str, said: str | None) -> str | None:
+    """The software as the task wrote it, when the model's name is a whole word of the task."""
+    wanted = _visible_words(said).strip(QUOTES)
+    if not wanted or len(wanted) > WORD_LIMIT:
         return None
-    stems = (wanted.removesuffix(end) for end in ("es", "s", "y")) if len(wanted) > 3 else ()
-    for form in dict.fromkeys((wanted, *stems)):
-        found = re.search(rf"(?<!\w){re.escape(form)}\w*", task, re.IGNORECASE)
-        if found is not None:
-            return found.group(0) if len(found.group(0)) <= WORD_LIMIT else None
-    return None
+    found = re.search(rf"(?<!\w){re.escape(wanted)}(?!\w)", task, re.IGNORECASE)
+    return None if found is None else found.group(0)
+
+
+def _watchlist_word_in(task: str, said: str | None) -> str | None:
+    """The task's own word for the model's watchlist word: the same word when the task has it,
+    else the first other form of the same vocabulary word, such as "releases" for "release"."""
+    wanted = _visible_words(said).strip(QUOTES).casefold()
+    root = RELEASE_WORDS.get(wanted)
+    forms = [w for w in re.findall(r"\w+", task) if RELEASE_WORDS.get(w.casefold()) == root]
+    if root is None or not forms:
+        return None
+    return next((w for w in forms if w.casefold() == wanted), forms[0])
 
 
 def understood_of(answer: UnderstandAnswer, task: str) -> Understood | BelongsOnWatchlist | None:
@@ -436,10 +445,10 @@ def understood_of(answer: UnderstandAnswer, task: str) -> Understood | BelongsOn
     together: no rows, or a watchlist word that is not in the task or not one of the words the
     prompt names."""
     if answer.belongs_on_watchlist:
-        word = _as_the_task_wrote_it(task, answer.watchlist_word)
-        if word is None or word.casefold() not in RELEASE_WORDS:
+        word = _watchlist_word_in(task, answer.watchlist_word)
+        if word is None:
             return None
-        return BelongsOnWatchlist(word=word, software=_as_the_task_wrote_it(task, answer.software))
+        return BelongsOnWatchlist(word=word, software=_software_in(task, answer.software))
     if not answer.rows:
         return None
     return Understood(rows=_rows(answer.rows))
