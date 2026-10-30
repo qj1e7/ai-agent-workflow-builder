@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useLocation } from 'react-router'
 import { useMe } from './api/queries'
 import { AskToBeAdded } from './shell/AskToBeAdded'
-import { Header } from './shell/Header'
+import { Header, isOperator } from './shell/Header'
 import { TabBar } from './shell/Menu'
 import { PlatformDown, platformIsDown } from './shell/PlatformDown'
 import { PRODUCT } from './shell/product'
@@ -68,7 +68,7 @@ export function App({ now = () => new Date() }: { now?: () => Date }) {
           <ErrorBoundary resetKey={pathname}>{content}</ErrorBoundary>
         </div>
       </main>
-      <TabBar />
+      <TabBar operator={isOperator(me.data)} />
       <TestControls />
     </>
   )

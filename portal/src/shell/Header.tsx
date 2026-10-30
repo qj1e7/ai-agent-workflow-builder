@@ -10,6 +10,8 @@ import { TeamsButton } from './TeamsPanel'
 import iconButton from './IconButton.module.css'
 import styles from './Header.module.css'
 
+export const isOperator = (person: Me | null | undefined) => person?.roles.includes('operator') === true
+
 export function Header({ person }: { person: Me | null }) {
   return (
     <header className={styles['header']}>
@@ -21,7 +23,7 @@ export function Header({ person }: { person: Me | null }) {
             {PRODUCT.slice(PRODUCT_PREFIX.length)}
           </span>
         </Link>
-        <Menu />
+        <Menu operator={isOperator(person)} />
         <div className={styles['tools']}>
           <TeamsButton person={person} />
           <NavLink to={PAGES.settings.path} className={cx(iconButton['button'])} aria-label="Settings" title="Settings">

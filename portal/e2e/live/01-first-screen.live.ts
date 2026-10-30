@@ -12,6 +12,7 @@ const MENU = [
   { label: 'Workflows', path: '/workflows', heading: 'Workflows', built: true },
   { label: 'Software watchlist', path: '/software', heading: 'Software watchlist', built: true },
   { label: 'Agent library', path: '/agents', heading: 'Agent library', built: true },
+  { label: 'New workflow', path: '/new', heading: /^New workflow, step 1 of 4: Describe it$/, built: true },
 ] as const
 
 const PAGES = [...MENU.map(({ path: to, label }) => ({ label, path: to })), { label: 'Settings', path: '/settings' }]
@@ -22,14 +23,13 @@ const settled = (page: Page) => page.waitForFunction(() => document.getAnimation
 const mainMenu = (page: Page) => page.getByRole('navigation', { name: 'Main' })
 const heading = (page: Page) => page.getByRole('heading', { level: 1 })
 
-test('Home greets the signed-in person and the menu reads Home, Workflows, Software watchlist, Agent library', async ({ page }, info) => {
+test('Home greets the signed-in person and the menu reads Home, Workflows, Software watchlist, Agent library, New workflow', async ({ page }, info) => {
   await page.goto('/')
   await expect(heading(page)).toHaveText(GREETING('Alice'))
   await expect(page.getByRole('banner')).toContainText('Alice')
   await expect(page.getByRole('banner')).toContainText('Operator and Approver')
   await expect(mainMenu(page).getByRole('link')).toHaveText(MENU.map((item) => item.label))
   await expect(mainMenu(page).getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page')
-  await expect(page.getByRole('link', { name: 'New workflow' })).toHaveCount(0)
   await expect(page).toHaveTitle(/^Good (morning|afternoon|evening), Alice · AI Workflow Builder$/)
   await shot(page, info, 'p1-01-home')
 })
@@ -172,8 +172,9 @@ test('at 390 px wide the page does not scroll sideways, and every tab bar item c
   await page.goto('/')
   await expect(heading(page)).toBeVisible()
   const bar = mainMenu(page)
-  await expect(bar.getByRole('link')).toHaveText(['Home', 'Workflows', 'Watchlist', 'Agents'])
+  await expect(bar.getByRole('link')).toHaveText(['Home', 'Workflows', 'Watchlist', 'Agents', 'New workflow'])
   for (const [label, to, words] of [
+    ['New workflow', /\/new$/, /^New workflow, step 1 of 4: Describe it$/],
     ['Workflows', /\/workflows$/, 'Workflows'],
     ['Watchlist', /\/software$/, 'Software watchlist'],
     ['Agents', /\/agents$/, 'Agent library'],
