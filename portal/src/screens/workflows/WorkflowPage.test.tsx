@@ -86,8 +86,8 @@ describe('a workflow page', () => {
     const removed = render({ useCase: { ...AGENTS, next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: 'owner_removed' } } })
     const notOperator = render({ useCase: { ...AGENTS, next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: 'owner_not_an_operator' } } })
     expect(factOf(removed, 'When')).toBe('Every Monday at 9:00 Singapore time (SGT).')
-    expect(factOf(removed, 'Next run')).toBe('Not running: Alice is no longer on the People list. An Operator can take it over by saving the schedule.')
-    expect(factOf(notOperator, 'Next run')).toBe('Not running: Alice can no longer run workflows. An Operator can take it over by saving the schedule.')
+    expect(factOf(removed, 'Next run')).toBe('Not running: Alice is no longer on the People list. An Operator can set it up again in New workflow.')
+    expect(factOf(notOperator, 'Next run')).toBe('Not running: Alice can no longer run workflows. An Operator can set it up again in New workflow.')
   })
 
   it('while paused and held, says Paused only, as the Software page does', () => {

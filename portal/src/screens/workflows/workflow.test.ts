@@ -16,7 +16,7 @@ import { errorWords } from '../../api/errors'
 import { createLatch } from '../../api/latch'
 import type { RunView, ScheduleHold, ScheduleView, UseCaseView } from '../../api/types'
 import { placeAfterRedraw } from '../../ui/focus'
-import { nextCheckWords } from '../software/software'
+import { nextCheckWords, TAKE_OVER_WORDS } from '../software/software'
 import {
   agentsOf,
   changeProblem,
@@ -38,6 +38,7 @@ import {
   runFact,
   runWhen,
   runsOf,
+  SET_UP_AGAIN_WORDS,
   stepTag,
   whenWords,
   workflowPath,
@@ -119,14 +120,14 @@ const heldBy = (held: ScheduleHold, owner_name = 'Carol'): UseCaseView => ({ ...
 
 describe('a schedule held because its owner can no longer run it', () => {
   it('says why on the workflow page, and the next run reads Not running', () => {
-    expect(heldNote(heldBy('owner_removed'))).toBe('Not running: Carol is no longer on the People list. An Operator can take it over by saving the schedule.')
-    expect(heldNote(heldBy('owner_not_an_operator'))).toBe('Not running: Carol can no longer run workflows. An Operator can take it over by saving the schedule.')
-    expect(heldNote(heldBy('owner_removed', ' '))).toBe('Not running: its owner is no longer on the People list. An Operator can take it over by saving the schedule.')
+    expect(heldNote(heldBy('owner_removed'))).toBe('Not running: Carol is no longer on the People list. An Operator can set it up again in New workflow.')
+    expect(heldNote(heldBy('owner_not_an_operator'))).toBe('Not running: Carol can no longer run workflows. An Operator can set it up again in New workflow.')
+    expect(heldNote(heldBy('owner_removed', ' '))).toBe('Not running: its owner is no longer on the People list. An Operator can set it up again in New workflow.')
     expect([nextRunWords(heldBy('owner_removed'), NOW), nextRunWords(HELD, NOW)]).toEqual(['Not running', 'Not running'])
   })
 
-  it('uses the Software page’s words for the same hold', () => {
-    expect(heldNote(HELD)).toBe(nextCheckWords(heldSchedule.schedule as ScheduleView, false))
+  it('says why in the Software page’s words, and points to New workflow, since only the watchlist’s schedule can be saved again', () => {
+    expect(heldNote(HELD)).toBe(nextCheckWords(heldSchedule.schedule as ScheduleView, false).replace(TAKE_OVER_WORDS, SET_UP_AGAIN_WORDS))
   })
 
   it('gives way to Paused, and says nothing while the schedule runs', () => {

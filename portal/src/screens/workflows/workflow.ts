@@ -113,9 +113,12 @@ export function nextRunWords(useCase: Pick<UseCaseView, 'state' | 'next_run_at' 
   return useCase.next_run_at ? runWhen(useCase.next_run_at, now) : 'Not scheduled'
 }
 
+/** No route saves a workflow's schedule, so a held one runs again only when it is set up again. */
+export const SET_UP_AGAIN_WORDS = 'An Operator can set it up again in New workflow.'
+
 /** Why the schedule starts no run while its owner can no longer run it, as the Software page says it. Paused wins, so null while paused. */
 export function heldNote({ state, schedule }: Pick<UseCaseView, 'state' | 'schedule'>): string | null {
-  return state === 'on' && schedule?.held ? heldWords(schedule.held, schedule.owner_name) : null
+  return state === 'on' && schedule?.held ? heldWords(schedule.held, schedule.owner_name, SET_UP_AGAIN_WORDS) : null
 }
 
 export interface When {
