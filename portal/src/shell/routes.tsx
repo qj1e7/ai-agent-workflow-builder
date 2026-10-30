@@ -1,13 +1,14 @@
 import { lazy, Suspense, type ReactNode } from 'react'
 import { Route, Routes } from 'react-router'
 import { AgentsPage } from '../screens/agents/AgentsPage'
+import { HomePage } from '../screens/home/HomePage'
 import { SettingsPage } from '../screens/settings/SettingsPage'
 import type { Icon } from '../ui/icons'
 import { WorkflowRoute } from '../screens/workflows/WorkflowPage'
 import { WorkflowsPage } from '../screens/workflows/WorkflowsPage'
 import { BotIcon, BoxIcon, GridIcon, HomeIcon, SettingsIcon } from './icons'
 import { NotFoundPage } from './NotFoundPage'
-import { EmptyPage, PageHead } from './PageHead'
+import { PageHead } from './PageHead'
 import { greeting, today } from './today'
 
 export interface PageContext {
@@ -114,14 +115,19 @@ export function AppRoutes({ context }: { context: PageContext }) {
         element={<WorkflowsPage heading={wordsOf(PAGES.workflows.heading, context)} lead={wordsOf(PAGES.workflows.lead, context)} now={context.now} />}
       />
       <Route path={`${PAGES.workflows.path}/:useCaseId`} element={<WorkflowRoute now={context.now} />} />
-      {PAGE_IDS.filter((id) => id !== 'agents' && id !== 'workflows').map((id) => {
-        const { path, heading, lead } = PAGES[id]
-        const title = wordsOf(heading, context)
-        const intro = wordsOf(lead, context)
-        if (id === 'software') return <Route key={id} path={path} element={<><PageHead heading={title} lead={intro} /><Lazy><SoftwareRoute /></Lazy></>} />
-        const Page = id === 'settings' ? SettingsPage : EmptyPage
-        return <Route key={id} path={path} element={<Page heading={title} lead={intro} />} />
-      })}
+      <Route path={PAGES.home.path} element={<HomePage heading={wordsOf(PAGES.home.heading, context)} lead={wordsOf(PAGES.home.lead, context)} now={context.now} />} />
+      <Route
+        path={PAGES.software.path}
+        element={
+          <>
+            <PageHead heading={wordsOf(PAGES.software.heading, context)} lead={wordsOf(PAGES.software.lead, context)} />
+            <Lazy>
+              <SoftwareRoute />
+            </Lazy>
+          </>
+        }
+      />
+      <Route path={PAGES.settings.path} element={<SettingsPage heading={wordsOf(PAGES.settings.heading, context)} lead={wordsOf(PAGES.settings.lead, context)} />} />
       <Route path="/runs/:runId" element={<Lazy><RunRoute /></Lazy>} />
       <Route path="/approvals/:approvalId" element={<Lazy><ApprovalRoute /></Lazy>} />
       <Route path="*" element={<NotFoundPage />} />

@@ -240,7 +240,7 @@ export function useApprovals(approvalIds: readonly string[], options?: QueryOpti
 
 function refreshAfterChange(queryClient: QueryClient): Promise<unknown> {
   return Promise.all(
-    ['approval', 'run', 'runs', 'teams-messages', 'jira-tickets', 'watchlist'].map((key) =>
+    ['approval', 'run', 'runs', 'home', 'teams-messages', 'jira-tickets', 'watchlist'].map((key) =>
       queryClient.invalidateQueries({ queryKey: [key] }),
     ),
   )

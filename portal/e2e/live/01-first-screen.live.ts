@@ -8,7 +8,7 @@ import { openContext, OUT, shot } from './support/ui'
 const GREETING = (name: string) => new RegExp(`^Good (morning|afternoon|evening), ${name}$`)
 
 const MENU = [
-  { label: 'Home', path: '/', heading: GREETING('Alice'), built: false },
+  { label: 'Home', path: '/', heading: GREETING('Alice'), built: true },
   { label: 'Workflows', path: '/workflows', heading: 'Workflows', built: true },
   { label: 'Software watchlist', path: '/software', heading: 'Software watchlist', built: true },
   { label: 'Agent library', path: '/agents', heading: 'Agent library', built: true },
