@@ -17,12 +17,14 @@
 #   down <export> <project> [oidc]         logs, then down -v
 #   mock-mode <project> <ok|slow|broken>   switch the stack's mock model
 #   snapshot <project> <file>              every table of the platform database: rows, and writes so far; and
-#                                          how many runs n8n's database holds
+#                                          the rows of every table in n8n's database
 #   shared <project> <api>                 lanes 1, 2, 3, 4, 7, 9 and 10 and the no-tool lane on a shared
 #                                          head stack; lanes 7, 9 and no-tool must leave every table as it was
-#   no-tool <project> <api>                both P12 checks' 52 live tasks: the fooled mock names an ability for
-#                                          each, the runtime holds each write to the tools and keeps each search
-#   trunk <api>                            lane 1's trunk half: trunk has no understand route
+#   no-tool <project> <api>                the 61 live tasks of both P12 checks and the P70 check: the fooled
+#                                          mock names an ability for each, the runtime holds each write to the
+#                                          tools and keeps each search
+#   trunk <api>                            lane 1's trunk half: trunk shows the follow-up task in the same rows
+#                                          as lane 1 on head (run shared on head first)
 #   own <export> <prefix> <tag> <portal> <api> <n8n>  lanes 6, 8 and 5, each on a stack of its own, then down
 #   trouble <export> <project> <tag> <portal> <api> <n8n>   its own stack: the runtime hangs (the platform's
 #                                          10 s limit), the runtime is down, the model settings cannot be
@@ -243,10 +245,11 @@ union all
 select 'writes', schemaname||'.'||relname, (n_tup_ins + n_tup_upd + n_tup_del)::text from pg_stat_user_tables
 order by 1, 2" | tr '|' ' ' >"$file"
   psql_in "$(container "$project" postgres)" "
-select 'n8n executions', (xpath('/row/c/text()', query_to_xml('select count(*) as c from public.execution_entity', false, true, '')))[1]::text
-where to_regclass('public.execution_entity') is not null
-union all
-select 'n8n executions', 'none' where to_regclass('public.execution_entity') is null" n8n | tr '|' ' ' >>"$file"
+select 'n8n rows', table_schema||'.'||table_name,
+  (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I.%I', table_schema, table_name), false, true, '')))[1]::text
+from information_schema.tables
+where table_schema not in ('pg_catalog','information_schema') and table_type='BASE TABLE'
+order by 2" n8n | tr '|' ' ' >>"$file"
 }
 
 # PostgreSQL counts a connection's writes when it next goes idle, at most 10 s later, hence the
@@ -447,6 +450,9 @@ if trunk is None or head is None:
     rows.append("POST /api/v1/use-cases/suggest: missing data")
 else:
     rows.append(f"POST /api/v1/use-cases/suggest: head p95 {head} ms vs trunk p95 {trunk} ms, limit {trunk * 1.2:.1f} ms -> {'PASS' if head <= trunk * 1.2 else 'FAIL'}")
+    band = trunk * 0.2
+    if band < 2:
+        rows.append(f"  the 20% band is {band:.1f} ms wide, which is at noise level for a route this fast, so this row says only that nothing grew past the noise")
 share = out / "head-share-mock.json"
 if share.exists():
     s = json.loads(share.read_text())["result"]

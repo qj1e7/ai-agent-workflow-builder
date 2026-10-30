@@ -5,7 +5,8 @@ usage: python3 -I scripts/checks/p12_lanes.py <command> <api-base-url> <out-dir>
 
   connect <api> <out>             alice saves the mock model in Settings, bob confirms its address
   model-off <api> <out>           alice turns the model off in Settings
-  trunk <api> <out>               trunk has no understand route: record what it answers
+  trunk <api> <out>               the follow-up task on trunk: the same rows as lane 1 on head,
+                                  which must have saved p12-understood.json in <out> first
   lane1 <api> <out>               the follow-up ticket task: four rows, each understood
   lane2 <api> <out>               a release task belongs on the Software watchlist, naming "release"
   lane3 <api> <out>               a task with no schedule: the schedule row is missing
@@ -15,10 +16,10 @@ usage: python3 -I scripts/checks/p12_lanes.py <command> <api-base-url> <out-dir>
   lane10 <api> <out>              bob, not an Operator, gets 403
   starters <api> <out> <file> <max-seconds>   the answer is the starter workflows within the time
   share <api> <out> <file> [count]   how many of count answers came from the model, not the starters
-  no-tool <api> <out> <cases.json> [mock.json]   both P12 checks' live tasks: each write is
-                                  can't do with a plain note and the task's own words, each Jira
-                                  search stays understood, and the mock itself named an ability
-                                  for each and marked it understood
+  no-tool <api> <out> <cases.json> [mock.json]   the live tasks of both P12 checks and the P70
+                                  check: each write is can't do with a plain note and the task's
+                                  own words, each Jira search stays understood, and the mock itself
+                                  named an ability for each and marked it understood or changed
   mock-raw <mock-url> - <cases json>   what the mock model itself answers for each task, as JSON
                                   on stdout; runs on the stack network: docker exec -i ... python -
   ask <api> <out> <name> <rows|starters|500> [max-seconds] [min-seconds]   one read-back of the
@@ -188,8 +189,19 @@ def model_off(api: Api, out: Path) -> bool:
 def trunk(api: Api, out: Path) -> bool:
     status, answer = api.understand(FOLLOW_UP)
     save(out, "p12-trunk-route.json", api.log)
-    print(f"trunk answers {status}: {json.dumps(answer)[:200]}")
-    return verdict([(status in (404, 405), f"trunk has no understand route ({status})")])
+    head_file = out / "p12-understood.json"
+    if not head_file.exists():
+        return verdict([(False, f"no {head_file}: run lane 1 on the head stack first")])
+    head = json.loads(head_file.read_text())[-1]["response"]
+    shown = [(r["kind"], r["text"], r["state"], r.get("note")) for r in rows(answer)]
+    wanted = [(r["kind"], r["text"], r["state"], r.get("note")) for r in rows(head)]
+    print(json.dumps({"trunk": shown, "head": wanted}, indent=1))
+    return verdict(
+        [
+            (status == 200 and answer.get("answer") == "rows", f"trunk answers {status} rows"),
+            (shown == wanted, "trunk and head show the follow-up task in the same rows"),
+        ]
+    )
 
 
 def lane1(api: Api, out: Path) -> bool:
@@ -339,9 +351,11 @@ def flat(text: str) -> str:
 
 
 def hits(answer: Any, case: dict[str, str], field: str = "text") -> list[dict[str, Any]]:
-    word = flat(case["word"])
+    word = re.compile(rf"(?<!\w){re.escape(flat(case['word']))}(?!\w)")
     return [
-        r for r in rows(answer) if r["kind"] == case["kind"] and word in flat(r.get(field) or "")
+        r
+        for r in rows(answer)
+        if r["kind"] == case["kind"] and word.search(flat(r.get(field) or "")) is not None
     ]
 
 
