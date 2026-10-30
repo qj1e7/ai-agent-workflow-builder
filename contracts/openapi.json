@@ -10810,7 +10810,7 @@
                 }
               }
             },
-            "description": "Only an Operator can do this"
+            "description": "Only an Operator can do this, or the person is not on the People list"
           },
           "404": {
             "content": {
