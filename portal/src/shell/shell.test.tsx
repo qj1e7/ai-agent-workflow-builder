@@ -145,11 +145,6 @@ describe('the pages', () => {
     }
   })
 
-  it('say they are not built yet, under a lead line', () => {
-    const main = text(mainOf(render()))
-    expect(main).toContain('Thursday 29 October. This page is not built yet.')
-  })
-
   it('open Home with the greeting and today in Singapore time', () => {
     const main = text(mainOf(render()))
     expect(main).toContain('Good morning, Alice')

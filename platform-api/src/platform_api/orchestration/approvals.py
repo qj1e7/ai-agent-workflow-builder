@@ -159,6 +159,40 @@ def _eligible(step: ApprovalStep, user: UserId) -> bool:
             return user in users
 
 
+def _refusal(
+    request: ApprovalRequest,
+    recorded: frozenset[Decision],
+    status: ApprovalStatus,
+    principal: Principal,
+    step_index: int,
+) -> Refusal | None:
+    if isinstance(status, Invalid):
+        return Refusal.INVALID_DECISIONS
+    if not isinstance(status, Open):
+        return Refusal.NOT_OPEN
+    if step_index != status.next_step:
+        return Refusal.WRONG_STEP
+    if Role.APPROVER not in principal.roles:
+        return Refusal.NOT_AN_APPROVER
+    if principal.user_id in request.parties:
+        return Refusal.OWN_WORK
+    if any(decision.by == principal.user_id for decision in recorded):
+        return Refusal.DECIDED_EARLIER_STEP
+    if not _eligible(request.policy.steps[step_index], principal.user_id):
+        return Refusal.NOT_ELIGIBLE
+    return None
+
+
+def why_not(
+    request: ApprovalRequest, decisions: Iterable[Decision], principal: Principal
+) -> Refusal | None:
+    recorded = _recorded(request, decisions)
+    status = approval_status(request, recorded)
+    if not isinstance(status, Open):
+        return Refusal.NOT_OPEN
+    return _refusal(request, recorded, status, principal, status.next_step)
+
+
 def decide(
     request: ApprovalRequest,
     decisions: Iterable[Decision],
@@ -176,21 +210,9 @@ def decide(
             and earlier.verdict is verdict
         ):
             return AlreadyRecorded(earlier)
-    status = approval_status(request, recorded)
-    if isinstance(status, Invalid):
-        return Refused(Refusal.INVALID_DECISIONS)
-    if not isinstance(status, Open):
-        return Refused(Refusal.NOT_OPEN)
-    if step_index != status.next_step:
-        return Refused(Refusal.WRONG_STEP)
-    if Role.APPROVER not in principal.roles:
-        return Refused(Refusal.NOT_AN_APPROVER)
-    if principal.user_id in request.parties:
-        return Refused(Refusal.OWN_WORK)
-    if any(decision.by == principal.user_id for decision in recorded):
-        return Refused(Refusal.DECIDED_EARLIER_STEP)
-    if not _eligible(request.policy.steps[step_index], principal.user_id):
-        return Refused(Refusal.NOT_ELIGIBLE)
+    reason = _refusal(request, recorded, approval_status(request, recorded), principal, step_index)
+    if reason is not None:
+        return Refused(reason)
     if seen_digest != request.digest:
         return Refused(Refusal.STALE_DIGEST)
     return Recorded(Decision(request.id, step_index, principal.user_id, verdict, seen_digest, now))

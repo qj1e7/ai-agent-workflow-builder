@@ -207,6 +207,18 @@ class Store:
         ).fetchall()
         return [_record(row) for row in rows]
 
+    async def open_runs(self, uow: UnitOfWork) -> list[RunRecord]:
+        rows = await (
+            await uow.conn.execute(
+                f"SELECT {RUN_COLUMNS} FROM orchestration.runs r "
+                "WHERE r.state = 'AwaitingApproval' OR (r.state = 'Failed' AND NOT EXISTS ("
+                "SELECT 1 FROM orchestration.runs newer WHERE newer.use_case_id = r.use_case_id "
+                "AND (newer.started_at, newer.run_id) > (r.started_at, r.run_id))) "
+                "ORDER BY r.started_at DESC, r.run_id DESC"
+            )
+        ).fetchall()
+        return [_record(row) for row in rows]
+
     async def runs_past_deadline(self, uow: UnitOfWork, now: datetime) -> list[RunId]:
         rows = await (
             await uow.conn.execute(

@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
 from platform_api.builder.card_store import NoSuchCard, StarterCard
+from platform_api.builder.home import Home, HomeOut
 from platform_api.builder.models import (
     BlockView,
     CardChecked,
@@ -81,6 +82,14 @@ def current_builder(request: Request) -> Builder:
 CurrentBuilder = Annotated[Builder, Depends(current_builder)]
 
 
+def current_home(request: Request) -> Home:
+    home: Home = request.app.state.home
+    return home
+
+
+CurrentHome = Annotated[Home, Depends(current_home)]
+
+
 def operators_only(refusal: str) -> Callable[[Principal], Principal]:
     def require_operator(principal: CurrentPrincipal) -> Principal:
         if Role.OPERATOR not in principal.roles:
@@ -107,6 +116,16 @@ NOT_OFFERED = {
     AGENT_CARDS.key: "Describe the task on the Builder page",
 }
 CARD_NOT_FOUND = error_response("No such agent")
+
+
+@router.get(
+    "/home",
+    responses=SIGNED_IN,
+    description="What needs the signed-in person, what they wait on, their drafts and what "
+    "runs next. The platform decides each item with the same rules as the page it opens.",
+)
+async def home(principal: CurrentPrincipal, home: CurrentHome) -> HomeOut:
+    return await home.for_person(principal)
 
 
 @router.get("/templates", responses=SIGNED_IN)
