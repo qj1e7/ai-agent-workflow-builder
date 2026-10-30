@@ -513,3 +513,34 @@ async def test_a_copier_that_cannot_reach_cosmos_db_while_idle_is_behind_until_i
         await until(not_behind, 3)
     finally:
         await copier.stop()
+
+
+async def test_a_stream_of_an_old_run_gets_every_event_while_its_copy_is_made_again(
+    db: Database, cosmos: CosmosUnderTest
+):
+    await append(db, 1, 2, 3)
+    copier = Copier(db, Watched(cosmos.events, delay=0.2), idle_check=60, reconnect_delay=0.1)
+    log = ActivityLog(db, copy=cosmos.events, status=copier, read_retry=0.05, reconnect_delay=0.1)
+    received: list[int] = []
+
+    async def copied() -> bool:
+        return await copied_seqs(cosmos) == [1, 2, 3]
+
+    async def collect() -> None:
+        async for event in log.subscribe(RUN, after=0):
+            received.append(event.seq)
+            if event.seq == 3:
+                return
+
+    await log.start()
+    await copier.start()
+    try:
+        await until(copied, 5)
+        await cosmos.delete("container")
+        with anyio.fail_after(5):
+            await collect()
+    finally:
+        await copier.stop()
+        await log.stop()
+
+    assert received == [1, 2, 3]

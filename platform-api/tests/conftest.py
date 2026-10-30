@@ -232,8 +232,8 @@ async def activity_log(request: pytest.FixtureRequest, db: Database) -> AsyncIte
             await log.stop()
         return
     under_test = await fresh_cosmos()
-    log = ActivityLog(db, copy=under_test.events, reconnect_delay=0.1, copy_wait=10)
     copier = Copier(db, under_test.events, retry_delay=0.1, reconnect_delay=0.1)
+    log = ActivityLog(db, copy=under_test.events, status=copier, reconnect_delay=0.1, copy_wait=10)
     await log.start()
     await copier.start()
     try:

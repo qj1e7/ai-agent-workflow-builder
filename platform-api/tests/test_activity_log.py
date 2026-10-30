@@ -389,3 +389,108 @@ async def test_a_malformed_notice_is_skipped_and_the_listener_stays_up(
     assert received == [1]
     assert "Skipped a run_events_copied notice" in caplog.text
     assert "lost its connection" not in caplog.text
+
+
+class Status:
+    def __init__(self, behind: bool) -> None:
+        self.behind = behind
+        self.nudges = 0
+
+    def check_soon(self) -> None:
+        self.nudges += 1
+
+
+class FromTheCopy:
+    def __init__(self, db: Database) -> None:
+        self.inner = PostgresEvents(db)
+
+    async def read_after(self, run_id: RunId, after: int) -> list[ActivityEvent]:
+        events = await self.inner.read_after(run_id, after)
+        return [e.model_copy(update={"summary": "from the copy"}) for e in events]
+
+
+async def test_a_stream_reads_postgresql_while_the_copy_is_behind(db: Database):
+    log = ActivityLog(db, copy=Lagging(), status=Status(behind=True), read_retry=0.05)
+    await log.start()
+    await appended(db, 1, 2)
+    received: list[int] = []
+
+    async def collect() -> None:
+        async for event in log.subscribe(RUN, after=0):
+            received.append(event.seq)
+            if event.seq == 3:
+                return
+
+    try:
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(collect)
+            with anyio.fail_after(2):
+                while len(received) < 2:
+                    await anyio.sleep(0.01)
+            await appended(db, 3)
+            with anyio.fail_after(2):
+                while len(received) < 3:
+                    await anyio.sleep(0.01)
+    finally:
+        await log.stop()
+
+    assert received == [1, 2, 3]
+
+
+async def test_a_stream_reads_the_copy_again_once_it_has_caught_up(db: Database):
+    status = Status(behind=True)
+    log = ActivityLog(db, copy=FromTheCopy(db), status=status, read_retry=0.05)
+    await log.start()
+    await appended(db, 1)
+    received: list[str] = []
+
+    async def collect() -> None:
+        async for event in log.subscribe(RUN, after=0):
+            received.append(event.summary)
+            if event.seq == 2:
+                return
+
+    try:
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(collect)
+            with anyio.fail_after(2):
+                while not received:
+                    await anyio.sleep(0.01)
+            status.behind = False
+            await appended(db, 2)
+            await notify_copied(db, RUN, 2)
+            with anyio.fail_after(2):
+                while len(received) < 2:
+                    await anyio.sleep(0.01)
+    finally:
+        await log.stop()
+
+    assert received == ["event 1", "from the copy"]
+
+
+async def test_a_failed_read_of_the_copy_nudges_the_copier(db: Database):
+    status = Status(behind=False)
+    log = ActivityLog(db, copy=FailsFirst(db), status=status, read_retry=0.05)
+    await log.start()
+    await appended(db, 1)
+
+    async def collect() -> int:
+        async for event in log.subscribe(RUN, after=0):
+            return event.seq
+        return 0
+
+    try:
+        with anyio.fail_after(2):
+            assert await collect() == 1
+    finally:
+        await log.stop()
+
+    assert status.nudges == 1
+
+
+async def test_a_one_off_read_while_the_copy_is_behind_reads_postgresql_at_once(db: Database):
+    log = ActivityLog(db, copy=Lagging(), status=Status(behind=True), copy_wait=5)
+    stored = await appended(db, 1, 2)
+
+    with anyio.fail_after(1):
+        assert await log.read_after(RUN, 0) == stored

@@ -53,6 +53,13 @@ class EventReader(Protocol):
     async def read_after(self, run_id: RunId, after: int) -> list[ActivityEvent]: ...
 
 
+class CopyStatus(Protocol):
+    @property
+    def behind(self) -> bool: ...
+
+    def check_soon(self) -> None: ...
+
+
 class EventCopy(Protocol):
     async def ensure(self) -> Generation: ...
 
@@ -101,12 +108,9 @@ class Wakeup:
         self._named_no_seq = False
         return due
 
-    async def wait(self, cursor: int, recheck: float) -> None:
-        if self._highest_named <= cursor:
-            await self._flag.wait()
-            return
+    async def wait(self, cursor: int, recheck: float, at_most: float | None = None) -> None:
         with suppress(TimeoutError):
-            async with asyncio.timeout(recheck):
+            async with asyncio.timeout(recheck if self._highest_named > cursor else at_most):
                 await self._flag.wait()
 
 
@@ -206,6 +210,7 @@ class ActivityLog:
         db: Database,
         *,
         copy: EventReader | None = None,
+        status: CopyStatus | None = None,
         reconnect_delay: float = 1.0,
         copy_wait: float = 2.0,
         short_read_recheck: float = 0.25,
@@ -214,6 +219,7 @@ class ActivityLog:
         self._db = db
         self._postgres = PostgresEvents(db)
         self._copy = copy
+        self._status = status
         self._reader: EventReader = self._postgres if copy is None else copy
         self._copy_wait = copy_wait
         self._short_read_recheck = short_read_recheck
@@ -290,28 +296,38 @@ class ActivityLog:
         return {run_id: found.get(run_id, 0) for run_id in run_ids}
 
     async def read_after(self, run_id: RunId, after: int) -> list[ActivityEvent]:
-        if self._copy is None:
+        if self._copy is None or self._copy_behind():
             return await self._postgres.read_after(run_id, after)
         return await self._read_when_copied(run_id, after)
 
     async def subscribe(self, run_id: RunId, after: int) -> AsyncGenerator[ActivityEvent]:
+        """While the copy is behind, the stream reads PostgreSQL every read_retry, since no
+        copied notice may come."""
         cursor = after
+        at_most = None if self._status is None else self._read_retry
         async with self._hub.wakeups(run_id) as wakeup:
             while True:
-                if wakeup.due_after(cursor):
+                behind = self._copy_behind()
+                if wakeup.due_after(cursor) or behind:
+                    reader = self._postgres if behind else self._reader
                     try:
-                        events = await self._reader.read_after(run_id, cursor)
+                        events = await reader.read_after(run_id, cursor)
                     except Exception as error:
                         logger.warning(
                             "Could not read the events of %s after %s: %r", run_id, cursor, error
                         )
+                        if self._status is not None:
+                            self._status.check_soon()
                         await asyncio.sleep(self._read_retry)
                         wakeup.wake(None)
                         continue
                     for event in events:
                         cursor = event.seq
                         yield event
-                await wakeup.wait(cursor, self._short_read_recheck)
+                await wakeup.wait(cursor, self._short_read_recheck, at_most)
+
+    def _copy_behind(self) -> bool:
+        return self._status is not None and self._status.behind
 
     async def _read_when_copied(self, run_id: RunId, after: int) -> list[ActivityEvent]:
         async with self._db.transaction("monitoring") as uow:
