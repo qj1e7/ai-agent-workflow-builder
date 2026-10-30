@@ -494,3 +494,37 @@ async def test_a_one_off_read_while_the_copy_is_behind_reads_postgresql_at_once(
 
     with anyio.fail_after(1):
         assert await log.read_after(RUN, 0) == stored
+
+
+class Hanging:
+    async def read_after(self, run_id: RunId, after: int) -> list[ActivityEvent]:
+        await anyio.sleep_forever()
+        return []
+
+
+class BehindOnceNudged(Status):
+    def check_soon(self) -> None:
+        super().check_soon()
+        self.behind = True
+
+
+async def test_a_stream_whose_read_of_the_copy_hangs_falls_back_once_the_copier_says_behind(
+    db: Database,
+):
+    status = BehindOnceNudged(behind=False)
+    log = ActivityLog(db, copy=Hanging(), status=status, copy_wait=0.1, read_retry=0.05)
+    await log.start()
+    await appended(db, 1)
+
+    async def first() -> int:
+        async for event in log.subscribe(RUN, after=0):
+            return event.seq
+        return 0
+
+    try:
+        with anyio.fail_after(2):
+            assert await first() == 1
+    finally:
+        await log.stop()
+
+    assert status.nudges == 1

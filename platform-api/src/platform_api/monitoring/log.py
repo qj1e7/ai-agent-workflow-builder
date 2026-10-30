@@ -302,7 +302,8 @@ class ActivityLog:
 
     async def subscribe(self, run_id: RunId, after: int) -> AsyncGenerator[ActivityEvent]:
         """While the copy is behind, the stream reads PostgreSQL every read_retry, since no
-        copied notice may come."""
+        copied notice may come. A read of the copy fails after copy_wait, as the SDK retries a
+        lost connection for longer."""
         cursor = after
         at_most = None if self._status is None else self._read_retry
         async with self._hub.wakeups(run_id) as wakeup:
@@ -310,8 +311,10 @@ class ActivityLog:
                 behind = self._copy_behind()
                 if wakeup.due_after(cursor) or behind:
                     reader = self._postgres if behind else self._reader
+                    limit = None if reader is self._postgres else self._copy_wait
                     try:
-                        events = await reader.read_after(run_id, cursor)
+                        async with asyncio.timeout(limit):
+                            events = await reader.read_after(run_id, cursor)
                     except Exception as error:
                         logger.warning(
                             "Could not read the events of %s after %s: %r", run_id, cursor, error
