@@ -260,12 +260,14 @@ logging.getLogger("uvicorn.access").info(
 )
 """
 STAMP = r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} "
+# CI points COSMOS_ENDPOINT at the emulator for the Cosmos DB tests, with no COSMOS_KEY.
+WITHOUT_COSMOS = {name: v for name, v in os.environ.items() if not name.startswith("COSMOS_")}
 
 
 def test_the_app_under_uvicorn_logs_each_skipped_scheduled_check_once():
     done = subprocess.run(
         [sys.executable, "-c", UNDER_UVICORN],
-        env={**os.environ, **LOCAL},
+        env={**WITHOUT_COSMOS, **LOCAL},
         capture_output=True,
         text=True,
         timeout=60,
