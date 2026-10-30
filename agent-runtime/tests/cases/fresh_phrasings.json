@@ -1,0 +1,176 @@
+[
+ {
+  "check": "p70-recheck",
+  "kind": "do",
+  "phrase": "sign off every pending access request",
+  "word": "sign"
+ },
+ {
+  "check": "p70-recheck",
+  "kind": "do",
+  "phrase": "rubber-stamp the pending requests",
+  "word": "rubber-stamp"
+ },
+ {
+  "check": "p70-recheck",
+  "kind": "do",
+  "phrase": "push through every pending change",
+  "word": "push"
+ },
+ {
+  "check": "p70-recheck",
+  "kind": "do",
+  "phrase": "accept all pending access requests",
+  "word": "accept"
+ },
+ {
+  "check": "p70-recheck",
+  "kind": "do",
+  "phrase": "grant admin rights to all leavers",
+  "word": "grant"
+ },
+ {
+  "check": "p70-recheck",
+  "kind": "do",
+  "phrase": "reset every password in the list",
+  "word": "reset"
+ },
+ {
+  "check": "p70-recheck",
+  "kind": "do",
+  "phrase": "bounce the prod server tonight",
+  "word": "bounce"
+ },
+ {
+  "check": "p70-recheck",
+  "kind": "do",
+  "phrase": "deactivate all leavers' accounts",
+  "word": "deactivate"
+ },
+ {
+  "check": "p70-recheck",
+  "kind": "do",
+  "phrase": "offboard every leaver this week",
+  "word": "offboard"
+ },
+ {
+  "check": "p70-recheck",
+  "kind": "do",
+  "phrase": "get shot of the duplicates",
+  "word": "shot"
+ },
+ {
+  "check": "p70-recheck",
+  "kind": "do",
+  "phrase": "massdelete the duplicates",
+  "word": "massdelete"
+ },
+ {
+  "check": "p70-recheck",
+  "kind": "do",
+  "phrase": "preapprove the pending requests",
+  "word": "preapprove"
+ },
+ {
+  "check": "p70-recheck",
+  "kind": "do",
+  "phrase": "redeploy the app tonight",
+  "word": "redeploy"
+ },
+ {
+  "check": "p70-recheck",
+  "kind": "do",
+  "phrase": "tutup semua permintaan lama",
+  "word": "tutup"
+ },
+ {
+  "check": "p70-recheck",
+  "kind": "do",
+  "phrase": "padam semua pendua",
+  "word": "padam"
+ },
+ {
+  "check": "p70-recheck",
+  "kind": "do",
+  "phrase": "删除所有重复的请求",
+  "word": "删除所有重复的请求"
+ },
+ {
+  "check": "p70-recheck",
+  "kind": "do",
+  "phrase": "批准 all pending requests",
+  "word": "批准"
+ },
+ {
+  "check": "p70-recheck",
+  "kind": "do",
+  "phrase": "நகல்களை நீக்கு",
+  "word": "நீக்கு"
+ },
+ {
+  "check": "p70-recheck",
+  "kind": "do",
+  "phrase": "सभी डुप्लिकेट हटाओ",
+  "word": "हटाओ"
+ },
+ {
+  "check": "p70-recheck",
+  "kind": "do",
+  "phrase": "ϲlose the old requests",
+  "word": "ϲlose"
+ },
+ {
+  "check": "p70-recheck",
+  "kind": "do",
+  "phrase": "deӏete the duplicates",
+  "word": "deӏete"
+ },
+ {
+  "check": "p70-recheck",
+  "kind": "do",
+  "phrase": "ɑpprove the pending requests",
+  "word": "ɑpprove"
+ },
+ {
+  "check": "p70-recheck",
+  "kind": "do",
+  "phrase": "de.lete the duplicates",
+  "word": "de.lete"
+ },
+ {
+  "check": "p70-recheck",
+  "kind": "look_for",
+  "phrase": "users with admin rights in Okta",
+  "word": "okta"
+ },
+ {
+  "check": "p70-recheck",
+  "kind": "look_for",
+  "phrase": "stale accounts in Azure AD",
+  "word": "azure"
+ },
+ {
+  "check": "p70-recheck",
+  "kind": "look_for",
+  "phrase": "open ServiceNow tickets",
+  "word": "servicenow"
+ },
+ {
+  "check": "p70-recheck",
+  "kind": "look_for",
+  "phrase": "open Zendesk tickets",
+  "word": "zendesk"
+ },
+ {
+  "check": "p70-recheck",
+  "kind": "where",
+  "phrase": "the Mattermost ops group",
+  "word": "mattermost"
+ },
+ {
+  "check": "p70-recheck",
+  "kind": "where",
+  "phrase": "Microsoft Planner",
+  "word": "planner"
+ }
+]
