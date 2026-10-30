@@ -62,6 +62,7 @@ from platform_api.orchestration.dispatch import (
     RetryPolicy,
     WorkflowEngine,
 )
+from platform_api.orchestration.person_runs import PersonRuns, runs_of
 from platform_api.orchestration.runs import (
     PLANNER,
     Acting,
@@ -838,6 +839,11 @@ class Orchestrator:
     async def list_runs(self) -> list[RunDetail]:
         async with self._db.transaction("orchestration") as uow:
             return await self._details(uow, await self._store.list_runs(uow))
+
+    async def runs_for(self, viewer: Principal) -> PersonRuns:
+        async with self._db.transaction("orchestration") as uow:
+            details = await self._details(uow, await self._store.open_runs(uow))
+        return runs_of(details, viewer)
 
     async def _detail(self, uow: UnitOfWork, record: RunRecord) -> RunDetail:
         (detail,) = await self._details(uow, [record])

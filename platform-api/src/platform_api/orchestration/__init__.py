@@ -38,6 +38,17 @@ from platform_api.orchestration.cards import (
     tools_used,
     write_tools_used,
 )
+from platform_api.orchestration.confirmations import ConfirmationKind, confirmation_summary
+from platform_api.orchestration.people_store import ConfirmationRow
+from platform_api.orchestration.person_runs import (
+    Ask,
+    Because,
+    Change,
+    PersonRuns,
+    RunFacts,
+    Stopped,
+    Waiting,
+)
 from platform_api.orchestration.planning import CardPlanning, NoModel, RuntimeDown
 from platform_api.orchestration.schedule import AT_PATTERN, Day, Schedule, parse_at
 from platform_api.orchestration.schedule_store import (
@@ -90,6 +101,15 @@ __all__ = [
     "TEXT_LIMIT",
     "TOOL_RULES",
     "AnyApprover",
+    "Ask",
+    "Because",
+    "Change",
+    "ConfirmationKind",
+    "ConfirmationRow",
+    "PersonRuns",
+    "RunFacts",
+    "Stopped",
+    "Waiting",
     "ApprovalPolicy",
     "ApprovalStep",
     "BelongsOnWatchlist",
@@ -126,6 +146,7 @@ __all__ = [
     "card_bindings",
     "cards_policy",
     "check_value",
+    "confirmation_summary",
     "tools_used",
     "write_tools_used",
     "CheckSpecs",

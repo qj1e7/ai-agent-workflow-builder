@@ -13,6 +13,7 @@ from platform_api.orchestration.confirmations import (
     ConfirmationKind,
     DecideRefusal,
     DecideRefused,
+    confirmation_summary,
 )
 from platform_api.orchestration.http import Operator
 from platform_api.orchestration.model_settings import (
@@ -182,16 +183,6 @@ def person_out(row: PersonRow) -> PersonOut:
         added_by=p.added_by,
         added_at=p.added_at,
     )
-
-
-def confirmation_summary(confirmation: Confirmation, about: Person | None) -> str:
-    match confirmation.kind:
-        case ConfirmationKind.APPROVER:
-            name = about.display if about is not None else str(confirmation.change.get("display"))
-            return f"Make {name} an Approver"
-        case ConfirmationKind.MODEL_ADDRESS:
-            change = confirmation.change
-            return f"Use {change.get('model')} at {change.get('host')}"
 
 
 def confirmation_out(row: ConfirmationRow) -> ConfirmationOut:
