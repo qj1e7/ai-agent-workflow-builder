@@ -51,6 +51,7 @@ class Watched:
         self.fails = fails
         self.delay = delay
         self.unreachable = False
+        self.ensured = 0
         self.sample: Callable[[], bool] | None = None
         self.samples: list[bool] = []
 
@@ -61,7 +62,9 @@ class Watched:
     async def ensure(self) -> Generation:
         if self.unreachable:
             raise CosmosDown("ensure")
-        return await self.inner.ensure()
+        generation = await self.inner.ensure()
+        self.ensured += 1
+        return generation
 
     async def put(self, event: LoggedEvent) -> None:
         if self.fails(event.run_id, event.seq):
@@ -520,9 +523,12 @@ async def test_a_copier_that_cannot_reach_cosmos_db_while_idle_is_behind_until_i
     async def not_behind() -> bool:
         return not copier.behind
 
+    async def swept_at_start() -> bool:
+        return watched.ensured > 0 and not copier.behind
+
     await copier.start()
     try:
-        await until(not_behind, 2)
+        await until(swept_at_start, 2)
         watched.unreachable = True
         await until(behind, 3)
         watched.unreachable = False
