@@ -29,8 +29,6 @@ class CosmosDown(Exception):
 
 
 class Watched:
-    """The real container, with a record of every put and a way to fail or slow one."""
-
     def __init__(
         self,
         inner: CosmosEvents,

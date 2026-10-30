@@ -11,10 +11,11 @@ gateway answers a repeated prompt from its store.
 Only 2xx answers are timed. It exits 1 when any timed request failed.
 
 With --stream it times the live stream instead. It opens the stream of a new run, then posts
---count agent events to that run, one each --interval seconds, signed with the callback key
-(--signing-key, or CALLBACK_SIGNING_KEY). Each event's ts is the moment it was sent, and the
-script subtracts it from the moment the event arrives on the stream. Run it inside the
-platform-api container, so both times come from one clock and the key is in its environment:
+--warm-up untimed and --count timed agent events to it, one each --interval seconds, signed
+with the callback key (--signing-key, or CALLBACK_SIGNING_KEY). Each event's ts is the moment
+it was sent, and the script subtracts it from the moment the event arrives on the stream. Run
+it inside the platform-api container, so both times come from one clock and the key is in its
+environment:
     docker compose exec -T platform-api python - --stream http://localhost:8000 \\
         /tmp/stream.json --count 200 < scripts/p95.py
 

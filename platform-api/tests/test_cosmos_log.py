@@ -148,7 +148,7 @@ def pending(n: int) -> PendingEvent:
 async def test_readers_read_cosmos_db_and_wait_a_bounded_time_for_the_copy(
     db: Database, cosmos: CosmosUnderTest
 ):
-    log = ActivityLog(db, replica=cosmos.events, read_wait=0.3)
+    log = ActivityLog(db, replica=cosmos.events, copy_wait=0.3)
     async with db.transaction("orchestration") as uow:
         stored = await log.append(uow, RUN, [pending(1), pending(2)])
 

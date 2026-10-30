@@ -176,7 +176,7 @@ class CosmosUnderTest:
         return [item["seq"] async for item in query]
 
 
-async def _test_database(settings: CosmosSettings) -> tuple[CosmosEvents, DatabaseProxy]:
+async def _wait_for_test_database(settings: CosmosSettings) -> tuple[CosmosEvents, DatabaseProxy]:
     deadline = time.monotonic() + COSMOS_WAIT_SECONDS
     while True:
         client = cosmos_client(settings)
@@ -192,8 +192,7 @@ async def _test_database(settings: CosmosSettings) -> tuple[CosmosEvents, Databa
 
 
 async def fresh_cosmos() -> CosmosUnderTest:
-    """An empty run_events container in a database of its own, so no test sees another's items."""
-    events, database = await _test_database(cosmos_settings())
+    events, database = await _wait_for_test_database(cosmos_settings())
     try:
         with suppress(CosmosResourceNotFoundError):
             await database.delete_container(CONTAINER)
@@ -224,7 +223,7 @@ async def activity_log(request: pytest.FixtureRequest, db: Database) -> AsyncIte
             await log.stop()
         return
     under_test = await fresh_cosmos()
-    log = ActivityLog(db, replica=under_test.events, reconnect_delay=0.1, read_wait=10)
+    log = ActivityLog(db, replica=under_test.events, reconnect_delay=0.1, copy_wait=10)
     copier = Copier(db, under_test.events, retry_delay=0.1, reconnect_delay=0.1)
     await log.start()
     await copier.start()

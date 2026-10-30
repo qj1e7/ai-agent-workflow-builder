@@ -204,8 +204,7 @@ own_stack_lane() {
   local n=$1 src=$2 first=$3 project="$PREFIX-l$1" portal api n8n status=0
   shift 3
   read -r portal api n8n <<<"$(ports_of "$first")"
-  # shellcheck disable=SC2086
-  NO_BUILD=1 up "$src" "$project" "$portal" "$api" "$n8n" ${STACK_ENV:-} || { down "$src" "$project" >/dev/null 2>&1 || true; return 1; }
+  NO_BUILD=1 up "$src" "$project" "$portal" "$api" "$n8n" ${STACK_ENV:+"$STACK_ENV"} || { down "$src" "$project" >/dev/null 2>&1 || true; return 1; }
   P4_COMPOSE="$(compose_cmd "$src" "$project" ${OVERLAYS:-})" lanes_py "lane$n" "http://localhost:$api" "$EVID/lane-$n" "$@" || status=$?
   down "$src" "$project" >/dev/null 2>&1 || true
   return "$status"

@@ -16,15 +16,11 @@ _READ_AFTER = "SELECT * FROM c WHERE c.seq > @after ORDER BY c.seq"
 
 
 def cosmos_client(settings: CosmosSettings) -> CosmosClient:
-    """Endpoint discovery is off: the account has one region, and the emulator names an
-    address that only it can reach."""
+    """Endpoint discovery is off: the emulator names an address that only it can reach."""
     return CosmosClient(settings.endpoint, credential=settings.key, enable_endpoint_discovery=False)
 
 
 class CosmosEvents:
-    """The activity log's copy in Cosmos DB for NoSQL: one item per event, in its run's
-    partition, with the seq as its id."""
-
     def __init__(self, client: CosmosClient, *, database: str = DATABASE) -> None:
         self._client = client
         self._database = database

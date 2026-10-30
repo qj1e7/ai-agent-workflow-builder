@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from contextlib import suppress
+from dataclasses import dataclass
 
 from platform_api.db import Database, UnitOfWork
 from platform_api.monitoring.log import (
@@ -9,6 +10,7 @@ from platform_api.monitoring.log import (
     EventReplica,
     LoggedEvent,
     NotificationHub,
+    copied_notice,
 )
 from platform_api.shared import RunId
 
@@ -35,13 +37,14 @@ _RUNS_BEHIND = """
 """
 
 
+@dataclass(frozen=True)
+class _Batch:
+    done: int
+    more: bool
+    failure: Exception | None
+
+
 class Copier:
-    """Copies each run's new events from monitoring.run_events to a replica, in seq order.
-
-    A copy holds a per-run lock that appends never take, so a second copier on the same run
-    waits and then finds nothing left. Each batch commits the highest seq it copied, even when
-    a put fails halfway, and notifies COPIED_CHANNEL with it. PostgreSQL keeps every row."""
-
     def __init__(
         self,
         db: Database,
@@ -56,7 +59,7 @@ class Copier:
         self._batch = batch
         self._retry_delay = retry_delay
         self._hub = NotificationHub(db, channel=CHANNEL, reconnect_delay=reconnect_delay)
-        self._hub.watch(self._note)
+        self._hub.watch(self._note_run, self._note_connect)
         self._behind: set[RunId] = set()
         self._sweep = False
         self._work = asyncio.Event()
@@ -77,16 +80,18 @@ class Copier:
 
     async def copy_run(self, run_id: RunId) -> int:
         while True:
-            copied, full = await self._copy_batch(run_id)
-            if not full:
-                return copied
+            batch = await self._copy_batch(run_id)
+            if batch.failure is not None:
+                raise batch.failure
+            if not batch.more:
+                return batch.done
 
     async def runs_behind(self) -> list[RunId]:
         async with self._db.transaction("monitoring") as uow:
             rows = await (await uow.conn.execute(_RUNS_BEHIND)).fetchall()
         return [RunId(row["run_id"]) for row in rows]
 
-    async def _copy_batch(self, run_id: RunId) -> tuple[int, bool]:
+    async def _copy_batch(self, run_id: RunId) -> _Batch:
         failure: Exception | None = None
         async with self._db.transaction("monitoring") as uow:
             await uow.conn.execute(_LOCK, (run_id,))
@@ -107,22 +112,21 @@ class Copier:
             if done > before:
                 await uow.conn.execute(_RECORD, {"run_id": run_id, "seq": done, "at": uow.now})
                 await uow.conn.execute(
-                    "SELECT pg_notify(%s, %s)", (COPIED_CHANNEL, f"{run_id} {done}")
+                    "SELECT pg_notify(%s, %s)", (COPIED_CHANNEL, copied_notice(run_id, done))
                 )
-        if failure is not None:
-            raise failure
-        return done, len(rows) == self._batch
+        return _Batch(done, len(rows) == self._batch, failure)
 
     @staticmethod
     async def _copied(uow: UnitOfWork, run_id: RunId) -> int:
         row = await (await uow.conn.execute(_COPIED, (run_id,))).fetchone()
         return 0 if row is None else int(row["seq"])
 
-    def _note(self, run_id: RunId | None) -> None:
-        if run_id is None:
-            self._sweep = True
-        else:
-            self._behind.add(run_id)
+    def _note_run(self, run_id: RunId) -> None:
+        self._behind.add(run_id)
+        self._work.set()
+
+    def _note_connect(self) -> None:
+        self._sweep = True
         self._work.set()
 
     async def _copy_forever(self) -> None:

@@ -6,8 +6,7 @@ x-platform-image: &platform-image
     target: runtime
   image: wab/platform-api:${WAB_IMAGE_TAG:-dev}
 
-# The Cosmos DB emulator's published key. The emulator does not check keys, and no real
-# account accepts this one. A real account's key comes from Key Vault.
+# The Cosmos DB emulator's published key.
 x-cosmos: &cosmos-account
   COSMOS_ENDPOINT: http://cosmos:8081
   COSMOS_KEY: ${COSMOS_KEY:-C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==}
@@ -31,9 +30,6 @@ services:
       timeout: 3s
       retries: 20
 
-  # Readers of the activity log read this copy (ADR 0031). It has no host port. Look inside with
-  # `docker compose exec cosmos cosmoshell.sh`. Its data lives in the container, so `stop` and
-  # `start` keep it, and `down` drops it.
   cosmos:
     image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:vnext-preview@sha256:db53613dae19d0a3d5ad50688d14aa6e957af082dafea56b52e1bd3a6b3f1406
     environment:
@@ -133,8 +129,6 @@ services:
         condition: service_healthy
     environment:
       <<: *cosmos-account
-      # cosmos reads the activity log from Cosmos DB, postgres from PostgreSQL. The copy into
-      # Cosmos DB runs either way, while COSMOS_ENDPOINT is set.
       ACTIVITY_READER: ${ACTIVITY_READER:-cosmos}
       AUTH_MODE: dev
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:${PORTAL_HOST_PORT:-8080}}

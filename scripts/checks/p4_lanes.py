@@ -18,7 +18,7 @@ P4_COMPOSE holds the lane stack's docker compose command, for example
     docker compose -p p4-check --env-file /tmp/swarm-p4/env/.env \\
         -f <src>/deploy/compose.yaml -f <src>/deploy/compose.e2e.yaml
 The lanes read Cosmos DB through a short script in that stack's platform-api container, and
-PostgreSQL through psql in its postgres container. Lanes 1 and 10 compare the kinds of events.
+PostgreSQL through psql in its postgres container. Lanes 1, 9 and 10 compare the kinds of events.
 """
 
 import hashlib
@@ -139,8 +139,6 @@ class Api:
 
 
 class Stream:
-    """One SSE connection, read on a thread. Keeps each raw frame and each event."""
-
     def __init__(self, base: str, run_id: str, last_event_id: int | None = None) -> None:
         headers = {"Accept": "text/event-stream", "X-Dev-User": "alice"}
         if last_event_id is not None:

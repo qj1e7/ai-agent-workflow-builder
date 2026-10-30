@@ -56,39 +56,39 @@ class EventReplica(EventReader, Protocol):
     async def put(self, event: LoggedEvent) -> None: ...
 
 
-class Wakeup:
-    """Set by each notification for one run. It keeps the highest seq those notifications named,
-    and has no bound when one of them named none."""
+def copied_notice(run_id: RunId, seq: int) -> str:
+    return f"{run_id} {seq}"
 
+
+def read_notice(payload: str) -> tuple[RunId, int | None]:
+    run_text, _, seq = payload.partition(" ")
+    return RunId(run_text), int(seq) if seq else None
+
+
+class Wakeup:
     def __init__(self) -> None:
         self._flag = asyncio.Event()
-        self._unbounded = True
-        self._upto = 0
+        self._named_no_seq = True
+        self._highest_named = 0
 
-    def wake(self, upto: int | None) -> None:
-        if upto is None:
-            self._unbounded = True
+    def wake(self, copied: int | None) -> None:
+        if copied is None:
+            self._named_no_seq = True
         else:
-            self._upto = max(self._upto, upto)
+            self._highest_named = max(self._highest_named, copied)
         self._flag.set()
 
-    def take(self) -> int | None:
+    def due_after(self, cursor: int) -> bool:
         self._flag.clear()
-        upto = None if self._unbounded else self._upto
-        self._unbounded = False
-        return upto
+        due = self._named_no_seq or self._highest_named > cursor
+        self._named_no_seq = False
+        return due
 
     async def wait(self) -> None:
         await self._flag.wait()
 
 
-type Watcher = Callable[[RunId | None], None]
-
-
 class NotificationHub:
-    """One LISTEN connection per process. A payload is a run id, optionally followed by a space
-    and the highest seq copied. Watchers hear of every run, and of None after each connect."""
-
     def __init__(
         self, db: Database, *, channel: str = CHANNEL, reconnect_delay: float = 1.0
     ) -> None:
@@ -96,7 +96,8 @@ class NotificationHub:
         self._channel = channel
         self._reconnect_delay = reconnect_delay
         self._subscribers: dict[RunId, set[Wakeup]] = {}
-        self._watchers: list[Watcher] = []
+        self._on_run: list[Callable[[RunId], None]] = []
+        self._on_connect: list[Callable[[], None]] = []
         self._listening = asyncio.Event()
         self._task: asyncio.Task[None] | None = None
 
@@ -104,8 +105,9 @@ class NotificationHub:
     def listening(self) -> bool:
         return self._listening.is_set()
 
-    def watch(self, watcher: Watcher) -> None:
-        self._watchers.append(watcher)
+    def watch(self, on_run: Callable[[RunId], None], on_connect: Callable[[], None]) -> None:
+        self._on_run.append(on_run)
+        self._on_connect.append(on_connect)
 
     async def start(self) -> None:
         self._task = asyncio.create_task(self._listen_forever())
@@ -150,42 +152,36 @@ class NotificationHub:
                 # every subscriber re-reads once.
                 for wakeups in self._subscribers.values():
                     self._wake(wakeups, None)
-                self._tell_watchers(None)
+                for on_connect in self._on_connect:
+                    on_connect()
                 async for notification in conn.notifies():
-                    run_text, _, seq = notification.payload.partition(" ")
-                    run_id = RunId(run_text)
-                    self._wake(self._subscribers.get(run_id, ()), int(seq) if seq else None)
-                    self._tell_watchers(run_id)
+                    run_id, copied = read_notice(notification.payload)
+                    self._wake(self._subscribers.get(run_id, ()), copied)
+                    for on_run in self._on_run:
+                        on_run(run_id)
             finally:
                 self._listening.clear()
                 with suppress(Exception):
                     await conn.set_autocommit(False)
 
     @staticmethod
-    def _wake(wakeups: Iterable[Wakeup], upto: int | None) -> None:
+    def _wake(wakeups: Iterable[Wakeup], copied: int | None) -> None:
         for wakeup in wakeups:
-            wakeup.wake(upto)
-
-    def _tell_watchers(self, run_id: RunId | None) -> None:
-        for watcher in self._watchers:
-            watcher(run_id)
+            wakeup.wake(copied)
 
 
 class ActivityLog:
-    """Writes always go to PostgreSQL. Reads go to PostgreSQL, or to a replica that a Copier
-    fills (ADR 0031), woken by the copier's notifications."""
-
     def __init__(
         self,
         db: Database,
         *,
         replica: EventReader | None = None,
         reconnect_delay: float = 1.0,
-        read_wait: float = 2.0,
+        copy_wait: float = 2.0,
     ) -> None:
         self._db = db
         self._replica = replica
-        self._read_wait = read_wait
+        self._copy_wait = copy_wait
         channel = CHANNEL if replica is None else COPIED_CHANNEL
         self._hub = NotificationHub(db, channel=channel, reconnect_delay=reconnect_delay)
 
@@ -258,11 +254,21 @@ class ActivityLog:
         return {run_id: found.get(run_id, 0) for run_id in run_ids}
 
     async def read_after(self, run_id: RunId, after: int) -> list[ActivityEvent]:
-        """From a replica, this waits at most read_wait for the copy to reach what PostgreSQL
-        held when the read began. A client that just saw a run's state then reads the event
-        that set it."""
         if self._replica is None:
             return await self._read_postgres(run_id, after)
+        return await self._read_when_copied(run_id, after)
+
+    async def subscribe(self, run_id: RunId, after: int) -> AsyncGenerator[ActivityEvent]:
+        cursor = after
+        async with self._hub.wakeups(run_id) as wakeup:
+            while True:
+                if wakeup.due_after(cursor):
+                    for event in await self._read(run_id, cursor):
+                        cursor = event.seq
+                        yield event
+                await wakeup.wait()
+
+    async def _read_when_copied(self, run_id: RunId, after: int) -> list[ActivityEvent]:
         async with self._db.transaction("monitoring") as uow:
             logged = await self.last_seq(uow, run_id)
         if logged <= after:
@@ -270,7 +276,7 @@ class ActivityLog:
         events: list[ActivityEvent] = []
         with suppress(TimeoutError):
             async with (
-                asyncio.timeout(self._read_wait),
+                asyncio.timeout(self._copy_wait),
                 aclosing(self.subscribe(run_id, after)) as stream,
             ):
                 async for event in stream:
@@ -278,17 +284,6 @@ class ActivityLog:
                     if event.seq >= logged:
                         break
         return events
-
-    async def subscribe(self, run_id: RunId, after: int) -> AsyncGenerator[ActivityEvent]:
-        cursor = after
-        async with self._hub.wakeups(run_id) as wakeup:
-            while True:
-                upto = wakeup.take()
-                if upto is None or upto > cursor:
-                    for event in await self._read(run_id, cursor):
-                        cursor = event.seq
-                        yield event
-                await wakeup.wait()
 
     async def _read(self, run_id: RunId, after: int) -> list[ActivityEvent]:
         if self._replica is None:

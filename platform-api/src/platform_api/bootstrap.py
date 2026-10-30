@@ -74,7 +74,8 @@ def main(env: Mapping[str, str] | None = None) -> int:
             asyncio.run(ensure_cosmos(settings.cosmos))
         except AzureError as error:
             say(f"could not reach Cosmos DB: {error}")
-            return _finish(settings, say, [], [], _failed("could not reach Cosmos DB", error))
+            detail = _detail_without_message("could not reach Cosmos DB", error)
+            return _finish(settings, say, [], [], detail)
         say("Cosmos DB holds the activity database and its run_events container")
     definitions = load_all()
     findings = lint(definitions)
@@ -84,9 +85,8 @@ def main(env: Mapping[str, str] | None = None) -> int:
         loaded, findings = load_into_n8n(settings, definitions, say)
     except (N8nError, httpx.HTTPError) as error:
         say(f"could not load the workflows into n8n: {error}")
-        return _finish(
-            settings, say, [], [], _failed("could not load the workflows into n8n", error)
-        )
+        detail = _detail_without_message("could not load the workflows into n8n", error)
+        return _finish(settings, say, [], [], detail)
     inactive = [w.name for w in loaded if not w.active]
     if inactive:
         return _finish(settings, say, loaded, findings, f"inactive in n8n: {', '.join(inactive)}")
@@ -103,9 +103,7 @@ async def ensure_cosmos(settings: CosmosSettings) -> None:
         await events.close()
 
 
-def _failed(what: str, error: Exception) -> str:
-    """The readiness check serves this detail, so it names the error's class and never its
-    message, which can hold an address or a request."""
+def _detail_without_message(what: str, error: Exception) -> str:
     return f"{what} ({type(error).__name__})"
 
 
