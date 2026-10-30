@@ -50,6 +50,18 @@ class FakeBuilder:
     async def start_run(self, *args: object) -> object:
         return self._started
 
+    async def pause_use_case(self, *args: object) -> None:
+        return None
+
+    async def resume_use_case(self, *args: object) -> None:
+        return None
+
+    async def delete_use_case(self, *args: object) -> None:
+        return None
+
+    async def restore_use_case(self, *args: object) -> None:
+        return None
+
 
 class FakeWatchlist:
     async def view(self) -> None:

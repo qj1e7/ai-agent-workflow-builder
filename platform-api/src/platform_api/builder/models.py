@@ -68,6 +68,14 @@ class UseCaseAgentView(WireModel):
 
 type UseCaseState = Literal["on", "paused"]
 
+type ClockTime = Annotated[str, Field(pattern=AT_PATTERN, examples=["09:00"])]
+
+
+class UseCaseSchedule(WireModel):
+    day: Day
+    at: ClockTime
+    time_zone: str
+
 
 class UseCaseView(WireModel):
     use_case_id: str
@@ -85,6 +93,10 @@ class UseCaseView(WireModel):
     next_run_at: datetime | None = Field(
         description="When the workflow next runs on its own. Null while it is paused, and for "
         "a workflow with no schedule."
+    )
+    schedule: UseCaseSchedule | None = Field(
+        description="When it runs on its own, kept while it is paused. Null for a workflow "
+        "with no schedule."
     )
     plan: list[BlockView] = Field(
         description="The blocks a run of this use case draws, in order. A template use case "
@@ -183,9 +195,6 @@ class LastCheckView(WireModel):
     run_id: RunId
     state: RunStateName
     started_at: datetime
-
-
-type ClockTime = Annotated[str, Field(pattern=AT_PATTERN, examples=["09:00"])]
 
 
 class ScheduleIn(WireIn):

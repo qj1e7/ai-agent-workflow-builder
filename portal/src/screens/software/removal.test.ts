@@ -156,3 +156,16 @@ describe('the message after a change to the list', () => {
     expect(changeFeedback(added, { type: 'added', name: 'Kafka' }).notice).toEqual({ kind: 'added', name: 'Kafka' })
   })
 })
+
+describe('resuming the watchlist', () => {
+  it('says it resumed, and what checks it next', () => {
+    const h = harness()
+    h.dispatch({ type: 'resumed' })
+    const { notice } = h.state()
+    if (!notice) throw new Error('no notice')
+    expect(noticeWords(notice, { scheduled: true, paused: false })).toBe('Resumed. Checks run on the schedule again.')
+    expect(noticeWords(notice, { scheduled: false, paused: false })).toBe('Resumed. Press Check now to check by hand.')
+    expect(noticeButtons(notice)).toEqual(['Dismiss'])
+    expect(h.state().focusTargetId).toBeNull()
+  })
+})

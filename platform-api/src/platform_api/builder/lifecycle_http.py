@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
 from platform_api.auth import OPERATORS_ONLY
-from platform_api.builder.http import CurrentBuilder, WorkflowOperator
+from platform_api.builder.http import NO_SUCH, NOT_FOUND, CurrentBuilder, WorkflowOperator
 from platform_api.builder.lifecycle import TooLate
 from platform_api.builder.models import UseCaseDeleted, UseCaseView
 from platform_api.builder.service import WatchlistStays
@@ -9,8 +9,6 @@ from platform_api.wire import error_response
 
 router = APIRouter(prefix="/api/v1", tags=["builder"])
 
-NO_SUCH = "No such workflow"
-NOT_FOUND = error_response("No such workflow, or it is deleted")
 WATCHLIST_STAYS = "The Software watchlist can't be deleted. Remove its software instead."
 
 
