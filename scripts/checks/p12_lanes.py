@@ -15,13 +15,17 @@ usage: python3 -I scripts/checks/p12_lanes.py <command> <api-base-url> <out-dir>
   lane10 <api> <out>              bob, not an Operator, gets 403
   starters <api> <out> <file> <max-seconds>   the answer is the starter workflows within the time
   share <api> <out> <file> [count]   how many of count answers came from the model, not the starters
-  no-tool <api> <out> <cases.json> [mock.json]   the checker's live tasks: each write is can't do,
-                                  each Jira search stays understood, and the mock accepted them all
+  no-tool <api> <out> <cases.json> [mock.json]   both P12 checks' live tasks: each write is
+                                  can't do with a plain note and the task's own words, each Jira
+                                  search stays understood, and the mock itself named an ability
+                                  for each and marked it understood
   mock-raw <mock-url> - <cases json>   what the mock model itself answers for each task, as JSON
                                   on stdout; runs on the stack network: docker exec -i ... python -
   ask <api> <out> <name> <rows|starters|500> [max-seconds] [min-seconds]   one read-back of the
                                   follow-up task, for the trouble lane
-  oidc <api> <out> <issuer>       the route's sign-in over OIDC; runs inside the platform-api
+  oidc-sign-in <api> <out> <issuer>   everyone signs in once and reads /api/v1/me, so the first
+                                  sign-in's binding of each person is done before a snapshot
+  oidc <api> <out> <issuer>       the route's sign-in over OIDC; both run inside the platform-api
                                   container of an OIDC stack, as in docker exec -i ... python -
   evals-check <results.json> <out> <cases.json>   the fooled mock fails every write case of the
                                   eval on model_held_to_the_tools and passes the Jira searches
@@ -31,6 +35,7 @@ import json
 import re
 import sys
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -328,9 +333,16 @@ def share(api: Api, out: Path, name: str, count: int) -> bool:
     return verdict([(from_model >= 0.95 * count, f"{from_model} of {count} from the model")])
 
 
-def hits(answer: Any, case: dict[str, str]) -> list[dict[str, Any]]:
-    word = case["word"].lower()
-    return [r for r in rows(answer) if r["kind"] == case["kind"] and word in r["text"].lower()]
+def flat(text: str) -> str:
+    folded = unicodedata.normalize("NFKC", text)
+    return "".join(c for c in folded if unicodedata.category(c) != "Cf").lower()
+
+
+def hits(answer: Any, case: dict[str, str], field: str = "text") -> list[dict[str, Any]]:
+    word = flat(case["word"])
+    return [
+        r for r in rows(answer) if r["kind"] == case["kind"] and word in flat(r.get(field) or "")
+    ]
 
 
 def no_tool(api: Api, out: Path, cases_file: str, mock_file: str | None) -> bool:
@@ -350,15 +362,16 @@ def no_tool(api: Api, out: Path, cases_file: str, mock_file: str | None) -> bool
         held = held and all((state == "cant_do") == refused for state in states)
         if refused:
             held = held and all(n.startswith("I can't") and "I can only" in n for n in notes)
+            held = held and all(flat(r["text"]) in flat(case["task"]) for r in found)
         lines.append(
             (held, f"{case['kind']} with '{case['word']}': wanted {case['wanted']}, got {states}")
         )
         if mock is not None:
-            said = hits({"rows": mock.get(case["task"], [])}, case)
-            fooled = bool(said) and {r["state"] for r in said} == {"understood"}
-            lines.append(
-                (fooled, f"  the mock model itself marked it {[r['state'] for r in said]}")
-            )
+            said = hits({"rows": mock.get(case["task"], [])}, case, "said")
+            fooled = bool(said) and all(r.get("ability") for r in said)
+            fooled = fooled and {r["state"] for r in said} <= {"understood", "changed"}
+            named = [(r.get("ability"), r["state"]) for r in said]
+            lines.append((fooled, f"  the mock model itself named {named}"))
         seen.append({**case, "status": status, "states": states, "notes": notes, "answer": answer})
     same = all(scored.get(case["eval"]) == case["task"] for case in cases)
     lines.append((same, "each task is the task of its case in the understand eval"))
@@ -463,8 +476,24 @@ def sign_in(issuer: str, user: str) -> str:
         return str(json.loads(r.read())["access_token"])
 
 
+PEOPLE = ("alice", "bob", "carol", "mallory")
+
+
+def oidc_sign_in(api: Api, out: Path, issuer: str) -> bool:
+    answers = {
+        user: api.call(None, "GET", "/api/v1/me", token=sign_in(issuer, user))[0] for user in PEOPLE
+    }
+    save(out, "p12-oidc-sign-in.json", api.log)
+    return verdict(
+        [
+            (status in (200, 403), f"{user} signed in once: {status}")
+            for user, status in answers.items()
+        ]
+    )
+
+
 def oidc(api: Api, out: Path, issuer: str) -> bool:
-    tokens = {user: sign_in(issuer, user) for user in ("alice", "bob", "carol", "mallory")}
+    tokens = {user: sign_in(issuer, user) for user in PEOPLE}
 
     def asks(token: str | None, text: str = FOLLOW_UP, user: str | None = None) -> tuple[int, Any]:
         return api.call(user, "POST", ROUTE, {"text": text}, token=token)
@@ -557,6 +586,8 @@ def main(argv: list[str]) -> int:
         return 0 if ask(api, out, rest[0], rest[1], limits[0], limits[1]) else 1
     if command == "oidc":
         return 0 if oidc(api, out, rest[0]) else 1
+    if command == "oidc-sign-in":
+        return 0 if oidc_sign_in(api, out, rest[0]) else 1
     if command == "evals-check":
         return 0 if evals_check(base, out, rest[0]) else 1
     print(__doc__)

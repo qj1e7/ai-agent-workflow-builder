@@ -5,27 +5,31 @@
 # usage: scripts/checks/p12.sh <command> [arguments]
 #
 #   disk                                   free space on the Docker disk; fails under 1.5 GB
-#   export <sha> <dir>                     git archive of one commit into <dir>, with the env file as deploy/.env
+#   export <sha> <dir>                     git archive of one commit into <dir>, with the env file as deploy/.env;
+#                                          run it from a git checkout of the repository, not from an export
 #   pg-up | pg-down                        the PostgreSQL 17 the platform-api tests use (host port $PG_PORT)
 #   gates <worktree>                       every gate for agent-runtime, platform-api, e2e and the Portal typecheck
-#   build <export> <tag>                   build every image of a stack once, the mock images named by <tag> too
+#   build <export> <tag> [project]         build every image of a stack once, the mock images named by <tag> too;
+#                                          the compose project is p12-build-<tag> unless named
 #   rmi <tag>                              remove the images build made
 #   e2e <export> <project> <tag> <portal> <api> <n8n>   scripts/e2e.sh with E2E_SUITES=api in an exported tree
 #   up <export> <project> <tag> <portal> <api> <n8n>  one dev stack (compose.yaml + compose.e2e.yaml), not rebuilt
 #   down <export> <project> [oidc]         logs, then down -v
 #   mock-mode <project> <ok|slow|broken>   switch the stack's mock model
-#   snapshot <project> <file>              every table of the stack's database: rows, and writes so far
+#   snapshot <project> <file>              every table of the platform database: rows, and writes so far; and
+#                                          how many runs n8n's database holds
 #   shared <project> <api>                 lanes 1, 2, 3, 4, 7, 9 and 10 and the no-tool lane on a shared
 #                                          head stack; lanes 7, 9 and no-tool must leave every table as it was
-#   no-tool <project> <api>                the checker's 15 live tasks: the mock accepts each one, the runtime
-#                                          holds each write to the tools and keeps each Jira search
+#   no-tool <project> <api>                both P12 checks' 52 live tasks: the fooled mock names an ability for
+#                                          each, the runtime holds each write to the tools and keeps each search
 #   trunk <api>                            lane 1's trunk half: trunk has no understand route
 #   own <export> <prefix> <tag> <portal> <api> <n8n>  lanes 6, 8 and 5, each on a stack of its own, then down
 #   trouble <export> <project> <tag> <portal> <api> <n8n>   its own stack: the runtime hangs (the platform's
 #                                          10 s limit), the runtime is down, the model settings cannot be
 #                                          read and PostgreSQL is down (a database error is a 500)
-#   oidc <export> <project> <tag>          its own OIDC stack (no host ports): the route's sign-in for each
-#                                          kind of person, and it writes nothing
+#   oidc <export> <project> <tag>          its own OIDC stack (no host ports): everyone signs in once, then the
+#                                          route's sign-in for each kind of person, and it writes nothing. Pulls
+#                                          ghcr.io/navikt/mock-oauth2-server:6.0.4 when it is not on the disk
 #   perf <api> trunk                       p95 of 50 suggest requests, the baseline
 #   perf <api> head [mock|haiku]           p95 of 50 understand requests and the share from the model;
 #                                          mock connects the mock model and also times suggest,
@@ -176,10 +180,10 @@ healthy() {
 }
 
 build() {
-  local src=$1 tag=$2
+  local src=$1 tag=$2 project=${3:-p12-build-$2}
   disk
   mkdir -p "$EVID/stacks"
-  WAB_IMAGE_TAG=$tag compose "$src" p12-build dev build >"$EVID/stacks/build-$tag.log" 2>&1 \
+  WAB_IMAGE_TAG=$tag compose "$src" "$project" dev build >"$EVID/stacks/build-$tag.log" 2>&1 \
     || { tail -n 20 "$EVID/stacks/build-$tag.log" >&2; return 1; }
   docker image ls --filter "reference=wab/*:$tag" --format '{{.Repository}}:{{.Tag}} {{.Size}}'
 }
@@ -225,7 +229,7 @@ mock_mode() {
   docker exec "$(container "$project" mock-model)" python -c "import json,sys,urllib.request as u; r=u.Request('http://127.0.0.1:8300/_admin/mode', data=json.dumps({'mode': sys.argv[1]}).encode(), method='POST', headers={'Content-Type':'application/json'}); print(u.urlopen(r).read().decode())" "$mode"
 }
 
-psql_in() { docker exec "$1" psql -U postgres -d platform -v ON_ERROR_STOP=1 -qAtc "$2"; }
+psql_in() { docker exec "$1" psql -U postgres -d "${3:-platform}" -v ON_ERROR_STOP=1 -qAtc "$2"; }
 
 snapshot() {
   local project=$1 file=$2
@@ -238,6 +242,11 @@ where table_schema not in ('pg_catalog','information_schema') and table_type='BA
 union all
 select 'writes', schemaname||'.'||relname, (n_tup_ins + n_tup_upd + n_tup_del)::text from pg_stat_user_tables
 order by 1, 2" | tr '|' ' ' >"$file"
+  psql_in "$(container "$project" postgres)" "
+select 'n8n executions', (xpath('/row/c/text()', query_to_xml('select count(*) as c from public.execution_entity', false, true, '')))[1]::text
+where to_regclass('public.execution_entity') is not null
+union all
+select 'n8n executions', 'none' where to_regclass('public.execution_entity') is null" n8n | tr '|' ' ' >>"$file"
 }
 
 # PostgreSQL counts a connection's writes when it next goes idle, at most 10 s later, hence the
@@ -386,9 +395,9 @@ trouble() {
 }
 
 in_api() {
-  local project=$1 out=$2 api status=0
+  local project=$1 out=$2 command=$3 api status=0
   api=$(container "$project" platform-api)
-  docker exec -i "$api" python - oidc http://localhost:8000 /tmp/p12-oidc "$ISSUER" <"$HERE/p12_lanes.py" || status=1
+  docker exec -i "$api" python - "$command" http://localhost:8000 /tmp/p12-oidc "$ISSUER" <"$HERE/p12_lanes.py" || status=1
   docker cp "$api:/tmp/p12-oidc/." "$out/" >/dev/null 2>&1 || true
   return "$status"
 }
@@ -403,7 +412,8 @@ oidc() {
     down "$src" "$project" oidc >/dev/null 2>&1 || true
     return 1
   fi
-  unchanged "$project" "$out" in_api "$project" "$out" || status=1
+  in_api "$project" "$out" oidc-sign-in || status=1
+  unchanged "$project" "$out" in_api "$project" "$out" oidc || status=1
   down "$src" "$project" oidc >/dev/null 2>&1 || true
   return "$status"
 }
