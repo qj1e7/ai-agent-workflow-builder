@@ -270,14 +270,14 @@ class ShortOnce:
 
 class Failing:
     async def read_after(self, run_id: RunId, after: int) -> list[ActivityEvent]:
-        raise RuntimeError("the replica is down")
+        raise RuntimeError("the copy is down")
 
 
 class FailsFirst(ShortOnce):
     async def read_after(self, run_id: RunId, after: int) -> list[ActivityEvent]:
         if self.reads == 0:
             self.reads += 1
-            raise RuntimeError("the replica is down")
+            raise RuntimeError("the copy is down")
         return await super().read_after(run_id, after)
 
 
@@ -297,8 +297,8 @@ async def appended(db: Database, *numbers: int) -> list[ActivityEvent]:
 
 
 async def test_a_stream_reads_again_when_a_read_comes_back_short_of_the_named_seq(db: Database):
-    replica = ShortOnce(db)
-    log = ActivityLog(db, replica=replica, short_read_recheck=0.05)
+    copy = ShortOnce(db)
+    log = ActivityLog(db, copy=copy, short_read_recheck=0.05)
     await log.start()
     received: list[int] = []
 
@@ -313,7 +313,7 @@ async def test_a_stream_reads_again_when_a_read_comes_back_short_of_the_named_se
             tg.start_soon(collect)
             await anyio.sleep(0.05)
             await appended(db, 1, 2, 3)
-            replica.short = True
+            copy.short = True
             await notify_copied(db, RUN, 3)
             with anyio.fail_after(2):
                 while len(received) < 3:
@@ -325,7 +325,7 @@ async def test_a_stream_reads_again_when_a_read_comes_back_short_of_the_named_se
 
 
 async def test_a_stream_reads_again_after_a_failed_read(db: Database):
-    log = ActivityLog(db, replica=FailsFirst(db), read_retry=0.05)
+    log = ActivityLog(db, copy=FailsFirst(db), read_retry=0.05)
     await log.start()
     await appended(db, 1)
     received: list[int] = []
@@ -344,11 +344,11 @@ async def test_a_stream_reads_again_after_a_failed_read(db: Database):
     assert received == [1]
 
 
-@pytest.mark.parametrize("replica", [Lagging(), Failing()], ids=["lagging", "failing"])
+@pytest.mark.parametrize("copy", [Lagging(), Failing()], ids=["lagging", "failing"])
 async def test_a_one_off_read_falls_back_to_postgresql_when_the_copy_cannot_answer(
-    db: Database, replica: Lagging | Failing, caplog: pytest.LogCaptureFixture
+    db: Database, copy: Lagging | Failing, caplog: pytest.LogCaptureFixture
 ):
-    log = ActivityLog(db, replica=replica, copy_wait=0.2, read_retry=0.05)
+    log = ActivityLog(db, copy=copy, copy_wait=0.2, read_retry=0.05)
     stored = await appended(db, 1, 2)
 
     with caplog.at_level(logging.WARNING), anyio.fail_after(2):
@@ -360,7 +360,7 @@ async def test_a_one_off_read_falls_back_to_postgresql_when_the_copy_cannot_answ
 async def test_a_malformed_notice_is_skipped_and_the_listener_stays_up(
     db: Database, caplog: pytest.LogCaptureFixture
 ):
-    log = ActivityLog(db, replica=PostgresEvents(db), reconnect_delay=5)
+    log = ActivityLog(db, copy=PostgresEvents(db), reconnect_delay=5)
     await log.start()
     received: list[int] = []
 

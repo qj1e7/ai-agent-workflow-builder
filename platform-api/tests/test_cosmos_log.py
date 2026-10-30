@@ -162,7 +162,7 @@ async def test_a_one_off_read_comes_from_cosmos_db_once_the_copy_reaches_postgre
     db: Database, cosmos: CosmosUnderTest
 ):
     reads = CountingReads(cosmos.events)
-    log = ActivityLog(db, replica=reads, copy_wait=0.3)
+    log = ActivityLog(db, copy=reads, copy_wait=0.3)
     async with db.transaction("orchestration") as uow:
         stored = await log.append(uow, RUN, [pending(1), pending(2)])
 
@@ -180,7 +180,7 @@ async def test_a_wake_up_that_names_a_copied_seq_at_or_below_the_cursor_reads_no
     db: Database, cosmos: CosmosUnderTest, postgres: PostgresUrls
 ):
     reads = CountingReads(cosmos.events)
-    log = ActivityLog(db, replica=reads)
+    log = ActivityLog(db, copy=reads)
     await log.start()
     await put(cosmos.events, 1)
     received: list[int] = []

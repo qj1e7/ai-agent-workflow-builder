@@ -61,7 +61,7 @@ class Copier:
     def __init__(
         self,
         db: Database,
-        replica: EventCopy,
+        copy: EventCopy,
         *,
         batch: int = 20,
         put_timeout: float = 10.0,
@@ -70,7 +70,7 @@ class Copier:
         reconnect_delay: float = 1.0,
     ) -> None:
         self._db = db
-        self._replica = replica
+        self._copy = copy
         self._batch = batch
         self._put_timeout = put_timeout
         self._retry_delay = retry_delay
@@ -118,7 +118,7 @@ class Copier:
 
     async def _rid(self) -> str:
         if self._container_rid is None:
-            self._container_rid = await self._replica.ensure()
+            self._container_rid = await self._copy.ensure()
         return self._container_rid
 
     async def _copy_batch(self, run_id: RunId) -> _Batch:
@@ -136,7 +136,7 @@ class Copier:
             for row in rows:
                 try:
                     async with asyncio.timeout(self._put_timeout):
-                        await self._replica.put(LoggedEvent(**row))
+                        await self._copy.put(LoggedEvent(**row))
                 except Exception as error:
                     failure = error
                     break

@@ -60,7 +60,7 @@ async def build(settings: Settings) -> Services:
     db = Database(settings.database)
     await db.open()
     cosmos = None if settings.cosmos is None else CosmosEvents.connect(settings.cosmos)
-    activity = ActivityLog(db, replica=cosmos if settings.activity_reader == "cosmos" else None)
+    activity = ActivityLog(db, copy=cosmos if settings.activity_reader == "cosmos" else None)
     await activity.start()
     copier: Copier | None = None
     if cosmos is not None:

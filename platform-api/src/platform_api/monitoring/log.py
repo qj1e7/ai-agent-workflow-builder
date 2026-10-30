@@ -58,9 +58,6 @@ class EventCopy(Protocol):
     async def put(self, event: LoggedEvent) -> None: ...
 
 
-class EventReplica(EventReader, EventCopy, Protocol): ...
-
-
 class PostgresEvents:
     def __init__(self, db: Database) -> None:
         self._db = db
@@ -207,7 +204,7 @@ class ActivityLog:
         self,
         db: Database,
         *,
-        replica: EventReader | None = None,
+        copy: EventReader | None = None,
         reconnect_delay: float = 1.0,
         copy_wait: float = 2.0,
         short_read_recheck: float = 0.25,
@@ -215,12 +212,12 @@ class ActivityLog:
     ) -> None:
         self._db = db
         self._postgres = PostgresEvents(db)
-        self._replica = replica
-        self._reader: EventReader = self._postgres if replica is None else replica
+        self._copy = copy
+        self._reader: EventReader = self._postgres if copy is None else copy
         self._copy_wait = copy_wait
         self._short_read_recheck = short_read_recheck
         self._read_retry = read_retry
-        channel = CHANNEL if replica is None else COPIED_CHANNEL
+        channel = CHANNEL if copy is None else COPIED_CHANNEL
         self._hub = NotificationHub(db, channel=channel, reconnect_delay=reconnect_delay)
 
     @property
@@ -292,7 +289,7 @@ class ActivityLog:
         return {run_id: found.get(run_id, 0) for run_id in run_ids}
 
     async def read_after(self, run_id: RunId, after: int) -> list[ActivityEvent]:
-        if self._replica is None:
+        if self._copy is None:
             return await self._postgres.read_after(run_id, after)
         return await self._read_when_copied(run_id, after)
 
