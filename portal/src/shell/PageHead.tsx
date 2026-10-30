@@ -2,11 +2,13 @@ import styles from './PageHead.module.css'
 
 export const NOT_BUILT_WORDS = 'This page is not built yet.'
 
-export function PageHead({ heading, lead }: { heading: string; lead: string }) {
+export function PageHead({ heading, lead, movesFocus = false }: { heading: string; lead: string; movesFocus?: boolean }) {
   return (
     <div className={styles['head']}>
       <div>
-        <h1 tabIndex={-1}>{heading}</h1>
+        <h1 tabIndex={-1} data-page-moves-focus={movesFocus || undefined}>
+          {heading}
+        </h1>
         <p>{lead}</p>
       </div>
     </div>

@@ -1,0 +1,254 @@
+.tabs {
+  display: inline-flex;
+  max-width: 100%;
+  margin-bottom: var(--space-5);
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid var(--hair);
+  border-radius: var(--r-ctl);
+  background: var(--sunk);
+}
+
+.tabs button {
+  min-height: 40px;
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tabs button[aria-pressed='true'] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 0 0 1px var(--hair);
+}
+
+.count {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 0.9em;
+}
+
+.section {
+  margin-bottom: var(--space-6);
+}
+
+.section h2 {
+  margin-bottom: var(--space-3);
+  font-size: 1.15rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: var(--space-3);
+}
+
+.tile {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  transition: border-color var(--dur-press) ease;
+}
+
+.tile p {
+  margin: 0;
+}
+
+.tileTop {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.tileTop h2,
+.tileTop h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.tileLink {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.tileLink::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-card);
+}
+
+.tileLink:focus-visible {
+  outline: none;
+}
+
+.tileLink:focus-visible::after {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tile:hover {
+    border-color: var(--rail);
+  }
+}
+
+.small {
+  font-size: 0.9rem;
+}
+
+.mark {
+  display: block;
+  color: var(--lead);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.tag,
+.writeTag {
+  display: inline-block;
+  padding: 1px 8px;
+  border: 1px solid var(--green-line);
+  border-radius: 999px;
+  background: var(--green-soft);
+  color: var(--green-ink);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.writeTag {
+  border-color: var(--amber-line);
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+}
+
+.notice {
+  margin: 0 0 var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--amber-line);
+  border-radius: var(--r-card);
+  background: var(--amber-soft);
+  color: var(--ink);
+}
+
+.toolRows,
+.plain,
+.toolList {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.toolRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 2fr) minmax(0, 1.6fr) minmax(0, 1.2fr);
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+
+.toolRow div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.toolRow p {
+  margin: 0;
+}
+
+.toolList li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+@media (max-width: 760px) {
+  .toolRow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+}
+
+.dialog {
+  width: min(560px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: var(--space-5);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-sheet);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--float);
+  overflow-wrap: anywhere;
+}
+
+.dialog[open] {
+  display: grid;
+  gap: var(--space-4);
+  justify-items: start;
+  animation: open var(--dur-panel) var(--ease-out);
+}
+
+.dialog::backdrop {
+  background: var(--scrim);
+}
+
+.dialog p,
+.dialog h3 {
+  margin: 0;
+}
+
+.dialog h3 {
+  margin-bottom: var(--space-2);
+  font-size: 1rem;
+}
+
+.dialog section {
+  justify-self: stretch;
+}
+
+.dialogTop {
+  align-items: flex-start;
+  justify-self: stretch;
+}
+
+.dialogClose {
+  flex: none;
+  margin-left: auto;
+}
+
+.steps {
+  margin: 0;
+  padding-left: 1.3em;
+}
+
+.note {
+  padding: var(--space-3);
+  border-radius: var(--r-card);
+  background: var(--sunk);
+  color: var(--muted);
+}
+
+@keyframes open {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
