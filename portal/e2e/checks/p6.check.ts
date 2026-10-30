@@ -3,11 +3,12 @@
  * Run through scripts/checks/p6.sh, which picks the stack and the lane with --grep @laneN.
  * Evidence goes to $EVID/lane-<n>/ with the file names the plan gives.
  */
-import { expect, test, type Locator, type Page } from '@playwright/test'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { expect, request, test, type Locator, type Page } from '@playwright/test'
+import { randomUUID } from 'node:crypto'
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { expectAccessible } from '../support/axe'
-import { Backend, LANGGRAPH, REDIS, setMockGithubMode, type Software } from '../live/support/stack'
+import { Backend, LANGGRAPH, MOCK_GITHUB_URL, REDIS, setMockGithubMode, type Software } from '../live/support/stack'
 import { devContext } from '../live/support/ui'
 import { assertClean, watchPage } from '../support/test'
 
@@ -16,6 +17,7 @@ const TARGET = process.env['TARGET'] ?? 'head'
 const SAMPLE = Number(process.env['SAMPLE'] ?? '0')
 const BASE_URL = process.env['BASE_URL'] ?? 'http://localhost:8080'
 const UNDO_STAYS_MS = 10_000
+const VIDEO_SECONDS = { min: 30, max: 60 }
 
 interface Row {
   id: string
@@ -24,8 +26,12 @@ interface Row {
   problem: string | null
   our_version: string | null
   newest_version: string | null
+  newest_read_at: string | null
+  checked_at: string | null
   our_version_source: { kind: string; ticket: string | null } | null
   open_ticket: string | null
+  added_by: string
+  added_at: string
   source: { ref: string }
 }
 
@@ -63,6 +69,8 @@ async function withBackend<T>(act: (backend: Backend) => Promise<T>): Promise<T>
 }
 
 const h1 = (page: Page) => page.getByRole('heading', { level: 1 })
+const notice = (page: Page) => page.locator('div[class*="notice"] > p[role="status"]')
+const problem = (page: Page) => page.locator('#change-problem')
 const rowOf = (page: Page, name: string): Locator => page.locator('li[data-status]').filter({ has: page.locator('b', { hasText: new RegExp(`^${name}$`) }) })
 const text = async (locator: Locator) => ((await locator.innerText()) || '').replace(/\s+/g, ' ').trim()
 
@@ -76,10 +84,12 @@ async function rowNamed(backend: Backend, name: string): Promise<Row> {
   return row as Row
 }
 
+/** The shell draws the heading before the lazy page has its data. The notice line is there only once the list is loaded. */
 async function openSoftware(page: Page): Promise<void> {
   await page.goto('/software')
   await expect(h1(page)).toHaveText('Software watchlist')
   await expect(page.getByText('Loading the software list')).toHaveCount(0)
+  await expect(notice(page)).toBeAttached()
 }
 
 async function addInForm(page: Page, software: Software): Promise<void> {
@@ -87,6 +97,23 @@ async function addInForm(page: Page, software: Software): Promise<void> {
   await page.getByLabel('GitHub repository').fill(software.repo)
   await page.getByLabel(/^Our version/).fill(software.our_version)
   await page.getByRole('button', { name: 'Add', exact: true }).click()
+}
+
+async function newestOnMockGithub(repo: string): Promise<{ status: number; newest: string }> {
+  const http = await request.newContext()
+  try {
+    const answer = await http.get(`${MOCK_GITHUB_URL}/repos/${repo}/releases?per_page=100`)
+    const tags = ((await answer.json()) as { tag_name: string }[]).map((release) => release.tag_name).filter((tag) => /^\d+\.\d+\.\d+$/.test(tag))
+    const parts = (tag: string) => tag.split('.').map(Number)
+    const newer = (a: string, b: string) => {
+      const [x, y] = [parts(a), parts(b)]
+      const at = x.findIndex((n, i) => n !== y[i])
+      return at >= 0 && (x[at] ?? 0) > (y[at] ?? 0)
+    }
+    return { status: answer.status(), newest: tags.reduce((best, tag) => (newer(tag, best) ? tag : best), '0.0.0') }
+  } finally {
+    await http.dispose()
+  }
 }
 
 function manyRows(count: number): Software[] {
@@ -144,9 +171,12 @@ test('@lane1 alice adds software, presses Check now, lands on the run, and the r
     const row = rowOf(page, 'LangGraph')
     await expect(row).toContainText('Ticket waiting for a yes', { timeout: 30_000 })
     const api = await rowNamed(backend, 'LangGraph')
-    await expect(row).toContainText(api.newest_version ?? 'missing')
+    const mock = await newestOnMockGithub(LANGGRAPH.repo)
+    await expect(row.locator('dd').nth(1)).toHaveText(mock.newest)
     await shotTo(page, 1, 'p6-check.png', true)
-    save(1, 'p6-check.json', { runId, idempotencyKeys: keys, adds, runsStarted, row: api, rowOnPage: await text(row) })
+    save(1, 'p6-check.json', { runId, idempotencyKeys: keys, adds, runsStarted, mock, row: api, rowOnPage: await text(row) })
+    expect(mock.status, 'the mock GitHub serves LangGraph').toBe(200)
+    expect(api.newest_version, 'the newest plain release the mock GitHub serves').toBe(mock.newest)
     expect(adds, 'two presses of Add sent one add').toHaveLength(1)
     expect(keys, 'two presses of Check now started one check with one key').toHaveLength(1)
     expect(keys[0]).toMatch(/^[0-9a-f-]{36}$/)
@@ -186,12 +216,25 @@ test('@lane2 a badly formed GitHub reference says what is wrong and saves nothin
     save(2, 'p6-bad-ref.json', { attempts, said, posts, before: before.software.map((r) => r.name), after: after.software.map((r) => r.name) })
     expect(posts, 'nothing was sent').toEqual([])
     expect(after.software.map((r) => r.name)).toEqual(before.software.map((r) => r.name))
+
+    for (const bad of ['acme/..', 'acme/.', 'https://github.com/acme/..']) {
+      await page.getByLabel('GitHub repository').fill(bad)
+      await page.getByRole('button', { name: 'Add', exact: true }).click()
+      await expect(page.locator('#sw-repo-error')).toContainText('That doesn’t look like a GitHub project')
+    }
+    expect(posts, 'a dot name is refused in the page, as the platform refuses it').toEqual([])
+
+    await addInForm(page, { name: 'Kafka', repo: 'apache/kafka', our_version: '3.9.0' })
+    await expect(notice(page)).toHaveText('Added Kafka. Press Check now to check it.')
+    await page.getByRole('button', { name: 'Dismiss' }).click()
+    await expect(notice(page), 'Dismiss clears the message').toHaveText('')
+    await expect(page.getByRole('searchbox', { name: 'Find software' })).toBeFocused()
     assertClean(watch)
     await context.close()
   })
 })
 
-test('@lane3 Remove reaches the platform at once, and Undo, which has no time limit, brings the same row back with its history', async ({ browser }) => {
+test('@lane3 Remove reaches the platform at once; Undo, with no time limit of its own, brings the same row back whole, also for another Operator; refusals read plainly', async ({ browser }) => {
   await withBackend(async (backend) => {
     const runId = await backend.startCheck('alice', [LANGGRAPH, REDIS])
     await backend.waitForState(runId, ['awaiting_approval'])
@@ -208,7 +251,7 @@ test('@lane3 Remove reaches the platform at once, and Undo, which has no time li
     await openSoftware(page)
     await rowOf(page, 'LangGraph').getByRole('button', { name: /^Remove/ }).click()
     await expect(rowOf(page, 'LangGraph')).toHaveCount(0)
-    await expect(page.getByRole('status').filter({ hasText: 'Removed LangGraph.' })).toBeVisible()
+    await expect(notice(page)).toHaveText('Removed LangGraph. It won’t be checked any more.')
     const undo = page.getByRole('button', { name: 'Undo' })
     await expect(undo, 'focus moves to Undo').toBeFocused()
     const removed = (await viewOf(backend)).software.map((r) => r.name)
@@ -217,12 +260,14 @@ test('@lane3 Remove reaches the platform at once, and Undo, which has no time li
     await page.keyboard.press('Enter')
     const row = rowOf(page, 'LangGraph')
     await expect(row).toBeVisible()
-    await expect(page.getByRole('status').filter({ hasText: 'Put LangGraph back on the list.' })).toBeVisible()
+    await expect(notice(page)).toHaveText('Put LangGraph back on the list.')
     await expect(row.getByRole('button', { name: /^Remove/ }), 'focus returns to the row').toBeFocused()
     await expect(row).toContainText('Ticket waiting for a yes')
     await row.getByRole('button', { name: /^History/ }).click()
     const history = row.getByRole('list', { name: 'History of LangGraph' })
     await expect(history).toContainText('Checked. The newest version is')
+    await expect(history).toContainText('Added by Alice.')
+    const historyOnPage = await text(history)
     const kept = await rowNamed(backend, 'LangGraph')
     await shotTo(page, 3, 'p6-undo.png', true)
 
@@ -232,17 +277,95 @@ test('@lane3 Remove reaches the platform at once, and Undo, which has no time li
     await page.keyboard.press('Escape')
     await expect(undo, 'Escape dismisses Undo').toHaveCount(0)
     const after = (await viewOf(backend)).software.map((r) => r.name)
-    save(3, 'p6-undo.json', { before, kept, removed, after, changes, historyOnPage: await text(history) })
+
+    await backend.delete('carol', `/api/v1/watchlist/software/${before.id}`)
+    const byCarol = await backend.send<{ software: Row[] }>('POST', 'carol', `/api/v1/watchlist/software/${before.id}/restore`)
+    const backByCarol = byCarol.body.software.find((r) => r.id === before.id)
+    const whileListed = await backend.send<View>('POST', 'alice', `/api/v1/watchlist/software/${before.id}/restore`)
+    const neverListed = await backend.send('POST', 'alice', '/api/v1/watchlist/software/sw_01NEVERLISTED00000000000000/restore')
+
+    await openSoftware(page)
+    await backend.delete('carol', `/api/v1/watchlist/software/${before.id}`)
+    await rowOf(page, 'LangGraph').getByRole('button', { name: /^Remove/ }).click()
+    await expect(notice(page)).toHaveText('LangGraph was already removed.')
+    await expect(rowOf(page, 'LangGraph')).toHaveCount(0)
+    const alertsAfterGone = await page.getByRole('alert').allInnerTexts()
+    await shotTo(page, 3, 'p6-gone.png', true)
+
+    await backend.post('alice', `/api/v1/watchlist/software/${redis.id}/restore`)
+    await openSoftware(page)
+    await rowOf(page, 'Redis').getByRole('button', { name: /^Remove/ }).click()
+    await expect(undo).toBeFocused()
+    const readded = await backend.post<{ software: Row[] }>('carol', '/api/v1/watchlist/software', REDIS, {}, [201])
+    await undo.click()
+    await expect(problem(page)).toHaveText('Could not put Redis back. Its repository was added again since, so it is on the list already.')
+    await expect(problem(page), 'focus moves to the words').toBeFocused()
+    await expect(undo, 'the refused Undo is gone').toHaveCount(0)
+    await expect(notice(page)).toHaveText('')
+    await expect(rowOf(page, 'Redis'), 'the list is read again at once, not at the next poll').toBeVisible({ timeout: 5_000 })
+    const clash = await backend.send('POST', 'alice', `/api/v1/watchlist/software/${redis.id}/restore`)
+    await shotTo(page, 3, 'p6-undo-refused.png', true)
+
+    save(3, 'p6-undo.json', {
+      before,
+      kept,
+      removed,
+      after,
+      changes,
+      historyOnPage,
+      byCarol: { status: byCarol.status, row: backByCarol },
+      whileListed: whileListed.status,
+      neverListed,
+      alertsAfterGone,
+      readded: readded.software.find((r) => r.name === 'Redis')?.id,
+      clash,
+    })
     expect(removed, 'the platform dropped LangGraph before Undo').toEqual(['Redis'])
-    expect(kept.id, 'the same row, not a copy').toBe(before.id)
-    expect(kept.status, 'its history came back whole').toBe(before.status)
-    expect(kept.newest_version).toBe(before.newest_version)
+    expect(kept, 'the same row comes back whole: id, who added it and when, the version given, status and newest').toEqual(before)
     expect(after).toEqual(['LangGraph'])
-    expect(changes).toEqual([
+    expect(changes.slice(0, 3)).toEqual([
       `DELETE /api/v1/watchlist/software/${before.id}`,
       `POST /api/v1/watchlist/software/${before.id}/restore`,
       `DELETE /api/v1/watchlist/software/${redis.id}`,
     ])
+    expect(byCarol.status).toBe(200)
+    expect(backByCarol, 'a restore by another Operator keeps who added it').toEqual(before)
+    expect(whileListed.status, 'restoring a listed row changes nothing').toBe(200)
+    expect(neverListed).toEqual({ status: 404, body: { detail: 'This software was never on the watchlist' } })
+    expect(alertsAfterGone, 'a row someone else removed is not an error').toEqual([])
+    expect(clash.status, 'a repository added again since cannot be restored').toBe(409)
+    assertClean(watch)
+    await context.close()
+  })
+})
+
+test('@lane3-day Undo more than a day after the removal is refused in plain words; p6.sh lane 3 moves the removal back a day while the page waits', async ({ browser }) => {
+  const marker = path.join(laneDir(3), 'late-removal.txt')
+  const moved = path.join(laneDir(3), 'late-removal.moved')
+  rmSync(marker, { force: true })
+  await withBackend(async (backend) => {
+    const useCaseId = await backend.freshWatchlist('alice', [LANGGRAPH, REDIS])
+    const langgraph = await rowNamed(backend, 'LangGraph')
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    await openSoftware(page)
+    await rowOf(page, 'LangGraph').getByRole('button', { name: /^Remove/ }).click()
+    const undo = page.getByRole('button', { name: 'Undo' })
+    await expect(undo).toBeFocused()
+    writeFileSync(marker, `use_case_id=${useCaseId}\nsoftware_id=${langgraph.id}\n`)
+    await expect.poll(() => existsSync(moved), { message: 'p6.sh lane 3 moves the removal back a day', timeout: 90_000, intervals: [500] }).toBe(true)
+    await undo.click()
+    await expect(problem(page)).toHaveText('Could not put LangGraph back. It was removed more than a day ago. Add it again to keep checking it.')
+    await expect(problem(page)).toBeFocused()
+    await expect(undo).toHaveCount(0)
+    await expect(rowOf(page, 'LangGraph')).toHaveCount(0)
+    const late = await backend.send('POST', 'alice', `/api/v1/watchlist/software/${langgraph.id}/restore`)
+    const listed = (await viewOf(backend)).software.map((r) => r.name)
+    await shotTo(page, 3, 'p6-undo-late.png', true)
+    save(3, 'p6-undo-late.json', { softwareId: langgraph.id, late, listed, onPage: await text(problem(page)) })
+    expect(late).toEqual({ status: 410, body: { detail: 'This software was removed more than a day ago, so it can\'t be put back.' } })
+    expect(listed).toEqual(['Redis'])
     assertClean(watch)
     await context.close()
   })
@@ -257,6 +380,10 @@ test('@lane4 carol sets the schedule to every Monday at 9:00, warned that she be
     await openSoftware(page)
     await page.getByRole('button', { name: 'Set a schedule' }).click()
     await expect(page.getByLabel('Day'), 'focus moves into the editor').toBeFocused()
+    await page.getByRole('button', { name: 'Cancel' }).click()
+    await expect(page.getByRole('button', { name: 'Set a schedule' }), 'Cancel returns focus to the button that opened the editor').toBeFocused()
+    await page.getByRole('button', { name: 'Set a schedule' }).click()
+    await expect(page.getByLabel('Day')).toBeFocused()
     const warning = 'Saving makes you the owner of this schedule. Its checks then count as your work, so you won’t be able to approve them.'
     await expect(page.getByText(warning)).toBeVisible()
     await expect(page.getByRole('button', { name: 'Save schedule' })).toHaveAccessibleDescription(warning)
@@ -280,10 +407,23 @@ test('@lane4 carol sets the schedule to every Monday at 9:00, warned that she be
   })
 })
 
-test('@lane5 bob, an Approver only, sees the list and no add, remove, schedule or check controls', async ({ browser }) => {
+test('@lane5 bob, an Approver only, sees the list and no add, remove, schedule or check controls, and the platform refuses each of his writes', async ({ browser }) => {
   await withBackend(async (backend) => {
-    await backend.freshWatchlist('alice', [LANGGRAPH, REDIS])
-    const refused = await backend.send('POST', 'bob', '/api/v1/watchlist/software', { name: 'Nope', repo: 'acme/nope' })
+    const useCaseId = await backend.freshWatchlist('alice', [LANGGRAPH, REDIS])
+    const lg = await rowNamed(backend, 'LangGraph')
+    const gone = await rowNamed(backend, 'Redis')
+    await backend.delete('alice', `/api/v1/watchlist/software/${gone.id}`)
+    const writes: Record<string, number> = {
+      'POST add': (await backend.send('POST', 'bob', '/api/v1/watchlist/software', { name: 'Nope', repo: 'acme/nope' })).status,
+      'DELETE remove': (await backend.send('DELETE', 'bob', `/api/v1/watchlist/software/${lg.id}`)).status,
+      'POST restore': (await backend.send('POST', 'bob', `/api/v1/watchlist/software/${gone.id}/restore`)).status,
+      'PUT schedule': (await backend.send('PUT', 'bob', '/api/v1/watchlist/schedule', { day: 'monday', at: '09:00' })).status,
+      'DELETE schedule': (await backend.send('DELETE', 'bob', '/api/v1/watchlist/schedule')).status,
+      'POST run (Check now)': (await backend.send('POST', 'bob', `/api/v1/use-cases/${useCaseId}/runs`, undefined, { 'Idempotency-Key': randomUUID() })).status,
+      'POST pause': (await backend.send('POST', 'bob', `/api/v1/use-cases/${useCaseId}/pause`)).status,
+      'POST resume': (await backend.send('POST', 'bob', `/api/v1/use-cases/${useCaseId}/resume`)).status,
+    }
+    const left = await viewOf(backend)
     const context = await devContext(browser, 'bob')
     const page = await context.newPage()
     const watch = watchPage(page)
@@ -292,46 +432,80 @@ test('@lane5 bob, an Approver only, sees the list and no add, remove, schedule o
     const names = await page.getByRole('button').allInnerTexts()
     const controls = names.filter((name) => /^(Check now|Remove|Change schedule|Set a schedule|Turn off schedule|Add)\b/.test(name.trim()))
     await shotTo(page, 5, 'p6-approver-view.png', true)
-    save(5, 'p6-approver-view.json', { buttons: names, controls, bobPostStatus: refused.status })
+    save(5, 'p6-approver-view.json', { buttons: names, controls, writes, left: { names: left.software.map((r) => r.name), state: left.state, schedule: left.schedule } })
     expect(controls).toEqual([])
     await expect(page.getByRole('heading', { name: 'Add software' })).toHaveCount(0)
     await expect(page.getByLabel('GitHub repository')).toHaveCount(0)
-    expect(refused.status, 'the platform also refuses bob').toBe(403)
+    for (const [write, status] of Object.entries(writes)) expect(status, `the platform refuses bob: ${write}`).toBe(403)
+    expect(left.software.map((r) => r.name)).toEqual(['LangGraph'])
+    expect(left.state).toBe('on')
+    expect(left.schedule).toBeNull()
     assertClean(watch)
     await context.close()
   })
 })
 
-test('@lane6 when the mock GitHub fails during a check, the row says it can’t check and will try at the next check, and the page says the check stopped', async ({ browser }) => {
+test('@lane6 when the mock GitHub fails during a check of rows that were Up to date, each row says it can’t check with its own reason, keeps the newest version it last read, and will try at the next check', async ({ browser }) => {
+  test.setTimeout(400_000)
   await withBackend(async (backend) => {
-    await backend.freshWatchlist('alice', [LANGGRAPH])
+    const useCaseId = await backend.freshWatchlist('alice', [
+      { ...LANGGRAPH, our_version: '1.2.16' },
+      { ...REDIS, our_version: '8.2.1' },
+    ])
     await backend.send('PUT', 'alice', '/api/v1/watchlist/schedule', { day: 'monday', at: '09:00' })
+    const first = await backend.checkNow('alice', useCaseId)
+    await backend.waitForState(first, ['succeeded'])
+    const before = await viewOf(backend)
     await setMockGithubMode('unavailable')
     let runId = ''
     try {
-      runId = await backend.checkNow('alice', (await viewOf(backend)).use_case_id)
-      await backend.waitForState(runId, ['failed'], 120_000)
+      runId = await backend.checkNow('alice', useCaseId)
+      await backend.waitForState(runId, ['failed'], 150_000)
     } finally {
       await setMockGithubMode('ok')
     }
     const view = await viewOf(backend)
-    const api = await rowNamed(backend, 'LangGraph')
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
     const watch = watchPage(page)
     await openSoftware(page)
-    const row = rowOf(page, 'LangGraph')
-    await expect(row).toContainText('Can’t check')
-    await expect(row).toContainText('It will try again at the next check.')
+    const onPage: Record<string, { row: string; history: string }> = {}
+    for (const name of ['LangGraph', 'Redis']) {
+      const was = before.software.find((r) => r.name === name)
+      const now = view.software.find((r) => r.name === name)
+      const row = rowOf(page, name)
+      await expect(row).toHaveAttribute('data-status', 'cant_check')
+      await expect(row).toContainText('Can’t check')
+      await expect(row).toContainText(`${now?.problem ?? 'missing'} It will try again at the next check.`)
+      await expect(row.locator('dd').nth(1)).toContainText(was?.newest_version ?? 'missing')
+      await expect(row.getByText(/^Last read /)).toBeVisible()
+      await row.getByRole('button', { name: /^History/ }).click()
+      const history = row.getByRole('list', { name: `History of ${name}` })
+      await expect(history).toContainText(`Couldn’t check. ${now?.problem ?? 'missing'}`)
+      await expect(history).toContainText(`Checked. The newest version is ${was?.newest_version ?? 'missing'}.`)
+      onPage[name] = { row: await text(row), history: await text(history) }
+    }
+    await expect(page.getByRole('heading', { name: /^Up to date/ })).toHaveCount(0)
     await expect(page.getByText('The last check stopped', { exact: false })).toHaveText('The last check stopped: an agent could not finish its work.')
     await expect(page.getByRole('link', { name: 'Open the run' })).toHaveAttribute('href', `/runs/${runId}`)
-    await row.getByRole('button', { name: /^History/ }).click()
-    const history = row.getByRole('list', { name: 'History of LangGraph' })
-    await expect(history).toContainText(`Couldn’t check. ${api.problem ?? 'missing'}`)
     await shotTo(page, 6, 'p6-cant-check.png', true)
-    save(6, 'p6-cant-check.json', { runId, lastCheck: view.last_check, row: api, rowOnPage: await text(row), historyOnPage: await text(history) })
-    expect(api.status).toBe('cant_check')
-    expect(api.problem, 'the row keeps why it could not be checked').toContain('GitHub')
+    save(6, 'p6-cant-check.json', {
+      first,
+      runId,
+      before: before.software.map((r) => ({ name: r.name, status: r.status, newest: r.newest_version, checked_at: r.checked_at })),
+      after: view.software.map((r) => ({ name: r.name, status: r.status, problem: r.problem, newest: r.newest_version, newest_read_at: r.newest_read_at, checked_at: r.checked_at })),
+      lastCheck: view.last_check,
+      onPage,
+    })
+    expect(before.software.map((r) => r.status), 'both rows were Up to date first').toEqual(['up_to_date', 'up_to_date'])
+    for (const row of view.software) {
+      const was = before.software.find((r) => r.id === row.id)
+      expect(row.status, `${row.name} status`).toBe('cant_check')
+      expect(row.problem, `${row.name} keeps its own reason`).toContain('GitHub')
+      expect(row.problem, `${row.name} has its own reason, not the shared sentence`).not.toMatch(/^None of the/)
+      expect(row.newest_version, `${row.name} keeps the newest version it last read`).toBe(was?.newest_version)
+      expect(row.newest_read_at, `${row.name} says when it was read`).toBe(was?.checked_at)
+    }
     expect(view.last_check).toMatchObject({ run_id: runId, state: 'failed' })
     assertClean(watch)
     await context.close()
@@ -472,10 +646,25 @@ test('@lane11 alice pauses the watchlist through the API, and the page says Paus
       expect(paused.schedule?.next_at).toBeNull()
       expect(pausedText).not.toContain('Next check')
       await expect(page.getByRole('button', { name: 'Check now' })).toHaveCount(0)
+      const byHand = await backend.send('POST', 'alice', `/api/v1/use-cases/${useCaseId}/runs`, undefined, { 'Idempotency-Key': randomUUID() })
+      expect(byHand.status, 'a paused watchlist starts no check by hand').toBe(409)
+
+      await backend.delete('alice', '/api/v1/watchlist/schedule')
+      await openSoftware(page)
+      await expect(schedule).toContainText('No schedule. Paused. No check runs until an Operator resumes it.')
+      await expect(page.getByText(/Press Check now/)).toHaveCount(0)
+      await addInForm(page, REDIS)
+      await expect(rowOf(page, 'Redis')).toBeVisible()
+      await expect(notice(page)).toHaveText('Added Redis. It can be checked once an Operator resumes the watchlist.')
+      await shotTo(page, 11, 'p6-paused-no-schedule.png', true)
+      save(11, 'p6-paused-no-schedule.json', { byHand, scheduleText: await text(schedule), addedNotice: await text(notice(page)) })
+
+      await backend.send('PUT', 'alice', '/api/v1/watchlist/schedule', { day: 'monday', at: '09:00' })
       await backend.post('alice', `/api/v1/use-cases/${useCaseId}/resume`)
       await openSoftware(page)
       await expect(schedule).toContainText('Next check ')
       await expect(schedule).not.toContainText('Paused')
+      await expect(page.getByRole('button', { name: 'Check now' })).toBeVisible()
       assertClean(watch)
     } finally {
       await backend.post('alice', `/api/v1/use-cases/${useCaseId}/resume`)
@@ -487,9 +676,21 @@ test('@lane11 alice pauses the watchlist through the API, and the page says Paus
 test('@perf largest contentful paint of the page with 14 watched software', async ({ browser }) => {
   await withBackend((backend) => backend.freshWatchlist('alice', [LANGGRAPH, ...manyRows(13)]))
   const context = await devContext(browser, 'alice')
+  await context.addInitScript(() => {
+    const w = window as unknown as { __rowsAt?: number }
+    new MutationObserver(() => {
+      if (w.__rowsAt === undefined && document.querySelectorAll('li[data-status]').length >= 14) {
+        requestAnimationFrame(() => {
+          w.__rowsAt = performance.now()
+        })
+      }
+    }).observe(document, { childList: true, subtree: true })
+  })
   const page = await context.newPage()
   await page.goto('/software', { waitUntil: 'load' })
   await expect(page.locator('li[data-status]')).toHaveCount(14, { timeout: 30_000 })
+  await page.waitForFunction(() => (window as unknown as { __rowsAt?: number }).__rowsAt !== undefined)
+  const rowsAt = await page.evaluate(() => (window as unknown as { __rowsAt: number }).__rowsAt)
   await page.waitForTimeout(1_500)
   const measured = await page.evaluate(
     () =>
@@ -509,12 +710,12 @@ test('@perf largest contentful paint of the page with 14 watched software', asyn
   )
   const last = measured.entries.at(-1)
   expect(last, 'the browser reported a largest contentful paint').toBeDefined()
-  save('perf', `lcp-${TARGET}-${SAMPLE}.json`, { target: TARGET, sample: SAMPLE, rows: 14, lcp: last?.startTime ?? -1, element: last?.element ?? '', entries: measured.entries })
+  save('perf', `lcp-${TARGET}-${SAMPLE}.json`, { target: TARGET, sample: SAMPLE, rows: 14, lcp: last?.startTime ?? -1, element: last?.element ?? '', rowsAt, entries: measured.entries })
   await context.close()
 })
 
-test('@review-video alice adds software and runs a check', async ({ browser }) => {
-  test.setTimeout(180_000)
+test('@review-video alice adds software and runs a check, in 30 to 60 seconds', async ({ browser }) => {
+  test.setTimeout(240_000)
   await withBackend(async (backend) => {
     await backend.freshWatchlist('alice', [])
     const context = await browser.newContext({
@@ -524,21 +725,40 @@ test('@review-video alice adds software and runs a check', async ({ browser }) =
       timezoneId: 'Asia/Singapore',
     })
     await context.addInitScript(() => window.localStorage.setItem('portal.dev-user', 'alice'))
+    const started = Date.now()
     const page = await context.newPage()
     const video = page.video()
     await openSoftware(page)
-    await page.waitForTimeout(1_500)
-    await addInForm(page, { name: 'FastAPI', repo: 'fastapi/fastapi', our_version: '0.115.0' })
-    await expect(rowOf(page, 'FastAPI')).toBeVisible()
-    await page.waitForTimeout(1_500)
+    await page.waitForTimeout(2_500)
+    const typeInto = async (label: string | RegExp, value: string) => {
+      const field = typeof label === 'string' ? page.getByLabel(label, { exact: true }) : page.getByLabel(label)
+      await field.click()
+      await field.pressSequentially(value, { delay: 90 })
+      await page.waitForTimeout(600)
+    }
+    await typeInto('Name', 'FastAPI')
+    await typeInto('GitHub repository', 'https://github.com/fastapi/fastapi')
+    await typeInto(/^Our version/, '0.115.0')
+    await page.getByRole('button', { name: 'Add', exact: true }).click()
+    await expect(rowOf(page, 'FastAPI')).toContainText('Not checked yet')
+    await page.waitForTimeout(3_000)
     await page.getByRole('button', { name: 'Check now' }).click()
     await expect(page).toHaveURL(/\/runs\//)
     await expect(h1(page)).toHaveText(/waiting for a yes$/, { timeout: 90_000 })
-    await page.waitForTimeout(1_500)
+    await page.waitForTimeout(5_000)
     await openSoftware(page)
-    await expect(rowOf(page, 'FastAPI')).toContainText('Ticket waiting for a yes', { timeout: 30_000 })
-    await page.waitForTimeout(2_000)
+    const row = rowOf(page, 'FastAPI')
+    await expect(row).toContainText('Ticket waiting for a yes', { timeout: 30_000 })
+    await page.waitForTimeout(2_500)
+    await row.getByRole('button', { name: /^History/ }).click()
+    await page.waitForTimeout(3_000)
+    const pad = (VIDEO_SECONDS.min + 2) * 1000 - (Date.now() - started)
+    if (pad > 0) await page.waitForTimeout(pad)
+    const seconds = (Date.now() - started) / 1000
     await context.close()
     await video?.saveAs(path.join(EVID, 'p6-review.webm'))
+    save('video', 'p6-review.json', { seconds })
+    expect(seconds, 'the review video runs 30 to 60 seconds').toBeGreaterThanOrEqual(VIDEO_SECONDS.min)
+    expect(seconds).toBeLessThanOrEqual(VIDEO_SECONDS.max)
   })
 })

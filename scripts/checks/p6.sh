@@ -4,18 +4,24 @@
 # usage: scripts/checks/p6.sh <command> [arguments]
 #
 #   disk                                   free space on the Docker disk; fails under 1.5 GB
-#   gates <worktree>                       typecheck, lint, unit tests, nginx render, build
-#   up <worktree> <project> <tag> <portal-port> <api-port> <n8n-port>
+#   gates <worktree>                       portal typecheck, lint, unit tests, nginx render, build
+#   pygates <worktree>                     both contract generators with empty porcelain; platform-api ruff, pyright,
+#                                          lint-imports and its tests on a throwaway PostgreSQL; agent-runtime ruff, pyright, tests
+#   up <worktree> <project> <tag> <portal-port> <api-port> <n8n-port> [--no-build]
+#                                          --no-build starts a second stack on the images an earlier up built with that tag;
+#                                          only the project's own mock images are built
 #   down <worktree> <project>
 #   check <project> [playwright arguments] run portal/e2e/checks/p6.check.ts in the runner image, in that project's Portal network
 #   live <project> [playwright arguments]  run the builder's live specs (portal/e2e/live) the same way
 #   lane1 <head-project> [trunk-project]   add software and check it at head; trunk has no Software watchlist page
-#   lane <n> <project>                     lanes 2, 3, 4, 5, 7, 8, 9, 10 and 11, one at a time on a shared stack
-#   lane6 <worktree> <project> <tag> <portal-port> <api-port> <n8n-port>
+#   lane <n> <project>                     lanes 2, 3, 4, 5, 7, 8, 9, 10 and 11, one at a time on a shared stack; lane 3 also moves
+#                                          one removal back a day in the stack's PostgreSQL while the page waits, to try a late Undo
+#   lane6 <worktree> <project> <tag> <portal-port> <api-port> <n8n-port> [--no-build]
 #                                          the mock GitHub fails during a check, on its own stack, which this brings up and down
 #   size <trunk-worktree> <head-worktree>  gzip bytes of the JavaScript that dist/index.html loads
-#   perf <project> [samples]               largest contentful paint of the page with 14 watched software, median of the samples
-#   video <project>                        the review video of adding software and a check, as $EVID/p6-review.webm and, with ffmpeg, .mp4
+#   perf <project> [samples]               largest contentful paint, and the time until all 14 rows are painted, median of the samples
+#   video <project>                        the review video of adding software and a check, 30 to 60 seconds, as $EVID/p6-review.webm
+#                                          and, with ffmpeg, .mp4
 #
 # Environment:
 #   EVID              evidence folder (default /tmp/swarm-p6)
@@ -23,6 +29,7 @@
 #   DISK_CONTAINER    a running container whose disk is the Docker VM's disk (default wab-postgres-1); falls back to a throwaway alpine
 #   E2E_RUNNER_IMAGE  browser runner image (default portal-e2e-runner:p1shell); never built here, so build it first with
 #                     portal/e2e/runner-image.sh if it is missing
+#   PG_PORT           host port of the throwaway PostgreSQL that pygates starts (default 55446)
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -31,6 +38,9 @@ EVID=${EVID:-/tmp/swarm-p6}
 ENV_FILE=${ENV_FILE:-$EVID/env/.env}
 RUNNER=${E2E_RUNNER_IMAGE:-portal-e2e-runner:p1shell}
 DISK_CONTAINER=${DISK_CONTAINER:-wab-postgres-1}
+PG_PORT=${PG_PORT:-55446}
+PG_NAME=p6-gates-pg
+PG_IMAGE=postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
 
 die() { echo "p6.sh: $*" >&2; exit 2; }
 
@@ -54,6 +64,8 @@ disk() {
 gates() {
   local worktree=$1 out="$EVID/gates"
   mkdir -p "$out"
+  # A fresh git archive export has no node_modules.
+  [ -d "$worktree/portal/node_modules" ] || (cd "$worktree/portal" && npm ci --no-audit --no-fund) >"$out/npm-ci.log" 2>&1
   (cd "$worktree/portal" && npm run typecheck && npm run lint && npm test) >"$out/typecheck-lint-test.log" 2>&1
   (cd "$worktree/portal" && npx vitest run src/screens/software src/shell src/api) >"$out/vitest-run-shell.log" 2>&1
   (cd "$worktree/portal" && sh nginx/render.test.sh) >"$out/nginx-render.log" 2>&1
@@ -63,13 +75,61 @@ gates() {
   tail -n 1 "$out/nginx-render.log"
 }
 
+pygates() {
+  local worktree=$1 out="$EVID/gates" status=0
+  mkdir -p "$out"
+  step() {
+    local name=$1
+    shift
+    if (cd "$worktree" && eval "$*") >"$out/$name.log" 2>&1; then
+      echo "PASS $name: $(tail -n 1 "$out/$name.log")"
+    else
+      echo "FAIL $name (see $out/$name.log): $(tail -n 3 "$out/$name.log" | tr '\n' ' ')"
+      status=1
+    fi
+  }
+  docker rm -fv "$PG_NAME" >/dev/null 2>&1 || true
+  docker run -d --rm --name "$PG_NAME" -e POSTGRES_PASSWORD=test -p "127.0.0.1:$PG_PORT:5432" "$PG_IMAGE" >/dev/null
+  for _ in $(seq 1 60); do
+    docker exec "$PG_NAME" pg_isready -U postgres >/dev/null 2>&1 && break
+    sleep 1
+  done
+  step contracts-generate "(cd platform-api && uv sync --locked && uv run python -m platform_api.contracts ../contracts) && (cd agent-runtime && uv sync --locked && uv run python -m agent_runtime.contracts ../contracts)"
+  git -C "$worktree" status --porcelain -- contracts >"$out/contracts-porcelain.txt"
+  if [ -s "$out/contracts-porcelain.txt" ]; then
+    echo "FAIL contracts-porcelain: $(tr '\n' ' ' <"$out/contracts-porcelain.txt")"
+    status=1
+  else
+    echo "PASS contracts-porcelain: git status --porcelain -- contracts is empty"
+  fi
+  step pa-ruff "cd platform-api && uv run ruff check . && uv run ruff format --check ."
+  step pa-pyright "cd platform-api && uv run pyright"
+  step pa-lint-imports "cd platform-api && uv run lint-imports"
+  step pa-pytest "cd platform-api && PLATFORM_TEST_DATABASE_URL=postgresql://postgres:test@127.0.0.1:$PG_PORT/postgres uv run pytest -q"
+  step ar-ruff "cd agent-runtime && uv run ruff check . && uv run ruff format --check ."
+  step ar-pyright "cd agent-runtime && uv run pyright"
+  step ar-pytest "cd agent-runtime && uv run pytest -q"
+  docker rm -fv "$PG_NAME" >/dev/null 2>&1 || true
+  return "$status"
+}
+
 up() {
-  local worktree=$1 project=$2 tag=$3 portal_port=$4 api_port=$5 n8n_port=$6
+  local worktree=$1 project=$2 tag=$3 portal_port=$4 api_port=$5 n8n_port=$6 build=--build
+  case "${7:-}" in
+    '') ;;
+    --no-build) build=--no-build ;;
+    *) die "unknown up option $7" ;;
+  esac
   disk
   [ -f "$ENV_FILE" ] || die "no $ENV_FILE; copy deploy/make-env.sh next to it and run it"
   mkdir -p "$EVID/stacks"
+  # The mock images are named after the project, so a second project builds its own even when the rest is reused.
+  if [ "$build" = --no-build ]; then
+    compose "$worktree" "$project" build mock-github mock-model >"$EVID/stacks/$project-build-mocks.log" 2>&1 ||
+      { tail -n 30 "$EVID/stacks/$project-build-mocks.log" >&2; die "$project could not build its mock images"; }
+  fi
   WAB_IMAGE_TAG=$tag PORTAL_HOST_PORT=$portal_port PLATFORM_API_HOST_PORT=$api_port N8N_HOST_PORT=$n8n_port \
-    compose "$worktree" "$project" up --build --wait --wait-timeout 400 >"$EVID/stacks/$project-up.log" 2>&1 ||
+    compose "$worktree" "$project" up "$build" --wait --wait-timeout 400 >"$EVID/stacks/$project-up.log" 2>&1 ||
     { tail -n 30 "$EVID/stacks/$project-up.log" >&2; die "$project did not become healthy"; }
   curl -sS -o "$EVID/stacks/$project-ready.json" -w "GET /healthz/ready %{http_code}\n" "http://localhost:$api_port/healthz/ready" | tee "$EVID/stacks/$project-ready.txt"
 }
@@ -81,9 +141,11 @@ down() {
   compose "$worktree" "$project" --profile e2e down -v --remove-orphans
 }
 
-portal_of() {
-  docker ps -q --filter "label=com.docker.compose.project=$1" --filter "label=com.docker.compose.service=portal" | head -n 1
+service_of() {
+  docker ps -q --filter "label=com.docker.compose.project=$1" --filter "label=com.docker.compose.service=$2" | head -n 1
 }
+
+portal_of() { service_of "$1" portal; }
 
 runner_in() {
   local project=$1
@@ -131,19 +193,61 @@ lane1() {
 }
 
 lane() {
-  local n=$1 project=$2
+  local n=$1 project=$2 status=0
   case "$n" in
     2 | 3 | 4 | 5 | 7 | 8 | 9 | 10 | 11) ;;
     *) die "lane $n does not run on a shared stack; see lane1 and lane6" ;;
   esac
   mkdir -p "$EVID/lane-$n"
-  check "$project" --grep "@lane$n " 2>&1 | tee "$EVID/lane-$n/playwright.log"
-  return "${PIPESTATUS[0]}"
+  check "$project" --grep "@lane$n " 2>&1 | tee "$EVID/lane-$n/playwright.log" || status=$?
+  if [ "$n" = 3 ]; then
+    late_undo "$project" || status=$?
+  fi
+  return "$status"
+}
+
+# The page removes a row and writes its ids to late-removal.txt, then waits. This moves that removal back 25 hours
+# in the stack's PostgreSQL and says so with late-removal.moved, so the page's Undo comes more than a day after it.
+late_undo() {
+  local project=$1 dir="$EVID/lane-3" pg pid uc sw status=0
+  pg=$(service_of "$project" postgres)
+  [ -n "$pg" ] || die "no running PostgreSQL in project $project"
+  mkdir -p "$dir"
+  rm -f "$dir/late-removal.txt" "$dir/late-removal.moved"
+  check "$project" --grep "@lane3-day " >"$dir/playwright-day.log" 2>&1 &
+  pid=$!
+  for _ in $(seq 1 180); do
+    [ -f "$dir/late-removal.txt" ] && break
+    kill -0 "$pid" 2>/dev/null || break
+    sleep 1
+  done
+  uc=$(sed -n 's/^use_case_id=\([A-Za-z0-9_]*\)$/\1/p' "$dir/late-removal.txt" 2>/dev/null || true)
+  sw=$(sed -n 's/^software_id=\([A-Za-z0-9_]*\)$/\1/p' "$dir/late-removal.txt" 2>/dev/null || true)
+  if [ -n "$uc" ] && [ -n "$sw" ]; then
+    docker exec -i "$pg" psql -U postgres -d platform -v ON_ERROR_STOP=1 -v uc="$uc" -v sw="$sw" >"$dir/late-removal.sql.log" 2>&1 <<'SQL' || true
+UPDATE builder.use_case_versions SET created_at = created_at - interval '25 hours'
+WHERE use_case_id = :'uc' AND version = (
+  SELECT max(version) + 1 FROM builder.watched_software WHERE use_case_id = :'uc' AND software_id = :'sw'
+);
+SQL
+    if grep -qx 'UPDATE 1' "$dir/late-removal.sql.log"; then
+      touch "$dir/late-removal.moved"
+    else
+      echo "lane 3: the removal was not moved back; see $dir/late-removal.sql.log" >&2
+      status=1
+    fi
+  else
+    echo "lane 3: the page wrote no late-removal.txt with a use case and a software" >&2
+    status=1
+  fi
+  wait "$pid" || status=$?
+  cat "$dir/playwright-day.log"
+  return "$status"
 }
 
 lane6() {
   local worktree=$1 project=$2 tag=$3 portal_port=$4 api_port=$5 n8n_port=$6 status=0
-  up "$worktree" "$project" "$tag" "$portal_port" "$api_port" "$n8n_port"
+  up "$worktree" "$project" "$tag" "$portal_port" "$api_port" "$n8n_port" "${7:-}"
   mkdir -p "$EVID/lane-6"
   check "$project" --grep '@lane6 ' 2>&1 | tee "$EVID/lane-6/playwright.log" || status=$?
   down "$worktree" "$project"
@@ -178,28 +282,39 @@ perf() {
   node -e '
     const fs = require("fs"), dir = process.argv[1]
     const rows = fs.readdirSync(dir).filter((f) => /^lcp-head-.*\.json$/.test(f)).map((f) => JSON.parse(fs.readFileSync(`${dir}/${f}`, "utf8"))).sort((a, b) => a.sample - b.sample)
-    const sorted = rows.map((r) => r.lcp).sort((a, b) => a - b)
-    const median = sorted[Math.floor(sorted.length / 2)]
-    const lines = [`head: ${rows.map((r) => `#${r.sample} ${r.lcp.toFixed(0)} ms (${r.element})`).join(", ")}`, `head median: ${median.toFixed(0)} ms`, `rule: under 2500 ms: ${median < 2500 ? "PASS" : "FAIL"}`]
+    const medianOf = (values) => values.sort((a, b) => a - b)[Math.floor(values.length / 2)]
+    const median = medianOf(rows.map((r) => r.lcp))
+    const rowsMedian = medianOf(rows.map((r) => r.rowsAt))
+    const pass = median < 2500 && rowsMedian < 2500
+    const lines = [
+      `head: ${rows.map((r) => `#${r.sample} ${r.lcp.toFixed(0)} ms (${r.element}), all rows ${r.rowsAt.toFixed(0)} ms`).join(", ")}`,
+      `head median: ${median.toFixed(0)} ms; all 14 rows painted, median: ${rowsMedian.toFixed(0)} ms`,
+      `rule: both under 2500 ms: ${pass ? "PASS" : "FAIL"}`,
+    ]
     fs.writeFileSync(`${dir}/lcp-summary.txt`, lines.join("\n") + "\n")
     console.log(lines.join("\n"))
-    process.exit(median < 2500 ? 0 : 1)
+    process.exit(pass ? 0 : 1)
   ' "$EVID/perf"
 }
 
 video() {
-  local project=$1
+  local project=$1 seconds
   check "$project" --grep @review-video
   if command -v ffmpeg >/dev/null 2>&1; then
     ffmpeg -y -loglevel error -i "$EVID/p6-review.webm" -c:v libx264 -pix_fmt yuv420p -movflags +faststart "$EVID/p6-review.mp4"
+  fi
+  if command -v ffprobe >/dev/null 2>&1 && [ -f "$EVID/p6-review.mp4" ]; then
+    seconds=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$EVID/p6-review.mp4")
+    echo "p6-review.mp4 runs $seconds s"
+    awk -v s="$seconds" 'BEGIN { exit !(s >= 30 && s <= 60) }' || die "the review video runs $seconds s, not 30 to 60"
   fi
   ls -la "$EVID"/p6-review.*
 }
 
 command=${1:-}
-[ -n "$command" ] || die "usage: p6.sh <disk|gates|up|down|check|live|lane1|lane|lane6|size|perf|video> ..."
+[ -n "$command" ] || die "usage: p6.sh <disk|gates|pygates|up|down|check|live|lane1|lane|lane6|size|perf|video> ..."
 shift
 case "$command" in
-  disk | gates | up | down | check | live | lane1 | lane | lane6 | size | perf | video) "$command" "$@" ;;
+  disk | gates | pygates | up | down | check | live | lane1 | lane | lane6 | size | perf | video) "$command" "$@" ;;
   *) die "unknown command $command" ;;
 esac
