@@ -16,10 +16,12 @@ from platform_api.monitoring import (
     RunRetriedData,
     activity_events_adapter,
     agent_event_adapter,
+    user_actor,
 )
+from platform_api.monitoring.events import ApprovalDecided
 from platform_api.monitoring.log import COPIED_CHANNEL, PostgresEvents, copied_notice
 from platform_api.settings import Context
-from platform_api.shared import RunId, TaskId
+from platform_api.shared import RunId, TaskId, UserId
 from tests.conftest import PostgresUrls
 from tests.support import FIXTURES
 
@@ -195,6 +197,32 @@ async def test_subscribe_resumes_after_a_seq_and_follows_new_appends(
                 await anyio.sleep(0.01)
 
     assert received == [3, 4, 5]
+
+
+async def test_a_decision_logged_before_decisions_named_their_digest_still_reads(
+    log: ActivityLog, postgres: PostgresUrls
+):
+    async with (
+        await AsyncConnection.connect(postgres.contexts.orchestration) as conn,
+        conn.transaction(),
+    ):
+        await conn.execute(
+            "INSERT INTO monitoring.run_events "
+            "(run_id, seq, ts, actor, kind, summary, data, dedupe_key) VALUES "
+            "(%(run)s, 1, now(), %(actor)s, 'approval_decided', 'Bob approved.', %(data)s, 'd1')",
+            {
+                "run": RUN,
+                "actor": user_actor(UserId("bob"), "Bob").model_dump_json(),
+                "data": '{"approval_id": "apr_old", "step": 0, "verdict": "approve", "by": "bob"}',
+            },
+        )
+        await conn.execute("SELECT pg_notify('run_events', %s)", (RUN,))
+
+    with anyio.fail_after(15):
+        [decided] = await log.read_after(RUN, 0)
+
+    assert isinstance(decided, ApprovalDecided)
+    assert (decided.data.by, decided.data.digest) == ("bob", None)
 
 
 async def test_subscribers_wake_after_the_listener_reconnects(log: ActivityLog):

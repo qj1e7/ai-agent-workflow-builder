@@ -384,7 +384,8 @@
       "approval_id": "apr_01JD1",
       "step": 0,
       "verdict": "approve",
-      "by": "bob"
+      "by": "bob",
+      "digest": "sha256:b53b3327eb5db3cbdf1c7559ad4310d809633322c018fc4894a1c65c8af4164b"
     }
   },
   {

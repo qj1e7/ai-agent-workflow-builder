@@ -1222,6 +1222,17 @@
             "title": "By",
             "type": "string"
           },
+          "digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Digest"
+          },
           "step": {
             "title": "Step",
             "type": "integer"

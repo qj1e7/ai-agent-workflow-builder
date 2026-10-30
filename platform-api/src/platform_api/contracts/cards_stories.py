@@ -365,7 +365,9 @@ def card_run_events() -> Timeline:
         420.0,
         USER_BOB,
         "Bob approved the request (Team approver).",
-        ApprovalDecidedData(approval_id=CARD_RUN.approval_id, step=0, verdict="approve", by=BOB),
+        ApprovalDecidedData(
+            approval_id=CARD_RUN.approval_id, step=0, verdict="approve", by=BOB, digest=DIGEST
+        ),
     )
     tl.add(
         LegDispatched,

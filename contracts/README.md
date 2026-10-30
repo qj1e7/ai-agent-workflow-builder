@@ -80,7 +80,7 @@ Every event has `run_id`, `seq` (gapless from 1 per run), `ts`, `actor {kind, id
 | `approval_requested` | platform | `approval_id`, `steps[] {index, label, status, decided_by, decided_at}`, `link` |
 | `approval_announced` | platform | `approval_id`, `channel`, `link` |
 | `approval_announce_failed` | platform | `approval_id`, `channel`, `message` |
-| `approval_decided` | user | `approval_id`, `step`, `verdict`, `by` |
+| `approval_decided` | user | `approval_id`, `step`, `verdict`, `by`, `digest` (the proposal digest the Approver decided on, `null` only on decisions logged before the field was added) |
 | `write_action_denied` | safety_checker | `reason`, `detail` |
 | `write_action_done` | platform | `connector`, `operation`, `external_reference`, `approved_by[]` |
 | `run_succeeded` | platform | `outcome` (`written` or `nothing_to_write`) |

@@ -109,6 +109,7 @@ class ApprovalDecidedData(WireModel):
     step: int
     verdict: WireVerdict
     by: UserId
+    digest: str | None = None
 
 
 class WriteActionDeniedData(WireModel):

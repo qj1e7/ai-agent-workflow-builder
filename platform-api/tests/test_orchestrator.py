@@ -10,6 +10,7 @@ import pytest
 
 from platform_api.db import Database, UnitOfWork
 from platform_api.monitoring import ActivityLog
+from platform_api.monitoring.events import ApprovalDecided, WriteActionProposed
 from platform_api.orchestration.agents import (
     AgentReply,
     AgentUnavailable,
@@ -340,6 +341,22 @@ async def test_a_stale_digest_is_refused_and_the_step_stays_open(h: Harness):
     detail = await h.orchestrator.get_approval(approval_id, BOB)
     assert detail is not None and detail.why_not is None and detail.decisions == ()
     assert isinstance(await h.state(run_id), AwaitingApproval)
+
+
+@pytest.mark.parametrize("verdict", [Verdict.APPROVE, Verdict.DECLINE])
+async def test_the_decision_event_carries_the_digest_the_approver_sent(
+    h: Harness, verdict: Verdict
+):
+    run_id, _, approval_id = await work_leg_to_approval(h)
+    detail = await h.orchestrator.get_approval(approval_id, BOB)
+    assert detail is not None
+    sent = detail.request.digest
+    assert isinstance(await h.orchestrator.decide(approval_id, BOB, 0, verdict, sent), Decided)
+    events = await h.log.read_after(run_id, 0)
+    proposed = next(e for e in events if isinstance(e, WriteActionProposed))
+    decided = next(e for e in events if isinstance(e, ApprovalDecided))
+    assert (decided.data.by, decided.data.digest) == (BOB.user_id, sent)
+    assert decided.data.digest == proposed.data.digest
 
 
 async def test_the_rejected_path_matches_the_recorded_run(h: Harness):

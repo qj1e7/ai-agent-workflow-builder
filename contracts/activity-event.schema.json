@@ -647,6 +647,18 @@
           "title": "By",
           "type": "string"
         },
+        "digest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Digest"
+        },
         "step": {
           "title": "Step",
           "type": "integer"

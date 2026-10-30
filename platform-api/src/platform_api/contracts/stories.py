@@ -362,7 +362,9 @@ def success_events() -> Timeline:
         383.447,
         USER_BOB,
         "Bob approved the request (Team approver).",
-        ApprovalDecidedData(approval_id=SUCCESS.approval_id, step=0, verdict="approve", by=BOB),
+        ApprovalDecidedData(
+            approval_id=SUCCESS.approval_id, step=0, verdict="approve", by=BOB, digest=DIGEST
+        ),
     )
     tl.add(
         LegDispatched,
@@ -501,7 +503,9 @@ def rejected_events() -> Timeline:
         251.903,
         USER_BOB,
         "Bob declined the request (Team approver).",
-        ApprovalDecidedData(approval_id=REJECTED.approval_id, step=0, verdict="decline", by=BOB),
+        ApprovalDecidedData(
+            approval_id=REJECTED.approval_id, step=0, verdict="decline", by=BOB, digest=DIGEST
+        ),
     )
     tl.add(
         RunRejected,
