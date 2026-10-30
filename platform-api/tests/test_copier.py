@@ -420,6 +420,13 @@ async def test_a_copier_whose_copy_keeps_failing_is_behind_until_it_catches_up(
         await copier.stop()
 
 
+async def generation(cosmos: CosmosUnderTest) -> str | None:
+    with suppress(CosmosHttpResponseError):
+        item = await cosmos.container.read_item("generation", partition_key="copier")
+        return item["generation"]
+    return None
+
+
 async def until(condition: Callable[[], Awaitable[bool]], seconds: float) -> None:
     with anyio.fail_after(seconds):
         while not await condition():
@@ -441,9 +448,13 @@ async def test_a_copy_deleted_while_nothing_is_logged_is_made_again_and_filled(
     await copier.start()
     try:
         await until(both_copied, 5)
+        first = await generation(cosmos)
         await cosmos.delete(what)
-        assert not await both_copied()
-        await until(both_copied, 5)
+
+        async def copied_again() -> bool:
+            return await generation(cosmos) not in (None, first) and await both_copied()
+
+        await until(copied_again, 5)
     finally:
         await copier.stop()
 
@@ -485,9 +496,14 @@ async def test_a_nudged_copier_checks_its_copy_at_once(db: Database, cosmos: Cos
     await copier.start()
     try:
         await until(copied, 5)
+        first = await generation(cosmos)
         await cosmos.delete("container")
         copier.check_soon()
-        await until(copied, 3)
+
+        async def copied_again() -> bool:
+            return await generation(cosmos) not in (None, first) and await copied()
+
+        await until(copied_again, 3)
     finally:
         await copier.stop()
 
