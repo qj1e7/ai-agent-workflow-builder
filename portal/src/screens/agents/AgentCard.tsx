@@ -5,6 +5,7 @@ import { agentIdentity } from '../../ui/agents'
 import { AgentFace } from '../../ui/AgentFace'
 import { Button } from '../../ui/Button'
 import { cx } from '../../ui/cx'
+import { FROM_LIST, openedFromList } from '../../ui/fromList'
 import { IconX } from '../../ui/icons'
 import iconButton from '../../shell/IconButton.module.css'
 import {
@@ -24,12 +25,6 @@ import {
 import styles from './AgentsPage.module.css'
 
 export const tileId = (id: string) => `agent-tile-${id}`
-
-const FROM_LIST = { fromList: true }
-
-function openedFromList(state: unknown): boolean {
-  return typeof state === 'object' && state !== null && 'fromList' in state
-}
 
 export function useCloseWithoutHistoryEntry(): () => void {
   const navigate = useNavigate()
