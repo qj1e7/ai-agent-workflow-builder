@@ -46,6 +46,8 @@ jobs:
           ENABLE_TELEMETRY: "false"
         ports:
           - 8081:8081
+        # The emulator upgrades its own packages at each start unless this name goes nowhere.
+        options: --add-host packages.microsoft.com:127.0.0.1
     env:
       # The platform-api tests migrate a throwaway database and skip without one.
       PLATFORM_TEST_DATABASE_URL: postgresql://postgres:test@127.0.0.1:5432/postgres
@@ -107,6 +109,17 @@ jobs:
             --env MOCK_OIDC_CONFIG=/mock-oidc/config.json \
             --volume "$PWD/deploy/mock-oidc:/mock-oidc:ro" \
             ${{ matrix.project }}:test
+
+      - name: The emulator kept the pinned image's packages
+        if: matrix.project == 'platform-api'
+        env:
+          EMULATOR: ${{ job.services.cosmos.id }}
+        run: |
+          docker exec "$EMULATOR" cat /logs/package-updates.log | tee package-updates.log
+          if grep -q Upgrading package-updates.log; then
+            echo "The emulator upgraded its own packages, so its digest no longer pins it." >&2
+            exit 1
+          fi
 
       - name: Build the runtime image
         if: matrix.project != 'e2e'
