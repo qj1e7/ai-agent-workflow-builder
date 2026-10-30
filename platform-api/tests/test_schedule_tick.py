@@ -20,7 +20,7 @@ from platform_api.orchestration import (
 from platform_api.orchestration.approvals import Refusal, Verdict
 from platform_api.orchestration.http import run_view
 from platform_api.orchestration.people import Person
-from platform_api.orchestration.people_store import People
+from platform_api.orchestration.people_store import People, PersonRow
 from platform_api.orchestration.runs import AwaitingApproval, StepName
 from platform_api.orchestration.service import Decided, DecisionRefused
 from platform_api.shared import N8nExecutionId, Principal, Role, UseCaseId
@@ -100,7 +100,7 @@ async def ticking(postgres: PostgresUrls) -> AsyncIterator[Ticking]:
             {WATCHLIST: WATCHLIST_SPEC, OTHER: replace(WATCHLIST_SPEC, use_case_id=OTHER)}
         )
         people = People(h.db)
-        assert await people.seed_dev(DEV_PEOPLE)  # alice both roles, bob Approver, carol Operator
+        assert await people.seed_dev(DEV_PEOPLE)
         runs = Recording(h.orchestrator)
         yield Ticking(h, book, specs, people, runs, ScheduleTicker(h.db, book, specs, runs))
 
@@ -324,6 +324,27 @@ async def test_a_held_schedule_starts_again_once_its_owner_is_an_operator_again(
     assert [key for _, key, _ in await ticking.run_keys()] == [
         f"schedule:{WATCHLIST}:2026-11-16T09:00:00+08:00"
     ]
+
+
+async def test_a_removed_owner_added_back_under_the_same_id_runs_the_next_slot_as_themselves(
+    ticking: Ticking,
+):
+    await ticking.book.save(WATCHLIST, MONDAY_9, CAROL)
+    assert isinstance(await ticking.people.remove(ALICE, "carol"), Person)
+    ticking.at(NEXT_MONDAY + timedelta(minutes=1))
+    assert await ticking.ticker.tick() == []
+
+    back = await ticking.people.add(ALICE, "carol@example.test", "Carol", True, False)
+    assert isinstance(back, PersonRow) and back.person.id == "carol"
+    ticking.at(NEXT_MONDAY + timedelta(hours=2))
+    assert await ticking.ticker.tick() == [], "the slot it missed while held stays used up"
+    ticking.at(NEXT_MONDAY + timedelta(days=7, minutes=1))
+    assert len(await ticking.ticker.tick()) == 1
+
+    assert [(key, by) for _, key, by in await ticking.run_keys()] == [
+        (f"schedule:{WATCHLIST}:2026-11-16T09:00:00+08:00", "carol")
+    ]
+    assert ticking.runs.started_as == [CAROL]
 
 
 async def test_a_schedule_whose_spec_cannot_be_built_does_not_block_the_others(

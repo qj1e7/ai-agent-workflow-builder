@@ -48,7 +48,7 @@ async def people_in(db: Database) -> People:
     """The People list in the database, as the platform runs it: sign-in reads it, and so does
     each schedule's view of its owner."""
     people = People(db)
-    assert await people.seed_dev(DEV_PEOPLE)  # alice both roles, bob Approver, carol Operator
+    assert await people.seed_dev(DEV_PEOPLE)
     return people
 
 

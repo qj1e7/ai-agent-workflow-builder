@@ -253,8 +253,9 @@ async def lab(postgres: PostgresUrls) -> AsyncIterator[Lab]:
             yield Lab(h, app, client, builder)
 
 
-async def watchlist_workflow(lab: Lab) -> str:
-    r = await lab.call("alice", "POST", "/api/v1/watchlist/software", LANGGRAPH)
+async def watchlist_workflow(lab: Lab, by: str = "alice") -> str:
+    """The watchlist, with its first schedule owned by whoever added the first software."""
+    r = await lab.call(by, "POST", "/api/v1/watchlist/software", LANGGRAPH)
     assert r.status_code == 201
     return r.json()["use_case_id"]
 
@@ -322,6 +323,23 @@ async def test_a_held_schedule_names_no_next_run_until_an_operator_saves_it_agai
     body = {"day": "monday", "at": "09:00"}
     assert (await lab.call("carol", "PUT", "/api/v1/watchlist/schedule", body)).status_code == 200
     [taken] = await lab.listed()
+    assert at(taken["next_run_at"]) == FIRST_MONDAY_SLOT
+
+
+async def test_a_schedule_whose_owner_left_the_list_names_no_next_run_until_it_is_taken_over(
+    lab: Lab,
+):
+    use_case_id = await watchlist_workflow(lab, by="carol")
+    assert (await lab.call("alice", "DELETE", "/api/v1/people/carol")).status_code == 204
+
+    [listed] = await lab.listed()
+    read = (await lab.call("bob", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
+
+    assert (listed["state"], listed["next_run_at"]) == ("on", None)
+    assert (read["state"], read["next_run_at"]) == ("on", None)
+    body = {"day": "monday", "at": "09:00"}
+    assert (await lab.call("alice", "PUT", "/api/v1/watchlist/schedule", body)).status_code == 200
+    taken = (await lab.call("bob", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
     assert at(taken["next_run_at"]) == FIRST_MONDAY_SLOT
 
 
