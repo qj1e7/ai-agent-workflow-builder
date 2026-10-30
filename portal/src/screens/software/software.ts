@@ -23,7 +23,7 @@ export const PAUSED_WORDS = 'Paused. No check runs until an Operator resumes it.
 
 /** True when the schedule starts checks: it is set, and not held because its owner can no longer run it. */
 export function scheduleRuns(schedule: ScheduleView | null | undefined): boolean {
-  return Boolean(schedule) && !schedule?.held
+  return schedule != null && !schedule.held
 }
 
 const heldWhy: Record<ScheduleHold, string> = {
@@ -31,10 +31,9 @@ const heldWhy: Record<ScheduleHold, string> = {
   owner_not_an_operator: 'can no longer run workflows',
 }
 
-/** What the schedule does next. Paused wins over a held schedule, which says why it is not running. */
+/** What the schedule does next. The view names no next check while the watchlist is paused or the schedule is held, and paused wins over held. */
 export function nextCheckWords(schedule: ScheduleView, paused: boolean): string {
-  if (paused) return PAUSED_WORDS
-  if (schedule.held) {
+  if (schedule.held && !paused) {
     const owner = schedule.owner_name.trim() || 'its owner'
     return `Not running: ${owner} ${heldWhy[schedule.held]}. An Operator can take it over by saving the schedule.`
   }
