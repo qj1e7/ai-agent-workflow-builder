@@ -41,7 +41,7 @@ from platform_api.orchestration.people_store import (
 )
 from platform_api.orchestration.settings_http import CurrentModelSettings
 from platform_api.shared import Principal, UserId
-from platform_api.wire import ErrorBody, WireModel, error_response
+from platform_api.wire import ErrorBody, WireIn, WireModel, error_response
 
 router = APIRouter()
 
@@ -72,7 +72,7 @@ class PeopleOut(WireModel):
     people: list[PersonOut]
 
 
-class AddPersonIn(WireModel):
+class AddPersonIn(WireIn):
     email: str = Field(min_length=3, max_length=MAX_EMAIL_CHARS)
     display: str = Field(min_length=1, max_length=MAX_DISPLAY_CHARS)
     operator: bool = False
@@ -81,7 +81,7 @@ class AddPersonIn(WireModel):
     )
 
 
-class OperatorIn(WireModel):
+class OperatorIn(WireIn):
     operator: bool
 
 
@@ -113,7 +113,7 @@ class ConfirmationsOut(WireModel):
     confirmations: list[ConfirmationOut]
 
 
-class ConfirmationDecisionIn(WireModel):
+class ConfirmationDecisionIn(WireIn):
     verdict: Literal["confirm", "not_now"]
     digest: str
 

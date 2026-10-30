@@ -66,6 +66,7 @@ from platform_api.wire import (
     StepName,
     StepOutcome,
     Trigger,
+    WireIn,
     WireModel,
     error_response,
 )
@@ -192,7 +193,7 @@ class ApprovalView(WireModel):
     why_not: Refusal | None
 
 
-class DecisionIn(WireModel):
+class DecisionIn(WireIn):
     step: int
     verdict: Verdict
     digest: Digest
@@ -230,7 +231,7 @@ class TickOut(WireModel):
     started: list[RunId]
 
 
-class WorkflowFailureIn(WireModel):
+class WorkflowFailureIn(WireIn):
     execution_id: str
     workflow: str
     last_node: str

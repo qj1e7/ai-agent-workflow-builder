@@ -2,9 +2,9 @@ import logging
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
-from platform_api.db import Database
+from platform_api.db import Connection, Database
 from platform_api.orchestration.schedule import (
     DEFAULT_AT,
     DEFAULT_DAY,
@@ -122,21 +122,44 @@ class ScheduleBook:
             ).fetchall()
         return [_saved(row) for row in rows]
 
-    async def record_slot(self, use_case_id: UseCaseId, slot: datetime) -> None:
-        """Remembers the newest slot started. An older slot never moves it back."""
+    async def use_up_slot(self, use_case_id: UseCaseId, slot: datetime) -> None:
+        """Remembers the newest slot used up, by a check or by a skip while paused. An older slot
+        never moves it back."""
         async with self._db.transaction("orchestration") as uow:
-            await uow.conn.execute(
-                "UPDATE orchestration.schedules SET last_slot_started = %s "
-                "WHERE use_case_id = %s AND (last_slot_started IS NULL OR last_slot_started < %s)",
-                (slot, use_case_id, slot),
-            )
+            await _use_up(uow.conn, use_case_id, slot)
+
+    async def use_up_slots_until(self, use_case_id: UseCaseId, now: datetime) -> None:
+        """Uses up every slot at or before now, so a workflow back on after missing a slot waits
+        for its next one."""
+        async with self._db.transaction("orchestration") as uow:
+            row = await (
+                await uow.conn.execute(
+                    "SELECT * FROM orchestration.schedules WHERE use_case_id = %s FOR UPDATE",
+                    (use_case_id,),
+                )
+            ).fetchone()
+            if row is not None:
+                await _use_up(uow.conn, use_case_id, _saved(row).slots(now).latest)
+
+
+async def _use_up(conn: Connection, use_case_id: UseCaseId, slot: datetime) -> None:
+    await conn.execute(
+        "UPDATE orchestration.schedules SET last_slot_started = %s "
+        "WHERE use_case_id = %s AND (last_slot_started IS NULL OR last_slot_started < %s)",
+        (slot, use_case_id, slot),
+    )
+
+
+@dataclass(frozen=True)
+class NotOn:
+    state: Literal["paused", "deleted"]
 
 
 class CheckSpecs(Protocol):
     """What a scheduled check needs from the use case builder, which orchestration may not
     import. None means there is nothing to check, for example an empty watchlist."""
 
-    async def check_spec(self, use_case_id: UseCaseId) -> RunSpec | None: ...
+    async def check_spec(self, use_case_id: UseCaseId) -> RunSpec | NotOn | None: ...
 
 
 class ScheduleTicker:
@@ -169,12 +192,17 @@ class ScheduleTicker:
     async def _start(self, saved: SavedSchedule, slot: datetime) -> RunId | None:
         spec = await self._specs.check_spec(saved.use_case_id)
         run_id: RunId | None = None
-        if spec is not None:
-            result = await self._runs.start_run(
-                replace(spec, trigger="schedule"),
-                saved.principal,
-                f"schedule:{saved.use_case_id}:{slot.isoformat()}",
-            )
-            run_id = result.run_id if result.created else None
-        await self._book.record_slot(saved.use_case_id, slot)
+        match spec:
+            case RunSpec():
+                result = await self._runs.start_run(
+                    replace(spec, trigger="schedule"),
+                    saved.principal,
+                    f"schedule:{saved.use_case_id}:{slot.isoformat()}",
+                )
+                run_id = result.run_id if result.created else None
+            case NotOn(state):
+                log.info("skipped the scheduled check of %s, which is %s", saved.use_case_id, state)
+            case None:
+                pass
+        await self._book.use_up_slot(saved.use_case_id, slot)
         return run_id
