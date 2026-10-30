@@ -113,8 +113,8 @@ describe('the next run', () => {
 describe('when it runs', () => {
   it('gives the schedule’s own day and time, in Singapore time', () => {
     expect(whenWords(WATCHLIST)).toEqual({ words: 'Every Monday at 9:00', small: 'Singapore time (SGT).' })
-    expect(whenWords({ schedule: { day: 'every_day', at: '17:30', time_zone: 'Asia/Singapore' } })).toEqual({ words: 'Every day at 17:30', small: 'Singapore time (SGT).' })
-    expect(whenWords({ schedule: { day: 'weekdays', at: '15:00', time_zone: 'Asia/Singapore' } })).toEqual({ words: 'Every weekday at 15:00', small: 'Singapore time (SGT).' })
+    expect(whenWords({ schedule: { day: 'every_day', at: '17:30', time_zone: 'Asia/Singapore', owner_name: 'Alice' } })).toEqual({ words: 'Every day at 17:30', small: 'Singapore time (SGT).' })
+    expect(whenWords({ schedule: { day: 'weekdays', at: '15:00', time_zone: 'Asia/Singapore', owner_name: 'Alice' } })).toEqual({ words: 'Every weekday at 15:00', small: 'Singapore time (SGT).' })
   })
 
   it('keeps the schedule while the workflow is paused, because Paused shows in the next run', () => {

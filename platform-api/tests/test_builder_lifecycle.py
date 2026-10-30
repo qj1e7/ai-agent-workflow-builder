@@ -318,12 +318,17 @@ async def test_a_held_schedule_names_no_next_run_until_an_operator_saves_it_agai
     [listed] = await lab.listed()
     read = (await lab.call("bob", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
 
-    assert (listed["state"], listed["next_run_at"]) == ("on", None)
-    assert (read["state"], read["next_run_at"]) == ("on", None)
+    for view in (listed, read):
+        assert (view["state"], view["next_run_at"]) == ("on", None)
+        assert (view["schedule"]["held"], view["schedule"]["owner_name"]) == (
+            "owner_not_an_operator",
+            "Alice",
+        )
     body = {"day": "monday", "at": "09:00"}
     assert (await lab.call("carol", "PUT", "/api/v1/watchlist/schedule", body)).status_code == 200
     [taken] = await lab.listed()
     assert at(taken["next_run_at"]) == FIRST_MONDAY_SLOT
+    assert (taken["schedule"]["held"], taken["schedule"]["owner_name"]) == (None, "Carol")
 
 
 async def test_a_schedule_whose_owner_left_the_list_names_no_next_run_until_it_is_taken_over(
@@ -335,12 +340,66 @@ async def test_a_schedule_whose_owner_left_the_list_names_no_next_run_until_it_i
     [listed] = await lab.listed()
     read = (await lab.call("bob", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
 
-    assert (listed["state"], listed["next_run_at"]) == ("on", None)
-    assert (read["state"], read["next_run_at"]) == ("on", None)
+    for view in (listed, read):
+        assert (view["state"], view["next_run_at"]) == ("on", None)
+        assert (view["schedule"]["held"], view["schedule"]["owner_name"]) == (
+            "owner_removed",
+            "Carol",
+        )
     body = {"day": "monday", "at": "09:00"}
     assert (await lab.call("alice", "PUT", "/api/v1/watchlist/schedule", body)).status_code == 200
     taken = (await lab.call("bob", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
     assert at(taken["next_run_at"]) == FIRST_MONDAY_SLOT
+    assert (taken["schedule"]["held"], taken["schedule"]["owner_name"]) == (None, "Alice")
+
+
+@pytest.mark.parametrize(
+    ("owner", "change", "held"),
+    [
+        pytest.param(
+            "alice",
+            ("carol", "PUT", "/api/v1/people/alice/operator", {"operator": False}),
+            "owner_not_an_operator",
+            id="not_an_operator",
+        ),
+        pytest.param(
+            "carol",
+            ("alice", "DELETE", "/api/v1/people/carol", None),
+            "owner_removed",
+            id="removed",
+        ),
+    ],
+)
+async def test_a_schedule_set_up_with_a_new_workflow_is_held_once_its_creator_cannot_run_it(
+    lab: Lab, owner: str, change: tuple[str, str, str, Any], held: str
+):
+    body = {
+        "name": "Watch LangGraph",
+        "instruction": "Check LangGraph for new releases.",
+        "agents": [{"card_id": VERSION_CHECKER_ID, "values": VALUES}],
+        "schedule": {"day": "monday", "at": "09:00"},
+    }
+    made = await lab.call(owner, "POST", "/api/v1/agent-use-cases", body)
+    assert made.status_code == 201, made.text
+    use_case_id = made.json()["use_case_id"]
+    name = owner.capitalize()
+
+    async def shown() -> list[tuple[datetime | None, str | None, str]]:
+        [listed] = (await lab.call("bob", "GET", "/api/v1/use-cases")).json()["use_cases"]
+        read = (await lab.call("bob", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
+        return [
+            (at(v["next_run_at"]), v["schedule"]["held"], v["schedule"]["owner_name"])
+            for v in (listed, read)
+        ]
+
+    assert await shown() == [(FIRST_MONDAY_SLOT, None, name)] * 2
+    by, method, path, change_body = change
+    assert (await lab.call(by, method, path, change_body)).status_code in (200, 204)
+    assert await shown() == [(None, held, name)] * 2
+    ticker = ScheduleTicker(lab.h.db, ScheduleBook(lab.h.db), lab.builder, lab.h.orchestrator)
+    lab.h.clock["now"] = FIRST_MONDAY_SLOT + timedelta(minutes=1)
+    assert await ticker.tick() == []
+    assert (await lab.call("bob", "GET", "/api/v1/runs")).json()["runs"] == []
 
 
 async def test_a_workflow_with_no_schedule_has_no_next_run(lab: Lab):
@@ -353,7 +412,13 @@ async def test_a_workflow_with_no_schedule_has_no_next_run(lab: Lab):
     )
 
 
-MONDAYS_AT_NINE = {"day": "monday", "at": "09:00", "time_zone": "Asia/Singapore"}
+MONDAYS_AT_NINE = {
+    "day": "monday",
+    "at": "09:00",
+    "time_zone": "Asia/Singapore",
+    "owner_name": "Alice",
+    "held": None,
+}
 
 
 async def test_a_workflow_keeps_its_schedule_while_it_is_paused(lab: Lab):

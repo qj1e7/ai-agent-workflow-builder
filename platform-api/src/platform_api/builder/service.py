@@ -92,8 +92,14 @@ _CURRENT_VERSION = """
 """
 
 
-def _schedule_view(schedule: Schedule) -> UseCaseSchedule:
-    return UseCaseSchedule(day=schedule.day, at=schedule.at, time_zone=schedule.time_zone)
+def _schedule_view(saved: SavedSchedule) -> UseCaseSchedule:
+    return UseCaseSchedule(
+        day=saved.schedule.day,
+        at=saved.schedule.at,
+        time_zone=saved.schedule.time_zone,
+        owner_name=saved.owner_name,
+        held=saved.held,
+    )
 
 
 def _view(
@@ -120,7 +126,7 @@ def _view(
         created_at=row["created_at"],
         state="on" if on else "paused",
         next_run_at=schedule.next_run(now) if on and schedule is not None else None,
-        schedule=None if schedule is None else _schedule_view(schedule.schedule),
+        schedule=None if schedule is None else _schedule_view(schedule),
         plan=plan,
         agents=[
             UseCaseAgentView(

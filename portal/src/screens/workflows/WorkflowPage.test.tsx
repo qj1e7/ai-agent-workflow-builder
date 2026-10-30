@@ -71,13 +71,13 @@ describe('a workflow page', () => {
   })
 
   it('gives its schedule’s day and time, and its next run', () => {
-    const html = render({ useCase: { ...AGENTS, next_run_at: '2026-11-09T01:00:00Z', schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore' } } })
+    const html = render({ useCase: { ...AGENTS, next_run_at: '2026-11-09T01:00:00Z', schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice' } } })
     expect(factOf(html, 'When')).toBe('Every Monday at 9:00 Singapore time (SGT).')
     expect(factOf(html, 'Next run')).toBe('Mon 9 Nov, 9:00')
   })
 
   it('while paused, keeps its schedule in When and says Paused only in Next run', () => {
-    const html = render({ useCase: { ...AGENTS, state: 'paused', next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore' } } })
+    const html = render({ useCase: { ...AGENTS, state: 'paused', next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice' } } })
     expect(factOf(html, 'When')).toBe('Every Monday at 9:00 Singapore time (SGT).')
     expect(factOf(html, 'Next run')).toBe('Paused')
   })

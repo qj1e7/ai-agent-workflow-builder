@@ -123,6 +123,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "builder/understand.watchlist.json": TypeAdapter(UnderstandOut),
     "builder/understand.starters.json": TypeAdapter(UnderstandOut),
     "builder/use-case.paused.json": TypeAdapter(UseCaseView),
+    "builder/use-case.held.json": TypeAdapter(UseCaseView),
     "builder/use-case.deleted.json": TypeAdapter(UseCaseDeleted),
     "builder/draft.in.json": TypeAdapter(DraftIn),
     "builder/drafts.json": TypeAdapter(DraftList),
@@ -345,6 +346,23 @@ def test_the_schedule_fixtures_show_the_owner_and_the_next_check():
     assert (scheduled.trigger, scheduled.started_by) == ("schedule", "alice")
     ran = run_view_adapter.validate_python(load("views/success.final.json"))
     assert ran.trigger == "person"
+
+
+def test_the_use_case_fixtures_say_whose_schedule_it_is_and_why_a_held_one_runs_nothing():
+    views = [
+        UseCaseView.model_validate(load(f"builder/use-case{name}.json"))
+        for name in ("", ".paused", ".held")
+    ]
+    shown = [
+        (v.state, v.next_run_at is None, v.schedule.owner_name, v.schedule.held)
+        for v in views
+        if v.schedule is not None
+    ]
+    assert shown == [
+        ("on", False, "Alice", None),
+        ("paused", True, "Alice", None),
+        ("on", True, "Alice", "owner_removed"),
+    ]
 
 
 def test_the_card_run_is_what_the_agent_sent_and_the_platform_bound():

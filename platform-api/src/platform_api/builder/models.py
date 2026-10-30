@@ -76,6 +76,15 @@ class UseCaseSchedule(WireModel):
     day: Day
     at: ClockTime
     time_zone: str
+    owner_name: str = Field(
+        description="The name of the schedule owner. Its scheduled runs start as them."
+    )
+    held: ScheduleHold | None = Field(
+        default=None,
+        description="Why the schedule starts no run: owner_removed when the owner has left the "
+        "People list, owner_not_an_operator when they are no longer an Operator. An Operator "
+        "takes it over by saving it again. Null while the owner can run it.",
+    )
 
 
 class UseCaseView(WireModel):
@@ -97,8 +106,8 @@ class UseCaseView(WireModel):
         "schedule."
     )
     schedule: UseCaseSchedule | None = Field(
-        description="When it runs on its own, kept while it is paused. Null for a workflow "
-        "with no schedule."
+        description="When it runs on its own, and who owns the schedule. Kept while it is "
+        "paused or held. Null for a workflow with no schedule."
     )
     plan: list[BlockView] = Field(
         description="The blocks a run of this use case draws, in order. A template use case "
