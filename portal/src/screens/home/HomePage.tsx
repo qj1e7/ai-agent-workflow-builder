@@ -8,7 +8,7 @@ import { cx } from '../../ui/cx'
 import { useFocusWhenReady } from '../../ui/focus'
 import { IconClock } from '../../ui/icons'
 import { useGlide, usePresence } from '../../ui/presence'
-import { comingUpOf, HOW_IT_WORKS, leadLine, moreWords, needsOf, type Need, type Next } from './home'
+import { comingUpOf, HOW_IT_WORKS, leadLine, moreWords, needsOf, needsTotal, type Need, type Next } from './home'
 import { DraftRow, NeedItem, WaitingRow } from './HomeItem'
 import styles from './Home.module.css'
 
@@ -22,24 +22,33 @@ interface HomePageProps {
 
 export function HomePage({ heading, today, now }: HomePageProps) {
   const home = useHome()
-  if (!home.data) {
-    return (
-      <div className={styles['home']}>
-        <PageHead heading={heading} lead={today} />
-        {home.isError ? (
-          <>
-            <p>Home could not be loaded.</p>
-            <Button onClick={() => void home.refetch()}>Try again</Button>
-          </>
-        ) : (
-          <p className="muted" role="status">
-            Loading what needs you
-          </p>
-        )}
-      </div>
-    )
-  }
-  return <Loaded heading={heading} today={today} now={now} home={home.data} />
+  const loaded = home.data
+  const total = loaded ? needsTotal(loaded) : 0
+  const next = loaded ? comingUpOf(loaded, now) : null
+  return (
+    <div className={styles['home']}>
+      <PageHead heading={heading} lead={loaded ? `${today} ${leadLine(total, loaded.workflows)}` : today}>
+        {total > 0 && next ? <ComingNext next={next} /> : null}
+      </PageHead>
+      {loaded && home.isError ? (
+        <p className="muted" role="status">
+          Could not refresh. Trying again in a moment.
+        </p>
+      ) : null}
+      {loaded ? (
+        <Loaded now={now} home={loaded} next={next} />
+      ) : home.isError ? (
+        <>
+          <p role="alert">Home could not be loaded.</p>
+          <Button onClick={() => void home.refetch()}>Try again</Button>
+        </>
+      ) : (
+        <p className="muted" role="status">
+          Loading what needs you
+        </p>
+      )}
+    </div>
+  )
 }
 
 function Count({ value }: { value: number }) {
@@ -152,9 +161,8 @@ function HowItWorks() {
   )
 }
 
-function Loaded({ heading, today, now, home }: HomePageProps & { home: HomeOut }) {
+function Loaded({ now, home, next }: { now: Date; home: HomeOut; next: Next | null }) {
   const needs = useMemo(() => needsOf(home), [home])
-  const next = comingUpOf(home, now)
   const dayOne = home.workflows === 0
   const arrival = useArrival([
     ...needs.shown.map((need) => need.key),
@@ -166,10 +174,7 @@ function Loaded({ heading, today, now, home }: HomePageProps & { home: HomeOut }
   const more = moreWords(needs.more)
 
   return (
-    <div className={styles['home']}>
-      <PageHead heading={heading} lead={`${today} ${leadLine(needs.total, home.workflows)}`}>
-        {needs.total > 0 && next ? <ComingNext next={next} /> : null}
-      </PageHead>
+    <>
       <section className={cx(styles['section'], arrival.page && styles['arrive'])} aria-labelledby="needs-h">
         <h2 id="needs-h">
           Needs you <Count value={needs.total} />
@@ -202,6 +207,6 @@ function Loaded({ heading, today, now, home }: HomePageProps & { home: HomeOut }
           How it works
         </button>
       )}
-    </div>
+    </>
   )
 }

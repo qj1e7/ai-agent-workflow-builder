@@ -27,6 +27,8 @@ const KIND_ORDER: Record<Need['kind'], number> = { approval: 0, confirmation: 1,
 
 const urgentFirst = (a: Need, b: Need) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || b.at.localeCompare(a.at) || a.key.localeCompare(b.key)
 
+export const needsTotal = (home: HomeOut) => home.approvals_total + home.confirmations.length + home.stopped_total
+
 export function needsOf(home: HomeOut): Needs {
   const all: Need[] = [
     ...home.approvals.map((item): Need => ({ kind: 'approval', key: `approval:${item.approval_id}`, at: item.started_at, item })),
@@ -34,7 +36,7 @@ export function needsOf(home: HomeOut): Needs {
     ...home.stopped.map((item): Need => ({ kind: 'stopped', key: `stopped:${item.run_id}`, at: item.stopped_at, item })),
   ].sort(urgentFirst)
   const shown = all.slice(0, NEEDS_SHOWN)
-  const total = home.approvals_total + home.confirmations.length + home.stopped_total
+  const total = needsTotal(home)
   const approvalsShown = shown.filter((need) => need.kind === 'approval').length
   const approvals = home.approvals_total - approvalsShown
   return { shown, total, more: { approvals, others: total - shown.length - approvals } }
