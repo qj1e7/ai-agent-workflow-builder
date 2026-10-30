@@ -3,11 +3,11 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from datetime import date
-from itertools import pairwise
 from typing import Final, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from agent_runtime.abilities import RELEASE_WORDS, why_not
 from agent_runtime.card_runner import CardRunner, agent_ref, one_line
 from agent_runtime.contract import (
     AgentAddressee,
@@ -290,143 +290,7 @@ WORD_LIMIT: Final = 80
 NOT_SAID: Final = "I couldn't tell from your words."
 READ_IN: Final = "I read this into your words. Please check it."
 CANT_YET: Final = "I can't do this yet."
-ONLY_TICKETS: Final = (
-    "I can't do this yet. The only change I can make is a new Jira ticket, after a yes."
-)
-NO_PLACE: Final = (
-    "I can't use {} yet. I can only read Jira tickets and GitHub releases, and create a Jira "
-    "ticket after a yes."
-)
-NO_TOOL_VERBS: Final = frozenset(
-    {
-        "add",
-        "approve",
-        "archive",
-        "ask",
-        "assign",
-        "attach",
-        "cancel",
-        "change",
-        "chase",
-        "close",
-        "comment",
-        "delete",
-        "deploy",
-        "disable",
-        "e-mail",
-        "edit",
-        "email",
-        "enable",
-        "escalate",
-        "flag",
-        "forward",
-        "grant",
-        "invite",
-        "label",
-        "link",
-        "lock",
-        "mark",
-        "merge",
-        "message",
-        "move",
-        "notify",
-        "nudge",
-        "ping",
-        "post",
-        "publish",
-        "reassign",
-        "reject",
-        "remind",
-        "remove",
-        "rename",
-        "reopen",
-        "reply",
-        "reset",
-        "resolve",
-        "revoke",
-        "send",
-        "set",
-        "share",
-        "submit",
-        "suspend",
-        "tag",
-        "tell",
-        "transition",
-        "unassign",
-        "update",
-        "upload",
-    }
-)
-LEADS_IN: Final = frozenset(
-    {
-        "also",
-        "and",
-        "finally",
-        "just",
-        "kindly",
-        "next",
-        "now",
-        "or",
-        "please",
-        "so",
-        "then",
-        "to",
-    }
-)
-FIRST_WORDS: Final = 5
-WORD: Final = re.compile(r"[a-z0-9][a-z0-9'-]*")
 CONTROL, FORMAT, SURROGATE = "Cc", "Cf", "Cs"
-
-
-def _place(name: str, case_sensitive: bool = False) -> tuple[str, re.Pattern[str]]:
-    flags = re.NOFLAG if case_sensitive else re.IGNORECASE
-    return name, re.compile(rf"(?<!\w){re.escape(name)}(?!\w)", flags)
-
-
-PLACES_WITH_NO_TOOL: Final = (
-    _place("Teams", case_sensitive=True),
-    *(
-        _place(name)
-        for name in (
-            "Confluence",
-            "Slack",
-            "Outlook",
-            "SharePoint",
-            "OneDrive",
-            "Excel",
-            "GitLab",
-            "Bitbucket",
-            "Entra",
-            "Active Directory",
-            "Azure AD",
-            "ServiceNow",
-            "email",
-            "e-mail",
-        )
-    ),
-)
-
-WATCHLIST_WORDS: Final = frozenset(
-    {
-        "version",
-        "versions",
-        "release",
-        "releases",
-        "released",
-        "releasing",
-        "upgrade",
-        "upgrades",
-        "upgraded",
-        "upgrading",
-        "patch",
-        "patches",
-        "patched",
-        "patching",
-        "vulnerability",
-        "vulnerabilities",
-        "vulnerable",
-    }
-)
 
 UNDERSTAND_SYSTEM: Final = (
     "You are the Planner on a platform used by the support staff of CODESparks, a team in "
@@ -510,23 +374,9 @@ def _missing(kind: RowKind, note: str = NOT_SAID) -> UnderstoodRow:
     return UnderstoodRow(kind=kind, text="", state="missing", note=note)
 
 
-def _no_tool_action(text: str) -> bool:
-    words = WORD.findall(text.casefold())[:FIRST_WORDS]
-    led_in = [word for before, word in pairwise(words) if before in LEADS_IN]
-    return any(word in NO_TOOL_VERBS for word in words[:1] + led_in)
-
-
 def why_no_tool(kind: RowKind, text: str) -> str | None:
-    """Why no tool can do this part, from its words alone: it names a place we have no tool for,
-    or one of its first words is an action no tool takes. None for a schedule part, and when the
-    words name neither."""
-    if kind == "schedule":
-        return None
-    text = _visible_words(text)
-    place = next((name for name, pattern in PLACES_WITH_NO_TOOL if pattern.search(text)), None)
-    if place is not None:
-        return NO_PLACE.format(place)
-    return ONLY_TICKETS if _no_tool_action(text) else None
+    """Why the platform can't do this part, or None when it can. Hidden characters do not count."""
+    return why_not(kind, _visible_words(text))
 
 
 def _held_to_the_tools(row: UnderstoodRow) -> UnderstoodRow:
@@ -578,7 +428,7 @@ def understood_of(answer: UnderstandAnswer, task: str) -> Understood | BelongsOn
     prompt names."""
     if answer.belongs_on_watchlist:
         word = _as_the_task_wrote_it(task, answer.watchlist_word)
-        if word is None or word.casefold() not in WATCHLIST_WORDS:
+        if word is None or word.casefold() not in RELEASE_WORDS:
             return None
         return BelongsOnWatchlist(word=word, software=_as_the_task_wrote_it(task, answer.software))
     if not answer.rows:
