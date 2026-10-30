@@ -13,6 +13,7 @@ import { ApiError } from '../../api/client'
 import { errorWords } from '../../api/errors'
 import { createLatch } from '../../api/latch'
 import type { RunView, UseCaseView } from '../../api/types'
+import { placeAfterRedraw } from '../../ui/focus'
 import {
   agentsOf,
   changeProblem,
@@ -24,6 +25,8 @@ import {
   lineWhen,
   meansOutOfDate,
   nextRunWords,
+  placeOf,
+  PLACES_IN_PAGE_ORDER,
   pressChange,
   pressRunNow,
   rowAction,
@@ -108,13 +111,20 @@ describe('the next run', () => {
 })
 
 describe('when it runs', () => {
-  it('says it runs on a schedule when it has a next run, and that only Run now starts one with no schedule', () => {
-    expect(whenWords({ ...AGENTS, next_run_at: '2026-11-09T01:00:00Z' })).toEqual({ words: 'On a schedule', small: 'Singapore time (SGT).' })
-    expect(whenWords(AGENTS)).toEqual({ words: 'No schedule', small: 'An Operator starts it with Run now.' })
+  it('gives the schedule’s own day and time, in Singapore time', () => {
+    expect(whenWords(WATCHLIST)).toEqual({ words: 'Every Monday at 9:00', small: 'Singapore time (SGT).' })
+    expect(whenWords({ schedule: { day: 'every_day', at: '17:30', time_zone: 'Asia/Singapore' } })).toEqual({ words: 'Every day at 17:30', small: 'Singapore time (SGT).' })
   })
 
-  it('says nothing runs while it is paused, whether it has a schedule or not', () => {
-    expect(whenWords({ ...AGENTS, state: 'paused' })).toEqual({ words: 'Paused', small: 'Nothing runs until an Operator resumes it.' })
+  it('keeps the schedule while the workflow is paused, because Paused shows in the next run', () => {
+    expect(whenWords(PAUSED)).toEqual({ words: 'Every Monday at 9:00', small: 'Singapore time (SGT).' })
+    expect(nextRunWords(PAUSED, NOW)).toBe('Paused')
+  })
+
+  it('says only Run now starts a workflow with no schedule, on or paused', () => {
+    expect(whenWords(AGENTS)).toEqual({ words: 'No schedule', small: 'An Operator starts it with Run now.' })
+    const paused: UseCaseView = { ...AGENTS, state: 'paused' }
+    expect(whenWords(paused)).toEqual({ words: 'No schedule', small: 'An Operator starts it with Run now.' })
   })
 })
 
@@ -215,6 +225,13 @@ describe('the manage controls of a workflow page', () => {
   it('give an Approver who is not an Operator none', () => {
     expect(controlsOf(AGENTS, BOB)).toEqual([])
     expect(controlsOf({ ...AGENTS, state: 'paused' }, BOB)).toEqual([])
+  })
+
+  it('keep Pause and Resume in one place, so a refused Run now on a workflow someone paused hands focus to Resume', () => {
+    const shown = (useCase: UseCaseView) => controlsOf(useCase, ALICE).map(placeOf)
+    expect(shown({ ...AGENTS, state: 'paused' })).toEqual(['switch', 'delete'])
+    expect(placeAfterRedraw(PLACES_IN_PAGE_ORDER, placeOf('run'), shown({ ...AGENTS, state: 'paused' }))).toBe('switch')
+    expect(placeAfterRedraw(PLACES_IN_PAGE_ORDER, placeOf('pause'), shown({ ...AGENTS, state: 'paused' }))).toBe('switch')
   })
 
   it('give nobody any for the Software watchlist, which is looked after on the Software page', () => {
@@ -357,8 +374,12 @@ describe('a refusal that means the page shows an old state', () => {
     expect(meansOutOfDate(new ApiError(409, { detail: 'This workflow is paused. Resume it to start a run.' }))).toBe(true)
   })
 
+  it('is a 404, such as any press on a workflow someone else deleted', () => {
+    expect(meansOutOfDate(new ApiError(404, { detail: 'No such workflow' }))).toBe(true)
+  })
+
   it('is not any other answer', () => {
-    for (const status of [403, 404, 410, 503]) expect(meansOutOfDate(new ApiError(status, null)), String(status)).toBe(false)
+    for (const status of [403, 410, 503]) expect(meansOutOfDate(new ApiError(status, null)), String(status)).toBe(false)
     expect(meansOutOfDate(new TypeError('Failed to fetch'))).toBe(false)
   })
 })

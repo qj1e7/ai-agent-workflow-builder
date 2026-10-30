@@ -70,10 +70,16 @@ describe('a workflow page', () => {
     expect(WHO_APPROVES).toBe('Any Approver except the people who start or own it')
   })
 
-  it('says it runs on a schedule when it has a next run', () => {
-    const html = render({ useCase: { ...AGENTS, next_run_at: '2026-11-09T01:00:00Z' } })
-    expect(factOf(html, 'When')).toBe('On a schedule Singapore time (SGT).')
+  it('gives its schedule’s day and time, and its next run', () => {
+    const html = render({ useCase: { ...AGENTS, next_run_at: '2026-11-09T01:00:00Z', schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore' } } })
+    expect(factOf(html, 'When')).toBe('Every Monday at 9:00 Singapore time (SGT).')
     expect(factOf(html, 'Next run')).toBe('Mon 9 Nov, 9:00')
+  })
+
+  it('while paused, keeps its schedule in When and says Paused only in Next run', () => {
+    const html = render({ useCase: { ...AGENTS, state: 'paused', next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore' } } })
+    expect(factOf(html, 'When')).toBe('Every Monday at 9:00 Singapore time (SGT).')
+    expect(factOf(html, 'Next run')).toBe('Paused')
   })
 
   it('names its agents, each opening its card', () => {
@@ -140,7 +146,7 @@ describe('the Software watchlist', () => {
 
 describe('a workflow that is not there', () => {
   it('says so and offers the list', () => {
-    const html = render({ useCase: new ApiError(404, { detail: 'No such use case' }) })
+    const html = render({ useCase: new ApiError(404, { detail: 'No such workflow' }) })
     expect(text(/<h1\b[^>]*>([\s\S]*?)<\/h1>/.exec(html)?.[1] ?? '')).toBe('Workflow not found')
     expect(mainOf(html)).toMatch(/<a[^>]*href="\/workflows"[^>]*>Go to Workflows<\/a>/)
   })

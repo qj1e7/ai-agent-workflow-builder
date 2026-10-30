@@ -11,6 +11,7 @@ type Notice =
   | { readonly kind: 'removed'; readonly row: Named }
   | { readonly kind: 'restored'; readonly row: Named }
   | { readonly kind: 'gone'; readonly name: string }
+  | { readonly kind: 'resumed' }
 
 export interface ChangeFeedback {
   readonly notice: Notice | null
@@ -23,7 +24,7 @@ export type FeedbackEvent =
   | { readonly type: 'added'; readonly name: string }
   | { readonly type: 'removing' | 'removed' | 'gone' | 'restoring' | 'restored'; readonly row: Named }
   | { readonly type: 'failed' | 'refused'; readonly words: string }
-  | { readonly type: 'dismissed' }
+  | { readonly type: 'resumed' | 'dismissed' }
 
 export const NO_FEEDBACK: ChangeFeedback = { notice: null, problem: null, busy: null, focusTargetId: null }
 
@@ -51,6 +52,8 @@ export function changeFeedback(state: ChangeFeedback, event: FeedbackEvent): Cha
       return { ...state, problem: event.words, busy: null, focusTargetId: null }
     case 'refused':
       return { notice: null, problem: event.words, busy: null, focusTargetId: PROBLEM_ID }
+    case 'resumed':
+      return { ...state, notice: { kind: 'resumed' }, problem: null, focusTargetId: null }
     case 'dismissed':
       return { ...state, notice: null, focusTargetId: null }
   }
@@ -76,6 +79,8 @@ export function noticeWords(notice: Notice, checking: Checking): string {
       return `Put ${notice.row.name} back on the list.`
     case 'gone':
       return `${notice.name} was already removed.`
+    case 'resumed':
+      return checking.scheduled ? 'Resumed. Checks run on the schedule again.' : 'Resumed. Press Check now to check by hand.'
   }
 }
 

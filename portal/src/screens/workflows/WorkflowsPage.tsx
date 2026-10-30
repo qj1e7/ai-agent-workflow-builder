@@ -5,7 +5,7 @@ import { useLatch } from '../../api/latch'
 import { useDisplayName } from '../../api/people'
 import { useMe, useRuns, useUseCases } from '../../api/queries'
 import type { Me, RunView, UseCaseView } from '../../api/types'
-import { useMoveWorkflow } from '../../api/workflowQueries'
+import { useMoveWorkflow, useRereadWorkflow } from '../../api/workflowQueries'
 import { PageHead } from '../../shell/PageHead'
 import { Button, ButtonLink } from '../../ui/Button'
 import { useFocusWhenReady } from '../../ui/focus'
@@ -14,7 +14,7 @@ import { IconSearch } from '../../ui/icons'
 import { Toast, UNDO_ID, type ToastMessage } from '../../ui/Toast'
 import { useArrivalScroll } from './arrival'
 import { Faces, StatusPills } from './Status'
-import { agentsOf, changeProblem, changeWords, FILTERS, lineWhen, nextRunWords, pressChange, rowsOf, runFact, workflowPath, type Filter, type Row, type RunFact, type Viewer } from './workflow'
+import { agentsOf, changeProblem, changeWords, FILTERS, lineWhen, meansOutOfDate, nextRunWords, pressChange, rowsOf, runFact, workflowPath, type Filter, type Row, type RunFact, type Viewer } from './workflow'
 import styles from './Workflows.module.css'
 
 export const REFRESH_MS = 15_000
@@ -153,6 +153,7 @@ function Loaded({ handedOver, now, me, useCases, runs, runsFailed }: LoadedProps
   const nameOf = useDisplayName()
   const words = useErrorWords()
   const move = useMoveWorkflow()
+  const reread = useRereadWorkflow()
   const changes = useLatch()
   const viewer = viewerOf(me)
   useArrivalScroll()
@@ -176,7 +177,10 @@ function Loaded({ handedOver, now, me, useCases, runs, runsFailed }: LoadedProps
         focusRestored()
         setNote((before) => ({ kind: 'said', id: (before?.id ?? 0) + 1, text: changeWords('restore', view, now) }))
       },
-      onError: (error) => setProblem(changeProblem('restore', row.name, error, words)),
+      onError: (error) => {
+        if (meansOutOfDate(error)) reread(row.id)
+        setProblem(changeProblem('restore', row.name, error, words))
+      },
     })
   }
 

@@ -222,9 +222,13 @@ function clockWords(at: string): string {
   return at.replace(/^0/, '')
 }
 
+export function repeatWords({ day, at }: { readonly day: Day; readonly at: string }): string {
+  return `${dayLabel[day]} at ${clockWords(at)}`
+}
+
 /** "Checked every Monday at 9:00, set by Carol." */
 export function scheduleWords(schedule: ScheduleView): string {
-  return `Checked ${dayLabel[schedule.day]} at ${clockWords(schedule.at)}, set by ${schedule.owner_name}.`
+  return `Checked ${repeatWords(schedule)}, set by ${schedule.owner_name}.`
 }
 
 export function stoppedWords(reason: FailureReason | null): string {

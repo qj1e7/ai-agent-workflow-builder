@@ -11,6 +11,7 @@ import { useDeleteWorkflow, useMoveWorkflow, useRereadWorkflow } from '../../api
 import { PageHead } from '../../shell/PageHead'
 import { AgentFace } from '../../ui/AgentFace'
 import { Button, ButtonLink } from '../../ui/Button'
+import { useFocusAfterReread } from '../../ui/focus'
 import { FROM_LIST, openedFromList } from '../../ui/fromList'
 import { IconChevronLeft, IconPause, IconPlay, IconTrash } from '../../ui/icons'
 import { Toast, type ToastMessage } from '../../ui/Toast'
@@ -24,6 +25,8 @@ import {
   controlsOf,
   meansOutOfDate,
   nextRunWords,
+  placeOf,
+  PLACES_IN_PAGE_ORDER,
   pressChange,
   pressRunNow,
   rowAction,
@@ -33,6 +36,7 @@ import {
   stepTag,
   whenWords,
   workflowPath,
+  type Place,
 } from './workflow'
 import { REFRESH_MS, viewerOf } from './WorkflowsPage'
 import styles from './Workflows.module.css'
@@ -159,7 +163,14 @@ interface Said {
   readonly text: string
 }
 
-function WorkflowView({ useCase, me, now }: { useCase: UseCaseView; me: Me; now: Date }) {
+interface ViewProps {
+  readonly useCase: UseCaseView
+  readonly me: Me
+  readonly now: Date
+  readonly onReread: (pressed: Place) => void
+}
+
+function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
   const id = useCase.use_case_id
   const runs = useRuns({ poll: REFRESH_MS })
   const nameOf = useDisplayName()
@@ -170,10 +181,12 @@ function WorkflowView({ useCase, me, now }: { useCase: UseCaseView; me: Me; now:
   const removal = useDeleteWorkflow()
   const reread = useRereadWorkflow()
   const changes = useLatch()
-  const rereadIfOutOfDate = (error: unknown) => {
-    if (meansOutOfDate(error)) reread(id)
+  const rereadIfOutOfDate = (pressed: Place) => (error: unknown) => {
+    if (!meansOutOfDate(error)) return
+    onReread(pressed)
+    reread(id)
   }
-  const runNow = useRunNow(id, rereadIfOutOfDate)
+  const runNow = useRunNow(id, rereadIfOutOfDate('run'))
   const deleteButton = useRef<HTMLButtonElement>(null)
   const [asking, setAsking] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
@@ -197,7 +210,7 @@ function WorkflowView({ useCase, me, now }: { useCase: UseCaseView; me: Me; now:
         setSaid((before) => ({ id: (before?.id ?? 0) + 1, text: changeWords(what, view, now) }))
       },
       onError: (error) => {
-        rereadIfOutOfDate(error)
+        rereadIfOutOfDate('switch')(error)
         setProblem(changeProblem(what, useCase.name, error, words))
       },
     })
@@ -207,7 +220,7 @@ function WorkflowView({ useCase, me, now }: { useCase: UseCaseView; me: Me; now:
     pressChange(changes, (outcome) => removal.mutate(id, outcome), {
       onSuccess: () => void navigate('/workflows', { state: { deleted: { id, name: useCase.name } } }),
       onError: (error) => {
-        rereadIfOutOfDate(error)
+        rereadIfOutOfDate('delete')(error)
         setDeleteProblem(changeProblem('delete', useCase.name, error, words))
       },
     })
@@ -231,7 +244,7 @@ function WorkflowView({ useCase, me, now }: { useCase: UseCaseView; me: Me; now:
             </ButtonLink>
           ) : null}
           {controls.includes('run') ? (
-            <Button variant={runNowVariant} loading={runNow.pending} onClick={runNow.press}>
+            <Button variant={runNowVariant} data-place={placeOf('run')} loading={runNow.pending} onClick={runNow.press}>
               Run now
             </Button>
           ) : null}
@@ -245,13 +258,14 @@ function WorkflowView({ useCase, me, now }: { useCase: UseCaseView; me: Me; now:
       {controls.length > 0 ? (
         <div className={styles['btns']}>
           {onOff ? (
-            <Button icon={onOff === 'resume' ? IconPlay : IconPause} loading={move.isPending} onClick={() => pauseOrResume(onOff)}>
+            <Button icon={onOff === 'resume' ? IconPlay : IconPause} data-place={placeOf(onOff)} loading={move.isPending} onClick={() => pauseOrResume(onOff)}>
               {onOff === 'resume' ? 'Resume' : 'Pause'}
             </Button>
           ) : null}
           {controls.includes('delete') ? (
             <Button
               ref={deleteButton}
+              data-place={placeOf('delete')}
               variant="danger-outline"
               icon={IconTrash}
               onClick={() => {
@@ -342,6 +356,8 @@ function notFound(error: unknown): boolean {
 function WorkflowLoader({ useCaseId, now }: { useCaseId: string; now: Date }) {
   const useCase = useUseCase(useCaseId)
   const me = useMe()
+  const shown = useCase.data && me.data && !useCase.isError ? controlsOf(useCase.data, viewerOf(me.data)).map(placeOf) : []
+  const refocus = useFocusAfterReread(PLACES_IN_PAGE_ORDER, shown, Math.max(useCase.dataUpdatedAt, useCase.errorUpdatedAt))
   if (useCase.isError && notFound(useCase.error)) {
     return (
       <>
@@ -368,7 +384,7 @@ function WorkflowLoader({ useCaseId, now }: { useCaseId: string; now: Date }) {
     )
   }
   if (workflowPath(useCase.data) === SOFTWARE_PAGE) return <Navigate to={SOFTWARE_PAGE} replace />
-  return <WorkflowView useCase={useCase.data} me={me.data} now={now} />
+  return <WorkflowView useCase={useCase.data} me={me.data} now={now} onReread={refocus} />
 }
 
 export function WorkflowRoute({ now }: { now: Date }) {

@@ -47,6 +47,7 @@ from platform_api.builder.models import (
     UseCaseCreated,
     UseCaseDeleted,
     UseCaseList,
+    UseCaseSchedule,
     UseCaseView,
 )
 from platform_api.builder.planning import (
@@ -74,6 +75,7 @@ from platform_api.orchestration import (
     RunStarted,
     RunStarter,
     SavedSchedule,
+    Schedule,
     ScheduleBook,
     Task,
     card_bindings,
@@ -88,6 +90,10 @@ _CURRENT_VERSION = """
     JOIN builder.use_case_versions v
       ON v.use_case_id = u.use_case_id AND v.version = u.current_version
 """
+
+
+def _schedule_view(schedule: Schedule) -> UseCaseSchedule:
+    return UseCaseSchedule(day=schedule.day, at=schedule.at, time_zone=schedule.time_zone)
 
 
 def _view(
@@ -114,6 +120,7 @@ def _view(
         created_at=row["created_at"],
         state="on" if on else "paused",
         next_run_at=schedule.slots(now).next if on and schedule is not None else None,
+        schedule=None if schedule is None else _schedule_view(schedule.schedule),
         plan=plan,
         agents=[
             UseCaseAgentView(
