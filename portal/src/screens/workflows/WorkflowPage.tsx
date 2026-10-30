@@ -23,6 +23,7 @@ import {
   changeProblem,
   changeWords,
   controlsOf,
+  heldNote,
   meansOutOfDate,
   nextRunWords,
   placeOf,
@@ -70,7 +71,7 @@ function When({ useCase }: { useCase: UseCaseView }) {
 }
 
 function NextRun({ useCase, now }: { useCase: UseCaseView; now: Date }) {
-  const words = nextRunWords(useCase, now)
+  const words = heldNote(useCase) ?? nextRunWords(useCase, now)
   const changes = useChanges(words)
   return (
     <dd>

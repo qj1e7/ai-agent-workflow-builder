@@ -84,6 +84,14 @@ describe('the Workflows list', () => {
     expect(text(rowOf(html, 'uc_bugs'))).toContain('Not scheduled')
   })
 
+  it('promises no next run on a row whose schedule is held, because its owner can no longer run it', () => {
+    const held: UseCaseView = { ...BUGS, next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Carol', held: 'owner_removed' } }
+    const row = text(rowOf(render({ useCases: [held] }), 'uc_bugs'))
+    expect(row).toContain('Not running')
+    expect(row).not.toContain('Next:')
+    expect(row).not.toContain('Not scheduled')
+  })
+
   it('opens each workflow from its name, and the Software watchlist on the Software page', () => {
     const html = render()
     expect(rowOf(html, 'uc_bugs')).toMatch(/<a[^>]*href="\/workflows\/uc_bugs"[^>]*>Morning bug report check<\/a>/)

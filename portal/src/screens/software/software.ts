@@ -31,12 +31,15 @@ const heldWhy: Record<ScheduleHold, string> = {
   owner_not_an_operator: 'can no longer run workflows',
 }
 
+/** Why a held schedule starts nothing, in the words the Software page and the workflow page both show. */
+export function heldWords(held: ScheduleHold, ownerName: string): string {
+  const owner = ownerName.trim() || 'its owner'
+  return `Not running: ${owner} ${heldWhy[held]}. An Operator can take it over by saving the schedule.`
+}
+
 /** What the schedule does next. The view names no next check while the watchlist is paused or the schedule is held, and paused wins over held. */
 export function nextCheckWords(schedule: ScheduleView, paused: boolean): string {
-  if (schedule.held && !paused) {
-    const owner = schedule.owner_name.trim() || 'its owner'
-    return `Not running: ${owner} ${heldWhy[schedule.held]}. An Operator can take it over by saving the schedule.`
-  }
+  if (schedule.held && !paused) return heldWords(schedule.held, schedule.owner_name)
   return schedule.next_at === null ? PAUSED_WORDS : `Next check ${singaporeTime(schedule.next_at)}, Singapore time.`
 }
 

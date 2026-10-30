@@ -6,7 +6,7 @@ import type { FaceState } from '../../ui/AgentFace'
 import { agentIdentity } from '../../ui/agents'
 import { andList, count, type NameOf } from '../run/words'
 import { faceId } from '../agents/agents'
-import { repeatWords } from '../software/software'
+import { heldWords, repeatWords } from '../software/software'
 
 export type Tone = 'ok' | 'wait' | 'bad' | 'new'
 
@@ -107,9 +107,15 @@ export function lineWhen(iso: string, now: Date): string {
   return sameDay(at, today) ? `Today ${at.clock}` : dayWords(at, today)
 }
 
-export function nextRunWords(useCase: Pick<UseCaseView, 'state' | 'next_run_at'>, now: Date): string {
+export function nextRunWords(useCase: Pick<UseCaseView, 'state' | 'next_run_at' | 'schedule'>, now: Date): string {
   if (useCase.state === 'paused') return 'Paused'
+  if (useCase.schedule?.held) return 'Not running'
   return useCase.next_run_at ? runWhen(useCase.next_run_at, now) : 'Not scheduled'
+}
+
+/** Why the schedule starts no run while its owner can no longer run it, as the Software page says it. Paused wins, so null while paused. */
+export function heldNote({ state, schedule }: Pick<UseCaseView, 'state' | 'schedule'>): string | null {
+  return state === 'on' && schedule?.held ? heldWords(schedule.held, schedule.owner_name) : null
 }
 
 export interface When {
