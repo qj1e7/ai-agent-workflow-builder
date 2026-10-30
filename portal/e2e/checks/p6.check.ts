@@ -31,9 +31,10 @@ interface Row {
 
 interface View {
   use_case_id: string
+  state: 'on' | 'paused'
   software: Row[]
   last_check: { run_id: string; state: string; started_at: string } | null
-  schedule: { day: string; at: string; owner: string; owner_name: string; next_at: string } | null
+  schedule: { day: string; at: string; owner: string; owner_name: string; next_at: string | null } | null
 }
 
 function laneDir(lane: number | string): string {
@@ -445,6 +446,41 @@ test('@lane10 search filters 14 rows as you type and a screen reader hears the c
     save(10, 'p6-search.json', { heard, liveRegionRole: await live.getAttribute('role'), liveRegionAria: await live.getAttribute('aria-live') })
     assertClean(watch)
     await context.close()
+  })
+})
+
+test('@lane11 alice pauses the watchlist through the API, and the page says Paused with no next check time; resuming brings the time back', async ({ browser }) => {
+  await withBackend(async (backend) => {
+    const useCaseId = await backend.freshWatchlist('alice', [LANGGRAPH])
+    await backend.send('PUT', 'alice', '/api/v1/watchlist/schedule', { day: 'monday', at: '09:00' })
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    const schedule = page.locator('section[aria-labelledby="schedule-heading"]')
+    try {
+      await openSoftware(page)
+      await expect(schedule).toContainText('Next check ')
+      await shotTo(page, 11, 'p6-on.png', true)
+      await backend.post('alice', `/api/v1/use-cases/${useCaseId}/pause`)
+      const paused = await viewOf(backend)
+      await openSoftware(page)
+      await expect(schedule).toContainText('Paused. No check runs until an Operator resumes it.')
+      const pausedText = await text(schedule)
+      await shotTo(page, 11, 'p6-paused.png', true)
+      save(11, 'p6-paused.json', { state: paused.state, next_at: paused.schedule?.next_at ?? null, onPage: pausedText })
+      expect(paused.state).toBe('paused')
+      expect(paused.schedule?.next_at).toBeNull()
+      expect(pausedText).not.toContain('Next check')
+      await expect(page.getByRole('button', { name: 'Check now' })).toHaveCount(0)
+      await backend.post('alice', `/api/v1/use-cases/${useCaseId}/resume`)
+      await openSoftware(page)
+      await expect(schedule).toContainText('Next check ')
+      await expect(schedule).not.toContainText('Paused')
+      assertClean(watch)
+    } finally {
+      await backend.post('alice', `/api/v1/use-cases/${useCaseId}/resume`)
+      await context.close()
+    }
   })
 })
 

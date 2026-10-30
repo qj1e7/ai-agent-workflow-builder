@@ -33,6 +33,7 @@ interface RowProps {
   readonly row: WatchedSoftwareView
   readonly operator: boolean
   readonly scheduled: boolean
+  readonly paused: boolean
   readonly open: boolean
   readonly removing: boolean
   readonly nameOf: (id: string) => string
@@ -40,7 +41,7 @@ interface RowProps {
   readonly onRemove: () => void
 }
 
-function Row({ row, operator, scheduled, open, removing, nameOf, onToggle, onRemove }: RowProps) {
+function Row({ row, operator, scheduled, paused, open, removing, nameOf, onToggle, onRemove }: RowProps) {
   const historyId = `history-${row.id}`
   return (
     <li className={styles['row']} data-status={row.status}>
@@ -72,7 +73,7 @@ function Row({ row, operator, scheduled, open, removing, nameOf, onToggle, onRem
         <span className={styles['pill']} data-tone={statusTone[row.status]}>
           {statusLabel[row.status]}
         </span>
-        {row.status === 'cant_check' ? <span className={styles['src']}>{cantCheckWords(scheduled)}</span> : null}
+        {row.status === 'cant_check' ? <span className={styles['src']}>{cantCheckWords(scheduled, paused)}</span> : null}
         {row.status === 'ticket_open' && row.open_ticket ? <span className={styles['src']}>{row.open_ticket}</span> : null}
         {row.status === 'awaiting_approval' && row.approval_id ? (
           <Link to={`/approvals/${row.approval_id}`} className={styles['src']}>
@@ -101,6 +102,7 @@ interface SectionProps {
   readonly rows: readonly WatchedSoftwareView[]
   readonly operator: boolean
   readonly scheduled: boolean
+  readonly paused: boolean
   readonly opened: string | null
   readonly removing: string | null
   readonly nameOf: (id: string) => string
@@ -122,6 +124,7 @@ function Section({ title, rows, ...rest }: SectionProps) {
             row={row}
             operator={rest.operator}
             scheduled={rest.scheduled}
+            paused={rest.paused}
             open={rest.opened === row.id}
             removing={rest.removing === row.id}
             nameOf={rest.nameOf}
@@ -222,13 +225,14 @@ function Loaded({ view, operator }: { view: WatchlistView | null; operator: bool
 
   const software = view?.software ?? []
   const scheduled = Boolean(view?.schedule)
+  const paused = view?.state === 'paused'
   const groups = groupsOf(software, query)
   const shown = countIn(groups)
   const searching = query.trim() !== ''
 
   return (
     <>
-      {operator && view && software.length > 0 ? <CheckNow useCaseId={view.use_case_id} /> : null}
+      {operator && view && !paused && software.length > 0 ? <CheckNow useCaseId={view.use_case_id} /> : null}
       {view?.last_check?.state === 'failed' ? <LastCheckStopped last={view.last_check} /> : null}
       {view ? <Schedule schedule={view.schedule} operator={operator} /> : null}
       <Notice feedback={feedback} scheduled={scheduled} onUndo={(row) => pressUndo(changes, restore.mutate, row, dispatch, words)} onDismiss={dismiss} />
@@ -259,6 +263,7 @@ function Loaded({ view, operator }: { view: WatchlistView | null; operator: bool
           rows={rows}
           operator={operator}
           scheduled={scheduled}
+          paused={paused}
           opened={opened}
           removing={feedback.busy?.act === 'remove' ? feedback.busy.id : null}
           nameOf={nameOf}

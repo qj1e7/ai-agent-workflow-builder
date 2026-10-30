@@ -1,5 +1,6 @@
 import failedRun from '@contracts/fixtures/views/failure.final.json'
 import empty from '@contracts/fixtures/watchlist/empty.json'
+import paused from '@contracts/fixtures/watchlist/paused.json'
 import statuses from '@contracts/fixtures/watchlist/statuses.json'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
@@ -67,6 +68,26 @@ describe('the Software watchlist page', () => {
     expect(text(html)).toContain('The last check stopped: an agent could not finish its work. Started Wed 4 Nov, 10:14, Singapore time.')
     expect(html).toContain(`href="/runs/${failedRun.run_id}"`)
     expect(text(render(stopped, BOB))).toContain('The last check stopped. Started Wed 4 Nov, 10:14')
+  })
+
+  it('says the watchlist is paused, with no next check time, while it is paused', () => {
+    expect((paused as WatchlistView).schedule?.next_at).toBeNull()
+    const words = text(render(paused, ALICE))
+    expect(words).toContain('Paused. No check runs until an Operator resumes it.')
+    expect(words).toContain('Checked every Monday at 9:00, set by Alice.')
+    expect(words).not.toContain('Next check')
+    expect(words).not.toContain('It will try again at the next check')
+    expect(words).toContain('Can’t check right now. It is checked again once the watchlist is resumed.')
+    expect(words).toContain('Change schedule')
+    expect(buttons(render(paused, ALICE))).not.toContain('Check now')
+    expect(buttons(render(statuses, ALICE))).toContain('Check now')
+  })
+
+  it('reads as before while the watchlist is on, with its next check time and no paused words', () => {
+    const words = text(render(statuses, ALICE))
+    expect((statuses as WatchlistView).state).toBe('on')
+    expect(words).toContain('Next check Mon 23 Nov, 9:00, Singapore time.')
+    expect(words).not.toContain('Paused')
   })
 
   it('says nothing about the last check while it has not stopped', () => {

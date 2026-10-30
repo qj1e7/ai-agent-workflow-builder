@@ -6,12 +6,14 @@ import { Button } from '../../ui/Button'
 import { checkClock, DAYS, dayOption, scheduleOwnerWords, scheduleWords, singaporeTime } from './software'
 import styles from './Software.module.css'
 
+const PAUSED_WORDS = 'Paused. No check runs until an Operator resumes it.'
+
 export function ScheduleNote({ schedule, operator }: { schedule: ScheduleView | null; operator: boolean }) {
   if (schedule === null) return <p>{operator ? 'No schedule. Press Check now to check by hand.' : 'No schedule. An Operator can press Check now to check by hand.'}</p>
   return (
     <>
       <p>
-        <b>{scheduleWords(schedule)}</b> Next check {singaporeTime(schedule.next_at)}, Singapore time.
+        <b>{scheduleWords(schedule)}</b> {schedule.next_at === null ? PAUSED_WORDS : `Next check ${singaporeTime(schedule.next_at)}, Singapore time.`}
       </p>
       <p className="muted">{scheduleOwnerWords(schedule)}</p>
     </>

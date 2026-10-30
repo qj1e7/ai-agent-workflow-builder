@@ -5,7 +5,8 @@ import type { Day, FailureReason, ScheduleView, SoftwareStatus, VersionSourceVie
 export const SOURCES_NOTE =
   'GitHub is the only place we can check today. Other places, such as npm or PyPI, are not available yet.'
 
-export function cantCheckWords(scheduled: boolean): string {
+export function cantCheckWords(scheduled: boolean, paused = false): string {
+  if (paused) return 'Can’t check right now. It is checked again once the watchlist is resumed.'
   return scheduled ? 'Can’t check right now. It will try again at the next check.' : 'Can’t check right now. With no schedule, it is checked again when an Operator presses Check now.'
 }
 

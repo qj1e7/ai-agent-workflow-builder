@@ -10,7 +10,7 @@
 #   check <project> [playwright arguments] run portal/e2e/checks/p6.check.ts in the runner image, in that project's Portal network
 #   live <project> [playwright arguments]  run the builder's live specs (portal/e2e/live) the same way
 #   lane1 <head-project> [trunk-project]   add software and check it at head; trunk has no Software watchlist page
-#   lane <n> <project>                     lanes 2, 3, 4, 5, 7, 8, 9 and 10, one at a time on a shared stack
+#   lane <n> <project>                     lanes 2, 3, 4, 5, 7, 8, 9, 10 and 11, one at a time on a shared stack
 #   lane6 <worktree> <project> <tag> <portal-port> <api-port> <n8n-port>
 #                                          the mock GitHub fails during a check, on its own stack, which this brings up and down
 #   size <trunk-worktree> <head-worktree>  gzip bytes of the JavaScript that dist/index.html loads
@@ -133,7 +133,7 @@ lane1() {
 lane() {
   local n=$1 project=$2
   case "$n" in
-    2 | 3 | 4 | 5 | 7 | 8 | 9 | 10) ;;
+    2 | 3 | 4 | 5 | 7 | 8 | 9 | 10 | 11) ;;
     *) die "lane $n does not run on a shared stack; see lane1 and lane6" ;;
   esac
   mkdir -p "$EVID/lane-$n"
