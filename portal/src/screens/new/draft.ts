@@ -278,6 +278,7 @@ export function nextBlockers(form: Form, plan: PlanView | null): NextBlockers {
   if (plan.kind === 'cannot') return { rows, words: opensWhen(['you change your words to something I can do']) }
   if (plan.kind === 'trouble') return { rows, words: opensWhen(['the Planner can read it']) }
   if (plan.problems.length > 0) return { rows, words: opensWhen(['you change your words so the new agent has no problems']) }
+  if (plan.notIncluded.length > 0) return { rows, words: opensWhen(['you change your words so nothing is left out']) }
   const empty = plan.agents.flatMap((agent) => agent.inputs.filter((input) => valueProblem(input.kind, valueOf(form, agent, input.name)) !== null).map((input) => input.name))
   return { rows, words: empty.length > 0 ? opensWhen([`you fill in ${[...new Set(empty)].join(' and ')}`]) : '' }
 }

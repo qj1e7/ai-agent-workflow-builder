@@ -212,6 +212,15 @@ describe('the plan in step 2', () => {
     expect(nextBlockers(form, cannot).words).toBe('Next opens when you change your words to something I can do.')
   })
 
+  it('keeps Next off while the plan leaves a part out, even once the part it couldn’t do is retyped', () => {
+    let form = read(TEAMS, 'Post a summary of stale tickets in Teams')
+    form = changeRow(form, 0, 'Every Monday at 9am')
+    form = { ...changeRow(form, 3, 'Post it in the Teams channel'), typed: { '0:Jira project': 'MOCK' } }
+    expect(rowBlockers(form.rows)).toEqual([])
+    const leftOut: PlanOut = { ...CLEAN_DRAFT, missing_tools: [{ need: 'Post in Teams', why: 'To share the list with the team.' }] }
+    expect(nextBlockers(form, planView(leftOut, form.rows)).words).toBe('Next opens when you change your words so nothing is left out.')
+  })
+
   it('waits for the plan before Next opens', () => {
     expect(nextBlockers(read(ROWS), null).words).toBe('Next opens when the plan is ready.')
   })

@@ -149,6 +149,16 @@ describe('step 2', () => {
     expect(text(html)).toContain('I’ll plan the steps once every part is clear.')
   })
 
+  it('keeps Next off while the plan leaves a part out, says so, and has the list to point at', () => {
+    const form = read(rowsAnswer as UnderstandOut)
+    const leftOut: PlanOut = { ...DRAFTED, missing_tools: [{ need: 'Post in Teams', why: 'To share the list with the team.' }] }
+    const html = check(form, planState(planView(leftOut, form.rows)))
+    expect(buttonTag(html, 'Next')).toContain('aria-disabled="true"')
+    expect(text(html)).toContain('Left out, because no tool does it yet: Post in Teams.')
+    expect(text(html)).toContain('Next opens when you change your words so nothing is left out.')
+    expect(html).toMatch(/<ul id="plan-problems"[^>]*tabindex="-1"/)
+  })
+
   it('shows a fixed row as changed by you, with what the request said', () => {
     const form = changeRow(read(rowsAnswer as UnderstandOut), 1, 'Bug tickets in MOCK with no update for 14 days')
     expect(text(check(form, planState(null, true)))).toContain(

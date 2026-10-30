@@ -23,6 +23,7 @@ const TOOL_TAG: Record<ToolId, string> = {
 
 export const fixId = (index: number) => `row-${index}-fix`
 export const valueId = (agent: number, input: string) => `value-${agent}-${input.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+const PROBLEMS_ID = 'plan-problems'
 
 function NextButton({ blocked, describedBy, onNext, onBlocked }: { blocked: boolean; describedBy: string; onNext: () => void; onBlocked: () => void }) {
   return (
@@ -249,7 +250,7 @@ function PlanPanel({ form, plan, ready, shown, onValue }: { form: Form; plan: Pl
           {drafted.length > 0 ? ` ${drafted.map((agent) => agent.name).join(' and ')} is a new agent. It’s saved to the Agent library when you turn this workflow on.` : ''}
         </p>
         {view.problems.length > 0 || view.notIncluded.length > 0 ? (
-          <ul className={styles['problems']}>
+          <ul id={PROBLEMS_ID} className={styles['problems']} tabIndex={-1}>
             {view.problems.map((problem) => (
               <li key={problem}>
                 <IconAlert size={16} />
@@ -292,6 +293,7 @@ interface StepCheckProps {
 function firstBlocked(form: Form, plan: PlanView | null, rowIndex: number | undefined): HTMLElement | null {
   if (rowIndex !== undefined) return document.getElementById(fixId(rowIndex))
   if (plan?.kind !== 'agents') return document.getElementById('plan-h')
+  if (plan.problems.length > 0 || plan.notIncluded.length > 0) return document.getElementById(PROBLEMS_ID)
   for (const agent of plan.agents)
     for (const input of agent.inputs) if (valueProblem(input.kind, valueOf(form, agent, input.name)) !== null) return document.getElementById(valueId(agent.index, input.name))
   return null
