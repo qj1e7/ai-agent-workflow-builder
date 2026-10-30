@@ -23,7 +23,6 @@ from platform_api.wire import FailureReason, Trigger, WireModel
 
 SHOWN = 10
 NAME_SHOWN = 80
-NOT_ON_THE_LIST = "Someone no longer on the list"
 
 
 class ChangeLine(WireModel):
@@ -38,7 +37,9 @@ class ApprovalItem(WireModel):
     use_case_id: str
     use_case_name: str
     started_by: UserId
-    started_by_name: str
+    started_by_name: str | None = Field(
+        description="Null when the person who started it is no longer on the list."
+    )
     trigger: Trigger
     started_at: datetime
     step: int = Field(description="The step waiting for a yes, from 0.")
@@ -103,7 +104,7 @@ class HomeOut(WireModel):
     )
     approvals_total: int
     confirmations: list[ConfirmationItem] = Field(
-        description="Setup changes this person may confirm, the oldest first."
+        description="Setup changes this person may confirm, the newest first."
     )
     stopped: list[StoppedItem] = Field(
         description="Stopped runs an Operator started, owns or retried, while each is the "
@@ -141,7 +142,7 @@ def _approval(ask: Ask, names: dict[UserId, str]) -> ApprovalItem:
         use_case_id=run.use_case_id,
         use_case_name=run.use_case_name,
         started_by=run.started_by,
-        started_by_name=names.get(run.started_by, NOT_ON_THE_LIST),
+        started_by_name=names.get(run.started_by),
         trigger=run.trigger,
         started_at=run.started_at,
         step=ask.step,
@@ -226,9 +227,11 @@ class Home:
     async def for_person(self, viewer: Principal) -> HomeOut:
         runs = await self._runs.runs_for(viewer)
         names = {p.user_id: p.display for p in await self._people.listed()}
-        confirmations = [
-            row for row in await self._people.confirmations(viewer) if row.why_not is None
-        ]
+        confirmations = sorted(
+            (row for row in await self._people.confirmations(viewer) if row.why_not is None),
+            key=lambda row: row.confirmation.asked_at,
+            reverse=True,
+        )
         use_cases = (await self._builder.list_use_cases()).use_cases
         live = {u.use_case_id for u in use_cases}
         stopped = [s for s in runs.stopped if s.run.use_case_id in live]

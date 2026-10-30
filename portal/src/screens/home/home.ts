@@ -27,6 +27,8 @@ const KIND_ORDER: Record<Need['kind'], number> = { approval: 0, confirmation: 1,
 
 const urgentFirst = (a: Need, b: Need) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || b.at.localeCompare(a.at) || a.key.localeCompare(b.key)
 
+export const needsTotal = (home: HomeOut) => home.approvals_total + home.confirmations.length + home.stopped_total
+
 export function needsOf(home: HomeOut): Needs {
   const all: Need[] = [
     ...home.approvals.map((item): Need => ({ kind: 'approval', key: `approval:${item.approval_id}`, at: item.started_at, item })),
@@ -34,7 +36,7 @@ export function needsOf(home: HomeOut): Needs {
     ...home.stopped.map((item): Need => ({ kind: 'stopped', key: `stopped:${item.run_id}`, at: item.stopped_at, item })),
   ].sort(urgentFirst)
   const shown = all.slice(0, NEEDS_SHOWN)
-  const total = home.approvals_total + home.confirmations.length + home.stopped_total
+  const total = needsTotal(home)
   const approvalsShown = shown.filter((need) => need.kind === 'approval').length
   const approvals = home.approvals_total - approvalsShown
   return { shown, total, more: { approvals, others: total - shown.length - approvals } }
@@ -66,8 +68,13 @@ export interface ItemWords {
   readonly why: string | null
 }
 
+function starterOf(item: ApprovalItem): string {
+  if (item.started_by_name !== null) return starterName(item.started_by_name, item.trigger)
+  return item.trigger === 'schedule' ? 'a schedule' : 'someone no longer on the list'
+}
+
 function approvalWords(item: ApprovalItem, now: Date): ItemWords {
-  const tickets = item.first_changes.length > 0 && item.first_changes.every((change) => change.operation === 'create_ticket')
+  const tickets = item.first_changes.length === item.changes && item.first_changes.every((change) => change.operation === 'create_ticket')
   const title = item.changes === 0 ? 'A run is waiting for your yes' : `${count(item.changes, tickets ? 'ticket' : 'change')} ${item.changes === 1 ? 'is' : 'are'} waiting for your yes`
   const step = item.steps > 1 ? ` · Step ${item.step + 1} of ${item.steps}` : ''
   const lines = item.first_changes.map((change) => change.title ?? `A change in ${connectorLabel(change.connector)}`)
@@ -75,7 +82,7 @@ function approvalWords(item: ApprovalItem, now: Date): ItemWords {
   return {
     tone: 'wait',
     title,
-    meta: `${item.use_case_name} · Started by ${starterName(item.started_by_name, item.trigger)}, ${runWhen(item.started_at, now)}${step}`,
+    meta: `${item.use_case_name} · Started by ${starterOf(item)}, ${runWhen(item.started_at, now)}${step}`,
     lines: unlisted > 0 ? [...lines, `and ${unlisted} more`] : lines,
     note: null,
     why: null,
@@ -164,7 +171,7 @@ function whyNotYours(item: WaitingItem): string {
     case 'owns':
       return 'It is your workflow'
     case 'decided_earlier':
-      return `You said yes to step ${item.step} of ${item.steps}`
+      return 'You already said yes to an earlier step'
   }
 }
 

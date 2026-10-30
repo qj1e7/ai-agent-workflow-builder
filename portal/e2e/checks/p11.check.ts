@@ -12,16 +12,18 @@ const TARGET = process.env['TARGET'] ?? 'head'
 const SAMPLE = Number(process.env['SAMPLE'] ?? '0')
 const BASE_URL = process.env['BASE_URL'] ?? 'http://localhost:8080'
 const AUTHORITY = process.env['MOCK_OIDC_URL'] ?? 'http://mock-oidc:8080/default'
+const MOCK_MODEL_URL = process.env['MOCK_MODEL_URL'] ?? 'http://mock-model:8300'
+const VERSION_CHECKER = { card_id: 'crd_version_checker', values: { 'GitHub repository': 'langchain-ai/langgraph', 'Jira project': 'MOCK' } }
 const WCAG_22_AA = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']
 const NOT_BUILT = 'This page is not built yet.'
 const PHONE = { width: 390, height: 844 }
 
 interface HomeAnswer {
-  approvals: { run_id: string; approval_id: string; started_at: string }[]
+  approvals: { run_id: string; approval_id: string; started_at: string; step: number; steps: number }[]
   approvals_total: number
   confirmations: { confirmation_id: string; kind: string; about_name: string | null }[]
   stopped: { run_id: string; advice: { explanation: string } }[]
-  waiting_on_others: { run_id: string; because: string }[]
+  waiting_on_others: { run_id: string; because: string; step: number; steps: number }[]
   drafts: { draft_id: string; name: string | null; step: number }[]
   workflows: number
 }
@@ -479,4 +481,224 @@ test('@review-video bob decides from Home, then alice sees her stopped run with 
   await page.waitForTimeout(Math.max(3_000, 34_000 - (Date.now() - started)))
   await context.close()
   await video?.saveAs(path.join(EVID, 'p11-review.webm'))
+})
+
+async function connectMockModel(api: APIRequestContext): Promise<void> {
+  const active = (await call(api, 'alice', 'GET', '/api/v1/settings/model')).body as { active: { base_url: string } | null }
+  if (active.active?.base_url === MOCK_MODEL_URL) return
+  const saved = await call(api, 'alice', 'PUT', '/api/v1/settings/model', { style: 'anthropic', base_url: MOCK_MODEL_URL, model: 'mock-model', api_key: 'p11-probe-key-not-real' })
+  expect(saved.status, JSON.stringify(saved.body)).toBe(200)
+  if ((saved.body as { status: string }).status === 'awaiting_confirmation') await decideModelAddress(api, 'confirm')
+}
+
+async function decideModelAddress(api: APIRequestContext, verdict: 'confirm' | 'decline'): Promise<void> {
+  const pending = ((await call(api, 'bob', 'GET', '/api/v1/settings/model')).body as { pending: { digest: string } | null }).pending
+  if (!pending) return
+  const decided = await call(api, 'bob', 'POST', '/api/v1/settings/model/address-decision', { verdict, digest: pending.digest })
+  expect(decided.status, JSON.stringify(decided.body)).toBeLessThan(300)
+}
+
+async function agentWorkflow(api: APIRequestContext, user: string, label: string, agents: unknown[] = [VERSION_CHECKER]): Promise<string> {
+  const made = await call(api, user, 'POST', '/api/v1/agent-use-cases', { name: `p11 probe ${label} ${randomUUID().slice(0, 6)}`, instruction: 'Check LangGraph for a new release and raise a ticket in MOCK.', agents })
+  expect(made.status, `${user} makes a workflow: ${JSON.stringify(made.body)}`).toBe(201)
+  return (made.body as { use_case_id: string }).use_case_id
+}
+
+async function waitingRunOf(backend: Backend, user: string, useCaseId: string): Promise<WaitingRun> {
+  const runId = await backend.checkNow(user, useCaseId)
+  await backend.waitForState(runId, ['awaiting_approval'], 180_000)
+  return { runId, approvalId: await backend.approvalIdOf(runId) }
+}
+
+const activeOf = (page: Page) =>
+  page.evaluate(() => {
+    const active = document.activeElement
+    return active ? `${active.tagName.toLowerCase()} "${(active.textContent ?? '').trim().slice(0, 40)}"` : 'none'
+  })
+
+async function menuMoveTo(browser: Browser, from: string, label: string, slowHomeMs: number): Promise<string> {
+  const context = await devContext(browser, 'alice')
+  const page = await context.newPage()
+  if (slowHomeMs > 0) {
+    await page.route('**/api/v1/home', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, slowHomeMs))
+      await route.continue()
+    })
+  }
+  await page.goto(from)
+  await expect(h1(page)).toBeVisible()
+  await page.waitForTimeout(500)
+  await mainMenu(page).getByRole('link', { name: label, exact: true }).click()
+  await expect(page.getByRole('main').getByRole('status').filter({ hasText: /^Loading/ })).toHaveCount(0)
+  await page.waitForTimeout(1_500)
+  const active = await activeOf(page)
+  await context.close()
+  return active
+}
+
+test('@focus-home a menu move to Home puts focus on its heading, like every other page, once Home has loaded', async ({ browser }) => {
+  const rows: { from: string; to: string; slowHomeMs: number; active: string }[] = []
+  for (const slow of [0, 0, 0, 0, 0, 300, 300, 300]) rows.push({ from: '/settings', to: 'Home', slowHomeMs: slow, active: await menuMoveTo(browser, '/settings', 'Home', slow) })
+  for (const slow of [0, 300]) rows.push({ from: '/settings', to: 'Workflows', slowHomeMs: slow, active: await menuMoveTo(browser, '/settings', 'Workflows', slow) })
+  save('probes', 'focus-home.json', rows)
+  expect(rows.filter((row) => !row.active.startsWith('h1')), 'every move ends with focus on the page heading').toEqual([])
+})
+
+test('@owner carol runs a workflow alice owns: bob may decide, alice waits as owner, carol waits as starter', async ({ browser }) => {
+  test.setTimeout(400_000)
+  await withBackend(async (backend, api) => {
+    await connectMockModel(api)
+    const id = await agentWorkflow(api, 'alice', 'owned by alice')
+    const { runId, approvalId } = await waitingRunOf(backend, 'carol', id)
+    const homes = { alice: await homeOf(api, 'alice'), bob: await homeOf(api, 'bob'), carol: await homeOf(api, 'carol') }
+    const pages = { alice: (await call(api, 'alice', 'GET', `/api/v1/approvals/${approvalId}`)).body, bob: (await call(api, 'bob', 'GET', `/api/v1/approvals/${approvalId}`)).body }
+    const page = await openHome(browser, 'alice')
+    const row = waitingOnOthers(page).locator(`a[href="/runs/${runId}"]`)
+    await expect(row).toBeVisible()
+    const rowText = await row.innerText()
+    const itemCount = await approvalItem(page, approvalId).count()
+    await shotTo(page, 'probes', 'owner-alice-home.png', true)
+    await page.context().close()
+    save('probes', 'owner.json', { id, runId, approvalId, rowText, itemCount, pages, homes })
+    expect(homes.bob.approvals.map((a) => a.run_id)).toContain(runId)
+    expect(homes.alice.approvals.map((a) => a.run_id)).not.toContain(runId)
+    expect(homes.alice.waiting_on_others.find((w) => w.run_id === runId)?.because).toBe('owns')
+    expect(homes.carol.approvals).toEqual([])
+    expect(homes.carol.waiting_on_others.find((w) => w.run_id === runId)?.because).toBe('started')
+    expect(itemCount).toBe(0)
+    expect(rowText).toContain('It is your workflow')
+    expect((pages.alice as { you_can_decide: boolean }).you_can_decide).toBe(false)
+    expect((pages.bob as { you_can_decide: boolean }).you_can_decide).toBe(true)
+  })
+})
+
+test('@two-step a run that needs two Approvers: after bob says yes to step 1, it leaves bob for Waiting on others and alice sees step 2', async ({ browser }) => {
+  test.setTimeout(400_000)
+  await withBackend(async (backend, api) => {
+    await connectMockModel(api)
+    const card = (await call(api, 'carol', 'GET', '/api/v1/agent-cards/crd_version_checker')).body as Record<string, unknown>
+    const definition = { name: `p11 two approvers ${randomUUID().slice(0, 6)}`, purpose: card['purpose'], good_for: card['good_for'], inputs: card['inputs'], blocks: card['blocks'], approvals: [{ tool: 'jira.create_ticket', approvers: 2 }] }
+    const made = await call(api, 'carol', 'POST', '/api/v1/agent-cards', definition)
+    save('probes', 'two-step-card.json', made)
+    expect(made.status, JSON.stringify(made.body)).toBeLessThan(300)
+    const cardId = (made.body as { card_id: string }).card_id
+    const id = await agentWorkflow(api, 'carol', 'two approvers', [{ card_id: cardId, values: VERSION_CHECKER.values }])
+    const { runId, approvalId } = await waitingRunOf(backend, 'carol', id)
+    const before = { alice: await homeOf(api, 'alice'), bob: await homeOf(api, 'bob'), carol: await homeOf(api, 'carol') }
+    const detail = (await call(api, 'bob', 'GET', `/api/v1/approvals/${approvalId}`)).body as { digest: string; steps: unknown[] }
+    const decided = await call(api, 'bob', 'POST', `/api/v1/approvals/${approvalId}/decisions`, { step: 0, verdict: 'approve', digest: detail.digest })
+    const after = { alice: await homeOf(api, 'alice'), bob: await homeOf(api, 'bob'), carol: await homeOf(api, 'carol') }
+    const ui: Record<string, string> = {}
+    for (const user of ['bob', 'alice']) {
+      const page = await openHome(browser, user)
+      await settle(page)
+      ui[user] = await page.getByRole('main').innerText()
+      await shotTo(page, 'probes', `two-step-${user}.png`, true)
+      await page.context().close()
+    }
+    save('probes', 'two-step.json', { id, runId, approvalId, steps: detail.steps, decided, before, after, ui })
+    expect(before.bob.approvals.find((a) => a.run_id === runId)?.steps).toBe(2)
+    expect(before.alice.approvals.map((a) => a.run_id)).toContain(runId)
+    expect(decided.status, JSON.stringify(decided.body)).toBeLessThan(300)
+    expect(after.bob.approvals.map((a) => a.run_id)).not.toContain(runId)
+    expect(after.bob.waiting_on_others.find((w) => w.run_id === runId)?.because).toBe('decided_earlier')
+    expect(after.alice.approvals.find((a) => a.run_id === runId)?.step).toBe(1)
+    expect(after.carol.approvals).toEqual([])
+    expect(ui['bob']).toContain('You already said yes to an earlier step')
+    expect(ui['alice']).toContain('Step 2 of 2')
+  })
+})
+
+test('@deleted a workflow deleted while its run waits: record what Home answers, then put it back', async () => {
+  test.setTimeout(400_000)
+  await withBackend(async (backend, api) => {
+    await connectMockModel(api)
+    const id = await agentWorkflow(api, 'alice', 'deleted while waiting')
+    const { runId, approvalId } = await waitingRunOf(backend, 'alice', id)
+    const deleted = await call(api, 'alice', 'DELETE', `/api/v1/use-cases/${id}`)
+    await new Promise((resolve) => setTimeout(resolve, 1_500))
+    const run = (await call(api, 'alice', 'GET', `/api/v1/runs/${runId}`)).body as { state: string }
+    const bob = await homeOf(api, 'bob')
+    const alice = await homeOf(api, 'alice')
+    const approval = (await call(api, 'bob', 'GET', `/api/v1/approvals/${approvalId}`)).body
+    save('probes', 'deleted.json', { id, runId, approvalId, deleted, runState: run.state, bobHasIt: bob.approvals.some((a) => a.run_id === runId), aliceWaits: alice.waiting_on_others.some((w) => w.run_id === runId), approval })
+    save('probes', 'deleted-restore.json', await call(api, 'alice', 'POST', `/api/v1/use-cases/${id}/restore`))
+  })
+})
+
+test('@stopped-who stopped runs: only an Operator who is a party sees one, only the newest run of a workflow, and a retrier waits as retrier', async ({ browser }) => {
+  test.setTimeout(600_000)
+  await withBackend(async (backend, api) => {
+    const watchlist = await backend.freshWatchlist('alice')
+    const out: Record<string, unknown> = { watchlist }
+    await setMockGithubMode('unavailable')
+    let first = ''
+    let second = ''
+    try {
+      first = await backend.checkNow('alice', watchlist)
+      await backend.waitForState(first, ['failed'], 240_000)
+      out['a'] = { alice: await homeOf(api, 'alice'), bob: await homeOf(api, 'bob'), carol: await homeOf(api, 'carol') }
+      second = await backend.checkNow('alice', watchlist)
+      await backend.waitForState(second, ['failed'], 240_000)
+      out['b'] = { alice: await homeOf(api, 'alice') }
+    } finally {
+      await setMockGithubMode('ok')
+    }
+    const retried = await call(api, 'carol', 'POST', `/api/v1/runs/${second}/retry`)
+    out['retried'] = retried
+    await backend.waitForState(second, ['awaiting_approval'], 240_000)
+    out['c'] = { alice: await homeOf(api, 'alice'), bob: await homeOf(api, 'bob'), carol: await homeOf(api, 'carol') }
+    const page = await openHome(browser, 'carol')
+    const row = waitingOnOthers(page).locator(`a[href="/runs/${second}"]`)
+    await expect(row).toBeVisible()
+    out['carolRow'] = await row.innerText()
+    await shotTo(page, 'probes', 'stopped-who-carol.png', true)
+    await page.context().close()
+    save('probes', 'stopped-who.json', { first, second, ...out })
+    const a = out['a'] as Record<string, HomeAnswer>
+    const b = out['b'] as Record<string, HomeAnswer>
+    const c = out['c'] as Record<string, HomeAnswer>
+    expect(a['alice']?.stopped.map((s) => s.run_id)).toContain(first)
+    expect(a['carol']?.stopped.map((s) => s.run_id), 'carol is an Operator but no party to the run').not.toContain(first)
+    expect(a['bob']?.stopped, 'bob is not an Operator').toEqual([])
+    expect(b['alice']?.stopped.map((s) => s.run_id)).toContain(second)
+    expect(b['alice']?.stopped.map((s) => s.run_id), 'an older failure of the same workflow is history').not.toContain(first)
+    expect(retried.status, JSON.stringify(retried.body)).toBeLessThan(300)
+    expect(c['carol']?.waiting_on_others.find((w) => w.run_id === second)?.because).toBe('retried')
+    expect(c['alice']?.waiting_on_others.find((w) => w.run_id === second)?.because).toBe('started')
+    expect(c['bob']?.approvals.map((x) => x.run_id)).toContain(second)
+    expect(c['carol']?.approvals).toEqual([])
+    expect(c['alice']?.stopped.map((s) => s.run_id)).not.toContain(first)
+    expect(c['alice']?.stopped.map((s) => s.run_id)).not.toContain(second)
+    expect(out['carolRow']).toContain('You retried it')
+  })
+})
+
+test('@model-confirm a new AI model address: an Approver other than the one who entered it confirms it, from Home', async ({ browser }) => {
+  test.setTimeout(300_000)
+  await withBackend(async (_backend, api) => {
+    try {
+      const first = await call(api, 'alice', 'PUT', '/api/v1/settings/model', { style: 'anthropic', base_url: MOCK_MODEL_URL, model: 'mock-model', api_key: 'p11-probe-key-not-real' })
+      const pending =
+        (first.body as { status?: string }).status === 'awaiting_confirmation'
+          ? first
+          : await call(api, 'alice', 'PUT', '/api/v1/settings/model', { style: 'anthropic', base_url: `${MOCK_MODEL_URL}/alt`, model: 'mock-model', api_key: 'p11-probe-key-not-real' })
+      const homes = { alice: await homeOf(api, 'alice'), bob: await homeOf(api, 'bob'), carol: await homeOf(api, 'carol') }
+      const page = await openHome(browser, 'bob')
+      const item = page.locator('li[data-home-item^="confirmation:"]', { hasText: 'Confirm a new AI model address' })
+      await expect(item).toBeVisible()
+      const text = await item.innerText()
+      const href = await item.getByRole('link').first().getAttribute('href')
+      await shotTo(page, 'probes', 'model-confirm-bob.png', true)
+      await page.context().close()
+      save('probes', 'model-confirm.json', { first, pending, homes, text, href })
+      expect((pending.body as { status: string }).status).toBe('awaiting_confirmation')
+      expect(homes.bob.confirmations.length).toBeGreaterThan(0)
+      expect(homes.alice.confirmations, 'the person who entered it does not confirm it').toEqual([])
+      expect(homes.carol.confirmations, 'carol is not an Approver').toEqual([])
+      expect(href).toBe('/settings')
+    } finally {
+      await decideModelAddress(api, 'decline')
+    }
+  })
 })

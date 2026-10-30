@@ -7,12 +7,17 @@
 #   disk                                   free space on the Docker disk; fails under 1.5 GB
 #   gates <worktree>                       portal: npm ci when needed, typecheck, lint, unit tests, nginx render, build
 #   pygates <worktree>                     both contract generators with empty porcelain; platform-api ruff, pyright,
-#                                          lint-imports and its tests on a throwaway PostgreSQL; agent-runtime ruff, pyright, tests
+#                                          lint-imports and its tests on a throwaway PostgreSQL ($PG_NAME on $PG_PORT, removed
+#                                          after); agent-runtime ruff, pyright, tests
 #   up <worktree> <project> <tag> <portal-port> <api-port> <n8n-port> [--reuse] [--oidc]
 #                                          --reuse starts a second stack on the images an earlier up built with that tag, and
 #                                          builds only this project's own mock images; --oidc adds deploy/compose.oidc.yaml,
 #                                          which publishes no host port
-#   down <worktree> <project> [--oidc]     stops the stack, deletes its volumes and the images it built for itself (down -v --rmi local)
+#   down <worktree> <project> [--oidc] [<tag>]
+#                                          stops the stack, deletes its volumes (down -v), and removes the images named after
+#                                          the project (mock-github, mock-model, e2e) and its dangling ones; with a tag, also
+#                                          wab/*:<tag> unless another stack still uses them. Without a tag the tag's images
+#                                          stay, so a later up --reuse still finds them
 #   check <project> [playwright arguments] run portal/e2e/checks/p11.check.ts in the runner image, in that project's Portal network
 #   live <project> [playwright arguments]  run portal/e2e/live, such as 06-home.live.ts, the same way
 #   lane1 <head-project> [trunk-project]   trunk's Home is the P1 empty page: record it; then bob's first item at head
@@ -27,9 +32,22 @@
 #   lane10 <worktree> <project> <tag> <portal-port> <api-port> <n8n-port> [--reuse]
 #                                          its own stack: one waiting run copied to 50 with psql, Home as bob, then the perf
 #                                          probe on the same 50 runs; down
+#   lane10-on <worktree> <project> <api-port>
+#                                          lane 10 and the perf box on a head stack that is already up, which stays up
 #   perf-trunk <trunk-worktree> <project> <tag> <portal-port> <api-port> <n8n-port> [--reuse]
 #                                          its own trunk stack with the same 50 waiting runs: GET /api/v1/runs p95 for the
 #                                          baseline; run it before lane10 so the rule can compare; down
+#   perf-trunk-on <trunk-worktree> <project> <api-port>
+#                                          the same on a trunk stack that is already up, such as lane 1's, which stays up
+#   judge_perf                             reads $EVID/perf and says PASS or FAIL for each perf rule
+#   probes <project>                       the checker's probes on a shared head stack, after the lanes: focus after a menu
+#                                          move to Home, a run on a workflow someone else owns, two Approvers one after the
+#                                          other, a workflow deleted while its run waits (recorded only), who sees a stopped
+#                                          run and a retried one, and a new AI model address (declined again at the end)
+#
+# Each own-stack lane takes its stack down with the images named after its project, and with the tag's images only when
+# it built them (no --reuse). So run the lanes with --reuse while the stack that built the tag is up, or keep the images
+# with a down that names no tag.
 #   size <trunk-worktree> <head-worktree>  gzip bytes of the JavaScript each built dist/index.html loads; fails past +30 KB
 #   video <worktree> <project> <tag> <portal-port> <api-port> <n8n-port> [--reuse]
 #                                          its own stack: the review video of bob deciding from Home and alice's stopped run,
@@ -41,7 +59,8 @@
 #   DISK_CONTAINER    a running container whose disk is the Docker VM's disk (default wab-postgres-1); falls back to a throwaway alpine
 #   E2E_RUNNER_IMAGE  browser runner image (default portal-e2e-runner:p1shell); never built here, so build it first with
 #                     portal/e2e/runner-image.sh if it is missing
-#   PG_PORT           host port of the throwaway PostgreSQL that pygates starts (default 55447)
+#   PG_NAME           container name of the throwaway PostgreSQL that pygates starts (default p11-gates-pg)
+#   PG_PORT           its host port (default 56940)
 #   PERF_SAMPLES      Home loads for the paint probe (default 5); P95_COUNT requests per route (default 500)
 set -euo pipefail
 
@@ -51,8 +70,8 @@ EVID=${EVID:-/tmp/swarm-p11}
 ENV_FILE=${ENV_FILE:-$EVID/env/.env}
 RUNNER=${E2E_RUNNER_IMAGE:-portal-e2e-runner:p1shell}
 DISK_CONTAINER=${DISK_CONTAINER:-wab-postgres-1}
-PG_PORT=${PG_PORT:-55447}
-PG_NAME=p11-gates-pg
+PG_NAME=${PG_NAME:-p11-gates-pg}
+PG_PORT=${PG_PORT:-56940}
 PG_IMAGE=postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
 PERF_SAMPLES=${PERF_SAMPLES:-5}
 P95_COUNT=${P95_COUNT:-500}
@@ -132,6 +151,7 @@ pygates() {
   step ar-pyright "cd agent-runtime && uv run pyright"
   step ar-pytest "cd agent-runtime && uv run pytest -q"
   docker rm -fv "$PG_NAME" >/dev/null 2>&1 || true
+  echo "throwaway PostgreSQL $PG_NAME removed: $(docker ps -aq --filter "name=^$PG_NAME\$" | wc -l | tr -d ' ') left"
   return "$status"
 }
 
@@ -163,11 +183,38 @@ up() {
 }
 
 down() {
-  local worktree=$1 project=$2 mode=dev
-  [ "${3:-}" = --oidc ] && mode=oidc
+  local worktree=$1 project=$2 mode=dev tag='' option image
+  shift 2
+  for option in "$@"; do
+    case "$option" in
+      --oidc) mode=oidc ;;
+      '') ;;
+      *) tag=$option ;;
+    esac
+  done
   mkdir -p "$EVID/stacks"
   compose "$worktree" "$project" "$mode" --profile e2e logs --no-color >"$EVID/stacks/$project-compose.log" 2>&1 || true
-  compose "$worktree" "$project" "$mode" --profile e2e down -v --remove-orphans --rmi local
+  compose "$worktree" "$project" "$mode" --profile e2e down -v --remove-orphans
+  docker image ls --format '{{.Repository}}:{{.Tag}}' --filter "reference=$project-*" | while read -r image; do
+    docker image rm "$image" >/dev/null || echo "kept $image, which a container still uses"
+  done
+  docker image prune -f --filter "label=com.docker.compose.project=$project" >/dev/null
+  if [ -n "$tag" ]; then
+    for image in wab/platform-api wab/agent-runtime wab/portal; do
+      docker image inspect "$image:$tag" >/dev/null 2>&1 || continue
+      docker image rm "$image:$tag" >/dev/null 2>&1 || echo "kept $image:$tag, which another stack still uses"
+    done
+  fi
+  echo "images named after $project left: $(docker image ls -q --filter "reference=$project-*" | wc -l | tr -d ' ')"
+}
+
+built_tag() {
+  local tag=$1 option
+  shift
+  for option in "$@"; do
+    [ "$option" != --reuse ] || return 0
+  done
+  echo "$tag"
 }
 
 service_of() {
@@ -236,7 +283,7 @@ own_stack() {
   up "$worktree" "$project" "$@"
   mkdir -p "$EVID/lane-$lane"
   check "$project" --grep "$grep" 2>&1 | tee "$EVID/lane-$lane/playwright.log" || status=$?
-  down "$worktree" "$project"
+  down "$worktree" "$project" "$(built_tag "$@")"
   return "$status"
 }
 
@@ -249,7 +296,7 @@ lane7() {
   up "$worktree" "$project" "$tag" 0 0 0 --oidc ${4:+"$4"}
   mkdir -p "$EVID/lane-7" "$EVID/lane-9"
   E2E_AUTH=oidc check "$project" --grep '@lane7-oidc' 2>&1 | tee "$EVID/lane-7/playwright.log" || status=$?
-  down "$worktree" "$project" --oidc
+  down "$worktree" "$project" --oidc "$(built_tag "$tag" ${4:+"$4"})"
   return "$status"
 }
 
@@ -278,9 +325,8 @@ p95() {
   python3 "$checker_root/scripts/p95.py" "http://localhost:$api_port" GET "$route" "$out" --count "$P95_COUNT" --user "$user" --warm-up 20
 }
 
-lane10() {
-  local worktree=$1 project=$2 api_port=$5 status=0 i
-  up "$worktree" "$project" "${@:3}"
+lane10-on() {
+  local worktree=$1 project=$2 api_port=$3 status=0 i
   mkdir -p "$EVID/lane-10" "$EVID/perf"
   fifty_waiting "$worktree" "$project" "$EVID/lane-10" || status=$?
   if [ "$status" -eq 0 ]; then
@@ -293,18 +339,38 @@ lane10() {
     done
     judge_perf || status=$?
   fi
-  down "$worktree" "$project"
+  return "$status"
+}
+
+lane10() {
+  local worktree=$1 project=$2 api_port=$5 status=0
+  up "$worktree" "$project" "${@:3}"
+  lane10-on "$worktree" "$project" "$api_port" || status=$?
+  down "$worktree" "$project" "$(built_tag "${@:3}")"
+  return "$status"
+}
+
+perf-trunk-on() {
+  local worktree=$1 project=$2 api_port=$3 status=0
+  mkdir -p "$EVID/perf-trunk" "$EVID/perf"
+  fifty_waiting "$worktree" "$project" "$EVID/perf-trunk" || status=$?
+  [ "$status" -ne 0 ] || p95 "$api_port" alice /api/v1/runs "$EVID/perf/p95-runs-trunk.json" || status=$?
   return "$status"
 }
 
 perf-trunk() {
   local worktree=$1 project=$2 api_port=$5 status=0
   up "$worktree" "$project" "${@:3}"
-  mkdir -p "$EVID/perf-trunk"
-  fifty_waiting "$worktree" "$project" "$EVID/perf-trunk" || status=$?
-  [ "$status" -ne 0 ] || p95 "$api_port" alice /api/v1/runs "$EVID/perf/p95-runs-trunk.json" || status=$?
-  down "$worktree" "$project"
+  perf-trunk-on "$worktree" "$project" "$api_port" || status=$?
+  down "$worktree" "$project" "$(built_tag "${@:3}")"
   return "$status"
+}
+
+probes() {
+  local project=$1
+  mkdir -p "$EVID/probes"
+  check "$project" --grep '@focus-home |@owner |@two-step |@deleted |@stopped-who |@model-confirm ' 2>&1 | tee "$EVID/probes/playwright.log"
+  return "${PIPESTATUS[0]}"
 }
 
 judge_perf() {
@@ -355,7 +421,7 @@ video() {
   mkdir -p "$EVID/review-video"
   check "$project" --grep '@review-video-setup' 2>&1 | tee "$EVID/review-video/setup.log" || status=$?
   [ "$status" -ne 0 ] || check "$project" --grep '@review-video ' 2>&1 | tee "$EVID/review-video/playwright.log" || status=$?
-  down "$worktree" "$project"
+  down "$worktree" "$project" "$(built_tag "${@:3}")"
   [ "$status" -eq 0 ] || return "$status"
   if command -v ffmpeg >/dev/null 2>&1; then
     ffmpeg -y -loglevel error -i "$EVID/p11-review.webm" -c:v libx264 -pix_fmt yuv420p -movflags +faststart "$EVID/p11-review.mp4"
@@ -369,9 +435,9 @@ video() {
 }
 
 command=${1:-}
-[ -n "$command" ] || die "usage: p11.sh <disk|gates|pygates|up|down|check|live|lane1|lane|lane4|lane5|lane7|lane10|perf-trunk|size|video> ..."
+[ -n "$command" ] || die "usage: p11.sh <disk|gates|pygates|up|down|check|live|lane1|lane|lane4|lane5|lane7|lane10|lane10-on|perf-trunk|perf-trunk-on|judge_perf|probes|size|video> ..."
 shift
 case "$command" in
-  disk | gates | pygates | up | down | check | live | lane1 | lane | lane4 | lane5 | lane7 | lane10 | perf-trunk | size | video) "$command" "$@" ;;
+  disk | gates | pygates | up | down | check | live | lane1 | lane | lane4 | lane5 | lane7 | lane10 | lane10-on | perf-trunk | perf-trunk-on | judge_perf | probes | size | video) "$command" "$@" ;;
   *) die "unknown command $command" ;;
 esac

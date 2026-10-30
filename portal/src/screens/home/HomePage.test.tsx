@@ -20,13 +20,15 @@ const ALICE_HOME = aliceHome as HomeOut
 const DAY_ONE = dayOne as HomeOut
 const NOW = new Date('2026-11-03T15:00:00+08:00')
 
-function render(me: Me, home: HomeOut | Error | 'loading'): string {
+function render(me: Me, home: HomeOut | Error | 'loading' | { readonly stale: HomeOut }): string {
   const session = createDevSession(null)
   const scope = session.cacheScope()
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   queryClient.setQueryData(['me', scope], me)
   queryClient.setQueryData(['dev-users'], [ALICE, BOB])
-  if (home instanceof Error) queryClient.getQueryCache().build(queryClient, { queryKey: ['home', scope] }).setState({ status: 'error', error: home, fetchStatus: 'idle' })
+  const homeQuery = () => queryClient.getQueryCache().build(queryClient, { queryKey: ['home', scope] })
+  if (home instanceof Error) homeQuery().setState({ status: 'error', error: home, fetchStatus: 'idle' })
+  else if (home !== 'loading' && 'stale' in home) homeQuery().setState({ status: 'error', data: home.stale, error: new ApiError(503, null), fetchStatus: 'idle' })
   else if (home !== 'loading') queryClient.setQueryData(['home', scope], home)
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
@@ -176,7 +178,20 @@ describe('Home before it knows', () => {
 
   it('says it could not load, and offers to try again', () => {
     const html = mainOf(render(BOB, new ApiError(500, null)))
-    expect(text(html)).toContain('Home could not be loaded.')
+    expect(html).toMatch(/<p[^>]*role="alert"[^>]*>Home could not be loaded\.<\/p>/)
     expect(buttonsIn(html)).toEqual(['Try again'])
+  })
+})
+
+describe('Home when a refresh fails', () => {
+  it('keeps what it showed and says quietly that it could not refresh', () => {
+    const html = mainOf(render(BOB, { stale: BOB_HOME }))
+    expect(text(itemOf(html, 'approval:apr_01JB8'))).toContain('1 ticket is waiting for your yes')
+    expect(html).toMatch(/<p[^>]*role="status"[^>]*>Could not refresh\. Trying again in a moment\.<\/p>/)
+    expect(html).not.toContain('role="alert"')
+  })
+
+  it('says nothing about refreshing while the refreshes work', () => {
+    expect(text(mainOf(render(BOB, BOB_HOME)))).not.toContain('Could not refresh')
   })
 })

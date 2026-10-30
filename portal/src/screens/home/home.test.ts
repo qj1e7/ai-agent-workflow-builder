@@ -114,9 +114,23 @@ describe('each item in words', () => {
     expect(words.lines).toEqual(['A change in Jira', 'and 4 more'])
   })
 
+  it('calls the changes tickets only when every one of them is known to be a ticket', () => {
+    const ticket = { connector: 'jira', operation: 'create_ticket', title: 'Upgrade LangGraph' }
+    const three = [ticket, ticket, ticket]
+    expect(wordsOf({ ...approval, item: { ...ASK, changes: 3, first_changes: three } } as Need, NOW).title).toBe('3 tickets are waiting for your yes')
+    expect(wordsOf({ ...approval, item: { ...ASK, changes: 5, first_changes: three } } as Need, NOW).title).toBe('5 changes are waiting for your yes')
+  })
+
   it('names a schedule that started a run', () => {
     const scheduled = { ...approval, item: { ...ASK, trigger: 'schedule' } } as Need
     expect(wordsOf(scheduled, NOW).meta).toBe("Software watchlist · Started by Alice's schedule, Today, 10:14")
+  })
+
+  it('says a schedule or someone no longer on the list started a run when the platform names no one', () => {
+    const gone = { ...approval, item: { ...ASK, started_by_name: null } } as Need
+    expect(wordsOf(gone, NOW).meta).toBe('Software watchlist · Started by someone no longer on the list, Today, 10:14')
+    const scheduled = { ...approval, item: { ...ASK, started_by_name: null, trigger: 'schedule' } } as Need
+    expect(wordsOf(scheduled, NOW).meta).toBe('Software watchlist · Started by a schedule, Today, 10:14')
   })
 
   it('asks to confirm a new Approver, and a new AI model address', () => {
@@ -183,9 +197,9 @@ describe('what you wait on, your drafts and what runs next', () => {
     expect(waitingWords({ ...WAIT, trigger: 'schedule' }, NOW).sub).toBe('Your schedule started it · Today 10:14')
     expect(waitingWords({ ...WAIT, because: 'retried' }, NOW).sub).toBe('You retried it · Today 10:14')
     expect(waitingWords({ ...WAIT, because: 'owns' }, NOW).sub).toBe('It is your workflow · Today 10:14')
-    expect(waitingWords({ ...WAIT, because: 'decided_earlier', step: 1, steps: 2 }, NOW)).toMatchObject({
+    expect(waitingWords({ ...WAIT, because: 'decided_earlier', step: 2, steps: 3 }, NOW)).toMatchObject({
       name: 'Another Approver’s yes on Software watchlist',
-      sub: 'You said yes to step 1 of 2 · Today 10:14',
+      sub: 'You already said yes to an earlier step · Today 10:14',
     })
   })
 
