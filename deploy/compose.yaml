@@ -36,6 +36,9 @@ services:
       GATEWAY_PUBLIC_ENDPOINT: cosmos
       ENABLE_EXPLORER: "false"
       ENABLE_TELEMETRY: "false"
+    # Stops the emulator upgrading its own packages at each start. deploy/README.md says why.
+    extra_hosts:
+      - "packages.microsoft.com:127.0.0.1"
     healthcheck:
       test:
         - CMD
