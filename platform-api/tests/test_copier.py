@@ -390,4 +390,3 @@ async def test_a_second_copier_puts_nothing_again_once_the_first_filled_a_new_co
 
     assert (first.puts, second.puts) == ([1, 2, 1, 2], [])
     assert await cosmos.seqs(RUN) == [1, 2]
-
