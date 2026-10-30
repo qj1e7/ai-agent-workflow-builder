@@ -90,6 +90,7 @@ def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
             app.state.db,
             app.state.activity_log.listening,
             None if copier is None else copier.listening,
+            copy_behind=copier is not None and copier.behind,
         )
         return JSONResponse(
             status_code=200 if readiness.ready else 503,
@@ -105,7 +106,9 @@ def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
     return app
 
 
-async def readiness_of(db: Database, listening: bool, copying: bool | None = None) -> Readiness:
+async def readiness_of(
+    db: Database, listening: bool, copying: bool | None = None, *, copy_behind: bool = False
+) -> Readiness:
     checks = [
         ReadinessCheck(
             name="activity_log",
@@ -116,11 +119,7 @@ async def readiness_of(db: Database, listening: bool, copying: bool | None = Non
     if copying is not None:
         checks.append(
             ReadinessCheck(
-                name="activity_copy",
-                ok=copying,
-                detail="listening for events to copy to Cosmos DB"
-                if copying
-                else "not listening for events to copy to Cosmos DB",
+                name="activity_copy", ok=copying, detail=_copy_detail(copying, copy_behind)
             )
         )
     async with db.transaction("orchestration") as uow:
@@ -143,3 +142,12 @@ async def readiness_of(db: Database, listening: bool, copying: bool | None = Non
             detail += f"; loaded: {loaded}"
         checks.append(ReadinessCheck(name="workflows", ok=bool(row["ready"]), detail=detail))
     return Readiness(ready=all(c.ok for c in checks), checks=checks)
+
+
+def _copy_detail(copying: bool, behind: bool) -> str:
+    """A copy that keeps failing never fails readiness, which must not depend on Cosmos DB."""
+    if not copying:
+        return "not listening for events to copy to Cosmos DB"
+    if behind:
+        return "listening for events to copy to Cosmos DB, but the copy is behind and retrying"
+    return "listening for events to copy to Cosmos DB"

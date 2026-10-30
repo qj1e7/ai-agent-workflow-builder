@@ -8,7 +8,7 @@ def upgrade() -> None:
     op.execute("""
         CREATE TABLE monitoring.run_events_copied (
             run_id text PRIMARY KEY,
-            container_rid text NOT NULL,
+            generation text NOT NULL,
             seq integer NOT NULL CHECK (seq >= 1),
             copied_at timestamptz NOT NULL
         );

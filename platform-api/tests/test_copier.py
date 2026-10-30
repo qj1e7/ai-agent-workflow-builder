@@ -390,3 +390,24 @@ async def test_a_second_copier_puts_nothing_again_once_the_first_filled_a_new_co
 
     assert (first.puts, second.puts) == ([1, 2, 1, 2], [])
     assert await cosmos.seqs(RUN) == [1, 2]
+
+
+async def test_a_copier_whose_copy_keeps_failing_is_behind_until_it_catches_up(
+    db: Database, cosmos: CosmosUnderTest
+):
+    down = True
+    watched = Watched(cosmos.events, fails=lambda run_id, seq: down)
+    copier = Copier(db, watched, retry_delay=0.05, max_retry_delay=0.1, reconnect_delay=0.1)
+    await copier.start()
+    try:
+        assert copier.behind is False
+        await append(db, 1)
+        with anyio.fail_after(5):
+            while not copier.behind:
+                await anyio.sleep(0.02)
+        down = False
+        with anyio.fail_after(5):
+            while copier.behind or await cosmos.seqs(RUN) != [1]:
+                await anyio.sleep(0.02)
+    finally:
+        await copier.stop()

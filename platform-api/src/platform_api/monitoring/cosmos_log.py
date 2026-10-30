@@ -1,7 +1,11 @@
+import secrets
+from contextlib import suppress
 from typing import Any
 
 from azure.cosmos import PartitionKey
 from azure.cosmos.aio import CosmosClient
+from azure.cosmos.exceptions import CosmosHttpResponseError, CosmosResourceExistsError
+from azure.cosmos.http_constants import StatusCodes, SubStatusCodes
 
 from platform_api.monitoring.events import ActivityEvent, activity_event_adapter
 from platform_api.monitoring.log import LoggedEvent
@@ -11,6 +15,8 @@ from platform_api.shared import RunId
 DATABASE = "activity"
 CONTAINER = "run_events"
 PARTITION_KEY = "/runId"
+_GENERATION_ID = "generation"
+_GENERATION_PARTITION = "copier"
 
 _READ_AFTER = "SELECT * FROM c WHERE c.seq > @after ORDER BY c.seq"
 
@@ -34,12 +40,39 @@ class CosmosEvents:
         await self._client.close()
 
     async def ensure(self) -> str:
-        database = await self._client.create_database_if_not_exists(self._database)
-        container = await database.create_container_if_not_exists(
-            id=CONTAINER, partition_key=PartitionKey(path=PARTITION_KEY)
-        )
-        properties = await container.read()
-        return properties["_rid"]
+        """The container's generation, a random value in an item that has no seq. A new or
+        emptied container has none, so it gets a new generation even where it keeps its _rid."""
+        found = await self._generation()
+        if found is not None:
+            return found
+        with suppress(CosmosResourceExistsError):
+            await self._client.create_database_if_not_exists(self._database)
+        with suppress(CosmosResourceExistsError):
+            await self._client.get_database_client(self._database).create_container_if_not_exists(
+                id=CONTAINER, partition_key=PartitionKey(path=PARTITION_KEY)
+            )
+        try:
+            made = await self._container.create_item(
+                {
+                    "id": _GENERATION_ID,
+                    "runId": _GENERATION_PARTITION,
+                    "generation": secrets.token_hex(16),
+                }
+            )
+        except CosmosResourceExistsError:
+            return await self.ensure()
+        return made["generation"]
+
+    async def _generation(self) -> str | None:
+        try:
+            item = await self._container.read_item(
+                _GENERATION_ID, partition_key=_GENERATION_PARTITION
+            )
+        except CosmosHttpResponseError as error:
+            if _missing(error):
+                return None
+            raise
+        return item["generation"]
 
     async def put(self, event: LoggedEvent) -> None:
         await self._container.upsert_item(
@@ -66,6 +99,14 @@ class CosmosEvents:
                 break
             events.append(_event(item))
         return events
+
+
+def _missing(error: CosmosHttpResponseError) -> bool:
+    sub_status: int | None = getattr(error, "sub_status", None)
+    return (
+        error.status_code == StatusCodes.NOT_FOUND
+        or sub_status == SubStatusCodes.OWNER_RESOURCE_NOT_FOUND
+    )
 
 
 def _event(item: dict[str, Any]) -> ActivityEvent:

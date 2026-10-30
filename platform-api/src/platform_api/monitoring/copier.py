@@ -20,18 +20,18 @@ logger = logging.getLogger(__name__)
 _LOCK = "SELECT pg_advisory_xact_lock(hashtextextended('copy:' || %s, 0))"
 _COPIED = """
     SELECT seq FROM monitoring.run_events_copied
-    WHERE run_id = %(run_id)s AND container_rid = %(rid)s
+    WHERE run_id = %(run_id)s AND generation = %(generation)s
 """
 _ROWS_AFTER = """
     SELECT run_id, seq, ts, actor, kind, summary, data, dedupe_key FROM monitoring.run_events
     WHERE run_id = %(run_id)s AND seq > %(after)s ORDER BY seq LIMIT %(limit)s
 """
 _RECORD = """
-    INSERT INTO monitoring.run_events_copied (run_id, container_rid, seq, copied_at)
-    VALUES (%(run_id)s, %(rid)s, %(seq)s, %(at)s)
+    INSERT INTO monitoring.run_events_copied (run_id, generation, seq, copied_at)
+    VALUES (%(run_id)s, %(generation)s, %(seq)s, %(at)s)
     ON CONFLICT (run_id) DO UPDATE
-    SET container_rid = EXCLUDED.container_rid, seq = EXCLUDED.seq, copied_at = EXCLUDED.copied_at
-    WHERE monitoring.run_events_copied.container_rid <> EXCLUDED.container_rid
+    SET generation = EXCLUDED.generation, seq = EXCLUDED.seq, copied_at = EXCLUDED.copied_at
+    WHERE monitoring.run_events_copied.generation <> EXCLUDED.generation
        OR monitoring.run_events_copied.seq < EXCLUDED.seq
 """
 _RUNS_BEHIND = """
@@ -39,7 +39,7 @@ _RUNS_BEHIND = """
         SELECT run_id, max(seq) AS seq FROM monitoring.run_events GROUP BY run_id
     ) AS logged
     LEFT JOIN monitoring.run_events_copied AS copied
-        ON copied.run_id = logged.run_id AND copied.container_rid = %(rid)s
+        ON copied.run_id = logged.run_id AND copied.generation = %(generation)s
     WHERE logged.seq > coalesce(copied.seq, 0)
 """
 
@@ -77,7 +77,8 @@ class Copier:
         self._max_retry_delay = max_retry_delay
         self._hub = NotificationHub(db, channel=CHANNEL, reconnect_delay=reconnect_delay)
         self._hub.watch(self._note_run, self._note_connect)
-        self._container_rid: str | None = None
+        self._generation_seen: str | None = None
+        self._sweep_failed = False
         self._live: set[RunId] = set()
         self._behind: set[RunId] = set()
         self._retries: dict[RunId, _Retry] = {}
@@ -88,6 +89,10 @@ class Copier:
     @property
     def listening(self) -> bool:
         return self._hub.listening
+
+    @property
+    def behind(self) -> bool:
+        return bool(self._retries) or self._sweep_failed
 
     async def start(self) -> None:
         self._task = asyncio.create_task(self._copy_forever())
@@ -111,22 +116,29 @@ class Copier:
                 return batch.done
 
     async def runs_behind(self) -> list[RunId]:
-        rid = await self._rid()
+        generation = await self._generation()
         async with self._db.transaction("monitoring") as uow:
-            rows = await (await uow.conn.execute(_RUNS_BEHIND, {"rid": rid})).fetchall()
+            rows = await (
+                await uow.conn.execute(_RUNS_BEHIND, {"generation": generation})
+            ).fetchall()
         return [RunId(row["run_id"]) for row in rows]
 
-    async def _rid(self) -> str:
-        if self._container_rid is None:
-            self._container_rid = await self._copy.ensure()
-        return self._container_rid
+    async def _generation(self) -> str:
+        """Read before every batch, so a copier never trusts a mark that counts for a container
+        that is gone, even one another replica made again. A new generation copies every run."""
+        async with asyncio.timeout(self._put_timeout):
+            generation = await self._copy.ensure()
+        if self._generation_seen not in (None, generation):
+            self._sweep_at = 0.0
+        self._generation_seen = generation
+        return generation
 
     async def _copy_batch(self, run_id: RunId) -> _Batch:
-        rid = await self._rid()
         failure: Exception | None = None
         async with self._db.transaction("monitoring") as uow:
             await uow.conn.execute(_LOCK, (run_id,))
-            before = await self._copied(uow, run_id, rid)
+            generation = await self._generation()
+            before = await self._copied(uow, run_id, generation)
             rows = await (
                 await uow.conn.execute(
                     _ROWS_AFTER, {"run_id": run_id, "after": before, "limit": self._batch}
@@ -143,7 +155,8 @@ class Copier:
                 done = row["seq"]
             if done > before:
                 await uow.conn.execute(
-                    _RECORD, {"run_id": run_id, "rid": rid, "seq": done, "at": uow.now}
+                    _RECORD,
+                    {"run_id": run_id, "generation": generation, "seq": done, "at": uow.now},
                 )
                 await uow.conn.execute(
                     "SELECT pg_notify(%s, %s)", (COPIED_CHANNEL, copied_notice(run_id, done))
@@ -151,8 +164,10 @@ class Copier:
         return _Batch(done, len(rows) == self._batch, failure)
 
     @staticmethod
-    async def _copied(uow: UnitOfWork, run_id: RunId, rid: str) -> int:
-        row = await (await uow.conn.execute(_COPIED, {"run_id": run_id, "rid": rid})).fetchone()
+    async def _copied(uow: UnitOfWork, run_id: RunId, generation: str) -> int:
+        row = await (
+            await uow.conn.execute(_COPIED, {"run_id": run_id, "generation": generation})
+        ).fetchone()
         return 0 if row is None else int(row["seq"])
 
     def _note_run(self, run_id: RunId) -> None:
@@ -170,8 +185,6 @@ class Copier:
             now = time.monotonic()
             if self._sweep_at is not None and self._sweep_at <= now:
                 await self._sweep(now)
-            if self._container_rid is None:
-                continue
             for run_id in sorted(self._behind, key=lambda r: (r not in self._live, r)):
                 retry = self._retries.get(run_id)
                 if retry is not None and retry.at > now:
@@ -200,8 +213,10 @@ class Copier:
         except Exception as error:
             logger.warning("Could not catch up the copy: %r", error)
             self._sweep_at = now + self._retry_delay
+            self._sweep_failed = True
             return
         self._sweep_at = None
+        self._sweep_failed = False
 
     async def _copy_one_batch(self, run_id: RunId) -> None:
         try:

@@ -2,9 +2,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from platform_api.app import create_app, readiness_of
+from platform_api.bootstrap import record_status
 from platform_api.db import Database
 from platform_api.orchestration.approvals import Refusal
 from platform_api.orchestration.service import DecisionRefused, RetryLater
+from tests.conftest import PostgresUrls
 from tests.support import LOCAL_ENV as LOCAL
 
 ROUTES = {
@@ -135,6 +137,21 @@ async def test_readiness_names_a_copier_that_is_not_listening(db: Database):
         ("activity_copy", False),
     ]
     assert readiness.ready is False
+
+
+@pytest.mark.anyio
+async def test_readiness_says_the_copy_is_behind_and_stays_ready(
+    db: Database, postgres: PostgresUrls
+):
+    record_status(postgres.owner, ready=True, detail="all workflows loaded", workflows=[])
+
+    readiness = await readiness_of(db, True, copying=True, copy_behind=True)
+
+    copy = readiness.checks[1]
+    assert (copy.name, copy.ok, readiness.ready) == ("activity_copy", True, True)
+    assert copy.detail == (
+        "listening for events to copy to Cosmos DB, but the copy is behind and retrying"
+    )
 
 
 @pytest.mark.anyio
