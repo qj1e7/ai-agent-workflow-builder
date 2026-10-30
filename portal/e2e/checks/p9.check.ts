@@ -1,8 +1,3 @@
-/**
- * The checker's checks for P9's live lanes, perf block and review video (docs/design/rebuild-plan.md).
- * Run through scripts/checks/p9.sh, which picks the stack and the lane with --grep @laneN.
- * Evidence goes to $EVID/lane-<n>/ with the file names the plan gives.
- */
 import AxeBuilder from '@axe-core/playwright'
 import { expect, request, test, type APIRequestContext, type Browser, type Page } from '@playwright/test'
 import { randomUUID } from 'node:crypto'
@@ -87,7 +82,6 @@ async function runsOf(api: APIRequestContext, id: string): Promise<Run[]> {
   return (body as { runs: Run[] }).runs.filter((run) => run.use_case_id === id)
 }
 
-/** The Software watchlist with LangGraph on it, on, with a Monday 9:00 schedule so it has a next run. */
 async function scheduledWatchlist(backend: Backend, api: APIRequestContext): Promise<string> {
   const id = await backend.freshWatchlist('alice')
   await call(api, 'alice', 'POST', `/api/v1/use-cases/${id}/resume`)
@@ -103,7 +97,6 @@ async function agentWorkflow(api: APIRequestContext, label: string): Promise<{ i
   return { id: (made.body as { use_case_id: string }).use_case_id, name }
 }
 
-/** Agent workflows need an AI model to run. The e2e stack's mock model answers like Anthropic's API. */
 async function connectMockModel(api: APIRequestContext): Promise<void> {
   const active = (await call(api, 'alice', 'GET', '/api/v1/settings/model')).body as { active: { base_url: string } | null }
   if (active.active?.base_url === MOCK_MODEL_URL) return

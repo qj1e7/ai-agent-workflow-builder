@@ -48,8 +48,7 @@ const ALICE: Viewer = { id: 'alice', operator: true, approver: true }
 const BOB: Viewer = { id: 'bob', operator: false, approver: true }
 const CAROL: Viewer = { id: 'carol', operator: true, approver: false }
 
-/** Wednesday 4 November 2026, 15:00 in Singapore. */
-const NOW = new Date('2026-11-04T07:00:00Z')
+const NOW = new Date('2026-11-04T15:00:00+08:00')
 
 describe('the status words', () => {
   it('say whether a workflow is on or paused', () => {

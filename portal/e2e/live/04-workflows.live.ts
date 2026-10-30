@@ -8,8 +8,7 @@ const rowOf = (page: Page, useCaseId: string) => page.locator(`li[data-workflow-
 const nextRun = (page: Page) => page.locator('dt', { hasText: 'Next run' }).locator('xpath=following-sibling::dd[1]')
 const VERSION_CHECKER = { card_id: 'crd_version_checker', values: { 'GitHub repository': 'langchain-ai/langgraph', 'Jira project': 'MOCK' } }
 
-/** An earlier test may have left the shared watchlist paused. Resuming one that is on changes nothing. */
-async function onAgain(request: APIRequestContext, useCaseId: string): Promise<void> {
+async function ensureWatchlistOn(request: APIRequestContext, useCaseId: string): Promise<void> {
   const response = await request.post(`/api/v1/use-cases/${useCaseId}/resume`, { headers: { 'X-Dev-User': 'alice' } })
   expect(response.status(), 'the watchlist is on').toBe(200)
 }
@@ -25,7 +24,7 @@ async function agentWorkflow(request: APIRequestContext, name: string): Promise<
 
 test('alice opens the Software watchlist from Workflows, presses Run now, and lands on the new run’s page', async ({ browser, backend, request }, info) => {
   const useCaseId = await backend.freshWatchlist('alice')
-  await onAgain(request, useCaseId)
+  await ensureWatchlistOn(request, useCaseId)
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()
   await page.goto('/workflows')
@@ -52,7 +51,7 @@ test('alice opens the Software watchlist from Workflows, presses Run now, and la
 
 test('alice pauses the Software watchlist, its next run reads Paused, and resuming shows a date again', async ({ browser, backend, request }) => {
   const useCaseId = await backend.freshWatchlist('alice')
-  await onAgain(request, useCaseId)
+  await ensureWatchlistOn(request, useCaseId)
   const saved = await request.put('/api/v1/watchlist/schedule', { headers: { 'X-Dev-User': 'alice' }, data: { day: 'monday', at: '09:00' } })
   expect(saved.status()).toBe(200)
   const context = await devContext(browser, 'alice')
@@ -98,7 +97,7 @@ test('alice deletes a workflow, it leaves the list, and Undo puts it back', asyn
 
 test('bob sees who may approve and the recent runs, with no Run now, Pause or Delete', async ({ browser, backend, request }, info) => {
   const useCaseId = await backend.freshWatchlist('alice')
-  await onAgain(request, useCaseId)
+  await ensureWatchlistOn(request, useCaseId)
   await backend.checkNow('alice', useCaseId)
   const context = await devContext(browser, 'bob')
   const page = await context.newPage()

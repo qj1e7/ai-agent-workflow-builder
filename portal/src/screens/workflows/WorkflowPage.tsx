@@ -124,7 +124,6 @@ interface DeleteDialogProps {
   readonly onConfirm: () => void
 }
 
-/** An alertdialog, as the prototype has it: focus starts on Cancel, and Escape closes it. */
 function DeleteDialog({ name, busy, problem, onClose, onConfirm }: DeleteDialogProps) {
   const dialog = useRef<HTMLDialogElement>(null)
   const cancel = useRef<HTMLButtonElement>(null)
@@ -190,7 +189,7 @@ function WorkflowView({ useCase, me, now }: { useCase: UseCaseView; me: Me; now:
   const [problem, setProblem] = useState<string | null>(null)
   const [deleteProblem, setDeleteProblem] = useState<string | null>(null)
   const [said, setSaid] = useState<Said | null>(null)
-  useArrivalScroll(true)
+  useArrivalScroll()
 
   const recent = runsOf(runs.data ?? [], id)
   const latest = recent[0] ?? null

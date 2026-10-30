@@ -18,7 +18,6 @@ function post(client: ApiClient, move: Move, useCaseId: string) {
   }
 }
 
-/** The platform lists the newest first, so a workflow put back goes where the next read would place it. */
 const platformOrder = (a: UseCaseView, b: UseCaseView) => b.created_at.localeCompare(a.created_at) || b.use_case_id.localeCompare(a.use_case_id)
 
 export function withView(list: readonly UseCaseView[], view: UseCaseView): UseCaseView[] {
@@ -29,12 +28,14 @@ function changeList(queryClient: QueryClient, user: string, change: (list: UseCa
   queryClient.setQueryData<UseCaseView[]>(keys.useCases(user), (list) => (list ? change(list) : list))
 }
 
-/** The workflow and the watchlist both say whether it is paused, so both read again. */
-function refresh(queryClient: QueryClient): void {
+function rereadWorkflowsAndWatchlist(queryClient: QueryClient): void {
   for (const key of ['use-cases', 'watchlist']) void queryClient.invalidateQueries({ queryKey: [key] })
 }
 
-/** Pause, resume or put back a workflow. Each answers the workflow as it is now. */
+function markStaleWithoutReading(queryClient: QueryClient, queryKey: readonly unknown[]): void {
+  void queryClient.invalidateQueries({ queryKey, refetchType: 'none' })
+}
+
 export function useMoveWorkflow() {
   const client = useApiClient()
   const queryClient = useQueryClient()
@@ -44,12 +45,11 @@ export function useMoveWorkflow() {
     onSuccess: (view) => {
       queryClient.setQueryData(keys.useCase(user, view.use_case_id), view)
       changeList(queryClient, user, (list) => withView(list, view))
-      refresh(queryClient)
+      rereadWorkflowsAndWatchlist(queryClient)
     },
   })
 }
 
-/** The page that pressed Delete is still open, so its own entry is only marked stale, not read again. */
 export function useDeleteWorkflow() {
   const client = useApiClient()
   const queryClient = useQueryClient()
@@ -59,8 +59,8 @@ export function useDeleteWorkflow() {
       unwrap(await client.DELETE('/api/v1/use-cases/{use_case_id}', { params: { path: { use_case_id: useCaseId } } })),
     onSuccess: (deleted) => {
       changeList(queryClient, user, (list) => list.filter((item) => item.use_case_id !== deleted.use_case_id))
-      void queryClient.invalidateQueries({ queryKey: keys.useCase(user, deleted.use_case_id), refetchType: 'none' })
-      refresh(queryClient)
+      markStaleWithoutReading(queryClient, keys.useCase(user, deleted.use_case_id))
+      rereadWorkflowsAndWatchlist(queryClient)
     },
   })
 }

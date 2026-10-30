@@ -1,9 +1,7 @@
-/** A message stays long enough to read: 2 seconds, plus a little for each character, up to 10. */
 export function readMs(text: string): number {
   return Math.min(10_000, 2_000 + text.length * 45)
 }
 
-/** After a pause, a message gets this long again, so it never vanishes the moment the pointer leaves. */
 export const RESUME_MS = 4_000
 
 export type Hold = 'hover' | 'focus' | 'hidden'
@@ -14,10 +12,6 @@ export interface ToastClock {
   stop(): void
 }
 
-/**
- * Times a message without Undo (WCAG 2.2.1). Its time does not run while the pointer or focus is on it, or while the
- * tab is hidden. A message with Undo gets no clock at all.
- */
 export function startToastClock(ms: number, onTimeout: () => void): ToastClock {
   const holds = new Set<Hold>()
   let timer: ReturnType<typeof setTimeout> | undefined

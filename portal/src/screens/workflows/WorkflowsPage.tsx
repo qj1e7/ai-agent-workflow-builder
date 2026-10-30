@@ -14,7 +14,7 @@ import { IconSearch } from '../../ui/icons'
 import { Toast, UNDO_ID, type ToastMessage } from '../../ui/Toast'
 import { useArrivalScroll } from './arrival'
 import { Faces, StatusPills } from './Status'
-import { agentsOf, changeProblem, FILTERS, lineWhen, nextRunWords, pressChange, rowsOf, runFact, type Filter, type Row, type Viewer } from './workflow'
+import { agentsOf, changeProblem, FILTERS, lineWhen, nextRunWords, pressChange, rowsOf, runFact, type Filter, type Row, type RunFact, type Viewer } from './workflow'
 import styles from './Workflows.module.css'
 
 export const REFRESH_MS = 15_000
@@ -30,7 +30,6 @@ interface Deleted {
   readonly name: string
 }
 
-/** The workflow page hands over what it deleted in the router state, so the list can offer Undo. */
 export function deletedIn(state: unknown): Deleted | null {
   if (typeof state !== 'object' || state === null || !('deleted' in state)) return null
   const { deleted } = state as { deleted: Partial<Deleted> | null }
@@ -39,20 +38,17 @@ export function deletedIn(state: unknown): Deleted | null {
 
 type Note = { readonly kind: 'deleted'; readonly id: number; readonly row: Deleted } | { readonly kind: 'said'; readonly id: number; readonly text: string }
 
-let notes = 0
-/** Called from event handlers only, so each message gets a new id and a fresh clock. */
-const said = (text: string): Note => ({ kind: 'said', id: ++notes, text })
-
 const lowerFirst = (words: string) => words.charAt(0).toLowerCase() + words.slice(1)
 
-function latestLine(latest: RunView | null, now: Date, nameOf: (id: string) => string): string {
-  if (!latest) return 'No runs yet.'
-  return `${lineWhen(latest.started_at, now)}: ${lowerFirst(runFact(latest, nameOf).words)}`
+function latestLine(latest: RunView | null, fact: RunFact | null, now: Date): string {
+  if (!latest || !fact) return 'No runs yet.'
+  return `${lineWhen(latest.started_at, now)}: ${lowerFirst(fact.words)}`
 }
 
 function nextLine(useCase: UseCaseView, now: Date): string {
-  const next = nextRunWords(useCase, now)
-  return next === 'Not scheduled' ? next : `Next: ${next}`
+  const words = nextRunWords(useCase, now)
+  const unscheduled = useCase.state === 'on' && useCase.next_run_at === null
+  return unscheduled ? words : `Next: ${words}`
 }
 
 interface RowProps {
@@ -81,7 +77,7 @@ function WorkflowRow({ row, index, primary, arrive, now, nameOf }: RowProps) {
             {useCase.name}
           </Link>
         </h2>
-        <p>{latestLine(latest, now, nameOf)}</p>
+        <p>{latestLine(latest, fact, now)}</p>
       </div>
       <Faces agents={agentsOf(useCase)} useCase={useCase} latest={latest} />
       <div className={styles['foot']}>
@@ -128,8 +124,7 @@ function Empty({ operator }: { operator: boolean }) {
   )
 }
 
-/** Hands the router state over once, so Back or a reload never offers the same Undo again. */
-function useHandOver(): Deleted | null {
+function useDeletedHandedOverOnce(): Deleted | null {
   const location = useLocation()
   const navigate = useNavigate()
   const [deleted] = useState(() => deletedIn(location.state))
@@ -150,7 +145,7 @@ interface LoadedProps {
 }
 
 function Loaded({ heading, lead, now, me, useCases, runs, runsFailed }: LoadedProps) {
-  const handedOver = useHandOver()
+  const handedOver = useDeletedHandedOverOnce()
   const back = useNavigationType() === NavigationType.Pop
   const [note, setNote] = useState<Note | null>(() => (handedOver ? { kind: 'deleted', id: 0, row: handedOver } : null))
   const [problem, setProblem] = useState<string | null>(null)
@@ -162,7 +157,7 @@ function Loaded({ heading, lead, now, me, useCases, runs, runsFailed }: LoadedPr
   const move = useMoveWorkflow()
   const changes = useLatch()
   const viewer = viewerOf(me)
-  useArrivalScroll(true)
+  useArrivalScroll()
 
   const focusRestored = useFocusWhenReady(restored !== null && useCases.some((item) => item.use_case_id === restored), () =>
     document.getElementById(rowLinkId(restored ?? '')),
@@ -181,7 +176,7 @@ function Loaded({ heading, lead, now, me, useCases, runs, runsFailed }: LoadedPr
         setProblem(null)
         setRestored(row.id)
         focusRestored()
-        setNote(said(`Put ${row.name} back.`))
+        setNote((before) => ({ kind: 'said', id: (before?.id ?? 0) + 1, text: `Put ${row.name} back.` }))
       },
       onError: (error) => setProblem(changeProblem('restore', row.name, error, words)),
     })

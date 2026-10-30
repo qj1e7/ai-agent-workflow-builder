@@ -19,7 +19,7 @@ const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
 
 const AGENTS = agentUseCase as UseCaseView
 const WATCHLIST = watchlistUseCase as UseCaseView
-const NOW = new Date('2026-11-04T07:00:00Z')
+const NOW = new Date('2026-11-04T15:00:00+08:00')
 
 interface Setup {
   readonly me?: Me

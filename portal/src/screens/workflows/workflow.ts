@@ -11,7 +11,6 @@ export type Tone = 'ok' | 'wait' | 'bad' | 'new'
 
 export interface RunFact {
   readonly tone: Tone
-  /** A second pill beside On or Paused, only when the run needs someone or is still going. */
   readonly pill: string | null
   readonly words: string
 }
@@ -164,7 +163,6 @@ const PLANNER: AgentLink = { face: 'planner', name: agentIdentity('planner').nam
 const VERSION_CHECKER_CARD = 'crd_version_checker'
 export const WATCHLIST_TEMPLATE = 'software_watchlist'
 
-/** The Planner leads every run, so it comes first. The watchlist's check always brings in the Version checker. */
 export function agentsOf(useCase: Pick<UseCaseView, 'template' | 'agents'>): AgentLink[] {
   const cards: readonly { readonly card_id: string; readonly name: string }[] =
     useCase.template === WATCHLIST_TEMPLATE
@@ -174,22 +172,25 @@ export function agentsOf(useCase: Pick<UseCaseView, 'template' | 'agents'>): Age
   return [PLANNER, ...unique.map((card) => ({ face: faceId(card), name: card.name, to: `/agents/${card.card_id}` }))]
 }
 
-/** Each face shows the real state of the work: closed eyes while paused, and a wait on the agent whose work needs a yes. */
 export function faceStates(useCase: Pick<UseCaseView, 'state'>, latest: RunView | null, total: number): FaceState[] {
+  const proposer = total - 1
   return Array.from({ length: total }, (_, index): FaceState => {
     if (useCase.state === 'paused') return 'stopped'
-    return latest?.state === 'awaiting_approval' && index === total - 1 ? 'waiting' : 'idle'
+    return latest?.state === 'awaiting_approval' && index === proposer ? 'waiting' : 'idle'
   })
 }
 
 export type RowAction = { readonly kind: 'decide' | 'why'; readonly runId: string }
 
-/** The first demo's rule: any Approver except the people who start or own it. The run page has the final say. */
+function mayDecide(useCase: Pick<UseCaseView, 'owner'>, run: Pick<RunView, 'started_by'>, viewer: Viewer): boolean {
+  const party = run.started_by === viewer.id || useCase.owner === viewer.id
+  return viewer.approver && !party
+}
+
 export function rowAction(useCase: Pick<UseCaseView, 'owner'>, latest: RunView | null, viewer: Viewer): RowAction | null {
   if (!latest) return null
   if (latest.state === 'awaiting_approval') {
-    const party = latest.started_by === viewer.id || useCase.owner === viewer.id
-    return viewer.approver && !party ? { kind: 'decide', runId: latest.run_id } : null
+    return mayDecide(useCase, latest, viewer) ? { kind: 'decide', runId: latest.run_id } : null
   }
   if (latest.state === 'failed' && viewer.operator) return { kind: 'why', runId: latest.run_id }
   return null
@@ -255,7 +256,6 @@ export interface ChangeOutcome<T> {
   onSettled?: () => void
 }
 
-/** One pause, resume, delete or Undo at a time: a second press before the platform answers is dropped. */
 export function pressChange<T>(latch: Latch, send: (outcome: ChangeOutcome<T>) => void, outcome: ChangeOutcome<T>): void {
   latch.run((settled) =>
     send({

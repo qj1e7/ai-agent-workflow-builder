@@ -14,7 +14,6 @@ interface RecentRunsProps {
   readonly runs: readonly RunView[]
   readonly now: Date
   readonly nameOf: (id: string) => string
-  /** When the first run is due, for a workflow that has not run yet, or null. */
   readonly firstRun: string | null
 }
 

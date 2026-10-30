@@ -9,7 +9,7 @@ import { RECENT_LIMIT, RecentRuns } from './RecentRuns'
 
 const NAMES: Record<string, string> = { alice: 'Alice', bob: 'Bob' }
 const nameOf = (id: string) => NAMES[id] ?? id
-const NOW = new Date('2026-11-04T07:00:00Z')
+const NOW = new Date('2026-11-04T15:00:00+08:00')
 
 function render(runs: RunView[], firstRun: string | null = 'Mon 9 Nov, 9:00'): string {
   return renderToStaticMarkup(
@@ -32,7 +32,7 @@ describe('the recent runs of a workflow', () => {
   })
 
   it('say when a schedule started a run', () => {
-    expect(text(render([scheduled as unknown as RunView]))).toContain("Started by Alice's schedule")
+    expect(text(render([scheduled as RunView]))).toContain("Started by Alice's schedule")
   })
 
   it('show the newest ones first and offer the older ones on request', () => {

@@ -24,10 +24,9 @@ const RUNS = [
   { ...(failed as RunView), use_case_id: 'uc_bugs', run_id: 'run_bugs' },
   waiting as RunView,
   { ...(done as RunView), run_id: 'run_older', started_at: '2026-11-01T02:14:00Z' },
-] as RunView[]
+]
 
-/** Wednesday 4 November 2026, 15:00 in Singapore. */
-const NOW = new Date('2026-11-04T07:00:00Z')
+const NOW = new Date('2026-11-04T15:00:00+08:00')
 
 interface Setup {
   readonly me?: Me

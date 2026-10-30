@@ -1,5 +1,3 @@
-/* The Workflows list and the workflow page, from the prototype's .wf-row, .facts, .panel and .steps. Light only. */
-
 .pills {
   display: inline-flex;
   flex-wrap: wrap;
@@ -41,7 +39,6 @@
   color: var(--accent-ink);
 }
 
-/* A value that changed while you looked: a soft tint that fades, once. */
 .changed {
   border-radius: 4px;
   animation: changed 980ms ease-out both;
@@ -55,7 +52,6 @@
   }
 }
 
-/* A new page: its rows arrive one after another, 40ms apart, at most 6 steps. Once. */
 .arrive {
   animation: rise var(--dur-small) var(--ease-out) both;
   animation-delay: calc(min(var(--i, 0), 6) * var(--stagger));
@@ -75,8 +71,6 @@
 .faces > svg + svg {
   margin-left: -8px;
 }
-
-/* ---------- The list ---------- */
 
 .findbar {
   display: flex;
@@ -183,7 +177,6 @@
   text-decoration: none;
 }
 
-/* The whole row is the link's hit area; the button at its end sits above it. */
 .rowLink::after {
   content: '';
   position: absolute;
@@ -222,7 +215,6 @@
   }
 }
 
-/* On a wide screen the next run and the button are cells of the row; on a narrow one they share its last line. */
 .foot {
   display: contents;
 }
@@ -288,8 +280,6 @@
   color: var(--red-ink);
   font-weight: 600;
 }
-
-/* ---------- The workflow page ---------- */
 
 .back {
   display: inline-flex;
