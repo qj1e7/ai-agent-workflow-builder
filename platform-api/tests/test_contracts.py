@@ -5,6 +5,7 @@ import pytest
 from pydantic import TypeAdapter
 
 from platform_api.auth import DevUsers
+from platform_api.builder.home import HomeOut
 from platform_api.builder.http import SuggestOut, TemplateList, UseCaseView
 from platform_api.builder.models import (
     AddSoftware,
@@ -122,9 +123,13 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "builder/understand.watchlist.json": TypeAdapter(UnderstandOut),
     "builder/understand.starters.json": TypeAdapter(UnderstandOut),
     "builder/use-case.paused.json": TypeAdapter(UseCaseView),
+    "builder/use-case.held.json": TypeAdapter(UseCaseView),
     "builder/use-case.deleted.json": TypeAdapter(UseCaseDeleted),
     "builder/draft.in.json": TypeAdapter(DraftIn),
     "builder/drafts.json": TypeAdapter(DraftList),
+    "builder/home.bob.json": TypeAdapter(HomeOut),
+    "builder/home.alice.json": TypeAdapter(HomeOut),
+    "builder/home.day-one.json": TypeAdapter(HomeOut),
     "internal/step-responses.json": TypeAdapter(list[StepResponseOut]),
     "internal/workflow-failure.json": TypeAdapter(WorkflowFailureIn),
     "stubs/dev-users.json": TypeAdapter(DevUsers),
@@ -160,6 +165,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "watchlist/schedule.in.json": TypeAdapter(ScheduleIn),
     "watchlist/schedule.saved.json": TypeAdapter(WatchlistView),
     "watchlist/schedule.off.json": TypeAdapter(WatchlistView),
+    "watchlist/schedule.held.json": TypeAdapter(WatchlistView),
     "watchlist/paused.json": TypeAdapter(WatchlistView),
     "internal/tick.started.json": TypeAdapter(TickOut),
     "internal/tick.nothing-due.json": TypeAdapter(TickOut),
@@ -287,6 +293,17 @@ def test_approval_views_follow_the_own_work_rule():
     assert alice.digest == bob.digest
 
 
+def test_home_fixtures_follow_the_own_work_rule():
+    bob = HomeOut.model_validate(load("builder/home.bob.json"))
+    alice = HomeOut.model_validate(load("builder/home.alice.json"))
+    (ask,) = bob.approvals
+    (waits,) = alice.waiting_on_others
+    assert ask.run_id == waits.run_id
+    assert (ask.started_by, waits.because) == ("alice", "started")
+    assert alice.approvals == []
+    assert (bob.stopped, bob.drafts) == ([], [])
+
+
 def _literal_values(alias: TypeAliasType) -> set[str]:
     return set(get_args(alias.__value__))
 
@@ -305,7 +322,15 @@ def test_the_schedule_fixtures_show_the_owner_and_the_next_check():
     saved = WatchlistView.model_validate(load("watchlist/schedule.saved.json"))
     off = WatchlistView.model_validate(load("watchlist/schedule.off.json"))
     paused = WatchlistView.model_validate(load("watchlist/paused.json"))
+    held = WatchlistView.model_validate(load("watchlist/schedule.held.json"))
     assert statuses.schedule is not None and saved.schedule is not None
+    assert (statuses.schedule.held, saved.schedule.held) == (None, None)
+    assert held.state == "on" and held.schedule is not None
+    assert (held.schedule.owner, held.schedule.held, held.schedule.next_at) == (
+        "alice",
+        "owner_removed",
+        None,
+    )
     assert (statuses.schedule.day, statuses.schedule.owner_name) == ("monday", "Alice")
     assert (saved.schedule.day, saved.schedule.at, saved.schedule.owner) == (
         "every_day",
@@ -321,6 +346,23 @@ def test_the_schedule_fixtures_show_the_owner_and_the_next_check():
     assert (scheduled.trigger, scheduled.started_by) == ("schedule", "alice")
     ran = run_view_adapter.validate_python(load("views/success.final.json"))
     assert ran.trigger == "person"
+
+
+def test_the_use_case_fixtures_say_whose_schedule_it_is_and_why_a_held_one_runs_nothing():
+    views = [
+        UseCaseView.model_validate(load(f"builder/use-case{name}.json"))
+        for name in ("", ".paused", ".held")
+    ]
+    shown = [
+        (v.state, v.next_run_at is None, v.schedule.owner_name, v.schedule.held)
+        for v in views
+        if v.schedule is not None
+    ]
+    assert shown == [
+        ("on", False, "Alice", None),
+        ("paused", True, "Alice", None),
+        ("on", True, "Alice", "owner_removed"),
+    ]
 
 
 def test_the_card_run_is_what_the_agent_sent_and_the_platform_bound():

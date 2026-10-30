@@ -66,6 +66,7 @@ WRITE_ACTION = StepName.WRITE_ACTION
 @dataclass
 class RecordingEngine:
     legs: list[tuple[str, Leg, RunId]] = field(default_factory=list)
+    executions: list[N8nExecutionId] = field(default_factory=list)
     next_execution: int = 41
     down: bool = False
 
@@ -74,6 +75,7 @@ class RecordingEngine:
             raise DispatchFailure("n8n is down")
         self.legs.append((workflow, leg, run_id))
         execution = N8nExecutionId(str(self.next_execution))
+        self.executions.append(execution)
         self.next_execution += 1
         return execution
 

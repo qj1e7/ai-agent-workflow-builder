@@ -172,7 +172,8 @@ def schedule_view(saved: SavedSchedule | None, now: datetime, on: bool) -> Sched
         owner=saved.owner,
         owner_name=saved.owner_name,
         saved_at=saved.saved_at,
-        next_at=saved.slots(now).next if on else None,
+        next_at=saved.next_run(now) if on else None,
+        held=saved.held,
     )
 
 

@@ -1,24 +1,28 @@
 import { NavLink } from 'react-router'
 import { cx } from '../ui/cx'
-import { MENU_PAGE_IDS, PAGES } from './routes'
+import { menuFor, PAGES } from './routes'
 import styles from './Menu.module.css'
 
-export function Menu() {
+export function Menu({ operator }: { operator: boolean }) {
   return (
     <nav className={styles['nav']} aria-label="Main">
-      {MENU_PAGE_IDS.map((id) => (
-        <NavLink key={id} to={PAGES[id].path} end={id === 'home'} className={cx(styles['link'])}>
-          {PAGES[id].menuLabel}
-        </NavLink>
-      ))}
+      {menuFor(operator).map((id) => {
+        const { path, menuLabel, icon: Icon, forOperators } = PAGES[id]
+        return (
+          <NavLink key={id} to={path} end={id === 'home'} className={cx(styles['link'], forOperators && styles['new'])}>
+            {forOperators ? <Icon size={16} /> : null}
+            {menuLabel}
+          </NavLink>
+        )
+      })}
     </nav>
   )
 }
 
-export function TabBar() {
+export function TabBar({ operator }: { operator: boolean }) {
   return (
     <nav className={styles['tabbar']} aria-label="Main">
-      {MENU_PAGE_IDS.map((id) => {
+      {menuFor(operator).map((id) => {
         const { path, tabLabel, icon: Icon } = PAGES[id]
         return (
           <NavLink key={id} to={path} end={id === 'home'} className={cx(styles['tab'])}>

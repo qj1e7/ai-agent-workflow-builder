@@ -8,10 +8,11 @@ import { openContext, OUT, shot } from './support/ui'
 const GREETING = (name: string) => new RegExp(`^Good (morning|afternoon|evening), ${name}$`)
 
 const MENU = [
-  { label: 'Home', path: '/', heading: GREETING('Alice'), built: false },
-  { label: 'Workflows', path: '/workflows', heading: 'Workflows', built: false },
+  { label: 'Home', path: '/', heading: GREETING('Alice'), built: true },
+  { label: 'Workflows', path: '/workflows', heading: 'Workflows', built: true },
   { label: 'Software watchlist', path: '/software', heading: 'Software watchlist', built: true },
   { label: 'Agent library', path: '/agents', heading: 'Agent library', built: true },
+  { label: 'New workflow', path: '/new', heading: /^New workflow, step 1 of 4: Describe it$/, built: true },
 ] as const
 
 const PAGES = [...MENU.map(({ path: to, label }) => ({ label, path: to })), { label: 'Settings', path: '/settings' }]
@@ -22,25 +23,42 @@ const settled = (page: Page) => page.waitForFunction(() => document.getAnimation
 const mainMenu = (page: Page) => page.getByRole('navigation', { name: 'Main' })
 const heading = (page: Page) => page.getByRole('heading', { level: 1 })
 
-test('Home greets the signed-in person and the menu reads Home, Workflows, Software watchlist, Agent library', async ({ page }, info) => {
+async function slowHome(page: Page): Promise<void> {
+  await page.route('**/api/v1/home', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    await route.continue()
+  })
+}
+
+/** On day one an Operator's Home shows Start your first workflow in place of All quiet. */
+async function loaded(page: Page): Promise<void> {
+  const main = page.getByRole('main')
+  await expect(main.getByRole('status').filter({ hasText: /^Loading/ })).toHaveCount(0)
+  if (new URL(page.url()).pathname !== '/') return
+  const drawn = main.locator('[data-home-item]').or(main.getByText('All quiet', { exact: true })).or(main.getByRole('heading', { name: 'Start your first workflow' }))
+  await expect(drawn.first()).toBeVisible()
+}
+
+test('Home greets the signed-in person and the menu reads Home, Workflows, Software watchlist, Agent library, New workflow', async ({ page }, info) => {
   await page.goto('/')
   await expect(heading(page)).toHaveText(GREETING('Alice'))
   await expect(page.getByRole('banner')).toContainText('Alice')
   await expect(page.getByRole('banner')).toContainText('Operator and Approver')
   await expect(mainMenu(page).getByRole('link')).toHaveText(MENU.map((item) => item.label))
   await expect(mainMenu(page).getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page')
-  await expect(page.getByRole('link', { name: 'New workflow' })).toHaveCount(0)
   await expect(page).toHaveTitle(/^Good (morning|afternoon|evening), Alice · AI Workflow Builder$/)
   await shot(page, info, 'p1-01-home')
 })
 
 test('each menu item changes the URL and opens a page with its own heading', async ({ page }, info) => {
+  await slowHome(page)
   await page.goto('/settings')
   for (const item of MENU) {
     await mainMenu(page).getByRole('link', { name: item.label, exact: true }).click()
     await expect(page).toHaveURL(new RegExp(`${item.path === '/' ? '/$' : `${item.path}$`}`))
     await expect(heading(page)).toHaveText(item.heading)
-    await expect(heading(page), 'a page change puts focus on the new heading').toBeFocused()
+    await loaded(page)
+    await expect(heading(page), 'a page change puts focus on the new heading, and it is still there once the page has loaded').toBeFocused()
     await expect(mainMenu(page).getByRole('link', { name: item.label, exact: true })).toHaveAttribute('aria-current', 'page')
     if (!item.built) await expect(page.getByRole('main')).toContainText('This page is not built yet.')
     await shot(page, info, `p1-02-menu-${item.label.toLowerCase().replaceAll(' ', '-')}`)
@@ -94,6 +112,18 @@ test('Teams opens a dialog, Escape closes it, and focus goes back to the Teams b
   await expect(teams).toBeFocused()
 })
 
+test('Teams pressed before the signed-in person is known still puts focus on Close', async ({ page }) => {
+  await page.route('**/api/v1/me', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+    await route.continue()
+  })
+  await page.goto('/')
+  await page.getByRole('button', { name: /^Teams, practice copy/ }).click()
+  const dialog = page.getByRole('dialog', { name: 'Teams, practice copy' })
+  await expect(dialog).toContainText('Microsoft Teams')
+  await expect(dialog.getByRole('button', { name: 'Close Teams' })).toBeFocused()
+})
+
 test('Test controls act as Bob, and Bob can open Settings', async ({ page }, info) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'Test controls' }).click()
@@ -118,6 +148,7 @@ test('Test controls act as Bob, and Bob can open Settings', async ({ page }, inf
 test('Tab reaches every header control with a visible focus ring, and the skip link moves focus to the heading', async ({ page }, info) => {
   await page.goto('/')
   await expect(heading(page)).toBeVisible()
+  await loaded(page)
   const walk = await walkTabs(page)
   const labels = walk.stops.map((stop) => stop.label)
   expect(labels[0], `the skip link is the first stop; stops: ${labels.join(', ')}`).toBe('Skip to main content')
@@ -172,8 +203,9 @@ test('at 390 px wide the page does not scroll sideways, and every tab bar item c
   await page.goto('/')
   await expect(heading(page)).toBeVisible()
   const bar = mainMenu(page)
-  await expect(bar.getByRole('link')).toHaveText(['Home', 'Workflows', 'Watchlist', 'Agents'])
+  await expect(bar.getByRole('link')).toHaveText(['Home', 'Workflows', 'Watchlist', 'Agents', 'New workflow'])
   for (const [label, to, words] of [
+    ['New workflow', /\/new$/, /^New workflow, step 1 of 4: Describe it$/],
     ['Workflows', /\/workflows$/, 'Workflows'],
     ['Watchlist', /\/software$/, 'Software watchlist'],
     ['Agents', /\/agents$/, 'Agent library'],

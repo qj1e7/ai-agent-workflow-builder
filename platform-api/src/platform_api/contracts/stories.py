@@ -5,7 +5,7 @@ from typing import TypedDict
 from platform_api.auth import DEV_USERS
 from platform_api.builder import TEMPLATES as TEMPLATES_BY_KEY
 from platform_api.builder import Builder
-from platform_api.builder.models import TemplateList, UseCaseView
+from platform_api.builder.models import TemplateList, UseCaseSchedule, UseCaseView
 from platform_api.builder.planning import starters, understood_out
 from platform_api.builder.templates import SOFTWARE_WATCHLIST, WATCHLIST_INSTRUCTION
 from platform_api.builder.views import template_view
@@ -631,11 +631,14 @@ def decision_out(tl: Timeline) -> DecisionOut:
 
 
 OWN_WORK_REFUSAL = RefusalOut(
-    refusal=Refusal.OWN_WORK, message="You started this run, so another Approver must decide."
+    refusal=Refusal.OWN_WORK, message="This run is your own work, so another Approver must decide."
 )
 
 TEMPLATES = TemplateList(templates=[template_view(t) for t in TEMPLATES_BY_KEY.values()])
 
+USE_CASE_SCHEDULE = UseCaseSchedule(
+    day="monday", at="09:00", time_zone="Asia/Singapore", owner_name="Alice"
+)
 USE_CASE = UseCaseView(
     use_case_id=USE_CASE_ID,
     version=1,
@@ -647,6 +650,7 @@ USE_CASE = UseCaseView(
     created_at=datetime(2026, 11, 2, 9, 30, tzinfo=UTC),
     state="on",
     next_run_at=datetime(2026, 11, 9, 1, 0, tzinfo=UTC),
+    schedule=USE_CASE_SCHEDULE,
     plan=template_view(SOFTWARE_WATCHLIST).blocks,
     agents=[],
 )

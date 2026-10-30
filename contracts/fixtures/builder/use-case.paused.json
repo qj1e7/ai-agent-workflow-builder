@@ -11,6 +11,13 @@
   "created_at": "2026-11-02T09:30:00Z",
   "state": "paused",
   "next_run_at": null,
+  "schedule": {
+    "day": "monday",
+    "at": "09:00",
+    "time_zone": "Asia/Singapore",
+    "owner_name": "Alice",
+    "held": null
+  },
   "plan": [
     {
       "key": "read_versions",

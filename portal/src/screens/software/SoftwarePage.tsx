@@ -13,7 +13,7 @@ import { FindSoftware } from './FindSoftware'
 import { Schedule } from './Schedule'
 import { changeFeedback, NO_FEEDBACK, noticeButtons, noticeWords, pressRemove, pressUndo, PROBLEM_ID, removeButtonId, UNDO_ID, type ChangeFeedback, type Named } from './removal'
 import { SoftwareHistory } from './SoftwareHistory'
-import { cantCheckWords, countIn, emptyWords, groupsOf, newestOf, singaporeTime, statusLabel, statusTone, stoppedWords, versionSourceWords } from './software'
+import { cantCheckWords, countIn, emptyWords, groupsOf, newestOf, scheduleRuns, singaporeTime, statusLabel, statusTone, stoppedWords, versionSourceWords } from './software'
 import styles from './Software.module.css'
 
 const REFRESH_MS = 15_000
@@ -216,7 +216,7 @@ function Notice({ feedback, scheduled, paused, onUndo, onDismiss }: NoticeProps)
   )
 }
 
-function Loaded({ view, operator }: { view: WatchlistView | null; operator: boolean }) {
+function Loaded({ view, operator, answeredAt }: { view: WatchlistView | null; operator: boolean; answeredAt: number }) {
   const [query, setQuery] = useState('')
   const [opened, setOpened] = useState<string | null>(null)
   const [feedback, dispatch] = useReducer(changeFeedback, NO_FEEDBACK)
@@ -234,7 +234,7 @@ function Loaded({ view, operator }: { view: WatchlistView | null; operator: bool
   }
 
   const software = view?.software ?? []
-  const scheduled = Boolean(view?.schedule)
+  const scheduled = scheduleRuns(view?.schedule)
   const paused = view?.state === 'paused'
   const groups = groupsOf(software, query)
   const shown = countIn(groups)
@@ -244,13 +244,22 @@ function Loaded({ view, operator }: { view: WatchlistView | null; operator: bool
     <>
       {operator && view && !paused && software.length > 0 ? <CheckNow useCaseId={view.use_case_id} /> : null}
       {view?.last_check?.state === 'failed' ? <LastCheckStopped last={view.last_check} /> : null}
-      {view ? <Schedule schedule={view.schedule} operator={operator} paused={paused} /> : null}
+      {view ? (
+        <Schedule
+          schedule={view.schedule}
+          operator={operator}
+          useCaseId={view.use_case_id}
+          paused={paused}
+          answeredAt={answeredAt}
+          onResumed={() => dispatch({ type: 'resumed' })}
+        />
+      ) : null}
       <Notice feedback={feedback} scheduled={scheduled} paused={paused} onUndo={(row) => pressUndo(changes, restore.mutate, row, dispatch, words)} onDismiss={dismiss} />
       {software.length > 0 || searching ? <FindSoftware query={query} shown={shown} onChange={setQuery} /> : null}
       {software.length === 0 && !searching ? (
         <div className={styles['empty']}>
           <b>No software yet</b>
-          <span>{emptyWords({ operator, scheduled: view === null || view.schedule !== null, paused })}</span>
+          <span>{emptyWords({ operator, scheduled: view === null || scheduleRuns(view.schedule), paused })}</span>
         </div>
       ) : null}
       {searching && shown === 0 ? (
@@ -306,5 +315,5 @@ export function SoftwareRoute() {
       </p>
     )
   }
-  return <Loaded view={watchlist.data} operator={me.data.roles.includes('operator')} />
+  return <Loaded view={watchlist.data} operator={me.data.roles.includes('operator')} answeredAt={Math.max(watchlist.dataUpdatedAt, watchlist.errorUpdatedAt)} />
 }

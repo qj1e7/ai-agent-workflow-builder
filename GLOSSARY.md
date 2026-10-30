@@ -105,6 +105,10 @@ _Avoid_: EOL, deprecated
 **Schedule owner**:
 The person who last saved a watchlist's schedule. Every scheduled check counts as their work.
 
+**Held schedule**:
+A schedule whose owner has left the People list or is no longer an Operator. It starts no run, and each slot it misses is used up, until the owner is an Operator again or another Operator saves the schedule and so becomes its owner.
+_Avoid_: Paused (a workflow is paused), turned off (an Operator turns a schedule off)
+
 ### Running
 
 **Run**:

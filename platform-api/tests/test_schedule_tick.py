@@ -6,13 +6,24 @@ from typing import Literal
 
 import pytest
 
+from platform_api.auth import DEV_PEOPLE
 from platform_api.db import Database
-from platform_api.orchestration import NotOn, RunSpec, Schedule, ScheduleBook, ScheduleTicker
+from platform_api.orchestration import (
+    NotOn,
+    RunSpec,
+    RunStarted,
+    RunStarter,
+    Schedule,
+    ScheduleBook,
+    ScheduleTicker,
+)
 from platform_api.orchestration.approvals import Refusal, Verdict
 from platform_api.orchestration.http import run_view
+from platform_api.orchestration.people import Person
+from platform_api.orchestration.people_store import People, PersonRow
 from platform_api.orchestration.runs import AwaitingApproval, StepName
 from platform_api.orchestration.service import Decided, DecisionRefused
-from platform_api.shared import N8nExecutionId, UseCaseId
+from platform_api.shared import N8nExecutionId, Principal, Role, UseCaseId
 from tests.conftest import PostgresUrls
 from tests.support import ALICE, BOB, CAROL, NOW, SPEC, WATCHLIST_SPEC
 from tests.test_orchestrator import Harness, open_harness
@@ -45,10 +56,26 @@ class FakeSpecs:
 
 
 @dataclass
+class Recording:
+    """The orchestrator, keeping the person each run was started as."""
+
+    runs: RunStarter
+    started_as: list[Principal] = field(default_factory=list[Principal])
+
+    async def start_run(
+        self, spec: RunSpec, principal: Principal, idempotency_key: str
+    ) -> RunStarted:
+        self.started_as.append(principal)
+        return await self.runs.start_run(spec, principal, idempotency_key)
+
+
+@dataclass
 class Ticking:
     h: Harness
     book: ScheduleBook
     specs: FakeSpecs
+    people: People
+    runs: Recording
     ticker: ScheduleTicker
 
     def at(self, moment: datetime) -> None:
@@ -72,7 +99,10 @@ async def ticking(postgres: PostgresUrls) -> AsyncIterator[Ticking]:
         specs = FakeSpecs(
             {WATCHLIST: WATCHLIST_SPEC, OTHER: replace(WATCHLIST_SPEC, use_case_id=OTHER)}
         )
-        yield Ticking(h, book, specs, ScheduleTicker(h.db, book, specs, h.orchestrator))
+        people = People(h.db)
+        assert await people.seed_dev(DEV_PEOPLE)
+        runs = Recording(h.orchestrator)
+        yield Ticking(h, book, specs, people, runs, ScheduleTicker(h.db, book, specs, runs))
 
 
 async def test_nothing_is_due_before_the_slot(ticking: Ticking):
@@ -205,6 +235,116 @@ async def test_a_workflow_resumed_after_its_slot_waits_for_the_next_one(ticking:
     assert [key for _, key, _ in await ticking.run_keys()] == [
         f"schedule:{WATCHLIST}:2026-11-16T09:00:00+08:00"
     ]
+
+
+async def test_a_scheduled_run_starts_as_its_owner_with_the_roles_they_hold_now(
+    ticking: Ticking,
+):
+    await ticking.book.save(WATCHLIST, MONDAY_9, ALICE)  # Alice is an Operator and an Approver
+    ticking.at(NEXT_MONDAY)
+
+    assert len(await ticking.ticker.tick()) == 1
+
+    assert ticking.runs.started_as == [ALICE]
+
+
+SKIPPED = "skipped the scheduled check of {use_case}, because its owner {owner} {why}"
+
+
+async def test_a_schedule_whose_owner_left_the_list_uses_its_slot_up_and_starts_nothing(
+    ticking: Ticking, caplog: pytest.LogCaptureFixture
+):
+    await ticking.book.save(WATCHLIST, MONDAY_9, CAROL)
+    assert isinstance(await ticking.people.remove(ALICE, "carol"), Person)
+    ticking.at(NEXT_MONDAY + timedelta(minutes=1))
+
+    with caplog.at_level(logging.INFO, logger="platform_api.orchestration.schedule_store"):
+        assert await ticking.ticker.tick() == []
+        ticking.at(NEXT_MONDAY + timedelta(minutes=6))
+        assert await ticking.ticker.tick() == []
+
+    assert await ticking.run_keys() == []
+    assert ticking.specs.asked == [], "a held schedule does not build a check"
+    [saved] = await ticking.book.all()
+    assert saved.last_slot_started == NEXT_MONDAY
+    skipped = SKIPPED.format(use_case=WATCHLIST, owner="carol", why="has left the People list")
+    assert caplog.text.count(skipped) == 1, "the slot is used up, so the next tick is quiet"
+
+
+async def test_a_schedule_whose_owner_is_now_only_an_approver_uses_its_slot_up_and_starts_nothing(
+    ticking: Ticking, caplog: pytest.LogCaptureFixture
+):
+    await ticking.book.save(WATCHLIST, MONDAY_9, ALICE)
+    changed = await ticking.people.set_operator(CAROL, "alice", False)
+    assert isinstance(changed, Person) and changed.roles == {Role.APPROVER}
+    ticking.at(NEXT_MONDAY + timedelta(minutes=1))
+
+    with caplog.at_level(logging.INFO, logger="platform_api.orchestration.schedule_store"):
+        assert await ticking.ticker.tick() == []
+
+    assert await ticking.run_keys() == []
+    [saved] = await ticking.book.all()
+    assert saved.last_slot_started == NEXT_MONDAY
+    skipped = SKIPPED.format(use_case=WATCHLIST, owner="alice", why="is no longer an Operator")
+    assert skipped in caplog.text
+
+
+async def test_an_operator_who_saves_a_held_schedule_again_takes_it_over(ticking: Ticking):
+    await ticking.book.save(WATCHLIST, MONDAY_9, CAROL)
+    assert isinstance(await ticking.people.remove(ALICE, "carol"), Person)
+    ticking.at(NEXT_MONDAY + timedelta(minutes=1))
+    assert await ticking.ticker.tick() == []
+
+    ticking.at(NEXT_MONDAY + timedelta(hours=1))
+    taken = await ticking.book.save(WATCHLIST, MONDAY_9, ALICE)
+    assert taken.owner == "alice"
+    ticking.at(NEXT_MONDAY + timedelta(days=7, minutes=1))
+    assert len(await ticking.ticker.tick()) == 1
+
+    assert [(key, by) for _, key, by in await ticking.run_keys()] == [
+        (f"schedule:{WATCHLIST}:2026-11-16T09:00:00+08:00", "alice")
+    ]
+    assert ticking.runs.started_as == [ALICE]
+
+
+async def test_a_held_schedule_starts_again_once_its_owner_is_an_operator_again(
+    ticking: Ticking,
+):
+    await ticking.book.save(WATCHLIST, MONDAY_9, ALICE)
+    assert isinstance(await ticking.people.set_operator(CAROL, "alice", False), Person)
+    ticking.at(NEXT_MONDAY + timedelta(minutes=1))
+    assert await ticking.ticker.tick() == []
+
+    assert isinstance(await ticking.people.set_operator(CAROL, "alice", True), Person)
+    ticking.at(NEXT_MONDAY + timedelta(hours=2))
+    assert await ticking.ticker.tick() == [], "the slot it missed while held stays used up"
+    ticking.at(NEXT_MONDAY + timedelta(days=7, minutes=1))
+    assert len(await ticking.ticker.tick()) == 1
+
+    assert [key for _, key, _ in await ticking.run_keys()] == [
+        f"schedule:{WATCHLIST}:2026-11-16T09:00:00+08:00"
+    ]
+
+
+async def test_a_removed_owner_added_back_under_the_same_id_runs_the_next_slot_as_themselves(
+    ticking: Ticking,
+):
+    await ticking.book.save(WATCHLIST, MONDAY_9, CAROL)
+    assert isinstance(await ticking.people.remove(ALICE, "carol"), Person)
+    ticking.at(NEXT_MONDAY + timedelta(minutes=1))
+    assert await ticking.ticker.tick() == []
+
+    back = await ticking.people.add(ALICE, "carol@example.test", "Carol", True, False)
+    assert isinstance(back, PersonRow) and back.person.id == "carol"
+    ticking.at(NEXT_MONDAY + timedelta(hours=2))
+    assert await ticking.ticker.tick() == [], "the slot it missed while held stays used up"
+    ticking.at(NEXT_MONDAY + timedelta(days=7, minutes=1))
+    assert len(await ticking.ticker.tick()) == 1
+
+    assert [(key, by) for _, key, by in await ticking.run_keys()] == [
+        (f"schedule:{WATCHLIST}:2026-11-16T09:00:00+08:00", "carol")
+    ]
+    assert ticking.runs.started_as == [CAROL]
 
 
 async def test_a_schedule_whose_spec_cannot_be_built_does_not_block_the_others(

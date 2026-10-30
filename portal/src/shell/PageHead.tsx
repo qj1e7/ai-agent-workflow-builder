@@ -1,8 +1,7 @@
+import type { ReactNode } from 'react'
 import styles from './PageHead.module.css'
 
-export const NOT_BUILT_WORDS = 'This page is not built yet.'
-
-export function PageHead({ heading, lead, movesFocus = false }: { heading: string; lead: string; movesFocus?: boolean }) {
+export function PageHead({ heading, lead, movesFocus = false, children }: { heading: string; lead: string; movesFocus?: boolean; children?: ReactNode }) {
   return (
     <div className={styles['head']}>
       <div>
@@ -10,16 +9,8 @@ export function PageHead({ heading, lead, movesFocus = false }: { heading: strin
           {heading}
         </h1>
         <p>{lead}</p>
+        {children}
       </div>
     </div>
-  )
-}
-
-export function EmptyPage({ heading, lead }: { heading: string; lead: string }) {
-  return (
-    <>
-      <PageHead heading={heading} lead={lead} />
-      <p className="muted">{NOT_BUILT_WORDS}</p>
-    </>
   )
 }

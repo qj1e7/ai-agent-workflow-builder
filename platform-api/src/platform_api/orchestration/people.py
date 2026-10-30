@@ -14,6 +14,12 @@ MAX_EMAIL_CHARS = 254
 MAX_DISPLAY_CHARS = 120
 
 
+def roles_from(is_operator: bool, is_approver: bool) -> frozenset[Role]:
+    """The roles that a person's two flags on the People list give them."""
+    flags = ((Role.OPERATOR, is_operator), (Role.APPROVER, is_approver))
+    return frozenset(role for role, on in flags if on)
+
+
 @dataclass(frozen=True)
 class Person:
     id: UserId
@@ -33,12 +39,7 @@ class Person:
 
     @property
     def roles(self) -> frozenset[Role]:
-        roles: set[Role] = set()
-        if self.is_operator:
-            roles.add(Role.OPERATOR)
-        if self.is_approver:
-            roles.add(Role.APPROVER)
-        return frozenset(roles)
+        return roles_from(self.is_operator, self.is_approver)
 
     @property
     def principal(self) -> Principal:

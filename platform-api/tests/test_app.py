@@ -1,3 +1,8 @@
+import os
+import re
+import subprocess
+import sys
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -14,6 +19,7 @@ ROUTES = {
     ("GET", "/healthz/ready"),
     ("GET", "/api/v1/dev/users"),
     ("GET", "/api/v1/me"),
+    ("GET", "/api/v1/home"),
     ("GET", "/api/v1/templates"),
     ("POST", "/api/v1/use-cases"),
     ("GET", "/api/v1/use-cases"),
@@ -190,7 +196,7 @@ def test_a_refused_decision_answers_the_documented_refusal_body(refusing_client:
     assert r.status_code == 403
     assert r.json() == {
         "refusal": "own_work",
-        "message": "You started this run, so another Approver must decide.",
+        "message": "This run is your own work, so another Approver must decide.",
     }
 
 
@@ -201,3 +207,81 @@ def test_a_step_told_to_retry_answers_the_documented_retry_body(refusing_client:
     )
     assert r.status_code == 503
     assert r.json() == {"detail": "n8n is still starting", "retryable": True}
+
+
+# The image's command, `uvicorn platform_api.app:create_app --factory`: uvicorn sets up its own
+# loggers, then builds the app. The script then ticks a held schedule and a paused one.
+UNDER_UVICORN = """
+import asyncio
+import logging
+from datetime import UTC, datetime, timedelta
+
+import uvicorn
+
+from platform_api.app import create_app
+from platform_api.orchestration import NotOn, SavedSchedule, Schedule, ScheduleTicker
+from platform_api.shared import Role, UseCaseId, UserId
+
+uvicorn.Config("platform_api.app:create_app", factory=True).load()
+create_app()
+
+NOW = datetime(2026, 11, 9, 1, 1, tzinfo=UTC)
+
+
+def saved(use_case, owner, roles):
+    return SavedSchedule(
+        UseCaseId(use_case), Schedule("monday", "09:00"), UserId(owner), owner.title(),
+        NOW - timedelta(days=1), None, roles,
+    )
+
+
+class Book:
+    async def all(self):
+        return [saved("uc_held", "carol", None), saved("uc_paused", "alice", {Role.OPERATOR})]
+
+    async def use_up_slot(self, use_case_id, slot):
+        pass
+
+
+class Specs:
+    async def check_spec(self, use_case_id):
+        return NotOn("paused")
+
+
+class Clock:
+    def clock(self):
+        return NOW
+
+
+asyncio.run(ScheduleTicker(Clock(), Book(), Specs(), None).tick())
+logging.getLogger("uvicorn.error").info("uvicorn's own line")
+logging.getLogger("uvicorn.access").info(
+    '%s - "%s %s HTTP/%s" %d', "127.0.0.1:5000", "POST", "/internal/v1/schedules/tick", "1.1", 200
+)
+"""
+STAMP = r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} "
+
+
+def test_the_app_under_uvicorn_logs_each_skipped_scheduled_check_once():
+    done = subprocess.run(
+        [sys.executable, "-c", UNDER_UVICORN],
+        env={**os.environ, **LOCAL},
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert done.returncode == 0, done.stderr
+
+    errors = done.stderr.splitlines()
+    skips = [re.sub(f"^{STAMP}", "", line) for line in errors if "skipped" in line]
+    logger = "platform_api.orchestration.schedule_store"
+    assert skips == [
+        f"INFO {logger}: skipped the scheduled check of uc_held, because its owner carol has "
+        "left the People list",
+        f"INFO {logger}: skipped the scheduled check of uc_paused, which is paused",
+    ]
+    assert errors.count("INFO:     uvicorn's own line") == 1
+    access = 'INFO:     127.0.0.1:5000 - "POST /internal/v1/schedules/tick HTTP/1.1" 200 OK'
+    assert done.stdout.splitlines().count(access) == 1
+    assert access not in done.stderr

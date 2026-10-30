@@ -39,6 +39,7 @@ from platform_api.monitoring.events import (
     user_actor,
 )
 from platform_api.monitoring.log import ActivityLog
+from platform_api.monitoring.troubleshooter import Advice, explain_failure
 
 __all__ = [
     "PLATFORM",
@@ -47,6 +48,7 @@ __all__ = [
     "ActionLine",
     "ActivityEvent",
     "ActivityLog",
+    "Advice",
     "Actor",
     "AgentEvent",
     "AgentEventPost",
@@ -78,6 +80,7 @@ __all__ = [
     "agent_actor",
     "agent_event_adapter",
     "callback_for",
+    "explain_failure",
     "user_actor",
     "verify_callback",
 ]

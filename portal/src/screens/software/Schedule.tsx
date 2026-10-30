@@ -1,9 +1,15 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useErrorWords } from '../../api/context'
+import { useLatch } from '../../api/latch'
 import { useSaveSchedule, useTurnOffSchedule } from '../../api/queries'
 import type { Day, ScheduleView } from '../../api/types'
+import { useMoveWorkflow, useRereadWorkflow } from '../../api/workflowQueries'
 import { Button } from '../../ui/Button'
-import { checkClock, DAYS, dayOption, noScheduleWords, PAUSED_WORDS, scheduleOwnerWords, scheduleWords, singaporeTime } from './software'
+import { useFocusAfterReread } from '../../ui/focus'
+import { IconPlay } from '../../ui/icons'
+import { meansOutOfDate } from '../workflows/workflow'
+import { pressResume, SCHEDULE_PLACES_IN_PAGE_ORDER, schedulePlaces, type SchedulePlace } from './resume'
+import { checkClock, DAYS, dayOption, nextCheckWords, noScheduleWords, scheduleOwnerWords, scheduleWords } from './software'
 import styles from './Software.module.css'
 
 export function ScheduleNote({ schedule, operator, paused }: { schedule: ScheduleView | null; operator: boolean; paused: boolean }) {
@@ -11,9 +17,9 @@ export function ScheduleNote({ schedule, operator, paused }: { schedule: Schedul
   return (
     <>
       <p>
-        <b>{scheduleWords(schedule)}</b> {schedule.next_at === null ? PAUSED_WORDS : `Next check ${singaporeTime(schedule.next_at)}, Singapore time.`}
+        <b>{scheduleWords(schedule)}</b> {nextCheckWords(schedule, paused)}
       </p>
-      <p className="muted">{scheduleOwnerWords(schedule)}</p>
+      {schedule.held ? null : <p className="muted">{scheduleOwnerWords(schedule)}</p>}
     </>
   )
 }
@@ -92,9 +98,48 @@ function useEditorThatRefocusesItsOpener() {
   return { editing, opener, open, close }
 }
 
-export function Schedule({ schedule, operator, paused }: { schedule: ScheduleView | null; operator: boolean; paused: boolean }) {
+function useResume(useCaseId: string, shown: readonly SchedulePlace[], answeredAt: number, onResumed: () => void) {
+  const move = useMoveWorkflow()
+  const reread = useRereadWorkflow()
+  const latch = useLatch()
+  const words = useErrorWords()
+  const [problem, setProblem] = useState<string | null>(null)
+  const refocus = useFocusAfterReread(SCHEDULE_PLACES_IN_PAGE_ORDER, shown, answeredAt)
+  const press = () =>
+    pressResume(
+      latch,
+      (outcome) => move.mutate({ move: 'resume', useCaseId }, outcome),
+      {
+        resumed: () => {
+          setProblem(null)
+          refocus('resume')
+          onResumed()
+        },
+        refused: (said, error) => {
+          setProblem(said)
+          if (!meansOutOfDate(error)) return
+          refocus('resume')
+          reread(useCaseId)
+        },
+      },
+      words,
+    )
+  return { press, pending: move.isPending, problem }
+}
+
+interface ScheduleProps {
+  readonly schedule: ScheduleView | null
+  readonly operator: boolean
+  readonly paused: boolean
+  readonly useCaseId: string
+  readonly answeredAt: number
+  readonly onResumed: () => void
+}
+
+export function Schedule({ schedule, operator, paused, useCaseId, answeredAt, onResumed }: ScheduleProps) {
   const { editing, opener, open, close } = useEditorThatRefocusesItsOpener()
   const off = useTurnOffSchedule()
+  const resume = useResume(useCaseId, schedulePlaces({ paused, scheduled: schedule !== null }), answeredAt, onResumed)
   const words = useErrorWords()
   return (
     <section className={styles['schedule']} aria-labelledby="schedule-heading">
@@ -106,15 +151,25 @@ export function Schedule({ schedule, operator, paused }: { schedule: ScheduleVie
       </div>
       {operator && !editing ? (
         <div className={styles['actions']}>
-          <Button ref={opener} onClick={open}>
+          {paused ? (
+            <Button data-place="resume" icon={IconPlay} loading={resume.pending} onClick={resume.press}>
+              Resume
+            </Button>
+          ) : null}
+          <Button ref={opener} data-place="schedule" onClick={open}>
             {schedule ? 'Change schedule' : 'Set a schedule'}
           </Button>
           {schedule ? (
-            <Button loading={off.isPending} onClick={() => off.mutate(undefined, { onSuccess: () => opener.current?.focus() })}>
+            <Button data-place="schedule-off" loading={off.isPending} onClick={() => off.mutate(undefined, { onSuccess: () => opener.current?.focus() })}>
               Turn off schedule
             </Button>
           ) : null}
         </div>
+      ) : null}
+      {resume.problem ? (
+        <p className={styles['error']} role="alert">
+          {resume.problem}
+        </p>
       ) : null}
       {off.isError ? (
         <p className={styles['error']} role="alert">

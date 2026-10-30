@@ -1,11 +1,15 @@
 import { lazy, Suspense, type ReactNode } from 'react'
 import { Route, Routes } from 'react-router'
 import { AgentsPage } from '../screens/agents/AgentsPage'
+import { HomePage } from '../screens/home/HomePage'
 import { SettingsPage } from '../screens/settings/SettingsPage'
-import type { Icon } from '../ui/icons'
+import { IconPlus, type Icon } from '../ui/icons'
+import { WorkflowRoute } from '../screens/workflows/WorkflowPage'
+import { WorkflowsPage } from '../screens/workflows/WorkflowsPage'
+import { NEW_WORKFLOW_PATH } from '../screens/new/starters'
 import { BotIcon, BoxIcon, GridIcon, HomeIcon, SettingsIcon } from './icons'
 import { NotFoundPage } from './NotFoundPage'
-import { EmptyPage, PageHead } from './PageHead'
+import { PageHead } from './PageHead'
 import { greeting, today } from './today'
 
 export interface PageContext {
@@ -23,9 +27,10 @@ export interface PageEntry {
   readonly heading: Words
   readonly lead: Words
   readonly inMenu: boolean
+  readonly forOperators?: boolean
 }
 
-export const PAGE_IDS = ['home', 'workflows', 'software', 'agents', 'settings'] as const
+export const PAGE_IDS = ['home', 'workflows', 'software', 'agents', 'new', 'settings'] as const
 export type PageId = (typeof PAGE_IDS)[number]
 
 export const PAGES: Readonly<Record<PageId, PageEntry>> = {
@@ -65,6 +70,16 @@ export const PAGES: Readonly<Record<PageId, PageEntry>> = {
     lead: 'The agents your team can use. For each workflow, the Planner picks the ones it needs. An agent can use only the tools on its card, and anything that changes data waits for a yes.',
     inMenu: true,
   },
+  new: {
+    path: NEW_WORKFLOW_PATH,
+    menuLabel: 'New workflow',
+    tabLabel: 'New workflow',
+    icon: IconPlus,
+    heading: 'New workflow',
+    lead: 'Describe a repeated task. Agents do it, and nothing changes without a yes.',
+    inMenu: true,
+    forOperators: true,
+  },
   settings: {
     path: '/settings',
     menuLabel: 'Settings',
@@ -79,6 +94,8 @@ export const PAGES: Readonly<Record<PageId, PageEntry>> = {
 const RunRoute = lazy(() => import('../screens/run/RunPage').then((module) => ({ default: module.RunRoute })))
 const SoftwareRoute = lazy(() => import('../screens/software/SoftwarePage').then((module) => ({ default: module.SoftwareRoute })))
 const ApprovalRoute = lazy(() => import('../screens/run/RunPage').then((module) => ({ default: module.ApprovalRoute })))
+const NewWorkflowRoute = lazy(() => import('../screens/new/NewWorkflow').then((module) => ({ default: module.NewWorkflowRoute })))
+const DoneRoute = lazy(() => import('../screens/new/DonePage').then((module) => ({ default: module.DoneRoute })))
 
 function Lazy({ children }: { children: ReactNode }) {
   return (
@@ -96,6 +113,10 @@ function Lazy({ children }: { children: ReactNode }) {
 
 export const MENU_PAGE_IDS: readonly PageId[] = PAGE_IDS.filter((id) => PAGES[id].inMenu)
 
+export function menuFor(operator: boolean): readonly PageId[] {
+  return MENU_PAGE_IDS.filter((id) => operator || PAGES[id].forOperators !== true)
+}
+
 export function wordsOf(words: Words, context: PageContext): string {
   return typeof words === 'function' ? words(context) : words
 }
@@ -107,14 +128,26 @@ export function AppRoutes({ context }: { context: PageContext }) {
         path={`${PAGES.agents.path}/:agentId?`}
         element={<AgentsPage heading={wordsOf(PAGES.agents.heading, context)} lead={wordsOf(PAGES.agents.lead, context)} />}
       />
-      {PAGE_IDS.filter((id) => id !== 'agents').map((id) => {
-        const { path, heading, lead } = PAGES[id]
-        const title = wordsOf(heading, context)
-        const intro = wordsOf(lead, context)
-        if (id === 'software') return <Route key={id} path={path} element={<><PageHead heading={title} lead={intro} /><Lazy><SoftwareRoute /></Lazy></>} />
-        const Page = id === 'settings' ? SettingsPage : EmptyPage
-        return <Route key={id} path={path} element={<Page heading={title} lead={intro} />} />
-      })}
+      <Route
+        path={PAGES.workflows.path}
+        element={<WorkflowsPage heading={wordsOf(PAGES.workflows.heading, context)} lead={wordsOf(PAGES.workflows.lead, context)} now={context.now} />}
+      />
+      <Route path={`${PAGES.workflows.path}/:useCaseId`} element={<WorkflowRoute now={context.now} />} />
+      <Route path={PAGES.home.path} element={<HomePage heading={wordsOf(PAGES.home.heading, context)} today={wordsOf(PAGES.home.lead, context)} now={context.now} />} />
+      <Route
+        path={PAGES.software.path}
+        element={
+          <>
+            <PageHead heading={wordsOf(PAGES.software.heading, context)} lead={wordsOf(PAGES.software.lead, context)} />
+            <Lazy>
+              <SoftwareRoute />
+            </Lazy>
+          </>
+        }
+      />
+      <Route path={PAGES.settings.path} element={<SettingsPage heading={wordsOf(PAGES.settings.heading, context)} lead={wordsOf(PAGES.settings.lead, context)} />} />
+      <Route path={PAGES.new.path} element={<Lazy><NewWorkflowRoute heading={wordsOf(PAGES.new.heading, context)} lead={wordsOf(PAGES.new.lead, context)} /></Lazy>} />
+      <Route path={`${PAGES.new.path}/done/:useCaseId`} element={<Lazy><DoneRoute now={context.now} /></Lazy>} />
       <Route path="/runs/:runId" element={<Lazy><RunRoute /></Lazy>} />
       <Route path="/approvals/:approvalId" element={<Lazy><ApprovalRoute /></Lazy>} />
       <Route path="*" element={<NotFoundPage />} />

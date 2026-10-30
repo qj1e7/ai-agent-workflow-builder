@@ -1,0 +1,101 @@
+.dock {
+  position: fixed;
+  z-index: var(--z-toast);
+  left: 50%;
+  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  width: max-content;
+  max-width: calc(100% - 32px);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 8px 8px 8px 18px;
+  border-radius: 10px;
+  background: var(--primary);
+  box-shadow: var(--float);
+  color: var(--on-ink);
+  font-weight: 600;
+  pointer-events: auto;
+  animation: toast-in var(--dur-small) var(--ease-out);
+}
+
+.toast > span {
+  padding-block: 4px;
+}
+
+.leaving {
+  animation: toast-out 180ms ease-in both;
+}
+
+.action,
+.close {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: var(--r-ctl);
+  color: var(--on-ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color var(--dur-press) ease, transform var(--dur-press) var(--ease-out);
+}
+
+.action {
+  padding: 0 14px;
+  border: 1px solid var(--on-ink);
+  background: transparent;
+}
+
+.close {
+  border: 0;
+  background: transparent;
+}
+
+.action:active,
+.close:active {
+  transform: scale(0.97);
+}
+
+.action[aria-busy='true'] {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.action:focus-visible,
+.close:focus-visible {
+  outline: 3px solid var(--on-ink);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .action:hover,
+  .close:hover {
+    background: rgba(255, 255, 255, 0.14);
+  }
+}
+
+@media (max-width: 900px) {
+  .dock {
+    bottom: calc(160px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@keyframes toast-out {
+  to {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}

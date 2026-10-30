@@ -5,7 +5,7 @@ from datetime import datetime
 from fastapi import FastAPI
 
 from platform_api.auth import DEV_PEOPLE, DevAuth, OidcAuth
-from platform_api.builder import Builder, Watchlist
+from platform_api.builder import Builder, Home, Watchlist
 from platform_api.db import Database
 from platform_api.monitoring import ActivityLog, Copier, CosmosEvents, callback_for
 from platform_api.orchestration.agents import HttpAgentRuntime
@@ -30,6 +30,7 @@ class Services:
     activity_log: ActivityLog
     orchestrator: Orchestrator
     builder: Builder
+    home: Home
     watchlist: Watchlist
     schedule_ticker: ScheduleTicker
     teams_stub: TeamsStub
@@ -48,6 +49,7 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.copier = services.copier
     app.state.orchestrator = services.orchestrator
     app.state.builder = services.builder
+    app.state.home = services.home
     app.state.watchlist = services.watchlist
     app.state.schedule_ticker = services.schedule_ticker
     app.state.teams_stub = services.teams_stub
@@ -114,6 +116,7 @@ async def build(settings: Settings) -> Services:
         watchlist,
         settings.public_base_url,
         CardPlanning(db, model_settings, agents),
+        schedules,
     )
     return Services(
         settings=settings,
@@ -121,6 +124,7 @@ async def build(settings: Settings) -> Services:
         activity_log=activity,
         orchestrator=orchestrator,
         builder=builder,
+        home=Home(builder, orchestrator, people),
         watchlist=watchlist,
         schedule_ticker=ScheduleTicker(db, schedules, builder, orchestrator),
         teams_stub=teams,

@@ -1,6 +1,6 @@
 """Recorded answers of the watchlist routes: no watchlist yet, an emptied one, and one with a
-row in every status, the schedule routes, the schedule tick, a scheduled run and the practice
-Jira ticket after Mark Done."""
+row in every status, the schedule routes, a schedule held because its owner left, the schedule
+tick, a scheduled run and the practice Jira ticket after Mark Done."""
 
 from datetime import UTC, datetime, timedelta, timezone
 
@@ -186,6 +186,10 @@ EMPTY = WatchlistView(
 )
 SCHEDULE_SAVED_VIEW = STATUSES.model_copy(update={"schedule": SCHEDULE_SAVED})
 SCHEDULE_OFF_VIEW = STATUSES.model_copy(update={"schedule": None})
+# Alice has left the People list, so her schedule starts no check until an Operator saves it.
+SCHEDULE_HELD_VIEW = STATUSES.model_copy(
+    update={"schedule": SCHEDULE.model_copy(update={"next_at": None, "held": "owner_removed"})}
+)
 
 SCHEDULED_RUN = PendingView(
     run_id=LAST_RUN,
@@ -222,6 +226,7 @@ def watchlist_fixtures() -> dict[str, WireModel | list[WireModel]]:
         "watchlist/schedule.in.json": SCHEDULE_IN,
         "watchlist/schedule.saved.json": SCHEDULE_SAVED_VIEW,
         "watchlist/schedule.off.json": SCHEDULE_OFF_VIEW,
+        "watchlist/schedule.held.json": SCHEDULE_HELD_VIEW,
         "internal/tick.started.json": TickOut(started=[LAST_RUN]),
         "internal/tick.nothing-due.json": TickOut(started=[]),
         "views/scheduled.pending.json": SCHEDULED_RUN,
