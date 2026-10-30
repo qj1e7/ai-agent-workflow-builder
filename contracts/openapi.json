@@ -2504,6 +2504,7 @@
       "Day": {
         "enum": [
           "every_day",
+          "weekdays",
           "monday",
           "tuesday",
           "wednesday",

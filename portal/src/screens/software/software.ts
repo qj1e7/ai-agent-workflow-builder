@@ -54,6 +54,7 @@ export const statusTone: Record<SoftwareStatus, StatusTone> = {
 
 const dayLabel: Record<Day, string> = {
   every_day: 'every day',
+  weekdays: 'every weekday',
   monday: 'every Monday',
   tuesday: 'every Tuesday',
   wednesday: 'every Wednesday',
@@ -67,6 +68,7 @@ export const DAYS: readonly Day[] = ['every_day', 'monday', 'tuesday', 'wednesda
 
 export const dayOption: Record<Day, string> = {
   every_day: 'Every day',
+  weekdays: 'Every weekday',
   monday: 'Monday',
   tuesday: 'Tuesday',
   wednesday: 'Wednesday',
