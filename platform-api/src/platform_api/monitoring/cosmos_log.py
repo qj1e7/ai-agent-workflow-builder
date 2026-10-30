@@ -8,7 +8,7 @@ from azure.cosmos.exceptions import CosmosHttpResponseError, CosmosResourceExist
 from azure.cosmos.http_constants import StatusCodes, SubStatusCodes
 
 from platform_api.monitoring.events import ActivityEvent, activity_event_adapter
-from platform_api.monitoring.log import LoggedEvent
+from platform_api.monitoring.log import Generation, LoggedEvent
 from platform_api.settings import CosmosSettings
 from platform_api.shared import RunId
 
@@ -39,9 +39,7 @@ class CosmosEvents:
     async def close(self) -> None:
         await self._client.close()
 
-    async def ensure(self) -> str:
-        """The container's generation, a random value in an item that has no seq. A new or
-        emptied container has none, so it gets a new generation even where it keeps its _rid."""
+    async def ensure(self) -> Generation:
         found = await self._generation()
         if found is not None:
             return found
@@ -61,9 +59,9 @@ class CosmosEvents:
             )
         except CosmosResourceExistsError:
             return await self.ensure()
-        return made["generation"]
+        return Generation(made["generation"])
 
-    async def _generation(self) -> str | None:
+    async def _generation(self) -> Generation | None:
         try:
             item = await self._container.read_item(
                 _GENERATION_ID, partition_key=_GENERATION_PARTITION
@@ -72,7 +70,7 @@ class CosmosEvents:
             if _missing(error):
                 return None
             raise
-        return item["generation"]
+        return Generation(item["generation"])
 
     async def put(self, event: LoggedEvent) -> None:
         await self._container.upsert_item(

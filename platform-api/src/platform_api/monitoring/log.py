@@ -5,7 +5,7 @@ from collections.abc import AsyncGenerator, Callable, Collection, Iterable
 from contextlib import aclosing, asynccontextmanager, suppress
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol
+from typing import NewType, Protocol
 
 from psycopg import sql
 
@@ -20,6 +20,7 @@ from platform_api.monitoring.events import (
 from platform_api.shared import RunId, TaskId
 
 CHANNEL = "run_events"
+Generation = NewType("Generation", str)
 COPIED_CHANNEL = "run_events_copied"
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ class EventReader(Protocol):
 
 
 class EventCopy(Protocol):
-    async def ensure(self) -> str: ...
+    async def ensure(self) -> Generation: ...
 
     async def put(self, event: LoggedEvent) -> None: ...
 

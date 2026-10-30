@@ -9,6 +9,7 @@ from platform_api.monitoring.log import (
     CHANNEL,
     COPIED_CHANNEL,
     EventCopy,
+    Generation,
     LoggedEvent,
     NotificationHub,
     copied_notice,
@@ -77,7 +78,7 @@ class Copier:
         self._max_retry_delay = max_retry_delay
         self._hub = NotificationHub(db, channel=CHANNEL, reconnect_delay=reconnect_delay)
         self._hub.watch(self._note_run, self._note_connect)
-        self._generation_seen: str | None = None
+        self._generation_seen: Generation | None = None
         self._sweep_failed = False
         self._live: set[RunId] = set()
         self._behind: set[RunId] = set()
@@ -116,28 +117,29 @@ class Copier:
                 return batch.done
 
     async def runs_behind(self) -> list[RunId]:
-        generation = await self._generation()
+        generation = await self._follow_generation()
         async with self._db.transaction("monitoring") as uow:
             rows = await (
                 await uow.conn.execute(_RUNS_BEHIND, {"generation": generation})
             ).fetchall()
         return [RunId(row["run_id"]) for row in rows]
 
-    async def _generation(self) -> str:
-        """Read before every batch, so a copier never trusts a mark that counts for a container
-        that is gone, even one another replica made again. A new generation copies every run."""
+    async def _follow_generation(self) -> Generation:
         async with asyncio.timeout(self._put_timeout):
             generation = await self._copy.ensure()
         if self._generation_seen not in (None, generation):
-            self._sweep_at = 0.0
+            self._catch_up_every_run()
         self._generation_seen = generation
         return generation
+
+    def _catch_up_every_run(self) -> None:
+        self._sweep_at = 0.0
 
     async def _copy_batch(self, run_id: RunId) -> _Batch:
         failure: Exception | None = None
         async with self._db.transaction("monitoring") as uow:
             await uow.conn.execute(_LOCK, (run_id,))
-            generation = await self._generation()
+            generation = await self._follow_generation()
             before = await self._copied(uow, run_id, generation)
             rows = await (
                 await uow.conn.execute(
@@ -164,7 +166,7 @@ class Copier:
         return _Batch(done, len(rows) == self._batch, failure)
 
     @staticmethod
-    async def _copied(uow: UnitOfWork, run_id: RunId, generation: str) -> int:
+    async def _copied(uow: UnitOfWork, run_id: RunId, generation: Generation) -> int:
         row = await (
             await uow.conn.execute(_COPIED, {"run_id": run_id, "generation": generation})
         ).fetchone()

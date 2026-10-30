@@ -17,7 +17,7 @@ from platform_api.monitoring import (
     RunRetriedData,
 )
 from platform_api.monitoring.cosmos_log import CONTAINER, cosmos_client
-from platform_api.monitoring.log import COPIED_CHANNEL, LoggedEvent
+from platform_api.monitoring.log import COPIED_CHANNEL, Generation, LoggedEvent
 from platform_api.shared import RunId
 from tests.conftest import (
     COSMOS_TEST_DATABASE,
@@ -55,7 +55,7 @@ class Watched:
     def puts(self) -> list[int]:
         return [seq for name, seq in self.order if name == self.name]
 
-    async def ensure(self) -> str:
+    async def ensure(self) -> Generation:
         return await self.inner.ensure()
 
     async def put(self, event: LoggedEvent) -> None:

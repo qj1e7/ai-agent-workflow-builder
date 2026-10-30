@@ -145,7 +145,6 @@ async def readiness_of(
 
 
 def _copy_detail(copying: bool, behind: bool) -> str:
-    """A copy that keeps failing never fails readiness, which must not depend on Cosmos DB."""
     if not copying:
         return "not listening for events to copy to Cosmos DB"
     if behind:
