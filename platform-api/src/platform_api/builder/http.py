@@ -98,7 +98,8 @@ WorkflowOperator = Annotated[Principal, Depends(operators_only(CHANGE_WORKFLOWS)
 
 router = APIRouter(prefix="/api/v1", tags=["builder"])
 
-NOT_FOUND = error_response("No such use case")
+NO_SUCH = "No such workflow"
+NOT_FOUND = error_response("No such workflow, or it is deleted")
 NO_MODEL = "Connect an AI model in Settings first."
 NO_MODEL_TO_RUN = "Connect an AI model in Settings to run agents."
 NOT_OFFERED = {
@@ -145,7 +146,7 @@ async def get_use_case(
 ) -> UseCaseView:
     view = await builder.get_use_case(use_case_id)
     if view is None:
-        raise HTTPException(404, "No such use case")
+        raise HTTPException(404, NO_SUCH)
     return view
 
 
@@ -171,7 +172,7 @@ async def start_run(
 ) -> RunStarted:
     started = await builder.start_run(UseCaseId(use_case_id), principal, idempotency_key)
     if started is None:
-        raise HTTPException(404, "No such use case")
+        raise HTTPException(404, NO_SUCH)
     if isinstance(started, NothingToCheck):
         raise HTTPException(409, "The watchlist is empty. Add software before starting a check.")
     if isinstance(started, NoModelToRun):

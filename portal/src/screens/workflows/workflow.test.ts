@@ -357,8 +357,12 @@ describe('a refusal that means the page shows an old state', () => {
     expect(meansOutOfDate(new ApiError(409, { detail: 'This workflow is paused. Resume it to start a run.' }))).toBe(true)
   })
 
+  it('is a 404, such as any press on a workflow someone else deleted', () => {
+    expect(meansOutOfDate(new ApiError(404, { detail: 'No such workflow' }))).toBe(true)
+  })
+
   it('is not any other answer', () => {
-    for (const status of [403, 404, 410, 503]) expect(meansOutOfDate(new ApiError(status, null)), String(status)).toBe(false)
+    for (const status of [403, 410, 503]) expect(meansOutOfDate(new ApiError(status, null)), String(status)).toBe(false)
     expect(meansOutOfDate(new TypeError('Failed to fetch'))).toBe(false)
   })
 })

@@ -10255,7 +10255,7 @@
                 }
               }
             },
-            "description": "No such use case"
+            "description": "No such workflow, or it is deleted"
           },
           "422": {
             "content": {
@@ -10647,7 +10647,7 @@
                 }
               }
             },
-            "description": "No such use case"
+            "description": "No such workflow, or it is deleted"
           },
           "409": {
             "content": {

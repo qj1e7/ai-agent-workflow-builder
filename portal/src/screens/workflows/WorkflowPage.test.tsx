@@ -140,7 +140,7 @@ describe('the Software watchlist', () => {
 
 describe('a workflow that is not there', () => {
   it('says so and offers the list', () => {
-    const html = render({ useCase: new ApiError(404, { detail: 'No such use case' }) })
+    const html = render({ useCase: new ApiError(404, { detail: 'No such workflow' }) })
     expect(text(/<h1\b[^>]*>([\s\S]*?)<\/h1>/.exec(html)?.[1] ?? '')).toBe('Workflow not found')
     expect(mainOf(html)).toMatch(/<a[^>]*href="\/workflows"[^>]*>Go to Workflows<\/a>/)
   })

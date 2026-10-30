@@ -155,6 +155,24 @@ def test_an_approver_is_told_in_the_app_words_that_only_an_operator_sets_up_or_r
     assert (response.status_code, response.json()) == (403, {"detail": SET_UP_OR_RUN_WORDS})
 
 
+NOT_THERE = [
+    pytest.param("GET", "/api/v1/use-cases/uc_gone", {}, id="read"),
+    pytest.param("POST", "/api/v1/use-cases/uc_gone/runs", KEY, id="start-run"),
+    pytest.param("POST", "/api/v1/use-cases/uc_gone/pause", {}, id="pause"),
+    pytest.param("POST", "/api/v1/use-cases/uc_gone/resume", {}, id="resume"),
+    pytest.param("DELETE", "/api/v1/use-cases/uc_gone", {}, id="delete"),
+    pytest.param("POST", "/api/v1/use-cases/uc_gone/restore", {}, id="restore"),
+]
+
+
+@pytest.mark.parametrize(("method", "path", "headers"), NOT_THERE)
+def test_a_workflow_that_is_not_there_is_named_in_the_app_words(
+    method: str, path: str, headers: dict[str, str]
+):
+    response = TestClient(app_with()).request(method, path, headers={**ALICE, **headers})
+    assert (response.status_code, response.json()) == (404, {"detail": "No such workflow"})
+
+
 @pytest.mark.parametrize(("method", "path", "body"), CHANGES)
 def test_an_approver_is_told_only_an_operator_can_change_workflows(
     method: str, path: str, body: object

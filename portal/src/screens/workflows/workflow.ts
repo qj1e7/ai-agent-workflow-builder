@@ -297,7 +297,7 @@ export function changeWords(change: Change, useCase: Pick<UseCaseView, 'name' | 
 
 const answered = (error: unknown, status: number) => error instanceof ApiError && error.status === status
 
-export const meansOutOfDate = (error: unknown) => answered(error, 409)
+export const meansOutOfDate = (error: unknown) => answered(error, 409) || answered(error, 404)
 
 export function changeProblem(change: Change, name: string, error: unknown, words: (error: unknown) => string): string {
   const start = change === 'restore' ? `Could not put ${name} back.` : `Could not ${change} ${name}.`
