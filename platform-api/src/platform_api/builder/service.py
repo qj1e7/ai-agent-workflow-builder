@@ -113,7 +113,7 @@ def _view(
         owner=UserId(row["owner"]),
         created_at=row["created_at"],
         state="on" if on else "paused",
-        next_run_at=schedule.slots(now).next if on and schedule is not None else None,
+        next_run_at=schedule.next_run(now) if on and schedule is not None else None,
         plan=plan,
         agents=[
             UseCaseAgentView(

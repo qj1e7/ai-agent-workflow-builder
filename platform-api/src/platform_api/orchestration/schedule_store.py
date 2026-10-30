@@ -44,6 +44,10 @@ class SavedSchedule:
     def slots(self, now: datetime) -> Slots:
         return slots(self.schedule, now)
 
+    def next_run(self, now: datetime) -> datetime | None:
+        """The first slot after now, or None while the schedule is held."""
+        return None if self.held is not None else self.slots(now).next
+
     @property
     def starter(self) -> Principal | ScheduleHold:
         """Who starts the schedule's runs: its owner, with the roles they hold now. While the

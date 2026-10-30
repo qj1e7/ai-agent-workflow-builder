@@ -309,6 +309,22 @@ async def test_resuming_shows_the_next_run_again(lab: Lab):
     assert (again.status_code, again.json()) == (200, resumed.json())
 
 
+async def test_a_held_schedule_names_no_next_run_until_an_operator_saves_it_again(lab: Lab):
+    use_case_id = await watchlist_workflow(lab)  # Alice owns its schedule
+    lost = await lab.call("carol", "PUT", "/api/v1/people/alice/operator", {"operator": False})
+    assert lost.status_code == 200
+
+    [listed] = await lab.listed()
+    read = (await lab.call("bob", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
+
+    assert (listed["state"], listed["next_run_at"]) == ("on", None)
+    assert (read["state"], read["next_run_at"]) == ("on", None)
+    body = {"day": "monday", "at": "09:00"}
+    assert (await lab.call("carol", "PUT", "/api/v1/watchlist/schedule", body)).status_code == 200
+    [taken] = await lab.listed()
+    assert at(taken["next_run_at"]) == FIRST_MONDAY_SLOT
+
+
 async def test_a_workflow_with_no_schedule_has_no_next_run(lab: Lab):
     use_case_id = await agent_workflow(lab)
     [listed] = await lab.listed()

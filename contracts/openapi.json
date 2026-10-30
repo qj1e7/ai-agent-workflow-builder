@@ -4671,6 +4671,13 @@
         "title": "SavedOut",
         "type": "object"
       },
+      "ScheduleHold": {
+        "enum": [
+          "owner_removed",
+          "owner_not_an_operator"
+        ],
+        "type": "string"
+      },
       "ScheduleIn": {
         "additionalProperties": false,
         "properties": {
@@ -4698,6 +4705,17 @@
           "day": {
             "$ref": "#/components/schemas/Day"
           },
+          "held": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScheduleHold"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the schedule starts no check: owner_removed when the owner has left the People list, owner_not_an_operator when they are no longer an Operator. An Operator takes it over by saving it again. Null while the owner can run it."
+          },
           "next_at": {
             "anyOf": [
               {
@@ -4708,7 +4726,7 @@
                 "type": "null"
               }
             ],
-            "description": "The next time a check starts. Null while the watchlist is paused.",
+            "description": "The next time a check starts. Null while the watchlist is paused, and while the schedule is held.",
             "title": "Next At"
           },
           "owner": {
@@ -5839,7 +5857,7 @@
                 "type": "null"
               }
             ],
-            "description": "When the workflow next runs on its own. Null while it is paused, and for a workflow with no schedule.",
+            "description": "When the workflow next runs on its own. Null while it is paused, while its schedule is held because the owner can no longer run it, and for a workflow with no schedule.",
             "title": "Next Run At"
           },
           "owner": {

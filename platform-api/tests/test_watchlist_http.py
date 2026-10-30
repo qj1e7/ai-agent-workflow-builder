@@ -5,6 +5,7 @@ import httpx
 import pytest
 
 from platform_api.app import create_app
+from platform_api.auth import DEV_PEOPLE
 from platform_api.builder import Watchlist
 from platform_api.builder.lifecycle import RESTORE_WINDOW
 from platform_api.db import Database
@@ -15,6 +16,7 @@ from platform_api.orchestration import (
     Standing,
     WatchlistStanding,
 )
+from platform_api.orchestration.people_store import People
 from platform_api.shared import RunId, SoftwareId, UseCaseId
 from tests.conftest import PostgresUrls, truncate_all
 from tests.support import LOCAL_ENV, MovingClock
@@ -42,6 +44,14 @@ class NothingLearned:
         )
 
 
+async def people_in(db: Database) -> People:
+    """The People list in the database, as the platform runs it: sign-in reads it, and so does
+    each schedule's view of its owner."""
+    people = People(db)
+    assert await people.seed_dev(DEV_PEOPLE)  # alice both roles, bob Approver, carol Operator
+    return people
+
+
 class FakeTicker:
     async def tick(self) -> list[RunId]:
         return [RunId("run_01A"), RunId("run_01B")]
@@ -50,6 +60,7 @@ class FakeTicker:
 @pytest.fixture
 async def client(db: Database) -> AsyncIterator[httpx.AsyncClient]:
     app = create_app(LOCAL_ENV)
+    app.state.people = await people_in(db)
     app.state.watchlist = Watchlist(db, NothingLearned(), ScheduleBook(db))
     app.state.schedule_ticker = FakeTicker()
     transport = httpx.ASGITransport(app=app)
@@ -70,6 +81,7 @@ async def timed_client(
     database = Database(postgres.contexts, clock=clock)
     await database.open()
     app = create_app(LOCAL_ENV)
+    app.state.people = await people_in(database)
     app.state.watchlist = Watchlist(database, NothingLearned(), ScheduleBook(database))
     transport = httpx.ASGITransport(app=app)
     try:
@@ -256,6 +268,49 @@ async def test_saving_a_schedule_makes_the_caller_its_owner_and_answers_the_watc
     assert schedule["next_at"].endswith("06:30:00+08:00")
     got = await client.get("/api/v1/watchlist", headers=BOB)
     assert got.json() == {"watchlist": view}
+
+
+async def test_a_schedule_whose_owner_left_the_list_is_held_until_an_operator_saves_it_again(
+    client: httpx.AsyncClient,
+):
+    await client.post("/api/v1/watchlist/software", json=LANGGRAPH, headers=CAROL)
+    assert (await client.delete("/api/v1/people/carol", headers=ALICE)).status_code == 204
+
+    held = (await client.get("/api/v1/watchlist", headers=BOB)).json()["watchlist"]["schedule"]
+
+    assert (held["owner"], held.get("held"), held["next_at"]) == ("carol", "owner_removed", None)
+    taken = await client.put(
+        "/api/v1/watchlist/schedule", json={"day": "monday", "at": "09:00"}, headers=ALICE
+    )
+    assert taken.status_code == 200
+    schedule = taken.json()["schedule"]
+    assert (schedule["owner"], schedule["owner_name"], schedule["held"]) == ("alice", "Alice", None)
+    assert schedule["next_at"].endswith("09:00:00+08:00")
+
+
+async def test_a_schedule_whose_owner_is_now_only_an_approver_is_held_and_they_cannot_take_it_back(
+    client: httpx.AsyncClient,
+):
+    await client.post("/api/v1/watchlist/software", json=LANGGRAPH, headers=ALICE)
+    lost = await client.put(
+        "/api/v1/people/alice/operator", json={"operator": False}, headers=CAROL
+    )
+    assert lost.status_code == 200
+
+    held = (await client.get("/api/v1/watchlist", headers=BOB)).json()["watchlist"]["schedule"]
+
+    assert (held["owner"], held.get("held"), held["next_at"]) == (
+        "alice",
+        "owner_not_an_operator",
+        None,
+    )
+    body = {"day": "friday", "at": "17:00"}
+    assert (
+        await client.put("/api/v1/watchlist/schedule", json=body, headers=ALICE)
+    ).status_code == 403
+    taken = (await client.put("/api/v1/watchlist/schedule", json=body, headers=CAROL)).json()
+    assert (taken["schedule"]["owner"], taken["schedule"]["held"]) == ("carol", None)
+    assert taken["schedule"]["next_at"].endswith("17:00:00+08:00")
 
 
 async def test_turning_the_schedule_off_leaves_null_and_saving_again_turns_it_on(
