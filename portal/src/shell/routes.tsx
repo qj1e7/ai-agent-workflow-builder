@@ -1,5 +1,6 @@
 import { lazy, Suspense, type ReactNode } from 'react'
 import { Route, Routes } from 'react-router'
+import { AgentsPage } from '../screens/agents/AgentsPage'
 import type { Icon } from '../ui/icons'
 import { BotIcon, BoxIcon, GridIcon, HomeIcon, SettingsIcon } from './icons'
 import { NotFoundPage } from './NotFoundPage'
@@ -100,7 +101,11 @@ export function wordsOf(words: Words, context: PageContext): string {
 export function AppRoutes({ context }: { context: PageContext }) {
   return (
     <Routes>
-      {PAGE_IDS.map((id) => {
+      <Route
+        path={`${PAGES.agents.path}/:agentId?`}
+        element={<AgentsPage heading={wordsOf(PAGES.agents.heading, context)} lead={wordsOf(PAGES.agents.lead, context)} />}
+      />
+      {PAGE_IDS.filter((id) => id !== 'agents').map((id) => {
         const { path, heading, lead } = PAGES[id]
         return <Route key={id} path={path} element={<EmptyPage heading={wordsOf(heading, context)} lead={wordsOf(lead, context)} />} />
       })}
