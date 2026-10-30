@@ -3,7 +3,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import Field, TypeAdapter
 
-from platform_api.wire import WireModel
+from platform_api.wire import WireIn, WireModel
 
 
 class AgentRef(WireModel):
@@ -95,6 +95,6 @@ type AgentEvent = Annotated[
 agent_event_adapter: TypeAdapter[AgentEvent] = TypeAdapter(AgentEvent)
 
 
-class AgentEventPost(WireModel):
+class AgentEventPost(WireIn):
     task_id: str
     event: AgentEvent
