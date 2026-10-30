@@ -2,14 +2,14 @@
 
 `ABILITIES` is the whole list, one line for each thing the platform can do. A part the Planner
 read back stays as the model said only when every action in it fits a line: its verb is one of the
-line's verbs, the thing it makes is one the line makes, and every place it names is one the line
-reaches. Anything else is can't do, with a note that says what the platform can't do yet. A new
-tool is one more line."""
+line's verbs, the thing it makes is one the line makes, it mentions what the line is about when the
+line names that, and every place it names is one the line reaches. Anything else is can't do, with
+a note that says what the platform can't do yet. A new tool is one more line."""
 
 import re
 from dataclasses import dataclass
 from functools import cache
-from typing import Final, Literal
+from typing import Final, Literal, NamedTuple
 
 from agent_runtime.contract import RowKind
 
@@ -30,7 +30,7 @@ OUTPUTS: Final = words(
     "recap recaps roundup round-up breakdown count counts total totals tally note notes update "
     "updates rundown"
 )
-RELEASE_WORDS: Final = {
+RELEASE_ROOTS: Final = {
     **dict.fromkeys(("version", "versions"), "version"),
     **dict.fromkeys(("release", "releases", "released", "releasing"), "release"),
     **dict.fromkeys(("upgrade", "upgrades", "upgraded", "upgrading"), "upgrade"),
@@ -66,7 +66,7 @@ ABILITIES: Final = (
     Ability(
         "check software for new releases",
         words("check watch track monitor compare look"),
-        about=frozenset(RELEASE_WORDS),
+        about=frozenset(RELEASE_ROOTS),
         reaches=frozenset({"github"}),
     ),
     Ability(
@@ -238,6 +238,11 @@ type Clause = tuple[_Word, ...]
 type Phrases = list[tuple[str, Clause]]
 
 
+class _Objects(NamedTuple):
+    things: list[Clause]
+    end: int
+
+
 def _tokens(text: str) -> Clause:
     found: list[_Word] = []
     starts = True
@@ -336,8 +341,7 @@ def _clauses(row: Clause, reader: _Reader, purpose: bool) -> list[Clause]:
     return [tuple(clause) for clause in clauses if clause]
 
 
-def _said(clause: Clause, reader: _Reader) -> str:
-    """The clause as the model wrote it, its verb in its plain form, to go after "I can't"."""
+def _cant_phrase(clause: Clause, reader: _Reader) -> str:
     first, *rest = clause
     found = reader.verb(first)
     titled = first.raw[1:] == first.raw[1:].lower()
@@ -358,8 +362,7 @@ def _said(clause: Clause, reader: _Reader) -> str:
     return shown[: SAID_LIMIT - 1].rsplit(" ", 1)[0] + "…"
 
 
-def _things(clause: Clause, start: int, reader: _Reader) -> tuple[list[Clause], int]:
-    """The things the action acts on, each its own words, and where their words end."""
+def _objects(clause: Clause, start: int, reader: _Reader) -> _Objects:
     at = start
     while at < len(clause) and clause[at].low in PARTICLES:
         at += 1
@@ -374,7 +377,7 @@ def _things(clause: Clause, start: int, reader: _Reader) -> tuple[list[Clause], 
         else:
             things[-1].append(word)
         at += 1
-    return [tuple(thing) for thing in things if thing], at
+    return _Objects([tuple(thing) for thing in things if thing], at)
 
 
 def _phrases(clause: Clause, start: int, reader: _Reader) -> Phrases:
@@ -402,7 +405,6 @@ def _head(thing: Clause) -> _Word | None:
 
 
 def _elsewhere(phrase: Clause, reaches: frozenset[str], products: bool = True) -> bool:
-    """Whether the words name a place outside what an ability reaches."""
     for word in phrase:
         if word.system is not None and word.system not in reaches:
             return True
@@ -415,23 +417,34 @@ def _names_jira(phrase: Clause) -> bool:
     return any(w.low in JIRA_ANCHORS or w.key for w in phrase)
 
 
+def _names_a_jira_place(word: _Word) -> bool:
+    return word.key or word.low in JIRA_ANCHORS | TICKETS | RUN_PLACES
+
+
+def _project_name(word: _Word, before: _Word | None, after: _Word | None) -> bool:
+    beside = {w.low for w in (before, after) if w is not None}
+    named_by = bool(beside & PROJECT_WORDS) or (
+        before is not None and before.capital and before.low not in WHERE_WORDS
+    )
+    return word.capital and word.system is None and not word.product and named_by
+
+
+def _jira_place_word(word: _Word, before: _Word | None, after: _Word | None) -> bool:
+    return (
+        _names_a_jira_place(word)
+        or word.mark
+        or word.low in WHERE_WORDS
+        or _project_name(word, before, after)
+    )
+
+
 def _jira_place(phrase: Clause) -> bool:
-    """Every word is one a Jira place is written with, and one of them is Jira, a project, a
-    board, a key, a ticket or the run."""
-    named = False
-    for at, word in enumerate(phrase):
-        before = phrase[at - 1] if at else None
-        after = phrase[at + 1] if at + 1 < len(phrase) else None
-        beside = {w.low for w in (before, after) if w is not None}
-        named_by = bool(beside & PROJECT_WORDS) or (
-            before is not None and before.capital and before.low not in WHERE_WORDS
-        )
-        name = word.capital and word.system is None and not word.product and named_by
-        if word.key or word.low in JIRA_ANCHORS | TICKETS | RUN_PLACES:
-            named = True
-        elif not (word.mark or word.low in WHERE_WORDS or name):
-            return False
-    return named and not _elsewhere(phrase, frozenset({JIRA}))
+    beside = zip((None, *phrase[:-1]), phrase, (*phrase[1:], None), strict=True)
+    return (
+        all(_jira_place_word(word, before, after) for before, word, after in beside)
+        and any(_names_a_jira_place(word) for word in phrase)
+        and not _elsewhere(phrase, frozenset({JIRA}))
+    )
 
 
 def _is_place(phrase: Clause, reaches: frozenset[str]) -> bool:
@@ -478,9 +491,7 @@ def _fits(ability: Ability, thing: Clause, phrases: Phrases) -> bool:
     return True
 
 
-def _made_so(clause: Clause, at: int) -> bool:
-    """Whether a past form asks for a change, as in "get them closed", rather than says what
-    happened, as in "tickets closed this week"."""
+def _asks_for_change(clause: Clause, at: int) -> bool:
     before = [w.low for w in clause[max(0, at - 3) : at]]
     if not before:
         return False
@@ -500,7 +511,7 @@ def _writes_in(clause: Clause, at: int, reader: _Reader) -> bool:
         if found is None or found[0] not in reader.writes or word.proper:
             continue
         if found[1] == "ed":
-            if _made_so(clause, i):
+            if _asks_for_change(clause, i):
                 return True
         elif not _noun_place(clause[i - 1]):
             return True
@@ -520,12 +531,12 @@ def _do(clause: Clause, reader: _Reader) -> str | None:
         if (ability.makes is not None if implied else found and found[0] in ability.verbs)
         and (ability.about is None or any(w.low in ability.about for w in clause))
     ]
-    things, end = _things(clause, at if implied else at + 1, reader)
+    things, end = _objects(clause, at if implied else at + 1, reader)
     phrases = _phrases(clause, end, reader)
     fits = bool(able) and all(any(_fits(a, t, phrases) for a in able) for t in things or [()])
     if fits and not _writes_in(clause, at, reader):
         return None
-    return _said(clause[at:], reader)
+    return _cant_phrase(clause[at:], reader)
 
 
 def _do_row(row: Clause, reader: _Reader) -> str | None:
@@ -543,13 +554,16 @@ def _schedule_row(row: Clause, reader: _Reader) -> str | None:
     return None
 
 
-def _source(clause: Clause, reaches: frozenset[str]) -> str | None:
-    """The other system a search reads, as in "GitHub issues" or "users in Entra"."""
+def _its_own_tickets(clause: Clause, reaches: frozenset[str]) -> str | None:
     for word, after in zip(clause, clause[1:], strict=False):
         system = word.system
         names_its_own = after.low in TICKETS or after.low in ("merge", "pull")
         if system in TICKET_SYSTEMS and system not in reaches and names_its_own:
             return SYSTEMS[system]
+    return None
+
+
+def _read_from(clause: Clause, reaches: frozenset[str]) -> str | None:
     for at, word in enumerate(clause):
         if word.low not in SOURCES:
             continue
@@ -577,7 +591,7 @@ def _look_for_row(row: Clause, reader: _Reader) -> str | None:
     if at is not None:
         found = reader.verb(first[at])
         if found is not None and found[1] != "ed" and found[0] in reader.writes:
-            return _said(first[at:], reader)
+            return _cant_phrase(first[at:], reader)
     reads = [
         ability
         for ability in reader.abilities
@@ -585,13 +599,13 @@ def _look_for_row(row: Clause, reader: _Reader) -> str | None:
         and (ability.about is None or any(w.low in ability.about for w in row))
     ]
     reaches = frozenset(place for ability in reads for place in ability.reaches)
-    source = _source(first, reaches)
+    source = _its_own_tickets(first, reaches) or _read_from(first, reaches)
     if source is not None:
         return f"read {source}"
     tickets = JIRA in reaches and any(w.low in TICKETS for w in first)
     if not tickets and not _names_jira(first) and not any(a.about for a in reads):
         named = next((w.system for w in first if w.system and w.system not in reaches), None)
-        return f"read {SYSTEMS[named]}" if named else f"look for {_said(first, reader)}"
+        return f"read {SYSTEMS[named]}" if named else f"look for {_cant_phrase(first, reader)}"
     return next((what for c in later if (what := _do(c, reader))), None)
 
 
@@ -603,7 +617,7 @@ def _where_row(row: Clause, reader: _Reader) -> str | None:
     if found is not None and found[1] != "ed":
         able = {verb for ability in reader.abilities for verb in ability.verbs}
         if found[0] not in able | PLACING:
-            return _said(row[at:], reader)
+            return _cant_phrase(row[at:], reader)
         at += 1
         while at < len(row) and row[at].low in PRONOUNS:
             at += 1
@@ -622,7 +636,7 @@ def _where_row(row: Clause, reader: _Reader) -> str | None:
     for part in (tuple(p) for p in parts if p):
         if not _is_place(part, places):
             lead = part[1:] if len(part) > 1 and part[0].low in TO_PLACE | IN_PLACE else part
-            return f"put results in {_said(lead, reader)}"
+            return f"put results in {_cant_phrase(lead, reader)}"
     return None
 
 

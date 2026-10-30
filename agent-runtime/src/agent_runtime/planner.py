@@ -7,7 +7,7 @@ from typing import Final, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from agent_runtime.abilities import RELEASE_WORDS, why_not
+from agent_runtime.abilities import RELEASE_ROOTS, why_not
 from agent_runtime.card_runner import CardRunner, agent_ref, one_line
 from agent_runtime.contract import (
     AgentAddressee,
@@ -419,8 +419,7 @@ def _rows(answers: list[RowAnswer]) -> list[UnderstoodRow]:
     return sorted(kept, key=lambda row: ORDER.index(row.kind))
 
 
-def _software_in(task: str, said: str | None) -> str | None:
-    """The software as the task wrote it, when the model's name is a whole word of the task."""
+def _whole_word_of(task: str, said: str | None) -> str | None:
     wanted = _visible_words(said).strip(QUOTES)
     if not wanted or len(wanted) > WORD_LIMIT:
         return None
@@ -428,12 +427,10 @@ def _software_in(task: str, said: str | None) -> str | None:
     return None if found is None else found.group(0)
 
 
-def _watchlist_word_in(task: str, said: str | None) -> str | None:
-    """The task's own word for the model's watchlist word: the same word when the task has it,
-    else the first other form of the same vocabulary word, such as "releases" for "release"."""
+def _task_form_of(task: str, said: str | None) -> str | None:
     wanted = _visible_words(said).strip(QUOTES).casefold()
-    root = RELEASE_WORDS.get(wanted)
-    forms = [w for w in re.findall(r"\w+", task) if RELEASE_WORDS.get(w.casefold()) == root]
+    root = RELEASE_ROOTS.get(wanted)
+    forms = [w for w in re.findall(r"\w+", task) if RELEASE_ROOTS.get(w.casefold()) == root]
     if root is None or not forms:
         return None
     return next((w for w in forms if w.casefold() == wanted), forms[0])
@@ -445,10 +442,10 @@ def understood_of(answer: UnderstandAnswer, task: str) -> Understood | BelongsOn
     together: no rows, or a watchlist word that is not in the task or not one of the words the
     prompt names."""
     if answer.belongs_on_watchlist:
-        word = _watchlist_word_in(task, answer.watchlist_word)
+        word = _task_form_of(task, answer.watchlist_word)
         if word is None:
             return None
-        return BelongsOnWatchlist(word=word, software=_software_in(task, answer.software))
+        return BelongsOnWatchlist(word=word, software=_whole_word_of(task, answer.software))
     if not answer.rows:
         return None
     return Understood(rows=_rows(answer.rows))
