@@ -20,8 +20,8 @@ me=$(az ad signed-in-user show --query id --output tsv)
 echo "1. Register the resource providers the environment uses"
 # The deploy identity has no rights on the subscription, so Terraform cannot register these
 # itself. The list covers every resource type in infra/, plus Storage for the state account.
-for namespace in Microsoft.App Microsoft.ContainerRegistry Microsoft.DBforPostgreSQL Microsoft.Insights \
-  Microsoft.KeyVault Microsoft.ManagedIdentity Microsoft.OperationalInsights Microsoft.Storage; do
+for namespace in Microsoft.App Microsoft.ContainerRegistry Microsoft.DBforPostgreSQL Microsoft.DocumentDB \
+  Microsoft.Insights Microsoft.KeyVault Microsoft.ManagedIdentity Microsoft.OperationalInsights Microsoft.Storage; do
   az provider register --namespace "$namespace" --wait
 done
 

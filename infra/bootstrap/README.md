@@ -17,13 +17,13 @@ STATE_ACCOUNT=<storage-account-name> infra/bootstrap/setup-azure.sh <github-owne
 
 The script does five things, and each is safe to run again:
 
-1. It registers the Azure resource providers that the environment uses. The deploy identity has no rights on the subscription, so the Terraform code cannot register them itself (`resource_provider_registrations = "none"`).
+1. It registers the Azure resource providers that the environment uses. The deploy identity has no rights on the subscription, so the Terraform code cannot register them itself (`resource_provider_registrations = "none"`). Cosmos DB's provider, `Microsoft.DocumentDB`, joined the list for the rebuild's deploy. If you ran the script before that, run it again, or run `az provider register --namespace Microsoft.DocumentDB --wait` once.
 2. It creates the resource group `rg-wab-tfstate` and the state storage account. Access keys are off (`--allow-shared-key-access false`), so the only way in is an Entra ID identity with a data role. Blob versioning and 30 days of soft delete let you recover an overwritten or deleted state file. It also creates the private `tfstate` container.
 3. It creates the resource group `rg-wab-dev`, where Terraform puts the whole environment. Terraform reads this group but never creates or deletes it, so `terraform destroy` leaves it behind, empty.
 4. It creates the user-assigned managed identity `id-wab-deploy` and a federated credential that trusts GitHub's OIDC tokens for the `azure-dev` environment of your repository. This needs no app registration, so it works even when the university tenant blocks app registrations (ADR 0013).
 5. It gives the deploy identity three roles, none of them on the whole subscription:
    - Storage Blob Data Contributor on the `tfstate` container only.
-   - Contributor on `rg-wab-dev`, to create the environment's resources.
+   - Contributor on `rg-wab-dev`, to create the environment's resources. That includes Cosmos DB's own data roles, which are not Azure roles, so the condition below does not cover them. The Terraform code gives one, to platform-api's identity. Contributor can already read the Cosmos DB account's keys, so the data role gives the deploy no reach it did not have.
    - Role Based Access Control Administrator on `rg-wab-dev`, with a condition. It may only assign or remove AcrPull, AcrPush, Key Vault Secrets User and Key Vault Secrets Officer, which are the only roles the Terraform code assigns. And it may only give them to service principals, such as our managed identities, never to a person or a group. The condition follows Microsoft's ["Constrain ACR management" example](https://learn.microsoft.com/en-us/azure/role-based-access-control/delegate-role-assignments-examples#example-constrain-acr-management).
 
 At the end the script prints five values. Put the three Azure IDs on the `azure-dev` GitHub environment as secrets, and the two state values as variables, as step 7 of [the main README](../README.md#one-time-human-steps-before-the-first-deploy) describes.
@@ -45,6 +45,6 @@ If the repository is made public later, add required reviewers and "Prevent self
 
 ## Why the state needs this care
 
-Terraform state holds every generated secret in plain text: the database passwords, `STEP_KEY`, `AGENT_API_KEY`, `CALLBACK_SIGNING_KEY` and the n8n encryption key, plus the GitHub token when one is set. Anyone who can read the state file can read those secrets. With access keys off, only identities with a blob data role can read it: the deploy identity and the person who ran this script. Do not give anyone else a data role on this storage account.
+Terraform state holds every generated secret in plain text: the database passwords, `STEP_KEY`, `AGENT_API_KEY`, `CALLBACK_SIGNING_KEY`, `SETTINGS_ENCRYPTION_KEY`, the n8n encryption key and the Cosmos DB account key, plus the GitHub token when one is set. Anyone who can read the state file can read those secrets. With access keys off, only identities with a blob data role can read it: the deploy identity and the person who ran this script. Do not give anyone else a data role on this storage account.
 
 The script was written without access to Azure and has not been run. If a step fails, the error from `az` names the problem, and you can rerun the script after you fix it.
