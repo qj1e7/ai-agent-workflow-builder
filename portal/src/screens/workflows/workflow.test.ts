@@ -339,7 +339,7 @@ describe('pausing, resuming, deleting and putting back', () => {
     expect(changeWords('resume', WATCHLIST, NOW)).toBe('Resumed. Next run Mon 9 Nov, 9:00.')
     expect(changeWords('resume', AGENTS, NOW)).toBe('Resumed. LangGraph release check can run again.')
     expect(changeWords('delete', AGENTS, NOW)).toBe('Deleted LangGraph release check.')
-    expect(changeWords('restore', AGENTS, NOW)).toBe('Put LangGraph release check back.')
+    expect(changeWords('restore', AGENTS, NOW)).toBe('Put back.')
   })
 
   it('say why a change did not go through', () => {

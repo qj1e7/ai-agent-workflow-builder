@@ -14,7 +14,7 @@ import { IconSearch } from '../../ui/icons'
 import { Toast, UNDO_ID, type ToastMessage } from '../../ui/Toast'
 import { useArrivalScroll } from './arrival'
 import { Faces, StatusPills } from './Status'
-import { agentsOf, changeProblem, FILTERS, lineWhen, nextRunWords, pressChange, rowsOf, runFact, workflowPath, type Filter, type Row, type RunFact, type Viewer } from './workflow'
+import { agentsOf, changeProblem, changeWords, FILTERS, lineWhen, nextRunWords, pressChange, rowsOf, runFact, workflowPath, type Filter, type Row, type RunFact, type Viewer } from './workflow'
 import styles from './Workflows.module.css'
 
 export const REFRESH_MS = 15_000
@@ -170,11 +170,11 @@ function Loaded({ handedOver, now, me, useCases, runs, runsFailed }: LoadedProps
 
   function undo(row: Deleted) {
     pressChange(changes, (outcome) => move.mutate({ move: 'restore', useCaseId: row.id }, outcome), {
-      onSuccess: () => {
+      onSuccess: (view: UseCaseView) => {
         setProblem(null)
         setRestored(row.id)
         focusRestored()
-        setNote((before) => ({ kind: 'said', id: (before?.id ?? 0) + 1, text: `Put ${row.name} back.` }))
+        setNote((before) => ({ kind: 'said', id: (before?.id ?? 0) + 1, text: changeWords('restore', view, now) }))
       },
       onError: (error) => setProblem(changeProblem('restore', row.name, error, words)),
     })

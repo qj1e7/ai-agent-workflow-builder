@@ -291,7 +291,7 @@ export function changeWords(change: Change, useCase: Pick<UseCaseView, 'name' | 
     case 'delete':
       return `Deleted ${useCase.name}.`
     case 'restore':
-      return `Put ${useCase.name} back.`
+      return 'Put back.'
   }
 }
 
