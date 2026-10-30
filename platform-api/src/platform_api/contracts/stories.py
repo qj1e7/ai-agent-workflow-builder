@@ -625,7 +625,7 @@ def decision_out(tl: Timeline) -> DecisionOut:
 
 
 OWN_WORK_REFUSAL = RefusalOut(
-    refusal=Refusal.OWN_WORK, message="You started this run, so another Approver must decide."
+    refusal=Refusal.OWN_WORK, message="This run is your own work, so another Approver must decide."
 )
 
 TEMPLATES = TemplateList(templates=[template_view(t) for t in TEMPLATES_BY_KEY.values()])

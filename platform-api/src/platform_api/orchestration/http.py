@@ -420,7 +420,7 @@ def run_view(detail: RunDetail) -> RunView:
 
 
 REFUSAL_MESSAGES: dict[Refusal, str] = {
-    Refusal.OWN_WORK: "You started this run, so another Approver must decide.",
+    Refusal.OWN_WORK: "This run is your own work, so another Approver must decide.",
     Refusal.NOT_AN_APPROVER: "Only an Approver can decide.",
     Refusal.NOT_OPEN: "This approval is already decided.",
     Refusal.WRONG_STEP: "This is not the step that is open now.",

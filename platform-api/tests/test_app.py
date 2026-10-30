@@ -161,7 +161,7 @@ def test_a_refused_decision_answers_the_documented_refusal_body(refusing_client:
     assert r.status_code == 403
     assert r.json() == {
         "refusal": "own_work",
-        "message": "You started this run, so another Approver must decide.",
+        "message": "This run is your own work, so another Approver must decide.",
     }
 
 
