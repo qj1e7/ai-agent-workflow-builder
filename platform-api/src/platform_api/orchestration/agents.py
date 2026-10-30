@@ -321,9 +321,13 @@ type ChooseResult = Annotated[Chosen | ModelProblem, Field(discriminator="status
 choose_result_adapter: TypeAdapter[ChooseResult] = TypeAdapter(ChooseResult)
 
 
+type JiraProjectKey = Annotated[str, Field(pattern=r"^[A-Z][A-Z0-9]{0,9}$")]
+
+
 class UnderstandRequest(WireModel):
     task: str
     model: ModelAccess
+    jira_projects: list[JiraProjectKey] | None = Field(default=None, max_length=1000)
 
 
 type RowKind = Literal["schedule", "look_for", "do", "where"]

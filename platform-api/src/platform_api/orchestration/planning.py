@@ -6,6 +6,7 @@ model key goes from the settings store into the request to the runtime and nowhe
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Protocol
 
 from platform_api.db import Database
 from platform_api.orchestration.agents import (
@@ -35,11 +36,18 @@ class RuntimeDown:
     detail: str
 
 
+class JiraProjects(Protocol):
+    async def projects(self) -> list[str]: ...
+
+
 class CardPlanning:
-    def __init__(self, db: Database, models: ActiveModel, agents: HttpAgentRuntime) -> None:
+    def __init__(
+        self, db: Database, models: ActiveModel, agents: HttpAgentRuntime, jira: JiraProjects
+    ) -> None:
         self._db = db
         self._models = models
         self._agents = agents
+        self._jira = jira
 
     async def has_model(self) -> bool:
         async with self._db.transaction("orchestration") as uow:
@@ -74,7 +82,10 @@ class CardPlanning:
             model = await self._models.access(uow)
         if model is None:
             return NoModel()
-        reply = await self._agents.understand(UnderstandRequest(task=task, model=model))
+        projects = await self._jira.projects()
+        reply = await self._agents.understand(
+            UnderstandRequest(task=task, model=model, jira_projects=projects)
+        )
         if isinstance(reply, AgentUnavailable | AgentRejected):
             return RuntimeDown(reply.detail)
         return reply

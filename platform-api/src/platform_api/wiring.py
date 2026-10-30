@@ -103,7 +103,7 @@ async def build(settings: Settings) -> Services:
         orchestrator,
         watchlist,
         settings.public_base_url,
-        CardPlanning(db, model_settings, agents),
+        CardPlanning(db, model_settings, agents, jira),
     )
     return Services(
         settings=settings,

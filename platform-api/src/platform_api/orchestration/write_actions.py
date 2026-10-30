@@ -269,6 +269,7 @@ def registry_of(connectors: Iterable[WriteConnector]) -> Registry:
 
 
 SEARCH_LIMIT = 50
+HOME_PROJECT = "MOCK"
 
 
 class MockJiraConnector:
@@ -297,7 +298,7 @@ class MockJiraConnector:
             ).fetchone()
             assert number_row is not None
             number = int(number_row["number"])
-            project = str(action.target.get("project", "MOCK"))
+            project = str(action.target.get("project", HOME_PROJECT))
             ticket = f"{project}-{number}"
             await uow.conn.execute(
                 "INSERT INTO orchestration.mock_jira_tickets "
@@ -325,6 +326,15 @@ class MockJiraConnector:
                 )
             ).fetchall()
         return [_ticket(row) for row in rows]
+
+    async def projects(self) -> list[str]:
+        async with self._db.transaction("orchestration") as uow:
+            rows = await (
+                await uow.conn.execute(
+                    "SELECT DISTINCT project FROM orchestration.mock_jira_tickets"
+                )
+            ).fetchall()
+        return sorted({HOME_PROJECT, *(str(row["project"]) for row in rows)})
 
     async def mark_done(self, key: str) -> MockTicket | None:
         """Marks a ticket Done. A ticket already Done keeps its first done time."""
