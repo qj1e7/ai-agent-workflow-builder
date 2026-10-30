@@ -5,10 +5,13 @@ from typing import Any
 import httpx
 import psycopg
 import pytest
+from azure.core.exceptions import ServiceRequestError
+from fastapi.testclient import TestClient
 from psycopg import sql
 from pydantic import TypeAdapter
 
 from platform_api import bootstrap
+from platform_api.app import create_app
 from platform_api.bootstrap import (
     OLD_RUN_WORKFLOW,
     OLD_TASK_KIND,
@@ -23,9 +26,9 @@ from platform_api.migrations import MIGRATION_ORDER, downgrade, upgrade_all
 from platform_api.orchestration.n8n import N8nClient
 from platform_api.orchestration.spec import RunSpec
 from platform_api.orchestration.workflows import load_all
-from platform_api.settings import BootstrapSettings
+from platform_api.settings import BootstrapSettings, CosmosSettings
 from tests.conftest import PostgresUrls, truncate_all
-from tests.support import NOW, SPEC
+from tests.support import LOCAL_ENV, NOW, SPEC
 
 N8N = "http://n8n.test"
 TRUNK_HEADS = {"monitoring": "0001", "orchestration": "0004", "builder": "0003"}
@@ -321,3 +324,58 @@ def test_bootstrap_removes_the_old_run_workflow_by_its_exact_name_and_nothing_el
     ]
     assert "workflow:delete" in n8n.scopes
     assert any(line.startswith(f"workflow {OLD_RUN_WORKFLOW} (W1): removed") for line in said)
+
+
+SECRET_ADDRESS = "wab-secret-account.documents.azure.com"
+
+
+async def cosmos_unreachable(settings: CosmosSettings) -> None:
+    raise ServiceRequestError(f"Failed to reach https://{SECRET_ADDRESS}:443/dbs/activity")
+
+
+def n8n_unreachable(*args: object) -> None:
+    raise httpx.ConnectError(f"Failed to reach http://{SECRET_ADDRESS}:5678/rest/login")
+
+
+@pytest.mark.parametrize(
+    ("patch", "env", "detail"),
+    [
+        pytest.param(
+            ("ensure_cosmos", cosmos_unreachable),
+            {"COSMOS_ENDPOINT": f"https://{SECRET_ADDRESS}:443/", "COSMOS_KEY": "a2V5"},
+            "could not reach Cosmos DB (ServiceRequestError)",
+            id="cosmos",
+        ),
+        pytest.param(
+            ("load_into_n8n", n8n_unreachable),
+            {},
+            "could not load the workflows into n8n (ConnectError)",
+            id="n8n",
+        ),
+    ],
+)
+def test_a_failure_logs_its_error_but_readiness_names_only_its_class(
+    postgres: PostgresUrls,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    patch: tuple[str, Any],
+    env: dict[str, str],
+    detail: str,
+):
+    truncate_all(postgres.owner)
+    monkeypatch.setattr(bootstrap, *patch)
+
+    assert main({**env_for(postgres.owner), **env}) == 1
+
+    assert SECRET_ADDRESS in capsys.readouterr().out
+    assert engine_status(postgres.owner) == (False, detail)
+    app_env = {
+        **LOCAL_ENV,
+        "DATABASE_URL_BUILDER": postgres.contexts.builder,
+        "DATABASE_URL_ORCHESTRATION": postgres.contexts.orchestration,
+        "DATABASE_URL_MONITORING": postgres.contexts.monitoring,
+    }
+    with TestClient(create_app(app_env)) as client:
+        ready = client.get("/healthz/ready")
+    assert ready.status_code == 503
+    assert SECRET_ADDRESS not in ready.text
