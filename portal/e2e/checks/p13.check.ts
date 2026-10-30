@@ -236,7 +236,8 @@ test('@lane7 a test run from the done page waits for bob, his yes takes it to Do
 test('@lane8 with the keyboard alone, each step’s heading takes focus and says which step it is', async ({ browser }) => {
   const page = await openNew(browser)
   const seen: { step: string; focused: boolean }[] = []
-  const note = async () => seen.push({ step: await heading(page).innerText(), focused: await heading(page).evaluate((el) => el === document.activeElement) })
+  const note = async () =>
+    seen.push({ step: ((await heading(page).textContent()) ?? '').replace(/\s+/g, ' ').trim(), focused: await heading(page).evaluate((el) => el === document.activeElement) })
   await tabTo(page, page.getByLabel('What should happen?'))
   await page.keyboard.type(FOLLOW_UP)
   await tabTo(page, page.getByRole('button', { name: 'Plan it' }))
