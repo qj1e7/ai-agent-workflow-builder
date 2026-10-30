@@ -562,8 +562,7 @@ def wait_for_copy(stack: Stack, run_id: str, last_seq: int, timeout: float = 90)
     return found
 
 
-def page_from_cosmos(api: Api, stack: Stack, run_id: str) -> tuple[bool, float, Any]:
-    """Changes event 1's summary in Cosmos DB only, so a page that shows it came from there."""
+def patch_copy_then_read_page(api: Api, stack: Stack, run_id: str) -> tuple[bool, float, Any]:
     patched = stack.patch(run_id, 1, "summary", MARKER)
     started = time.monotonic()
     events = api.events(run_id)
@@ -1157,7 +1156,7 @@ def lane11(api: Api, out: Path) -> bool:
     after = stack.cosmos()
     compared = settled_compare(stack)
     ready = wait_caught_up(api)
-    from_cosmos, took, patched = page_from_cosmos(api, stack, old_id)
+    from_cosmos, took, patched = patch_copy_then_read_page(api, stack, old_id)
     api_after = stack.started_at("platform-api")
     save(
         out,
@@ -1226,7 +1225,7 @@ def lane12(api: Api, out: Path) -> bool:
     time.sleep(1)
     stream.close()
     compared = settled_compare(stack)
-    from_cosmos, took, patched = page_from_cosmos(api, stack, old_id)
+    from_cosmos, took, patched = patch_copy_then_read_page(api, stack, old_id)
     expected = list(range(1, old_run["last_seq"] + 1))
     save(
         out,

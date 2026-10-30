@@ -162,15 +162,20 @@ compose_cmd() {
   echo "docker compose -p $project --env-file $ENV_FILE -f $src/deploy/compose.yaml -f $src/deploy/compose.e2e.yaml $*"
 }
 
+stack_env() {
+  local portal=$1 api=$2 n8n=$3
+  echo "WAB_IMAGE_TAG=${STACK_TAG:-$TAG} PORTAL_HOST_PORT=$portal PLATFORM_API_HOST_PORT=$api N8N_HOST_PORT=$n8n"
+}
+
 up() {
-  local src=$1 project=$2 portal=$3 api=$4 n8n=$5 tag=${STACK_TAG:-$TAG} log build=--build
+  local src=$1 project=$2 portal=$3 api=$4 n8n=$5 log build=--build
   shift 5
   disk
   [ "${NO_BUILD:-0}" = 1 ] && build=--no-build
   mkdir -p "$EVID/stacks"
   log="$EVID/stacks/$project-up-$(cut -c1-7 "$src/.SHA").log"
   local status=0
-  env WAB_IMAGE_TAG="$tag" PORTAL_HOST_PORT="$portal" PLATFORM_API_HOST_PORT="$api" N8N_HOST_PORT="$n8n" "$@" \
+  env $(stack_env "$portal" "$api" "$n8n") "$@" \
     $(compose_cmd "$src" "$project" ${OVERLAYS:-}) up $build --wait --wait-timeout 420 >"$log" 2>&1 || status=$?
   if [ "$status" -ne 0 ]; then
     tail -n 20 "$log" >&2
@@ -221,14 +226,12 @@ lane_first() {
   echo $((LANE_PORTS + offset))
 }
 
-# The lane gets the stack's tag and host ports too, so a lane that runs `up` itself (lane 12)
-# brings back the same stack.
 own_stack_lane() {
   local n=$1 src=$2 project="$PREFIX-l$1" portal api n8n status=0
   shift 2
   read -r portal api n8n <<<"$(ports_of "$(lane_first "$n")")"
   NO_BUILD=1 up "$src" "$project" "$portal" "$api" "$n8n" ${STACK_ENV:+"$STACK_ENV"} || { down "$src" "$project" >/dev/null 2>&1 || true; return 1; }
-  env WAB_IMAGE_TAG="${STACK_TAG:-$TAG}" PORTAL_HOST_PORT="$portal" PLATFORM_API_HOST_PORT="$api" N8N_HOST_PORT="$n8n" ${STACK_ENV:+"$STACK_ENV"} \
+  env $(stack_env "$portal" "$api" "$n8n") ${STACK_ENV:+"$STACK_ENV"} \
     P4_COMPOSE="$(compose_cmd "$src" "$project" ${OVERLAYS:-})" \
     python3 -I "$HERE/p4_lanes.py" "lane$n" "http://localhost:$api" "$EVID/lane-$n" "$@" || status=$?
   down "$src" "$project" >/dev/null 2>&1 || true
