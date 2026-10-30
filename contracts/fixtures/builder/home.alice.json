@@ -1,0 +1,52 @@
+{
+  "approvals": [],
+  "approvals_total": 0,
+  "confirmations": [],
+  "stopped": [
+    {
+      "run_id": "run_01JB9",
+      "use_case_id": "uc_01JB7",
+      "use_case_name": "Software watchlist",
+      "started_at": "2026-11-04T02:14:00Z",
+      "stopped_at": "2026-11-04T02:14:13.031000Z",
+      "reason": "AgentError",
+      "retryable": true,
+      "advice": {
+        "explanation": "An agent could not finish its work.",
+        "likely_cause": "A service the agent reads from, such as GitHub, was unavailable or answered with an error.",
+        "suggested_action": "retry",
+        "suggestion": "Retry the run. If it fails again, check whether that service is up."
+      }
+    }
+  ],
+  "stopped_total": 1,
+  "waiting_on_others": [
+    {
+      "run_id": "run_01JB8",
+      "use_case_id": "uc_01JB7",
+      "use_case_name": "Software watchlist",
+      "trigger": "person",
+      "started_at": "2026-11-03T02:14:00Z",
+      "step": 0,
+      "steps": 1,
+      "because": "started"
+    }
+  ],
+  "waiting_on_others_total": 1,
+  "drafts": [
+    {
+      "draft_id": "drf-7f3a2c",
+      "name": "Nudge stale tickets",
+      "step": 2,
+      "saved_at": "2026-11-04T06:24:00Z"
+    }
+  ],
+  "coming_up": {
+    "use_case_id": "uc_01JB7",
+    "name": "Software watchlist",
+    "template": "software_watchlist",
+    "next_run_at": "2026-11-09T01:00:00Z",
+    "more": 0
+  },
+  "workflows": 1
+}

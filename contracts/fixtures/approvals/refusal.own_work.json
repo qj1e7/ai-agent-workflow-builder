@@ -1,4 +1,4 @@
 {
   "refusal": "own_work",
-  "message": "You started this run, so another Approver must decide."
+  "message": "This run is your own work, so another Approver must decide."
 }
