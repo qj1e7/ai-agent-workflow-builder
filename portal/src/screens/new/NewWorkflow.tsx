@@ -6,7 +6,7 @@ import { DRAFT_STEPS } from '../../api/drafts'
 import { newIdempotencyKey } from '../../api/idempotency'
 import { useLatch } from '../../api/latch'
 import { isOperator } from '../../api/me'
-import { refusedWords, useDeleteDraft, useDrafts, usePlanFor, useSaveDraft, useUnderstand } from '../../api/newQueries'
+import { refusedWords, useDeleteDraft, useDrafts, usePlanFor, useReadAgentCards, useSaveDraft, useUnderstand } from '../../api/newQueries'
 import { useCreateAgentUseCase, useMe, useSaveCard } from '../../api/queries'
 import { PRODUCT } from '../../shell/product'
 import { Button } from '../../ui/Button'
@@ -26,6 +26,7 @@ import {
   planView,
   restoreDraft,
   rowBlockers,
+  savedCopyOf,
   STEP_NAMES,
   textProblem,
   turnOn,
@@ -124,6 +125,8 @@ function NewWorkflow({ page, draftId, start }: { page: PageWords; draftId: strin
   const saveDraft = useSaveDraft()
   const deleteDraft = useDeleteDraft()
   const saveCard = useSaveCard()
+  const readCards = useReadAgentCards()
+  const me = useMe()
   const create = useCreateAgentUseCase()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -197,6 +200,7 @@ function NewWorkflow({ page, draftId, start }: { page: PageWords; draftId: strin
     }
     latch.run((settled) => {
       turnOn(form, view, draft, cards.current, {
+        savedCard: async (card) => (me.data ? savedCopyOf(await readCards(), me.data.id, card) : null),
         saveCard: async (card) => (await saveCard.mutateAsync({ cardId: null, card })).card_id,
         create: (body) => create.mutateAsync(body),
         deleteDraft: (draftId) => deleteDraft.mutateAsync(draftId),

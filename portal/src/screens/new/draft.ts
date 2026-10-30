@@ -1,5 +1,6 @@
 import type {
   CardDefinition,
+  CardView,
   CreateAgentUseCase,
   Day,
   DraftView,
@@ -421,7 +422,22 @@ function notSavedYet(agent: PlanAgent): never {
   throw new Error(`${agent.name} is a drafted agent that has not been saved yet.`)
 }
 
+const shapeOf = (card: CardDefinition | CardView) =>
+  JSON.stringify([
+    card.name,
+    card.purpose,
+    card.good_for ?? [],
+    (card.inputs ?? []).map(({ name, kind, what, example }) => [name, kind, what, example]),
+    (card.blocks ?? []).map(({ say, tool }) => [say, tool ?? null]),
+  ])
+
+export function savedCopyOf(cards: readonly CardView[], owner: string, card: CardDefinition): string | null {
+  const shape = shapeOf(card)
+  return cards.find((saved) => saved.owner === owner && !saved.starter && shapeOf(saved) === shape)?.card_id ?? null
+}
+
 export interface TurnOnCalls {
+  readonly savedCard: (card: CardDefinition) => Promise<string | null>
   readonly saveCard: (card: CardDefinition) => Promise<string>
   readonly create: (body: CreateAgentUseCase) => Promise<UseCaseCreated>
   readonly deleteDraft: (draftId: string) => Promise<unknown>
@@ -438,7 +454,7 @@ export async function turnOn(form: Form, plan: PlanView, draftId: string | null,
   for (const agent of plan.kind === 'agents' ? plan.agents : []) {
     if (agent.card.kind === 'saved') continue
     const key = `${task}#${String(agent.index)}`
-    const id = cards.get(key) ?? (await calls.saveCard(agent.card.definition))
+    const id = cards.get(key) ?? (await calls.savedCard(agent.card.definition)) ?? (await calls.saveCard(agent.card.definition))
     cards.set(key, id)
     saved[agent.index] = id
   }

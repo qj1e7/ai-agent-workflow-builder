@@ -25,6 +25,11 @@ export function usePlanFor(task: string, enabled: boolean, planned: PlanOut | un
   })
 }
 
+export function useReadAgentCards() {
+  const client = useApiClient()
+  return async () => unwrap(await client.GET('/api/v1/agent-cards')).cards
+}
+
 export function useDrafts(enabled: boolean) {
   const client = useApiClient()
   const user = useCacheScope()

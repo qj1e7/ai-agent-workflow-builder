@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import newAgent from '../../../../contracts/fixtures/cards/plan.new-agent.json'
+import cardList from '../../../../contracts/fixtures/cards/list.json'
 import cannotDo from '../../../../contracts/fixtures/cards/plan.cannot-do.json'
 import useOne from '../../../../contracts/fixtures/cards/plan.use-one.json'
 import rowsAnswer from '../../../../contracts/fixtures/builder/understand.rows.json'
 import starters from '../../../../contracts/fixtures/builder/understand.starters.json'
 import watchlist from '../../../../contracts/fixtures/builder/understand.watchlist.json'
 import { ApiError } from '../../api/client'
-import type { DraftView, PlanOut, RowKind, RowState, UnderstandOut } from '../../api/types'
+import type { CardView, DraftView, PlanOut, RowKind, RowState, ToolId, UnderstandOut } from '../../api/types'
 import {
   afterChecking,
   afterReading,
@@ -26,6 +27,7 @@ import {
   readWhen,
   restoreDraft,
   rowBlockers,
+  savedCopyOf,
   scheduleOf,
   textProblem,
   turnOn,
@@ -345,7 +347,7 @@ describe('step 4, turn it on', () => {
 describe('pressing Turn it on', () => {
   const form = (): Form => ({ ...enterWhen(read(ROWS)), step: 4, name: 'Follow up stale bugs' })
 
-  function fakeCalls(failing: number): { readonly calls: TurnOnCalls; readonly seen: string[] } {
+  function fakeCalls(failing: number, saved: string | null = null): { readonly calls: TurnOnCalls; readonly seen: string[] } {
     const seen: string[] = []
     const answer = <T>(said: string, value: T): Promise<T> => {
       seen.push(said)
@@ -354,6 +356,7 @@ describe('pressing Turn it on', () => {
     return {
       seen,
       calls: {
+        savedCard: (card) => answer(`look for ${card.name}`, saved),
         saveCard: (card) => answer(`save ${card.name}`, 'crd_new'),
         create: (body) => answer(`create with ${body.agents.map((agent) => agent.card_id).join(', ')}`, { use_case_id: 'uc_new', version: 1 }),
         deleteDraft: (draftId) => answer(`delete draft ${draftId}`, undefined),
@@ -362,13 +365,42 @@ describe('pressing Turn it on', () => {
   }
 
   it('saves the new agent, then the workflow with it, and after a failure the next press reuses the saved agent', async () => {
-    const { calls, seen } = fakeCalls(2)
+    const { calls, seen } = fakeCalls(3)
     const cards = new Map<string, string>()
     const plan = planView(CLEAN_DRAFT, form().rows)
     await expect(turnOn(form(), plan, 'd1', cards, calls)).rejects.toBeInstanceOf(ApiError)
-    expect(seen).toEqual(['save Stale bug follow-up', 'create with crd_new'])
+    expect(seen).toEqual(['look for Stale bug follow-up', 'save Stale bug follow-up', 'create with crd_new'])
     await expect(turnOn(form(), plan, 'd1', cards, calls)).resolves.toEqual({ useCaseId: 'uc_new', draftKept: false })
-    expect(seen).toEqual(['save Stale bug follow-up', 'create with crd_new', 'create with crd_new', 'delete draft d1'])
+    expect(seen).toEqual(['look for Stale bug follow-up', 'save Stale bug follow-up', 'create with crd_new', 'create with crd_new', 'delete draft d1'])
+  })
+
+  it('uses the agent the Operator already saved for the same plan, and saves no copy', async () => {
+    const { calls, seen } = fakeCalls(0, 'crd_saved')
+    await expect(turnOn(form(), planView(CLEAN_DRAFT, form().rows), null, new Map(), calls)).resolves.toEqual({ useCaseId: 'uc_new', draftKept: false })
+    expect(seen).toEqual(['look for Stale bug follow-up', 'create with crd_saved'])
+  })
+
+  it('finds only the Operator’s own saved agent with the same name, purpose, inputs and steps', () => {
+    const drafted = CLEAN_DRAFT.decision === 'new_agent' ? CLEAN_DRAFT.draft : null
+    if (drafted === null) throw new Error('no draft')
+    const starter = (cardList as { cards: CardView[] }).cards[0]
+    if (!starter) throw new Error('no card')
+    const copy = (card_id: string, owner: string, change: Partial<CardView> = {}): CardView => ({
+      ...starter,
+      card_id,
+      owner,
+      starter: false,
+      name: drafted.name,
+      purpose: drafted.purpose,
+      good_for: drafted.good_for ?? [],
+      inputs: (drafted.inputs ?? []).map((input) => ({ ...input, kind: 'jira_project' })),
+      blocks: (drafted.blocks ?? []).map((block) => ({ say: block.say, tool: (block.tool ?? null) as ToolId | null })),
+      ...change,
+    })
+    const other = copy('crd_bob', 'bob')
+    const changed = copy('crd_changed', 'alice', { blocks: [{ say: 'Find bug tickets.', tool: 'jira.search' }] })
+    expect(savedCopyOf([starter, other, changed], 'alice', drafted)).toBeNull()
+    expect(savedCopyOf([starter, other, changed, copy('crd_mine', 'alice')], 'alice', drafted)).toBe('crd_mine')
   })
 
   it('saves nothing new for a saved agent, and has no draft to delete for a workflow never saved as one', async () => {
@@ -378,9 +410,9 @@ describe('pressing Turn it on', () => {
   })
 
   it('still turns it on when the draft cannot be deleted, and says the draft is kept', async () => {
-    const { calls, seen } = fakeCalls(3)
+    const { calls, seen } = fakeCalls(4)
     await expect(turnOn(form(), planView(CLEAN_DRAFT, form().rows), 'd1', new Map(), calls)).resolves.toEqual({ useCaseId: 'uc_new', draftKept: true })
-    expect(seen).toEqual(['save Stale bug follow-up', 'create with crd_new', 'delete draft d1'])
+    expect(seen).toEqual(['look for Stale bug follow-up', 'save Stale bug follow-up', 'create with crd_new', 'delete draft d1'])
   })
 })
 
