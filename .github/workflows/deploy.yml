@@ -1,10 +1,9 @@
 name: deploy
 
-# A person starts each deploy by hand. The azure-dev environment only accepts main, and main only
-# takes pull requests a second person approved, so only reviewed code can deploy. No second person
-# approves each run, so every apply goes through guarded-apply.sh, which stops before applying a
-# plan that would destroy or replace anything unless allow_destroy is ticked. infra/README.md
-# lists the one-time setup in the order that makes this true.
+# A person starts each deploy by hand. The azure-dev environment only accepts main, so only code on
+# main can deploy. No second person approves each run, so every apply goes through guarded-apply.sh,
+# which stops before applying a plan that would destroy or replace anything unless allow_destroy is
+# ticked. infra/README.md lists the one-time setup in the order that makes this true.
 #
 # The Azure IDs are secrets, which GitHub masks, and the steps print summaries only. Terraform's
 # full output and the plan stay on the runner. That keeps the logs safe if the repository is ever

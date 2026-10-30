@@ -4,9 +4,13 @@ This is the operator's runbook for P14 of [the rebuild plan](../../design/rebuil
 
 Do the steps in order. [infra/README.md](../../../infra/README.md) explains the infrastructure and the one-time setup. This file adds what the rebuilt app needs.
 
+## 0. Do the one-time setup first
+
+As of 31 Oct 2026 the repository has no `azure-dev` environment and no deploy identity. If that is still true, do `infra/README.md` steps 1 to 7 first, in that order, before anything below. The order matters: the environment and its branch rule must exist before the deploy identity trusts it, or a workflow on any branch could get the deploy token.
+
 ## 1. Decide how the deploy reaches the code
 
-The `deploy` workflow runs only on `main`, because the `azure-dev` environment accepts only `main`. The plan says the operator lands P14 after the deploy. Both can't be true as things stand, so pick one:
+Once the setup is done, the `deploy` workflow runs only on `main`, because the `azure-dev` environment accepts only `main`. The plan says the operator lands P14 after the deploy. Both can't be true as things stand, so pick one:
 
 - **A. Land first, then deploy (recommended).** Land P4, then P14, on `main`. Run the deploy on `main`, then the live lanes. If a lane fails, fix it in a new pull request. This keeps the gate as it is: only reviewed code on `main` can deploy.
 - **B. Deploy the branch, then land.** Add `rebuild/p14-deploy` to `azure-dev`'s allowed branches, run the deploy on that branch, then remove the branch again at once. This follows the plan's order. While the branch is allowed, anyone who can push to it can deploy unreviewed code with the deploy identity, so do it only for this one run.
@@ -19,7 +23,7 @@ The `deploy` workflow runs only on `main`, because the `azure-dev` environment a
    az policy assignment list --query "[?contains(displayName, 'region')].{name:displayName, regions:parameters.listOfAllowedLocations.value}" --output json
    ```
 
-   If `southeastasia` is not on the list, set the environment variable `AZURE_LOCATION` to an allowed region. If only Cosmos DB is refused there, set `COSMOS_LOCATION` instead.
+   If `southeastasia` is not on the list, set the environment variable `AZURE_LOCATION` to an allowed region. If only Cosmos DB is refused there, set `COSMOS_LOCATION` instead. Set `AZURE_LOCATION` before the first deploy only: changing it later replaces every resource, PostgreSQL and its data included.
 2. **Check that no other free-tier Cosmos DB account exists.** A subscription may have one. ADR 0031 asked the team to make one by hand as a test, so look for it:
 
    ```sh
@@ -144,7 +148,7 @@ Copy these files from `EVID` into this folder, after you look at each screenshot
 | `perf/p14-perf.json` | `p14-perf.json` |
 | `summary.txt` | `p14-summary.txt` |
 
-Never copy anything from `~/.wab-p14`.
+Never copy anything from `~/.wab-p14`. The `.json` files not in this table, such as `lane-2/p14-sign-in.json` and `lane-4/run.json`, hold the test accounts' addresses and names. Leave them in `EVID`.
 
 ## 7. After the lanes
 

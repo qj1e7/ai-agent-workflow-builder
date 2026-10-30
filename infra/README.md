@@ -129,7 +129,7 @@ Do these in order. Each one changes cloud resources or repository settings, so a
 
 The repository is private. On a private repository with GitHub Pro, an environment can be limited to certain branches, but it cannot have required reviewers, "Prevent self-review" or a wait timer. Those need a public repository or GitHub Enterprise. So the gate is:
 
-- Only code reviewed into `main` can deploy. The `azure-dev` environment only accepts `main`, and `main` only takes pull requests that someone other than the author approved.
+- Only code on `main` can deploy, because the `azure-dev` environment only accepts `main`. Since 29 Oct 2026 (PR #44) a pull request into `main` no longer needs a second person's approval, so what reaches `main` is checked by CI and by the team's review practice, not by a branch rule.
 - A person starts each deploy by hand. Anyone with write access to the repository can start one.
 - No second person approves each run. To make up for that, the deploy stops before any apply that would destroy or replace a resource, unless the person who starts it ticks `allow_destroy`.
 
@@ -170,7 +170,7 @@ If the repository is made public later, add required reviewers and "Prevent self
    | `FIRST_OPERATOR` | the work email of the first Operator. Needed on the first deploy |
    | `FIRST_APPROVERS` | the work emails of the first two Approvers, separated by a comma. Two different people. The first Operator may be one of them |
    | `PRACTICE_JIRA_URL` | optional. Leave it unset, and agent-runtime reads platform-api's own practice Jira |
-   | `AZURE_LOCATION` | optional. The region for every resource. Unset means `southeastasia` |
+   | `AZURE_LOCATION` | optional. The region for every resource. Unset means `southeastasia`. Set it before the first deploy only: changing it later replaces everything, PostgreSQL included |
    | `COSMOS_LOCATION` | optional. A region for Cosmos DB alone, when it is refused in `AZURE_LOCATION` |
    | `COSMOS_SERVERLESS` | optional. `true` makes a serverless Cosmos DB account, for when the free tier is refused. Unset means `false` |
 
