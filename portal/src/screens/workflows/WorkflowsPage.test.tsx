@@ -30,7 +30,7 @@ const NOW = new Date('2026-11-04T15:00:00+08:00')
 
 interface Setup {
   readonly me?: Me
-  readonly useCases?: UseCaseView[] | Error
+  readonly useCases?: UseCaseView[] | Error | 'loading'
   readonly runs?: RunView[]
   readonly state?: unknown
 }
@@ -43,7 +43,7 @@ function render({ me = ALICE, useCases = [BUGS, WATCHLIST, LANGGRAPH], runs = RU
   queryClient.setQueryData(['dev-users'], [ALICE, BOB, CAROL])
   queryClient.setQueryData(['runs', scope], runs)
   if (useCases instanceof Error) queryClient.getQueryCache().build(queryClient, { queryKey: ['use-cases', scope] }).setState({ status: 'error', error: useCases, fetchStatus: 'idle' })
-  else queryClient.setQueryData(['use-cases', scope], useCases)
+  else if (useCases !== 'loading') queryClient.setQueryData(['use-cases', scope], useCases)
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
@@ -156,6 +156,15 @@ describe('after a delete', () => {
     const heading = (html: string) => /<h1\b[^>]*>/.exec(html)?.[0] ?? ''
     expect(heading(render({ state: deleted }))).toContain('data-page-moves-focus')
     expect(heading(render())).not.toContain('data-page-moves-focus')
+  })
+
+  it('draws the heading the same while the list loads and once it has loaded, so the shell’s focus stays on it', () => {
+    const heading = (html: string) => /<h1\b[^>]*>[\s\S]*?<\/h1>/.exec(mainOf(html))?.[0] ?? ''
+    for (const state of [undefined, deleted]) {
+      const loading = render({ state, useCases: 'loading' })
+      expect(text(mainOf(loading))).toContain('Loading the workflows')
+      expect(heading(loading), JSON.stringify(state)).toBe(heading(render({ state })))
+    }
   })
 
   it('shows no message on an ordinary visit', () => {

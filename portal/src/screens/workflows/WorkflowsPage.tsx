@@ -135,8 +135,7 @@ function useDeletedHandedOverOnce(): Deleted | null {
 }
 
 interface LoadedProps {
-  readonly heading: string
-  readonly lead: string
+  readonly handedOver: Deleted | null
   readonly now: Date
   readonly me: Me
   readonly useCases: readonly UseCaseView[]
@@ -144,8 +143,7 @@ interface LoadedProps {
   readonly runsFailed: boolean
 }
 
-function Loaded({ heading, lead, now, me, useCases, runs, runsFailed }: LoadedProps) {
-  const handedOver = useDeletedHandedOverOnce()
+function Loaded({ handedOver, now, me, useCases, runs, runsFailed }: LoadedProps) {
   const back = useNavigationType() === NavigationType.Pop
   const [note, setNote] = useState<Note | null>(() => (handedOver ? { kind: 'deleted', id: 0, row: handedOver } : null))
   const [problem, setProblem] = useState<string | null>(null)
@@ -192,7 +190,6 @@ function Loaded({ heading, lead, now, me, useCases, runs, runsFailed }: LoadedPr
   const searching = query.trim() !== '' || filter !== 'all'
   return (
     <>
-      <PageHead heading={heading} lead={lead} movesFocus={handedOver !== null} />
       {problem ? (
         <p className={styles['problem']} role="alert">
           {problem}
@@ -234,13 +231,22 @@ function Loaded({ heading, lead, now, me, useCases, runs, runsFailed }: LoadedPr
 }
 
 export function WorkflowsPage({ heading, lead, now }: { heading: string; lead: string; now: Date }) {
+  const handedOver = useDeletedHandedOverOnce()
+  return (
+    <>
+      <PageHead heading={heading} lead={lead} movesFocus={handedOver !== null} />
+      <WorkflowsBody handedOver={handedOver} now={now} />
+    </>
+  )
+}
+
+function WorkflowsBody({ handedOver, now }: { handedOver: Deleted | null; now: Date }) {
   const me = useMe()
   const useCases = useUseCases()
   const runs = useRuns({ poll: REFRESH_MS })
   if ((useCases.isError && !useCases.data) || me.isError) {
     return (
       <>
-        <PageHead heading={heading} lead={lead} />
         <p>The workflows could not be loaded.</p>
         <Button onClick={() => void Promise.all([useCases.refetch(), me.refetch()])}>Try again</Button>
       </>
@@ -248,13 +254,10 @@ export function WorkflowsPage({ heading, lead, now }: { heading: string; lead: s
   }
   if (!useCases.data || !me.data || (runs.isPending && !runs.isError)) {
     return (
-      <>
-        <PageHead heading={heading} lead={lead} />
-        <p className="muted" role="status">
-          Loading the workflows
-        </p>
-      </>
+      <p className="muted" role="status">
+        Loading the workflows
+      </p>
     )
   }
-  return <Loaded heading={heading} lead={lead} now={now} me={me.data} useCases={useCases.data} runs={runs.data ?? []} runsFailed={runs.isError && !runs.data} />
+  return <Loaded handedOver={handedOver} now={now} me={me.data} useCases={useCases.data} runs={runs.data ?? []} runsFailed={runs.isError && !runs.data} />
 }
