@@ -764,8 +764,13 @@ FOLLOW_UP_TASK = (
 RELEASE_TASK = "Tell me when LangGraph has a new release"
 
 
+PRACTICE_PROJECTS = ["MOCK"]
+
+
 def understand_request() -> UnderstandRequest:
-    return UnderstandRequest(task=FOLLOW_UP_TASK, model=draft_request().model)
+    return UnderstandRequest(
+        task=FOLLOW_UP_TASK, model=draft_request().model, jira_projects=PRACTICE_PROJECTS
+    )
 
 
 def understood() -> WireModel:
@@ -806,7 +811,7 @@ def understood() -> WireModel:
             ),
         ],
     )
-    result = understood_of(answer, FOLLOW_UP_TASK)
+    result = understood_of(answer, FOLLOW_UP_TASK, PRACTICE_PROJECTS)
     assert result is not None
     return result
 

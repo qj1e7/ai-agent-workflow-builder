@@ -8,8 +8,10 @@ from typing import Annotated, Any, Final, Literal, cast, get_args
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter
 
 from agent_runtime.contract import (
+    JIRA_PROJECT_PATTERN,
     REPO_PATTERN,
     InputKind,
+    JiraProject,
     RepoName,
     ToolId,
     ToolKind,
@@ -17,14 +19,12 @@ from agent_runtime.contract import (
     ToolSpec,
 )
 
-JIRA_PROJECT_PATTERN = r"^[A-Z][A-Z0-9]{0,9}$"
 JIRA_KEY_PATTERN = r"^[A-Z][A-Z0-9]{0,9}-[0-9]{1,9}$"
 DATE_PATTERN = r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
 TEXT_INPUT_MAX = 200
 TITLE_MAX = 200
 BODY_MAX = 5000
 
-type JiraProject = Annotated[str, Field(pattern=JIRA_PROJECT_PATTERN)]
 type JiraKey = Annotated[str, Field(pattern=JIRA_KEY_PATTERN)]
 
 

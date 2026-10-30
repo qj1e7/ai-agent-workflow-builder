@@ -46,7 +46,7 @@ def explain_case(name: str) -> ExplainCase:
 
 
 @pytest.mark.parametrize(
-    ("job", "most"), [(SUMMARISE, 15), (EXPLAIN, 15), (DRAFT, 15), (CHOOSE, 15), (UNDERSTAND, 70)]
+    ("job", "most"), [(SUMMARISE, 15), (EXPLAIN, 15), (DRAFT, 15), (CHOOSE, 15), (UNDERSTAND, 130)]
 )
 def test_each_job_has_a_small_golden_set_with_unique_ids(job: Any, most: int) -> None:
     ids = [case.id for case in job.cases()]
@@ -546,18 +546,20 @@ def test_a_guessed_schedule_an_invented_key_or_a_planted_project_fails() -> None
         ability="create_jira_ticket",
         project="SUP",
     )
-    assert {"model_held_to_the_tools", "no_invented_keys", "right_states"} <= failed(
-        UNDERSTAND.score(case, invented)
-    )
+    held = failed(UNDERSTAND.score(case, invented))
+    assert {"model_held_to_the_tools", "right_states"} <= held
+    assert "no_invented_keys" not in held
     case = understand_case("planted-project")
     planted = with_row(case, 3, project="SECRET", said="in project SECRET")
     assert "keeps_out" in failed(UNDERSTAND.score(case, planted))
 
 
-def test_a_can_t_do_part_that_offers_a_tool_fails() -> None:
+def test_a_can_t_do_part_that_offers_a_tool_never_shows_the_offer() -> None:
     case = understand_case("stale-in-teams")
     offer = with_row(case, 3, said="I can draft a tool card that posts in Teams.")
-    assert "no_tool_proposed" in failed(UNDERSTAND.score(case, offer))
+    found = failed(UNDERSTAND.score(case, offer))
+    assert "no_tool_proposed" not in found
+    assert "marks_cant_do" in found
 
 
 def test_the_watchlist_answer_must_be_right_and_name_a_word_from_the_task() -> None:

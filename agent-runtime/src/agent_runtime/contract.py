@@ -538,9 +538,22 @@ class Chosen(WireModel):
 type ChooseResult = Annotated[Chosen | ModelProblem, Field(discriminator="status")]
 
 
+JIRA_PROJECT_PATTERN = r"^[A-Z][A-Z0-9]{0,9}$"
+JIRA_PROJECTS_LIMIT = 1000
+
+type JiraProject = Annotated[str, Field(pattern=JIRA_PROJECT_PATTERN)]
+
+
 class UnderstandRequest(WireModel):
     task: str = Field(min_length=1, max_length=2000)
     model: ModelAccess
+    jira_projects: list[JiraProject] | None = Field(
+        default=None,
+        max_length=JIRA_PROJECTS_LIMIT,
+        description="The keys of the Jira projects the platform can see, so the Planner can "
+        "check a project the task names. Left out when the platform cannot list them; then "
+        "every part that names a project is changed, never understood.",
+    )
 
 
 type RowKind = Literal["schedule", "look_for", "do", "where"]

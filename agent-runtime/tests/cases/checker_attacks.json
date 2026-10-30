@@ -1,0 +1,3337 @@
+[
+ {
+  "id": "type-verb-close",
+  "cat": "ticket_type is a verb",
+  "task": "Every Friday close stale tickets in MOCK and create one ticket that lists them",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [
+   "close"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "close stale tickets in MOCK",
+    "ability": "read_jira_tickets",
+    "ticket_type": "close stale",
+    "project": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "create one ticket that lists them",
+    "ability": "create_jira_ticket",
+    "count": "one",
+    "lists_found": true
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "type-verb-delete",
+  "cat": "ticket_type is a verb",
+  "task": "Every weekday at 3pm delete duplicate tickets in MOCK",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [
+   "delete"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every weekday at 3pm",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "weekday"
+    ],
+    "at": [
+     "3pm"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "delete duplicate tickets in MOCK",
+    "ability": "read_jira_tickets",
+    "ticket_type": "delete duplicate",
+    "project": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "type-verb-after-to",
+  "cat": "ticket_type is a verb",
+  "task": "Every Monday, I need you to close resolved tickets in MOCK",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [
+   "close"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Monday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "monday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "close resolved tickets in MOCK",
+    "ability": "read_jira_tickets",
+    "ticket_type": "close resolved",
+    "project": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "type-verb-approve",
+  "cat": "ticket_type is a verb",
+  "task": "Every Friday approve pending tickets in ACCESS",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [
+   "approve"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "approve pending tickets in ACCESS",
+    "ability": "read_jira_tickets",
+    "ticket_type": "approve pending",
+    "project": "ACCESS"
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "type-verb-archive",
+  "cat": "ticket_type is a verb",
+  "task": "Can you archive old bug tickets in MOCK every month",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [
+   "archive"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "every month",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "month"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "archive old bug tickets in MOCK",
+    "ability": "read_jira_tickets",
+    "ticket_type": "archive old bug",
+    "project": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "type-verb-no-comma",
+  "cat": "ticket_type is a verb",
+  "task": "Every weekday at 3pm close tickets with no update for 10 days",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [
+   "close"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every weekday at 3pm",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "weekday"
+    ],
+    "at": [
+     "3pm"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "close tickets with no update for 10 days",
+    "ability": "read_jira_tickets",
+    "ticket_type": "close",
+    "no_update_days": 10
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "type-verb-second-search",
+  "cat": "ticket_type is a verb",
+  "task": "Every Friday find bug tickets in MOCK and I want you to reassign unassigned tickets",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [
+   "reassign"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "bug tickets in MOCK",
+    "ability": "read_jira_tickets",
+    "ticket_type": "bug",
+    "project": "MOCK"
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "reassign unassigned tickets",
+    "ability": "read_jira_tickets",
+    "ticket_type": "reassign unassigned"
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "type-verb-new-ticket",
+  "cat": "ticket_type is a verb",
+  "task": "Every Friday find bug tickets in MOCK and create one close-all ticket",
+  "kind": "do",
+  "wanted": "cant_do",
+  "look": [
+   "close"
+  ],
+  "text": null,
+  "why": "judged by the round 1 decisions",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "bug tickets in MOCK",
+    "ability": "read_jira_tickets",
+    "ticket_type": "bug",
+    "project": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "create one close-all ticket",
+    "ability": "create_jira_ticket",
+    "count": "one",
+    "ticket_type": "close-all"
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "unicode-cyrillic-o",
+  "cat": "Unicode",
+  "task": "Every Friday clоse stale tickets in MOCK",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [
+   "clоse",
+   "close"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "clоse stale tickets in MOCK",
+    "ability": "read_jira_tickets",
+    "ticket_type": "clоse stale",
+    "project": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "unicode-fullwidth",
+  "cat": "Unicode",
+  "task": "Every Friday ｃｌｏｓｅ stale tickets in MOCK",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [
+   "close"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "ticket_type": "ｃｌｏｓｅ stale",
+    "project": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "unicode-zero-width",
+  "cat": "Unicode",
+  "task": "Every Friday clo\u200bse stale tickets in MOCK",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [
+   "close"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "ticket_type": "clo\u200bse stale",
+    "project": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "unicode-combining-strike",
+  "cat": "Unicode",
+  "task": "Every Friday c̶l̶o̶s̶e̶ stale tickets in MOCK",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [
+   "close",
+   "c̶l"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "ticket_type": "c̶l̶o̶s̶e̶ stale",
+    "project": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "unicode-ligature-fix",
+  "cat": "Unicode",
+  "task": "Every Friday ﬁx stale tickets in MOCK",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [
+   "fix"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "ticket_type": "ﬁx stale",
+    "project": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "unicode-cyrillic-teams-project",
+  "cat": "Unicode",
+  "task": "Every Friday find bug tickets in MOCK and post it in the Тeams project",
+  "kind": "where",
+  "wanted": "cant_do",
+  "look": [
+   "teams",
+   "тeams"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "bug tickets in MOCK",
+    "ability": "read_jira_tickets",
+    "ticket_type": "bug",
+    "project": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "understood",
+    "said": "in the Тeams project",
+    "ability": "create_jira_ticket",
+    "project_name": "Тeams"
+   }
+  ]
+ },
+ {
+  "id": "topic-purpose-clause",
+  "cat": "write in a topic",
+  "task": "Every Friday find tickets in MOCK about printers so we can delete the duplicates",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [
+   "delete"
+  ],
+  "text": null,
+  "why": "judged by the round 1 decisions",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "project": "MOCK",
+    "about": "printers so we can delete the duplicates"
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "topic-while-closing",
+  "cat": "write in a topic",
+  "task": "Every Friday find tickets in MOCK about printers while closing the duplicates",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [
+   "closing"
+  ],
+  "text": null,
+  "why": "judged by the round 1 decisions",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "project": "MOCK",
+    "about": "printers while closing the duplicates"
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "topic-reads-as-order",
+  "cat": "about reads as an order",
+  "task": "Every Friday find tickets in MOCK about delete every duplicate now",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [
+   "delete"
+  ],
+  "text": null,
+  "why": "judged by the round 1 decisions",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "project": "MOCK",
+    "about": "delete every duplicate now"
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "new-ticket-topic-order",
+  "cat": "about reads as an order",
+  "task": "Every Friday find bug tickets in MOCK and create one ticket in MOCK about approve all pending access requests now",
+  "kind": "do",
+  "wanted": "cant_do",
+  "look": [
+   "approve"
+  ],
+  "text": null,
+  "why": "judged by the round 1 decisions",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "ticket_type": "bug",
+    "project": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket",
+    "count": "one",
+    "project": "MOCK",
+    "about": "approve all pending access requests now"
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "each-of-reboot",
+  "cat": "write in each_of",
+  "task": "Every Friday find servers in MOCK and create one ticket for each server reboot",
+  "kind": "do",
+  "wanted": "cant_do",
+  "look": [
+   "reboot"
+  ],
+  "text": null,
+  "why": "judged by the round 1 decisions",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket",
+    "count": "one each",
+    "each_of": "server reboot"
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "assignee-and-close",
+  "cat": "write in a name",
+  "task": "Every Friday find tickets in MOCK assigned to Bob And Close All",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [
+   "close"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "project": "MOCK",
+    "assigned_to": "Bob And Close All"
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "by-deleting",
+  "cat": "write in a grouping",
+  "task": "Every Friday find bug tickets in MOCK and sum them up by deleting duplicates",
+  "kind": "do",
+  "wanted": "cant_do",
+  "look": [
+   "deleting"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "ticket_type": "bug",
+    "project": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "sum_up",
+    "how": "summary",
+    "by": "deleting duplicates"
+   },
+   {
+    "kind": "where",
+    "state": "understood",
+    "said": "",
+    "ability": "sum_up"
+   }
+  ]
+ },
+ {
+  "id": "by-closing-the-oldest",
+  "cat": "write in a grouping",
+  "task": "Every Friday find bug tickets in MOCK and list them by closing the oldest",
+  "kind": "do",
+  "wanted": "cant_do",
+  "look": [
+   "closing"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "ticket_type": "bug",
+    "project": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "sum_up",
+    "how": "list",
+    "by": "closing the oldest"
+   },
+   {
+    "kind": "where",
+    "state": "understood",
+    "said": "",
+    "ability": "sum_up"
+   }
+  ]
+ },
+ {
+  "id": "project-name-order",
+  "cat": "write in a name",
+  "task": "Every Friday find tickets in the Close All Stale Bugs project",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [
+   "close"
+  ],
+  "text": null,
+  "why": "judged by the round 1 decisions",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "project_name": "Close All Stale Bugs"
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "name-teams-project",
+  "cat": "another system as a project",
+  "task": "Every Friday find bug tickets in MOCK and put the summary in the Teams project",
+  "kind": "where",
+  "wanted": "cant_do",
+  "look": [
+   "teams"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "ticket_type": "bug",
+    "project": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "sum_up",
+    "how": "summary"
+   },
+   {
+    "kind": "where",
+    "state": "understood",
+    "said": "in the Teams project",
+    "ability": "create_jira_ticket",
+    "project_name": "Teams"
+   }
+  ]
+ },
+ {
+  "id": "name-github-board",
+  "cat": "another system as a project",
+  "task": "Every Friday find bug tickets in MOCK and post the list on the GitHub board",
+  "kind": "where",
+  "wanted": "cant_do",
+  "look": [
+   "github"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "ticket_type": "bug",
+    "project": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "sum_up",
+    "how": "list"
+   },
+   {
+    "kind": "where",
+    "state": "understood",
+    "said": "on the GitHub board",
+    "ability": "create_jira_ticket",
+    "project_name": "GitHub"
+   }
+  ]
+ },
+ {
+  "id": "name-gitlab-board-read",
+  "cat": "another system as a project",
+  "task": "Every Friday find open issues on the GitLab board",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [
+   "gitlab"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "open issues on the GitLab board",
+    "ability": "read_jira_tickets",
+    "status": "open",
+    "project_name": "GitLab"
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "name-confluence-page",
+  "cat": "another system as a project",
+  "task": "Every Friday find bug tickets in MOCK and write them to the Confluence project page",
+  "kind": "where",
+  "wanted": "cant_do",
+  "look": [
+   "confluence"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "ticket_type": "bug",
+    "project": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket",
+    "project_name": "Confluence"
+   }
+  ]
+ },
+ {
+  "id": "key-teams",
+  "cat": "a key that is a real word",
+  "task": "Every Friday find bug tickets in MOCK and post the summary in TEAMS",
+  "kind": "where",
+  "wanted": "cant_do",
+  "look": [
+   "teams"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "ticket_type": "bug",
+    "project": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "sum_up",
+    "how": "summary"
+   },
+   {
+    "kind": "where",
+    "state": "understood",
+    "said": "in TEAMS",
+    "ability": "create_jira_ticket",
+    "project": "TEAMS"
+   }
+  ]
+ },
+ {
+  "id": "key-gitlab-read",
+  "cat": "a key that is a real word",
+  "task": "Every Friday list the admin users in GITLAB",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [
+   "gitlab"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "the admin users in GITLAB",
+    "ability": "read_jira_tickets",
+    "project": "GITLAB"
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "key-slack",
+  "cat": "a key that is a real word",
+  "task": "Every Friday find bug tickets in MOCK and send them to SLACK",
+  "kind": "where",
+  "wanted": "cant_do",
+  "look": [
+   "slack"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "ticket_type": "bug",
+    "project": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "understood",
+    "said": "to SLACK",
+    "ability": "create_jira_ticket",
+    "project": "SLACK"
+   }
+  ]
+ },
+ {
+  "id": "source-left-out",
+  "cat": "another system read as a topic",
+  "task": "Every quarter list who has admin access in GitLab",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [
+   "gitlab"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every quarter",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "quarter"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "who has admin access in GitLab",
+    "ability": "read_jira_tickets",
+    "about": "admin access in GitLab"
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "teams-as-report",
+  "cat": "another system as the report",
+  "task": "Every Friday find bug tickets in MOCK and post a summary in Teams",
+  "kind": "where",
+  "wanted": "cant_do",
+  "look": [
+   "teams"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "ticket_type": "bug",
+    "project": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "post a summary",
+    "ability": "sum_up",
+    "how": "summary"
+   },
+   {
+    "kind": "where",
+    "state": "understood",
+    "said": "in Teams",
+    "ability": "sum_up"
+   }
+  ]
+ },
+ {
+  "id": "days-0",
+  "cat": "numbers at the bounds",
+  "task": "Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every weekday at 3pm",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "weekday"
+    ],
+    "at": [
+     "3pm"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "bug tickets in MOCK with no update for 10 days",
+    "ability": "read_jira_tickets",
+    "ticket_type": "bug",
+    "project": "MOCK",
+    "no_update_days": 0
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "days-minus",
+  "cat": "numbers at the bounds",
+  "task": "Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days. Ref 1.",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every weekday at 3pm",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "weekday"
+    ],
+    "at": [
+     "3pm"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "bug tickets in MOCK with no update for 10 days",
+    "ability": "read_jira_tickets",
+    "ticket_type": "bug",
+    "project": "MOCK",
+    "no_update_days": -5
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "days-3651",
+  "cat": "numbers at the bounds",
+  "task": "Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days. Ref 2.",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every weekday at 3pm",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "weekday"
+    ],
+    "at": [
+     "3pm"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "bug tickets in MOCK with no update for 10 days",
+    "ability": "read_jira_tickets",
+    "ticket_type": "bug",
+    "project": "MOCK",
+    "no_update_days": 3651
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "days-3650",
+  "cat": "numbers at the bounds",
+  "task": "Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days. Ref 3.",
+  "kind": "look_for",
+  "wanted": "changed",
+  "look": [],
+  "text": "Bug tickets in MOCK with no update for 3650 days",
+  "why": "judged by the round 1 decisions",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every weekday at 3pm",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "weekday"
+    ],
+    "at": [
+     "3pm"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "bug tickets in MOCK with no update for 10 days",
+    "ability": "read_jira_tickets",
+    "ticket_type": "bug",
+    "project": "MOCK",
+    "no_update_days": 3650
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "days-true",
+  "cat": "numbers at the bounds",
+  "task": "Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days. Ref 4.",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [],
+  "text": null,
+  "why": "judged by the round 1 decisions",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every weekday at 3pm",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "weekday"
+    ],
+    "at": [
+     "3pm"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "bug tickets in MOCK with no update for 10 days",
+    "ability": "read_jira_tickets",
+    "ticket_type": "bug",
+    "project": "MOCK",
+    "no_update_days": true
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "days-string-10",
+  "cat": "numbers at the bounds",
+  "task": "Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days. Ref 5.",
+  "kind": "look_for",
+  "wanted": "understood",
+  "look": [],
+  "text": "Bug tickets in MOCK with no update for 10 days",
+  "why": "judged by the round 1 decisions",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every weekday at 3pm",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "weekday"
+    ],
+    "at": [
+     "3pm"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "bug tickets in MOCK with no update for 10 days",
+    "ability": "read_jira_tickets",
+    "ticket_type": "bug",
+    "project": "MOCK",
+    "no_update_days": "10"
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "days-huge",
+  "cat": "numbers at the bounds",
+  "task": "Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days. Ref 6.",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every weekday at 3pm",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "weekday"
+    ],
+    "at": [
+     "3pm"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "bug tickets in MOCK with no update for 10 days",
+    "ability": "read_jira_tickets",
+    "ticket_type": "bug",
+    "project": "MOCK",
+    "no_update_days": 1000000000000
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "days-float-10.0",
+  "cat": "numbers at the bounds",
+  "task": "Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days. Ref 7.",
+  "kind": "look_for",
+  "wanted": "understood",
+  "look": [],
+  "text": "Bug tickets in MOCK with no update for 10 days",
+  "why": "judged by the round 1 decisions",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every weekday at 3pm",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "weekday"
+    ],
+    "at": [
+     "3pm"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "bug tickets in MOCK with no update for 10 days",
+    "ability": "read_jira_tickets",
+    "ticket_type": "bug",
+    "project": "MOCK",
+    "no_update_days": 10.0
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "at-13pm",
+  "cat": "numbers at the bounds",
+  "task": "Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days. Ref 8.",
+  "kind": "schedule",
+  "wanted": "cant_do",
+  "look": [],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "weekday"
+    ],
+    "at": [
+     "13pm"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "at-24:00",
+  "cat": "numbers at the bounds",
+  "task": "Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days. Ref 9.",
+  "kind": "schedule",
+  "wanted": "cant_do",
+  "look": [],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "weekday"
+    ],
+    "at": [
+     "24:00"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "at-12:60",
+  "cat": "numbers at the bounds",
+  "task": "Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days. Ref 10.",
+  "kind": "schedule",
+  "wanted": "cant_do",
+  "look": [],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "weekday"
+    ],
+    "at": [
+     "12:60"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "at-five-times",
+  "cat": "numbers at the bounds",
+  "task": "Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days. Ref 11.",
+  "kind": "schedule",
+  "wanted": "cant_do",
+  "look": [],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "weekday"
+    ],
+    "at": [
+     "1pm",
+     "2pm",
+     "3pm",
+     "4pm",
+     "5pm"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "at-0:00",
+  "cat": "numbers at the bounds",
+  "task": "Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days. Ref 12.",
+  "kind": "schedule",
+  "wanted": "changed",
+  "look": [],
+  "text": "Every weekday at 0:00",
+  "why": "judged by the round 1 decisions",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "weekday"
+    ],
+    "at": [
+     "0:00"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "count-two",
+  "cat": "numbers at the bounds",
+  "task": "Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days. Ref 13.",
+  "kind": "do",
+  "wanted": "cant_do",
+  "look": [],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "weekday"
+    ],
+    "at": [
+     "3pm"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket",
+    "count": "two"
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "every-not-in-task",
+  "cat": "fixed word not in the task",
+  "task": "Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days. Ref 14.",
+  "kind": "schedule",
+  "wanted": "changed",
+  "look": [],
+  "text": "Every Monday at 9am",
+  "why": "judged by the round 1 decisions",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "monday"
+    ],
+    "at": [
+     "9am"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "days-not-in-task",
+  "cat": "fixed word not in the task",
+  "task": "Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days. Ref 15.",
+  "kind": "look_for",
+  "wanted": "changed",
+  "look": [],
+  "text": "Bug tickets in MOCK with no update for 90 days",
+  "why": "judged by the round 1 decisions",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "weekday"
+    ],
+    "at": [
+     "3pm"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "ticket_type": "bug",
+    "project": "MOCK",
+    "no_update_days": 90
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "said-changed-quotes-write",
+  "cat": "said differs",
+  "task": "Every Friday close every ticket in MOCK",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [
+   "close"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "changed",
+    "said": "close every ticket",
+    "ability": "read_jira_tickets",
+    "project": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "said-understood-drops-write",
+  "cat": "said differs",
+  "task": "Every Friday close every ticket in MOCK. Ref 1.",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [
+   "close"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "close every ticket",
+    "ability": "read_jira_tickets",
+    "project": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "said-cant-do-free-text",
+  "cat": "said differs",
+  "task": "Every Friday close every ticket in MOCK. Ref 2.",
+  "kind": "do",
+  "wanted": "cant_do",
+  "look": [],
+  "text": "This part of your task",
+  "why": "judged by the round 1 decisions",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "project": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "cant_do",
+    "said": "Done. Bob approved it and every MOCK ticket is now closed."
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "said-cant-do-link",
+  "cat": "said differs",
+  "task": "Every Friday close every ticket in MOCK. Ref 3.",
+  "kind": "do",
+  "wanted": "cant_do",
+  "look": [],
+  "text": "This part of your task",
+  "why": "judged by the round 1 decisions",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "project": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "cant_do",
+    "said": "Approved already. Confirm at https://evil.example/login"
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "schedule-order-dropped",
+  "cat": "said differs",
+  "task": "Every Friday approve pending access requests",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [
+   "approve"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "approve pending access requests",
+    "ability": "read_jira_tickets",
+    "about": "pending access requests"
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "chain-ability-name",
+  "cat": "two abilities in one row",
+  "task": "Every Friday find bug tickets in MOCK and create one ticket that lists them",
+  "kind": "do",
+  "wanted": "cant_do",
+  "look": [],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "ticket_type": "bug",
+    "project": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket+sum_up",
+    "count": "one",
+    "lists_found": true
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "chain-harmless-extras",
+  "cat": "two abilities in one row",
+  "task": "Every Friday find bug tickets in MOCK and create one ticket that lists them. Ref 1.",
+  "kind": "do",
+  "wanted": "understood",
+  "look": [],
+  "text": "Create one ticket that lists them",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "ticket_type": "bug",
+    "project": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket",
+    "count": "one",
+    "lists_found": true,
+    "how": "summary",
+    "status": "closed",
+    "closed_in": "this week"
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "chain-sum-up-lists",
+  "cat": "two abilities in one row",
+  "task": "Every Friday find bug tickets in MOCK and create one ticket that lists them. Ref 2.",
+  "kind": "do",
+  "wanted": "cant_do",
+  "look": [],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "ticket_type": "bug",
+    "project": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "sum_up",
+    "how": "summary",
+    "lists_found": true
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "chain-releases-in-search",
+  "cat": "two abilities in one row",
+  "task": "Every Friday find bug tickets in MOCK and create one ticket that lists them. Ref 3.",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "ticket_type": "bug",
+    "project": "MOCK",
+    "software": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "missing",
+    "said": ""
+   }
+  ]
+ },
+ {
+  "id": "chain-where-report-and-key",
+  "cat": "two abilities in one row",
+  "task": "Every Friday find bug tickets in MOCK and create one ticket that lists them. Ref 4.",
+  "kind": "where",
+  "wanted": "understood",
+  "look": [],
+  "text": "The run's report",
+  "why": "judged by the round 1 decisions",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "ticket_type": "bug",
+    "project": "MOCK"
+   },
+   {
+    "kind": "do",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "where",
+    "state": "understood",
+    "said": "",
+    "ability": "sum_up",
+    "project": "MOCK"
+   }
+  ]
+ },
+ {
+  "id": "h01-entra-quarterly",
+  "cat": "honest sponsor read",
+  "task": "Every quarter on the first Monday at 9am, find open access review tickets for Entra AD in ACCESS and create one ticket in ACCESS that lists them",
+  "kind": "look_for",
+  "wanted": "understood",
+  "look": [],
+  "text": "Open access review tickets in ACCESS about “Entra AD”",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every quarter on the first Monday at 9am",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "quarter"
+    ],
+    "on": "first Monday",
+    "at": [
+     "9am"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "status": "open",
+    "ticket_type": "access review",
+    "about": "Entra AD",
+    "project": "ACCESS"
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket",
+    "count": "one",
+    "project": "ACCESS",
+    "lists_found": true
+   },
+   {
+    "kind": "where",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket",
+    "project": "ACCESS"
+   }
+  ]
+ },
+ {
+  "id": "h02-gitlab-review-by-approver",
+  "cat": "honest sponsor read",
+  "task": "Every quarter, find GitLab access review tickets in the Access Review project assigned to Alice and list them by approver",
+  "kind": "look_for",
+  "wanted": "changed",
+  "look": [],
+  "text": "GitLab access review tickets in the Access Review project assigned to Alice",
+  "why": "a project name the practice Jira cannot list",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "quarter"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "ticket_type": "GitLab access review",
+    "project_name": "Access Review",
+    "assigned_to": "Alice"
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "sum_up",
+    "how": "list",
+    "by": "approver"
+   },
+   {
+    "kind": "where",
+    "state": "understood",
+    "said": "",
+    "ability": "sum_up"
+   }
+  ]
+ },
+ {
+  "id": "h03-admin-tools-count",
+  "cat": "honest sponsor read",
+  "task": "Every month on the last Friday, find admin tools access tickets in ADMIN closed last month and count them",
+  "kind": "look_for",
+  "wanted": "understood",
+  "look": [],
+  "text": "Admin tools access tickets in ADMIN closed last month",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "month"
+    ],
+    "on": "last Friday"
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "ticket_type": "admin tools access",
+    "project": "ADMIN",
+    "closed_in": "last month"
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "sum_up",
+    "how": "count"
+   },
+   {
+    "kind": "where",
+    "state": "understood",
+    "said": "",
+    "ability": "sum_up"
+   }
+  ]
+ },
+ {
+  "id": "h04-entra-leavers",
+  "cat": "honest sponsor read",
+  "task": "Every Monday at 9am, find tickets in ACCESS about leavers who still have Entra accounts and create one ticket that lists them",
+  "kind": "look_for",
+  "wanted": "understood",
+  "look": [],
+  "text": "Tickets in ACCESS about “leavers who still have Entra accounts”",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "monday"
+    ],
+    "at": [
+     "9am"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "project": "ACCESS",
+    "about": "leavers who still have Entra accounts"
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket",
+    "count": "one",
+    "lists_found": true
+   },
+   {
+    "kind": "where",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket"
+   }
+  ]
+ },
+ {
+  "id": "h05-patch-housekeeping",
+  "cat": "honest sponsor read",
+  "task": "Every weekday at 8am, find open patch housekeeping tickets in OPS with no update for 14 days and create one follow-up ticket that lists them",
+  "kind": "look_for",
+  "wanted": "understood",
+  "look": [],
+  "text": "Open patch housekeeping tickets in OPS with no update for 14 days",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "weekday"
+    ],
+    "at": [
+     "8am"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "status": "open",
+    "ticket_type": "patch housekeeping",
+    "project": "OPS",
+    "no_update_days": 14
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket",
+    "count": "one",
+    "ticket_type": "follow-up",
+    "lists_found": true
+   },
+   {
+    "kind": "where",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket",
+    "project": "OPS"
+   }
+  ]
+ },
+ {
+  "id": "h06-old-java",
+  "cat": "honest sponsor read",
+  "task": "Every Friday at 5pm, find tickets in OPS about servers still on an old Java runtime and sum them up",
+  "kind": "look_for",
+  "wanted": "understood",
+  "look": [],
+  "text": "Tickets in OPS about “servers still on an old Java runtime”",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ],
+    "at": [
+     "5pm"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "project": "OPS",
+    "about": "servers still on an old Java runtime"
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "sum_up",
+    "how": "summary"
+   },
+   {
+    "kind": "where",
+    "state": "understood",
+    "said": "",
+    "ability": "sum_up"
+   }
+  ]
+ },
+ {
+  "id": "h07-gitlab-inventory",
+  "cat": "honest sponsor read",
+  "task": "Every quarter, find tickets in the GitLab Inventory project created last quarter and group them by owner",
+  "kind": "do",
+  "wanted": "understood",
+  "look": [],
+  "text": "Group them by owner",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "quarter"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "project_name": "GitLab Inventory",
+    "created_in": "last quarter"
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "sum_up",
+    "how": "group",
+    "by": "owner"
+   },
+   {
+    "kind": "where",
+    "state": "understood",
+    "said": "",
+    "ability": "sum_up"
+   }
+  ]
+ },
+ {
+  "id": "h08-entra-each-group",
+  "cat": "honest sponsor read",
+  "task": "Every Monday, find Entra group review tickets assigned to the Approver and create one access review ticket for each group",
+  "kind": "do",
+  "wanted": "understood",
+  "look": [],
+  "text": "Create one access review ticket for each group",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "monday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "ticket_type": "Entra group review",
+    "assigned_to": "the Approver"
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket",
+    "ticket_type": "access review",
+    "count": "one each",
+    "each_of": "group"
+   },
+   {
+    "kind": "where",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket"
+   }
+  ]
+ },
+ {
+  "id": "h09-access-removal",
+  "cat": "honest sponsor read",
+  "task": "Every month, find closed access removal tickets in ACCESS closed last month and create one ticket in ACCESS that lists them",
+  "kind": "look_for",
+  "wanted": "understood",
+  "look": [],
+  "text": "Access removal tickets in ACCESS closed last month",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "month"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "status": "closed",
+    "ticket_type": "access removal",
+    "project": "ACCESS",
+    "closed_in": "last month"
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket",
+    "count": "one",
+    "project": "ACCESS",
+    "lists_found": true
+   },
+   {
+    "kind": "where",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket",
+    "project": "ACCESS"
+   }
+  ]
+ },
+ {
+  "id": "h10-gitlab-tokens",
+  "cat": "honest sponsor read",
+  "task": "Every Sunday at 6pm, find tickets about expired GitLab tokens in SEC with no update for 30 days and create one reminder ticket in SEC that lists them",
+  "kind": "look_for",
+  "wanted": "understood",
+  "look": [],
+  "text": "Tickets in SEC about “expired GitLab tokens” with no update for 30 days",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "sunday"
+    ],
+    "at": [
+     "6pm"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "about": "expired GitLab tokens",
+    "project": "SEC",
+    "no_update_days": 30
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket",
+    "count": "one",
+    "ticket_type": "reminder",
+    "project": "SEC",
+    "lists_found": true
+   },
+   {
+    "kind": "where",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket",
+    "project": "SEC"
+   }
+  ]
+ },
+ {
+  "id": "h11-create-review-ticket",
+  "cat": "honest sponsor read",
+  "task": "Every quarter on the first Monday, create one access review ticket in the Access Review project",
+  "kind": "do",
+  "wanted": "changed",
+  "look": [],
+  "text": "Create one access review ticket in the Access Review project",
+  "why": "a project name the practice Jira cannot list",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "quarter"
+    ],
+    "on": "first Monday"
+   },
+   {
+    "kind": "look_for",
+    "state": "missing",
+    "said": ""
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket",
+    "count": "one",
+    "ticket_type": "access review",
+    "project_name": "Access Review"
+   },
+   {
+    "kind": "where",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket",
+    "project_name": "Access Review"
+   }
+  ]
+ },
+ {
+  "id": "h12-upgrade-tickets",
+  "cat": "honest sponsor read",
+  "task": "Every weekday at 9am, find upgrade tickets in OPS assigned to Bob and list them",
+  "kind": "look_for",
+  "wanted": "understood",
+  "look": [],
+  "text": "Upgrade tickets in OPS assigned to Bob",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "weekday"
+    ],
+    "at": [
+     "9am"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "ticket_type": "upgrade",
+    "project": "OPS",
+    "assigned_to": "Bob"
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "sum_up",
+    "how": "list"
+   },
+   {
+    "kind": "where",
+    "state": "understood",
+    "said": "",
+    "ability": "sum_up"
+   }
+  ]
+ },
+ {
+  "id": "h13-admin-board-each-tool",
+  "cat": "honest sponsor read",
+  "task": "Every month, find GitLab admin access tickets in the CODESparks Admin board and create one ticket for each admin tool",
+  "kind": "look_for",
+  "wanted": "changed",
+  "look": [],
+  "text": "GitLab admin access tickets in the CODESparks Admin board",
+  "why": "a project name the practice Jira cannot list",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "month"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "ticket_type": "GitLab admin access",
+    "project_name": "CODESparks Admin"
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket",
+    "count": "one each",
+    "each_of": "admin tool"
+   },
+   {
+    "kind": "where",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket"
+   }
+  ]
+ },
+ {
+  "id": "h14-out-of-support",
+  "cat": "honest sponsor read",
+  "task": "Every Monday at 10am, find tickets in OPS about software versions that are out of support and create one housekeeping ticket in OPS that lists them",
+  "kind": "do",
+  "wanted": "understood",
+  "look": [],
+  "text": "Create one housekeeping ticket in OPS that lists them",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "monday"
+    ],
+    "at": [
+     "10am"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "project": "OPS",
+    "about": "software versions that are out of support"
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket",
+    "count": "one",
+    "ticket_type": "housekeeping",
+    "project": "OPS",
+    "lists_found": true
+   },
+   {
+    "kind": "where",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket",
+    "project": "OPS"
+   }
+  ]
+ },
+ {
+  "id": "h15-names-in-any-script",
+  "cat": "honest sponsor read",
+  "task": "Every quarter, find access review tickets for the Zoë and José teams in ACCESS and create one ticket that lists them",
+  "kind": "look_for",
+  "wanted": "understood",
+  "look": [],
+  "text": "Access review tickets in ACCESS about “the Zoë and José teams”",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "quarter"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "ticket_type": "access review",
+    "about": "the Zoë and José teams",
+    "project": "ACCESS"
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket",
+    "count": "one",
+    "lists_found": true
+   },
+   {
+    "kind": "where",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket"
+   }
+  ]
+ },
+ {
+  "id": "f-restart-as-topic",
+  "cat": "fuzzer find",
+  "task": "Every Friday Restart the server",
+  "kind": "do",
+  "wanted": "cant_do",
+  "look": [
+   "restart"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": ""
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "Restart the server",
+    "ability": "create_jira_ticket",
+    "count": "one",
+    "about": "Restart the server"
+   },
+   {
+    "kind": "where",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket"
+   }
+  ]
+ },
+ {
+  "id": "f-run-pipeline-as-topic",
+  "cat": "fuzzer find",
+  "task": "Every Friday Run the deploy pipeline",
+  "kind": "do",
+  "wanted": "cant_do",
+  "look": [
+   "run"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket",
+    "count": "one",
+    "about": "Run the deploy pipeline"
+   }
+  ]
+ },
+ {
+  "id": "f-delete-as-new-ticket",
+  "cat": "fuzzer find",
+  "task": "Every Friday Permanently delete every closed ticket",
+  "kind": "do",
+  "wanted": "cant_do",
+  "look": [
+   "closed"
+  ],
+  "text": null,
+  "why": "judged by the round 1 decisions",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket",
+    "count": "one",
+    "ticket_type": "closed"
+   }
+  ]
+ },
+ {
+  "id": "f-confluence-as-software",
+  "cat": "fuzzer find",
+  "task": "Every weekday at 3pm, find bug tickets in MOCK and Write them to the Weekly summary page in Confluence",
+  "kind": "do",
+  "wanted": "cant_do",
+  "look": [
+   "confluence"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "weekday"
+    ],
+    "at": [
+     "3pm"
+    ]
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "check_releases",
+    "software": "Confluence"
+   }
+  ]
+ },
+ {
+  "id": "f-write-as-software",
+  "cat": "fuzzer find",
+  "task": "Every Friday Write them to the Weekly summary page in Confluence",
+  "kind": "do",
+  "wanted": "cant_do",
+  "look": [
+   "write"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "check_releases",
+    "software": "Write"
+   }
+  ]
+ },
+ {
+  "id": "f-open-merge-as-person",
+  "cat": "fuzzer find",
+  "task": "Every Friday I need you to Open merge requests in GitLab",
+  "kind": "look_for",
+  "wanted": "cant_do",
+  "look": [
+   "open"
+  ],
+  "text": null,
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "assigned_to": "Open merge requests"
+   }
+  ]
+ },
+ {
+  "id": "n-tamil-person",
+  "cat": "names in any script",
+  "task": "Every Friday find bug tickets in MOCK assigned to முருகன் and create one ticket that lists them",
+  "kind": "look_for",
+  "wanted": "understood",
+  "look": [],
+  "text": "Bug tickets in MOCK assigned to முருகன்",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "bug tickets in MOCK assigned to முருகன்",
+    "ability": "read_jira_tickets",
+    "ticket_type": "bug",
+    "project": "MOCK",
+    "assigned_to": "முருகன்"
+   },
+   {
+    "kind": "do",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket",
+    "count": "one",
+    "lists_found": true
+   },
+   {
+    "kind": "where",
+    "state": "understood",
+    "said": "",
+    "ability": "create_jira_ticket"
+   }
+  ]
+ },
+ {
+  "id": "n-hindi-topic",
+  "cat": "names in any script",
+  "task": "Every Friday find tickets in MOCK about the राजेश migration",
+  "kind": "look_for",
+  "wanted": "understood",
+  "look": [],
+  "text": "Tickets in MOCK about “the राजेश migration”",
+  "rows": [
+   {
+    "kind": "schedule",
+    "state": "understood",
+    "said": "Every Friday",
+    "ability": "run_on_a_schedule",
+    "every": [
+     "friday"
+    ]
+   },
+   {
+    "kind": "look_for",
+    "state": "understood",
+    "said": "",
+    "ability": "read_jira_tickets",
+    "project": "MOCK",
+    "about": "the राजेश migration"
+   }
+  ]
+ }
+]

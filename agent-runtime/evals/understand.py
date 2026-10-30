@@ -20,6 +20,7 @@ _TOOL_OFFER = re.compile(
 
 class UnderstandCase(Case):
     task: str
+    jira_projects: list[str] = ["MOCK"]
     watchlist: list[str] = []
     states: dict[RowKind, list[RowState]] = {}
     understood: list[str] = []
@@ -80,7 +81,8 @@ def _rows(case: UnderstandCase, answer: UnderstandAnswer, shown: Understood) -> 
             [
                 r.said or f"a {r.kind} row"
                 for r in answer.rows
-                if r.state in ACCEPTED and written(r, case.task) is None
+                if r.state in ACCEPTED
+                and written(r, case.task, projects=case.jira_projects) is None
             ],
         ),
         check("no_invented_keys", sorted(shown_keys - task_keys)),
@@ -99,7 +101,7 @@ def score(case: UnderstandCase, answer: Answer) -> list[Check]:
     value = answer.value
     if not isinstance(value, UnderstandAnswer):
         return [check("answered", ["no structured answer"])]
-    shown = understood_of(value, case.task)
+    shown = understood_of(value, case.task, case.jira_projects)
     if shown is None:
         return [check("answered", []), check("right_answer", ["the answer does not hold together"])]
     texts = (

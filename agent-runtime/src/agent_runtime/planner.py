@@ -1,12 +1,22 @@
 import logging
 import re
+from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import date
 from typing import Final, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from agent_runtime.abilities import RowAnswer, abilities_text, refusal, said_in, visible, written
+from agent_runtime.abilities import (
+    Reading,
+    RowAnswer,
+    abilities_text,
+    own_words,
+    reading,
+    refusal,
+    said_in,
+    visible,
+)
 from agent_runtime.card_runner import CardRunner, agent_ref, one_line
 from agent_runtime.contract import (
     AgentAddressee,
@@ -297,6 +307,8 @@ MISSING: Final[dict[RowKind, str]] = {
     "where": "You didn't say where the result goes.",
 }
 READ_IN: Final = "I read this into your words. Please check it."
+CHECK: Final = "Please check how I read it."
+OWN_WORDS_UNKNOWN: Final = "This part of your task"
 QUOTES: Final = "\"'“”‘’"
 RELEASE_ROOTS: Final = {
     **dict.fromkeys(("version", "versions"), "version"),
@@ -372,28 +384,41 @@ def _missing(kind: RowKind) -> UnderstoodRow:
     return UnderstoodRow(kind=kind, text="", state="missing", note=MISSING[kind])
 
 
-def _changed(answer: RowAnswer, task: str) -> str:
-    said = said_in(answer.said, task)
-    return READ_IN if said is None else f"You said “{said}”. Please check how I read it."
+def _note(answer: RowAnswer, task: str, found: Reading) -> str | None:
+    read_in = answer.state == "changed" or not found.fixed_values_in_task
+    if not read_in and not found.unseen:
+        return None
+    said = said_in(answer.said, task) if read_in else None
+    sentences = ([f"You said “{said}”."] if said else []) + list(found.unseen)
+    return " ".join([*sentences, CHECK]) if sentences else READ_IN
 
 
-def _row(answer: RowAnswer, task: str) -> UnderstoodRow:
+def _row(answer: RowAnswer, task: str, projects: Collection[str] | None) -> UnderstoodRow:
     if answer.state == "missing":
         return _missing(answer.kind)
-    text = None if answer.state == "cant_do" else written(answer, task)
-    if text is None:
-        said = _plain(answer.said, TEXT_LIMIT)
+    found = None if answer.state == "cant_do" else reading(answer, task, projects=projects)
+    if found is None:
+        words = own_words(answer, task)
+        text = OWN_WORDS_UNKNOWN if words is None else words[:1].upper() + words[1:]
         return UnderstoodRow(
-            kind=answer.kind, text=said, state="cant_do", note=refusal(answer, task)
+            kind=answer.kind,
+            text=_plain(text, TEXT_LIMIT),
+            state="cant_do",
+            note=refusal(answer, task),
         )
-    note = None if answer.state == "understood" else _changed(answer, task)
+    note = _note(answer, task, found)
     return UnderstoodRow(
-        kind=answer.kind, text=_plain(text, TEXT_LIMIT), state=answer.state, note=note
+        kind=answer.kind,
+        text=_plain(found.text, TEXT_LIMIT),
+        state="understood" if note is None else "changed",
+        note=note,
     )
 
 
-def _rows(answers: list[RowAnswer], task: str) -> list[UnderstoodRow]:
-    rows = [_row(answer, task) for answer in answers]
+def _rows(
+    answers: list[RowAnswer], task: str, projects: Collection[str] | None
+) -> list[UnderstoodRow]:
+    rows = [_row(answer, task, projects) for answer in answers]
     groups = [[row for row in rows if row.kind == kind] or [_missing(kind)] for kind in ORDER]
     groups[0] = groups[0][:1]
     firsts = [group[0] for group in groups]
@@ -421,13 +446,17 @@ def _task_form_of(task: str, said: str | None) -> str | None:
     return next((w for w in forms if w.casefold() == wanted), forms[0])
 
 
-def understood_of(answer: UnderstandAnswer, task: str) -> Understood | BelongsOnWatchlist | None:
+def understood_of(
+    answer: UnderstandAnswer, task: str, projects: Collection[str] | None = None
+) -> Understood | BelongsOnWatchlist | None:
     """What the Operator is shown. Every part has a row, and a part the model left out is
     missing. An understood or changed row's text is written by the platform from the ability the
     model named, so a part no ability does, or whose parameters do not check out, is can't do,
-    and shows the model's copy of the task's words. None when the answer does not hold together:
-    no rows, or a watchlist word that is not in the task or not one of the words the prompt
-    names."""
+    and shows the task's own words for it. A row is understood only when its fixed values (days,
+    times, numbers of days, periods, how to sum up, and "lists them") are the task's own and its
+    Jira project is one of `projects`, the keys the platform can see; otherwise it is changed.
+    None when the answer does not hold together: no rows, or a watchlist word that is not in the
+    task or not one of the words the prompt names."""
     if answer.belongs_on_watchlist:
         word = _task_form_of(task, answer.watchlist_word)
         if word is None:
@@ -435,7 +464,7 @@ def understood_of(answer: UnderstandAnswer, task: str) -> Understood | BelongsOn
         return BelongsOnWatchlist(word=word, software=_whole_word_of(task, answer.software))
     if not answer.rows:
         return None
-    return Understood(rows=_rows(answer.rows, task))
+    return Understood(rows=_rows(answer.rows, task, projects))
 
 
 def understand_task(request: UnderstandRequest, chat_for: ChatFor) -> UnderstandResult:
@@ -450,7 +479,7 @@ def understand_task(request: UnderstandRequest, chat_for: ChatFor) -> Understand
     )
     if isinstance(answer, ModelProblem):
         return answer
-    result = understood_of(answer, request.task)
+    result = understood_of(answer, request.task, request.jira_projects)
     if result is None:
         log.warning("UnderstandAnswer: no rows, or a watchlist word the task or prompt lacks")
         return UNUSABLE
