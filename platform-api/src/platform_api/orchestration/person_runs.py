@@ -1,22 +1,15 @@
-"""The runs one person has to act on or is waiting on, for Home. The approval rules decide who
-may say yes, with the same dry run as the approval page, so Home never offers what the page
-would refuse."""
-
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal, Protocol
 
-from platform_api.orchestration import approvals
 from platform_api.orchestration.approvals import (
     ApprovalRequest,
     Decision,
     Open,
-    Recorded,
     Refusal,
-    Refused,
-    Verdict,
     approval_status,
+    why_not,
 )
 from platform_api.orchestration.runs import AwaitingApproval, Failed
 from platform_api.orchestration.store import RunRecord
@@ -46,8 +39,6 @@ class RunFacts:
 
 @dataclass(frozen=True)
 class Ask:
-    """A run waiting for a yes that this person may give."""
-
     run: RunFacts
     approval_id: ApprovalId
     step: int
@@ -62,8 +53,6 @@ type Because = Literal["started", "retried", "owns", "decided_earlier"]
 
 @dataclass(frozen=True)
 class Waiting:
-    """A run waiting for someone else's yes: the person is a party to it, or decided a step."""
-
     run: RunFacts
     step: int
     steps: int
@@ -88,8 +77,6 @@ class PersonRuns:
 
 
 class OpenRun(Protocol):
-    """A run waiting for a yes, or the newest run of its workflow and stopped."""
-
     @property
     def record(self) -> RunRecord: ...
 
@@ -143,10 +130,8 @@ def _waiting_or_ask(run: OpenRun, viewer: Principal) -> Ask | Waiting | None:
         return None
     step = status.next_step
     steps = len(request.policy.steps)
-    dry_run = approvals.decide(
-        request, run.decisions, viewer, step, Verdict.APPROVE, request.digest, datetime.min
-    )
-    if isinstance(dry_run, Recorded):
+    reason = why_not(request, run.decisions, viewer)
+    if reason is None:
         return Ask(
             run=_facts(run.record),
             approval_id=request.id,
@@ -156,8 +141,7 @@ def _waiting_or_ask(run: OpenRun, viewer: Principal) -> Ask | Waiting | None:
             changes=len(proposal.actions),
             first_changes=_changes(proposal),
         )
-    decided_a_step = isinstance(dry_run, Refused) and dry_run.reason is Refusal.DECIDED_EARLIER_STEP
-    if viewer.user_id in request.parties or decided_a_step:
+    if viewer.user_id in request.parties or reason is Refusal.DECIDED_EARLIER_STEP:
         return Waiting(_facts(run.record), step, steps, _because(run.record, viewer.user_id))
     return None
 
@@ -177,9 +161,6 @@ def _stopped(record: RunRecord, state: Failed, viewer: Principal) -> Stopped | N
 
 
 def runs_of(runs: Iterable[OpenRun], viewer: Principal) -> PersonRuns:
-    """Sorts the open runs, newest first as given, into what the viewer may decide, what waits
-    on someone else, and their stopped runs. Only an Operator can retry, so only an Operator
-    who started, owns or retried a stopped run sees it."""
     asks: list[Ask] = []
     waiting: list[Waiting] = []
     stopped: list[Stopped] = []

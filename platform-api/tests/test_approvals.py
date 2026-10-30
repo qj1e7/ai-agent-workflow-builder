@@ -21,6 +21,7 @@ from platform_api.orchestration.approvals import (
     Verdict,
     approval_status,
     decide,
+    why_not,
 )
 from platform_api.shared import ApprovalId, Digest, Principal, ProposalId, Role, RunId, UserId
 
@@ -314,6 +315,75 @@ def approver(user: UserId) -> Principal:
 )
 def test_decide(policy, decisions, principal, step, verdict, seen, expected):
     assert decide(request(policy), decisions, principal, step, verdict, seen, NOW) == expected
+
+
+DAVE = UserId("dave")
+
+
+@pytest.mark.parametrize(
+    ("policy", "decisions", "principal", "expected"),
+    [
+        pytest.param(ONE_STEP, (), approver(BOB), None, id="an approver who is no party"),
+        pytest.param(ONE_STEP, (), approver(ALICE), Refusal.OWN_WORK, id="a party to the run"),
+        pytest.param(
+            ONE_STEP,
+            (),
+            Principal(BOB, frozenset({Role.OPERATOR}), "Bob"),
+            Refusal.NOT_AN_APPROVER,
+            id="an Operator who is not an Approver",
+        ),
+        pytest.param(
+            ONE_STEP, (decision(0, BOB),), approver(CAROL), Refusal.NOT_OPEN, id="decided"
+        ),
+        pytest.param(
+            ONE_STEP, (STALE,), approver(CAROL), Refusal.NOT_OPEN, id="inconsistent records"
+        ),
+        pytest.param(
+            TWO_STEPS,
+            (decision(0, BOB),),
+            approver(BOB),
+            Refusal.DECIDED_EARLIER_STEP,
+            id="the first Approver at step 2",
+        ),
+        pytest.param(
+            TWO_STEPS, (decision(0, BOB),), approver(CAROL), None, id="the named second Approver"
+        ),
+        pytest.param(
+            TWO_STEPS,
+            (decision(0, BOB),),
+            approver(DAVE),
+            Refusal.NOT_ELIGIBLE,
+            id="an Approver not named for step 2",
+        ),
+    ],
+)
+def test_why_not_says_why_a_person_may_not_decide_the_open_step(
+    policy: ApprovalPolicy,
+    decisions: tuple[Decision, ...],
+    principal: Principal,
+    expected: Refusal | None,
+):
+    assert why_not(request(policy), decisions, principal) == expected
+
+
+def test_why_not_is_none_exactly_when_a_yes_on_the_open_step_would_be_recorded():
+    for decisions in [(), (decision(0, BOB),)]:
+        for who in (ALICE, BOB, CAROL, DAVE):
+            principal = approver(who)
+            status = approval_status(request(TWO_STEPS), decisions)
+            assert isinstance(status, Open)
+            outcome = decide(
+                request(TWO_STEPS),
+                decisions,
+                principal,
+                status.next_step,
+                Verdict.APPROVE,
+                DIGEST,
+                NOW,
+            )
+            assert (why_not(request(TWO_STEPS), decisions, principal) is None) == isinstance(
+                outcome, Recorded
+            )
 
 
 def test_decide_stamps_the_time_it_was_given():

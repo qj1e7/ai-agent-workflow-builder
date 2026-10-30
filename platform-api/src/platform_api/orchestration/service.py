@@ -738,23 +738,9 @@ class Orchestrator:
             proposal = await self._store.load_proposal(uow, request.proposal_id)
             assert proposal is not None
             decisions = await self._store.load_decisions(uow, approval_id)
-        status = approval_status(request, decisions)
-        why_not: Refusal | None = None
-        if isinstance(status, Open):
-            dry_run = approvals.decide(
-                request,
-                decisions,
-                principal,
-                status.next_step,
-                Verdict.APPROVE,
-                request.digest,
-                datetime.min,
-            )
-            if isinstance(dry_run, Refused):
-                why_not = dry_run.reason
-        else:
-            why_not = Refusal.NOT_OPEN
-        return ApprovalDetail(request, proposal, decisions, why_not)
+        return ApprovalDetail(
+            request, proposal, decisions, approvals.why_not(request, decisions, principal)
+        )
 
     async def decide(
         self,

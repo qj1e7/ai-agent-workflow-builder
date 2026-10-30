@@ -208,7 +208,6 @@ class Store:
         return [_record(row) for row in rows]
 
     async def open_runs(self, uow: UnitOfWork) -> list[RunRecord]:
-        """Every run waiting for a yes, and each workflow's newest run when it has stopped."""
         rows = await (
             await uow.conn.execute(
                 f"SELECT {RUN_COLUMNS} FROM orchestration.runs r "
