@@ -1,8 +1,8 @@
 # Set up Entra ID sign-in
 
-This guide is for the person who holds admin rights in the Entra tenant. When you finish, people sign in to the Portal with their work account, and platform-api knows who is an Operator and who is an Approver. [ADR 0018](../adr/0018-sign-in-with-openid-connect.md) explains the design.
+This guide is for the person who holds admin rights in the Entra tenant. When you finish, people sign in to the Portal with their work account. Entra only signs people in. Who is an Operator and who is an Approver is kept in the platform's own People list, which Operators manage in the Portal, and the first deploy names the first people through `FIRST_OPERATOR` and `FIRST_APPROVERS`. [ADR 0018](../adr/0018-sign-in-with-openid-connect.md) explains the sign-in and [ADR 0029](../adr/0029-entra-id-signs-people-in-and-the-platform-keeps-their-roles.md) and [ADR 0030](../adr/0030-operators-look-after-setup-and-the-first-deploy-names-the-first-people.md) explain the roles. Both role ADRs are still proposed.
 
-You register two apps. One is for platform-api, which owns the roles. One is for the Portal, which signs people in. Keep them separate: platform-api does not check the kind of token it gets, and two registrations keep the Portal's ID token from ever passing as an access token for platform-api. In this guide the Portal's https address is `https://<portal-host>`. When you deploy to Azure, Azure picks that address as the first deploy creates the environment, and the deploy prints it. So for a first Azure deploy, register both apps, leave out the Portal's redirect URIs, and add them once the deploy has printed the address. [infra/README.md](../../infra/README.md#one-time-human-steps-before-the-first-deploy) lists that order.
+You register two apps. One is for platform-api, which the tokens are for. One is for the Portal, which signs people in. Keep them separate: platform-api does not check the kind of token it gets, and two registrations keep the Portal's ID token from ever passing as an access token for platform-api. In this guide the Portal's https address is `https://<portal-host>`. When you deploy to Azure, Azure picks that address as the first deploy creates the environment, and the deploy prints it. So for a first Azure deploy, register both apps, leave out the Portal's redirect URIs, and add them once the deploy has printed the address. [infra/README.md](../../infra/README.md#one-time-human-steps-before-the-first-deploy) lists that order.
 
 ## Register the app for platform-api
 
@@ -11,20 +11,18 @@ You register two apps. One is for platform-api, which owns the roles. One is for
 3. Copy the **Application (client) ID** and the **Directory (tenant) ID** from the overview page.
 4. Open **Manifest**. Set `requestedAccessTokenVersion` (under `api`) to `2`, then save. If you skip this step, tokens carry the old issuer `https://sts.windows.net/<tenant-id>/` and platform-api refuses every one of them.
 5. Open **Expose an API**. Set the **Application ID URI** to the suggested `api://<api-client-id>`. Add a scope named `access_as_user`, with **Admins and users** able to consent, and save it.
-6. Open **App roles** and create two roles. The values must match exactly, including the capital letter.
 
-   | Display name | Value | Allowed member types |
-   |---|---|---|
-   | Operator | `Operator` | Users/Groups |
-   | Approver | `Approver` | Users/Groups |
+## Limit who can sign in
 
-## Assign people
+platform-api adds nobody to the People list by itself: a person who signs in but is not on the list sees "Ask an Operator to add you", and an Operator adds them by their work email. Still, limit who can get a token at all, so a user name that is later given to someone else can never claim a record nobody has used yet.
 
 1. Open **Enterprise applications** and select the platform-api app.
-2. In **Properties**, set **Assignment required** to **Yes**. Then only assigned people can get a token for platform-api.
-3. In **Users and groups**, add one assignment for each person and role. A person who is both an Operator and an Approver needs two assignments.
+2. In **Properties**, set **Assignment required** to **Yes**.
+3. In **Users and groups**, assign one group that holds the CODESparks staff. Assigning a group needs Entra ID P1 or P2. Without it, assign each person.
 
-A role change reaches the platform when the person's current token expires, so after at most about 90 minutes.
+Nothing in Entra says who is an Operator or an Approver. A role change in the Portal takes effect on the person's next request.
+
+One trust assumption remains. An Operator adds a person by their work email, and platform-api matches that email to the token's user name (`preferred_username`, or `upn` in v1 tokens) on the person's first sign-in only. A tenant admin can rename a user before that first sign-in, and a renamed user could then claim a record meant for someone else. After the first sign-in only the account's object id counts, so a later rename changes nothing. platform-api refuses an issuer that serves every tenant (`common`, `organizations`, `consumers`), and a token whose `tid` names another tenant than the issuer. Keep the tenant's admins few, and ask people to sign in soon after they are added.
 
 ## Register the app for the Portal
 
@@ -48,6 +46,10 @@ The Portal app has no client secret. It uses PKCE, which needs no secret.
 | `OIDC_AUTHORITY` | Portal | the same value as `OIDC_ISSUER` |
 | `OIDC_CLIENT_ID` | Portal | the Portal app's Application (client) ID |
 | `OIDC_SCOPE` | Portal | `openid profile offline_access api://<api-client-id>/access_as_user` |
+| `FIRST_OPERATOR` | platform-api | the work email of the first Operator |
+| `FIRST_APPROVERS` | platform-api | the work emails of the first two Approvers, separated by a comma. They must be two different people. The first Operator may be one of them |
+
+`FIRST_OPERATOR` and `FIRST_APPROVERS` are read only while the People list is empty. After that platform-api ignores them, so a later deploy cannot hand out roles. If both are unset on an empty list, platform-api starts and logs a warning, and nobody can sign in until they are set.
 
 `OIDC_JWKS_URL` is optional. Leave it unset, and platform-api reads the key address from the issuer's discovery document.
 
@@ -70,5 +72,6 @@ None of these values is a secret. They can live in plain Terraform variables, no
 ## Check the setup
 
 1. Open `https://login.microsoftonline.com/<tenant-id>/v2.0/.well-known/openid-configuration` in a browser. Its `issuer` must equal `OIDC_ISSUER` exactly.
-2. Open the Portal as an assigned person. You should go to the Microsoft sign-in page and come back signed in, with your name and roles in the header.
-3. If the Portal keeps asking you to sign in again, the platform-api log names the reason it refused the token. The usual causes are a missing step 4 in the platform-api registration (the issuer is wrong), an `OIDC_AUDIENCE` set to the `api://` URI instead of the client ID, or a person with no assignment.
+2. Open the Portal as one of the people named in `FIRST_OPERATOR` or `FIRST_APPROVERS`. You should go to the Microsoft sign-in page and come back signed in, with your name and roles in the header. platform-api matched your token's user name to the email in the People list on this first sign-in, and from now on matches your account's object id alone.
+3. Open the Portal as an assigned person who is not on the list. You should see "Ask an Operator to add you". An Operator adds them under Settings, People and roles.
+4. If the Portal keeps asking you to sign in again, the platform-api log names the reason it refused the token. The usual causes are a missing step 4 in the platform-api registration (the issuer is wrong), an `OIDC_AUDIENCE` set to the `api://` URI instead of the client ID, or a person with no assignment.

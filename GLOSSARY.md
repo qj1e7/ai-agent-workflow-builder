@@ -167,7 +167,11 @@ _Avoid_: Approval (that is for a run's proposal), sign-off
 ### Roles
 
 **Operator**:
-A support staff member who describes tasks and starts runs.
+A support staff member who describes tasks and starts runs, and looks after Settings: the AI model, and the People list. An Operator adds people, makes someone an Operator or stops them being one at once, and asks for a new Approver. Nobody can remove their own Operator role.
 
 **Approver**:
-A person who approves write actions. An Approver can never approve their own work.
+A person who approves write actions, and who confirms a new Approver and a new AI model address. An Approver can never approve their own work, and never confirms a change they asked for or that is about them. At least two people are Approvers.
+
+**People list**:
+The platform's own record of who may use it and which roles they hold. Sign-in only says who someone is; the People list gives them their roles. Someone who signs in but is not on it is told to ask an Operator.
+_Avoid_: Users, accounts, app roles

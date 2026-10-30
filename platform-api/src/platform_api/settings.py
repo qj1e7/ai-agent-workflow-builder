@@ -26,6 +26,14 @@ class DatabaseUrls:
 
 
 @dataclass(frozen=True)
+class FirstPeople:
+    """The first deploy's people (ADR 0030): applied only while the People list is empty."""
+
+    operator: str
+    approvers: tuple[str, str]
+
+
+@dataclass(frozen=True)
 class Settings:
     auth: AuthConfig
     public_base_url: str
@@ -38,6 +46,7 @@ class Settings:
     callback_signing_key: str
     teams_channel: str
     settings_encryption_key: str | None = None
+    first_people: FirstPeople | None = None
 
 
 def _required(env: Mapping[str, str], name: str) -> str:
@@ -47,10 +56,33 @@ def _required(env: Mapping[str, str], name: str) -> str:
     return value
 
 
+def first_people_from_env(env: Mapping[str, str]) -> FirstPeople | None:
+    operator = env.get("FIRST_OPERATOR", "").strip()
+    approvers = [a.strip() for a in env.get("FIRST_APPROVERS", "").split(",") if a.strip()]
+    if not operator and not approvers:
+        return None
+    if not operator or not approvers:
+        raise ConfigError(
+            "FIRST_OPERATOR and FIRST_APPROVERS go together: one email, and two emails "
+            "separated by a comma."
+        )
+    if len(approvers) != 2 or approvers[0].lower() == approvers[1].lower():
+        raise ConfigError(
+            "FIRST_APPROVERS must name two different people, separated by a comma, so nobody "
+            "has to approve their own work."
+        )
+    for email in (operator, *approvers):
+        local, at, domain = email.partition("@")
+        if not (at and local and "." in domain):
+            raise ConfigError(f"{email!r} in FIRST_OPERATOR or FIRST_APPROVERS is not an email.")
+    return FirstPeople(operator, (approvers[0], approvers[1]))
+
+
 def settings_from_env(env: Mapping[str, str]) -> Settings:
     auth = auth_config(env)
     return Settings(
         auth=auth,
+        first_people=first_people_from_env(env),
         public_base_url=auth.public_base_url.rstrip("/"),
         database=DatabaseUrls(
             builder=_required(env, "DATABASE_URL_BUILDER"),

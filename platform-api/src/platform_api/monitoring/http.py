@@ -1,12 +1,13 @@
 import asyncio
-from collections.abc import AsyncIterator, Sequence
+import time
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import suppress
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
 
-from platform_api.auth import SIGNED_IN, CurrentPrincipal
+from platform_api.auth import SIGNED_IN, CurrentPrincipal, PeopleDirectory
 from platform_api.monitoring.agent_events import AgentEventPost
 from platform_api.monitoring.callbacks import verify_callback
 from platform_api.monitoring.events import ActivityEvent, RunFailed, RunFailedData, RunRetried
@@ -17,6 +18,7 @@ from platform_api.shared import RunId, TaskId
 from platform_api.wire import WireModel, error_response
 
 KEEP_ALIVE_SECONDS = 15.0
+PERSON_RECHECK_SECONDS = 60.0
 
 
 class EventPage(WireModel):
@@ -41,9 +43,19 @@ def _keep_alive_seconds(request: Request) -> float:
     return getattr(request.app.state, "sse_keepalive_seconds", KEEP_ALIVE_SECONDS)
 
 
+def _recheck_seconds(request: Request) -> float:
+    return getattr(request.app.state, "person_recheck_seconds", PERSON_RECHECK_SECONDS)
+
+
+def _people(request: Request) -> PeopleDirectory:
+    return request.app.state.people
+
+
 Log = Annotated[ActivityLog, Depends(_activity_log)]
 AppSettings = Annotated[Settings, Depends(_settings)]
 KeepAlive = Annotated[float, Depends(_keep_alive_seconds)]
+Recheck = Annotated[float, Depends(_recheck_seconds)]
+Directory = Annotated[PeopleDirectory, Depends(_people)]
 
 router = APIRouter()
 
@@ -54,7 +66,8 @@ router = APIRouter()
     description=(
         "With `Accept: text/event-stream` this is the live stream. Each frame is "
         "`id: <seq>`, `event: activity`, `data: <ActivityEvent>`. The server replays from "
-        "the event after `Last-Event-ID` and then waits for new ones. "
+        "the event after `Last-Event-ID` and then waits for new ones. Every minute it checks "
+        "the person is still on the People list, and closes the stream when they are not. "
         "Otherwise it returns the events after `after` as one JSON page."
     ),
     response_model=EventPage,
@@ -74,6 +87,8 @@ async def run_events(
     principal: CurrentPrincipal,
     log: Log,
     keep_alive: KeepAlive,
+    recheck: Recheck,
+    people: Directory,
     after: Annotated[int, Query(ge=0)] = 0,
     last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None,
     accept: Annotated[str, Header()] = "application/json",
@@ -81,18 +96,27 @@ async def run_events(
     if "text/event-stream" not in accept:
         return EventPage(events=await log.read_after(run_id, after))
     start = int(last_event_id) if last_event_id is not None and last_event_id.isdigit() else after
+
+    async def still_listed() -> bool:
+        return await people.person(principal.user_id) is not None
+
     return StreamingResponse(
-        _frames(log, run_id, start, keep_alive),
+        _frames(log, run_id, start, keep_alive, still_listed, recheck),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
 async def _frames(
-    log: ActivityLog, run_id: RunId, after: int, keep_alive: float
+    log: ActivityLog,
+    run_id: RunId,
+    after: int,
+    keep_alive: float,
+    still_listed: Callable[[], Awaitable[bool]],
+    recheck: float,
 ) -> AsyncIterator[str]:
     """Pumps the subscription through a queue so the keep-alive timeout cancels a queue read,
-    never the subscription itself."""
+    never the subscription itself. The stream ends once the person is no longer on the list."""
     queue: asyncio.Queue[ActivityEvent | Exception] = asyncio.Queue()
 
     async def pump() -> None:
@@ -103,12 +127,20 @@ async def _frames(
             await queue.put(error)
 
     task = asyncio.create_task(pump())
+    next_check = time.monotonic() + recheck
     try:
         while True:
+            if time.monotonic() >= next_check:
+                if not await still_listed():
+                    return
+                next_check = time.monotonic() + recheck
             try:
-                item = await asyncio.wait_for(queue.get(), keep_alive)
+                item = await asyncio.wait_for(
+                    queue.get(), min(keep_alive, max(next_check - time.monotonic(), 0.0))
+                )
             except TimeoutError:
-                yield ": keep-alive\n\n"
+                if time.monotonic() < next_check:
+                    yield ": keep-alive\n\n"
                 continue
             if isinstance(item, Exception):
                 raise item

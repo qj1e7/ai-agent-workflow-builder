@@ -1,0 +1,4 @@
+{
+  "refusal": "two_approvers",
+  "message": "At least two people must stay Approvers, so nobody approves their own work."
+}

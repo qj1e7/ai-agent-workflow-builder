@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from starlette.types import Message
 
 from platform_api.app import create_app
-from platform_api.auth import DevAuth
+from platform_api.auth import DevAuth, InMemoryPeople
 from platform_api.db import Database
 from platform_api.monitoring import (
     PLATFORM,
@@ -23,7 +23,7 @@ from platform_api.monitoring import (
     callback_for,
 )
 from platform_api.settings import Settings
-from platform_api.shared import RunId, TaskId
+from platform_api.shared import RunId, TaskId, UserId
 from tests.conftest import PostgresUrls
 from tests.support import FIXTURES, LOCAL_ENV
 
@@ -205,6 +205,22 @@ async def test_the_stream_falls_back_to_after_when_last_event_id_is_not_a_number
     plain = {**ALICE, "Accept": "text/event-stream"}
     async with SseConnection(app, f"/api/v1/runs/{RUN}/events", plain) as stream:
         assert [event_in(await stream.frame())[0] for _ in range(3)] == [1, 2, 3]
+
+
+async def test_the_stream_closes_once_the_person_leaves_the_list(app: FastAPI):
+    app.state.person_recheck_seconds = KEEPALIVE / 2
+    people: InMemoryPeople = app.state.people
+    await append(app, RUN, pending(1))
+    headers = {**ALICE, "Accept": "text/event-stream"}
+    async with SseConnection(app, f"/api/v1/runs/{RUN}/events", headers) as stream:
+        assert event_in(await stream.frame())[0] == 1
+        await append(app, RUN, pending(2))
+        assert event_in(await stream.frame())[0] == 2
+        people.remove(UserId("alice"))
+        with pytest.raises(EOFError), anyio.fail_after(KEEPALIVE * 10):
+            while True:
+                await stream.frame()
+    assert (await app.state.people.person(UserId("alice"))) is None
 
 
 async def test_a_disconnected_stream_stops_the_handler(app: FastAPI):
