@@ -169,14 +169,7 @@ class PeopleStore:
                 (person_id,),
             )
         ).fetchone()
-        if row is None:
-            return None
-        roles: set[Role] = set()
-        if row["is_operator"]:
-            roles.add(Role.OPERATOR)
-        if row["is_approver"]:
-            roles.add(Role.APPROVER)
-        return frozenset(roles)
+        return None if row is None else rules.roles_from(row["is_operator"], row["is_approver"])
 
 
 @dataclass(frozen=True)

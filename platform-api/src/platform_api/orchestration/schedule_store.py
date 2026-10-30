@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any, Literal, Protocol
 
 from platform_api.db import Connection, Database
+from platform_api.orchestration.people import roles_from
 from platform_api.orchestration.schedule import (
     DEFAULT_AT,
     DEFAULT_DAY,
@@ -65,7 +66,6 @@ class SavedSchedule:
         return None if isinstance(starter, Principal) else starter
 
 
-# Each schedule is read with its owner's entry on the People list as it is now.
 _WITH_OWNER = (
     "SELECT s.*, p.is_operator AS owner_is_operator, p.is_approver AS owner_is_approver "
     "FROM {source} s LEFT JOIN orchestration.people p "
@@ -74,14 +74,8 @@ _WITH_OWNER = (
 _SCHEDULES = _WITH_OWNER.format(source="orchestration.schedules")
 
 
-def _owner_roles(row: Mapping[str, Any]) -> frozenset[Role] | None:
-    if row["owner_is_operator"] is None:
-        return None
-    flags = ((Role.OPERATOR, row["owner_is_operator"]), (Role.APPROVER, row["owner_is_approver"]))
-    return frozenset(role for role, on in flags if on)
-
-
 def _saved(row: Mapping[str, Any]) -> SavedSchedule:
+    on_list = row["owner_is_operator"] is not None
     return SavedSchedule(
         UseCaseId(row["use_case_id"]),
         Schedule(row["day"], row["at"], row["time_zone"]),
@@ -89,7 +83,7 @@ def _saved(row: Mapping[str, Any]) -> SavedSchedule:
         row["owner_name"],
         row["saved_at"],
         row["last_slot_started"],
-        _owner_roles(row),
+        roles_from(row["owner_is_operator"], row["owner_is_approver"]) if on_list else None,
     )
 
 
