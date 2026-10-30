@@ -9,7 +9,8 @@
 #   pg-up | pg-down                        the PostgreSQL 17 the platform-api tests use (host port $PG_PORT)
 #   cosmos-up | cosmos-down                an emulator for the platform-api tests (host port $COSMOS_PORT)
 #   gates <worktree>                       platform-api's CI gates with the Cosmos DB tests required
-#   up <src> <project> <portal> <api> <n8n>    one dev stack; builds the images unless NO_BUILD=1
+#   build <src> <project>                  builds one stack's images, nothing started
+#   up <src> <project> <portal> <api> <n8n>    one dev stack: build (unless NO_BUILD=1), then up
 #   down <src> <project>                   logs, then down -v
 #   lane1 <trunk-src> <head-src>           trunk and head stacks ($PREFIX-trunk, $PREFIX), lane 1
 #   lane <2|3|7>                           a lane on the shared head stack $PREFIX, from $HEAD_SRC
@@ -17,20 +18,27 @@
 #                                          a lane on its own stack $PREFIX-l<n>
 #   perf <trunk-src> <head-src> [rounds]   p95.py --stream in both shared stacks, interleaved
 #   perf-table <dir>                       the medians and the rule: head under 1 s and at most trunk + 500 ms
-#   cleanup                                removes the images this checker's tag left
+#   cleanup                                removes the images this script made: its tags, its
+#                                          projects' compose images, and the emulator image
+#                                          only when this script pulled it
 #
 # Order:
 #   p4.sh export <trunk-sha> $EVID/trunk && p4.sh export <head-sha> $EVID/head
 #   p4.sh pg-up && p4.sh cosmos-up && p4.sh gates <head-worktree>
-#   p4.sh up $EVID/head p4-check 44080 44000 44678     (builds the head images)
+#   p4.sh up $EVID/head p4-check 44000 44001 44002     (builds the head images, then starts them)
 #   p4.sh lane1 $EVID/trunk $EVID/head                  (builds trunk's images, starts $PREFIX-trunk)
 #   p4.sh lane 2; p4.sh lane 3; p4.sh lane 7
-#   p4.sh lane4 $EVID/head ... p4.sh lane12 $EVID/head  (own stacks, NO_BUILD=1, each downed after)
+#   p4.sh lane4 $EVID/head ... p4.sh lane12 $EVID/head  (own stacks on the head images that `up`
+#                                                        or `build` made, each downed after)
 #   p4.sh perf $EVID/trunk $EVID/head
 #   p4.sh down $EVID/head p4-check; STACK_TAG=p4check-trunk p4.sh down $EVID/trunk p4-check-trunk
 # Lane 8 builds a small libfaketime layer on the head image, which needs apt's network. It moves
 # only platform-api's clock, which stamps the run's events and the decision.
-# Lane 11 makes the emulator again while platform-api runs. Lane 12 runs down without -v, then up.
+# Lane 11 makes the emulator again while platform-api runs and nothing is logged, then starts a run.
+# Lane 12 runs down without -v, then up. Every `up` builds first and starts with --no-build, so
+# PRUNE=1 (or a `docker builder prune -af` by hand, then NO_BUILD=1) frees the build cache between.
+# Own-stack lanes reuse the head images, the mocks included: every stack names its mock images
+# wab/mock-github:<tag> and wab/mock-model:<tag> through a generated overlay.
 # Everything runs from a git archive export of this tree too: only `export` needs a git repository.
 #
 # Environment (defaults in brackets):
@@ -39,14 +47,19 @@
 #   PREFIX [p4-check]         compose project prefix
 #   TAG [p4check]             image tag of the head build; TRUNK_TAG [p4check-trunk]
 #   SOURCE_REPO [this tree]   the git repository `export` archives from
-#   PORTS [44]                first two digits of the head stack's ports: 44080 44000 44678
-#   TRUNK_PORTS [45]          the same for the trunk stack
-#   LANE_PORTS [46]           the same for lane 4's own stack; each next own-stack lane adds one
-#                             (lane5 47, lane6 48, lane8 49, lane9 50 and <n>001, lane10 51,
-#                             lane11 52, lane12 53)
+#   PORTS [44000]             the head stack's first host port: portal, then platform-api, then n8n
+#   TRUNK_PORTS [44010]       the same for the trunk stack
+#   LANE_PORTS [44020]        the same for lane 4's own stack; each next own-stack lane adds 10
+#                             (lane5 44030, lane6 44040, lane8 44050, lane9 44060 with its second
+#                             platform-api on 44063, lane10 44070, lane11 44080, lane12 44090).
+#                             Every stack takes 4 ports; the script stops if two stacks overlap,
+#                             or overlap PG_PORT or the COSMOS ports.
 #   PG_NAME [p4-check-pg]  PG_PORT [55441]
 #   COSMOS_NAME [p4-check-cosmos]  COSMOS_PORT [58081]  COSMOS_HEALTH_PORT [58080]
-#   DISK_CONTAINER [wab-postgres-1]   a running container on the Docker VM's disk; DISK_MIN_MB [1500]
+#   DISK_CONTAINER [wab-postgres-1]   a running container on the Docker VM's disk
+#   DISK_MIN_MB [1431]        the floor in MiB (1431 MiB is 1.5 GB); the emulator image takes 1.61 GB
+#   PULL_MIN_MB [2385]        the floor in MiB (2.5 GB) before a command pulls the emulator image
+#   PRUNE [0]                 1 runs `docker builder prune -af` between build and up
 #   HEAD_SRC [$EVID/head]     the exported head tree, for lane 2, 3 and 7
 #   OVERLAYS                  extra compose files ("-f a.yaml -f b.yaml") for every stack and lane
 #   LANE5_EVENTS [4000]       lane 5's backlog; raise it when the kill lands after the copy ends
@@ -57,9 +70,11 @@ ENV_FILE=${ENV_FILE:-$EVID/env/.env}
 PREFIX=${PREFIX:-p4-check}
 TAG=${TAG:-p4check}
 TRUNK_TAG=${TRUNK_TAG:-p4check-trunk}
-PORTS=${PORTS:-44}
-TRUNK_PORTS=${TRUNK_PORTS:-45}
-LANE_PORTS=${LANE_PORTS:-46}
+PORTS=${PORTS:-44000}
+TRUNK_PORTS=${TRUNK_PORTS:-44010}
+LANE_PORTS=${LANE_PORTS:-44020}
+LANE_STEP=10
+STACK_WIDTH=4
 PG_NAME=${PG_NAME:-p4-check-pg}
 PG_PORT=${PG_PORT:-55441}
 PG_IMAGE=postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
@@ -68,19 +83,20 @@ COSMOS_PORT=${COSMOS_PORT:-58081}
 COSMOS_HEALTH_PORT=${COSMOS_HEALTH_PORT:-58080}
 COSMOS_IMAGE=mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:vnext-preview@sha256:db53613dae19d0a3d5ad50688d14aa6e957af082dafea56b52e1bd3a6b3f1406
 DISK_CONTAINER=${DISK_CONTAINER:-wab-postgres-1}
-DISK_MIN_MB=${DISK_MIN_MB:-1500}
+DISK_MIN_MB=${DISK_MIN_MB:-1431}
+PULL_MIN_MB=${PULL_MIN_MB:-2385}
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
 SOURCE_REPO=${SOURCE_REPO:-$REPO}
 
 die() { echo "p4.sh: $*" >&2; exit 2; }
 
+free_kib() { docker exec "$DISK_CONTAINER" df -k / | awk 'NR==2 {print $4}'; }
+
 disk() {
-  local avail
   docker exec "$DISK_CONTAINER" df -h / | tail -n 1
-  avail=$(docker exec "$DISK_CONTAINER" df -k / | awk 'NR==2 {print $4}')
-  if [ "$avail" -lt $((DISK_MIN_MB * 1024)) ]; then
-    echo "BLOCKED: less than $DISK_MIN_MB MB free on the Docker disk; the emulator image is 603 MB compressed" >&2
+  if [ "$(free_kib)" -lt $((DISK_MIN_MB * 1024)) ]; then
+    echo "BLOCKED: less than $DISK_MIN_MB MiB free on the Docker disk; the emulator image takes 1.61 GB on disk" >&2
     exit 3
   fi
 }
@@ -106,9 +122,22 @@ pg_up() {
 
 pg_down() { docker rm -fv "$PG_NAME" >/dev/null 2>&1 || true; }
 
+note_emulator_pull() {
+  docker image inspect "$COSMOS_IMAGE" >/dev/null 2>&1 && return 0
+  if [ "$(free_kib)" -lt $((PULL_MIN_MB * 1024)) ]; then
+    echo "BLOCKED: the emulator image is not here, and pulling it (1.61 GB on disk) needs $PULL_MIN_MB MiB free" >&2
+    exit 3
+  fi
+  mkdir -p "$EVID"
+  date -u +%FT%TZ >"$EVID/.emulator-pulled"
+}
+
 cosmos_up() {
+  disk
+  note_emulator_pull
   docker rm -fv "$COSMOS_NAME" >/dev/null 2>&1 || true
-  docker run -d --rm --name "$COSMOS_NAME" -e PORT="$COSMOS_PORT" -e ENABLE_EXPLORER=false -e ENABLE_TELEMETRY=false \
+  docker run -d --rm --name "$COSMOS_NAME" --add-host packages.microsoft.com:127.0.0.1 \
+    -e PORT="$COSMOS_PORT" -e ENABLE_EXPLORER=false -e ENABLE_TELEMETRY=false \
     -p "127.0.0.1:$COSMOS_PORT:$COSMOS_PORT" -p "127.0.0.1:$COSMOS_HEALTH_PORT:8080" "$COSMOS_IMAGE" >/dev/null
   for _ in $(seq 1 120); do
     curl -fsS "http://127.0.0.1:$COSMOS_HEALTH_PORT/ready" >/dev/null 2>&1 && { echo "emulator up on $COSMOS_PORT"; return 0; }
@@ -153,13 +182,56 @@ gates() {
 
 ports_of() {
   local first=$1
-  echo "${first}080 ${first}000 ${first}678"
+  echo "$first $((first + 1)) $((first + 2))"
+}
+
+lane_first() {
+  local offset
+  case "$1" in
+    4) offset=0 ;; 5) offset=1 ;; 6) offset=2 ;; 8) offset=3 ;; 9) offset=4 ;; 10) offset=5 ;; 11) offset=6 ;; 12) offset=7 ;;
+    *) die "lane $1 has no own stack" ;;
+  esac
+  echo $((LANE_PORTS + offset * LANE_STEP))
+}
+
+check_ports() {
+  local blocks=() names=() n i j a b wa wb
+  blocks+=("$PORTS:$STACK_WIDTH") names+=("PORTS (head)")
+  blocks+=("$TRUNK_PORTS:$STACK_WIDTH") names+=("TRUNK_PORTS (trunk)")
+  for n in 4 5 6 8 9 10 11 12; do
+    blocks+=("$(lane_first "$n"):$STACK_WIDTH") names+=("lane $n (LANE_PORTS)")
+  done
+  blocks+=("$PG_PORT:1" "$COSMOS_PORT:1" "$COSMOS_HEALTH_PORT:1") names+=("PG_PORT" "COSMOS_PORT" "COSMOS_HEALTH_PORT")
+  for i in "${!blocks[@]}"; do
+    a=${blocks[$i]%%:*} wa=${blocks[$i]##*:}
+    [ "$a" -ge 1024 ] && [ $((a + wa - 1)) -le 65535 ] || die "${names[$i]} uses ports $a to $((a + wa - 1)), outside 1024 to 65535"
+    for j in "${!blocks[@]}"; do
+      [ "$j" -gt "$i" ] || continue
+      b=${blocks[$j]%%:*} wb=${blocks[$j]##*:}
+      if [ "$a" -lt $((b + wb)) ] && [ "$b" -lt $((a + wa)) ]; then
+        die "${names[$i]} (from $a) and ${names[$j]} (from $b) share host ports"
+      fi
+    done
+  done
+}
+
+mock_overlay() {
+  local overlay="$EVID/overlays/mock-images.yaml"
+  mkdir -p "$EVID/overlays"
+  cat >"$overlay" <<'YAML'
+services:
+  mock-github:
+    image: wab/mock-github:${WAB_IMAGE_TAG:-dev}
+  mock-model:
+    image: wab/mock-model:${WAB_IMAGE_TAG:-dev}
+YAML
+  echo "$overlay"
 }
 
 compose_cmd() {
   local src=$1 project=$2
   shift 2
-  echo "docker compose -p $project --env-file $ENV_FILE -f $src/deploy/compose.yaml -f $src/deploy/compose.e2e.yaml $*"
+  echo "docker compose -p $project --env-file $ENV_FILE -f $src/deploy/compose.yaml -f $src/deploy/compose.e2e.yaml -f $(mock_overlay) $*"
 }
 
 stack_env() {
@@ -167,16 +239,32 @@ stack_env() {
   echo "WAB_IMAGE_TAG=${STACK_TAG:-$TAG} PORTAL_HOST_PORT=$portal PLATFORM_API_HOST_PORT=$api N8N_HOST_PORT=$n8n"
 }
 
-up() {
-  local src=$1 project=$2 portal=$3 api=$4 n8n=$5 log build=--build
-  shift 5
+build() {
+  local src=$1 project=$2 log status=0
   disk
-  [ "${NO_BUILD:-0}" = 1 ] && build=--no-build
+  mkdir -p "$EVID/stacks"
+  log="$EVID/stacks/$project-build-$(cut -c1-7 "$src/.SHA").log"
+  WAB_IMAGE_TAG="${STACK_TAG:-$TAG}" $(compose_cmd "$src" "$project" ${OVERLAYS:-}) build >"$log" 2>&1 || status=$?
+  if [ "$status" -ne 0 ]; then
+    tail -n 20 "$log" >&2
+    return "$status"
+  fi
+  echo "built $project at $(cut -c1-7 "$src/.SHA") as tag ${STACK_TAG:-$TAG}"
+}
+
+up() {
+  local src=$1 project=$2 portal=$3 api=$4 n8n=$5 log status=0
+  shift 5
+  if [ "${NO_BUILD:-0}" != 1 ]; then
+    build "$src" "$project"
+    [ "${PRUNE:-0}" = 1 ] && docker builder prune -af >/dev/null
+  fi
+  disk
+  note_emulator_pull
   mkdir -p "$EVID/stacks"
   log="$EVID/stacks/$project-up-$(cut -c1-7 "$src/.SHA").log"
-  local status=0
   env $(stack_env "$portal" "$api" "$n8n") "$@" \
-    $(compose_cmd "$src" "$project" ${OVERLAYS:-}) up $build --wait --wait-timeout 420 >"$log" 2>&1 || status=$?
+    $(compose_cmd "$src" "$project" ${OVERLAYS:-}) up --no-build --wait --wait-timeout 420 >"$log" 2>&1 || status=$?
   if [ "$status" -ne 0 ]; then
     tail -n 20 "$log" >&2
     return "$status"
@@ -215,15 +303,6 @@ lane() {
     7) P4_COMPOSE="$(compose_cmd "$head_src" "$PREFIX" ${OVERLAYS:-})" lanes_py lane7 "http://localhost:$api" "$EVID/lane-7" ;;
     *) die "lane $n runs on its own stack: p4.sh lane$n <head-src>" ;;
   esac
-}
-
-lane_first() {
-  local offset
-  case "$1" in
-    4) offset=0 ;; 5) offset=1 ;; 6) offset=2 ;; 8) offset=3 ;; 9) offset=4 ;; 10) offset=5 ;; 11) offset=6 ;; 12) offset=7 ;;
-    *) die "lane $1 has no own stack" ;;
-  esac
-  echo $((LANE_PORTS + offset))
 }
 
 own_stack_lane() {
@@ -282,7 +361,7 @@ YAML
 
 lane9() {
   local src=$1 overlay="$EVID/overlays/two-api.yaml" second key
-  second="$(lane_first 9)001"
+  second=$(($(lane_first 9) + 3))
   key=$(signing_key)
   mkdir -p "$EVID/overlays"
   cat >"$overlay" <<YAML
@@ -344,17 +423,40 @@ sys.exit(0 if verdict == "PASS" else 1)
 PYEOF
 }
 
+projects() {
+  local n
+  echo "$PREFIX" "$PREFIX-trunk"
+  for n in 4 5 6 8 9 10 11 12; do echo "$PREFIX-l$n"; done
+}
+
 cleanup() {
-  local image
+  local image project id
   for image in $(docker images --format '{{.Repository}}:{{.Tag}}' | /usr/bin/grep -E "^wab/[a-z-]+:($TAG|$TRUNK_TAG)(-faketime)?$"); do
     docker rmi "$image" >/dev/null || true
   done
-  docker images --format '{{.Repository}}:{{.Tag}}' | /usr/bin/grep -E "$TAG" || echo "no $TAG images left"
+  for project in $(projects); do
+    for id in $(docker images -q --filter "label=com.docker.compose.project=$project" | sort -u); do
+      docker rmi "$id" >/dev/null 2>&1 || true
+    done
+  done
+  if [ -f "$EVID/.emulator-pulled" ]; then
+    if [ -n "$(docker ps -aq --filter "ancestor=$COSMOS_IMAGE")" ]; then
+      echo "kept the emulator image: a container still uses it"
+    else
+      docker rmi "$COSMOS_IMAGE" >/dev/null 2>&1 || true
+      rm -f "$EVID/.emulator-pulled"
+      echo "removed the emulator image this script pulled"
+    fi
+  else
+    echo "kept the emulator image: this script did not pull it"
+  fi
+  docker images --format '{{.Repository}}:{{.Tag}}' | /usr/bin/grep -E ":($TAG|$TRUNK_TAG)(-faketime)?$" || echo "no $TAG images left"
 }
 
 command=${1:-}
-[ -n "$command" ] || die "usage: p4.sh <disk|export|pg-up|pg-down|cosmos-up|cosmos-down|gates|up|down|lane1|lane|lane4|lane5|lane6|lane8|lane9|lane10|lane11|lane12|perf|perf-table|cleanup> ..."
+[ -n "$command" ] || die "usage: p4.sh <disk|export|pg-up|pg-down|cosmos-up|cosmos-down|gates|build|up|down|lane1|lane|lane4|lane5|lane6|lane8|lane9|lane10|lane11|lane12|perf|perf-table|cleanup> ..."
 shift
+check_ports
 case "$command" in
   disk) disk ;;
   export) export_tree "$@" ;;
@@ -363,6 +465,6 @@ case "$command" in
   cosmos-up) cosmos_up ;;
   cosmos-down) cosmos_down ;;
   perf-table) perf_table "$@" ;;
-  gates | up | down | lane1 | lane | lane4 | lane5 | lane6 | lane8 | lane9 | lane10 | lane11 | lane12 | perf | cleanup) "$command" "$@" ;;
+  gates | build | up | down | lane1 | lane | lane4 | lane5 | lane6 | lane8 | lane9 | lane10 | lane11 | lane12 | perf | cleanup) "$command" "$@" ;;
   *) die "unknown command $command" ;;
 esac
