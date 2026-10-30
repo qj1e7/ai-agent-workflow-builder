@@ -364,6 +364,7 @@ export function useRestoreSoftware() {
         await client.POST('/api/v1/watchlist/software/{software_id}/restore', { params: { path: { software_id: softwareId } } }),
       ),
     onSuccess: (view) => queryClient.setQueryData(keys.watchlist(user), view),
+    onError: () => queryClient.invalidateQueries({ queryKey: keys.watchlist(user) }),
   })
 }
 

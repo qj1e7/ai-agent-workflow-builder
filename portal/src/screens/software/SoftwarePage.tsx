@@ -11,9 +11,9 @@ import { AddSoftware } from './AddSoftware'
 import { pressCheckNow } from './checkNow'
 import { FindSoftware } from './FindSoftware'
 import { Schedule } from './Schedule'
-import { changeFeedback, NO_FEEDBACK, noticeWords, pressRemove, pressUndo, removeButtonId, UNDO_ID, type ChangeFeedback, type Named } from './removal'
+import { changeFeedback, NO_FEEDBACK, noticeButtons, noticeWords, pressRemove, pressUndo, PROBLEM_ID, removeButtonId, UNDO_ID, type ChangeFeedback, type Named } from './removal'
 import { SoftwareHistory } from './SoftwareHistory'
-import { cantCheckWords, countIn, groupsOf, newestOf, singaporeTime, statusLabel, statusTone, stoppedWords, versionSourceWords } from './software'
+import { cantCheckWords, countIn, emptyWords, groupsOf, newestOf, singaporeTime, statusLabel, statusTone, stoppedWords, versionSourceWords } from './software'
 import styles from './Software.module.css'
 
 const REFRESH_MS = 15_000
@@ -77,7 +77,7 @@ function Row({ row, operator, scheduled, paused, open, removing, nameOf, onToggl
         <span className={styles['pill']} data-tone={statusTone[row.status]}>
           {statusLabel[row.status]}
         </span>
-        {row.status === 'cant_check' ? <span className={styles['src']}>{cantCheckWords(scheduled, paused)}</span> : null}
+        {row.status === 'cant_check' ? <span className={styles['src']}>{cantCheckWords(row.problem, { scheduled, paused })}</span> : null}
         {row.status === 'ticket_open' && row.open_ticket ? <span className={styles['src']}>{row.open_ticket}</span> : null}
         {row.status === 'awaiting_approval' && row.approval_id ? (
           <Link to={`/approvals/${row.approval_id}`} className={styles['src']}>
@@ -173,36 +173,42 @@ function LastCheckStopped({ last }: { last: LastCheckView }) {
   )
 }
 
-function emptyWords(view: WatchlistView | null, operator: boolean): string {
-  if (!operator) return 'An Operator can add the tools your team runs.'
-  const willBeScheduled = view === null || view.schedule !== null
-  return willBeScheduled ? 'Add the tools your team runs. Each one is checked at the next check.' : 'Add the tools your team runs, then press Check now to check them.'
+/** The status line stays on the page when it is empty, so a screen reader hears each new message. */
+interface NoticeProps {
+  readonly feedback: ChangeFeedback
+  readonly scheduled: boolean
+  readonly paused: boolean
+  readonly onUndo: (row: Named) => void
+  readonly onDismiss: () => void
 }
 
-/** The status line stays on the page when it is empty, so a screen reader hears each new message. */
-function Notice({ feedback, scheduled, onUndo, onDismiss }: { feedback: ChangeFeedback; scheduled: boolean; onUndo: (row: Named) => void; onDismiss: () => void }) {
+function Notice({ feedback, scheduled, paused, onUndo, onDismiss }: NoticeProps) {
   const { notice } = feedback
-  const undoing = notice?.kind === 'removed' ? notice.row : null
   const escape = (event: KeyboardEvent) => {
     if (event.key === 'Escape') onDismiss()
   }
   return (
     <>
       <div className={styles['notice']}>
-        <p role="status">{notice ? noticeWords(notice, scheduled) : ''}</p>
-        {undoing ? (
+        <p role="status">{notice ? noticeWords(notice, { scheduled, paused }) : ''}</p>
+        {notice ? (
           <div className={styles['actions']}>
-            <Button id={UNDO_ID} loading={feedback.busy?.act === 'restore'} onClick={() => onUndo(undoing)} onKeyDown={escape}>
-              Undo
-            </Button>
-            <Button onClick={onDismiss} onKeyDown={escape}>
-              Dismiss
-            </Button>
+            {noticeButtons(notice).map((label) =>
+              label === 'Undo' && notice.kind === 'removed' ? (
+                <Button key={label} id={UNDO_ID} loading={feedback.busy?.act === 'restore'} onClick={() => onUndo(notice.row)} onKeyDown={escape}>
+                  Undo
+                </Button>
+              ) : (
+                <Button key={label} onClick={onDismiss} onKeyDown={escape}>
+                  Dismiss
+                </Button>
+              ),
+            )}
           </div>
         ) : null}
       </div>
       {feedback.problem ? (
-        <p className={styles['error']} role="alert">
+        <p className={styles['error']} id={PROBLEM_ID} tabIndex={-1} role="alert">
           {feedback.problem}
         </p>
       ) : null}
@@ -238,13 +244,13 @@ function Loaded({ view, operator }: { view: WatchlistView | null; operator: bool
     <>
       {operator && view && !paused && software.length > 0 ? <CheckNow useCaseId={view.use_case_id} /> : null}
       {view?.last_check?.state === 'failed' ? <LastCheckStopped last={view.last_check} /> : null}
-      {view ? <Schedule schedule={view.schedule} operator={operator} /> : null}
-      <Notice feedback={feedback} scheduled={scheduled} onUndo={(row) => pressUndo(changes, restore.mutate, row, dispatch, words)} onDismiss={dismiss} />
+      {view ? <Schedule schedule={view.schedule} operator={operator} paused={paused} /> : null}
+      <Notice feedback={feedback} scheduled={scheduled} paused={paused} onUndo={(row) => pressUndo(changes, restore.mutate, row, dispatch, words)} onDismiss={dismiss} />
       {software.length > 0 || searching ? <FindSoftware query={query} shown={shown} onChange={setQuery} /> : null}
       {software.length === 0 && !searching ? (
         <div className={styles['empty']}>
           <b>No software yet</b>
-          <span>{emptyWords(view, operator)}</span>
+          <span>{emptyWords({ operator, scheduled: view === null || view.schedule !== null, paused })}</span>
         </div>
       ) : null}
       {searching && shown === 0 ? (

@@ -22,12 +22,14 @@ export interface ChangeFeedback {
 export type FeedbackEvent =
   | { readonly type: 'added'; readonly name: string }
   | { readonly type: 'removing' | 'removed' | 'gone' | 'restoring' | 'restored'; readonly row: Named }
-  | { readonly type: 'failed'; readonly words: string }
+  | { readonly type: 'failed' | 'refused'; readonly words: string }
   | { readonly type: 'dismissed' }
 
 export const NO_FEEDBACK: ChangeFeedback = { notice: null, problem: null, busy: null, focusTargetId: null }
 
 export const UNDO_ID = 'undo-removal'
+
+export const PROBLEM_ID = 'change-problem'
 
 export const removeButtonId = (id: string) => `remove-${id}`
 
@@ -47,15 +49,27 @@ export function changeFeedback(state: ChangeFeedback, event: FeedbackEvent): Cha
       return { notice: { kind: 'restored', row: event.row }, problem: null, busy: null, focusTargetId: removeButtonId(event.row.id) }
     case 'failed':
       return { ...state, problem: event.words, busy: null, focusTargetId: null }
+    case 'refused':
+      return { notice: null, problem: event.words, busy: null, focusTargetId: PROBLEM_ID }
     case 'dismissed':
       return { ...state, notice: null, focusTargetId: null }
   }
 }
 
-export function noticeWords(notice: Notice, scheduled: boolean): string {
+interface Checking {
+  readonly scheduled: boolean
+  readonly paused: boolean
+}
+
+function addedWords(name: string, { scheduled, paused }: Checking): string {
+  if (paused) return scheduled ? `Added ${name}. It is checked at the next check once an Operator resumes the watchlist.` : `Added ${name}. It can be checked once an Operator resumes the watchlist.`
+  return scheduled ? `Added ${name}. It is checked at the next check.` : `Added ${name}. Press Check now to check it.`
+}
+
+export function noticeWords(notice: Notice, checking: Checking): string {
   switch (notice.kind) {
     case 'added':
-      return scheduled ? `Added ${notice.name}. It is checked at the next check.` : `Added ${notice.name}. Press Check now to check it.`
+      return addedWords(notice.name, checking)
     case 'removed':
       return `Removed ${notice.row.name}. It won’t be checked any more.`
     case 'restored':
@@ -63,6 +77,10 @@ export function noticeWords(notice: Notice, scheduled: boolean): string {
     case 'gone':
       return `${notice.name} was already removed.`
   }
+}
+
+export function noticeButtons(notice: Notice): readonly ('Undo' | 'Dismiss')[] {
+  return notice.kind === 'removed' ? ['Undo', 'Dismiss'] : ['Dismiss']
 }
 
 export interface MutateCallbacks {
@@ -75,6 +93,8 @@ type Send = (id: string, outcome: MutateCallbacks) => void
 type Words = (error: unknown) => string
 
 const answered = (error: unknown, status: number) => error instanceof ApiError && error.status === status
+
+const refusal = (error: unknown) => error instanceof ApiError && error.status >= 400 && error.status < 500
 
 function restoreProblem(name: string, error: unknown, words: Words): string {
   const start = `Could not put ${name} back.`
@@ -101,7 +121,7 @@ export function pressUndo(latch: Latch, send: Send, row: Named, dispatch: (event
     dispatch({ type: 'restoring', row })
     send(row.id, {
       onSuccess: () => dispatch({ type: 'restored', row }),
-      onError: (error) => dispatch({ type: 'failed', words: restoreProblem(row.name, error, words) }),
+      onError: (error) => dispatch({ type: refusal(error) ? 'refused' : 'failed', words: restoreProblem(row.name, error, words) }),
       onSettled: settled,
     })
   })

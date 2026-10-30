@@ -5,9 +5,32 @@ import type { Day, FailureReason, ScheduleView, SoftwareStatus, VersionSourceVie
 export const SOURCES_NOTE =
   'GitHub is the only place we can check today. Other places, such as npm or PyPI, are not available yet.'
 
-export function cantCheckWords(scheduled: boolean, paused = false): string {
-  if (paused) return 'Can’t check right now. It is checked again once the watchlist is resumed.'
-  return scheduled ? 'Can’t check right now. It will try again at the next check.' : 'Can’t check right now. With no schedule, it is checked again when an Operator presses Check now.'
+interface Checking {
+  readonly scheduled: boolean
+  readonly paused: boolean
+}
+
+function checkedAgain({ scheduled, paused }: Checking): string {
+  if (paused) return 'It is checked again once the watchlist is resumed.'
+  return scheduled ? 'It will try again at the next check.' : 'With no schedule, it is checked again when an Operator presses Check now.'
+}
+
+/** The row's own reason, from the check that could not read it, then when it is checked again. */
+export function cantCheckWords(problem: string | null, checking: Checking): string {
+  return `${problem ?? 'Can’t check right now.'} ${checkedAgain(checking)}`
+}
+
+export const PAUSED_WORDS = 'Paused. No check runs until an Operator resumes it.'
+
+export function noScheduleWords({ operator, paused }: { readonly operator: boolean; readonly paused: boolean }): string {
+  if (paused) return `No schedule. ${PAUSED_WORDS}`
+  return operator ? 'No schedule. Press Check now to check by hand.' : 'No schedule. An Operator can press Check now to check by hand.'
+}
+
+export function emptyWords({ operator, scheduled, paused }: { readonly operator: boolean } & Checking): string {
+  if (!operator) return 'An Operator can add the tools your team runs.'
+  if (paused) return 'Add the tools your team runs. They can be checked once an Operator resumes the watchlist.'
+  return scheduled ? 'Add the tools your team runs. Each one is checked at the next check.' : 'Add the tools your team runs, then press Check now to check them.'
 }
 
 export const statusLabel: Record<SoftwareStatus, string> = {

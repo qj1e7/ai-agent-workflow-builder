@@ -50,14 +50,18 @@ describe('the Software watchlist page', () => {
     expect(words).toContain('Ticket waiting for a yes')
   })
 
-  it('says a check could not reach the source and will try at the next check', () => {
-    expect(text(render(statuses, ALICE))).toContain('Can’t check right now. It will try again at the next check.')
+  it('says on the row why a check could not read the source, and that it will try at the next check', () => {
+    expect(text(render(statuses, ALICE))).toContain('Can’t check GitHub answered 404 Not Found. It will try again at the next check.')
+  })
+
+  it('keeps the newest version an earlier check read on a row that can’t be checked, and says when it was read', () => {
+    expect(text(render(statuses, ALICE))).toContain('Newest 0.115.2 Last read Mon 9 Nov, 9:00')
   })
 
   it('promises no next check when no schedule is set', () => {
     const words = text(render({ ...statuses, schedule: null }, ALICE))
     expect(words).not.toContain('next check')
-    expect(words).toContain('Can’t check right now. With no schedule, it is checked again when an Operator presses Check now.')
+    expect(words).toContain('GitHub answered 404 Not Found. With no schedule, it is checked again when an Operator presses Check now.')
     expect(words).toContain('No schedule. Press Check now to check by hand.')
     expect(text(render({ ...empty, schedule: null }, ALICE))).toContain('Add the tools your team runs, then press Check now to check them.')
   })
@@ -77,10 +81,17 @@ describe('the Software watchlist page', () => {
     expect(words).toContain('Checked every Monday at 9:00, set by Alice.')
     expect(words).not.toContain('Next check')
     expect(words).not.toContain('It will try again at the next check')
-    expect(words).toContain('Can’t check right now. It is checked again once the watchlist is resumed.')
+    expect(words).toContain('GitHub answered 404 Not Found. It is checked again once the watchlist is resumed.')
     expect(words).toContain('Change schedule')
     expect(buttons(render(paused, ALICE))).not.toContain('Check now')
     expect(buttons(render(statuses, ALICE))).toContain('Check now')
+  })
+
+  it('does not point to the hidden Check now while paused with no schedule', () => {
+    const words = text(render({ ...paused, schedule: null }, ALICE))
+    expect(words).toContain('No schedule. Paused. No check runs until an Operator resumes it.')
+    expect(words).not.toContain('Press Check now')
+    expect(buttons(render({ ...paused, schedule: null }, ALICE))).not.toContain('Check now')
   })
 
   it('reads as before while the watchlist is on, with its next check time and no paused words', () => {
@@ -191,7 +202,7 @@ describe('the schedule editor', () => {
 
 describe('the schedule note', () => {
   it('says no schedule is set and how a check starts then', () => {
-    expect(text(renderToStaticMarkup(<ScheduleNote schedule={null} operator />))).toBe('No schedule. Press Check now to check by hand.')
-    expect(text(renderToStaticMarkup(<ScheduleNote schedule={null} operator={false} />))).toBe('No schedule. An Operator can press Check now to check by hand.')
+    expect(text(renderToStaticMarkup(<ScheduleNote schedule={null} operator paused={false} />))).toBe('No schedule. Press Check now to check by hand.')
+    expect(text(renderToStaticMarkup(<ScheduleNote schedule={null} operator={false} paused={false} />))).toBe('No schedule. An Operator can press Check now to check by hand.')
   })
 })

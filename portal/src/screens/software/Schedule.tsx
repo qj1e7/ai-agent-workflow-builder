@@ -3,13 +3,11 @@ import { useErrorWords } from '../../api/context'
 import { useSaveSchedule, useTurnOffSchedule } from '../../api/queries'
 import type { Day, ScheduleView } from '../../api/types'
 import { Button } from '../../ui/Button'
-import { checkClock, DAYS, dayOption, scheduleOwnerWords, scheduleWords, singaporeTime } from './software'
+import { checkClock, DAYS, dayOption, noScheduleWords, PAUSED_WORDS, scheduleOwnerWords, scheduleWords, singaporeTime } from './software'
 import styles from './Software.module.css'
 
-const PAUSED_WORDS = 'Paused. No check runs until an Operator resumes it.'
-
-export function ScheduleNote({ schedule, operator }: { schedule: ScheduleView | null; operator: boolean }) {
-  if (schedule === null) return <p>{operator ? 'No schedule. Press Check now to check by hand.' : 'No schedule. An Operator can press Check now to check by hand.'}</p>
+export function ScheduleNote({ schedule, operator, paused }: { schedule: ScheduleView | null; operator: boolean; paused: boolean }) {
+  if (schedule === null) return <p>{noScheduleWords({ operator, paused })}</p>
   return (
     <>
       <p>
@@ -94,7 +92,7 @@ function useEditorThatRefocusesItsOpener() {
   return { editing, opener, open, close }
 }
 
-export function Schedule({ schedule, operator }: { schedule: ScheduleView | null; operator: boolean }) {
+export function Schedule({ schedule, operator, paused }: { schedule: ScheduleView | null; operator: boolean; paused: boolean }) {
   const { editing, opener, open, close } = useEditorThatRefocusesItsOpener()
   const off = useTurnOffSchedule()
   const words = useErrorWords()
@@ -104,7 +102,7 @@ export function Schedule({ schedule, operator }: { schedule: ScheduleView | null
         Schedule
       </h2>
       <div className={styles['scheduleText']}>
-        <ScheduleNote schedule={schedule} operator={operator} />
+        <ScheduleNote schedule={schedule} operator={operator} paused={paused} />
       </div>
       {operator && !editing ? (
         <div className={styles['actions']}>

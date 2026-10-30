@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../api/client'
 import { errorWords } from '../../api/errors'
 import { createLatch } from '../../api/latch'
-import { changeFeedback, NO_FEEDBACK, noticeWords, pressRemove, pressUndo, UNDO_ID, type ChangeFeedback, type FeedbackEvent, type MutateCallbacks } from './removal'
+import { changeFeedback, NO_FEEDBACK, noticeButtons, noticeWords, pressRemove, pressUndo, PROBLEM_ID, UNDO_ID, type ChangeFeedback, type FeedbackEvent, type MutateCallbacks } from './removal'
 
 const LANGGRAPH = { id: 'sw_lang', name: 'LangGraph' }
 const REDIS = { id: 'sw_redis', name: 'Redis' }
@@ -80,19 +80,30 @@ describe('Undo', () => {
     expect(h.state()).toEqual({ notice: { kind: 'restored', row: LANGGRAPH }, problem: null, busy: null, focusTargetId: 'remove-sw_lang' })
   })
 
-  it('says in plain words why the software could not come back, and keeps Undo', () => {
+  it('says in plain words why the platform refused, drops the Undo it can no longer do, and moves focus to the words', () => {
     const cases: [number, string][] = [
       [409, 'Could not put LangGraph back. Its repository was added again since, so it is on the list already.'],
       [404, 'Could not put LangGraph back. The platform has no record of it.'],
+      [410, 'Could not put LangGraph back. It was removed more than a day ago. Add it again to keep checking it.'],
       [422, 'Could not put LangGraph back. The list is full. Remove software you no longer run, then try again.'],
-      [503, 'Could not put LangGraph back. The platform had a problem. Try again in a moment.'],
     ]
     for (const [status, said] of cases) {
       const h = harness(removed)
       pressUndo(h.latch, h.send, LANGGRAPH, h.dispatch, words)
       h.answer((outcome) => outcome.onError?.(new ApiError(status, { detail: 'detail' })))
-      expect(h.state().problem, String(status)).toBe(said)
+      expect(h.state(), String(status)).toEqual({ notice: null, problem: said, busy: null, focusTargetId: PROBLEM_ID })
+    }
+  })
+
+  it('keeps Undo to try again when the platform had a problem or did not answer', () => {
+    for (const error of [new ApiError(503, null), new TypeError('Failed to fetch')]) {
+      const h = harness(removed)
+      pressUndo(h.latch, h.send, LANGGRAPH, h.dispatch, words)
+      h.answer((outcome) => outcome.onError?.(error))
       expect(h.state().notice).toEqual(removed.notice)
+      expect(h.state().problem).toMatch(/^Could not put LangGraph back\. /)
+      pressUndo(h.latch, h.send, LANGGRAPH, h.dispatch, words)
+      expect(h.sent).toEqual(['sw_lang', 'sw_lang'])
     }
   })
 
@@ -116,11 +127,32 @@ describe('Undo', () => {
 })
 
 describe('the message after a change to the list', () => {
+  const on = { scheduled: true, paused: false }
+
   it('says what happened in plain words', () => {
-    expect(noticeWords({ kind: 'removed', row: LANGGRAPH }, true)).toBe('Removed LangGraph. It won’t be checked any more.')
-    expect(noticeWords({ kind: 'restored', row: LANGGRAPH }, true)).toBe('Put LangGraph back on the list.')
-    expect(noticeWords({ kind: 'gone', name: 'LangGraph' }, true)).toBe('LangGraph was already removed.')
-    expect(noticeWords({ kind: 'added', name: 'Redis' }, true)).toBe('Added Redis. It is checked at the next check.')
-    expect(noticeWords({ kind: 'added', name: 'Redis' }, false)).toBe('Added Redis. Press Check now to check it.')
+    expect(noticeWords({ kind: 'removed', row: LANGGRAPH }, on)).toBe('Removed LangGraph. It won’t be checked any more.')
+    expect(noticeWords({ kind: 'restored', row: LANGGRAPH }, on)).toBe('Put LangGraph back on the list.')
+    expect(noticeWords({ kind: 'gone', name: 'LangGraph' }, on)).toBe('LangGraph was already removed.')
+    expect(noticeWords({ kind: 'added', name: 'Redis' }, on)).toBe('Added Redis. It is checked at the next check.')
+    expect(noticeWords({ kind: 'added', name: 'Redis' }, { scheduled: false, paused: false })).toBe('Added Redis. Press Check now to check it.')
+  })
+
+  it('does not point to Check now while the watchlist is paused, since the page hides it', () => {
+    expect(noticeWords({ kind: 'added', name: 'Redis' }, { scheduled: true, paused: true })).toBe('Added Redis. It is checked at the next check once an Operator resumes the watchlist.')
+    expect(noticeWords({ kind: 'added', name: 'Redis' }, { scheduled: false, paused: true })).toBe('Added Redis. It can be checked once an Operator resumes the watchlist.')
+  })
+
+  it('can be dismissed, and only a removal offers Undo', () => {
+    expect(noticeButtons({ kind: 'removed', row: LANGGRAPH })).toEqual(['Undo', 'Dismiss'])
+    for (const notice of [{ kind: 'added', name: 'Redis' }, { kind: 'restored', row: LANGGRAPH }, { kind: 'gone', name: 'LangGraph' }] as const) {
+      expect(noticeButtons(notice), notice.kind).toEqual(['Dismiss'])
+    }
+  })
+
+  it('goes when it is dismissed or the next change replaces it', () => {
+    const added: ChangeFeedback = { ...NO_FEEDBACK, notice: { kind: 'added', name: 'Redis' } }
+    expect(changeFeedback(added, { type: 'dismissed' }).notice).toBeNull()
+    expect(changeFeedback(added, { type: 'removing', row: LANGGRAPH }).notice).toBeNull()
+    expect(changeFeedback(added, { type: 'added', name: 'Kafka' }).notice).toEqual({ kind: 'added', name: 'Kafka' })
   })
 })

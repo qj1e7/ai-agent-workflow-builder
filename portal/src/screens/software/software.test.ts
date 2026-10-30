@@ -4,15 +4,18 @@ import { ApiError } from '../../api/client'
 import type { ScheduleView, WatchedSoftwareView } from '../../api/types'
 import {
   addProblems,
+  cantCheckWords,
   checkClock,
   checkName,
   checkRepo,
   checkVersion,
   countIn,
+  emptyWords,
   groupsOf,
   historyOf,
   matches,
   newestOf,
+  noScheduleWords,
   repoOf,
   scheduleOwnerWords,
   scheduleWords,
@@ -159,6 +162,36 @@ describe('the newest version', () => {
   it('shows the version alone when the latest check read it', () => {
     const read = ROWS.find((r) => r.status === 'behind') as WatchedSoftwareView
     expect(newestOf(read)).toEqual({ version: '1.2.16', note: null })
+  })
+})
+
+describe('a row that can’t be checked', () => {
+  it('says its own reason, then when it is checked again', () => {
+    const reason = 'GitHub answered 404 Not Found.'
+    expect(cantCheckWords(reason, { scheduled: true, paused: false })).toBe('GitHub answered 404 Not Found. It will try again at the next check.')
+    expect(cantCheckWords(reason, { scheduled: false, paused: false })).toBe('GitHub answered 404 Not Found. With no schedule, it is checked again when an Operator presses Check now.')
+    expect(cantCheckWords(reason, { scheduled: true, paused: true })).toBe('GitHub answered 404 Not Found. It is checked again once the watchlist is resumed.')
+  })
+
+  it('says it can’t check right now when the platform gave no reason', () => {
+    expect(cantCheckWords(null, { scheduled: true, paused: false })).toBe('Can’t check right now. It will try again at the next check.')
+  })
+})
+
+describe('words that depend on the schedule and on pausing', () => {
+  it('offers Check now with no schedule, but not while the watchlist is paused', () => {
+    expect(noScheduleWords({ operator: true, paused: false })).toBe('No schedule. Press Check now to check by hand.')
+    expect(noScheduleWords({ operator: false, paused: false })).toBe('No schedule. An Operator can press Check now to check by hand.')
+    for (const operator of [true, false]) {
+      expect(noScheduleWords({ operator, paused: true })).toBe('No schedule. Paused. No check runs until an Operator resumes it.')
+    }
+  })
+
+  it('says how new software gets checked on an empty list', () => {
+    expect(emptyWords({ operator: true, scheduled: true, paused: false })).toBe('Add the tools your team runs. Each one is checked at the next check.')
+    expect(emptyWords({ operator: true, scheduled: false, paused: false })).toBe('Add the tools your team runs, then press Check now to check them.')
+    expect(emptyWords({ operator: true, scheduled: false, paused: true })).toBe('Add the tools your team runs. They can be checked once an Operator resumes the watchlist.')
+    expect(emptyWords({ operator: false, scheduled: true, paused: false })).toBe('An Operator can add the tools your team runs.')
   })
 })
 
