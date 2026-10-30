@@ -1,8 +1,10 @@
 from collections.abc import Callable
+from contextlib import suppress
 
 import anyio
 import psycopg
 import pytest
+from azure.cosmos.exceptions import CosmosResourceNotFoundError
 from psycopg import AsyncConnection
 
 from platform_api.db import Database
@@ -272,11 +274,17 @@ async def test_a_copier_creates_its_container_before_its_first_copy(
     await cosmos.database.delete_container(CONTAINER)
     fresh = CosmosEvents(cosmos_client(cosmos_settings()), database=COSMOS_TEST_DATABASE)
     copier = Copier(db, fresh, reconnect_delay=0.1)
+
+    async def copied() -> list[int]:
+        with suppress(CosmosResourceNotFoundError):
+            return [e.seq for e in await fresh.read_after(RUN, 0)]
+        return []
+
     await append(db, 1, 2)
     await copier.start()
     try:
         with anyio.fail_after(10):
-            while [e.seq for e in await fresh.read_after(RUN, 0)] != [1, 2]:
+            while await copied() != [1, 2]:
                 await anyio.sleep(0.05)
     finally:
         await copier.stop()
