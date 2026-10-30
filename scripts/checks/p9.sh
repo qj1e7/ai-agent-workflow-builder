@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Checker probes for P9 of docs/design/rebuild-plan.md: the Workflows list and the workflow page. Rerun any step on its own.
 # Works from a fresh `git archive` export: nothing here needs git, and each e2e folder is mounted on its own.
-# The checks run from this script's own tree, whatever stack they point at. Trunk's tree has no p9.sh or p9.check.ts,
-# so run this head copy of p9.sh for a trunk stack too, as lane1 does.
+# The checks run from this script's own tree, whatever stack they point at, so a trunk stack is checked with this head
+# copy: trunk has no p9.sh or p9.check.ts.
 #
 # usage: scripts/checks/p9.sh <command> [arguments]
 #
@@ -19,8 +19,7 @@
 #                                          wab/*:<tag> unless another stack still uses them
 #   check <project> [playwright arguments] run portal/e2e/checks/p9.check.ts in the runner image, in that project's Portal network
 #   live <project> [playwright arguments]  run portal/e2e/live, such as 04-workflows.live.ts, the same way
-#   lane1 <head-project> [trunk-project]   trunk has no Workflows page: record it; then two seeded rows at head. The trunk
-#                                          stack is checked with this head script and its checks, as trunk has none
+#   lane1 <head-project> [trunk-project]   trunk has no Workflows page: record it; then two seeded rows at head
 #   lane <n> <project>                     lanes 2, 3, 5, 6, 7, 9 and 10, one at a time on a shared stack. Lane 9 also lists
 #                                          each check axe could not decide in lane-9/p9-axe-undecided.txt, for a person to read
 #   lane4 <worktree> <project> <tag> <portal-port> <api-port> <n8n-port> [--reuse]
@@ -30,7 +29,7 @@
 #                                          lane 8 brings up its own stack, stops mock-model before the run, and takes it down
 #                                          with its images (and the tag's, unless --reuse)
 #   probes <project>                       the checker's probes: focus from every page at 1440 and 390 px, presses on a
-#                                          workflow someone else paused or deleted, the watchlist and its Resume on the
+#                                          workflow someone else paused, resumed or deleted, the watchlist and its Resume on the
 #                                          Software page, roles, own runs, Delete and Undo, messages, reduced motion, and
 #                                          retired words in the pages and in every message a press brings
 #   size <trunk-worktree> <head-worktree>  gzip bytes of the JavaScript each built dist/index.html loads; fails past +30 KB
