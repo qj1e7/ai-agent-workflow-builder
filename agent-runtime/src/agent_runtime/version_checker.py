@@ -1,10 +1,10 @@
 from collections.abc import Callable
 
-from agent_runtime.contract import TaskError, TaskOutput, WatchlistInputs
+from agent_runtime.contract import TaskOutput, WatchlistInputs
 from agent_runtime.events import Draft
 from agent_runtime.release_source import CHECKER, DEFAULT_RETRY, ReleaseSource, RetryPolicy
 from agent_runtime.summary import Summarizer
-from agent_runtime.watchlist import WatchlistChecker
+from agent_runtime.watchlist import NothingChecked, WatchlistChecker
 
 __all__ = ["CHECKER", "VersionChecker"]
 
@@ -28,5 +28,5 @@ class VersionChecker:
 
     def check_watchlist(
         self, inputs: WatchlistInputs, emit: Callable[[Draft], None]
-    ) -> TaskOutput | TaskError:
+    ) -> TaskOutput | NothingChecked:
         return self._watchlist.check(inputs, emit)

@@ -25,6 +25,7 @@ from agent_runtime.events import Draft, EventLog
 from agent_runtime.release_source import tag_list
 from agent_runtime.summary import ChatFor
 from agent_runtime.version_checker import CHECKER, VersionChecker
+from agent_runtime.watchlist import NothingChecked
 
 log = logging.getLogger(__name__)
 
@@ -167,8 +168,13 @@ def run_task(
             )
         )
         return TaskFailed(task_id=request.task_id, error=UNEXPECTED, events=events.events)
-    if isinstance(outcome, TaskError):
-        return TaskFailed(task_id=request.task_id, error=outcome, events=events.events)
+    if isinstance(outcome, NothingChecked):
+        return TaskFailed(
+            task_id=request.task_id,
+            error=outcome.error,
+            events=events.events,
+            findings=outcome.findings,
+        )
     reply = planner.reply(outcome)
     events.add(
         Draft(
@@ -182,7 +188,7 @@ def run_task(
 
 def _check(
     request: TaskRequest, checker: VersionChecker, events: EventLog
-) -> TaskOutput | TaskError:
+) -> TaskOutput | NothingChecked:
     match request.inputs:
         case WatchlistInputs():
             return checker.check_watchlist(request.inputs, events.add)

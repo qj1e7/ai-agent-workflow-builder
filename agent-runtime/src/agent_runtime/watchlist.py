@@ -101,6 +101,12 @@ def ticket_for(item: SoftwareToCheck, finding: Finding) -> ProposedIntent:
     )
 
 
+@dataclass(frozen=True)
+class NothingChecked:
+    error: TaskError
+    findings: list[Finding]
+
+
 @dataclass
 class WatchlistState:
     inputs: WatchlistInputs
@@ -129,7 +135,7 @@ class WatchlistChecker:
 
     def check(
         self, inputs: WatchlistInputs, emit: Callable[[Draft], None]
-    ) -> TaskOutput | TaskError:
+    ) -> TaskOutput | NothingChecked:
         final: dict[str, object] = {}
         for mode, chunk in self._graph.stream(
             WatchlistState(inputs=inputs), stream_mode=["custom", "values"]
@@ -139,7 +145,9 @@ class WatchlistChecker:
             elif mode == "values" and isinstance(chunk, dict):
                 final = cast(dict[str, object], chunk)
         outcome = final.get("error") or final.get("output")
-        assert isinstance(outcome, TaskError | TaskOutput)
+        if isinstance(outcome, TaskError):
+            return NothingChecked(outcome, cast(list[Finding], final.get("findings", [])))
+        assert isinstance(outcome, TaskOutput)
         return outcome
 
     def _build(self):

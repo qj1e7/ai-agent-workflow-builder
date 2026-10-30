@@ -295,6 +295,17 @@ def test_every_software_refused_fails_the_task_for_good():
     assert (result.error.type, result.error.retryable) == ("UpstreamRejected", False)
 
 
+def test_a_task_that_could_check_nothing_still_gives_each_software_its_own_reason():
+    source = RepoSource({**TAGS, LANGGRAPH: ["nightly"]}, refused={FASTAPI: 404, REDIS: 403})
+    result = Room(source).run(request_for(fastapi("0.115.0"), redis("8.2.1"), langgraph("1.2.14")))
+    assert isinstance(result, TaskFailed)
+    assert [(f.software_id, f.state, f.newest, f.detail) for f in result.findings] == [
+        (FASTAPI_ID, "cant_check", None, "GitHub answered 404 Not Found."),
+        (REDIS_ID, "cant_check", None, "GitHub answered 403 Forbidden."),
+        (LANGGRAPH_ID, "cant_check", None, "No release has a plain version number."),
+    ]
+
+
 def test_each_software_reports_its_state_in_a_read_source_step_in_input_order():
     source = RepoSource(TAGS, refused={FASTAPI: 404})
     result = finished(

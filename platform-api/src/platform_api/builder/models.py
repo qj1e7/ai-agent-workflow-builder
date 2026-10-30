@@ -153,7 +153,14 @@ class WatchedSoftwareView(WireModel):
     source: SourceView
     our_version: str | None
     our_version_source: VersionSourceView | None
-    newest_version: str | None
+    newest_version: str | None = Field(
+        description="The newest release read from the source. A check that cannot read the "
+        "source keeps the version an earlier check read."
+    )
+    newest_read_at: datetime | None = Field(
+        description="When newest_version was read. Earlier than checked_at when the latest "
+        "check could not read the source."
+    )
     checked_at: datetime | None
     status: Status
     problem: str | None

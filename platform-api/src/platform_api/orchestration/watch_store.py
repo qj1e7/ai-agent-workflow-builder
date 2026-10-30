@@ -18,9 +18,11 @@ from platform_api.orchestration.store import STATE_TYPES, RunRecord
 from platform_api.orchestration.watch import (
     Checked,
     CouldNotCheck,
+    CouldNotRead,
     FromFirstCheck,
     FromTicketDone,
     Given,
+    KnownNewest,
     LatestCheck,
     LearnedVersion,
     OpenTicket,
@@ -58,6 +60,31 @@ class LastCheck:
     started_at: datetime
 
 
+async def _save_newest(
+    uow: UnitOfWork, use_case_id: UseCaseId, read: ReadNewest, run_id: RunId
+) -> None:
+    await uow.conn.execute(
+        "INSERT INTO orchestration.software_checks (use_case_id, software_id, run_id, "
+        "checked_at, newest_version, newest_at, problem) VALUES (%s, %s, %s, %s, %s, %s, NULL) "
+        "ON CONFLICT (use_case_id, software_id) DO UPDATE SET run_id = EXCLUDED.run_id, "
+        "checked_at = EXCLUDED.checked_at, newest_version = EXCLUDED.newest_version, "
+        "newest_at = EXCLUDED.newest_at, problem = NULL",
+        (use_case_id, read.software_id, run_id, uow.now, read.newest, uow.now),
+    )
+
+
+async def _save_problem_keeping_last_read(
+    uow: UnitOfWork, use_case_id: UseCaseId, unread: CouldNotRead, run_id: RunId
+) -> None:
+    await uow.conn.execute(
+        "INSERT INTO orchestration.software_checks (use_case_id, software_id, run_id, "
+        "checked_at, problem) VALUES (%s, %s, %s, %s, %s) "
+        "ON CONFLICT (use_case_id, software_id) DO UPDATE SET run_id = EXCLUDED.run_id, "
+        "checked_at = EXCLUDED.checked_at, problem = EXCLUDED.problem",
+        (use_case_id, unread.software_id, run_id, uow.now, unread.problem),
+    )
+
+
 class WatchStore:
     async def record_review(
         self,
@@ -69,17 +96,10 @@ class WatchStore:
         """Keeps what one check learned. The same review again changes nothing."""
         use_case_id = record.spec.use_case_id
         for entry in reviewed.learned:
-            newest, problem = (
-                (entry.newest, None) if isinstance(entry, ReadNewest) else (None, entry.problem)
-            )
-            await uow.conn.execute(
-                "INSERT INTO orchestration.software_checks (use_case_id, software_id, run_id, "
-                "checked_at, newest_version, problem) VALUES (%s, %s, %s, %s, %s, %s) "
-                "ON CONFLICT (use_case_id, software_id) DO UPDATE SET run_id = EXCLUDED.run_id, "
-                "checked_at = EXCLUDED.checked_at, newest_version = EXCLUDED.newest_version, "
-                "problem = EXCLUDED.problem",
-                (use_case_id, entry.software_id, record.run_id, uow.now, newest, problem),
-            )
+            if isinstance(entry, ReadNewest):
+                await _save_newest(uow, use_case_id, entry, record.run_id)
+            else:
+                await _save_problem_keeping_last_read(uow, use_case_id, entry, record.run_id)
             if isinstance(entry, ReadNewest) and entry.starting_point:
                 await uow.conn.execute(
                     "INSERT INTO orchestration.our_versions (use_case_id, software_id, version, "
@@ -187,7 +207,7 @@ class WatchStore:
         checks: dict[SoftwareId, LatestCheck] = {}
         for row in await (
             await uow.conn.execute(
-                "SELECT software_id, run_id, checked_at, newest_version, problem "
+                "SELECT software_id, run_id, checked_at, newest_version, newest_at, problem "
                 "FROM orchestration.software_checks WHERE use_case_id = %s",
                 (use_case_id,),
             )
@@ -195,7 +215,14 @@ class WatchStore:
             software_id = SoftwareId(row["software_id"])
             run_id = RunId(row["run_id"])
             if row["problem"] is not None:
-                checks[software_id] = CouldNotCheck(run_id, row["checked_at"], str(row["problem"]))
+                last_read = (
+                    None
+                    if row["newest_version"] is None
+                    else KnownNewest(str(row["newest_version"]), row["newest_at"])
+                )
+                checks[software_id] = CouldNotCheck(
+                    run_id, row["checked_at"], str(row["problem"]), last_read
+                )
             else:
                 checks[software_id] = Checked(run_id, row["checked_at"], str(row["newest_version"]))
         pending: dict[SoftwareId, PendingTicket] = {}

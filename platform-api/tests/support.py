@@ -1,5 +1,6 @@
 import json
 import os
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -42,6 +43,15 @@ ALICE = Principal(UserId("alice"), frozenset({Role.OPERATOR, Role.APPROVER}), "A
 BOB = Principal(UserId("bob"), frozenset({Role.APPROVER}), "Bob")
 CAROL = Principal(UserId("carol"), frozenset({Role.OPERATOR}), "Carol")
 NOW = datetime(2026, 11, 3, 2, 14, tzinfo=UTC)
+
+
+@dataclass
+class MovingClock:
+    now: datetime = NOW
+
+    def __call__(self) -> datetime:
+        return self.now
+
 
 LANGGRAPH = SoftwareId("sw_01JC2A3B4C5D6E7F8G9H0J1K2M")
 REDIS = SoftwareId("sw_01REDIS")

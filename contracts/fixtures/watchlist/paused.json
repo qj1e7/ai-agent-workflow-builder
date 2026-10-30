@@ -18,7 +18,8 @@
         "at": "2026-11-02T10:00:00Z",
         "ticket": null
       },
-      "newest_version": null,
+      "newest_version": "0.115.2",
+      "newest_read_at": "2026-11-09T01:00:00Z",
       "checked_at": "2026-11-16T01:00:12Z",
       "status": "cant_check",
       "problem": "GitHub answered 404 Not Found.",
@@ -42,6 +43,7 @@
         "ticket": null
       },
       "newest_version": "1.2.16",
+      "newest_read_at": "2026-11-16T01:00:12Z",
       "checked_at": "2026-11-16T01:00:12Z",
       "status": "behind",
       "problem": null,
@@ -65,6 +67,7 @@
         "ticket": null
       },
       "newest_version": "8.2.1",
+      "newest_read_at": "2026-11-16T01:00:12Z",
       "checked_at": "2026-11-16T01:00:12Z",
       "status": "awaiting_approval",
       "problem": null,
@@ -88,6 +91,7 @@
         "ticket": null
       },
       "newest_version": "17.3.0",
+      "newest_read_at": "2026-11-16T01:00:12Z",
       "checked_at": "2026-11-16T01:00:12Z",
       "status": "ticket_open",
       "problem": null,
@@ -107,6 +111,7 @@
       "our_version": null,
       "our_version_source": null,
       "newest_version": null,
+      "newest_read_at": null,
       "checked_at": null,
       "status": "not_checked",
       "problem": null,
@@ -130,6 +135,7 @@
         "ticket": "MOCK-140"
       },
       "newest_version": "2.42.6",
+      "newest_read_at": "2026-11-16T01:00:12Z",
       "checked_at": "2026-11-16T01:00:12Z",
       "status": "up_to_date",
       "problem": null,
