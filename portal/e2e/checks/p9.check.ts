@@ -317,7 +317,10 @@ test('@lane4 pausing a scheduled workflow makes its next run read Paused, and re
     seen['resumed'] = { next: await nextRunOf(page).innerText(), when: await whenOf(page).innerText(), api: await useCaseOf(api, workflow.id) }
     await shotTo(page, 4, 'p9-resumed.png')
     save(4, 'p9-pause.json', seen)
-    expect((seen['before'] as { when: string }).when).toContain('On a schedule')
+    const when = (key: string) => (seen[key] as { when: string }).when
+    expect(when('before'), 'When gives the schedule’s own day and time').toBe('Every Monday at 9:00\nSingapore time (SGT).')
+    expect(when('paused'), 'When keeps the schedule while paused; Paused shows only in Next run').toBe(when('before'))
+    expect(when('resumed')).toBe(when('before'))
     expect((seen['paused'] as { api: UseCase }).api.next_run_at).toBeNull()
     expect((seen['resumed'] as { api: UseCase }).api.next_run_at).not.toBeNull()
     assertClean(watch)

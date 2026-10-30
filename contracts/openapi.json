@@ -5798,6 +5798,28 @@
         "title": "UseCaseList",
         "type": "object"
       },
+      "UseCaseSchedule": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "$ref": "#/components/schemas/ClockTime"
+          },
+          "day": {
+            "$ref": "#/components/schemas/Day"
+          },
+          "time_zone": {
+            "title": "Time Zone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "at",
+          "time_zone"
+        ],
+        "title": "UseCaseSchedule",
+        "type": "object"
+      },
       "UseCaseState": {
         "enum": [
           "on",
@@ -5861,6 +5883,17 @@
             "title": "Plan",
             "type": "array"
           },
+          "schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UseCaseSchedule"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When it runs on its own, kept while it is paused. Null for a workflow with no schedule."
+          },
           "state": {
             "$ref": "#/components/schemas/UseCaseState",
             "description": "on, or paused until an Operator resumes it. A paused workflow starts no run, on its schedule or by hand. A deleted workflow is not shown."
@@ -5889,6 +5922,7 @@
           "created_at",
           "state",
           "next_run_at",
+          "schedule",
           "plan",
           "agents"
         ],

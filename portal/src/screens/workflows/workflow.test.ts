@@ -108,13 +108,20 @@ describe('the next run', () => {
 })
 
 describe('when it runs', () => {
-  it('says it runs on a schedule when it has a next run, and that only Run now starts one with no schedule', () => {
-    expect(whenWords({ ...AGENTS, next_run_at: '2026-11-09T01:00:00Z' })).toEqual({ words: 'On a schedule', small: 'Singapore time (SGT).' })
-    expect(whenWords(AGENTS)).toEqual({ words: 'No schedule', small: 'An Operator starts it with Run now.' })
+  it('gives the schedule’s own day and time, in Singapore time', () => {
+    expect(whenWords(WATCHLIST)).toEqual({ words: 'Every Monday at 9:00', small: 'Singapore time (SGT).' })
+    expect(whenWords({ schedule: { day: 'every_day', at: '17:30', time_zone: 'Asia/Singapore' } })).toEqual({ words: 'Every day at 17:30', small: 'Singapore time (SGT).' })
   })
 
-  it('says nothing runs while it is paused, whether it has a schedule or not', () => {
-    expect(whenWords({ ...AGENTS, state: 'paused' })).toEqual({ words: 'Paused', small: 'Nothing runs until an Operator resumes it.' })
+  it('keeps the schedule while the workflow is paused, because Paused shows in the next run', () => {
+    expect(whenWords(PAUSED)).toEqual({ words: 'Every Monday at 9:00', small: 'Singapore time (SGT).' })
+    expect(nextRunWords(PAUSED, NOW)).toBe('Paused')
+  })
+
+  it('says only Run now starts a workflow with no schedule, on or paused', () => {
+    expect(whenWords(AGENTS)).toEqual({ words: 'No schedule', small: 'An Operator starts it with Run now.' })
+    const paused: UseCaseView = { ...AGENTS, state: 'paused' }
+    expect(whenWords(paused)).toEqual({ words: 'No schedule', small: 'An Operator starts it with Run now.' })
   })
 })
 

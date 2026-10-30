@@ -6,6 +6,7 @@ import type { FaceState } from '../../ui/AgentFace'
 import { agentIdentity } from '../../ui/agents'
 import { andList, count, type NameOf } from '../run/words'
 import { faceId } from '../agents/agents'
+import { repeatWords } from '../software/software'
 
 export type Tone = 'ok' | 'wait' | 'bad' | 'new'
 
@@ -116,10 +117,10 @@ export interface When {
   readonly small: string
 }
 
-export function whenWords(useCase: Pick<UseCaseView, 'state' | 'next_run_at'>): When {
-  if (useCase.state === 'paused') return { words: 'Paused', small: 'Nothing runs until an Operator resumes it.' }
-  if (useCase.next_run_at) return { words: 'On a schedule', small: 'Singapore time (SGT).' }
-  return { words: 'No schedule', small: 'An Operator starts it with Run now.' }
+export function whenWords({ schedule }: Pick<UseCaseView, 'schedule'>): When {
+  if (!schedule) return { words: 'No schedule', small: 'An Operator starts it with Run now.' }
+  const words = repeatWords(schedule)
+  return { words: words.charAt(0).toUpperCase() + words.slice(1), small: 'Singapore time (SGT).' }
 }
 
 const STEP_TAGS: Record<BlockKind, { readonly words: string; readonly writes: boolean }> = {
