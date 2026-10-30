@@ -49,10 +49,19 @@ class Checked:
 
 
 @dataclass(frozen=True)
+class KnownNewest:
+    version: str
+    at: datetime
+
+
+@dataclass(frozen=True)
 class CouldNotCheck:
+    """The latest check could not read the source. known is what an earlier check read."""
+
     run_id: RunId
     at: datetime
     problem: str
+    known: KnownNewest | None = None
 
 
 type LatestCheck = Checked | CouldNotCheck

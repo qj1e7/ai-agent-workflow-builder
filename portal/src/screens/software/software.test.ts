@@ -12,6 +12,7 @@ import {
   groupsOf,
   historyOf,
   matches,
+  newestOf,
   repoOf,
   scheduleOwnerWords,
   scheduleWords,
@@ -142,6 +143,25 @@ describe('the list', () => {
   })
 })
 
+describe('the newest version', () => {
+  const failed = ROWS.find((r) => r.status === 'cant_check') as WatchedSoftwareView
+
+  it('keeps the version an earlier check read, and says when, after a check that could not read the source', () => {
+    expect(newestOf(failed)).toEqual({ version: '0.115.2', note: 'Last read Mon 9 Nov, 9:00' })
+  })
+
+  it('says it is not known when no check has read it, and not checked yet before the first check', () => {
+    expect(newestOf({ ...failed, newest_version: null, newest_read_at: null })).toEqual({ version: 'Not known', note: null })
+    const fresh = ROWS.find((r) => r.status === 'not_checked') as WatchedSoftwareView
+    expect(newestOf(fresh)).toEqual({ version: 'Not checked yet', note: null })
+  })
+
+  it('shows the version alone when the latest check read it', () => {
+    const read = ROWS.find((r) => r.status === 'behind') as WatchedSoftwareView
+    expect(newestOf(read)).toEqual({ version: '1.2.16', note: null })
+  })
+})
+
 describe('the schedule', () => {
   it('shows the next check in Singapore time and names the owner', () => {
     expect(singaporeTime('2026-11-23T09:00:00+08:00')).toBe('Mon 23 Nov, 9:00')
@@ -169,6 +189,7 @@ describe('a row’s history', () => {
       status: 'ticket_open',
       open_ticket: 'MOCK-150',
       checked_at: '2026-11-10T01:00:00Z',
+      newest_read_at: '2026-11-10T01:00:00Z',
       our_version: '1.2.16',
       our_version_source: { kind: 'ticket_done', at: '2026-11-17T03:00:00Z', ticket: 'MOCK-143' },
     }
@@ -180,6 +201,16 @@ describe('a row’s history', () => {
   it('says why a check failed and when it will try again', () => {
     const row = ROWS.find((r) => r.status === 'cant_check') as WatchedSoftwareView
     expect(historyOf(row, nameOf).map((line) => line.words)).toContain('Couldn’t check. GitHub answered 404 Not Found.')
+  })
+
+  it('keeps the newest version an earlier check read below the check that failed', () => {
+    const row = ROWS.find((r) => r.status === 'cant_check') as WatchedSoftwareView
+    expect(historyOf(row, nameOf)).toEqual([
+      { when: 'Mon 16 Nov, 9:00', words: 'Couldn’t check. GitHub answered 404 Not Found.' },
+      { when: 'Mon 9 Nov, 9:00', words: 'Checked. The newest version is 0.115.2.' },
+      { when: 'Mon 2 Nov, 18:00', words: 'Our version is 0.115.0. Given when added.' },
+      { when: 'Mon 2 Nov, 18:00', words: 'Added by Alice.' },
+    ])
   })
 
   it('says a new row was not checked yet', () => {

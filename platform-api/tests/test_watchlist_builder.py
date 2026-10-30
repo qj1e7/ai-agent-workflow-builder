@@ -22,6 +22,7 @@ from platform_api.orchestration import (
     FromFirstCheck,
     FromTicketDone,
     Given,
+    KnownNewest,
     LastCheck,
     OpenTicket,
     PendingTicket,
@@ -426,6 +427,34 @@ async def test_the_view_shows_each_fact_the_platform_learned(
         LATER,
     )
     assert gamma.open_ticket == "MOCK-9"
+
+
+async def test_a_row_that_cannot_be_checked_shows_the_newest_version_it_last_knew_and_when(
+    watchlist: Watchlist, facts: FakeFacts
+):
+    by_name = await listed(watchlist, "Alpha", "Beta")
+    facts.known = {
+        by_name["Alpha"]: SoftwareFacts(
+            Given("1.0.0", NOW),
+            CouldNotCheck(RUN, LATER, "GitHub answered 503.", KnownNewest("1.2.0", NOW)),
+            None,
+            None,
+        ),
+        by_name["Beta"]: SoftwareFacts(
+            Given("1.0.0", NOW), Checked(RUN, LATER, "1.1.0"), None, None
+        ),
+    }
+    view = await watchlist.view()
+    assert view is not None
+    rows = {row.name: row for row in view.software}
+    alpha, beta = rows["Alpha"], rows["Beta"]
+    assert (alpha.status, alpha.problem, alpha.checked_at) == (
+        "cant_check",
+        "GitHub answered 503.",
+        LATER,
+    )
+    assert (alpha.newest_version, alpha.newest_read_at) == ("1.2.0", NOW)
+    assert (beta.newest_version, beta.newest_read_at, beta.checked_at) == ("1.1.0", LATER, LATER)
 
 
 async def test_a_check_carries_our_version_the_open_ticket_and_the_waiting_approval(

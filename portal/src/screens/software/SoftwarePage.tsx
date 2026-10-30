@@ -13,7 +13,7 @@ import { FindSoftware } from './FindSoftware'
 import { Schedule } from './Schedule'
 import { changeFeedback, NO_FEEDBACK, noticeWords, pressRemove, pressUndo, removeButtonId, UNDO_ID, type ChangeFeedback, type Named } from './removal'
 import { SoftwareHistory } from './SoftwareHistory'
-import { cantCheckWords, countIn, groupsOf, singaporeTime, statusLabel, statusTone, stoppedWords, versionSourceWords } from './software'
+import { cantCheckWords, countIn, groupsOf, newestOf, singaporeTime, statusLabel, statusTone, stoppedWords, versionSourceWords } from './software'
 import styles from './Software.module.css'
 
 const REFRESH_MS = 15_000
@@ -43,6 +43,7 @@ interface RowProps {
 
 function Row({ row, operator, scheduled, paused, open, removing, nameOf, onToggle, onRemove }: RowProps) {
   const historyId = `history-${row.id}`
+  const newest = newestOf(row)
   return (
     <li className={styles['row']} data-status={row.status}>
       <div className={styles['who']}>
@@ -66,7 +67,10 @@ function Row({ row, operator, scheduled, paused, open, removing, nameOf, onToggl
         </div>
         <div>
           <dt>Newest</dt>
-          <dd>{row.newest_version ?? (row.status === 'not_checked' ? 'Not checked yet' : 'Not known')}</dd>
+          <dd>
+            {newest.version}
+            {newest.note ? <span className={styles['src']}>{newest.note}</span> : null}
+          </dd>
         </div>
       </dl>
       <div className={styles['state']}>

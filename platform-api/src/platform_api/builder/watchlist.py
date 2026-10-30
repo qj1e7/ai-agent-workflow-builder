@@ -122,11 +122,13 @@ def software_view(listed: ListedSoftware, standing: Standing) -> WatchedSoftware
             our_source = VersionSourceView(kind="ticket_done", at=at, ticket=ticket)
     match facts.latest_check:
         case None:
-            newest, checked_at, problem = None, None, None
+            newest, read_at, checked_at, problem = None, None, None, None
         case Checked(_, at, newest_version):
-            newest, checked_at, problem = newest_version, at, None
-        case CouldNotCheck(_, at, why):
-            newest, checked_at, problem = None, at, why
+            newest, read_at, checked_at, problem = newest_version, at, at, None
+        case CouldNotCheck(_, at, why, known):
+            newest = None if known is None else known.version
+            read_at = None if known is None else known.at
+            checked_at, problem = at, why
     return WatchedSoftwareView(
         id=listed.id,
         name=listed.name,
@@ -134,6 +136,7 @@ def software_view(listed: ListedSoftware, standing: Standing) -> WatchedSoftware
         our_version=None if facts.our_version is None else facts.our_version.version,
         our_version_source=our_source,
         newest_version=newest,
+        newest_read_at=read_at,
         checked_at=checked_at,
         status=standing.status,
         problem=problem,

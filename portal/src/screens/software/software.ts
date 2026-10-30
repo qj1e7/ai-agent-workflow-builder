@@ -174,6 +174,18 @@ export function versionSourceWords(source: VersionSourceView | null): string {
   }
 }
 
+interface Newest {
+  readonly version: string
+  readonly note: string | null
+}
+
+/** A check that could not read the source keeps the version an earlier check read. */
+export function newestOf(row: WatchedSoftwareView): Newest {
+  if (row.newest_version === null) return { version: row.status === 'not_checked' ? 'Not checked yet' : 'Not known', note: null }
+  const keptFrom = row.status === 'cant_check' ? row.newest_read_at : null
+  return { version: row.newest_version, note: keptFrom ? `Last read ${singaporeTime(keptFrom)}` : null }
+}
+
 const TIME_ZONE = 'Asia/Singapore'
 const day = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: TIME_ZONE })
 const clock = new Intl.DateTimeFormat('en-GB', { hour: 'numeric', minute: '2-digit', hourCycle: 'h23', timeZone: TIME_ZONE })
@@ -215,12 +227,11 @@ export function historyOf(row: WatchedSoftwareView, nameOf: (id: string) => stri
   if (row.open_ticket) now.push({ when: 'Now', words: `${row.open_ticket} is open in Jira for the upgrade.` })
   else if (row.status === 'awaiting_approval') now.push({ when: 'Now', words: 'An upgrade ticket is waiting for a yes.' })
   const dated: { readonly at: string; readonly words: string }[] = []
-  if (row.checked_at) {
-    const failed = row.status === 'cant_check'
-    dated.push({ at: row.checked_at, words: failed ? (row.problem ? `Couldn’t check. ${row.problem}` : 'Couldn’t check.') : `Checked. The newest version is ${row.newest_version ?? 'unknown'}.` })
-  } else {
-    now.push({ when: 'Not yet', words: 'Not checked yet.' })
-  }
+  const failed = row.status === 'cant_check'
+  if (row.checked_at && failed) dated.push({ at: row.checked_at, words: row.problem ? `Couldn’t check. ${row.problem}` : 'Couldn’t check.' })
+  const readAt = row.newest_read_at ?? (failed ? null : row.checked_at)
+  if (readAt) dated.push({ at: readAt, words: `Checked. The newest version is ${row.newest_version ?? 'unknown'}.` })
+  if (!row.checked_at) now.push({ when: 'Not yet', words: 'Not checked yet.' })
   const source = row.our_version_source
   if (source && row.our_version) {
     const words = source.kind === 'ticket_done' ? `Our version moved to ${row.our_version}. It came from ${source.ticket ?? 'a ticket'}, marked Done.` : `Our version is ${row.our_version}. ${versionSourceWords(source)}.`

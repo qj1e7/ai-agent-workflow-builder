@@ -5877,6 +5877,19 @@
             "title": "Name",
             "type": "string"
           },
+          "newest_read_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When newest_version was read. Earlier than checked_at when the latest check could not read the source.",
+            "title": "Newest Read At"
+          },
           "newest_version": {
             "anyOf": [
               {
@@ -5886,6 +5899,7 @@
                 "type": "null"
               }
             ],
+            "description": "The newest release read from the source. A check that cannot read the source keeps the version an earlier check read.",
             "title": "Newest Version"
           },
           "open_ticket": {
@@ -5945,6 +5959,7 @@
           "our_version",
           "our_version_source",
           "newest_version",
+          "newest_read_at",
           "checked_at",
           "status",
           "problem",

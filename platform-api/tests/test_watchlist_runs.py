@@ -32,6 +32,7 @@ from platform_api.orchestration.watch import (
     FromFirstCheck,
     FromTicketDone,
     Given,
+    KnownNewest,
     OpenTicket,
     PendingTicket,
     ReadNewest,
@@ -376,6 +377,9 @@ async def checked_once_then_failed(
     return first, second
 
 
+READ_FIRST = {LANGGRAPH: "1.2.14", REDIS: "8.2.1", FASTAPI: "0.115.0", POSTGRES: "17.2.0"}
+
+
 async def test_a_check_that_reads_no_source_marks_every_software_cant_check_and_says_why(
     h: Harness,
 ):
@@ -383,12 +387,48 @@ async def test_a_check_that_reads_no_source_marks_every_software_cant_check_and_
     found = await standings(h)
     later = NOW + timedelta(hours=1)
     assert {sid: s.facts.latest_check for sid, s in found.software.items()} == {
-        sid: CouldNotCheck(failed, later, f"{UNREADABLE}.") for sid in GIVEN
+        sid: CouldNotCheck(failed, later, f"{UNREADABLE}.", KnownNewest(read, NOW))
+        for sid, read in READ_FIRST.items()
     }
     assert {s.status for s in found.software.values()} == {"cant_check"}
     assert found.software[REDIS].facts.our_version == FromFirstCheck("8.2.1", NOW)
     assert found.last_check is not None
     assert (found.last_check.run_id, found.last_check.state) == (failed, "failed")
+
+
+async def test_a_software_that_cannot_be_read_keeps_the_newest_version_read_before_and_when(
+    h: Harness,
+):
+    h.agent.output = NOTHING_BEHIND
+    first = await start_check(h)
+    await h.orchestrator.on_step(first, StepName.RUN_AGENTS, WORK)
+    h.advance(timedelta(hours=1))
+    h.agent.output = NOTHING_BEHIND.model_copy(
+        update={
+            "findings": [
+                finding(LANGGRAPH, "up_to_date", "1.2.14"),
+                finding(REDIS, "starting_point", "8.2.1"),
+                finding(FASTAPI, "cant_check", None, NOT_FOUND),
+                finding(POSTGRES, "up_to_date", "17.2.0"),
+            ]
+        }
+    )
+    second = await start_check(h, key="check-2")
+    await h.orchestrator.on_step(second, StepName.RUN_AGENTS, N8nExecutionId("42"))
+    found = await standings(h)
+    later = NOW + timedelta(hours=1)
+    assert found.software[FASTAPI].facts.latest_check == CouldNotCheck(
+        second, later, NOT_FOUND, KnownNewest("0.115.0", NOW)
+    )
+    assert found.software[FASTAPI].status == "cant_check"
+    assert found.software[POSTGRES].facts.latest_check == Checked(second, later, "17.2.0")
+
+    h.advance(timedelta(hours=1))
+    h.agent.output = NOTHING_BEHIND
+    third = await start_check(h, key="check-3")
+    await h.orchestrator.on_step(third, StepName.RUN_AGENTS, N8nExecutionId("43"))
+    read_again = (await standings(h)).software[FASTAPI].facts.latest_check
+    assert read_again == Checked(third, later + timedelta(hours=1), "0.115.0")
 
 
 async def test_a_check_that_fails_for_another_reason_keeps_what_the_last_check_found(
