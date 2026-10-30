@@ -84,12 +84,11 @@ async function rowNamed(backend: Backend, name: string): Promise<Row> {
   return row as Row
 }
 
-/** The shell draws the heading before the lazy page has its data. The notice line is there only once the list is loaded. */
 async function openSoftware(page: Page): Promise<void> {
   await page.goto('/software')
   await expect(h1(page)).toHaveText('Software watchlist')
   await expect(page.getByText('Loading the software list')).toHaveCount(0)
-  await expect(notice(page)).toBeAttached()
+  await expect(notice(page), 'the list has loaded: the lazy page draws its notice line with it').toBeAttached()
 }
 
 async function addInForm(page: Page, software: Software): Promise<void> {
@@ -340,9 +339,10 @@ test('@lane3 Remove reaches the platform at once; Undo, with no time limit of it
 })
 
 test('@lane3-day Undo more than a day after the removal is refused in plain words; p6.sh lane 3 moves the removal back a day while the page waits', async ({ browser }) => {
-  const marker = path.join(laneDir(3), 'late-removal.txt')
-  const moved = path.join(laneDir(3), 'late-removal.moved')
-  rmSync(marker, { force: true })
+  const ids = process.env['LATE_REMOVAL_IDS'] ?? ''
+  const moved = process.env['LATE_REMOVAL_MOVED'] ?? ''
+  test.skip(ids === '' || moved === '', 'p6.sh lane 3 runs this, as it moves the removal back a day')
+  rmSync(ids, { force: true })
   await withBackend(async (backend) => {
     const useCaseId = await backend.freshWatchlist('alice', [LANGGRAPH, REDIS])
     const langgraph = await rowNamed(backend, 'LangGraph')
@@ -353,7 +353,7 @@ test('@lane3-day Undo more than a day after the removal is refused in plain word
     await rowOf(page, 'LangGraph').getByRole('button', { name: /^Remove/ }).click()
     const undo = page.getByRole('button', { name: 'Undo' })
     await expect(undo).toBeFocused()
-    writeFileSync(marker, `use_case_id=${useCaseId}\nsoftware_id=${langgraph.id}\n`)
+    writeFileSync(ids, `use_case_id=${useCaseId}\nsoftware_id=${langgraph.id}\n`)
     await expect.poll(() => existsSync(moved), { message: 'p6.sh lane 3 moves the removal back a day', timeout: 90_000, intervals: [500] }).toBe(true)
     await undo.click()
     await expect(problem(page)).toHaveText('Could not put LangGraph back. It was removed more than a day ago. Add it again to keep checking it.')

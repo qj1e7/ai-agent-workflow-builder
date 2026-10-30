@@ -41,6 +41,8 @@ DISK_CONTAINER=${DISK_CONTAINER:-wab-postgres-1}
 PG_PORT=${PG_PORT:-55446}
 PG_NAME=p6-gates-pg
 PG_IMAGE=postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
+LATE_REMOVAL_IDS=lane-3/late-removal.txt
+LATE_REMOVAL_MOVED=lane-3/late-removal.moved
 
 die() { echo "p6.sh: $*" >&2; exit 2; }
 
@@ -64,7 +66,6 @@ disk() {
 gates() {
   local worktree=$1 out="$EVID/gates"
   mkdir -p "$out"
-  # A fresh git archive export has no node_modules.
   [ -d "$worktree/portal/node_modules" ] || (cd "$worktree/portal" && npm ci --no-audit --no-fund) >"$out/npm-ci.log" 2>&1
   (cd "$worktree/portal" && npm run typecheck && npm run lint && npm test) >"$out/typecheck-lint-test.log" 2>&1
   (cd "$worktree/portal" && npx vitest run src/screens/software src/shell src/api) >"$out/vitest-run-shell.log" 2>&1
@@ -123,15 +124,17 @@ up() {
   disk
   [ -f "$ENV_FILE" ] || die "no $ENV_FILE; copy deploy/make-env.sh next to it and run it"
   mkdir -p "$EVID/stacks"
-  # The mock images are named after the project, so a second project builds its own even when the rest is reused.
-  if [ "$build" = --no-build ]; then
-    compose "$worktree" "$project" build mock-github mock-model >"$EVID/stacks/$project-build-mocks.log" 2>&1 ||
-      { tail -n 30 "$EVID/stacks/$project-build-mocks.log" >&2; die "$project could not build its mock images"; }
-  fi
+  [ "$build" = --build ] || build_the_projects_own_mock_images "$worktree" "$project"
   WAB_IMAGE_TAG=$tag PORTAL_HOST_PORT=$portal_port PLATFORM_API_HOST_PORT=$api_port N8N_HOST_PORT=$n8n_port \
     compose "$worktree" "$project" up "$build" --wait --wait-timeout 400 >"$EVID/stacks/$project-up.log" 2>&1 ||
     { tail -n 30 "$EVID/stacks/$project-up.log" >&2; die "$project did not become healthy"; }
   curl -sS -o "$EVID/stacks/$project-ready.json" -w "GET /healthz/ready %{http_code}\n" "http://localhost:$api_port/healthz/ready" | tee "$EVID/stacks/$project-ready.txt"
+}
+
+build_the_projects_own_mock_images() {
+  local worktree=$1 project=$2
+  compose "$worktree" "$project" build mock-github mock-model >"$EVID/stacks/$project-build-mocks.log" 2>&1 ||
+    { tail -n 30 "$EVID/stacks/$project-build-mocks.log" >&2; die "$project could not build its mock images"; }
 }
 
 down() {
@@ -165,6 +168,7 @@ runner_in() {
     -e BASE_URL=http://localhost:8080 -e E2E_AUTH=dev -e EVID=/evidence \
     -e TARGET="${TARGET:-head}" -e SAMPLE="${SAMPLE:-0}" -e MOCK_GITHUB_URL=http://mock-github:8200 \
     -e PLAIN_HTTP_URL=http://portal:8080 \
+    -e LATE_REMOVAL_IDS="${LATE_REMOVAL_IDS_IN_RUNNER:-}" -e LATE_REMOVAL_MOVED="/evidence/$LATE_REMOVAL_MOVED" \
     "${e2e_mounts[@]}" -v "$EVID:/evidence" -v "$EVID/.live-out:/work/e2e/out/live" \
     -w /work "$RUNNER" "$@"
 }
@@ -201,28 +205,26 @@ lane() {
   mkdir -p "$EVID/lane-$n"
   check "$project" --grep "@lane$n " 2>&1 | tee "$EVID/lane-$n/playwright.log" || status=$?
   if [ "$n" = 3 ]; then
-    late_undo "$project" || status=$?
+    undo_after_the_removal_is_moved_back_a_day "$project" || status=$?
   fi
   return "$status"
 }
 
-# The page removes a row and writes its ids to late-removal.txt, then waits. This moves that removal back 25 hours
-# in the stack's PostgreSQL and says so with late-removal.moved, so the page's Undo comes more than a day after it.
-late_undo() {
-  local project=$1 dir="$EVID/lane-3" pg pid uc sw status=0
+undo_after_the_removal_is_moved_back_a_day() {
+  local project=$1 dir="$EVID/lane-3" ids="$EVID/$LATE_REMOVAL_IDS" moved="$EVID/$LATE_REMOVAL_MOVED" pg pid uc sw status=0
   pg=$(service_of "$project" postgres)
   [ -n "$pg" ] || die "no running PostgreSQL in project $project"
   mkdir -p "$dir"
-  rm -f "$dir/late-removal.txt" "$dir/late-removal.moved"
-  check "$project" --grep "@lane3-day " >"$dir/playwright-day.log" 2>&1 &
+  rm -f "$ids" "$moved"
+  LATE_REMOVAL_IDS_IN_RUNNER="/evidence/$LATE_REMOVAL_IDS" check "$project" --grep "@lane3-day " >"$dir/playwright-day.log" 2>&1 &
   pid=$!
   for _ in $(seq 1 180); do
-    [ -f "$dir/late-removal.txt" ] && break
+    [ -f "$ids" ] && break
     kill -0 "$pid" 2>/dev/null || break
     sleep 1
   done
-  uc=$(sed -n 's/^use_case_id=\([A-Za-z0-9_]*\)$/\1/p' "$dir/late-removal.txt" 2>/dev/null || true)
-  sw=$(sed -n 's/^software_id=\([A-Za-z0-9_]*\)$/\1/p' "$dir/late-removal.txt" 2>/dev/null || true)
+  uc=$(sed -n 's/^use_case_id=\([A-Za-z0-9_]*\)$/\1/p' "$ids" 2>/dev/null || true)
+  sw=$(sed -n 's/^software_id=\([A-Za-z0-9_]*\)$/\1/p' "$ids" 2>/dev/null || true)
   if [ -n "$uc" ] && [ -n "$sw" ]; then
     docker exec -i "$pg" psql -U postgres -d platform -v ON_ERROR_STOP=1 -v uc="$uc" -v sw="$sw" >"$dir/late-removal.sql.log" 2>&1 <<'SQL' || true
 UPDATE builder.use_case_versions SET created_at = created_at - interval '25 hours'
@@ -231,13 +233,13 @@ WHERE use_case_id = :'uc' AND version = (
 );
 SQL
     if grep -qx 'UPDATE 1' "$dir/late-removal.sql.log"; then
-      touch "$dir/late-removal.moved"
+      touch "$moved"
     else
       echo "lane 3: the removal was not moved back; see $dir/late-removal.sql.log" >&2
       status=1
     fi
   else
-    echo "lane 3: the page wrote no late-removal.txt with a use case and a software" >&2
+    echo "lane 3: the page wrote no $LATE_REMOVAL_IDS with a use case and a software" >&2
     status=1
   fi
   wait "$pid" || status=$?
