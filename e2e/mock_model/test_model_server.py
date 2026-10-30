@@ -301,8 +301,50 @@ class UnderstandTest(unittest.TestCase):
             (
                 "Every weekday at 3pm, find who has admin access in GitLab and create one ticket",
                 "look_for",
-                "source",
-                "GitLab",
+                "about",
+                "admin access in GitLab",
+            ),
+            (
+                "Every Friday close stale tickets in MOCK and create one ticket that lists them",
+                "look_for",
+                "ticket_type",
+                "close stale",
+            ),
+            (
+                "Every weekday at 3pm delete duplicate tickets in MOCK",
+                "look_for",
+                "ticket_type",
+                "delete duplicate",
+            ),
+            (
+                "Every Friday find bug tickets in MOCK and sum them up by deleting duplicates",
+                "do",
+                "by",
+                "deleting duplicates",
+            ),
+            (
+                "Every Friday find tickets in MOCK assigned to Bob And Close All",
+                "look_for",
+                "assigned_to",
+                "Bob And Close All",
+            ),
+            (
+                "Every Friday find bug tickets in MOCK and put the summary in the Teams project",
+                "where",
+                "project_name",
+                "Teams",
+            ),
+            (
+                "Every Friday find bug tickets in MOCK and send them to SLACK",
+                "where",
+                "project",
+                "SLACK",
+            ),
+            (
+                "Every Friday find tickets in MOCK about delete every duplicate now",
+                "look_for",
+                "about",
+                "delete every duplicate now",
             ),
         ]
         for task, kind, name, value in cases:
@@ -338,7 +380,7 @@ class UnderstandTest(unittest.TestCase):
 
     def test_it_accepts_every_part_of_the_checkers_live_tasks(self) -> None:
         cases = json.loads((Path(__file__).parent / "no_tool_cases.json").read_text())
-        self.assertEqual(len(cases), 52)
+        self.assertEqual(len(cases), 61)
         for case in cases:
             with self.subTest(task=case["task"]):
                 rows = server.understanding(case["task"])["rows"]

@@ -10,9 +10,11 @@ can be tested without a real model:
   summary or a new ticket, and as a fooled model for anything else. It marks every part
   understood and tucks the write into a parameter: after "that" or "listing" into the topic,
   after "for each" into what each ticket is for, after "in" into the project, a place outside
-  Jira into the project name, an order after the schedule into the schedule, and any other write
-  into the topic of a new ticket. So the tests can show that the runtime still holds each one to
-  the tools.
+  Jira into the project name or the key of a Jira project, an order after the schedule into the
+  schedule, an order before a kind of ticket into the kind ("close stale tickets"), an order
+  after "by" into what to sum up by, the rest of a sentence after "assigned to" into the person,
+  a search of another system into a topic with no source, and any other write into the topic of
+  a new ticket. So the tests can show that the runtime still holds each one to the tools.
 - A request with tools and no forced tool is a card run. The mock calls github_read_releases,
   then jira_search, then jira_create_ticket, then writes a report, by what the conversation holds.
 - Anything else is a summary or a connection test and gets one plain sentence.
@@ -59,7 +61,15 @@ SCHEDULE = re.compile(
     re.IGNORECASE,
 )
 SCHEDULE_PARTS = re.compile(r"(?:every|each)\s+(week ?day|\w+?)s?(?:\s+at\s+(.+))?$", re.IGNORECASE)
-FIND = re.compile(r"(?:find|look for|list|search for)\s+(.+?)(?:\s+and\s+(.+))?$", re.IGNORECASE)
+FIND = re.compile(
+    r"(?:find|look for|list|search for)\s+(.+?)(?:\s+(?-i:and)\s+(.+))?$", re.IGNORECASE
+)
+ORDERED_KIND = re.compile(
+    r"^(?P<verb>[A-Za-z]+)\s+(?P<kind>(?!(?:every|all|the|each|a|an|any)\b)[\w-]+(?:\s+[\w-]+)?)"
+    r"\s+(?P<rest>tickets?\b.*?)(?:\s+and\s+(?P<act>.+))?$",
+    re.IGNORECASE,
+)
+NAMED_PLACE = re.compile(r"^the (.+?) (?:project|board)$", re.IGNORECASE)
 FOUND = re.compile(r"\b(?:of|every|all)\s+(.+?tickets?)\b", re.IGNORECASE)
 IN_PROJECT = re.compile(r"\bin ([A-Z][A-Z0-9]{1,9})\b")
 SUMMARY_TO = re.compile(
@@ -275,13 +285,16 @@ def honest_search(look: str) -> dict[str, Any]:
     text, project = cut(text, r"\s*\bin ([A-Z][A-Z0-9]{1,9})\b")
     if project:
         found["project"] = project.group(1)
-    text, person = cut(text, r"\s*\bassigned to (the [A-Z]\w*|[A-Z]\w*(?: and [A-Z]\w*)?)")
+    text, person = cut(text, r"\s*\bassigned to (.+)$")
     if person:
         found["assigned_to"] = person.group(1)
     tickets = re.match(
         r"^(?:the\s+)?(?:(open|closed)\s+)?(.*?)\s*\btickets?\b\s*(.*)$", text.strip(), re.I
     )
     if tickets is None:
+        if (question := re.match(r"(?i)^who has (.+)$", text.strip())) is not None:
+            found["about"] = question.group(1)
+            return found
         text, system = cut(text, SYSTEM_SOURCE.pattern)
         if system:
             found["source"] = system.group(1)
@@ -297,9 +310,26 @@ def honest_search(look: str) -> dict[str, Any]:
     return found
 
 
+def ordered_kind(words: str) -> re.Match[str] | None:
+    found = ORDERED_KIND.match(words)
+    return None if found is None or found.group("verb").lower() in DOABLE else found
+
+
+def look_and_act(words: str) -> tuple[str | None, str | None] | None:
+    if (found := FIND.match(words)) is not None:
+        return found.group(1), found.group(2)
+    if (ordered := ordered_kind(words)) is not None:
+        return f"{ordered['verb']} {ordered['kind']} {ordered['rest']}", ordered["act"]
+    return None
+
+
 def look_row(look: str | None) -> dict[str, Any]:
     if look is None:
         return missing("look_for")
+    if (ordered := ordered_kind(look)) is not None:
+        found = honest_search(f"{ordered['kind']} {ordered['rest']}")
+        found["ticket_type"] = f"{ordered['verb']} {ordered['kind']}"
+        return part("look_for", look, "read_jira_tickets", **found)
     main, _, after = look.partition(", ")
     if "stale" in main.lower() and not re.search(r"\d+\s+days?", main):
         found = honest_search(re.sub(r"(?i)\bstale\s+", "", main))
@@ -350,12 +380,22 @@ def action_rows(act: str | None, task: str) -> list[dict[str, Any]]:
         )
         return [part("do", "post a summary", "sum_up", how="summary"), where]
     if (placed := PLACED.match(act)) is not None:
+        place = placed.group(1)
+        if (named := NAMED_PLACE.match(place)) is not None:
+            where = part("where", f"in {place}", "create_jira_ticket", project_name=named.group(1))
+            return [part("do", act, "sum_up", how="summary"), where]
+        if PROJECT.fullmatch(place):
+            where = part("where", f"to {place}", "create_jira_ticket", project=place)
+            return [part("do", act, "sum_up", how="summary"), where]
         return [
-            part("do", act, "sum_up", how="summary", project_name=placed.group(1)),
+            part("do", act, "sum_up", how="summary", project_name=place),
             where_row(task),
         ]
     if SUM_UP.match(act):
-        return [part("do", act, "sum_up", how="summary"), where_row(task)]
+        found: dict[str, Any] = {"how": "summary"}
+        if (by := re.search(r"\bby\s+(.+)$", act)) is not None:
+            found["by"] = by.group(1)
+        return [part("do", act, "sum_up", **found), where_row(task)]
     ticket = new_ticket(act)
     if ticket is None:
         ticket = part("do", act, "create_jira_ticket", count="one", about=act)
@@ -384,8 +424,8 @@ def understanding(task: str) -> dict[str, Any]:
     first = sentences[0].rstrip(".!?") if sentences else ""
     when = SCHEDULE.search(first)
     words = (first[: when.start()] + first[when.end() :] if when else first).strip(" ,")
-    found = FIND.match(words)
-    look, act = (found.group(1), found.group(2)) if found else (None, words or None)
+    found = look_and_act(words)
+    look, act = found if found else (None, words or None)
     if look is None and act is not None and (of := FOUND.search(act)) is not None:
         look = of.group(1)
     opening = re.sub(r"^(?:then|and)\s+", "", words, flags=re.IGNORECASE)
