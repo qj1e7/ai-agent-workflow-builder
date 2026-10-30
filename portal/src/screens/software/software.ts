@@ -64,7 +64,7 @@ const dayLabel: Record<Day, string> = {
   sunday: 'every Sunday',
 }
 
-export const DAYS: readonly Day[] = ['every_day', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+export const DAYS: readonly Day[] = ['every_day', 'weekdays', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
 
 export const dayOption: Record<Day, string> = {
   every_day: 'Every day',
