@@ -14,7 +14,7 @@ import { IconSearch } from '../../ui/icons'
 import { Toast, UNDO_ID, type ToastMessage } from '../../ui/Toast'
 import { useArrivalScroll } from './arrival'
 import { Faces, StatusPills } from './Status'
-import { agentsOf, changeProblem, FILTERS, lineWhen, nextRunWords, pressChange, rowsOf, runFact, type Filter, type Row, type RunFact, type Viewer } from './workflow'
+import { agentsOf, changeProblem, FILTERS, lineWhen, nextRunWords, pressChange, rowsOf, runFact, workflowPath, type Filter, type Row, type RunFact, type Viewer } from './workflow'
 import styles from './Workflows.module.css'
 
 export const REFRESH_MS = 15_000
@@ -73,7 +73,7 @@ function WorkflowRow({ row, index, primary, arrive, now, nameOf }: RowProps) {
       <StatusPills state={useCase.state} fact={fact} />
       <div className={styles['main']}>
         <h2>
-          <Link id={rowLinkId(useCase.use_case_id)} to={`/workflows/${useCase.use_case_id}`} state={FROM_LIST} className={styles['rowLink']}>
+          <Link id={rowLinkId(useCase.use_case_id)} to={workflowPath(useCase)} state={FROM_LIST} className={styles['rowLink']}>
             {useCase.name}
           </Link>
         </h2>

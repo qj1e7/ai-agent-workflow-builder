@@ -1,11 +1,11 @@
 import { useEffect, useId, useRef, useState, type MouseEvent } from 'react'
-import { Link, useLocation, useNavigate, useParams } from 'react-router'
+import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router'
 import { ApiError } from '../../api/client'
 import { useErrorWords } from '../../api/context'
 import { newIdempotencyKey } from '../../api/idempotency'
 import { useLatch } from '../../api/latch'
 import { useDisplayName } from '../../api/people'
-import { useMe, useRuns, useStartRun, useUseCase, useWatchlist } from '../../api/queries'
+import { useMe, useRuns, useStartRun, useUseCase } from '../../api/queries'
 import type { Me, UseCaseView } from '../../api/types'
 import { useDeleteWorkflow, useMoveWorkflow } from '../../api/workflowQueries'
 import { PageHead } from '../../shell/PageHead'
@@ -21,15 +21,17 @@ import {
   agentsOf,
   changeProblem,
   changeWords,
+  controlsOf,
   nextRunWords,
   pressChange,
   pressRunNow,
   rowAction,
   runFact,
   runsOf,
-  scheduleWords,
+  SOFTWARE_PAGE,
   stepTag,
-  WATCHLIST_TEMPLATE,
+  whenWords,
+  workflowPath,
 } from './workflow'
 import { REFRESH_MS, viewerOf } from './WorkflowsPage'
 import styles from './Workflows.module.css'
@@ -52,24 +54,12 @@ function BackToList() {
   )
 }
 
-function WatchlistWhen() {
-  const watchlist = useWatchlist()
-  if (watchlist.data === undefined) return <dd>{watchlist.isError ? 'Not known right now' : 'Loading'}</dd>
-  const schedule = watchlist.data?.schedule ?? null
-  return (
-    <dd>
-      {scheduleWords(schedule)}
-      <small>{schedule ? `Singapore time, set by ${schedule.owner_name}.` : 'An Operator starts each check with Run now.'}</small>
-    </dd>
-  )
-}
-
 function When({ useCase }: { useCase: UseCaseView }) {
-  if (useCase.template === WATCHLIST_TEMPLATE) return <WatchlistWhen />
+  const { words, small } = whenWords(useCase)
   return (
     <dd>
-      No schedule
-      <small>An Operator starts it with Run now.</small>
+      {words}
+      <small>{small}</small>
     </dd>
   )
 }
@@ -107,11 +97,6 @@ function Steps({ useCase }: { useCase: UseCaseView }) {
           )
         })}
       </ol>
-      {useCase.template === WATCHLIST_TEMPLATE ? (
-        <p>
-          <Link to="/software">See the software it checks</Link>
-        </p>
-      ) : null}
     </section>
   )
 }
@@ -196,7 +181,8 @@ function WorkflowView({ useCase, me, now }: { useCase: UseCaseView; me: Me; now:
   const fact = latest ? runFact(latest, nameOf) : null
   const action = rowAction(useCase, latest, viewer)
   const paused = useCase.state === 'paused'
-  const watchlist = useCase.template === WATCHLIST_TEMPLATE
+  const controls = controlsOf(useCase, viewer)
+  const onOff = controls.find((control) => control === 'pause' || control === 'resume')
 
   function pauseOrResume(what: 'pause' | 'resume') {
     pressChange(changes, (outcome) => move.mutate({ move: what, useCaseId: id }, outcome), {
@@ -233,7 +219,7 @@ function WorkflowView({ useCase, me, now }: { useCase: UseCaseView; me: Me; now:
               {action.kind === 'decide' ? 'Review and decide' : 'See why it stopped'}
             </ButtonLink>
           ) : null}
-          {viewer.operator && !paused ? (
+          {controls.includes('run') ? (
             <Button variant={runNowVariant} loading={runNow.pending} onClick={runNow.press}>
               Run now
             </Button>
@@ -245,12 +231,14 @@ function WorkflowView({ useCase, me, now }: { useCase: UseCaseView; me: Me; now:
           {words(runNow.error)}
         </p>
       ) : null}
-      {viewer.operator ? (
+      {controls.length > 0 ? (
         <div className={styles['btns']}>
-          <Button icon={paused ? IconPlay : IconPause} loading={move.isPending} onClick={() => pauseOrResume(paused ? 'resume' : 'pause')}>
-            {paused ? 'Resume' : 'Pause'}
-          </Button>
-          {watchlist ? null : (
+          {onOff ? (
+            <Button icon={onOff === 'resume' ? IconPlay : IconPause} loading={move.isPending} onClick={() => pauseOrResume(onOff)}>
+              {onOff === 'resume' ? 'Resume' : 'Pause'}
+            </Button>
+          ) : null}
+          {controls.includes('delete') ? (
             <Button
               ref={deleteButton}
               variant="danger-outline"
@@ -262,7 +250,7 @@ function WorkflowView({ useCase, me, now }: { useCase: UseCaseView; me: Me; now:
             >
               Delete
             </Button>
-          )}
+          ) : null}
         </div>
       ) : null}
       {problem ? (
@@ -368,6 +356,7 @@ function WorkflowLoader({ useCaseId, now }: { useCaseId: string; now: Date }) {
       </p>
     )
   }
+  if (workflowPath(useCase.data) === SOFTWARE_PAGE) return <Navigate to={SOFTWARE_PAGE} replace />
   return <WorkflowView useCase={useCase.data} me={me.data} now={now} />
 }
 

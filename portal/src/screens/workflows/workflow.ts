@@ -1,7 +1,7 @@
 import { ApiError } from '../../api/client'
 import { failureReasonLabel } from '../../api/labels'
 import type { Latch } from '../../api/latch'
-import type { BlockKind, Day, RunView, ScheduleView, UseCaseView } from '../../api/types'
+import type { BlockKind, RunView, UseCaseView } from '../../api/types'
 import type { FaceState } from '../../ui/AgentFace'
 import { agentIdentity } from '../../ui/agents'
 import { andList, count, type NameOf } from '../run/words'
@@ -111,21 +111,15 @@ export function nextRunWords(useCase: Pick<UseCaseView, 'state' | 'next_run_at'>
   return useCase.next_run_at ? runWhen(useCase.next_run_at, now) : 'Not scheduled'
 }
 
-const DAY_WORDS: Record<Day, string> = {
-  every_day: 'Every day',
-  monday: 'Every Monday',
-  tuesday: 'Every Tuesday',
-  wednesday: 'Every Wednesday',
-  thursday: 'Every Thursday',
-  friday: 'Every Friday',
-  saturday: 'Every Saturday',
-  sunday: 'Every Sunday',
+export interface When {
+  readonly words: string
+  readonly small: string
 }
 
-export function scheduleWords(schedule: Pick<ScheduleView, 'day' | 'at'> | null): string {
-  if (!schedule) return 'No schedule'
-  const [hour = '0', minute = '00'] = schedule.at.split(':')
-  return `${DAY_WORDS[schedule.day]} at ${Number(hour)}:${minute}`
+export function whenWords(useCase: Pick<UseCaseView, 'state' | 'next_run_at'>): When {
+  if (useCase.state === 'paused') return { words: 'Paused', small: 'Nothing runs until an Operator resumes it.' }
+  if (useCase.next_run_at) return { words: 'On a schedule', small: 'Singapore time (SGT).' }
+  return { words: 'No schedule', small: 'An Operator starts it with Run now.' }
 }
 
 const STEP_TAGS: Record<BlockKind, { readonly words: string; readonly writes: boolean }> = {
@@ -161,7 +155,21 @@ export interface AgentLink {
 
 const PLANNER: AgentLink = { face: 'planner', name: agentIdentity('planner').name, to: '/agents/planner' }
 const VERSION_CHECKER_CARD = 'crd_version_checker'
-export const WATCHLIST_TEMPLATE = 'software_watchlist'
+const WATCHLIST_TEMPLATE = 'software_watchlist'
+export const SOFTWARE_PAGE = '/software'
+
+const looksAfterOnSoftwarePage = (useCase: Pick<UseCaseView, 'template'>) => useCase.template === WATCHLIST_TEMPLATE
+
+export function workflowPath(useCase: Pick<UseCaseView, 'template' | 'use_case_id'>): string {
+  return looksAfterOnSoftwarePage(useCase) ? SOFTWARE_PAGE : `/workflows/${useCase.use_case_id}`
+}
+
+export type Control = 'run' | 'pause' | 'resume' | 'delete'
+
+export function controlsOf(useCase: Pick<UseCaseView, 'template' | 'state'>, viewer: Viewer): readonly Control[] {
+  if (!viewer.operator || looksAfterOnSoftwarePage(useCase)) return []
+  return useCase.state === 'paused' ? ['resume', 'delete'] : ['run', 'pause', 'delete']
+}
 
 export function agentsOf(useCase: Pick<UseCaseView, 'template' | 'agents'>): AgentLink[] {
   const cards: readonly { readonly card_id: string; readonly name: string }[] =

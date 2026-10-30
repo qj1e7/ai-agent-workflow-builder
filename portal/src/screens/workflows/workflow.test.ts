@@ -16,6 +16,7 @@ import type { RunView, UseCaseView } from '../../api/types'
 import {
   agentsOf,
   changeProblem,
+  controlsOf,
   faceStates,
   changeWords,
   latestRuns,
@@ -29,8 +30,9 @@ import {
   runFact,
   runWhen,
   runsOf,
-  scheduleWords,
   stepTag,
+  whenWords,
+  workflowPath,
   type ChangeOutcome,
   type RunNowOutcome,
   type Viewer,
@@ -104,11 +106,14 @@ describe('the next run', () => {
   })
 })
 
-describe('the schedule', () => {
-  it('reads as people say it', () => {
-    expect(scheduleWords({ day: 'monday', at: '09:00' })).toBe('Every Monday at 9:00')
-    expect(scheduleWords({ day: 'every_day', at: '18:30' })).toBe('Every day at 18:30')
-    expect(scheduleWords(null)).toBe('No schedule')
+describe('when it runs', () => {
+  it('says it runs on a schedule when it has a next run, and that only Run now starts one with no schedule', () => {
+    expect(whenWords({ ...AGENTS, next_run_at: '2026-11-09T01:00:00Z' })).toEqual({ words: 'On a schedule', small: 'Singapore time (SGT).' })
+    expect(whenWords(AGENTS)).toEqual({ words: 'No schedule', small: 'An Operator starts it with Run now.' })
+  })
+
+  it('says nothing runs while it is paused, whether it has a schedule or not', () => {
+    expect(whenWords({ ...AGENTS, state: 'paused' })).toEqual({ words: 'Paused', small: 'Nothing runs until an Operator resumes it.' })
   })
 })
 
@@ -184,6 +189,38 @@ describe('the button at the end of a row', () => {
   it('is empty when the latest run needs nobody', () => {
     expect(rowAction(WATCHLIST, run(done), ALICE)).toBeNull()
     expect(rowAction(WATCHLIST, null, ALICE)).toBeNull()
+  })
+})
+
+describe('where a row opens', () => {
+  it('opens the Software page for the Software watchlist, as the prototype does', () => {
+    expect(workflowPath(WATCHLIST)).toBe('/software')
+    expect(workflowPath(PAUSED)).toBe('/software')
+  })
+
+  it('opens the workflow page for any other workflow', () => {
+    expect(workflowPath(AGENTS)).toBe('/workflows/uc_01JD0')
+  })
+})
+
+describe('the manage controls of a workflow page', () => {
+  it('give an Operator Run now, Pause and Delete while it is on, and Resume and Delete while it is paused', () => {
+    for (const operator of [ALICE, CAROL]) {
+      expect(controlsOf(AGENTS, operator)).toEqual(['run', 'pause', 'delete'])
+      expect(controlsOf({ ...AGENTS, state: 'paused' }, operator)).toEqual(['resume', 'delete'])
+    }
+  })
+
+  it('give an Approver who is not an Operator none', () => {
+    expect(controlsOf(AGENTS, BOB)).toEqual([])
+    expect(controlsOf({ ...AGENTS, state: 'paused' }, BOB)).toEqual([])
+  })
+
+  it('give nobody any for the Software watchlist, which is looked after on the Software page', () => {
+    for (const viewer of [ALICE, BOB, CAROL]) {
+      expect(controlsOf(WATCHLIST, viewer)).toEqual([])
+      expect(controlsOf(PAUSED, viewer)).toEqual([])
+    }
   })
 })
 

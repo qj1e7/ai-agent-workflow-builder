@@ -84,9 +84,10 @@ describe('the Workflows list', () => {
     expect(text(rowOf(html, 'uc_bugs'))).toContain('Not scheduled')
   })
 
-  it('opens each workflow from its name', () => {
-    const row = rowOf(render(), 'uc_bugs')
-    expect(row).toMatch(/<a[^>]*href="\/workflows\/uc_bugs"[^>]*>Morning bug report check<\/a>/)
+  it('opens each workflow from its name, and the Software watchlist on the Software page', () => {
+    const html = render()
+    expect(rowOf(html, 'uc_bugs')).toMatch(/<a[^>]*href="\/workflows\/uc_bugs"[^>]*>Morning bug report check<\/a>/)
+    expect(rowOf(html, 'uc_01JB7')).toMatch(/<a[^>]*href="\/software"[^>]*>Software watchlist<\/a>/)
   })
 
   it('puts the rows that need you first, each with its one button', () => {

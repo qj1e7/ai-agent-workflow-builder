@@ -6,7 +6,6 @@ import agentUseCase from '../../../../contracts/fixtures/cards/use-case.json'
 import watchlistUseCase from '../../../../contracts/fixtures/builder/use-case.json'
 import failed from '../../../../contracts/fixtures/views/failure.final.json'
 import done from '../../../../contracts/fixtures/views/success.final.json'
-import beforeCheck from '../../../../contracts/fixtures/watchlist/before-check.json'
 import { App } from '../../App'
 import { ApiError } from '../../api/client'
 import { ApiProvider } from '../../api/context'
@@ -36,7 +35,6 @@ function render({ me = ALICE, useCase = AGENTS, runs = [], id }: Setup = {}): st
   queryClient.setQueryData(['me', scope], me)
   queryClient.setQueryData(['dev-users'], [ALICE, BOB])
   queryClient.setQueryData(['runs', scope], runs)
-  queryClient.setQueryData(['watchlist', scope], beforeCheck)
   const key = ['use-case', scope, useCaseId]
   if (useCase instanceof Error) queryClient.getQueryCache().build(queryClient, { queryKey: key }).setState({ status: 'error', error: useCase, fetchStatus: 'idle' })
   else queryClient.setQueryData(key, useCase)
@@ -70,6 +68,12 @@ describe('a workflow page', () => {
     expect(factOf(html, 'Next run')).toBe('Not scheduled')
     expect(factOf(html, 'Who approves')).toBe(`${WHO_APPROVES} Owned by Alice.`)
     expect(WHO_APPROVES).toBe('Any Approver except the people who start or own it')
+  })
+
+  it('says it runs on a schedule when it has a next run', () => {
+    const html = render({ useCase: { ...AGENTS, next_run_at: '2026-11-09T01:00:00Z' } })
+    expect(factOf(html, 'When')).toBe('On a schedule Singapore time (SGT).')
+    expect(factOf(html, 'Next run')).toBe('Mon 9 Nov, 9:00')
   })
 
   it('names its agents, each opening its card', () => {
@@ -124,16 +128,13 @@ describe('a workflow page', () => {
   })
 })
 
-describe('the Software watchlist as a workflow', () => {
-  it('says its schedule, in Singapore time, and who set it', () => {
-    expect(factOf(render({ useCase: WATCHLIST }), 'When')).toBe('Every Monday at 9:00 Singapore time, set by Alice.')
-  })
-
-  it('can be paused and run, but not deleted, and points to its software', () => {
-    const html = render({ useCase: WATCHLIST })
-    expect(buttons(html)).toEqual(expect.arrayContaining(['Run now', 'Pause']))
-    expect(buttons(html)).not.toContain('Delete')
-    expect(mainOf(html)).toMatch(/<a[^>]*href="\/software"[^>]*>See the software it checks<\/a>/)
+describe('the Software watchlist', () => {
+  it('has no workflow page of its own, so its address sends the person to the Software page', () => {
+    for (const me of [ALICE, BOB]) {
+      const main = mainOf(render({ me, useCase: WATCHLIST }))
+      expect(main).not.toMatch(/<h1\b/)
+      expect(buttons(main)).toEqual([])
+    }
   })
 })
 
