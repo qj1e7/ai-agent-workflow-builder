@@ -404,12 +404,17 @@ export function useModelSettings() {
 }
 
 function refreshModelSettings(queryClient: QueryClient): Promise<unknown> {
-  return queryClient.invalidateQueries({ queryKey: ['model-settings'] })
+  return Promise.all(
+    ['model-settings', 'settings-history', 'confirmations'].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
+  )
 }
+
+const FORGET_THE_KEY = { gcTime: 0 } as const
 
 export function useConnectModel() {
   const client = useApiClient()
   return useMutation({
+    ...FORGET_THE_KEY,
     mutationFn: async (body: ConnectIn) => unwrap(await client.POST('/api/v1/settings/model/connect', { body })),
   })
 }
@@ -418,6 +423,7 @@ export function useSaveModel() {
   const client = useApiClient()
   const queryClient = useQueryClient()
   return useMutation({
+    ...FORGET_THE_KEY,
     mutationFn: async (body: SaveIn) => unwrap(await client.PUT('/api/v1/settings/model', { body })),
     onSettled: () => refreshModelSettings(queryClient),
   })
