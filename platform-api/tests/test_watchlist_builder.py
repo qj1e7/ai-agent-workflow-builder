@@ -1,10 +1,11 @@
-from collections.abc import Mapping
+from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
 from datetime import timedelta
 
 import pytest
 
 from platform_api.builder import Builder, Watchlist
+from platform_api.builder.lifecycle import RESTORE_WINDOW, TooLate
 from platform_api.builder.models import AddSoftware, WatchlistView
 from platform_api.builder.service import NothingToCheck
 from platform_api.builder.watchlist import (
@@ -36,7 +37,8 @@ from platform_api.orchestration import (
 )
 from platform_api.orchestration.watch import status_of
 from platform_api.shared import ApprovalId, Principal, ProposalId, RunId, SoftwareId, UseCaseId
-from tests.support import ALICE, CAROL, NOW
+from tests.conftest import PostgresUrls, truncate_all
+from tests.support import ALICE, CAROL, NOW, MovingClock
 
 pytestmark = pytest.mark.anyio
 
@@ -85,6 +87,22 @@ def facts() -> FakeFacts:
 @pytest.fixture
 def watchlist(db: Database, facts: FakeFacts) -> Watchlist:
     return Watchlist(db, facts, ScheduleBook(db))
+
+
+@pytest.fixture
+def clock() -> MovingClock:
+    return MovingClock()
+
+
+@pytest.fixture
+async def timed(postgres: PostgresUrls, clock: MovingClock) -> AsyncIterator[Watchlist]:
+    truncate_all(postgres.owner)
+    database = Database(postgres.contexts, clock=clock)
+    await database.open()
+    try:
+        yield Watchlist(database, FakeFacts(), ScheduleBook(database))
+    finally:
+        await database.close()
 
 
 @pytest.fixture
@@ -246,6 +264,53 @@ async def test_a_repository_added_again_since_its_removal_cannot_be_restored(
     assert ids(again)["LangGraph"] != old
     assert await watchlist.restore(old) == RepoAddedAgainSinceRemoval("langchain-ai/langgraph")
     assert await watchlist.view() == again
+
+
+async def test_removed_software_can_be_restored_until_a_day_after_its_removal(
+    timed: Watchlist, clock: MovingClock
+):
+    langgraph = ids(await added(timed, LANGGRAPH))["LangGraph"]
+    await added(timed, REDIS)
+    clock.now = NOW + timedelta(hours=3)
+    await timed.remove(langgraph)
+    clock.now += RESTORE_WINDOW
+    restored = await timed.restore(langgraph)
+    assert isinstance(restored, WatchlistView)
+    assert ids(restored)["LangGraph"] == langgraph
+
+
+async def test_restoring_more_than_a_day_after_the_removal_is_refused(
+    timed: Watchlist, clock: MovingClock
+):
+    langgraph = ids(await added(timed, LANGGRAPH))["LangGraph"]
+    await added(timed, REDIS)
+    removed_at = NOW + timedelta(hours=3)
+    clock.now = removed_at
+    left = await timed.remove(langgraph)
+    assert isinstance(left, WatchlistView)
+    clock.now = removed_at + RESTORE_WINDOW + timedelta(seconds=1)
+    assert await timed.restore(langgraph) == TooLate(removed_at + RESTORE_WINDOW)
+    after = await timed.view()
+    assert after is not None
+    assert (after.version, ids(after)) == (left.version, ids(left))
+
+
+async def test_the_day_to_restore_counts_from_the_latest_removal(
+    timed: Watchlist, clock: MovingClock
+):
+    langgraph = ids(await added(timed, LANGGRAPH))["LangGraph"]
+    await timed.remove(langgraph)
+    clock.now = NOW + timedelta(hours=20)
+    await timed.restore(langgraph)
+    removed_again = NOW + timedelta(hours=30)
+    clock.now = removed_again
+    await timed.remove(langgraph)
+    clock.now = removed_again + timedelta(hours=5)
+    await added(timed, REDIS)
+    clock.now = removed_again + RESTORE_WINDOW
+    restored = await timed.restore(langgraph)
+    assert isinstance(restored, WatchlistView)
+    assert sorted(ids(restored)) == ["LangGraph", "Redis"]
 
 
 async def test_restoring_into_a_full_list_is_refused(watchlist: Watchlist):

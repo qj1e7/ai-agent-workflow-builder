@@ -10,7 +10,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from platform_api.builder.lifecycle import Lifecycle, On, is_on, lifecycle_of
+from platform_api.builder.lifecycle import (
+    RESTORE_WINDOW,
+    Lifecycle,
+    On,
+    TooLate,
+    is_on,
+    lifecycle_of,
+)
 from platform_api.builder.models import (
     AddSoftware,
     LastCheckView,
@@ -242,17 +249,28 @@ async def _software_of(
     return tuple(_listed(row) for row in rows)
 
 
-async def _removed_entry(
+@dataclass(frozen=True)
+class Removal:
+    listed: ListedSoftware
+    at: datetime
+
+
+async def _last_removal(
     conn: Connection, use_case_id: UseCaseId, software_id: SoftwareId
-) -> ListedSoftware | None:
+) -> Removal | None:
+    """The software as it was last listed, and when the next version of the list dropped it."""
     row = await (
         await conn.execute(
-            f"SELECT {_SOFTWARE_COLUMNS} FROM builder.watched_software "
-            "WHERE use_case_id = %s AND software_id = %s ORDER BY version DESC LIMIT 1",
+            f"SELECT {_SOFTWARE_COLUMNS}, (SELECT v.created_at FROM builder.use_case_versions v "
+            "WHERE v.use_case_id = s.use_case_id AND v.version = s.version + 1) AS removed_at "
+            "FROM builder.watched_software s WHERE s.use_case_id = %s AND s.software_id = %s "
+            "ORDER BY s.version DESC LIMIT 1",
             (use_case_id, software_id),
         )
     ).fetchone()
-    return None if row is None else _listed(row)
+    if row is None or row["removed_at"] is None:
+        return None
+    return Removal(_listed(row), row["removed_at"])
 
 
 async def _current(conn: Connection, lock: bool) -> WatchlistRecord | None:
@@ -365,15 +383,19 @@ class Watchlist:
 
     async def restore(
         self, software_id: SoftwareId
-    ) -> WatchlistView | NoSuchSoftware | RepoAddedAgainSinceRemoval | WatchlistFull:
+    ) -> WatchlistView | NoSuchSoftware | TooLate | RepoAddedAgainSinceRemoval | WatchlistFull:
         async with self._db.transaction("builder") as uow:
             record = await _current(uow.conn, lock=True)
             if record is None:
                 return NoSuchSoftware(software_id)
             if all(s.id != software_id for s in record.software):
-                removed = await _removed_entry(uow.conn, record.use_case_id, software_id)
-                if removed is None:
+                removal = await _last_removal(uow.conn, record.use_case_id, software_id)
+                if removal is None:
                     return NoSuchSoftware(software_id)
+                until = removal.at + RESTORE_WINDOW
+                if uow.now > until:
+                    return TooLate(until)
+                removed = removal.listed
                 ref = removed.source.ref.casefold()
                 if any(s.source.ref.casefold() == ref for s in record.software):
                     return RepoAddedAgainSinceRemoval(removed.source.ref)

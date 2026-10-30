@@ -96,6 +96,18 @@ describe('Undo', () => {
     }
   })
 
+  it('has no time limit of its own: the platform puts the software back within a day of the removal, and after the day the page says so plainly', () => {
+    const inside = harness(removed)
+    pressUndo(inside.latch, inside.send, LANGGRAPH, inside.dispatch, words)
+    inside.answer((outcome) => outcome.onSuccess?.(undefined))
+    expect(inside.state().notice).toEqual({ kind: 'restored', row: LANGGRAPH })
+
+    const late = harness(removed)
+    pressUndo(late.latch, late.send, LANGGRAPH, late.dispatch, words)
+    late.answer((outcome) => outcome.onError?.(new ApiError(410, { detail: 'This software was removed more than a day ago, so it can’t be put back.' })))
+    expect(late.state().problem).toBe('Could not put LangGraph back. It was removed more than a day ago. Add it again to keep checking it.')
+  })
+
   it('stays until it is dismissed or the next message replaces it', () => {
     expect(changeFeedback(removed, { type: 'dismissed' }).notice).toBeNull()
     expect(changeFeedback(removed, { type: 'added', name: 'Redis' }).notice).toEqual({ kind: 'added', name: 'Redis' })

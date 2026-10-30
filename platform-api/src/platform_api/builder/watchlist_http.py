@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
 from platform_api.builder.http import Operator
+from platform_api.builder.lifecycle import TooLate
 from platform_api.builder.models import AddSoftware, ScheduleIn, WatchlistOut, WatchlistView
 from platform_api.builder.watchlist import (
     NoSuchSoftware,
@@ -81,12 +82,14 @@ async def remove_software(
     "/watchlist/software/{software_id}/restore",
     description=(
         "Puts removed software back on the watchlist as it was, with the same id, so what the "
-        "platform learned about it comes back too. Software already on the list stays as it is."
+        "platform learned about it comes back too, within a day of the removal. Software "
+        "already on the list stays as it is."
     ),
     responses={
         **OPERATORS_ONLY,
         404: error_response("This software was never on the watchlist"),
         409: error_response("The repository was added again after it was removed"),
+        410: error_response("The software was removed more than a day ago"),
     },
 )
 async def restore_software(
@@ -97,6 +100,10 @@ async def restore_software(
             return restored
         case NoSuchSoftware():
             raise HTTPException(404, "This software was never on the watchlist")
+        case TooLate():
+            raise HTTPException(
+                410, "This software was removed more than a day ago, so it can't be put back."
+            )
         case RepoAddedAgainSinceRemoval(ref):
             raise HTTPException(
                 409,

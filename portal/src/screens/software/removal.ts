@@ -80,6 +80,7 @@ function restoreProblem(name: string, error: unknown, words: Words): string {
   const start = `Could not put ${name} back.`
   if (answered(error, 409)) return `${start} Its repository was added again since, so it is on the list already.`
   if (answered(error, 404)) return `${start} The platform has no record of it.`
+  if (answered(error, 410)) return `${start} It was removed more than a day ago. Add it again to keep checking it.`
   if (answered(error, 422)) return `${start} The list is full. Remove software you no longer run, then try again.`
   return `${start} ${words(error)}`
 }
