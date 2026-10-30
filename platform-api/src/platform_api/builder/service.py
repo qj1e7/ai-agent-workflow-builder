@@ -42,6 +42,7 @@ from platform_api.builder.models import (
     PlanOut,
     SuggestOut,
     ToolList,
+    UnderstandOut,
     UseCaseAgentView,
     UseCaseCreated,
     UseCaseDeleted,
@@ -49,11 +50,12 @@ from platform_api.builder.models import (
     UseCaseView,
 )
 from platform_api.builder.planning import (
-    CardPlanner,
     NoModelConnected,
     NoPlanner,
+    Planning,
     RuntimeNotAnswering,
     plan,
+    understand,
 )
 from platform_api.builder.templates import (
     AGENT_CARDS,
@@ -168,7 +170,7 @@ class Builder:
         runs: RunStarter,
         watchlist: Watchlist,
         public_base_url: str,
-        planner: CardPlanner | None = None,
+        planner: Planning | None = None,
     ) -> None:
         self._db = db
         self._runs = runs
@@ -348,6 +350,10 @@ class Builder:
         """The Planner's plan for a task. Nothing is saved."""
         library = (await self._cards.list())[:LIBRARY_LIMIT]
         return await plan(self._planner, library, task)
+
+    async def understand(self, text: str) -> UnderstandOut:
+        """What the Planner understood of a task, or the starter workflows. Nothing is saved."""
+        return await understand(self._planner, text)
 
     async def create_agent_use_case(
         self, principal: Principal, body: CreateAgentUseCase

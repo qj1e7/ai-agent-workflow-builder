@@ -20,6 +20,8 @@ from agent_runtime.contract import (
     ModelTestResult,
     TaskRequest,
     ToolList,
+    UnderstandRequest,
+    UnderstandResult,
     task_result_adapter,
 )
 
@@ -49,6 +51,9 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "card-drafted.json": TypeAdapter(DraftResult),
     "planner-choose-request.json": TypeAdapter(ChooseRequest),
     "planner-chosen.json": TypeAdapter(ChooseResult),
+    "planner-understand-request.json": TypeAdapter(UnderstandRequest),
+    "planner-understood.json": TypeAdapter(UnderstandResult),
+    "planner-watchlist.json": TypeAdapter(UnderstandResult),
 }
 
 

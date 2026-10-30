@@ -146,9 +146,8 @@ describe('the pages', () => {
   })
 
   it('say they are not built yet, under a lead line', () => {
-    const html = render({ path: '/software' })
-    expect(text(mainOf(html))).toContain('Everything your team runs, in one list.')
-    expect(text(mainOf(html))).toContain('This page is not built yet.')
+    const main = text(mainOf(render()))
+    expect(main).toContain('Thursday 29 October. This page is not built yet.')
   })
 
   it('open Home with the greeting and today in Singapore time', () => {

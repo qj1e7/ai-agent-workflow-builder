@@ -5,6 +5,7 @@ import os
 import re
 import statistics
 import time
+import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
@@ -19,15 +20,22 @@ from evals.checks import Check
 from evals.choose import CHOOSE
 from evals.draft import DRAFT
 from evals.explain import EXPLAIN
-from evals.jobs import Answer, Case, Job
+from evals.jobs import Answer, Case, Job, marked
 from evals.providers import PROVIDERS, Env, NotRun, Target, plan
 from evals.summarise import SUMMARISE
+from evals.understand import UNDERSTAND
 
-JOBS: tuple[Job[Any], ...] = (SUMMARISE, EXPLAIN, DRAFT, CHOOSE)
+JOBS: tuple[Job[Any], ...] = (SUMMARISE, EXPLAIN, DRAFT, CHOOSE, UNDERSTAND)
 PRICING = Path(__file__).parent / "pricing.json"
 # CI keeps the endpoints as secrets too. A URL can hold a password or a private host name.
-URL_ENVS = ("AZURE_OPENAI_ENDPOINT", "OLLAMA_BASE_URL")
-SECRET_ENVS = ("AZURE_OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY", *URL_ENVS)
+URL_ENVS = ("AZURE_OPENAI_ENDPOINT", "OLLAMA_BASE_URL", "AGENT_MODEL_BASE_URL")
+SECRET_ENVS = (
+    "AZURE_OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "GOOGLE_API_KEY",
+    "AGENT_MODEL_API_KEY",
+    *URL_ENVS,
+)
 _KEY_SHAPES = re.compile(r"\b(?:sk-[\w*-]{8,}|AIza[\w-]{8,})")
 WARM_UP = "Reply with the word ready."
 # A host name, host label or user name shorter than this is not redacted on its own. Short ones
@@ -112,10 +120,12 @@ def _usage(answer: Answer) -> tuple[int, int]:
     return int(usage.get("input_tokens", 0)), int(usage.get("output_tokens", 0))
 
 
-def run_case(model: BaseChatModel, job: Job[Any], case: Case, env: Env) -> Outcome:
+def run_case(
+    model: BaseChatModel, job: Job[Any], case: Case, env: Env, marker: str = ""
+) -> Outcome:
     started = time.perf_counter()
     try:
-        answer = job.ask(model, case)
+        answer = job.ask(model, case, marker)
     except Exception as error:
         return Outcome(case.id, [Check("answered", False, _failure(error, env))], None, 0, 0, "")
     latency = (time.perf_counter() - started) * 1000
@@ -249,13 +259,17 @@ def model_for(job: Job[Any], target: Target, shared: BaseChatModel) -> BaseChatM
 
 
 def run_target(
-    target: Target, env: Env, judge_model: BaseChatModel | None, pricing: Mapping[str, Any]
+    target: Target,
+    env: Env,
+    judge_model: BaseChatModel | None,
+    pricing: Mapping[str, Any],
+    marker: str = "",
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     try:
         # Building can fail on a malformed setting, and the error can quote it.
         model = target.build()
         started = time.perf_counter()
-        model.invoke(WARM_UP)
+        model.invoke(marked(WARM_UP, marker))
         warm_up_ms = round((time.perf_counter() - started) * 1000)
         models = {job.name: model_for(job, target, model) for job in JOBS}
     except Exception as error:
@@ -264,7 +278,7 @@ def run_target(
     for job in JOBS:
         outcomes: list[Outcome] = []
         for case in job.cases():
-            outcome = run_case(models[job.name], job, case, env)
+            outcome = run_case(models[job.name], job, case, env, marker)
             if judge_model is not None and job.judged and outcome.answer:
                 outcome = replace(
                     outcome, judge=judge(judge_model, job.prompt(case), outcome.answer)
@@ -331,9 +345,10 @@ def main(out: Path, env: Env | None = None) -> int:
         not_run.append(judge_skip)
     results: list[dict[str, Any]] = []
     models: list[dict[str, Any]] = []
+    marker = env.get("EVAL_MARKER") or uuid.uuid4().hex[:12]
     for target in targets:
         print(f"Running {target.label}", flush=True)
-        status, rows = run_target(target, env, judge_model, pricing)
+        status, rows = run_target(target, env, judge_model, pricing, marker)
         if "error" in status:
             not_run.append(_redacted(NotRun(target.provider, target.model, status["error"]), env))
             continue
@@ -341,6 +356,7 @@ def main(out: Path, env: Env | None = None) -> int:
         results.extend(rows)
     report = {
         "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "marker": marker,
         "cases": {job.name: len(job.cases()) for job in JOBS},
         "judge": judge_spec.label if judge_spec else None,
         "models": models,

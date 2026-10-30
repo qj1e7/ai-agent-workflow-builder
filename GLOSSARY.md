@@ -50,7 +50,7 @@ A workflow an Operator has taken out of the list. It starts no run, but nothing 
 _Avoid_: Archived, removed (watched software is removed)
 
 **Restore**:
-Putting a deleted workflow back as it was, paused or on, within a day of the delete. Undo after a delete restores it.
+Putting a deleted workflow back as it was, paused or on, within a day of the delete. Undo after a delete restores it. Software removed from the watchlist is restored the same way, within a day of the removal, with what the platform learned about it.
 _Avoid_: Undelete, recover
 
 **Template**:

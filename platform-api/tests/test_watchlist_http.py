@@ -1,10 +1,12 @@
 from collections.abc import AsyncIterator, Mapping
+from datetime import timedelta
 
 import httpx
 import pytest
 
 from platform_api.app import create_app
 from platform_api.builder import Watchlist
+from platform_api.builder.lifecycle import RESTORE_WINDOW
 from platform_api.db import Database
 from platform_api.orchestration import (
     Given,
@@ -14,7 +16,8 @@ from platform_api.orchestration import (
     WatchlistStanding,
 )
 from platform_api.shared import RunId, SoftwareId, UseCaseId
-from tests.support import LOCAL_ENV
+from tests.conftest import PostgresUrls, truncate_all
+from tests.support import LOCAL_ENV, MovingClock
 
 pytestmark = pytest.mark.anyio
 
@@ -52,6 +55,28 @@ async def client(db: Database) -> AsyncIterator[httpx.AsyncClient]:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
+
+
+@pytest.fixture
+def clock() -> MovingClock:
+    return MovingClock()
+
+
+@pytest.fixture
+async def timed_client(
+    postgres: PostgresUrls, clock: MovingClock
+) -> AsyncIterator[httpx.AsyncClient]:
+    truncate_all(postgres.owner)
+    database = Database(postgres.contexts, clock=clock)
+    await database.open()
+    app = create_app(LOCAL_ENV)
+    app.state.watchlist = Watchlist(database, NothingLearned(), ScheduleBook(database))
+    transport = httpx.ASGITransport(app=app)
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+            yield c
+    finally:
+        await database.close()
 
 
 async def test_the_watchlist_is_null_until_software_is_added_then_lists_it(
@@ -126,6 +151,66 @@ async def test_removing_software_answers_the_list_that_is_left(client: httpx.Asy
     assert (gone.status_code, gone.json()) == (404, {"detail": "No such watched software"})
 
 
+async def test_restoring_puts_removed_software_back_with_the_same_id_once(
+    client: httpx.AsyncClient,
+):
+    await client.post("/api/v1/watchlist/software", json=LANGGRAPH, headers=ALICE)
+    both = (await client.post("/api/v1/watchlist/software", json=REDIS, headers=ALICE)).json()
+    langgraph = next(row for row in both["software"] if row["name"] == "LangGraph")
+    await client.delete(f"/api/v1/watchlist/software/{langgraph['id']}", headers=ALICE)
+
+    back = await client.post(f"/api/v1/watchlist/software/{langgraph['id']}/restore", headers=CAROL)
+    assert back.status_code == 200
+    assert back.json()["version"] == 4
+    assert next(row for row in back.json()["software"] if row["id"] == langgraph["id"]) == langgraph
+    again = await client.post(
+        f"/api/v1/watchlist/software/{langgraph['id']}/restore", headers=ALICE
+    )
+    assert (again.status_code, again.json()) == (200, back.json())
+
+
+async def test_restoring_is_allowed_for_a_day_after_the_removal_then_a_410_in_plain_words(
+    timed_client: httpx.AsyncClient, clock: MovingClock
+):
+    first = await timed_client.post("/api/v1/watchlist/software", json=LANGGRAPH, headers=ALICE)
+    old = first.json()["software"][0]["id"]
+    await timed_client.delete(f"/api/v1/watchlist/software/{old}", headers=ALICE)
+    clock.now += RESTORE_WINDOW
+    inside = await timed_client.post(f"/api/v1/watchlist/software/{old}/restore", headers=ALICE)
+    assert inside.status_code == 200
+    assert [row["id"] for row in inside.json()["software"]] == [old]
+
+    await timed_client.delete(f"/api/v1/watchlist/software/{old}", headers=ALICE)
+    clock.now += RESTORE_WINDOW + timedelta(seconds=1)
+    late = await timed_client.post(f"/api/v1/watchlist/software/{old}/restore", headers=CAROL)
+    assert (late.status_code, late.json()) == (
+        410,
+        {"detail": "This software was removed more than a day ago, so it can't be put back."},
+    )
+    view = (await timed_client.get("/api/v1/watchlist", headers=ALICE)).json()["watchlist"]
+    assert view["software"] == []
+
+
+async def test_restoring_unknown_software_is_a_404_and_a_repository_added_again_a_409(
+    client: httpx.AsyncClient,
+):
+    never = await client.post("/api/v1/watchlist/software/sw_nope/restore", headers=ALICE)
+    assert (never.status_code, never.json()) == (
+        404,
+        {"detail": "This software was never on the watchlist"},
+    )
+    first = (await client.post("/api/v1/watchlist/software", json=LANGGRAPH, headers=ALICE)).json()
+    old = first["software"][0]["id"]
+    await client.delete(f"/api/v1/watchlist/software/{old}", headers=ALICE)
+    await client.post("/api/v1/watchlist/software", json=LANGGRAPH, headers=ALICE)
+    clash = await client.post(f"/api/v1/watchlist/software/{old}/restore", headers=ALICE)
+    assert clash.status_code == 409
+    assert clash.json() == {
+        "detail": "langchain-ai/langgraph was added again after it was removed, "
+        "so the removed entry cannot come back"
+    }
+
+
 async def test_only_an_operator_changes_the_list_and_anyone_signed_in_reads_it(
     client: httpx.AsyncClient,
 ):
@@ -133,6 +218,8 @@ async def test_only_an_operator_changes_the_list_and_anyone_signed_in_reads_it(
     refused = await client.post("/api/v1/watchlist/software", json=LANGGRAPH, headers=BOB)
     assert refused.status_code == 403
     assert (await client.delete("/api/v1/watchlist/software/sw_x", headers=BOB)).status_code == 403
+    restore = await client.post("/api/v1/watchlist/software/sw_x/restore", headers=BOB)
+    assert restore.status_code == 403
     assert (await client.get("/api/v1/watchlist", headers=BOB)).json() == {"watchlist": None}
 
 

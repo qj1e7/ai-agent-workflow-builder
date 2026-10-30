@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
 
-from platform_api.orchestration.agents import Finding, ProposedIntentIn
+from platform_api.orchestration.agents import Finding, ProposedIntentIn, TaskError
 from platform_api.orchestration.spec import WatchlistTask
 from platform_api.shared import ApprovalId, ProposalId, RunId, SoftwareId
 
@@ -49,10 +49,17 @@ class Checked:
 
 
 @dataclass(frozen=True)
+class KnownNewest:
+    version: str
+    at: datetime
+
+
+@dataclass(frozen=True)
 class CouldNotCheck:
     run_id: RunId
     at: datetime
     problem: str
+    last_read: KnownNewest | None = None
 
 
 type LatestCheck = Checked | CouldNotCheck
@@ -262,3 +269,25 @@ def review(
             )
         tickets.append(TicketToPropose(index, software_id, finding.newest))
     return Reviewed(tuple(learned), tuple(tickets))
+
+
+NOTHING_READABLE_TYPES = frozenset({"UpstreamUnavailable", "UpstreamRejected"})
+
+
+def all_could_not_read(
+    task: WatchlistTask, error: TaskError, findings: Sequence[Finding]
+) -> Reviewed | None:
+    if error.type not in NOTHING_READABLE_TYPES:
+        return None
+    shared = error.message if error.message.endswith(".") else f"{error.message}."
+    own = {
+        SoftwareId(f.software_id): f.detail.strip()
+        for f in findings
+        if f.state == "cant_check" and f.detail.strip()
+    }
+    return Reviewed(
+        tuple(
+            CouldNotRead(software.id, own.get(software.id, shared)) for software in task.software
+        ),
+        (),
+    )

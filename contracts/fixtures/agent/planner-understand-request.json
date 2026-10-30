@@ -1,0 +1,9 @@
+{
+  "task": "Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days and create one follow-up ticket that lists them",
+  "model": {
+    "style": "anthropic",
+    "base_url": "https://llm-gateway.example",
+    "model": "claude-sonnet-5-5",
+    "api_key": "example-key-not-a-secret"
+  }
+}
