@@ -104,7 +104,7 @@ class HomeOut(WireModel):
     )
     approvals_total: int
     confirmations: list[ConfirmationItem] = Field(
-        description="Setup changes this person may confirm, the oldest first."
+        description="Setup changes this person may confirm, the newest first."
     )
     stopped: list[StoppedItem] = Field(
         description="Stopped runs an Operator started, owns or retried, while each is the "
@@ -227,9 +227,11 @@ class Home:
     async def for_person(self, viewer: Principal) -> HomeOut:
         runs = await self._runs.runs_for(viewer)
         names = {p.user_id: p.display for p in await self._people.listed()}
-        confirmations = [
-            row for row in await self._people.confirmations(viewer) if row.why_not is None
-        ]
+        confirmations = sorted(
+            (row for row in await self._people.confirmations(viewer) if row.why_not is None),
+            key=lambda row: row.confirmation.asked_at,
+            reverse=True,
+        )
         use_cases = (await self._builder.list_use_cases()).use_cases
         live = {u.use_case_id for u in use_cases}
         stopped = [s for s in runs.stopped if s.run.use_case_id in live]

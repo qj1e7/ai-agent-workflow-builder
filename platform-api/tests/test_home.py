@@ -338,6 +338,17 @@ async def test_a_confirmation_shows_to_approvers_who_may_decide_it_and_not_to_th
         assert (await lab.home(cannot))["confirmations"] == [], cannot
 
 
+async def test_confirmations_come_the_newest_first(lab: Lab):
+    assert isinstance(await lab.people.ask_approver(ALICE_NOW, "carol"), PersonRow)
+    lab.h.advance(timedelta(minutes=1))
+    added = await lab.people.add(ALICE_NOW, "frank@example.test", "Frank", False, True)
+    assert isinstance(added, PersonRow)
+
+    confirmations = (await lab.home("bob"))["confirmations"]
+
+    assert [c["about_name"] for c in confirmations] == ["Frank", "Carol"]
+
+
 async def test_drafts_show_to_their_author_and_only_to_an_operator(lab: Lab):
     named = {"step": 2, "content": {"intent": "Nudge", "name": "  Nudge stale tickets "}}
     first = await lab.call("alice", "PUT", "/api/v1/drafts/d-1", named)

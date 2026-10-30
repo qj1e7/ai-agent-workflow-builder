@@ -3018,7 +3018,7 @@
             "description": "The workflow that runs next, if any."
           },
           "confirmations": {
-            "description": "Setup changes this person may confirm, the oldest first.",
+            "description": "Setup changes this person may confirm, the newest first.",
             "items": {
               "$ref": "#/components/schemas/ConfirmationItem"
             },
