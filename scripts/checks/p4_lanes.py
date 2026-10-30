@@ -14,7 +14,8 @@ usage: python3 -I scripts/checks/p4_lanes.py <command> <api-base-url> <out-dir> 
   lane9 <api> <out> <second-api> <key>   (own stack) two platform-api replicas stream one run
   lane10 <api> <out> <lane-1 json>       (own stack, ACTIVITY_READER=postgres) emulator stopped
   lane11 <api> <out>                     (own stack) the emulator is made again while the API runs
-  lane12 <api> <out>                     (own stack) down without -v, then up
+                                         and nothing is logged; then a new run
+  lane12 <api> <out>                     (own stack) down without -v, then up; every old run
 
 P4_COMPOSE holds the lane stack's docker compose command, for example
     docker compose -p p4-check --env-file /tmp/swarm-p4/env/.env \\
@@ -103,6 +104,11 @@ async def main(run_id, seq, field, value):
 
 asyncio.run(main(sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4]))
 """
+
+LAST_SEQS = (
+    "SELECT coalesce(json_object_agg(run_id, seq), '{}') FROM "
+    "(SELECT run_id, max(seq) AS seq FROM monitoring.run_events GROUP BY run_id) AS runs;"
+)
 
 ALL_ROWS = (
     "SELECT coalesce(json_agg(json_build_object('run_id', run_id, 'seq', seq, 'ts', ts, "
@@ -225,6 +231,15 @@ def ready_without_cosmos(ready: dict[str, Any]) -> bool:
         and copy["ok"]
         and COSMOS_ADDRESS not in json.dumps(ready["body"])
     )
+
+
+def wait_behind(api: Api, timeout: float = 15) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    ready = api.ready()
+    while not copy_behind(ready) and time.monotonic() < deadline:
+        time.sleep(0.5)
+        ready = api.ready()
+    return ready
 
 
 def wait_caught_up(api: Api, timeout: float = 30) -> dict[str, Any]:
@@ -357,6 +372,9 @@ class Stack:
             "FROM monitoring.run_events WHERE run_id = :'run';",
             run_id,
         )
+
+    def last_seqs(self) -> dict[str, int]:
+        return self.sql(LAST_SEQS)
 
     def mark(self, run_id: str) -> int:
         return self.sql(
@@ -562,6 +580,20 @@ def wait_for_copy(stack: Stack, run_id: str, last_seq: int, timeout: float = 90)
     return found
 
 
+def replay(api: Api, run_id: str, last_seq: int, timeout: float = 30) -> list[int]:
+    stream = Stream(api.base, run_id)
+    stream.wait_for_seq(last_seq, timeout=timeout)
+    time.sleep(1)
+    stream.close()
+    return stream.seqs()
+
+
+def timed_page(api: Api, run_id: str) -> dict[str, Any]:
+    started = time.monotonic()
+    events = api.events(run_id)
+    return {"seqs": [e["seq"] for e in events], "seconds": round(time.monotonic() - started, 2)}
+
+
 def patch_copy_then_read_page(api: Api, stack: Stack, run_id: str) -> tuple[bool, float, Any]:
     patched = stack.patch(run_id, 1, "summary", MARKER)
     started = time.monotonic()
@@ -669,8 +701,9 @@ def lane4(api: Api, out: Path) -> bool:
         approved, _, _ = approve_as_bob(api, run)
     done = api.wait(run_id, DONE)
     copied_while_down = stack.mark(run_id)
+    ready_down = wait_behind(api)
+    stream.wait_for_seq(done["last_seq"], timeout=15)
     streamed_while_down = stream.seqs()
-    ready_down = api.ready()
     stack.run("start", "cosmos")
     stack.wait_healthy("cosmos")
     started_at = datetime.now(UTC).isoformat()
@@ -724,6 +757,11 @@ def lane4(api: Api, out: Path) -> bool:
             (
                 ready_without_cosmos(ready_down) and copy_behind(ready_down),
                 f"readiness while down: HTTP {ready_down['status']}, {ready_down['copy']}",
+            ),
+            (
+                streamed_while_down == expected,
+                f"while the emulator was down the open stream got {streamed_while_down} "
+                "from PostgreSQL",
             ),
             (
                 seqs_of(found["items"]) == expected,
@@ -1100,11 +1138,7 @@ def lane10(api: Api, out: Path, lane1_json: str) -> bool:
     stack.run("stop", "-t", "1", "cosmos")
     run_id, events, run, caught_up = streamed_run(api, ensure_watchlist(api))
     head = json.loads(Path(lane1_json).read_text())["head"]
-    ready = api.ready()
-    deadline = time.monotonic() + 15
-    while not copy_behind(ready) and time.monotonic() < deadline:
-        time.sleep(0.5)
-        ready = api.ready()
+    ready = wait_behind(api)
     save(
         out,
         "p4-postgres-reader.json",
@@ -1135,33 +1169,83 @@ def lane10(api: Api, out: Path, lane1_json: str) -> bool:
     )
 
 
+def old_runs(api: Api, stack: Stack, count: int = 2) -> dict[str, int]:
+    use_case = ensure_watchlist(api)
+    for _ in range(count):
+        streamed_run(api, use_case)
+    runs = stack.last_seqs()
+    for run_id, last_seq in runs.items():
+        wait_for_copy(stack, run_id, last_seq)
+    return runs
+
+
+def watch_the_refill(api: Api, stack: Stack, timeout: float = 90) -> list[dict[str, Any]]:
+    """Readiness first, then the copy: the copy only grows, so a sample that says caught up
+    while its copy is short is a real miss."""
+    deadline = time.monotonic() + timeout
+    samples: list[dict[str, Any]] = []
+    while time.monotonic() < deadline:
+        ready = api.ready()
+        found = stack.cosmos()
+        samples.append(
+            {
+                "at": datetime.now(UTC).isoformat(),
+                "behind": copy_behind(ready),
+                "detail": ready["copy"]["detail"] if ready["copy"] else None,
+                "items": len(found["items"]),
+                "error": found.get("error"),
+            }
+        )
+        if not samples[-1]["behind"] and "error" not in found and samples[-1]["items"] > 0:
+            break
+        time.sleep(0.5)
+    return samples
+
+
 def lane11(api: Api, out: Path) -> bool:
     stack = Stack()
-    use_case = ensure_watchlist(api)
-    old_id, _, old_run, _ = streamed_run(api, use_case)
-    wait_for_copy(stack, old_id, old_run["last_seq"])
+    runs = old_runs(api, stack)
+    rows = sum(runs.values())
     before = stack.cosmos()
     api_before = stack.started_at("platform-api")
     stack.run("rm", "-sf", "cosmos")
+    removed_at = datetime.now(UTC).isoformat()
+    ready_gone = wait_behind(api)
+    streams_gone = {run_id: replay(api, run_id, last_seq) for run_id, last_seq in runs.items()}
+    pages_gone = {run_id: timed_page(api, run_id) for run_id in runs}
     stack.run("up", "-d", "--no-deps", "--wait", "cosmos")
     made_again_at = datetime.now(UTC).isoformat()
+    started = time.monotonic()
+    samples = watch_the_refill(api, stack)
+    refill_seconds = round(time.monotonic() - started, 2)
+    logged_meanwhile = sum(stack.last_seqs().values()) - rows
+    after = stack.cosmos()
+    compared = settled_compare(stack)
+    streams_after = {run_id: replay(api, run_id, last_seq) for run_id, last_seq in runs.items()}
+    first = next(iter(runs))
+    from_cosmos, took, patched = patch_copy_then_read_page(api, stack, first)
+    use_case = ensure_watchlist(api)
     new_id = api.start_run("alice", use_case)
     stream = Stream(api.base, new_id)
     new_run = api.wait(new_id, SETTLED)
-    new_found = wait_for_copy(stack, new_id, new_run["last_seq"], timeout=120)
+    new_found = wait_for_copy(stack, new_id, new_run["last_seq"], timeout=60)
     stream.wait_for_seq(new_run["last_seq"], timeout=60)
     time.sleep(1)
     stream.close()
-    old_found = wait_for_copy(stack, old_id, old_run["last_seq"])
-    after = stack.cosmos()
-    compared = settled_compare(stack)
     ready = wait_caught_up(api)
-    from_cosmos, took, patched = patch_copy_then_read_page(api, stack, old_id)
     api_after = stack.started_at("platform-api")
+    expected = {run_id: list(range(1, last_seq + 1)) for run_id, last_seq in runs.items()}
+    said_caught_up_short = [
+        x for x in samples if not x["behind"] and (x["error"] or x["items"] < rows)
+    ]
+    last = samples[-1] if samples else {"behind": True, "items": 0, "detail": None}
+    behind_samples = sum(x["behind"] for x in samples)
     save(
         out,
         "p4-emulator-made-again.json",
         {
+            "old_runs": runs,
+            "removed_at": removed_at,
             "made_again_at": made_again_at,
             "platform_api_before": api_before,
             "platform_api_after": api_after,
@@ -1169,23 +1253,63 @@ def lane11(api: Api, out: Path) -> bool:
             "rid_after": after["rid"],
             "generation_before": before["generation"],
             "generation_after": after["generation"],
-            "old_run": {"run_id": old_id, "last_seq": old_run["last_seq"], **old_found},
-            "new_run": {"run_id": new_id, "last_seq": new_run["last_seq"], **new_found},
-            "new_run_streamed": stream.seqs(),
-            "ready": ready,
+            "ready_while_gone": ready_gone,
+            "streams_while_gone": streams_gone,
+            "pages_while_gone": pages_gone,
+            "refill_samples": samples,
+            "refill_seconds": refill_seconds,
+            "logged_meanwhile": logged_meanwhile,
+            "streams_after": streams_after,
             "compare": compared,
             "page_read_seconds": took,
             "patched_in_cosmos_only": patched,
+            "new_run": {"run_id": new_id, "last_seq": new_run["last_seq"], **new_found},
+            "new_run_streamed": stream.seqs(),
+            "ready": ready,
         },
     )
     return verdict(
         [
             (api_before == api_after, f"platform-api ran throughout: {api_after}"),
             (
-                before["generation"] != after["generation"] and bool(after["generation"]),
-                f"the new container has a new generation: {before['generation']} then "
-                f"{after['generation']}",
+                len(runs) >= 2 and before["generation"] != after["generation"],
+                f"{len(runs)} old runs; the new container has a new generation: "
+                f"{before['generation']} then {after['generation']}",
             ),
+            (
+                ready_without_cosmos(ready_gone) and copy_behind(ready_gone),
+                f"readiness with the emulator gone: HTTP {ready_gone['status']}, "
+                f"{ready_gone['copy']}",
+            ),
+            (
+                streams_gone == expected,
+                f"with the emulator gone every old run's stream replayed in full: {streams_gone}",
+            ),
+            (
+                all(page["seqs"] == expected[r] for r, page in pages_gone.items()),
+                f"with the emulator gone every old run's page read: {pages_gone}",
+            ),
+            (
+                logged_meanwhile == 0,
+                f"nothing was logged while the copy was made again ({logged_meanwhile} new events)",
+            ),
+            (
+                bool(samples) and not last["behind"] and last["items"] == rows,
+                f"with nothing logged, the copy was full again {refill_seconds} s after the "
+                f"emulator was back, and readiness then said {last['detail']!r}",
+            ),
+            (
+                not said_caught_up_short,
+                f"readiness said behind until the refill ended ({behind_samples} of "
+                f"{len(samples)} samples); it never said caught up while the copy was short: "
+                f"{said_caught_up_short}",
+            ),
+            (compared["ok"], compared_line(compared)),
+            (
+                streams_after == expected,
+                f"after the refill every old run's stream replayed in full: {streams_after}",
+            ),
+            (from_cosmos, f"an old run's page came from Cosmos DB, in {took:.2f} s"),
             (
                 seqs_of(new_found["items"]) == list(range(1, new_run["last_seq"] + 1)),
                 f"run {new_id}, started after, reached Cosmos DB: {seqs_of(new_found['items'])}",
@@ -1195,16 +1319,9 @@ def lane11(api: Api, out: Path) -> bool:
                 f"its stream got {stream.seqs()}, each once, in order",
             ),
             (
-                seqs_of(old_found["items"]) == list(range(1, old_run["last_seq"] + 1)),
-                f"run {old_id}, copied before, is in Cosmos DB again: "
-                f"{seqs_of(old_found['items'])}",
-            ),
-            (compared["ok"], compared_line(compared)),
-            (
                 ready["status"] == 200 and not copy_behind(ready),
-                f"readiness once caught up: {ready['copy']}",
+                f"readiness at the end: {ready['copy']}",
             ),
-            (from_cosmos, f"the old run's page came from Cosmos DB, in {took:.2f} s"),
         ],
         [f"the container's _rid was {before['rid']} and is {after['rid']}"],
     )
@@ -1212,60 +1329,61 @@ def lane11(api: Api, out: Path) -> bool:
 
 def lane12(api: Api, out: Path) -> bool:
     stack = Stack()
-    old_id, _, old_run, _ = streamed_run(api, ensure_watchlist(api))
-    wait_for_copy(stack, old_id, old_run["last_seq"])
+    runs = old_runs(api, stack)
     before = stack.cosmos()
     stack.run("down")
     stack.run("up", "--no-build", "--wait", "--wait-timeout", "420")
-    kept = api.get("alice", f"/api/v1/runs/{old_id}")
-    refilled = wait_for_copy(stack, old_id, old_run["last_seq"], timeout=120)
+    kept = {run_id: api.get("alice", f"/api/v1/runs/{run_id}")["last_seq"] for run_id in runs}
+    compared = settled_compare(stack, timeout=120)
     after = stack.cosmos()
-    stream = Stream(api.base, old_id)
-    stream.wait_for_seq(old_run["last_seq"], timeout=30)
-    time.sleep(1)
-    stream.close()
-    compared = settled_compare(stack)
-    from_cosmos, took, patched = patch_copy_then_read_page(api, stack, old_id)
-    expected = list(range(1, old_run["last_seq"] + 1))
+    replays = {run_id: replay(api, run_id, last_seq) for run_id, last_seq in runs.items()}
+    pages = {run_id: patch_copy_then_read_page(api, stack, run_id) for run_id in runs}
+    ready = wait_caught_up(api)
+    expected = {run_id: list(range(1, last_seq + 1)) for run_id, last_seq in runs.items()}
     save(
         out,
         "p4-down-up.json",
         {
-            "run_id": old_id,
-            "last_seq": old_run["last_seq"],
+            "old_runs": runs,
             "kept_in_postgresql": kept,
             "rid_before": before["rid"],
             "rid_after": after["rid"],
             "generation_before": before["generation"],
             "generation_after": after["generation"],
-            "refilled": refilled,
-            "replayed": stream.seqs(),
             "compare": compared,
-            "page_read_seconds": took,
-            "patched_in_cosmos_only": patched,
+            "replayed": replays,
+            "pages": {
+                run_id: {"from_cosmos": ok, "seconds": took, "patched": patched}
+                for run_id, (ok, took, patched) in pages.items()
+            },
+            "ready": ready,
         },
     )
     return verdict(
         [
             (
-                kept["last_seq"] == old_run["last_seq"],
-                f"PostgreSQL kept run {old_id} with last_seq {kept['last_seq']}",
+                len(runs) >= 2 and kept == runs,
+                f"PostgreSQL kept every old run with its last_seq: {kept}",
             ),
             (
                 before["generation"] != after["generation"] and bool(after["generation"]),
                 f"the new emulator's container has a new generation: {before['generation']} "
                 f"then {after['generation']}",
             ),
-            (
-                seqs_of(refilled["items"]) == expected,
-                f"the old run is in Cosmos DB again: {seqs_of(refilled['items'])}",
-            ),
-            (
-                stream.seqs() == expected,
-                f"its stream replayed {stream.seqs()}, each once, in order",
-            ),
             (compared["ok"], compared_line(compared)),
-            (from_cosmos, f"the old run's page came from Cosmos DB, in {took:.2f} s"),
+            (
+                replays == expected,
+                f"every old run's stream replayed in full, each once, in order: {replays}",
+            ),
+            (
+                all(ok for ok, _, _ in pages.values()),
+                "every old run's page came from Cosmos DB: "
+                + ", ".join(f"{r} {took:.2f} s" for r, (_, took, _) in pages.items()),
+            ),
+            (
+                ready["status"] == 200 and not copy_behind(ready),
+                f"readiness at the end: {ready['copy']}",
+            ),
         ],
         [f"the container's _rid was {before['rid']} and is {after['rid']}"],
     )
