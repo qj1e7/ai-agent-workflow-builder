@@ -123,8 +123,8 @@ def insert_old_use_case(owner_url: str) -> None:
 @pytest.fixture
 def at_trunk_heads(postgres: PostgresUrls) -> Iterator[None]:
     truncate_all(postgres.owner)
-    downgrade("orchestration", postgres.owner, TRUNK_HEADS["orchestration"])
-    downgrade("builder", postgres.owner, TRUNK_HEADS["builder"])
+    for context in MIGRATION_ORDER:
+        downgrade(context, postgres.owner, TRUNK_HEADS[context])
     try:
         yield
     finally:
