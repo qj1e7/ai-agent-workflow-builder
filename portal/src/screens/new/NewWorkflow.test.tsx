@@ -6,9 +6,10 @@ import { describe, expect, it } from 'vitest'
 import rowsAnswer from '../../../../contracts/fixtures/builder/understand.rows.json'
 import watchlist from '../../../../contracts/fixtures/builder/understand.watchlist.json'
 import useCase from '../../../../contracts/fixtures/builder/use-case.json'
+import toolList from '../../../../contracts/fixtures/cards/tools.json'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
-import type { DraftView, Me, PlanOut, UnderstandOut, UseCaseView } from '../../api/types'
+import type { DraftView, Me, PlanOut, ToolView, UnderstandOut, UseCaseView } from '../../api/types'
 import { DoneRoute } from './DonePage'
 import { afterReading, changeRow, draftContent, EMPTY_FORM, enterWhen, taskWithoutSchedule, planView, type Form } from './draft'
 import { NewWorkflowRoute } from './NewWorkflow'
@@ -68,8 +69,10 @@ const read = (answer: UnderstandOut, words = FOLLOW_UP): Form => afterReading({ 
 const noop = () => undefined
 const planState = (view: PlanState['view'], pending = false): PlanState => ({ view, pending, error: null, retry: noop })
 
-function check(form: Form, plan: PlanState): string {
-  return wrap(<StepCheck form={form} plan={plan} onChangeRow={noop} onDropRow={noop} onValue={noop} onBack={noop} onNext={noop} onCarryOn={noop} />)
+function check(form: Form, plan: PlanState, tools: readonly ToolView[] = []): string {
+  return wrap(<StepCheck form={form} plan={plan} onChangeRow={noop} onDropRow={noop} onValue={noop} onBack={noop} onNext={noop} onCarryOn={noop} />, {
+    seed: (client) => client.setQueryData(['tools'], tools),
+  })
 }
 
 describe('New workflow for an Operator', () => {
@@ -166,6 +169,20 @@ describe('step 2', () => {
     expect(text(html)).toContain('When Not said , please fill in Fill in You didn’t say when it runs.')
     expect(text(html)).toContain('Where it goes Post it in Teams , can’t do this yet Change I can’t post in Teams yet.')
     expect(text(html)).toContain('I’ll plan the steps once every part is clear.')
+  })
+
+  it('tags each step by what the tool list says its tool does', () => {
+    const form = read(rowsAnswer as UnderstandOut)
+    const plan = planState(planView(DRAFTED, form.rows))
+    const tools = (toolList as { tools: ToolView[] }).tools
+    expect(text(check(form, plan, tools))).toContain('Find bug tickets with no update for 10 days. Reads Jira Propose one ticket that lists them. Changes data, waits for a yes')
+    const searchWrites = check(
+      form,
+      plan,
+      tools.map((tool) => (tool.id === 'jira.search' ? { ...tool, kind: 'write' as const } : tool)),
+    )
+    expect(text(searchWrites)).toContain('Find bug tickets with no update for 10 days. Changes data, waits for a yes')
+    expect(searchWrites.match(/data-writes="true"/g)).toHaveLength(2)
   })
 
   it('keeps Next off while the plan leaves a part out, says so, and has the list to point at', () => {

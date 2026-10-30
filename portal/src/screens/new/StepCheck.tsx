@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import type { ToolId } from '../../api/types'
+import { useTools } from '../../api/queries'
+import type { ToolId, ToolView } from '../../api/types'
 import { Button, ButtonLink, buttonClassName } from '../../ui/Button'
 import { IconAlert, IconInfo, IconPencil } from '../../ui/icons'
+import { systemOf } from '../agents/agents'
 import { canDrop, nextBlockers, ROW_LABEL, valueKey, valueOf, valueProblem, type ChipState, type Form, type PlanAgent, type PlanView, type Redirect, type Row } from './draft'
 import { PlannerSays } from './StepDescribe'
 import styles from './NewWorkflow.module.css'
@@ -14,11 +16,11 @@ const HINT: Record<ChipState, string> = {
   cant_do: 'can’t do this yet',
 }
 
-const TOOL_TAG: Record<ToolId, string> = {
-  'github.read_releases': 'Reads GitHub',
-  'jira.search': 'Reads Jira',
-  'jira.read_ticket': 'Reads Jira',
-  'jira.create_ticket': 'Changes data, waits for a yes',
+type ToolKinds = ReadonlyMap<ToolId, ToolView['kind']>
+
+function tagOf(tool: ToolId | null, kinds: ToolKinds): { readonly words: string; readonly writes: boolean } {
+  if (tool === null) return { words: 'No system access', writes: false }
+  return kinds.get(tool) === 'read' ? { words: `Reads ${systemOf(tool)}`, writes: false } : { words: 'Changes data, waits for a yes', writes: true }
 }
 
 export const fixId = (index: number) => `row-${index}-fix`
@@ -149,16 +151,16 @@ function RowItem({ row, index, rows, onChange, onDrop }: { row: Row; index: numb
   )
 }
 
-function AgentSteps({ agent }: { agent: PlanAgent }) {
+function AgentSteps({ agent, kinds }: { agent: PlanAgent; kinds: ToolKinds }) {
   return (
     <ol className={styles['steps']} aria-label={`What ${agent.name} does`}>
       {agent.blocks.map((block, index) => {
-        const tag = block.tool ? TOOL_TAG[block.tool] : 'No system access'
+        const tag = tagOf(block.tool, kinds)
         return (
           <li key={`${String(index)}:${block.say}`}>
             <span>{block.say}</span>
-            <span className={styles['tag']} data-writes={block.tool === 'jira.create_ticket' || undefined}>
-              {tag}
+            <span className={styles['tag']} data-writes={tag.writes || undefined}>
+              {tag.words}
             </span>
           </li>
         )
@@ -203,7 +205,7 @@ function Values({ form, agents, shown, onValue }: { form: Form; agents: readonly
   )
 }
 
-function PlanPanel({ form, plan, ready, shown, onValue }: { form: Form; plan: PlanState; ready: boolean; shown: boolean; onValue: (key: string, value: string) => void }) {
+function PlanPanel({ form, plan, kinds, ready, shown, onValue }: { form: Form; plan: PlanState; kinds: ToolKinds; ready: boolean; shown: boolean; onValue: (key: string, value: string) => void }) {
   let body
   if (!ready) body = <p className={styles['note']}>I’ll plan the steps once every part is clear.</p>
   else if (plan.pending)
@@ -243,7 +245,7 @@ function PlanPanel({ form, plan, ready, shown, onValue }: { form: Form; plan: Pl
     body = (
       <>
         {view.agents.map((agent) => (
-          <AgentSteps key={agent.index} agent={agent} />
+          <AgentSteps key={agent.index} agent={agent} kinds={kinds} />
         ))}
         <p className={styles['note']}>
           Done by: {view.agents.map((agent) => agent.name).join(' and ')}. Nothing is changed without an Approver’s yes.
@@ -301,6 +303,7 @@ function firstBlocked(form: Form, plan: PlanView | null, rowIndex: number | unde
 
 export function StepCheck({ form, plan, onChangeRow, onDropRow, onValue, onBack, onNext, onCarryOn }: StepCheckProps) {
   const [shown, setShown] = useState(false)
+  const tools = useTools()
   if (form.redirect) return <WatchlistStep redirect={form.redirect} onBack={onBack} onCarryOn={onCarryOn} />
   const blockers = nextBlockers(form, plan.view)
   const ready = blockers.rows.length === 0
@@ -332,7 +335,7 @@ export function StepCheck({ form, plan, onChangeRow, onDropRow, onValue, onBack,
           </ul>
           <p className={styles['note']}>Green: from your words. Teal: changed by you. Amber: please fill in. Red: can’t do this yet. Your words stay as you wrote them.</p>
         </section>
-        <PlanPanel form={form} plan={plan} ready={ready} shown={shown} onValue={onValue} />
+        <PlanPanel form={form} plan={plan} kinds={new Map((tools.data ?? []).map((tool) => [tool.id, tool.kind]))} ready={ready} shown={shown} onValue={onValue} />
       </div>
       <div className={styles['foot']}>
         <Button onClick={onBack}>Back</Button>
