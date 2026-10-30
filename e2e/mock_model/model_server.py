@@ -261,8 +261,7 @@ def cut(text: str, pattern: str) -> tuple[str, re.Match[str] | None]:
     return (text if found is None else text[: found.start()] + text[found.end() :]), found
 
 
-def search(look: str) -> dict[str, Any]:
-    """A search's parameters, read honestly from the words."""
+def honest_search(look: str) -> dict[str, Any]:
     found: dict[str, Any] = {}
     text, days = cut(look, r"\s*\bwith no update for (\d+) days?\b")
     if days:
@@ -303,17 +302,16 @@ def look_row(look: str | None) -> dict[str, Any]:
         return missing("look_for")
     main, _, after = look.partition(", ")
     if "stale" in main.lower() and not re.search(r"\d+\s+days?", main):
-        found = search(re.sub(r"(?i)\bstale\s+", "", main))
+        found = honest_search(re.sub(r"(?i)\bstale\s+", "", main))
         row = part("look_for", look, "read_jira_tickets", **found, no_update_days=14)
         return {**row, "state": "changed"}
-    found = search(main)
+    found = honest_search(main)
     if after:
         found["about"] = after
     return part("look_for", look, "read_jira_tickets", **found)
 
 
 def new_ticket(act: str) -> dict[str, Any] | None:
-    """A new ticket, honestly when it is one, with any write after it tucked into a parameter."""
     found = NEW_TICKET.match(act.strip())
     if found is None:
         return None
