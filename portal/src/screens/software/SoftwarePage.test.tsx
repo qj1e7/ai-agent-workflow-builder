@@ -87,6 +87,24 @@ describe('the Software watchlist page', () => {
     expect(buttons(render(statuses, ALICE))).toContain('Check now')
   })
 
+  it('gives an Operator Resume while the watchlist is paused, and never a Pause', () => {
+    expect(buttons(render(paused, ALICE))).toContain('Resume')
+    expect(buttons(render({ ...paused, schedule: null }, ALICE))).toContain('Resume')
+    expect(buttons(render(statuses, ALICE))).not.toContain('Resume')
+    for (const view of [paused, statuses]) expect(buttons(render(view, ALICE))).not.toContain('Pause')
+  })
+
+  it('gives an Approver no Resume', () => {
+    expect(buttons(render(paused, BOB))).not.toContain('Resume')
+  })
+
+  it('puts Resume first among the schedule controls, so the schedule button takes its place once it resumes', () => {
+    const places = (html: string) => [...html.matchAll(/data-place="([^"]+)"/g)].map((match) => match[1])
+    expect(places(render(paused, ALICE))).toEqual(['resume', 'schedule', 'schedule-off'])
+    expect(places(render(statuses, ALICE))).toEqual(['schedule', 'schedule-off'])
+    expect(places(render({ ...paused, schedule: null }, ALICE))).toEqual(['resume', 'schedule'])
+  })
+
   it('does not point to the hidden Check now while paused with no schedule', () => {
     const words = text(render({ ...paused, schedule: null }, ALICE))
     expect(words).toContain('No schedule. Paused. No check runs until an Operator resumes it.')
