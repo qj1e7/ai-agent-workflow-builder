@@ -449,7 +449,7 @@ class DraftIn(WireIn):
     )
     content: dict[str, JsonValue] = Field(
         description="The New workflow form as the Portal keeps it, at most 32 KB as JSON. "
-        "The platform stores it as it is and never reads it."
+        "The platform stores it as it is. It reads only a top-level `name`, which Home shows."
     )
 
     @field_validator("content")

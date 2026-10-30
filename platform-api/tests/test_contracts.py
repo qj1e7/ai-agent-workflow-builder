@@ -5,6 +5,7 @@ import pytest
 from pydantic import TypeAdapter
 
 from platform_api.auth import DevUsers
+from platform_api.builder.home import HomeOut
 from platform_api.builder.http import SuggestOut, TemplateList, UseCaseView
 from platform_api.builder.models import (
     AddSoftware,
@@ -125,6 +126,9 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "builder/use-case.deleted.json": TypeAdapter(UseCaseDeleted),
     "builder/draft.in.json": TypeAdapter(DraftIn),
     "builder/drafts.json": TypeAdapter(DraftList),
+    "builder/home.bob.json": TypeAdapter(HomeOut),
+    "builder/home.alice.json": TypeAdapter(HomeOut),
+    "builder/home.day-one.json": TypeAdapter(HomeOut),
     "internal/step-responses.json": TypeAdapter(list[StepResponseOut]),
     "internal/workflow-failure.json": TypeAdapter(WorkflowFailureIn),
     "stubs/dev-users.json": TypeAdapter(DevUsers),
@@ -285,6 +289,17 @@ def test_approval_views_follow_the_own_work_rule():
     assert (alice.you_can_decide, alice.why_not) == (False, Refusal.OWN_WORK)
     assert (bob.you_can_decide, bob.why_not) == (True, None)
     assert alice.digest == bob.digest
+
+
+def test_home_fixtures_follow_the_own_work_rule():
+    bob = HomeOut.model_validate(load("builder/home.bob.json"))
+    alice = HomeOut.model_validate(load("builder/home.alice.json"))
+    (ask,) = bob.approvals
+    (waits,) = alice.waiting_on_others
+    assert ask.run_id == waits.run_id
+    assert (ask.started_by, waits.because) == ("alice", "started")
+    assert alice.approvals == []
+    assert (bob.stopped, bob.drafts) == ([], [])
 
 
 def _literal_values(alias: TypeAliasType) -> set[str]:
