@@ -1,6 +1,5 @@
 from typing import Any
 
-from azure.core.pipeline.transport import AsyncioRequestsTransport
 from azure.cosmos import PartitionKey
 from azure.cosmos.aio import CosmosClient
 
@@ -17,14 +16,9 @@ _READ_AFTER = "SELECT * FROM c WHERE c.seq > @after ORDER BY c.seq"
 
 
 def cosmos_client(settings: CosmosSettings) -> CosmosClient:
-    """Requests in a worker thread, so the client needs no aiohttp. Endpoint discovery is off:
-    the account has one region, and the emulator names an address only it can reach."""
-    return CosmosClient(
-        settings.endpoint,
-        credential=settings.key,
-        transport=AsyncioRequestsTransport(),
-        enable_endpoint_discovery=False,
-    )
+    """Endpoint discovery is off: the account has one region, and the emulator names an
+    address that only it can reach."""
+    return CosmosClient(settings.endpoint, credential=settings.key, enable_endpoint_discovery=False)
 
 
 class CosmosEvents:
