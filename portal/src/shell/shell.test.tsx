@@ -95,6 +95,11 @@ describe('the menu', () => {
     expect(new Set(currentLinks(html))).toEqual(new Set([path]))
   })
 
+  it('keeps an item current on the addresses under it, such as an open agent card, and Home only at Home', () => {
+    expect(currentLinks(render({ path: '/agents/crd_version_checker' }))).toEqual(['/agents', '/agents'])
+    expect(currentLinks(render({ path: '/' }))).toEqual(['/', '/'])
+  })
+
   it('marks nothing current for a path the menu does not name', () => {
     expect(currentLinks(render({ path: '/nowhere' }))).toEqual([])
   })

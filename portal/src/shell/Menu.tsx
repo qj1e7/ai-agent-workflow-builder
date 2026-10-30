@@ -7,7 +7,7 @@ export function Menu() {
   return (
     <nav className={styles['nav']} aria-label="Main">
       {MENU_PAGE_IDS.map((id) => (
-        <NavLink key={id} to={PAGES[id].path} end className={cx(styles['link'])}>
+        <NavLink key={id} to={PAGES[id].path} end={id === 'home'} className={cx(styles['link'])}>
           {PAGES[id].menuLabel}
         </NavLink>
       ))}
@@ -21,7 +21,7 @@ export function TabBar() {
       {MENU_PAGE_IDS.map((id) => {
         const { path, tabLabel, icon: Icon } = PAGES[id]
         return (
-          <NavLink key={id} to={path} end className={cx(styles['tab'])}>
+          <NavLink key={id} to={path} end={id === 'home'} className={cx(styles['tab'])}>
             <Icon size={22} />
             <span>{tabLabel}</span>
           </NavLink>
