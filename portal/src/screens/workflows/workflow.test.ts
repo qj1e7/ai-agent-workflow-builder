@@ -13,6 +13,7 @@ import { ApiError } from '../../api/client'
 import { errorWords } from '../../api/errors'
 import { createLatch } from '../../api/latch'
 import type { RunView, UseCaseView } from '../../api/types'
+import { placeAfterRedraw } from '../../ui/focus'
 import {
   agentsOf,
   changeProblem,
@@ -24,6 +25,8 @@ import {
   lineWhen,
   meansOutOfDate,
   nextRunWords,
+  placeOf,
+  PLACES,
   pressChange,
   pressRunNow,
   rowAction,
@@ -222,6 +225,13 @@ describe('the manage controls of a workflow page', () => {
   it('give an Approver who is not an Operator none', () => {
     expect(controlsOf(AGENTS, BOB)).toEqual([])
     expect(controlsOf({ ...AGENTS, state: 'paused' }, BOB)).toEqual([])
+  })
+
+  it('keep Pause and Resume in one place, so a refused Run now on a workflow someone paused hands focus to Resume', () => {
+    const shown = (useCase: UseCaseView) => controlsOf(useCase, ALICE).map(placeOf)
+    expect(shown({ ...AGENTS, state: 'paused' })).toEqual(['switch', 'delete'])
+    expect(placeAfterRedraw(PLACES, placeOf('run'), shown({ ...AGENTS, state: 'paused' }))).toBe('switch')
+    expect(placeAfterRedraw(PLACES, placeOf('pause'), shown({ ...AGENTS, state: 'paused' }))).toBe('switch')
   })
 
   it('give nobody any for the Software watchlist, which is looked after on the Software page', () => {
