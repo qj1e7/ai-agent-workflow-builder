@@ -12,7 +12,6 @@ from starlette.types import Message
 
 from platform_api.app import create_app
 from platform_api.auth import DevAuth, InMemoryPeople
-from platform_api.db import Database
 from platform_api.monitoring import (
     PLATFORM,
     ActivityLog,
@@ -55,11 +54,9 @@ def failed(retryable: bool) -> PendingEvent:
 
 
 @pytest.fixture
-async def app(db: Database, postgres: PostgresUrls) -> AsyncIterator[FastAPI]:
+async def app(activity_log: ActivityLog, postgres: PostgresUrls) -> AsyncIterator[FastAPI]:
     application = create_app(LOCAL)
-    log = ActivityLog(db)
-    await log.start()
-    application.state.activity_log = log
+    application.state.activity_log = activity_log
     application.state.settings = Settings(
         auth=DevAuth("http://localhost:8000"),
         public_base_url="http://localhost:8000",
@@ -73,10 +70,7 @@ async def app(db: Database, postgres: PostgresUrls) -> AsyncIterator[FastAPI]:
         teams_channel="CODESparks Ops",
     )
     application.state.sse_keepalive_seconds = KEEPALIVE
-    try:
-        yield application
-    finally:
-        await log.stop()
+    yield application
 
 
 @pytest.fixture

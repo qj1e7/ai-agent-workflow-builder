@@ -1,8 +1,13 @@
 import asyncio
 import logging
 import secrets
-from collections.abc import AsyncGenerator, AsyncIterator, Collection, Iterable
-from contextlib import asynccontextmanager, suppress
+from collections.abc import AsyncGenerator, Callable, Collection, Iterable
+from contextlib import aclosing, asynccontextmanager, suppress
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Protocol
+
+from psycopg import sql
 
 from platform_api.db import Database, UnitOfWork, json
 from platform_api.monitoring.agent_events import AgentEvent
@@ -15,6 +20,7 @@ from platform_api.monitoring.events import (
 from platform_api.shared import RunId, TaskId
 
 CHANNEL = "run_events"
+COPIED_CHANNEL = "run_events_copied"
 logger = logging.getLogger(__name__)
 
 _COLUMNS = "run_id, seq, ts, actor, kind, summary, data"
@@ -30,17 +36,76 @@ _READ_AFTER = f"""
 """
 
 
+@dataclass(frozen=True)
+class LoggedEvent:
+    run_id: RunId
+    seq: int
+    ts: datetime
+    actor: dict[str, object]
+    kind: str
+    summary: str
+    data: dict[str, object]
+    dedupe_key: str
+
+
+class EventReader(Protocol):
+    async def read_after(self, run_id: RunId, after: int) -> list[ActivityEvent]: ...
+
+
+class EventReplica(EventReader, Protocol):
+    async def put(self, event: LoggedEvent) -> None: ...
+
+
+class Wakeup:
+    """Set by each notification for one run. It keeps the highest seq those notifications named,
+    and has no bound when one of them named none."""
+
+    def __init__(self) -> None:
+        self._flag = asyncio.Event()
+        self._unbounded = True
+        self._upto = 0
+
+    def wake(self, upto: int | None) -> None:
+        if upto is None:
+            self._unbounded = True
+        else:
+            self._upto = max(self._upto, upto)
+        self._flag.set()
+
+    def take(self) -> int | None:
+        self._flag.clear()
+        upto = None if self._unbounded else self._upto
+        self._unbounded = False
+        return upto
+
+    async def wait(self) -> None:
+        await self._flag.wait()
+
+
+type Watcher = Callable[[RunId | None], None]
+
+
 class NotificationHub:
-    def __init__(self, db: Database, *, reconnect_delay: float = 1.0) -> None:
+    """One LISTEN connection per process. A payload is a run id, optionally followed by a space
+    and the highest seq copied. Watchers hear of every run, and of None after each connect."""
+
+    def __init__(
+        self, db: Database, *, channel: str = CHANNEL, reconnect_delay: float = 1.0
+    ) -> None:
         self._db = db
+        self._channel = channel
         self._reconnect_delay = reconnect_delay
-        self._subscribers: dict[RunId, set[asyncio.Event]] = {}
+        self._subscribers: dict[RunId, set[Wakeup]] = {}
+        self._watchers: list[Watcher] = []
         self._listening = asyncio.Event()
         self._task: asyncio.Task[None] | None = None
 
     @property
     def listening(self) -> bool:
         return self._listening.is_set()
+
+    def watch(self, watcher: Watcher) -> None:
+        self._watchers.append(watcher)
 
     async def start(self) -> None:
         self._task = asyncio.create_task(self._listen_forever())
@@ -55,15 +120,15 @@ class NotificationHub:
         self._task = None
 
     @asynccontextmanager
-    async def wakeups(self, run_id: RunId) -> AsyncGenerator[asyncio.Event]:
-        flag = asyncio.Event()
-        self._subscribers.setdefault(run_id, set()).add(flag)
+    async def wakeups(self, run_id: RunId) -> AsyncGenerator[Wakeup]:
+        wakeup = Wakeup()
+        self._subscribers.setdefault(run_id, set()).add(wakeup)
         try:
-            yield flag
+            yield wakeup
         finally:
-            flags = self._subscribers[run_id]
-            flags.discard(flag)
-            if not flags:
+            wakeups = self._subscribers[run_id]
+            wakeups.discard(wakeup)
+            if not wakeups:
                 del self._subscribers[run_id]
 
     async def _listen_forever(self) -> None:
@@ -71,7 +136,7 @@ class NotificationHub:
             try:
                 await self._listen()
             except Exception:
-                logger.warning("The run_events listener lost its connection.", exc_info=True)
+                logger.warning("The %s listener lost its connection.", self._channel, exc_info=True)
             self._listening.clear()
             await asyncio.sleep(self._reconnect_delay)
 
@@ -79,29 +144,50 @@ class NotificationHub:
         async with self._db.connection("monitoring") as conn:
             await conn.set_autocommit(True)
             try:
-                await conn.execute(f"LISTEN {CHANNEL}")
+                await conn.execute(sql.SQL("LISTEN {}").format(sql.Identifier(self._channel)))
                 self._listening.set()
                 # Anything committed while we were not listening is invisible to us, so
                 # every subscriber re-reads once.
-                for flags in self._subscribers.values():
-                    self._wake(flags)
+                for wakeups in self._subscribers.values():
+                    self._wake(wakeups, None)
+                self._tell_watchers(None)
                 async for notification in conn.notifies():
-                    self._wake(self._subscribers.get(RunId(notification.payload), ()))
+                    run_text, _, seq = notification.payload.partition(" ")
+                    run_id = RunId(run_text)
+                    self._wake(self._subscribers.get(run_id, ()), int(seq) if seq else None)
+                    self._tell_watchers(run_id)
             finally:
                 self._listening.clear()
                 with suppress(Exception):
                     await conn.set_autocommit(False)
 
     @staticmethod
-    def _wake(flags: Iterable[asyncio.Event]) -> None:
-        for flag in flags:
-            flag.set()
+    def _wake(wakeups: Iterable[Wakeup], upto: int | None) -> None:
+        for wakeup in wakeups:
+            wakeup.wake(upto)
+
+    def _tell_watchers(self, run_id: RunId | None) -> None:
+        for watcher in self._watchers:
+            watcher(run_id)
 
 
 class ActivityLog:
-    def __init__(self, db: Database, hub: NotificationHub | None = None) -> None:
+    """Writes always go to PostgreSQL. Reads go to PostgreSQL, or to a replica that a Copier
+    fills (ADR 0031), woken by the copier's notifications."""
+
+    def __init__(
+        self,
+        db: Database,
+        *,
+        replica: EventReader | None = None,
+        reconnect_delay: float = 1.0,
+        read_wait: float = 2.0,
+    ) -> None:
         self._db = db
-        self._hub = hub if hub is not None else NotificationHub(db)
+        self._replica = replica
+        self._read_wait = read_wait
+        channel = CHANNEL if replica is None else COPIED_CHANNEL
+        self._hub = NotificationHub(db, channel=channel, reconnect_delay=reconnect_delay)
 
     @property
     def database(self) -> Database:
@@ -171,26 +257,50 @@ class ActivityLog:
         found = {RunId(row["run_id"]): int(row["seq"]) for row in rows}
         return {run_id: found.get(run_id, 0) for run_id in run_ids}
 
-    async def read_after(
-        self, run_id: RunId, after: int, *, uow: UnitOfWork | None = None
-    ) -> list[ActivityEvent]:
-        if uow is None:
-            async with self._db.transaction("monitoring") as own:
-                return await self.read_after(run_id, after, uow=own)
-        rows = await (
-            await uow.conn.execute(_READ_AFTER, {"run_id": run_id, "after": after})
-        ).fetchall()
-        return [activity_event_adapter.validate_python(row) for row in rows]
+    async def read_after(self, run_id: RunId, after: int) -> list[ActivityEvent]:
+        """From a replica, this waits at most read_wait for the copy to reach what PostgreSQL
+        held when the read began. A client that just saw a run's state then reads the event
+        that set it."""
+        if self._replica is None:
+            return await self._read_postgres(run_id, after)
+        async with self._db.transaction("monitoring") as uow:
+            logged = await self.last_seq(uow, run_id)
+        if logged <= after:
+            return []
+        events: list[ActivityEvent] = []
+        with suppress(TimeoutError):
+            async with (
+                asyncio.timeout(self._read_wait),
+                aclosing(self.subscribe(run_id, after)) as stream,
+            ):
+                async for event in stream:
+                    events.append(event)
+                    if event.seq >= logged:
+                        break
+        return events
 
-    async def subscribe(self, run_id: RunId, after: int) -> AsyncIterator[ActivityEvent]:
+    async def subscribe(self, run_id: RunId, after: int) -> AsyncGenerator[ActivityEvent]:
         cursor = after
         async with self._hub.wakeups(run_id) as wakeup:
             while True:
-                wakeup.clear()
-                for event in await self.read_after(run_id, cursor):
-                    cursor = event.seq
-                    yield event
+                upto = wakeup.take()
+                if upto is None or upto > cursor:
+                    for event in await self._read(run_id, cursor):
+                        cursor = event.seq
+                        yield event
                 await wakeup.wait()
+
+    async def _read(self, run_id: RunId, after: int) -> list[ActivityEvent]:
+        if self._replica is None:
+            return await self._read_postgres(run_id, after)
+        return await self._replica.read_after(run_id, after)
+
+    async def _read_postgres(self, run_id: RunId, after: int) -> list[ActivityEvent]:
+        async with self._db.transaction("monitoring") as uow:
+            rows = await (
+                await uow.conn.execute(_READ_AFTER, {"run_id": run_id, "after": after})
+            ).fetchall()
+        return [activity_event_adapter.validate_python(row) for row in rows]
 
     async def ingest_agent_events(
         self, uow: UnitOfWork, run_id: RunId, task_id: TaskId, events: Iterable[AgentEvent]

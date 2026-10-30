@@ -2,21 +2,35 @@ import os
 import shutil
 import subprocess
 import time
+from collections import Counter
 from collections.abc import AsyncIterator, Iterator
+from contextlib import suppress
 from dataclasses import dataclass
 
+import anyio
 import psycopg
 import pytest
+from azure.core.exceptions import AzureError
+from azure.cosmos.aio import ContainerProxy, DatabaseProxy
+from azure.cosmos.exceptions import CosmosResourceNotFoundError
 from psycopg import sql
 
 from platform_api.db import PLATFORM_DATABASE, ROLE_OWNER, ROLES, Database, create_roles_sql
 from platform_api.migrations import upgrade_all
-from platform_api.settings import CONTEXTS, DatabaseUrls
+from platform_api.monitoring import ActivityLog, Copier, CosmosEvents
+from platform_api.monitoring.cosmos_log import CONTAINER, cosmos_client
+from platform_api.settings import CONTEXTS, CosmosSettings, DatabaseUrls
 
 POSTGRES_IMAGE = (
     "postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3"
 )
 SCHEMAS = ("monitoring", "orchestration", "builder")
+EMULATOR_KEY = (
+    "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="
+)
+COSMOS_TEST_DATABASE = "activity_test"
+COSMOS_WAIT_SECONDS = 180
+READERS = ["postgres", pytest.param("cosmos", marks=pytest.mark.cosmos)]
 
 
 @dataclass(frozen=True)
@@ -138,3 +152,126 @@ async def db(postgres: PostgresUrls) -> AsyncIterator[Database]:
         yield database
     finally:
         await database.close()
+
+
+def cosmos_settings() -> CosmosSettings:
+    endpoint = os.environ.get("COSMOS_ENDPOINT")
+    if not endpoint:
+        reason = "no Cosmos DB: set COSMOS_ENDPOINT to the emulator"
+        if os.environ.get("COSMOS_REQUIRED"):
+            pytest.fail(f"{reason}. COSMOS_REQUIRED is set, so this test may not skip.")
+        pytest.skip(reason)
+    return CosmosSettings(endpoint=endpoint, key=os.environ.get("COSMOS_KEY") or EMULATOR_KEY)
+
+
+@dataclass(frozen=True)
+class CosmosUnderTest:
+    events: CosmosEvents
+    container: ContainerProxy
+
+    async def seqs(self, run_id: str) -> list[int]:
+        query = self.container.query_items(
+            "SELECT c.seq FROM c ORDER BY c.seq", partition_key=run_id
+        )
+        return [item["seq"] async for item in query]
+
+
+async def _test_database(settings: CosmosSettings) -> tuple[CosmosEvents, DatabaseProxy]:
+    deadline = time.monotonic() + COSMOS_WAIT_SECONDS
+    while True:
+        client = cosmos_client(settings)
+        try:
+            database = await client.create_database_if_not_exists(COSMOS_TEST_DATABASE)
+        except AzureError:
+            await client.close()
+            if time.monotonic() > deadline:
+                raise
+            await anyio.sleep(1)
+            continue
+        return CosmosEvents(client, database=COSMOS_TEST_DATABASE), database
+
+
+async def fresh_cosmos() -> CosmosUnderTest:
+    """An empty run_events container in a database of its own, so no test sees another's items."""
+    events, database = await _test_database(cosmos_settings())
+    try:
+        with suppress(CosmosResourceNotFoundError):
+            await database.delete_container(CONTAINER)
+        await events.ensure()
+    except BaseException:
+        await events.close()
+        raise
+    return CosmosUnderTest(events, database.get_container_client(CONTAINER))
+
+
+@pytest.fixture
+async def cosmos() -> AsyncIterator[CosmosUnderTest]:
+    under_test = await fresh_cosmos()
+    try:
+        yield under_test
+    finally:
+        await under_test.events.close()
+
+
+@pytest.fixture(params=READERS)
+async def activity_log(request: pytest.FixtureRequest, db: Database) -> AsyncIterator[ActivityLog]:
+    if request.param == "postgres":
+        log = ActivityLog(db, reconnect_delay=0.1)
+        await log.start()
+        try:
+            yield log
+        finally:
+            await log.stop()
+        return
+    under_test = await fresh_cosmos()
+    log = ActivityLog(db, replica=under_test.events, reconnect_delay=0.1, read_wait=10)
+    copier = Copier(db, under_test.events, retry_delay=0.1, reconnect_delay=0.1)
+    await log.start()
+    await copier.start()
+    try:
+        yield log
+    finally:
+        await copier.stop()
+        await log.stop()
+        await under_test.events.close()
+
+
+_cosmos_tests: set[str] = set()
+_cosmos_outcomes: dict[str, str] = {}
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    _cosmos_tests.update(item.nodeid for item in items if item.get_closest_marker("cosmos"))
+
+
+def pytest_runtest_logreport(report: pytest.TestReport) -> None:
+    if report.nodeid not in _cosmos_tests:
+        return
+    if report.failed:
+        _cosmos_outcomes[report.nodeid] = "failed"
+    elif report.skipped:
+        _cosmos_outcomes[report.nodeid] = "skipped"
+    elif report.when == "call":
+        _cosmos_outcomes.setdefault(report.nodeid, "passed")
+
+
+def _cosmos_counts() -> Counter[str]:
+    return Counter(_cosmos_outcomes.values())
+
+
+def pytest_sessionfinish(session: pytest.Session) -> None:
+    counts = _cosmos_counts()
+    if os.environ.get("COSMOS_REQUIRED") and (counts["skipped"] or not counts["passed"]):
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED
+
+
+def pytest_terminal_summary(terminalreporter: pytest.TerminalReporter) -> None:
+    counts = _cosmos_counts()
+    terminalreporter.write_line(
+        f"Cosmos DB tests: {counts['passed']} passed, {counts['failed']} failed, "
+        f"{counts['skipped']} skipped"
+    )
+    if os.environ.get("COSMOS_REQUIRED") and (counts["skipped"] or not counts["passed"]):
+        terminalreporter.write_line(
+            "FAIL: COSMOS_REQUIRED is set, so every Cosmos DB test must run and pass."
+        )

@@ -1,18 +1,15 @@
 import json
-from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
 import anyio
 import pytest
 from psycopg import AsyncConnection
 
-from platform_api.db import Database
 from platform_api.monitoring import (
     PLATFORM,
     ActivityEvent,
     ActivityLog,
     AgentEventPost,
-    NotificationHub,
     PendingEvent,
     RunRetriedData,
     activity_events_adapter,
@@ -40,13 +37,8 @@ def pending(n: int, ts: datetime | None = None, dedupe_key: str | None = None) -
 
 
 @pytest.fixture
-async def log(db: Database) -> AsyncIterator[ActivityLog]:
-    activity_log = ActivityLog(db)
-    await activity_log.start()
-    try:
-        yield activity_log
-    finally:
-        await activity_log.stop()
+def log(activity_log: ActivityLog) -> ActivityLog:
+    return activity_log
 
 
 async def append(log: ActivityLog, context: Context, *events: PendingEvent) -> list[ActivityEvent]:
@@ -202,9 +194,7 @@ async def test_subscribe_resumes_after_a_seq_and_follows_new_appends(
     assert received == [3, 4, 5]
 
 
-async def test_subscribers_wake_after_the_listener_reconnects(db: Database):
-    log = ActivityLog(db, hub=NotificationHub(db, reconnect_delay=0.1))
-    await log.start()
+async def test_subscribers_wake_after_the_listener_reconnects(log: ActivityLog):
     received: list[int] = []
 
     async def collect() -> None:
@@ -212,24 +202,21 @@ async def test_subscribers_wake_after_the_listener_reconnects(db: Database):
             received.append(event.seq)
             return
 
-    try:
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(collect)
-            await anyio.sleep(0.05)
-            async with db.connection("monitoring") as conn:
-                await conn.execute(
-                    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
-                    "WHERE pid <> pg_backend_pid() AND query = 'LISTEN run_events'"
-                )
-            with anyio.fail_after(5):
-                while log.listening:
-                    await anyio.sleep(0.01)
-                while not log.listening:
-                    await anyio.sleep(0.01)
-                await append(log, "monitoring", pending(1))
-                while not received:
-                    await anyio.sleep(0.01)
-    finally:
-        await log.stop()
+    async with anyio.create_task_group() as tg:
+        tg.start_soon(collect)
+        await anyio.sleep(0.05)
+        async with log.database.connection("monitoring") as conn:
+            await conn.execute(
+                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                "WHERE pid <> pg_backend_pid() AND query LIKE 'LISTEN %'"
+            )
+        with anyio.fail_after(5):
+            while log.listening:
+                await anyio.sleep(0.01)
+            while not log.listening:
+                await anyio.sleep(0.01)
+            await append(log, "monitoring", pending(1))
+            while not received:
+                await anyio.sleep(0.01)
 
     assert received == [1]
