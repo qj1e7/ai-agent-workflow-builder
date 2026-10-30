@@ -6,9 +6,11 @@ can be tested without a real model:
 - GET /v1/models lists one model.
 - A request that forces a tool is a draft, a choice or the Planner reading a task back. The canned
   answer follows the task's words. A task that names a GitHub repository picks the Version
-  checker, any other gets the drafted agent, and a release task belongs on the Software watchlist.
+  checker, any other gets a drafted agent (a follow-up one for a follow-up ticket task, else a
+  summary one), and a release task belongs on the Software watchlist.
 - A request with tools and no forced tool is a card run. The mock calls github_read_releases,
   then jira_search, then jira_create_ticket, then writes a report, by what the conversation holds.
+  The ticket's title follows the card: a release, a follow-up or a summary.
 - Anything else is a summary or a connection test and gets one plain sentence.
 
 When a tool result tells it to use another Jira project (the planted instruction in a release
@@ -86,6 +88,27 @@ DRAFT: dict[str, Any] = {
     "missing_tools": [],
     "questions": ["Which Jira project should it cover?"],
 }
+FOLLOW_UP = re.compile(r"\bfollow[- ]?up\b", re.IGNORECASE)
+FOLLOW_UP_DRAFT: dict[str, Any] = {
+    **DRAFT,
+    "name": "Stale bug follow-up",
+    "purpose": "Finds bug tickets in one Jira project that have had no update for a while, and "
+    "proposes one follow-up ticket that lists them.",
+    "good_for": ["Follow up stale bug tickets"],
+    "inputs": [
+        {
+            "name": "Jira project",
+            "kind": "jira_project",
+            "what": "The project to look in, and where the follow-up ticket goes.",
+            "example": "MOCK",
+        }
+    ],
+    "blocks": [
+        {"say": "Find bug tickets with no recent update.", "tool": "jira.search"},
+        {"say": "Propose one follow-up ticket that lists them.", "tool": "jira.create_ticket"},
+    ],
+}
+CARD_NAME = re.compile(r"^Agent card: (.+)$", re.MULTILINE)
 
 
 def text_of(content: Any) -> str:
@@ -254,7 +277,7 @@ def forced(body: dict[str, Any], name: str) -> dict[str, Any]:
     if mode == "broken":
         return call(name, BROKEN, 0)
     if "draft" in lowered:
-        return call(name, DRAFT, 0)
+        return call(name, FOLLOW_UP_DRAFT if FOLLOW_UP.search(task_text(body)) else DRAFT, 0)
     if "choice" in lowered:
         return call(name, choice(task_text(body)), 0)
     if "understand" in lowered:
@@ -295,11 +318,13 @@ def run_step(body: dict[str, Any]) -> dict[str, Any]:
     attempts = calls.get("jira_create_ticket", 0)
     fooled = planted is not None
     if "jira_create_ticket" in offered and (attempts == 0 or (fooled and attempts == 1)):
-        title = (
-            f"New release {version} of {repo}"
-            if "github_read_releases" in offered
-            else f"Summary of finished tickets in {project}"
-        )
+        card = CARD_NAME.search(system)
+        if "github_read_releases" in offered:
+            title = f"New release {version} of {repo}"
+        elif card is not None and FOLLOW_UP.search(card.group(1)):
+            title = f"Bug tickets to follow up in {project}"
+        else:
+            title = f"Summary of finished tickets in {project}"
         ticket: dict[str, Any] = {"title": title, "body": f"Proposed for {project}."}
         if fooled and attempts == 0:
             ticket["project"] = planted.group(1)  # pyright: ignore[reportOptionalMemberAccess]

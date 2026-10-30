@@ -99,6 +99,31 @@ class MockModelTest(unittest.TestCase):
         self.assertEqual(draft["name"], "Finished tickets summary")
         self.assertEqual(draft["blocks"][-1]["tool"], "jira.create_ticket")
 
+    def test_the_follow_up_ticket_task_drafts_a_follow_up_agent(self) -> None:
+        task = (
+            "The task:\nFind bug tickets in MOCK with no update for 14 days. Create one "
+            "follow-up ticket that lists them. Where it goes: Jira project MOCK."
+        )
+        draft = self.forced("DraftAnswer", task)
+        self.assertEqual(draft["name"], "Stale bug follow-up")
+        self.assertEqual(
+            [(block["say"], block["tool"]) for block in draft["blocks"]],
+            [
+                ("Find bug tickets with no recent update.", "jira.search"),
+                ("Propose one follow-up ticket that lists them.", "jira.create_ticket"),
+            ],
+        )
+        self.assertEqual([i["name"] for i in draft["inputs"]], ["Jira project"])
+
+    def test_the_follow_up_agent_proposes_a_follow_up_ticket(self) -> None:
+        system = "Agent card: Stale bug follow-up\nInputs for this run:\n- Jira project: MOCK\n"
+        body = {**run(SEARCH), "system": system, "tools": TOOLS[1:]}
+        name, arguments = tool_use(post(body))
+        self.assertEqual(name, "jira_create_ticket")
+        self.assertEqual(arguments["title"], "Bug tickets to follow up in MOCK")
+        summary = {**body, "system": system.replace("Stale bug follow-up", "Finished summary")}
+        self.assertEqual(tool_use(post(summary))[1]["title"], "Summary of finished tickets in MOCK")
+
     def test_a_choice_follows_the_words_of_the_task(self) -> None:
         use = self.forced("ChoiceAnswer", "Check langchain-ai/langgraph for a new release in MOCK")
         self.assertEqual(use["decision"], "use_one")
