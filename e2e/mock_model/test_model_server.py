@@ -113,6 +113,10 @@ class MockModelTest(unittest.TestCase):
             self.forced("ChoiceAnswer", "book a meeting room")["decision"], "cannot_do"
         )
 
+    def test_a_task_that_names_no_github_project_gets_a_new_agent(self) -> None:
+        task = "Find bug tickets in MOCK with no update for 10 days. Create one ticket for them."
+        self.assertEqual(self.forced("ChoiceAnswer", task)["decision"], "new_agent")
+
     def test_a_choice_reads_only_the_task_not_the_saved_agents(self) -> None:
         request = (
             "Saved agents:\n- Finished tickets summary: proposes a summary ticket.\n\n"

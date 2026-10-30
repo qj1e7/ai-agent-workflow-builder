@@ -5,7 +5,8 @@ can be tested without a real model:
 
 - GET /v1/models lists one model.
 - A request that forces a tool is a draft, a choice or the Planner reading a task back. The canned
-  answer follows the task's words. A release task belongs on the Software watchlist.
+  answer follows the task's words. A task that names a GitHub repository picks the Version
+  checker, any other gets the drafted agent, and a release task belongs on the Software watchlist.
 - A request with tools and no forced tool is a card run. The mock calls github_read_releases,
   then jira_search, then jira_create_ticket, then writes a report, by what the conversation holds.
 - Anything else is a summary or a connection test and gets one plain sentence.
@@ -156,7 +157,7 @@ def choice(task: str) -> dict[str, Any]:
             "reason": "No calendar tool.",
             "questions": [],
         }
-    if "summar" in words:
+    if "summar" in words or REPO.search(task) is None:
         return {
             "decision": "new_agent",
             "agents": [],
