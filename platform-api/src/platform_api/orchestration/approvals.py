@@ -162,10 +162,10 @@ def _eligible(step: ApprovalStep, user: UserId) -> bool:
 def _refusal(
     request: ApprovalRequest,
     recorded: frozenset[Decision],
+    status: ApprovalStatus,
     principal: Principal,
     step_index: int,
 ) -> Refusal | None:
-    status = approval_status(request, recorded)
     if isinstance(status, Invalid):
         return Refusal.INVALID_DECISIONS
     if not isinstance(status, Open):
@@ -190,7 +190,7 @@ def why_not(
     status = approval_status(request, recorded)
     if not isinstance(status, Open):
         return Refusal.NOT_OPEN
-    return _refusal(request, recorded, principal, status.next_step)
+    return _refusal(request, recorded, status, principal, status.next_step)
 
 
 def decide(
@@ -210,7 +210,7 @@ def decide(
             and earlier.verdict is verdict
         ):
             return AlreadyRecorded(earlier)
-    reason = _refusal(request, recorded, principal, step_index)
+    reason = _refusal(request, recorded, approval_status(request, recorded), principal, step_index)
     if reason is not None:
         return Refused(reason)
     if seen_digest != request.digest:
