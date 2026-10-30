@@ -1,0 +1,2 @@
+$ terraform fmt -check -recursive -diff -no-color   (in infra/, Terraform 1.16.5 darwin_arm64, at 7a0d931)
+exit 0
