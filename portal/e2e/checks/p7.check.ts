@@ -227,7 +227,7 @@ test('@lane6 a card opens from its URL and closing returns focus to its tile', a
   await context.close()
 })
 
-// Lane 7. Tab stays inside an open card, also after a click on its text, and Escape closes it.
+// Lane 7. Tab stays inside an open card, and Escape closes it.
 const TAB_STOPS = 'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
 interface FocusStop {
   step: string
@@ -246,7 +246,7 @@ const focusAfter = (page: Page, step: string): Promise<FocusStop> =>
     },
     [step, TAB_STOPS] as const,
   )
-test('@lane7 Tab stays inside an open card and Escape closes it', async ({ browser }) => {
+test('@lane7 Tab stays inside an open card, also after a click on its text, and Escape closes it', async ({ browser }) => {
   onlyDev()
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()

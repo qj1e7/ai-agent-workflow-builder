@@ -149,7 +149,6 @@ type Edges = Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom'>
 
 const offCard = (spot: Spot, card: Edges) => spot.clientX < card.left || spot.clientX > card.right || spot.clientY < card.top || spot.clientY > card.bottom
 
-/** A text selection that overshoots the card ends on the dimmed page, so the press must start there too. */
 export function pressClosesCard(start: Spot | null, end: Spot, card: Edges): boolean {
   return start !== null && offCard(start, card) && offCard(end, card)
 }
