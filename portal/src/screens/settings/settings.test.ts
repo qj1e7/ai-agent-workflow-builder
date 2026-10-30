@@ -9,8 +9,11 @@ import ownOperatorRole from '../../../../contracts/fixtures/people/refusal.own_o
 import twoApprovers from '../../../../contracts/fixtures/people/refusal.two_approvers.json'
 import history from '../../../../contracts/fixtures/settings/history.json'
 import modelActive from '../../../../contracts/fixtures/settings/model.active.json'
+import modelEmpty from '../../../../contracts/fixtures/settings/model.empty.json'
+import pendingAlice from '../../../../contracts/fixtures/settings/model.pending.alice.json'
+import pendingBob from '../../../../contracts/fixtures/settings/model.pending.bob.json'
 import { ApiError } from '../../api/client'
-import type { ConfirmationOut, DecideRefusal, Me, ModelOut, PeopleRefusal, PersonOut, SettingsChangeOut } from '../../api/types'
+import type { ConfirmationOut, DecideRefusal, Me, ModelOut, ModelSettingsView, PeopleRefusal, PersonOut, SettingsChangeOut } from '../../api/types'
 import {
   approverConfirmationsByPerson,
   canChangeSettings,
@@ -20,18 +23,22 @@ import {
   fieldOfProblem,
   historyOf,
   keyEndingWords,
+  leftTheListWords,
+  modelNeedsYou,
   needsYou,
   NOT_ACCEPTED_WORDS,
   NOT_SIGNED_IN_WORDS,
   peopleRefusalWords,
   pendingApproverFor,
   personStatusWords,
+  saidAfterListChange,
   savedKeyFits,
   SETTINGS_OFF_WORDS,
   settingsErrorWords,
   startingProvider,
   tabFrom,
   type NotFound,
+  type PeopleSaid,
 } from './settings'
 
 const schemas = (openapi as unknown as { components: { schemas: Record<string, { enum?: string[] }> } }).components.schemas
@@ -96,6 +103,12 @@ describe('the refusal words', () => {
       expect(said).toBe(words)
       expect(said).not.toMatch(LOOKS_LIKE_A_CODE)
     }
+  })
+
+  it('name the person a change was about when the platform no longer has them', () => {
+    const gone = new ApiError(404, { detail: 'No such person on the list' })
+    expect(settingsErrorWords(gone, 'dev', 'person', 'Gina')).toBe('Gina is no longer on the list. The list now shows who is on it.')
+    expect(settingsErrorWords(gone, 'dev', 'confirmation', 'Gina')).toBe('This request is no longer waiting. The page now shows where it stands.')
   })
 
   it('pass on the platform’s own plain words for an address it refused', () => {
@@ -163,6 +176,57 @@ describe('a decided Approver request', () => {
   })
 })
 
+describe('a person who leaves the list while the page is open', () => {
+  const GINA = { ...DAVE, id: 'gina', display: 'Gina', email: 'gina@example.test' }
+  const HANA = { ...DAVE, id: 'hana', display: 'Hana', email: 'hana@example.test' }
+  const IVAN = { ...DAVE, id: 'ivan', display: 'Ivan', email: 'ivan@example.test' }
+  const BEFORE = [...PEOPLE, GINA, HANA, IVAN]
+  const without = (...ids: string[]) => BEFORE.filter((person) => !ids.includes(person.id))
+  const NOTHING: PeopleSaid = { notice: null, problem: null }
+
+  it('is announced by name when nothing was shown on their row', () => {
+    expect(saidAfterListChange(BEFORE, without('ivan'), NOTHING)).toEqual({
+      notice: { personId: 'ivan', words: 'Ivan is no longer on the list. The list now shows who is on it.', undo: null },
+      problem: null,
+    })
+  })
+
+  it('replaces the notice that was on their row, and its Undo', () => {
+    const said: PeopleSaid = { notice: { personId: 'hana', words: 'Hana is no longer an Operator.', undo: { name: 'Hana', operator: true } }, problem: null }
+    expect(saidAfterListChange(BEFORE, without('hana'), said)).toEqual({
+      notice: { personId: 'hana', words: 'Hana is no longer on the list. The list now shows who is on it.', undo: null },
+      problem: null,
+    })
+  })
+
+  it('names them in the problem when someone acted on them after they left', () => {
+    const said: PeopleSaid = { notice: null, problem: { personId: 'gina', words: 'That person is no longer on the list. The list now shows who is on it.' } }
+    expect(saidAfterListChange(BEFORE, without('gina'), said)).toEqual({
+      notice: null,
+      problem: { personId: 'gina', words: 'Gina is no longer on the list. The list now shows who is on it.' },
+    })
+  })
+
+  it('replaces what was said about someone still on the list', () => {
+    const said: PeopleSaid = { notice: null, problem: { personId: 'bob', words: 'At least 2 people must be Approvers, so nobody has to approve their own work.' } }
+    expect(saidAfterListChange(BEFORE, without('ivan'), said)).toEqual({
+      notice: { personId: 'ivan', words: 'Ivan is no longer on the list. The list now shows who is on it.', undo: null },
+      problem: null,
+    })
+  })
+
+  it('names everyone who left at once', () => {
+    expect(saidAfterListChange(BEFORE, without('gina', 'ivan'), NOTHING).notice?.words).toBe('Gina and Ivan are no longer on the list. The list now shows who is on it.')
+    expect(leftTheListWords(['Gina', 'Hana', 'Ivan'])).toBe('Gina, Hana and Ivan are no longer on the list. The list now shows who is on it.')
+  })
+
+  it('keeps what is shown when nobody left', () => {
+    const said: PeopleSaid = { notice: { personId: 'hana', words: 'Hana is no longer an Operator.', undo: { name: 'Hana', operator: true } }, problem: null }
+    expect(saidAfterListChange(BEFORE, [...BEFORE, { ...DAVE, id: 'jo', display: 'Jo' }], said)).toBe(said)
+    expect(saidAfterListChange(BEFORE, BEFORE.map((person) => ({ ...person, operator: !person.operator })), said)).toBe(said)
+  })
+})
+
 describe('who can change settings', () => {
   it('is every Operator, and never an Approver who is not one', () => {
     expect(canChangeSettings(ALICE)).toBe(true)
@@ -216,6 +280,26 @@ describe('the AI model', () => {
     expect(startingProvider(providers, ACTIVE)).toBe('aisg')
     expect(startingProvider(providers, { ...ACTIVE, base_url: 'http://mock-model:8300' })).toBe('other')
     expect(startingProvider(providers, null)).toBe('aisg')
+  })
+
+  it('marks its tab for an Operator while no model is connected and nothing waits', () => {
+    const empty = modelEmpty as ModelSettingsView
+    expect(modelNeedsYou(empty, ALICE)).toBe(true)
+    expect(modelNeedsYou(empty, CAROL)).toBe(true)
+    expect(modelNeedsYou({ ...empty, you_can_change: false }, BOB)).toBe(false)
+    expect(modelNeedsYou({ ...empty, available: false }, ALICE)).toBe(false)
+    expect(modelNeedsYou(modelActive as ModelSettingsView, ALICE)).toBe(false)
+    expect(modelNeedsYou(undefined, ALICE)).toBe(false)
+  })
+
+  it('marks its tab while an address waits only for someone who can decide it, never for the person who entered it', () => {
+    const forAlice = { ...(pendingAlice as ModelSettingsView), active: null }
+    const forCarol = { ...forAlice, pending: forAlice.pending ? { ...forAlice.pending, why_not: 'Only Approvers can confirm a new address.' } : null }
+    const forBob = { ...(pendingBob as ModelSettingsView), active: null }
+    expect(modelNeedsYou(forAlice, ALICE)).toBe(false)
+    expect(modelNeedsYou(forCarol, CAROL)).toBe(false)
+    expect(modelNeedsYou(forBob, BOB)).toBe(true)
+    expect(modelNeedsYou(pendingBob as ModelSettingsView, BOB)).toBe(true)
   })
 
   it('shows a problem beside the field it is about', () => {

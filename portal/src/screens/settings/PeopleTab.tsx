@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useCacheScope } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { useAddPerson, useAskApprover, useConfirmations, useDecideConfirmation, usePeopleList, useRemoveApprover, useSetOperator } from '../../api/settingsQueries'
 import type { ConfirmationOut, Me, PersonOut } from '../../api/types'
@@ -18,7 +19,10 @@ import {
   pendingApproverFor,
   personStatusWords,
   ROLE_RULES,
+  saidAfterListChange,
   undoneWords,
+  type PeopleNotice,
+  type PeopleSaid,
 } from './settings'
 import { FieldError, History, useFocusOnNextRender, useSettingsWords } from './SettingsParts'
 import styles from './Settings.module.css'
@@ -31,16 +35,7 @@ const operatorBoxId = (personId: string) => `person-${personId}-operator`
 const approverBoxId = (personId: string) => `person-${personId}-approver`
 const rowErrorId = (personId: string) => `person-${personId}-error`
 
-interface Notice {
-  readonly personId: string
-  readonly words: string
-  readonly undo: { readonly name: string; readonly operator: boolean } | null
-}
-
-interface RowProblem {
-  readonly personId: string
-  readonly words: string
-}
+const NOTHING_SAID: PeopleSaid = { notice: null, problem: null }
 
 interface Settled {
   readonly onSuccess: () => void
@@ -58,6 +53,7 @@ export function PeopleTab({ me }: { me: Me | undefined }) {
   const people = usePeopleList()
   const confirmations = useConfirmations()
   const words = useSettingsWords()
+  const viewer = useCacheScope()
   if (people.isPending) {
     return (
       <section className={styles['panel']} aria-label="People and roles">
@@ -77,7 +73,7 @@ export function PeopleTab({ me }: { me: Me | undefined }) {
       </section>
     )
   }
-  return <PeoplePanel people={people.data} confirmations={confirmations.data} me={me} />
+  return <PeoplePanel key={viewer} people={people.data} confirmations={confirmations.data} me={me} />
 }
 
 interface PanelProps {
@@ -95,9 +91,15 @@ function PeoplePanel({ people, confirmations, me }: PanelProps) {
   const decide = useDecideConfirmation()
   const latch = useLatch()
   const focus = useFocusOnNextRender()
-  const [notice, setNotice] = useState<Notice | null>(null)
-  const [problem, setProblem] = useState<RowProblem | null>(null)
+  const [said, setSaid] = useState<PeopleSaid>(NOTHING_SAID)
+  const [listed, setListed] = useState(people)
   const [busy, setBusy] = useState<Busy | null>(null)
+  if (listed !== people) {
+    setListed(people)
+    setSaid(saidAfterListChange(listed, people, said))
+  }
+  const { notice, problem } = said
+  const tell = (next: PeopleNotice) => setSaid({ notice: next, problem: null })
 
   const waiting = approverConfirmationsByPerson(confirmations)
   const names = new Map(people.map((person) => [person.id, person.display]))
@@ -111,12 +113,11 @@ function PeoplePanel({ people, confirmations, me }: PanelProps) {
   function change(person: PersonOut, act: Busy['act'], to: boolean | undefined, send: (done: Settled) => void, after: () => void) {
     latch.run((settled) => {
       setBusy(to === undefined ? { personId: person.id, act } : { personId: person.id, act, to })
-      setProblem(null)
+      setSaid((now) => ({ notice: now.notice, problem: null }))
       send({
         onSuccess: after,
         onError: (error) => {
-          setNotice(null)
-          setProblem({ personId: person.id, words: words(error, act === 'confirm' || act === 'not_now' ? 'confirmation' : 'person') })
+          setSaid({ notice: null, problem: { personId: person.id, words: words(error, act === 'confirm' || act === 'not_now' ? 'confirmation' : 'person', person.display) } })
         },
         onSettled: () => {
           setBusy(null)
@@ -128,20 +129,20 @@ function PeoplePanel({ people, confirmations, me }: PanelProps) {
 
   function onOperator(person: PersonOut, to: boolean) {
     change(person, 'operator', to, (done) => setOperator.mutate({ personId: person.id, operator: to }, done), () =>
-      setNotice({ personId: person.id, words: operatorChangeWords(person.display, to), undo: { name: person.display, operator: !to } }),
+      tell({ personId: person.id, words: operatorChangeWords(person.display, to), undo: { name: person.display, operator: !to } }),
     )
   }
 
-  function onUndo(person: PersonOut, undo: NonNullable<Notice['undo']>) {
+  function onUndo(person: PersonOut, undo: NonNullable<PeopleNotice['undo']>) {
     change(person, 'undo', undefined, (done) => setOperator.mutate({ personId: person.id, operator: undo.operator }, done), () => {
-      setNotice({ personId: person.id, words: undoneWords(undo.name, undo.operator), undo: null })
+      tell({ personId: person.id, words: undoneWords(undo.name, undo.operator), undo: null })
       focus(operatorBoxId(person.id))
     })
   }
 
   function onApprover(person: PersonOut, to: boolean) {
     change(person, 'approver', to, (done) => (to ? askApprover.mutate(person.id, done) : removeApprover.mutate(person.id, done)), () => {
-      setNotice({ personId: person.id, words: to ? askedApproverWords(person.display) : approverRemovedWords(person.display), undo: null })
+      tell({ personId: person.id, words: to ? askedApproverWords(person.display) : approverRemovedWords(person.display), undo: null })
       // The box is disabled while the request waits, so focus would otherwise fall to the page.
       focus(NOTICE_ID)
     })
@@ -149,14 +150,13 @@ function PeoplePanel({ people, confirmations, me }: PanelProps) {
 
   function onDecide(person: PersonOut, confirmation: ConfirmationOut, verdict: 'confirm' | 'not_now') {
     change(person, verdict, undefined, (done) => decide.mutate({ confirmationId: confirmation.confirmation_id, verdict, digest: confirmation.digest }, done), () => {
-      setNotice({ personId: person.id, words: decidedApproverWords(person.display, verdict === 'confirm'), undo: null })
+      tell({ personId: person.id, words: decidedApproverWords(person.display, verdict === 'confirm'), undo: null })
       focus(NOTICE_ID)
     })
   }
 
   function onAdded(person: PersonOut, askedApprover: boolean) {
-    setProblem(null)
-    setNotice({ personId: person.id, words: addedWords(person.display, askedApprover), undo: null })
+    tell({ personId: person.id, words: addedWords(person.display, askedApprover), undo: null })
     focus(NOTICE_ID)
   }
 

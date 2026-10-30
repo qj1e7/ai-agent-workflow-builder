@@ -7,6 +7,7 @@ import type {
   KnownProviderOut,
   Me,
   ModelOut,
+  ModelSettingsView,
   PeopleRefusal,
   PersonOut,
   ProblemReason,
@@ -89,13 +90,13 @@ const NOT_FOUND_WORDS: Record<NotFound, string> = {
 
 export const NOT_ACCEPTED_WORDS = 'The platform did not accept this. Reload the page, then try again.'
 
-export function settingsErrorWords(error: unknown, signIn: SessionKind, missing: NotFound = 'person'): string {
+export function settingsErrorWords(error: unknown, signIn: SessionKind, missing: NotFound = 'person', who?: string): string {
   const people = peopleRefusalOf(error)
   if (people) return peopleRefusalWords[people]
   const decide = decideRefusalOf(error)
   if (decide) return decideRefusalWords[decide]
   if (!(error instanceof ApiError) || error.status === 401) return errorWords(error, signIn)
-  if (error.status === 404) return NOT_FOUND_WORDS[missing]
+  if (error.status === 404) return missing === 'person' && who ? leftTheListWords([who]) : NOT_FOUND_WORDS[missing]
   if (error.status === 422) return CHECK_WHAT_YOU_TYPED_WORDS
   if (error.status === 503 && missing === 'address') return SETTINGS_OFF_WORDS
   const detail = (error.body as { detail?: unknown } | null)?.detail
@@ -179,6 +180,44 @@ export function approverConfirmationsByPerson(confirmations: readonly Confirmati
 
 export function needsYou(confirmations: readonly ConfirmationOut[] | undefined, kind: ConfirmationOut['kind']): boolean {
   return (confirmations ?? []).some((c) => c.kind === kind && c.you_can_decide)
+}
+
+export function modelNeedsYou(view: ModelSettingsView | undefined, me: Me | undefined): boolean {
+  if (!view?.available) return false
+  if (view.pending) return view.pending.you_can_decide
+  return view.active === null && canChangeSettings(me)
+}
+
+export interface PeopleNotice {
+  readonly personId: string
+  readonly words: string
+  readonly undo: { readonly name: string; readonly operator: boolean } | null
+}
+
+export interface PeopleProblem {
+  readonly personId: string
+  readonly words: string
+}
+
+export interface PeopleSaid {
+  readonly notice: PeopleNotice | null
+  readonly problem: PeopleProblem | null
+}
+
+export function leftTheListWords(names: readonly string[]): string {
+  const who = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''} are` : `${names[0] ?? 'That person'} is`
+  return `${who} no longer on the list. The list now shows who is on it.`
+}
+
+export function saidAfterListChange(before: readonly Pick<PersonOut, 'id' | 'display'>[], after: readonly Pick<PersonOut, 'id'>[], said: PeopleSaid): PeopleSaid {
+  const still = new Set(after.map((person) => person.id))
+  const left = before.filter((person) => !still.has(person.id))
+  const first = left[0]
+  if (!first) return said
+  const words = leftTheListWords(left.map((person) => person.display))
+  const problem = said.problem
+  if (problem && left.some((person) => person.id === problem.personId)) return { notice: null, problem: { personId: problem.personId, words } }
+  return { notice: { personId: first.id, words, undo: null }, problem: null }
 }
 
 export function personStatusWords(person: PersonOut): string | null {

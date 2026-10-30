@@ -3,16 +3,15 @@ import { useMe, useModelSettings } from '../../api/queries'
 import { useConfirmations } from '../../api/settingsQueries'
 import { ModelTab } from './ModelTab'
 import { PeopleTab } from './PeopleTab'
-import { canChangeSettings, needsYou, SETTINGS_TABS, tabFrom, type SettingsTab } from './settings'
+import { modelNeedsYou, needsYou, SETTINGS_TABS, tabFrom, type SettingsTab } from './settings'
 import styles from './Settings.module.css'
 
 function useNeedsAttention(): Record<SettingsTab, boolean> {
   const me = useMe().data
   const model = useModelSettings().data
   const confirmations = useConfirmations().data
-  const noModel = model !== undefined && model.available && model.active === null && canChangeSettings(me)
   return {
-    model: noModel || (model?.pending?.you_can_decide ?? false),
+    model: modelNeedsYou(model, me),
     people: needsYou(confirmations, 'approver'),
   }
 }

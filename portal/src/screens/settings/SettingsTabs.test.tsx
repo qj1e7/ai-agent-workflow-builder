@@ -89,6 +89,11 @@ describe('the Settings tabs', () => {
     expect(alice).not.toContain('(needs you)')
   })
 
+  it('never mark the AI model for the person whose own address waits, even with no model yet', () => {
+    expect(render({ model: { ...pendingAlice, active: null } })).not.toContain('(needs you)')
+    expect(render({ me: BOB, model: { ...pendingBob, active: null } }).match(/\(needs you\)/g)).toHaveLength(1)
+  })
+
   it('load the Settings page itself in the shell, with its heading at once', () => {
     const queryClient = new QueryClient()
     const session = createDevSession(null)

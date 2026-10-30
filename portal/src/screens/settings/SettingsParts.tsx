@@ -14,9 +14,9 @@ export function useFocusOnNextRender(): (id: string) => void {
   return useCallback((id: string) => setTarget({ id }), [])
 }
 
-export function useSettingsWords(): (error: unknown, missing?: NotFound) => string {
+export function useSettingsWords(): (error: unknown, missing?: NotFound, who?: string) => string {
   const { kind } = useSession()
-  return (error, missing) => settingsErrorWords(error, kind, missing)
+  return (error, missing, who) => settingsErrorWords(error, kind, missing, who)
 }
 
 export function FieldError({ id, words }: { id: string; words: string | undefined }) {
