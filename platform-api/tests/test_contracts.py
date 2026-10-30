@@ -41,6 +41,7 @@ from platform_api.orchestration.agents import (
 )
 from platform_api.orchestration.agents import ToolList as AgentToolList
 from platform_api.orchestration.approvals import Refusal, Verdict
+from platform_api.orchestration.confirmations import DecideRefusal
 from platform_api.orchestration.http import (
     ApprovalView,
     DecisionOut,
@@ -52,6 +53,17 @@ from platform_api.orchestration.http import (
     TickOut,
     WorkflowFailureIn,
     run_view_adapter,
+)
+from platform_api.orchestration.people_http import (
+    AddPersonIn,
+    ConfirmationDecidedOut,
+    ConfirmationDecisionIn,
+    ConfirmationsOut,
+    DecideRefusalOut,
+    PeopleOut,
+    PeopleRefusalOut,
+    PersonOut,
+    SettingsHistoryOut,
 )
 from platform_api.orchestration.runs import FailureReason, Leg, Stage, StepName
 from platform_api.orchestration.settings_http import ModelSettingsView, SaveOut
@@ -144,6 +156,18 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "internal/tick.nothing-due.json": TypeAdapter(TickOut),
     "views/scheduled.pending.json": run_view_adapter,
     "watchlist/before-check.json": TypeAdapter(WatchlistView),
+    "people/list.json": TypeAdapter(PeopleOut),
+    "people/add.in.json": TypeAdapter(AddPersonIn),
+    "people/person.pending.json": TypeAdapter(PersonOut),
+    "people/person.approver.json": TypeAdapter(PersonOut),
+    "people/refusal.two_approvers.json": TypeAdapter(PeopleRefusalOut),
+    "people/refusal.own_operator_role.json": TypeAdapter(PeopleRefusalOut),
+    "people/confirmations.alice.json": TypeAdapter(ConfirmationsOut),
+    "people/confirmations.bob.json": TypeAdapter(ConfirmationsOut),
+    "people/decision.in.json": TypeAdapter(ConfirmationDecisionIn),
+    "people/decision.confirmed.json": TypeAdapter(ConfirmationDecidedOut),
+    "people/decide-refusal.you_asked.json": TypeAdapter(DecideRefusalOut),
+    "settings/history.json": TypeAdapter(SettingsHistoryOut),
 }
 
 
@@ -316,3 +340,20 @@ def test_the_card_use_case_draws_agents_then_the_gate_then_the_write():
     view = UseCaseView.model_validate(load("cards/use-case.json"))
     assert [b.kind for b in view.plan] == ["agent", "approval", "write_action"]
     assert view.agents[0].values["Jira project"] == "MOCK"
+
+
+def test_the_people_fixtures_follow_the_second_person_rule():
+    alice = ConfirmationsOut.model_validate(load("people/confirmations.alice.json"))
+    bob = ConfirmationsOut.model_validate(load("people/confirmations.bob.json"))
+    assert [(c.you_can_decide, c.why_not) for c in alice.confirmations] == [
+        (False, DecideRefusal.YOU_ASKED),
+        (False, DecideRefusal.YOU_ASKED),
+    ]
+    assert all(c.you_can_decide for c in bob.confirmations)
+    assert [c.kind.value for c in bob.confirmations] == ["approver", "model_address"]
+    people = PeopleOut.model_validate(load("people/list.json"))
+    dave = next(p for p in people.people if p.display == "Dave")
+    assert dave.approver is False and dave.pending_approver is not None
+    assert dave.pending_approver.confirmation_id == bob.confirmations[0].confirmation_id
+    history = SettingsHistoryOut.model_validate(load("settings/history.json"))
+    assert (history.changes[0].by, history.changes[0].confirmed_by) == ("alice", "bob")

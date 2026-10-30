@@ -1,0 +1,44 @@
+{
+  "changes": [
+    {
+      "at": "2026-11-09T05:41:00Z",
+      "area": "people",
+      "by": "alice",
+      "by_name": "Alice",
+      "confirmed_by": "bob",
+      "confirmed_by_name": "Bob",
+      "confirmation_id": "cfm_01JD4VE",
+      "summary": "Bob confirmed Dave as an Approver, as Alice asked."
+    },
+    {
+      "at": "2026-11-09T03:41:00Z",
+      "area": "people",
+      "by": "alice",
+      "by_name": "Alice",
+      "confirmed_by": null,
+      "confirmed_by_name": null,
+      "confirmation_id": "cfm_01JD4VE",
+      "summary": "Alice asked to make Dave an Approver. Another Approver must confirm."
+    },
+    {
+      "at": "2026-11-09T03:40:00Z",
+      "area": "people",
+      "by": "alice",
+      "by_name": "Alice",
+      "confirmed_by": null,
+      "confirmed_by_name": null,
+      "confirmation_id": null,
+      "summary": "Alice added Dave (per_01JD4VE@example.test) as an Operator."
+    },
+    {
+      "at": "2026-11-02T06:00:00Z",
+      "area": "people",
+      "by": "deploy",
+      "by_name": null,
+      "confirmed_by": null,
+      "confirmed_by_name": null,
+      "confirmation_id": null,
+      "summary": "The deploy put Alice (alice@example.test, Operator and Approver), Bob (bob@example.test, Approver) and Carol (carol@example.test, Operator) on the list."
+    }
+  ]
+}

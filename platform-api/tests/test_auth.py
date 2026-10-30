@@ -60,6 +60,21 @@ def without(env: dict[str, str], name: str) -> dict[str, str]:
             id="http JWKS URL",
         ),
         pytest.param(
+            {**OIDC, "OIDC_ISSUER": "https://login.microsoftonline.com/common/v2.0"},
+            "OIDC_ISSUER must name one tenant",
+            id="common issuer",
+        ),
+        pytest.param(
+            {**OIDC, "OIDC_ISSUER": "https://login.microsoftonline.com/Organizations/v2.0"},
+            "OIDC_ISSUER must name one tenant",
+            id="organizations issuer",
+        ),
+        pytest.param(
+            {**OIDC, "OIDC_ISSUER": "https://login.microsoftonline.com/consumers/v2.0"},
+            "OIDC_ISSUER must name one tenant",
+            id="consumers issuer",
+        ),
+        pytest.param(
             {**OIDC, "OIDC_ISSUER": HTTP_ISSUER, "OIDC_TEST_ONLY_HTTP_ISSUER": HTTP_ISSUER + "/"},
             "must equal OIDC_ISSUER",
             id="allowance not equal to the issuer",
@@ -123,8 +138,11 @@ def test_dev_mode_rejects_missing_or_unknown_user(headers: dict[str, str]):
 @pytest.mark.parametrize(
     ("user", "me"),
     [
-        ("alice", {"id": "alice", "display": "Alice", "roles": ["operator", "approver"]}),
-        ("bob", {"id": "bob", "display": "Bob", "roles": ["approver"]}),
+        (
+            "alice",
+            {"id": "alice", "display": "Alice", "roles": ["operator", "approver"], "on_list": True},
+        ),
+        ("bob", {"id": "bob", "display": "Bob", "roles": ["approver"], "on_list": True}),
     ],
 )
 def test_me_answers_who_the_platform_thinks_you_are(user: str, me: dict[str, object]):

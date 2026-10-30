@@ -59,6 +59,15 @@ ROUTES = {
     ("DELETE", "/api/v1/settings/model"),
     ("POST", "/api/v1/settings/model/connect"),
     ("POST", "/api/v1/settings/model/address-decision"),
+    ("GET", "/api/v1/settings/history"),
+    ("GET", "/api/v1/people"),
+    ("POST", "/api/v1/people"),
+    ("PUT", "/api/v1/people/{person_id}/operator"),
+    ("POST", "/api/v1/people/{person_id}/approver"),
+    ("DELETE", "/api/v1/people/{person_id}/approver"),
+    ("DELETE", "/api/v1/people/{person_id}"),
+    ("GET", "/api/v1/confirmations"),
+    ("POST", "/api/v1/confirmations/{confirmation_id}/decisions"),
 }
 
 

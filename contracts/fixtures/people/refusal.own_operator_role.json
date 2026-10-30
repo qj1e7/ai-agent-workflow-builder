@@ -1,0 +1,4 @@
+{
+  "refusal": "own_operator_role",
+  "message": "You cannot remove your own Operator role."
+}

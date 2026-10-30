@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useLocation } from 'react-router'
 import { useMe } from './api/queries'
+import { AskToBeAdded } from './shell/AskToBeAdded'
 import { Header } from './shell/Header'
 import { TabBar } from './shell/Menu'
 import { PlatformDown, platformIsDown } from './shell/PlatformDown'
@@ -53,6 +54,7 @@ export function App({ now = () => new Date() }: { now?: () => Date }) {
   let content
   if (me.isPending) content = <p className="muted" role="status">Loading</p>
   else if (me.isError && platformIsDown(me.error)) content = <PlatformDown onRetry={() => void me.refetch()} />
+  else if (me.data?.on_list === false) content = <AskToBeAdded display={me.data.display} />
   else content = <AppRoutes context={{ name: me.data?.display ?? null, now: now() }} />
 
   return (

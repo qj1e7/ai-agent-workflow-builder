@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -9,29 +11,29 @@ SIGN_IN = [{"DevUser": []}, {"OidcBearer": []}]
 
 
 @pytest.fixture(scope="module")
-def schema() -> dict[str, object]:
+def schema() -> dict[str, Any]:
     return create_app(LOCAL_ENV).openapi()
 
 
-def operations(schema: dict[str, object]):
-    for path, methods in schema["paths"].items():  # type: ignore[attr-defined]
+def operations(schema: dict[str, Any]):
+    for path, methods in schema["paths"].items():
         for method, operation in methods.items():
             yield path, method, operation
 
 
-def test_dev_sign_in_is_an_api_key_header_scheme(schema: dict[str, object]):
-    scheme = schema["components"]["securitySchemes"]["DevUser"]  # type: ignore[index]
+def test_dev_sign_in_is_an_api_key_header_scheme(schema: dict[str, Any]):
+    scheme = schema["components"]["securitySchemes"]["DevUser"]
     assert (scheme["type"], scheme["in"], scheme["name"]) == ("apiKey", "header", "X-Dev-User")
     assert "dev" in scheme["description"].lower()
 
 
-def test_real_sign_in_is_an_http_bearer_scheme(schema: dict[str, object]):
-    scheme = schema["components"]["securitySchemes"]["OidcBearer"]  # type: ignore[index]
+def test_real_sign_in_is_an_http_bearer_scheme(schema: dict[str, Any]):
+    scheme = schema["components"]["securitySchemes"]["OidcBearer"]
     assert (scheme["type"], scheme["scheme"], scheme["bearerFormat"]) == ("http", "bearer", "JWT")
     assert "oidc" in scheme["description"].lower()
 
 
-def test_sign_in_is_required_on_exactly_the_routes_that_read_it(schema: dict[str, object]):
+def test_sign_in_is_required_on_exactly_the_routes_that_read_it(schema: dict[str, Any]):
     needs = {
         (path, method) for path, method, op in operations(schema) if op.get("security") == SIGN_IN
     }
@@ -44,7 +46,7 @@ def test_sign_in_is_required_on_exactly_the_routes_that_read_it(schema: dict[str
     assert "security" not in schema
 
 
-def test_every_signed_in_route_declares_the_401_and_503_it_answers(schema: dict[str, object]):
+def test_every_signed_in_route_declares_the_401_and_503_it_answers(schema: dict[str, Any]):
     missing = [
         f"{method.upper()} {path} {status}"
         for path, method, op in operations(schema)
@@ -53,6 +55,29 @@ def test_every_signed_in_route_declares_the_401_and_503_it_answers(schema: dict[
         if status not in op["responses"]
     ]
     assert missing == []
+
+
+ERROR_BODY = {"$ref": "#/components/schemas/ErrorBody"}
+
+
+def admits_error_body(response: dict[str, Any]) -> bool:
+    body = response.get("content", {}).get("application/json", {}).get("schema", {})
+    return body == ERROR_BODY or ERROR_BODY in body.get("anyOf", [])
+
+
+def test_every_signed_in_route_but_me_declares_the_403_for_someone_not_on_the_list(
+    schema: dict[str, Any],
+):
+    missing = [
+        f"{method.upper()} {path}"
+        for path, method, op in operations(schema)
+        if op.get("security")
+        and path != "/api/v1/me"
+        and not admits_error_body(op["responses"].get("403", {}))
+    ]
+    assert missing == []
+    me = schema["paths"]["/api/v1/me"]["get"]["responses"]
+    assert "403" not in me
 
 
 def test_a_signed_in_route_answers_401_without_the_header():
