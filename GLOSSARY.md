@@ -171,7 +171,7 @@ The part of run monitoring that copies each new activity event from PostgreSQL t
 _Avoid_: Sync, mirror
 
 **Copied mark**:
-For each run, the highest sequence number the copier has put in Cosmos DB. PostgreSQL keeps it for one Cosmos DB container, so a new container is copied again from the start. Each copy wakes the live activity view's stream with the new mark.
+For each run, the highest sequence number the copier has put in Cosmos DB. PostgreSQL keeps it with the container's generation, a random value the copier writes into each new container. A new or emptied container has a new generation, so it is copied again from the start. Each copy wakes the live activity view's stream with the new mark.
 _Avoid_: Checkpoint, watermark
 
 **Activity reader**:
