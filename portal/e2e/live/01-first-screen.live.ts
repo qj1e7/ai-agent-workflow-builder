@@ -136,6 +136,7 @@ test('Test controls act as Bob, and Bob can open Settings', async ({ page }, inf
 test('Tab reaches every header control with a visible focus ring, and the skip link moves focus to the heading', async ({ page }, info) => {
   await page.goto('/')
   await expect(heading(page)).toBeVisible()
+  await loaded(page)
   const walk = await walkTabs(page)
   const labels = walk.stops.map((stop) => stop.label)
   expect(labels[0], `the skip link is the first stop; stops: ${labels.join(', ')}`).toBe('Skip to main content')
