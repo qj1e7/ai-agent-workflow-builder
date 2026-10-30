@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router'
+import { useLocation, useNavigate, useParams } from 'react-router'
 import { useErrorWords } from '../../api/context'
 import { newIdempotencyKey } from '../../api/idempotency'
 import { useLatch } from '../../api/latch'
@@ -21,7 +21,7 @@ function When({ useCase, now }: { useCase: UseCaseView; now: Date }) {
   )
 }
 
-function Done({ useCase, now }: { useCase: UseCaseView; now: Date }) {
+function Done({ useCase, now, draftKept }: { useCase: UseCaseView; now: Date; draftKept: boolean }) {
   const start = useStartRun()
   const latch = useLatch()
   const navigate = useNavigate()
@@ -48,6 +48,7 @@ function Done({ useCase, now }: { useCase: UseCaseView; now: Date }) {
       <p>
         <b>{useCase.name}</b> <When useCase={useCase} now={now} />. When it needs a yes, an Approver gets a message in Teams.
       </p>
+      {draftKept ? <p>Your draft is still on Home. This workflow is already on, so there is no need to turn it on again.</p> : null}
       <div className={styles['actions']}>
         <Button variant="primary" loading={start.isPending} onClick={testRun}>
           Do a test run now
@@ -66,8 +67,9 @@ function Done({ useCase, now }: { useCase: UseCaseView; now: Date }) {
 
 export function DoneRoute({ now }: { now: Date }) {
   const { useCaseId = '' } = useParams()
+  const draftKept = (useLocation().state as { draftKept?: unknown } | null)?.draftKept === true
   const useCase = useUseCase(useCaseId)
-  if (useCase.data) return <Done useCase={useCase.data} now={now} />
+  if (useCase.data) return <Done useCase={useCase.data} now={now} draftKept={draftKept} />
   if (useCase.isError)
     return (
       <div className={styles['done']}>

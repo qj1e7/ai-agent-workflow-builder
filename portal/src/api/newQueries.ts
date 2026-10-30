@@ -36,7 +36,7 @@ export function useDrafts(enabled: boolean) {
 }
 
 function rereadDrafts(queryClient: QueryClient): Promise<unknown> {
-  return Promise.all(['home', 'drafts'].map((key) => queryClient.invalidateQueries({ queryKey: [key] })))
+  return Promise.all([queryClient.invalidateQueries({ queryKey: ['home'] }), queryClient.invalidateQueries({ queryKey: ['drafts'], refetchType: 'none' })])
 }
 
 export function useSaveDraft() {

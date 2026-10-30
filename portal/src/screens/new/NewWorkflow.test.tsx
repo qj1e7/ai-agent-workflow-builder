@@ -241,4 +241,13 @@ describe('the done page', () => {
     expect(buttons(html)).toContain('Do a test run now')
     expect(html).toMatch(/<a [^>]*href="\/"[^>]*>Back to Home<\/a>/)
   })
+
+  it('says the draft is still on Home when it could not be deleted, so nobody turns it on twice', () => {
+    const view = useCase as UseCaseView
+    const seed = (client: QueryClient, scope: string) => client.setQueryData(['use-case', scope, view.use_case_id], view)
+    const kept = wrap(<DoneRoute now={NOW} />, { path: { pathname: `/new/done/${view.use_case_id}`, state: { draftKept: true } }, seed })
+    expect(text(kept)).toContain('Your draft is still on Home. This workflow is already on, so there is no need to turn it on again.')
+    const gone = wrap(<DoneRoute now={NOW} />, { path: { pathname: `/new/done/${view.use_case_id}`, state: { draftKept: false } }, seed })
+    expect(text(gone)).not.toContain('Your draft is still on Home')
+  })
 })

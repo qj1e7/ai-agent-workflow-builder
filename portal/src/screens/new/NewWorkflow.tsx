@@ -12,7 +12,6 @@ import {
   afterReading,
   carryOn,
   changeRow,
-  createBody,
   defaultName,
   draftContent,
   dropRow,
@@ -25,6 +24,7 @@ import {
   rowBlockers,
   STEP_NAMES,
   textProblem,
+  turnOn,
   whenProblems,
   type Form,
   type Planned,
@@ -111,7 +111,6 @@ function NewWorkflow({ draftId, start }: { draftId: string | null; start: Start 
   const [nameError, setNameError] = useState<string | null>(null)
   const [refused, setRefused] = useState<readonly string[]>([])
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [cards, setCards] = useState<Readonly<Record<string, string>>>({})
   const understand = useUnderstand()
   const saveDraft = useSaveDraft()
   const deleteDraft = useDeleteDraft()
@@ -121,6 +120,7 @@ function NewWorkflow({ draftId, start }: { draftId: string | null; start: Start 
   const navigate = useNavigate()
   const words = useErrorWords()
   const latch = useLatch()
+  const cards = useRef(new Map<string, string>())
   useHeadingOnStep(form.step, form.redirect !== null)
 
   const task = taskWithoutSchedule(form.rows)
@@ -167,7 +167,7 @@ function NewWorkflow({ draftId, start }: { draftId: string | null; start: Start 
 
   const back = () => setForm((before) => ({ ...before, step: Math.max(1, before.step - 1) as Step }))
 
-  const turnOn = () => {
+  const pressTurnOn = () => {
     if (view?.kind !== 'agents') return
     const problem = nameProblem(form.name)
     setNameError(problem)
@@ -176,27 +176,20 @@ function NewWorkflow({ draftId, start }: { draftId: string | null; start: Start 
       return
     }
     latch.run((settled) => {
-      void (async () => {
-        try {
-          const savedDrafts: Record<number, string> = {}
-          for (const agent of view.agents) {
-            if (agent.card.kind === 'saved') continue
-            const key = `${task}#${String(agent.index)}`
-            const id = cards[key] ?? (await saveCard.mutateAsync({ cardId: null, card: agent.card.definition })).card_id
-            setCards((before) => ({ ...before, [key]: id }))
-            savedDrafts[agent.index] = id
-          }
-          const made = await create.mutateAsync(createBody(form, view, savedDrafts))
-          if (draft !== null) deleteDraft.mutate(draft)
+      turnOn(form, view, draft, cards.current, {
+        saveCard: async (card) => (await saveCard.mutateAsync({ cardId: null, card })).card_id,
+        create: (body) => create.mutateAsync(body),
+        deleteDraft: (draftId) => deleteDraft.mutateAsync(draftId),
+      })
+        .then(({ useCaseId, draftKept }) => {
           void queryClient.invalidateQueries({ queryKey: ['home'] })
-          void navigate(`/new/done/${made.use_case_id}`, { replace: true })
-        } catch (error) {
+          void navigate(`/new/done/${useCaseId}`, { replace: true, state: { draftKept } })
+        })
+        .catch((error: unknown) => {
           const said = refusedWords(error)
           setRefused(said.length > 0 ? said : [words(error)])
-        } finally {
-          settled()
-        }
-      })()
+        })
+        .finally(settled)
     })
   }
 
@@ -278,7 +271,7 @@ function NewWorkflow({ draftId, start }: { draftId: string | null; start: Start 
           problems={refused}
           onName={(name) => setForm((before) => ({ ...before, name }))}
           onBack={back}
-          onTurnOn={turnOn}
+          onTurnOn={pressTurnOn}
         />
       ) : (
         <p className="muted" role="status">

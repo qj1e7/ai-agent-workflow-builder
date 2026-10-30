@@ -10,6 +10,7 @@ import type {
   ScheduleIn,
   ToolId,
   UnderstandOut,
+  UseCaseCreated,
 } from '../../api/types'
 import { checkClock, checkRepo, repeatWords, repoOf } from '../software/software'
 
@@ -391,6 +392,32 @@ export function createBody(form: Form, plan: PlanView, savedDrafts: Readonly<Rec
 
 function notSavedYet(agent: PlanAgent): never {
   throw new Error(`${agent.name} is a drafted agent that has not been saved yet.`)
+}
+
+export interface TurnOnCalls {
+  readonly saveCard: (card: CardDefinition) => Promise<string>
+  readonly create: (body: CreateAgentUseCase) => Promise<UseCaseCreated>
+  readonly deleteDraft: (draftId: string) => Promise<unknown>
+}
+
+export interface TurnedOn {
+  readonly useCaseId: string
+  readonly draftKept: boolean
+}
+
+export async function turnOn(form: Form, plan: PlanView, draftId: string | null, cards: Map<string, string>, calls: TurnOnCalls): Promise<TurnedOn> {
+  const task = taskWithoutSchedule(form.rows)
+  const saved: Record<number, string> = {}
+  for (const agent of plan.kind === 'agents' ? plan.agents : []) {
+    if (agent.card.kind === 'saved') continue
+    const key = `${task}#${String(agent.index)}`
+    const id = cards.get(key) ?? (await calls.saveCard(agent.card.definition))
+    cards.set(key, id)
+    saved[agent.index] = id
+  }
+  const made = await calls.create(createBody(form, plan, saved))
+  const draftKept = draftId !== null && (await calls.deleteDraft(draftId).then(() => false, () => true))
+  return { useCaseId: made.use_case_id, draftKept }
 }
 
 export interface Planned {

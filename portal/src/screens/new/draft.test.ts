@@ -5,6 +5,7 @@ import useOne from '../../../../contracts/fixtures/cards/plan.use-one.json'
 import rowsAnswer from '../../../../contracts/fixtures/builder/understand.rows.json'
 import starters from '../../../../contracts/fixtures/builder/understand.starters.json'
 import watchlist from '../../../../contracts/fixtures/builder/understand.watchlist.json'
+import { ApiError } from '../../api/client'
 import type { DraftView, PlanOut, UnderstandOut } from '../../api/types'
 import {
   afterReading,
@@ -25,12 +26,14 @@ import {
   rowBlockers,
   scheduleOf,
   textProblem,
+  turnOn,
   valueOf,
   valueProblem,
   whenProblems,
   whenWords,
   type Form,
   type PlanAgent,
+  type TurnOnCalls,
 } from './draft'
 
 const FOLLOW_UP = 'Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days and create one follow-up ticket that lists them'
@@ -295,6 +298,48 @@ describe('step 4, turn it on', () => {
     })
     const named = createBody({ ...form, name: '' }, planView(CLEAN_DRAFT, form.rows), { 0: 'crd_new' })
     expect(named.name).toBe('Stale bug follow-up')
+  })
+})
+
+describe('pressing Turn it on', () => {
+  const form = (): Form => ({ ...enterWhen(read(ROWS)), step: 4, name: 'Follow up stale bugs' })
+
+  function fakeCalls(failing: number): { readonly calls: TurnOnCalls; readonly seen: string[] } {
+    const seen: string[] = []
+    const answer = <T>(said: string, value: T): Promise<T> => {
+      seen.push(said)
+      return seen.length === failing ? Promise.reject(new ApiError(500, null)) : Promise.resolve(value)
+    }
+    return {
+      seen,
+      calls: {
+        saveCard: (card) => answer(`save ${card.name}`, 'crd_new'),
+        create: (body) => answer(`create with ${body.agents.map((agent) => agent.card_id).join(', ')}`, { use_case_id: 'uc_new', version: 1 }),
+        deleteDraft: (draftId) => answer(`delete draft ${draftId}`, undefined),
+      },
+    }
+  }
+
+  it('saves the new agent, then the workflow with it, and after a failure the next press reuses the saved agent', async () => {
+    const { calls, seen } = fakeCalls(2)
+    const cards = new Map<string, string>()
+    const plan = planView(CLEAN_DRAFT, form().rows)
+    await expect(turnOn(form(), plan, 'd1', cards, calls)).rejects.toBeInstanceOf(ApiError)
+    expect(seen).toEqual(['save Stale bug follow-up', 'create with crd_new'])
+    await expect(turnOn(form(), plan, 'd1', cards, calls)).resolves.toEqual({ useCaseId: 'uc_new', draftKept: false })
+    expect(seen).toEqual(['save Stale bug follow-up', 'create with crd_new', 'create with crd_new', 'delete draft d1'])
+  })
+
+  it('saves nothing new for a saved agent, and has no draft to delete for a workflow never saved as one', async () => {
+    const { calls, seen } = fakeCalls(0)
+    await expect(turnOn(form(), planView(USE_ONE, form().rows), null, new Map(), calls)).resolves.toEqual({ useCaseId: 'uc_new', draftKept: false })
+    expect(seen).toEqual(['create with crd_version_checker'])
+  })
+
+  it('still turns it on when the draft cannot be deleted, and says the draft is kept', async () => {
+    const { calls, seen } = fakeCalls(3)
+    await expect(turnOn(form(), planView(CLEAN_DRAFT, form().rows), 'd1', new Map(), calls)).resolves.toEqual({ useCaseId: 'uc_new', draftKept: true })
+    expect(seen).toEqual(['save Stale bug follow-up', 'create with crd_new', 'delete draft d1'])
   })
 })
 
