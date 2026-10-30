@@ -144,6 +144,16 @@ function keepTabInside(box: HTMLElement, event: KeyboardEvent): void {
   next.focus()
 }
 
+type Spot = Pick<MouseEvent, 'clientX' | 'clientY'>
+type Edges = Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom'>
+
+const offCard = (spot: Spot, card: Edges) => spot.clientX < card.left || spot.clientX > card.right || spot.clientY < card.top || spot.clientY > card.bottom
+
+/** A text selection that overshoots the card ends on the dimmed page, so the press must start there too. */
+export function pressClosesCard(start: Spot | null, end: Spot, card: Edges): boolean {
+  return start !== null && offCard(start, card) && offCard(end, card)
+}
+
 function Modal({ face, title, under, onClose, children }: ModalProps) {
   const dialog = useRef<HTMLDialogElement>(null)
   const topClose = useRef<HTMLButtonElement>(null)
@@ -154,17 +164,22 @@ function Modal({ face, title, under, onClose, children }: ModalProps) {
     if (!element.open) element.showModal()
     topClose.current?.focus()
     const onKey = (event: KeyboardEvent) => keepTabInside(element, event)
-    const onPress = (event: MouseEvent) => {
-      if (event.target !== element) return
-      const box = element.getBoundingClientRect()
-      const onCard = event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom
-      if (!onCard) element.close()
+    let pressStart: Spot | null = null
+    const onPointerDown = (event: PointerEvent) => {
+      pressStart = event
+    }
+    const onClick = (event: MouseEvent) => {
+      const closes = event.target === element && pressClosesCard(pressStart, event, element.getBoundingClientRect())
+      pressStart = null
+      if (closes) element.close()
     }
     document.addEventListener('keydown', onKey)
-    element.addEventListener('click', onPress)
+    element.addEventListener('pointerdown', onPointerDown)
+    element.addEventListener('click', onClick)
     return () => {
       document.removeEventListener('keydown', onKey)
-      element.removeEventListener('click', onPress)
+      element.removeEventListener('pointerdown', onPointerDown)
+      element.removeEventListener('click', onClick)
     }
   }, [])
   const close = () => dialog.current?.close()

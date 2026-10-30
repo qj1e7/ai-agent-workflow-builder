@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { nextTabStop } from './AgentCard'
+import { nextTabStop, pressClosesCard } from './AgentCard'
 
 interface Node {
   readonly name: string
@@ -40,5 +40,31 @@ describe('Tab in an open card', () => {
   it('leaves a move between two stops to the browser', () => {
     expect(nextTabStop(topClose, stops, card, false)).toBeNull()
     expect(nextTabStop(bottomClose, stops, card, true)).toBeNull()
+  })
+})
+
+describe('a press on the dimmed page', () => {
+  const edges = { left: 100, right: 500, top: 50, bottom: 650 }
+  const onCard = { clientX: 300, clientY: 200 }
+  const onPage = { clientX: 40, clientY: 200 }
+
+  it('closes the card when it starts and ends on the dimmed page', () => {
+    expect(pressClosesCard(onPage, onPage, edges)).toBe(true)
+  })
+
+  it('keeps the card open when a text selection on the card ends on the dimmed page', () => {
+    expect(pressClosesCard(onCard, onPage, edges)).toBe(false)
+  })
+
+  it('keeps the card open when a press on the dimmed page ends on the card', () => {
+    expect(pressClosesCard(onPage, onCard, edges)).toBe(false)
+  })
+
+  it('keeps the card open for a click with no press, as the keyboard sends', () => {
+    expect(pressClosesCard(null, { clientX: 0, clientY: 0 }, edges)).toBe(false)
+  })
+
+  it('counts the card’s edge as on the card', () => {
+    expect(pressClosesCard({ clientX: 100, clientY: 650 }, { clientX: 500, clientY: 50 }, edges)).toBe(false)
   })
 })
