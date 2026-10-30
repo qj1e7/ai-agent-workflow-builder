@@ -1,0 +1,57 @@
+{
+  "approvals": [
+    {
+      "run_id": "run_01JB8",
+      "approval_id": "apr_01JB8",
+      "use_case_id": "uc_01JB7",
+      "use_case_name": "Software watchlist",
+      "started_by": "alice",
+      "started_by_name": "Alice",
+      "trigger": "person",
+      "started_at": "2026-11-03T02:14:00Z",
+      "step": 0,
+      "steps": 1,
+      "step_label": "Team approver",
+      "changes": 1,
+      "first_changes": [
+        {
+          "connector": "jira",
+          "operation": "create_ticket",
+          "title": "Upgrade LangGraph from 1.2.14 to 1.2.16"
+        }
+      ]
+    }
+  ],
+  "approvals_total": 1,
+  "confirmations": [
+    {
+      "confirmation_id": "cfm_01JD4VE",
+      "kind": "approver",
+      "summary": "Make Dave an Approver",
+      "about_name": "Dave",
+      "asked_by_name": "Alice",
+      "asked_at": "2026-11-09T03:41:00Z"
+    },
+    {
+      "confirmation_id": "cfm_01JADDR",
+      "kind": "model_address",
+      "summary": "Use ncs-llm-small at ai-gateway.ncs.example",
+      "about_name": null,
+      "asked_by_name": "Alice",
+      "asked_at": "2026-11-09T03:41:00Z"
+    }
+  ],
+  "stopped": [],
+  "stopped_total": 0,
+  "waiting_on_others": [],
+  "waiting_on_others_total": 0,
+  "drafts": [],
+  "coming_up": {
+    "use_case_id": "uc_01JB7",
+    "name": "Software watchlist",
+    "template": "software_watchlist",
+    "next_run_at": "2026-11-09T01:00:00Z",
+    "more": 0
+  },
+  "workflows": 1
+}

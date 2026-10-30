@@ -9,6 +9,7 @@ import httpx
 import pytest
 
 from platform_api.app import create_app
+from platform_api.auth import DEV_PEOPLE
 from platform_api.builder import Builder, Watchlist
 from platform_api.builder.cards import VERSION_CHECKER
 from platform_api.builder.models import (
@@ -35,6 +36,7 @@ from platform_api.orchestration import (
     RunSpec,
     RunStarted,
     RuntimeDown,
+    Schedule,
     ScheduleBook,
     SoftwareFacts,
     Standing,
@@ -43,6 +45,7 @@ from platform_api.orchestration import (
     UnderstoodRow,
     WatchlistStanding,
 )
+from platform_api.orchestration.people_store import People
 from platform_api.shared import Principal, Role, RunId, SoftwareId, UseCaseId, UserId
 from tests.support import LOCAL_ENV
 
@@ -211,6 +214,73 @@ async def test_an_agent_use_case_shows_its_agents_and_the_line_a_run_draws(build
     ]
     listed = await builder.list_use_cases()
     assert listed.use_cases[0] == view
+
+
+async def test_a_schedule_saved_with_the_use_case_belongs_to_the_person_who_set_it_up(
+    builder: Builder, db: Database
+):
+    assert await People(db).seed_dev(DEV_PEOPLE)
+    made = await builder.create_agent_use_case(
+        ALICE,
+        CreateAgentUseCase.model_validate(
+            {
+                "name": "Follow up stale bugs",
+                "instruction": "Find stale bugs and list them in one ticket.",
+                "agents": [{"card_id": "crd_version_checker", "values": RELEASES}],
+                "schedule": {"day": "weekdays", "at": "15:00"},
+            }
+        ),
+    )
+    assert isinstance(made, UseCaseCreated)
+    view = await builder.get_use_case(made.use_case_id)
+    assert view is not None and view.schedule is not None
+    assert (view.schedule.day, view.schedule.at, view.schedule.time_zone) == (
+        "weekdays",
+        "15:00",
+        "Asia/Singapore",
+    )
+    assert view.next_run_at is not None and view.next_run_at > db.clock()
+    saved = await ScheduleBook(db).get(UseCaseId(made.use_case_id))
+    assert saved is not None and (saved.owner, saved.owner_name) == ("alice", "Alice")
+
+
+class ScheduleBookDown(ScheduleBook):
+    async def save(self, use_case_id: UseCaseId, schedule: Schedule, owner: Principal):
+        raise RuntimeError("The schedule book is down.")
+
+
+async def test_a_use_case_whose_schedule_cannot_be_saved_is_undone_so_trying_again_makes_one(
+    db: Database, runs: Runs, planner: Planner, builder: Builder
+):
+    down = Builder(
+        db,
+        runs,
+        Watchlist(db, NoFacts(), ScheduleBook(db)),
+        "http://localhost:8000",
+        planner,
+        ScheduleBookDown(db),
+    )
+    body = CreateAgentUseCase.model_validate(
+        {
+            "name": "Follow up stale bugs",
+            "instruction": "Find stale bugs and list them in one ticket.",
+            "agents": [{"card_id": "crd_version_checker", "values": RELEASES}],
+            "schedule": {"day": "weekdays", "at": "15:00"},
+        }
+    )
+    with pytest.raises(RuntimeError, match="The schedule book is down."):
+        await down.create_agent_use_case(ALICE, body)
+    assert (await builder.list_use_cases()).use_cases == []
+    made = await builder.create_agent_use_case(ALICE, body)
+    assert isinstance(made, UseCaseCreated)
+    listed = (await builder.list_use_cases()).use_cases
+    assert [(u.use_case_id, u.schedule is not None) for u in listed] == [(made.use_case_id, True)]
+
+
+async def test_a_use_case_made_without_a_schedule_has_none(builder: Builder):
+    made = await use_case(builder, ("crd_version_checker", RELEASES))
+    view = await builder.get_use_case(made.use_case_id)
+    assert view is not None and (view.schedule, view.next_run_at) == (None, None)
 
 
 async def test_the_watchlist_use_case_has_its_templates_blocks_and_no_agents(
@@ -456,6 +526,30 @@ async def test_an_agent_use_case_is_made_started_and_refused_without_a_model(
         f"/api/v1/use-cases/{uc}/runs", headers={**AS_ALICE, "Idempotency-Key": "k"}
     )
     assert ok.status_code == 201
+
+
+async def test_a_schedule_off_the_five_minute_step_is_refused_and_nothing_is_made(
+    client: httpx.AsyncClient,
+):
+    body = {
+        "name": "Releases",
+        "instruction": "Check.",
+        "agents": [{"card_id": "crd_version_checker", "values": RELEASES}],
+        "schedule": {"day": "weekdays", "at": "15:03"},
+    }
+    bad = await client.post("/api/v1/agent-use-cases", json=body, headers=AS_ALICE)
+    assert bad.status_code == 422
+    assert bad.json()["detail"][0]["loc"][:3] == ["body", "schedule", "at"]
+    listed = await client.get("/api/v1/use-cases", headers=AS_ALICE)
+    assert listed.json()["use_cases"] == []
+    made = await client.post(
+        "/api/v1/agent-use-cases",
+        json={**body, "schedule": {"day": "weekdays", "at": "15:00"}},
+        headers=AS_ALICE,
+    )
+    assert made.status_code == 201
+    view = await client.get(f"/api/v1/use-cases/{made.json()['use_case_id']}", headers=AS_BOB)
+    assert view.json()["schedule"]["day"] == "weekdays"
 
 
 async def test_the_agent_template_cannot_be_built_by_hand(client: httpx.AsyncClient):

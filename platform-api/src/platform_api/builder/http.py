@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
 from platform_api.builder.card_store import NoSuchCard, StarterCard
+from platform_api.builder.home import Home, HomeOut
 from platform_api.builder.models import (
     BlockView,
     CardChecked,
@@ -81,6 +82,14 @@ def current_builder(request: Request) -> Builder:
 CurrentBuilder = Annotated[Builder, Depends(current_builder)]
 
 
+def current_home(request: Request) -> Home:
+    home: Home = request.app.state.home
+    return home
+
+
+CurrentHome = Annotated[Home, Depends(current_home)]
+
+
 def operators_only(refusal: str) -> Callable[[Principal], Principal]:
     def require_operator(principal: CurrentPrincipal) -> Principal:
         if Role.OPERATOR not in principal.roles:
@@ -90,15 +99,16 @@ def operators_only(refusal: str) -> Callable[[Principal], Principal]:
     return require_operator
 
 
-BUILD_OR_RUN = "Only an Operator can build use cases or start runs. Ask an Operator on the team."
+SET_UP_OR_RUN = "Only an Operator can set up workflows or start runs. Ask an Operator on the team."
 CHANGE_WORKFLOWS = "Only an Operator can change workflows."
 
-Operator = Annotated[Principal, Depends(operators_only(BUILD_OR_RUN))]
+Operator = Annotated[Principal, Depends(operators_only(SET_UP_OR_RUN))]
 WorkflowOperator = Annotated[Principal, Depends(operators_only(CHANGE_WORKFLOWS))]
 
 router = APIRouter(prefix="/api/v1", tags=["builder"])
 
-NOT_FOUND = error_response("No such use case")
+NO_SUCH = "No such workflow"
+NOT_FOUND = error_response("No such workflow, or it is deleted")
 NO_MODEL = "Connect an AI model in Settings first."
 NO_MODEL_TO_RUN = "Connect an AI model in Settings to run agents."
 NOT_OFFERED = {
@@ -106,6 +116,16 @@ NOT_OFFERED = {
     AGENT_CARDS.key: "Describe the task on the Builder page",
 }
 CARD_NOT_FOUND = error_response("No such agent")
+
+
+@router.get(
+    "/home",
+    responses=SIGNED_IN,
+    description="What needs the signed-in person, what they wait on, their drafts and what "
+    "runs next. The platform decides each item with the same rules as the page it opens.",
+)
+async def home(principal: CurrentPrincipal, home: CurrentHome) -> HomeOut:
+    return await home.for_person(principal)
 
 
 @router.get("/templates", responses=SIGNED_IN)
@@ -145,7 +165,7 @@ async def get_use_case(
 ) -> UseCaseView:
     view = await builder.get_use_case(use_case_id)
     if view is None:
-        raise HTTPException(404, "No such use case")
+        raise HTTPException(404, NO_SUCH)
     return view
 
 
@@ -171,7 +191,7 @@ async def start_run(
 ) -> RunStarted:
     started = await builder.start_run(UseCaseId(use_case_id), principal, idempotency_key)
     if started is None:
-        raise HTTPException(404, "No such use case")
+        raise HTTPException(404, NO_SUCH)
     if isinstance(started, NothingToCheck):
         raise HTTPException(409, "The watchlist is empty. Add software before starting a check.")
     if isinstance(started, NoModelToRun):

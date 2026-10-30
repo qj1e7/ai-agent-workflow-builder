@@ -216,7 +216,7 @@ function Notice({ feedback, scheduled, paused, onUndo, onDismiss }: NoticeProps)
   )
 }
 
-function Loaded({ view, operator }: { view: WatchlistView | null; operator: boolean }) {
+function Loaded({ view, operator, answeredAt }: { view: WatchlistView | null; operator: boolean; answeredAt: number }) {
   const [query, setQuery] = useState('')
   const [opened, setOpened] = useState<string | null>(null)
   const [feedback, dispatch] = useReducer(changeFeedback, NO_FEEDBACK)
@@ -244,7 +244,16 @@ function Loaded({ view, operator }: { view: WatchlistView | null; operator: bool
     <>
       {operator && view && !paused && software.length > 0 ? <CheckNow useCaseId={view.use_case_id} /> : null}
       {view?.last_check?.state === 'failed' ? <LastCheckStopped last={view.last_check} /> : null}
-      {view ? <Schedule schedule={view.schedule} operator={operator} paused={paused} /> : null}
+      {view ? (
+        <Schedule
+          schedule={view.schedule}
+          operator={operator}
+          useCaseId={view.use_case_id}
+          paused={paused}
+          answeredAt={answeredAt}
+          onResumed={() => dispatch({ type: 'resumed' })}
+        />
+      ) : null}
       <Notice feedback={feedback} scheduled={scheduled} paused={paused} onUndo={(row) => pressUndo(changes, restore.mutate, row, dispatch, words)} onDismiss={dismiss} />
       {software.length > 0 || searching ? <FindSoftware query={query} shown={shown} onChange={setQuery} /> : null}
       {software.length === 0 && !searching ? (
@@ -306,5 +315,5 @@ export function SoftwareRoute() {
       </p>
     )
   }
-  return <Loaded view={watchlist.data} operator={me.data.roles.includes('operator')} />
+  return <Loaded view={watchlist.data} operator={me.data.roles.includes('operator')} answeredAt={Math.max(watchlist.dataUpdatedAt, watchlist.errorUpdatedAt)} />
 }

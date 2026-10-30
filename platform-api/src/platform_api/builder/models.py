@@ -69,6 +69,14 @@ class UseCaseAgentView(WireModel):
 
 type UseCaseState = Literal["on", "paused"]
 
+type ClockTime = Annotated[str, Field(pattern=AT_PATTERN, examples=["09:00"])]
+
+
+class UseCaseSchedule(WireModel):
+    day: Day
+    at: ClockTime
+    time_zone: str
+
 
 class UseCaseView(WireModel):
     use_case_id: str
@@ -87,6 +95,10 @@ class UseCaseView(WireModel):
         description="When the workflow next runs on its own. Null while it is paused, while its "
         "schedule is held because the owner can no longer run it, and for a workflow with no "
         "schedule."
+    )
+    schedule: UseCaseSchedule | None = Field(
+        description="When it runs on its own, kept while it is paused. Null for a workflow "
+        "with no schedule."
     )
     plan: list[BlockView] = Field(
         description="The blocks a run of this use case draws, in order. A template use case "
@@ -185,9 +197,6 @@ class LastCheckView(WireModel):
     run_id: RunId
     state: RunStateName
     started_at: datetime
-
-
-type ClockTime = Annotated[str, Field(pattern=AT_PATTERN, examples=["09:00"])]
 
 
 class ScheduleIn(WireIn):
@@ -389,6 +398,12 @@ class CreateAgentUseCase(WireIn):
         str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)
     ]
     agents: Annotated[list[AgentChoice], Field(min_length=1, max_length=3)]
+    schedule: ScheduleIn | None = Field(
+        default=None,
+        description="When it runs on its own, in Singapore time. The person who sets it up "
+        "owns the schedule, so its scheduled runs are their work. Leave it out to run it only "
+        "by hand.",
+    )
 
 
 class UnderstandIn(WireIn):
@@ -458,7 +473,7 @@ class DraftIn(WireIn):
     )
     content: dict[str, JsonValue] = Field(
         description="The New workflow form as the Portal keeps it, at most 32 KB as JSON. "
-        "The platform stores it as it is and never reads it."
+        "The platform stores it as it is. It reads only a top-level `name`, which Home shows."
     )
 
     @field_validator("content")

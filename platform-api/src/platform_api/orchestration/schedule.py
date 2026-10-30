@@ -9,11 +9,20 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 
 type Day = Literal[
-    "every_day", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"
+    "every_day",
+    "weekdays",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
 ]
 
 DAYS: tuple[Day, ...] = (
     "every_day",
+    "weekdays",
     "monday",
     "tuesday",
     "wednesday",
@@ -31,6 +40,7 @@ WEEKDAY: dict[Day, int] = {
     "saturday": 5,
     "sunday": 6,
 }
+SATURDAY = 5
 TIME_ZONE = "Asia/Singapore"
 STEP_MINUTES = 5
 DEFAULT_DAY: Day = "monday"
@@ -70,6 +80,14 @@ class Slots:
     """The first slot after now."""
 
 
+def _runs_on(day: Day, weekday: int) -> bool:
+    if day == "every_day":
+        return True
+    if day == "weekdays":
+        return weekday < SATURDAY
+    return weekday == WEEKDAY[day]
+
+
 def slots(schedule: Schedule, now: datetime) -> Slots:
     """The slots on either side of now, in the schedule's own time zone, so 9:00 stays 9:00."""
     zone = ZoneInfo(schedule.time_zone)
@@ -78,7 +96,7 @@ def slots(schedule: Schedule, now: datetime) -> Slots:
 
     def slot_on(offset: int) -> datetime | None:
         date = (local_now + timedelta(days=offset)).date()
-        if schedule.day != "every_day" and date.weekday() != WEEKDAY[schedule.day]:
+        if not _runs_on(schedule.day, date.weekday()):
             return None
         return datetime.combine(date, at, tzinfo=zone)
 

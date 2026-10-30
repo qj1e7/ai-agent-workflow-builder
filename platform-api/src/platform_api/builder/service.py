@@ -47,6 +47,7 @@ from platform_api.builder.models import (
     UseCaseCreated,
     UseCaseDeleted,
     UseCaseList,
+    UseCaseSchedule,
     UseCaseView,
 )
 from platform_api.builder.planning import (
@@ -74,6 +75,7 @@ from platform_api.orchestration import (
     RunStarted,
     RunStarter,
     SavedSchedule,
+    Schedule,
     ScheduleBook,
     Task,
     card_bindings,
@@ -88,6 +90,10 @@ _CURRENT_VERSION = """
     JOIN builder.use_case_versions v
       ON v.use_case_id = u.use_case_id AND v.version = u.current_version
 """
+
+
+def _schedule_view(schedule: Schedule) -> UseCaseSchedule:
+    return UseCaseSchedule(day=schedule.day, at=schedule.at, time_zone=schedule.time_zone)
 
 
 def _view(
@@ -114,6 +120,7 @@ def _view(
         created_at=row["created_at"],
         state="on" if on else "paused",
         next_run_at=schedule.next_run(now) if on and schedule is not None else None,
+        schedule=None if schedule is None else _schedule_view(schedule.schedule),
         plan=plan,
         agents=[
             UseCaseAgentView(
@@ -171,12 +178,13 @@ class Builder:
         watchlist: Watchlist,
         public_base_url: str,
         planner: Planning | None = None,
+        schedules: ScheduleBook | None = None,
     ) -> None:
         self._db = db
         self._runs = runs
         self._watchlist = watchlist
         self._cards = CardLibrary(db)
-        self._schedules = ScheduleBook(db)
+        self._schedules = schedules or ScheduleBook(db)
         self._drafts = Drafts(db)
         self._planner = planner or NoPlanner()
         self.public_base_url = public_base_url
@@ -392,6 +400,16 @@ class Builder:
                     ' card_id, card_version, "values") VALUES (%s, 1, %s, %s, %s, %s)',
                     (use_case_id, position, card.card_id, card.version, json(values)),
                 )
+        if body.schedule is not None:
+            try:
+                await self._schedules.save(
+                    UseCaseId(use_case_id),
+                    Schedule(body.schedule.day, body.schedule.at),
+                    principal,
+                )
+            except Exception:
+                await self.delete_use_case(use_case_id, principal)
+                raise
         return UseCaseCreated(use_case_id=use_case_id, version=1)
 
     @staticmethod

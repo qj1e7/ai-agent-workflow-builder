@@ -62,6 +62,7 @@ from platform_api.orchestration.dispatch import (
     RetryPolicy,
     WorkflowEngine,
 )
+from platform_api.orchestration.person_runs import PersonRuns, runs_of
 from platform_api.orchestration.runs import (
     PLANNER,
     Acting,
@@ -737,23 +738,9 @@ class Orchestrator:
             proposal = await self._store.load_proposal(uow, request.proposal_id)
             assert proposal is not None
             decisions = await self._store.load_decisions(uow, approval_id)
-        status = approval_status(request, decisions)
-        why_not: Refusal | None = None
-        if isinstance(status, Open):
-            dry_run = approvals.decide(
-                request,
-                decisions,
-                principal,
-                status.next_step,
-                Verdict.APPROVE,
-                request.digest,
-                datetime.min,
-            )
-            if isinstance(dry_run, Refused):
-                why_not = dry_run.reason
-        else:
-            why_not = Refusal.NOT_OPEN
-        return ApprovalDetail(request, proposal, decisions, why_not)
+        return ApprovalDetail(
+            request, proposal, decisions, approvals.why_not(request, decisions, principal)
+        )
 
     async def decide(
         self,
@@ -838,6 +825,11 @@ class Orchestrator:
     async def list_runs(self) -> list[RunDetail]:
         async with self._db.transaction("orchestration") as uow:
             return await self._details(uow, await self._store.list_runs(uow))
+
+    async def runs_for(self, viewer: Principal) -> PersonRuns:
+        async with self._db.transaction("orchestration") as uow:
+            details = await self._details(uow, await self._store.open_runs(uow))
+        return runs_of(details, viewer)
 
     async def _detail(self, uow: UnitOfWork, record: RunRecord) -> RunDetail:
         (detail,) = await self._details(uow, [record])

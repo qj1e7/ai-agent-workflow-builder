@@ -17,6 +17,7 @@ ROUTES = {
     ("GET", "/healthz/ready"),
     ("GET", "/api/v1/dev/users"),
     ("GET", "/api/v1/me"),
+    ("GET", "/api/v1/home"),
     ("GET", "/api/v1/templates"),
     ("POST", "/api/v1/use-cases"),
     ("GET", "/api/v1/use-cases"),
@@ -168,7 +169,7 @@ def test_a_refused_decision_answers_the_documented_refusal_body(refusing_client:
     assert r.status_code == 403
     assert r.json() == {
         "refusal": "own_work",
-        "message": "You started this run, so another Approver must decide.",
+        "message": "This run is your own work, so another Approver must decide.",
     }
 
 

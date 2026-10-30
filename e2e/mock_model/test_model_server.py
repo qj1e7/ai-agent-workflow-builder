@@ -99,6 +99,31 @@ class MockModelTest(unittest.TestCase):
         self.assertEqual(draft["name"], "Finished tickets summary")
         self.assertEqual(draft["blocks"][-1]["tool"], "jira.create_ticket")
 
+    def test_the_follow_up_ticket_task_drafts_a_follow_up_agent(self) -> None:
+        task = (
+            "The task:\nFind bug tickets in MOCK with no update for 14 days. Create one "
+            "follow-up ticket that lists them. Where it goes: Jira project MOCK."
+        )
+        draft = self.forced("DraftAnswer", task)
+        self.assertEqual(draft["name"], "Stale bug follow-up")
+        self.assertEqual(
+            [(block["say"], block["tool"]) for block in draft["blocks"]],
+            [
+                ("Find bug tickets with no recent update.", "jira.search"),
+                ("Propose one follow-up ticket that lists them.", "jira.create_ticket"),
+            ],
+        )
+        self.assertEqual([i["name"] for i in draft["inputs"]], ["Jira project"])
+
+    def test_the_follow_up_agent_proposes_a_follow_up_ticket(self) -> None:
+        system = "Agent card: Stale bug follow-up\nInputs for this run:\n- Jira project: MOCK\n"
+        body = {**run(SEARCH), "system": system, "tools": TOOLS[1:]}
+        name, arguments = tool_use(post(body))
+        self.assertEqual(name, "jira_create_ticket")
+        self.assertEqual(arguments["title"], "Bug tickets to follow up in MOCK")
+        summary = {**body, "system": system.replace("Stale bug follow-up", "Finished summary")}
+        self.assertEqual(tool_use(post(summary))[1]["title"], "Summary of finished tickets in MOCK")
+
     def test_a_choice_follows_the_words_of_the_task(self) -> None:
         use = self.forced("ChoiceAnswer", "Check langchain-ai/langgraph for a new release in MOCK")
         self.assertEqual(use["decision"], "use_one")
@@ -112,6 +137,10 @@ class MockModelTest(unittest.TestCase):
         self.assertEqual(
             self.forced("ChoiceAnswer", "book a meeting room")["decision"], "cannot_do"
         )
+
+    def test_a_task_that_names_no_github_project_gets_a_new_agent(self) -> None:
+        task = "Find bug tickets in MOCK with no update for 10 days. Create one ticket for them."
+        self.assertEqual(self.forced("ChoiceAnswer", task)["decision"], "new_agent")
 
     def test_a_choice_reads_only_the_task_not_the_saved_agents(self) -> None:
         request = (
@@ -212,6 +241,21 @@ class UnderstandTest(unittest.TestCase):
                 ]
                 self.assertTrue(hits)
                 self.assertEqual({row["state"] for row in rows}, {"understood"})
+
+    def test_one_named_part_is_read_as_that_part_alone(self) -> None:
+        self.assertEqual(
+            read_back("Where it goes: Post it in the team’s Teams channel"),
+            [
+                ("schedule", "", "missing"),
+                ("look_for", "", "missing"),
+                ("do", "", "missing"),
+                ("where", "Post it in the team’s Teams channel", "understood"),
+            ],
+        )
+        self.assertEqual(
+            read_back("Does: Create one ticket")[2], ("do", "Create one ticket", "understood")
+        )
+        self.assertTrue(server.understanding("Looks for: new releases")["belongs_on_watchlist"])
 
     def test_a_marker_after_the_task_changes_nothing(self) -> None:
         self.assertEqual(read_back(f"{FOLLOW_UP}. Ref 0a1b2c."), read_back(FOLLOW_UP))

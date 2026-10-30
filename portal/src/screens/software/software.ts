@@ -73,6 +73,7 @@ export const statusTone: Record<SoftwareStatus, StatusTone> = {
 
 const dayLabel: Record<Day, string> = {
   every_day: 'every day',
+  weekdays: 'every weekday',
   monday: 'every Monday',
   tuesday: 'every Tuesday',
   wednesday: 'every Wednesday',
@@ -82,10 +83,11 @@ const dayLabel: Record<Day, string> = {
   sunday: 'every Sunday',
 }
 
-export const DAYS: readonly Day[] = ['every_day', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+export const DAYS: readonly Day[] = ['every_day', 'weekdays', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
 
 export const dayOption: Record<Day, string> = {
   every_day: 'Every day',
+  weekdays: 'Every weekday',
   monday: 'Monday',
   tuesday: 'Tuesday',
   wednesday: 'Wednesday',
@@ -241,9 +243,13 @@ function clockWords(at: string): string {
   return at.replace(/^0/, '')
 }
 
+export function repeatWords({ day, at }: { readonly day: Day; readonly at: string }): string {
+  return `${dayLabel[day]} at ${clockWords(at)}`
+}
+
 /** "Checked every Monday at 9:00, set by Carol." */
 export function scheduleWords(schedule: ScheduleView): string {
-  return `Checked ${dayLabel[schedule.day]} at ${clockWords(schedule.at)}, set by ${schedule.owner_name}.`
+  return `Checked ${repeatWords(schedule)}, set by ${schedule.owner_name}.`
 }
 
 export function stoppedWords(reason: FailureReason | null): string {

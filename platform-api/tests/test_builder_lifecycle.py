@@ -353,6 +353,35 @@ async def test_a_workflow_with_no_schedule_has_no_next_run(lab: Lab):
     )
 
 
+MONDAYS_AT_NINE = {"day": "monday", "at": "09:00", "time_zone": "Asia/Singapore"}
+
+
+async def test_a_workflow_keeps_its_schedule_while_it_is_paused(lab: Lab):
+    use_case_id = await watchlist_workflow(lab)
+    [before] = await lab.listed()
+
+    paused = await lab.move("alice", "pause", use_case_id)
+    read = await lab.call(
+        "alice",
+        "GET",
+        f"/api/v1/use-cases/{use_case_id}",
+        template="/api/v1/use-cases/{use_case_id}",
+    )
+
+    assert before["schedule"] == MONDAYS_AT_NINE
+    assert (paused.json()["schedule"], paused.json()["next_run_at"]) == (MONDAYS_AT_NINE, None)
+    assert (read.json()["schedule"], read.json()["next_run_at"]) == (MONDAYS_AT_NINE, None)
+    [listed] = await lab.listed()
+    assert listed["schedule"] == MONDAYS_AT_NINE
+
+
+async def test_a_workflow_with_no_schedule_says_so_while_on_and_while_paused(lab: Lab):
+    use_case_id = await agent_workflow(lab)
+    [on] = await lab.listed()
+    paused = await lab.move("alice", "pause", use_case_id)
+    assert (on["schedule"], paused.json()["schedule"]) == (None, None)
+
+
 async def test_a_paused_workflow_cannot_be_started_by_hand(lab: Lab):
     use_case_id = await agent_workflow(lab)
     await lab.move("alice", "pause", use_case_id)

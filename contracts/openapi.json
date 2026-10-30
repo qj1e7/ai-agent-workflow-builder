@@ -1239,6 +1239,94 @@
         "title": "ApprovalDecidedData",
         "type": "object"
       },
+      "ApprovalItem": {
+        "additionalProperties": false,
+        "properties": {
+          "approval_id": {
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "changes": {
+            "description": "How many changes the run would write.",
+            "title": "Changes",
+            "type": "integer"
+          },
+          "first_changes": {
+            "description": "The first few of them.",
+            "items": {
+              "$ref": "#/components/schemas/ChangeLine"
+            },
+            "title": "First Changes",
+            "type": "array"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "started_by": {
+            "title": "Started By",
+            "type": "string"
+          },
+          "started_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when the person who started it is no longer on the list.",
+            "title": "Started By Name"
+          },
+          "step": {
+            "description": "The step waiting for a yes, from 0.",
+            "title": "Step",
+            "type": "integer"
+          },
+          "step_label": {
+            "title": "Step Label",
+            "type": "string"
+          },
+          "steps": {
+            "title": "Steps",
+            "type": "integer"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/Trigger"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "use_case_name": {
+            "title": "Use Case Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "approval_id",
+          "use_case_id",
+          "use_case_name",
+          "started_by",
+          "started_by_name",
+          "trigger",
+          "started_at",
+          "step",
+          "steps",
+          "step_label",
+          "changes",
+          "first_changes"
+        ],
+        "title": "ApprovalItem",
+        "type": "object"
+      },
       "ApprovalRef": {
         "additionalProperties": false,
         "properties": {
@@ -1547,6 +1635,15 @@
         ],
         "title": "AwaitingConfirmationOut",
         "type": "object"
+      },
+      "Because": {
+        "enum": [
+          "started",
+          "retried",
+          "owns",
+          "decided_earlier"
+        ],
+        "type": "string"
       },
       "BlockKind": {
         "enum": [
@@ -1967,12 +2064,79 @@
         "title": "CardView",
         "type": "object"
       },
+      "ChangeLine": {
+        "additionalProperties": false,
+        "properties": {
+          "connector": {
+            "title": "Connector",
+            "type": "string"
+          },
+          "operation": {
+            "title": "Operation",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "connector",
+          "operation",
+          "title"
+        ],
+        "title": "ChangeLine",
+        "type": "object"
+      },
       "ClockTime": {
         "examples": [
           "09:00"
         ],
         "pattern": "^([01][0-9]|2[0-3]):[0-5][05]$",
         "type": "string"
+      },
+      "ComingUp": {
+        "additionalProperties": false,
+        "properties": {
+          "more": {
+            "description": "How many other workflows have a next run.",
+            "title": "More",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "next_run_at": {
+            "format": "date-time",
+            "title": "Next Run At",
+            "type": "string"
+          },
+          "template": {
+            "title": "Template",
+            "type": "string"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "use_case_id",
+          "name",
+          "template",
+          "next_run_at",
+          "more"
+        ],
+        "title": "ComingUp",
+        "type": "object"
       },
       "ConfirmationDecidedOut": {
         "additionalProperties": false,
@@ -2037,6 +2201,53 @@
           "digest"
         ],
         "title": "ConfirmationDecisionIn",
+        "type": "object"
+      },
+      "ConfirmationItem": {
+        "additionalProperties": false,
+        "properties": {
+          "about_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The person a new Approver role is about.",
+            "title": "About Name"
+          },
+          "asked_at": {
+            "format": "date-time",
+            "title": "Asked At",
+            "type": "string"
+          },
+          "asked_by_name": {
+            "title": "Asked By Name",
+            "type": "string"
+          },
+          "confirmation_id": {
+            "title": "Confirmation Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ConfirmationKind"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirmation_id",
+          "kind",
+          "summary",
+          "about_name",
+          "asked_by_name",
+          "asked_at"
+        ],
+        "title": "ConfirmationItem",
         "type": "object"
       },
       "ConfirmationKind": {
@@ -2256,6 +2467,17 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScheduleIn"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When it runs on its own, in Singapore time. The person who sets it up owns the schedule, so its scheduled runs are their work. Leave it out to run it only by hand."
           }
         },
         "required": [
@@ -2301,6 +2523,7 @@
       "Day": {
         "enum": [
           "every_day",
+          "weekdays",
           "monday",
           "tuesday",
           "wednesday",
@@ -2479,7 +2702,7 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/JsonValue"
             },
-            "description": "The New workflow form as the Portal keeps it, at most 32 KB as JSON. The platform stores it as it is and never reads it.",
+            "description": "The New workflow form as the Portal keeps it, at most 32 KB as JSON. The platform stores it as it is. It reads only a top-level `name`, which Home shows.",
             "title": "Content",
             "type": "object"
           },
@@ -2496,6 +2719,44 @@
           "content"
         ],
         "title": "DraftIn",
+        "type": "object"
+      },
+      "DraftItem": {
+        "additionalProperties": false,
+        "properties": {
+          "draft_id": {
+            "title": "Draft Id",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The draft's `name`, when the Portal saved one.",
+            "title": "Name"
+          },
+          "saved_at": {
+            "format": "date-time",
+            "title": "Saved At",
+            "type": "string"
+          },
+          "step": {
+            "title": "Step",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "draft_id",
+          "name",
+          "step",
+          "saved_at"
+        ],
+        "title": "DraftItem",
         "type": "object"
       },
       "DraftList": {
@@ -2740,6 +3001,93 @@
           }
         },
         "title": "Health",
+        "type": "object"
+      },
+      "HomeOut": {
+        "additionalProperties": false,
+        "properties": {
+          "approvals": {
+            "description": "Runs waiting for a yes this person may give, the newest first. At most 10.",
+            "items": {
+              "$ref": "#/components/schemas/ApprovalItem"
+            },
+            "title": "Approvals",
+            "type": "array"
+          },
+          "approvals_total": {
+            "title": "Approvals Total",
+            "type": "integer"
+          },
+          "coming_up": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ComingUp"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The workflow that runs next, if any."
+          },
+          "confirmations": {
+            "description": "Setup changes this person may confirm, the newest first.",
+            "items": {
+              "$ref": "#/components/schemas/ConfirmationItem"
+            },
+            "title": "Confirmations",
+            "type": "array"
+          },
+          "drafts": {
+            "description": "An Operator's own drafts, the last saved first.",
+            "items": {
+              "$ref": "#/components/schemas/DraftItem"
+            },
+            "title": "Drafts",
+            "type": "array"
+          },
+          "stopped": {
+            "description": "Stopped runs an Operator started, owns or retried, while each is the newest run of its workflow. The newest first. At most 10.",
+            "items": {
+              "$ref": "#/components/schemas/StoppedItem"
+            },
+            "title": "Stopped",
+            "type": "array"
+          },
+          "stopped_total": {
+            "title": "Stopped Total",
+            "type": "integer"
+          },
+          "waiting_on_others": {
+            "description": "Runs waiting for someone else's yes that this person is part of. At most 10.",
+            "items": {
+              "$ref": "#/components/schemas/WaitingItem"
+            },
+            "title": "Waiting On Others",
+            "type": "array"
+          },
+          "waiting_on_others_total": {
+            "title": "Waiting On Others Total",
+            "type": "integer"
+          },
+          "workflows": {
+            "description": "How many workflows the team has.",
+            "title": "Workflows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "approvals",
+          "approvals_total",
+          "confirmations",
+          "stopped",
+          "stopped_total",
+          "waiting_on_others",
+          "waiting_on_others_total",
+          "drafts",
+          "coming_up",
+          "workflows"
+        ],
+        "title": "HomeOut",
         "type": "object"
       },
       "InputKind": {
@@ -5236,6 +5584,56 @@
         "title": "StepStartedData",
         "type": "object"
       },
+      "StoppedItem": {
+        "additionalProperties": false,
+        "properties": {
+          "advice": {
+            "$ref": "#/components/schemas/Advice",
+            "description": "The AI troubleshooter's reason and what to do."
+          },
+          "reason": {
+            "$ref": "#/components/schemas/FailureReason"
+          },
+          "retryable": {
+            "title": "Retryable",
+            "type": "boolean"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "stopped_at": {
+            "format": "date-time",
+            "title": "Stopped At",
+            "type": "string"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "use_case_name": {
+            "title": "Use Case Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "use_case_id",
+          "use_case_name",
+          "started_at",
+          "stopped_at",
+          "reason",
+          "retryable",
+          "advice"
+        ],
+        "title": "StoppedItem",
+        "type": "object"
+      },
       "SucceededView": {
         "additionalProperties": false,
         "properties": {
@@ -5816,6 +6214,28 @@
         "title": "UseCaseList",
         "type": "object"
       },
+      "UseCaseSchedule": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "$ref": "#/components/schemas/ClockTime"
+          },
+          "day": {
+            "$ref": "#/components/schemas/Day"
+          },
+          "time_zone": {
+            "title": "Time Zone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "at",
+          "time_zone"
+        ],
+        "title": "UseCaseSchedule",
+        "type": "object"
+      },
       "UseCaseState": {
         "enum": [
           "on",
@@ -5879,6 +6299,17 @@
             "title": "Plan",
             "type": "array"
           },
+          "schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UseCaseSchedule"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When it runs on its own, kept while it is paused. Null for a workflow with no schedule."
+          },
           "state": {
             "$ref": "#/components/schemas/UseCaseState",
             "description": "on, or paused until an Operator resumes it. A paused workflow starts no run, on its schedule or by hand. A deleted workflow is not shown."
@@ -5907,6 +6338,7 @@
           "created_at",
           "state",
           "next_run_at",
+          "schedule",
           "plan",
           "agents"
         ],
@@ -6041,6 +6473,55 @@
           "ticket"
         ],
         "title": "VersionSourceView",
+        "type": "object"
+      },
+      "WaitingItem": {
+        "additionalProperties": false,
+        "properties": {
+          "because": {
+            "$ref": "#/components/schemas/Because",
+            "description": "Why this person cannot say yes: they started, retried or own the run, or they said yes to an earlier step."
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "step": {
+            "title": "Step",
+            "type": "integer"
+          },
+          "steps": {
+            "title": "Steps",
+            "type": "integer"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/Trigger"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "use_case_name": {
+            "title": "Use Case Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "use_case_id",
+          "use_case_name",
+          "trigger",
+          "started_at",
+          "step",
+          "steps",
+          "because"
+        ],
+        "title": "WaitingItem",
         "type": "object"
       },
       "WatchedSoftwareView": {
@@ -8039,6 +8520,66 @@
           }
         ],
         "summary": "Save Draft",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/home": {
+      "get": {
+        "description": "What needs the signed-in person, what they wait on, their drafts and what runs next. The platform decides each item with the same rules as the page it opens.",
+        "operationId": "home_api_v1_home_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HomeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Signed in, but not on the People list. Ask an Operator to add you"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Home",
         "tags": [
           "builder"
         ]
@@ -10273,7 +10814,7 @@
                 }
               }
             },
-            "description": "No such use case"
+            "description": "No such workflow, or it is deleted"
           },
           "422": {
             "content": {
@@ -10665,7 +11206,7 @@
                 }
               }
             },
-            "description": "No such use case"
+            "description": "No such workflow, or it is deleted"
           },
           "409": {
             "content": {

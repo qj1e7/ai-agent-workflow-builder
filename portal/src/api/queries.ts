@@ -240,7 +240,7 @@ export function useApprovals(approvalIds: readonly string[], options?: QueryOpti
 
 function refreshAfterChange(queryClient: QueryClient): Promise<unknown> {
   return Promise.all(
-    ['approval', 'run', 'runs', 'teams-messages', 'jira-tickets', 'watchlist'].map((key) =>
+    ['approval', 'run', 'runs', 'home', 'teams-messages', 'jira-tickets', 'watchlist'].map((key) =>
       queryClient.invalidateQueries({ queryKey: [key] }),
     ),
   )
@@ -261,12 +261,13 @@ export function useDecide(approvalId: string) {
   })
 }
 
-export function useRetry(runId: string) {
+export function useRetry(runId: string, onRetried: () => void) {
   const client = useApiClient()
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async () =>
       unwrap(await client.POST('/api/v1/runs/{run_id}/retry', { params: { path: { run_id: runId } } })),
+    onSuccess: onRetried,
     onSettled: () => refreshAfterChange(queryClient),
   })
 }

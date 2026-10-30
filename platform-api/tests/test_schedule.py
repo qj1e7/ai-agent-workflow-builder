@@ -59,6 +59,23 @@ def test_every_day_has_a_slot_each_day():
     assert (after.latest, after.next) == (sgt(27, 9), sgt(28, 9))
 
 
+def test_every_weekday_skips_the_weekend():
+    weekdays = Schedule("weekdays", "15:00")
+    friday = slots(weekdays, sgt(30, 16))
+    assert (friday.latest, friday.next) == (sgt(30, 15), sgt(2, 15, month=11))
+    saturday = slots(weekdays, sgt(31, 9))
+    assert (saturday.latest, saturday.next) == (sgt(30, 15), sgt(2, 15, month=11))
+    tuesday = slots(weekdays, sgt(27, 14))
+    assert (tuesday.latest, tuesday.next) == (sgt(26, 15), sgt(27, 15))
+
+
+def test_a_weekday_schedule_saved_on_friday_evening_starts_on_monday():
+    weekdays = Schedule("weekdays", "15:00")
+    saved = sgt(30, 18)
+    assert due_slot(weekdays, saved, None, sgt(1, 15, month=11)) is None
+    assert due_slot(weekdays, saved, None, sgt(2, 15, month=11)) == sgt(2, 15, month=11)
+
+
 @pytest.mark.parametrize(
     "day", ["tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 )

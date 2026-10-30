@@ -13,6 +13,7 @@ from typing import Any, Literal, NewType
 
 from platform_api.db import UnitOfWork
 from platform_api.db import json as jsonb
+from platform_api.orchestration.people import Person
 from platform_api.shared import Principal, Role, UserId
 
 ConfirmationId = NewType("ConfirmationId", str)
@@ -48,6 +49,16 @@ class Confirmation:
     @property
     def open(self) -> bool:
         return self.decided_at is None
+
+
+def confirmation_summary(confirmation: Confirmation, about: Person | None) -> str:
+    match confirmation.kind:
+        case ConfirmationKind.APPROVER:
+            name = about.display if about is not None else str(confirmation.change.get("display"))
+            return f"Make {name} an Approver"
+        case ConfirmationKind.MODEL_ADDRESS:
+            change = confirmation.change
+            return f"Use {change.get('model')} at {change.get('host')}"
 
 
 class DecideRefusal(Enum):

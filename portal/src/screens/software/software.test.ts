@@ -10,6 +10,8 @@ import {
   checkRepo,
   checkVersion,
   countIn,
+  DAYS,
+  dayOption,
   emptyWords,
   groupsOf,
   historyOf,
@@ -215,6 +217,11 @@ describe('the schedule', () => {
     const paused: ScheduleView = { ...SCHEDULE, next_at: null }
     for (const schedule of [paused, removed, notOperator]) expect(nextCheckWords(schedule, true)).toBe('Paused. No check runs until an Operator resumes it.')
     expect([scheduleRuns(SCHEDULE), scheduleRuns(removed), scheduleRuns(notOperator), scheduleRuns(null)]).toEqual([true, false, false, false])
+  })
+
+  it('offers every day the platform takes, so a watchlist set to every weekday shows it', () => {
+    expect(DAYS).toEqual(Object.keys(dayOption))
+    expect(DAYS.map((day) => dayOption[day]).slice(0, 3)).toEqual(['Every day', 'Every weekday', 'Monday'])
   })
 })
 

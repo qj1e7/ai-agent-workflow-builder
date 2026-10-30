@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useLocation } from 'react-router'
+import { isOperator } from './api/me'
 import { useMe } from './api/queries'
 import { AskToBeAdded } from './shell/AskToBeAdded'
 import { Header } from './shell/Header'
@@ -68,7 +69,7 @@ export function App({ now = () => new Date() }: { now?: () => Date }) {
           <ErrorBoundary resetKey={pathname}>{content}</ErrorBoundary>
         </div>
       </main>
-      <TabBar />
+      <TabBar operator={isOperator(me.data)} />
       <TestControls />
     </>
   )
