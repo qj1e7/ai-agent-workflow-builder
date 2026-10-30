@@ -7,7 +7,7 @@ import { useLatch } from '../../api/latch'
 import { useDisplayName } from '../../api/people'
 import { useMe, useRuns, useStartRun, useUseCase } from '../../api/queries'
 import type { Me, UseCaseView } from '../../api/types'
-import { useDeleteWorkflow, useMoveWorkflow } from '../../api/workflowQueries'
+import { useDeleteWorkflow, useMoveWorkflow, useRereadWorkflow } from '../../api/workflowQueries'
 import { PageHead } from '../../shell/PageHead'
 import { AgentFace } from '../../ui/AgentFace'
 import { Button, ButtonLink } from '../../ui/Button'
@@ -22,6 +22,7 @@ import {
   changeProblem,
   changeWords,
   controlsOf,
+  meansOutOfDate,
   nextRunWords,
   pressChange,
   pressRunNow,
@@ -140,16 +141,16 @@ function DeleteDialog({ name, busy, problem, onClose, onConfirm }: DeleteDialogP
   )
 }
 
-function useRunNow(useCaseId: string) {
+function useRunNow(useCaseId: string, refused: (error: unknown) => void) {
   const start = useStartRun()
   const latch = useLatch()
   const navigate = useNavigate()
   const [key, setKey] = useState(newIdempotencyKey)
-  const press = () =>
-    pressRunNow(latch, start.mutate, { useCaseId, idempotencyKey: key }, (runId) => {
-      setKey(newIdempotencyKey())
-      void navigate(`/runs/${runId}`)
-    })
+  const open = (runId: string) => {
+    setKey(newIdempotencyKey())
+    void navigate(`/runs/${runId}`)
+  }
+  const press = () => pressRunNow(latch, start.mutate, { useCaseId, idempotencyKey: key }, { open, refused })
   return { press, pending: start.isPending, error: start.error, reset: start.reset }
 }
 
@@ -167,8 +168,12 @@ function WorkflowView({ useCase, me, now }: { useCase: UseCaseView; me: Me; now:
   const viewer = viewerOf(me)
   const move = useMoveWorkflow()
   const removal = useDeleteWorkflow()
+  const reread = useRereadWorkflow()
   const changes = useLatch()
-  const runNow = useRunNow(id)
+  const rereadIfOutOfDate = (error: unknown) => {
+    if (meansOutOfDate(error)) reread(id)
+  }
+  const runNow = useRunNow(id, rereadIfOutOfDate)
   const deleteButton = useRef<HTMLButtonElement>(null)
   const [asking, setAsking] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
@@ -191,14 +196,20 @@ function WorkflowView({ useCase, me, now }: { useCase: UseCaseView; me: Me; now:
         runNow.reset()
         setSaid((before) => ({ id: (before?.id ?? 0) + 1, text: changeWords(what, view, now) }))
       },
-      onError: (error) => setProblem(changeProblem(what, useCase.name, error, words)),
+      onError: (error) => {
+        rereadIfOutOfDate(error)
+        setProblem(changeProblem(what, useCase.name, error, words))
+      },
     })
   }
 
   function confirmDelete() {
     pressChange(changes, (outcome) => removal.mutate(id, outcome), {
       onSuccess: () => void navigate('/workflows', { state: { deleted: { id, name: useCase.name } } }),
-      onError: (error) => setDeleteProblem(changeProblem('delete', useCase.name, error, words)),
+      onError: (error) => {
+        rereadIfOutOfDate(error)
+        setDeleteProblem(changeProblem('delete', useCase.name, error, words))
+      },
     })
   }
 

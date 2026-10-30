@@ -36,6 +36,15 @@ function markStaleWithoutReading(queryClient: QueryClient, queryKey: readonly un
   void queryClient.invalidateQueries({ queryKey, refetchType: 'none' })
 }
 
+export function useRereadWorkflow(): (useCaseId: string) => void {
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  return (useCaseId) => {
+    void queryClient.invalidateQueries({ queryKey: keys.useCase(user, useCaseId) })
+    rereadWorkflowsAndWatchlist(queryClient)
+  }
+}
+
 export function useMoveWorkflow() {
   const client = useApiClient()
   const queryClient = useQueryClient()

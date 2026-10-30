@@ -246,14 +246,20 @@ export function rowsOf(useCases: readonly UseCaseView[], runs: readonly RunView[
 
 export interface RunNowOutcome {
   onSuccess?: (started: { readonly run_id: string }) => void
+  onError?: (error: unknown) => void
   onSettled?: () => void
 }
 
 type Start = (input: { useCaseId: string; idempotencyKey: string }, outcome: RunNowOutcome) => void
 
+interface RunNowAnswers {
+  readonly open: (runId: string) => void
+  readonly refused: (error: unknown) => void
+}
+
 /** The caller keeps one key until a run starts, so a press after a lost answer cannot start a second run. */
-export function pressRunNow(latch: Latch, start: Start, input: { useCaseId: string; idempotencyKey: string }, open: (runId: string) => void): void {
-  latch.run((settled) => start(input, { onSuccess: (started) => open(started.run_id), onSettled: settled }))
+export function pressRunNow(latch: Latch, start: Start, input: { useCaseId: string; idempotencyKey: string }, { open, refused }: RunNowAnswers): void {
+  latch.run((settled) => start(input, { onSuccess: (started) => open(started.run_id), onError: refused, onSettled: settled }))
 }
 
 export type Change = 'pause' | 'resume' | 'delete' | 'restore'
@@ -290,6 +296,8 @@ export function changeWords(change: Change, useCase: Pick<UseCaseView, 'name' | 
 }
 
 const answered = (error: unknown, status: number) => error instanceof ApiError && error.status === status
+
+export const meansOutOfDate = (error: unknown) => answered(error, 409)
 
 export function changeProblem(change: Change, name: string, error: unknown, words: (error: unknown) => string): string {
   const start = change === 'restore' ? `Could not put ${name} back.` : `Could not ${change} ${name}.`

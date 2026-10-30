@@ -22,6 +22,7 @@ import {
   latestRuns,
   lifeWords,
   lineWhen,
+  meansOutOfDate,
   nextRunWords,
   pressChange,
   pressRunNow,
@@ -259,6 +260,7 @@ describe('Run now', () => {
     const started: { useCaseId: string; idempotencyKey: string }[] = []
     const outcomes: RunNowOutcome[] = []
     const opened: string[] = []
+    const refused: unknown[] = []
     const latch = createLatch()
     let key = 'key-1'
     const press = () =>
@@ -269,9 +271,9 @@ describe('Run now', () => {
           outcomes.push(outcome)
         },
         { useCaseId: 'uc_01JB7', idempotencyKey: key },
-        (runId) => opened.push(runId),
+        { open: (runId) => opened.push(runId), refused: (error) => refused.push(error) },
       )
-    return { started, outcomes, opened, press, rekey: (next: string) => (key = next) }
+    return { started, outcomes, opened, refused, press, rekey: (next: string) => (key = next) }
   }
 
   it('starts one run for two presses in one tick', () => {
@@ -287,6 +289,15 @@ describe('Run now', () => {
     h.outcomes[0]?.onSuccess?.({ run_id: 'run_new' })
     h.outcomes[0]?.onSettled?.()
     expect(h.opened).toEqual(['run_new'])
+  })
+
+  it('hands a refusal to the page, so it can read the workflow again', () => {
+    const h = harness()
+    const paused = new ApiError(409, { detail: 'This workflow is paused. Resume it to start a run.' })
+    h.press()
+    h.outcomes[0]?.onError?.(paused)
+    expect(h.refused).toEqual([paused])
+    expect(h.opened).toEqual([])
   })
 
   it('lets the next press through once the platform answered, with the key it is given', () => {
@@ -338,5 +349,16 @@ describe('pausing, resuming, deleting and putting back', () => {
     expect(changeProblem('restore', name, new ApiError(404, { detail: 'No such workflow' }), words)).toBe('Could not put LangGraph release check back. The platform has no record of it.')
     expect(changeProblem('delete', name, new ApiError(403, { detail: 'Only an Operator can change workflows.' }), words)).toBe('Could not delete LangGraph release check. Only an Operator can change workflows.')
     expect(changeProblem('resume', name, new ApiError(503, null), words)).toBe('Could not resume LangGraph release check. The platform had a problem. Try again in a moment.')
+  })
+})
+
+describe('a refusal that means the page shows an old state', () => {
+  it('is a 409, such as Run now on a workflow someone else paused', () => {
+    expect(meansOutOfDate(new ApiError(409, { detail: 'This workflow is paused. Resume it to start a run.' }))).toBe(true)
+  })
+
+  it('is not any other answer', () => {
+    for (const status of [403, 404, 410, 503]) expect(meansOutOfDate(new ApiError(status, null)), String(status)).toBe(false)
+    expect(meansOutOfDate(new TypeError('Failed to fetch'))).toBe(false)
   })
 })
