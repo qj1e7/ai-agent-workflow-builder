@@ -173,7 +173,6 @@ function LastCheckStopped({ last }: { last: LastCheckView }) {
   )
 }
 
-/** The status line stays on the page when it is empty, so a screen reader hears each new message. */
 interface NoticeProps {
   readonly feedback: ChangeFeedback
   readonly scheduled: boolean
@@ -182,6 +181,7 @@ interface NoticeProps {
   readonly onDismiss: () => void
 }
 
+/** The status line stays on the page when it is empty, so a screen reader hears each new message. */
 function Notice({ feedback, scheduled, paused, onUndo, onDismiss }: NoticeProps) {
   const { notice } = feedback
   const escape = (event: KeyboardEvent) => {

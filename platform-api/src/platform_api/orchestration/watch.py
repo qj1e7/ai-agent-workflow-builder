@@ -56,12 +56,10 @@ class KnownNewest:
 
 @dataclass(frozen=True)
 class CouldNotCheck:
-    """The latest check could not read the source. known is what an earlier check read."""
-
     run_id: RunId
     at: datetime
     problem: str
-    known: KnownNewest | None = None
+    last_read: KnownNewest | None = None
 
 
 type LatestCheck = Checked | CouldNotCheck
@@ -279,7 +277,6 @@ NOTHING_READABLE_TYPES = frozenset({"UpstreamUnavailable", "UpstreamRejected"})
 def all_could_not_read(
     task: WatchlistTask, error: TaskError, findings: Sequence[Finding]
 ) -> Reviewed | None:
-    """Each listed software keeps the reason the runtime gave it; the rest share the error's."""
     if error.type not in NOTHING_READABLE_TYPES:
         return None
     shared = error.message if error.message.endswith(".") else f"{error.message}."

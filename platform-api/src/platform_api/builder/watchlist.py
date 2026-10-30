@@ -125,9 +125,9 @@ def software_view(listed: ListedSoftware, standing: Standing) -> WatchedSoftware
             newest, read_at, checked_at, problem = None, None, None, None
         case Checked(_, at, newest_version):
             newest, read_at, checked_at, problem = newest_version, at, at, None
-        case CouldNotCheck(_, at, why, known):
-            newest = None if known is None else known.version
-            read_at = None if known is None else known.at
+        case CouldNotCheck(_, at, why, last_read):
+            newest = None if last_read is None else last_read.version
+            read_at = None if last_read is None else last_read.at
             checked_at, problem = at, why
     return WatchedSoftwareView(
         id=listed.id,
@@ -261,7 +261,6 @@ class Removal:
 async def _last_removal(
     conn: Connection, use_case_id: UseCaseId, software_id: SoftwareId
 ) -> Removal | None:
-    """The software as it was last listed, and when the next version of the list dropped it."""
     row = await (
         await conn.execute(
             f"SELECT {_SOFTWARE_COLUMNS}, (SELECT v.created_at FROM builder.use_case_versions v "

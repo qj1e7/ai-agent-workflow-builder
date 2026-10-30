@@ -5,8 +5,6 @@ down_revision = "0006"
 
 
 def upgrade() -> None:
-    # A check that cannot read a software keeps the newest version an earlier check read, and
-    # when, beside the problem.
     op.execute("""
         ALTER TABLE orchestration.software_checks
             DROP CONSTRAINT software_checks_check,

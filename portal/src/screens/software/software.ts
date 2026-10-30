@@ -15,7 +15,6 @@ function checkedAgain({ scheduled, paused }: Checking): string {
   return scheduled ? 'It will try again at the next check.' : 'With no schedule, it is checked again when an Operator presses Check now.'
 }
 
-/** The row's own reason, from the check that could not read it, then when it is checked again. */
 export function cantCheckWords(problem: string | null, checking: Checking): string {
   return `${problem ?? 'Can’t check right now.'} ${checkedAgain(checking)}`
 }
@@ -202,7 +201,6 @@ interface Newest {
   readonly note: string | null
 }
 
-/** A check that could not read the source keeps the version an earlier check read. */
 export function newestOf(row: WatchedSoftwareView): Newest {
   if (row.newest_version === null) return { version: row.status === 'not_checked' ? 'Not checked yet' : 'Not known', note: null }
   const keptFrom = row.status === 'cant_check' ? row.newest_read_at : null
