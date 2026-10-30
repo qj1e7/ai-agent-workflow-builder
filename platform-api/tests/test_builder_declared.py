@@ -120,6 +120,24 @@ CHANGES = [
 ]
 
 
+SET_UP_OR_RUN_WORDS = (
+    "Only an Operator can set up workflows or start runs. Ask an Operator on the team."
+)
+SET_UP_OR_RUN = [
+    pytest.param("POST", "/api/v1/use-cases/uc_x/runs", KEY, None, id="start-run"),
+    pytest.param("POST", "/api/v1/use-cases", {}, USE_CASE, id="create"),
+    pytest.param("PUT", "/api/v1/watchlist/schedule", {}, SCHEDULE, id="schedule"),
+]
+
+
+@pytest.mark.parametrize(("method", "path", "headers", "body"), SET_UP_OR_RUN)
+def test_an_approver_is_told_in_the_app_words_that_only_an_operator_sets_up_or_runs_workflows(
+    method: str, path: str, headers: dict[str, str], body: object
+):
+    response = TestClient(app_with()).request(method, path, headers={**BOB, **headers}, json=body)
+    assert (response.status_code, response.json()) == (403, {"detail": SET_UP_OR_RUN_WORDS})
+
+
 @pytest.mark.parametrize(("method", "path", "body"), CHANGES)
 def test_an_approver_is_told_only_an_operator_can_change_workflows(
     method: str, path: str, body: object

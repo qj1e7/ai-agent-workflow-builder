@@ -88,10 +88,10 @@ def operators_only(refusal: str) -> Callable[[Principal], Principal]:
     return require_operator
 
 
-BUILD_OR_RUN = "Only an Operator can build use cases or start runs. Ask an Operator on the team."
+SET_UP_OR_RUN = "Only an Operator can set up workflows or start runs. Ask an Operator on the team."
 CHANGE_WORKFLOWS = "Only an Operator can change workflows."
 
-Operator = Annotated[Principal, Depends(operators_only(BUILD_OR_RUN))]
+Operator = Annotated[Principal, Depends(operators_only(SET_UP_OR_RUN))]
 WorkflowOperator = Annotated[Principal, Depends(operators_only(CHANGE_WORKFLOWS))]
 
 router = APIRouter(prefix="/api/v1", tags=["builder"])
