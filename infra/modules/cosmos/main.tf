@@ -9,6 +9,7 @@ locals {
   data_contributor_role = "00000000-0000-0000-0000-000000000002"
 }
 
+# tflint-ignore: azurerm_resources_missing_prevent_destroy # A copy only: PostgreSQL keeps every event, and the copier fills a new account.
 resource "azurerm_cosmosdb_account" "this" {
   #checkov:skip=CKV_AZURE_140:platform-api signs in with the account key today (COSMOS_KEY, read from Key Vault). Local auth goes off once it signs in with its managed identity.
   #checkov:skip=CKV_AZURE_99:No IP or network filter. Container Apps without a VNet have no fixed outbound address, and the checker reads items from a laptop. The key and the data role are the control, as for Key Vault.
@@ -57,12 +58,14 @@ resource "azurerm_cosmosdb_account" "this" {
   }
 }
 
+# tflint-ignore: azurerm_resources_missing_prevent_destroy # A copy only: PostgreSQL keeps every event, and the copier fills a new account.
 resource "azurerm_cosmosdb_sql_database" "activity" {
   name                = local.database
   resource_group_name = var.resource_group_name
   account_name        = azurerm_cosmosdb_account.this.name
 }
 
+# tflint-ignore: azurerm_resources_missing_prevent_destroy # A copy only: PostgreSQL keeps every event, and the copier fills a new account.
 resource "azurerm_cosmosdb_sql_container" "run_events" {
   name                  = local.container
   resource_group_name   = var.resource_group_name
