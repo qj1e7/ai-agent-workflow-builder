@@ -13,7 +13,7 @@ import { FindSoftware } from './FindSoftware'
 import { Schedule } from './Schedule'
 import { changeFeedback, NO_FEEDBACK, noticeButtons, noticeWords, pressRemove, pressUndo, PROBLEM_ID, removeButtonId, UNDO_ID, type ChangeFeedback, type Named } from './removal'
 import { SoftwareHistory } from './SoftwareHistory'
-import { cantCheckWords, countIn, emptyWords, groupsOf, newestOf, singaporeTime, statusLabel, statusTone, stoppedWords, versionSourceWords } from './software'
+import { cantCheckWords, countIn, emptyWords, groupsOf, newestOf, scheduleRuns, singaporeTime, statusLabel, statusTone, stoppedWords, versionSourceWords } from './software'
 import styles from './Software.module.css'
 
 const REFRESH_MS = 15_000
@@ -234,7 +234,7 @@ function Loaded({ view, operator }: { view: WatchlistView | null; operator: bool
   }
 
   const software = view?.software ?? []
-  const scheduled = Boolean(view?.schedule)
+  const scheduled = scheduleRuns(view?.schedule)
   const paused = view?.state === 'paused'
   const groups = groupsOf(software, query)
   const shown = countIn(groups)
@@ -250,7 +250,7 @@ function Loaded({ view, operator }: { view: WatchlistView | null; operator: bool
       {software.length === 0 && !searching ? (
         <div className={styles['empty']}>
           <b>No software yet</b>
-          <span>{emptyWords({ operator, scheduled: view === null || view.schedule !== null, paused })}</span>
+          <span>{emptyWords({ operator, scheduled: view === null || scheduleRuns(view.schedule), paused })}</span>
         </div>
       ) : null}
       {searching && shown === 0 ? (

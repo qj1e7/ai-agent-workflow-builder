@@ -3,7 +3,7 @@ import { useErrorWords } from '../../api/context'
 import { useSaveSchedule, useTurnOffSchedule } from '../../api/queries'
 import type { Day, ScheduleView } from '../../api/types'
 import { Button } from '../../ui/Button'
-import { checkClock, DAYS, dayOption, noScheduleWords, PAUSED_WORDS, scheduleOwnerWords, scheduleWords, singaporeTime } from './software'
+import { checkClock, DAYS, dayOption, nextCheckWords, noScheduleWords, scheduleOwnerWords, scheduleWords } from './software'
 import styles from './Software.module.css'
 
 export function ScheduleNote({ schedule, operator, paused }: { schedule: ScheduleView | null; operator: boolean; paused: boolean }) {
@@ -11,7 +11,7 @@ export function ScheduleNote({ schedule, operator, paused }: { schedule: Schedul
   return (
     <>
       <p>
-        <b>{scheduleWords(schedule)}</b> {schedule.next_at === null ? PAUSED_WORDS : `Next check ${singaporeTime(schedule.next_at)}, Singapore time.`}
+        <b>{scheduleWords(schedule)}</b> {nextCheckWords(schedule, paused)}
       </p>
       <p className="muted">{scheduleOwnerWords(schedule)}</p>
     </>

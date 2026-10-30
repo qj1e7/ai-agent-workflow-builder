@@ -1,6 +1,7 @@
 import failedRun from '@contracts/fixtures/views/failure.final.json'
 import empty from '@contracts/fixtures/watchlist/empty.json'
 import paused from '@contracts/fixtures/watchlist/paused.json'
+import held from '@contracts/fixtures/watchlist/schedule.held.json'
 import statuses from '@contracts/fixtures/watchlist/statuses.json'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
@@ -9,7 +10,7 @@ import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
-import type { Me, WatchlistView } from '../../api/types'
+import type { Me, ScheduleHold, WatchlistView } from '../../api/types'
 import { AddSoftwareFields, EMPTY_VALUES } from './AddSoftware'
 import { FindSoftware } from './FindSoftware'
 import { SoftwareRoute } from './SoftwarePage'
@@ -61,7 +62,7 @@ describe('the Software watchlist page', () => {
   it('promises no next check when no schedule is set', () => {
     const words = text(render({ ...statuses, schedule: null }, ALICE))
     expect(words).not.toContain('next check')
-    expect(words).toContain('GitHub answered 404 Not Found. With no schedule, it is checked again when an Operator presses Check now.')
+    expect(words).toContain('GitHub answered 404 Not Found. It is checked again when an Operator presses Check now.')
     expect(words).toContain('No schedule. Press Check now to check by hand.')
     expect(text(render({ ...empty, schedule: null }, ALICE))).toContain('Add the tools your team runs, then press Check now to check them.')
   })
@@ -189,6 +190,44 @@ describe('the add form', () => {
     const html = fields({})
     expect(html).not.toContain('aria-invalid')
     expect(html).toContain('id="sw-version-help"')
+  })
+})
+
+describe('a schedule held because its owner can no longer run it', () => {
+  const PAUSED_WORDS = 'Paused. No check runs until an Operator resumes it.'
+  const heldFor = (hold: ScheduleHold, ownerName = 'Alice') => {
+    const view = held as WatchlistView
+    if (view.schedule === null) throw new Error('the held fixture has a schedule')
+    return { ...view, schedule: { ...view.schedule, held: hold, owner_name: ownerName } }
+  }
+
+  it('says the owner is no longer on the list, and promises no next check anywhere on the page', () => {
+    const words = text(render(held, ALICE))
+    expect(words).toContain('Not running: Alice is no longer on the list. An Operator can take it over by saving the schedule.')
+    expect(words).not.toContain(PAUSED_WORDS)
+    expect(words).not.toContain('Next check')
+    expect(words).not.toContain('It will try again at the next check')
+    expect(words).toContain('GitHub answered 404 Not Found. It is checked again when an Operator presses Check now.')
+    expect(buttons(render(held, ALICE))).toEqual(expect.arrayContaining(['Check now', 'Change schedule']))
+  })
+
+  it('says the owner can no longer run workflows when they are no longer an Operator', () => {
+    const words = text(render(heldFor('owner_not_an_operator'), BOB))
+    expect(words).toContain('Not running: Alice can no longer run workflows. An Operator can take it over by saving the schedule.')
+    expect(words).not.toContain(PAUSED_WORDS)
+  })
+
+  it('says its owner when the view gives no name', () => {
+    expect(text(render(heldFor('owner_removed', ''), BOB))).toContain('Not running: its owner is no longer on the list. An Operator can take it over by saving the schedule.')
+    expect(text(render(heldFor('owner_not_an_operator', ' '), BOB))).toContain('Not running: its owner can no longer run workflows.')
+  })
+
+  it('keeps the paused words while the watchlist is paused as well', () => {
+    for (const hold of ['owner_removed', 'owner_not_an_operator'] as const) {
+      const words = text(render({ ...heldFor(hold), state: 'paused' }, ALICE))
+      expect(words).toContain(PAUSED_WORDS)
+      expect(words).not.toContain('Not running')
+    }
   })
 })
 

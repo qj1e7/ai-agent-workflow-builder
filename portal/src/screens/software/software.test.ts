@@ -15,9 +15,11 @@ import {
   historyOf,
   matches,
   newestOf,
+  nextCheckWords,
   noScheduleWords,
   repoOf,
   scheduleOwnerWords,
+  scheduleRuns,
   scheduleWords,
   singaporeTime,
   statusLabel,
@@ -169,7 +171,7 @@ describe('a row that can’t be checked', () => {
   it('says its own reason, then when it is checked again', () => {
     const reason = 'GitHub answered 404 Not Found.'
     expect(cantCheckWords(reason, { scheduled: true, paused: false })).toBe('GitHub answered 404 Not Found. It will try again at the next check.')
-    expect(cantCheckWords(reason, { scheduled: false, paused: false })).toBe('GitHub answered 404 Not Found. With no schedule, it is checked again when an Operator presses Check now.')
+    expect(cantCheckWords(reason, { scheduled: false, paused: false })).toBe('GitHub answered 404 Not Found. It is checked again when an Operator presses Check now.')
     expect(cantCheckWords(reason, { scheduled: true, paused: true })).toBe('GitHub answered 404 Not Found. It is checked again once the watchlist is resumed.')
   })
 
@@ -201,6 +203,17 @@ describe('the schedule', () => {
     expect(singaporeTime('2026-11-23T01:00:00Z')).toBe('Mon 23 Nov, 9:00')
     expect(scheduleWords(SCHEDULE)).toBe('Checked every Monday at 9:00, set by Alice.')
     expect(scheduleOwnerWords(SCHEDULE)).toBe('Scheduled checks count as Alice’s work, so Alice can’t approve them.')
+  })
+
+  it('says why a held schedule is not running, and paused wins over held', () => {
+    const removed: ScheduleView = { ...SCHEDULE, next_at: null, held: 'owner_removed' }
+    const notOperator: ScheduleView = { ...removed, held: 'owner_not_an_operator' }
+    expect(nextCheckWords(SCHEDULE, false)).toBe('Next check Mon 23 Nov, 9:00, Singapore time.')
+    expect(nextCheckWords(removed, false)).toBe('Not running: Alice is no longer on the list. An Operator can take it over by saving the schedule.')
+    expect(nextCheckWords(notOperator, false)).toBe('Not running: Alice can no longer run workflows. An Operator can take it over by saving the schedule.')
+    expect(nextCheckWords({ ...removed, owner_name: '' }, false)).toBe('Not running: its owner is no longer on the list. An Operator can take it over by saving the schedule.')
+    for (const schedule of [SCHEDULE, removed, notOperator]) expect(nextCheckWords(schedule, true)).toBe('Paused. No check runs until an Operator resumes it.')
+    expect([scheduleRuns(SCHEDULE), scheduleRuns(removed), scheduleRuns(notOperator), scheduleRuns(null)]).toEqual([true, false, false, false])
   })
 })
 

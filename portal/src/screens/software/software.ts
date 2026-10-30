@@ -1,6 +1,6 @@
 import { ApiError } from '../../api/client'
 import { failureReasonLabel } from '../../api/labels'
-import type { Day, FailureReason, ScheduleView, SoftwareStatus, VersionSourceView, WatchedSoftwareView } from '../../api/types'
+import type { Day, FailureReason, ScheduleHold, ScheduleView, SoftwareStatus, VersionSourceView, WatchedSoftwareView } from '../../api/types'
 
 export const SOURCES_NOTE =
   'GitHub is the only place we can check today. Other places, such as npm or PyPI, are not available yet.'
@@ -12,7 +12,7 @@ interface Checking {
 
 function checkedAgain({ scheduled, paused }: Checking): string {
   if (paused) return 'It is checked again once the watchlist is resumed.'
-  return scheduled ? 'It will try again at the next check.' : 'With no schedule, it is checked again when an Operator presses Check now.'
+  return scheduled ? 'It will try again at the next check.' : 'It is checked again when an Operator presses Check now.'
 }
 
 export function cantCheckWords(problem: string | null, checking: Checking): string {
@@ -20,6 +20,26 @@ export function cantCheckWords(problem: string | null, checking: Checking): stri
 }
 
 export const PAUSED_WORDS = 'Paused. No check runs until an Operator resumes it.'
+
+/** True when the schedule starts checks: it is set, and not held because its owner can no longer run it. */
+export function scheduleRuns(schedule: ScheduleView | null | undefined): boolean {
+  return Boolean(schedule) && !schedule?.held
+}
+
+const heldWhy: Record<ScheduleHold, string> = {
+  owner_removed: 'is no longer on the list',
+  owner_not_an_operator: 'can no longer run workflows',
+}
+
+/** What the schedule does next. Paused wins over a held schedule, which says why it is not running. */
+export function nextCheckWords(schedule: ScheduleView, paused: boolean): string {
+  if (paused) return PAUSED_WORDS
+  if (schedule.held) {
+    const owner = schedule.owner_name.trim() || 'its owner'
+    return `Not running: ${owner} ${heldWhy[schedule.held]}. An Operator can take it over by saving the schedule.`
+  }
+  return schedule.next_at === null ? PAUSED_WORDS : `Next check ${singaporeTime(schedule.next_at)}, Singapore time.`
+}
 
 export function noScheduleWords({ operator, paused }: { readonly operator: boolean; readonly paused: boolean }): string {
   if (paused) return `No schedule. ${PAUSED_WORDS}`
