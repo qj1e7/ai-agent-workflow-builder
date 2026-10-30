@@ -11,7 +11,11 @@
 #   up <worktree> <project> <tag> <portal-port> <api-port> <n8n-port> [--reuse]
 #                                          --reuse starts a second stack on the images an earlier up built with that tag, and
 #                                          builds only this project's own mock images
-#   down <worktree> <project>              stops the stack, deletes its volumes and the images it built for itself (down -v --rmi local)
+#   down <worktree> <project> [--oidc] [<tag>]
+#                                          stops the stack, deletes its volumes (down -v), and removes the images named after
+#                                          the project (mock-github, mock-model, e2e) and its dangling ones; with a tag, also
+#                                          wab/*:<tag> unless another stack still uses them. Without a tag the tag's images
+#                                          stay, so a later up --reuse still finds them
 #   check <project> [playwright arguments] run portal/e2e/checks/p13.check.ts in the runner image, in that project's Portal network
 #   live <project> [playwright arguments]  run portal/e2e/live, such as 07-new-workflow.live.ts, the same way
 #   lane1 <head-project> [trunk-project]   trunk has no New workflow: record it; then alice sets up the follow-up ticket
@@ -21,7 +25,8 @@
 #   size <trunk-worktree> <head-worktree>  gzip bytes of the JavaScript each built dist/index.html loads; fails past +30 KB
 #   video <worktree> <project> <tag> <portal-port> <api-port> <n8n-port> [--reuse]
 #                                          its own stack: the review video of alice setting up a workflow and its test run,
-#                                          which bob approves, 30 to 60 s, as $EVID/p13-review.webm and, with ffmpeg, .mp4; down
+#                                          which bob approves, 30 to 60 s, as $EVID/p13-review.webm and, with ffmpeg, .mp4; down,
+#                                          with the tag's images only when it built them (no --reuse)
 #
 # Every lane but the video runs on one shared dev stack. The first check connects the mock model as the AI model, with
 # bob's confirmation, unless it is already the model.
@@ -152,11 +157,38 @@ up() {
 }
 
 down() {
-  local worktree=$1 project=$2 mode=dev
-  [ "${3:-}" = --oidc ] && mode=oidc
+  local worktree=$1 project=$2 mode=dev tag='' option image
+  shift 2
+  for option in "$@"; do
+    case "$option" in
+      --oidc) mode=oidc ;;
+      '') ;;
+      *) tag=$option ;;
+    esac
+  done
   mkdir -p "$EVID/stacks"
   compose "$worktree" "$project" "$mode" --profile e2e logs --no-color >"$EVID/stacks/$project-compose.log" 2>&1 || true
-  compose "$worktree" "$project" "$mode" --profile e2e down -v --remove-orphans --rmi local
+  compose "$worktree" "$project" "$mode" --profile e2e down -v --remove-orphans
+  docker image ls --format '{{.Repository}}:{{.Tag}}' --filter "reference=$project-*" | while read -r image; do
+    docker image rm "$image" >/dev/null || echo "kept $image, which a container still uses"
+  done
+  docker image prune -f --filter "label=com.docker.compose.project=$project" >/dev/null
+  if [ -n "$tag" ]; then
+    for image in wab/platform-api wab/agent-runtime wab/portal; do
+      docker image inspect "$image:$tag" >/dev/null 2>&1 || continue
+      docker image rm "$image:$tag" >/dev/null 2>&1 || echo "kept $image:$tag, which another stack still uses"
+    done
+  fi
+  echo "images named after $project left: $(docker image ls -q --filter "reference=$project-*" | wc -l | tr -d ' ')"
+}
+
+built_tag() {
+  local tag=$1 option
+  shift
+  for option in "$@"; do
+    [ "$option" != --reuse ] || return 0
+  done
+  echo "$tag"
 }
 
 service_of() {
@@ -265,7 +297,7 @@ video() {
   mkdir -p "$EVID/review-video"
   check "$project" --grep '@review-video-setup' 2>&1 | tee "$EVID/review-video/setup.log" || status=$?
   [ "$status" -ne 0 ] || check "$project" --grep '@review-video ' 2>&1 | tee "$EVID/review-video/playwright.log" || status=$?
-  down "$worktree" "$project"
+  down "$worktree" "$project" "$(built_tag "${@:3}")"
   [ "$status" -eq 0 ] || return "$status"
   if command -v ffmpeg >/dev/null 2>&1; then
     ffmpeg -y -loglevel error -i "$EVID/p13-review.webm" -c:v libx264 -pix_fmt yuv420p -movflags +faststart "$EVID/p13-review.mp4"
