@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { useLayoutEffect, useRef, useState, type AnimationEvent, type RefObject } from 'react'
 import { motionAllowed } from './motion'
 
 export interface Present<T> {
@@ -11,7 +11,6 @@ export function presentNow<T>(items: readonly T[], keyOf: (item: T) => string): 
   return items.map((item) => ({ key: keyOf(item), item, leaving: false }))
 }
 
-/** The list as it is now, with each item that left kept at its old place and marked leaving until it is gone. */
 export function withLeaving<T>(before: readonly Present<T>[], items: readonly T[], keyOf: (item: T) => string): Present<T>[] {
   const now = presentNow(items, keyOf)
   const kept = new Set(now.map((present) => present.key))
@@ -25,30 +24,31 @@ export function withoutGone<T>(list: readonly Present<T>[], key: string): Presen
   return list.filter((present) => !(present.leaving && present.key === key))
 }
 
-interface Shown<T> {
+interface Drawn<T> {
   readonly items: readonly T[]
   readonly list: readonly Present<T>[]
 }
 
-/**
- * A removed item stays drawn, marked leaving, so it can fade out before the list closes the gap. Call gone(key) when
- * its fade ends. With reduced motion it goes at once.
- */
-export function usePresence<T>(items: readonly T[], keyOf: (item: T) => string): { readonly list: readonly Present<T>[]; readonly gone: (key: string) => void } {
-  const [shown, setShown] = useState<Shown<T>>(() => ({ items, list: presentNow(items, keyOf) }))
-  let list = shown.list
-  if (shown.items !== items) {
-    list = motionAllowed() ? withLeaving(shown.list, items, keyOf) : presentNow(items, keyOf)
-    setShown({ items, list })
+export interface Shown<T> extends Present<T> {
+  readonly onAnimationEnd: ((event: AnimationEvent) => void) | undefined
+}
+
+export function usePresence<T>(items: readonly T[], keyOf: (item: T) => string): readonly Shown<T>[] {
+  const [drawn, setDrawn] = useState<Drawn<T>>(() => ({ items, list: presentNow(items, keyOf) }))
+  let list = drawn.list
+  if (drawn.items !== items) {
+    list = motionAllowed() ? withLeaving(drawn.list, items, keyOf) : presentNow(items, keyOf)
+    setDrawn({ items, list })
   }
-  const gone = useCallback((key: string) => setShown((now) => ({ ...now, list: withoutGone(now.list, key) })), [])
-  return { list, gone }
+  const fadedOut = (key: string) => (event: AnimationEvent) => {
+    if (event.target === event.currentTarget) setDrawn((now) => ({ ...now, list: withoutGone(now.list, key) }))
+  }
+  return list.map((present) => ({ ...present, onAnimationEnd: present.leaving ? fadedOut(present.key) : undefined }))
 }
 
 const GLIDE_MS = 220
 const EASE_OUT = 'cubic-bezier(0.23, 1, 0.32, 1)'
 
-/** Each child marked data-glide that moved since the last render glides from where it was, so the list never jumps. */
 export function useGlide(container: RefObject<HTMLElement | null>): void {
   const tops = useRef(new Map<string, number>())
   useLayoutEffect(() => {

@@ -115,7 +115,7 @@ export function AppRoutes({ context }: { context: PageContext }) {
         element={<WorkflowsPage heading={wordsOf(PAGES.workflows.heading, context)} lead={wordsOf(PAGES.workflows.lead, context)} now={context.now} />}
       />
       <Route path={`${PAGES.workflows.path}/:useCaseId`} element={<WorkflowRoute now={context.now} />} />
-      <Route path={PAGES.home.path} element={<HomePage heading={wordsOf(PAGES.home.heading, context)} lead={wordsOf(PAGES.home.lead, context)} now={context.now} />} />
+      <Route path={PAGES.home.path} element={<HomePage heading={wordsOf(PAGES.home.heading, context)} today={wordsOf(PAGES.home.lead, context)} now={context.now} />} />
       <Route
         path={PAGES.software.path}
         element={

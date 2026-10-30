@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query'
 import { unwrap } from './client'
 import { useApiClient, useCacheScope } from './context'
 
-/** How often Home asks again, so an item decided in Teams or elsewhere leaves without a reload. */
 export const HOME_REFRESH_MS = 15_000
 
 export const homeKey = (user: string) => ['home', user] as const

@@ -12,7 +12,7 @@ import { needsOf, type Need } from './home'
 import { DraftRow, NeedItem, WaitingRow, type Motion } from './HomeItem'
 
 const NOW = new Date('2026-11-04T15:00:00+08:00')
-const STILL: Motion = { arrive: false, index: 0, leaving: false, onGone: () => undefined }
+const STILL: Motion = { glide: 'item', arrive: false, stagger: 0, leaving: false, onAnimationEnd: undefined }
 const [ASK] = needsOf(bobHome as HomeOut).shown as [Need]
 const [STOPPED] = needsOf(aliceHome as HomeOut).shown as [Need]
 const ALICE = aliceHome as HomeOut
@@ -67,9 +67,13 @@ describe('an item that is leaving', () => {
     expect(html).toMatch(/class="[^"]*_leaving_/)
   })
 
+  it('is marked with its key, so the rows below can glide into its place', () => {
+    expect(render(<NeedItem need={ASK} card={false} now={NOW} motion={{ ...STILL, glide: 'approval:apr_01JB8' }} />)).toMatch(/<li[^>]*data-glide="approval:apr_01JB8"/)
+  })
+
   it('arrives in its place in the first paint, and not at all when the person came back', () => {
-    const arriving = render(<WaitingRow item={ALICE.waiting_on_others[0]!} now={NOW} motion={{ ...STILL, arrive: true, index: 2 }} />)
+    const arriving = render(<WaitingRow item={ALICE.waiting_on_others[0]!} now={NOW} motion={{ ...STILL, arrive: true, stagger: 2 }} />)
     expect(arriving).toMatch(/<li class="[^"]*_arrive_[^"]*"[^>]*style="--i:2"/)
-    expect(render(<DraftRow draft={ALICE.drafts[0]!} now={NOW} arrive={false} index={0} />)).not.toMatch(/_arrive_/)
+    expect(render(<DraftRow draft={ALICE.drafts[0]!} now={NOW} arrive={false} stagger={0} />)).not.toMatch(/_arrive_/)
   })
 })

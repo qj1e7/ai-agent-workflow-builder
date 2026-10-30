@@ -27,7 +27,6 @@ const KIND_ORDER: Record<Need['kind'], number> = { approval: 0, confirmation: 1,
 
 const urgentFirst = (a: Need, b: Need) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || b.at.localeCompare(a.at) || a.key.localeCompare(b.key)
 
-/** Approvals first, then confirmations, then stopped runs, each newest first. The totals come from the platform. */
 export function needsOf(home: HomeOut): Needs {
   const all: Need[] = [
     ...home.approvals.map((item): Need => ({ kind: 'approval', key: `approval:${item.approval_id}`, at: item.started_at, item })),
@@ -128,7 +127,6 @@ export function wordsOf(need: Need, now: Date): ItemWords {
 
 export type Action = { readonly kind: 'open'; readonly label: string; readonly to: string } | { readonly kind: 'retry'; readonly label: string; readonly runId: string }
 
-/** Nothing is decided on Home: an approval opens its run, which lands on the decision and shows the exact change. */
 export function actionsOf(need: Need): readonly Action[] {
   switch (need.kind) {
     case 'approval':
@@ -145,9 +143,10 @@ export function actionsOf(need: Need): readonly Action[] {
   }
 }
 
-/** The platform answers 409 when the run is no longer stopped, as after someone else retried it. */
+const noLongerStopped = (error: unknown) => error instanceof ApiError && error.status === 409
+
 export function retryProblem(error: unknown, words: (error: unknown) => string): string {
-  if (error instanceof ApiError && error.status === 409) return 'It can’t be retried now. Someone may have retried it already, so look at the run.'
+  if (noLongerStopped(error)) return 'It can’t be retried now. Someone may have retried it already, so look at the run.'
   return `Could not retry the run. ${words(error)}`
 }
 

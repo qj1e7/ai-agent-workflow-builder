@@ -1,5 +1,3 @@
--- Copies one run that waits for a yes, as P11's lane 10 needs 50 of them. Each copy has its own run, proposal and
--- approval ids, starts one minute earlier per copy, and carries the run's activity events, so its run page opens.
 -- usage: psql -v run=<run_id> -v copies=<n> -f p11_seed_waiting.sql
 SELECT set_config('p11.run', :'run', false), set_config('p11.copies', :'copies', false);
 

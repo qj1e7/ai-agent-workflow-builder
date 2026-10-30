@@ -9,7 +9,6 @@ const needsYou = (page: Page) => page.getByRole('list', { name: 'Needs you' })
 const itemOf = (page: Page, approvalId: string) => page.locator(`li[data-home-item="approval:${approvalId}"]`)
 const waitingOnOthers = (page: Page) => page.getByRole('region', { name: 'Waiting on others' })
 
-/** A value on window survives a client-side page change and is gone after a reload. */
 async function markThisPage(page: Page): Promise<void> {
   await page.evaluate(() => {
     ;(window as unknown as { __homeNotReloaded: boolean }).__homeNotReloaded = true

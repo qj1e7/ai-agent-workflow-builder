@@ -61,7 +61,6 @@ SEED_COPIES=49
 
 die() { echo "p11.sh: $*" >&2; exit 2; }
 
-# compose <worktree> <project> <dev|oidc> <compose arguments>
 compose() {
   local worktree=$1 project=$2 mode=$3
   shift 3
@@ -136,7 +135,6 @@ pygates() {
   return "$status"
 }
 
-# up <worktree> <project> <tag> <portal-port> <api-port> <n8n-port> [--reuse] [--oidc]
 up() {
   local worktree=$1 project=$2 tag=$3 portal_port=$4 api_port=$5 n8n_port=$6 build=--build mode=dev option
   shift 6
@@ -164,7 +162,6 @@ up() {
   fi
 }
 
-# down <worktree> <project> [--oidc]
 down() {
   local worktree=$1 project=$2 mode=dev
   [ "${3:-}" = --oidc ] && mode=oidc
@@ -233,7 +230,6 @@ lane() {
   return "${PIPESTATUS[0]}"
 }
 
-# own_stack <lane> <grep> <worktree> <project> <tag> <portal-port> <api-port> <n8n-port> [--reuse]
 own_stack() {
   local lane=$1 grep=$2 worktree=$3 project=$4 status=0
   shift 4
@@ -269,7 +265,6 @@ json_field() {
   node -e 'let raw = ""; process.stdin.on("data", (c) => (raw += c)).on("end", () => console.log(JSON.parse(raw)[process.argv[1]]))' "$1"
 }
 
-# fifty_waiting <worktree> <project> <lane-folder>: one real waiting run, copied to 50 with psql
 fifty_waiting() {
   local worktree=$1 project=$2 out=$3 run
   check "$project" --grep '@lane10-setup' 2>&1 | tee "$out/setup.log"

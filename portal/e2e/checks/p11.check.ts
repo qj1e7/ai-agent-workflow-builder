@@ -7,8 +7,6 @@ import { Backend, setMockGithubMode, type WaitingRun } from '../live/support/sta
 import { devContext, openContext } from '../live/support/ui'
 import { assertClean, watchPage } from '../support/test'
 
-// The checker's P11 lanes. scripts/checks/p11.sh runs them in the browser runner image, inside a stack's Portal
-// container, so the page is at http://localhost:8080 and compose names such as mock-github resolve.
 const EVID = process.env['EVID'] ?? '/tmp/swarm-p11'
 const TARGET = process.env['TARGET'] ?? 'head'
 const SAMPLE = Number(process.env['SAMPLE'] ?? '0')
@@ -44,7 +42,6 @@ function savedBySetup<T>(lane: number, by: string): T {
   return JSON.parse(readFileSync(file, 'utf8')) as T
 }
 
-/** Waits for one-off motion to end, so a shot shows the page at rest. */
 async function settle(page: Page): Promise<void> {
   await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== 'running'), undefined, { timeout: 5_000 }).catch(() => undefined)
 }

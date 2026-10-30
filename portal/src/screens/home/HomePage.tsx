@@ -16,17 +16,16 @@ const HOW_ID = 'how-it-works'
 
 interface HomePageProps {
   readonly heading: string
-  /** Today's date, as a sentence. Home adds what needs the person once it knows. */
-  readonly lead: string
+  readonly today: string
   readonly now: Date
 }
 
-export function HomePage({ heading, lead, now }: HomePageProps) {
+export function HomePage({ heading, today, now }: HomePageProps) {
   const home = useHome()
   if (!home.data) {
     return (
       <div className={styles['home']}>
-        <PageHead heading={heading} lead={lead} />
+        <PageHead heading={heading} lead={today} />
         {home.isError ? (
           <>
             <p>Home could not be loaded.</p>
@@ -40,7 +39,7 @@ export function HomePage({ heading, lead, now }: HomePageProps) {
       </div>
     )
   }
-  return <Loaded heading={heading} lead={lead} now={now} home={home.data} />
+  return <Loaded heading={heading} today={today} now={now} home={home.data} />
 }
 
 function Count({ value }: { value: number }) {
@@ -82,37 +81,34 @@ function AllQuiet({ next }: { next: Next | null }) {
 }
 
 interface Arrival {
+  readonly page: boolean
   readonly arrive: (key: string) => boolean
-  readonly index: (key: string) => number
+  readonly stagger: (key: string) => number
 }
 
-/**
- * Opened from the menu, what the first paint showed arrives in order; anything later fades up on its own. A first load
- * or Back draws the page at once, as the Workflows list does.
- */
-function useArrival(firstKeys: readonly string[]): Arrival & { readonly page: boolean } {
-  const opened = useNavigationType() !== NavigationType.Pop
+function useArrival(firstKeys: readonly string[]): Arrival {
+  const firstLoadOrBack = useNavigationType() === NavigationType.Pop
   const [first] = useState(() => new Map(firstKeys.map((key, index) => [key, index])))
   return {
-    page: opened,
-    arrive: (key) => opened || !first.has(key),
-    index: (key) => first.get(key) ?? 0,
+    page: !firstLoadOrBack,
+    arrive: (key) => !firstLoadOrBack || !first.has(key),
+    stagger: (key) => first.get(key) ?? 0,
   }
 }
 
 function NeedsList({ needs, now, arrival }: { needs: readonly Need[]; now: Date; arrival: Arrival }) {
   const list = useRef<HTMLUListElement>(null)
-  const { list: shown, gone } = usePresence(needs, (need) => need.key)
+  const shown = usePresence(needs, (need) => need.key)
   useGlide(list)
   return (
     <ul ref={list} className={styles['needs']} aria-label="Needs you">
-      {shown.map(({ key, item, leaving }, index) => (
+      {shown.map(({ key, item, leaving, onAnimationEnd }, index) => (
         <NeedItem
           key={key}
           need={item}
           card={index === 0}
           now={now}
-          motion={{ arrive: arrival.arrive(key), index: arrival.index(key) + 1, leaving, onGone: () => gone(key) }}
+          motion={{ glide: key, arrive: arrival.arrive(key), stagger: arrival.stagger(key) + 1, leaving, onAnimationEnd }}
         />
       ))}
     </ul>
@@ -121,14 +117,14 @@ function NeedsList({ needs, now, arrival }: { needs: readonly Need[]; now: Date;
 
 function WaitingList({ items, total, now, arrival }: { items: readonly WaitingItem[]; total: number; now: Date; arrival: Arrival }) {
   const list = useRef<HTMLUListElement>(null)
-  const { list: shown, gone } = usePresence(items, (item) => `waiting:${item.run_id}`)
+  const shown = usePresence(items, (item) => `waiting:${item.run_id}`)
   useGlide(list)
   return (
     <section className={styles['section']} aria-labelledby="waiting-h">
       <h2 id="waiting-h">Waiting on others</h2>
       <ul ref={list} className={styles['rows']}>
-        {shown.map(({ key, item, leaving }) => (
-          <WaitingRow key={key} item={item} now={now} motion={{ arrive: arrival.arrive(key), index: arrival.index(key), leaving, onGone: () => gone(key) }} />
+        {shown.map(({ key, item, leaving, onAnimationEnd }) => (
+          <WaitingRow key={key} item={item} now={now} motion={{ glide: key, arrive: arrival.arrive(key), stagger: arrival.stagger(key), leaving, onAnimationEnd }} />
         ))}
       </ul>
       {total > items.length ? <p className={styles['more']}>And {total - items.length} more.</p> : null}
@@ -156,7 +152,7 @@ function HowItWorks() {
   )
 }
 
-function Loaded({ heading, lead, now, home }: HomePageProps & { home: HomeOut }) {
+function Loaded({ heading, today, now, home }: HomePageProps & { home: HomeOut }) {
   const needs = useMemo(() => needsOf(home), [home])
   const next = comingUpOf(home, now)
   const dayOne = home.workflows === 0
@@ -171,7 +167,7 @@ function Loaded({ heading, lead, now, home }: HomePageProps & { home: HomeOut })
 
   return (
     <div className={styles['home']}>
-      <PageHead heading={heading} lead={`${lead} ${leadLine(needs.total, home.workflows)}`}>
+      <PageHead heading={heading} lead={`${today} ${leadLine(needs.total, home.workflows)}`}>
         {needs.total > 0 && next ? <ComingNext next={next} /> : null}
       </PageHead>
       <section className={cx(styles['section'], arrival.page && styles['arrive'])} aria-labelledby="needs-h">
@@ -187,7 +183,7 @@ function Loaded({ heading, lead, now, home }: HomePageProps & { home: HomeOut })
           <h2 id="drafts-h">Your drafts</h2>
           <ul className={styles['rows']}>
             {home.drafts.map((draft, index) => (
-              <DraftRow key={draft.draft_id} draft={draft} now={now} arrive={arrival.arrive(`draft:${draft.draft_id}`)} index={index} />
+              <DraftRow key={draft.draft_id} draft={draft} now={now} arrive={arrival.arrive(`draft:${draft.draft_id}`)} stagger={index} />
             ))}
           </ul>
         </section>

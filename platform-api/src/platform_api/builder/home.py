@@ -1,7 +1,3 @@
-"""Home: what needs the signed-in person, what they wait on, their drafts and what runs next.
-Each context answers for its own part: orchestration for runs and confirmations, run monitoring
-for the troubleshooter's reason, and the builder for drafts and workflows."""
-
 from collections.abc import Sequence
 from datetime import datetime
 from typing import Protocol
@@ -208,19 +204,15 @@ def _draft(draft: DraftView) -> DraftItem:
 
 
 def _coming_up(use_cases: Sequence[UseCaseView]) -> ComingUp | None:
-    scheduled = sorted(
-        (u for u in use_cases if u.next_run_at is not None),
-        key=lambda u: (u.next_run_at, u.use_case_id),
-    )
+    scheduled = [(u.next_run_at, u) for u in use_cases if u.next_run_at is not None]
     if not scheduled:
         return None
-    first = scheduled[0]
-    assert first.next_run_at is not None
+    at, first = min(scheduled, key=lambda pair: (pair[0], pair[1].use_case_id))
     return ComingUp(
         use_case_id=first.use_case_id,
         name=first.name,
         template=first.template,
-        next_run_at=first.next_run_at,
+        next_run_at=at,
         more=len(scheduled) - 1,
     )
 

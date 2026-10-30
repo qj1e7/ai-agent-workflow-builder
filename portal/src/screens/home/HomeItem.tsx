@@ -7,48 +7,37 @@ import type { DraftItem, WaitingItem } from '../../api/types'
 import { AgentFace } from '../../ui/AgentFace'
 import { Button, ButtonLink } from '../../ui/Button'
 import { cx } from '../../ui/cx'
-import { IconAlert, IconChevronRight, IconShield } from '../../ui/icons'
+import { IconAlert, IconChevronRight, IconShield, type Icon } from '../../ui/icons'
 import { actionsOf, draftWords, retryProblem, waitingWords, wordsOf, type Action, type Need, type Tone } from './home'
 import styles from './Home.module.css'
 
-const TONE_ICON: Record<Tone, typeof IconShield> = { wait: IconShield, tool: IconShield, bad: IconAlert }
+const TONE_ICON: Record<Tone, Icon> = { wait: IconShield, tool: IconShield, bad: IconAlert }
 
 export interface Motion {
+  readonly glide: string
   readonly arrive: boolean
-  /** Its place in the first paint, for the stagger. */
-  readonly index: number
+  readonly stagger: number
   readonly leaving: boolean
-  readonly onGone: () => void
+  readonly onAnimationEnd: ((event: AnimationEvent) => void) | undefined
 }
 
-function motionProps({ arrive, index, leaving, onGone }: Motion) {
+function motionProps({ glide, arrive, stagger, leaving, onAnimationEnd }: Motion) {
   return {
     className: cx(leaving && styles['leaving'], !leaving && arrive && styles['arrive']),
-    style: { '--i': index } as CSSProperties,
+    style: { '--i': stagger } as CSSProperties,
+    'data-glide': glide,
     'aria-hidden': leaving || undefined,
     inert: leaving || undefined,
-    onAnimationEnd: (event: AnimationEvent) => {
-      if (leaving && event.target === event.currentTarget) onGone()
-    },
+    onAnimationEnd,
   }
 }
 
 function RetryButton({ runId, label, primary, describedBy }: { runId: string; label: string; primary: boolean; describedBy: string }) {
-  const retry = useRetry(runId)
-  const latch = useLatch()
   const navigate = useNavigate()
+  const retry = useRetry(runId, () => void navigate(`/runs/${runId}`))
+  const latch = useLatch()
   const words = useErrorWords()
-  /** The retry refreshes Home first, so this item may leave before the answer is in. The promise outlives it. */
-  const press = () =>
-    latch.run((settled) => {
-      retry
-        .mutateAsync()
-        .then(
-          () => navigate(`/runs/${runId}`),
-          () => undefined,
-        )
-        .finally(settled)
-    })
+  const press = () => latch.run((settled) => retry.mutate(undefined, { onSettled: settled }))
   return (
     <>
       <Button variant={primary ? 'primary' : 'secondary'} loading={retry.isPending} onClick={press} aria-describedby={describedBy}>
@@ -74,7 +63,6 @@ function ActionButton({ action, primary, describedBy }: { action: Action; primar
 
 interface NeedProps {
   readonly need: Need
-  /** The first item is the full card with the page's one main button; the rest are rows with their first button. */
   readonly card: boolean
   readonly now: Date
   readonly motion: Motion
@@ -160,10 +148,10 @@ export function WaitingRow({ item, now, motion }: { item: WaitingItem; now: Date
   )
 }
 
-export function DraftRow({ draft, now, arrive, index }: { draft: DraftItem; now: Date; arrive: boolean; index: number }) {
+export function DraftRow({ draft, now, arrive, stagger }: { draft: DraftItem; now: Date; arrive: boolean; stagger: number }) {
   const words = draftWords(draft, now)
   return (
-    <li className={cx(styles['plainRow'], arrive && styles['arrive'])} style={{ '--i': index } as CSSProperties} data-draft={draft.draft_id}>
+    <li className={cx(styles['plainRow'], arrive && styles['arrive'])} style={{ '--i': stagger } as CSSProperties} data-draft={draft.draft_id}>
       <span className={styles['rowName']}>{words.name}</span>
       <span className={styles['rowSub']}>{words.sub}</span>
     </li>

@@ -124,10 +124,10 @@ async def start(lab: Lab, use_case_id: str, by: str = "alice") -> RunId:
 
 
 def execution_of(h: Harness, run_id: RunId) -> N8nExecutionId:
-    """The recording engine numbers executions from 41 in the order it starts legs."""
-    last = max(i for i, (_, leg, rid) in enumerate(h.engine.legs) if rid == run_id)
-    assert h.engine.legs[last][1] is Leg.WORK
-    return N8nExecutionId(str(41 + last))
+    last = max(
+        i for i, (_, leg, rid) in enumerate(h.engine.legs) if rid == run_id and leg is Leg.WORK
+    )
+    return h.engine.executions[last]
 
 
 async def work(lab: Lab, run_id: RunId, *, fail: bool = False, cards: bool = True) -> None:
