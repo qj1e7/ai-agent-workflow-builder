@@ -55,8 +55,8 @@ export class SettingsApi {
     await this.http.dispose()
   }
 
-  async send<T = Json>(user: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown): Promise<Answer<T>> {
-    const response = await this.http.fetch(path, { method, headers: { 'X-Dev-User': user }, ...(body === undefined ? {} : { data: body }) })
+  async send<T = Json>(user: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown, headers: Record<string, string> = {}): Promise<Answer<T>> {
+    const response = await this.http.fetch(path, { method, headers: { 'X-Dev-User': user, ...headers }, ...(body === undefined ? {} : { data: body }) })
     const text = await response.text()
     return { status: response.status(), body: (text ? JSON.parse(text) : null) as T }
   }

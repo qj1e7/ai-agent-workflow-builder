@@ -27,6 +27,8 @@ const PERF_PEOPLE = 30
 const ONLY_OPERATORS = 'Only Operators change settings.'
 const NOT_SIGNED_IN = 'Hasn’t signed in yet'
 const TWO_APPROVERS = 'At least 2 people must be Approvers, so nobody has to approve their own work.'
+const SUMMARY_TASK = 'Every Friday summarise the tickets we finished in MOCK.'
+const WIDE_PENDING = 'wide-pending@example.test'
 
 function laneDir(lane: number | string): string {
   const dir = path.join(EVID, typeof lane === 'number' ? `lane-${lane}` : lane)
@@ -54,6 +56,23 @@ async function withApi<T>(act: (api: SettingsApi) => Promise<T>): Promise<T> {
   } finally {
     await api.dispose()
   }
+}
+
+async function runsNow(api: SettingsApi, lane: string) {
+  const plan = await api.send<{ decision?: string }>('alice', 'POST', '/api/v1/builder/plan', { task: SUMMARY_TASK })
+  const made = await api.send<{ use_case_id?: string }>('alice', 'POST', '/api/v1/agent-use-cases', {
+    name: `${lane} model check`,
+    instruction: 'Run the agent.',
+    agents: [{ card_id: 'crd_version_checker', values: { 'GitHub repository': 'acme/planted', 'Jira project': 'MOCK' } }],
+  })
+  expect(made.status, `alice sets up an agent workflow: ${JSON.stringify(made.body)}`).toBe(201)
+  const run = await api.send('alice', 'POST', `/api/v1/use-cases/${made.body.use_case_id ?? ''}/runs`, undefined, { 'Idempotency-Key': `${lane}-${Date.now()}` })
+  return { plan, made, run }
+}
+
+async function onlyAliceAndBobApprove(api: SettingsApi): Promise<void> {
+  const approvers = (await api.people()).filter((p) => p.approver).map((p) => p.id)
+  expect(approvers.sort(), 'this lane needs a stack where only alice and bob are Approvers').toEqual(['alice', 'bob'])
 }
 
 async function as(browser: Browser, user: string, phone = false) {
@@ -86,31 +105,52 @@ test('@lane1 alice connects the mock model, tests and saves it, and only the key
     await page.getByRole('button', { name: 'Connect', exact: true }).click()
     const models = page.getByLabel('Model', { exact: true })
     await expect(models).toBeVisible({ timeout: 30_000 })
-    const offered = await models.locator('option').allInnerTexts()
+    const offered = await models.locator('option').evaluateAll((options) => options.map((option) => ({ value: (option as HTMLOptionElement).value, text: (option.textContent ?? '').trim() })))
+    await shotTo(page, 1, 'p10-model-list.png')
     await models.selectOption(MOCK_MODEL)
     await page.getByRole('button', { name: 'Test and save' }).click()
     await expect(page.getByRole('button', { name: 'Connect', exact: true })).toBeVisible({ timeout: 30_000 })
-    const waited = await page.locator('#model-waiting').isVisible()
-    if (waited) await api.confirmAddress('bob')
+    const waiting = page.locator('#model-waiting')
+    const waited = await waiting.isVisible()
+    let own: { confirmButtons: number; modelTab: string; aliceDecides: number } | null = null
+    if (waited) {
+      const { pending } = await api.model('alice')
+      own = {
+        confirmButtons: await waiting.getByRole('button', { name: 'Confirm address' }).count(),
+        modelTab: await settingsTab(page, 'AI model').innerText(),
+        aliceDecides: (await api.send('alice', 'POST', '/api/v1/settings/model/address-decision', { verdict: 'confirm', digest: pending?.digest })).status,
+      }
+      await shotTo(page, 1, 'p10-own-address.png')
+      await api.confirmAddress('bob')
+    }
     await page.reload()
     await expect(page.locator('#model-now')).toContainText(`API key ending ${key.slice(-2)}`)
     await expect(page.locator('#model-now')).toContainText(MOCK_MODEL)
     await shotTo(page, 1, 'p10-model.png')
     const everything = await everythingOnThePage(page)
+    const text = await page.getByRole('main').innerText()
     const model = await api.model('alice')
-    save(1, 'p10-model.json', { offered, waitedForAnApprover: waited, active: model.active, keyEnding: key.slice(-2) })
-    expect(offered.some((option) => option.includes(MOCK_MODEL)), `the model list offers ${MOCK_MODEL}: ${offered.join(', ')}`).toBe(true)
+    save(1, 'p10-model.json', { offered, waitedForAnApprover: waited, own, active: model.active, keyEnding: key.slice(-2) })
+    expect(offered.map((option) => option.value), `the model list offers ${MOCK_MODEL}`).toContain(MOCK_MODEL)
     expect(model.active?.base_url).toBe(MOCK_MODEL_URL)
+    expect(model.active?.model).toBe(MOCK_MODEL)
     expect(model.active?.key_hint).toBe(key.slice(-2))
     expect(everything.includes(key.slice(0, -2)), 'more of the key than its last two characters is on the page').toBe(false)
+    expect(text.includes(key.slice(-3)), 'more than the last two characters is in the page text').toBe(false)
+    if (own) {
+      expect(own.confirmButtons, 'alice entered the address, so she gets no Confirm address').toBe(0)
+      expect(own.modelTab, 'the AI model tab does not say it needs alice while her own address waits').not.toContain('needs you')
+      expect(own.aliceDecides, 'the platform refuses alice confirming her own address').toBe(403)
+    }
     assertClean(watch)
     await context.close()
   })
 })
 
-test('@lane2 carol enters an address that is not on the known list, and it waits for an Approver', async ({ browser }) => {
+test('@lane2 carol enters an address that is not on the known list, it waits for an Approver, and runs keep the old model', async ({ browser }) => {
   await withApi(async (api) => {
     const before = await api.model('alice')
+    expect(before.active, 'lane 2 needs a fresh stack, where no model was ever connected').toBeNull()
     const { context, page, watch } = await as(browser, 'carol')
     await openSettings(page)
     await connectAndSave(page, { key: freshKey('lane2') })
@@ -119,18 +159,23 @@ test('@lane2 carol enters an address that is not on the known list, and it waits
     await expect(waiting).toContainText('A new address is waiting for an Approver')
     await expect(waiting).toContainText('Entered by Carol')
     await expect(waiting.getByRole('button', { name: 'Confirm address' })).toHaveCount(0)
+    await expect(settingsTab(page, 'AI model'), 'carol entered it and cannot confirm it, so the tab does not say it needs her').not.toContainText('needs you')
     await shotTo(page, 2, 'p10-pending-address.png')
     const after = await api.model('alice')
-    save(2, 'p10-pending-address.json', { before: before.active, after: after.active, pending: after.pending })
+    const runs = await runsNow(api, 'lane2')
+    save(2, 'p10-pending-address.json', { before: before.active, after: after.active, pending: after.pending, runs })
     expect(after.pending?.by).toBe('carol')
     expect(after.pending?.base_url).toBe(MOCK_MODEL_URL)
     expect(after.active, 'runs keep the old model').toEqual(before.active)
+    expect(runs.plan.status, `the Planner still has no model: ${JSON.stringify(runs.plan.body)}`).toBe(409)
+    expect(runs.run.status, `an agent run still has no model: ${JSON.stringify(runs.run.body)}`).toBe(409)
+    expect(JSON.stringify(runs.run.body)).toContain('Connect an AI model in Settings to run agents.')
     assertClean(watch)
     await context.close()
   })
 })
 
-test('@lane3 bob confirms carol’s address, the new model is in use, and the history names both', async ({ browser }) => {
+test('@lane3 bob confirms carol’s address, the Planner and agent runs use the new model, and the history names both', async ({ browser }) => {
   await withApi(async (api) => {
     expect((await api.model('bob')).pending?.by, 'run lane 2 on this stack first').toBe('carol')
     const { context, page, watch } = await as(browser, 'bob')
@@ -144,10 +189,14 @@ test('@lane3 bob confirms carol’s address, the new model is in use, and the hi
     await shotTo(page, 3, 'p10-address-confirmed.png')
     const model = await api.model('alice')
     const history = await api.history('alice')
-    save(3, 'p10-address-confirmed.json', { active: model.active, pending: model.pending, history: history.filter((line) => line.area === 'model') })
+    const runs = await runsNow(api, 'lane3')
+    save(3, 'p10-address-confirmed.json', { active: model.active, pending: model.pending, history: history.filter((line) => line.area === 'model'), runs })
     expect(model.active?.base_url).toBe(MOCK_MODEL_URL)
     expect(model.pending).toBeNull()
     expect(history.some((line) => line.area === 'model' && line.by === 'carol' && line.confirmed_by === 'bob')).toBe(true)
+    expect(runs.plan.status, `the Planner answers with the confirmed model: ${JSON.stringify(runs.plan.body)}`).toBe(200)
+    expect(runs.plan.body.decision, 'the Planner made a decision').toBeTruthy()
+    expect(runs.run.status, `an agent run starts with the confirmed model: ${JSON.stringify(runs.run.body)}`).toBe(201)
     assertClean(watch)
     await context.close()
   })
@@ -242,8 +291,7 @@ test('@lane6 alice unticks erin’s Operator role, presses Undo, and erin is an 
 
 test('@lane7 unticking bob’s Approver role while only alice and bob are Approvers explains the rule and changes nothing', async ({ browser }) => {
   await withApi(async (api) => {
-    const approvers = (await api.people()).filter((p) => p.approver).map((p) => p.id)
-    expect(approvers.sort(), 'this lane needs a stack where only alice and bob are Approvers').toEqual(['alice', 'bob'])
+    await onlyAliceAndBobApprove(api)
     const historyBefore = await api.history()
     const { context, page, watch } = await as(browser, 'alice')
     const refusals: number[] = []
@@ -282,58 +330,111 @@ async function readOnlyState(page: Page) {
   })
 }
 
+async function expectReadOnly(page: Page, tab: 'model' | 'people') {
+  await openSettings(page, tab)
+  await expect(page.getByRole('main')).toContainText(ONLY_OPERATORS)
+  const state = await readOnlyState(page)
+  expect(state.forms, `${tab}: no form for bob`).toBe(0)
+  expect(state.fields.filter((f) => !f.disabled), `${tab}: fields bob could change`).toEqual([])
+  const decisions = state.buttons.filter((name) => !/^(AI model|People and roles)/.test(name))
+  expect(decisions.every((name) => /^(Confirm|Not now)/.test(name)), `${tab}: buttons other than the tabs and a decision: ${decisions.join(', ')}`).toBe(true)
+  return { ...state, decisions }
+}
+
 test('@lane8 bob sees every control read-only, and the page says only Operators change settings', async ({ browser }) => {
   const { context, page, watch } = await as(browser, 'bob')
   const states: Record<string, unknown> = {}
   for (const tab of ['model', 'people'] as const) {
-    await openSettings(page, tab)
-    await expect(page.getByRole('main')).toContainText(ONLY_OPERATORS)
-    const state = await readOnlyState(page)
-    states[tab] = state
+    states[tab] = await expectReadOnly(page, tab)
     await shotTo(page, 8, tab === 'people' ? 'p10-read-only.png' : 'p10-read-only-model.png')
-    expect(state.forms, `${tab}: no form for bob`).toBe(0)
-    expect(state.fields.filter((f) => !f.disabled), `${tab}: fields bob could change`).toEqual([])
-    const decisions = state.buttons.filter((name) => !/^(AI model|People and roles)/.test(name))
-    expect(decisions.every((name) => /^(Confirm|Not now)/.test(name)), `${tab}: buttons other than the tabs and a decision: ${decisions.join(', ')}`).toBe(true)
   }
+  // With a request waiting, bob gets Confirm and Not now on it, and still nothing else he could change.
+  await withApi(async (api) => {
+    await api.ensurePerson(WIDE_PENDING, 'Wide Pending', { operator: true, approver: true })
+    expect((await api.confirmations('bob')).filter((c) => c.kind === 'approver' && c.you_can_decide).length, 'a request waits for bob').toBeGreaterThan(0)
+  })
+  const waiting = await expectReadOnly(page, 'people')
+  states['people-with-a-request-waiting'] = waiting
+  await shotTo(page, 8, 'p10-read-only-waiting.png')
   save(8, 'p10-read-only.json', states)
+  expect(waiting.decisions.some((name) => name.startsWith('Confirm')), 'bob can confirm the waiting request').toBe(true)
+  expect(waiting.decisions.some((name) => name.startsWith('Not now')), 'bob can say not now to the waiting request').toBe(true)
   assertClean(watch)
   await context.close()
 })
 
-test('@lane9 axe finds no WCAG 2.2 AA problems on either tab at 1440 and 390 px', async ({ browser }) => {
-  const runs: Record<string, unknown>[] = []
-  // A long waiting line is the widest thing on the People tab, so the 390 px run needs one.
-  await withApi((api) => api.ensurePerson('wide-pending@example.test', 'Wide Pending', { operator: true, approver: true }))
+interface AxeRun {
+  readonly user: string
+  readonly view: string
+  readonly width: number
+  readonly sidewaysScroll: boolean
+  readonly violations: { id: string; impact: string | null | undefined; help: string; nodes: { target: unknown; summary: string | undefined }[] }[]
+  readonly passes: number
+}
+
+async function axeRun(page: Page, user: string, view: string, phone: boolean): Promise<AxeRun> {
+  await page.waitForTimeout(400)
+  const result = await new AxeBuilder({ page }).withTags(WCAG_22_AA).analyze()
+  const width = phone ? 390 : 1440
+  const scroll = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }))
+  await shotTo(page, 9, `p10-axe-${user}-${view}-${width}.png`)
+  return {
+    user,
+    view,
+    width,
+    sidewaysScroll: scroll.scroll > scroll.client,
+    violations: result.violations.map((v) => ({ id: v.id, impact: v.impact, help: v.help, nodes: v.nodes.map((n) => ({ target: n.target, summary: n.failureSummary })) })),
+    passes: result.passes.length,
+  }
+}
+
+test('@lane9 axe finds no WCAG 2.2 AA problems on either tab, the model list, the field errors or a refusal, at 1440 and 390 px', async ({ browser }) => {
+  const runs: AxeRun[] = []
+  await withApi(async (api) => {
+    // A long waiting line is the widest thing on the People tab, so the 390 px run needs one.
+    await api.ensurePerson(WIDE_PENDING, 'Wide Pending', { operator: true, approver: true })
+    await onlyAliceAndBobApprove(api)
+  })
   for (const user of ['alice', 'bob']) {
     for (const phone of [false, true]) {
       const { context, page } = await as(browser, user, phone)
       for (const tab of ['model', 'people'] as const) {
         await openSettings(page, tab)
-        await page.waitForTimeout(400)
-        const result = await new AxeBuilder({ page }).withTags(WCAG_22_AA).analyze()
-        const width = phone ? 390 : 1440
-        const scroll = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }))
-        runs.push({
-          user,
-          tab,
-          width,
-          sidewaysScroll: scroll.scroll > scroll.client,
-          violations: result.violations.map((v) => ({ id: v.id, impact: v.impact, help: v.help, nodes: v.nodes.map((n) => ({ target: n.target, summary: n.failureSummary })) })),
-          passes: result.passes.length,
-        })
-        await shotTo(page, 9, `p10-axe-${user}-${tab}-${width}.png`)
+        runs.push(await axeRun(page, user, tab, phone))
       }
       await context.close()
     }
   }
+  for (const phone of [false, true]) {
+    const { context, page } = await as(browser, 'alice', phone)
+    await openSettings(page)
+    await page.getByLabel('Provider').selectOption('other')
+    await page.getByLabel('Address', { exact: true }).fill('')
+    await page.getByRole('button', { name: 'Connect', exact: true }).click()
+    await expect(page.locator('#model-address-error')).toBeVisible()
+    runs.push(await axeRun(page, 'alice', 'model-field-errors', phone))
+    await page.getByLabel('Address', { exact: true }).fill(MOCK_MODEL_URL)
+    await page.getByLabel('API key').fill(freshKey('lane9'))
+    await page.getByRole('button', { name: 'Connect', exact: true }).click()
+    await expect(page.getByLabel('Model', { exact: true })).toBeVisible({ timeout: 30_000 })
+    runs.push(await axeRun(page, 'alice', 'model-list', phone))
+    await page.getByRole('button', { name: 'Cancel' }).click()
+    await openSettings(page, 'people')
+    await page.getByRole('button', { name: 'Add', exact: true }).click()
+    await expect(page.locator('#add-email-error')).toBeVisible()
+    runs.push(await axeRun(page, 'alice', 'add-person-errors', phone))
+    await roleBox(page, 'Approver', 'Bob').click()
+    await expect(personRow(page, 'bob@example.test')).toContainText(TWO_APPROVERS)
+    runs.push(await axeRun(page, 'alice', 'two-approver-refusal', phone))
+    await context.close()
+  }
   save(9, 'p10-axe.json', { tags: WCAG_22_AA, runs })
-  const problems = runs.flatMap((r) => (r['violations'] as { id: string }[]).map((v) => `${String(r['user'])} ${String(r['tab'])} @${String(r['width'])}: ${v.id}`))
-  expect(problems).toEqual([])
-  expect(runs.filter((r) => r['sidewaysScroll']).map((r) => `${String(r['user'])} ${String(r['tab'])} @${String(r['width'])}`), 'pages that scroll sideways').toEqual([])
+  const where = (r: AxeRun) => `${r.user} ${r.view} @${r.width}`
+  expect(runs.flatMap((r) => r.violations.map((v) => `${where(r)}: ${v.id}`))).toEqual([])
+  expect(runs.filter((r) => r.sidewaysScroll).map(where), 'pages that scroll sideways').toEqual([])
 })
 
-test('@lane10 after a key is saved, the full key is in no page source and no API response', async ({ browser }) => {
+test('@lane10 after a key is saved, the full key is in no page source, no API response and no browser storage', async ({ browser }) => {
   await withApi(async (api) => {
     const key = freshKey('lane10')
     const secretPart = key.slice(0, -2)
@@ -344,10 +445,19 @@ test('@lane10 after a key is saved, the full key is in no page source and no API
       const body = await response.text().catch(() => '')
       responses.push({ method: response.request().method(), url: new URL(response.url()).pathname, status: response.status(), holdsKey: body.includes(secretPart) })
     })
+    // p10.sh lane 10 reads this file to search the compose logs and a database dump for the key, then deletes it.
+    save(10, 'key-under-test.txt', `${key}\n`)
     await openSettings(page)
     await connectAndSave(page, { key })
     if (await page.locator('#model-waiting').isVisible()) await api.confirmAddress('bob')
     const afterSave = await everythingOnThePage(page)
+    const keyField = await page.locator('#model-key').inputValue()
+    const stores = await page.evaluate(async () => {
+      const dump = (store: Storage) => Object.fromEntries(Object.keys(store).map((name) => [name, store.getItem(name)]))
+      const databases = await indexedDB.databases()
+      return { local: dump(localStorage), session: dump(sessionStorage), cookie: document.cookie, indexedDb: databases.map((db) => db.name ?? '') }
+    })
+    const storesHoldKey = JSON.stringify(stores).includes(secretPart)
     await page.reload()
     await expect(page.locator('#model-now')).toContainText(`API key ending ${key.slice(-2)}`)
     await page.getByText(/^Change history/).click()
@@ -366,18 +476,22 @@ test('@lane10 after a key is saved, the full key is in no page source and no API
       ...(afterSave.includes(secretPart) ? ['page after saving'] : []),
       ...(afterReload.includes(secretPart) ? ['page after reload, history open'] : []),
       ...(peopleTab.includes(secretPart) ? ['People and roles tab'] : []),
+      ...(storesHoldKey ? ['browser storage'] : []),
+      ...(keyField ? ['the key field after saving'] : []),
       ...Object.entries(direct)
         .filter(([, holds]) => holds)
         .map(([where]) => where),
     ]
     const report = [
-      `# Lane 10: the full key in the page and the API (target ${TARGET})`,
+      `# Lane 10: the full key in the page, the API and browser storage (target ${TARGET})`,
       `key saved: ${key.length} characters, ending ${key.slice(-2)}; searched for its first ${secretPart.length}`,
       `browser API responses read: ${responses.length}`,
       ...responses.map((r) => `  ${r.method} ${r.url} ${r.status}: ${r.holdsKey ? 'HOLDS THE KEY' : 'clean'}`),
       `page after saving: ${afterSave.includes(secretPart) ? 'HOLDS THE KEY' : 'clean'} (${afterSave.length} characters, field values included)`,
       `page after reload with the history open: ${afterReload.includes(secretPart) ? 'HOLDS THE KEY' : 'clean'}`,
       `People and roles tab: ${peopleTab.includes(secretPart) ? 'HOLDS THE KEY' : 'clean'}`,
+      `browser storage (local, session, cookies; IndexedDB ${stores.indexedDb.length === 0 ? 'has no databases' : `names ${stores.indexedDb.join(', ')}`}): ${storesHoldKey ? 'HOLDS THE KEY' : 'clean'}`,
+      `key field after saving: ${keyField ? 'NOT EMPTY' : 'empty'}`,
       'direct GETs:',
       ...Object.entries(direct).map(([where, holds]) => `  ${where}: ${holds ? 'HOLDS THE KEY' : 'clean'}`),
       `verdict: ${found.length === 0 ? 'PASS, the full key appears nowhere' : `FAIL, found in ${found.join(', ')}`}`,
@@ -402,9 +516,16 @@ test('@seed adds the perf probe’s people once', async () => {
   })
 })
 
-test('@perf largest contentful paint of People and roles', async ({ browser }) => {
+test('@perf largest contentful paint of People and roles, and when every row is drawn', async ({ browser }) => {
   const { context, page } = await as(browser, 'alice')
-  await page.goto('/settings?tab=people', { waitUntil: 'load' })
+  await page.goto('/settings?tab=people', { waitUntil: 'commit' })
+  const drawn = await page.waitForFunction(
+    (least) => (document.querySelectorAll('ul[aria-label="People on the list"] > li').length >= least ? performance.now() : false),
+    PERF_PEOPLE,
+    { polling: 'raf', timeout: 15_000 },
+  )
+  const rowsDrawn = Number(await drawn.jsonValue())
+  await page.waitForLoadState('load')
   const list = page.getByRole('list', { name: 'People on the list' }).getByRole('listitem')
   await expect(list).not.toHaveCount(0)
   const rows = await list.count()
@@ -427,7 +548,7 @@ test('@perf largest contentful paint of People and roles', async ({ browser }) =
   )
   const last = measured.entries.at(-1)
   expect(last, 'the browser reported a largest contentful paint').toBeDefined()
-  save('perf', `lcp-${TARGET}-${SAMPLE}.json`, { target: TARGET, sample: SAMPLE, rows, lcp: last?.startTime ?? -1, element: last?.element ?? '', entries: measured.entries })
+  save('perf', `lcp-${TARGET}-${SAMPLE}.json`, { target: TARGET, sample: SAMPLE, rows, lcp: last?.startTime ?? -1, rowsDrawn, element: last?.element ?? '', entries: measured.entries })
   expect(rows, 'the seeded people are on the list').toBeGreaterThanOrEqual(PERF_PEOPLE)
   await context.close()
 })

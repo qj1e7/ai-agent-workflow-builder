@@ -5,22 +5,26 @@
 #
 #   disk                                   free space on the Docker disk; fails under 1.5 GB
 #   gates <worktree>                       typecheck, lint, unit tests, nginx render, build
-#   up <worktree> <project> <tag> <portal-port> <api-port> <n8n-port>
+#   up [--no-build] <worktree> <project> <tag> <portal-port> <api-port> <n8n-port>
+#                                          --no-build starts the images already built with that tag
 #   down <worktree> <project>
 #   check <project> [playwright arguments] run portal/e2e/checks/p10.check.ts in the runner image, in that project's Portal network
 #   live <project> [playwright arguments]  run the builder's live specs (portal/e2e/live) the same way
 #   lane1 <head-project> [trunk-project]   alice connects the mock model at head; trunk has no Settings tabs
-#   lane <n> <project>                     lanes 7, 8, 9 and 10, one at a time on the shared stack, after lane 1
-#   own <lanes> <worktree> <project> <tag> <portal-port> <api-port> <n8n-port>
+#   lane <n> <project>                     lanes 7, 8, 9 and 10, one at a time on the shared stack, after lane 1; lane 10
+#                                          then searches the stack's container logs and a database dump for the key
+#   own [--no-build] <lanes> <worktree> <project> <tag> <portal-port> <api-port> <n8n-port>
 #                                          lanes that change the People list or need a model address never confirmed:
 #                                          "2,3" (in that order), "4", "5" or "6", each on a fresh stack this brings up and down
 #   size <trunk-worktree> <head-worktree>  gzip bytes of the JavaScript that dist/index.html loads
 #   perf <project> [samples]               seeds 30 people once, then the largest contentful paint of People and roles
+#                                          and the time until every row is drawn
 #   video <project>                        the review video, as $EVID/p10-review.webm and, with ffmpeg, .mp4
 #
-# The shared stack runs lane1, then lanes 7, 8, 9 and 10, then perf. Lane 7 needs alice and bob as the only Approvers,
-# so nothing that adds an Approver runs on that stack before it. The video adds and confirms an Approver, so give it its
-# own stack, or run it last.
+# The shared stack runs lane1, then lanes 7, 8, 9 and 10, then perf. Lanes 7 and 9 need alice and bob as the only
+# Approvers, so nothing that adds an Approver runs on that stack before them. Lanes 8 and 9 leave a request waiting to
+# make Wide Pending an Approver, which no lane confirms. The video adds and confirms an Approver, so give it its own
+# stack, or run it last.
 #
 # Environment:
 #   EVID              evidence folder (default /tmp/swarm-p10)
@@ -69,12 +73,17 @@ gates() {
 }
 
 up() {
+  local build=--build
+  if [ "${1:-}" = --no-build ]; then
+    build=
+    shift
+  fi
   local worktree=$1 project=$2 tag=$3 portal_port=$4 api_port=$5 n8n_port=$6
   disk
   [ -f "$ENV_FILE" ] || die "no $ENV_FILE; copy deploy/make-env.sh next to it and run it"
   mkdir -p "$EVID/stacks"
   WAB_IMAGE_TAG=$tag PORTAL_HOST_PORT=$portal_port PLATFORM_API_HOST_PORT=$api_port N8N_HOST_PORT=$n8n_port \
-    compose "$worktree" "$project" up --build --wait --wait-timeout 400 >"$EVID/stacks/$project-up.log" 2>&1 ||
+    compose "$worktree" "$project" up ${build:+"$build"} --wait --wait-timeout 400 >"$EVID/stacks/$project-up.log" 2>&1 ||
     { tail -n 30 "$EVID/stacks/$project-up.log" >&2; die "$project did not become healthy"; }
   curl -sS -o "$EVID/stacks/$project-ready.json" -w "GET /healthz/ready %{http_code}\n" "http://localhost:$api_port/healthz/ready" | tee "$EVID/stacks/$project-ready.txt"
 }
@@ -144,16 +153,50 @@ lane() {
   esac
   mkdir -p "$EVID/lane-$n"
   check "$project" --grep "@lane$n " 2>&1 | tee "$EVID/lane-$n/playwright.log"
-  return "${PIPESTATUS[0]}"
+  if [ "$n" = 10 ]; then key_search "$project"; fi
+}
+
+# The check wrote the key it saved; look for it in every container's log and in a dump of every database.
+key_search() {
+  local project=$1 out="$EVID/lane-10" key secret postgres logs dump in_logs in_db container
+  key=$(cat "$out/key-under-test.txt" 2>/dev/null) || die "no $out/key-under-test.txt; run lane 10's check first"
+  secret=${key%??}
+  postgres=$(docker ps -q --filter "label=com.docker.compose.project=$project" --filter "label=com.docker.compose.service=postgres" | head -n 1)
+  [ -n "$postgres" ] || die "no running postgres in project $project"
+  logs="$out/compose-logs.txt"
+  dump="$out/.dump.sql"
+  : >"$logs"
+  for container in $(docker ps -aq --filter "label=com.docker.compose.project=$project"); do
+    docker logs "$container" >>"$logs" 2>&1
+  done
+  docker exec "$postgres" pg_dumpall -U postgres >"$dump"
+  in_logs=$(grep -cF -- "$secret" "$logs" || true)
+  in_db=$(grep -cF -- "$secret" "$dump" || true)
+  {
+    echo "key under test: ${#key} characters, ending ${key: -2}; searched for its first ${#secret}"
+    echo "container logs of $project: $(wc -l <"$logs" | tr -d ' ') lines; lines with the key: $in_logs"
+    echo "pg_dumpall of $project: $(wc -c <"$dump" | tr -d ' ') bytes; lines with the key: $in_db (the dump is deleted after the search)"
+  } | tee "$out/p10-no-key-host.txt"
+  rm -f "$dump" "$out/key-under-test.txt"
+  if [ "$in_logs" -ne 0 ] || [ "$in_db" -ne 0 ]; then
+    echo "FAIL: the full key is in a log or the database" | tee -a "$out/p10-no-key-host.txt"
+    return 1
+  fi
+  echo "PASS: the full key is in no log and no table" | tee -a "$out/p10-no-key-host.txt"
 }
 
 own() {
+  local build=
+  if [ "${1:-}" = --no-build ]; then
+    build=--no-build
+    shift
+  fi
   local lanes=$1 worktree=$2 project=$3 tag=$4 portal_port=$5 api_port=$6 n8n_port=$7 status=0 n
   case "$lanes" in
     2,3 | 4 | 5 | 6) ;;
     *) die "own runs \"2,3\", \"4\", \"5\" or \"6\", not $lanes" ;;
   esac
-  up "$worktree" "$project" "$tag" "$portal_port" "$api_port" "$n8n_port"
+  up ${build:+"$build"} "$worktree" "$project" "$tag" "$portal_port" "$api_port" "$n8n_port"
   for n in ${lanes//,/ }; do
     mkdir -p "$EVID/lane-$n"
     check "$project" --grep "@lane$n " 2>&1 | tee "$EVID/lane-$n/playwright.log" || status=$?
@@ -201,12 +244,16 @@ perf() {
   node -e '
     const fs = require("fs"), dir = process.argv[1]
     const rows = fs.readdirSync(dir).filter((f) => /^lcp-head-.*\.json$/.test(f)).map((f) => JSON.parse(fs.readFileSync(`${dir}/${f}`, "utf8"))).sort((a, b) => a.sample - b.sample)
-    const sorted = rows.map((r) => r.lcp).sort((a, b) => a - b)
-    const median = sorted[Math.floor(sorted.length / 2)]
-    const lines = [`head: ${rows.map((r) => `#${r.sample} ${r.lcp.toFixed(0)} ms, ${r.rows} people (${r.element})`).join(", ")}`, `head median: ${median.toFixed(0)} ms`, `rule: under 2500 ms: ${median < 2500 ? "PASS" : "FAIL"}`]
+    const median = (key) => rows.map((r) => r[key]).sort((a, b) => a - b)[Math.floor(rows.length / 2)]
+    const lcp = median("lcp"), drawn = median("rowsDrawn"), pass = lcp < 2500 && drawn < 2500
+    const lines = [
+      `head: ${rows.map((r) => `#${r.sample} paint ${r.lcp.toFixed(0)} ms, every row drawn ${r.rowsDrawn.toFixed(0)} ms, ${r.rows} people (${r.element})`).join(", ")}`,
+      `head median: paint ${lcp.toFixed(0)} ms, every row drawn ${drawn.toFixed(0)} ms`,
+      `rule: both under 2500 ms: ${pass ? "PASS" : "FAIL"}`,
+    ]
     fs.writeFileSync(`${dir}/lcp-summary.txt`, lines.join("\n") + "\n")
     console.log(lines.join("\n"))
-    process.exit(median < 2500 ? 0 : 1)
+    process.exit(pass ? 0 : 1)
   ' "$EVID/perf"
 }
 
