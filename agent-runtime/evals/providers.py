@@ -20,6 +20,7 @@ class Provider:
     models_env: str
     default_models: tuple[str, ...]
     settings: Settings
+    client: str | None = None
 
 
 @dataclass(frozen=True)
@@ -27,6 +28,7 @@ class Target:
     provider: str
     model: str
     kwargs: dict[str, Any]
+    client: str | None = None
 
     @property
     def label(self) -> str:
@@ -34,7 +36,7 @@ class Target:
 
     def build(self, **overrides: Any) -> BaseChatModel:
         settings = self.kwargs | overrides
-        return init_chat_model(self.model, model_provider=self.provider, **settings)
+        return init_chat_model(self.model, model_provider=self.client or self.provider, **settings)
 
 
 @dataclass(frozen=True)
@@ -73,6 +75,14 @@ def _cloud(env: Env, model: str) -> dict[str, object]:
     return {"timeout": CLOUD_TIMEOUT_SECONDS, "max_retries": 2, **_temperature(env, None)}
 
 
+def _gateway(env: Env, model: str) -> dict[str, object]:
+    return {
+        "base_url": env["AGENT_MODEL_BASE_URL"],
+        "api_key": env["AGENT_MODEL_API_KEY"],
+        **_cloud(env, model),
+    }
+
+
 PROVIDERS = (
     Provider(
         "ollama",
@@ -101,6 +111,14 @@ PROVIDERS = (
         models_env="GOOGLE_MODELS",
         default_models=(),
         settings=_cloud,
+    ),
+    Provider(
+        "gateway",
+        needs=("AGENT_MODEL_BASE_URL", "AGENT_MODEL_API_KEY"),
+        models_env="GATEWAY_MODELS",
+        default_models=("azure_ai/claude-haiku-5-5",),
+        settings=_gateway,
+        client="anthropic",
     ),
 )
 
@@ -146,5 +164,7 @@ def _plan_provider(provider: Provider, env: Env) -> tuple[list[Target], list[Not
         elif installed is not None and model not in installed:
             not_run.append(NotRun(provider.name, model, "model not installed, not pulled"))
         else:
-            targets.append(Target(provider.name, model, provider.settings(env, model)))
+            targets.append(
+                Target(provider.name, model, provider.settings(env, model), provider.client)
+            )
     return targets, not_run

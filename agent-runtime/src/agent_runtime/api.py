@@ -37,6 +37,8 @@ from agent_runtime.contract import (
     TaskRequest,
     TaskResult,
     ToolList,
+    UnderstandRequest,
+    UnderstandResult,
 )
 from agent_runtime.drafting import choose_agents, draft_card
 from agent_runtime.events import Clock, EventLog, EventSink
@@ -45,7 +47,7 @@ from agent_runtime.guarded import GuardedModels
 from agent_runtime.jira import JiraReaderFor, PracticeJiraFor, no_jira
 from agent_runtime.model_access import ModelProbe, chat_for, summarizer_for
 from agent_runtime.origins import Origin, origin_of, parse_origin_list
-from agent_runtime.planner import FixedPlanner, Planner, run_cards, run_task
+from agent_runtime.planner import FixedPlanner, Planner, run_cards, run_task, understand_task
 from agent_runtime.summary import (
     ChatFor,
     ModelSummarizer,
@@ -375,6 +377,11 @@ def create_app(
     def choose(body: ChooseRequest) -> ChooseResult:
         chat = active.chat_source(body.model)
         return choose_agents(body, chat) if chat else NO_MODEL
+
+    @app.post("/v1/planner/understand", dependencies=[Depends(require_key)])
+    def understand(body: UnderstandRequest) -> UnderstandResult:
+        chat = active.chat_source(body.model)
+        return understand_task(body, chat) if chat else NO_MODEL
 
     @app.post("/v1/models/connect", dependencies=[Depends(require_key)])
     def connect_model(body: ConnectRequest) -> ConnectResult:

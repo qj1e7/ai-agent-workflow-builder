@@ -4130,6 +4130,24 @@
         "title": "RoomAddressee",
         "type": "object"
       },
+      "RowKind": {
+        "enum": [
+          "schedule",
+          "look_for",
+          "do",
+          "where"
+        ],
+        "type": "string"
+      },
+      "RowState": {
+        "enum": [
+          "understood",
+          "changed",
+          "missing",
+          "cant_do"
+        ],
+        "type": "string"
+      },
       "RunCreated": {
         "additionalProperties": false,
         "properties": {
@@ -4857,6 +4875,81 @@
         "title": "SourceView",
         "type": "object"
       },
+      "StarterView": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "opens": {
+            "anyOf": [
+              {
+                "const": "software_watchlist",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The page this starter opens instead of a task.",
+            "title": "Opens"
+          },
+          "task": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The task to start New workflow with. Null when the starter opens a page.",
+            "title": "Task"
+          },
+          "what": {
+            "title": "What",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "what",
+          "task",
+          "opens"
+        ],
+        "title": "StarterView",
+        "type": "object"
+      },
+      "Starters": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "const": "starters",
+            "default": "starters",
+            "title": "Answer",
+            "type": "string"
+          },
+          "message": {
+            "description": "Why the Planner could not read the task, in plain words.",
+            "title": "Message",
+            "type": "string"
+          },
+          "starters": {
+            "items": {
+              "$ref": "#/components/schemas/StarterView"
+            },
+            "title": "Starters",
+            "type": "array"
+          }
+        },
+        "required": [
+          "message",
+          "starters"
+        ],
+        "title": "Starters",
+        "type": "object"
+      },
       "Status": {
         "enum": [
           "cant_check",
@@ -5511,6 +5604,104 @@
         "title": "TroubleshootingOut",
         "type": "object"
       },
+      "UnderstandIn": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "UnderstandIn",
+        "type": "object"
+      },
+      "UnderstandOut": {
+        "discriminator": {
+          "mapping": {
+            "rows": "#/components/schemas/UnderstoodRows",
+            "starters": "#/components/schemas/Starters",
+            "watchlist": "#/components/schemas/WatchlistRedirect"
+          },
+          "propertyName": "answer"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/UnderstoodRows"
+          },
+          {
+            "$ref": "#/components/schemas/WatchlistRedirect"
+          },
+          {
+            "$ref": "#/components/schemas/Starters"
+          }
+        ]
+      },
+      "UnderstoodRowView": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/RowKind",
+            "description": "schedule: when it runs. look_for: what to look for. do: what to do with it. where: where the result goes."
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "state": {
+            "$ref": "#/components/schemas/RowState",
+            "description": "understood: from the task's words. changed: the Planner read something into the words, and the note says what the task said. missing: the task does not say. cant_do: no tool does it yet, and the note says why."
+          },
+          "text": {
+            "description": "What the Planner read, in plain words. Empty when missing, and can be empty when cant_do.",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "text",
+          "state",
+          "note"
+        ],
+        "title": "UnderstoodRowView",
+        "type": "object"
+      },
+      "UnderstoodRows": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "const": "rows",
+            "default": "rows",
+            "title": "Answer",
+            "type": "string"
+          },
+          "rows": {
+            "description": "One schedule row, then at least one row for what to look for, what to do and where, in that order. At most 8.",
+            "items": {
+              "$ref": "#/components/schemas/UnderstoodRowView"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "rows"
+        ],
+        "title": "UnderstoodRows",
+        "type": "object"
+      },
       "UseCaseAgentView": {
         "additionalProperties": false,
         "properties": {
@@ -5989,6 +6180,46 @@
           "watchlist"
         ],
         "title": "WatchlistOut",
+        "type": "object"
+      },
+      "WatchlistRedirect": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "const": "watchlist",
+            "default": "watchlist",
+            "title": "Answer",
+            "type": "string"
+          },
+          "note": {
+            "description": "What the Planner says, in plain words.",
+            "title": "Note",
+            "type": "string"
+          },
+          "software": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The software the task names, as it wrote it.",
+            "title": "Software"
+          },
+          "word": {
+            "description": "The word in the task that made the Planner think so.",
+            "title": "Word",
+            "type": "string"
+          }
+        },
+        "required": [
+          "word",
+          "software",
+          "note"
+        ],
+        "title": "WatchlistRedirect",
         "type": "object"
       },
       "WatchlistView": {
@@ -7263,6 +7494,86 @@
           }
         ],
         "summary": "Plan Task",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/builder/understand": {
+      "post": {
+        "description": "The Planner reads the task back in parts, each understood, changed, missing or can't do, or says it belongs on the Software watchlist. Without an AI model, or after 10 seconds, it answers the starter workflows. Nothing is saved or written.",
+        "operationId": "understand_task_api_v1_builder_understand_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnderstandIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnderstandOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Understand Task",
         "tags": [
           "builder"
         ]

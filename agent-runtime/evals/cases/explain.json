@@ -1,22 +1,24 @@
 [
   {
     "id": "github-503-fixture",
-    "note": "The recorded failure run: GitHub answered 503 on all three tries.",
+    "note": "The recorded failure run (contracts/fixtures/runs/failure.json): GitHub answered 503 on all three tries for the one watched software.",
     "outcome": "failed",
     "stage": "working",
     "reason": "AgentError",
-    "message": "Version checker failed: GitHub returned 503 Service Unavailable three times",
+    "message": "UpstreamUnavailable: Could not check LangGraph: GitHub returned 503 Service Unavailable three times",
     "events": [
-      "Alice started a run of LangGraph releases.",
+      "Alice started a run of the Software watchlist.",
       "The work leg was queued for the workflow engine (attempt 1).",
       "Workflow step run_agents started (n8n execution 43).",
-      "Planner brought in Version checker to read the GitHub releases.",
-      "Planner asked Version checker to look for releases newer than 1.2.14.",
-      "Version checker is fetching releases from langchain-ai/langgraph.",
+      "Planner brought in Version checker to read the source of LangGraph.",
+      "Planner asked Version checker to check LangGraph for new releases.",
+      "Version checker is reading the releases of LangGraph.",
       "Version checker reported that GitHub answered 503 (try 1 of 3).",
       "Version checker reported that GitHub answered 503 (try 2 of 3).",
       "Version checker reported that GitHub answered 503 (try 3 of 3).",
-      "Version checker failed: GitHub was unavailable.",
+      "Version checker could not read LangGraph.",
+      "Version checker could not check LangGraph.",
+      "Version checker failed: LangGraph could not be checked.",
       "Workflow step run_agents finished with a failure."
     ],
     "retry_safe": true,
@@ -40,28 +42,42 @@
       ]
     ],
     "reference": {
-      "explanation": "GitHub was not available when the Version checker tried to read the releases, even after three tries. Nothing was changed. Retry the run, and if it fails again, check whether GitHub is up.",
+      "explanation": "GitHub was not available when the Version checker tried to read the releases of LangGraph, even after three tries. Nothing was changed. Retry the run, and if it fails again, check whether GitHub is up.",
       "retry_safe": true
     }
   },
   {
     "id": "github-502",
-    "note": "GitHub answered 502 on all three tries.",
+    "note": "Three watched software, and GitHub answered 502 on every try for each of them.",
     "outcome": "failed",
     "stage": "working",
     "reason": "AgentError",
-    "message": "UpstreamUnavailable: GitHub returned 502 Bad Gateway three times",
+    "message": "UpstreamUnavailable: None of the 3 watched software could be checked. GitHub returned 502 Bad Gateway three times",
     "events": [
-      "Alice started a run of Terraform releases.",
+      "Alice started a run of the Software watchlist.",
       "The work leg was queued for the workflow engine (attempt 1).",
-      "Workflow step run_agents started (n8n execution 43).",
-      "Planner brought in Version checker to read the GitHub releases.",
-      "Planner asked Version checker to look for releases newer than 1.9.8.",
-      "Version checker is fetching releases from hashicorp/terraform.",
+      "Workflow step run_agents started (n8n execution 47).",
+      "Planner brought in Version checker to read the sources of 3 watched software.",
+      "Planner asked Version checker to check 3 watched software for new releases.",
+      "Version checker is reading the releases of LangGraph.",
       "Version checker reported that GitHub answered 502 (try 1 of 3).",
       "Version checker reported that GitHub answered 502 (try 2 of 3).",
       "Version checker reported that GitHub answered 502 (try 3 of 3).",
-      "Version checker failed: GitHub was unavailable.",
+      "Version checker could not read LangGraph.",
+      "Version checker could not check LangGraph and carried on.",
+      "Version checker is reading the releases of Redis.",
+      "Version checker reported that GitHub answered 502 (try 1 of 3).",
+      "Version checker reported that GitHub answered 502 (try 2 of 3).",
+      "Version checker reported that GitHub answered 502 (try 3 of 3).",
+      "Version checker could not read Redis.",
+      "Version checker could not check Redis and carried on.",
+      "Version checker is reading the releases of FastAPI.",
+      "Version checker reported that GitHub answered 502 (try 1 of 3).",
+      "Version checker reported that GitHub answered 502 (try 2 of 3).",
+      "Version checker reported that GitHub answered 502 (try 3 of 3).",
+      "Version checker could not read FastAPI.",
+      "Version checker could not check FastAPI.",
+      "Version checker failed: none of the watched software could be checked.",
       "Workflow step run_agents finished with a failure."
     ],
     "retry_safe": true,
@@ -85,7 +101,7 @@
       ]
     ],
     "reference": {
-      "explanation": "GitHub was having trouble and did not answer properly, even after three tries. Nothing was changed. Retry the run in a few minutes.",
+      "explanation": "GitHub was having trouble and did not answer properly for any of the watched software, even after three tries each. Nothing was changed. Retry the run in a few minutes.",
       "retry_safe": true
     }
   },
@@ -95,18 +111,20 @@
     "outcome": "failed",
     "stage": "working",
     "reason": "AgentError",
-    "message": "UpstreamUnavailable: GitHub could not be reached three times",
+    "message": "UpstreamUnavailable: Could not check LangGraph: GitHub could not be reached three times",
     "events": [
-      "Alice started a run of LangGraph releases.",
+      "Alice started a run of the Software watchlist.",
       "The work leg was queued for the workflow engine (attempt 1).",
       "Workflow step run_agents started (n8n execution 43).",
-      "Planner brought in Version checker to read the GitHub releases.",
-      "Planner asked Version checker to look for releases newer than 1.2.14.",
-      "Version checker is fetching releases from langchain-ai/langgraph.",
+      "Planner brought in Version checker to read the source of LangGraph.",
+      "Planner asked Version checker to check LangGraph for new releases.",
+      "Version checker is reading the releases of LangGraph.",
       "Version checker reported that GitHub could not be reached (try 1 of 3).",
       "Version checker reported that GitHub could not be reached (try 2 of 3).",
       "Version checker reported that GitHub could not be reached (try 3 of 3).",
-      "Version checker failed: GitHub was unavailable.",
+      "Version checker could not read LangGraph.",
+      "Version checker could not check LangGraph.",
+      "Version checker failed: LangGraph could not be checked.",
       "Workflow step run_agents finished with a failure."
     ],
     "retry_safe": true,
@@ -132,25 +150,27 @@
       ]
     ],
     "reference": {
-      "explanation": "The Version checker could not reach GitHub, even after three tries. Nothing was changed. Retry the run, and if it fails again, check the network connection to GitHub.",
+      "explanation": "The Version checker could not reach GitHub to read the releases of LangGraph, even after three tries. Nothing was changed. Retry the run, and if it fails again, check the network connection to GitHub.",
       "retry_safe": true
     }
   },
   {
     "id": "github-404-typo",
-    "note": "The use case names a repository that does not exist, so GitHub refused.",
+    "note": "The watchlist names a repository that does not exist, so GitHub refused.",
     "outcome": "failed",
     "stage": "working",
     "reason": "AgentError",
-    "message": "UpstreamRejected: GitHub answered 404 Not Found",
+    "message": "UpstreamRejected: Could not check LangGraph: GitHub answered 404 Not Found",
     "events": [
-      "Alice started a run of LangGraph releases.",
+      "Alice started a run of the Software watchlist.",
       "The work leg was queued for the workflow engine (attempt 1).",
       "Workflow step run_agents started (n8n execution 43).",
-      "Planner brought in Version checker to read the GitHub releases.",
-      "Planner asked Version checker to look for releases newer than 1.2.14.",
-      "Version checker is fetching releases from langchain-ai/langgrph.",
-      "Version checker failed: GitHub refused the request.",
+      "Planner brought in Version checker to read the source of LangGraph.",
+      "Planner asked Version checker to check LangGraph for new releases.",
+      "Version checker is reading the releases of LangGraph.",
+      "Version checker could not read LangGraph.",
+      "Version checker could not check LangGraph.",
+      "Version checker failed: LangGraph could not be checked.",
       "Workflow step run_agents finished with a failure."
     ],
     "retry_safe": false,
@@ -169,25 +189,27 @@
       ]
     ],
     "reference": {
-      "explanation": "GitHub could not find the repository langchain-ai/langgrph, so the Version checker stopped. The name looks misspelled. Ask a maintainer to fix the repository name in the use case, then start a new run.",
+      "explanation": "GitHub could not find the repository saved for LangGraph, so its releases could not be read. The name on the Software watchlist may be misspelled. Fix the repository name there, then start a new run.",
       "retry_safe": false
     }
   },
   {
     "id": "github-403-private",
-    "note": "The repository is private, so GitHub refused.",
+    "note": "The watched repository is private, so GitHub refused.",
     "outcome": "failed",
     "stage": "working",
     "reason": "AgentError",
-    "message": "UpstreamRejected: GitHub answered 403 Forbidden",
+    "message": "UpstreamRejected: Could not check Internal tools: GitHub answered 403 Forbidden",
     "events": [
-      "Alice started a run of Internal tools releases.",
+      "Alice started a run of the Software watchlist.",
       "The work leg was queued for the workflow engine (attempt 1).",
       "Workflow step run_agents started (n8n execution 43).",
-      "Planner brought in Version checker to read the GitHub releases.",
-      "Planner asked Version checker to look for releases newer than 2.4.0.",
-      "Version checker is fetching releases from codesparks/internal-tools.",
-      "Version checker failed: GitHub refused the request.",
+      "Planner brought in Version checker to read the source of Internal tools.",
+      "Planner asked Version checker to check Internal tools for new releases.",
+      "Version checker is reading the releases of Internal tools.",
+      "Version checker could not read Internal tools.",
+      "Version checker could not check Internal tools.",
+      "Version checker failed: Internal tools could not be checked.",
       "Workflow step run_agents finished with a failure."
     ],
     "retry_safe": false,
@@ -206,7 +228,7 @@
       ]
     ],
     "reference": {
-      "explanation": "GitHub refused to show the releases of codesparks/internal-tools, most likely because the repository is private. Retrying will get the same answer. Ask a maintainer to check the repository and its access, then start a new run.",
+      "explanation": "GitHub refused to show the releases of Internal tools, most likely because its repository is private. Retrying will get the same answer. Ask a maintainer to check the repository and its access, then start a new run.",
       "retry_safe": false
     }
   },
@@ -218,19 +240,17 @@
     "reason": "WriteFailed",
     "message": "jira create_ticket failed: Jira answered 503 Service Unavailable",
     "events": [
-      "Alice started a run of LangGraph releases.",
+      "Alice started a run of the Software watchlist.",
       "The work leg was queued for the workflow engine (attempt 1).",
       "Workflow step run_agents started (n8n execution 41).",
-      "Planner brought in Version checker to read the GitHub releases.",
-      "Planner asked Version checker to look for releases newer than 1.2.14.",
-      "Version checker is fetching releases from langchain-ai/langgraph.",
-      "Version checker fetched 30 releases. The latest is 1.2.16.",
-      "Version checker is comparing them with the last known tag 1.2.14.",
-      "Version checker found 2 new releases: 1.2.16, 1.2.15.",
-      "Version checker reported 2 new releases to the room and suggested one ticket.",
+      "Planner brought in Version checker to read the source of LangGraph.",
+      "Planner asked Version checker to check LangGraph for new releases.",
+      "Version checker is reading the releases of LangGraph.",
+      "Version checker read LangGraph. 2 releases newer than 1.2.14.",
+      "Version checker reported that LangGraph is behind and suggested one ticket.",
       "Planner agreed and will propose the ticket for approval.",
       "The agents proposed 1 write action: create a Jira ticket in MOCK.",
-      "Workflow step run_agents finished: 2 new releases: 1.2.16, 1.2.15.",
+      "Workflow step run_agents finished: LangGraph has a new release: 1.2.16.",
       "Workflow step ask_approval started (n8n execution 41).",
       "Approval requested. Waiting for the Team approver.",
       "Workflow step ask_approval finished. The work leg ends here.",
@@ -250,7 +270,7 @@
       ]
     ],
     "reference": {
-      "explanation": "Bob approved the ticket, but Jira was not available when the platform tried to create it, so no ticket was made. Retry the run. It carries on from the approval, so nobody has to approve again.",
+      "explanation": "Bob approved the upgrade ticket, but Jira was not available when the platform tried to create it, so no ticket was made. Retry the run. It carries on from the approval, so nobody has to approve again.",
       "retry_safe": true
     }
   },
@@ -262,19 +282,17 @@
     "reason": "WriteFailed",
     "message": "jira create_ticket failed: the request to Jira timed out after 30 seconds",
     "events": [
-      "Alice started a run of LangGraph releases.",
+      "Alice started a run of the Software watchlist.",
       "The work leg was queued for the workflow engine (attempt 1).",
       "Workflow step run_agents started (n8n execution 41).",
-      "Planner brought in Version checker to read the GitHub releases.",
-      "Planner asked Version checker to look for releases newer than 1.2.14.",
-      "Version checker is fetching releases from langchain-ai/langgraph.",
-      "Version checker fetched 30 releases. The latest is 1.2.16.",
-      "Version checker is comparing them with the last known tag 1.2.14.",
-      "Version checker found 2 new releases: 1.2.16, 1.2.15.",
-      "Version checker reported 2 new releases to the room and suggested one ticket.",
+      "Planner brought in Version checker to read the source of LangGraph.",
+      "Planner asked Version checker to check LangGraph for new releases.",
+      "Version checker is reading the releases of LangGraph.",
+      "Version checker read LangGraph. 2 releases newer than 1.2.14.",
+      "Version checker reported that LangGraph is behind and suggested one ticket.",
       "Planner agreed and will propose the ticket for approval.",
       "The agents proposed 1 write action: create a Jira ticket in MOCK.",
-      "Workflow step run_agents finished: 2 new releases: 1.2.16, 1.2.15.",
+      "Workflow step run_agents finished: LangGraph has a new release: 1.2.16.",
       "Workflow step ask_approval started (n8n execution 41).",
       "Approval requested. Waiting for the Team approver.",
       "Workflow step ask_approval finished. The work leg ends here.",
@@ -294,31 +312,29 @@
       ]
     ],
     "reference": {
-      "explanation": "Bob approved the ticket, but Jira took too long to answer, so the ticket was not made. Retry the run. It carries on from the approval, so nobody has to approve again.",
+      "explanation": "Bob approved the upgrade ticket, but Jira took too long to answer, so the ticket was not made. Retry the run. It carries on from the approval, so nobody has to approve again.",
       "retry_safe": true
     }
   },
   {
     "id": "declined",
-    "note": "The recorded declined run: Bob said no, so nothing was written.",
+    "note": "The recorded declined run (contracts/fixtures/runs/rejected.json): Bob said no, so nothing was written.",
     "outcome": "declined",
     "stage": "awaiting approval",
     "reason": null,
     "message": "Bob declined the request. Nothing was written.",
     "events": [
-      "Alice started a run of LangGraph releases.",
+      "Alice started a run of the Software watchlist.",
       "The work leg was queued for the workflow engine (attempt 1).",
       "Workflow step run_agents started (n8n execution 44).",
-      "Planner brought in Version checker to read the GitHub releases.",
-      "Planner asked Version checker to look for releases newer than 1.2.14.",
-      "Version checker is fetching releases from langchain-ai/langgraph.",
-      "Version checker fetched 30 releases. The latest is 1.2.16.",
-      "Version checker is comparing them with the last known tag 1.2.14.",
-      "Version checker found 2 new releases: 1.2.16, 1.2.15.",
-      "Version checker reported 2 new releases to the room and suggested one ticket.",
+      "Planner brought in Version checker to read the source of LangGraph.",
+      "Planner asked Version checker to check LangGraph for new releases.",
+      "Version checker is reading the releases of LangGraph.",
+      "Version checker read LangGraph. 2 releases newer than 1.2.14.",
+      "Version checker reported that LangGraph is behind and suggested one ticket.",
       "Planner agreed and will propose the ticket for approval.",
       "The agents proposed 1 write action: create a Jira ticket in MOCK.",
-      "Workflow step run_agents finished: 2 new releases: 1.2.16, 1.2.15.",
+      "Workflow step run_agents finished: LangGraph has a new release: 1.2.16.",
       "Workflow step ask_approval started (n8n execution 44).",
       "Approval requested. Waiting for the Team approver.",
       "Workflow step ask_approval finished. The work leg ends here.",
@@ -341,22 +357,22 @@
       ]
     ],
     "reference": {
-      "explanation": "Bob declined the proposed ticket, so nothing was written to Jira. This was a decision, not a fault. Talk to Bob if you think the ticket is still needed.",
+      "explanation": "Bob declined the proposed upgrade ticket, so nothing was written to Jira. This was a decision, not a fault. Talk to Bob if you think the ticket is still needed.",
       "retry_safe": false
     }
   },
   {
     "id": "timed-out",
-    "note": "The workflow engine never came back while the agents worked.",
+    "note": "The workflow engine never came back while the agents read three watched software.",
     "outcome": "failed",
     "stage": "working",
     "reason": "TimedOut",
     "message": "The workflow engine did not come back while the run was working",
     "events": [
-      "Alice started a run of LangGraph releases.",
+      "Alice started a run of the Software watchlist.",
       "The work leg was queued for the workflow engine (attempt 1).",
       "Workflow step run_agents started (n8n execution 45).",
-      "Planner brought in Version checker to read the GitHub releases."
+      "Planner brought in Version checker to read the sources of 3 watched software."
     ],
     "retry_safe": true,
     "must_mention": [
@@ -390,7 +406,7 @@
     "reason": "WorkflowNodeError",
     "message": "The n8n workflow 'run' failed at its step 'Run agents': The service refused the connection",
     "events": [
-      "Alice started a run of LangGraph releases.",
+      "Alice started a run of the Software watchlist.",
       "The work leg was queued for the workflow engine (attempt 1).",
       "Workflow step run_agents started (n8n execution 41)."
     ],
@@ -420,19 +436,17 @@
     "reason": "SafetyDenied",
     "message": "the safety checker denied the write: digest_mismatch",
     "events": [
-      "Alice started a run of LangGraph releases.",
+      "Alice started a run of the Software watchlist.",
       "The work leg was queued for the workflow engine (attempt 1).",
       "Workflow step run_agents started (n8n execution 41).",
-      "Planner brought in Version checker to read the GitHub releases.",
-      "Planner asked Version checker to look for releases newer than 1.2.14.",
-      "Version checker is fetching releases from langchain-ai/langgraph.",
-      "Version checker fetched 30 releases. The latest is 1.2.16.",
-      "Version checker is comparing them with the last known tag 1.2.14.",
-      "Version checker found 2 new releases: 1.2.16, 1.2.15.",
-      "Version checker reported 2 new releases to the room and suggested one ticket.",
+      "Planner brought in Version checker to read the source of LangGraph.",
+      "Planner asked Version checker to check LangGraph for new releases.",
+      "Version checker is reading the releases of LangGraph.",
+      "Version checker read LangGraph. 2 releases newer than 1.2.14.",
+      "Version checker reported that LangGraph is behind and suggested one ticket.",
       "Planner agreed and will propose the ticket for approval.",
       "The agents proposed 1 write action: create a Jira ticket in MOCK.",
-      "Workflow step run_agents finished: 2 new releases: 1.2.16, 1.2.15.",
+      "Workflow step run_agents finished: LangGraph has a new release: 1.2.16.",
       "Workflow step ask_approval started (n8n execution 41).",
       "Approval requested. Waiting for the Team approver.",
       "Workflow step ask_approval finished. The work leg ends here.",
@@ -467,7 +481,7 @@
     "reason": "OutOfOrderStep",
     "message": "The workflow called write_action out of order. Reload it from git and start a new run",
     "events": [
-      "Alice started a run of LangGraph releases.",
+      "Alice started a run of the Software watchlist.",
       "The work leg was queued for the workflow engine (attempt 1).",
       "Workflow step run_agents started (n8n execution 46).",
       "Workflow step write_action finished: refused."
@@ -496,11 +510,13 @@
     "reason": "UnboundIntent",
     "message": "No connector is bound for create_page",
     "events": [
-      "Alice started a run of LangGraph releases.",
+      "Alice started a run of the Software watchlist.",
       "The work leg was queued for the workflow engine (attempt 1).",
       "Workflow step run_agents started (n8n execution 47).",
-      "Planner brought in Version checker to read the GitHub releases.",
-      "Version checker found 1 new release: 1.2.17.",
+      "Planner brought in Version checker to read the source of LangGraph.",
+      "Planner asked Version checker to check LangGraph for new releases.",
+      "Version checker is reading the releases of LangGraph.",
+      "Version checker read LangGraph. 1 release newer than 1.2.16.",
       "Workflow step run_agents finished with a failure."
     ],
     "retry_safe": false,
@@ -530,6 +546,43 @@
     ],
     "reference": {
       "explanation": "The agents suggested an action that this use case is not set up to carry out, so the run stopped. Nothing was written. Ask a maintainer to update the template, then start a new run.",
+      "retry_safe": false
+    }
+  },
+  {
+    "id": "no-plain-version",
+    "note": "The watched repository's releases carry no plain version number, so nothing can be compared.",
+    "outcome": "failed",
+    "stage": "working",
+    "reason": "AgentError",
+    "message": "UpstreamRejected: Could not check LangGraph CLI: No release has a plain version number",
+    "events": [
+      "Alice started a run of the Software watchlist.",
+      "The work leg was queued for the workflow engine (attempt 1).",
+      "Workflow step run_agents started (n8n execution 48).",
+      "Planner brought in Version checker to read the source of LangGraph CLI.",
+      "Planner asked Version checker to check LangGraph CLI for new releases.",
+      "Version checker is reading the releases of LangGraph CLI.",
+      "Version checker could not read LangGraph CLI.",
+      "Version checker could not check LangGraph CLI.",
+      "Version checker failed: LangGraph CLI could not be checked.",
+      "Workflow step run_agents finished with a failure."
+    ],
+    "retry_safe": false,
+    "must_mention": [
+      [
+        "version"
+      ],
+      [
+        "plain",
+        "number",
+        "compare",
+        "format",
+        "pattern"
+      ]
+    ],
+    "reference": {
+      "explanation": "The Version checker read the releases of LangGraph CLI, but none of them has a plain version number, so it could not compare them with the version the team runs. Retrying will get the same answer. Check that the Software watchlist points at the right repository, then start a new run.",
       "retry_safe": false
     }
   }

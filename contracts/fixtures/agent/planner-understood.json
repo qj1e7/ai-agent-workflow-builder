@@ -1,0 +1,29 @@
+{
+  "status": "understood",
+  "rows": [
+    {
+      "kind": "schedule",
+      "text": "Every weekday at 3pm",
+      "state": "understood",
+      "note": null
+    },
+    {
+      "kind": "look_for",
+      "text": "Bug tickets in MOCK with no update for 10 days",
+      "state": "understood",
+      "note": null
+    },
+    {
+      "kind": "do",
+      "text": "Create one follow-up ticket that lists them",
+      "state": "understood",
+      "note": null
+    },
+    {
+      "kind": "where",
+      "text": "Jira project MOCK",
+      "state": "understood",
+      "note": null
+    }
+  ]
+}

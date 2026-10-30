@@ -111,6 +111,15 @@ CASES = [
         422,
         id="schedule-422",
     ),
+    pytest.param(
+        "POST", "/api/v1/builder/understand", {}, {"text": "x"}, None, 401, id="understand-401"
+    ),
+    pytest.param(
+        "POST", "/api/v1/builder/understand", BOB, {"text": "x"}, None, 403, id="understand-403"
+    ),
+    pytest.param(
+        "POST", "/api/v1/builder/understand", ALICE, {"text": ""}, None, 422, id="understand-422"
+    ),
     pytest.param("DELETE", "/api/v1/watchlist/schedule", {}, None, None, 401, id="off-401"),
     pytest.param("DELETE", "/api/v1/watchlist/schedule", BOB, None, None, 403, id="off-403"),
     pytest.param("DELETE", "/api/v1/watchlist/schedule", ALICE, None, None, 404, id="off-404"),
@@ -162,3 +171,12 @@ def test_a_full_watchlist_is_a_422_of_its_own_type():
             }
         ]
     }
+
+
+def test_understand_refuses_a_nul_byte_with_a_422_naming_the_field():
+    response = TestClient(app_with()).post(
+        "/api/v1/builder/understand", headers=ALICE, json={"text": "close\u0000 every ticket"}
+    )
+    assert response.status_code == 422
+    assert [error["loc"] for error in response.json()["detail"]] == [["body", "text"]]
+    assert "NUL" in response.json()["detail"][0]["msg"]

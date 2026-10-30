@@ -1,5 +1,7 @@
 """Cards and agent use cases against the real tables, and through the routes."""
 
+import asyncio
+import time
 from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass, field
 
@@ -36,6 +38,9 @@ from platform_api.orchestration import (
     ScheduleBook,
     SoftwareFacts,
     Standing,
+    UnderstandResult,
+    Understood,
+    UnderstoodRow,
     WatchlistStanding,
 )
 from platform_api.shared import Principal, Role, RunId, SoftwareId, UseCaseId, UserId
@@ -74,6 +79,9 @@ class Planner:
         default_factory=lambda: Chosen(choice=Choice(decision="cannot_do", reason="No."))
     )
     seen: list[Sequence[LibraryCard]] = field(default_factory=lambda: [])
+    understood: UnderstandResult | NoModel | RuntimeDown = field(default_factory=lambda: NoModel())
+    wait: float = 0.0
+    read: list[str] = field(default_factory=lambda: [])
 
     async def has_model(self) -> bool:
         return self.model
@@ -84,6 +92,11 @@ class Planner:
 
     async def draft(self, task: str) -> DraftResult | NoModel | RuntimeDown:
         return NoModel()
+
+    async def understand(self, task: str) -> UnderstandResult | NoModel | RuntimeDown:
+        self.read.append(task)
+        await asyncio.sleep(self.wait)
+        return self.understood
 
 
 @pytest.fixture
@@ -457,3 +470,63 @@ async def test_the_agent_template_cannot_be_built_by_hand(client: httpx.AsyncCli
 
 def test_the_starter_is_the_one_the_tests_assume():
     assert VERSION_CHECKER.card_id == "crd_version_checker"
+
+
+FOLLOW_UP = (
+    "Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days and create one "
+    "follow-up ticket that lists them"
+)
+FOUR_ROWS = Understood(
+    rows=[
+        UnderstoodRow(kind="schedule", text="Every weekday at 3pm", state="understood"),
+        UnderstoodRow(kind="look_for", text="Bug tickets in MOCK", state="understood"),
+        UnderstoodRow(kind="do", text="Create one follow-up ticket", state="understood"),
+        UnderstoodRow(kind="where", text="Jira project MOCK", state="understood"),
+    ]
+)
+
+
+async def test_understand_reads_the_task_back_for_an_operator_and_saves_nothing(
+    client: httpx.AsyncClient, planner: Planner
+):
+    planner.understood = FOUR_ROWS
+    r = await client.post("/api/v1/builder/understand", json={"text": FOLLOW_UP}, headers=AS_ALICE)
+    assert r.status_code == 200
+    assert r.json()["answer"] == "rows"
+    assert [row["state"] for row in r.json()["rows"]] == ["understood"] * 4
+    assert planner.read == [FOLLOW_UP]
+    assert (await client.get("/api/v1/use-cases", headers=AS_ALICE)).json()["use_cases"] == []
+
+
+async def test_understand_is_for_operators_only_and_needs_some_text(
+    client: httpx.AsyncClient, planner: Planner
+):
+    planner.understood = FOUR_ROWS
+    refused = await client.post("/api/v1/builder/understand", json={"text": "x"}, headers=AS_BOB)
+    assert refused.status_code == 403
+    blank = await client.post("/api/v1/builder/understand", json={"text": " "}, headers=AS_ALICE)
+    assert blank.status_code == 422
+    assert planner.read == []
+
+
+async def test_understand_without_a_model_answers_the_starter_workflows(
+    client: httpx.AsyncClient, planner: Planner
+):
+    r = await client.post("/api/v1/builder/understand", json={"text": "x"}, headers=AS_ALICE)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["answer"] == "starters"
+    assert "No AI model is connected" in body["message"]
+    assert [s["name"] for s in body["starters"]][0] == "Keep our software up to date"
+
+
+async def test_understand_answers_the_starters_when_the_planner_is_slower_than_the_limit(
+    client: httpx.AsyncClient, planner: Planner, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr("platform_api.builder.planning.UNDERSTAND_LIMIT_SECONDS", 0.2)
+    planner.understood, planner.wait = FOUR_ROWS, 3.0
+    started = time.monotonic()
+    r = await client.post("/api/v1/builder/understand", json={"text": "x"}, headers=AS_ALICE)
+    assert time.monotonic() - started < 2
+    assert (r.status_code, r.json()["answer"]) == (200, "starters")
+    assert "took too long" in r.json()["message"]

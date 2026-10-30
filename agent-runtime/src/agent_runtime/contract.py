@@ -538,6 +538,61 @@ class Chosen(WireModel):
 type ChooseResult = Annotated[Chosen | ModelProblem, Field(discriminator="status")]
 
 
+class UnderstandRequest(WireModel):
+    task: str = Field(min_length=1, max_length=2000)
+    model: ModelAccess
+
+
+type RowKind = Literal["schedule", "look_for", "do", "where"]
+type RowState = Literal["understood", "changed", "missing", "cant_do"]
+
+
+class UnderstoodRow(WireModel):
+    kind: RowKind
+    text: str = Field(
+        max_length=200,
+        description="What the Planner read, in plain words. Empty when the part is missing, "
+        "and can be empty when it can't be done.",
+    )
+    state: RowState
+    note: str | None = Field(
+        default=None,
+        max_length=300,
+        description="Why the part is changed, missing or can't be done. Usually None when it is "
+        "understood.",
+    )
+
+
+class Understood(WireModel):
+    status: Literal["understood"] = "understood"
+    rows: list[UnderstoodRow] = Field(
+        min_length=4,
+        max_length=8,
+        description="One schedule row, then at least one row for what to look for, what to do "
+        "and where, in that order.",
+    )
+
+
+class BelongsOnWatchlist(WireModel):
+    status: Literal["watchlist"] = "watchlist"
+    word: str = Field(
+        min_length=1,
+        max_length=80,
+        description="The word that made the Planner think so, as the task wrote it: a form of "
+        "version, release, upgrade, patch or vulnerability.",
+    )
+    software: str | None = Field(
+        default=None,
+        max_length=80,
+        description="The software the task names, as the task wrote it.",
+    )
+
+
+type UnderstandResult = Annotated[
+    Understood | BelongsOnWatchlist | ModelProblem, Field(discriminator="status")
+]
+
+
 class AgentCard(WireModel):
     id: str
     display: str
@@ -567,3 +622,5 @@ class AgentApiSchema(WireModel):
     card_draft_result: DraftResult
     planner_choose_request: ChooseRequest
     planner_choose_result: ChooseResult
+    planner_understand_request: UnderstandRequest
+    planner_understand_result: UnderstandResult
