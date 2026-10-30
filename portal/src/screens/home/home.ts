@@ -2,10 +2,10 @@ import { ApiError } from '../../api/client'
 import { connectorLabel, starterName } from '../../api/labels'
 import type { ApprovalItem, ConfirmationItem, DraftItem, HomeOut, StoppedItem, WaitingItem } from '../../api/types'
 import { count, withCurrentNames } from '../run/words'
+import { DRAFT_STEPS } from '../new/draft'
 import { lineWhen, runWhen, workflowPath } from '../workflows/workflow'
 
 export const NEEDS_SHOWN = 10
-const DRAFT_STEPS = 4
 
 export type Need =
   | { readonly kind: 'approval'; readonly key: string; readonly at: string; readonly item: ApprovalItem }

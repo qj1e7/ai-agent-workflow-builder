@@ -1,5 +1,7 @@
 export const NEW_WORKFLOW_PATH = '/new'
 
+export const draftPath = (draftId: string) => `${NEW_WORKFLOW_PATH}?draft=${encodeURIComponent(draftId)}`
+
 export const FOLLOW_UP_TASK =
   'Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days and create one follow-up ticket that lists them'
 const WEEKLY_SUMMARY_TASK = 'Every Friday at 4pm, find the tickets in MOCK closed this week and create one ticket that sums them up'
