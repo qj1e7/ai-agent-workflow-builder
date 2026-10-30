@@ -11,7 +11,7 @@ import anyio
 import psycopg
 import pytest
 from azure.core.exceptions import AzureError
-from azure.cosmos.aio import ContainerProxy, DatabaseProxy
+from azure.cosmos.aio import ContainerProxy, CosmosClient, DatabaseProxy
 from azure.cosmos.exceptions import CosmosResourceNotFoundError
 from psycopg import sql
 
@@ -167,6 +167,7 @@ def cosmos_settings() -> CosmosSettings:
 @dataclass(frozen=True)
 class CosmosUnderTest:
     events: CosmosEvents
+    client: CosmosClient
     database: DatabaseProxy
     container: ContainerProxy
 
@@ -176,8 +177,14 @@ class CosmosUnderTest:
         )
         return [item["seq"] async for item in query]
 
+    async def delete(self, what: str) -> None:
+        if what == "database":
+            await self.client.delete_database(self.database.id)
+        else:
+            await self.database.delete_container(CONTAINER)
 
-async def _wait_for_test_database(settings: CosmosSettings) -> tuple[CosmosEvents, DatabaseProxy]:
+
+async def _wait_for_test_database(settings: CosmosSettings) -> tuple[CosmosClient, DatabaseProxy]:
     deadline = time.monotonic() + COSMOS_WAIT_SECONDS
     while True:
         client = cosmos_client(settings)
@@ -189,11 +196,12 @@ async def _wait_for_test_database(settings: CosmosSettings) -> tuple[CosmosEvent
                 raise
             await anyio.sleep(1)
             continue
-        return CosmosEvents(client, database=COSMOS_TEST_DATABASE), database
+        return client, database
 
 
 async def fresh_cosmos() -> CosmosUnderTest:
-    events, database = await _wait_for_test_database(cosmos_settings())
+    client, database = await _wait_for_test_database(cosmos_settings())
+    events = CosmosEvents(client, database=COSMOS_TEST_DATABASE)
     try:
         with suppress(CosmosResourceNotFoundError):
             await database.delete_container(CONTAINER)
@@ -201,7 +209,7 @@ async def fresh_cosmos() -> CosmosUnderTest:
     except BaseException:
         await events.close()
         raise
-    return CosmosUnderTest(events, database, database.get_container_client(CONTAINER))
+    return CosmosUnderTest(events, client, database, database.get_container_client(CONTAINER))
 
 
 @pytest.fixture

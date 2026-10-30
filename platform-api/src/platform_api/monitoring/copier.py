@@ -69,8 +69,10 @@ class Copier:
         retry_delay: float = 1.0,
         max_retry_delay: float = 5.0,
         reconnect_delay: float = 1.0,
+        idle_check: float = 5.0,
     ) -> None:
         self._db = db
+        self._idle_check = idle_check
         self._copy = copy
         self._batch = batch
         self._put_timeout = put_timeout
@@ -79,6 +81,11 @@ class Copier:
         self._hub = NotificationHub(db, channel=CHANNEL, reconnect_delay=reconnect_delay)
         self._hub.watch(self._note_run, self._note_connect)
         self._generation_seen: Generation | None = None
+        self._checked_at = time.monotonic()
+        self._check_asked = False
+        self._unreachable = False
+        self._missing = False
+        self._catching_up: set[RunId] = set()
         self._sweep_failed = False
         self._live: set[RunId] = set()
         self._behind: set[RunId] = set()
@@ -93,7 +100,18 @@ class Copier:
 
     @property
     def behind(self) -> bool:
-        return bool(self._retries) or self._sweep_failed
+        """From the moment the copy is found gone or out of reach until every run is copied."""
+        return (
+            self._unreachable
+            or self._missing
+            or self._sweep_failed
+            or bool(self._catching_up)
+            or bool(self._retries)
+        )
+
+    def check_soon(self) -> None:
+        self._check_asked = True
+        self._work.set()
 
     async def start(self) -> None:
         self._task = asyncio.create_task(self._copy_forever())
@@ -125,14 +143,21 @@ class Copier:
         return [RunId(row["run_id"]) for row in rows]
 
     async def _follow_generation(self) -> Generation:
-        async with asyncio.timeout(self._put_timeout):
-            generation = await self._copy.ensure()
+        self._checked_at = time.monotonic()
+        try:
+            async with asyncio.timeout(self._put_timeout):
+                generation = await self._copy.ensure()
+        except Exception:
+            self._unreachable = True
+            raise
+        self._unreachable = False
         if self._generation_seen not in (None, generation):
             self._catch_up_every_run()
         self._generation_seen = generation
         return generation
 
     def _catch_up_every_run(self) -> None:
+        self._missing = True
         self._sweep_at = 0.0
 
     async def _copy_batch(self, run_id: RunId) -> _Batch:
@@ -184,6 +209,8 @@ class Copier:
     async def _copy_forever(self) -> None:
         while True:
             await self._next_work()
+            if self._check_asked or time.monotonic() >= self._checked_at + self._idle_check:
+                await self._check_copy()
             now = time.monotonic()
             if self._sweep_at is not None and self._sweep_at <= now:
                 await self._sweep(now)
@@ -201,7 +228,8 @@ class Copier:
         due = [retry.at for retry in self._retries.values()]
         if self._sweep_at is not None:
             due.append(self._sweep_at)
-        wait = max(0.0, min(due) - time.monotonic()) if due else None
+        due.append(self._checked_at + self._idle_check)
+        wait = max(0.0, min(due) - time.monotonic())
         with suppress(TimeoutError):
             async with asyncio.timeout(wait):
                 await self._work.wait()
@@ -209,16 +237,26 @@ class Copier:
         now = time.monotonic()
         self._behind.update(run_id for run_id, retry in self._retries.items() if retry.at <= now)
 
+    async def _check_copy(self) -> None:
+        self._check_asked = False
+        try:
+            await self._follow_generation()
+        except Exception as error:
+            logger.warning("Could not check the copy in Cosmos DB: %r", error)
+
     async def _sweep(self, now: float) -> None:
         try:
-            self._behind.update(await self.runs_behind())
+            found = await self.runs_behind()
         except Exception as error:
             logger.warning("Could not catch up the copy: %r", error)
             self._sweep_at = now + self._retry_delay
             self._sweep_failed = True
             return
+        self._behind.update(found)
+        self._catching_up = set(found)
         self._sweep_at = None
         self._sweep_failed = False
+        self._missing = False
 
     async def _copy_one_batch(self, run_id: RunId) -> None:
         try:
@@ -233,6 +271,8 @@ class Copier:
         if batch.more:
             self._behind.add(run_id)
             self._work.set()
+        else:
+            self._catching_up.discard(run_id)
 
     def _retry_later(self, run_id: RunId, error: Exception) -> None:
         previous = self._retries.get(run_id)

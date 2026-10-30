@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from contextlib import suppress
 
 import anyio
@@ -50,17 +50,24 @@ class Watched:
         self.order = order if order is not None else []
         self.fails = fails
         self.delay = delay
+        self.unreachable = False
+        self.sample: Callable[[], bool] | None = None
+        self.samples: list[bool] = []
 
     @property
     def puts(self) -> list[int]:
         return [seq for name, seq in self.order if name == self.name]
 
     async def ensure(self) -> Generation:
+        if self.unreachable:
+            raise CosmosDown("ensure")
         return await self.inner.ensure()
 
     async def put(self, event: LoggedEvent) -> None:
         if self.fails(event.run_id, event.seq):
             raise CosmosDown(f"seq {event.seq}")
+        if self.sample is not None:
+            self.samples.append(self.sample())
         await anyio.sleep(self.delay)
         await self.inner.put(event)
         self.order.append((self.name, event.seq))
@@ -409,5 +416,100 @@ async def test_a_copier_whose_copy_keeps_failing_is_behind_until_it_catches_up(
         with anyio.fail_after(5):
             while copier.behind or await cosmos.seqs(RUN) != [1]:
                 await anyio.sleep(0.02)
+    finally:
+        await copier.stop()
+
+
+async def until(condition: Callable[[], Awaitable[bool]], seconds: float) -> None:
+    with anyio.fail_after(seconds):
+        while not await condition():
+            await anyio.sleep(0.02)
+
+
+@pytest.mark.parametrize("what", ["container", "database"])
+async def test_a_copy_deleted_while_nothing_is_logged_is_made_again_and_filled(
+    db: Database, cosmos: CosmosUnderTest, what: str
+):
+    other = RunId("run_01FINISHED")
+    await append(db, 1, run_id=other)
+    await append(db, 1, 2)
+    copier = Copier(db, cosmos.events, idle_check=0.1, retry_delay=0.05, reconnect_delay=0.1)
+
+    async def both_copied() -> bool:
+        return (await copied_seqs(cosmos), await copied_seqs(cosmos, other)) == ([1, 2], [1])
+
+    await copier.start()
+    try:
+        await until(both_copied, 5)
+        await cosmos.delete(what)
+        assert not await both_copied()
+        await until(both_copied, 5)
+    finally:
+        await copier.stop()
+
+
+async def test_a_copier_is_behind_from_finding_its_copy_gone_until_it_is_filled_again(
+    db: Database, cosmos: CosmosUnderTest
+):
+    await append(db, 1, 2, 3)
+    watched = Watched(cosmos.events, delay=0.05)
+    copier = Copier(db, watched, batch=1, idle_check=0.1, reconnect_delay=0.1)
+    watched.sample = lambda: copier.behind
+
+    async def caught_up() -> bool:
+        return not copier.behind and await copied_seqs(cosmos) == [1, 2, 3]
+
+    async def behind() -> bool:
+        return copier.behind
+
+    await copier.start()
+    try:
+        await until(caught_up, 5)
+        watched.samples.clear()
+        await cosmos.delete("container")
+        await until(behind, 5)
+        await until(caught_up, 5)
+    finally:
+        await copier.stop()
+
+    assert watched.samples == [True, True, True]
+
+
+async def test_a_nudged_copier_checks_its_copy_at_once(db: Database, cosmos: CosmosUnderTest):
+    await append(db, 1, 2)
+    copier = Copier(db, cosmos.events, idle_check=60, reconnect_delay=0.1)
+
+    async def copied() -> bool:
+        return await copied_seqs(cosmos) == [1, 2]
+
+    await copier.start()
+    try:
+        await until(copied, 5)
+        await cosmos.delete("container")
+        copier.check_soon()
+        await until(copied, 3)
+    finally:
+        await copier.stop()
+
+
+async def test_a_copier_that_cannot_reach_cosmos_db_while_idle_is_behind_until_it_can(
+    db: Database, cosmos: CosmosUnderTest
+):
+    watched = Watched(cosmos.events)
+    copier = Copier(db, watched, idle_check=0.1, reconnect_delay=0.1)
+
+    async def behind() -> bool:
+        return copier.behind
+
+    async def not_behind() -> bool:
+        return not copier.behind
+
+    await copier.start()
+    try:
+        await until(not_behind, 2)
+        watched.unreachable = True
+        await until(behind, 3)
+        watched.unreachable = False
+        await until(not_behind, 3)
     finally:
         await copier.stop()
