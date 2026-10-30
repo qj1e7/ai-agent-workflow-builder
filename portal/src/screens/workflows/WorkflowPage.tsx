@@ -26,7 +26,7 @@ import {
   meansOutOfDate,
   nextRunWords,
   placeOf,
-  PLACES,
+  PLACES_IN_PAGE_ORDER,
   pressChange,
   pressRunNow,
   rowAction,
@@ -357,7 +357,7 @@ function WorkflowLoader({ useCaseId, now }: { useCaseId: string; now: Date }) {
   const useCase = useUseCase(useCaseId)
   const me = useMe()
   const shown = useCase.data && me.data && !useCase.isError ? controlsOf(useCase.data, viewerOf(me.data)).map(placeOf) : []
-  const refocus = useFocusAfterReread(PLACES, shown, Math.max(useCase.dataUpdatedAt, useCase.errorUpdatedAt))
+  const refocus = useFocusAfterReread(PLACES_IN_PAGE_ORDER, shown, Math.max(useCase.dataUpdatedAt, useCase.errorUpdatedAt))
   if (useCase.isError && notFound(useCase.error)) {
     return (
       <>

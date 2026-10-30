@@ -167,9 +167,8 @@ export function workflowPath(useCase: Pick<UseCaseView, 'template' | 'use_case_i
 
 export type Control = 'run' | 'pause' | 'resume' | 'delete'
 
-/** Where each control sits on the workflow page, in page order. Pause and Resume are one button. */
 export type Place = 'run' | 'switch' | 'delete'
-export const PLACES: readonly Place[] = ['run', 'switch', 'delete']
+export const PLACES_IN_PAGE_ORDER: readonly Place[] = ['run', 'switch', 'delete']
 const PLACE_OF: Record<Control, Place> = { run: 'run', pause: 'switch', resume: 'switch', delete: 'delete' }
 export const placeOf = (control: Control): Place => PLACE_OF[control]
 

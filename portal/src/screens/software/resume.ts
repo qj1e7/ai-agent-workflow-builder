@@ -1,11 +1,10 @@
 import type { Latch } from '../../api/latch'
 
-/** The schedule controls in page order. Resume comes first, so the schedule button takes its place once it goes. */
 export type SchedulePlace = 'resume' | 'schedule' | 'schedule-off'
-export const SCHEDULE_PLACES: readonly SchedulePlace[] = ['resume', 'schedule', 'schedule-off']
+export const SCHEDULE_PLACES_IN_PAGE_ORDER: readonly SchedulePlace[] = ['resume', 'schedule', 'schedule-off']
 
 export function schedulePlaces({ paused, scheduled }: { readonly paused: boolean; readonly scheduled: boolean }): SchedulePlace[] {
-  return SCHEDULE_PLACES.filter((place) => (place === 'resume' ? paused : place === 'schedule-off' ? scheduled : true))
+  return SCHEDULE_PLACES_IN_PAGE_ORDER.filter((place) => (place === 'resume' ? paused : place === 'schedule-off' ? scheduled : true))
 }
 
 export interface ResumeOutcome {

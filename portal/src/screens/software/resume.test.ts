@@ -3,7 +3,7 @@ import { ApiError } from '../../api/client'
 import { errorWords } from '../../api/errors'
 import { createLatch } from '../../api/latch'
 import { placeAfterRedraw } from '../../ui/focus'
-import { pressResume, SCHEDULE_PLACES, schedulePlaces, type ResumeOutcome } from './resume'
+import { pressResume, SCHEDULE_PLACES_IN_PAGE_ORDER, schedulePlaces, type ResumeOutcome } from './resume'
 
 const words = (error: unknown) => errorWords(error, 'dev')
 
@@ -39,7 +39,7 @@ describe('Resume on the Software page', () => {
 
   it('hands focus to the schedule button once Resume is gone, as the shell’s rule does', () => {
     expect(schedulePlaces({ paused: true, scheduled: true })).toEqual(['resume', 'schedule', 'schedule-off'])
-    expect(placeAfterRedraw(SCHEDULE_PLACES, 'resume', schedulePlaces({ paused: false, scheduled: true }))).toBe('schedule')
-    expect(placeAfterRedraw(SCHEDULE_PLACES, 'resume', schedulePlaces({ paused: false, scheduled: false }))).toBe('schedule')
+    expect(placeAfterRedraw(SCHEDULE_PLACES_IN_PAGE_ORDER, 'resume', schedulePlaces({ paused: false, scheduled: true }))).toBe('schedule')
+    expect(placeAfterRedraw(SCHEDULE_PLACES_IN_PAGE_ORDER, 'resume', schedulePlaces({ paused: false, scheduled: false }))).toBe('schedule')
   })
 })

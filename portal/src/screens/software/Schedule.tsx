@@ -8,7 +8,7 @@ import { Button } from '../../ui/Button'
 import { useFocusAfterReread } from '../../ui/focus'
 import { IconPlay } from '../../ui/icons'
 import { meansOutOfDate } from '../workflows/workflow'
-import { pressResume, SCHEDULE_PLACES, schedulePlaces, type SchedulePlace } from './resume'
+import { pressResume, SCHEDULE_PLACES_IN_PAGE_ORDER, schedulePlaces, type SchedulePlace } from './resume'
 import { checkClock, DAYS, dayOption, noScheduleWords, PAUSED_WORDS, scheduleOwnerWords, scheduleWords, singaporeTime } from './software'
 import styles from './Software.module.css'
 
@@ -104,7 +104,7 @@ function useResume(useCaseId: string, shown: readonly SchedulePlace[], answeredA
   const latch = useLatch()
   const words = useErrorWords()
   const [problem, setProblem] = useState<string | null>(null)
-  const refocus = useFocusAfterReread(SCHEDULE_PLACES, shown, answeredAt)
+  const refocus = useFocusAfterReread(SCHEDULE_PLACES_IN_PAGE_ORDER, shown, answeredAt)
   const press = () =>
     pressResume(
       latch,

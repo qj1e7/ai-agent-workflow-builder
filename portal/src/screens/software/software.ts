@@ -222,7 +222,6 @@ function clockWords(at: string): string {
   return at.replace(/^0/, '')
 }
 
-/** "every Monday at 9:00", in the schedule's own time zone. */
 export function repeatWords({ day, at }: { readonly day: Day; readonly at: string }): string {
   return `${dayLabel[day]} at ${clockWords(at)}`
 }

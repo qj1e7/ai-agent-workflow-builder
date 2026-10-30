@@ -26,7 +26,7 @@ import {
   meansOutOfDate,
   nextRunWords,
   placeOf,
-  PLACES,
+  PLACES_IN_PAGE_ORDER,
   pressChange,
   pressRunNow,
   rowAction,
@@ -230,8 +230,8 @@ describe('the manage controls of a workflow page', () => {
   it('keep Pause and Resume in one place, so a refused Run now on a workflow someone paused hands focus to Resume', () => {
     const shown = (useCase: UseCaseView) => controlsOf(useCase, ALICE).map(placeOf)
     expect(shown({ ...AGENTS, state: 'paused' })).toEqual(['switch', 'delete'])
-    expect(placeAfterRedraw(PLACES, placeOf('run'), shown({ ...AGENTS, state: 'paused' }))).toBe('switch')
-    expect(placeAfterRedraw(PLACES, placeOf('pause'), shown({ ...AGENTS, state: 'paused' }))).toBe('switch')
+    expect(placeAfterRedraw(PLACES_IN_PAGE_ORDER, placeOf('run'), shown({ ...AGENTS, state: 'paused' }))).toBe('switch')
+    expect(placeAfterRedraw(PLACES_IN_PAGE_ORDER, placeOf('pause'), shown({ ...AGENTS, state: 'paused' }))).toBe('switch')
   })
 
   it('give nobody any for the Software watchlist, which is looked after on the Software page', () => {
