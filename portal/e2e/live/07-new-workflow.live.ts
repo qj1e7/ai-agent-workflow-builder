@@ -97,14 +97,33 @@ test('a task with no schedule keeps Next off, and pressing it points at the miss
   await context.close()
 })
 
-test('a task that posts in Teams marks that part can’t do yet, and says why', async ({ browser }) => {
+test('a task that posts in Teams marks that part can’t do yet, says why, and only the Planner clears it once changed', async ({ browser }) => {
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()
   await page.goto('/new')
   await planIt(page, TEAMS)
-  await expect(rowOf(page, 'Where it goes')).toContainText('can’t do this yet')
-  await expect(rowOf(page, 'Where it goes')).toContainText(/Teams/)
+  const where = rowOf(page, 'Where it goes')
+  await expect(where).toContainText('can’t do this yet')
+  await expect(where).toContainText(/Teams/)
   await expect(nextButton(page)).toHaveAttribute('aria-disabled', 'true')
+
+  await page.route('**/api/v1/builder/understand', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 600))
+    await route.continue()
+  })
+  await fixRow(page, 'Where it goes', 'Post it in the team’s Teams channel')
+  await expect(where).toContainText('Checking your new words')
+  await expect(nextButton(page)).toHaveAttribute('aria-disabled', 'true')
+  await expect(where).toContainText('can’t do this yet')
+  await expect(where).toContainText('post it in the team’s Teams channel yet')
+  await expect(nextButton(page)).toHaveAttribute('aria-disabled', 'true')
+  await pressNext(page)
+  await expect(where.getByRole('button', { name: 'Change' })).toBeFocused()
+
+  await fixRow(page, 'Where it goes', 'Jira project MOCK')
+  await expect(where).toContainText('changed by you')
+  await expect(page.getByRole('region', { name: 'What the workflow will do' })).toContainText('Changes data, waits for a yes')
+  await expect(nextButton(page)).not.toHaveAttribute('aria-disabled', 'true')
   await context.close()
 })
 

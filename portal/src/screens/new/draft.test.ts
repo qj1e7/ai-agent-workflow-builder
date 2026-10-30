@@ -6,8 +6,9 @@ import rowsAnswer from '../../../../contracts/fixtures/builder/understand.rows.j
 import starters from '../../../../contracts/fixtures/builder/understand.starters.json'
 import watchlist from '../../../../contracts/fixtures/builder/understand.watchlist.json'
 import { ApiError } from '../../api/client'
-import type { DraftView, PlanOut, UnderstandOut } from '../../api/types'
+import type { DraftView, PlanOut, RowKind, RowState, UnderstandOut } from '../../api/types'
 import {
+  afterChecking,
   afterReading,
   carryOn,
   changeRow,
@@ -19,6 +20,7 @@ import {
   EMPTY_FORM,
   enterWhen,
   nextBlockers,
+  partWords,
   taskWithoutSchedule,
   planView,
   readWhen,
@@ -71,6 +73,13 @@ const CLEAN_DRAFT: PlanOut = {
 }
 
 const read = (answer: UnderstandOut, text = FOLLOW_UP): Form => afterReading({ ...EMPTY_FORM, text }, answer)
+const readTeams = (): Form => read(TEAMS, 'Post a summary of stale tickets in Teams')
+const KINDS: readonly RowKind[] = ['schedule', 'look_for', 'do', 'where']
+const partRead = (kind: RowKind, text: string, state: RowState, note: string | null = null): UnderstandOut => ({
+  answer: 'rows',
+  rows: KINDS.map((each) => (each === kind ? { kind, text, state, note } : { kind: each, text: '', state: 'missing', note: 'I couldn’t tell from your words.' })),
+})
+const NOT_CHECKED = 'I couldn’t check your new words just now. Change them to try again.'
 const agentOf = (answer: PlanOut, form: Form): PlanAgent => {
   const view = planView(answer, form.rows)
   if (view.kind !== 'agents') throw new Error(`no agents in ${view.kind}`)
@@ -135,11 +144,43 @@ describe('step 2, check what I understood', () => {
     expect(changeRow(fixed, 1, '  ').rows[1]).toMatchObject({ text: '', state: 'missing' })
   })
 
-  it('opens Next once the missing and can’t-do rows are fixed', () => {
-    let form = read(TEAMS, 'Post a summary of stale tickets in Teams')
-    form = changeRow(form, 0, 'Every Monday at 9am')
+  it('opens Next once the missing row is filled in and the Planner can do the changed part', () => {
+    let form = changeRow(readTeams(), 0, 'Every Monday at 9am')
     form = changeRow(form, 3, 'Jira project MOCK')
+    form = afterChecking(form, { kind: 'where', text: 'Jira project MOCK' }, partRead('where', 'Jira project MOCK', 'understood'))
     expect(rowBlockers(form.rows)).toEqual([])
+  })
+
+  it('sends a changed can’t-do part back to the Planner as that part, and keeps Next off while it checks', () => {
+    const form = changeRow(readTeams(), 3, 'Post it in the team’s Teams channel')
+    expect(form.rows[3]).toMatchObject({ text: 'Post it in the team’s Teams channel', state: 'checking', note: null })
+    expect(form.rows.filter((row) => row.state === 'checking').map(partWords)).toEqual(['Where it goes: Post it in the team’s Teams channel'])
+    expect(nextBlockers(form, null).words).toBe('Next opens when you say when it runs and I’ve checked your new words.')
+    expect(changeRow(form, 3, 'Post it in Teams').rows[3]).toMatchObject({ text: 'Post it in Teams', state: 'cant_do', note: 'I can’t post in Teams yet.', planner: null })
+  })
+
+  it('clears a changed can’t-do part only when the Planner reads the new words as something it can do', () => {
+    const cleared = afterChecking(changeRow(readTeams(), 3, 'Jira project MOCK'), { kind: 'where', text: 'Jira project MOCK' }, partRead('where', 'Jira project MOCK', 'understood'))
+    expect(cleared.rows[3]).toMatchObject({ text: 'Jira project MOCK', state: 'edited', note: null })
+    expect(cleared.rows[3]?.planner?.text).toBe('Post it in Teams')
+    const words = 'Post it in the team’s Teams channel'
+    const still = afterChecking(changeRow(readTeams(), 3, words), { kind: 'where', text: words }, partRead('where', words, 'cant_do', 'I can’t post it in the team’s Teams channel yet.'))
+    expect(still.rows[3]).toMatchObject({ text: words, state: 'cant_do', note: 'I can’t post it in the team’s Teams channel yet.' })
+    expect(rowBlockers(still.rows)).toContainEqual({ index: 3, words: 'you change what I can’t do' })
+  })
+
+  it('keeps the part red when the Planner could not check the new words, and drops an answer for words changed since', () => {
+    const checking = changeRow(readTeams(), 3, 'Jira project MOCK')
+    const part = { kind: 'where', text: 'Jira project MOCK' } as const
+    expect(afterChecking(checking, part, null).rows[3]).toMatchObject({ state: 'cant_do', note: NOT_CHECKED })
+    expect(afterChecking(checking, part, starters as UnderstandOut).rows[3]).toMatchObject({ state: 'cant_do', note: NOT_CHECKED })
+    expect(afterChecking(checking, part, watchlist as UnderstandOut).rows[3]).toMatchObject({ state: 'cant_do', note: (watchlist as { note: string }).note })
+    const changedAgain = changeRow(checking, 3, 'Jira project ABC')
+    expect(afterChecking(changedAgain, part, partRead('where', 'Jira project MOCK', 'understood'))).toEqual(changedAgain)
+  })
+
+  it('never asks the Planner again about a part it could do', () => {
+    expect(changeRow(read(ROWS), 3, 'Jira project ABC').rows[3]).toMatchObject({ text: 'Jira project ABC', state: 'edited' })
   })
 
   it('leaves out a part only when another of its kind stays', () => {
@@ -215,10 +256,10 @@ describe('the plan in step 2', () => {
     expect(nextBlockers(form, cannot).words).toBe('Next opens when you change your words to something I can do.')
   })
 
-  it('keeps Next off while the plan leaves a part out, even once the part it couldn’t do is retyped', () => {
-    let form = read(TEAMS, 'Post a summary of stale tickets in Teams')
-    form = changeRow(form, 0, 'Every Monday at 9am')
-    form = { ...changeRow(form, 3, 'Post it in the Teams channel'), typed: { '0:Jira project': 'MOCK' } }
+  it('keeps Next off while the plan leaves a part out, even once the Planner clears the changed part', () => {
+    let form = changeRow(readTeams(), 0, 'Every Monday at 9am')
+    form = changeRow(form, 3, 'Jira project MOCK')
+    form = { ...afterChecking(form, { kind: 'where', text: 'Jira project MOCK' }, partRead('where', 'Jira project MOCK', 'understood')), typed: { '0:Jira project': 'MOCK' } }
     expect(rowBlockers(form.rows)).toEqual([])
     const leftOut: PlanOut = { ...CLEAN_DRAFT, missing_tools: [{ need: 'Post in Teams', why: 'To share the list with the team.' }] }
     expect(nextBlockers(form, planView(leftOut, form.rows)).words).toBe('Next opens when you change your words so nothing is left out.')
@@ -358,6 +399,12 @@ describe('a draft', () => {
     const content = JSON.parse(JSON.stringify(draftContent(form, plan))) as Record<string, unknown>
     expect(content['name']).toBe('Stale bug follow-up')
     expect(restoreDraft(saved(3, content))).toEqual({ form, plan })
+  })
+
+  it('saves a part still being checked as one I can’t do yet, so the reopened draft asks again', () => {
+    const checking = changeRow(readTeams(), 3, 'Jira project MOCK')
+    const content = JSON.parse(JSON.stringify(draftContent(checking, null))) as Record<string, unknown>
+    expect(restoreDraft(saved(2, content)).form.rows[3]).toMatchObject({ text: 'Jira project MOCK', state: 'cant_do', note: NOT_CHECKED })
   })
 
   it('keeps the name at the top, from what was typed, the plan, or the task', () => {

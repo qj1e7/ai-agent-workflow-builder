@@ -22,7 +22,7 @@ export const NAME_LIMIT = 80
 const VALUE_LIMIT = 200
 const DRAFT_NAME_LIMIT = 60
 
-export type ChipState = RowState | 'edited'
+export type ChipState = RowState | 'edited' | 'checking'
 
 export interface PlannerRow {
   readonly text: string
@@ -78,6 +78,9 @@ const SAY_IT: Record<RowKind, string> = {
   where: 'you say where it goes',
 }
 const CHANGE_IT = 'you change what I can’t do'
+const CHECK_IT = 'I’ve checked your new words'
+const NOT_CHECKED = 'I couldn’t check your new words just now. Change them to try again.'
+const CANT_YET = 'I can’t do this yet.'
 const KINDS: readonly RowKind[] = ['schedule', 'look_for', 'do', 'where']
 
 export function textProblem(text: string): string | null {
@@ -114,8 +117,27 @@ export function changeRow(form: Form, index: number, typed: string): Form {
     const text = typed.trim()
     if (text === planner.text) return { kind: row.kind, ...planner, planner: null }
     if (text === '') return { kind: row.kind, text: '', state: 'missing', note: null, planner }
-    return { kind: row.kind, text, state: 'edited', note: null, planner }
+    return { kind: row.kind, text, state: planner.state === 'cant_do' ? 'checking' : 'edited', note: null, planner }
   })
+  return { ...form, rows }
+}
+
+type Part = Pick<Row, 'kind' | 'text'>
+
+export const partWords = (part: Part) => `${ROW_LABEL[part.kind]}: ${part.text}`
+
+function stillCantDo(answer: UnderstandOut | null): string | null {
+  if (answer === null || answer.answer === 'starters') return NOT_CHECKED
+  if (answer.answer === 'watchlist') return answer.note
+  const cant = answer.rows.find((row) => row.state === 'cant_do')
+  return cant ? (cant.note ?? CANT_YET) : null
+}
+
+export function afterChecking(form: Form, part: Part, answer: UnderstandOut | null): Form {
+  const why = stillCantDo(answer)
+  const rows = form.rows.map((row): Row =>
+    row.state === 'checking' && row.kind === part.kind && row.text === part.text ? { ...row, state: why === null ? 'edited' : 'cant_do', note: why } : row,
+  )
   return { ...form, rows }
 }
 
@@ -133,10 +155,16 @@ export interface Blocker {
   readonly words: string
 }
 
+function blockedBy(row: Row): string | null {
+  if (row.state === 'missing') return SAY_IT[row.kind]
+  if (row.state === 'cant_do') return CHANGE_IT
+  return row.state === 'checking' ? CHECK_IT : null
+}
+
 export function rowBlockers(rows: readonly Row[]): Blocker[] {
   const out: Blocker[] = []
   rows.forEach((row, index) => {
-    const words = row.state === 'missing' ? SAY_IT[row.kind] : row.state === 'cant_do' ? CHANGE_IT : null
+    const words = blockedBy(row)
     if (words !== null && !out.some((blocker) => blocker.words === words)) out.push({ index, words })
   })
   return out
@@ -430,9 +458,11 @@ function excerpt(text: string): string | null {
   return flat.length <= DRAFT_NAME_LIMIT ? flat : `${flat.slice(0, DRAFT_NAME_LIMIT).replace(/\s+\S*$/, '')}…`
 }
 
+const unchecked = (row: Row): Row => (row.state === 'checking' ? { ...row, state: 'cant_do', note: NOT_CHECKED } : row)
+
 export function draftContent(form: Form, plan: Planned | null): DraftView['content'] {
   const name = form.name.trim() || (plan ? defaultName(planView(plan.answer, form.rows)) : '') || excerpt(form.text)
-  return { name: name || null, form, plan }
+  return { name: name || null, form: { ...form, rows: form.rows.map(unchecked) }, plan }
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)

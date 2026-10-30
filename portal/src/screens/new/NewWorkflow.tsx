@@ -11,6 +11,7 @@ import { useCreateAgentUseCase, useMe, useSaveCard } from '../../api/queries'
 import { PRODUCT } from '../../shell/product'
 import { Button } from '../../ui/Button'
 import {
+  afterChecking,
   afterReading,
   carryOn,
   changeRow,
@@ -20,6 +21,7 @@ import {
   EMPTY_FORM,
   enterWhen,
   nameProblem,
+  partWords,
   taskWithoutSchedule,
   planView,
   restoreDraft,
@@ -118,6 +120,7 @@ function NewWorkflow({ page, draftId, start }: { page: PageWords; draftId: strin
   const [refused, setRefused] = useState<readonly string[]>([])
   const [saveError, setSaveError] = useState<string | null>(null)
   const understand = useUnderstand()
+  const check = useUnderstand()
   const saveDraft = useSaveDraft()
   const deleteDraft = useDeleteDraft()
   const saveCard = useSaveCard()
@@ -155,6 +158,17 @@ function NewWorkflow({ page, draftId, start }: { page: PageWords; draftId: strin
         onError: (error) => setForm((before) => ({ ...before, plannerSaid: words(error) })),
         onSettled: settled,
       }),
+    )
+  }
+
+  const changePart = (index: number, text: string) => {
+    const next = changeRow(form, index, text)
+    setForm(next)
+    const part = next.rows[index]
+    if (part?.state !== 'checking') return
+    check.mutateAsync(partWords(part)).then(
+      (answer) => setForm((before) => afterChecking(before, part, answer)),
+      () => setForm((before) => afterChecking(before, part, null)),
     )
   }
 
@@ -246,7 +260,7 @@ function NewWorkflow({ page, draftId, start }: { page: PageWords; draftId: strin
             error: plan.isError ? words(plan.error) : null,
             retry: () => void plan.refetch(),
           }}
-          onChangeRow={(index, text) => setForm((before) => changeRow(before, index, text))}
+          onChangeRow={changePart}
           onDropRow={(index) => setForm((before) => dropRow(before, index))}
           onValue={(key, value) => setForm((before) => ({ ...before, typed: { ...before.typed, [key]: value } }))}
           onBack={back}

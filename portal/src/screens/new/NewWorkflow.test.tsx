@@ -151,19 +151,20 @@ describe('step 2', () => {
     expect(buttonTag(html, 'Next')).not.toContain('aria-disabled')
   })
 
+  const teams = read(
+    {
+      answer: 'rows',
+      rows: [
+        { kind: 'schedule', text: '', state: 'missing', note: 'You didn’t say when it runs.' },
+        { kind: 'look_for', text: 'Tickets with no update for 14 days', state: 'changed', note: 'You said “stale”, so I used 14 days without an update.' },
+        { kind: 'do', text: 'Write a short summary', state: 'understood', note: null },
+        { kind: 'where', text: 'Post it in Teams', state: 'cant_do', note: 'I can’t post in Teams yet.' },
+      ],
+    },
+    'Post a summary of stale tickets in Teams',
+  )
+
   it('keeps Next off at a missing schedule and a part it can’t do, and says why', () => {
-    const teams = read(
-      {
-        answer: 'rows',
-        rows: [
-          { kind: 'schedule', text: '', state: 'missing', note: 'You didn’t say when it runs.' },
-          { kind: 'look_for', text: 'Tickets with no update for 14 days', state: 'changed', note: 'You said “stale”, so I used 14 days without an update.' },
-          { kind: 'do', text: 'Write a short summary', state: 'understood', note: null },
-          { kind: 'where', text: 'Post it in Teams', state: 'cant_do', note: 'I can’t post in Teams yet.' },
-        ],
-      },
-      'Post a summary of stale tickets in Teams',
-    )
     const html = check(teams, planState(null))
     expect(buttonTag(html, 'Next')).toContain('aria-disabled="true"')
     expect(buttonTag(html, 'Next')).toContain('aria-describedby="next-why"')
@@ -195,6 +196,14 @@ describe('step 2', () => {
     expect(text(html)).toContain('Left out, because no tool does it yet: Post in Teams.')
     expect(text(html)).toContain('Next opens when you change your words so nothing is left out.')
     expect(html).toMatch(/<ul id="plan-problems"[^>]*tabindex="-1"/)
+  })
+
+  it('says it is checking a changed can’t-do part, and keeps Next off until the Planner answers', () => {
+    const html = check(changeRow(teams, 3, 'Jira project MOCK'), planState(null))
+    expect(text(html)).toContain('Where it goes Jira project MOCK , checking your new words Change Checking your new words')
+    expect(buttonTag(html, 'Next')).toContain('aria-disabled="true"')
+    expect(text(html)).toContain('Next opens when you say when it runs and I’ve checked your new words.')
+    expect(text(html)).toContain('I’ve marked what I wasn’t sure about or can’t do.')
   })
 
   it('shows a fixed row as changed by you, with what the request said', () => {

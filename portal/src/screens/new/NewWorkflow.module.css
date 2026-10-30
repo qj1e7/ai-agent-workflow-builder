@@ -258,6 +258,7 @@
 }
 
 .spin {
+  flex: none;
   width: 18px;
   height: 18px;
   border: 3px solid var(--lead-tint);
@@ -391,10 +392,15 @@
   color: var(--green-ink);
 }
 
-.schip[data-state='edited'] {
+.schip[data-state='edited'],
+.schip[data-state='checking'] {
   border-color: color-mix(in srgb, var(--accent) 35%, transparent);
   background: var(--accent-soft);
   color: var(--accent-ink);
+}
+
+.schip[data-state='checking'] {
+  border-style: dashed;
 }
 
 .schip[data-state='missing'] {

@@ -14,6 +14,7 @@ const HINT: Record<ChipState, string> = {
   edited: 'changed by you',
   missing: 'please fill in',
   cant_do: 'can’t do this yet',
+  checking: 'checking your new words',
 }
 
 type ToolKinds = ReadonlyMap<ToolId, ToolView['kind']>
@@ -129,7 +130,12 @@ function RowItem({ row, index, rows, onChange, onDrop }: { row: Row; index: numb
           ) : null}
         </span>
       )}
-      {asked ? (
+      {row.state === 'checking' ? (
+        <span className={styles['rowNote']}>
+          <span className={styles['spin']} aria-hidden="true" />
+          <span>Checking your new words</span>
+        </span>
+      ) : asked ? (
         <span className={styles['rowNote']}>
           {row.state === 'cant_do' || row.state === 'missing' ? <IconAlert size={16} /> : row.state === 'edited' ? <IconPencil size={16} /> : <IconInfo size={16} />}
           <span>{asked}</span>
@@ -308,7 +314,7 @@ export function StepCheck({ form, plan, onChangeRow, onDropRow, onValue, onBack,
   const blockers = nextBlockers(form, plan.view)
   const ready = blockers.rows.length === 0
   const blank = form.rows.every((row) => row.text === '' && row.planner === null)
-  const unsure = form.rows.some((row) => row.state === 'missing' || row.state === 'cant_do')
+  const unsure = form.rows.some((row) => row.state === 'missing' || row.state === 'cant_do' || row.state === 'checking')
   const words = blank
     ? 'Tell me each part in a few words, and I’ll set it up as a new workflow.'
     : unsure
