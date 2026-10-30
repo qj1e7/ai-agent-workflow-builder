@@ -52,6 +52,11 @@ def cant(what: str) -> str:
         ("do", "Also post a summary in Teams", "post a summary in Teams"),
         ("do", '"Close" every ticket', "close every ticket"),
         ("do", "“Close” every ticket", "close every ticket"),
+        ("do", "Create one ticket that lists them, CLOSE the rest", "close the rest"),
+        ("do", "Create one ticket + close the rest", "close the rest"),
+        ("do", "Create one ticket (and close the rest)", "close the rest"),
+        ("do", "Create one ticket and cc the team", "create one ticket and cc the team"),
+        ("do", "Ensure every ticket is closed", "ensure every ticket is closed"),
         (
             "schedule",
             "Every weekday at 3pm, then delete every closed ticket",
@@ -178,6 +183,8 @@ def test_a_search_of_jira_tickets_stays_as_the_model_said(text: str):
         "Check LangGraph for new releases",
         "Check the GitHub releases of LangGraph",
         "Create one ticket for Mark",
+        "Generate one ticket that lists them",
+        "Create one ticket in OPS",
     ],
 )
 def test_a_read_or_a_new_jira_ticket_stays_as_the_model_said(text: str):

@@ -71,7 +71,7 @@ ABILITIES: Final = (
     ),
     Ability(
         "create a Jira ticket after a yes",
-        words("create add file raise open make log propose draft write submit put"),
+        words("create add file raise open make log propose draft write submit put generate"),
         makes=TICKETS,
     ),
 )
@@ -217,7 +217,7 @@ class _Word:
 
     @property
     def proper(self) -> bool:
-        return not self.starts and self.capital
+        return not self.starts and self.capital and not self.raw.isupper()
 
     @property
     def key(self) -> bool:
@@ -351,6 +351,8 @@ def _said(clause: Clause, reader: _Reader) -> str:
         glued = word.raw in ",;:.!?)" or shown.endswith("(")
         shown += word.raw if glued else f" {word.raw}"
     shown = shown.strip(" ,;:.!?")
+    if shown.endswith(")") and "(" not in shown:
+        shown = shown[:-1]
     if len(shown) <= SAID_LIMIT:
         return shown
     return shown[: SAID_LIMIT - 1].rsplit(" ", 1)[0] + "…"
