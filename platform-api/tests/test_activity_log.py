@@ -226,9 +226,6 @@ async def test_subscribers_wake_after_the_listener_reconnects(log: ActivityLog):
 
 
 class ShortOnce:
-    """Reads PostgreSQL, but the read after `short` is set returns one event, as a lagging
-    replica would."""
-
     def __init__(self, db: Database) -> None:
         self.inner = PostgresEvents(db)
         self.short = False
