@@ -167,6 +167,7 @@ def cosmos_settings() -> CosmosSettings:
 @dataclass(frozen=True)
 class CosmosUnderTest:
     events: CosmosEvents
+    database: DatabaseProxy
     container: ContainerProxy
 
     async def seqs(self, run_id: str) -> list[int]:
@@ -200,7 +201,7 @@ async def fresh_cosmos() -> CosmosUnderTest:
     except BaseException:
         await events.close()
         raise
-    return CosmosUnderTest(events, database.get_container_client(CONTAINER))
+    return CosmosUnderTest(events, database, database.get_container_client(CONTAINER))
 
 
 @pytest.fixture

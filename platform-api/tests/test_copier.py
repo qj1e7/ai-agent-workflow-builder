@@ -8,16 +8,21 @@ from psycopg import AsyncConnection
 from platform_api.db import Database
 from platform_api.monitoring import (
     PLATFORM,
-    ActivityEvent,
     ActivityLog,
     Copier,
     CosmosEvents,
     PendingEvent,
     RunRetriedData,
 )
+from platform_api.monitoring.cosmos_log import CONTAINER, cosmos_client
 from platform_api.monitoring.log import COPIED_CHANNEL, LoggedEvent
 from platform_api.shared import RunId
-from tests.conftest import CosmosUnderTest, PostgresUrls
+from tests.conftest import (
+    COSMOS_TEST_DATABASE,
+    CosmosUnderTest,
+    PostgresUrls,
+    cosmos_settings,
+)
 
 pytestmark = [pytest.mark.anyio, pytest.mark.cosmos]
 
@@ -35,7 +40,7 @@ class Watched:
         name: str = "copier",
         *,
         order: list[tuple[str, int]] | None = None,
-        fails: Callable[[int], bool] = lambda seq: False,
+        fails: Callable[[RunId, int], bool] = lambda run_id, seq: False,
         delay: float = 0.0,
     ) -> None:
         self.inner = inner
@@ -48,15 +53,15 @@ class Watched:
     def puts(self) -> list[int]:
         return [seq for name, seq in self.order if name == self.name]
 
+    async def ensure(self) -> str:
+        return await self.inner.ensure()
+
     async def put(self, event: LoggedEvent) -> None:
-        if self.fails(event.seq):
+        if self.fails(event.run_id, event.seq):
             raise CosmosDown(f"seq {event.seq}")
         await anyio.sleep(self.delay)
         await self.inner.put(event)
         self.order.append((self.name, event.seq))
-
-    async def read_after(self, run_id: RunId, after: int) -> list[ActivityEvent]:
-        return await self.inner.read_after(run_id, after)
 
 
 def pending(n: int) -> PendingEvent:
@@ -128,7 +133,7 @@ async def test_a_copy_that_fails_halfway_keeps_its_progress_and_the_next_one_fin
 ):
     await append(db, 1, 2, 3, 4, 5)
     down = True
-    watched = Watched(cosmos.events, fails=lambda seq: down and seq == 3)
+    watched = Watched(cosmos.events, fails=lambda run_id, seq: down and seq == 3)
     copier = Copier(db, watched, batch=2)
 
     with pytest.raises(CosmosDown):
@@ -222,7 +227,7 @@ async def test_a_running_copier_retries_a_failed_copy_after_a_short_delay(
 ):
     attempts: list[int] = []
 
-    def fails(seq: int) -> bool:
+    def fails(run_id: RunId, seq: int) -> bool:
         attempts.append(seq)
         return len(attempts) <= 2
 
@@ -239,3 +244,56 @@ async def test_a_running_copier_retries_a_failed_copy_after_a_short_delay(
 
     assert attempts[:2] == [1, 1]
     assert watched.puts == [1, 2]
+
+
+async def test_a_run_that_keeps_failing_does_not_hold_up_another_run(
+    db: Database, cosmos: CosmosUnderTest
+):
+    stuck, other = RunId("run_01STUCK"), RunId("run_01OTHER")
+    watched = Watched(cosmos.events, fails=lambda run_id, seq: run_id == stuck)
+    copier = Copier(db, watched, retry_delay=5, reconnect_delay=0.1)
+    await copier.start()
+    try:
+        await append(db, 1, run_id=stuck)
+        await anyio.sleep(0.2)
+        await append(db, 1, 2, run_id=other)
+        with anyio.fail_after(1.5):
+            while await cosmos.seqs(other) != [1, 2]:
+                await anyio.sleep(0.02)
+    finally:
+        await copier.stop()
+
+    assert await cosmos.seqs(stuck) == []
+
+
+async def test_a_copier_creates_its_container_before_its_first_copy(
+    db: Database, cosmos: CosmosUnderTest
+):
+    await cosmos.database.delete_container(CONTAINER)
+    fresh = CosmosEvents(cosmos_client(cosmos_settings()), database=COSMOS_TEST_DATABASE)
+    copier = Copier(db, fresh, reconnect_delay=0.1)
+    await append(db, 1, 2)
+    await copier.start()
+    try:
+        with anyio.fail_after(10):
+            while [e.seq for e in await fresh.read_after(RUN, 0)] != [1, 2]:
+                await anyio.sleep(0.05)
+    finally:
+        await copier.stop()
+        await fresh.close()
+
+
+async def test_a_recreated_container_is_filled_again_from_postgresql(
+    db: Database, cosmos: CosmosUnderTest
+):
+    await append(db, 1, 2)
+    assert await Copier(db, cosmos.events).copy_run(RUN) == 2
+    await cosmos.database.delete_container(CONTAINER)
+    fresh = CosmosEvents(cosmos_client(cosmos_settings()), database=COSMOS_TEST_DATABASE)
+    try:
+        again = Copier(db, fresh)
+        assert await again.runs_behind() == [RUN]
+        assert await again.copy_run(RUN) == 2
+        assert [e.seq for e in await fresh.read_after(RUN, 0)] == [1, 2]
+    finally:
+        await fresh.close()

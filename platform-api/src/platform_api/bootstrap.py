@@ -1,4 +1,3 @@
-import asyncio
 import hashlib
 import json
 import os
@@ -9,12 +8,10 @@ from typing import Any, LiteralString
 
 import httpx
 import psycopg
-from azure.core.exceptions import AzureError
 from psycopg.types.json import Jsonb
 
 from platform_api.auth import ConfigError
 from platform_api.migrations import upgrade_all
-from platform_api.monitoring import CosmosEvents
 from platform_api.orchestration.n8n import N8nClient, N8nError
 from platform_api.orchestration.workflows import (
     Finding,
@@ -26,7 +23,7 @@ from platform_api.orchestration.workflows import (
     parse,
     render,
 )
-from platform_api.settings import BootstrapSettings, CosmosSettings, bootstrap_settings_from_env
+from platform_api.settings import BootstrapSettings, bootstrap_settings_from_env
 
 API_KEY_LABEL = "platform-bootstrap"
 CREDENTIAL_NAME = "X-Step-Key"
@@ -69,14 +66,6 @@ def main(env: Mapping[str, str] | None = None) -> int:
         return _finish(settings, say, [], [], "the database holds old release-check data")
     upgrade_all(settings.owner_database_url)
     say("database migrations are at head")
-    if settings.cosmos is not None:
-        try:
-            asyncio.run(ensure_cosmos(settings.cosmos))
-        except AzureError as error:
-            say(f"could not reach Cosmos DB: {error}")
-            detail = _detail_without_message("could not reach Cosmos DB", error)
-            return _finish(settings, say, [], [], detail)
-        say("Cosmos DB holds the activity database and its run_events container")
     definitions = load_all()
     findings = lint(definitions)
     if findings:
@@ -93,14 +82,6 @@ def main(env: Mapping[str, str] | None = None) -> int:
     if findings:
         return _finish(settings, say, loaded, findings, "the live workflows fail the lint")
     return _finish(settings, say, loaded, [], "all workflows loaded, active and linted")
-
-
-async def ensure_cosmos(settings: CosmosSettings) -> None:
-    events = CosmosEvents.connect(settings)
-    try:
-        await events.ensure()
-    finally:
-        await events.close()
 
 
 def _detail_without_message(what: str, error: Exception) -> str:

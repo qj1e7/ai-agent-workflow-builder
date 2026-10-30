@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from contextlib import suppress
 from dataclasses import dataclass
 
@@ -7,7 +8,7 @@ from platform_api.db import Database, UnitOfWork
 from platform_api.monitoring.log import (
     CHANNEL,
     COPIED_CHANNEL,
-    EventReplica,
+    EventCopy,
     LoggedEvent,
     NotificationHub,
     copied_notice,
@@ -17,22 +18,28 @@ from platform_api.shared import RunId
 logger = logging.getLogger(__name__)
 
 _LOCK = "SELECT pg_advisory_xact_lock(hashtextextended('copy:' || %s, 0))"
-_COPIED = "SELECT seq FROM monitoring.run_events_copied WHERE run_id = %s"
+_COPIED = """
+    SELECT seq FROM monitoring.run_events_copied
+    WHERE run_id = %(run_id)s AND container_rid = %(rid)s
+"""
 _ROWS_AFTER = """
     SELECT run_id, seq, ts, actor, kind, summary, data, dedupe_key FROM monitoring.run_events
     WHERE run_id = %(run_id)s AND seq > %(after)s ORDER BY seq LIMIT %(limit)s
 """
 _RECORD = """
-    INSERT INTO monitoring.run_events_copied (run_id, seq, copied_at)
-    VALUES (%(run_id)s, %(seq)s, %(at)s)
-    ON CONFLICT (run_id) DO UPDATE SET seq = EXCLUDED.seq, copied_at = EXCLUDED.copied_at
-    WHERE monitoring.run_events_copied.seq < EXCLUDED.seq
+    INSERT INTO monitoring.run_events_copied (run_id, container_rid, seq, copied_at)
+    VALUES (%(run_id)s, %(rid)s, %(seq)s, %(at)s)
+    ON CONFLICT (run_id) DO UPDATE
+    SET container_rid = EXCLUDED.container_rid, seq = EXCLUDED.seq, copied_at = EXCLUDED.copied_at
+    WHERE monitoring.run_events_copied.container_rid <> EXCLUDED.container_rid
+       OR monitoring.run_events_copied.seq < EXCLUDED.seq
 """
 _RUNS_BEHIND = """
     SELECT logged.run_id FROM (
         SELECT run_id, max(seq) AS seq FROM monitoring.run_events GROUP BY run_id
     ) AS logged
-    LEFT JOIN monitoring.run_events_copied AS copied USING (run_id)
+    LEFT JOIN monitoring.run_events_copied AS copied
+        ON copied.run_id = logged.run_id AND copied.container_rid = %(rid)s
     WHERE logged.seq > coalesce(copied.seq, 0)
 """
 
@@ -44,26 +51,43 @@ class _Batch:
     failure: Exception | None
 
 
+@dataclass(frozen=True)
+class _Retry:
+    at: float
+    failures: int
+
+
 class Copier:
     def __init__(
         self,
         db: Database,
-        replica: EventReplica,
+        replica: EventCopy,
         *,
-        batch: int = 100,
+        batch: int = 20,
+        put_timeout: float = 10.0,
         retry_delay: float = 1.0,
+        max_retry_delay: float = 5.0,
         reconnect_delay: float = 1.0,
     ) -> None:
         self._db = db
         self._replica = replica
         self._batch = batch
+        self._put_timeout = put_timeout
         self._retry_delay = retry_delay
+        self._max_retry_delay = max_retry_delay
         self._hub = NotificationHub(db, channel=CHANNEL, reconnect_delay=reconnect_delay)
         self._hub.watch(self._note_run, self._note_connect)
+        self._container_rid: str | None = None
+        self._live: set[RunId] = set()
         self._behind: set[RunId] = set()
-        self._sweep = False
+        self._retries: dict[RunId, _Retry] = {}
+        self._sweep_at: float | None = None
         self._work = asyncio.Event()
         self._task: asyncio.Task[None] | None = None
+
+    @property
+    def listening(self) -> bool:
+        return self._hub.listening
 
     async def start(self) -> None:
         self._task = asyncio.create_task(self._copy_forever())
@@ -87,15 +111,22 @@ class Copier:
                 return batch.done
 
     async def runs_behind(self) -> list[RunId]:
+        rid = await self._rid()
         async with self._db.transaction("monitoring") as uow:
-            rows = await (await uow.conn.execute(_RUNS_BEHIND)).fetchall()
+            rows = await (await uow.conn.execute(_RUNS_BEHIND, {"rid": rid})).fetchall()
         return [RunId(row["run_id"]) for row in rows]
 
+    async def _rid(self) -> str:
+        if self._container_rid is None:
+            self._container_rid = await self._replica.ensure()
+        return self._container_rid
+
     async def _copy_batch(self, run_id: RunId) -> _Batch:
+        rid = await self._rid()
         failure: Exception | None = None
         async with self._db.transaction("monitoring") as uow:
             await uow.conn.execute(_LOCK, (run_id,))
-            before = await self._copied(uow, run_id)
+            before = await self._copied(uow, run_id, rid)
             rows = await (
                 await uow.conn.execute(
                     _ROWS_AFTER, {"run_id": run_id, "after": before, "limit": self._batch}
@@ -104,55 +135,97 @@ class Copier:
             done = before
             for row in rows:
                 try:
-                    await self._replica.put(LoggedEvent(**row))
+                    async with asyncio.timeout(self._put_timeout):
+                        await self._replica.put(LoggedEvent(**row))
                 except Exception as error:
                     failure = error
                     break
                 done = row["seq"]
             if done > before:
-                await uow.conn.execute(_RECORD, {"run_id": run_id, "seq": done, "at": uow.now})
+                await uow.conn.execute(
+                    _RECORD, {"run_id": run_id, "rid": rid, "seq": done, "at": uow.now}
+                )
                 await uow.conn.execute(
                     "SELECT pg_notify(%s, %s)", (COPIED_CHANNEL, copied_notice(run_id, done))
                 )
         return _Batch(done, len(rows) == self._batch, failure)
 
     @staticmethod
-    async def _copied(uow: UnitOfWork, run_id: RunId) -> int:
-        row = await (await uow.conn.execute(_COPIED, (run_id,))).fetchone()
+    async def _copied(uow: UnitOfWork, run_id: RunId, rid: str) -> int:
+        row = await (await uow.conn.execute(_COPIED, {"run_id": run_id, "rid": rid})).fetchone()
         return 0 if row is None else int(row["seq"])
 
     def _note_run(self, run_id: RunId) -> None:
+        self._live.add(run_id)
         self._behind.add(run_id)
         self._work.set()
 
     def _note_connect(self) -> None:
-        self._sweep = True
+        self._sweep_at = 0.0
         self._work.set()
 
     async def _copy_forever(self) -> None:
         while True:
-            await self._work.wait()
-            self._work.clear()
-            if not await self._copy_pending():
-                await asyncio.sleep(self._retry_delay)
-                self._work.set()
+            await self._next_work()
+            now = time.monotonic()
+            if self._sweep_at is not None and self._sweep_at <= now:
+                await self._sweep(now)
+            if self._container_rid is None:
+                continue
+            for run_id in sorted(self._behind, key=lambda r: (r not in self._live, r)):
+                retry = self._retries.get(run_id)
+                if retry is not None and retry.at > now:
+                    continue
+                self._behind.discard(run_id)
+                self._live.discard(run_id)
+                await self._copy_one_batch(run_id)
+                if self._live:
+                    break
 
-    async def _copy_pending(self) -> bool:
-        if self._sweep:
-            self._sweep = False
-            try:
-                self._behind.update(await self.runs_behind())
-            except Exception as error:
-                logger.warning("Could not list the runs left to copy: %s", error)
-                self._sweep = True
-                return False
-        copied_all = True
-        for run_id in sorted(self._behind):
-            self._behind.discard(run_id)
-            try:
-                await self.copy_run(run_id)
-            except Exception as error:
-                logger.warning("Could not copy the events of %s: %r", run_id, error)
-                self._behind.add(run_id)
-                copied_all = False
-        return copied_all
+    async def _next_work(self) -> None:
+        due = [retry.at for retry in self._retries.values()]
+        if self._sweep_at is not None:
+            due.append(self._sweep_at)
+        wait = max(0.0, min(due) - time.monotonic()) if due else None
+        with suppress(TimeoutError):
+            async with asyncio.timeout(wait):
+                await self._work.wait()
+        self._work.clear()
+        now = time.monotonic()
+        self._behind.update(run_id for run_id, retry in self._retries.items() if retry.at <= now)
+
+    async def _sweep(self, now: float) -> None:
+        try:
+            self._behind.update(await self.runs_behind())
+        except Exception as error:
+            logger.warning("Could not catch up the copy: %r", error)
+            self._sweep_at = now + self._retry_delay
+            return
+        self._sweep_at = None
+
+    async def _copy_one_batch(self, run_id: RunId) -> None:
+        try:
+            batch = await self._copy_batch(run_id)
+        except Exception as error:
+            self._retry_later(run_id, error)
+            return
+        if batch.failure is not None:
+            self._retry_later(run_id, batch.failure)
+            return
+        self._retries.pop(run_id, None)
+        if batch.more:
+            self._behind.add(run_id)
+            self._work.set()
+
+    def _retry_later(self, run_id: RunId, error: Exception) -> None:
+        previous = self._retries.get(run_id)
+        failures = 1 if previous is None else previous.failures + 1
+        delay = min(self._retry_delay * 2 ** (failures - 1), self._max_retry_delay)
+        self._retries[run_id] = _Retry(time.monotonic() + delay, failures)
+        logger.warning(
+            "Could not copy the events of %s (try %d, next in %.1f s): %r",
+            run_id,
+            failures,
+            delay,
+            error,
+        )

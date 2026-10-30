@@ -146,7 +146,6 @@ class BootstrapSettings:
     n8n_owner_password: str
     step_key: str
     platform_internal_url: str
-    cosmos: CosmosSettings | None = None
 
 
 def bootstrap_settings_from_env(env: Mapping[str, str]) -> BootstrapSettings:
@@ -157,5 +156,4 @@ def bootstrap_settings_from_env(env: Mapping[str, str]) -> BootstrapSettings:
         n8n_owner_password=_required(env, "N8N_OWNER_PASSWORD"),
         step_key=_required(env, "STEP_KEY"),
         platform_internal_url=_required(env, "PLATFORM_INTERNAL_URL").rstrip("/"),
-        cosmos=cosmos_from_env(env),
     )

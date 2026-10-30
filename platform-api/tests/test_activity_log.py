@@ -1,10 +1,12 @@
 import json
+import logging
 from datetime import UTC, datetime
 
 import anyio
 import pytest
 from psycopg import AsyncConnection
 
+from platform_api.db import Database
 from platform_api.monitoring import (
     PLATFORM,
     ActivityEvent,
@@ -15,6 +17,7 @@ from platform_api.monitoring import (
     activity_events_adapter,
     agent_event_adapter,
 )
+from platform_api.monitoring.log import COPIED_CHANNEL, PostgresEvents, copied_notice
 from platform_api.settings import Context
 from platform_api.shared import RunId, TaskId
 from tests.conftest import PostgresUrls
@@ -220,3 +223,144 @@ async def test_subscribers_wake_after_the_listener_reconnects(log: ActivityLog):
                 await anyio.sleep(0.01)
 
     assert received == [1]
+
+
+class ShortOnce:
+    """Reads PostgreSQL, but the read after `short` is set returns one event, as a lagging
+    replica would."""
+
+    def __init__(self, db: Database) -> None:
+        self.inner = PostgresEvents(db)
+        self.short = False
+        self.reads = 0
+
+    async def read_after(self, run_id: RunId, after: int) -> list[ActivityEvent]:
+        self.reads += 1
+        events = await self.inner.read_after(run_id, after)
+        if self.short:
+            self.short = False
+            return events[:1]
+        return events
+
+
+class Failing:
+    async def read_after(self, run_id: RunId, after: int) -> list[ActivityEvent]:
+        raise RuntimeError("the replica is down")
+
+
+class FailsFirst(ShortOnce):
+    async def read_after(self, run_id: RunId, after: int) -> list[ActivityEvent]:
+        if self.reads == 0:
+            self.reads += 1
+            raise RuntimeError("the replica is down")
+        return await super().read_after(run_id, after)
+
+
+class Lagging:
+    async def read_after(self, run_id: RunId, after: int) -> list[ActivityEvent]:
+        return []
+
+
+async def notify_copied(db: Database, run_id: RunId, seq: int) -> None:
+    async with db.connection("monitoring") as conn, conn.transaction():
+        await conn.execute("SELECT pg_notify(%s, %s)", (COPIED_CHANNEL, copied_notice(run_id, seq)))
+
+
+async def appended(db: Database, *numbers: int) -> list[ActivityEvent]:
+    async with db.transaction("orchestration") as uow:
+        return await ActivityLog(db).append(uow, RUN, [pending(n) for n in numbers])
+
+
+async def test_a_stream_reads_again_when_a_read_comes_back_short_of_the_named_seq(db: Database):
+    replica = ShortOnce(db)
+    log = ActivityLog(db, replica=replica, short_read_recheck=0.05)
+    await log.start()
+    received: list[int] = []
+
+    async def collect() -> None:
+        async for event in log.subscribe(RUN, after=0):
+            received.append(event.seq)
+            if len(received) == 3:
+                return
+
+    try:
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(collect)
+            await anyio.sleep(0.05)
+            await appended(db, 1, 2, 3)
+            replica.short = True
+            await notify_copied(db, RUN, 3)
+            with anyio.fail_after(2):
+                while len(received) < 3:
+                    await anyio.sleep(0.01)
+    finally:
+        await log.stop()
+
+    assert received == [1, 2, 3]
+
+
+async def test_a_stream_reads_again_after_a_failed_read(db: Database):
+    log = ActivityLog(db, replica=FailsFirst(db), read_retry=0.05)
+    await log.start()
+    await appended(db, 1)
+    received: list[int] = []
+
+    async def collect() -> None:
+        async for event in log.subscribe(RUN, after=0):
+            received.append(event.seq)
+            return
+
+    try:
+        with anyio.fail_after(2):
+            await collect()
+    finally:
+        await log.stop()
+
+    assert received == [1]
+
+
+@pytest.mark.parametrize("replica", [Lagging(), Failing()], ids=["lagging", "failing"])
+async def test_a_one_off_read_falls_back_to_postgresql_when_the_copy_cannot_answer(
+    db: Database, replica: Lagging | Failing, caplog: pytest.LogCaptureFixture
+):
+    log = ActivityLog(db, replica=replica, copy_wait=0.2, read_retry=0.05)
+    stored = await appended(db, 1, 2)
+
+    with caplog.at_level(logging.WARNING), anyio.fail_after(2):
+        assert await log.read_after(RUN, 0) == stored
+
+    assert f"Read {RUN} from PostgreSQL" in caplog.text
+
+
+async def test_a_malformed_notice_is_skipped_and_the_listener_stays_up(
+    db: Database, caplog: pytest.LogCaptureFixture
+):
+    log = ActivityLog(db, replica=PostgresEvents(db), reconnect_delay=5)
+    await log.start()
+    received: list[int] = []
+
+    async def collect() -> None:
+        async for event in log.subscribe(RUN, after=0):
+            received.append(event.seq)
+            return
+
+    try:
+        with caplog.at_level(logging.WARNING):
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(collect)
+                await anyio.sleep(0.05)
+                async with db.connection("monitoring") as conn, conn.transaction():
+                    await conn.execute(
+                        "SELECT pg_notify(%s, %s)", (COPIED_CHANNEL, f"{RUN} not-a-seq")
+                    )
+                await appended(db, 1)
+                await notify_copied(db, RUN, 1)
+                with anyio.fail_after(2):
+                    while not received:
+                        await anyio.sleep(0.01)
+    finally:
+        await log.stop()
+
+    assert received == [1]
+    assert "Skipped a run_events_copied notice" in caplog.text
+    assert "lost its connection" not in caplog.text

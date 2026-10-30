@@ -52,16 +52,35 @@ class EventReader(Protocol):
     async def read_after(self, run_id: RunId, after: int) -> list[ActivityEvent]: ...
 
 
-class EventReplica(EventReader, Protocol):
+class EventCopy(Protocol):
+    async def ensure(self) -> str: ...
+
     async def put(self, event: LoggedEvent) -> None: ...
+
+
+class EventReplica(EventReader, EventCopy, Protocol): ...
+
+
+class PostgresEvents:
+    def __init__(self, db: Database) -> None:
+        self._db = db
+
+    async def read_after(self, run_id: RunId, after: int) -> list[ActivityEvent]:
+        async with self._db.transaction("monitoring") as uow:
+            rows = await (
+                await uow.conn.execute(_READ_AFTER, {"run_id": run_id, "after": after})
+            ).fetchall()
+        return [activity_event_adapter.validate_python(row) for row in rows]
 
 
 def copied_notice(run_id: RunId, seq: int) -> str:
     return f"{run_id} {seq}"
 
 
-def read_notice(payload: str) -> tuple[RunId, int | None]:
+def read_notice(payload: str) -> tuple[RunId, int | None] | None:
     run_text, _, seq = payload.partition(" ")
+    if not run_text or (seq and not seq.isdigit()):
+        return None
     return RunId(run_text), int(seq) if seq else None
 
 
@@ -84,8 +103,13 @@ class Wakeup:
         self._named_no_seq = False
         return due
 
-    async def wait(self) -> None:
-        await self._flag.wait()
+    async def wait(self, cursor: int, recheck: float) -> None:
+        if self._highest_named <= cursor:
+            await self._flag.wait()
+            return
+        with suppress(TimeoutError):
+            async with asyncio.timeout(recheck):
+                await self._flag.wait()
 
 
 class NotificationHub:
@@ -155,7 +179,15 @@ class NotificationHub:
                 for on_connect in self._on_connect:
                     on_connect()
                 async for notification in conn.notifies():
-                    run_id, copied = read_notice(notification.payload)
+                    notice = read_notice(notification.payload)
+                    if notice is None:
+                        logger.warning(
+                            "Skipped a %s notice that names no run: %r",
+                            self._channel,
+                            notification.payload,
+                        )
+                        continue
+                    run_id, copied = notice
                     self._wake(self._subscribers.get(run_id, ()), copied)
                     for on_run in self._on_run:
                         on_run(run_id)
@@ -178,10 +210,16 @@ class ActivityLog:
         replica: EventReader | None = None,
         reconnect_delay: float = 1.0,
         copy_wait: float = 2.0,
+        short_read_recheck: float = 0.25,
+        read_retry: float = 1.0,
     ) -> None:
         self._db = db
+        self._postgres = PostgresEvents(db)
         self._replica = replica
+        self._reader: EventReader = self._postgres if replica is None else replica
         self._copy_wait = copy_wait
+        self._short_read_recheck = short_read_recheck
+        self._read_retry = read_retry
         channel = CHANNEL if replica is None else COPIED_CHANNEL
         self._hub = NotificationHub(db, channel=channel, reconnect_delay=reconnect_delay)
 
@@ -255,7 +293,7 @@ class ActivityLog:
 
     async def read_after(self, run_id: RunId, after: int) -> list[ActivityEvent]:
         if self._replica is None:
-            return await self._read_postgres(run_id, after)
+            return await self._postgres.read_after(run_id, after)
         return await self._read_when_copied(run_id, after)
 
     async def subscribe(self, run_id: RunId, after: int) -> AsyncGenerator[ActivityEvent]:
@@ -263,10 +301,19 @@ class ActivityLog:
         async with self._hub.wakeups(run_id) as wakeup:
             while True:
                 if wakeup.due_after(cursor):
-                    for event in await self._read(run_id, cursor):
+                    try:
+                        events = await self._reader.read_after(run_id, cursor)
+                    except Exception as error:
+                        logger.warning(
+                            "Could not read the events of %s after %s: %r", run_id, cursor, error
+                        )
+                        await asyncio.sleep(self._read_retry)
+                        wakeup.wake(None)
+                        continue
+                    for event in events:
                         cursor = event.seq
                         yield event
-                await wakeup.wait()
+                await wakeup.wait(cursor, self._short_read_recheck)
 
     async def _read_when_copied(self, run_id: RunId, after: int) -> list[ActivityEvent]:
         async with self._db.transaction("monitoring") as uow:
@@ -274,7 +321,7 @@ class ActivityLog:
         if logged <= after:
             return []
         events: list[ActivityEvent] = []
-        with suppress(TimeoutError):
+        try:
             async with (
                 asyncio.timeout(self._copy_wait),
                 aclosing(self.subscribe(run_id, after)) as stream,
@@ -282,20 +329,16 @@ class ActivityLog:
                 async for event in stream:
                     events.append(event)
                     if event.seq >= logged:
-                        break
-        return events
-
-    async def _read(self, run_id: RunId, after: int) -> list[ActivityEvent]:
-        if self._replica is None:
-            return await self._read_postgres(run_id, after)
-        return await self._replica.read_after(run_id, after)
-
-    async def _read_postgres(self, run_id: RunId, after: int) -> list[ActivityEvent]:
-        async with self._db.transaction("monitoring") as uow:
-            rows = await (
-                await uow.conn.execute(_READ_AFTER, {"run_id": run_id, "after": after})
-            ).fetchall()
-        return [activity_event_adapter.validate_python(row) for row in rows]
+                        return events
+        except Exception as error:
+            logger.warning(
+                "Read %s from PostgreSQL: its copy stopped at %s of %s (%r).",
+                run_id,
+                events[-1].seq if events else after,
+                logged,
+                error,
+            )
+        return await self._postgres.read_after(run_id, after)
 
     async def ingest_agent_events(
         self, uow: UnitOfWork, run_id: RunId, task_id: TaskId, events: Iterable[AgentEvent]

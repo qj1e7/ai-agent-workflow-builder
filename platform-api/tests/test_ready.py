@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from platform_api.app import create_app
-from platform_api.bootstrap import LoadedWorkflow, ensure_cosmos, previous_hashes, record_status
+from platform_api.bootstrap import LoadedWorkflow, previous_hashes, record_status
 from platform_api.monitoring import CosmosEvents, callback_for
 from platform_api.settings import CosmosSettings
 from platform_api.shared import RunId, TaskId
@@ -93,7 +93,6 @@ def test_with_activity_reader_cosmos_the_api_copies_each_event_and_reads_it_back
     postgres: PostgresUrls,
 ):
     settings = cosmos_settings()
-    asyncio.run(ensure_cosmos(settings))
     truncate_all(postgres.owner)
     record_status(postgres.owner, ready=True, detail="all workflows loaded", workflows=[])
     env = {
@@ -115,7 +114,12 @@ def test_with_activity_reader_cosmos_the_api_copies_each_event_and_reads_it_back
     ).token
 
     with TestClient(create_app(env)) as client:
-        assert client.get("/healthz/ready").status_code == 200
+        ready = client.get("/healthz/ready")
+        assert ready.status_code == 200
+        assert {k: v for k, v in ready.json()["checks"][1].items() if k in ("name", "ok")} == {
+            "name": "activity_copy",
+            "ok": True,
+        }
         posted = client.post(
             f"/internal/v1/runs/{run_id}/agent-events",
             params={"task": task_id},

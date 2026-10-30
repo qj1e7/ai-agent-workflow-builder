@@ -10,6 +10,7 @@ from platform_api import auth, wiring
 from platform_api.builder import http as builder_http
 from platform_api.builder import watchlist_http
 from platform_api.db import Database
+from platform_api.monitoring import Copier
 from platform_api.monitoring import http as monitoring_http
 from platform_api.orchestration import http as orchestration_http
 from platform_api.orchestration import people_http, practice_jira_http, settings_http
@@ -80,7 +81,12 @@ def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
         responses={503: {"model": Readiness, "description": "Not ready to take traffic"}},
     )
     async def ready() -> JSONResponse:
-        readiness = await readiness_of(app.state.db, app.state.activity_log.listening)
+        copier: Copier | None = app.state.copier
+        readiness = await readiness_of(
+            app.state.db,
+            app.state.activity_log.listening,
+            None if copier is None else copier.listening,
+        )
         return JSONResponse(
             status_code=200 if readiness.ready else 503,
             content=readiness.model_dump(mode="json"),
@@ -95,7 +101,7 @@ def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
     return app
 
 
-async def readiness_of(db: Database, listening: bool) -> Readiness:
+async def readiness_of(db: Database, listening: bool, copying: bool | None = None) -> Readiness:
     checks = [
         ReadinessCheck(
             name="activity_log",
@@ -103,6 +109,16 @@ async def readiness_of(db: Database, listening: bool) -> Readiness:
             detail="listening for run events" if listening else "not listening for run events",
         )
     ]
+    if copying is not None:
+        checks.append(
+            ReadinessCheck(
+                name="activity_copy",
+                ok=copying,
+                detail="listening for events to copy to Cosmos DB"
+                if copying
+                else "not listening for events to copy to Cosmos DB",
+            )
+        )
     async with db.transaction("orchestration") as uow:
         row = await (
             await uow.conn.execute(

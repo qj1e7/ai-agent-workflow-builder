@@ -33,11 +33,13 @@ class CosmosEvents:
     async def close(self) -> None:
         await self._client.close()
 
-    async def ensure(self) -> None:
+    async def ensure(self) -> str:
         database = await self._client.create_database_if_not_exists(self._database)
-        await database.create_container_if_not_exists(
+        container = await database.create_container_if_not_exists(
             id=CONTAINER, partition_key=PartitionKey(path=PARTITION_KEY)
         )
+        properties = await container.read()
+        return properties["_rid"]
 
     async def put(self, event: LoggedEvent) -> None:
         await self._container.upsert_item(

@@ -63,8 +63,8 @@ async def test_orchestration_may_insert_into_the_activity_log_only(db: Database)
 async def test_only_the_copier_moves_the_copied_mark_and_it_never_deletes(db: Database):
     async with db.transaction("monitoring") as uow:
         await uow.conn.execute(
-            "INSERT INTO monitoring.run_events_copied (run_id, seq, copied_at) "
-            "VALUES ('run_1', 1, now())"
+            "INSERT INTO monitoring.run_events_copied (run_id, container_rid, seq, copied_at) "
+            "VALUES ('run_1', 'rid', 1, now())"
         )
         await uow.conn.execute("UPDATE monitoring.run_events_copied SET seq = 2")
     async with db.transaction("monitoring") as uow:

@@ -45,6 +45,7 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.step_key = services.settings.step_key
     app.state.db = services.db
     app.state.activity_log = services.activity_log
+    app.state.copier = services.copier
     app.state.orchestrator = services.orchestrator
     app.state.builder = services.builder
     app.state.watchlist = services.watchlist

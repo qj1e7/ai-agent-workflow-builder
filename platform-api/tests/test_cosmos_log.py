@@ -145,28 +145,35 @@ def pending(n: int) -> PendingEvent:
     )
 
 
-async def test_readers_read_cosmos_db_and_wait_a_bounded_time_for_the_copy(
-    db: Database, cosmos: CosmosUnderTest
-):
-    log = ActivityLog(db, replica=cosmos.events, copy_wait=0.3)
-    async with db.transaction("orchestration") as uow:
-        stored = await log.append(uow, RUN, [pending(1), pending(2)])
-
-    with anyio.fail_after(3):
-        assert await log.read_after(RUN, 0) == []
-
-    await Copier(db, cosmos.events).copy_run(RUN)
-    assert await log.read_after(RUN, 0) == stored
-
-
 class CountingReads:
     def __init__(self, inner: CosmosEvents) -> None:
         self.inner = inner
         self.reads: list[int] = []
+        self.served: list[list[int]] = []
 
     async def read_after(self, run_id: RunId, after: int) -> list[ActivityEvent]:
         self.reads.append(after)
-        return await self.inner.read_after(run_id, after)
+        events = await self.inner.read_after(run_id, after)
+        self.served.append([e.seq for e in events])
+        return events
+
+
+async def test_a_one_off_read_comes_from_cosmos_db_once_the_copy_reaches_postgresql(
+    db: Database, cosmos: CosmosUnderTest
+):
+    reads = CountingReads(cosmos.events)
+    log = ActivityLog(db, replica=reads, copy_wait=0.3)
+    async with db.transaction("orchestration") as uow:
+        stored = await log.append(uow, RUN, [pending(1), pending(2)])
+
+    with anyio.fail_after(3):
+        assert await log.read_after(RUN, 0) == stored
+    assert reads.served == [[]]
+
+    await Copier(db, cosmos.events).copy_run(RUN)
+
+    assert await log.read_after(RUN, 0) == stored
+    assert reads.served[-1] == [1, 2]
 
 
 async def test_a_wake_up_that_names_a_copied_seq_at_or_below_the_cursor_reads_nothing(

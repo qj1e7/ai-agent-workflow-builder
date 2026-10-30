@@ -109,10 +109,7 @@ services:
         condition: service_healthy
       n8n:
         condition: service_healthy
-      cosmos:
-        condition: service_healthy
     environment:
-      <<: *cosmos-account
       DATABASE_URL_OWNER: postgresql://wab_owner:${WAB_OWNER_PASSWORD:?run deploy/make-env.sh}@postgres:5432/platform
       N8N_BASE_URL: http://n8n:5678
       N8N_OWNER_EMAIL: ${N8N_OWNER_EMAIL:?run deploy/make-env.sh}

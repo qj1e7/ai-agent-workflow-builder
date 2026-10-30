@@ -121,6 +121,16 @@ def test_step_route_refuses_a_bad_step_name():
 
 
 @pytest.mark.anyio
+async def test_readiness_names_a_copier_that_is_not_listening(db: Database):
+    readiness = await readiness_of(db, True, copying=False)
+    assert [(c.name, c.ok) for c in readiness.checks][:2] == [
+        ("activity_log", True),
+        ("activity_copy", False),
+    ]
+    assert readiness.ready is False
+
+
+@pytest.mark.anyio
 async def test_readiness_is_not_ready_before_bootstrap(db: Database):
     readiness = await readiness_of(db, True)
     assert readiness.ready is False

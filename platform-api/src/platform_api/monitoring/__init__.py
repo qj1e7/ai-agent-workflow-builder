@@ -38,7 +38,7 @@ from platform_api.monitoring.events import (
     agent_actor,
     user_actor,
 )
-from platform_api.monitoring.log import ActivityLog, NotificationHub
+from platform_api.monitoring.log import ActivityLog
 
 __all__ = [
     "PLATFORM",
@@ -60,7 +60,6 @@ __all__ = [
     "ApprovalRequestedData",
     "DeniedReason",
     "LegDispatchedData",
-    "NotificationHub",
     "PendingEvent",
     "RunCreatedData",
     "RunFailedData",
