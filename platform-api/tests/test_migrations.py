@@ -341,3 +341,24 @@ async def test_migration_0007_keeps_the_newest_version_beside_a_problem_and_back
             "WHERE software_id = 'sw_read'"
         ).fetchall()
         assert read == [("2.0.0", NOW)]
+
+
+def test_migration_0008_lets_a_schedule_run_on_weekdays_and_a_downgrade_drops_those(
+    postgres: PostgresUrls,
+):
+    insert = (
+        "INSERT INTO orchestration.schedules (use_case_id, day, at, time_zone, owner_id, "
+        "owner_name, saved_at) VALUES (%s, %s, '15:00', 'Asia/Singapore', 'alice', 'Alice', %s)"
+    )
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        conn.execute(insert, ("uc_weekdays", "weekdays", NOW))
+        conn.execute(insert, ("uc_monday", "monday", NOW))
+        downgrade("orchestration", postgres.owner, "0007")
+        try:
+            days = conn.execute("SELECT day FROM orchestration.schedules").fetchall()
+            assert days == [("monday",)]
+            with pytest.raises(psycopg.errors.CheckViolation):
+                conn.execute(insert, ("uc_again", "weekdays", NOW))
+        finally:
+            upgrade("orchestration", postgres.owner)
+        conn.execute(insert, ("uc_again", "weekdays", NOW))

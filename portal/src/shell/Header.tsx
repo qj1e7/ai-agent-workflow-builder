@@ -1,4 +1,5 @@
 import { Link, NavLink } from 'react-router'
+import { isOperator } from '../api/me'
 import type { Me } from '../api/types'
 import { cx } from '../ui/cx'
 import { Mark, SettingsIcon } from './icons'
@@ -21,7 +22,7 @@ export function Header({ person }: { person: Me | null }) {
             {PRODUCT.slice(PRODUCT_PREFIX.length)}
           </span>
         </Link>
-        <Menu />
+        <Menu operator={isOperator(person)} />
         <div className={styles['tools']}>
           <TeamsButton person={person} />
           <NavLink to={PAGES.settings.path} className={cx(iconButton['button'])} aria-label="Settings" title="Settings">

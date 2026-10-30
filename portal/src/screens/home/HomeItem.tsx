@@ -8,6 +8,7 @@ import { AgentFace } from '../../ui/AgentFace'
 import { Button, ButtonLink } from '../../ui/Button'
 import { cx } from '../../ui/cx'
 import { IconAlert, IconChevronRight, IconShield, type Icon } from '../../ui/icons'
+import { draftPath } from '../new/starters'
 import { actionsOf, draftWords, retryProblem, waitingWords, wordsOf, type Action, type Need, type Tone } from './home'
 import styles from './Home.module.css'
 
@@ -151,9 +152,14 @@ export function WaitingRow({ item, now, motion }: { item: WaitingItem; now: Date
 export function DraftRow({ draft, now, arrive, stagger }: { draft: DraftItem; now: Date; arrive: boolean; stagger: number }) {
   const words = draftWords(draft, now)
   return (
-    <li className={cx(styles['plainRow'], arrive && styles['arrive'])} style={{ '--i': stagger } as CSSProperties} data-draft={draft.draft_id}>
-      <span className={styles['rowName']}>{words.name}</span>
-      <span className={styles['rowSub']}>{words.sub}</span>
+    <li className={arrive ? styles['arrive'] : undefined} style={{ '--i': stagger } as CSSProperties} data-draft={draft.draft_id}>
+      <Link to={draftPath(draft.draft_id)} className={styles['rowLink']}>
+        <span>
+          <span className={styles['rowName']}>{words.name}</span>
+          <span className={styles['rowSub']}>{words.sub}</span>
+        </span>
+        <IconChevronRight size={16} />
+      </Link>
     </li>
   )
 }

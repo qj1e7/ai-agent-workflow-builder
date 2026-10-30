@@ -12,6 +12,7 @@ const MENU = [
   { label: 'Workflows', path: '/workflows', heading: 'Workflows', built: true },
   { label: 'Software watchlist', path: '/software', heading: 'Software watchlist', built: true },
   { label: 'Agent library', path: '/agents', heading: 'Agent library', built: true },
+  { label: 'New workflow', path: '/new', heading: /^New workflow, step 1 of 4: Describe it$/, built: true },
 ] as const
 
 const PAGES = [...MENU.map(({ path: to, label }) => ({ label, path: to })), { label: 'Settings', path: '/settings' }]
@@ -29,20 +30,22 @@ async function slowHome(page: Page): Promise<void> {
   })
 }
 
+/** On day one an Operator's Home shows Start your first workflow in place of All quiet. */
 async function loaded(page: Page): Promise<void> {
   const main = page.getByRole('main')
   await expect(main.getByRole('status').filter({ hasText: /^Loading/ })).toHaveCount(0)
-  if (new URL(page.url()).pathname === '/') await expect(main.locator('[data-home-item]').or(main.getByText('All quiet', { exact: true })).first()).toBeVisible()
+  if (new URL(page.url()).pathname !== '/') return
+  const drawn = main.locator('[data-home-item]').or(main.getByText('All quiet', { exact: true })).or(main.getByRole('heading', { name: 'Start your first workflow' }))
+  await expect(drawn.first()).toBeVisible()
 }
 
-test('Home greets the signed-in person and the menu reads Home, Workflows, Software watchlist, Agent library', async ({ page }, info) => {
+test('Home greets the signed-in person and the menu reads Home, Workflows, Software watchlist, Agent library, New workflow', async ({ page }, info) => {
   await page.goto('/')
   await expect(heading(page)).toHaveText(GREETING('Alice'))
   await expect(page.getByRole('banner')).toContainText('Alice')
   await expect(page.getByRole('banner')).toContainText('Operator and Approver')
   await expect(mainMenu(page).getByRole('link')).toHaveText(MENU.map((item) => item.label))
   await expect(mainMenu(page).getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page')
-  await expect(page.getByRole('link', { name: 'New workflow' })).toHaveCount(0)
   await expect(page).toHaveTitle(/^Good (morning|afternoon|evening), Alice · AI Workflow Builder$/)
   await shot(page, info, 'p1-01-home')
 })
@@ -133,6 +136,7 @@ test('Test controls act as Bob, and Bob can open Settings', async ({ page }, inf
 test('Tab reaches every header control with a visible focus ring, and the skip link moves focus to the heading', async ({ page }, info) => {
   await page.goto('/')
   await expect(heading(page)).toBeVisible()
+  await loaded(page)
   const walk = await walkTabs(page)
   const labels = walk.stops.map((stop) => stop.label)
   expect(labels[0], `the skip link is the first stop; stops: ${labels.join(', ')}`).toBe('Skip to main content')
@@ -187,8 +191,9 @@ test('at 390 px wide the page does not scroll sideways, and every tab bar item c
   await page.goto('/')
   await expect(heading(page)).toBeVisible()
   const bar = mainMenu(page)
-  await expect(bar.getByRole('link')).toHaveText(['Home', 'Workflows', 'Watchlist', 'Agents'])
+  await expect(bar.getByRole('link')).toHaveText(['Home', 'Workflows', 'Watchlist', 'Agents', 'New workflow'])
   for (const [label, to, words] of [
+    ['New workflow', /\/new$/, /^New workflow, step 1 of 4: Describe it$/],
     ['Workflows', /\/workflows$/, 'Workflows'],
     ['Watchlist', /\/software$/, 'Software watchlist'],
     ['Agents', /\/agents$/, 'Agent library'],

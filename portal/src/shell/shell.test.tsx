@@ -71,12 +71,28 @@ function menuLabels(html: string): string[] {
   return [...nav.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/g)].map((match) => text(match[1] ?? ''))
 }
 
+const DRAWN_AT_ONCE = MENU_PAGE_IDS.filter((id) => id !== 'new')
+
 describe('the menu', () => {
-  it('reads Home, Workflows, Software watchlist, Agent library', () => {
-    expect(menuLabels(render())).toEqual(['Home', 'Workflows', 'Software watchlist', 'Agent library'])
+  it('reads Home, Workflows, Software watchlist, Agent library, New workflow for an Operator', () => {
+    expect(menuLabels(render())).toEqual(['Home', 'Workflows', 'Software watchlist', 'Agent library', 'New workflow'])
   })
 
-  it('has the same four items on the phone tab bar', () => {
+  it('has no New workflow for an Approver who is not an Operator, on the header or the tab bar', () => {
+    const html = render({ me: BOB })
+    expect(menuLabels(html)).toEqual(['Home', 'Workflows', 'Software watchlist', 'Agent library'])
+    expect(html).not.toContain('href="/new"')
+  })
+
+  it('marks New workflow current at /new and on its done page, which load on demand', () => {
+    for (const path of ['/new', '/new/done/uc_1']) {
+      const html = render({ path })
+      expect(text(mainOf(html)), path).toBe('Loading')
+      expect(new Set(currentLinks(html)), path).toEqual(new Set(['/new']))
+    }
+  })
+
+  it('has the menu’s items on the phone tab bar too', () => {
     const html = render()
     const bars = [...html.matchAll(/<nav\b[^>]*aria-label="Main"[^>]*>([\s\S]*?)<\/nav>/g)].map((match) =>
       [...(match[1] ?? '').matchAll(/<a\b[^>]*href="([^"]*)"/g)].map((link) => link[1]),
@@ -85,7 +101,7 @@ describe('the menu', () => {
     expect(bars[1]).toEqual(MENU_PAGE_IDS.map((id) => PAGES[id].path))
   })
 
-  it.each(MENU_PAGE_IDS)('%s links to its path, and at that path shows its own heading with the item marked current', (id) => {
+  it.each(DRAWN_AT_ONCE)('%s links to its path, and at that path shows its own heading with the item marked current', (id) => {
     const { path, menuLabel } = PAGES[id]
     const html = render({ path })
     expect(html).toContain(`href="${path}"`)
@@ -138,7 +154,7 @@ describe('a run or an approval link', () => {
 
 describe('the pages', () => {
   it('give every heading a tabindex so focus can move to it', () => {
-    for (const path of [...MENU_PAGE_IDS.map((id) => PAGES[id].path), '/settings', '/nowhere']) {
+    for (const path of [...DRAWN_AT_ONCE.map((id) => PAGES[id].path), '/settings', '/nowhere']) {
       const tags = [...render({ path }).matchAll(/<h1\b[^>]*>/g)]
       expect(tags.length, path).toBeGreaterThan(0)
       expect(tags.every((tag) => tag[0].includes('tabindex="-1"')), path).toBe(true)

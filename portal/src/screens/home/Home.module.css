@@ -244,18 +244,13 @@
   border-top: 1px solid var(--rule);
 }
 
-.rowLink,
-.plainRow {
+.rowLink {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   padding: 12px 6px;
   border-bottom: 1px solid var(--rule);
-}
-
-.plainRow {
-  display: block;
 }
 
 .rowLink {

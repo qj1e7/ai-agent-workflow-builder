@@ -103,3 +103,16 @@ export const IconClock = drawn(
   </>,
   2.2,
 )
+
+export const IconPlus = drawn('IconPlus', <path d="M12 5v14M5 12h14" />, 2.4)
+
+export const IconPencil = drawn('IconPencil', <path d="M15.5 5.5l3 3L8 19H5v-3z" />, 2)
+
+export const IconInfo = drawn(
+  'IconInfo',
+  <>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 11v5.5M12 7.5v.5" />
+  </>,
+  2.4,
+)

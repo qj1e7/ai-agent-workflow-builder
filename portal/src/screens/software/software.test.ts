@@ -10,6 +10,8 @@ import {
   checkRepo,
   checkVersion,
   countIn,
+  DAYS,
+  dayOption,
   emptyWords,
   groupsOf,
   historyOf,
@@ -201,6 +203,11 @@ describe('the schedule', () => {
     expect(singaporeTime('2026-11-23T01:00:00Z')).toBe('Mon 23 Nov, 9:00')
     expect(scheduleWords(SCHEDULE)).toBe('Checked every Monday at 9:00, set by Alice.')
     expect(scheduleOwnerWords(SCHEDULE)).toBe('Scheduled checks count as Alice’s work, so Alice can’t approve them.')
+  })
+
+  it('offers every day the platform takes, so a watchlist set to every weekday shows it', () => {
+    expect(DAYS).toEqual(Object.keys(dayOption))
+    expect(DAYS.map((day) => dayOption[day]).slice(0, 3)).toEqual(['Every day', 'Every weekday', 'Monday'])
   })
 })
 

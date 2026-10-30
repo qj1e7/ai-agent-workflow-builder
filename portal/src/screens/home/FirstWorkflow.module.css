@@ -1,0 +1,28 @@
+.starters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.starter {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--hair);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+
+.starter h3 {
+  font-size: 1rem;
+}
+
+.starter p {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.starter a {
+  justify-self: start;
+}

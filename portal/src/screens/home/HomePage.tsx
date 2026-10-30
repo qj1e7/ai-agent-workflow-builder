@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState } from 'react'
 import { Link, NavigationType, useNavigationType } from 'react-router'
 import { useHome } from '../../api/homeQueries'
+import { isOperator } from '../../api/me'
+import { useMe } from '../../api/queries'
 import type { HomeOut, WaitingItem } from '../../api/types'
 import { PageHead } from '../../shell/PageHead'
 import { Button } from '../../ui/Button'
@@ -9,6 +11,7 @@ import { useFocusWhenReady } from '../../ui/focus'
 import { IconClock } from '../../ui/icons'
 import { useGlide, usePresence } from '../../ui/presence'
 import { comingUpOf, HOW_IT_WORKS, leadLine, moreWords, needsOf, needsTotal, type Need, type Next } from './home'
+import { FirstWorkflow } from './FirstWorkflow'
 import { DraftRow, NeedItem, WaitingRow } from './HomeItem'
 import styles from './Home.module.css'
 
@@ -163,7 +166,9 @@ function HowItWorks() {
 
 function Loaded({ now, home, next }: { now: Date; home: HomeOut; next: Next | null }) {
   const needs = useMemo(() => needsOf(home), [home])
+  const operator = isOperator(useMe().data)
   const dayOne = home.workflows === 0
+  const firstWorkflow = dayOne && operator
   const arrival = useArrival([
     ...needs.shown.map((need) => need.key),
     ...home.waiting_on_others.map((item) => `waiting:${item.run_id}`),
@@ -175,13 +180,16 @@ function Loaded({ now, home, next }: { now: Date; home: HomeOut; next: Next | nu
 
   return (
     <>
-      <section className={cx(styles['section'], arrival.page && styles['arrive'])} aria-labelledby="needs-h">
-        <h2 id="needs-h">
-          Needs you <Count value={needs.total} />
-        </h2>
-        {needs.shown.length > 0 ? <NeedsList needs={needs.shown} now={now} arrival={arrival} /> : <AllQuiet next={next} />}
-        {more ? <p className={styles['more']}>{more}</p> : null}
-      </section>
+      {firstWorkflow ? <FirstWorkflow /> : null}
+      {firstWorkflow && needs.total === 0 ? null : (
+        <section className={cx(styles['section'], arrival.page && styles['arrive'])} aria-labelledby="needs-h">
+          <h2 id="needs-h">
+            Needs you <Count value={needs.total} />
+          </h2>
+          {needs.shown.length > 0 ? <NeedsList needs={needs.shown} now={now} arrival={arrival} /> : <AllQuiet next={next} />}
+          {more ? <p className={styles['more']}>{more}</p> : null}
+        </section>
+      )}
       {home.waiting_on_others.length > 0 ? <WaitingList items={home.waiting_on_others} total={home.waiting_on_others_total} now={now} arrival={arrival} /> : null}
       {home.drafts.length > 0 ? (
         <section className={styles['section']} aria-labelledby="drafts-h">

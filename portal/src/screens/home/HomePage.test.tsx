@@ -111,18 +111,37 @@ describe('Home for the Operator who started that run', () => {
     expect(buttonsIn(waiting)).toEqual([])
   })
 
-  it('lists her draft by name, with its step and when it was saved', () => {
+  it('lists her draft by name, with its step and when it was saved, opening New workflow at that draft', () => {
     const drafts = sectionOf(html, 'Your drafts')
     expect(text(drafts)).toContain('Nudge stale tickets Step 2 of 4. Last saved Wed 4 Nov, 14:24.')
+    expect(linksIn(drafts)).toEqual([['Nudge stale tickets Step 2 of 4. Last saved Wed 4 Nov, 14:24.', `/new?draft=${ALICE_HOME.drafts[0]?.draft_id ?? ''}`]])
   })
 })
 
 describe('Home on day one', () => {
   const html = mainOf(render(ERIN, DAY_ONE))
 
-  it('says nothing needs you yet, that all is quiet, and how it works', () => {
+  it('starts an Operator on a first workflow: three ready-made ones and Describe your own', () => {
+    const first = sectionOf(html, 'Start your first workflow')
+    expect(text(first)).toContain('Pick a ready-made one or describe your own.')
+    expect(linksIn(first)).toEqual([
+      ['Add your software', '/software'],
+      ['Use this', '/new'],
+      ['Use this', '/new'],
+      ['Describe your own', '/new'],
+    ])
+    expect(primaries(first)).toBe(1)
+    expect(sectionOf(html, 'Needs you')).toBe('')
+  })
+
+  it('keeps an Approver on all quiet, with no first workflow', () => {
+    const approver = mainOf(render(BOB, DAY_ONE))
+    expect(text(sectionOf(approver, 'Needs you'))).toContain('All quiet Nothing is scheduled yet.')
+    expect(approver).not.toContain('Start your first workflow')
+  })
+
+  it('says nothing needs you yet, and how it works', () => {
     expect(text(html)).toContain('Tuesday 3 November. Nothing needs you yet. When a workflow wants to change something, it shows up here and in Teams.')
-    expect(text(sectionOf(html, 'Needs you'))).toContain('All quiet Nothing is scheduled yet.')
     const how = sectionOf(html, 'How it works')
     expect([...how.matchAll(/<li>/g)]).toHaveLength(4)
     expect(text(how)).toContain('Say yes in Teams Nothing changes in Jira or Confluence until an Approver agrees.')
