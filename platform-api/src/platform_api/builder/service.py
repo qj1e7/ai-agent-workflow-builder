@@ -399,6 +399,12 @@ class Builder:
                     ' card_id, card_version, "values") VALUES (%s, 1, %s, %s, %s, %s)',
                     (use_case_id, position, card.card_id, card.version, json(values)),
                 )
+        if body.schedule is not None:
+            # The builder's role cannot write orchestration's schedules, so this is its own
+            # transaction, after the workflow's: a failure leaves a workflow that runs by hand.
+            await self._schedules.save(
+                UseCaseId(use_case_id), Schedule(body.schedule.day, body.schedule.at), principal
+            )
         return UseCaseCreated(use_case_id=use_case_id, version=1)
 
     @staticmethod

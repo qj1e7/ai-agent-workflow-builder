@@ -389,6 +389,12 @@ class CreateAgentUseCase(WireIn):
         str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)
     ]
     agents: Annotated[list[AgentChoice], Field(min_length=1, max_length=3)]
+    schedule: ScheduleIn | None = Field(
+        default=None,
+        description="When it runs on its own, in Singapore time. The person who sets it up "
+        "owns the schedule, so its scheduled runs are their work. Leave it out to run it only "
+        "by hand.",
+    )
 
 
 class UnderstandIn(WireIn):

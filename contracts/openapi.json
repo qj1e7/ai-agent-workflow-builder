@@ -2459,6 +2459,17 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScheduleIn"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When it runs on its own, in Singapore time. The person who sets it up owns the schedule, so its scheduled runs are their work. Leave it out to run it only by hand."
           }
         },
         "required": [
