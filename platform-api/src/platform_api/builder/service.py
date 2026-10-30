@@ -178,12 +178,13 @@ class Builder:
         watchlist: Watchlist,
         public_base_url: str,
         planner: Planning | None = None,
+        schedules: ScheduleBook | None = None,
     ) -> None:
         self._db = db
         self._runs = runs
         self._watchlist = watchlist
         self._cards = CardLibrary(db)
-        self._schedules = ScheduleBook(db)
+        self._schedules = schedules or ScheduleBook(db)
         self._drafts = Drafts(db)
         self._planner = planner or NoPlanner()
         self.public_base_url = public_base_url
@@ -400,9 +401,15 @@ class Builder:
                     (use_case_id, position, card.card_id, card.version, json(values)),
                 )
         if body.schedule is not None:
-            await self._schedules.save(
-                UseCaseId(use_case_id), Schedule(body.schedule.day, body.schedule.at), principal
-            )
+            try:
+                await self._schedules.save(
+                    UseCaseId(use_case_id),
+                    Schedule(body.schedule.day, body.schedule.at),
+                    principal,
+                )
+            except Exception:
+                await self.delete_use_case(use_case_id, principal)
+                raise
         return UseCaseCreated(use_case_id=use_case_id, version=1)
 
     @staticmethod

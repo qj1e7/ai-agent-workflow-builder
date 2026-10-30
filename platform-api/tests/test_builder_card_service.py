@@ -35,6 +35,7 @@ from platform_api.orchestration import (
     RunSpec,
     RunStarted,
     RuntimeDown,
+    Schedule,
     ScheduleBook,
     SoftwareFacts,
     Standing,
@@ -238,6 +239,39 @@ async def test_a_schedule_saved_with_the_use_case_belongs_to_the_person_who_set_
     assert view.next_run_at is not None and view.next_run_at > db.clock()
     saved = await ScheduleBook(db).get(UseCaseId(made.use_case_id))
     assert saved is not None and (saved.owner, saved.owner_name) == ("alice", "Alice")
+
+
+class ScheduleBookDown(ScheduleBook):
+    async def save(self, use_case_id: UseCaseId, schedule: Schedule, owner: Principal):
+        raise RuntimeError("The schedule book is down.")
+
+
+async def test_a_use_case_whose_schedule_cannot_be_saved_is_undone_so_trying_again_makes_one(
+    db: Database, runs: Runs, planner: Planner, builder: Builder
+):
+    down = Builder(
+        db,
+        runs,
+        Watchlist(db, NoFacts(), ScheduleBook(db)),
+        "http://localhost:8000",
+        planner,
+        ScheduleBookDown(db),
+    )
+    body = CreateAgentUseCase.model_validate(
+        {
+            "name": "Follow up stale bugs",
+            "instruction": "Find stale bugs and list them in one ticket.",
+            "agents": [{"card_id": "crd_version_checker", "values": RELEASES}],
+            "schedule": {"day": "weekdays", "at": "15:00"},
+        }
+    )
+    with pytest.raises(RuntimeError, match="The schedule book is down."):
+        await down.create_agent_use_case(ALICE, body)
+    assert (await builder.list_use_cases()).use_cases == []
+    made = await builder.create_agent_use_case(ALICE, body)
+    assert isinstance(made, UseCaseCreated)
+    listed = (await builder.list_use_cases()).use_cases
+    assert [(u.use_case_id, u.schedule is not None) for u in listed] == [(made.use_case_id, True)]
 
 
 async def test_a_use_case_made_without_a_schedule_has_none(builder: Builder):

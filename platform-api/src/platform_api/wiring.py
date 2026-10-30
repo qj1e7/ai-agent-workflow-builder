@@ -106,6 +106,7 @@ async def build(settings: Settings) -> Services:
         watchlist,
         settings.public_base_url,
         CardPlanning(db, model_settings, agents),
+        schedules,
     )
     return Services(
         settings=settings,
