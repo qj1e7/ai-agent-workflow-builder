@@ -153,13 +153,12 @@ lane() {
   esac
   mkdir -p "$EVID/lane-$n"
   check "$project" --grep "@lane$n " 2>&1 | tee "$EVID/lane-$n/playwright.log"
-  if [ "$n" = 10 ]; then key_search "$project"; fi
+  if [ "$n" = 10 ]; then search_logs_and_db_for_key "$project"; fi
 }
 
-# The check wrote the key it saved; look for it in every container's log and in a dump of every database.
-key_search() {
+search_logs_and_db_for_key() {
   local project=$1 out="$EVID/lane-10" key secret postgres logs dump in_logs in_db container
-  key=$(cat "$out/key-under-test.txt" 2>/dev/null) || die "no $out/key-under-test.txt; run lane 10's check first"
+  key=$(cat "$out/key-for-host-search.txt" 2>/dev/null) || die "no $out/key-for-host-search.txt; run lane 10's check first"
   secret=${key%??}
   postgres=$(docker ps -q --filter "label=com.docker.compose.project=$project" --filter "label=com.docker.compose.service=postgres" | head -n 1)
   [ -n "$postgres" ] || die "no running postgres in project $project"
@@ -177,7 +176,7 @@ key_search() {
     echo "container logs of $project: $(wc -l <"$logs" | tr -d ' ') lines; lines with the key: $in_logs"
     echo "pg_dumpall of $project: $(wc -c <"$dump" | tr -d ' ') bytes; lines with the key: $in_db (the dump is deleted after the search)"
   } | tee "$out/p10-no-key-host.txt"
-  rm -f "$dump" "$out/key-under-test.txt"
+  rm -f "$dump" "$out/key-for-host-search.txt"
   if [ "$in_logs" -ne 0 ] || [ "$in_db" -ne 0 ]; then
     echo "FAIL: the full key is in a log or the database" | tee -a "$out/p10-no-key-host.txt"
     return 1

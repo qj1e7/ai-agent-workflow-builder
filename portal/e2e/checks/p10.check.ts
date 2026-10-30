@@ -105,7 +105,7 @@ test('@lane1 alice connects the mock model, tests and saves it, and only the key
     await page.getByRole('button', { name: 'Connect', exact: true }).click()
     const models = page.getByLabel('Model', { exact: true })
     await expect(models).toBeVisible({ timeout: 30_000 })
-    const offered = await models.locator('option').evaluateAll((options) => options.map((option) => ({ value: (option as HTMLOptionElement).value, text: (option.textContent ?? '').trim() })))
+    const offered = await models.locator('option').evaluateAll((options: HTMLOptionElement[]) => options.map((option) => ({ value: option.value, text: option.text.trim() })))
     await shotTo(page, 1, 'p10-model-list.png')
     await models.selectOption(MOCK_MODEL)
     await page.getByRole('button', { name: 'Test and save' }).click()
@@ -348,7 +348,6 @@ test('@lane8 bob sees every control read-only, and the page says only Operators 
     states[tab] = await expectReadOnly(page, tab)
     await shotTo(page, 8, tab === 'people' ? 'p10-read-only.png' : 'p10-read-only-model.png')
   }
-  // With a request waiting, bob gets Confirm and Not now on it, and still nothing else he could change.
   await withApi(async (api) => {
     await api.ensurePerson(WIDE_PENDING, 'Wide Pending', { operator: true, approver: true })
     expect((await api.confirmations('bob')).filter((c) => c.kind === 'approver' && c.you_can_decide).length, 'a request waits for bob').toBeGreaterThan(0)
@@ -391,9 +390,9 @@ async function axeRun(page: Page, user: string, view: string, phone: boolean): P
 test('@lane9 axe finds no WCAG 2.2 AA problems on either tab, the model list, the field errors or a refusal, at 1440 and 390 px', async ({ browser }) => {
   const runs: AxeRun[] = []
   await withApi(async (api) => {
+    await onlyAliceAndBobApprove(api)
     // A long waiting line is the widest thing on the People tab, so the 390 px run needs one.
     await api.ensurePerson(WIDE_PENDING, 'Wide Pending', { operator: true, approver: true })
-    await onlyAliceAndBobApprove(api)
   })
   for (const user of ['alice', 'bob']) {
     for (const phone of [false, true]) {
@@ -445,8 +444,7 @@ test('@lane10 after a key is saved, the full key is in no page source, no API re
       const body = await response.text().catch(() => '')
       responses.push({ method: response.request().method(), url: new URL(response.url()).pathname, status: response.status(), holdsKey: body.includes(secretPart) })
     })
-    // p10.sh lane 10 reads this file to search the compose logs and a database dump for the key, then deletes it.
-    save(10, 'key-under-test.txt', `${key}\n`)
+    save(10, 'key-for-host-search.txt', `${key}\n`)
     await openSettings(page)
     await connectAndSave(page, { key })
     if (await page.locator('#model-waiting').isVisible()) await api.confirmAddress('bob')
