@@ -209,9 +209,9 @@ describe('the schedule', () => {
     const removed: ScheduleView = { ...SCHEDULE, next_at: null, held: 'owner_removed' }
     const notOperator: ScheduleView = { ...removed, held: 'owner_not_an_operator' }
     expect(nextCheckWords(SCHEDULE, false)).toBe('Next check Mon 23 Nov, 9:00, Singapore time.')
-    expect(nextCheckWords(removed, false)).toBe('Not running: Alice is no longer on the list. An Operator can take it over by saving the schedule.')
+    expect(nextCheckWords(removed, false)).toBe('Not running: Alice is no longer on the People list. An Operator can take it over by saving the schedule.')
     expect(nextCheckWords(notOperator, false)).toBe('Not running: Alice can no longer run workflows. An Operator can take it over by saving the schedule.')
-    expect(nextCheckWords({ ...removed, owner_name: '' }, false)).toBe('Not running: its owner is no longer on the list. An Operator can take it over by saving the schedule.')
+    expect(nextCheckWords({ ...removed, owner_name: '' }, false)).toBe('Not running: its owner is no longer on the People list. An Operator can take it over by saving the schedule.')
     for (const schedule of [SCHEDULE, removed, notOperator]) expect(nextCheckWords(schedule, true)).toBe('Paused. No check runs until an Operator resumes it.')
     expect([scheduleRuns(SCHEDULE), scheduleRuns(removed), scheduleRuns(notOperator), scheduleRuns(null)]).toEqual([true, false, false, false])
   })

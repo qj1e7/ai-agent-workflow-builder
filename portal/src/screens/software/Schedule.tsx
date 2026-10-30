@@ -13,7 +13,7 @@ export function ScheduleNote({ schedule, operator, paused }: { schedule: Schedul
       <p>
         <b>{scheduleWords(schedule)}</b> {nextCheckWords(schedule, paused)}
       </p>
-      <p className="muted">{scheduleOwnerWords(schedule)}</p>
+      {schedule.held ? null : <p className="muted">{scheduleOwnerWords(schedule)}</p>}
     </>
   )
 }

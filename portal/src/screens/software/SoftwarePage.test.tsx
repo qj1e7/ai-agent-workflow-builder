@@ -195,18 +195,20 @@ describe('the add form', () => {
 
 describe('a schedule held because its owner can no longer run it', () => {
   const PAUSED_WORDS = 'Paused. No check runs until an Operator resumes it.'
+  const OWNER_WORDS = 'Scheduled checks count as'
   const heldFor = (hold: ScheduleHold, ownerName = 'Alice') => {
     const view = held as WatchlistView
     if (view.schedule === null) throw new Error('the held fixture has a schedule')
     return { ...view, schedule: { ...view.schedule, held: hold, owner_name: ownerName } }
   }
 
-  it('says the owner is no longer on the list, and promises no next check anywhere on the page', () => {
+  it('says the owner is no longer on the People list, and promises no next check anywhere on the page', () => {
     const words = text(render(held, ALICE))
-    expect(words).toContain('Not running: Alice is no longer on the list. An Operator can take it over by saving the schedule.')
+    expect(words).toContain('Not running: Alice is no longer on the People list. An Operator can take it over by saving the schedule.')
     expect(words).not.toContain(PAUSED_WORDS)
     expect(words).not.toContain('Next check')
     expect(words).not.toContain('It will try again at the next check')
+    expect(words).not.toContain(OWNER_WORDS)
     expect(words).toContain('GitHub answered 404 Not Found. It is checked again when an Operator presses Check now.')
     expect(buttons(render(held, ALICE))).toEqual(expect.arrayContaining(['Check now', 'Change schedule']))
   })
@@ -215,11 +217,17 @@ describe('a schedule held because its owner can no longer run it', () => {
     const words = text(render(heldFor('owner_not_an_operator'), BOB))
     expect(words).toContain('Not running: Alice can no longer run workflows. An Operator can take it over by saving the schedule.')
     expect(words).not.toContain(PAUSED_WORDS)
+    expect(words).not.toContain(OWNER_WORDS)
   })
 
   it('says its owner when the view gives no name', () => {
-    expect(text(render(heldFor('owner_removed', ''), BOB))).toContain('Not running: its owner is no longer on the list. An Operator can take it over by saving the schedule.')
+    expect(text(render(heldFor('owner_removed', ''), BOB))).toContain('Not running: its owner is no longer on the People list. An Operator can take it over by saving the schedule.')
     expect(text(render(heldFor('owner_not_an_operator', ' '), BOB))).toContain('Not running: its owner can no longer run workflows.')
+  })
+
+  it('still says whose work the checks are while the schedule is not held, paused or not', () => {
+    expect(text(render(statuses, BOB))).toContain('Scheduled checks count as Alice’s work, so Alice can’t approve them.')
+    expect(text(render(paused, BOB))).toContain('Scheduled checks count as Alice’s work, so Alice can’t approve them.')
   })
 
   it('keeps the paused words while the watchlist is paused as well', () => {
@@ -227,6 +235,7 @@ describe('a schedule held because its owner can no longer run it', () => {
       const words = text(render({ ...heldFor(hold), state: 'paused' }, ALICE))
       expect(words).toContain(PAUSED_WORDS)
       expect(words).not.toContain('Not running')
+      expect(words).not.toContain(OWNER_WORDS)
     }
   })
 })

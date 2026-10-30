@@ -27,7 +27,7 @@ export function scheduleRuns(schedule: ScheduleView | null | undefined): boolean
 }
 
 const heldWhy: Record<ScheduleHold, string> = {
-  owner_removed: 'is no longer on the list',
+  owner_removed: 'is no longer on the People list',
   owner_not_an_operator: 'can no longer run workflows',
 }
 
