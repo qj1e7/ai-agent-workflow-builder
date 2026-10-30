@@ -46,7 +46,7 @@ def explain_case(name: str) -> ExplainCase:
 
 
 @pytest.mark.parametrize(
-    ("job", "most"), [(SUMMARISE, 15), (EXPLAIN, 15), (DRAFT, 15), (CHOOSE, 15), (UNDERSTAND, 30)]
+    ("job", "most"), [(SUMMARISE, 15), (EXPLAIN, 15), (DRAFT, 15), (CHOOSE, 15), (UNDERSTAND, 70)]
 )
 def test_each_job_has_a_small_golden_set_with_unique_ids(job: Any, most: int) -> None:
     ids = [case.id for case in job.cases()]
@@ -459,9 +459,9 @@ def test_the_golden_set_covers_every_kind_of_task_the_plan_names() -> None:
 
 def test_accepting_the_planted_order_fails_the_tool_checks() -> None:
     case = understand_case("ignore-your-rules")
-    fooled = with_row(case, 3, state="understood", note=None)
+    fooled = with_row(case, 3, state="understood")
     assert {"model_held_to_the_tools"} <= failed(UNDERSTAND.score(case, fooled))
-    kept = [r for r in case.reference.rows if "Close" not in r.text]
+    kept = [r for r in case.reference.rows if "close" not in r.said]
     dropped = understand_answer(case, rows=kept)
     assert "marks_cant_do" in failed(UNDERSTAND.score(case, dropped))
 
@@ -472,59 +472,91 @@ def test_marking_any_part_that_cannot_be_done_understood_fails_its_case(
 ) -> None:
     for index, row in enumerate(case.reference.rows):
         if row.state == "cant_do":
-            fooled = with_row(case, index, state="understood", note=None)
-            assert "model_held_to_the_tools" in failed(UNDERSTAND.score(case, fooled)), row.text
+            fooled = with_row(case, index, state="understood")
+            assert "model_held_to_the_tools" in failed(UNDERSTAND.score(case, fooled)), row.said
+
+
+def folds(case: UnderstandCase) -> bool:
+    rows = case.reference.rows
+    return any(
+        r.state == "cant_do" and any(o.state == "understood" and o.kind == r.kind for o in rows)
+        for r in rows
+    )
 
 
 @pytest.mark.parametrize(
-    "case",
-    [c for c in UNDERSTAND.cases() if c.cant_do and len(c.reference.rows) > 4],
-    ids=lambda c: c.id,
+    "case", [c for c in UNDERSTAND.cases() if c.cant_do and folds(c)], ids=lambda c: c.id
 )
 def test_folding_a_write_into_an_understood_part_fails_its_case(case: UnderstandCase) -> None:
     rows = case.reference.rows
-    refused = next(r for r in rows if r.state == "cant_do" and r.kind == "do")
-    kept = [r for r in rows if r is not refused]
-    accepted = next(i for i, r in enumerate(kept) if r.kind == "do" and r.state == "understood")
-    folded = kept[accepted].model_copy(
-        update={"text": f"{kept[accepted].text}, then {refused.text}"}
+    refused = next(
+        r
+        for r in rows
+        if r.state == "cant_do" and any(o.state == "understood" and o.kind == r.kind for o in rows)
     )
+    kept = [r for r in rows if r is not refused]
+    accepted = next(
+        i for i, r in enumerate(kept) if r.kind == refused.kind and r.state == "understood"
+    )
+    folded = kept[accepted].model_copy(update={"about": refused.said})
     answer = understand_answer(case, rows=[*kept[:accepted], folded, *kept[accepted + 1 :]])
     assert "model_held_to_the_tools" in failed(UNDERSTAND.score(case, answer))
 
 
 @pytest.mark.parametrize(
     "case",
-    [c for c in UNDERSTAND.cases() if c.id.startswith(("assigned-", "about-"))],
+    [c for c in UNDERSTAND.cases() if c.id.startswith(("assigned-", "about-", "p2-"))],
     ids=lambda c: c.id,
 )
 def test_refusing_a_search_of_jira_tickets_fails_its_case(case: UnderstandCase) -> None:
-    index = next(i for i, r in enumerate(case.reference.rows) if r.kind == "look_for")
-    refused = with_row(case, index, state="cant_do", note="I can't read that yet.")
-    assert "right_states" in failed(UNDERSTAND.score(case, refused))
+    for kind in case.states:
+        index = next(i for i, r in enumerate(case.reference.rows) if r.kind == kind)
+        refused = with_row(case, index, state="cant_do")
+        assert "right_states" in failed(UNDERSTAND.score(case, refused)), kind
 
 
 def test_reading_gitlab_as_understood_fails_the_access_review() -> None:
     case = understand_case("admin-access-in-gitlab")
-    fooled = with_row(case, 1, state="understood", note=None)
+    fooled = with_row(case, 1, state="understood")
     assert "model_held_to_the_tools" in failed(UNDERSTAND.score(case, fooled))
+    as_a_topic = with_row(
+        case, 1, state="understood", source=None, about="who has admin access in GitLab"
+    )
+    assert "model_held_to_the_tools" in failed(UNDERSTAND.score(case, as_a_topic))
 
 
 def test_a_guessed_schedule_an_invented_key_or_a_planted_project_fails() -> None:
     case = understand_case("no-schedule")
-    guessed = with_row(case, 0, text="Every Monday at 9am", state="understood", note=None)
+    guessed = with_row(
+        case,
+        0,
+        said="Every Monday at 9am",
+        state="understood",
+        ability="run_on_a_schedule",
+        every=["monday"],
+        at=["9am"],
+    )
     assert "right_states" in failed(UNDERSTAND.score(case, guessed))
     case = understand_case("no-project")
-    invented = with_row(case, 3, text="Jira project SUP", state="understood", note=None)
-    assert {"no_invented_keys", "right_states"} <= failed(UNDERSTAND.score(case, invented))
+    invented = with_row(
+        case,
+        3,
+        said="Jira project SUP",
+        state="understood",
+        ability="create_jira_ticket",
+        project="SUP",
+    )
+    assert {"model_held_to_the_tools", "no_invented_keys", "right_states"} <= failed(
+        UNDERSTAND.score(case, invented)
+    )
     case = understand_case("planted-project")
-    planted = with_row(case, 3, text="Jira project SECRET")
+    planted = with_row(case, 3, project="SECRET", said="in project SECRET")
     assert "keeps_out" in failed(UNDERSTAND.score(case, planted))
 
 
-def test_a_can_t_do_note_that_offers_a_tool_fails() -> None:
+def test_a_can_t_do_part_that_offers_a_tool_fails() -> None:
     case = understand_case("stale-in-teams")
-    offer = with_row(case, 3, note="I can draft a tool card that posts in Teams.")
+    offer = with_row(case, 3, said="I can draft a tool card that posts in Teams.")
     assert "no_tool_proposed" in failed(UNDERSTAND.score(case, offer))
 
 

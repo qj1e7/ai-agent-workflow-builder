@@ -4,6 +4,7 @@ import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from agent_runtime.abilities import RowAnswer
 from agent_runtime.api import AGENT_CARDS
 from agent_runtime.contract import (
     AgentAddressee,
@@ -63,7 +64,7 @@ from agent_runtime.contract import (
     agent_event_adapter,
 )
 from agent_runtime.model_access import KEY_REFUSED
-from agent_runtime.planner import RowAnswer, UnderstandAnswer, understood_of
+from agent_runtime.planner import UnderstandAnswer, understood_of
 from agent_runtime.tools import tool_list
 
 PLANNER = AgentRef(id="planner", display="Planner")
@@ -771,16 +772,38 @@ def understood() -> WireModel:
     answer = UnderstandAnswer(
         belongs_on_watchlist=False,
         rows=[
-            RowAnswer(kind="schedule", text="Every weekday at 3pm", state="understood"),
+            RowAnswer(
+                kind="schedule",
+                state="understood",
+                said="Every weekday at 3pm",
+                ability="run_on_a_schedule",
+                every=["weekday"],
+                at=["3pm"],
+            ),
             RowAnswer(
                 kind="look_for",
-                text="Bug tickets in MOCK with no update for 10 days",
                 state="understood",
+                said="bug tickets in MOCK with no update for 10 days",
+                ability="read_jira_tickets",
+                ticket_type="bug",
+                project="MOCK",
+                no_update_days=10,
             ),
             RowAnswer(
-                kind="do", text="Create one follow-up ticket that lists them", state="understood"
+                kind="do",
+                state="understood",
+                said="create one follow-up ticket that lists them",
+                ability="create_jira_ticket",
+                ticket_type="follow-up",
+                lists_found=True,
             ),
-            RowAnswer(kind="where", text="Jira project MOCK", state="understood"),
+            RowAnswer(
+                kind="where",
+                state="understood",
+                said="in MOCK",
+                ability="create_jira_ticket",
+                project="MOCK",
+            ),
         ],
     )
     result = understood_of(answer, FOLLOW_UP_TASK)

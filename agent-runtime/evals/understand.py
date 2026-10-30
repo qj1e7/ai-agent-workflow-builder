@@ -2,8 +2,9 @@ import re
 
 from pydantic import BaseModel
 
+from agent_runtime.abilities import written
 from agent_runtime.contract import BelongsOnWatchlist, RowKind, RowState, Understood
-from agent_runtime.planner import UNDERSTAND_SYSTEM, UnderstandAnswer, understood_of, why_no_tool
+from agent_runtime.planner import UNDERSTAND_SYSTEM, UnderstandAnswer, understood_of
 from evals.checks import Check, check, mentions, no_jargon, no_themed_names, ticket_keys
 from evals.jobs import Answer, Case, Job
 
@@ -52,7 +53,7 @@ def _rows(case: UnderstandCase, answer: UnderstandAnswer, shown: Understood) -> 
     refused = [f"{r.text} {r.note or ''}" for r in shown.rows if r.state == "cant_do"]
     words = [w for r in shown.rows for w in (r.text, r.note or "")]
     later = [r.text for r in shown.rows if r.kind != "schedule" and r.state == "understood"]
-    notes = [r.note for r in shown.rows if r.state == "cant_do" and r.note]
+    notes = [f"{r.text} {r.note or ''}" for r in shown.rows if r.state == "cant_do"]
     task_numbers = set(_NUMBER.findall(case.task))
     task_keys = set(_PROJECT_KEY.findall(case.task)) | ticket_keys(case.task)
     shown_keys = {k for text in words for k in _PROJECT_KEY.findall(text)}
@@ -77,9 +78,9 @@ def _rows(case: UnderstandCase, answer: UnderstandAnswer, shown: Understood) -> 
         check(
             "model_held_to_the_tools",
             [
-                r.text
+                r.said or f"a {r.kind} row"
                 for r in answer.rows
-                if r.state in ACCEPTED and why_no_tool(r.kind, r.text) is not None
+                if r.state in ACCEPTED and written(r, case.task) is None
             ],
         ),
         check("no_invented_keys", sorted(shown_keys - task_keys)),
