@@ -683,6 +683,7 @@ test('@model-confirm a new AI model address: an Approver other than the one who 
         (first.body as { status?: string }).status === 'awaiting_confirmation'
           ? first
           : await call(api, 'alice', 'PUT', '/api/v1/settings/model', { style: 'anthropic', base_url: `${MOCK_MODEL_URL}/alt`, model: 'mock-model', api_key: 'p11-probe-key-not-real' })
+      expect((pending.body as { status?: string }).status, `no address waits for a yes: ${JSON.stringify(pending.body)}`).toBe('awaiting_confirmation')
       const homes = { alice: await homeOf(api, 'alice'), bob: await homeOf(api, 'bob'), carol: await homeOf(api, 'carol') }
       const page = await openHome(browser, 'bob')
       const item = page.locator('li[data-home-item^="confirmation:"]', { hasText: 'Confirm a new AI model address' })
@@ -692,7 +693,6 @@ test('@model-confirm a new AI model address: an Approver other than the one who 
       await shotTo(page, 'probes', 'model-confirm-bob.png', true)
       await page.context().close()
       save('probes', 'model-confirm.json', { first, pending, homes, text, href })
-      expect((pending.body as { status: string }).status).toBe('awaiting_confirmation')
       expect(homes.bob.confirmations.length).toBeGreaterThan(0)
       expect(homes.alice.confirmations, 'the person who entered it does not confirm it').toEqual([])
       expect(homes.carol.confirmations, 'carol is not an Approver').toEqual([])
