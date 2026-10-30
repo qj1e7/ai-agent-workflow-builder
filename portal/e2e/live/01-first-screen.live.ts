@@ -112,6 +112,18 @@ test('Teams opens a dialog, Escape closes it, and focus goes back to the Teams b
   await expect(teams).toBeFocused()
 })
 
+test('Teams pressed before the signed-in person is known still puts focus on Close', async ({ page }) => {
+  await page.route('**/api/v1/me', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+    await route.continue()
+  })
+  await page.goto('/')
+  await page.getByRole('button', { name: /^Teams, practice copy/ }).click()
+  const dialog = page.getByRole('dialog', { name: 'Teams, practice copy' })
+  await expect(dialog).toContainText('Microsoft Teams')
+  await expect(dialog.getByRole('button', { name: 'Close Teams' })).toBeFocused()
+})
+
 test('Test controls act as Bob, and Bob can open Settings', async ({ page }, info) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'Test controls' }).click()
