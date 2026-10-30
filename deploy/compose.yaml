@@ -6,6 +6,12 @@ x-platform-image: &platform-image
     target: runtime
   image: wab/platform-api:${WAB_IMAGE_TAG:-dev}
 
+# The Cosmos DB emulator's published key. The emulator does not check keys, and no real
+# account accepts this one. A real account's key comes from Key Vault.
+x-cosmos: &cosmos-account
+  COSMOS_ENDPOINT: http://cosmos:8081
+  COSMOS_KEY: ${COSMOS_KEY:-C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==}
+
 services:
   postgres:
     image: postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
@@ -24,6 +30,29 @@ services:
       interval: 3s
       timeout: 3s
       retries: 20
+
+  # Readers of the activity log read this copy (ADR 0031). It has no host port. Look inside with
+  # `docker compose exec cosmos cosmoshell.sh`. Its data lives in the container, so `stop` and
+  # `start` keep it, and `down` drops it.
+  cosmos:
+    image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:vnext-preview@sha256:db53613dae19d0a3d5ad50688d14aa6e957af082dafea56b52e1bd3a6b3f1406
+    environment:
+      GATEWAY_PUBLIC_ENDPOINT: cosmos
+      ENABLE_EXPLORER: "false"
+      ENABLE_TELEMETRY: "false"
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/8080
+          && printf 'GET /ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3
+          && read -r status <&3 && [[ $$status == *' 200 '* ]]
+      interval: 3s
+      timeout: 3s
+      retries: 60
+      start_period: 10s
 
   n8n:
     image: n8nio/n8n:2.42.6@sha256:526daa38b68e923cc00c5280d18b4da5d489f115a73bdbf3b8e452b184197a9a
@@ -84,7 +113,10 @@ services:
         condition: service_healthy
       n8n:
         condition: service_healthy
+      cosmos:
+        condition: service_healthy
     environment:
+      <<: *cosmos-account
       DATABASE_URL_OWNER: postgresql://wab_owner:${WAB_OWNER_PASSWORD:?run deploy/make-env.sh}@postgres:5432/platform
       N8N_BASE_URL: http://n8n:5678
       N8N_OWNER_EMAIL: ${N8N_OWNER_EMAIL:?run deploy/make-env.sh}
@@ -100,6 +132,10 @@ services:
       agent-runtime:
         condition: service_healthy
     environment:
+      <<: *cosmos-account
+      # cosmos reads the activity log from Cosmos DB, postgres from PostgreSQL. The copy into
+      # Cosmos DB runs either way, while COSMOS_ENDPOINT is set.
+      ACTIVITY_READER: ${ACTIVITY_READER:-cosmos}
       AUTH_MODE: dev
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:${PORTAL_HOST_PORT:-8080}}
       DATABASE_URL_BUILDER: postgresql://wab_builder:${WAB_BUILDER_PASSWORD:?run deploy/make-env.sh}@postgres:5432/platform
