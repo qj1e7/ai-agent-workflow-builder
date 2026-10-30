@@ -1,4 +1,5 @@
 import { Link, NavLink } from 'react-router'
+import { isOperator } from '../api/me'
 import type { Me } from '../api/types'
 import { cx } from '../ui/cx'
 import { Mark, SettingsIcon } from './icons'
@@ -9,8 +10,6 @@ import { PAGES } from './routes'
 import { TeamsButton } from './TeamsPanel'
 import iconButton from './IconButton.module.css'
 import styles from './Header.module.css'
-
-export const isOperator = (person: Me | null | undefined) => person?.roles.includes('operator') === true
 
 export function Header({ person }: { person: Me | null }) {
   return (

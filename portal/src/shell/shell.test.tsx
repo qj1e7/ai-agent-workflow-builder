@@ -92,7 +92,7 @@ describe('the menu', () => {
     }
   })
 
-  it('has the same four items on the phone tab bar', () => {
+  it('has the menu’s items on the phone tab bar too', () => {
     const html = render()
     const bars = [...html.matchAll(/<nav\b[^>]*aria-label="Main"[^>]*>([\s\S]*?)<\/nav>/g)].map((match) =>
       [...(match[1] ?? '').matchAll(/<a\b[^>]*href="([^"]*)"/g)].map((link) => link[1]),

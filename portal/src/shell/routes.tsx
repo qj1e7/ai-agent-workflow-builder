@@ -146,7 +146,7 @@ export function AppRoutes({ context }: { context: PageContext }) {
         }
       />
       <Route path={PAGES.settings.path} element={<SettingsPage heading={wordsOf(PAGES.settings.heading, context)} lead={wordsOf(PAGES.settings.lead, context)} />} />
-      <Route path={PAGES.new.path} element={<Lazy><NewWorkflowRoute /></Lazy>} />
+      <Route path={PAGES.new.path} element={<Lazy><NewWorkflowRoute heading={wordsOf(PAGES.new.heading, context)} lead={wordsOf(PAGES.new.lead, context)} /></Lazy>} />
       <Route path={`${PAGES.new.path}/done/:useCaseId`} element={<Lazy><DoneRoute now={context.now} /></Lazy>} />
       <Route path="/runs/:runId" element={<Lazy><RunRoute /></Lazy>} />
       <Route path="/approvals/:approvalId" element={<Lazy><ApprovalRoute /></Lazy>} />

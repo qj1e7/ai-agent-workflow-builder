@@ -2,8 +2,10 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { useErrorWords } from '../../api/context'
+import { DRAFT_STEPS } from '../../api/drafts'
 import { newIdempotencyKey } from '../../api/idempotency'
 import { useLatch } from '../../api/latch'
+import { isOperator } from '../../api/me'
 import { refusedWords, useDeleteDraft, useDrafts, usePlanFor, useSaveDraft, useUnderstand } from '../../api/newQueries'
 import { useCreateAgentUseCase, useMe, useSaveCard } from '../../api/queries'
 import { PRODUCT } from '../../shell/product'
@@ -38,23 +40,27 @@ import { StepWhen, whenFieldId } from './StepWhen'
 import { draftGone, NEW_WORKFLOW_PATH, taskHandedOver } from './starters'
 import styles from './NewWorkflow.module.css'
 
-const LEAD = 'Describe a repeated task. Agents do it, and nothing changes without a yes.'
 const DRAFT_GONE = 'That draft is gone. Start a new one.'
 const WHEN_ORDER: readonly WhenField[] = ['often', 'day', 'at']
 
-function Head({ step, saving, onSave }: { step: Step | null; saving?: boolean; onSave?: () => void }) {
+interface PageWords {
+  readonly heading: string
+  readonly lead: string
+}
+
+function Head({ page, step, saving, onSave }: { page: PageWords; step: Step | null; saving?: boolean; onSave?: () => void }) {
   return (
     <div className={styles['head']}>
       <div>
         <h1 tabIndex={-1}>
-          New workflow
+          {page.heading}
           {step === null ? null : (
             <span className="visually-hidden">
-              , step {step} of 4: {STEP_NAMES[step - 1]}
+              , step {step} of {DRAFT_STEPS}: {STEP_NAMES[step - 1]}
             </span>
           )}
         </h1>
-        <p>{LEAD}</p>
+        <p>{page.lead}</p>
       </div>
       {onSave ? (
         <button type="button" className={styles['linkButton']} aria-busy={saving || undefined} onClick={onSave}>
@@ -78,7 +84,7 @@ function Stepper({ step }: { step: Step }) {
         ))}
       </ol>
       <p className={styles['stepNow']} aria-hidden="true">
-        Step {step} of 4: {STEP_NAMES[step - 1]}
+        Step {step} of {DRAFT_STEPS}: {STEP_NAMES[step - 1]}
       </p>
     </>
   )
@@ -102,7 +108,7 @@ interface Start {
   readonly plan: Planned | null
 }
 
-function NewWorkflow({ draftId, start }: { draftId: string | null; start: Start }) {
+function NewWorkflow({ page, draftId, start }: { page: PageWords; draftId: string | null; start: Start }) {
   const [form, setForm] = useState(start.form)
   const [draft, setDraft] = useState(draftId)
   const [textError, setTextError] = useState<string | null>(null)
@@ -283,7 +289,7 @@ function NewWorkflow({ draftId, start }: { draftId: string | null; start: Start 
 
   return (
     <div className={styles['page']}>
-      <Head step={form.step} saving={saveDraft.isPending} onSave={saveAndClose} />
+      <Head page={page} step={form.step} saving={saveDraft.isPending} onSave={saveAndClose} />
       {saveError ? (
         <p className={styles['error']} role="alert">
           {saveError}
@@ -295,33 +301,33 @@ function NewWorkflow({ draftId, start }: { draftId: string | null; start: Start 
   )
 }
 
-function OnlyOperators() {
+function OnlyOperators({ page }: { page: PageWords }) {
   return (
     <div className={styles['page']}>
-      <Head step={null} />
+      <Head page={page} step={null} />
       <p>Only Operators set up workflows. Ask an Operator on your team.</p>
     </div>
   )
 }
 
-function Opening() {
+function Opening({ page }: { page: PageWords }) {
   const [params] = useSearchParams()
   const location = useLocation()
   const draftId = params.get('draft')
   const drafts = useDrafts(draftId !== null)
   if (draftId === null) {
     const form = { ...EMPTY_FORM, text: taskHandedOver(location.state), plannerSaid: draftGone(location.state) ? DRAFT_GONE : null }
-    return <NewWorkflow key="new" draftId={null} start={{ form, plan: null }} />
+    return <NewWorkflow key="new" page={page} draftId={null} start={{ form, plan: null }} />
   }
   if (drafts.data && (drafts.isFetchedAfterMount || !drafts.isStale)) {
     const found = drafts.data.find((saved) => saved.draft_id === draftId)
     if (!found) return <Navigate to={NEW_WORKFLOW_PATH} replace state={{ draftGone: true }} />
-    return <NewWorkflow key={draftId} draftId={draftId} start={restoreDraft(found)} />
+    return <NewWorkflow key={draftId} page={page} draftId={draftId} start={restoreDraft(found)} />
   }
   if (drafts.isError)
     return (
       <div className={styles['page']}>
-        <Head step={null} />
+        <Head page={page} step={null} />
         <p>Your draft could not be loaded.</p>
         <Button onClick={() => void drafts.refetch()}>Try again</Button>
       </div>
@@ -333,8 +339,8 @@ function Opening() {
   )
 }
 
-export function NewWorkflowRoute() {
+export function NewWorkflowRoute(page: PageWords) {
   const me = useMe()
   if (!me.data) return null
-  return me.data.roles.includes('operator') ? <Opening /> : <OnlyOperators />
+  return isOperator(me.data) ? <Opening page={page} /> : <OnlyOperators page={page} />
 }

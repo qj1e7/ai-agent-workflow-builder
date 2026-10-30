@@ -10,6 +10,7 @@ import toolList from '../../../../contracts/fixtures/cards/tools.json'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
 import type { DraftView, Me, PlanOut, ToolView, UnderstandOut, UseCaseView } from '../../api/types'
+import { PAGES, wordsOf } from '../../shell/routes'
 import { DoneRoute } from './DonePage'
 import { afterReading, changeRow, draftContent, EMPTY_FORM, enterWhen, taskWithoutSchedule, planView, type Form } from './draft'
 import { NewWorkflowRoute } from './NewWorkflow'
@@ -20,6 +21,7 @@ import { StepWhen } from './StepWhen'
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
 const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
 const NOW = new Date('2026-11-03T15:00:00+08:00')
+const ROUTE = <NewWorkflowRoute heading={wordsOf(PAGES.new.heading, { name: 'Alice', now: NOW })} lead={wordsOf(PAGES.new.lead, { name: 'Alice', now: NOW })} />
 const FOLLOW_UP = 'Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days and create one follow-up ticket that lists them'
 const DRAFTED: PlanOut = {
   decision: 'new_agent',
@@ -76,7 +78,7 @@ function check(form: Form, plan: PlanState, tools: readonly ToolView[] = []): st
 }
 
 describe('New workflow for an Operator', () => {
-  const html = wrap(<NewWorkflowRoute />)
+  const html = wrap(ROUTE)
 
   it('says it is step 1 of 4 in its heading, and marks the step', () => {
     expect(heading(html)).toBe('New workflow , step 1 of 4: Describe it')
@@ -93,7 +95,7 @@ describe('New workflow for an Operator', () => {
 
 describe('New workflow for an Approver who is not an Operator', () => {
   it('says only Operators set up workflows, and offers no form', () => {
-    const html = wrap(<NewWorkflowRoute />, { me: BOB })
+    const html = wrap(ROUTE, { me: BOB })
     expect(heading(html)).toBe('New workflow')
     expect(text(html)).toContain('Only Operators set up workflows. Ask an Operator on your team.')
     expect(html).not.toContain('textarea')
@@ -117,20 +119,20 @@ describe('a draft opened from Home', () => {
     }
 
   it('reopens at the step it was saved at', () => {
-    const html = wrap(<NewWorkflowRoute />, { path: '/new?draft=d1', seed: listed([draft], true) })
+    const html = wrap(ROUTE, { path: '/new?draft=d1', seed: listed([draft], true) })
     expect(heading(html)).toBe('New workflow , step 3 of 4: When it runs')
     expect(html).toMatch(/<option value="weekdays" selected="">Every weekday<\/option>/)
     expect(html).toContain('value="15:00"')
   })
 
   it('waits for the list to be read again rather than reopen what an earlier read kept', () => {
-    const html = wrap(<NewWorkflowRoute />, { path: '/new?draft=d1', seed: listed([draft], false) })
+    const html = wrap(ROUTE, { path: '/new?draft=d1', seed: listed([draft], false) })
     expect(text(html)).toBe('Loading your draft')
   })
 
   it('leaves a draft that is gone for a new workflow, where the Planner says it is gone', () => {
-    expect(wrap(<NewWorkflowRoute />, { path: '/new?draft=d2', seed: listed([draft], true) })).toBe('')
-    const html = wrap(<NewWorkflowRoute />, { path: { pathname: '/new', state: { draftGone: true } } })
+    expect(wrap(ROUTE, { path: '/new?draft=d2', seed: listed([draft], true) })).toBe('')
+    const html = wrap(ROUTE, { path: { pathname: '/new', state: { draftGone: true } } })
     expect(heading(html)).toBe('New workflow , step 1 of 4: Describe it')
     expect(text(html)).toContain('Planner: That draft is gone. Start a new one.')
   })

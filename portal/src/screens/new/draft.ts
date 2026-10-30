@@ -14,7 +14,6 @@ import type {
 } from '../../api/types'
 import { checkClock, checkRepo, repeatWords, repoOf } from '../software/software'
 
-export const DRAFT_STEPS = 4
 export type Step = 1 | 2 | 3 | 4
 export const STEP_NAMES = ['Describe it', 'Check what I understood', 'When it runs', 'Turn it on'] as const
 
@@ -144,10 +143,10 @@ export function rowBlockers(rows: readonly Row[]): Blocker[] {
 }
 
 const withoutStop = (text: string) => text.trim().replace(/[.!?]+$/, '')
-const lowerFirst = (text: string) => (/^[A-Z][a-z]/.test(text) ? text.charAt(0).toLowerCase() + text.slice(1) : text)
+export const lowerFirst = (text: string) => (/^[A-Z][a-z]/.test(text) ? text.charAt(0).toLowerCase() + text.slice(1) : text)
 const upperFirst = (text: string) => text.charAt(0).toUpperCase() + text.slice(1)
 
-function textsOf(rows: readonly Row[], kind: RowKind): string[] {
+export function textsOf(rows: readonly Row[], kind: RowKind): string[] {
   return rows.filter((row) => row.kind === kind && row.text !== '').map((row) => withoutStop(row.text))
 }
 

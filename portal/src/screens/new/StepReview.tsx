@@ -1,6 +1,7 @@
+import type { RowKind } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { IconCheck, IconPencil } from '../../ui/icons'
-import { checkedRows, NAME_LIMIT, whenWords, type Form, type PlanView } from './draft'
+import { checkedRows, lowerFirst, NAME_LIMIT, textsOf, whenWords, type Form, type PlanView } from './draft'
 import styles from './NewWorkflow.module.css'
 
 const PROMISES = [
@@ -9,14 +10,7 @@ const PROMISES = [
   'If it stops, the AI troubleshooter tells you why on the Home page.',
 ] as const
 
-function partsOf(form: Form, kind: 'look_for' | 'do' | 'where'): string {
-  return form.rows
-    .filter((row) => row.kind === kind && row.text !== '')
-    .map((row) => row.text.replace(/[.!?]+$/, ''))
-    .join(' and ')
-}
-
-const lowerFirst = (text: string) => (/^[A-Z][a-z]/.test(text) ? text.charAt(0).toLowerCase() + text.slice(1) : text)
+const partsOf = (form: Form, kind: RowKind) => textsOf(form.rows, kind).join(' and ')
 
 interface StepReviewProps {
   readonly form: Form

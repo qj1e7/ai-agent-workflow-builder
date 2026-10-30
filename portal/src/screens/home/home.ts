@@ -1,8 +1,8 @@
 import { ApiError } from '../../api/client'
+import { DRAFT_STEPS } from '../../api/drafts'
 import { connectorLabel, starterName } from '../../api/labels'
 import type { ApprovalItem, ConfirmationItem, DraftItem, HomeOut, StoppedItem, WaitingItem } from '../../api/types'
 import { count, withCurrentNames } from '../run/words'
-import { DRAFT_STEPS } from '../new/draft'
 import { lineWhen, runWhen, workflowPath } from '../workflows/workflow'
 
 export const NEEDS_SHOWN = 10
