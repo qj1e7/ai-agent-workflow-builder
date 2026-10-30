@@ -663,9 +663,10 @@ def lane7(api: Api, out: Path) -> bool:
             "digest_bob_sent": digest,
             "decision_item": decision,
             "proposal_item": proposal,
-            "note": "approval_decided has no digest field; the digest is on write_action_proposed",
         },
     )
+    decided_digest = decision and decision["data"].get("digest")
+    proposed_digest = proposal and proposal["data"]["digest"]
     return verdict(
         [
             (status == 201, f"bob's decision answered HTTP {status}"),
@@ -677,8 +678,12 @@ def lane7(api: Api, out: Path) -> bool:
                 f"the decision's item names bob: {decision and decision['data']}",
             ),
             (
-                proposal is not None and proposal["data"]["digest"] == digest,
-                f"the proposal's item holds the digest bob saw, {digest}",
+                decided_digest == digest,
+                f"the decision's item holds the digest bob sent, {decided_digest} vs {digest}",
+            ),
+            (
+                decided_digest == proposed_digest,
+                f"it is the digest write_action_proposed showed, {proposed_digest}",
             ),
         ]
     )
