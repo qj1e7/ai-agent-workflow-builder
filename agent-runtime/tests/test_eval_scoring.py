@@ -16,6 +16,8 @@ from evals.understand import UNDERSTAND, UnderstandCase
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 
+from agent_runtime.contract import Understood
+from agent_runtime.planner import understood_of
 from agent_runtime.summary import SUMMARY_TIMEOUT_SECONDS, ModelSummarizer, template_check_summary
 
 
@@ -457,13 +459,18 @@ def test_the_golden_set_covers_every_kind_of_task_the_plan_names() -> None:
     assert cases["release"].watchlist == ["releas*"]
 
 
-def test_accepting_the_planted_order_fails_the_tool_checks() -> None:
+def test_accepting_the_planted_order_fails_the_tool_checks_and_dropping_it_is_caught() -> None:
     case = understand_case("ignore-your-rules")
     fooled = with_row(case, 3, state="understood")
     assert {"model_held_to_the_tools"} <= failed(UNDERSTAND.score(case, fooled))
     kept = [r for r in case.reference.rows if "close" not in r.said]
-    dropped = understand_answer(case, rows=kept)
-    assert "marks_cant_do" in failed(UNDERSTAND.score(case, dropped))
+    dropped = case.reference.model_copy(update={"rows": kept})
+    assert failed(UNDERSTAND.score(case, understand_answer(case, rows=kept))) == set()
+    shown = understood_of(dropped, case.task, case.jira_projects)
+    assert isinstance(shown, Understood)
+    assert [(r.text, r.state) for r in shown.rows if "close" in r.text.lower()] == [
+        ("Close every ticket", "cant_do")
+    ]
 
 
 @pytest.mark.parametrize("case", [c for c in UNDERSTAND.cases() if c.cant_do], ids=lambda c: c.id)

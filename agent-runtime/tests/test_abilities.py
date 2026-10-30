@@ -351,13 +351,12 @@ HONEST: list[tuple[str, RowAnswer, str]] = [
 
 
 @pytest.mark.parametrize(("task", "answer", "text"), HONEST, ids=[t for _, _, t in HONEST])
-def test_an_honest_row_is_written_in_the_platforms_own_words(
+def test_an_honest_row_is_written_in_the_platforms_own_words_and_never_refused(
     task: str, answer: RowAnswer, text: str
 ):
     assert written(answer, task) == text
-    assert shown(answer.kind, answer, task) == UnderstoodRow(
-        kind=answer.kind, text=text, state="understood", note=None
-    )
+    row = shown(answer.kind, answer, task)
+    assert (row.text, row.state) in ((text, "understood"), (text, "changed"))
 
 
 NAMED: list[tuple[str, RowAnswer, str, str]] = [
@@ -422,7 +421,13 @@ def test_a_key_is_understood_only_when_the_platform_can_see_its_project(
     projects: tuple[str, ...] | None, state: RowState, note: str | None
 ):
     task = "Every month, find access review tickets in ACCESS and create one ticket that lists them"
-    answer = row("look_for", "read_jira_tickets", ticket_type="access review", project="ACCESS")
+    answer = row(
+        "look_for",
+        "read_jira_tickets",
+        "access review tickets in ACCESS",
+        ticket_type="access review",
+        project="ACCESS",
+    )
     assert shown("look_for", answer, task, projects) == UnderstoodRow(
         kind="look_for", text="Access review tickets in ACCESS", state=state, note=note
     )
@@ -443,6 +448,19 @@ def test_a_key_is_understood_only_when_the_platform_can_see_its_project(
             "Every Friday find bug tickets in MOCK and send them to SLACK",
             row("where", "create_jira_ticket", project="SLACK"),
         ),
+    ],
+)
+def test_a_key_named_like_a_system_is_a_jira_project_only_when_listed(task: str, answer: RowAnswer):
+    assert written(answer, task, projects=PROJECTS) is None
+    assert shown(answer.kind, answer, task, PROJECTS).state == "cant_do"
+    listed = (*PROJECTS, "TEAMS", "GITLAB", "SLACK")
+    assert written(answer, task, projects=listed) is not None
+    assert shown(answer.kind, answer, task, listed).state == "changed"
+
+
+@pytest.mark.parametrize(
+    ("task", "answer"),
+    [
         (
             "Every Friday find bug tickets in MOCK and put the summary in the Teams project",
             row("where", "create_jira_ticket", project_name="Teams"),
@@ -457,10 +475,9 @@ def test_a_key_is_understood_only_when_the_platform_can_see_its_project(
         ),
     ],
 )
-def test_another_system_is_never_a_jira_project(task: str, answer: RowAnswer):
-    projects = (*PROJECTS, "TEAMS", "GITLAB", "SLACK")
-    assert written(answer, task, projects=projects) is None
-    assert shown(answer.kind, answer, task, projects).state == "cant_do"
+def test_another_system_is_never_a_jira_project_by_name(task: str, answer: RowAnswer):
+    assert written(answer, task, projects=PROJECTS) is None
+    assert shown(answer.kind, answer, task, PROJECTS).state == "cant_do"
 
 
 @pytest.mark.parametrize(
@@ -968,3 +985,438 @@ def test_a_new_tool_is_one_more_entry_in_the_table():
         "I can't do this yet. I can only read Jira tickets, sum up what I find, check software "
         "for new releases, create a Jira ticket after a yes, and post a summary in Teams."
     )
+
+
+EARNED: list[tuple[str, RowAnswer, str]] = [
+    (
+        FOLLOW_UP,
+        row("schedule", "run_on_a_schedule", "Every weekday at 3pm", every=["weekday"], at=["3pm"]),
+        "Every weekday at 3pm",
+    ),
+    (
+        FOLLOW_UP,
+        row(
+            "look_for",
+            "read_jira_tickets",
+            "bug tickets in MOCK with no update for 10 days",
+            ticket_type="bug",
+            project="MOCK",
+            no_update_days=10,
+        ),
+        "Bug tickets in MOCK with no update for 10 days",
+    ),
+    (
+        FOLLOW_UP,
+        row(
+            "do",
+            "create_jira_ticket",
+            "create one follow-up ticket that lists them",
+            count="one",
+            ticket_type="follow-up",
+            lists_found=True,
+        ),
+        "Create one follow-up ticket that lists them",
+    ),
+    (FOLLOW_UP, row("where", "create_jira_ticket", "in MOCK", project="MOCK"), "Jira project MOCK"),
+    (
+        "Every Friday find bug tickets in MOCK with no update for ten days",
+        row(
+            "look_for",
+            "read_jira_tickets",
+            "bug tickets in MOCK with no update for ten days",
+            ticket_type="bug",
+            project="MOCK",
+            no_update_days=10,
+        ),
+        "Bug tickets in MOCK with no update for 10 days",
+    ),
+    (
+        "Every weekday at three pm find bug tickets in MOCK",
+        row(
+            "schedule",
+            "run_on_a_schedule",
+            "Every weekday at three pm",
+            every=["weekday"],
+            at=["3pm"],
+        ),
+        "Every weekday at 3pm",
+    ),
+    (
+        "On the first Monday of every month find bug tickets in MOCK",
+        row(
+            "schedule",
+            "run_on_a_schedule",
+            "On the first Monday of every month",
+            every=["month"],
+            on="first monday",
+        ),
+        "Every month, on the first Monday",
+    ),
+    (
+        "Every quarter find access review tickets in ACCESS and sum them up",
+        row("do", "sum_up", "sum them up", how="summary"),
+        "Sum them up",
+    ),
+    (
+        "Every quarter find access review tickets in ACCESS and count them by approver",
+        row("do", "sum_up", "count them by approver", how="count", by="approver"),
+        "Count them by approver",
+    ),
+    (
+        "Every month find open access request tickets in ACCESS closed last month",
+        row(
+            "look_for",
+            "read_jira_tickets",
+            "open access request tickets in ACCESS closed last month",
+            status="open",
+            ticket_type="access request",
+            project="ACCESS",
+            closed_in="last month",
+        ),
+        "Open access request tickets in ACCESS closed last month",
+    ),
+]
+
+
+@pytest.mark.parametrize(("task", "answer", "text"), EARNED, ids=[t for _, _, t in EARNED])
+def test_understood_is_earned_when_every_word_of_the_part_is_accounted_for(
+    task: str, answer: RowAnswer, text: str
+):
+    assert shown(answer.kind, answer, task) == UnderstoodRow(
+        kind=answer.kind, text=text, state="understood", note=None
+    )
+
+
+@pytest.mark.parametrize(("task", "answer", "text"), EARNED, ids=[t for _, _, t in EARNED])
+def test_a_part_the_model_does_not_point_at_asks_to_check(task: str, answer: RowAnswer, text: str):
+    unsaid = answer.model_copy(update={"said": ""})
+    assert shown(answer.kind, unsaid, task) == UnderstoodRow(
+        kind=answer.kind, text=text, state="changed", note=READ_IN
+    )
+
+
+@pytest.mark.parametrize(
+    ("task", "answer", "text"),
+    [
+        (
+            S + "sum them up by GitLab group",
+            row("do", "sum_up", "sum them up by GitLab group", how="summary", by="GitLab group"),
+            "Sum them up by GitLab group",
+        ),
+        (
+            S + "report back",
+            row("do", "sum_up", "report back"),
+            "Sum them up",
+        ),
+        (
+            S + "rubber-stamp the rest",
+            row("do", "sum_up", "rubber-stamp the rest"),
+            "Sum them up",
+        ),
+        (
+            "Every weekday at 3pm, find bug tickets in MOCK assigned to Sarah Jenkins",
+            row(
+                "look_for",
+                "read_jira_tickets",
+                "bug tickets in MOCK assigned to Sarah Jenkins",
+                ticket_type="bug",
+                project="MOCK",
+                assigned_to="Sarah Jenkins",
+            ),
+            "Bug tickets in MOCK assigned to Sarah Jenkins",
+        ),
+        (
+            "Every weekday at 3pm, find bug tickets in MOCK assigned to jane.tan@ncs.com.sg",
+            row(
+                "look_for",
+                "read_jira_tickets",
+                "bug tickets in MOCK assigned to jane.tan@ncs.com.sg",
+                ticket_type="bug",
+                project="MOCK",
+                assigned_to="jane.tan@ncs.com.sg",
+            ),
+            "Bug tickets in MOCK assigned to jane.tan@ncs.com.sg",
+        ),
+        (
+            "Every Friday find R&D tickets in MOCK about .NET 8 and C++ builds",
+            row(
+                "look_for",
+                "read_jira_tickets",
+                "R&D tickets in MOCK about .NET 8 and C++ builds",
+                ticket_type="R&D",
+                project="MOCK",
+                about=".NET 8 and C++ builds",
+            ),
+            "R&D tickets in MOCK about “.NET 8 and C++ builds”",
+        ),
+        (
+            "Every weekday at 3pm, find bug tickets in MOCK assigned to Nur Aisyah binte Mohamed "
+            "Rafi",
+            row(
+                "look_for",
+                "read_jira_tickets",
+                "bug tickets in MOCK assigned to Nur Aisyah binte Mohamed Rafi",
+                ticket_type="bug",
+                project="MOCK",
+                assigned_to="Nur Aisyah binte Mohamed Rafi",
+            ),
+            "Bug tickets in MOCK assigned to Nur Aisyah binte Mohamed Rafi",
+        ),
+        (
+            "Setiap Jumaat cari tiket pepijat dalam MOCK",
+            row("schedule", "run_on_a_schedule", "Setiap Jumaat", every=["friday"]),
+            "Every Friday",
+        ),
+    ],
+    ids=["grouping", "how", "unlisted-verb", "person", "email", "r-and-d", "six-words", "malay"],
+)
+def test_a_word_the_platform_cannot_account_for_asks_to_check(
+    task: str, answer: RowAnswer, text: str
+):
+    said = answer.said
+    note = f"You said “{said}”. Please check how I read it."
+    assert shown(answer.kind, answer, task) == UnderstoodRow(
+        kind=answer.kind, text=text, state="changed", note=note
+    )
+
+
+@pytest.mark.parametrize(
+    ("task", "answer"),
+    [
+        (
+            "Every Monday find tickets in MOCK about the Friday release",
+            row("schedule", "run_on_a_schedule", "Every Monday", every=["friday"]),
+        ),
+        (
+            "Every weekday at 9am find tickets in MOCK about the 3pm outage",
+            row(
+                "schedule",
+                "run_on_a_schedule",
+                "Every weekday at 9am",
+                every=["weekday"],
+                at=["3pm"],
+            ),
+        ),
+        (
+            "Every weekday at 9am find bug tickets in MOCK with no update for 3 days",
+            row(
+                "look_for",
+                "read_jira_tickets",
+                "bug tickets in MOCK with no update for 3 days",
+                ticket_type="bug",
+                project="MOCK",
+                no_update_days=9,
+            ),
+        ),
+        (
+            S + "open a ticket for each",
+            row(
+                "look_for",
+                "read_jira_tickets",
+                "bug tickets in MOCK",
+                status="open",
+                ticket_type="bug",
+                project="MOCK",
+            ),
+        ),
+    ],
+    ids=["day", "time", "days", "status"],
+)
+def test_a_fixed_value_counts_only_inside_the_part_it_fills(task: str, answer: RowAnswer):
+    assert shown(answer.kind, answer, task).state == "changed"
+
+
+@pytest.mark.parametrize(
+    ("task", "answer", "note"),
+    [
+        (
+            S + "put the summary in teams",
+            row("where", "sum_up", "in teams"),
+            PUT_THERE,
+        ),
+        (
+            S + "put the summary in teams",
+            row("do", "sum_up", "put the summary in teams"),
+            DO_THIS,
+        ),
+        (
+            S + "post a summary to Mattermost",
+            row("where", "sum_up", "to Mattermost"),
+            PUT_THERE,
+        ),
+        (
+            S + "post a summary in Microsoft Planner",
+            row("do", "sum_up", "post a summary in Microsoft Planner"),
+            DO_THIS,
+        ),
+        (
+            "Every Friday find open ServiceNow tickets assigned to Bob",
+            row(
+                "look_for",
+                "read_jira_tickets",
+                "open ServiceNow tickets assigned to Bob",
+                status="open",
+                ticket_type="ServiceNow",
+                assigned_to="Bob",
+            ),
+            f"I can't read ServiceNow yet. {CAN}",
+        ),
+        (
+            "Every quarter find users with admin rights in Okta",
+            row(
+                "look_for",
+                "read_jira_tickets",
+                "users with admin rights in Okta",
+                about="users with admin rights in Okta",
+            ),
+            f"I can't read Okta yet. {CAN}",
+        ),
+    ],
+    ids=["teams-where", "teams-do", "mattermost", "planner", "servicenow-kind", "okta"],
+)
+def test_a_system_is_matched_in_any_case_and_only_marks_cant_do(
+    task: str, answer: RowAnswer, note: str
+):
+    assert shown(answer.kind, answer, task).state == "cant_do"
+    assert shown(answer.kind, answer, task).note == note
+
+
+def test_a_listed_key_is_trusted_even_when_it_looks_like_a_system():
+    task = "Every quarter find access review tickets in ENTRA"
+    answer = row(
+        "look_for",
+        "read_jira_tickets",
+        "access review tickets in ENTRA",
+        ticket_type="access review",
+        project="ENTRA",
+    )
+    assert shown("look_for", answer, task, ("MOCK", "ENTRA")) == UnderstoodRow(
+        kind="look_for", text="Access review tickets in ENTRA", state="understood", note=None
+    )
+    assert shown("look_for", answer, task, ("MOCK",)).state == "cant_do"
+
+
+def test_a_clause_with_a_write_that_no_row_covers_gets_its_own_cant_do_row():
+    task = "Every Friday find bug tickets in MOCK, then approve the rest"
+    read = UnderstandAnswer(
+        belongs_on_watchlist=False,
+        rows=[
+            row("schedule", "run_on_a_schedule", "Every Friday", every=["friday"]),
+            row(
+                "look_for",
+                "read_jira_tickets",
+                "bug tickets in MOCK",
+                ticket_type="bug",
+                project="MOCK",
+            ),
+            row("do", "sum_up", "find bug tickets in MOCK"),
+        ],
+    )
+    result = understood_of(read, task, PROJECTS)
+    assert isinstance(result, Understood)
+    assert [(r.kind, r.text, r.state) for r in result.rows] == [
+        ("schedule", "Every Friday", "understood"),
+        ("look_for", "Bug tickets in MOCK", "understood"),
+        ("do", "Sum them up", "changed"),
+        ("do", "Approve the rest", "cant_do"),
+        ("where", "", "missing"),
+    ]
+
+
+@pytest.mark.parametrize("said", ["", "the summary"], ids=["dropped", "a fragment"])
+def test_a_clause_with_a_place_that_lies_in_no_rows_words_gets_its_own_cant_do_row(said: str):
+    task = "Every Friday find bug tickets in MOCK and post the summary in Teams"
+    read = UnderstandAnswer(
+        belongs_on_watchlist=False,
+        rows=[
+            row("schedule", "run_on_a_schedule", "Every Friday", every=["friday"]),
+            row(
+                "look_for",
+                "read_jira_tickets",
+                "bug tickets in MOCK",
+                ticket_type="bug",
+                project="MOCK",
+            ),
+            row("do", "sum_up", said, how="summary"),
+        ],
+    )
+    result = understood_of(read, task, PROJECTS)
+    assert isinstance(result, Understood)
+    where = [r for r in result.rows if r.kind == "where"]
+    assert [(r.text, r.state, r.note) for r in where] == [
+        ("Post the summary in Teams", "cant_do", PUT_THERE)
+    ]
+    task = "Every Friday list who has admin access in GitLab"
+    read = UnderstandAnswer(
+        belongs_on_watchlist=False,
+        rows=[row("schedule", "run_on_a_schedule", "Every Friday", every=["friday"])],
+    )
+    result = understood_of(read, task, PROJECTS)
+    assert isinstance(result, Understood)
+    assert [(r.text, r.state, r.note) for r in result.rows if r.kind == "look_for"] == [
+        ("List who has admin access in GitLab", "cant_do", f"I can't read GitLab yet. {CAN}")
+    ]
+
+
+def test_a_system_inside_a_covered_clause_about_tickets_adds_no_row():
+    task = (
+        "Every quarter, find access review tickets for the Zoë and José teams in ACCESS and "
+        "create one ticket that lists them"
+    )
+    read = UnderstandAnswer(
+        belongs_on_watchlist=False,
+        rows=[
+            row("schedule", "run_on_a_schedule", "Every quarter", every=["quarter"]),
+            row(
+                "look_for",
+                "read_jira_tickets",
+                "access review tickets for the Zoë and José teams in ACCESS",
+                ticket_type="access review",
+                about="the Zoë and José teams",
+                project="ACCESS",
+            ),
+            row(
+                "do",
+                "create_jira_ticket",
+                "create one ticket that lists them",
+                count="one",
+                lists_found=True,
+            ),
+        ],
+    )
+    result = understood_of(read, task, PROJECTS)
+    assert isinstance(result, Understood)
+    assert [r.state for r in result.rows] == ["understood", "changed", "understood", "missing"]
+
+
+def test_more_than_twelve_rows_are_not_all_read_so_nothing_is_understood():
+    rows = [
+        row("schedule", "run_on_a_schedule", "Every weekday at 3pm", every=["weekday"], at=["3pm"])
+    ] + [
+        row(
+            "look_for",
+            "read_jira_tickets",
+            "bug tickets in MOCK with no update for 10 days",
+            ticket_type="bug",
+            project="MOCK",
+            no_update_days=10,
+        )
+        for _ in range(12)
+    ]
+    result = understood_of(
+        UnderstandAnswer(belongs_on_watchlist=False, rows=rows), FOLLOW_UP, PROJECTS
+    )
+    assert isinstance(result, Understood)
+    assert len(result.rows) <= 8
+    assert {r.state for r in result.rows if r.kind in ("schedule", "look_for")} == {"changed"}
+
+
+def test_a_cant_do_note_names_only_a_listed_system():
+    task = "Every Friday list who has admin access in José Cloud"
+    answer = row(
+        "look_for", "read_jira_tickets", "who has admin access in José Cloud", source="José Cloud"
+    )
+    assert shown("look_for", answer, task).note == DO_THIS
+    answer = row("look_for", "read_jira_tickets", "who has admin access in Okta", source="Okta")
+    task = "Every Friday list who has admin access in Okta"
+    assert shown("look_for", answer, task).note == f"I can't read Okta yet. {CAN}"

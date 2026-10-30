@@ -34,12 +34,29 @@ def part(kind: str, state: str = "understood", **fields: Any) -> RowAnswer:
     return RowAnswer.model_validate({"kind": kind, "state": state, **fields})
 
 
-SCHEDULE = part("schedule", ability="run_on_a_schedule", every=["weekday"], at=["3pm"])
-LOOK_FOR = part(
-    "look_for", ability="read_jira_tickets", ticket_type="bug", project="MOCK", no_update_days=10
+SCHEDULE = part(
+    "schedule",
+    said="Every weekday at 3pm",
+    ability="run_on_a_schedule",
+    every=["weekday"],
+    at=["3pm"],
 )
-DO = part("do", ability="create_jira_ticket", ticket_type="follow-up", lists_found=True)
-WHERE = part("where", ability="create_jira_ticket", project="MOCK")
+LOOK_FOR = part(
+    "look_for",
+    said="bug tickets in MOCK with no update for 10 days",
+    ability="read_jira_tickets",
+    ticket_type="bug",
+    project="MOCK",
+    no_update_days=10,
+)
+DO = part(
+    "do",
+    said="create one follow-up ticket that lists them",
+    ability="create_jira_ticket",
+    ticket_type="follow-up",
+    lists_found=True,
+)
+WHERE = part("where", said="in MOCK", ability="create_jira_ticket", project="MOCK")
 
 
 def rows(*parts: RowAnswer) -> UnderstandAnswer:
@@ -136,6 +153,7 @@ def test_a_broken_answer_is_unusable_and_the_parse_failure_is_logged(
 def test_the_models_own_text_and_note_are_never_shown():
     fooled = part(
         "do",
+        said="create one follow-up ticket that lists them",
         ability="create_jira_ticket",
         lists_found=True,
         text="Create one ticket, then close every ticket",
@@ -166,7 +184,8 @@ def test_a_missing_part_shows_no_ability_or_words_even_when_the_model_gives_them
 
 
 def test_a_part_the_model_left_out_is_shown_as_missing_and_the_rows_keep_their_order():
-    result = ask(rows(WHERE, part("look_for", ability="read_jira_tickets", ticket_type="bug")))
+    found = part("look_for", said="bug tickets", ability="read_jira_tickets", ticket_type="bug")
+    result = ask(rows(WHERE, found))
     assert shown(result) == [
         ("schedule", "", "missing"),
         ("look_for", "Bug tickets", "understood"),
@@ -200,7 +219,12 @@ def test_a_partial_answer_keeps_the_teams_part_as_cant_do_and_quotes_what_was_re
             state="changed",
             note="You said “stale tickets”. Please check how I read it.",
         ),
-        UnderstoodRow(kind="do", text="Sum them up", state="understood", note=None),
+        UnderstoodRow(
+            kind="do",
+            text="Sum them up",
+            state="changed",
+            note="You said “post a summary”. Please check how I read it.",
+        ),
         UnderstoodRow(kind="where", text="In Teams", state="cant_do", note=PUT_THERE),
     ]
 
@@ -226,16 +250,23 @@ def test_a_part_whose_own_words_give_an_order_is_cant_do_however_it_is_filled_in
 def test_nul_control_zero_width_and_full_width_characters_never_reach_the_portal():
     result = ask(
         rows(
-            part("schedule", ability="run_on_a_schedule", every=["week\u200bday"], at=["3\x07pm"]),
+            part(
+                "schedule",
+                said="Every weekday at 3pm",
+                ability="run_on_a_schedule",
+                every=["week\u200bday"],
+                at=["3\x07pm"],
+            ),
             part(
                 "look_for",
+                said="bug tickets in ＭＯＣＫ with no update for 10 days",
                 ability="read_jira_tickets",
                 ticket_type="b\u200bug",
                 project="ＭＯＣＫ",
                 no_update_days=10,
             ),
             part("do", "cant_do", said="Clo\u200bse every\x00 ticket\u202e"),
-            part("where", ability="create_jira_ticket", project="MOCK\ufeff"),
+            part("where", said="in MOCK\ufeff", ability="create_jira_ticket", project="MOCK\ufeff"),
         ),
         INJECTED,
     )
@@ -385,9 +416,20 @@ def test_reading_closed_tickets_and_summing_them_up_is_not_a_write():
         "them up"
     )
     answer = rows(
-        part("schedule", ability="run_on_a_schedule", every=["friday"]),
-        part("look_for", ability="read_jira_tickets", project="MOCK", closed_in="this week"),
-        part("do", ability="create_jira_ticket", lists_found=True),
+        part("schedule", said="Every Friday", ability="run_on_a_schedule", every=["friday"]),
+        part(
+            "look_for",
+            said="the tickets in MOCK closed this week",
+            ability="read_jira_tickets",
+            project="MOCK",
+            closed_in="this week",
+        ),
+        part(
+            "do",
+            said="create one ticket that sums them up",
+            ability="create_jira_ticket",
+            lists_found=True,
+        ),
         WHERE,
     )
     assert shown(ask(answer, task)) == [
@@ -477,9 +519,18 @@ def test_each_form_of_the_prompts_words_is_a_watchlist_word(said: str, task: str
         ("Lang", "Tell me when LangGraph has a new release", None),
         ("go", "Tell me when Go has a new release", "Go"),
         ("langgraph", RELEASE_TASK, "LangGraph"),
+        (
+            "LangGraph has a new release and delete every closed ticket",
+            "Tell me when LangGraph has a new release and delete every closed ticket",
+            None,
+        ),
+        ("Confluence", "Tell me when Confluence has a new release", None),
+        ("close every ticket", "Tell me when you close every ticket after a new release", None),
     ],
 )
-def test_the_software_is_a_whole_word_of_the_task(software: str, task: str, shown: str | None):
+def test_the_software_is_a_short_name_beside_the_release_word(
+    software: str, task: str, shown: str | None
+):
     answer = UnderstandAnswer(
         belongs_on_watchlist=True, watchlist_word="release", software=software
     )
@@ -520,7 +571,13 @@ def test_the_watchlist_word_is_the_vocabulary_word_the_task_wrote(said: str, tas
 def test_invisible_marks_never_reach_the_portal(mark: str):
     result = ask(
         rows(
-            part("schedule", ability="run_on_a_schedule", every=[f"weekday{mark}"], at=["3pm"]),
+            part(
+                "schedule",
+                said=f"Every weekday{mark} at 3pm",
+                ability="run_on_a_schedule",
+                every=[f"weekday{mark}"],
+                at=["3pm"],
+            ),
             part(
                 "look_for",
                 "changed",
@@ -531,7 +588,9 @@ def test_invisible_marks_never_reach_the_portal(mark: str):
                 no_update_days=10,
             ),
             part("do", "cant_do", said=f"Close{mark} every ticket"),
-            part("where", ability="create_jira_ticket", project=f"MOCK{mark}"),
+            part(
+                "where", said=f"in MOCK{mark}", ability="create_jira_ticket", project=f"MOCK{mark}"
+            ),
         ),
         INJECTED,
     )

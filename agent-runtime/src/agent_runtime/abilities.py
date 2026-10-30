@@ -1,20 +1,27 @@
 """What the platform can do, and how a part the Planner read back is held to it.
 
 The model never writes a row the platform trusts. For each part of a task it names one ability
-from `ABILITIES` and fills in that ability's parameters. The platform checks each parameter and
-writes the row itself, in its own words. A part that names no ability in the table, an ability
-that does not fit the part, or a parameter that does not check out is can't do. A new tool that
-takes the parameters already here is one more entry.
+from `ABILITIES`, copies the task's own words for the part (`said`), and fills in that ability's
+parameters. The platform checks each parameter and writes the row itself, in its own words. A
+part that names no ability in the table, an ability that does not fit the part, or a parameter
+that does not check out is can't do. A new tool that takes the parameters already here is one
+more entry, with its own words.
 
 Every parameter is a short, checked value. An enum is one of its words, a Jira key is a key the
 task wrote, and a number is in bounds. Anything taken from the task's words (a kind of ticket, a
 name, a topic) must be plain text that the task holds where such a value sits, and must carry no
 instruction: it never starts a clause, joins one on, points back at what was found ("them", "the
-rest"), names a ticket, holds a search query, holds a write word in any form, or names another
-system outside the words about Jira tickets. A row is understood only when each fixed value it
-shows (a day, a time, a number of days, a period, how to sum up, and that a new ticket lists what
-was found) is the task's own, and its Jira project is one the platform can see. Otherwise it is
-changed, and the Operator is asked to check it."""
+rest"), names a ticket, holds a search query, or holds a write word in any form.
+
+"Understood" is earned. A row is understood only when the model pointed at the task's own words
+for the part, every value sits inside them, every fixed value the row shows (a day, a time, a
+number of days, a period, a status, how to sum up, that a new ticket lists what was found, a Jira
+project) sits inside them and the project is one the platform can see, and every word of the
+part is accounted for: the ability's own words, the generic glue words, a listed Jira key, or a
+number or time the row shows. Any word left over makes the row changed, and the Operator is
+asked to check it. An unlisted verb, another language, a look-alike letter or a split word all
+fall there by construction. The write words and the names of other systems only make a part
+can't do."""
 
 import re
 import unicodedata
@@ -218,6 +225,43 @@ SOFTWARE_BEFORE: Final = re.compile(rf"\b{RELEASE}\s+(?:of|for|to|in)\s+(?:the\s
 NOT_SOFTWARE: Final = frozenset(
     ("latest", "new", "newest", "next", "current", "old", "older", "previous", "last", "our")
 )
+NUMBER_WORDS: Final = (
+    {
+        word: str(number)
+        for number, word in enumerate(
+            [
+                "zero",
+                "one",
+                "two",
+                "three",
+                "four",
+                "five",
+                "six",
+                "seven",
+                "eight",
+                "nine",
+                "ten",
+                "eleven",
+                "twelve",
+                "thirteen",
+                "fourteen",
+                "fifteen",
+                "sixteen",
+                "seventeen",
+                "eighteen",
+                "nineteen",
+                "twenty",
+            ]
+        )
+    }
+    | {
+        f"twenty-{word}": str(20 + n)
+        for n, word in enumerate(
+            ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine"], 1
+        )
+    }
+    | {"thirty": "30"}
+)
 
 STARTS: Final = frozenset(
     [
@@ -300,7 +344,114 @@ PREPOSITIONS: Final = frozenset(
     ]
 )
 FUNCTION_WORDS: Final = DETERMINERS | PREPOSITIONS | CONJUNCTIONS | BACK | {"one"}
+GLUE: Final = FUNCTION_WORDS | frozenset(
+    [
+        "please",
+        "i",
+        "we",
+        "me",
+        "us",
+        "you",
+        "your",
+        "need",
+        "want",
+        "would",
+        "like",
+        "can",
+        "could",
+        "should",
+        "let",
+        "then",
+        "also",
+        "plus",
+        "so",
+        "that",
+        "which",
+        "who",
+        "whom",
+        "whose",
+        "what",
+        "if",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        "not",
+        "still",
+        "only",
+        "just",
+        "too",
+        "there",
+        "here",
+        "again",
+        "once",
+        "both",
+        "either",
+    ]
+)
 TICKET_WORDS: Final = frozenset(("ticket", "tickets"))
+TICKET_KINDS: Final = frozenset(
+    [
+        "bug",
+        "bugs",
+        "task",
+        "tasks",
+        "story",
+        "stories",
+        "epic",
+        "epics",
+        "incident",
+        "incidents",
+        "request",
+        "requests",
+        "access",
+        "review",
+        "reviews",
+        "change",
+        "changes",
+        "problem",
+        "problems",
+        "support",
+        "follow-up",
+        "follow-ups",
+        "housekeeping",
+        "patch",
+        "patches",
+        "patching",
+        "upgrade",
+        "upgrades",
+        "version",
+        "versions",
+        "admin",
+        "tool",
+        "tools",
+        "removal",
+        "reminder",
+        "reminders",
+        "pending",
+        "security",
+        "service",
+        "account",
+        "accounts",
+        "user",
+        "users",
+        "leaver",
+        "leavers",
+        "group",
+        "groups",
+        "server",
+        "servers",
+        "software",
+    ]
+)
 READS: Final = frozenset(
     [
         "find",
@@ -319,6 +470,251 @@ READS: Final = frozenset(
         "gather",
         "collect",
     ]
+)
+SCHEDULE_WORDS: Final = (
+    EVERY
+    | frozenset(EVERY_ALSO)
+    | frozenset(ORDINALS)
+    | frozenset(f"{word}s" for word in EVERY)
+    | frozenset(
+        [
+            "every",
+            "each",
+            "on",
+            "at",
+            "of",
+            "in",
+            "and",
+            "run",
+            "runs",
+            "time",
+            "times",
+            "afternoon",
+            "noon",
+            "midnight",
+            "am",
+            "pm",
+            "o'clock",
+        ]
+    )
+)
+READ_WORDS: Final = (
+    READS
+    | TICKET_WORDS
+    | TICKET_KINDS
+    | PERIODS
+    | frozenset(STATUSES)
+    | frozenset(EVERY_ALSO)
+    | frozenset(
+        [
+            "issue",
+            "issues",
+            "jira",
+            "assigned",
+            "to",
+            "in",
+            "with",
+            "no",
+            "update",
+            "updates",
+            "updated",
+            "for",
+            "days",
+            "day",
+            "since",
+            "than",
+            "older",
+            "more",
+            "created",
+            "closed",
+            "this",
+            "last",
+            "week",
+            "month",
+            "quarter",
+            "year",
+            "about",
+            "regarding",
+            "concerning",
+            "mention",
+            "mentions",
+            "mentioning",
+            "listing",
+            "lists",
+            "where",
+            "involving",
+            "covering",
+            "status",
+            "type",
+            "kind",
+            "of",
+            "project",
+            "projects",
+            "board",
+            "boards",
+            "from",
+            "by",
+            "are",
+            "all",
+        ]
+    )
+)
+SUM_WORDS: Final = frozenset(
+    [
+        "sum",
+        "sums",
+        "summarise",
+        "summarize",
+        "summarised",
+        "summarized",
+        "summary",
+        "summaries",
+        "list",
+        "lists",
+        "listed",
+        "count",
+        "counts",
+        "counted",
+        "group",
+        "groups",
+        "grouped",
+        "them",
+        "it",
+        "up",
+        "by",
+        "per",
+        "each",
+        "for",
+        "what",
+        "was",
+        "found",
+        "results",
+        "result",
+        "report",
+        "back",
+        "short",
+        "give",
+        "me",
+        "a",
+        "the",
+        "in",
+        "into",
+        "run's",
+        "run",
+        "and",
+        "then",
+        "one",
+        "total",
+        "totals",
+        "owner",
+        "owners",
+        "team",
+        "approver",
+        "approvers",
+        "person",
+        "people",
+        "assignee",
+        "status",
+        "type",
+        "kind",
+        "project",
+        "month",
+        "week",
+        "day",
+        "admin",
+        "tool",
+        "tools",
+        "category",
+        "priority",
+    ]
+)
+RELEASE_WORDS: Final = frozenset(
+    [
+        "check",
+        "checks",
+        "watch",
+        "tell",
+        "me",
+        "when",
+        "for",
+        "new",
+        "newer",
+        "latest",
+        "release",
+        "releases",
+        "released",
+        "version",
+        "versions",
+        "upgrade",
+        "upgrades",
+        "update",
+        "updates",
+        "patch",
+        "patches",
+        "vulnerability",
+        "vulnerabilities",
+        "cve",
+        "cves",
+        "of",
+        "has",
+        "have",
+        "a",
+        "an",
+        "the",
+        "any",
+        "out",
+        "comes",
+        "come",
+        "is",
+        "software",
+        "if",
+        "there",
+    ]
+)
+CREATE_WORDS: Final = (
+    TICKET_WORDS
+    | TICKET_KINDS
+    | frozenset(
+        [
+            "create",
+            "creates",
+            "make",
+            "raise",
+            "log",
+            "file",
+            "propose",
+            "new",
+            "one",
+            "a",
+            "an",
+            "jira",
+            "issue",
+            "for",
+            "each",
+            "every",
+            "of",
+            "them",
+            "it",
+            "that",
+            "lists",
+            "listing",
+            "list",
+            "sums",
+            "sum",
+            "up",
+            "in",
+            "the",
+            "project",
+            "board",
+            "found",
+            "what",
+            "was",
+            "about",
+            "with",
+            "and",
+            "per",
+        ]
+    )
 )
 TICKET_LEAD: Final = (
     DETERMINERS | READS | frozenset(STATUSES) | {"one", "new", "single", "me", "us", "for", "of"}
@@ -346,12 +742,12 @@ QUESTION_WORDS: Final = frozenset(
 QUOTES: Final = "\"“”‘’'«»"
 JQL: Final = frozenset(("AND", "OR", "NOT", "ORDER", "EMPTY", "NULL"))
 APOSTROPHES: Final = "'’‘"
+PLAIN_MARKS: Final = "-/.&+@" + APOSTROPHES
+CLAUSE_ENDS: Final = ".!?;:,"
 WORDS_LIMIT: Final = 12
 CHARS_LIMIT: Final = 80
 LABEL_CHARS: Final = 40
 NAME_WORDS: Final = 3
-
-type Systems = Literal["never", "about_tickets", "with_tickets", "always"]
 
 
 def _single(*words: str) -> frozenset[tuple[str, ...]]:
@@ -367,14 +763,12 @@ class Spot:
     before: str | None = None
     tickets_ok: bool = False
     content_only: bool = False
-    systems: Systems = "never"
+    system_ok: bool = False
 
 
-TICKET_TYPE: Final = Spot(
-    3, before=r"\s+tickets?", after=_single(*TICKET_LEAD), content_only=True, systems="always"
-)
-PROJECT_NAME: Final = Spot(5, before=r"\s+(project|board)s?", systems="always")
-ASSIGNEE: Final = Spot(4, after=frozenset({("assigned", "to")}))
+TICKET_TYPE: Final = Spot(3, before=r"\s+tickets?", after=_single(*TICKET_LEAD), content_only=True)
+PROJECT_NAME: Final = Spot(5, before=r"\s+(project|board)s?")
+ASSIGNEE: Final = Spot(6, after=frozenset({("assigned", "to")}))
 BY: Final = Spot(3, after=frozenset({("by",), ("per",), ("for", "each"), ("for", "every")}))
 EACH_OF: Final = Spot(
     4, after=frozenset({("for", "each"), ("for", "every"), ("per",)}), content_only=True
@@ -385,9 +779,8 @@ TOPIC: Final = Spot(
     CHARS_LIMIT,
     clause_starts=TOPIC_STARTS,
     after=_single(*TOPIC_MARKERS),
-    systems="about_tickets",
+    system_ok=True,
 )
-SAID: Final = Spot(WORDS_LIMIT, CHARS_LIMIT, tickets_ok=True, systems="with_tickets")
 
 
 def _letter(c: str) -> bool:
@@ -428,14 +821,15 @@ def _is_word(token: str) -> bool:
     return _letter(token[0])
 
 
+def _words(text: str) -> list[str]:
+    return [token.casefold() for _, token in _tokens(text) if _is_word(token)]
+
+
 def _plain_chars(value: str) -> bool:
     for at, c in enumerate(value):
-        if c.isalnum() or c == " " or c in "-/" or c in APOSTROPHES:
+        if c.isalnum() or c == " " or c in PLAIN_MARKS:
             continue
-        if unicodedata.category(c)[0] == "M" and at > 0 and value[at - 1] != " ":
-            continue
-        inner = 0 < at < len(value) - 1 and value[at - 1].isalnum() and value[at + 1].isalnum()
-        if c != "." or not inner:
+        if not (unicodedata.category(c)[0] == "M" and at > 0 and value[at - 1] != " "):
             return False
     return True
 
@@ -496,6 +890,7 @@ def _skeleton(text: str | None) -> str:
 
 
 SPACED_LETTERS: Final = re.compile(r"(?<!\w)(?:\w ){2,}\w(?!\w)")
+LETTER_RUNS: Final = re.compile(r"\w+(?:[^\w\s]+\w+)+")
 
 
 def _parts_and_whole(word: str) -> set[str]:
@@ -503,14 +898,16 @@ def _parts_and_whole(word: str) -> set[str]:
     return {*parts, "".join(parts)}
 
 
-def _spaced_letters_joined(text: str) -> set[str]:
-    return {spaced.replace(" ", "") for spaced in SPACED_LETTERS.findall(text)}
+def _letters_joined(text: str) -> set[str]:
+    spaced = {run.replace(" ", "") for run in SPACED_LETTERS.findall(text)}
+    marked = {"".join(re.findall(r"\w+", run)) for run in LETTER_RUNS.findall(text)}
+    return spaced | marked
 
 
 def _words_in(text: str | None) -> set[str]:
     folded = _skeleton(text).casefold()
     words = {w for _, token in _tokens(folded) if _is_word(token) for w in _parts_and_whole(token)}
-    return words | _spaced_letters_joined(folded)
+    return words | _letters_joined(folded)
 
 
 class VerbForms(NamedTuple):
@@ -533,10 +930,23 @@ def _forms(verb: str) -> VerbForms:
     return forms
 
 
-def _systems_in(text: str) -> str | None:
-    skeleton = _skeleton(text)
-    found = SYSTEMS_FOUND.search(skeleton.casefold()) or NAMED_FOUND.search(skeleton)
+def _without_keys(text: str, keys: Collection[str]) -> str:
+    for key in keys:
+        text = re.sub(rf"(?<![\w-]){re.escape(key)}(?![\w-])", " ", text)
+    return text
+
+
+def _systems_in(text: str, keys: Collection[str] = ()) -> str | None:
+    found = SYSTEMS_FOUND.search(_skeleton(_without_keys(text, keys)).casefold())
     return None if found is None else found.group(0)
+
+
+def _a_system(text: str) -> bool:
+    return SYSTEMS_FOUND.fullmatch(_skeleton(text).casefold()) is not None
+
+
+def _placed_system(text: str, keys: Collection[str]) -> bool:
+    return PLACED_SYSTEM.search(_skeleton(_without_keys(text, keys)).casefold()) is not None
 
 
 def _gives_an_order(text: str) -> bool:
@@ -547,8 +957,17 @@ def _writes(text: str) -> bool:
     return not _words_in(text).isdisjoint(BARRED_FORMS)
 
 
-def _places(text: str) -> bool:
-    return not _words_in(text).isdisjoint(PLACES) or _systems_in(text) is not None
+def _places(text: str, keys: Collection[str] = ()) -> bool:
+    rest = _without_keys(text, keys)
+    return not _words_in(rest).isdisjoint(PLACES) or _systems_in(rest) is not None
+
+
+def _digits(text: str) -> str:
+    return re.sub(
+        r"(?<![\w-])[a-z-]+(?![\w-])",
+        lambda m: NUMBER_WORDS.get(m.group(0), m.group(0)),
+        text.casefold(),
+    )
 
 
 class Place(NamedTuple):
@@ -572,6 +991,10 @@ class _Task:
         found = seen.copy_of(said)
         return seen if found is None else cls(seen.text, (found.start(1), found.end(1)))
 
+    @property
+    def clause(self) -> str:
+        return "" if self.part is None else self.text[self.part[0] : self.part[1]]
+
     def copies(self, value: str, end: str = "") -> list[re.Match[str]]:
         return [
             m
@@ -586,6 +1009,26 @@ class _Task:
             if found:
                 return found[0]
         return None
+
+    def inside(self, found: re.Match[str]) -> bool:
+        part = self.part
+        return part is not None and part[0] <= found.start(1) and found.end(1) <= part[1]
+
+    def holds(self, value: str) -> bool:
+        return any(self.inside(m) for m in self.copies(value))
+
+    def rest(self, p: Parameters) -> str:
+        """The part's own words without the values the row takes from them: a system named
+        inside a person, a topic, a grouping or a kind of ticket is not a system."""
+        names = [p.project_name.name] if p.project_name else []
+        values = (p.ticket_type, p.assigned_to, p.about, p.by, p.each_of, p.software, *names)
+        kept = list(self.clause)
+        offset = self.part[0] if self.part else 0
+        for value in filter(None, values):
+            for found in filter(self.inside, self.copies(value)):
+                start, end = found.span(1)
+                kept[start - offset : end - offset] = " " * (end - start)
+        return "".join(kept)
 
     def _words_before(self, at: int, count: int) -> list[str]:
         words: list[str] = []
@@ -614,10 +1057,6 @@ class _Task:
 
         return walk(iter(range(here - 1, -1, -1))), walk(iter(range(here, len(tokens))))
 
-    def about_tickets(self, at: int) -> bool:
-        before, _ = self._clause(at)
-        return not TICKET_WORDS.isdisjoint(before)
-
     def _in_place(self, found: re.Match[str], words: list[str], spot: Spot) -> bool:
         before = self._words_before(found.start(1), 2)
         if not before or before[-1] in spot.clause_starts:
@@ -628,19 +1067,6 @@ class _Task:
             return False
         return not (before[-1] == "find" and words[0].casefold() in QUESTION_WORDS)
 
-    def _systems_ok(self, value: str, found: re.Match[str], spot: Spot) -> bool:
-        if _systems_in(value) is None:
-            return True
-        match spot.systems:
-            case "always":
-                return True
-            case "about_tickets":
-                return self.about_tickets(found.start(1))
-            case "with_tickets":
-                return not TICKET_WORDS.isdisjoint(w.casefold() for w in value.split())
-            case "never":
-                return False
-
     def find(self, value: str, spot: Spot) -> re.Match[str] | None:
         said = visible(value).strip(" " + QUOTES)
         words = said.split()
@@ -648,14 +1074,11 @@ class _Task:
             return None
         if not _plain_chars(said) or _instruction(words, spot) or _writes(said):
             return None
+        if not spot.system_ok and _a_system(said):
+            return None
         found = self.copies(said, spot.before or rf"(?:e?s|[{APOSTROPHES}]s)?")
-        part = self.part
-        inside = [m for m in found if part and part[0] <= m.start(1) and m.end(1) <= part[1]]
-        placed = (
-            m
-            for m in inside or found
-            if self._in_place(m, words, spot) and self._systems_ok(said, m, spot)
-        )
+        inside = [m for m in found if self.inside(m)]
+        placed = (m for m in inside or found if self._in_place(m, words, spot))
         return next(placed, None)
 
     def quote(self, value: str, spot: Spot) -> str | None:
@@ -665,6 +1088,8 @@ class _Task:
     def software(self, value: str) -> str | None:
         found = self.find(value, SOFTWARE)
         if found is None or found.group(1).split()[0].casefold() in NOT_SOFTWARE | FUNCTION_WORDS:
+            return None
+        if _systems_in(found.group(1)) is not None:
             return None
         named = SOFTWARE_AFTER.match(self.text, found.end(1)) or SOFTWARE_BEFORE.search(
             self.text[: found.start(1)]
@@ -677,8 +1102,7 @@ class _Task:
         found = self.find(name, PROJECT_NAME)
         if found is None or found.group(1).split()[0].casefold() in FUNCTION_WORDS:
             return None
-        system = _systems_in(found.group(1))
-        if system is not None and system.casefold() == _skeleton(found.group(1)).casefold():
+        if _a_system(found.group(1)):
             return None
         return Place(found.group(1), found.group(2).casefold())
 
@@ -702,7 +1126,7 @@ class _Task:
         return re.search(rf"(?<![\w-]){re.escape(key)}(?![\w-])", self.text) is not None
 
     def own(self, pattern: str) -> bool:
-        return re.search(pattern, self.text, re.IGNORECASE) is not None
+        return re.search(pattern, self.clause, re.IGNORECASE) is not None
 
 
 def _word(value: str | None) -> str:
@@ -784,9 +1208,11 @@ def _on(value: str) -> Day:
     return Day(found.group(1), found.group(2))
 
 
-def _key(value: str, task: _Task) -> str:
+def _key(value: str, task: _Task, projects: Collection[str] | None) -> str:
     key = visible(value)
-    if KEY.fullmatch(key) is None or not task.has_key(key) or _systems_in(key):
+    if KEY.fullmatch(key) is None or not task.has_key(key):
+        raise _Bad
+    if key not in (projects or ()) and _a_system(key):
         raise _Bad
     return key
 
@@ -818,7 +1244,9 @@ def _present(row: RowAnswer) -> list[str]:
     return named
 
 
-def _checked(row: RowAnswer, task: _Task, takes: Collection[str]) -> Parameters | None:
+def _checked(
+    row: RowAnswer, task: _Task, takes: Collection[str], projects: Collection[str] | None
+) -> Parameters | None:
     def quoted(value: str | None, spot: Spot) -> str | None:
         return _maybe(value, lambda v: _ok(task.quote(v, spot)))
 
@@ -833,7 +1261,7 @@ def _checked(row: RowAnswer, task: _Task, takes: Collection[str]) -> Parameters 
             on=_maybe(row.on, _on),
             status=_maybe(row.status, status),
             ticket_type=quoted(row.ticket_type, TICKET_TYPE),
-            project=_maybe(row.project, lambda v: _key(v, task)),
+            project=_maybe(row.project, lambda v: _key(v, task, projects)),
             project_name=_maybe(row.project_name, lambda v: _ok(task.project_name(v))),
             assigned_to=quoted(row.assigned_to, ASSIGNEE),
             about=quoted(row.about, TOPIC),
@@ -851,24 +1279,71 @@ def _checked(row: RowAnswer, task: _Task, takes: Collection[str]) -> Parameters 
         return None
 
 
-def _every_in(word: str, task: _Task) -> bool:
-    return any(_every_word(w) == word for w in re.findall(r"[^\W\d_]+", task.text))
+def _every_in(word: str, clause: str) -> bool:
+    return any(_every_word(w) == word for w in re.findall(r"[^\W\d_]+", clause))
 
 
-def _fixed_values_in_task(p: Parameters, takes: Collection[str], task: _Task) -> bool:
-    times = {_time(t) for t in TASK_TIME.findall(task.text)}
+def _shown_numbers(p: Parameters) -> set[str]:
+    pieces: set[str] = {str(p.no_update_days)} if p.no_update_days is not None else set()
+    for time in p.at:
+        pieces |= {time, *re.findall(r"[a-z]+|\d+", time)}
+    return pieces
+
+
+def _accounted(clause: str, words: frozenset[str], p: Parameters, keys: Collection[str]) -> bool:
+    shown = _shown_numbers(p) | set(_words(p.software or ""))
+    known = words | GLUE | shown
+    for _, token in _tokens(clause):
+        if not _is_word(token) or token in keys:
+            continue
+        low = token.casefold()
+        if low in known or all(part in known for part in _parts_and_whole(low)):
+            continue
+        if _every_word(low) in p.every or (p.on is not None and low in p.on):
+            continue
+        if NUMBER_WORDS.get(low) in shown:
+            continue
+        return False
+    return True
+
+
+def _fixed_values_inside(p: Parameters, takes: Collection[str], task: _Task) -> bool:
+    clause = task.clause
+    digits = _digits(clause)
+    times = {_time(t) for t in TASK_TIME.findall(digits)}
     days = p.no_update_days
-    in_task = {
-        "every": all(_every_in(word, task) for word in p.every),
+    inside = {
+        "every": all(_every_in(word, clause) for word in p.every),
         "at": all(time in times for time in p.at),
         "on": p.on is None or task.own(rf"\b{p.on.ordinal}\s+{p.on.day}s?\b"),
-        "no_update_days": days is None or task.own(rf"(?<!\d){days}(?!\d)"),
+        "status": p.status is None
+        or any(task.own(rf"(?<![\w-]){w}(?![\w-])") for w, s in STATUSES.items() if s == p.status),
+        "no_update_days": days is None or re.search(rf"(?<!\w){days}(?!\w)", digits) is not None,
         "closed_in": p.closed_in is None or task.own(rf"\b{p.closed_in}\b"),
         "created_in": p.created_in is None or task.own(rf"\b{p.created_in}\b"),
-        "how": p.how is None or task.own(HOW_WORDS[p.how]),
+        "how": task.own(HOW_WORDS[p.how or "summary"]),
         "lists_found": not p.lists_found or task.own(LISTS),
+        "project": p.project is None or task.own(rf"(?<![\w-]){p.project}(?![\w-])"),
     }
-    return all(held for name, held in in_task.items() if name in takes)
+    return all(held for name, held in inside.items() if name in takes)
+
+
+def _values_inside(p: Parameters, task: _Task) -> bool:
+    values = (p.ticket_type, p.assigned_to, p.about, p.by, p.each_of, p.software)
+    names = [p.project_name.name] if p.project_name else []
+    return all(task.holds(value) for value in (*values, *names) if value)
+
+
+def _earned(
+    p: Parameters, form: Form, ability: Ability, task: _Task, projects: Collection[str] | None
+) -> bool:
+    keys = {*(projects or ()), *filter(None, [p.project])}
+    return (
+        task.part is not None
+        and _values_inside(p, task)
+        and _fixed_values_inside(p, form.takes, task)
+        and _accounted(task.clause, ability.words, p, keys)
+    )
 
 
 def _unseen(p: Parameters, takes: Collection[str], projects: Collection[str] | None) -> list[str]:
@@ -974,9 +1449,13 @@ class Form:
 
 @dataclass(frozen=True)
 class Ability:
+    """One thing the platform can do: its forms by kind of row, and its own words, the ones a
+    part of the task may use and still be understood."""
+
     id: str
     plain: str | None
     forms: Mapping[RowKind, Form]
+    words: frozenset[str] = frozenset()
 
 
 SEARCH: Final = (
@@ -1005,11 +1484,13 @@ ABILITIES: Final = (
         "run_on_a_schedule",
         None,
         {"schedule": Form("when the task runs.", ("every", "at", "on"), _schedule)},
+        SCHEDULE_WORDS,
     ),
     Ability(
         "read_jira_tickets",
         "read Jira tickets",
         {"look_for": Form("a search of Jira tickets.", SEARCH, _search)},
+        READ_WORDS,
     ),
     Ability(
         "sum_up",
@@ -1018,11 +1499,13 @@ ABILITIES: Final = (
             "do": Form("sum up what was found, in the run's report.", ("how", "by"), _sum_up),
             "where": Form("the run's report.", (), lambda _: "The run's report"),
         },
+        SUM_WORDS,
     ),
     Ability(
         "check_releases",
         "check software for new releases",
         {"do": Form("check software for new releases.", ("software",), _releases)},
+        RELEASE_WORDS,
     ),
     Ability(
         "create_jira_ticket",
@@ -1040,6 +1523,7 @@ ABILITIES: Final = (
                 _ticket_place,
             ),
         },
+        CREATE_WORDS,
     ),
 )
 
@@ -1111,34 +1595,54 @@ BARRED_ONLY_IN_VALUES: Final = (
 )
 IRREGULAR_PAST: Final = ("sent", "gave", "given", "told")
 SYSTEMS: Final = (
+    "teams",
     "slack",
     "confluence",
     "github",
     "gitlab",
+    "bitbucket",
     "entra",
-    "basecamp",
-    r"monday\.com",
-    "whatsapp",
-    "sharepoint",
-    "gmail",
+    "azure ad",
+    "azure",
+    "active directory",
+    "okta",
     "servicenow",
+    "zendesk",
+    "freshdesk",
+    "pagerduty",
+    "salesforce",
+    "linear",
+    "notion",
     "trello",
     "asana",
-    "bitbucket",
+    "basecamp",
+    r"monday\.com",
+    "airtable",
     "jenkins",
-    "telegram",
-    "discord",
-    "webex",
-    "yammer",
+    "devops",
+    "sharepoint",
     "onedrive",
+    "onenote",
+    "outlook",
+    "gmail",
     "dropbox",
     "google sheets?",
     "google docs?",
     "google drive",
+    "google",
+    "excel",
+    "power bi",
+    "planner",
+    "mattermost",
+    "whatsapp",
+    "telegram",
+    "discord",
+    "webex",
+    "yammer",
+    "zoom",
     "intranet",
     "spreadsheets?",
 )
-NAMED_SYSTEMS: Final = ("Teams", "Linear", "Notion", "Outlook", "Zoom", "Excel")
 PLACES: Final = frozenset(
     [
         "channel",
@@ -1170,8 +1674,9 @@ BARRED_FORMS: Final = frozenset(
     for form in forms.orders | forms.past
 ) | frozenset(IRREGULAR_PAST)
 SYSTEMS_FOUND: Final = re.compile(rf"(?<![\w.-])(?:{'|'.join(SYSTEMS)})(?![\w-])")
-NAMED_FOUND: Final = re.compile(
-    rf"(?<![\w-])(?:{'|'.join(NAMED_SYSTEMS + tuple(n.upper() for n in NAMED_SYSTEMS))})(?![\w-])"
+PLACED_SYSTEM: Final = re.compile(
+    rf"\b(?:in|on|to|into|onto|via|at)\s+(?:(?:the|a|an|our|my|your|their)\s+)?"
+    rf"(?:{'|'.join(SYSTEMS)})(?![\w-])"
 )
 
 
@@ -1193,31 +1698,39 @@ def abilities_text(abilities: tuple[Ability, ...] = ABILITIES) -> str:
     return "\n".join(lines)
 
 
-def _form(row: RowAnswer, abilities: tuple[Ability, ...]) -> Form | None:
+def _named(row: RowAnswer, abilities: tuple[Ability, ...]) -> Ability | None:
     named = _word(row.ability).replace(" ", "_")
-    ability = next((a for a in abilities if a.id == named), None)
-    return None if ability is None else ability.forms.get(row.kind)
+    return next((a for a in abilities if a.id == named), None)
 
 
 def _unused_ok(name: str, row: RowAnswer) -> bool:
     return name in HARMLESS or (name == "source" and _word(row.source) == "jira")
 
 
-def _holds_more(part: str, kind: RowKind) -> bool:
+def _denied(task: _Task, p: Parameters, kind: RowKind, keys: Collection[str]) -> bool:
+    """Whether the part's own words, less the values its row takes from them, give an order or
+    name another system as a place or a source. A topic may name a system only when the part is
+    about tickets."""
+    part = task.rest(p)
     if _gives_an_order(part):
         return True
     if kind == "where":
-        return _places(part)
-    return _systems_in(part) is not None and TICKET_WORDS.isdisjoint(_words_in(part))
+        return _places(part, keys)
+    about_tickets = not TICKET_WORDS.isdisjoint(_words_in(task.clause))
+    if p.about and _systems_in(p.about, keys) is not None and not about_tickets:
+        return True
+    if _systems_in(part, keys) is None:
+        return False
+    return not about_tickets or _placed_system(part, keys)
 
 
 class Reading(NamedTuple):
-    """A row the platform can do, in its own words. `fixed_values_in_task` is false when a day,
-    time, number of days, period, way of summing up, or "lists them" that the row shows is not in
-    the task, and `unseen` says what the platform could not check in Jira."""
+    """A row the platform can do, in its own words. `earned` is true when the part's own words
+    are all accounted for and every value sits inside them, so the row can be understood;
+    `unseen` says what the platform could not check in Jira."""
 
     text: str
-    fixed_values_in_task: bool
+    earned: bool
     unseen: tuple[str, ...]
 
 
@@ -1231,24 +1744,25 @@ def reading(
     """The row in the platform's own words, or None when the platform can't do it: the ability
     is not in the table or does not fit the row, a parameter does not check out, the row carries
     a value the ability does not take, a value the ability needs is missing, or the task's own
-    words for the part say more than the ability does."""
-    form = _form(row, abilities)
-    if form is None:
+    words for the part give an order or name another system."""
+    ability = _named(row, abilities)
+    form = None if ability is None else ability.forms.get(row.kind)
+    if ability is None or form is None:
         return None
     if any(n not in form.takes and not _unused_ok(n, row) for n in _present(row)):
         return None
     seen = _Task.of(task, row.said)
-    if seen.part is not None and _holds_more(seen.text[seen.part[0] : seen.part[1]], row.kind):
-        return None
-    checked = _checked(row, seen, form.takes)
+    checked = _checked(row, seen, form.takes, projects)
     if checked is None:
+        return None
+    if seen.part is not None and _denied(seen, checked, row.kind, tuple(projects or ())):
         return None
     text = form.write(checked)
     if text is None:
         return None
     return Reading(
         text[:1].upper() + text[1:],
-        _fixed_values_in_task(checked, form.takes, seen),
+        _earned(checked, form, ability, seen, projects),
         tuple(_unseen(checked, form.takes, projects)),
     )
 
@@ -1266,12 +1780,25 @@ def written(
 
 
 def said_in(text: str, task: str) -> str | None:
-    """The task's own words for a part, when the model's quote of them checks out and holds no
-    write. It may name another system only when it also says tickets."""
-    return _Task(visible(task)).quote(text, SAID)
+    """The task's own words for a part, when the model's quote of them checks out: short, plain,
+    and holding no order."""
+    said = visible(text).strip(" " + QUOTES)
+    words = _words_in(said)
+    if not said or len(said.split()) > WORDS_LIMIT or len(said) > CHARS_LIMIT:
+        return None
+    if not _plain_chars(said) or not words.isdisjoint(ORDER_FORMS):
+        return None
+    found = _Task(visible(task)).copy_of(said)
+    return None if found is None else found.group(1)
 
 
-def own_words(row: RowAnswer, task: str) -> str | None:
+def software_in(task: str, value: str | None) -> str | None:
+    """The software as the task wrote it: a short name beside a word for releases, never a verb
+    or another system."""
+    return _maybe(value, _Task(visible(task)).software)
+
+
+def own_words(row: RowAnswer, task: str) -> re.Match[str] | None:
     """The task's own words for a part the platform can't do: the model's copy of them when the
     task holds it, or else the longest value of the row that the task holds."""
     seen = _Task(visible(task))
@@ -1279,24 +1806,82 @@ def own_words(row: RowAnswer, task: str) -> str | None:
     for value in (row.said, *sorted(values, key=len, reverse=True)):
         found = seen.copy_of(value)
         if found is not None:
-            return found.group(1)
+            return found
     return None
 
 
+def _listed_system(task: _Task, value: str | None) -> str | None:
+    named = None if value is None else task.name_anywhere(value)
+    return named if named is not None and _a_system(named) else None
+
+
 def refusal(row: RowAnswer, task: str, abilities: tuple[Ability, ...] = ABILITIES) -> str:
-    """The plain note for a part the platform can't do."""
+    """The plain note for a part the platform can't do. It names another system only when the
+    task names a listed one."""
     can = can_only(abilities)
     seen = _Task(visible(task))
     if row.source is not None and _word(row.source) != "jira":
-        source = seen.name_anywhere(row.source)
+        source = _listed_system(seen, row.source)
         if source is not None:
             return f"I can't read {source} yet. {can}"
     if row.kind == "look_for":
-        named = (own_words(row, task), row.project, row.project_name)
-        system = next((s for v in named if v and (s := _systems_in(v))), None)
-        shown = None if system is None else seen.name_anywhere(system)
+        words = own_words(row, task)
+        named = (None if words is None else words.group(1), row.ticket_type, row.project_name)
+        system = next((s for v in (*named, row.project) if v and (s := _systems_in(v))), None)
+        shown = _listed_system(seen, system)
         if shown is not None:
             return f"I can't read {shown} yet. {can}"
     if row.kind == "where":
         return f"I can't put results there yet. {can}"
     return f"I can't do this yet. {can}"
+
+
+class Uncovered(NamedTuple):
+    """A clause of the task that holds an order or names another system or place, and that no
+    row of the read-back covers."""
+
+    kind: RowKind
+    text: str
+    system: str | None
+
+
+def _clauses(text: str) -> Iterator[tuple[int, int]]:
+    start: int | None = None
+    end = 0
+    for at, token in _tokens(text):
+        is_word = _is_word(token)
+        if (is_word and token.casefold() in STARTS) or (not is_word and token in CLAUSE_ENDS):
+            if start is not None:
+                yield start, end
+            start = None
+        elif is_word:
+            start = at if start is None else start
+            end = at + len(token)
+    if start is not None:
+        yield start, end
+
+
+def uncovered(
+    task: str, covered: Collection[tuple[int, int]], projects: Collection[str] | None = None
+) -> list[Uncovered]:
+    """The clauses of the task outside every row's words that hold an order (a do part) or name
+    another system with no word for tickets (a where part, or what to look for when the clause
+    asks a question or reads)."""
+    seen = visible(task)
+    keys = tuple(projects or ())
+    found: list[Uncovered] = []
+    for start, end in _clauses(seen):
+        for a, b in sorted(covered):
+            start = max(start, b) if a <= start < b else start
+            end = min(end, a) if a < end <= b else end
+        if start >= end:
+            continue
+        clause = seen[start:end].strip()
+        words = _words_in(clause)
+        system = _systems_in(clause, keys)
+        if _gives_an_order(clause):
+            found.append(Uncovered("do", clause, None))
+        elif system is not None and TICKET_WORDS.isdisjoint(words):
+            asks = not (READS | QUESTION_WORDS).isdisjoint(words)
+            found.append(Uncovered("look_for" if asks else "where", clause, system))
+    return found

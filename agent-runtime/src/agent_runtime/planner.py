@@ -3,18 +3,21 @@ import re
 from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import date
-from typing import Final, Protocol
+from typing import Final, NamedTuple, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from agent_runtime.abilities import (
     Reading,
     RowAnswer,
+    Uncovered,
     abilities_text,
     own_words,
     reading,
     refusal,
     said_in,
+    software_in,
+    uncovered,
     visible,
 )
 from agent_runtime.card_runner import CardRunner, agent_ref, one_line
@@ -298,8 +301,8 @@ def run_cards(
 UNDERSTAND_TIMEOUT_SECONDS: Final = 8.0
 ORDER: Final[tuple[RowKind, ...]] = ("schedule", "look_for", "do", "where")
 MAX_ROWS: Final = 8
+ROWS_READ: Final = 12
 TEXT_LIMIT: Final = 200
-WORD_LIMIT: Final = 80
 MISSING: Final[dict[RowKind, str]] = {
     "schedule": "You didn't say when it runs.",
     "look_for": "You didn't say what to look for.",
@@ -385,7 +388,7 @@ def _missing(kind: RowKind) -> UnderstoodRow:
 
 
 def _note(answer: RowAnswer, task: str, found: Reading) -> str | None:
-    read_in = answer.state == "changed" or not found.fixed_values_in_task
+    read_in = answer.state == "changed" or not found.earned
     if not read_in and not found.unseen:
         return None
     said = said_in(answer.said, task) if read_in else None
@@ -393,32 +396,68 @@ def _note(answer: RowAnswer, task: str, found: Reading) -> str | None:
     return " ".join([*sentences, CHECK]) if sentences else READ_IN
 
 
-def _row(answer: RowAnswer, task: str, projects: Collection[str] | None) -> UnderstoodRow:
+def _first_up(text: str) -> str:
+    return text[:1].upper() + text[1:]
+
+
+class Read(NamedTuple):
+    """A row as shown, and the span of the task's words it covers."""
+
+    row: UnderstoodRow
+    span: tuple[int, int] | None
+
+
+def _row(answer: RowAnswer, task: str, projects: Collection[str] | None) -> Read:
     if answer.state == "missing":
-        return _missing(answer.kind)
+        return Read(_missing(answer.kind), None)
     found = None if answer.state == "cant_do" else reading(answer, task, projects=projects)
+    words = own_words(answer, task)
+    span = None if words is None else words.span(1)
     if found is None:
-        words = own_words(answer, task)
-        text = OWN_WORDS_UNKNOWN if words is None else words[:1].upper() + words[1:]
-        return UnderstoodRow(
+        text = OWN_WORDS_UNKNOWN if words is None else _first_up(words.group(1))
+        row = UnderstoodRow(
             kind=answer.kind,
             text=_plain(text, TEXT_LIMIT),
             state="cant_do",
             note=refusal(answer, task),
         )
+        return Read(row, span)
     note = _note(answer, task, found)
-    return UnderstoodRow(
+    row = UnderstoodRow(
         kind=answer.kind,
         text=_plain(found.text, TEXT_LIMIT),
         state="understood" if note is None else "changed",
         note=note,
     )
+    return Read(row, span)
+
+
+def _left_out(clause: Uncovered, task: str) -> UnderstoodRow:
+    source = clause.system if clause.kind == "look_for" else None
+    answer = RowAnswer(kind=clause.kind, state="cant_do", said=clause.text, source=source)
+    return UnderstoodRow(
+        kind=clause.kind,
+        text=_plain(_first_up(clause.text), TEXT_LIMIT),
+        state="cant_do",
+        note=refusal(answer, task),
+    )
+
+
+def _not_all_read(row: UnderstoodRow) -> UnderstoodRow:
+    if row.state != "understood":
+        return row
+    return row.model_copy(update={"state": "changed", "note": READ_IN})
 
 
 def _rows(
     answers: list[RowAnswer], task: str, projects: Collection[str] | None
 ) -> list[UnderstoodRow]:
-    rows = [_row(answer, task, projects) for answer in answers]
+    reads = [_row(answer, task, projects) for answer in answers[:ROWS_READ]]
+    covered = [read.span for read in reads if read.span is not None]
+    rows = [read.row for read in reads]
+    rows += [_left_out(clause, task) for clause in uncovered(task, covered, projects)]
+    if len(answers) > ROWS_READ:
+        rows = [_not_all_read(row) for row in rows]
     groups = [[row for row in rows if row.kind == kind] or [_missing(kind)] for kind in ORDER]
     groups[0] = groups[0][:1]
     firsts = [group[0] for group in groups]
@@ -427,14 +466,6 @@ def _rows(
     )
     kept = firsts + extras[: MAX_ROWS - len(firsts)]
     return sorted(kept, key=lambda row: ORDER.index(row.kind))
-
-
-def _whole_word_of(task: str, said: str | None) -> str | None:
-    wanted = visible(said).strip(QUOTES)
-    if not wanted or len(wanted) > WORD_LIMIT:
-        return None
-    found = re.search(rf"(?<!\w){re.escape(wanted)}(?!\w)", task, re.IGNORECASE)
-    return None if found is None else found.group(0)
 
 
 def _task_form_of(task: str, said: str | None) -> str | None:
@@ -452,16 +483,19 @@ def understood_of(
     """What the Operator is shown. Every part has a row, and a part the model left out is
     missing. An understood or changed row's text is written by the platform from the ability the
     model named, so a part no ability does, or whose parameters do not check out, is can't do,
-    and shows the task's own words for it. A row is understood only when its fixed values (days,
-    times, numbers of days, periods, how to sum up, and "lists them") are the task's own and its
-    Jira project is one of `projects`, the keys the platform can see; otherwise it is changed.
-    None when the answer does not hold together: no rows, or a watchlist word that is not in the
-    task or not one of the words the prompt names."""
+    and shows the task's own words for it. A row is understood only when it is earned: the model
+    pointed at the task's own words for the part, every value and fixed value sits inside them,
+    its Jira project is one of `projects`, the keys the platform can see, and every word of the
+    part is accounted for; otherwise it is changed. A clause of the task that no row covers and
+    that gives an order or names another system gets its own can't do row. At most `ROWS_READ`
+    rows are read; when the model gives more, nothing is understood. None when the answer does
+    not hold together: no rows, or a watchlist word that is not in the task or not one of the
+    words the prompt names."""
     if answer.belongs_on_watchlist:
         word = _task_form_of(task, answer.watchlist_word)
         if word is None:
             return None
-        return BelongsOnWatchlist(word=word, software=_whole_word_of(task, answer.software))
+        return BelongsOnWatchlist(word=word, software=software_in(task, answer.software))
     if not answer.rows:
         return None
     return Understood(rows=_rows(answer.rows, task, projects))
