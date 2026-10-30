@@ -8,10 +8,10 @@ import { openContext, OUT, shot } from './support/ui'
 const GREETING = (name: string) => new RegExp(`^Good (morning|afternoon|evening), ${name}$`)
 
 const MENU = [
-  { label: 'Home', path: '/', heading: GREETING('Alice') },
-  { label: 'Workflows', path: '/workflows', heading: 'Workflows' },
-  { label: 'Software watchlist', path: '/software', heading: 'Software watchlist' },
-  { label: 'Agent library', path: '/agents', heading: 'Agent library' },
+  { label: 'Home', path: '/', heading: GREETING('Alice'), built: false },
+  { label: 'Workflows', path: '/workflows', heading: 'Workflows', built: true },
+  { label: 'Software watchlist', path: '/software', heading: 'Software watchlist', built: false },
+  { label: 'Agent library', path: '/agents', heading: 'Agent library', built: true },
 ] as const
 
 const PAGES = [...MENU.map(({ path: to, label }) => ({ label, path: to })), { label: 'Settings', path: '/settings' }]
@@ -42,7 +42,7 @@ test('each menu item changes the URL and opens a page with its own heading', asy
     await expect(heading(page)).toHaveText(item.heading)
     await expect(heading(page), 'a page change puts focus on the new heading').toBeFocused()
     await expect(mainMenu(page).getByRole('link', { name: item.label, exact: true })).toHaveAttribute('aria-current', 'page')
-    await expect(page.getByRole('main')).toContainText('This page is not built yet.')
+    if (!item.built) await expect(page.getByRole('main')).toContainText('This page is not built yet.')
     await shot(page, info, `p1-02-menu-${item.label.toLowerCase().replaceAll(' ', '-')}`)
   }
 })
