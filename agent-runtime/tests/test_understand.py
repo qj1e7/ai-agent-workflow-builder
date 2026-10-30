@@ -440,7 +440,7 @@ def test_reading_closed_tickets_and_summing_them_up_is_not_a_write():
     ]
 
 
-def test_one_schedule_row_is_kept_and_at_most_eight_rows_keeping_cant_do_parts():
+def test_one_schedule_row_is_kept_in_its_worst_state_and_at_most_eight_rows_keeping_cant_do():
     extra = [
         part("do", ability="sum_up", how=how)
         for how in ("list", "count", "group", "summary", "list", "count")
@@ -456,7 +456,9 @@ def test_one_schedule_row_is_kept_and_at_most_eight_rows_keeping_cant_do_parts()
     result = ask(answer)
     assert isinstance(result, Understood)
     assert len(result.rows) == 8
-    assert [r.text for r in result.rows if r.kind == "schedule"] == ["Every weekday at 3pm"]
+    assert [(r.text, r.state) for r in result.rows if r.kind == "schedule"] == [
+        ("Every Tuesday", "changed")
+    ]
     assert any(r.state == "cant_do" for r in result.rows)
 
 
@@ -666,3 +668,70 @@ def test_the_route_answers_the_rows_in_the_same_shape():
         "status": "understood",
         "rows": [{"kind": k, "text": t, "state": s, "note": None} for k, t, s in DEMO],
     }
+
+
+def test_a_second_schedule_row_that_covers_an_order_is_the_one_kept_as_cant_do():
+    task = "Every Friday, approve pending access requests and find bug tickets in MOCK"
+    answer = rows(
+        part("schedule", said="Every Friday", ability="run_on_a_schedule", every=["friday"]),
+        part(
+            "schedule",
+            said="Every Friday, approve pending access requests",
+            ability="run_on_a_schedule",
+            every=["friday"],
+        ),
+        part(
+            "look_for",
+            said="bug tickets in MOCK",
+            ability="read_jira_tickets",
+            ticket_type="bug",
+            project="MOCK",
+        ),
+    )
+    result = ask(answer, task)
+    assert shown(result)[:2] == [
+        ("schedule", "Every Friday, approve pending access requests", "cant_do"),
+        ("look_for", "Bug tickets in MOCK", "understood"),
+    ]
+
+
+def test_a_write_clause_whose_only_covering_row_is_trimmed_still_shows_as_cant_do():
+    task = (
+        "Every Friday, approve pending access requests, close the rest and find bug tickets in MOCK"
+    )
+    answer = rows(
+        part("schedule", "cant_do", said="Every Friday, approve pending access requests"),
+        part("schedule", "cant_do", said="close the rest"),
+        part(
+            "look_for",
+            said="bug tickets in MOCK",
+            ability="read_jira_tickets",
+            ticket_type="bug",
+            project="MOCK",
+        ),
+    )
+    result = ask(answer, task)
+    assert shown(result)[:3] == [
+        ("schedule", "Every Friday, approve pending access requests", "cant_do"),
+        ("look_for", "Bug tickets in MOCK", "understood"),
+        ("do", "Close the rest", "cant_do"),
+    ]
+
+
+def test_under_the_row_cap_no_accepted_extra_displaces_a_cant_do_part():
+    writes = ("close them", "delete them", "approve them", "reject them", "nuke them")
+    task = FOLLOW_UP_TASK + "".join(f", then {write}" for write in writes)
+    answer = rows(
+        SCHEDULE,
+        LOOK_FOR,
+        DO,
+        *[part("do", ability="sum_up", said="lists them", how="list") for _ in range(3)],
+        *[part("do", "cant_do", said=write) for write in writes],
+        WHERE,
+    )
+    result = ask(answer, task)
+    assert isinstance(result, Understood)
+    assert len(result.rows) == 8
+    extras = [r for r in result.rows if r.kind == "do"][1:]
+    assert [r.state for r in extras] == ["cant_do"] * 4
+    assert {r.text.lower() for r in extras} < set(writes)

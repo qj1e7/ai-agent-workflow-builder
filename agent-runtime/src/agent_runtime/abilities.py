@@ -1837,8 +1837,8 @@ def refusal(row: RowAnswer, task: str, abilities: tuple[Ability, ...] = ABILITIE
 
 
 class Uncovered(NamedTuple):
-    """A clause of the task that holds an order or names another system or place, and that no
-    row of the read-back covers."""
+    """A clause of the task that holds an order or names another system, and that no kept row of
+    the read-back covers."""
 
     kind: RowKind
     text: str

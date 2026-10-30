@@ -33,6 +33,7 @@ from agent_runtime.contract import (
     CarryForward,
     ModelProblem,
     RowKind,
+    RowState,
     TaskError,
     TaskFailed,
     TaskFinished,
@@ -302,6 +303,12 @@ UNDERSTAND_TIMEOUT_SECONDS: Final = 8.0
 ORDER: Final[tuple[RowKind, ...]] = ("schedule", "look_for", "do", "where")
 MAX_ROWS: Final = 8
 ROWS_READ: Final = 12
+WORST_FIRST: Final[dict[RowState, int]] = {
+    "cant_do": 0,
+    "changed": 1,
+    "missing": 2,
+    "understood": 3,
+}
 TEXT_LIMIT: Final = 200
 MISSING: Final[dict[RowKind, str]] = {
     "schedule": "You didn't say when it runs.",
@@ -449,23 +456,30 @@ def _not_all_read(row: UnderstoodRow) -> UnderstoodRow:
     return row.model_copy(update={"state": "changed", "note": READ_IN})
 
 
+def _kept(reads: list[Read]) -> list[Read]:
+    """One schedule row (the one in the worst state), the first row of each other kind, and the
+    extras that fit, can't do parts first."""
+    groups = [[read for read in reads if read.row.kind == kind] for kind in ORDER]
+    groups[0] = sorted(groups[0], key=lambda read: WORST_FIRST[read.row.state])[:1]
+    firsts = [group[0] for group in groups if group]
+    extras = (read for group in groups for read in group[1:])
+    fitted = sorted(extras, key=lambda read: read.row.state != "cant_do")
+    return firsts + fitted[: MAX_ROWS - len(ORDER)]
+
+
 def _rows(
     answers: list[RowAnswer], task: str, projects: Collection[str] | None
 ) -> list[UnderstoodRow]:
-    reads = [_row(answer, task, projects) for answer in answers[:ROWS_READ]]
+    reads = _kept([_row(answer, task, projects) for answer in answers[:ROWS_READ]])
     covered = [read.span for read in reads if read.span is not None]
-    rows = [read.row for read in reads]
-    rows += [_left_out(clause, task) for clause in uncovered(task, covered, projects)]
+    left_out = [
+        Read(_left_out(clause, task), None) for clause in uncovered(task, covered, projects)
+    ]
+    rows = [read.row for read in _kept(reads + left_out)]
     if len(answers) > ROWS_READ:
         rows = [_not_all_read(row) for row in rows]
-    groups = [[row for row in rows if row.kind == kind] or [_missing(kind)] for kind in ORDER]
-    groups[0] = groups[0][:1]
-    firsts = [group[0] for group in groups]
-    extras = sorted(
-        (row for group in groups for row in group[1:]), key=lambda r: r.state != "cant_do"
-    )
-    kept = firsts + extras[: MAX_ROWS - len(firsts)]
-    return sorted(kept, key=lambda row: ORDER.index(row.kind))
+    rows += [_missing(kind) for kind in ORDER if all(row.kind != kind for row in rows)]
+    return sorted(rows, key=lambda row: ORDER.index(row.kind))
 
 
 def _task_form_of(task: str, said: str | None) -> str | None:
@@ -486,9 +500,11 @@ def understood_of(
     and shows the task's own words for it. A row is understood only when it is earned: the model
     pointed at the task's own words for the part, every value and fixed value sits inside them,
     its Jira project is one of `projects`, the keys the platform can see, and every word of the
-    part is accounted for; otherwise it is changed. A clause of the task that no row covers and
-    that gives an order or names another system gets its own can't do row. At most `ROWS_READ`
-    rows are read; when the model gives more, nothing is understood. None when the answer does
+    part is accounted for; otherwise it is changed. A clause of the task that no kept row covers
+    and that gives an order or names another system gets its own can't do row; rows are kept
+    before that, so a dropped row covers nothing, and the one schedule row kept is the one in the
+    worst state. At most `ROWS_READ` rows are read; when the model gives more, nothing is
+    understood. None when the answer does
     not hold together: no rows, or a watchlist word that is not in the task or not one of the
     words the prompt names."""
     if answer.belongs_on_watchlist:
