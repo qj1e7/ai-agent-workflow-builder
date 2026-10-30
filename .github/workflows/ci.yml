@@ -38,6 +38,15 @@ jobs:
           --health-interval 3s
           --health-timeout 3s
           --health-retries 20
+      # platform-api's tests copy the activity log into this emulator (ADR 0031). An empty image
+      # starts no service, so the other legs do not pull it. Tests wait for it to be ready.
+      cosmos:
+        image: ${{ matrix.project == 'platform-api' && 'mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:vnext-preview@sha256:db53613dae19d0a3d5ad50688d14aa6e957af082dafea56b52e1bd3a6b3f1406' || '' }}
+        env:
+          ENABLE_EXPLORER: "false"
+          ENABLE_TELEMETRY: "false"
+        ports:
+          - 8081:8081
     env:
       # The platform-api tests migrate a throwaway database and skip without one.
       PLATFORM_TEST_DATABASE_URL: postgresql://postgres:test@127.0.0.1:5432/postgres
@@ -85,10 +94,17 @@ jobs:
 
       - name: Unit tests in the image
         if: matrix.project != 'e2e'
+        env:
+          # With COSMOS_REQUIRED a Cosmos DB test that cannot run fails, and so does a run in
+          # which no Cosmos DB test passed. The summary line counts them.
+          COSMOS_ENDPOINT: ${{ matrix.project == 'platform-api' && 'http://127.0.0.1:8081' || '' }}
+          COSMOS_REQUIRED: ${{ matrix.project == 'platform-api' && '1' || '' }}
         run: |
           docker build --target test --tag ${{ matrix.project }}:test ${{ matrix.project }}
           docker run --rm --network host \
             --env PLATFORM_TEST_DATABASE_URL \
+            --env COSMOS_ENDPOINT \
+            --env COSMOS_REQUIRED \
             --env CONTRACT_FIXTURES=/contracts/fixtures \
             --volume "$PWD/contracts:/contracts:ro" \
             --env MOCK_OIDC_CONFIG=/mock-oidc/config.json \
