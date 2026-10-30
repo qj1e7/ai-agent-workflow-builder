@@ -23,7 +23,6 @@ from platform_api.wire import FailureReason, Trigger, WireModel
 
 SHOWN = 10
 NAME_SHOWN = 80
-NOT_ON_THE_LIST = "Someone no longer on the list"
 
 
 class ChangeLine(WireModel):
@@ -38,7 +37,9 @@ class ApprovalItem(WireModel):
     use_case_id: str
     use_case_name: str
     started_by: UserId
-    started_by_name: str
+    started_by_name: str | None = Field(
+        description="Null when the person who started it is no longer on the list."
+    )
     trigger: Trigger
     started_at: datetime
     step: int = Field(description="The step waiting for a yes, from 0.")
@@ -141,7 +142,7 @@ def _approval(ask: Ask, names: dict[UserId, str]) -> ApprovalItem:
         use_case_id=run.use_case_id,
         use_case_name=run.use_case_name,
         started_by=run.started_by,
-        started_by_name=names.get(run.started_by, NOT_ON_THE_LIST),
+        started_by_name=names.get(run.started_by),
         trigger=run.trigger,
         started_at=run.started_at,
         step=ask.step,

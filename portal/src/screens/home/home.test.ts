@@ -126,6 +126,13 @@ describe('each item in words', () => {
     expect(wordsOf(scheduled, NOW).meta).toBe("Software watchlist · Started by Alice's schedule, Today, 10:14")
   })
 
+  it('says a schedule or someone no longer on the list started a run when the platform names no one', () => {
+    const gone = { ...approval, item: { ...ASK, started_by_name: null } } as Need
+    expect(wordsOf(gone, NOW).meta).toBe('Software watchlist · Started by someone no longer on the list, Today, 10:14')
+    const scheduled = { ...approval, item: { ...ASK, started_by_name: null, trigger: 'schedule' } } as Need
+    expect(wordsOf(scheduled, NOW).meta).toBe('Software watchlist · Started by a schedule, Today, 10:14')
+  })
+
   it('asks to confirm a new Approver, and a new AI model address', () => {
     expect(wordsOf(approver, NOW)).toMatchObject({ tone: 'tool', title: 'Confirm Dave as an Approver', meta: 'Asked by Alice, Mon 9 Nov, 11:41' })
     expect(wordsOf(address, NOW)).toMatchObject({ tone: 'tool', title: 'Confirm a new AI model address', meta: 'Use ncs-llm-small at ai-gateway.ncs.example · Asked by Alice' })

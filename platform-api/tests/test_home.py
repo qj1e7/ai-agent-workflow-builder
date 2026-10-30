@@ -203,6 +203,15 @@ async def test_an_approver_sees_a_run_waiting_for_their_yes_with_what_it_would_c
     assert home["waiting_on_others"] == []
 
 
+async def test_a_run_whose_starter_left_the_list_names_no_one(lab: Lab):
+    run_id = await waiting_run(lab, await workflow(lab), by="carol")
+    assert isinstance(await lab.people.remove(ALICE_NOW, "carol"), Person)
+
+    (item,) = (await lab.home("bob"))["approvals"]
+
+    assert (item["run_id"], item["started_by"], item["started_by_name"]) == (run_id, "carol", None)
+
+
 async def test_no_party_to_a_run_sees_its_approval_item_and_each_waits_on_others(lab: Lab):
     use_case_id = await workflow(lab, owner="alice")
     run_id = await stopped_run(lab, use_case_id, by="carol")

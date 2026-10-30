@@ -68,6 +68,11 @@ export interface ItemWords {
   readonly why: string | null
 }
 
+function starterOf(item: ApprovalItem): string {
+  if (item.started_by_name !== null) return starterName(item.started_by_name, item.trigger)
+  return item.trigger === 'schedule' ? 'a schedule' : 'someone no longer on the list'
+}
+
 function approvalWords(item: ApprovalItem, now: Date): ItemWords {
   const tickets = item.first_changes.length === item.changes && item.first_changes.every((change) => change.operation === 'create_ticket')
   const title = item.changes === 0 ? 'A run is waiting for your yes' : `${count(item.changes, tickets ? 'ticket' : 'change')} ${item.changes === 1 ? 'is' : 'are'} waiting for your yes`
@@ -77,7 +82,7 @@ function approvalWords(item: ApprovalItem, now: Date): ItemWords {
   return {
     tone: 'wait',
     title,
-    meta: `${item.use_case_name} · Started by ${starterName(item.started_by_name, item.trigger)}, ${runWhen(item.started_at, now)}${step}`,
+    meta: `${item.use_case_name} · Started by ${starterOf(item)}, ${runWhen(item.started_at, now)}${step}`,
     lines: unlisted > 0 ? [...lines, `and ${unlisted} more`] : lines,
     note: null,
     why: null,

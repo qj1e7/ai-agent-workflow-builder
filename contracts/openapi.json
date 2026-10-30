@@ -1273,8 +1273,16 @@
             "type": "string"
           },
           "started_by_name": {
-            "title": "Started By Name",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when the person who started it is no longer on the list.",
+            "title": "Started By Name"
           },
           "step": {
             "description": "The step waiting for a yes, from 0.",
