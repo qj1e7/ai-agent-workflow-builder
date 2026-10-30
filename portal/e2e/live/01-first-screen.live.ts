@@ -10,7 +10,7 @@ const GREETING = (name: string) => new RegExp(`^Good (morning|afternoon|evening)
 const MENU = [
   { label: 'Home', path: '/', heading: GREETING('Alice'), built: false },
   { label: 'Workflows', path: '/workflows', heading: 'Workflows', built: false },
-  { label: 'Software watchlist', path: '/software', heading: 'Software watchlist', built: false },
+  { label: 'Software watchlist', path: '/software', heading: 'Software watchlist', built: true },
   { label: 'Agent library', path: '/agents', heading: 'Agent library', built: true },
 ] as const
 

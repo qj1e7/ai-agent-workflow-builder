@@ -306,3 +306,38 @@ def test_migration_0006_downgrade_keeps_a_waiting_address(postgres: PostgresUrls
         finally:
             conn.execute("DELETE FROM orchestration.model_setting")
             upgrade("orchestration", postgres.owner)
+
+
+async def test_migration_0007_keeps_the_newest_version_beside_a_problem_and_back(
+    postgres: PostgresUrls, db: Database
+):
+    async with db.transaction("orchestration") as uow:
+        pending = Pending(RunId("run_kept"), 1, None, NOW)
+        record = RunRecord(RunId("run_kept"), SPEC, SPEC.owner, NOW, NOW, 1, pending, (), None)
+        await Store().insert_run(uow, record, "key-kept")
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO orchestration.software_checks (use_case_id, software_id, run_id, "
+            "checked_at, newest_version, newest_at, problem) VALUES "
+            "('uc_1', 'sw_kept', 'run_kept', %s, '1.2.0', %s, 'GitHub answered 503.')",
+            (NOW, NOW),
+        )
+        downgrade("orchestration", postgres.owner, "0006")
+        try:
+            old = conn.execute(
+                "SELECT newest_version, problem FROM orchestration.software_checks"
+            ).fetchall()
+            assert old == [(None, "GitHub answered 503.")]
+            conn.execute(
+                "INSERT INTO orchestration.software_checks (use_case_id, software_id, run_id, "
+                "checked_at, newest_version, problem) VALUES "
+                "('uc_1', 'sw_read', 'run_kept', %s, '2.0.0', NULL)",
+                (NOW,),
+            )
+        finally:
+            upgrade("orchestration", postgres.owner)
+        read = conn.execute(
+            "SELECT newest_version, newest_at FROM orchestration.software_checks "
+            "WHERE software_id = 'sw_read'"
+        ).fetchall()
+        assert read == [("2.0.0", NOW)]

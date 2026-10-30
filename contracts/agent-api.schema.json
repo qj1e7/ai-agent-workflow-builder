@@ -1611,6 +1611,14 @@
           "title": "Events",
           "type": "array"
         },
+        "findings": {
+          "description": "When a watchlist check could read none of its software: one finding for each, with its own reason. Empty for any other failure.",
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "title": "Findings",
+          "type": "array"
+        },
         "status": {
           "const": "failed",
           "default": "failed",

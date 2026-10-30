@@ -150,6 +150,7 @@ class TaskFailed(WireModel):
     status: Literal["failed"] = "failed"
     error: TaskError
     events: list[AgentEvent]
+    findings: list[Finding] = Field(default_factory=list[Finding])
 
 
 type TaskResult = Annotated[TaskFinished | TaskFailed, Field(discriminator="status")]

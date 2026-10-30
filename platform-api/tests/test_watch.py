@@ -3,7 +3,7 @@ from datetime import timedelta
 
 import pytest
 
-from platform_api.orchestration.agents import Finding, ProposedIntentIn
+from platform_api.orchestration.agents import Finding, ProposedIntentIn, TaskError
 from platform_api.orchestration.spec import WatchlistTask
 from platform_api.orchestration.watch import (
     ATTENTION_ORDER,
@@ -22,6 +22,7 @@ from platform_api.orchestration.watch import (
     Status,
     TicketToPropose,
     Unusable,
+    all_could_not_read,
     newer,
     review,
     standing,
@@ -223,3 +224,50 @@ def test_an_answer_that_does_not_fit_the_list_is_unusable(
     result = review(task, findings, proposed)
     assert isinstance(result, Unusable)
     assert words in result.detail
+
+
+@pytest.mark.parametrize("kind", ["UpstreamUnavailable", "UpstreamRejected"])
+def test_a_check_that_read_no_source_could_not_check_any_listed_software(kind: str):
+    error = TaskError(type=kind, message="None of the 4 could be checked", retryable=True)
+    assert all_could_not_read(TASK, error, []) == Reviewed(
+        tuple(
+            CouldNotRead(software_id, "None of the 4 could be checked.")
+            for software_id in (LANGGRAPH, REDIS, FASTAPI, POSTGRES)
+        ),
+        (),
+    )
+    ended = error.model_copy(update={"message": "GitHub answered 404 Not Found."})
+    unread = all_could_not_read(TASK, ended, [])
+    assert unread is not None
+    assert {entry.problem for entry in unread.learned if isinstance(entry, CouldNotRead)} == {
+        "GitHub answered 404 Not Found."
+    }
+
+
+def test_each_software_the_runtime_gave_a_reason_for_keeps_its_own_and_the_rest_share_one():
+    error = TaskError(
+        type="UpstreamRejected",
+        message="None of the 4 watched software could be checked. GitHub answered 404 Not Found",
+        retryable=False,
+    )
+    findings = [
+        finding(LANGGRAPH, "cant_check", None, "GitHub answered 404 Not Found."),
+        finding(REDIS, "cant_check", None, "GitHub answered 403 Forbidden."),
+        finding(FASTAPI, "cant_check", None, "   "),
+        finding(SoftwareId("sw_not_listed"), "cant_check", None, "Not on the list."),
+    ]
+    shared = "None of the 4 watched software could be checked. GitHub answered 404 Not Found."
+    assert all_could_not_read(TASK, error, findings) == Reviewed(
+        (
+            CouldNotRead(LANGGRAPH, "GitHub answered 404 Not Found."),
+            CouldNotRead(REDIS, "GitHub answered 403 Forbidden."),
+            CouldNotRead(FASTAPI, shared),
+            CouldNotRead(POSTGRES, shared),
+        ),
+        (),
+    )
+
+
+def test_a_check_that_failed_for_another_reason_says_nothing_about_the_software():
+    error = TaskError(type="AgentError", message="The agent stopped", retryable=False)
+    assert all_could_not_read(TASK, error, []) is None

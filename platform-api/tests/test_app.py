@@ -39,6 +39,7 @@ ROUTES = {
     ("PUT", "/api/v1/watchlist/schedule"),
     ("DELETE", "/api/v1/watchlist/schedule"),
     ("DELETE", "/api/v1/watchlist/software/{software_id}"),
+    ("POST", "/api/v1/watchlist/software/{software_id}/restore"),
     ("GET", "/api/v1/runs"),
     ("GET", "/api/v1/runs/{run_id}"),
     ("POST", "/api/v1/runs/{run_id}/retry"),

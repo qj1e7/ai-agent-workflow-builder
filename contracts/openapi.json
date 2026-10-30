@@ -6068,6 +6068,19 @@
             "title": "Name",
             "type": "string"
           },
+          "newest_read_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When newest_version was read. Earlier than checked_at when the latest check could not read the source.",
+            "title": "Newest Read At"
+          },
           "newest_version": {
             "anyOf": [
               {
@@ -6077,6 +6090,7 @@
                 "type": "null"
               }
             ],
+            "description": "The newest release read from the source. A check that cannot read the source keeps the version an earlier check read.",
             "title": "Newest Version"
           },
           "open_ticket": {
@@ -6136,6 +6150,7 @@
           "our_version",
           "our_version_source",
           "newest_version",
+          "newest_read_at",
           "checked_at",
           "status",
           "problem",
@@ -11072,6 +11087,117 @@
           }
         ],
         "summary": "Remove Software",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/watchlist/software/{software_id}/restore": {
+      "post": {
+        "description": "Puts removed software back on the watchlist as it was, with the same id, so what the platform learned about it comes back too, within a day of the removal. Software already on the list stays as it is.",
+        "operationId": "restore_software_api_v1_watchlist_software__software_id__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "software_id",
+            "required": true,
+            "schema": {
+              "title": "Software Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchlistView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "This software was never on the watchlist"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The repository was added again after it was removed"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The software was removed more than a day ago"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Restore Software",
         "tags": [
           "builder"
         ]

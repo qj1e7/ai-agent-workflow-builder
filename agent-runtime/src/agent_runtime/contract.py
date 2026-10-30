@@ -358,6 +358,11 @@ class TaskFailed(WireModel):
     status: Literal["failed"] = "failed"
     error: TaskError
     events: list[AgentEvent]
+    findings: list[Finding] = Field(
+        default_factory=list[Finding],
+        description="When a watchlist check could read none of its software: one finding for "
+        "each, with its own reason. Empty for any other failure.",
+    )
 
 
 type TaskResult = Annotated[TaskFinished | TaskFailed, Field(discriminator="status")]

@@ -456,6 +456,15 @@ def failed_task() -> TaskFailed:
         task_id="run_01JB9/work/1/1",
         error=TaskError(type="UpstreamUnavailable", message=NOTHING_READABLE, retryable=True),
         events=rec.events,
+        findings=[
+            Finding(
+                software_id=LANGGRAPH_ID,
+                state="cant_check",
+                newest=None,
+                new_versions=[],
+                detail=f"{GITHUB_503}.",
+            )
+        ],
     )
 
 
