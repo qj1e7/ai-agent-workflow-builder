@@ -29,3 +29,5 @@ export function taskHandedOver(state: unknown): string {
   const task = (state as { task?: unknown } | null)?.task
   return typeof task === 'string' ? task : ''
 }
+
+export const draftGone = (state: unknown): boolean => (state as { draftGone?: unknown } | null)?.draftGone === true

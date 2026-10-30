@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { MemoryRouter, Route, Routes } from 'react-router'
+import { MemoryRouter, Route, Routes, type InitialEntry } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import rowsAnswer from '../../../../contracts/fixtures/builder/understand.rows.json'
 import watchlist from '../../../../contracts/fixtures/builder/understand.watchlist.json'
@@ -40,7 +40,7 @@ const DRAFTED: PlanOut = {
   questions: [],
 }
 
-function wrap(node: ReactNode, { me = ALICE, path = '/new', seed }: { me?: Me; path?: string; seed?: (client: QueryClient, scope: string) => void } = {}): string {
+function wrap(node: ReactNode, { me = ALICE, path = '/new', seed }: { me?: Me; path?: InitialEntry; seed?: (client: QueryClient, scope: string) => void } = {}): string {
   const session = createDevSession(null)
   const scope = session.cacheScope()
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
@@ -98,19 +98,38 @@ describe('New workflow for an Approver who is not an Operator', () => {
 })
 
 describe('a draft opened from Home', () => {
-  it('reopens at the step it was saved at', () => {
-    const form = { ...enterWhen(read(rowsAnswer as UnderstandOut)), step: 3 as const }
-    const draft: DraftView = {
-      draft_id: 'd1',
-      step: 3,
-      content: JSON.parse(JSON.stringify(draftContent(form, { task: taskWithoutSchedule(form.rows), answer: DRAFTED }))) as DraftView['content'],
-      created_at: '2026-11-03T07:00:00Z',
-      saved_at: '2026-11-03T07:00:00Z',
+  const form = { ...enterWhen(read(rowsAnswer as UnderstandOut)), step: 3 as const }
+  const draft: DraftView = {
+    draft_id: 'd1',
+    step: 3,
+    content: JSON.parse(JSON.stringify(draftContent(form, { task: taskWithoutSchedule(form.rows), answer: DRAFTED }))) as DraftView['content'],
+    created_at: '2026-11-03T07:00:00Z',
+    saved_at: '2026-11-03T07:00:00Z',
+  }
+  const listed =
+    (drafts: DraftView[], fresh: boolean) =>
+    (client: QueryClient, scope: string): void => {
+      if (fresh) client.setQueryDefaults(['drafts'], { staleTime: Infinity })
+      client.setQueryData(['drafts', scope], drafts)
     }
-    const html = wrap(<NewWorkflowRoute />, { path: '/new?draft=d1', seed: (client, scope) => client.setQueryData(['drafts', scope], [draft]) })
+
+  it('reopens at the step it was saved at', () => {
+    const html = wrap(<NewWorkflowRoute />, { path: '/new?draft=d1', seed: listed([draft], true) })
     expect(heading(html)).toBe('New workflow , step 3 of 4: When it runs')
     expect(html).toMatch(/<option value="weekdays" selected="">Every weekday<\/option>/)
     expect(html).toContain('value="15:00"')
+  })
+
+  it('waits for the list to be read again rather than reopen what an earlier read kept', () => {
+    const html = wrap(<NewWorkflowRoute />, { path: '/new?draft=d1', seed: listed([draft], false) })
+    expect(text(html)).toBe('Loading your draft')
+  })
+
+  it('leaves a draft that is gone for a new workflow, where the Planner says it is gone', () => {
+    expect(wrap(<NewWorkflowRoute />, { path: '/new?draft=d2', seed: listed([draft], true) })).toBe('')
+    const html = wrap(<NewWorkflowRoute />, { path: { pathname: '/new', state: { draftGone: true } } })
+    expect(heading(html)).toBe('New workflow , step 1 of 4: Describe it')
+    expect(text(html)).toContain('Planner: That draft is gone. Start a new one.')
   })
 })
 

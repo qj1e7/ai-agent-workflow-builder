@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
-import { useLocation, useNavigate, useSearchParams } from 'react-router'
+import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { useErrorWords } from '../../api/context'
 import { newIdempotencyKey } from '../../api/idempotency'
 import { useLatch } from '../../api/latch'
@@ -35,10 +35,11 @@ import { StepCheck } from './StepCheck'
 import { StepDescribe } from './StepDescribe'
 import { StepReview } from './StepReview'
 import { StepWhen, whenFieldId } from './StepWhen'
-import { taskHandedOver } from './starters'
+import { draftGone, NEW_WORKFLOW_PATH, taskHandedOver } from './starters'
 import styles from './NewWorkflow.module.css'
 
 const LEAD = 'Describe a repeated task. Agents do it, and nothing changes without a yes.'
+const DRAFT_GONE = 'That draft is gone. Start a new one.'
 const WHEN_ORDER: readonly WhenField[] = ['often', 'day', 'at']
 
 function Head({ step, saving, onSave }: { step: Step | null; saving?: boolean; onSave?: () => void }) {
@@ -315,10 +316,14 @@ function Opening() {
   const location = useLocation()
   const draftId = params.get('draft')
   const drafts = useDrafts(draftId !== null)
-  if (draftId === null) return <NewWorkflow key="new" draftId={null} start={{ form: { ...EMPTY_FORM, text: taskHandedOver(location.state) }, plan: null }} />
-  if (drafts.data) {
+  if (draftId === null) {
+    const form = { ...EMPTY_FORM, text: taskHandedOver(location.state), plannerSaid: draftGone(location.state) ? DRAFT_GONE : null }
+    return <NewWorkflow key="new" draftId={null} start={{ form, plan: null }} />
+  }
+  if (drafts.data && (drafts.isFetchedAfterMount || !drafts.isStale)) {
     const found = drafts.data.find((saved) => saved.draft_id === draftId)
-    return <NewWorkflow key={draftId} draftId={found ? draftId : null} start={found ? restoreDraft(found) : { form: EMPTY_FORM, plan: null }} />
+    if (!found) return <Navigate to={NEW_WORKFLOW_PATH} replace state={{ draftGone: true }} />
+    return <NewWorkflow key={draftId} draftId={draftId} start={restoreDraft(found)} />
   }
   if (drafts.isError)
     return (
