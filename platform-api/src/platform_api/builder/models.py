@@ -1,8 +1,8 @@
+import json
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import Field, StringConstraints, field_validator
-from pydantic_core import PydanticCustomError
+from pydantic import Field, JsonValue, StringConstraints, field_validator
 
 from platform_api.builder.templates import TAG_PATTERN
 from platform_api.orchestration import (
@@ -16,7 +16,7 @@ from platform_api.orchestration import (
     ToolKind,
 )
 from platform_api.shared import ApprovalId, RunId, SoftwareId, UserId
-from platform_api.wire import RepoName, WireModel
+from platform_api.wire import RepoName, WireIn, WireModel
 from platform_api.wire import RunState as RunStateName
 
 type BlockKind = Literal["agent", "approval", "write_action"]
@@ -47,7 +47,7 @@ class TemplateList(WireModel):
     templates: list[TemplateView]
 
 
-class CreateUseCase(WireModel):
+class CreateUseCase(WireIn):
     template: str
     name: str
     instruction: str
@@ -66,6 +66,9 @@ class UseCaseAgentView(WireModel):
     values: dict[str, str]
 
 
+type UseCaseState = Literal["on", "paused"]
+
+
 class UseCaseView(WireModel):
     use_case_id: str
     version: int
@@ -75,6 +78,14 @@ class UseCaseView(WireModel):
     params: dict[str, str]
     owner: UserId
     created_at: datetime
+    state: UseCaseState = Field(
+        description="on, or paused until an Operator resumes it. A paused workflow starts no "
+        "run, on its schedule or by hand. A deleted workflow is not shown."
+    )
+    next_run_at: datetime | None = Field(
+        description="When the workflow next runs on its own. Null while it is paused, and for "
+        "a workflow with no schedule."
+    )
     plan: list[BlockView] = Field(
         description="The blocks a run of this use case draws, in order. A template use case "
         "has its template's blocks. An agent use case has one agent block for each agent, "
@@ -87,10 +98,19 @@ class UseCaseView(WireModel):
 
 
 class UseCaseList(WireModel):
-    use_cases: list[UseCaseView]
+    use_cases: list[UseCaseView] = Field(description="Every workflow that is not deleted.")
 
 
-class SuggestIn(WireModel):
+class UseCaseDeleted(WireModel):
+    use_case_id: str
+    deleted_at: datetime
+    restore_until: datetime = Field(
+        description="Until then, POST /api/v1/use-cases/{use_case_id}/restore puts the workflow "
+        "back as it was. Its past runs stay readable either way."
+    )
+
+
+class SuggestIn(WireIn):
     text: str
 
 
@@ -111,7 +131,7 @@ type SoftwareName = Annotated[
 type Version = Annotated[str, Field(pattern=TAG_PATTERN)]
 
 
-class AddSoftware(WireModel):
+class AddSoftware(WireIn):
     name: SoftwareName
     repo: RepoName
     our_version: Version | None = Field(
@@ -161,7 +181,7 @@ class LastCheckView(WireModel):
 type ClockTime = Annotated[str, Field(pattern=AT_PATTERN, examples=["09:00"])]
 
 
-class ScheduleIn(WireModel):
+class ScheduleIn(WireIn):
     day: Day
     at: ClockTime = Field(description="Time of day in Singapore, HH:MM on a 5-minute step.")
 
@@ -173,13 +193,19 @@ class ScheduleView(WireModel):
     owner: UserId = Field(description="The schedule owner. Only another Approver can approve.")
     owner_name: str
     saved_at: datetime
-    next_at: datetime = Field(description="The next time a check starts.")
+    next_at: datetime | None = Field(
+        description="The next time a check starts. Null while the watchlist is paused."
+    )
 
 
 class WatchlistView(WireModel):
     use_case_id: str
     version: int
     ticket_project: str
+    state: UseCaseState = Field(
+        description="on, or paused until an Operator resumes it, as on its use case view. A "
+        "paused watchlist starts no check, on its schedule or by hand."
+    )
     software: list[WatchedSoftwareView] = Field(
         description="Rows that need a person first: cannot check, behind, awaiting approval, "
         "ticket open, not checked; then up to date. Rows with one status sort by name."
@@ -207,24 +233,24 @@ class ToolList(WireModel):
     tools: list[ToolView]
 
 
-class CardInput(WireModel):
+class CardInput(WireIn):
     name: str
     kind: str = Field(description="github_repo, jira_project or text.")
     what: str = ""
     example: str = ""
 
 
-class CardBlock(WireModel):
+class CardBlock(WireIn):
     say: str
     tool: str | None = Field(default=None, description="A tool id from GET /tools, or null.")
 
 
-class CardApprovalView(WireModel):
+class CardApprovalView(WireIn):
     tool: str
     approvers: int
 
 
-class CardDefinition(WireModel):
+class CardDefinition(WireIn):
     """What an Operator or the Planner writes. Nothing here is trusted until it is checked."""
 
     name: str
@@ -287,7 +313,7 @@ class CardList(WireModel):
     cards: list[CardView]
 
 
-class PlanIn(WireModel):
+class PlanIn(WireIn):
     task: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
 
 
@@ -336,12 +362,12 @@ type PlanOut = Annotated[
 ]
 
 
-class AgentChoice(WireModel):
+class AgentChoice(WireIn):
     card_id: str
     values: dict[str, str]
 
 
-class CreateAgentUseCase(WireModel):
+class CreateAgentUseCase(WireIn):
     name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
     instruction: Annotated[
         str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)
@@ -349,18 +375,8 @@ class CreateAgentUseCase(WireModel):
     agents: Annotated[list[AgentChoice], Field(min_length=1, max_length=3)]
 
 
-NUL_IN_TEXT = "This text holds a NUL character (\\u0000). Remove it."
-
-
-class UnderstandIn(WireModel):
+class UnderstandIn(WireIn):
     text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
-
-    @field_validator("text")
-    @classmethod
-    def _no_nul(cls, text: str) -> str:
-        if "\x00" in text:
-            raise PydanticCustomError("nul_character", NUL_IN_TEXT)
-        return text
 
 
 class UnderstoodRowView(WireModel):
@@ -415,3 +431,38 @@ class Starters(WireModel):
 type UnderstandOut = Annotated[
     UnderstoodRows | WatchlistRedirect | Starters, Field(discriminator="answer")
 ]
+DRAFT_ID_PATTERN = r"^[A-Za-z0-9_-]{1,64}$"
+DRAFT_STEPS = 4
+DRAFT_LIMIT_BYTES = 32 * 1024
+
+
+class DraftIn(WireIn):
+    step: Annotated[int, Field(ge=1, le=DRAFT_STEPS)] = Field(
+        description="The New workflow step the draft was saved at, from 1 to 4."
+    )
+    content: dict[str, JsonValue] = Field(
+        description="The New workflow form as the Portal keeps it, at most 32 KB as JSON. "
+        "The platform stores it as it is and never reads it."
+    )
+
+    @field_validator("content")
+    @classmethod
+    def _fits(cls, content: dict[str, JsonValue]) -> dict[str, JsonValue]:
+        size = len(json.dumps(content, ensure_ascii=False, separators=(",", ":")).encode())
+        if size > DRAFT_LIMIT_BYTES:
+            raise ValueError("The draft is too big to save. Keep it under 32 KB.")
+        return content
+
+
+class DraftView(WireModel):
+    draft_id: str
+    step: int
+    content: dict[str, JsonValue]
+    created_at: datetime
+    saved_at: datetime
+
+
+class DraftList(WireModel):
+    drafts: list[DraftView] = Field(
+        description="The signed-in person's own drafts, the last saved first."
+    )

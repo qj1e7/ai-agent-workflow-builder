@@ -59,12 +59,14 @@ from platform_api.shared import (
 )
 from platform_api.wire import (
     ApprovalStepView,
+    ErrorBody,
     FailureReason,
     FailureStage,
     RunOutcome,
     StepName,
     StepOutcome,
     Trigger,
+    WireIn,
     WireModel,
     error_response,
 )
@@ -191,7 +193,7 @@ class ApprovalView(WireModel):
     why_not: Refusal | None
 
 
-class DecisionIn(WireModel):
+class DecisionIn(WireIn):
     step: int
     verdict: Verdict
     digest: Digest
@@ -229,7 +231,7 @@ class TickOut(WireModel):
     started: list[RunId]
 
 
-class WorkflowFailureIn(WireModel):
+class WorkflowFailureIn(WireIn):
     execution_id: str
     workflow: str
     last_node: str
@@ -520,7 +522,10 @@ async def get_approval(
     responses={
         **SIGNED_IN,
         200: {"model": DecisionOut, "description": "The same decision was already recorded"},
-        403: {"model": RefusalOut, "description": "This person cannot decide this step"},
+        403: {
+            "model": RefusalOut | ErrorBody,
+            "description": "This person cannot decide this step, or is not on the People list",
+        },
         404: error_response("No such approval"),
         409: error_response("Another Approver decided this step first"),
     },

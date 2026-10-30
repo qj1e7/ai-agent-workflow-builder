@@ -37,6 +37,22 @@ _Avoid_: Job, recipe, routine
 What Operators see a use case called in the app. Always write "n8n workflow" for n8n's own workflows, and "Jira workflow" for a ticket's statuses.
 _Avoid_: Routine
 
+**Draft**:
+A New workflow that an Operator started and has not finished, kept so they can come back to it. Only they see it. Always write "n8n draft" for an n8n workflow that is not published yet.
+_Avoid_: Proposal (that is a run's write actions)
+
+**Paused**:
+A workflow an Operator has stopped for now. It starts no run, on its schedule or by hand, until an Operator resumes it. A run that has already started carries on.
+_Avoid_: Disabled, turned off (a schedule is turned off, a workflow is paused)
+
+**Deleted**:
+A workflow an Operator has taken out of the list. It starts no run, but nothing is erased: its past runs stay readable, and a run waiting for a yes can still be decided.
+_Avoid_: Archived, removed (watched software is removed)
+
+**Restore**:
+Putting a deleted workflow back as it was, paused or on, within a day of the delete. Undo after a delete restores it.
+_Avoid_: Undelete, recover
+
 **Template**:
 A ready-made agent card that ships with the platform, such as the Version checker.
 
@@ -49,7 +65,7 @@ Our own n8n nodes. With them, an n8n workflow can run an agent card, read from a
 _Avoid_: Plugin, integration, custom nodes
 
 **Published version**:
-The version of a use case's n8n workflow that runs. Staff change a draft in n8n, and publishing the draft makes it the published version.
+The version of a use case's n8n workflow that runs. Staff change the n8n draft, and publishing the n8n draft makes it the published version.
 _Avoid_: Live version, active version
 
 ### Keeping software up to date
@@ -118,7 +134,7 @@ Any action that changes data in an external system, such as Jira, Confluence or 
 
 **Proposal**:
 The set of write actions that agents propose for one run. One approval request covers exactly one proposal, and the Approver approves it as a whole.
-_Avoid_: Plan, draft
+_Avoid_: Plan, draft (a Draft is an unfinished New workflow)
 
 **Approval gate**:
 The step that pauses a run before a write action until an Approver approves it in Teams.
@@ -167,7 +183,11 @@ _Avoid_: Approval (that is for a run's proposal), sign-off
 ### Roles
 
 **Operator**:
-A support staff member who describes tasks and starts runs.
+A support staff member who describes tasks and starts runs, and looks after Settings: the AI model, and the People list. An Operator adds people, makes someone an Operator or stops them being one at once, and asks for a new Approver. Nobody can remove their own Operator role.
 
 **Approver**:
-A person who approves write actions. An Approver can never approve their own work.
+A person who approves write actions, and who confirms a new Approver and a new AI model address. An Approver can never approve their own work, and never confirms a change they asked for or that is about them. At least two people are Approvers.
+
+**People list**:
+The platform's own record of who may use it and which roles they hold. Sign-in only says who someone is; the People list gives them their roles. Someone who signs in but is not on it is told to ask an Operator.
+_Avoid_: Users, accounts, app roles

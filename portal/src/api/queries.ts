@@ -1,9 +1,10 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { keepPreviousData, queryOptions, useMutation, useQueries, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { ApiError, unwrap, type ApiClient } from './client'
 import { useApiClient, useSession, useCacheScope } from './context'
 import type {
   AddSoftware,
   AddressDecisionIn,
+  ApprovalView,
   CardDefinition,
   ConnectIn,
   CreateAgentUseCase,
@@ -36,10 +37,13 @@ export const keys = {
 }
 
 interface QueryOptions {
-  poll?: boolean
+  /** true polls every POLL_MS; a number polls that often. */
+  poll?: boolean | number
+  enabled?: boolean
 }
 
 function pollEvery(options: QueryOptions | undefined): number | false {
+  if (typeof options?.poll === 'number') return options.poll
   return options?.poll ? POLL_MS : false
 }
 
@@ -72,6 +76,7 @@ export function useRuns(options?: QueryOptions) {
     queryKey: keys.runs(user),
     queryFn: async () => unwrap(await client.GET('/api/v1/runs')).runs,
     refetchInterval: pollEvery(options),
+    enabled: options?.enabled ?? true,
   })
 }
 
@@ -208,16 +213,29 @@ export function useStartRun() {
   })
 }
 
-export function useApproval(approvalId: string, options?: QueryOptions & { enabled?: boolean }) {
-  const client = useApiClient()
-  const user = useCacheScope()
-  return useQuery({
+function decided(approval: ApprovalView | undefined): boolean {
+  return approval !== undefined && approval.steps.every((step) => step.status === 'approved' || step.status === 'declined')
+}
+
+export function approvalQuery(client: ApiClient, user: string, approvalId: string, options?: QueryOptions) {
+  return queryOptions({
     queryKey: keys.approval(user, approvalId),
     queryFn: async () =>
       unwrap(await client.GET('/api/v1/approvals/{approval_id}', { params: { path: { approval_id: approvalId } } })),
-    refetchInterval: pollEvery(options),
+    refetchInterval: (query) => (decided(query.state.data) ? false : pollEvery(options)),
     enabled: options?.enabled ?? true,
   })
+}
+
+export function useApproval(approvalId: string, options?: QueryOptions) {
+  return useQuery(approvalQuery(useApiClient(), useCacheScope(), approvalId, options))
+}
+
+/** The same cache entries as useApproval, one per id. */
+export function useApprovals(approvalIds: readonly string[], options?: QueryOptions) {
+  const client = useApiClient()
+  const user = useCacheScope()
+  return useQueries({ queries: approvalIds.map((approvalId) => approvalQuery(client, user, approvalId, options)) })
 }
 
 function refreshAfterChange(queryClient: QueryClient): Promise<unknown> {
@@ -272,6 +290,7 @@ export function useTeamsMessages(options?: QueryOptions) {
     queryKey: keys.teamsMessages(user),
     queryFn: async () => unwrap(await client.GET('/api/v1/teams-stub/messages')).messages,
     refetchInterval: pollEvery(options),
+    enabled: options?.enabled ?? true,
   })
 }
 

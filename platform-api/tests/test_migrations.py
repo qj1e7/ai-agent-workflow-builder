@@ -190,3 +190,119 @@ def test_migration_0004_renames_the_starter_card_on_saved_agent_use_cases(
         assert card_ids() == [OLD_STARTER_CARD, "crd_mine"]
         upgrade("builder", postgres.owner)
         conn.execute("DELETE FROM builder.use_case_cards")
+
+
+LIFECYCLE_COLUMNS = ["deleted_at", "deleted_by", "paused_at", "paused_by"]
+
+
+def test_migration_0005_adds_the_lifecycle_and_drafts_and_stops_hard_deletes(
+    postgres: PostgresUrls,
+):
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+
+        def lifecycle_columns() -> list[str]:
+            rows = conn.execute(
+                "SELECT column_name FROM information_schema.columns WHERE table_schema = "
+                "'builder' AND table_name = 'use_cases' AND column_name = ANY(%s) ORDER BY 1",
+                (LIFECYCLE_COLUMNS,),
+            ).fetchall()
+            return [str(r[0]) for r in rows]
+
+        def has_drafts() -> bool:
+            row = conn.execute("SELECT to_regclass('builder.drafts') IS NOT NULL").fetchone()
+            return bool(row and row[0])
+
+        assert (lifecycle_columns(), has_drafts()) == (LIFECYCLE_COLUMNS, True)
+        downgrade("builder", postgres.owner, "0004")
+        assert (lifecycle_columns(), has_drafts()) == ([], False)
+        conn.execute("DELETE FROM builder.use_case_versions")
+        conn.execute("DELETE FROM builder.use_cases")
+        conn.execute(
+            "INSERT INTO builder.use_cases (use_case_id, owner, created_at, current_version) "
+            "VALUES ('uc_before', 'alice', %s, 1)",
+            (NOW,),
+        )
+        upgrade("builder", postgres.owner)
+        assert (lifecycle_columns(), has_drafts()) == (LIFECYCLE_COLUMNS, True)
+        assert conn.execute(
+            "SELECT paused_at, paused_by, deleted_at, deleted_by FROM builder.use_cases"
+        ).fetchall() == [(None, None, None, None)]
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute("UPDATE builder.use_cases SET paused_at = %s", (NOW,))
+
+    with psycopg.connect(postgres.contexts.builder) as builder:
+        builder.execute("SELECT count(*) FROM builder.drafts")
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            builder.execute("DELETE FROM builder.use_cases")
+        builder.rollback()
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            builder.execute("DELETE FROM builder.use_case_versions")
+    with (
+        psycopg.connect(postgres.contexts.orchestration) as other,
+        pytest.raises(psycopg.errors.InsufficientPrivilege),
+    ):
+        other.execute("SELECT count(*) FROM builder.drafts")
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        conn.execute("DELETE FROM builder.use_cases")
+
+
+def test_migration_0006_adds_the_people_tables_and_folds_the_model_history_into_them(
+    postgres: PostgresUrls,
+):
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        conn.execute("DELETE FROM orchestration.settings_changes")
+        conn.execute("DELETE FROM orchestration.confirmations")
+        conn.execute("DELETE FROM orchestration.people")
+        conn.execute(
+            "INSERT INTO orchestration.settings_changes (changed_at, area, changed_by, summary) "
+            "VALUES (%s, 'model', 'alice', 'Alice turned on a model.'), "
+            "(%s, 'people', 'deploy', 'The deploy put people on the list.')",
+            (NOW, NOW),
+        )
+
+        def tables() -> list[str]:
+            rows = conn.execute(
+                "SELECT table_name FROM information_schema.tables WHERE table_schema = "
+                "'orchestration' AND table_name IN ('people', 'confirmations', "
+                "'settings_changes', 'model_setting_changes') ORDER BY 1"
+            ).fetchall()
+            return [r[0] for r in rows]
+
+        assert tables() == ["confirmations", "people", "settings_changes"]
+        downgrade("orchestration", postgres.owner, "0005")
+        assert tables() == ["model_setting_changes"]
+        old = conn.execute(
+            "SELECT changed_by, summary FROM orchestration.model_setting_changes"
+        ).fetchall()
+        assert old == [("alice", "Alice turned on a model.")]
+        upgrade("orchestration", postgres.owner)
+        assert tables() == ["confirmations", "people", "settings_changes"]
+        kept = conn.execute(
+            "SELECT area, changed_by, summary FROM orchestration.settings_changes"
+        ).fetchall()
+        assert kept == [("model", "alice", "Alice turned on a model.")]
+        assert conn.execute("SELECT count(*) FROM orchestration.people").fetchone() == (0,)
+
+    with psycopg.connect(postgres.contexts.orchestration) as orchestration:
+        orchestration.execute("SELECT count(*) FROM orchestration.people")
+        orchestration.execute("LOCK TABLE orchestration.people IN SHARE ROW EXCLUSIVE MODE")
+        orchestration.rollback()
+
+
+def test_migration_0006_downgrade_keeps_a_waiting_address(postgres: PostgresUrls):
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        conn.execute("DELETE FROM orchestration.model_setting")
+        conn.execute(
+            "INSERT INTO orchestration.model_setting (slot, provider, style, base_url, model, "
+            "sealed_key, key_hint, test_seconds, saved_by, saved_by_name, saved_at) VALUES "
+            "('pending', 'ai-gateway.ncs.example', 'openai', 'https://ai-gateway.ncs.example/v1', "
+            "'ncs-llm-small', 'sealed', 'x7', 1.4, 'alice', 'Alice', %s)",
+            (NOW,),
+        )
+        downgrade("orchestration", postgres.owner, "0005")
+        try:
+            kept = conn.execute("SELECT slot, model FROM orchestration.model_setting").fetchall()
+            assert kept == [("pending", "ncs-llm-small")]
+        finally:
+            conn.execute("DELETE FROM orchestration.model_setting")
+            upgrade("orchestration", postgres.owner)

@@ -15,14 +15,19 @@ from platform_api.oidc import (
     KEYS_MAX_STALE_SECONDS,
     MAX_DOCUMENT_BYTES,
     REFETCH_COOLDOWN_SECONDS,
+    identity_from_claims,
 )
 from platform_api.orchestration.service import NotFound
 from tests.declared import FakeOrchestrator, declared_status
 from tests.oidc_support import (
+    ALICE_CLAIMS,
     ALICE_ID,
+    BOB_CLAIMS,
     EC_KEY,
     IMPOSTOR,
     ISSUER,
+    NOBODY_CLAIMS,
+    NOBODY_ID,
     OIDC_ENV,
     RSA_KEY,
     Clock,
@@ -103,9 +108,10 @@ def test_a_valid_token_signs_in_as_the_person_it_names(client: TestClient, key: 
     response = client.get(ME, headers=bearer(token(key)))
     assert response.status_code == 200
     assert response.json() == {
-        "id": ALICE_ID,
+        "id": "alice",
         "display": "Alice",
         "roles": ["operator", "approver"],
+        "on_list": True,
     }
 
 
@@ -465,11 +471,11 @@ def test_a_kid_published_twice_is_dropped(client: TestClient, issuer: FakeIssuer
     ],
     ids=["oid wins", "sub without oid", "empty oid", "oid not a string"],
 )
-def test_the_id_is_oid_then_sub(
-    client: TestClient, claims: dict[str, object], drop: list[str], expected: str
-):
-    response = client.get(ME, headers=bearer(token(claims=claims, drop=drop)))
-    assert response.json()["id"] == expected
+def test_the_subject_is_oid_then_sub(claims: dict[str, object], drop: list[str], expected: str):
+    payload = {**ALICE_CLAIMS, **claims}
+    for name in drop:
+        payload.pop(name, None)
+    assert identity_from_claims(payload).subject == expected
 
 
 def test_a_token_naming_no_person_is_refused(client: TestClient, app: FastAPI):
@@ -482,44 +488,95 @@ def test_a_token_naming_no_person_is_refused(client: TestClient, app: FastAPI):
         ({"name": "Alice Liddell"}, [], "Alice Liddell"),
         ({}, ["name"], "alice@example.test"),
         ({}, ["name", "preferred_username"], ALICE_ID),
-        ({"name": "  Al\x00ice​ \n"}, [], "Alice"),
+        ({"name": "  Al\x00ice\u200b \n"}, [], "Alice"),
         ({"name": "A" * 200}, [], "A" * 120),
-        ({"name": "\x00\x01"}, [], ALICE_ID),
+        ({"name": "\x00\x01"}, [], "alice@example.test"),
     ],
-    ids=["name", "preferred_username", "the id", "cleaned", "cut to 120", "empty after cleaning"],
+    ids=[
+        "name",
+        "preferred_username",
+        "the subject",
+        "cleaned",
+        "cut to 120",
+        "empty after cleaning",
+    ],
 )
-def test_the_display_name_is_name_then_preferred_username_then_the_id(
-    client: TestClient, claims: dict[str, object], drop: list[str], expected: str
+def test_the_identity_shows_name_then_user_name_then_the_subject(
+    claims: dict[str, object], drop: list[str], expected: str
 ):
-    response = client.get(ME, headers=bearer(token(claims=claims, drop=drop)))
-    assert response.json()["display"] == expected
+    payload = {**ALICE_CLAIMS, **claims}
+    for name in drop:
+        payload.pop(name, None)
+    assert identity_from_claims(payload).display == expected
 
 
-def test_an_unknown_role_is_ignored(client: TestClient):
-    roles = ["Operator", "Admin", 5, "operator", "APPROVER"]
-    response = client.get(ME, headers=bearer(token(claims={"roles": roles})))
-    assert response.json()["roles"] == ["operator"]
+def test_the_user_name_is_preferred_username_then_upn():
+    v2 = identity_from_claims({**ALICE_CLAIMS, "upn": "old@example.test"})
+    v1 = {k: v for k, v in ALICE_CLAIMS.items() if k != "preferred_username"}
+    assert v2.user_name == "alice@example.test"
+    assert identity_from_claims({**v1, "upn": "Alice@Example.test"}).user_name == (
+        "Alice@Example.test"
+    )
+    assert identity_from_claims(v1).user_name is None
 
 
-def test_a_roles_claim_that_is_not_a_list_counts_as_no_roles(client: TestClient):
-    response = client.get(ME, headers=bearer(token(claims={"roles": "Operator"})))
-    assert response.json()["roles"] == []
+@pytest.mark.parametrize(
+    "roles",
+    [["Operator", "Approver"], "Operator", [], ["Admin", 5]],
+    ids=["both", "text", "none", "odd"],
+)
+def test_a_roles_claim_in_the_token_is_ignored(client: TestClient, roles: object):
+    bob = bearer(token(claims={**BOB_CLAIMS, "roles": roles}))
+    assert client.get(ME, headers=bob).json()["roles"] == ["approver"]
 
 
-@pytest.mark.parametrize("roles", [{"roles": []}, None], ids=["empty", "absent"])
-def test_a_person_without_a_known_role_can_read_but_not_act_as_an_operator(
-    issuer: FakeIssuer, clock: Clock, roles: dict[str, object] | None
-):
+def test_a_person_not_on_the_list_is_told_to_ask_an_operator(issuer: FakeIssuer, clock: Clock):
     app = oidc_app(issuer, clock)
     app.state.orchestrator = FakeOrchestrator(retry=NotFound())
     client = TestClient(app)
-    nobody = bearer(token(claims=roles, drop=[] if roles else ["roles"]))
-    assert client.get(ME, headers=nobody).json()["roles"] == []
-    response = client.post("/api/v1/runs/run_1/retry", headers=nobody)
-    assert response.status_code == 403
-    declared_status(app, "POST", "/api/v1/runs/{run_id}/retry", response)
-    operator = bearer(token(claims={"roles": ["Operator"]}))
-    assert client.post("/api/v1/runs/run_1/retry", headers=operator).status_code == 404
+    nobody = bearer(token(claims=NOBODY_CLAIMS))
+    me = client.get(ME, headers=nobody)
+    assert me.status_code == 200
+    assert me.json() == {"id": NOBODY_ID, "display": "Nobody", "roles": [], "on_list": False}
+    declared_status(app, "GET", ME, me)
+    decision = {"verdict": "confirm", "digest": "sha256:0"}
+    for method, path, declared, body in (
+        ("GET", "/api/v1/runs", "/api/v1/runs", None),
+        ("POST", "/api/v1/runs/run_1/retry", "/api/v1/runs/{run_id}/retry", None),
+        ("GET", "/api/v1/people", "/api/v1/people", None),
+        (
+            "POST",
+            "/api/v1/confirmations/cfm_1/decisions",
+            "/api/v1/confirmations/{confirmation_id}/decisions",
+            decision,
+        ),
+    ):
+        response = client.request(method, path, headers=nobody, json=body)
+        assert response.status_code == 403, (method, path)
+        assert "Ask an Operator to add you" in response.json()["detail"]
+        declared_status(app, method, declared, response)
+    alice = bearer(token(claims=ALICE_CLAIMS))
+    assert client.post("/api/v1/runs/run_1/retry", headers=alice).status_code == 404
+
+
+def test_the_first_sign_in_binds_by_email_once_and_then_only_the_subject_counts(
+    client: TestClient,
+):
+    first = bearer(
+        token(
+            claims={
+                **ALICE_CLAIMS,
+                "preferred_username": "ALICE@Example.Test",
+                "name": "Alice Liddell",
+            }
+        )
+    )
+    me = client.get(ME, headers=first).json()
+    assert (me["id"], me["display"]) == ("alice", "Alice")
+    renamed = bearer(token(claims={**ALICE_CLAIMS, "preferred_username": "al@example.test"}))
+    assert client.get(ME, headers=renamed).json()["id"] == "alice"
+    impostor = bearer(token(claims={**ALICE_CLAIMS, "oid": "0000beef-0000-4000-8000-00000000000f"}))
+    assert client.get(ME, headers=impostor).json()["on_list"] is False
 
 
 def test_the_reason_for_a_refusal_is_logged_and_not_sent(
@@ -572,3 +629,23 @@ async def test_concurrent_first_requests_share_one_key_load(issuer: FakeIssuer, 
         )
     assert [r.status_code for r in responses] == [200] * 5
     assert (issuer.discovery_fetches, issuer.jwks_fetches) == (1, 1)
+
+
+TENANT_ISSUER = "https://login.test/tenant-a/v2.0"
+
+
+@pytest.mark.parametrize(
+    ("tid", "status"),
+    [("tenant-a", 200), ("TENANT-A", 200), ("tenant-b", 401), (None, 200)],
+    ids=["same tenant", "same tenant, other case", "other tenant", "no tid"],
+)
+def test_a_token_binds_only_from_the_issuers_tenant(clock: Clock, tid: str | None, status: int):
+    issuer = FakeIssuer(TENANT_ISSUER)
+    app = oidc_app(issuer, clock, {**OIDC_ENV, "OIDC_ISSUER": TENANT_ISSUER})
+    client = TestClient(app)
+    claims = {**ALICE_CLAIMS, **({"tid": tid} if tid is not None else {})}
+    response = client.get(ME, headers=bearer(token(claims=claims, issuer=TENANT_ISSUER)))
+    assert response.status_code == status
+    if status == 401:
+        assert response.headers["www-authenticate"] == INVALID_TOKEN
+        declared_status(app, "GET", ME, response)

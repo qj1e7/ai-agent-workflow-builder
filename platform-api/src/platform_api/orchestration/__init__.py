@@ -42,6 +42,7 @@ from platform_api.orchestration.planning import CardPlanning, NoModel, RuntimeDo
 from platform_api.orchestration.schedule import AT_PATTERN, Day, Schedule, parse_at
 from platform_api.orchestration.schedule_store import (
     CheckSpecs,
+    NotOn,
     SavedSchedule,
     ScheduleBook,
     ScheduleTicker,
@@ -112,6 +113,7 @@ __all__ = [
     "NoModel",
     "RowKind",
     "RowState",
+    "NotOn",
     "RuntimeDown",
     "ToolId",
     "ToolKind",

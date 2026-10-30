@@ -1,0 +1,52 @@
+{
+  "people": [
+    {
+      "id": "alice",
+      "display": "Alice",
+      "email": "alice@example.test",
+      "operator": true,
+      "approver": true,
+      "pending_approver": null,
+      "signed_in": true,
+      "added_by": "deploy",
+      "added_at": "2026-11-02T06:00:00Z"
+    },
+    {
+      "id": "bob",
+      "display": "Bob",
+      "email": "bob@example.test",
+      "operator": false,
+      "approver": true,
+      "pending_approver": null,
+      "signed_in": true,
+      "added_by": "deploy",
+      "added_at": "2026-11-02T06:00:00Z"
+    },
+    {
+      "id": "carol",
+      "display": "Carol",
+      "email": "carol@example.test",
+      "operator": true,
+      "approver": false,
+      "pending_approver": null,
+      "signed_in": true,
+      "added_by": "deploy",
+      "added_at": "2026-11-02T06:00:00Z"
+    },
+    {
+      "id": "per_01JD4VE",
+      "display": "Dave",
+      "email": "per_01JD4VE@example.test",
+      "operator": true,
+      "approver": false,
+      "pending_approver": {
+        "confirmation_id": "cfm_01JD4VE",
+        "asked_by": "alice",
+        "asked_at": "2026-11-09T03:41:00Z"
+      },
+      "signed_in": false,
+      "added_by": "alice",
+      "added_at": "2026-11-09T03:40:00Z"
+    }
+  ]
+}

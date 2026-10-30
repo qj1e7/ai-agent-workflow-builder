@@ -2,6 +2,7 @@
   "use_case_id": "uc_01JBW",
   "version": 7,
   "ticket_project": "MOCK",
+  "state": "on",
   "software": [
     {
       "id": "sw_01JBW00000000000000000005",
