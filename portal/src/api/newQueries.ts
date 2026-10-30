@@ -66,8 +66,11 @@ export function refusedWords(error: unknown): string[] {
   const body = error.body as { detail?: unknown; problems?: unknown } | null
   const list = Array.isArray(body?.detail) ? body.detail : Array.isArray(body?.problems) ? body.problems : []
   return list.flatMap((item: unknown) => {
-    const said = item as { msg?: unknown; message?: unknown } | null
+    const said = item as { msg?: unknown; message?: unknown; loc?: unknown } | null
     const words = said?.msg ?? said?.message
-    return typeof words === 'string' ? [words] : []
+    if (typeof words !== 'string') return []
+    const loc = Array.isArray(said?.loc) ? (said.loc as unknown[]) : []
+    const input = loc.at(-2) === 'values' ? loc.at(-1) : undefined
+    return [typeof input === 'string' ? `${input}: ${words}` : words]
   })
 }
