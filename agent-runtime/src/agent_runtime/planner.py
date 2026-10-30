@@ -291,6 +291,11 @@ NOT_SAID: Final = "I couldn't tell from your words."
 READ_IN: Final = "I read this into your words. Please check it."
 CANT_YET: Final = "I can't do this yet."
 CONTROL, FORMAT, SURROGATE = "Cc", "Cf", "Cs"
+INVISIBLE: Final = frozenset(
+    "\u034f\u115f\u1160\u17b4\u17b5\u180b\u180c\u180d\u180f\u2800\u3164\uffa0"
+    + "".join(map(chr, range(0xFE00, 0xFE10)))
+    + "".join(map(chr, range(0xE0100, 0xE01F0)))
+)
 
 UNDERSTAND_SYSTEM: Final = (
     "You are the Planner on a platform used by the support staff of CODESparks, a team in "
@@ -361,7 +366,11 @@ class UnderstandAnswer(BaseModel):
 
 def _visible_words(text: str | None) -> str:
     hidden = (CONTROL, FORMAT, SURROGATE)
-    kept = (c for c in text or "" if c.isspace() or unicodedata.category(c) not in hidden)
+    kept = (
+        c
+        for c in text or ""
+        if c.isspace() or (unicodedata.category(c) not in hidden and c not in INVISIBLE)
+    )
     return " ".join("".join(kept).split())
 
 

@@ -416,6 +416,41 @@ def test_each_form_of_the_prompts_words_is_a_watchlist_word(said: str, task: str
     assert understood_of(answer, task) == BelongsOnWatchlist(word=word)
 
 
+@pytest.mark.parametrize(
+    "mark",
+    [
+        "\u034f",
+        "\ufe00",
+        "\ufe0f",
+        "\U000e0100",
+        "\U000e01ef",
+        "\u3164",
+        "\u115f",
+        "\u1160",
+        "\uffa0",
+        "\u2800",
+        "\u180b",
+        "\u17b4",
+    ],
+)
+def test_invisible_marks_never_reach_the_portal(mark: str):
+    result = ask(
+        rows(
+            ("schedule", f"Every weekday{mark} at 3pm", "understood"),
+            ("look_for", f"Bug tickets{mark} in MOCK", "changed", f"You said{mark} stale."),
+            ("do", f"Create one ticket{mark} that lists them", "understood"),
+            ("where", f"Jira project MOCK{mark}", "understood"),
+        )
+    )
+    assert shown(result) == [
+        ("schedule", "Every weekday at 3pm", "understood"),
+        ("look_for", "Bug tickets in MOCK", "changed"),
+        ("do", "Create one ticket that lists them", "understood"),
+        ("where", "Jira project MOCK", "understood"),
+    ]
+    assert isinstance(result, Understood) and result.rows[1].note == "You said stale."
+
+
 def test_a_slow_model_is_too_slow_and_waits_less_than_the_platform():
     waits: list[float] = []
     slow = type("ReadTimeout", (Exception,), {})("took too long")
