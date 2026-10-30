@@ -6,7 +6,7 @@ usage: python3 -I scripts/checks/p4_lanes.py <command> <api-base-url> <out-dir> 
   lane1 <trunk-api> <out> <head-api>     a watchlist check streamed at trunk and at head
   lane2 <api> <out> <run-id>             the run's items in Cosmos DB
   lane3 <api> <out> <run-id>             the stream again with Last-Event-ID 3
-  lane4 <api> <out>                      (own stack) the emulator stops during a run
+  lane4 <api> <out>                      (own stack) the emulator stops while a run streams
   lane5 <api> <out> <signing-key> [n]    (own stack) platform-api is killed in the middle of a copy
   lane6 <api> <out>                      (own stack) a run fails on purpose; its troubleshooter
   lane7 <api> <out>                      bob approves a run; the decision's item in Cosmos DB
@@ -41,6 +41,7 @@ from typing import Any
 WAIT_SECONDS = 150
 SETTLED = {"awaiting_approval", "succeeded", "failed", "rejected"}
 DONE = {"succeeded", "failed", "rejected"}
+READ_ERRORS = (OSError, ValueError)
 MOCK_MODEL_URL = "http://mock-model:8300"
 LANGGRAPH = {"name": "LangGraph", "repo": "langchain-ai/langgraph", "our_version": "1.2.14"}
 VALUES = {"GitHub repository": "langchain-ai/langgraph", "Jira project": "MOCK"}
@@ -169,7 +170,7 @@ class Stream:
                         self.events.append(json.loads(data[0]))
                     self.arrived.notify_all()
                 lines = []
-        except OSError, ValueError:
+        except READ_ERRORS:
             return
 
     def wait_for_seq(self, seq: int, timeout: float = 30) -> bool:
@@ -448,6 +449,7 @@ def lane3(api: Api, out: Path, run_id: str) -> bool:
 def lane4(api: Api, out: Path) -> bool:
     stack = Stack()
     run_id = api.start_run("alice", ensure_watchlist(api))
+    stream = Stream(api.base, run_id)
     stack.run("stop", "-t", "1", "cosmos")
     stopped_at = datetime.now(UTC).isoformat()
     run = api.wait(run_id, SETTLED)
@@ -456,6 +458,9 @@ def lane4(api: Api, out: Path) -> bool:
     stack.wait_healthy("cosmos")
     started_at = datetime.now(UTC).isoformat()
     found = wait_for_copy(stack, run_id, run["last_seq"])
+    stream.wait_for_seq(run["last_seq"], timeout=60)
+    stream.close()
+    streamed = [e["seq"] for e in stream.events]
     logs = stack.run("logs", "--no-color", "platform-api", check=False)
     warnings = [line for line in logs.splitlines() if "Could not copy" in line]
     save(
@@ -469,6 +474,7 @@ def lane4(api: Api, out: Path) -> bool:
             "mark_while_down": copied_while_down,
             "pg_rows": stack.rows(run_id),
             "cosmos": found,
+            "streamed_across_the_outage": streamed,
             "copier_warnings": warnings[:20],
         },
     )
@@ -485,6 +491,10 @@ def lane4(api: Api, out: Path) -> bool:
             (
                 seqs == list(range(1, run["last_seq"] + 1)),
                 f"after the restart Cosmos DB holds {seqs} of {run['last_seq']}",
+            ),
+            (
+                streamed == list(range(1, run["last_seq"] + 1)),
+                f"a stream held open across the outage got {streamed}, each once, in order",
             ),
         ]
     )
