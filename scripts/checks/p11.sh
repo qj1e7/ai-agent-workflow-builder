@@ -367,10 +367,12 @@ perf-trunk() {
 }
 
 probes() {
-  local project=$1
+  local project=$1 failed=0
   mkdir -p "$EVID/probes"
-  check "$project" --grep '@focus-home |@owner |@two-step |@deleted |@stopped-who |@model-confirm ' 2>&1 | tee "$EVID/probes/playwright.log"
-  return "${PIPESTATUS[0]}"
+  # @model-confirm goes first: @owner and @two-step connect the mock model, after which no new address waits for a yes.
+  check "$project" --grep '@model-confirm ' 2>&1 | tee "$EVID/probes/playwright-model.log" || failed=1
+  check "$project" --grep '@focus-home |@owner |@two-step |@deleted |@stopped-who ' 2>&1 | tee "$EVID/probes/playwright.log" || failed=1
+  return "$failed"
 }
 
 judge_perf() {
