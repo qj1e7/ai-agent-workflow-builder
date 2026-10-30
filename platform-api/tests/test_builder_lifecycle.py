@@ -11,6 +11,7 @@ import pytest
 from fastapi import FastAPI
 
 from platform_api.app import create_app
+from platform_api.auth import DEV_PEOPLE
 from platform_api.builder import Builder, Watchlist
 from platform_api.builder.cards import VERSION_CHECKER_ID
 from platform_api.builder.lifecycle import (
@@ -45,8 +46,9 @@ from platform_api.orchestration import (
     ScheduleTicker,
     UnderstandResult,
 )
+from platform_api.orchestration.people_store import People
 from platform_api.orchestration.runs import AwaitingApproval, StepName
-from platform_api.shared import N8nExecutionId, RunId, UseCaseId, UserId
+from platform_api.shared import N8nExecutionId, Role, RunId, UseCaseId, UserId
 from tests.conftest import PostgresUrls
 from tests.declared import declared_status
 from tests.support import CAROL, LOCAL_ENV, NOW
@@ -155,7 +157,13 @@ def test_the_columns_of_a_deleted_paused_use_case_keep_both_times():
 
 def test_a_paused_watchlist_s_schedule_shows_no_next_check():
     saved = SavedSchedule(
-        UseCaseId("uc_w"), Schedule("monday", "09:00"), CAROL_ID, "Carol", NOW, None
+        UseCaseId("uc_w"),
+        Schedule("monday", "09:00"),
+        CAROL_ID,
+        "Carol",
+        NOW,
+        None,
+        frozenset({Role.OPERATOR}),
     )
 
     on = schedule_view(saved, NOW, on=True)
@@ -234,6 +242,9 @@ async def lab(postgres: PostgresUrls) -> AsyncIterator[Lab]:
         builder = Builder(
             h.db, h.orchestrator, watchlist, "http://localhost:8000", ModelConnected()
         )
+        people = People(h.db)
+        assert await people.seed_dev(DEV_PEOPLE)
+        app.state.people = people
         app.state.builder = builder
         app.state.watchlist = watchlist
         app.state.orchestrator = h.orchestrator
