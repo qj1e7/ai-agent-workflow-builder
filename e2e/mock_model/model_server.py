@@ -17,12 +17,6 @@ fooled, so the test can show that the platform still writes only to the card's o
 POST /_admin/mode with {"mode": "slow"} makes every message answer wait 15 seconds, {"mode":
 "broken"} makes every forced tool answer carry a cut-off JSON string in place of its rows, and
 {"mode": "ok"} restores it.
-
-no_tool_cases.json holds the tasks of the P12 checker's live lane. For each one the mock accepts
-every part, writes included, so the lane shows that the runtime alone marks them can't do.
-
-It listens on 0.0.0.0:8300 in the stack. `python model_server.py --host 127.0.0.1 --port 18300`
-runs it on the host, for the evals.
 """
 
 import argparse

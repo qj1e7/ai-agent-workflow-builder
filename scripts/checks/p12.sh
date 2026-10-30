@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Checker probes for P12 of the rebuild plan (teach the Planner to say what it understood). Rerun
-# any step on its own. Run it from a git archive export (the export command makes one), never a
-# worktree: the evals sync and the stacks work on the tree they are given.
+# any step on its own. <export> is a tree the export command made.
 #
 # usage: scripts/checks/p12.sh <command> [arguments]
 #
@@ -9,11 +8,11 @@
 #   export <sha> <dir>                     git archive of one commit into <dir>, with the env file as deploy/.env
 #   pg-up | pg-down                        the PostgreSQL 17 the platform-api tests use (host port $PG_PORT)
 #   gates <worktree>                       every gate for agent-runtime, platform-api, e2e and the Portal typecheck
-#   build <src> <tag>                      build every image of a stack once, the mock images named by <tag> too
+#   build <export> <tag>                   build every image of a stack once, the mock images named by <tag> too
 #   rmi <tag>                              remove the images build made
-#   e2e <src> <project> <tag> <portal> <api> <n8n>   scripts/e2e.sh with E2E_SUITES=api in an exported tree
-#   up <src> <project> <tag> <portal> <api> <n8n>    one dev stack (compose.yaml + compose.e2e.yaml), not rebuilt
-#   down <src> <project> [oidc]            logs, then down -v
+#   e2e <export> <project> <tag> <portal> <api> <n8n>   scripts/e2e.sh with E2E_SUITES=api in an exported tree
+#   up <export> <project> <tag> <portal> <api> <n8n>  one dev stack (compose.yaml + compose.e2e.yaml), not rebuilt
+#   down <export> <project> [oidc]         logs, then down -v
 #   mock-mode <project> <ok|slow|broken>   switch the stack's mock model
 #   snapshot <project> <file>              every table of the stack's database: rows, and writes so far
 #   shared <project> <api>                 lanes 1, 2, 3, 4, 7, 9 and 10 and the no-tool lane on a shared
@@ -21,20 +20,20 @@
 #   no-tool <project> <api>                the checker's 15 live tasks: the mock accepts each one, the runtime
 #                                          holds each write to the tools and keeps each Jira search
 #   trunk <api>                            lane 1's trunk half: trunk has no understand route
-#   own <src> <prefix> <tag> <portal> <api> <n8n>    lanes 6, 8 and 5, each on a stack of its own, then down
-#   trouble <src> <project> <tag> <portal> <api> <n8n>   its own stack: the runtime hangs (the platform's
+#   own <export> <prefix> <tag> <portal> <api> <n8n>  lanes 6, 8 and 5, each on a stack of its own, then down
+#   trouble <export> <project> <tag> <portal> <api> <n8n>   its own stack: the runtime hangs (the platform's
 #                                          10 s limit), the runtime is down, the model settings cannot be
 #                                          read and PostgreSQL is down (a database error is a 500)
-#   oidc <src> <project> <tag>             its own OIDC stack (no host ports): the route's sign-in for each
+#   oidc <export> <project> <tag>          its own OIDC stack (no host ports): the route's sign-in for each
 #                                          kind of person, and it writes nothing
 #   perf <api> trunk                       p95 of 50 suggest requests, the baseline
 #   perf <api> head [mock|haiku]           p95 of 50 understand requests and the share from the model;
 #                                          mock connects the mock model and also times suggest,
 #                                          haiku uses Claude Haiku 5.5 once it is connected in Settings
 #   perf-table                             the plan's perf rule over $EVID/perf
-#   evals <src>                            the bake-off on the host against the mock model, then the check
+#   evals <export>                         the bake-off on the host against the mock model, then the check
 #                                          that the fooled mock fails every write case of the no-tool lane
-#   evals-gateway <src>                    the bake-off on the host against the AI Singapore gateway; needs
+#   evals-gateway <export>                 the bake-off on the host against the AI Singapore gateway; needs
 #                                          the key in the shell
 #
 # The usual order: export, build, then shared on one head stack (up first), own, trouble, oidc,
@@ -135,9 +134,7 @@ gates() {
   return "$status"
 }
 
-# The mock images get names too, so a second project starts from the same images instead of
-# building its own.
-images_file() {
+mock_image_names() {
   mkdir -p "$EVID/stacks"
   cat >"$EVID/stacks/p12-images.yaml" <<'YAML'
 services:
@@ -154,7 +151,7 @@ compose() {
   shift 3
   local files=(-f "$src/deploy/compose.yaml" -f "$src/deploy/compose.e2e.yaml")
   [ "$mode" = oidc ] && files+=(-f "$src/deploy/compose.oidc.yaml")
-  files+=(-f "$(images_file)")
+  files+=(-f "$(mock_image_names)")
   docker compose -p "$project" --env-file "$ENV_FILE" "${files[@]}" "$@"
 }
 
@@ -243,8 +240,8 @@ select 'writes', schemaname||'.'||relname, (n_tup_ins + n_tup_upd + n_tup_del)::
 order by 1, 2" | tr '|' ' ' >"$file"
 }
 
-# Runs a command between two snapshots of every table and fails when anything changed. PostgreSQL
-# counts a connection's writes when it next goes idle, at most 10 s later, hence the wait.
+# PostgreSQL counts a connection's writes when it next goes idle, at most 10 s later, hence the
+# wait before each snapshot.
 unchanged() {
   local project=$1 out=$2 status=0
   shift 2
@@ -456,9 +453,7 @@ print(text)
 PYEOF
 }
 
-# The bake-off on the host, in a venv of its own under $EVID so the tree's venv keeps its dev
-# tools. Only the gateway provider runs: the caller exports its settings, and every other
-# provider's are cleared. The values go by name, so a key never appears on a command line.
+# A venv of its own under $EVID, so a --no-dev sync never strips the tree's venv of its dev tools.
 bake_off() {
   local src=$1 name=$2 out="$EVID/evals"
   mkdir -p "$out"

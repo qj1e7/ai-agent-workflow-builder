@@ -423,8 +423,7 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def token_for(issuer: str, user: str) -> str:
-    """Signs in at the mock identity provider as a person would, and returns the access token."""
+def sign_in(issuer: str, user: str) -> str:
     back = "http://localhost:8080/auth/callback"
     opener = urllib.request.build_opener(_NoRedirect)
     query = urllib.parse.urlencode(
@@ -465,7 +464,7 @@ def token_for(issuer: str, user: str) -> str:
 
 
 def oidc(api: Api, out: Path, issuer: str) -> bool:
-    tokens = {user: token_for(issuer, user) for user in ("alice", "bob", "carol", "mallory")}
+    tokens = {user: sign_in(issuer, user) for user in ("alice", "bob", "carol", "mallory")}
 
     def asks(token: str | None, text: str = FOLLOW_UP, user: str | None = None) -> tuple[int, Any]:
         return api.call(user, "POST", ROUTE, {"text": text}, token=token)
