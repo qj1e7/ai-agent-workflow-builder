@@ -13,9 +13,14 @@
 #   check <project> [playwright arguments] run portal/e2e/checks/p9.check.ts in the runner image, in that project's Portal network
 #   live <project> [playwright arguments]  run portal/e2e/live, such as 04-workflows.live.ts, the same way
 #   lane1 <head-project> [trunk-project]   trunk has no Workflows page: record it; then two seeded rows at head
-#   lane <n> <project>                     lanes 2, 3, 4, 5, 6, 7, 9 and 10, one at a time on a shared stack
+#   lane <n> <project>                     lanes 2, 3, 5, 6, 7, 9 and 10, one at a time on a shared stack
+#   lane4 <worktree> <project> <tag> <portal-port> <api-port> <n8n-port> [--reuse]
+#                                          lane 4 brings up its own stack, writes a schedule into orchestration.schedules
+#                                          with psql, and down -v
 #   lane8 <worktree> <project> <tag> <portal-port> <api-port> <n8n-port> [--reuse]
-#                                          a stopped run needs mock-github down, so lane 8 brings up its own stack and down -v
+#                                          lane 8 brings up its own stack, stops mock-model before the run, and down -v
+#   probes <project>                       the checker's probes: focus, a stale Run now, the watchlist, roles,
+#                                          own runs, Delete and Undo, messages, reduced motion and retired words
 #   size <trunk-worktree> <head-worktree>  gzip bytes of the JavaScript each built dist/index.html loads; fails past +30 KB
 #   perf <project> [samples]               largest contentful paint of a workflow page with 20 runs; fails at a median of 2.5 s or more
 #   video <project>                        the review video, as $EVID/p9-review.webm and, with ffmpeg, .mp4
@@ -146,21 +151,63 @@ lane1() {
 lane() {
   local n=$1 project=$2
   case "$n" in
-    2 | 3 | 4 | 5 | 6 | 7 | 9 | 10) ;;
-    *) die "lane $n does not run on a shared stack; see lane1 and lane8" ;;
+    2 | 3 | 5 | 6 | 7 | 9 | 10) ;;
+    *) die "lane $n does not run on a shared stack; see lane1, lane4 and lane8" ;;
   esac
   mkdir -p "$EVID/lane-$n"
   check "$project" --grep "@lane$n " 2>&1 | tee "$EVID/lane-$n/playwright.log"
   return "${PIPESTATUS[0]}"
 }
 
+json_field() {
+  node -e 'let raw = ""; process.stdin.on("data", (c) => (raw += c)).on("end", () => console.log(JSON.parse(raw)[process.argv[1]]))' "$1"
+}
+
+schedule_agent_workflow_in_database() {
+  local worktree=$1 project=$2 api_port=$3 out="$EVID/lane-4" name made id
+  name="p9 lane4 scheduled $(date +%H%M%S)"
+  made=$(curl -sS -X POST -H 'X-Dev-User: alice' -H 'Content-Type: application/json' \
+    -d "{\"name\": \"$name\", \"instruction\": \"Check LangGraph for a new release and raise a ticket in MOCK.\", \"agents\": [{\"card_id\": \"crd_version_checker\", \"values\": {\"GitHub repository\": \"langchain-ai/langgraph\", \"Jira project\": \"MOCK\"}}]}" \
+    "http://localhost:$api_port/api/v1/agent-use-cases")
+  id=$(printf '%s' "$made" | json_field use_case_id)
+  [ -n "$id" ] && [ "$id" != undefined ] || die "alice could not make the lane 4 workflow: $made"
+  compose "$worktree" "$project" exec -T postgres psql -U postgres -d platform -v ON_ERROR_STOP=1 -c \
+    "insert into orchestration.schedules (use_case_id, day, at, time_zone, owner_id, owner_name, saved_at) values ('$id', 'monday', '09:00', 'Asia/Singapore', 'alice', 'Alice', now())" \
+    >"$out/schedule-insert.log" 2>&1 || { cat "$out/schedule-insert.log" >&2; die "could not write the lane 4 schedule"; }
+  compose "$worktree" "$project" exec -T postgres psql -U postgres -d platform -Atc \
+    "select use_case_id||' '||day||' '||at||' '||time_zone||' '||owner_id from orchestration.schedules where use_case_id = '$id'" >"$out/schedule-row.txt"
+  printf '{"id": "%s", "name": "%s", "schedule": "written into orchestration.schedules with psql, because no route gives an agent workflow a schedule: Mondays at 09:00 Singapore time, owned by alice"}\n' "$id" "$name" >"$out/workflow.json"
+  cat "$out/workflow.json"
+}
+
+lane4() {
+  local worktree=$1 project=$2 tag=$3 portal_port=$4 api_port=$5 n8n_port=$6 status=0
+  up "$worktree" "$project" "$tag" "$portal_port" "$api_port" "$n8n_port" ${7:+"$7"}
+  mkdir -p "$EVID/lane-4"
+  schedule_agent_workflow_in_database "$worktree" "$project" "$api_port" || status=$?
+  [ "$status" -ne 0 ] || check "$project" --grep '@lane4 ' 2>&1 | tee "$EVID/lane-4/playwright.log" || status=$?
+  down "$worktree" "$project"
+  return "$status"
+}
+
 lane8() {
   local worktree=$1 project=$2 tag=$3 portal_port=$4 api_port=$5 n8n_port=$6 status=0
   up "$worktree" "$project" "$tag" "$portal_port" "$api_port" "$n8n_port" ${7:+"$7"}
   mkdir -p "$EVID/lane-8"
-  check "$project" --grep '@lane8 ' 2>&1 | tee "$EVID/lane-8/playwright.log" || status=$?
+  check "$project" --grep '@lane8-setup' 2>&1 | tee "$EVID/lane-8/setup.log" || status=$?
+  if [ "$status" -eq 0 ]; then
+    compose "$worktree" "$project" stop mock-model | tee "$EVID/lane-8/mock-model-stopped.txt"
+    check "$project" --grep '@lane8 ' 2>&1 | tee "$EVID/lane-8/playwright.log" || status=$?
+  fi
   down "$worktree" "$project"
   return "$status"
+}
+
+probes() {
+  local project=$1
+  mkdir -p "$EVID/safety" "$EVID/probe-focus"
+  check "$project" --grep '@focus |@stale |@watchlist |@roles |@own-run |@delete-undo |@toast |@reduced |@words ' 2>&1 | tee "$EVID/safety/playwright.log"
+  return "${PIPESTATUS[0]}"
 }
 
 size() {
@@ -194,9 +241,10 @@ perf() {
   node -e '
     const fs = require("fs"), dir = process.argv[1]
     const rows = fs.readdirSync(dir).filter((f) => /^lcp-head-.*\.json$/.test(f)).map((f) => JSON.parse(fs.readFileSync(`${dir}/${f}`, "utf8"))).sort((a, b) => a.sample - b.sample)
-    const sorted = rows.map((r) => r.lcp).sort((a, b) => a - b)
-    const median = sorted[Math.floor(sorted.length / 2)]
-    const lines = [`head: ${rows.map((r) => `#${r.sample} ${r.lcp.toFixed(0)} ms (${r.element}, ${r.runsShown} runs shown)`).join(", ")}`, `head median: ${median.toFixed(0)} ms`, `rule: under 2500 ms: ${median < 2500 ? "PASS" : "FAIL"}`, "trunk has no workflow page, so its paint is not measured"]
+    const middle = (values) => values.sort((a, b) => a - b)[Math.floor(values.length / 2)]
+    const median = middle(rows.map((r) => r.lcp))
+    const drawn = middle(rows.map((r) => r.runsDrawnAt))
+    const lines = [`head: ${rows.map((r) => `#${r.sample} ${r.lcp.toFixed(0)} ms (${r.element}, ${r.runsShown} runs shown, run list drawn at ${r.runsDrawnAt.toFixed(0)} ms)`).join(", ")}`, `head median: ${median.toFixed(0)} ms; run list drawn, median: ${drawn.toFixed(0)} ms`, `rule: under 2500 ms: ${median < 2500 ? "PASS" : "FAIL"}`, "trunk has no workflow page, so its paint is not measured"]
     fs.writeFileSync(`${dir}/lcp-summary.txt`, lines.join("\n") + "\n")
     console.log(lines.join("\n"))
     process.exit(median < 2500 ? 0 : 1)
@@ -213,9 +261,9 @@ video() {
 }
 
 command=${1:-}
-[ -n "$command" ] || die "usage: p9.sh <disk|gates|up|down|check|live|lane1|lane|lane8|size|perf|video> ..."
+[ -n "$command" ] || die "usage: p9.sh <disk|gates|up|down|check|live|lane1|lane|lane4|lane8|probes|size|perf|video> ..."
 shift
 case "$command" in
-  disk | gates | up | down | check | live | lane1 | lane | lane8 | size | perf | video) "$command" "$@" ;;
+  disk | gates | up | down | check | live | lane1 | lane | lane4 | lane8 | probes | size | perf | video) "$command" "$@" ;;
   *) die "unknown command $command" ;;
 esac
