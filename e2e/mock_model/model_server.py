@@ -5,7 +5,14 @@ can be tested without a real model:
 
 - GET /v1/models lists one model.
 - A request that forces a tool is a draft, a choice or the Planner reading a task back. The canned
-  answer follows the task's words. A release task belongs on the Software watchlist.
+  answer follows the task's words. A release task belongs on the Software watchlist. Reading a
+  task back, it names an ability and its parameters for each part: honestly for a search, a
+  summary or a new ticket, and as a fooled model for anything else. It marks every part
+  understood and tucks the write into a parameter: after "that" or "listing" into the topic,
+  after "for each" into what each ticket is for, after "in" into the project, a place outside
+  Jira into the project name, an order after the schedule into the schedule, and any other write
+  into the topic of a new ticket. So the tests can show that the runtime still holds each one to
+  the tools.
 - A request with tools and no forced tool is a card run. The mock calls github_read_releases,
   then jira_search, then jira_create_ticket, then writes a report, by what the conversation holds.
 - Anything else is a summary or a connection test and gets one plain sentence.
@@ -46,17 +53,53 @@ RELEASE_WORDS = re.compile(
 )
 SOFTWARE = ("LangGraph", "Redis", "FastAPI", "PostgreSQL", "Terraform", "Log4j", "Kubernetes")
 SCHEDULE = re.compile(
-    r"\b(?:every|each)\s+(?:week ?day|day|morning|monday|tuesday|wednesday|thursday|friday|"
-    r"saturday|sunday|week|month)s?(?:\s+at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)?"
-    r"|\b(?:daily|weekly|monthly)\b",
+    r"\b(?:every|each)\s+(?:week ?day|day|morning|evening|monday|tuesday|wednesday|thursday|"
+    r"friday|saturday|sunday|week|month|quarter|year)s?(?:\s+at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)?"
+    r"|\b(?:daily|weekly|monthly|quarterly)\b",
     re.IGNORECASE,
 )
+SCHEDULE_PARTS = re.compile(r"(?:every|each)\s+(week ?day|\w+?)s?(?:\s+at\s+(.+))?$", re.IGNORECASE)
 FIND = re.compile(r"(?:find|look for|list|search for)\s+(.+?)(?:\s+and\s+(.+))?$", re.IGNORECASE)
 FOUND = re.compile(r"\b(?:of|every|all)\s+(.+?tickets?)\b", re.IGNORECASE)
 IN_PROJECT = re.compile(r"\bin ([A-Z][A-Z0-9]{1,9})\b")
 SUMMARY_TO = re.compile(
     r"^(?:post|send|share)\s+(?:a|the)\s+summary\b.*?\b(?:in|to|on)\s+(teams|slack|confluence)\b",
     re.IGNORECASE,
+)
+PLACED = re.compile(
+    r"^(?:put|post|send|share|write)\s+(?:the|a)?\s*(?:summary|them|it|list)\s+(?:in|to|on)\s+(.+)$",
+    re.IGNORECASE,
+)
+NEW_TICKET = re.compile(
+    r"^(?:create|raise|open|file|log|add)\s+(?:a|an|one)\s+(?:(?P<type>[\w\s-]+?)\s+)?"
+    r"(?P<noun>ticket|issue|page)\b(?P<rest>.*)$",
+    re.IGNORECASE,
+)
+LISTS_THEM = re.compile(
+    r"^(?:that\s+(?:lists|sums)\s+them(?:\s+up)?|listing\s+them)$", re.IGNORECASE
+)
+TOPIC_LEAD = re.compile(
+    r"^(?:that\s+lists|that\s+sums\s+up|listing|about|for|where|that\s+mentions?)\s+", re.IGNORECASE
+)
+SUM_UP = re.compile(r"^sum\b", re.IGNORECASE)
+SYSTEM_SOURCE = re.compile(r"\s+in\s+(GitLab|GitHub|Confluence|Entra)\b")
+DOABLE = frozenset(
+    [
+        "create",
+        "raise",
+        "open",
+        "file",
+        "log",
+        "add",
+        "sum",
+        "summarise",
+        "summarize",
+        "write",
+        "list",
+        "count",
+        "find",
+        "check",
+    ]
 )
 FOOLING_ORDER = re.compile(
     r"\bignore (?:your|all|the|previous) (?:rules|instructions)\b", re.IGNORECASE
@@ -181,44 +224,153 @@ def first_up(text: str) -> str:
     return text[:1].upper() + text[1:]
 
 
+def part(kind: str, said: str, ability: str | None, **parameters: Any) -> dict[str, Any]:
+    row: dict[str, Any] = {"kind": kind, "state": "understood", "said": first_up(said.strip())}
+    if ability is not None:
+        row["ability"] = ability
+    row.update(parameters)
+    return row
+
+
+def missing(kind: str) -> dict[str, Any]:
+    return {"kind": kind, "state": "missing", "said": ""}
+
+
+def schedule_row(when: str, hidden: str | None) -> dict[str, Any]:
+    found = SCHEDULE_PARTS.match(when.strip())
+    every = (found.group(1) if found else when).replace(" ", "").lower()
+    parameters: dict[str, Any] = {"every": [every]}
+    if found and found.group(2):
+        parameters["at"] = [found.group(2).strip()]
+    if hidden is not None:
+        parameters["on"] = hidden
+        return part("schedule", f"{when}, {hidden}", "run_on_a_schedule", **parameters)
+    return part("schedule", when, "run_on_a_schedule", **parameters)
+
+
 def where_row(task: str) -> dict[str, Any]:
     project = IN_PROJECT.search(task)
     if project is None:
-        return {"kind": "where", "state": "missing", "note": "You didn't say which Jira project."}
-    return {"kind": "where", "text": f"Jira project {project.group(1)}", "state": "understood"}
+        return missing("where")
+    key = project.group(1)
+    return part("where", f"in {key}", "create_jira_ticket", project=key)
+
+
+def cut(text: str, pattern: str) -> tuple[str, re.Match[str] | None]:
+    found = re.search(pattern, text)
+    return (text if found is None else text[: found.start()] + text[found.end() :]), found
+
+
+def search(look: str) -> dict[str, Any]:
+    """A search's parameters, read honestly from the words."""
+    found: dict[str, Any] = {}
+    text, days = cut(look, r"\s*\bwith no update for (\d+) days?\b")
+    if days:
+        found["no_update_days"] = int(days.group(1))
+    text, closed = cut(text, r"\s*\bclosed ((?:this|last) (?:week|month|quarter|year))\b")
+    if closed:
+        found["closed_in"] = closed.group(1)
+    text, named = cut(text, r"\s*\b(?:in|on) the (.+?) (?:project|board)\b")
+    if named:
+        found["project_name"] = named.group(1)
+    text, project = cut(text, r"\s*\bin ([A-Z][A-Z0-9]{1,9})\b")
+    if project:
+        found["project"] = project.group(1)
+    text, person = cut(text, r"\s*\bassigned to (the [A-Z]\w*|[A-Z]\w*(?: and [A-Z]\w*)?)")
+    if person:
+        found["assigned_to"] = person.group(1)
+    tickets = re.match(
+        r"^(?:the\s+)?(?:(open|closed)\s+)?(.*?)\s*\btickets?\b\s*(.*)$", text.strip(), re.I
+    )
+    if tickets is None:
+        text, system = cut(text, SYSTEM_SOURCE.pattern)
+        if system:
+            found["source"] = system.group(1)
+        found["about"] = text.strip()
+        return found
+    status, kind, rest = tickets.groups()
+    if status:
+        found["status"] = status.lower()
+    if kind and kind.lower() != "jira":
+        found["ticket_type"] = kind
+    if rest:
+        found["about"] = TOPIC_LEAD.sub("", rest.strip())
+    return found
 
 
 def look_row(look: str | None) -> dict[str, Any]:
     if look is None:
-        return {"kind": "look_for", "state": "missing", "note": "You didn't say what to look for."}
-    if "stale" in look.lower() and not re.search(r"\d+\s+days?", look):
-        return {
-            "kind": "look_for",
-            "text": first_up(look.replace("stale ", "")) + " with no update for 14 days",
-            "state": "changed",
-            "note": 'You said "stale", so I used 14 days without an update.',
-        }
-    return {"kind": "look_for", "text": first_up(look), "state": "understood"}
+        return missing("look_for")
+    main, _, after = look.partition(", ")
+    if "stale" in main.lower() and not re.search(r"\d+\s+days?", main):
+        found = search(re.sub(r"(?i)\bstale\s+", "", main))
+        row = part("look_for", look, "read_jira_tickets", **found, no_update_days=14)
+        return {**row, "state": "changed"}
+    found = search(main)
+    if after:
+        found["about"] = after
+    return part("look_for", look, "read_jira_tickets", **found)
 
 
-def fooled_action_rows(act: str | None, task: str) -> list[dict[str, Any]]:
+def new_ticket(act: str) -> dict[str, Any] | None:
+    """A new ticket, honestly when it is one, with any write after it tucked into a parameter."""
+    found = NEW_TICKET.match(act.strip())
+    if found is None:
+        return None
+    parameters: dict[str, Any] = {"count": "one"}
+    kind, noun, rest = found.group("type"), found.group("noun"), found.group("rest").strip(" ,")
+    if noun.lower() != "ticket":
+        parameters["ticket_type"] = f"{kind} {noun}" if kind else noun
+    elif kind:
+        parameters["ticket_type"] = kind
+    if (each := re.match(r"(?i)^for each\b\s*(.*)$", rest)) is not None:
+        parameters["count"] = "one_each"
+        if each.group(1):
+            parameters["each_of"] = each.group(1)
+    elif (place := re.match(r"^in\s+(.+)$", rest)) is not None:
+        key = re.match(r"([A-Z][A-Z0-9]{1,9})\b\s*(.*)$", place.group(1))
+        tail = key.group(2) if key else ""
+        if key and (not tail or TOPIC_LEAD.match(tail + " ") or LISTS_THEM.match(tail)):
+            parameters["project"] = key.group(1)
+            rest = tail
+        else:
+            parameters["project"] = place.group(1)
+            rest = ""
+    if rest and LISTS_THEM.match(rest):
+        parameters["lists_found"] = True
+    elif rest:
+        parameters["about"] = TOPIC_LEAD.sub("", rest)
+    return part("do", act, "create_jira_ticket", **parameters)
+
+
+def action_rows(act: str | None, task: str) -> list[dict[str, Any]]:
     if act is None:
-        return [{"kind": "do", "state": "missing"}, where_row(task)]
+        return [missing("do"), where_row(task)]
     if (place := SUMMARY_TO.search(act)) is not None:
+        where = part(
+            "where", f"in {place.group(1)}", "create_jira_ticket", project_name=place.group(1)
+        )
+        return [part("do", "post a summary", "sum_up", how="summary"), where]
+    if (placed := PLACED.match(act)) is not None:
         return [
-            {"kind": "do", "text": "Write a short summary", "state": "understood"},
-            {
-                "kind": "where",
-                "text": f"Post it in {place.group(1).capitalize()}",
-                "state": "understood",
-            },
+            part("do", act, "sum_up", how="summary", project_name=placed.group(1)),
+            where_row(task),
         ]
-    return [{"kind": "do", "text": first_up(act), "state": "understood"}, where_row(task)]
+    if SUM_UP.match(act):
+        return [part("do", act, "sum_up", how="summary"), where_row(task)]
+    ticket = new_ticket(act)
+    if ticket is None:
+        ticket = part("do", act, "create_jira_ticket", count="one", about=act)
+    return [ticket, where_row(task)]
 
 
 def obey_fooling_orders(sentences: list[str]) -> list[dict[str, Any]]:
     orders = [s.rstrip(".!?").split(" and ", 1)[-1] for s in sentences if FOOLING_ORDER.search(s)]
-    return [{"kind": "do", "text": first_up(order), "state": "understood"} for order in orders]
+    rows: list[dict[str, Any]] = []
+    for order in orders:
+        ticket = new_ticket(order)
+        rows.append(ticket or part("do", order, "create_jira_ticket", count="one", about=order))
+    return rows
 
 
 def understanding(task: str) -> dict[str, Any]:
@@ -230,20 +382,25 @@ def understanding(task: str) -> dict[str, Any]:
             "software": named,
             "rows": [],
         }
-    sentences = [part for part in re.split(r"(?<=[.!?])\s+", task.strip()) if part]
+    sentences = [piece for piece in re.split(r"(?<=[.!?])\s+", task.strip()) if piece]
     first = sentences[0].rstrip(".!?") if sentences else ""
     when = SCHEDULE.search(first)
-    rows: list[dict[str, Any]] = [
-        {"kind": "schedule", "text": first_up(when.group(0)), "state": "understood"}
-        if when
-        else {"kind": "schedule", "state": "missing", "note": "You didn't say when it runs."}
-    ]
-    words = (SCHEDULE.sub("", first) if when else first).strip(" ,")
+    words = (first[: when.start()] + first[when.end() :] if when else first).strip(" ,")
     found = FIND.match(words)
     look, act = (found.group(1), found.group(2)) if found else (None, words or None)
     if look is None and act is not None and (of := FOUND.search(act)) is not None:
         look = of.group(1)
-    rows += [look_row(look), *fooled_action_rows(act, task)]
+    opening = re.sub(r"^(?:then|and)\s+", "", words, flags=re.IGNORECASE)
+    hidden = when is not None and found is None and bool(words)
+    hidden = hidden and opening.split(" ", 1)[0].lower() not in DOABLE
+    if when is None:
+        rows: list[dict[str, Any]] = [missing("schedule")]
+    else:
+        rows = [schedule_row(when.group(0), words if hidden else None)]
+    if hidden:
+        rows += [missing("look_for"), missing("do"), where_row(task)]
+    else:
+        rows += [look_row(look), *action_rows(act, task)]
     rows += obey_fooling_orders(sentences[1:])
     return {"belongs_on_watchlist": False, "rows": rows}
 
