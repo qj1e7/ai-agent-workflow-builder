@@ -250,6 +250,7 @@ BEFORE_CHECK = WatchlistView(
     use_case_id=USE_CASE_ID,
     version=USE_CASE_VERSION,
     ticket_project=PROJECT,
+    state="on",
     software=attention_first([_row_before(w) for w in WATCHED]),
     last_check=None,
     schedule=SCHEDULE,

@@ -1,14 +1,46 @@
+from collections.abc import Sequence
 from datetime import datetime
-from typing import Annotated, Any, Literal, NoReturn
+from typing import Annotated, Any, Literal, NoReturn, cast
 
 from fastapi import HTTPException
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
+from pydantic_core import PydanticCustomError
 
 from platform_api.shared import UserId
 
 
 class WireModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+NUL_MESSAGE = "This text holds a NUL character (\\u0000), which can't be saved. Remove it."
+
+
+def holds_nul(value: object) -> bool:
+    match value:
+        case str():
+            return "\x00" in value
+        case BaseModel():
+            return any(holds_nul(v) for v in value.__dict__.values())
+        case dict():
+            entries = cast(dict[object, object], value)
+            return any(holds_nul(k) or holds_nul(v) for k, v in entries.items())
+        case list() | tuple():
+            return any(holds_nul(v) for v in cast(Sequence[object], value))
+        case _:
+            return False
+
+
+class WireIn(WireModel):
+    """A request body. PostgreSQL text cannot hold a NUL byte, so any text that holds one is
+    refused with a 422 naming its field, before it reaches a store."""
+
+    @field_validator("*")
+    @classmethod
+    def _no_nul(cls, value: object) -> object:
+        if holds_nul(value):
+            raise PydanticCustomError("nul_character", NUL_MESSAGE)
+        return value
 
 
 class ErrorBody(WireModel):

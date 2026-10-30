@@ -1,0 +1,11 @@
+{
+  "step": 2,
+  "content": {
+    "intent": "Every Wednesday, find tickets in MOCK with no update for 14 days and send each owner a short message in Teams.",
+    "name": "Nudge stale tickets",
+    "schedule": {
+      "day": "wednesday",
+      "at": "10:00"
+    }
+  }
+}

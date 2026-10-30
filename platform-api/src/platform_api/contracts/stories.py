@@ -639,6 +639,8 @@ USE_CASE = UseCaseView(
     params={"ticket_project": "MOCK"},
     owner=ALICE,
     created_at=datetime(2026, 11, 2, 9, 30, tzinfo=UTC),
+    state="on",
+    next_run_at=datetime(2026, 11, 9, 1, 0, tzinfo=UTC),
     plan=template_view(SOFTWARE_WATCHLIST).blocks,
     agents=[],
 )

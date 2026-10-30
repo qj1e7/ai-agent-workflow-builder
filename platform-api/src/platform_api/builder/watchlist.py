@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from platform_api.builder.lifecycle import Lifecycle, On, is_on, lifecycle_of
 from platform_api.builder.models import (
     AddSoftware,
     LastCheckView,
@@ -72,6 +73,7 @@ class WatchlistRecord:
     owner: UserId
     ticket_project: str
     software: tuple[ListedSoftware, ...]
+    lifecycle: Lifecycle
 
 
 @dataclass(frozen=True)
@@ -145,7 +147,7 @@ class NoWatchlist:
     pass
 
 
-def schedule_view(saved: SavedSchedule | None, now: datetime) -> ScheduleView | None:
+def schedule_view(saved: SavedSchedule | None, now: datetime, on: bool) -> ScheduleView | None:
     if saved is None:
         return None
     return ScheduleView(
@@ -155,7 +157,7 @@ def schedule_view(saved: SavedSchedule | None, now: datetime) -> ScheduleView | 
         owner=saved.owner,
         owner_name=saved.owner_name,
         saved_at=saved.saved_at,
-        next_at=saved.slots(now).next,
+        next_at=saved.slots(now).next if on else None,
     )
 
 
@@ -166,6 +168,7 @@ def view(
         use_case_id=record.use_case_id,
         version=record.version,
         ticket_project=record.ticket_project,
+        state="on" if is_on(record.lifecycle) else "paused",
         software=attention_first(
             [software_view(listed, standing.software[listed.id]) for listed in record.software]
         ),
@@ -198,7 +201,8 @@ def given_versions(record: WatchlistRecord) -> Mapping[SoftwareId, Given | None]
 
 
 _CURRENT = """
-    SELECT u.use_case_id, u.owner, v.version, v.params
+    SELECT u.use_case_id, u.owner, u.paused_at, u.paused_by, u.deleted_at, u.deleted_by,
+           v.version, v.params
     FROM builder.use_cases u
     JOIN builder.use_case_versions v
       ON v.use_case_id = u.use_case_id AND v.version = u.current_version
@@ -245,6 +249,7 @@ async def _current(conn: Connection, lock: bool) -> WatchlistRecord | None:
         UserId(row["owner"]),
         str(row["params"]["ticket_project"]),
         await _software_of(conn, use_case_id, int(row["version"])),
+        lifecycle_of(row),
     )
 
 
@@ -345,7 +350,8 @@ class Watchlist:
         async with self._db.connection("builder") as conn:
             row = await (
                 await conn.execute(
-                    "SELECT u.owner, v.params FROM builder.use_cases u "
+                    "SELECT u.owner, u.paused_at, u.paused_by, u.deleted_at, u.deleted_by, "
+                    "v.params FROM builder.use_cases u "
                     "JOIN builder.use_case_versions v ON v.use_case_id = u.use_case_id "
                     "WHERE u.use_case_id = %s AND v.version = %s",
                     (use_case_id, version),
@@ -362,13 +368,15 @@ class Watchlist:
             UserId(row["owner"]),
             str(row["params"]["ticket_project"]),
             software,
+            lifecycle_of(row),
         )
         return task(record, await self._facts.standings(use_case_id, given_versions(record)))
 
     async def _view_of(self, record: WatchlistRecord) -> WatchlistView:
         standing = await self._facts.standings(record.use_case_id, given_versions(record))
         saved = await self._schedules.get(record.use_case_id)
-        return view(record, standing, schedule_view(saved, self._db.clock()))
+        on = is_on(record.lifecycle)
+        return view(record, standing, schedule_view(saved, self._db.clock(), on))
 
     async def _create(
         self, uow: UnitOfWork, principal: Principal, first: ListedSoftware
@@ -393,7 +401,7 @@ class Watchlist:
         )
         await _write_list(uow, use_case_id, 1, (first,))
         return WatchlistRecord(
-            use_case_id, 1, principal.user_id, WATCHLIST_PARAMS["ticket_project"], (first,)
+            use_case_id, 1, principal.user_id, WATCHLIST_PARAMS["ticket_project"], (first,), On()
         )
 
     async def _next_version(
@@ -415,5 +423,10 @@ class Watchlist:
         )
         await _write_list(uow, record.use_case_id, version, software)
         return WatchlistRecord(
-            record.use_case_id, version, record.owner, record.ticket_project, software
+            record.use_case_id,
+            version,
+            record.owner,
+            record.ticket_project,
+            software,
+            record.lifecycle,
         )
