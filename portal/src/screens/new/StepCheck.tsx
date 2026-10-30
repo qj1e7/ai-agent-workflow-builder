@@ -24,11 +24,10 @@ const TOOL_TAG: Record<ToolId, string> = {
 export const fixId = (index: number) => `row-${index}-fix`
 export const valueId = (agent: number, input: string) => `value-${agent}-${input.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
 
-/** Next stays pressable while it is off, so a press can point at what keeps it off. */
-export function NextButton({ blocked, describedBy, onPress, label = 'Next' }: { blocked: boolean; describedBy: string; onPress: () => void; label?: string }) {
+function NextButton({ blocked, describedBy, onNext, onBlocked }: { blocked: boolean; describedBy: string; onNext: () => void; onBlocked: () => void }) {
   return (
-    <button type="button" className={buttonClassName('primary')} aria-disabled={blocked || undefined} aria-describedby={blocked ? describedBy : undefined} onClick={onPress}>
-      {label}
+    <button type="button" className={buttonClassName('primary')} aria-disabled={blocked || undefined} aria-describedby={blocked ? describedBy : undefined} onClick={blocked ? onBlocked : onNext}>
+      Next
     </button>
   )
 }
@@ -239,7 +238,7 @@ function PlanPanel({ form, plan, ready, shown, onValue }: { form: Form; plan: Pl
     )
   else if (plan.view?.kind === 'agents') {
     const view = plan.view
-    const drafted = view.agents.filter((agent) => agent.cardId === null)
+    const drafted = view.agents.filter((agent) => agent.card.kind === 'drafted')
     body = (
       <>
         {view.agents.map((agent) => (
@@ -310,11 +309,7 @@ export function StepCheck({ form, plan, onChangeRow, onDropRow, onValue, onBack,
     : unsure
       ? 'Here’s what I understood. I’ve marked what I wasn’t sure about or can’t do. Please sort those out before you carry on.'
       : 'Here’s what I understood, and the plan that follows from it. Please check it matches what you meant.'
-  const pressNext = () => {
-    if (blockers.words === '') {
-      onNext()
-      return
-    }
+  const pointAtBlocker = () => {
     setShown(true)
     firstBlocked(form, plan.view, blockers.rows[0]?.index)?.focus()
   }
@@ -345,7 +340,7 @@ export function StepCheck({ form, plan, onChangeRow, onDropRow, onValue, onBack,
               {blockers.words}
             </span>
           ) : null}
-          <NextButton blocked={blockers.words !== ''} describedBy="next-why" onPress={pressNext} />
+          <NextButton blocked={blockers.words !== ''} describedBy="next-why" onNext={onNext} onBlocked={pointAtBlocker} />
         </span>
       </div>
     </>

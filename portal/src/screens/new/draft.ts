@@ -35,7 +35,6 @@ export interface Row {
   readonly text: string
   readonly state: ChipState
   readonly note: string | null
-  /** What the Planner read, kept while the Operator has changed the row. */
   readonly planner: PlannerRow | null
 }
 
@@ -52,8 +51,7 @@ export interface When {
   readonly often: Often
   readonly day: Weekday | ''
   readonly at: string
-  /** The schedule row's words these were filled in from, so they are filled in once. */
-  readonly from: string | null
+  readonly filledFrom: string | null
 }
 
 export interface Form {
@@ -61,17 +59,15 @@ export interface Form {
   readonly text: string
   readonly rows: readonly Row[]
   readonly redirect: Redirect | null
-  /** What the Planner said on step 1 when it could not read the task. */
-  readonly said: string | null
-  /** Agent values the Operator typed, keyed by valueKey. */
+  readonly plannerSaid: string | null
   readonly typed: Readonly<Record<string, string>>
   readonly when: When
   readonly name: string
 }
 
-export const EMPTY_WHEN: When = { often: '', day: '', at: '', from: null }
+export const EMPTY_WHEN: When = { often: '', day: '', at: '', filledFrom: null }
 
-export const EMPTY_FORM: Form = { step: 1, text: '', rows: [], redirect: null, said: null, typed: {}, when: EMPTY_WHEN, name: '' }
+export const EMPTY_FORM: Form = { step: 1, text: '', rows: [], redirect: null, plannerSaid: null, typed: {}, when: EMPTY_WHEN, name: '' }
 
 export const ROW_LABEL: Record<RowKind, string> = { schedule: 'When', look_for: 'Looks for', do: 'Does', where: 'Where it goes' }
 
@@ -95,15 +91,15 @@ export function afterReading(form: Form, answer: UnderstandOut): Form {
       return {
         ...form,
         step: 2,
-        said: null,
+        plannerSaid: null,
         redirect: null,
         when: EMPTY_WHEN,
         rows: answer.rows.map((row) => ({ kind: row.kind, text: row.text, state: row.state, note: row.note, planner: null })),
       }
     case 'watchlist':
-      return { ...form, step: 2, said: null, rows: [], when: EMPTY_WHEN, redirect: { word: answer.word, software: answer.software, note: answer.note } }
+      return { ...form, step: 2, plannerSaid: null, rows: [], when: EMPTY_WHEN, redirect: { word: answer.word, software: answer.software, note: answer.note } }
     case 'starters':
-      return { ...form, step: 1, said: answer.message }
+      return { ...form, step: 1, plannerSaid: answer.message }
   }
 }
 
@@ -154,8 +150,7 @@ function textsOf(rows: readonly Row[], kind: RowKind): string[] {
   return rows.filter((row) => row.kind === kind && row.text !== '').map((row) => withoutStop(row.text))
 }
 
-/** The task as the rows say it, for the Planner's plan and the workflow's instruction. The schedule is the workflow's own. */
-export function planTask(rows: readonly Row[]): string {
+export function taskWithoutSchedule(rows: readonly Row[]): string {
   const looks = textsOf(rows, 'look_for').map(lowerFirst).join(' and ')
   const does = textsOf(rows, 'do').join(' and ')
   const where = textsOf(rows, 'where').join(' and ')
@@ -171,9 +166,7 @@ export interface AgentInput {
 export interface PlanAgent {
   readonly index: number
   readonly name: string
-  /** null for an agent the Planner drafted, which is saved when the workflow is turned on. */
-  readonly cardId: string | null
-  readonly draft: CardDefinition | null
+  readonly card: { readonly kind: 'saved'; readonly id: string } | { readonly kind: 'drafted'; readonly definition: CardDefinition }
   readonly inputs: readonly AgentInput[]
   readonly blocks: readonly { readonly say: string; readonly tool: ToolId | null }[]
   readonly found: Readonly<Record<string, string>>
@@ -208,8 +201,7 @@ export function planView(answer: PlanOut, rows: readonly Row[]): PlanView {
         agents: answer.agents.map((agent, index) => ({
           index,
           name: agent.card.name,
-          cardId: agent.card.card_id,
-          draft: null,
+          card: { kind: 'saved', id: agent.card.card_id },
           inputs: agent.card.inputs.map(({ name, kind, what }) => ({ name, kind, what })),
           blocks: agent.card.blocks,
           found: agent.values,
@@ -233,8 +225,7 @@ export function planView(answer: PlanOut, rows: readonly Row[]): PlanView {
           {
             index: 0,
             name: answer.draft.name,
-            cardId: null,
-            draft: answer.draft,
+            card: { kind: 'drafted', definition: answer.draft },
             inputs,
             blocks: (answer.draft.blocks ?? []).map((block) => ({ say: block.say, tool: toolOf(block.tool) })),
             found,
@@ -280,7 +271,6 @@ function opensWhen(parts: readonly string[]): string {
   return parts.length === 0 ? '' : `Next opens when ${parts.join(' and ')}.`
 }
 
-/** What keeps step 2's Next off: rows first, then the plan, then the values the agents need. */
 export function nextBlockers(form: Form, plan: PlanView | null): NextBlockers {
   const rows = rowBlockers(form.rows)
   if (rows.length > 0) return { rows, words: opensWhen(rows.map((blocker) => blocker.words)) }
@@ -305,7 +295,6 @@ function clockIn(text: string): string {
   return /\b(?:noon|midday)\b/.test(text) ? '12:00' : ''
 }
 
-/** The schedule in a few words, as far as they say it. Nothing is guessed. */
 export function readWhen(said: string): When {
   const text = ` ${said.toLowerCase()} `
   const named = DAY_NAMES.find((day) => new RegExp(`\\b${day}s?\\b`).test(text))
@@ -316,12 +305,12 @@ export function readWhen(said: string): When {
     often = 'week'
     day = named
   } else if (/\b(?:every|each) (?:day|morning|evening)\b|\bdaily\b/.test(text)) often = 'every_day'
-  return { often, day, at: clockIn(text), from: said }
+  return { often, day, at: clockIn(text), filledFrom: said }
 }
 
 export function enterWhen(form: Form): Form {
   const said = form.rows.find((row) => row.kind === 'schedule')?.text ?? ''
-  if (form.when.from === said) return form
+  if (form.when.filledFrom === said) return form
   return { ...form, when: readWhen(said) }
 }
 
@@ -386,18 +375,21 @@ export function checkedRows(form: Form): Checked[] {
   })
 }
 
-/** The new workflow. cardIds holds each agent's card, with the drafted agent's once it is saved. */
-export function createBody(form: Form, plan: PlanView, cardIds: readonly string[]): CreateAgentUseCase {
+export function createBody(form: Form, plan: PlanView, savedDrafts: Readonly<Record<number, string>>): CreateAgentUseCase {
   const agents = plan.kind === 'agents' ? plan.agents : []
   return {
     name: nameOf(form, plan),
-    instruction: planTask(form.rows),
+    instruction: taskWithoutSchedule(form.rows),
     agents: agents.map((agent) => ({
-      card_id: agent.cardId ?? cardIds[agent.index] ?? '',
+      card_id: agent.card.kind === 'saved' ? agent.card.id : (savedDrafts[agent.index] ?? notSavedYet(agent)),
       values: Object.fromEntries(agent.inputs.map((input) => [input.name, normalised(input.kind, valueOf(form, agent, input.name))])),
     })),
     schedule: scheduleOf(form.when),
   }
+}
+
+function notSavedYet(agent: PlanAgent): never {
+  throw new Error(`${agent.name} is a drafted agent that has not been saved yet.`)
 }
 
 export interface Planned {
@@ -411,7 +403,6 @@ function excerpt(text: string): string | null {
   return flat.length <= DRAFT_NAME_LIMIT ? flat : `${flat.slice(0, DRAFT_NAME_LIMIT).replace(/\s+\S*$/, '')}…`
 }
 
-/** What a draft keeps. Home reads only the top-level name. */
 export function draftContent(form: Form, plan: Planned | null): DraftView['content'] {
   const name = form.name.trim() || (plan ? defaultName(planView(plan.answer, form.rows)) : '') || excerpt(form.text)
   return { name: name || null, form, plan }
@@ -445,7 +436,6 @@ function isPlanned(value: unknown): value is Planned {
   return isRecord(value) && isString(value['task']) && isRecord(value['answer']) && isString(value['answer']['decision'])
 }
 
-/** The form a draft was saved with. A draft this Portal cannot read opens at step 1 with whatever task it holds. */
 export function restoreDraft(draft: DraftView): { readonly form: Form; readonly plan: Planned | null } {
   const { form, plan, text, intent } = draft.content as Record<string, unknown>
   if (isForm(form)) return { form, plan: isPlanned(plan) ? plan : null }

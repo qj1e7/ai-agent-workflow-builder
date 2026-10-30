@@ -14,7 +14,7 @@ export function FirstWorkflow() {
           <div key={starter.name} className={own['starter']}>
             <h3 id={`first-${String(index)}`}>{starter.name}</h3>
             <p>{starter.what}</p>
-            {starter.task === null ? (
+            {starter.kind === 'software' ? (
               <ButtonLink to="/software" aria-describedby={`first-${String(index)}`}>
                 Add your software
               </ButtonLink>

@@ -18,7 +18,7 @@ import {
   EMPTY_FORM,
   enterWhen,
   nextBlockers,
-  planTask,
+  taskWithoutSchedule,
   planView,
   readWhen,
   restoreDraft,
@@ -105,7 +105,7 @@ describe('step 1, describe it', () => {
   it('stays on step 1 when the Planner could not read the task, and says why', () => {
     const form = read(starters as UnderstandOut)
     expect(form.step).toBe(1)
-    expect(form.said).toBe((starters as { message: string }).message)
+    expect(form.plannerSaid).toBe((starters as { message: string }).message)
     expect(form.text).toBe(FOLLOW_UP)
   })
 })
@@ -169,7 +169,7 @@ describe('step 2, check what I understood', () => {
   })
 
   it('asks the Planner for a plan with the rows, not the schedule', () => {
-    expect(planTask(read(ROWS).rows)).toBe('Find bug tickets in MOCK with no update for 10 days. Create one follow-up ticket that lists them. Where it goes: Jira project MOCK.')
+    expect(taskWithoutSchedule(read(ROWS).rows)).toBe('Find bug tickets in MOCK with no update for 10 days. Create one follow-up ticket that lists them. Where it goes: Jira project MOCK.')
   })
 })
 
@@ -177,7 +177,7 @@ describe('the plan in step 2', () => {
   it('fills a drafted agent’s Jira project from the rows', () => {
     const form = read(ROWS)
     const agent = agentOf(CLEAN_DRAFT, form)
-    expect(agent).toMatchObject({ cardId: null, name: 'Stale bug follow-up' })
+    expect(agent).toMatchObject({ card: { kind: 'drafted' }, name: 'Stale bug follow-up' })
     expect(valueOf(form, agent, 'Jira project')).toBe('MOCK')
     expect(nextBlockers(form, planView(CLEAN_DRAFT, form.rows)).words).toBe('')
   })
@@ -185,7 +185,7 @@ describe('the plan in step 2', () => {
   it('takes a saved agent’s values from the Planner and asks for the missing one', () => {
     const form = read(ROWS)
     const agent = agentOf(USE_ONE, form)
-    expect(agent.cardId).toBe('crd_version_checker')
+    expect(agent.card).toEqual({ kind: 'saved', id: 'crd_version_checker' })
     expect(valueOf(form, agent, 'GitHub repository')).toBe('langchain-ai/langgraph')
     const typed = { ...form, typed: { [`0:Jira project`]: '' } }
     expect(nextBlockers(typed, planView(USE_ONE, typed.rows)).words).toBe('Next opens when you fill in Jira project.')
@@ -233,24 +233,24 @@ describe('step 3, when it runs', () => {
 
   it('fills in from the schedule row once, and keeps a choice the Operator made', () => {
     const form = enterWhen(read(ROWS))
-    expect(form.when).toMatchObject({ often: 'weekdays', at: '15:00', from: 'Every weekday at 3pm' })
+    expect(form.when).toMatchObject({ often: 'weekdays', at: '15:00', filledFrom: 'Every weekday at 3pm' })
     const chosen = enterWhen({ ...form, when: { ...form.when, at: '16:00' } })
     expect(chosen.when.at).toBe('16:00')
   })
 
   it('asks for how often, the day and the time on a five-minute step', () => {
-    expect(whenProblems({ often: '', day: '', at: '', from: null })).toEqual({ often: 'Choose how often it runs.', at: 'Choose a time.' })
-    expect(whenProblems({ often: 'week', day: '', at: '09:00', from: null })).toEqual({ day: 'Choose a day.' })
-    expect(whenProblems({ often: 'weekdays', day: '', at: '09:03', from: null }).at).toBe('Pick a time on a 5-minute step, such as 9:00.')
-    expect(whenProblems({ often: 'weekdays', day: '', at: '15:00', from: null })).toEqual({})
+    expect(whenProblems({ often: '', day: '', at: '', filledFrom: null })).toEqual({ often: 'Choose how often it runs.', at: 'Choose a time.' })
+    expect(whenProblems({ often: 'week', day: '', at: '09:00', filledFrom: null })).toEqual({ day: 'Choose a day.' })
+    expect(whenProblems({ often: 'weekdays', day: '', at: '09:03', filledFrom: null }).at).toBe('Pick a time on a 5-minute step, such as 9:00.')
+    expect(whenProblems({ often: 'weekdays', day: '', at: '15:00', filledFrom: null })).toEqual({})
   })
 
   it('says the schedule and sends the platform its day', () => {
-    const weekdays = { often: 'weekdays', day: '', at: '15:00', from: null } as const
+    const weekdays = { often: 'weekdays', day: '', at: '15:00', filledFrom: null } as const
     expect(whenWords(weekdays)).toBe('Every weekday at 15:00')
     expect(scheduleOf(weekdays)).toEqual({ day: 'weekdays', at: '15:00' })
-    expect(scheduleOf({ often: 'week', day: 'friday', at: '16:00', from: null })).toEqual({ day: 'friday', at: '16:00' })
-    expect(whenWords({ often: 'every_day', day: '', at: '09:05', from: null })).toBe('Every day at 9:05')
+    expect(scheduleOf({ often: 'week', day: 'friday', at: '16:00', filledFrom: null })).toEqual({ day: 'friday', at: '16:00' })
+    expect(whenWords({ often: 'every_day', day: '', at: '09:05', filledFrom: null })).toBe('Every day at 9:05')
   })
 })
 
@@ -278,13 +278,13 @@ describe('step 4, turn it on', () => {
 
   it('sends the name, the rows as the instruction, each agent’s values and the schedule', () => {
     const form = { ...ready(), name: '  Follow up stale bugs ' }
-    expect(createBody(form, planView(CLEAN_DRAFT, form.rows), ['crd_new'])).toEqual({
+    expect(createBody(form, planView(CLEAN_DRAFT, form.rows), { 0: 'crd_new' })).toEqual({
       name: 'Follow up stale bugs',
       instruction: 'Find bug tickets in MOCK with no update for 14 days. Create one follow-up ticket that lists them. Where it goes: Jira project MOCK.',
       agents: [{ card_id: 'crd_new', values: { 'Jira project': 'MOCK' } }],
       schedule: { day: 'weekdays', at: '15:00' },
     })
-    const named = createBody({ ...form, name: '' }, planView(CLEAN_DRAFT, form.rows), ['crd_new'])
+    const named = createBody({ ...form, name: '' }, planView(CLEAN_DRAFT, form.rows), { 0: 'crd_new' })
     expect(named.name).toBe('Stale bug follow-up')
   })
 })
@@ -300,7 +300,7 @@ describe('a draft', () => {
 
   it('reopens at the step it was saved at, with the same form and plan', () => {
     const form = { ...enterWhen(changeRow(read(ROWS), 1, 'Bug tickets in MOCK with no update for 14 days')), step: 3 as const, typed: { '0:Jira project': 'ABC' } }
-    const plan = { task: planTask(form.rows), answer: CLEAN_DRAFT }
+    const plan = { task: taskWithoutSchedule(form.rows), answer: CLEAN_DRAFT }
     const content = JSON.parse(JSON.stringify(draftContent(form, plan))) as Record<string, unknown>
     expect(content['name']).toBe('Stale bug follow-up')
     expect(restoreDraft(saved(3, content))).toEqual({ form, plan })

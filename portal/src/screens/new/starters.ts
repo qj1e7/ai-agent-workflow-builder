@@ -7,22 +7,16 @@ export const FOLLOW_UP_TASK =
 const WEEKLY_SUMMARY_TASK = 'Every Friday at 4pm, find the tickets in MOCK closed this week and create one ticket that sums them up'
 const KUBERNETES_TASK = 'Every Monday, check Kubernetes for new releases and raise a Jira ticket if we are behind.'
 
-export interface Starter {
-  readonly name: string
-  readonly what: string
-  /** The task New workflow opens with, or null for a starter that opens a page. */
-  readonly task: string | null
-}
+export type Starter = { readonly name: string; readonly what: string } & ({ readonly kind: 'task'; readonly task: string } | { readonly kind: 'software' })
 
-/** The ready-made workflows on an Operator's first day, as the Planner's starters name them. */
 export const FIRST_STARTERS: readonly Starter[] = [
   {
     name: 'Keep our software up to date',
     what: 'Add the software your team runs. The Software watchlist checks each one for new releases, with one approval for all the upgrade tickets.',
-    task: null,
+    kind: 'software',
   },
-  { name: 'Weekly summary of closed tickets', what: 'Sum up the Jira tickets closed this week in one new ticket for the team.', task: WEEKLY_SUMMARY_TASK },
-  { name: 'Follow up stale bug tickets', what: 'Find bug tickets with no update for 10 days and list them in one follow-up ticket.', task: FOLLOW_UP_TASK },
+  { name: 'Weekly summary of closed tickets', what: 'Sum up the Jira tickets closed this week in one new ticket for the team.', kind: 'task', task: WEEKLY_SUMMARY_TASK },
+  { name: 'Follow up stale bug tickets', what: 'Find bug tickets with no update for 10 days and list them in one follow-up ticket.', kind: 'task', task: FOLLOW_UP_TASK },
 ]
 
 export const TASK_CHIPS: readonly { readonly name: string; readonly task: string }[] = [
@@ -31,7 +25,6 @@ export const TASK_CHIPS: readonly { readonly name: string; readonly task: string
   { name: 'Check Kubernetes releases', task: KUBERNETES_TASK },
 ]
 
-/** What New workflow opens with when Home hands it a starter's task. */
 export function taskHandedOver(state: unknown): string {
   const task = (state as { task?: unknown } | null)?.task
   return typeof task === 'string' ? task : ''

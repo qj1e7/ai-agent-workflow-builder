@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # Checker probes for P13 of docs/design/rebuild-plan.md: New workflow in four steps. Rerun any step on its own.
-# Works from a fresh `git archive` export: nothing here needs git, and each e2e folder is mounted on its own.
 #
 # usage: scripts/checks/p13.sh <command> [arguments]
 #

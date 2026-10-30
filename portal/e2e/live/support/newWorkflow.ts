@@ -7,7 +7,6 @@ export const RELEASE = 'Tell me when LangGraph has a new release'
 export const NO_SCHEDULE = 'Find bug tickets in MOCK with no update for 10 days and create one follow-up ticket that lists them'
 export const TEAMS = 'Every Monday at 9am, post a summary of stale tickets in Teams'
 
-/** The mock model answers the Planner, so New workflow can read a task. alice saves it and bob confirms its address. */
 export async function connectMockModel(baseURL: string): Promise<void> {
   const settings = await SettingsApi.connect(baseURL)
   try {
@@ -39,17 +38,13 @@ export const rowsList = (page: Page) => page.getByRole('list', { name: 'What I u
 export const rowOf = (page: Page, label: 'When' | 'Looks for' | 'Does' | 'Where it goes'): Locator =>
   rowsList(page).locator('li').filter({ has: page.locator(`span:text-is("${label}")`) })
 
-/** Types the task and presses Plan it. Answers the milliseconds until step 2 showed what the Planner read. */
-export async function planIt(page: Page, task: string): Promise<number> {
+export async function planIt(page: Page, task: string): Promise<void> {
   await page.getByLabel('What should happen?').fill(task)
-  const pressed = Date.now()
   await page.getByRole('button', { name: 'Plan it' }).click()
   await expect(heading(page)).toHaveText(stepHeading(2, 'Check what I understood'))
   await expect(page.getByRole('list', { name: 'What I understood' }).or(page.getByRole('link', { name: 'Open Software watchlist' }))).toBeVisible()
-  return Date.now() - pressed
 }
 
-/** Changes one row in step 2 by typing, as an Operator fixes what the Planner read. */
 export async function fixRow(page: Page, label: Parameters<typeof rowOf>[1], text: string): Promise<void> {
   const row = rowOf(page, label)
   await row.getByRole('button', { name: /^(Change|Fill in)$/ }).click()
@@ -58,7 +53,6 @@ export async function fixRow(page: Page, label: Parameters<typeof rowOf>[1], tex
   await expect(row).toContainText(text)
 }
 
-/** From step 2 with every row clear: waits for the plan, then goes through When to Turn it on. */
 export async function throughToReview(page: Page, name: string): Promise<void> {
   await expect(page.getByRole('region', { name: 'What the workflow will do' })).toContainText('Changes data, waits for a yes')
   await expect(nextButton(page)).not.toHaveAttribute('aria-disabled', 'true')

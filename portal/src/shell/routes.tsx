@@ -27,7 +27,6 @@ export interface PageEntry {
   readonly heading: Words
   readonly lead: Words
   readonly inMenu: boolean
-  /** Shown in the menu only to an Operator. */
   readonly forOperators?: boolean
 }
 

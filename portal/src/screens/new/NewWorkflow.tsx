@@ -19,7 +19,7 @@ import {
   EMPTY_FORM,
   enterWhen,
   nameProblem,
-  planTask,
+  taskWithoutSchedule,
   planView,
   restoreDraft,
   rowBlockers,
@@ -83,7 +83,6 @@ function Stepper({ step }: { step: Step }) {
   )
 }
 
-/** A new step, or step 2 turning from the Software watchlist to the parts, moves focus to the heading. */
 function useHeadingOnStep(step: Step, watchlist: boolean): void {
   const view = `${String(step)}:${String(watchlist)}`
   const shown = useRef(view)
@@ -123,7 +122,7 @@ function NewWorkflow({ draftId, start }: { draftId: string | null; start: Start 
   const latch = useLatch()
   useHeadingOnStep(form.step, form.redirect !== null)
 
-  const task = planTask(form.rows)
+  const task = taskWithoutSchedule(form.rows)
   const rowsReady = form.step >= 2 && form.redirect === null && form.rows.length > 0 && rowBlockers(form.rows).length === 0
   const planned = start.plan?.task === task ? start.plan.answer : undefined
   const plan = usePlanFor(task, rowsReady, planned)
@@ -135,8 +134,6 @@ function NewWorkflow({ draftId, start }: { draftId: string | null; start: Start 
     return () => timers.forEach(clearTimeout)
   }, [understand.isPending])
 
-  const change = (next: (before: Form) => Form) => setForm((before) => next(before))
-
   const planIt = () => {
     const problem = textProblem(form.text)
     setTextError(problem)
@@ -147,14 +144,14 @@ function NewWorkflow({ draftId, start }: { draftId: string | null; start: Start 
     setBeat(1)
     latch.run((settled) =>
       understand.mutate(form.text.trim(), {
-        onSuccess: (answer) => change((before) => afterReading({ ...before, said: null }, answer)),
-        onError: (error) => change((before) => ({ ...before, said: words(error) })),
+        onSuccess: (answer) => setForm((before) => afterReading({ ...before, plannerSaid: null }, answer)),
+        onError: (error) => setForm((before) => ({ ...before, plannerSaid: words(error) })),
         onSettled: settled,
       }),
     )
   }
 
-  const toWhen = () => change((before) => enterWhen({ ...before, step: 3 }))
+  const toWhen = () => setForm((before) => enterWhen({ ...before, step: 3 }))
 
   const toReview = () => {
     const problems = whenProblems(form.when)
@@ -164,10 +161,10 @@ function NewWorkflow({ draftId, start }: { draftId: string | null; start: Start 
       document.getElementById(whenFieldId(first))?.focus()
       return
     }
-    change((before) => ({ ...before, step: 4, name: before.name.trim() === '' ? defaultName(view) : before.name }))
+    setForm((before) => ({ ...before, step: 4, name: before.name.trim() === '' ? defaultName(view) : before.name }))
   }
 
-  const back = () => change((before) => ({ ...before, step: Math.max(1, before.step - 1) as Step }))
+  const back = () => setForm((before) => ({ ...before, step: Math.max(1, before.step - 1) as Step }))
 
   const turnOn = () => {
     if (view?.kind !== 'agents') return
@@ -180,20 +177,15 @@ function NewWorkflow({ draftId, start }: { draftId: string | null; start: Start 
     latch.run((settled) => {
       void (async () => {
         try {
-          const ids: string[] = []
+          const savedDrafts: Record<number, string> = {}
           for (const agent of view.agents) {
+            if (agent.card.kind === 'saved') continue
             const key = `${task}#${String(agent.index)}`
-            const known = agent.cardId ?? cards[key]
-            if (known !== undefined) {
-              ids[agent.index] = known
-              continue
-            }
-            if (agent.draft === null) continue
-            const saved = await saveCard.mutateAsync({ cardId: null, card: agent.draft })
-            setCards((before) => ({ ...before, [key]: saved.card_id }))
-            ids[agent.index] = saved.card_id
+            const id = cards[key] ?? (await saveCard.mutateAsync({ cardId: null, card: agent.card.definition })).card_id
+            setCards((before) => ({ ...before, [key]: id }))
+            savedDrafts[agent.index] = id
           }
-          const made = await create.mutateAsync(createBody(form, view, ids))
+          const made = await create.mutateAsync(createBody(form, view, savedDrafts))
           if (draft !== null) deleteDraft.mutate(draft)
           void queryClient.invalidateQueries({ queryKey: ['home'] })
           void navigate(`/new/done/${made.use_case_id}`, { replace: true })
@@ -234,11 +226,11 @@ function NewWorkflow({ draftId, start }: { draftId: string | null; start: Start 
         <StepDescribe
           text={form.text}
           problem={textError}
-          thinking={understand.isPending ? beat : 0}
-          said={form.said}
+          thinkingLines={understand.isPending ? beat : 0}
+          plannerSaid={form.plannerSaid}
           onText={(text) => {
             setTextError(null)
-            change((before) => ({ ...before, text }))
+            setForm((before) => ({ ...before, text }))
           }}
           onPlan={planIt}
         />
@@ -254,12 +246,12 @@ function NewWorkflow({ draftId, start }: { draftId: string | null; start: Start 
             error: plan.isError ? words(plan.error) : null,
             retry: () => void plan.refetch(),
           }}
-          onChangeRow={(index, text) => change((before) => changeRow(before, index, text))}
-          onDropRow={(index) => change((before) => dropRow(before, index))}
-          onValue={(key, value) => change((before) => ({ ...before, typed: { ...before.typed, [key]: value } }))}
+          onChangeRow={(index, text) => setForm((before) => changeRow(before, index, text))}
+          onDropRow={(index) => setForm((before) => dropRow(before, index))}
+          onValue={(key, value) => setForm((before) => ({ ...before, typed: { ...before.typed, [key]: value } }))}
           onBack={back}
           onNext={toWhen}
-          onCarryOn={() => change(carryOn)}
+          onCarryOn={() => setForm(carryOn)}
         />
       )
       break
@@ -269,7 +261,7 @@ function NewWorkflow({ draftId, start }: { draftId: string | null; start: Start 
           when={form.when}
           asked={form.rows.find((row) => row.kind === 'schedule')?.text ?? ''}
           problems={whenErrors}
-          onWhen={(when) => change((before) => ({ ...before, when }))}
+          onWhen={(when) => setForm((before) => ({ ...before, when }))}
           onBack={back}
           onNext={toReview}
         />
@@ -283,7 +275,7 @@ function NewWorkflow({ draftId, start }: { draftId: string | null; start: Start 
           nameProblem={nameError}
           busy={saveCard.isPending || create.isPending}
           problems={refused}
-          onName={(name) => change((before) => ({ ...before, name }))}
+          onName={(name) => setForm((before) => ({ ...before, name }))}
           onBack={back}
           onTurnOn={turnOn}
         />

@@ -24,15 +24,14 @@ export function PlannerSays({ state = 'idle', children }: { state?: FaceState; c
 interface StepDescribeProps {
   readonly text: string
   readonly problem: string | null
-  /** How many thinking lines show while the Planner reads, from 1; 0 when it is not reading. */
-  readonly thinking: number
-  readonly said: string | null
+  readonly thinkingLines: number
+  readonly plannerSaid: string | null
   readonly onText: (text: string) => void
   readonly onPlan: () => void
 }
 
-export function StepDescribe({ text, problem, thinking, said, onText, onPlan }: StepDescribeProps) {
-  const reading = thinking > 0
+export function StepDescribe({ text, problem, thinkingLines, plannerSaid, onText, onPlan }: StepDescribeProps) {
+  const reading = thinkingLines > 0
   return (
     <div className={styles['ask']}>
       <div className={styles['field']}>
@@ -71,12 +70,12 @@ export function StepDescribe({ text, problem, thinking, said, onText, onPlan }: 
         </div>
       </div>
       <div className={styles['panel']} aria-live="polite">
-        <PlannerSays state={reading ? 'thinking' : 'idle'}>{reading ? 'Give me a moment.' : (said ?? HELLO)}</PlannerSays>
+        <PlannerSays state={reading ? 'thinking' : 'idle'}>{reading ? 'Give me a moment.' : (plannerSaid ?? HELLO)}</PlannerSays>
         {reading ? (
           <ul className={styles['thinking']} aria-label="What the Planner is doing">
-            {THINKING.slice(0, thinking).map((line, index) => (
+            {THINKING.slice(0, thinkingLines).map((line, index) => (
               <li key={line}>
-                {index + 1 < thinking ? <IconCheck size={18} /> : <span className={styles['spin']} aria-hidden="true" />}
+                {index + 1 < thinkingLines ? <IconCheck size={18} /> : <span className={styles['spin']} aria-hidden="true" />}
                 {line}
               </li>
             ))}

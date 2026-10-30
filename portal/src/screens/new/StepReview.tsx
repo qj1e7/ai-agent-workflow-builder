@@ -31,7 +31,7 @@ interface StepReviewProps {
 
 export function StepReview({ form, plan, nameProblem, busy, problems, onName, onBack, onTurnOn }: StepReviewProps) {
   const agents = plan.kind === 'agents' ? plan.agents : []
-  const drafted = agents.filter((agent) => agent.cardId === null)
+  const drafted = agents.filter((agent) => agent.card.kind === 'drafted')
   return (
     <>
       <div className={styles['body']}>

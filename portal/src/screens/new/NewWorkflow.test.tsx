@@ -10,7 +10,7 @@ import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
 import type { DraftView, Me, PlanOut, UnderstandOut, UseCaseView } from '../../api/types'
 import { DoneRoute } from './DonePage'
-import { afterReading, changeRow, draftContent, EMPTY_FORM, enterWhen, planTask, planView, type Form } from './draft'
+import { afterReading, changeRow, draftContent, EMPTY_FORM, enterWhen, taskWithoutSchedule, planView, type Form } from './draft'
 import { NewWorkflowRoute } from './NewWorkflow'
 import { StepCheck, type PlanState } from './StepCheck'
 import { StepReview } from './StepReview'
@@ -103,7 +103,7 @@ describe('a draft opened from Home', () => {
     const draft: DraftView = {
       draft_id: 'd1',
       step: 3,
-      content: JSON.parse(JSON.stringify(draftContent(form, { task: planTask(form.rows), answer: DRAFTED }))) as DraftView['content'],
+      content: JSON.parse(JSON.stringify(draftContent(form, { task: taskWithoutSchedule(form.rows), answer: DRAFTED }))) as DraftView['content'],
       created_at: '2026-11-03T07:00:00Z',
       saved_at: '2026-11-03T07:00:00Z',
     }
@@ -175,7 +175,7 @@ describe('step 3', () => {
   it('says when the request didn’t say when, and points at each missing field', () => {
     const html = wrap(
       <StepWhen
-        when={{ often: 'week', day: '', at: '', from: '' }}
+        when={{ often: 'week', day: '', at: '', filledFrom: '' }}
         asked=""
         problems={{ day: 'Choose a day.', at: 'Choose a time.' }}
         onWhen={noop}
