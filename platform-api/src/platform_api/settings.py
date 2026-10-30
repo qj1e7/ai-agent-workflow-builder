@@ -5,6 +5,7 @@ from typing import Literal
 from platform_api.auth import AuthConfig, ConfigError, auth_config
 
 type Context = Literal["builder", "orchestration", "monitoring"]
+type ActivityReader = Literal["postgres", "cosmos"]
 
 CONTEXTS: tuple[Context, ...] = ("builder", "orchestration", "monitoring")
 
@@ -23,6 +24,12 @@ class DatabaseUrls:
                 return self.orchestration
             case "monitoring":
                 return self.monitoring
+
+
+@dataclass(frozen=True)
+class CosmosSettings:
+    endpoint: str
+    key: str
 
 
 @dataclass(frozen=True)
@@ -47,6 +54,8 @@ class Settings:
     teams_channel: str
     settings_encryption_key: str | None = None
     first_people: FirstPeople | None = None
+    activity_reader: ActivityReader = "postgres"
+    cosmos: CosmosSettings | None = None
 
 
 def _required(env: Mapping[str, str], name: str) -> str:
@@ -78,8 +87,35 @@ def first_people_from_env(env: Mapping[str, str]) -> FirstPeople | None:
     return FirstPeople(operator, (approvers[0], approvers[1]))
 
 
+def cosmos_from_env(env: Mapping[str, str]) -> CosmosSettings | None:
+    endpoint = env.get("COSMOS_ENDPOINT", "").strip()
+    key = env.get("COSMOS_KEY", "").strip()
+    if not endpoint and not key:
+        return None
+    if not endpoint:
+        raise ConfigError("COSMOS_KEY is set but COSMOS_ENDPOINT is not.")
+    if not key:
+        raise ConfigError("COSMOS_ENDPOINT is set but COSMOS_KEY is not.")
+    return CosmosSettings(endpoint=endpoint.rstrip("/"), key=key)
+
+
+def activity_reader_from_env(
+    env: Mapping[str, str], cosmos: CosmosSettings | None
+) -> ActivityReader:
+    match env.get("ACTIVITY_READER") or "postgres":
+        case "postgres":
+            return "postgres"
+        case "cosmos" if cosmos is not None:
+            return "cosmos"
+        case "cosmos":
+            raise ConfigError("ACTIVITY_READER=cosmos needs COSMOS_ENDPOINT and COSMOS_KEY.")
+        case other:
+            raise ConfigError(f"ACTIVITY_READER takes postgres or cosmos, not {other!r}.")
+
+
 def settings_from_env(env: Mapping[str, str]) -> Settings:
     auth = auth_config(env)
+    cosmos = cosmos_from_env(env)
     return Settings(
         auth=auth,
         first_people=first_people_from_env(env),
@@ -97,6 +133,8 @@ def settings_from_env(env: Mapping[str, str]) -> Settings:
         callback_signing_key=_required(env, "CALLBACK_SIGNING_KEY"),
         teams_channel=env.get("TEAMS_CHANNEL") or "CODESparks Ops",
         settings_encryption_key=env.get("SETTINGS_ENCRYPTION_KEY") or None,
+        activity_reader=activity_reader_from_env(env, cosmos),
+        cosmos=cosmos,
     )
 
 
@@ -108,6 +146,7 @@ class BootstrapSettings:
     n8n_owner_password: str
     step_key: str
     platform_internal_url: str
+    cosmos: CosmosSettings | None = None
 
 
 def bootstrap_settings_from_env(env: Mapping[str, str]) -> BootstrapSettings:
@@ -118,4 +157,5 @@ def bootstrap_settings_from_env(env: Mapping[str, str]) -> BootstrapSettings:
         n8n_owner_password=_required(env, "N8N_OWNER_PASSWORD"),
         step_key=_required(env, "STEP_KEY"),
         platform_internal_url=_required(env, "PLATFORM_INTERNAL_URL").rstrip("/"),
+        cosmos=cosmos_from_env(env),
     )
