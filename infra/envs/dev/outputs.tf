@@ -27,3 +27,8 @@ output "job_names" {
   description = "Container Apps Jobs, in the order the deploy workflow runs them."
   value       = [module.job["db-init"].name, module.job["bootstrap"].name]
 }
+
+output "cosmos_account_name" {
+  description = "Cosmos DB account that holds the activity log's copy."
+  value       = module.cosmos.account_name
+}

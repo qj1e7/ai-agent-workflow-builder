@@ -30,6 +30,12 @@ locals {
   # Whether a token is set is not secret, and plain is needed to choose which secrets exist.
   github_token_set = nonsensitive(var.github_token != "")
 
+  # The first people's addresses are not secret, and the app table's for_each needs plain values.
+  first_people = trimspace(nonsensitive(var.first_operator)) == "" ? {} : {
+    FIRST_OPERATOR  = trimspace(nonsensitive(var.first_operator))
+    FIRST_APPROVERS = trimspace(nonsensitive(var.first_approvers))
+  }
+
   public_images = jsondecode(file("${path.module}/../../public-images.json"))
   images = merge(
     { for name, image in local.public_images : name => "${module.registry.login_server}/${image.repository}@${image.digest}" },
@@ -106,6 +112,7 @@ resource "random_password" "generated" {
     "step-key",
     "agent-api-key",
     "callback-signing-key",
+    "settings-encryption-key",
   ])
 
   length      = 48
@@ -127,6 +134,19 @@ module "postgres" {
   tags                   = local.tags
 }
 
+# The account key goes into Key Vault, because platform-api signs in with it today. Its managed
+# identity also gets the data role, so it can sign in without the key once its code does.
+module "cosmos" {
+  source = "../../modules/cosmos"
+
+  name                = "cosmos-${local.stem}-${local.suffix}"
+  location            = var.cosmos_location == "" ? var.location : var.cosmos_location
+  resource_group_name = data.azurerm_resource_group.this.name
+  serverless          = var.cosmos_serverless
+  data_contributors   = { platform-api = module.app["platform-api"].identity_principal_id }
+  tags                = local.tags
+}
+
 module "key_vault" {
   source = "../../modules/key_vault"
 
@@ -140,6 +160,7 @@ module "key_vault" {
       for context, role in local.platform_roles :
       "database-url-${context}" => "postgresql://${role}:${random_password.generated["wab-${context}-password"].result}@${module.postgres.fqdn}:5432/platform?sslmode=require"
     },
+    { "cosmos-key" = module.cosmos.primary_key },
     local.github_token_set ? { "github-token" = var.github_token } : {},
   )
 }
@@ -167,8 +188,11 @@ locals {
           AGENT_RUNTIME_URL     = local.url["agent-runtime"]
           N8N_BASE_URL          = local.url["n8n"]
           PLATFORM_INTERNAL_URL = local.url["platform-api"]
+          COSMOS_ENDPOINT       = module.cosmos.endpoint
+          ACTIVITY_READER       = "cosmos"
         },
         var.oidc_jwks_url == "" ? {} : { OIDC_JWKS_URL = var.oidc_jwks_url },
+        local.first_people,
       )
       secrets = {
         DATABASE_URL_BUILDER       = local.secret["database-url-builder"]
@@ -177,6 +201,8 @@ locals {
         AGENT_API_KEY              = local.secret["agent-api-key"]
         STEP_KEY                   = local.secret["step-key"]
         CALLBACK_SIGNING_KEY       = local.secret["callback-signing-key"]
+        SETTINGS_ENCRYPTION_KEY    = local.secret["settings-encryption-key"]
+        COSMOS_KEY                 = local.secret["cosmos-key"]
       }
     }
 
@@ -190,6 +216,7 @@ locals {
       env = {
         GITHUB_API_BASE          = var.github_api_base
         CALLBACK_ALLOWED_ORIGINS = local.url["platform-api"]
+        PRACTICE_JIRA_URL        = var.practice_jira_url == "" ? local.url["platform-api"] : var.practice_jira_url
       }
       secrets = merge(
         { AGENT_API_KEY = local.secret["agent-api-key"] },
