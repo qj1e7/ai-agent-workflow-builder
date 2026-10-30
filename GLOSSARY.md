@@ -150,6 +150,21 @@ _Avoid_: Log line, n8n event
 **AI troubleshooter**:
 The agent that explains why a run failed and helps the Operator fix it.
 
+**Copier**:
+The part of run monitoring that copies each new activity event from PostgreSQL to Cosmos DB. It copies a run's events in order, and only one copier works on a run at a time. PostgreSQL keeps every event, so a copy that stops halfway goes on from the copied mark.
+_Avoid_: Sync, mirror
+
+**Copied mark**:
+For each run, the highest sequence number the copier has put in Cosmos DB. PostgreSQL keeps it for one Cosmos DB container, so a new container is copied again from the start. Each copy wakes the live activity view's stream with the new mark.
+_Avoid_: Checkpoint, watermark
+
+**Activity reader**:
+Where the live activity view, its replay and the AI troubleshooter read activity events: Cosmos DB or PostgreSQL. The setting `ACTIVITY_READER` picks `cosmos` or `postgres`. When Cosmos DB is set up, the copier runs whichever is picked. A place without Cosmos DB, such as a DevNet that does not allow it, reads PostgreSQL.
+
+**Replica**:
+One running instance of a platform service, such as platform-api in Container Apps. Several replicas share one database, and PostgreSQL wakes each one when events are added or copied, so any replica can stream any run. Call the activity log in Cosmos DB the copy, never a replica.
+_Avoid_: Pod, node
+
 ### Setting up
 
 **Connection**:
