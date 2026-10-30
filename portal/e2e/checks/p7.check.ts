@@ -18,6 +18,8 @@ const PHONE = { width: 390, height: 844 }
 const WCAG_22_AA = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']
 const PLATFORM_AGENTS = ['Planner', 'AI troubleshooter']
 const PLATFORM_NOTE = 'only the team that runs the platform can change it'
+const NOT_BUILT_WORDS = 'This page is not built yet.'
+const TOOLS_UNAVAILABLE = 'The tool list is not available'
 
 interface Card {
   card_id: string
@@ -99,6 +101,7 @@ test('@lane1 the library lists every card once, beside the two platform agents',
     await expect(h1(page)).toBeVisible()
     save(1, 'p7-library-trunk.json', { target: 'trunk', heading: await h1(page).innerText(), main: await page.locator('main').innerText() })
     await shotTo(page, path.join(laneDir(1), 'p7-library-trunk.png'))
+    await expect(page.locator('main'), 'trunk has no Agent library yet').toContainText(NOT_BUILT_WORDS)
     await context.close()
     return
   }
@@ -224,8 +227,25 @@ test('@lane6 a card opens from its URL and closing returns focus to its tile', a
   await context.close()
 })
 
-// Lane 7. Tab stays inside an open card, and Escape closes it.
+// Lane 7. Tab stays inside an open card, also after a click on its text, and Escape closes it.
 const TAB_STOPS = 'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
+interface FocusStop {
+  step: string
+  tag: string
+  label: string
+  inside: boolean
+  stop: number
+}
+const focusAfter = (page: Page, step: string): Promise<FocusStop> =>
+  page.evaluate(
+    ([name, selector]) => {
+      const el = document.activeElement as HTMLElement | null
+      const box = el?.closest('dialog[open]') ?? null
+      const stop = box && el ? [...box.querySelectorAll(selector)].indexOf(el) : -1
+      return { step: name, tag: el?.tagName.toLowerCase() ?? '', label: (el?.getAttribute('aria-label') ?? el?.textContent ?? '').trim().slice(0, 40), inside: box !== null, stop }
+    },
+    [step, TAB_STOPS] as const,
+  )
 test('@lane7 Tab stays inside an open card and Escape closes it', async ({ browser }) => {
   onlyDev()
   const context = await devContext(browser, 'alice')
@@ -236,26 +256,25 @@ test('@lane7 Tab stays inside an open card and Escape closes it', async ({ brows
   await expect(dialog).toBeVisible()
   const focusable = await dialog.locator(TAB_STOPS).count()
   expect(focusable, 'the card has more than one focusable element').toBeGreaterThan(1)
-  const stops: { press: string; tag: string; label: string; inside: boolean; stop: number }[] = []
+  const stops: FocusStop[] = []
   const presses = [...Array.from({ length: focusable + 2 }, () => 'Tab'), ...Array.from({ length: focusable + 2 }, () => 'Shift+Tab')]
   for (const key of presses) {
     await page.keyboard.press(key)
-    stops.push(
-      await page.evaluate(
-        ([press, selector]) => {
-          const el = document.activeElement as HTMLElement | null
-          const box = el?.closest('dialog[open]') ?? null
-          const stop = box && el ? [...box.querySelectorAll(selector)].indexOf(el) : -1
-          return { press, tag: el?.tagName.toLowerCase() ?? '', label: (el?.getAttribute('aria-label') ?? el?.textContent ?? '').trim().slice(0, 40), inside: box !== null, stop }
-        },
-        [key, TAB_STOPS] as const,
-      ),
-    )
+    stops.push(await focusAfter(page, key))
   }
   await shotTo(page, path.join(laneDir(7), 'p7-dialog-tab.png'))
-  save(7, 'p7-dialog-tab.json', { focusable, stops })
+  const afterText: Record<string, { click: FocusStop; press: FocusStop }> = {}
+  for (const key of ['Shift+Tab', 'Tab']) {
+    await dialog.getByRole('heading', { name: 'How it works' }).click()
+    const click = await focusAfter(page, 'click "How it works"')
+    await page.keyboard.press(key)
+    afterText[key] = { click, press: await focusAfter(page, key) }
+  }
+  save(7, 'p7-dialog-tab.json', { focusable, stops, afterText })
   expect(stops.filter((s) => !s.inside), 'focus never leaves the dialog').toEqual([])
   expect(new Set(stops.map((s) => s.stop)).size, 'Tab visits every focusable element').toBe(focusable)
+  expect(afterText['Shift+Tab']?.press, 'Shift+Tab after a click on card text goes to the last stop').toMatchObject({ inside: true, stop: focusable - 1 })
+  expect(afterText['Tab']?.press, 'Tab after a click on card text goes to the first stop').toMatchObject({ inside: true, stop: 0 })
   await page.keyboard.press('Escape')
   await expect(dialog).toHaveCount(0)
   await context.close()
@@ -283,10 +302,16 @@ test('@lane8 at 390 px the cards stack and nothing scrolls sideways', async ({ b
   widths.push(await measure())
   await page.getByRole('button', { name: /^Agents/ }).click()
   await page.getByRole('link', { name: 'Version checker', exact: true }).click()
-  await expect(dialogOf(page)).toBeVisible()
+  const dialog = dialogOf(page)
+  await expect(dialog).toBeVisible()
+  await settle(page)
+  const opensAt = await dialog.evaluate((el) => ({ scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }))
+  const topClose = dialog.getByRole('button', { name: 'Close' }).first()
   widths.push(await measure())
-  const dialogBox = await dialogOf(page).boundingBox()
-  save(8, 'p7-phone.json', { boxes, widths, dialogBox })
+  const dialogBox = await dialog.boundingBox()
+  save(8, 'p7-phone.json', { boxes, widths, dialogBox, opensAt, topCloseBox: await topClose.boundingBox() })
+  expect(opensAt.scrollTop, 'the card opens at its top').toBe(0)
+  await expect(topClose, 'the top Close shows when the card opens').toBeInViewport({ ratio: 1 })
   expect(new Set(boxes.map((b) => Math.round(b.left))).size, 'every card starts at the same left edge').toBe(1)
   expect(boxes.map((b) => b.top), 'each card sits below the one before').toEqual([...boxes.map((b) => b.top)].sort((a, b) => a - b))
   expect(new Set(boxes.map((b) => Math.round(b.top))).size, 'no two cards share a row').toBe(boxes.length)
@@ -344,23 +369,36 @@ test('@lane9 axe finds no WCAG 2.2 AA problem', async ({ browser }) => {
 })
 
 // Lane 10. With the agent runtime stopped (p7.sh stops it), the Tools tab says the list is not available and the cards stay.
-// GET /api/v1/tools answers from a fixed list in platform-api, so it may still answer 200 with the runtime down.
-// The first pass records what the real route did. The second pass forces a 503 on that route, so the page's own handling is seen either way.
-const LANE_10_PASSES_THROUGH =
-  'GET /api/v1/tools answers from a fixed list in platform-api, so stopping the agent runtime does not make it fail. This lane passes through its forced 503 on that route, not through the stopped runtime.'
+const FIXED_TOOL_LIST = 'platform-api serves GET /api/v1/tools from a fixed list, so the route still answers with the agent runtime stopped.'
+const LANE_10_PASSES_THROUGH = 'The not-available notice is proved by a forced 503 on that route, not by the stopped runtime.'
 test('@lane10 the Tools tab says the tool list is not available and keeps the cards', async ({ browser }) => {
   onlyDev()
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()
-  const real = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/tools').then((r) => r.status())
+  const real = page
+    .waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/tools')
+    .then(async (r) => ({ status: r.status(), tools: r.ok() ? ((await r.json()) as { tools: Tool[] }).tools.length : 0 }))
+    .catch(() => ({ status: -1, tools: 0 }))
   const cardsReal = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/agent-cards')
   await page.goto('/agents')
   await expect(h1(page)).toHaveText('Agent library')
   const cardCount = ((await (await cardsReal).json()) as { cards: Card[] }).cards.length
   await expect(tiles(page), 'every tile has drawn').toHaveCount(PLATFORM_AGENTS.length + cardCount)
-  const cardsShownReal = await tiles(page).count()
-  const realStatus = await real.catch(() => -1)
-  save(10, 'p7-runtime-down-real.json', { runtimeStopped: process.env['EXPECT_DOWN'] === '1', toolsStatus: realStatus, tiles: cardsShownReal, passesThrough: LANE_10_PASSES_THROUGH })
+  const shown = await tiles(page).count()
+  const served = await real
+  const runtimeStopped = process.env['EXPECT_DOWN'] === '1'
+  save(10, 'p7-runtime-down-real.json', {
+    runtimeStopped,
+    toolsStatus: served.status,
+    toolsServed: served.tools,
+    tiles: shown,
+    proves: `With the agent runtime ${runtimeStopped ? 'stopped' : 'running'}, GET /api/v1/tools answered ${served.status} with ${served.tools} tools, and the library showed all ${shown} tiles.`,
+    why: FIXED_TOOL_LIST,
+  })
+  expect(served.status, FIXED_TOOL_LIST).toBe(200)
+  expect(served.tools, 'the fixed tool list is still served').toBeGreaterThan(0)
+  expect(cardCount, 'the stack has a card for the page to keep').toBeGreaterThan(0)
+  await expect(page.getByText(TOOLS_UNAVAILABLE)).toHaveCount(0)
   await page.close()
 
   const forced = await context.newPage()
@@ -371,16 +409,22 @@ test('@lane10 the Tools tab says the tool list is not available and keeps the ca
   const forcedCount = ((await (await cardsForced).json()) as { cards: Card[] }).cards.length
   await expect(tiles(forced), 'every tile has drawn').toHaveCount(PLATFORM_AGENTS.length + forcedCount)
   const before = await tiles(forced).allInnerTexts()
-  await forced.getByRole('button', { name: /^Tools/ }).click()
-  await expect(forced.getByText('The tool list is not available')).toBeVisible({ timeout: 30_000 })
+  const toolsButton = forced.getByRole('button', { name: /^Tools/ })
+  await toolsButton.click()
+  await expect(toolsButton).toHaveAttribute('aria-pressed', 'true')
+  await expect(forced.getByRole('heading', { name: /^(Platform|Specialist) agents/ }), 'the Agents sections are hidden').toHaveCount(0)
+  const notice = forced.getByRole('status').filter({ hasText: TOOLS_UNAVAILABLE })
+  await expect(notice).toBeVisible({ timeout: 30_000 })
+  const toolsNotice = await notice.innerText()
   await shotTo(forced, path.join(laneDir(10), 'p7-runtime-down.png'), true)
   await forced.getByRole('button', { name: /^Agents/ }).click()
   await expect(tiles(forced), 'every tile has drawn again').toHaveCount(before.length)
   const after = await tiles(forced).allInnerTexts()
-  save(10, 'p7-runtime-down.json', { realToolsStatus: realStatus, forced503: true, passesThrough: LANE_10_PASSES_THROUGH, tilesBefore: before, tilesAfter: after })
+  save(10, 'p7-runtime-down.json', { realToolsStatus: served.status, forced503: true, why: FIXED_TOOL_LIST, passesThrough: LANE_10_PASSES_THROUGH, toolsNotice, tilesBefore: before, tilesAfter: after })
+  expect(toolsNotice, 'the Tools tab has no cards below to point at').not.toContain('below')
   expect(after.length, 'the cards stay').toBeGreaterThan(PLATFORM_AGENTS.length)
   expect(after).toEqual(before)
-  await expect(forced.getByText('The tool list is not available')).toBeVisible()
+  await expect(forced.getByText(TOOLS_UNAVAILABLE)).toBeVisible()
   await context.close()
 })
 

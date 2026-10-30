@@ -5,13 +5,14 @@
 #
 #   disk                                   free space on the Docker disk; fails under 1.5 GB
 #   gates <worktree>                       typecheck, lint, unit tests, build, first-load size
-#   up <worktree> <project> <tag> <portal-port> <api-port> <n8n-port>
+#   up <worktree> <project> <tag> <portal-port> <api-port> <n8n-port> [--no-build]
+#                                          --no-build starts a second stack on images an earlier up built with that tag
 #   down <worktree> <project>
 #   check <project> [playwright arguments] run portal/e2e/checks/p7.check.ts in the runner image, in that project's Portal network
 #   lane1 <trunk-project> <head-project>   trunk has no Agent library: record it; then lane 1 at head
 #   lanes <project>                        lanes 2 to 9 at head, one browser run per lane
 #   lane10 <worktree> <project>            stop the agent runtime, open the Tools tab, start the runtime again
-#   size <trunk-worktree> <head-worktree>  gzip bytes of the JavaScript that dist/index.html loads; fails past +30 KB
+#   size <trunk-worktree> <head-worktree>  gzip bytes of the JavaScript that each built dist/index.html loads; fails past +30 KB
 #   perf <head-project> [samples]          largest contentful paint of /agents; fails at a median of 2.5 s or more
 #
 # Environment:
@@ -27,7 +28,6 @@ EVID=${EVID:-/tmp/swarm-p7}
 ENV_FILE=${ENV_FILE:-$EVID/env/.env}
 RUNNER=${E2E_RUNNER_IMAGE:-portal-e2e-runner:p1shell}
 DISK_CONTAINER=${DISK_CONTAINER:-wab-postgres-1}
-TRUNK_FIRST_LOAD_GZIP=${TRUNK_FIRST_LOAD_GZIP:-102296}
 GROWTH_LIMIT=30720
 
 die() { echo "p7.sh: $*" >&2; exit 2; }
@@ -59,12 +59,17 @@ gates() {
 }
 
 up() {
-  local worktree=$1 project=$2 tag=$3 portal_port=$4 api_port=$5 n8n_port=$6
+  local worktree=$1 project=$2 tag=$3 portal_port=$4 api_port=$5 n8n_port=$6 build=--build
+  case "${7:-}" in
+    '') ;;
+    --no-build) build=--no-build ;;
+    *) die "unknown up option $7" ;;
+  esac
   disk
   [ -f "$ENV_FILE" ] || die "no $ENV_FILE; copy deploy/make-env.sh next to it and run it"
   mkdir -p "$EVID/stacks"
   WAB_IMAGE_TAG=$tag PORTAL_HOST_PORT=$portal_port PLATFORM_API_HOST_PORT=$api_port N8N_HOST_PORT=$n8n_port \
-    compose "$worktree" "$project" up --build --wait --wait-timeout 300 >"$EVID/stacks/$project-up.log" 2>&1 ||
+    compose "$worktree" "$project" up "$build" --wait --wait-timeout 300 >"$EVID/stacks/$project-up.log" 2>&1 ||
     { tail -n 30 "$EVID/stacks/$project-up.log" >&2; die "$project did not become healthy"; }
   curl -sS -o "$EVID/stacks/$project-ready.json" -w "GET /healthz/ready %{http_code}\n" "http://localhost:$api_port/healthz/ready" | tee "$EVID/stacks/$project-ready.txt"
 }
@@ -100,9 +105,10 @@ check() {
 }
 
 lane1() {
-  local trunk=$1 head=$2
-  TARGET=trunk check "$trunk" --grep "@lane1\b" || true
-  TARGET=head check "$head" --grep "@lane1\b"
+  local trunk=$1 head=$2 status=0
+  TARGET=trunk check "$trunk" --grep "@lane1\b" || status=$?
+  TARGET=head check "$head" --grep "@lane1\b" || status=$?
+  return "$status"
 }
 
 lanes() {
@@ -130,6 +136,7 @@ size() {
   for pair in "trunk:$1" "head:$2"; do
     name=${pair%%:*}
     dir=${pair#*:}/portal/dist
+    [ -f "$dir/index.html" ] || die "no $dir/index.html; build the $name Portal first"
     total=0
     for src in $(/usr/bin/grep -oE '<script[^>]*src="[^"]+"' "$dir/index.html" | sed -E 's/.*src="([^"]+)".*/\1/'); do
       bytes=$(gzip -c "$dir$src" | wc -c | tr -d ' ')
@@ -139,7 +146,7 @@ size() {
     echo "$name total gzip=$total" | tee -a "$out/first-load-js.txt"
     if [ "$name" = trunk ]; then trunk_total=$total; else head_total=$total; fi
   done
-  echo "growth=$((head_total - trunk_total)) bytes (limit $GROWTH_LIMIT; recorded trunk baseline $TRUNK_FIRST_LOAD_GZIP)" | tee -a "$out/first-load-js.txt"
+  echo "growth=$((head_total - trunk_total)) bytes (limit $GROWTH_LIMIT; trunk baseline measured from $1)" | tee -a "$out/first-load-js.txt"
   [ $((head_total - trunk_total)) -le "$GROWTH_LIMIT" ]
 }
 
