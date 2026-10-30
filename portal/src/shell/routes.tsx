@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ReactNode } from 'react'
 import { Route, Routes } from 'react-router'
 import { AgentsPage } from '../screens/agents/AgentsPage'
+import { SettingsPage } from '../screens/settings/SettingsPage'
 import type { Icon } from '../ui/icons'
 import { BotIcon, BoxIcon, GridIcon, HomeIcon, SettingsIcon } from './icons'
 import { NotFoundPage } from './NotFoundPage'
@@ -107,7 +108,8 @@ export function AppRoutes({ context }: { context: PageContext }) {
       />
       {PAGE_IDS.filter((id) => id !== 'agents').map((id) => {
         const { path, heading, lead } = PAGES[id]
-        return <Route key={id} path={path} element={<EmptyPage heading={wordsOf(heading, context)} lead={wordsOf(lead, context)} />} />
+        const Page = id === 'settings' ? SettingsPage : EmptyPage
+        return <Route key={id} path={path} element={<Page heading={wordsOf(heading, context)} lead={wordsOf(lead, context)} />} />
       })}
       <Route path="/runs/:runId" element={<Lazy><RunRoute /></Lazy>} />
       <Route path="/approvals/:approvalId" element={<Lazy><ApprovalRoute /></Lazy>} />

@@ -111,7 +111,7 @@ test('Test controls act as Bob, and Bob can open Settings', async ({ page }, inf
 
   await page.getByRole('link', { name: 'Settings', exact: true }).click()
   await expect(heading(page)).toHaveText('Settings')
-  await expect(page.getByRole('main')).toContainText('This page is not built yet.')
+  await expect(page.getByRole('main')).toContainText('Only Operators change settings.')
   await shot(page, info, 'p1-06-settings-approver')
 })
 
