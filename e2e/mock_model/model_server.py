@@ -7,7 +7,8 @@ can be tested without a real model:
 - A request that forces a tool is a draft, a choice or the Planner reading a task back. The canned
   answer follows the task's words. A task that names a GitHub repository picks the Version
   checker, any other gets a drafted agent (a follow-up one for a follow-up ticket task, else a
-  summary one), and a release task belongs on the Software watchlist.
+  summary one), and a release task belongs on the Software watchlist. One named part, such as
+  "Where it goes: Jira project MOCK", is read as that part alone, the others missing.
 - A request with tools and no forced tool is a card run. The mock calls github_read_releases,
   then jira_search, then jira_create_ticket, then writes a report, by what the conversation holds.
   The ticket's title follows the card: a release, a follow-up or a summary.
@@ -64,6 +65,8 @@ SUMMARY_TO = re.compile(
 FOOLING_ORDER = re.compile(
     r"\bignore (?:your|all|the|previous) (?:rules|instructions)\b", re.IGNORECASE
 )
+ONE_PART = re.compile(r"^(When|Looks for|Does|Where it goes): (.+)$", re.DOTALL)
+PART_KINDS = {"When": "schedule", "Looks for": "look_for", "Does": "do", "Where it goes": "where"}
 mode = "ok"
 
 DRAFT: dict[str, Any] = {
@@ -253,6 +256,17 @@ def understanding(task: str) -> dict[str, Any]:
             "watchlist_word": word.group(0),
             "software": named,
             "rows": [],
+        }
+    if (named := ONE_PART.match(task.strip())) is not None:
+        kind = PART_KINDS[named.group(1)]
+        return {
+            "belongs_on_watchlist": False,
+            "rows": [
+                {"kind": each, "text": named.group(2), "state": "understood"}
+                if each == kind
+                else {"kind": each, "state": "missing"}
+                for each in PART_KINDS.values()
+            ],
         }
     sentences = [part for part in re.split(r"(?<=[.!?])\s+", task.strip()) if part]
     first = sentences[0].rstrip(".!?") if sentences else ""

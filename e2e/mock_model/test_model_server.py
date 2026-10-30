@@ -242,6 +242,21 @@ class UnderstandTest(unittest.TestCase):
                 self.assertTrue(hits)
                 self.assertEqual({row["state"] for row in rows}, {"understood"})
 
+    def test_one_named_part_is_read_as_that_part_alone(self) -> None:
+        self.assertEqual(
+            read_back("Where it goes: Post it in the team’s Teams channel"),
+            [
+                ("schedule", "", "missing"),
+                ("look_for", "", "missing"),
+                ("do", "", "missing"),
+                ("where", "Post it in the team’s Teams channel", "understood"),
+            ],
+        )
+        self.assertEqual(
+            read_back("Does: Create one ticket")[2], ("do", "Create one ticket", "understood")
+        )
+        self.assertTrue(server.understanding("Looks for: new releases")["belongs_on_watchlist"])
+
     def test_a_marker_after_the_task_changes_nothing(self) -> None:
         self.assertEqual(read_back(f"{FOLLOW_UP}. Ref 0a1b2c."), read_back(FOLLOW_UP))
 
