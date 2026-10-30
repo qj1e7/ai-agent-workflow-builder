@@ -205,7 +205,8 @@ export interface PeopleSaid {
 }
 
 export function leftTheListWords(names: readonly string[]): string {
-  const who = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''} are` : `${names[0] ?? 'That person'} is`
+  const last = names.at(-1) ?? 'That person'
+  const who = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${last} are` : `${last} is`
   return `${who} no longer on the list. The list now shows who is on it.`
 }
 
