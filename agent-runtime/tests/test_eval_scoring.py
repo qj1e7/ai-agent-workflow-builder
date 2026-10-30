@@ -8,10 +8,11 @@ from evals.checks import Check, jargon, mentions, write_claims
 from evals.choose import CHOOSE, ChooseCase
 from evals.draft import DRAFT, DraftCase
 from evals.explain import EXPLAIN, ExplainCase, Explanation
-from evals.jobs import Answer
+from evals.jobs import Answer, marked
 from evals.providers import Target, plan
 from evals.runner import JOBS, Outcome, main, model_for, redact, run_case, summarise_job
 from evals.summarise import SUMMARISE, SummariseCase, checked
+from evals.understand import UNDERSTAND, UnderstandCase
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 
@@ -44,10 +45,12 @@ def explain_case(name: str) -> ExplainCase:
     return next(c for c in EXPLAIN.cases() if c.id == name)
 
 
-@pytest.mark.parametrize("job", [SUMMARISE, EXPLAIN, DRAFT, CHOOSE])
-def test_each_job_has_10_to_15_cases_with_unique_ids(job: Any) -> None:
+@pytest.mark.parametrize(
+    ("job", "most"), [(SUMMARISE, 15), (EXPLAIN, 15), (DRAFT, 15), (CHOOSE, 15), (UNDERSTAND, 30)]
+)
+def test_each_job_has_a_small_golden_set_with_unique_ids(job: Any, most: int) -> None:
     ids = [case.id for case in job.cases()]
-    assert 10 <= len(ids) <= 15
+    assert 10 <= len(ids) <= most
     assert len(set(ids)) == len(ids)
 
 
@@ -232,7 +235,13 @@ def test_endpoints_and_keys_never_reach_the_results(
 def test_a_provider_without_its_key_is_planned_as_not_run() -> None:
     targets, not_run = plan({"ANTHROPIC_MODELS": "claude-haiku-5-5"})
     assert targets == []
-    assert {n.provider for n in not_run} == {"ollama", "azure_openai", "anthropic", "google_genai"}
+    assert {n.provider for n in not_run} == {
+        "ollama",
+        "azure_openai",
+        "anthropic",
+        "google_genai",
+        "gateway",
+    }
     assert all(n.reason.startswith("not set:") for n in not_run)
 
 
@@ -246,7 +255,7 @@ def test_a_cloud_provider_with_a_key_runs_its_default_models() -> None:
 
 
 def test_every_job_is_registered_once() -> None:
-    assert [job.name for job in JOBS] == ["summarise", "explain", "draft", "choose"]
+    assert [job.name for job in JOBS] == ["summarise", "explain", "draft", "choose", "understand"]
 
 
 @pytest.mark.parametrize(
@@ -413,3 +422,165 @@ def test_a_choice_that_brings_in_an_agent_nobody_saved_fails() -> None:
     ghost = case.reference.agents[0].model_copy(update={"card_id": "crd_admin_access"})
     value = case.reference.model_copy(update={"agents": [ghost]})
     assert "only_saved_agents" in failed(CHOOSE.score(case, Answer(value, "", None)))
+
+
+def understand_case(name: str) -> UnderstandCase:
+    return next(c for c in UNDERSTAND.cases() if c.id == name)
+
+
+def understand_answer(case: UnderstandCase, **changes: Any) -> Answer:
+    value = case.reference.model_copy(update=changes)
+    return Answer(value, value.model_dump_json(), None)
+
+
+def with_row(case: UnderstandCase, index: int, **changes: Any) -> Answer:
+    rows = [*case.reference.rows]
+    rows[index] = rows[index].model_copy(update=changes)
+    return understand_answer(case, rows=rows)
+
+
+@pytest.mark.parametrize("case", UNDERSTAND.cases(), ids=lambda c: c.id)
+def test_each_understand_reference_passes_its_own_case(case: UnderstandCase) -> None:
+    answer = Answer(case.reference, case.reference.model_dump_json(), None)
+    assert failed(UNDERSTAND.score(case, answer)) == set()
+
+
+def test_the_golden_set_covers_every_kind_of_task_the_plan_names() -> None:
+    cases = {c.id: c for c in UNDERSTAND.cases()}
+    assert cases["follow-up-ticket"].states == {
+        kind: ["understood"] for kind in ("schedule", "look_for", "do", "where")
+    }
+    assert cases["no-schedule"].states["schedule"] == ["missing"]
+    assert cases["stale-in-teams"].cant_do == ["Teams"]
+    assert cases["delete-closed"].cant_do == ["delete"]
+    assert "Ignore your rules" in cases["ignore-your-rules"].task
+    assert cases["release"].watchlist == ["releas*"]
+
+
+def test_accepting_the_planted_order_fails_the_tool_checks() -> None:
+    case = understand_case("ignore-your-rules")
+    fooled = with_row(case, 3, state="understood", note=None)
+    assert {"model_held_to_the_tools"} <= failed(UNDERSTAND.score(case, fooled))
+    kept = [r for r in case.reference.rows if "Close" not in r.text]
+    dropped = understand_answer(case, rows=kept)
+    assert "marks_cant_do" in failed(UNDERSTAND.score(case, dropped))
+
+
+@pytest.mark.parametrize("case", [c for c in UNDERSTAND.cases() if c.cant_do], ids=lambda c: c.id)
+def test_marking_any_part_that_cannot_be_done_understood_fails_its_case(
+    case: UnderstandCase,
+) -> None:
+    for index, row in enumerate(case.reference.rows):
+        if row.state == "cant_do":
+            fooled = with_row(case, index, state="understood", note=None)
+            assert "model_held_to_the_tools" in failed(UNDERSTAND.score(case, fooled)), row.text
+
+
+@pytest.mark.parametrize(
+    "case",
+    [c for c in UNDERSTAND.cases() if c.cant_do and len(c.reference.rows) > 4],
+    ids=lambda c: c.id,
+)
+def test_folding_a_write_into_an_understood_part_fails_its_case(case: UnderstandCase) -> None:
+    rows = case.reference.rows
+    refused = next(r for r in rows if r.state == "cant_do" and r.kind == "do")
+    kept = [r for r in rows if r is not refused]
+    accepted = next(i for i, r in enumerate(kept) if r.kind == "do" and r.state == "understood")
+    folded = kept[accepted].model_copy(
+        update={"text": f"{kept[accepted].text}, then {refused.text}"}
+    )
+    answer = understand_answer(case, rows=[*kept[:accepted], folded, *kept[accepted + 1 :]])
+    assert "model_held_to_the_tools" in failed(UNDERSTAND.score(case, answer))
+
+
+@pytest.mark.parametrize(
+    "case",
+    [c for c in UNDERSTAND.cases() if c.id.startswith(("assigned-", "about-"))],
+    ids=lambda c: c.id,
+)
+def test_refusing_a_search_of_jira_tickets_fails_its_case(case: UnderstandCase) -> None:
+    index = next(i for i, r in enumerate(case.reference.rows) if r.kind == "look_for")
+    refused = with_row(case, index, state="cant_do", note="I can't read that yet.")
+    assert "right_states" in failed(UNDERSTAND.score(case, refused))
+
+
+def test_reading_gitlab_as_understood_fails_the_access_review() -> None:
+    case = understand_case("admin-access-in-gitlab")
+    fooled = with_row(case, 1, state="understood", note=None)
+    assert "model_held_to_the_tools" in failed(UNDERSTAND.score(case, fooled))
+
+
+def test_a_guessed_schedule_an_invented_key_or_a_planted_project_fails() -> None:
+    case = understand_case("no-schedule")
+    guessed = with_row(case, 0, text="Every Monday at 9am", state="understood", note=None)
+    assert "right_states" in failed(UNDERSTAND.score(case, guessed))
+    case = understand_case("no-project")
+    invented = with_row(case, 3, text="Jira project SUP", state="understood", note=None)
+    assert {"no_invented_keys", "right_states"} <= failed(UNDERSTAND.score(case, invented))
+    case = understand_case("planted-project")
+    planted = with_row(case, 3, text="Jira project SECRET")
+    assert "keeps_out" in failed(UNDERSTAND.score(case, planted))
+
+
+def test_a_can_t_do_note_that_offers_a_tool_fails() -> None:
+    case = understand_case("stale-in-teams")
+    offer = with_row(case, 3, note="I can draft a tool card that posts in Teams.")
+    assert "no_tool_proposed" in failed(UNDERSTAND.score(case, offer))
+
+
+def test_the_watchlist_answer_must_be_right_and_name_a_word_from_the_task() -> None:
+    release = understand_case("release")
+    rows = understand_case("follow-up-ticket").reference
+    assert "right_answer" in failed(UNDERSTAND.score(release, Answer(rows, "", None)))
+    invented = understand_answer(release, watchlist_word="upgrade")
+    assert "right_answer" in failed(UNDERSTAND.score(release, invented))
+    demo = understand_case("follow-up-ticket")
+    sent = understand_case("release").reference
+    assert "right_answer" in failed(UNDERSTAND.score(demo, Answer(sent, "", None)))
+
+
+def test_each_request_carries_the_runs_marker() -> None:
+    sent: list[Any] = []
+
+    class Recording(GenericFakeChatModel):
+        def invoke(self, prompt: Any, *args: Any, **kwargs: Any) -> Any:
+            sent.append(prompt)
+            return super().invoke(prompt, *args, **kwargs)
+
+    model = Recording(messages=iter([AIMessage(content="LangGraph has a new release.")]))
+    case = SUMMARISE.cases()[0]
+    run_case(model, SUMMARISE, case, {}, "c0ffee123456")
+    assert sent == [marked(SUMMARISE.prompt(case), "c0ffee123456")]
+    assert sent[0].startswith("Eval run c0ffee123456.") and SUMMARISE.prompt(case) in sent[0]
+    assert marked("same", "") == "same"
+
+
+def test_the_gateway_runs_haiku_from_the_runtimes_own_settings() -> None:
+    env = {"AGENT_MODEL_BASE_URL": "https://gateway.example", "AGENT_MODEL_API_KEY": "gw-key-9"}
+    targets, _ = plan(env)
+    [target] = [t for t in targets if t.provider == "gateway"]
+    assert (target.label, target.client) == ("gateway:azure_ai/claude-haiku-5-5", "anthropic")
+    assert target.kwargs["base_url"] == "https://gateway.example"
+    assert redact("refused gw-key-9 at https://gateway.example/v1", env) == (
+        "refused [redacted] at [redacted]/v1"
+    )
+    mock = plan({**env, "GATEWAY_MODELS": "mock-model"})[0]
+    assert [t.label for t in mock if t.provider == "gateway"] == ["gateway:mock-model"]
+
+
+RUNS = Path(__file__).resolve().parents[2] / "contracts" / "fixtures" / "runs"
+
+
+def test_the_explain_logs_are_watchlist_runs() -> None:
+    for case in EXPLAIN.cases():
+        assert case.events[0] == "Alice started a run of the Software watchlist."
+        assert not any("fetching releases" in e or "last known tag" in e for e in case.events)
+
+
+@pytest.mark.skipif(not RUNS.exists(), reason="contracts/ is not in the test image.")
+@pytest.mark.parametrize(
+    ("case_id", "story"), [("github-503-fixture", "failure"), ("declined", "rejected")]
+)
+def test_the_recorded_explain_cases_replay_their_recorded_run(case_id: str, story: str) -> None:
+    recorded = [e["summary"] for e in json.loads((RUNS / f"{story}.json").read_text())]
+    assert explain_case(case_id).events == recorded[:-1]

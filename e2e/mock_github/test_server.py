@@ -112,6 +112,17 @@ class MockGithubTest(unittest.TestCase):
         self.assertTrue(all(url.startswith("https://github.com/redis/redis/") for url in urls))
         self.assertEqual([r["tag_name"] for r in paged], ["8.0.3", "8.0.2"])
 
+    def test_fastapi_has_plain_releases_newer_than_the_version_the_review_adds(self) -> None:
+        with running() as base:
+            status, releases = call(base, "/repos/fastapi/fastapi/releases")
+        self.assertEqual(status, 200)
+        tags = [r["tag_name"] for r in releases]
+        self.assertEqual(tags, server.FASTAPI_TAGS)
+        self.assertEqual(tags[0], "0.115.6")
+        self.assertIn("0.115.0", tags)
+        urls = [r["html_url"] for r in releases]
+        self.assertTrue(all(url.startswith("https://github.com/fastapi/fastapi/") for url in urls))
+
     def test_unavailable_mode_covers_every_repository(self) -> None:
         with running() as base:
             call(base, "/_admin/mode", {"mode": "unavailable"})

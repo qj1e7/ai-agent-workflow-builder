@@ -10,7 +10,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from platform_api.builder.lifecycle import Lifecycle, On, is_on, lifecycle_of
+from platform_api.builder.lifecycle import (
+    RESTORE_WINDOW,
+    Lifecycle,
+    On,
+    TooLate,
+    is_on,
+    lifecycle_of,
+)
 from platform_api.builder.models import (
     AddSoftware,
     LastCheckView,
@@ -87,6 +94,11 @@ class NoSuchSoftware:
 
 
 @dataclass(frozen=True)
+class RepoAddedAgainSinceRemoval:
+    ref: str
+
+
+@dataclass(frozen=True)
 class WatchlistFull:
     limit: int
 
@@ -110,11 +122,13 @@ def software_view(listed: ListedSoftware, standing: Standing) -> WatchedSoftware
             our_source = VersionSourceView(kind="ticket_done", at=at, ticket=ticket)
     match facts.latest_check:
         case None:
-            newest, checked_at, problem = None, None, None
+            newest, read_at, checked_at, problem = None, None, None, None
         case Checked(_, at, newest_version):
-            newest, checked_at, problem = newest_version, at, None
-        case CouldNotCheck(_, at, why):
-            newest, checked_at, problem = None, at, why
+            newest, read_at, checked_at, problem = newest_version, at, at, None
+        case CouldNotCheck(_, at, why, last_read):
+            newest = None if last_read is None else last_read.version
+            read_at = None if last_read is None else last_read.at
+            checked_at, problem = at, why
     return WatchedSoftwareView(
         id=listed.id,
         name=listed.name,
@@ -122,6 +136,7 @@ def software_view(listed: ListedSoftware, standing: Standing) -> WatchedSoftware
         our_version=None if facts.our_version is None else facts.our_version.version,
         our_version_source=our_source,
         newest_version=newest,
+        newest_read_at=read_at,
         checked_at=checked_at,
         status=standing.status,
         problem=problem,
@@ -237,6 +252,29 @@ async def _software_of(
     return tuple(_listed(row) for row in rows)
 
 
+@dataclass(frozen=True)
+class Removal:
+    listed: ListedSoftware
+    at: datetime
+
+
+async def _last_removal(
+    conn: Connection, use_case_id: UseCaseId, software_id: SoftwareId
+) -> Removal | None:
+    row = await (
+        await conn.execute(
+            f"SELECT {_SOFTWARE_COLUMNS}, (SELECT v.created_at FROM builder.use_case_versions v "
+            "WHERE v.use_case_id = s.use_case_id AND v.version = s.version + 1) AS removed_at "
+            "FROM builder.watched_software s WHERE s.use_case_id = %s AND s.software_id = %s "
+            "ORDER BY s.version DESC LIMIT 1",
+            (use_case_id, software_id),
+        )
+    ).fetchone()
+    if row is None or row["removed_at"] is None:
+        return None
+    return Removal(_listed(row), row["removed_at"])
+
+
 async def _current(conn: Connection, lock: bool) -> WatchlistRecord | None:
     suffix = " ORDER BY u.created_at LIMIT 1" + (" FOR UPDATE OF u" if lock else "")
     row = await (await conn.execute(_CURRENT + suffix, (SOFTWARE_WATCHLIST.key,))).fetchone()
@@ -343,6 +381,29 @@ class Watchlist:
                 return NoSuchSoftware(software_id)
             kept = tuple(s for s in record.software if s.id != software_id)
             record = await self._next_version(uow, record, kept)
+        return await self._view_of(record)
+
+    async def restore(
+        self, software_id: SoftwareId
+    ) -> WatchlistView | NoSuchSoftware | TooLate | RepoAddedAgainSinceRemoval | WatchlistFull:
+        async with self._db.transaction("builder") as uow:
+            record = await _current(uow.conn, lock=True)
+            if record is None:
+                return NoSuchSoftware(software_id)
+            if all(s.id != software_id for s in record.software):
+                removal = await _last_removal(uow.conn, record.use_case_id, software_id)
+                if removal is None:
+                    return NoSuchSoftware(software_id)
+                until = removal.at + RESTORE_WINDOW
+                if uow.now > until:
+                    return TooLate(until)
+                removed = removal.listed
+                ref = removed.source.ref.casefold()
+                if any(s.source.ref.casefold() == ref for s in record.software):
+                    return RepoAddedAgainSinceRemoval(removed.source.ref)
+                if len(record.software) >= WATCHLIST_LIMIT:
+                    return WatchlistFull(WATCHLIST_LIMIT)
+                record = await self._next_version(uow, record, (*record.software, removed))
         return await self._view_of(record)
 
     async def task_for(self, use_case_id: UseCaseId, version: int) -> WatchlistTask | None:

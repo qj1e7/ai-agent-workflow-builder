@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -16,6 +18,7 @@ KEY = {"Idempotency-Key": "k"}
 REPEATED = FakeBuilder(started=RunStarted(RunId("run_1"), created=False))
 SCHEDULE = {"day": "monday", "at": "09:00"}
 SOFTWARE = {"name": "LangGraph", "repo": "langchain-ai/langgraph", "our_version": "1.2.14"}
+RESTORE = "/api/v1/watchlist/software/{}/restore"
 
 CASES = [
     pytest.param("GET", "/api/v1/templates", {}, None, None, 401, id="templates-401"),
@@ -89,6 +92,11 @@ CASES = [
     pytest.param(
         "DELETE", "/api/v1/watchlist/software/sw_x", ALICE, None, None, 404, id="remove-404"
     ),
+    pytest.param("POST", RESTORE.format("sw_x"), {}, None, None, 401, id="restore-401"),
+    pytest.param("POST", RESTORE.format("sw_x"), BOB, None, None, 403, id="restore-403"),
+    pytest.param("POST", RESTORE.format("sw_x"), ALICE, None, None, 404, id="restore-404"),
+    pytest.param("POST", RESTORE.format("sw_again"), ALICE, None, None, 409, id="restore-409"),
+    pytest.param("POST", RESTORE.format("sw_full"), ALICE, None, None, 422, id="restore-422"),
     pytest.param("PUT", "/api/v1/watchlist/schedule", {}, SCHEDULE, None, 401, id="schedule-401"),
     pytest.param("PUT", "/api/v1/watchlist/schedule", BOB, SCHEDULE, None, 403, id="schedule-403"),
     pytest.param(
@@ -102,6 +110,15 @@ CASES = [
         None,
         422,
         id="schedule-422",
+    ),
+    pytest.param(
+        "POST", "/api/v1/builder/understand", {}, {"text": "x"}, None, 401, id="understand-401"
+    ),
+    pytest.param(
+        "POST", "/api/v1/builder/understand", BOB, {"text": "x"}, None, 403, id="understand-403"
+    ),
+    pytest.param(
+        "POST", "/api/v1/builder/understand", ALICE, {"text": ""}, None, 422, id="understand-422"
     ),
     pytest.param("DELETE", "/api/v1/watchlist/schedule", {}, None, None, 401, id="off-401"),
     pytest.param("DELETE", "/api/v1/watchlist/schedule", BOB, None, None, 403, id="off-403"),
@@ -140,4 +157,26 @@ def test_the_route_answers_the_status_and_declares_it(
         method, path.format(use_case_id="uc_x"), headers=headers, json=body
     )
     assert response.status_code == status
-    declared_status(app, method, path.replace("sw_x", "{software_id}"), response)
+    declared_status(app, method, re.sub(r"/sw_[a-z]+", "/{software_id}", path), response)
+
+
+def test_a_full_watchlist_is_a_422_of_its_own_type():
+    response = TestClient(app_with()).post(RESTORE.format("sw_full"), headers=ALICE)
+    assert response.json() == {
+        "detail": [
+            {
+                "type": "watchlist_full",
+                "loc": ["body"],
+                "msg": "The watchlist holds 100 software at most",
+            }
+        ]
+    }
+
+
+def test_understand_refuses_a_nul_byte_with_a_422_naming_the_field():
+    response = TestClient(app_with()).post(
+        "/api/v1/builder/understand", headers=ALICE, json={"text": "close\u0000 every ticket"}
+    )
+    assert response.status_code == 422
+    assert [error["loc"] for error in response.json()["detail"]] == [["body", "text"]]
+    assert "NUL" in response.json()["detail"][0]["msg"]

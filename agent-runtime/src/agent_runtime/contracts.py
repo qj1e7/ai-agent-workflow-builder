@@ -57,11 +57,13 @@ from agent_runtime.contract import (
     TaskFinished,
     TaskOutput,
     TaskRequest,
+    UnderstandRequest,
     WatchlistInputs,
     WireModel,
     agent_event_adapter,
 )
 from agent_runtime.model_access import KEY_REFUSED
+from agent_runtime.planner import RowAnswer, UnderstandAnswer, understood_of
 from agent_runtime.tools import tool_list
 
 PLANNER = AgentRef(id="planner", display="Planner")
@@ -454,6 +456,15 @@ def failed_task() -> TaskFailed:
         task_id="run_01JB9/work/1/1",
         error=TaskError(type="UpstreamUnavailable", message=NOTHING_READABLE, retryable=True),
         events=rec.events,
+        findings=[
+            Finding(
+                software_id=LANGGRAPH_ID,
+                state="cant_check",
+                newest=None,
+                new_versions=[],
+                detail=f"{GITHUB_503}.",
+            )
+        ],
     )
 
 
@@ -745,6 +756,45 @@ def chosen() -> Chosen:
 
 GATEWAY = "https://llm-gateway.example"
 EXAMPLE_KEY = "example-key-not-a-secret"
+FOLLOW_UP_TASK = (
+    "Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days and create one "
+    "follow-up ticket that lists them"
+)
+RELEASE_TASK = "Tell me when LangGraph has a new release"
+
+
+def understand_request() -> UnderstandRequest:
+    return UnderstandRequest(task=FOLLOW_UP_TASK, model=draft_request().model)
+
+
+def understood() -> WireModel:
+    answer = UnderstandAnswer(
+        belongs_on_watchlist=False,
+        rows=[
+            RowAnswer(kind="schedule", text="Every weekday at 3pm", state="understood"),
+            RowAnswer(
+                kind="look_for",
+                text="Bug tickets in MOCK with no update for 10 days",
+                state="understood",
+            ),
+            RowAnswer(
+                kind="do", text="Create one follow-up ticket that lists them", state="understood"
+            ),
+            RowAnswer(kind="where", text="Jira project MOCK", state="understood"),
+        ],
+    )
+    result = understood_of(answer, FOLLOW_UP_TASK)
+    assert result is not None
+    return result
+
+
+def belongs_on_watchlist() -> WireModel:
+    answer = UnderstandAnswer(
+        belongs_on_watchlist=True, watchlist_word="release", software="LangGraph"
+    )
+    result = understood_of(answer, RELEASE_TASK)
+    assert result is not None
+    return result
 
 
 def fixtures() -> dict[str, WireModel]:
@@ -780,6 +830,9 @@ def fixtures() -> dict[str, WireModel]:
         "card-drafted.json": drafted(),
         "planner-choose-request.json": choose_request(),
         "planner-chosen.json": chosen(),
+        "planner-understand-request.json": understand_request(),
+        "planner-understood.json": understood(),
+        "planner-watchlist.json": belongs_on_watchlist(),
     }
 
 

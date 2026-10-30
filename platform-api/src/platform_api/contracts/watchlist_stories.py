@@ -54,6 +54,7 @@ def row(
     open_ticket: str | None = None,
     approval_id: ApprovalId | None = None,
     added_at: datetime = ADDED_AT,
+    newest_read_at: datetime | None = None,
 ) -> WatchedSoftwareView:
     return WatchedSoftwareView.model_validate(
         {
@@ -63,6 +64,7 @@ def row(
             "our_version": our_version,
             "our_version_source": our_version_source,
             "newest_version": newest_version,
+            "newest_read_at": newest_read_at or (checked_at if newest_version else None),
             "checked_at": checked_at,
             "status": status,
             "problem": problem,
@@ -123,10 +125,11 @@ ROWS = [
         "fastapi/fastapi",
         "0.115.0",
         given(),
-        None,
+        "0.115.2",
         CHECKED_AT,
         "cant_check",
         problem="GitHub answered 404 Not Found.",
+        newest_read_at=FIRST_CHECK_AT,
     ),
     row(
         6,

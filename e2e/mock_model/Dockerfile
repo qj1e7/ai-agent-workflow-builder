@@ -3,7 +3,7 @@ WORKDIR /app
 COPY model_server.py ./
 
 FROM base AS test
-COPY test_model_server.py ./
+COPY test_model_server.py no_tool_cases.json ./
 USER nobody
 CMD ["python", "-m", "unittest", "-v", "test_model_server"]
 

@@ -5,7 +5,7 @@ import { SettingsPage } from '../screens/settings/SettingsPage'
 import type { Icon } from '../ui/icons'
 import { BotIcon, BoxIcon, GridIcon, HomeIcon, SettingsIcon } from './icons'
 import { NotFoundPage } from './NotFoundPage'
-import { EmptyPage } from './PageHead'
+import { EmptyPage, PageHead } from './PageHead'
 import { greeting, today } from './today'
 
 export interface PageContext {
@@ -53,7 +53,7 @@ export const PAGES: Readonly<Record<PageId, PageEntry>> = {
     tabLabel: 'Watchlist',
     icon: BoxIcon,
     heading: 'Software watchlist',
-    lead: 'Everything your team runs, in one list. Each check cross-checks versions, support dates and known vulnerabilities across trusted sources, and its upgrade tickets go out in one approval.',
+    lead: 'Everything your team runs, in one list. Each check reads the newest release from GitHub, and its upgrade tickets go out in one approval.',
     inMenu: true,
   },
   agents: {
@@ -77,6 +77,7 @@ export const PAGES: Readonly<Record<PageId, PageEntry>> = {
 }
 
 const RunRoute = lazy(() => import('../screens/run/RunPage').then((module) => ({ default: module.RunRoute })))
+const SoftwareRoute = lazy(() => import('../screens/software/SoftwarePage').then((module) => ({ default: module.SoftwareRoute })))
 const ApprovalRoute = lazy(() => import('../screens/run/RunPage').then((module) => ({ default: module.ApprovalRoute })))
 
 function Lazy({ children }: { children: ReactNode }) {
@@ -108,8 +109,11 @@ export function AppRoutes({ context }: { context: PageContext }) {
       />
       {PAGE_IDS.filter((id) => id !== 'agents').map((id) => {
         const { path, heading, lead } = PAGES[id]
+        const title = wordsOf(heading, context)
+        const intro = wordsOf(lead, context)
+        if (id === 'software') return <Route key={id} path={path} element={<><PageHead heading={title} lead={intro} /><Lazy><SoftwareRoute /></Lazy></>} />
         const Page = id === 'settings' ? SettingsPage : EmptyPage
-        return <Route key={id} path={path} element={<Page heading={wordsOf(heading, context)} lead={wordsOf(lead, context)} />} />
+        return <Route key={id} path={path} element={<Page heading={title} lead={intro} />} />
       })}
       <Route path="/runs/:runId" element={<Lazy><RunRoute /></Lazy>} />
       <Route path="/approvals/:approvalId" element={<Lazy><ApprovalRoute /></Lazy>} />

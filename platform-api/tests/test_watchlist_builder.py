@@ -1,13 +1,19 @@
-from collections.abc import Mapping
+from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
 from datetime import timedelta
 
 import pytest
 
 from platform_api.builder import Builder, Watchlist
+from platform_api.builder.lifecycle import RESTORE_WINDOW, TooLate
 from platform_api.builder.models import AddSoftware, WatchlistView
 from platform_api.builder.service import NothingToCheck
-from platform_api.builder.watchlist import NoSuchSoftware, RepoAlreadyWatched, WatchlistFull
+from platform_api.builder.watchlist import (
+    NoSuchSoftware,
+    RepoAddedAgainSinceRemoval,
+    RepoAlreadyWatched,
+    WatchlistFull,
+)
 from platform_api.db import Database
 from platform_api.orchestration import (
     Binding,
@@ -16,6 +22,7 @@ from platform_api.orchestration import (
     FromFirstCheck,
     FromTicketDone,
     Given,
+    KnownNewest,
     LastCheck,
     OpenTicket,
     PendingTicket,
@@ -31,7 +38,8 @@ from platform_api.orchestration import (
 )
 from platform_api.orchestration.watch import status_of
 from platform_api.shared import ApprovalId, Principal, ProposalId, RunId, SoftwareId, UseCaseId
-from tests.support import ALICE, CAROL, NOW
+from tests.conftest import PostgresUrls, truncate_all
+from tests.support import ALICE, CAROL, NOW, MovingClock
 
 pytestmark = pytest.mark.anyio
 
@@ -80,6 +88,22 @@ def facts() -> FakeFacts:
 @pytest.fixture
 def watchlist(db: Database, facts: FakeFacts) -> Watchlist:
     return Watchlist(db, facts, ScheduleBook(db))
+
+
+@pytest.fixture
+def clock() -> MovingClock:
+    return MovingClock()
+
+
+@pytest.fixture
+async def timed(postgres: PostgresUrls, clock: MovingClock) -> AsyncIterator[Watchlist]:
+    truncate_all(postgres.owner)
+    database = Database(postgres.contexts, clock=clock)
+    await database.open()
+    try:
+        yield Watchlist(database, FakeFacts(), ScheduleBook(database))
+    finally:
+        await database.close()
 
 
 @pytest.fixture
@@ -194,6 +218,114 @@ async def test_removing_software_that_is_not_listed_changes_nothing(watchlist: W
     assert await watchlist.view() == view
 
 
+async def test_restoring_removed_software_lists_it_again_as_it_was(
+    watchlist: Watchlist, facts: FakeFacts
+):
+    first = await added(watchlist, LANGGRAPH)
+    both = await added(watchlist, REDIS)
+    langgraph, redis = ids(both)["LangGraph"], ids(both)["Redis"]
+    facts.known = {
+        langgraph: SoftwareFacts(Given("1.2.14", NOW), Checked(RUN, LATER, "1.2.16"), None, None)
+    }
+    shown = await watchlist.view()
+    assert shown is not None
+    before = next(row for row in shown.software if row.id == langgraph)
+    removed = await watchlist.remove(langgraph)
+    assert isinstance(removed, WatchlistView) and removed.version == 3
+
+    restored = await watchlist.restore(langgraph)
+    assert isinstance(restored, WatchlistView)
+    assert restored.version == 4
+    assert next(row for row in restored.software if row.id == langgraph) == before
+    assert before.newest_version == "1.2.16", "what the platform learned comes back with it"
+    assert facts.asked[-1][1] == {
+        redis: None,
+        langgraph: Given("1.2.14", first.software[0].added_at),
+    }
+    assert await watchlist.restore(langgraph) == restored, "a repeat restore changes nothing"
+    again = await watchlist.view()
+    assert again is not None and again.version == 4
+
+
+async def test_restoring_software_that_was_never_listed_changes_nothing(watchlist: Watchlist):
+    nope = SoftwareId("sw_nope")
+    assert await watchlist.restore(nope) == NoSuchSoftware(nope)
+    view = await added(watchlist, LANGGRAPH)
+    assert await watchlist.restore(nope) == NoSuchSoftware(nope)
+    assert await watchlist.view() == view
+
+
+async def test_a_repository_added_again_since_its_removal_cannot_be_restored(
+    watchlist: Watchlist,
+):
+    first = await added(watchlist, LANGGRAPH)
+    old = first.software[0].id
+    await watchlist.remove(old)
+    again = await added(watchlist, software("LangGraph", "LangChain-AI/LangGraph"))
+    assert ids(again)["LangGraph"] != old
+    assert await watchlist.restore(old) == RepoAddedAgainSinceRemoval("langchain-ai/langgraph")
+    assert await watchlist.view() == again
+
+
+async def test_removed_software_can_be_restored_until_a_day_after_its_removal(
+    timed: Watchlist, clock: MovingClock
+):
+    langgraph = ids(await added(timed, LANGGRAPH))["LangGraph"]
+    await added(timed, REDIS)
+    clock.now = NOW + timedelta(hours=3)
+    await timed.remove(langgraph)
+    clock.now += RESTORE_WINDOW
+    restored = await timed.restore(langgraph)
+    assert isinstance(restored, WatchlistView)
+    assert ids(restored)["LangGraph"] == langgraph
+
+
+async def test_restoring_more_than_a_day_after_the_removal_is_refused(
+    timed: Watchlist, clock: MovingClock
+):
+    langgraph = ids(await added(timed, LANGGRAPH))["LangGraph"]
+    await added(timed, REDIS)
+    removed_at = NOW + timedelta(hours=3)
+    clock.now = removed_at
+    left = await timed.remove(langgraph)
+    assert isinstance(left, WatchlistView)
+    clock.now = removed_at + RESTORE_WINDOW + timedelta(seconds=1)
+    assert await timed.restore(langgraph) == TooLate(removed_at + RESTORE_WINDOW)
+    after = await timed.view()
+    assert after is not None
+    assert (after.version, ids(after)) == (left.version, ids(left))
+
+
+async def test_the_day_to_restore_counts_from_the_latest_removal(
+    timed: Watchlist, clock: MovingClock
+):
+    langgraph = ids(await added(timed, LANGGRAPH))["LangGraph"]
+    await timed.remove(langgraph)
+    clock.now = NOW + timedelta(hours=20)
+    await timed.restore(langgraph)
+    removed_again = NOW + timedelta(hours=30)
+    clock.now = removed_again
+    await timed.remove(langgraph)
+    clock.now = removed_again + timedelta(hours=5)
+    await added(timed, REDIS)
+    clock.now = removed_again + RESTORE_WINDOW
+    restored = await timed.restore(langgraph)
+    assert isinstance(restored, WatchlistView)
+    assert sorted(ids(restored)) == ["LangGraph", "Redis"]
+
+
+async def test_restoring_into_a_full_list_is_refused(watchlist: Watchlist):
+    for n in range(100):
+        await added(watchlist, software(f"Tool {n}", f"owner/tool-{n}"))
+    full = await watchlist.view()
+    assert full is not None
+    gone = ids(full)["Tool 0"]
+    await watchlist.remove(gone)
+    refilled = await added(watchlist, software("One more", "owner/one-more"))
+    assert await watchlist.restore(gone) == WatchlistFull(100)
+    assert await watchlist.view() == refilled
+
+
 async def test_the_list_holds_a_hundred_software_at_most(watchlist: Watchlist):
     for n in range(100):
         await added(watchlist, software(f"Tool {n}", f"owner/tool-{n}"))
@@ -295,6 +427,34 @@ async def test_the_view_shows_each_fact_the_platform_learned(
         LATER,
     )
     assert gamma.open_ticket == "MOCK-9"
+
+
+async def test_a_row_that_cannot_be_checked_shows_the_newest_version_it_last_knew_and_when(
+    watchlist: Watchlist, facts: FakeFacts
+):
+    by_name = await listed(watchlist, "Alpha", "Beta")
+    facts.known = {
+        by_name["Alpha"]: SoftwareFacts(
+            Given("1.0.0", NOW),
+            CouldNotCheck(RUN, LATER, "GitHub answered 503.", KnownNewest("1.2.0", NOW)),
+            None,
+            None,
+        ),
+        by_name["Beta"]: SoftwareFacts(
+            Given("1.0.0", NOW), Checked(RUN, LATER, "1.1.0"), None, None
+        ),
+    }
+    view = await watchlist.view()
+    assert view is not None
+    rows = {row.name: row for row in view.software}
+    alpha, beta = rows["Alpha"], rows["Beta"]
+    assert (alpha.status, alpha.problem, alpha.checked_at) == (
+        "cant_check",
+        "GitHub answered 503.",
+        LATER,
+    )
+    assert (alpha.newest_version, alpha.newest_read_at) == ("1.2.0", NOW)
+    assert (beta.newest_version, beta.newest_read_at, beta.checked_at) == ("1.1.0", LATER, LATER)
 
 
 async def test_a_check_carries_our_version_the_open_ticket_and_the_waiting_approval(

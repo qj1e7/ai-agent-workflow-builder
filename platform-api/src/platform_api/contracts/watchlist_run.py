@@ -235,6 +235,7 @@ def _row_before(w: Watched) -> WatchedSoftwareView:
             "our_version": w.our_version,
             "our_version_source": w.our_version_source,
             "newest_version": w.seen,
+            "newest_read_at": None if w.seen is None else LAST_WEEK,
             "checked_at": None if w.seen is None and w.problem is None else LAST_WEEK,
             "status": _status_before(w),
             "problem": w.problem,

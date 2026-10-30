@@ -102,7 +102,7 @@ from platform_api.orchestration.store import (
     RunRecord,
     Store,
 )
-from platform_api.orchestration.watch import Reviewed, Unusable, review
+from platform_api.orchestration.watch import Reviewed, Unusable, all_could_not_read, review
 from platform_api.orchestration.watch_store import WatchStore
 from platform_api.orchestration.write_actions import (
     AuthorizedWrite,
@@ -468,8 +468,16 @@ class Orchestrator:
                     await self._commit(uow, current, moved2)
                     await self._store.cancel_outbox(uow, run_id)
                     return StepReply(False, "failed", detail)
-                case TaskFailed(error=error, events=events):
+                case TaskFailed(error=error, events=events, findings=findings):
                     await self._activity.ingest_agent_events(uow, run_id, working.task_id, events)
+                    task = current.spec.task
+                    unread = (
+                        all_could_not_read(task, error, findings)
+                        if isinstance(task, WatchlistTask)
+                        else None
+                    )
+                    if unread is not None:
+                        await self._watch.record_review(uow, current, unread, None)
                     detail = f"{error.type}: {error.message}"
                     moved2 = working.fail(
                         Failure(FailureReason.AGENT_ERROR, detail, retryable=error.retryable)

@@ -24,6 +24,8 @@ from platform_api.builder.models import (
     TemplateList,
     TemplateView,
     ToolList,
+    UnderstandIn,
+    UnderstandOut,
     UseCaseCreated,
     UseCaseList,
     UseCaseView,
@@ -276,6 +278,19 @@ async def plan_task(body: PlanIn, principal: Operator, builder: CurrentBuilder) 
             raise HTTPException(503, "The agent runtime did not answer. Try again in a minute.")
         case _:
             return planned
+
+
+@router.post(
+    "/builder/understand",
+    description="The Planner reads the task back in parts, each understood, changed, missing or "
+    "can't do, or says it belongs on the Software watchlist. Without an AI model, or after 10 "
+    "seconds, it answers the starter workflows. Nothing is saved or written.",
+    responses=OPERATORS_ONLY,
+)
+async def understand_task(
+    body: UnderstandIn, principal: Operator, builder: CurrentBuilder
+) -> UnderstandOut:
+    return await builder.understand(body.text)
 
 
 @router.post(

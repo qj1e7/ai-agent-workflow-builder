@@ -87,7 +87,7 @@ export class Backend {
     return (await response.json()) as T
   }
 
-  async send<T = Json>(method: 'POST' | 'DELETE', user: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<Answer<T>> {
+  async send<T = Json>(method: 'POST' | 'PUT' | 'DELETE', user: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<Answer<T>> {
     const response = await this.http.fetch(path, { method, headers: { ...this.proofOf(user), ...headers }, ...(body === undefined ? {} : { data: body }) })
     const text = await response.text()
     return { status: response.status(), body: (text ? JSON.parse(text) : null) as T }
