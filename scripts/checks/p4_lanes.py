@@ -4,21 +4,25 @@ command saves what it saw in the folder it is given and prints PASS or FAIL.
 usage: python3 -I scripts/checks/p4_lanes.py <command> <api-base-url> <out-dir> [arguments]
 
   lane1 <trunk-api> <out> <head-api>     a watchlist check streamed at trunk and at head
-  lane2 <api> <out> <run-id>             the run's items in Cosmos DB
+  lane2 <api> <out> <run-id>             the run's items, then every item against PostgreSQL
   lane3 <api> <out> <run-id>             the stream again with Last-Event-ID 3
-  lane4 <api> <out>                      (own stack) the emulator stops while a run streams
+  lane4 <api> <out>                      (own stack) the emulator is down for a whole run
   lane5 <api> <out> <signing-key> [n]    (own stack) platform-api is killed in the middle of a copy
   lane6 <api> <out>                      (own stack) a run fails on purpose; its troubleshooter
   lane7 <api> <out>                      bob approves a run; the decision's item in Cosmos DB
   lane8 <api> <out>                      (own stack, libfaketime) two days pass before the yes
-  lane9 <api> <out> <second-api>         (own stack) two platform-api replicas stream one run
+  lane9 <api> <out> <second-api> <key>   (own stack) two platform-api replicas stream one run
   lane10 <api> <out> <lane-1 json>       (own stack, ACTIVITY_READER=postgres) emulator stopped
+  lane11 <api> <out>                     (own stack) the emulator is made again while the API runs
+  lane12 <api> <out>                     (own stack) down without -v, then up
 
 P4_COMPOSE holds the lane stack's docker compose command, for example
     docker compose -p p4-check --env-file /tmp/swarm-p4/env/.env \\
         -f <src>/deploy/compose.yaml -f <src>/deploy/compose.e2e.yaml
-The lanes read Cosmos DB through a short script in that stack's platform-api container, and
-PostgreSQL through psql in its postgres container. Lanes 1, 9 and 10 compare the kinds of events.
+Lane 12 runs `up` itself, so it also needs the stack's WAB_IMAGE_TAG and host ports in its
+environment; p4.sh passes them. The lanes read Cosmos DB through a short script in that stack's
+platform-api container, and PostgreSQL through psql in its postgres container. Lanes 1, 9 and 10
+compare the kinds of events.
 """
 
 import hashlib
@@ -41,10 +45,12 @@ from typing import Any
 WAIT_SECONDS = 150
 SETTLED = {"awaiting_approval", "succeeded", "failed", "rejected"}
 DONE = {"succeeded", "failed", "rejected"}
-READ_ERRORS = (OSError, ValueError)
 MOCK_MODEL_URL = "http://mock-model:8300"
 LANGGRAPH = {"name": "LangGraph", "repo": "langchain-ai/langgraph", "our_version": "1.2.14"}
 VALUES = {"GitHub repository": "langchain-ai/langgraph", "Jira project": "MOCK"}
+MARKER = "P4-MARKER: this text exists only in the Cosmos DB item"
+COSMOS_ADDRESS = "cosmos:8081"
+LANE9_EVENTS = 1000
 
 COSMOS_ITEMS = """
 import asyncio, json, os, sys
@@ -58,12 +64,74 @@ async def main():
     ) as client:
         container = client.get_database_client("activity").get_container_client("run_events")
         properties = await container.read()
-        query = container.query_items("SELECT * FROM c ORDER BY c.seq", partition_key=sys.argv[1])
-        items = [item async for item in query]
-    print(json.dumps({"partition_key": properties["partitionKey"], "items": items}))
+        if len(sys.argv) > 1:
+            query = container.query_items("SELECT * FROM c", partition_key=sys.argv[1])
+        else:
+            query = container.query_items("SELECT * FROM c")
+        found = [item async for item in query]
+    events = sorted((i for i in found if "seq" in i), key=lambda i: (i["runId"], i["seq"]))
+    print(json.dumps({
+        "partition_key": properties["partitionKey"],
+        "rid": properties["_rid"],
+        "generation": [i.get("generation") for i in found if "seq" not in i],
+        "items": events,
+    }))
 
 asyncio.run(main())
 """
+
+PATCH_ITEM = """
+import asyncio, json, os, sys
+from azure.cosmos.aio import CosmosClient
+
+async def main(run_id, seq, field, value):
+    async with CosmosClient(
+        os.environ["COSMOS_ENDPOINT"],
+        credential=os.environ["COSMOS_KEY"],
+        enable_endpoint_discovery=False,
+    ) as client:
+        container = client.get_database_client("activity").get_container_client("run_events")
+        item = await container.read_item(str(seq), partition_key=run_id)
+        *path, last = field.split(".")
+        target = item
+        for key in path:
+            target = target[key]
+        old = target[last]
+        target[last] = value
+        await container.upsert_item({k: v for k, v in item.items() if not k.startswith("_")})
+    print(json.dumps({"old": old, "new": value}))
+
+asyncio.run(main(sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4]))
+"""
+
+ALL_ROWS = (
+    "SELECT coalesce(json_agg(json_build_object('run_id', run_id, 'seq', seq, 'ts', ts, "
+    "'actor', actor, 'kind', kind, 'summary', summary, 'data', data, "
+    "'dedupe_key', dedupe_key) ORDER BY run_id, seq), '[]') FROM monitoring.run_events;"
+)
+
+GRANTS = """
+SELECT json_object_agg(t.name || ' ' || r.rolname, concat_ws(',',
+    CASE WHEN has_table_privilege(r.rolname, t.name, 'SELECT') THEN 'select' END,
+    CASE WHEN has_table_privilege(r.rolname, t.name, 'INSERT') THEN 'insert' END,
+    CASE WHEN has_table_privilege(r.rolname, t.name, 'UPDATE') THEN 'update' END,
+    CASE WHEN has_table_privilege(r.rolname, t.name, 'DELETE') THEN 'delete' END,
+    CASE WHEN has_table_privilege(r.rolname, t.name, 'TRUNCATE') THEN 'truncate' END)
+    ORDER BY t.name, r.rolname)
+FROM pg_roles AS r
+CROSS JOIN (VALUES ('monitoring.run_events'), ('monitoring.run_events_copied')) AS t(name)
+WHERE r.rolname IN ('n8n', 'wab_builder', 'wab_monitoring', 'wab_orchestration');
+"""
+TODAYS_GRANTS = {
+    "monitoring.run_events n8n": "",
+    "monitoring.run_events wab_builder": "",
+    "monitoring.run_events wab_monitoring": "select,insert",
+    "monitoring.run_events wab_orchestration": "select,insert",
+    "monitoring.run_events_copied n8n": "",
+    "monitoring.run_events_copied wab_builder": "",
+    "monitoring.run_events_copied wab_monitoring": "select,insert,update",
+    "monitoring.run_events_copied wab_orchestration": "",
+}
 
 
 class Api:
@@ -138,6 +206,35 @@ class Api:
     def events(self, run_id: str) -> list[Any]:
         return self.get("alice", f"/api/v1/runs/{run_id}/events?after=0")["events"]
 
+    def ready(self) -> dict[str, Any]:
+        status, body = self.call(None, "GET", "/healthz/ready")
+        checks = body.get("checks", []) if isinstance(body, dict) else []
+        copy = next((c for c in checks if c["name"] == "activity_copy"), None)
+        return {"status": status, "body": body, "copy": copy}
+
+
+def copy_behind(ready: dict[str, Any]) -> bool:
+    return ready["copy"] is not None and "behind" in ready["copy"]["detail"]
+
+
+def ready_without_cosmos(ready: dict[str, Any]) -> bool:
+    copy = ready["copy"]
+    return (
+        ready["status"] == 200
+        and copy is not None
+        and copy["ok"]
+        and COSMOS_ADDRESS not in json.dumps(ready["body"])
+    )
+
+
+def wait_caught_up(api: Api, timeout: float = 30) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    ready = api.ready()
+    while copy_behind(ready) and time.monotonic() < deadline:
+        time.sleep(0.5)
+        ready = api.ready()
+    return ready
+
 
 class Stream:
     def __init__(self, base: str, run_id: str, last_event_id: int | None = None) -> None:
@@ -150,7 +247,9 @@ class Stream:
         self.response = urllib.request.urlopen(request, timeout=WAIT_SECONDS)
         self.frames: list[str] = []
         self.events: list[dict[str, Any]] = []
+        self.error: str | None = None
         self.arrived = threading.Condition()
+        self.closed = threading.Event()
         threading.Thread(target=self._read, daemon=True).start()
 
     def _read(self) -> None:
@@ -170,8 +269,9 @@ class Stream:
                         self.events.append(json.loads(data[0]))
                     self.arrived.notify_all()
                 lines = []
-        except READ_ERRORS:
-            return
+        except Exception as error:
+            if not self.closed.is_set():
+                self.error = repr(error)
 
     def wait_for_seq(self, seq: int, timeout: float = 30) -> bool:
         deadline = time.monotonic() + timeout
@@ -183,7 +283,11 @@ class Stream:
                 self.arrived.wait(left)
         return True
 
+    def seqs(self) -> list[int]:
+        return [e["seq"] for e in self.events]
+
     def close(self) -> None:
+        self.closed.set()
         self.response.close()
 
 
@@ -194,19 +298,38 @@ class Stack:
             raise SystemExit("set P4_COMPOSE to the lane stack's docker compose command")
         self.compose = shlex.split(command)
 
-    def run(self, *args: str, stdin: str | None = None, check: bool = True) -> str:
-        done = subprocess.run(
+    def attempt(self, *args: str, stdin: str | None = None) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
             [*self.compose, *args], input=stdin, capture_output=True, text=True, check=False
         )
+
+    def run(self, *args: str, stdin: str | None = None, check: bool = True) -> str:
+        done = self.attempt(*args, stdin=stdin)
         if check and done.returncode != 0:
             raise SystemExit(f"{' '.join(args)}: {done.stderr.strip()}"[:800])
         return done.stdout
 
-    def cosmos(self, run_id: str) -> dict[str, Any]:
-        out = self.run("exec", "-T", "platform-api", "python", "-c", COSMOS_ITEMS, run_id)
+    def cosmos(self, run_id: str | None = None) -> dict[str, Any]:
+        args = [run_id] if run_id is not None else []
+        done = self.attempt("exec", "-T", "platform-api", "python", "-c", COSMOS_ITEMS, *args)
+        if done.returncode != 0:
+            error = (done.stderr.strip().splitlines() or ["no output"])[-1]
+            return {
+                "partition_key": None,
+                "rid": None,
+                "generation": [],
+                "items": [],
+                "error": error,
+            }
+        return json.loads(done.stdout.strip().splitlines()[-1])
+
+    def patch(self, run_id: str, seq: int, field: str, value: str) -> Any:
+        out = self.run(
+            "exec", "-T", "platform-api", "python", "-c", PATCH_ITEM, run_id, str(seq), field, value
+        )
         return json.loads(out.strip().splitlines()[-1])
 
-    def sql(self, statement: str, run_id: str) -> Any:
+    def sql(self, statement: str, run_id: str = "") -> Any:
         out = self.run(
             "exec",
             "-T",
@@ -242,17 +365,26 @@ class Stack:
             run_id,
         )
 
-    def health(self, service: str) -> str:
-        container = self.run("ps", "-q", service).strip()
+    def container(self, service: str) -> str:
+        return self.run("ps", "-q", service).strip()
+
+    def inspect(self, service: str, template: str) -> str:
+        container = self.container(service)
         if not container:
             return "absent"
         done = subprocess.run(
-            ["docker", "inspect", "--format", "{{.State.Health.Status}}", container],
+            ["docker", "inspect", "--format", template, container],
             capture_output=True,
             text=True,
             check=False,
         )
         return done.stdout.strip()
+
+    def health(self, service: str) -> str:
+        return self.inspect(service, "{{.State.Health.Status}}")
+
+    def started_at(self, service: str) -> str:
+        return self.inspect(service, "{{.Id}} {{.State.StartedAt}}")
 
     def wait_healthy(self, service: str, timeout: float = 240) -> None:
         deadline = time.monotonic() + timeout
@@ -268,7 +400,9 @@ def save(out: Path, name: str, payload: Any) -> None:
     (out / name).write_text(text + "\n")
 
 
-def verdict(lines: list[tuple[bool, str]]) -> bool:
+def verdict(lines: list[tuple[bool, str]], notes: list[str] | None = None) -> bool:
+    for note in notes or []:
+        print("note " + note)
     for ok, line in lines:
         print(("ok   " if ok else "FAIL ") + line)
     passed = all(ok for ok, _ in lines)
@@ -286,6 +420,66 @@ def seqs_of(items: list[dict[str, Any]]) -> list[int]:
 
 def gapless(seqs: list[int]) -> bool:
     return seqs == list(range(1, len(seqs) + 1))
+
+
+def same(row: dict[str, Any], item: dict[str, Any]) -> bool:
+    return (
+        item["id"] == str(row["seq"])
+        and item["kind"] == row["kind"]
+        and item["summary"] == row["summary"]
+        and item["data"] == row["data"]
+        and item["actor"] == row["actor"]
+        and item["dedupeKey"] == row["dedupe_key"]
+        and datetime.fromisoformat(item["ts"]) == datetime.fromisoformat(row["ts"])
+    )
+
+
+def compare(stack: Stack) -> dict[str, Any]:
+    found = stack.cosmos()
+    rows = stack.sql(ALL_ROWS)
+    by_row = {(r["run_id"], r["seq"]): r for r in rows}
+    by_item: dict[tuple[str, int], dict[str, Any]] = {}
+    repeated: list[tuple[str, int]] = []
+    for item in found["items"]:
+        key = (item["runId"], item["seq"])
+        if key in by_item:
+            repeated.append(key)
+        by_item[key] = item
+    missing = sorted(by_row.keys() - by_item.keys())
+    extra = sorted(by_item.keys() - by_row.keys())
+    differ = [k for k in sorted(by_row.keys() & by_item.keys()) if not same(by_row[k], by_item[k])]
+    runs = sorted({run for run, _ in by_row})
+    pg_gapless = all(gapless(sorted(s for r, s in by_row if r == run)) for run in runs)
+    return {
+        "ok": not (missing or extra or repeated or differ) and pg_gapless and "error" not in found,
+        "pg_rows": len(rows),
+        "cosmos_items": len(found["items"]),
+        "runs": len(runs),
+        "missing": len(missing),
+        "extra": len(extra),
+        "repeated": len(repeated),
+        "differ": len(differ),
+        "pg_gapless_per_run": pg_gapless,
+        "error": found.get("error"),
+        "first_missing": missing[:10],
+        "first_extra": extra[:10],
+        "first_differ": [{"pg": by_row[k], "cosmos": by_item[k]} for k in differ[:3]],
+    }
+
+
+def settled_compare(stack: Stack, timeout: float = 90) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    compared = compare(stack)
+    while not compared["ok"] and time.monotonic() < deadline:
+        time.sleep(2)
+        compared = compare(stack)
+    return compared
+
+
+def compared_line(compared: dict[str, Any]) -> str:
+    counts = {k: compared[k] for k in ("pg_rows", "cosmos_items", "runs", "missing", "extra")}
+    counts |= {k: compared[k] for k in ("repeated", "differ")}
+    return f"every PostgreSQL row has one equal item in Cosmos DB, and nothing else: {counts}"
 
 
 def ensure_watchlist(api: Api) -> str:
@@ -368,6 +562,15 @@ def wait_for_copy(stack: Stack, run_id: str, last_seq: int, timeout: float = 90)
     return found
 
 
+def page_from_cosmos(api: Api, stack: Stack, run_id: str) -> tuple[bool, float, Any]:
+    """Changes event 1's summary in Cosmos DB only, so a page that shows it came from there."""
+    patched = stack.patch(run_id, 1, "summary", MARKER)
+    started = time.monotonic()
+    events = api.events(run_id)
+    took = time.monotonic() - started
+    return bool(events) and events[0]["summary"] == MARKER, took, patched
+
+
 def lane1(trunk: Api, out: Path, head: Api) -> bool:
     sides: dict[str, Any] = {}
     for name, api in (("trunk", trunk), ("head", head)):
@@ -405,11 +608,16 @@ def lane2(api: Api, out: Path, run_id: str) -> bool:
     run = api.get("alice", f"/api/v1/runs/{run_id}")
     found = wait_for_copy(stack, run_id, run["last_seq"])
     items = found["items"]
+    compared = settled_compare(stack)
+    grants = stack.sql(GRANTS)
     save(out, "p4-items.json", {"run": run, **found})
+    save(out, "p4-compare.json", compared)
+    save(out, "p4-grants.json", grants)
     return verdict(
         [
             (
-                found["partition_key"]["paths"] == ["/runId"],
+                found["partition_key"] is not None
+                and found["partition_key"]["paths"] == ["/runId"],
                 f"partition key {found['partition_key']}",
             ),
             (
@@ -424,6 +632,8 @@ def lane2(api: Api, out: Path, run_id: str) -> bool:
                 all(item["id"] == str(item["seq"]) for item in items),
                 "each item's id is its seq as text",
             ),
+            (compared["ok"], compared_line(compared)),
+            (grants == TODAYS_GRANTS, f"the activity log keeps today's grants: {grants}"),
         ]
     )
 
@@ -439,8 +649,8 @@ def lane3(api: Api, out: Path, run_id: str) -> bool:
         [
             (first == 4, f"the first frame after Last-Event-ID 3 is event {first}"),
             (
-                [e["seq"] for e in stream.events] == list(range(4, 4 + len(stream.events))),
-                f"then {[e['seq'] for e in stream.events]} in order",
+                stream.seqs() == list(range(4, 4 + len(stream.events))),
+                f"then {stream.seqs()} in order",
             ),
         ]
     )
@@ -448,21 +658,32 @@ def lane3(api: Api, out: Path, run_id: str) -> bool:
 
 def lane4(api: Api, out: Path) -> bool:
     stack = Stack()
-    run_id = api.start_run("alice", ensure_watchlist(api))
-    stream = Stream(api.base, run_id)
+    connect_model(api)
+    use_case = agent_workflow(api, "lane4")
     stack.run("stop", "-t", "1", "cosmos")
     stopped_at = datetime.now(UTC).isoformat()
+    run_id = api.start_run("alice", use_case)
+    stream = Stream(api.base, run_id)
     run = api.wait(run_id, SETTLED)
+    approved = None
+    if run["state"] == "awaiting_approval":
+        approved, _, _ = approve_as_bob(api, run)
+    done = api.wait(run_id, DONE)
     copied_while_down = stack.mark(run_id)
+    streamed_while_down = stream.seqs()
+    ready_down = api.ready()
     stack.run("start", "cosmos")
     stack.wait_healthy("cosmos")
     started_at = datetime.now(UTC).isoformat()
-    found = wait_for_copy(stack, run_id, run["last_seq"])
-    stream.wait_for_seq(run["last_seq"], timeout=60)
+    found = wait_for_copy(stack, run_id, done["last_seq"])
+    stream.wait_for_seq(done["last_seq"], timeout=60)
+    time.sleep(1)
     stream.close()
-    streamed = [e["seq"] for e in stream.events]
+    ready_after = wait_caught_up(api)
+    compared = settled_compare(stack)
     logs = stack.run("logs", "--no-color", "platform-api", check=False)
     warnings = [line for line in logs.splitlines() if "Could not copy" in line]
+    expected = list(range(1, done["last_seq"] + 1))
     save(
         out,
         "p4-emulator-down.json",
@@ -470,32 +691,54 @@ def lane4(api: Api, out: Path) -> bool:
             "run_id": run_id,
             "stopped_at": stopped_at,
             "started_at": started_at,
-            "run": run,
+            "state_at_the_gate": run["state"],
+            "approve_status": approved,
+            "run": done,
             "mark_while_down": copied_while_down,
+            "streamed_while_down": streamed_while_down,
+            "ready_while_down": ready_down,
+            "ready_after": ready_after,
             "pg_rows": stack.rows(run_id),
             "cosmos": found,
-            "streamed_across_the_outage": streamed,
+            "streamed_across_the_outage": stream.seqs(),
             "copier_warnings": warnings[:20],
+            "compare": compared,
         },
     )
-    seqs = seqs_of(found["items"])
     return verdict(
         [
-            (run["state"] in SETTLED, f"the run reached {run['state']} in PostgreSQL"),
             (
-                copied_while_down < run["last_seq"],
+                run["state"] == "awaiting_approval" and approved == 201,
+                f"bob approved while the emulator was down: HTTP {approved}",
+            ),
+            (
+                done["state"] == "succeeded",
+                f"the run finished in PostgreSQL with the emulator down: {done['state']}, "
+                f"last_seq {done['last_seq']}",
+            ),
+            (
+                copied_while_down < done["last_seq"],
                 f"while the emulator was down the mark stayed at {copied_while_down} "
-                f"of {run['last_seq']}",
+                f"of {done['last_seq']}",
             ),
             (bool(warnings), f"the copier logged {len(warnings)} failed copies"),
             (
-                seqs == list(range(1, run["last_seq"] + 1)),
-                f"after the restart Cosmos DB holds {seqs} of {run['last_seq']}",
+                ready_without_cosmos(ready_down) and copy_behind(ready_down),
+                f"readiness while down: HTTP {ready_down['status']}, {ready_down['copy']}",
             ),
             (
-                streamed == list(range(1, run["last_seq"] + 1)),
-                f"a stream held open across the outage got {streamed}, each once, in order",
+                seqs_of(found["items"]) == expected,
+                f"after the restart Cosmos DB holds {len(found['items'])} of {done['last_seq']}",
             ),
+            (
+                stream.seqs() == expected,
+                f"a stream held open across the outage got {stream.seqs()}, each once, in order",
+            ),
+            (
+                ready_after["status"] == 200 and not copy_behind(ready_after),
+                f"readiness once caught up: {ready_after['copy']}",
+            ),
+            (compared["ok"], compared_line(compared)),
         ]
     )
 
@@ -506,7 +749,7 @@ def signed(key: str, run_id: str, task_id: str) -> str:
     return f"{expires}.{hmac.new(key.encode(), message, hashlib.sha256).hexdigest()}"
 
 
-def post_agent_events(api: Api, run_id: str, key: str, count: int) -> int:
+def post_agent_events(apis: list[Api], run_id: str, key: str, count: int, agent: str) -> int:
     task_id = f"{run_id}/work/1/1"
     token = signed(key, run_id, task_id)
     task = urllib.parse.quote(task_id, safe="")
@@ -515,12 +758,12 @@ def post_agent_events(api: Api, run_id: str, key: str, count: int) -> int:
         event = {
             "agent_seq": n,
             "ts": datetime.now(UTC).isoformat(),
-            "agent": {"id": "p4_lane5", "display": "Lane 5"},
-            "summary": f"Lane 5 event {n}.",
+            "agent": {"id": agent, "display": agent},
+            "summary": f"{agent} event {n}.",
             "kind": "agent_step_started",
             "data": {"step": f"step {n}"},
         }
-        status, _ = api.call(
+        status, _ = apis[n % len(apis)].call(
             None,
             "POST",
             f"/internal/v1/runs/{run_id}/agent-events?task={task}",
@@ -536,13 +779,11 @@ def lane5(api: Api, out: Path, key: str, count: int) -> bool:
     stack = Stack()
     run_id = f"run_p4lane5{uuid.uuid4().hex[:12]}"
     stack.run("stop", "-t", "1", "cosmos")
-    accepted = post_agent_events(api, run_id, key, count)
+    accepted = post_agent_events([api], run_id, key, count, "p4_lane5")
     stack.run("start", "cosmos")
-    stack.wait_healthy("cosmos")
-    deadline = time.monotonic() + 120
+    deadline = time.monotonic() + 240
     mark = stack.mark(run_id)
     while mark == 0 and time.monotonic() < deadline:
-        time.sleep(0.05)
         mark = stack.mark(run_id)
     stack.run("kill", "-s", "SIGKILL", "platform-api")
     killed_at_mark = stack.mark(run_id)
@@ -571,7 +812,7 @@ def lane5(api: Api, out: Path, key: str, count: int) -> bool:
             (
                 0 < killed_at_mark < count,
                 f"platform-api was killed mid-copy, at mark {killed_at_mark} of {count}. "
-                "Rerun with a larger count when this fails",
+                "Rerun with a larger LANE5_EVENTS when this fails",
             ),
             (
                 seqs == list(range(1, count + 1)),
@@ -609,18 +850,31 @@ def lane6(api: Api, out: Path) -> bool:
     try:
         run_id = api.start_run("alice", ensure_watchlist(api))
         run = api.wait(run_id, DONE | {"awaiting_approval"})
-        status, answer = api.call("alice", "GET", f"/api/v1/runs/{run_id}/troubleshoot")
     finally:
         set_github(stack, "ok")
     found = wait_for_copy(stack, run_id, run["last_seq"])
+    status, answer = api.call("alice", "GET", f"/api/v1/runs/{run_id}/troubleshoot")
     failed_items = [item for item in found["items"] if item["kind"] == "run_failed"]
     failed_item = failed_items[-1] if failed_items else None
+    patched = marked_status = marked = None
+    if failed_item is not None:
+        patched = stack.patch(run_id, failed_item["seq"], "data.message", MARKER)
+        marked_status, marked = api.call("alice", "GET", f"/api/v1/runs/{run_id}/troubleshoot")
     save(
         out,
         "p4-troubleshoot.json",
-        {"run": run, "status": status, "answer": answer, "run_failed_item": failed_item},
+        {
+            "run": run,
+            "status": status,
+            "answer": answer,
+            "run_failed_item": failed_item,
+            "patched_in_cosmos_only": patched,
+            "status_after_patch": marked_status,
+            "answer_after_patch": marked,
+        },
     )
     failure = (answer or {}).get("failure") if isinstance(answer, dict) else None
+    marked_failure = (marked or {}).get("failure") if isinstance(marked, dict) else None
     return verdict(
         [
             (run["state"] == "failed", f"the run is {run['state']}"),
@@ -634,6 +888,13 @@ def lane6(api: Api, out: Path) -> bool:
             (
                 bool(failure) and bool(failure.get("stage")),
                 f"the answer names the step that stopped: stage {failure and failure.get('stage')}",
+            ),
+            (
+                marked_status == 200
+                and bool(marked_failure)
+                and marked_failure.get("message") == MARKER,
+                "after the item's message changed in Cosmos DB only, the answer carries it: "
+                f"{marked_failure and marked_failure.get('message')}",
             ),
         ]
     )
@@ -696,6 +957,16 @@ def server_time(api: Api) -> datetime:
     return datetime.strptime(date, "%a, %d %b %Y %H:%M:%S GMT").replace(tzinfo=UTC)
 
 
+def server_time_after_the_jump(api: Api, before: datetime, timeout: float = 5) -> datetime:
+    """uvicorn makes its Date header once a second, so the new clock shows after a second."""
+    deadline = time.monotonic() + timeout
+    after = server_time(api)
+    while after - before < timedelta(hours=47) and time.monotonic() < deadline:
+        time.sleep(0.5)
+        after = server_time(api)
+    return after
+
+
 def lane8(api: Api, out: Path) -> bool:
     stack = Stack()
     run_id = api.start_run("alice", ensure_watchlist(api))
@@ -706,7 +977,7 @@ def lane8(api: Api, out: Path) -> bool:
     before_items = wait_for_copy(stack, run_id, run["last_seq"])["items"]
     clock_before = server_time(api)
     stack.run("exec", "-T", "platform-api", "sh", "-c", "echo +2d > /tmp/faketime")
-    clock_after = server_time(api)
+    clock_after = server_time_after_the_jump(api, clock_before)
     status, _, _ = approve_as_bob(api, run)
     after = api.wait(run_id, DONE)
     rows = stack.rows(run_id)
@@ -721,6 +992,7 @@ def lane8(api: Api, out: Path) -> bool:
             "run_id": run_id,
             "clock_before": clock_before,
             "clock_after": clock_after,
+            "clock_moved": "platform-api only",
             "decision_status": status,
             "state": after["state"],
             "pg_rows_before": before_rows,
@@ -733,7 +1005,11 @@ def lane8(api: Api, out: Path) -> bool:
     last_old_ts = datetime.fromisoformat(before_rows[-1]["ts"]) if before_rows else None
     return verdict(
         [
-            (jumped >= timedelta(hours=47), f"platform-api's clock moved {jumped}"),
+            (
+                jumped >= timedelta(hours=47),
+                f"platform-api's clock moved {jumped}. Only platform-api's clock moves; "
+                "it stamps the run's events and the decision",
+            ),
             (
                 status == 201 and after["state"] in DONE,
                 f"bob approved; the run is {after['state']}",
@@ -757,7 +1033,8 @@ def lane8(api: Api, out: Path) -> bool:
     )
 
 
-def lane9(api: Api, out: Path, second: Api) -> bool:
+def lane9(api: Api, out: Path, second: Api, key: str) -> bool:
+    stack = Stack()
     run_id = api.start_run("alice", ensure_watchlist(api))
     streams = {"api-1": Stream(api.base, run_id), "api-2": Stream(second.base, run_id)}
     run = api.wait(run_id, SETTLED)
@@ -765,22 +1042,56 @@ def lane9(api: Api, out: Path, second: Api) -> bool:
     time.sleep(1)
     for stream in streams.values():
         stream.close()
+    many = f"run_p4lane9{uuid.uuid4().hex[:12]}"
+    busy = {"api-1": Stream(api.base, many), "api-2": Stream(second.base, many)}
+    time.sleep(0.5)
+    accepted = post_agent_events([api, second], many, key, LANE9_EVENTS, "p4_lane9")
+    busy_caught_up = {name: s.wait_for_seq(LANE9_EVENTS, 60) for name, s in busy.items()}
+    time.sleep(1)
+    for stream in busy.values():
+        stream.close()
+    compared = settled_compare(stack)
     lines_out = [f"run {run_id} is {run['state']}, last_seq {run['last_seq']}"]
     for name, stream in streams.items():
         lines_out += [f"{name}: {e['seq']} {e['kind']}" for e in stream.events]
+    for name, stream in busy.items():
+        lines_out.append(f"{name}: run {many} got {len(stream.events)} events")
     save(out, "p4-two-replicas.txt", "\n".join(lines_out))
+    save(
+        out,
+        "p4-two-replicas-1000.json",
+        {
+            "run_id": many,
+            "accepted": accepted,
+            **{name: s.seqs() for name, s in busy.items()},
+            "compare": compared,
+        },
+    )
     expected = list(range(1, run["last_seq"] + 1))
-    seen = {name: [e["seq"] for e in s.events] for name, s in streams.items()}
+    many_expected = list(range(1, LANE9_EVENTS + 1))
     return verdict(
         [
             *(
-                (caught_up[name] and seen[name] == expected, f"{name} got {seen[name]}")
-                for name in streams
+                (caught_up[name] and s.seqs() == expected, f"{name} got {s.seqs()}")
+                for name, s in streams.items()
             ),
             (
                 kinds(streams["api-1"].events) == kinds(streams["api-2"].events),
                 "both replicas streamed the same kinds in the same order",
             ),
+            (
+                accepted == LANE9_EVENTS,
+                f"{accepted} of {LANE9_EVENTS} events posted, alternating between the replicas",
+            ),
+            *(
+                (
+                    busy_caught_up[name] and s.seqs() == many_expected,
+                    f"{name} streamed {len(s.events)} of {LANE9_EVENTS} events, each once, "
+                    "in order",
+                )
+                for name, s in busy.items()
+            ),
+            (compared["ok"], compared_line(compared)),
         ]
     )
 
@@ -790,6 +1101,11 @@ def lane10(api: Api, out: Path, lane1_json: str) -> bool:
     stack.run("stop", "-t", "1", "cosmos")
     run_id, events, run, caught_up = streamed_run(api, ensure_watchlist(api))
     head = json.loads(Path(lane1_json).read_text())["head"]
+    ready = api.ready()
+    deadline = time.monotonic() + 15
+    while not copy_behind(ready) and time.monotonic() < deadline:
+        time.sleep(0.5)
+        ready = api.ready()
     save(
         out,
         "p4-postgres-reader.json",
@@ -800,6 +1116,7 @@ def lane10(api: Api, out: Path, lane1_json: str) -> bool:
             "seqs": [e["seq"] for e in events],
             "lane1_head_kinds": head["kinds"],
             "cosmos_health": stack.health("cosmos"),
+            "ready": ready,
         },
     )
     return verdict(
@@ -810,7 +1127,148 @@ def lane10(api: Api, out: Path, lane1_json: str) -> bool:
                 kinds(events) == head["kinds"],
                 f"the stream holds lane 1's head kinds: {kinds(events)}",
             ),
+            (
+                ready_without_cosmos(ready) and copy_behind(ready),
+                f"readiness: HTTP {ready['status']}, {ready['copy']}, and it never names "
+                f"{COSMOS_ADDRESS}",
+            ),
         ]
+    )
+
+
+def lane11(api: Api, out: Path) -> bool:
+    stack = Stack()
+    use_case = ensure_watchlist(api)
+    old_id, _, old_run, _ = streamed_run(api, use_case)
+    wait_for_copy(stack, old_id, old_run["last_seq"])
+    before = stack.cosmos()
+    api_before = stack.started_at("platform-api")
+    stack.run("rm", "-sf", "cosmos")
+    stack.run("up", "-d", "--no-deps", "--wait", "cosmos")
+    made_again_at = datetime.now(UTC).isoformat()
+    new_id = api.start_run("alice", use_case)
+    stream = Stream(api.base, new_id)
+    new_run = api.wait(new_id, SETTLED)
+    new_found = wait_for_copy(stack, new_id, new_run["last_seq"], timeout=120)
+    stream.wait_for_seq(new_run["last_seq"], timeout=60)
+    time.sleep(1)
+    stream.close()
+    old_found = wait_for_copy(stack, old_id, old_run["last_seq"])
+    after = stack.cosmos()
+    compared = settled_compare(stack)
+    ready = wait_caught_up(api)
+    from_cosmos, took, patched = page_from_cosmos(api, stack, old_id)
+    api_after = stack.started_at("platform-api")
+    save(
+        out,
+        "p4-emulator-made-again.json",
+        {
+            "made_again_at": made_again_at,
+            "platform_api_before": api_before,
+            "platform_api_after": api_after,
+            "rid_before": before["rid"],
+            "rid_after": after["rid"],
+            "generation_before": before["generation"],
+            "generation_after": after["generation"],
+            "old_run": {"run_id": old_id, "last_seq": old_run["last_seq"], **old_found},
+            "new_run": {"run_id": new_id, "last_seq": new_run["last_seq"], **new_found},
+            "new_run_streamed": stream.seqs(),
+            "ready": ready,
+            "compare": compared,
+            "page_read_seconds": took,
+            "patched_in_cosmos_only": patched,
+        },
+    )
+    return verdict(
+        [
+            (api_before == api_after, f"platform-api ran throughout: {api_after}"),
+            (
+                before["generation"] != after["generation"] and bool(after["generation"]),
+                f"the new container has a new generation: {before['generation']} then "
+                f"{after['generation']}",
+            ),
+            (
+                seqs_of(new_found["items"]) == list(range(1, new_run["last_seq"] + 1)),
+                f"run {new_id}, started after, reached Cosmos DB: {seqs_of(new_found['items'])}",
+            ),
+            (
+                stream.seqs() == list(range(1, new_run["last_seq"] + 1)),
+                f"its stream got {stream.seqs()}, each once, in order",
+            ),
+            (
+                seqs_of(old_found["items"]) == list(range(1, old_run["last_seq"] + 1)),
+                f"run {old_id}, copied before, is in Cosmos DB again: "
+                f"{seqs_of(old_found['items'])}",
+            ),
+            (compared["ok"], compared_line(compared)),
+            (
+                ready["status"] == 200 and not copy_behind(ready),
+                f"readiness once caught up: {ready['copy']}",
+            ),
+            (from_cosmos, f"the old run's page came from Cosmos DB, in {took:.2f} s"),
+        ],
+        [f"the container's _rid was {before['rid']} and is {after['rid']}"],
+    )
+
+
+def lane12(api: Api, out: Path) -> bool:
+    stack = Stack()
+    old_id, _, old_run, _ = streamed_run(api, ensure_watchlist(api))
+    wait_for_copy(stack, old_id, old_run["last_seq"])
+    before = stack.cosmos()
+    stack.run("down")
+    stack.run("up", "--no-build", "--wait", "--wait-timeout", "420")
+    kept = api.get("alice", f"/api/v1/runs/{old_id}")
+    refilled = wait_for_copy(stack, old_id, old_run["last_seq"], timeout=120)
+    after = stack.cosmos()
+    stream = Stream(api.base, old_id)
+    stream.wait_for_seq(old_run["last_seq"], timeout=30)
+    time.sleep(1)
+    stream.close()
+    compared = settled_compare(stack)
+    from_cosmos, took, patched = page_from_cosmos(api, stack, old_id)
+    expected = list(range(1, old_run["last_seq"] + 1))
+    save(
+        out,
+        "p4-down-up.json",
+        {
+            "run_id": old_id,
+            "last_seq": old_run["last_seq"],
+            "kept_in_postgresql": kept,
+            "rid_before": before["rid"],
+            "rid_after": after["rid"],
+            "generation_before": before["generation"],
+            "generation_after": after["generation"],
+            "refilled": refilled,
+            "replayed": stream.seqs(),
+            "compare": compared,
+            "page_read_seconds": took,
+            "patched_in_cosmos_only": patched,
+        },
+    )
+    return verdict(
+        [
+            (
+                kept["last_seq"] == old_run["last_seq"],
+                f"PostgreSQL kept run {old_id} with last_seq {kept['last_seq']}",
+            ),
+            (
+                before["generation"] != after["generation"] and bool(after["generation"]),
+                f"the new emulator's container has a new generation: {before['generation']} "
+                f"then {after['generation']}",
+            ),
+            (
+                seqs_of(refilled["items"]) == expected,
+                f"the old run is in Cosmos DB again: {seqs_of(refilled['items'])}",
+            ),
+            (
+                stream.seqs() == expected,
+                f"its stream replayed {stream.seqs()}, each once, in order",
+            ),
+            (compared["ok"], compared_line(compared)),
+            (from_cosmos, f"the old run's page came from Cosmos DB, in {took:.2f} s"),
+        ],
+        [f"the container's _rid was {before['rid']} and is {after['rid']}"],
     )
 
 
@@ -826,12 +1284,14 @@ def main(argv: list[str]) -> int:
         "lane2": lambda: lane2(api, out, rest[0]),
         "lane3": lambda: lane3(api, out, rest[0]),
         "lane4": lambda: lane4(api, out),
-        "lane5": lambda: lane5(api, out, rest[0], int(rest[1]) if len(rest) > 1 else 600),
+        "lane5": lambda: lane5(api, out, rest[0], int(rest[1]) if len(rest) > 1 else 4000),
         "lane6": lambda: lane6(api, out),
         "lane7": lambda: lane7(api, out),
         "lane8": lambda: lane8(api, out),
-        "lane9": lambda: lane9(api, out, Api(rest[0])),
+        "lane9": lambda: lane9(api, out, Api(rest[0]), rest[1]),
         "lane10": lambda: lane10(api, out, rest[0]),
+        "lane11": lambda: lane11(api, out),
+        "lane12": lambda: lane12(api, out),
     }
     if command not in lanes:
         print(__doc__)

@@ -5,7 +5,7 @@
 # usage: scripts/checks/p4.sh <command> [arguments]
 #
 #   disk                                   free space on the Docker disk; fails under $DISK_MIN_MB
-#   export <sha> <dir>                     git archive of one commit into <dir>, with $ENV_FILE as deploy/.env
+#   export <sha> <dir>                     git archive of one commit of $SOURCE_REPO into <dir>, with $ENV_FILE as deploy/.env
 #   pg-up | pg-down                        the PostgreSQL 17 the platform-api tests use (host port $PG_PORT)
 #   cosmos-up | cosmos-down                an emulator for the platform-api tests (host port $COSMOS_PORT)
 #   gates <worktree>                       platform-api's CI gates with the Cosmos DB tests required
@@ -13,7 +13,8 @@
 #   down <src> <project>                   logs, then down -v
 #   lane1 <trunk-src> <head-src>           trunk and head stacks ($PREFIX-trunk, $PREFIX), lane 1
 #   lane <2|3|7>                           a lane on the shared head stack $PREFIX, from $HEAD_SRC
-#   lane4 | lane5 | lane6 | lane8 | lane9 | lane10 <head-src>   a lane on its own stack $PREFIX-l<n>
+#   lane4 | lane5 | lane6 | lane8 | lane9 | lane10 | lane11 | lane12 <head-src>
+#                                          a lane on its own stack $PREFIX-l<n>
 #   perf <trunk-src> <head-src> [rounds]   p95.py --stream in both shared stacks, interleaved
 #   perf-table <dir>                       the medians and the rule: head under 1 s and at most trunk + 500 ms
 #   cleanup                                removes the images this checker's tag left
@@ -24,23 +25,31 @@
 #   p4.sh up $EVID/head p4-check 44080 44000 44678     (builds the head images)
 #   p4.sh lane1 $EVID/trunk $EVID/head                  (builds trunk's images, starts $PREFIX-trunk)
 #   p4.sh lane 2; p4.sh lane 3; p4.sh lane 7
-#   p4.sh lane4 $EVID/head ... p4.sh lane10 $EVID/head  (own stacks, NO_BUILD=1, each downed after)
+#   p4.sh lane4 $EVID/head ... p4.sh lane12 $EVID/head  (own stacks, NO_BUILD=1, each downed after)
 #   p4.sh perf $EVID/trunk $EVID/head
 #   p4.sh down $EVID/head p4-check; STACK_TAG=p4check-trunk p4.sh down $EVID/trunk p4-check-trunk
-# Lane 8 builds a small libfaketime layer on the head image, which needs apt's network.
+# Lane 8 builds a small libfaketime layer on the head image, which needs apt's network. It moves
+# only platform-api's clock, which stamps the run's events and the decision.
+# Lane 11 makes the emulator again while platform-api runs. Lane 12 runs down without -v, then up.
+# Everything runs from a git archive export of this tree too: only `export` needs a git repository.
 #
 # Environment (defaults in brackets):
 #   EVID [/tmp/swarm-p4]      evidence folder
 #   ENV_FILE [$EVID/env/.env] compose env file; copy deploy/make-env.sh next to it and run it
 #   PREFIX [p4-check]         compose project prefix
 #   TAG [p4check]             image tag of the head build; TRUNK_TAG [p4check-trunk]
-#   PORTS [44]                first two digits of the head stack's ports: 44080 44000 44678;
-#                             trunk uses 45, own stacks 46 to 51 (lane4 46 ... lane10 51)
+#   SOURCE_REPO [this tree]   the git repository `export` archives from
+#   PORTS [44]                first two digits of the head stack's ports: 44080 44000 44678
+#   TRUNK_PORTS [45]          the same for the trunk stack
+#   LANE_PORTS [46]           the same for lane 4's own stack; each next own-stack lane adds one
+#                             (lane5 47, lane6 48, lane8 49, lane9 50 and <n>001, lane10 51,
+#                             lane11 52, lane12 53)
 #   PG_NAME [p4-check-pg]  PG_PORT [55441]
 #   COSMOS_NAME [p4-check-cosmos]  COSMOS_PORT [58081]  COSMOS_HEALTH_PORT [58080]
-#   DISK_CONTAINER [wab-postgres-1]   a running container on the Docker VM's disk; DISK_MIN_MB [2560]
+#   DISK_CONTAINER [wab-postgres-1]   a running container on the Docker VM's disk; DISK_MIN_MB [1500]
 #   HEAD_SRC [$EVID/head]     the exported head tree, for lane 2, 3 and 7
-#   LANE5_EVENTS [600]        lane 5's backlog; raise it when the kill lands after the copy ends
+#   OVERLAYS                  extra compose files ("-f a.yaml -f b.yaml") for every stack and lane
+#   LANE5_EVENTS [4000]       lane 5's backlog; raise it when the kill lands after the copy ends
 set -euo pipefail
 
 EVID=${EVID:-/tmp/swarm-p4}
@@ -49,6 +58,8 @@ PREFIX=${PREFIX:-p4-check}
 TAG=${TAG:-p4check}
 TRUNK_TAG=${TRUNK_TAG:-p4check-trunk}
 PORTS=${PORTS:-44}
+TRUNK_PORTS=${TRUNK_PORTS:-45}
+LANE_PORTS=${LANE_PORTS:-46}
 PG_NAME=${PG_NAME:-p4-check-pg}
 PG_PORT=${PG_PORT:-55441}
 PG_IMAGE=postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
@@ -57,9 +68,10 @@ COSMOS_PORT=${COSMOS_PORT:-58081}
 COSMOS_HEALTH_PORT=${COSMOS_HEALTH_PORT:-58080}
 COSMOS_IMAGE=mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:vnext-preview@sha256:db53613dae19d0a3d5ad50688d14aa6e957af082dafea56b52e1bd3a6b3f1406
 DISK_CONTAINER=${DISK_CONTAINER:-wab-postgres-1}
-DISK_MIN_MB=${DISK_MIN_MB:-2560}
+DISK_MIN_MB=${DISK_MIN_MB:-1500}
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
+SOURCE_REPO=${SOURCE_REPO:-$REPO}
 
 die() { echo "p4.sh: $*" >&2; exit 2; }
 
@@ -76,10 +88,10 @@ disk() {
 export_tree() {
   local sha=$1 dir=$2
   rm -rf "$dir" && mkdir -p "$dir"
-  git -C "$REPO" archive "$sha" | tar -x -C "$dir"
+  git -C "$SOURCE_REPO" archive "$sha" | tar -x -C "$dir"
   [ -f "$ENV_FILE" ] || die "no $ENV_FILE; copy deploy/make-env.sh next to it and run it"
   cp "$ENV_FILE" "$dir/deploy/.env"
-  git -C "$REPO" rev-parse "$sha" >"$dir/.SHA"
+  git -C "$SOURCE_REPO" rev-parse "$sha" >"$dir/.SHA"
 }
 
 pg_up() {
@@ -178,9 +190,9 @@ lanes_py() { python3 -I "$HERE/p4_lanes.py" "$@"; }
 
 lane1() {
   local trunk_src=$1 head_src=$2 tapi hapi
-  read -r _ tapi _ <<<"$(ports_of 45)"
+  read -r _ tapi _ <<<"$(ports_of "$TRUNK_PORTS")"
   read -r _ hapi _ <<<"$(ports_of "$PORTS")"
-  STACK_TAG=$TRUNK_TAG up "$trunk_src" "$PREFIX-trunk" $(ports_of 45)
+  STACK_TAG=$TRUNK_TAG up "$trunk_src" "$PREFIX-trunk" $(ports_of "$TRUNK_PORTS")
   curl -fsS "http://localhost:$hapi/healthz" >/dev/null || up "$head_src" "$PREFIX" $(ports_of "$PORTS")
   lanes_py lane1 "http://localhost:$tapi" "$EVID/lane-1" "http://localhost:$hapi"
 }
@@ -194,32 +206,51 @@ lane() {
   read -r _ api _ <<<"$(ports_of "$PORTS")"
   head_src=${HEAD_SRC:-$EVID/head}
   case "$n" in
-    2 | 3) P4_COMPOSE="$(compose_cmd "$head_src" "$PREFIX")" lanes_py "lane$n" "http://localhost:$api" "$EVID/lane-$n" "$(head_run)" ;;
-    7) P4_COMPOSE="$(compose_cmd "$head_src" "$PREFIX")" lanes_py lane7 "http://localhost:$api" "$EVID/lane-7" ;;
+    2 | 3) P4_COMPOSE="$(compose_cmd "$head_src" "$PREFIX" ${OVERLAYS:-})" lanes_py "lane$n" "http://localhost:$api" "$EVID/lane-$n" "$(head_run)" ;;
+    7) P4_COMPOSE="$(compose_cmd "$head_src" "$PREFIX" ${OVERLAYS:-})" lanes_py lane7 "http://localhost:$api" "$EVID/lane-7" ;;
     *) die "lane $n runs on its own stack: p4.sh lane$n <head-src>" ;;
   esac
 }
 
+lane_first() {
+  local offset
+  case "$1" in
+    4) offset=0 ;; 5) offset=1 ;; 6) offset=2 ;; 8) offset=3 ;; 9) offset=4 ;; 10) offset=5 ;; 11) offset=6 ;; 12) offset=7 ;;
+    *) die "lane $1 has no own stack" ;;
+  esac
+  echo $((LANE_PORTS + offset))
+}
+
+# The lane gets the stack's tag and host ports too, so a lane that runs `up` itself (lane 12)
+# brings back the same stack.
 own_stack_lane() {
-  local n=$1 src=$2 first=$3 project="$PREFIX-l$1" portal api n8n status=0
-  shift 3
-  read -r portal api n8n <<<"$(ports_of "$first")"
+  local n=$1 src=$2 project="$PREFIX-l$1" portal api n8n status=0
+  shift 2
+  read -r portal api n8n <<<"$(ports_of "$(lane_first "$n")")"
   NO_BUILD=1 up "$src" "$project" "$portal" "$api" "$n8n" ${STACK_ENV:+"$STACK_ENV"} || { down "$src" "$project" >/dev/null 2>&1 || true; return 1; }
-  P4_COMPOSE="$(compose_cmd "$src" "$project" ${OVERLAYS:-})" lanes_py "lane$n" "http://localhost:$api" "$EVID/lane-$n" "$@" || status=$?
+  env WAB_IMAGE_TAG="${STACK_TAG:-$TAG}" PORTAL_HOST_PORT="$portal" PLATFORM_API_HOST_PORT="$api" N8N_HOST_PORT="$n8n" ${STACK_ENV:+"$STACK_ENV"} \
+    P4_COMPOSE="$(compose_cmd "$src" "$project" ${OVERLAYS:-})" \
+    python3 -I "$HERE/p4_lanes.py" "lane$n" "http://localhost:$api" "$EVID/lane-$n" "$@" || status=$?
   down "$src" "$project" >/dev/null 2>&1 || true
   return "$status"
 }
 
-lane4() { own_stack_lane 4 "$1" 46; }
-
-lane5() {
+signing_key() {
   local key
   key=$(sed -n 's/^CALLBACK_SIGNING_KEY=//p' "$ENV_FILE")
   [ -n "$key" ] || die "no CALLBACK_SIGNING_KEY in $ENV_FILE"
-  own_stack_lane 5 "$1" 47 "$key" "${LANE5_EVENTS:-600}"
+  echo "$key"
 }
 
-lane6() { own_stack_lane 6 "$1" 48; }
+lane4() { own_stack_lane 4 "$1"; }
+
+lane5() {
+  local key
+  key=$(signing_key)
+  own_stack_lane 5 "$1" "$key" "${LANE5_EVENTS:-4000}"
+}
+
+lane6() { own_stack_lane 6 "$1"; }
 
 lane8() {
   local src=$1 overlay="$EVID/overlays/faketime.yaml"
@@ -243,11 +274,13 @@ services:
       FAKETIME_NO_CACHE: "1"
       DONT_FAKE_MONOTONIC: "1"
 YAML
-  OVERLAYS="-f $overlay" own_stack_lane 8 "$src" 49
+  OVERLAYS="${OVERLAYS:-} -f $overlay" own_stack_lane 8 "$src"
 }
 
 lane9() {
-  local src=$1 overlay="$EVID/overlays/two-api.yaml" second=50001
+  local src=$1 overlay="$EVID/overlays/two-api.yaml" second key
+  second="$(lane_first 9)001"
+  key=$(signing_key)
   mkdir -p "$EVID/overlays"
   cat >"$overlay" <<YAML
 services:
@@ -258,12 +291,16 @@ services:
     ports: !override
       - "$second:8000"
 YAML
-  OVERLAYS="-f $overlay" own_stack_lane 9 "$src" 50 "http://localhost:$second"
+  OVERLAYS="${OVERLAYS:-} -f $overlay" own_stack_lane 9 "$src" "http://localhost:$second" "$key"
 }
 
 lane10() {
-  STACK_ENV=ACTIVITY_READER=postgres own_stack_lane 10 "$1" 51 "$EVID/lane-1/p4-stream-trunk-head.json"
+  STACK_ENV=ACTIVITY_READER=postgres own_stack_lane 10 "$1" "$EVID/lane-1/p4-stream-trunk-head.json"
 }
+
+lane11() { own_stack_lane 11 "$1"; }
+
+lane12() { own_stack_lane 12 "$1"; }
 
 perf() {
   local trunk_src=$1 head_src=$2 rounds=${3:-3} out="$EVID/perf" status=0 i side src project tag
@@ -313,7 +350,7 @@ cleanup() {
 }
 
 command=${1:-}
-[ -n "$command" ] || die "usage: p4.sh <disk|export|pg-up|pg-down|cosmos-up|cosmos-down|gates|up|down|lane1|lane|lane4|lane5|lane6|lane8|lane9|lane10|perf|perf-table|cleanup> ..."
+[ -n "$command" ] || die "usage: p4.sh <disk|export|pg-up|pg-down|cosmos-up|cosmos-down|gates|up|down|lane1|lane|lane4|lane5|lane6|lane8|lane9|lane10|lane11|lane12|perf|perf-table|cleanup> ..."
 shift
 case "$command" in
   disk) disk ;;
@@ -323,6 +360,6 @@ case "$command" in
   cosmos-up) cosmos_up ;;
   cosmos-down) cosmos_down ;;
   perf-table) perf_table "$@" ;;
-  gates | up | down | lane1 | lane | lane4 | lane5 | lane6 | lane8 | lane9 | lane10 | perf | cleanup) "$command" "$@" ;;
+  gates | up | down | lane1 | lane | lane4 | lane5 | lane6 | lane8 | lane9 | lane10 | lane11 | lane12 | perf | cleanup) "$command" "$@" ;;
   *) die "unknown command $command" ;;
 esac
