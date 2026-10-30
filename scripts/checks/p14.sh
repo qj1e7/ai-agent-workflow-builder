@@ -321,6 +321,8 @@ perf() {
 
 all() {
   local n status=0
+  need_azure
+  curl -sS -o /dev/null --max-time 10 "$LOCAL_PORTAL_URL/" || die "no local stack at $LOCAL_PORTAL_URL for lane 1 and perf; start it with p14.sh up <worktree>"
   for n in 3 7 2 9 1 4 5 10; do
     lane "$n" || status=1
   done
