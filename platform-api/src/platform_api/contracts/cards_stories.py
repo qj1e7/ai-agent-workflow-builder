@@ -186,6 +186,8 @@ USE_CASE = UseCaseView(
     params={},
     owner=ALICE,
     created_at=datetime(2026, 11, 4, 9, 30, tzinfo=UTC),
+    state="on",
+    next_run_at=None,
     plan=plan_for_cards([VERSION_CHECKER]),
     agents=[
         UseCaseAgentView(

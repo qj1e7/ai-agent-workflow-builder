@@ -53,11 +53,13 @@
     {
       "at": "2026-11-09T03:40:00Z",
       "by": "alice",
+      "confirmed_by": null,
       "summary": "Alice asked to use ncs-llm-small at ai-gateway.ncs.example. An Approver must confirm the new address."
     },
     {
       "at": "2026-11-02T06:02:00Z",
       "by": "alice",
+      "confirmed_by": null,
       "summary": "Alice turned on claude-haiku-5-5 (AI Singapore gateway), with a key ending in x7."
     }
   ]

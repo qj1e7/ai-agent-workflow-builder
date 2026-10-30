@@ -7,7 +7,7 @@ from collections import Counter
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import Enum
-from typing import Literal, cast
+from typing import Literal
 from urllib.parse import urlsplit
 
 import httpx
@@ -18,7 +18,7 @@ from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 from fastapi import HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from platform_api.shared import Principal, Role, UserId
+from platform_api.shared import ExternalIdentity
 
 log = logging.getLogger(__name__)
 
@@ -35,8 +35,6 @@ RETRY_AFTER_SECONDS = 30
 MIN_RSA_BITS = 2048
 MAX_DISPLAY_CHARS = 120
 MAX_DOCUMENT_BYTES = 256 * 1024
-
-ROLE_BY_CLAIM: Mapping[str, Role] = {"Operator": Role.OPERATOR, "Approver": Role.APPROVER}
 
 
 @dataclass(frozen=True)
@@ -66,6 +64,7 @@ class Rejection(Enum):
     ISSUER = "issuer"
     AUDIENCE = "audience"
     NO_USER = "no_user"
+    TENANT = "tenant"
 
 
 class TokenRejected(Exception):
@@ -76,6 +75,13 @@ class TokenRejected(Exception):
 
 class KeysUnavailable(Exception):
     pass
+
+
+def tenant_of(issuer: str) -> str | None:
+    """The tenant an Entra issuer names: https://login.microsoftonline.com/<tenant>/v2.0.
+    None when the issuer has no path, such as a provider that serves one tenant at its root."""
+    segments = [s for s in urlsplit(issuer).path.split("/") if s]
+    return segments[0].lower() if segments else None
 
 
 def origin_of(url: str) -> str:
@@ -159,19 +165,15 @@ def _cleaned(display: str) -> str:
     return "".join(ch for ch in display if ch.isprintable()).strip()[:MAX_DISPLAY_CHARS]
 
 
-def principal_from_claims(claims: Mapping[str, object]) -> Principal:
-    user_id = _text(claims.get("oid")) or _text(claims.get("sub"))
-    if user_id is None:
+def identity_from_claims(claims: Mapping[str, object]) -> ExternalIdentity:
+    """Who the token says this is. Roles are not read: the People list holds them (ADR 0029).
+    The user name is `preferred_username` in v2 tokens and `upn` in v1 tokens."""
+    subject = _text(claims.get("oid")) or _text(claims.get("sub"))
+    if subject is None:
         raise TokenRejected(Rejection.NO_USER)
-    display = _text(claims.get("name")) or _text(claims.get("preferred_username")) or user_id
-    raw_roles = claims.get("roles")
-    granted = cast("list[object]", raw_roles) if isinstance(raw_roles, list) else []
-    roles = frozenset(
-        ROLE_BY_CLAIM[value]
-        for value in granted
-        if isinstance(value, str) and value in ROLE_BY_CLAIM
-    )
-    return Principal(UserId(user_id), roles, _cleaned(display) or user_id)
+    user_name = _text(claims.get("preferred_username")) or _text(claims.get("upn"))
+    name = _cleaned(_text(claims.get("name")) or "") or None
+    return ExternalIdentity(subject, user_name, name)
 
 
 class _LoadFailed(Exception):
@@ -380,7 +382,7 @@ class OidcAuthenticator:
                 config.test_only_http_origin,
             )
 
-    async def __call__(self, request: Request) -> Principal:
+    async def __call__(self, request: Request) -> ExternalIdentity:
         try:
             return await self.verify(bearer_token(request.headers.get("authorization")))
         except TokenRejected as rejected:
@@ -389,7 +391,7 @@ class OidcAuthenticator:
         except KeysUnavailable:
             raise _unavailable() from None
 
-    async def verify(self, token: str) -> Principal:
+    async def verify(self, token: str) -> ExternalIdentity:
         try:
             header = jwt.get_unverified_header(token)
         except jwt.InvalidTokenError as error:
@@ -415,4 +417,8 @@ class OidcAuthenticator:
             )
         except jwt.InvalidTokenError as error:
             raise TokenRejected(_rejection(error)) from None
-        return principal_from_claims(claims)
+        tenant = tenant_of(self._config.issuer)
+        tid = _text(claims.get("tid"))
+        if tenant is not None and tid is not None and tid.lower() != tenant:
+            raise TokenRejected(Rejection.TENANT)
+        return identity_from_claims(claims)

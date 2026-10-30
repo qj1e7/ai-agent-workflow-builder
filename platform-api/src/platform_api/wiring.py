@@ -4,12 +4,14 @@ from datetime import datetime
 
 from fastapi import FastAPI
 
+from platform_api.auth import DEV_PEOPLE, DevAuth, OidcAuth
 from platform_api.builder import Builder, Watchlist
 from platform_api.db import Database
 from platform_api.monitoring import ActivityLog, callback_for
 from platform_api.orchestration.agents import HttpAgentRuntime
 from platform_api.orchestration.dispatch import N8nWebhooks, TeamsStub
 from platform_api.orchestration.model_settings import KeyBox, ModelSettings
+from platform_api.orchestration.people_store import People
 from platform_api.orchestration.planning import CardPlanning
 from platform_api.orchestration.runs import Leg
 from platform_api.orchestration.schedule_store import ScheduleBook, ScheduleTicker
@@ -33,6 +35,7 @@ class Services:
     teams_stub: TeamsStub
     mock_jira: MockJiraConnector
     model_settings: ModelSettings
+    people: People
 
 
 def install(app: FastAPI, services: Services) -> None:
@@ -47,6 +50,7 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.teams_stub = services.teams_stub
     app.state.mock_jira = services.mock_jira
     app.state.model_settings = services.model_settings
+    app.state.people = services.people
 
 
 async def build(settings: Settings) -> Services:
@@ -54,6 +58,12 @@ async def build(settings: Settings) -> Services:
     await db.open()
     activity = ActivityLog(db)
     await activity.start()
+    people = People(db)
+    match settings.auth:
+        case DevAuth():
+            await people.seed_dev(DEV_PEOPLE)
+        case OidcAuth():
+            await people.seed_first(settings.first_people)
     jira = MockJiraConnector(db)
     teams = TeamsStub(db, settings.teams_channel)
 
@@ -74,7 +84,7 @@ async def build(settings: Settings) -> Services:
 
     agents = HttpAgentRuntime(settings.agent_runtime_url, settings.agent_api_key)
     secret = settings.settings_encryption_key
-    model_settings = ModelSettings(db, agents, KeyBox(secret) if secret else None)
+    model_settings = ModelSettings(db, agents, KeyBox(secret) if secret else None, people=people)
     orchestrator = Orchestrator(
         db,
         activity,
@@ -84,6 +94,7 @@ async def build(settings: Settings) -> Services:
         WriteGateway(db, [jira]),
         mint,
         models=model_settings,
+        people=people,
     )
     schedules = ScheduleBook(db)
     watchlist = Watchlist(db, WatchFacts(db, jira), schedules)
@@ -105,6 +116,7 @@ async def build(settings: Settings) -> Services:
         teams_stub=teams,
         mock_jira=jira,
         model_settings=model_settings,
+        people=people,
     )
 
 

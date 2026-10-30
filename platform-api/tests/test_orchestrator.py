@@ -45,6 +45,7 @@ from platform_api.orchestration.service import (
     Orchestrator,
     Retried,
     RetryLater,
+    RolesNow,
     StepReply,
 )
 from platform_api.orchestration.store import Store
@@ -138,8 +139,11 @@ def mint(run_id: RunId, task_id: TaskId, expires_at: datetime) -> tuple[str, str
 
 
 @asynccontextmanager
-async def open_harness(postgres: PostgresUrls) -> AsyncIterator[Harness]:
-    truncate_all(postgres.owner)
+async def open_harness(
+    postgres: PostgresUrls, people: RolesNow | None = None, keep_data: bool = False
+) -> AsyncIterator[Harness]:
+    if not keep_data:
+        truncate_all(postgres.owner)
     clock = {"now": NOW}
     db = Database(postgres.contexts, clock=lambda: clock["now"])
     await db.open()
@@ -149,7 +153,7 @@ async def open_harness(postgres: PostgresUrls) -> AsyncIterator[Harness]:
     jira = MockJiraConnector(db)
     teams = TeamsStub(db, "CODESparks Ops")
     orchestrator = Orchestrator(
-        db, log, engine, teams, agent, WriteGateway(db, [jira], poll=0.05), mint
+        db, log, engine, teams, agent, WriteGateway(db, [jira], poll=0.05), mint, people=people
     )
     try:
         yield Harness(db, clock, log, engine, agent, jira, teams, orchestrator)

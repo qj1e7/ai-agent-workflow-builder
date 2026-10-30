@@ -13,6 +13,7 @@ from platform_api.orchestration.model_settings import (
     KeyNeeded,
     KnownProviderId,
     ModelSettings,
+    NotAnApprover,
     NothingPending,
     OwnAddress,
     PendingChanged,
@@ -23,7 +24,7 @@ from platform_api.orchestration.model_settings import (
     StoredModel,
 )
 from platform_api.shared import Principal, Role, UserId
-from platform_api.wire import WireModel, error_response
+from platform_api.wire import WireIn, WireModel, error_response
 
 router = APIRouter()
 
@@ -58,7 +59,10 @@ class PendingModelOut(ModelOut):
 
 class ModelChangeOut(WireModel):
     at: datetime
-    by: UserId
+    by: UserId = Field(description="Whose change it is: the person who made it, or who asked.")
+    confirmed_by: UserId | None = Field(
+        default=None, description="The Approver who decided it, when a second person was needed."
+    )
     summary: str
 
 
@@ -72,7 +76,7 @@ class ModelSettingsView(WireModel):
     changes: list[ModelChangeOut]
 
 
-class ConnectIn(WireModel):
+class ConnectIn(WireIn):
     provider_id: KnownProviderId | None = None
     base_url: str | None = Field(default=None, max_length=2048)
     api_key: str | None = Field(
@@ -89,7 +93,7 @@ class ConnectIn(WireModel):
         return self
 
 
-class SaveIn(WireModel):
+class SaveIn(WireIn):
     style: ModelStyle
     base_url: str = Field(max_length=2048)
     model: str = Field(min_length=1, max_length=200)
@@ -122,7 +126,7 @@ type SaveOut = Annotated[
 ]
 
 
-class AddressDecisionIn(WireModel):
+class AddressDecisionIn(WireIn):
     verdict: Literal["confirm", "decline"]
     digest: str = Field(description="The digest of the waiting entry the Approver looked at.")
 
@@ -187,7 +191,10 @@ def view_of(state: SettingsState, principal: Principal) -> ModelSettingsView:
         providers=[
             KnownProviderOut(id=p.id, name=p.name, base_url=p.base_url) for p in KNOWN_PROVIDERS
         ],
-        changes=[ModelChangeOut(at=c.at, by=c.by, summary=c.summary) for c in state.changes],
+        changes=[
+            ModelChangeOut(at=c.at, by=c.by, confirmed_by=c.confirmed_by, summary=c.summary)
+            for c in state.changes
+        ],
     )
 
 
@@ -274,7 +281,7 @@ async def decide_address(
     match result:
         case AddressDecided():
             return view_of(await settings.view(), principal)
-        case OwnAddress(message):
+        case OwnAddress(message) | NotAnApprover(message):
             raise HTTPException(status_code=403, detail=message)
         case PendingChanged(message):
             raise HTTPException(status_code=409, detail=message)

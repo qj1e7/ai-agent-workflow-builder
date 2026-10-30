@@ -22,9 +22,43 @@ class Role(Enum):
 
 @dataclass(frozen=True)
 class Principal:
+    """A person on the People list: our id, their roles from our table, and their name."""
+
     user_id: UserId
     roles: frozenset[Role]
     display: str
+
+
+@dataclass(frozen=True)
+class DevIdentity:
+    """Local mode: X-Dev-User carries our person id."""
+
+    person_id: UserId
+
+
+@dataclass(frozen=True)
+class ExternalIdentity:
+    """What a verified token says: the identity provider's subject, the user name it signs in
+    with, and the name it shows. None of it grants a role."""
+
+    subject: str
+    user_name: str | None
+    name: str | None
+
+    @property
+    def display(self) -> str:
+        return self.name or self.user_name or self.subject
+
+
+type Identity = DevIdentity | ExternalIdentity
+
+
+@dataclass(frozen=True)
+class SeedPerson:
+    id: UserId
+    email: str
+    display: str
+    roles: frozenset[Role]
 
 
 _CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"

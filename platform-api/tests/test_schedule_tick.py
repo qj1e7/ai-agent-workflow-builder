@@ -1,11 +1,13 @@
+import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 import pytest
 
 from platform_api.db import Database
-from platform_api.orchestration import RunSpec, Schedule, ScheduleBook, ScheduleTicker
+from platform_api.orchestration import NotOn, RunSpec, Schedule, ScheduleBook, ScheduleTicker
 from platform_api.orchestration.approvals import Refusal, Verdict
 from platform_api.orchestration.http import run_view
 from platform_api.orchestration.runs import AwaitingApproval, StepName
@@ -29,11 +31,13 @@ SLOT = "2026-11-09T09:00:00+08:00"
 class FakeSpecs:
     """The builder's side of the port: a spec for each watchlist, or nothing to check."""
 
-    specs: dict[UseCaseId, RunSpec | None] = field(default_factory=dict[UseCaseId, RunSpec | None])
+    specs: dict[UseCaseId, RunSpec | NotOn | None] = field(
+        default_factory=dict[UseCaseId, RunSpec | NotOn | None]
+    )
     broken: set[UseCaseId] = field(default_factory=set[UseCaseId])
     asked: list[UseCaseId] = field(default_factory=list[UseCaseId])
 
-    async def check_spec(self, use_case_id: UseCaseId) -> RunSpec | None:
+    async def check_spec(self, use_case_id: UseCaseId) -> RunSpec | NotOn | None:
         self.asked.append(use_case_id)
         if use_case_id in self.broken:
             raise RuntimeError("the Jira refresh fell over")
@@ -169,6 +173,40 @@ async def test_a_watchlist_with_no_software_records_the_slot_and_starts_nothing(
     assert await ticking.run_keys() == []
 
 
+@pytest.mark.parametrize("state", ["paused", "deleted"])
+async def test_a_paused_or_deleted_workflow_uses_its_slot_up_and_starts_nothing(
+    ticking: Ticking, caplog: pytest.LogCaptureFixture, state: Literal["paused", "deleted"]
+):
+    ticking.specs.specs[WATCHLIST] = NotOn(state)
+    await ticking.book.save(WATCHLIST, MONDAY_9, CAROL)
+    ticking.at(NEXT_MONDAY + timedelta(minutes=1))
+
+    with caplog.at_level(logging.INFO, logger="platform_api.orchestration.schedule_store"):
+        assert await ticking.ticker.tick() == []
+
+    assert await ticking.run_keys() == []
+    [saved] = await ticking.book.all()
+    assert saved.last_slot_started == NEXT_MONDAY
+    assert f"skipped the scheduled check of {WATCHLIST}, which is {state}" in caplog.text
+
+
+async def test_a_workflow_resumed_after_its_slot_waits_for_the_next_one(ticking: Ticking):
+    ticking.specs.specs[WATCHLIST] = NotOn("paused")
+    await ticking.book.save(WATCHLIST, MONDAY_9, CAROL)
+    ticking.at(NEXT_MONDAY + timedelta(minutes=1))
+    assert await ticking.ticker.tick() == []
+
+    ticking.specs.specs[WATCHLIST] = WATCHLIST_SPEC
+    ticking.at(NEXT_MONDAY + timedelta(hours=2))
+    assert await ticking.ticker.tick() == []
+    ticking.at(NEXT_MONDAY + timedelta(days=7, minutes=1))
+    assert len(await ticking.ticker.tick()) == 1
+
+    assert [key for _, key, _ in await ticking.run_keys()] == [
+        f"schedule:{WATCHLIST}:2026-11-16T09:00:00+08:00"
+    ]
+
+
 async def test_a_schedule_whose_spec_cannot_be_built_does_not_block_the_others(
     ticking: Ticking, caplog: pytest.LogCaptureFixture
 ):
@@ -256,3 +294,18 @@ async def test_the_default_schedule_is_monday_nine_and_never_replaces_a_saved_on
     await book.delete(WATCHLIST)
     await book.delete(WATCHLIST)
     assert await book.get(WATCHLIST) is None
+
+
+async def test_using_up_the_slots_until_a_moment_takes_the_latest_and_never_moves_back(
+    db: Database,
+):
+    book = ScheduleBook(db)
+    await book.use_up_slots_until(WATCHLIST, NEXT_MONDAY)
+    assert await book.get(WATCHLIST) is None
+
+    await book.save(WATCHLIST, MONDAY_9, CAROL)
+    await book.use_up_slots_until(WATCHLIST, NEXT_MONDAY + timedelta(minutes=7))
+    await book.use_up_slots_until(WATCHLIST, NEXT_MONDAY - timedelta(minutes=5))
+
+    saved = await book.get(WATCHLIST)
+    assert saved is not None and saved.last_slot_started == NEXT_MONDAY

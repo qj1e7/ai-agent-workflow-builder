@@ -1,0 +1,6 @@
+{
+  "email": "dave@example.test",
+  "display": "Dave",
+  "operator": true,
+  "approver": true
+}

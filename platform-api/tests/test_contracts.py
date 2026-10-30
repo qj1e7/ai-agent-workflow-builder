@@ -11,10 +11,13 @@ from platform_api.builder.models import (
     CannotDo,
     CardChecked,
     CardList,
+    DraftIn,
+    DraftList,
     NewAgent,
     PlanOut,
     ScheduleIn,
     ToolList,
+    UseCaseDeleted,
     UseSaved,
     WatchlistOut,
     WatchlistView,
@@ -38,6 +41,7 @@ from platform_api.orchestration.agents import (
 )
 from platform_api.orchestration.agents import ToolList as AgentToolList
 from platform_api.orchestration.approvals import Refusal, Verdict
+from platform_api.orchestration.confirmations import DecideRefusal
 from platform_api.orchestration.http import (
     ApprovalView,
     DecisionOut,
@@ -49,6 +53,17 @@ from platform_api.orchestration.http import (
     TickOut,
     WorkflowFailureIn,
     run_view_adapter,
+)
+from platform_api.orchestration.people_http import (
+    AddPersonIn,
+    ConfirmationDecidedOut,
+    ConfirmationDecisionIn,
+    ConfirmationsOut,
+    DecideRefusalOut,
+    PeopleOut,
+    PeopleRefusalOut,
+    PersonOut,
+    SettingsHistoryOut,
 )
 from platform_api.orchestration.runs import FailureReason, Leg, Stage, StepName
 from platform_api.orchestration.settings_http import ModelSettingsView, SaveOut
@@ -97,6 +112,10 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "builder/templates.json": TypeAdapter(TemplateList),
     "builder/use-case.json": TypeAdapter(UseCaseView),
     "builder/suggest.json": TypeAdapter(SuggestOut),
+    "builder/use-case.paused.json": TypeAdapter(UseCaseView),
+    "builder/use-case.deleted.json": TypeAdapter(UseCaseDeleted),
+    "builder/draft.in.json": TypeAdapter(DraftIn),
+    "builder/drafts.json": TypeAdapter(DraftList),
     "internal/step-responses.json": TypeAdapter(list[StepResponseOut]),
     "internal/workflow-failure.json": TypeAdapter(WorkflowFailureIn),
     "stubs/dev-users.json": TypeAdapter(DevUsers),
@@ -132,10 +151,23 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "watchlist/schedule.in.json": TypeAdapter(ScheduleIn),
     "watchlist/schedule.saved.json": TypeAdapter(WatchlistView),
     "watchlist/schedule.off.json": TypeAdapter(WatchlistView),
+    "watchlist/paused.json": TypeAdapter(WatchlistView),
     "internal/tick.started.json": TypeAdapter(TickOut),
     "internal/tick.nothing-due.json": TypeAdapter(TickOut),
     "views/scheduled.pending.json": run_view_adapter,
     "watchlist/before-check.json": TypeAdapter(WatchlistView),
+    "people/list.json": TypeAdapter(PeopleOut),
+    "people/add.in.json": TypeAdapter(AddPersonIn),
+    "people/person.pending.json": TypeAdapter(PersonOut),
+    "people/person.approver.json": TypeAdapter(PersonOut),
+    "people/refusal.two_approvers.json": TypeAdapter(PeopleRefusalOut),
+    "people/refusal.own_operator_role.json": TypeAdapter(PeopleRefusalOut),
+    "people/confirmations.alice.json": TypeAdapter(ConfirmationsOut),
+    "people/confirmations.bob.json": TypeAdapter(ConfirmationsOut),
+    "people/decision.in.json": TypeAdapter(ConfirmationDecisionIn),
+    "people/decision.confirmed.json": TypeAdapter(ConfirmationDecidedOut),
+    "people/decide-refusal.you_asked.json": TypeAdapter(DecideRefusalOut),
+    "settings/history.json": TypeAdapter(SettingsHistoryOut),
 }
 
 
@@ -263,6 +295,7 @@ def test_the_schedule_fixtures_show_the_owner_and_the_next_check():
     statuses = WatchlistView.model_validate(load("watchlist/statuses.json"))
     saved = WatchlistView.model_validate(load("watchlist/schedule.saved.json"))
     off = WatchlistView.model_validate(load("watchlist/schedule.off.json"))
+    paused = WatchlistView.model_validate(load("watchlist/paused.json"))
     assert statuses.schedule is not None and saved.schedule is not None
     assert (statuses.schedule.day, statuses.schedule.owner_name) == ("monday", "Alice")
     assert (saved.schedule.day, saved.schedule.at, saved.schedule.owner) == (
@@ -270,8 +303,11 @@ def test_the_schedule_fixtures_show_the_owner_and_the_next_check():
         "06:30",
         "carol",
     )
+    assert saved.schedule.next_at is not None
     assert saved.schedule.next_at > saved.schedule.saved_at
     assert off.schedule is None
+    assert (statuses.state, paused.state) == ("on", "paused")
+    assert paused.schedule is not None and paused.schedule.next_at is None
     scheduled = run_view_adapter.validate_python(load("views/scheduled.pending.json"))
     assert (scheduled.trigger, scheduled.started_by) == ("schedule", "alice")
     ran = run_view_adapter.validate_python(load("views/success.final.json"))
@@ -304,3 +340,20 @@ def test_the_card_use_case_draws_agents_then_the_gate_then_the_write():
     view = UseCaseView.model_validate(load("cards/use-case.json"))
     assert [b.kind for b in view.plan] == ["agent", "approval", "write_action"]
     assert view.agents[0].values["Jira project"] == "MOCK"
+
+
+def test_the_people_fixtures_follow_the_second_person_rule():
+    alice = ConfirmationsOut.model_validate(load("people/confirmations.alice.json"))
+    bob = ConfirmationsOut.model_validate(load("people/confirmations.bob.json"))
+    assert [(c.you_can_decide, c.why_not) for c in alice.confirmations] == [
+        (False, DecideRefusal.YOU_ASKED),
+        (False, DecideRefusal.YOU_ASKED),
+    ]
+    assert all(c.you_can_decide for c in bob.confirmations)
+    assert [c.kind.value for c in bob.confirmations] == ["approver", "model_address"]
+    people = PeopleOut.model_validate(load("people/list.json"))
+    dave = next(p for p in people.people if p.display == "Dave")
+    assert dave.approver is False and dave.pending_approver is not None
+    assert dave.pending_approver.confirmation_id == bob.confirmations[0].confirmation_id
+    history = SettingsHistoryOut.model_validate(load("settings/history.json"))
+    assert (history.changes[0].by, history.changes[0].confirmed_by) == ("alice", "bob")

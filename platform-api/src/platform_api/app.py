@@ -7,12 +7,13 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 from platform_api import auth, wiring
+from platform_api.builder import drafts_http, lifecycle_http, watchlist_http
 from platform_api.builder import http as builder_http
-from platform_api.builder import watchlist_http
 from platform_api.db import Database
 from platform_api.monitoring import http as monitoring_http
+from platform_api.nul_guard import RefuseNul
 from platform_api.orchestration import http as orchestration_http
-from platform_api.orchestration import practice_jira_http, settings_http
+from platform_api.orchestration import people_http, practice_jira_http, settings_http
 from platform_api.security_headers import SecurityHeaders
 from platform_api.settings import Settings, settings_from_env
 from platform_api.wire import WireModel
@@ -59,12 +60,17 @@ def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.step_key = settings.step_key
     app.state.authenticator = auth.authenticator_for(settings.auth)
+    app.add_middleware(RefuseNul)
+    app.state.people = auth.people_for(settings.auth)
     app.add_middleware(SecurityHeaders)
     app.include_router(builder_http.router)
+    app.include_router(lifecycle_http.router)
+    app.include_router(drafts_http.router)
     app.include_router(watchlist_http.router)
     app.include_router(orchestration_http.router)
     app.include_router(practice_jira_http.router)
     app.include_router(settings_http.router)
+    app.include_router(people_http.router)
     app.include_router(monitoring_http.router)
 
     @app.get("/healthz", tags=["health"])

@@ -40,6 +40,7 @@
     {
       "at": "2026-11-02T06:02:00Z",
       "by": "alice",
+      "confirmed_by": null,
       "summary": "Alice turned on claude-haiku-5-5 (AI Singapore gateway), with a key ending in x7."
     }
   ]

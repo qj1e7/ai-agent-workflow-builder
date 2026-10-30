@@ -117,6 +117,28 @@ CASES = [
 ]
 
 
+CHANGES = [
+    pytest.param("POST", "/api/v1/use-cases/uc_x/pause", None, id="pause"),
+    pytest.param("POST", "/api/v1/use-cases/uc_x/resume", None, id="resume"),
+    pytest.param("DELETE", "/api/v1/use-cases/uc_x", None, id="delete"),
+    pytest.param("POST", "/api/v1/use-cases/uc_x/restore", None, id="restore"),
+    pytest.param("PUT", "/api/v1/drafts/d1", {"step": 1, "content": {}}, id="save-draft"),
+    pytest.param("GET", "/api/v1/drafts", None, id="list-drafts"),
+    pytest.param("DELETE", "/api/v1/drafts/d1", None, id="delete-draft"),
+]
+
+
+@pytest.mark.parametrize(("method", "path", "body"), CHANGES)
+def test_an_approver_is_told_only_an_operator_can_change_workflows(
+    method: str, path: str, body: object
+):
+    response = TestClient(app_with()).request(method, path, headers=BOB, json=body)
+    assert (response.status_code, response.json()) == (
+        403,
+        {"detail": "Only an Operator can change workflows."},
+    )
+
+
 @pytest.mark.parametrize(("method", "path", "headers", "body", "builder", "status"), CASES)
 def test_the_route_answers_the_status_and_declares_it(
     method: str, path: str, headers: dict[str, str], body: object, builder: object, status: int
