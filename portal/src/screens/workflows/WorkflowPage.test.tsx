@@ -71,15 +71,29 @@ describe('a workflow page', () => {
   })
 
   it('gives its schedule’s day and time, and its next run', () => {
-    const html = render({ useCase: { ...AGENTS, next_run_at: '2026-11-09T01:00:00Z', schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore' } } })
+    const html = render({ useCase: { ...AGENTS, next_run_at: '2026-11-09T01:00:00Z', schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice' } } })
     expect(factOf(html, 'When')).toBe('Every Monday at 9:00 Singapore time (SGT).')
     expect(factOf(html, 'Next run')).toBe('Mon 9 Nov, 9:00')
   })
 
   it('while paused, keeps its schedule in When and says Paused only in Next run', () => {
-    const html = render({ useCase: { ...AGENTS, state: 'paused', next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore' } } })
+    const html = render({ useCase: { ...AGENTS, state: 'paused', next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice' } } })
     expect(factOf(html, 'When')).toBe('Every Monday at 9:00 Singapore time (SGT).')
     expect(factOf(html, 'Next run')).toBe('Paused')
+  })
+
+  it('while its schedule is held, keeps the schedule in When and says in Next run why it is not running', () => {
+    const removed = render({ useCase: { ...AGENTS, next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: 'owner_removed' } } })
+    const notOperator = render({ useCase: { ...AGENTS, next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: 'owner_not_an_operator' } } })
+    expect(factOf(removed, 'When')).toBe('Every Monday at 9:00 Singapore time (SGT).')
+    expect(factOf(removed, 'Next run')).toBe('Not running: Alice is no longer on the People list. An Operator can set it up again in New workflow.')
+    expect(factOf(notOperator, 'Next run')).toBe('Not running: Alice can no longer run workflows. An Operator can set it up again in New workflow.')
+  })
+
+  it('while paused and held, says Paused only, as the Software page does', () => {
+    const html = render({ useCase: { ...AGENTS, state: 'paused', next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: 'owner_removed' } } })
+    expect(factOf(html, 'Next run')).toBe('Paused')
+    expect(text(mainOf(html))).not.toContain('Not running')
   })
 
   it('names its agents, each opening its card', () => {

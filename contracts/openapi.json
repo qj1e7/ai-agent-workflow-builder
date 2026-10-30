@@ -5019,6 +5019,13 @@
         "title": "SavedOut",
         "type": "object"
       },
+      "ScheduleHold": {
+        "enum": [
+          "owner_removed",
+          "owner_not_an_operator"
+        ],
+        "type": "string"
+      },
       "ScheduleIn": {
         "additionalProperties": false,
         "properties": {
@@ -5046,6 +5053,17 @@
           "day": {
             "$ref": "#/components/schemas/Day"
           },
+          "held": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScheduleHold"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the schedule starts no check: owner_removed when the owner has left the People list, owner_not_an_operator when they are no longer an Operator. An Operator takes it over by saving it again. Null while the owner can run it."
+          },
           "next_at": {
             "anyOf": [
               {
@@ -5056,7 +5074,7 @@
                 "type": "null"
               }
             ],
-            "description": "The next time a check starts. Null while the watchlist is paused.",
+            "description": "The next time a check starts. Null while the watchlist is paused, and while the schedule is held.",
             "title": "Next At"
           },
           "owner": {
@@ -6205,6 +6223,22 @@
           "day": {
             "$ref": "#/components/schemas/Day"
           },
+          "held": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScheduleHold"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the schedule starts no run: owner_removed when the owner has left the People list, owner_not_an_operator when they are no longer an Operator. An Operator takes it over by saving it again. Null while the owner can run it."
+          },
+          "owner_name": {
+            "description": "The name of the schedule owner. Its scheduled runs start as them.",
+            "title": "Owner Name",
+            "type": "string"
+          },
           "time_zone": {
             "title": "Time Zone",
             "type": "string"
@@ -6213,7 +6247,8 @@
         "required": [
           "day",
           "at",
-          "time_zone"
+          "time_zone",
+          "owner_name"
         ],
         "title": "UseCaseSchedule",
         "type": "object"
@@ -6259,7 +6294,7 @@
                 "type": "null"
               }
             ],
-            "description": "When the workflow next runs on its own. Null while it is paused, and for a workflow with no schedule.",
+            "description": "When the workflow next runs on its own. Null while it is paused, while its schedule is held because the owner can no longer run it, and for a workflow with no schedule.",
             "title": "Next Run At"
           },
           "owner": {
@@ -6290,7 +6325,7 @@
                 "type": "null"
               }
             ],
-            "description": "When it runs on its own, kept while it is paused. Null for a workflow with no schedule."
+            "description": "When it runs on its own, and who owns the schedule. Kept while it is paused or held. Null for a workflow with no schedule."
           },
           "state": {
             "$ref": "#/components/schemas/UseCaseState",

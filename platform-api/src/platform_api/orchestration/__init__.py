@@ -55,6 +55,7 @@ from platform_api.orchestration.schedule_store import (
     NotOn,
     SavedSchedule,
     ScheduleBook,
+    ScheduleHold,
     ScheduleTicker,
 )
 from platform_api.orchestration.spec import (
@@ -164,6 +165,7 @@ __all__ = [
     "SavedSchedule",
     "Schedule",
     "ScheduleBook",
+    "ScheduleHold",
     "ScheduleTicker",
     "SoftwareFacts",
     "SoftwareSource",

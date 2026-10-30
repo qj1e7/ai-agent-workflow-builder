@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import agentUseCase from '../../../../contracts/fixtures/cards/use-case.json'
 import watchlistUseCase from '../../../../contracts/fixtures/builder/use-case.json'
+import heldWatchlist from '../../../../contracts/fixtures/builder/use-case.held.json'
 import pausedWatchlist from '../../../../contracts/fixtures/builder/use-case.paused.json'
 import failed from '../../../../contracts/fixtures/views/failure.final.json'
 import working from '../../../../contracts/fixtures/views/failure.working.json'
@@ -9,17 +10,20 @@ import scheduled from '../../../../contracts/fixtures/views/scheduled.pending.js
 import waiting from '../../../../contracts/fixtures/views/success.awaiting_approval.json'
 import done from '../../../../contracts/fixtures/views/success.final.json'
 import threeWaiting from '../../../../contracts/fixtures/views/watchlist.awaiting_approval.json'
+import heldSchedule from '../../../../contracts/fixtures/watchlist/schedule.held.json'
 import { ApiError } from '../../api/client'
 import { errorWords } from '../../api/errors'
 import { createLatch } from '../../api/latch'
-import type { RunView, UseCaseView } from '../../api/types'
+import type { RunView, ScheduleHold, ScheduleView, UseCaseView } from '../../api/types'
 import { placeAfterRedraw } from '../../ui/focus'
+import { nextCheckWords, TAKE_OVER_WORDS } from '../software/software'
 import {
   agentsOf,
   changeProblem,
   controlsOf,
   faceStates,
   changeWords,
+  heldNote,
   latestRuns,
   lifeWords,
   lineWhen,
@@ -34,6 +38,7 @@ import {
   runFact,
   runWhen,
   runsOf,
+  SET_UP_AGAIN_WORDS,
   stepTag,
   whenWords,
   workflowPath,
@@ -45,6 +50,7 @@ import {
 const WATCHLIST = watchlistUseCase as UseCaseView
 const PAUSED = pausedWatchlist as UseCaseView
 const AGENTS = agentUseCase as UseCaseView
+const HELD = heldWatchlist as UseCaseView
 const run = (view: unknown, change: Partial<RunView> = {}) => ({ ...(view as RunView), ...change }) as RunView
 const NAMES: Record<string, string> = { alice: 'Alice', bob: 'Bob', carol: 'Carol' }
 const nameOf = (id: string) => NAMES[id] ?? id
@@ -110,11 +116,32 @@ describe('the next run', () => {
   })
 })
 
+const heldBy = (held: ScheduleHold, owner_name = 'Carol'): UseCaseView => ({ ...AGENTS, next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name, held } })
+
+describe('a schedule held because its owner can no longer run it', () => {
+  it('says why on the workflow page, and the next run reads Not running', () => {
+    expect(heldNote(heldBy('owner_removed'))).toBe('Not running: Carol is no longer on the People list. An Operator can set it up again in New workflow.')
+    expect(heldNote(heldBy('owner_not_an_operator'))).toBe('Not running: Carol can no longer run workflows. An Operator can set it up again in New workflow.')
+    expect(heldNote(heldBy('owner_removed', ' '))).toBe('Not running: its owner is no longer on the People list. An Operator can set it up again in New workflow.')
+    expect([nextRunWords(heldBy('owner_removed'), NOW), nextRunWords(HELD, NOW)]).toEqual(['Not running', 'Not running'])
+  })
+
+  it('says why in the Software page’s words, and points to New workflow, since only the watchlist’s schedule can be saved again', () => {
+    expect(heldNote(HELD)).toBe(nextCheckWords(heldSchedule.schedule as ScheduleView, false).replace(TAKE_OVER_WORDS, SET_UP_AGAIN_WORDS))
+  })
+
+  it('gives way to Paused, and says nothing while the schedule runs', () => {
+    const paused: UseCaseView = { ...heldBy('owner_not_an_operator'), state: 'paused' }
+    expect([heldNote(paused), nextRunWords(paused, NOW)]).toEqual([null, 'Paused'])
+    expect([heldNote(WATCHLIST), heldNote(PAUSED), heldNote(AGENTS)]).toEqual([null, null, null])
+  })
+})
+
 describe('when it runs', () => {
   it('gives the schedule’s own day and time, in Singapore time', () => {
     expect(whenWords(WATCHLIST)).toEqual({ words: 'Every Monday at 9:00', small: 'Singapore time (SGT).' })
-    expect(whenWords({ schedule: { day: 'every_day', at: '17:30', time_zone: 'Asia/Singapore' } })).toEqual({ words: 'Every day at 17:30', small: 'Singapore time (SGT).' })
-    expect(whenWords({ schedule: { day: 'weekdays', at: '15:00', time_zone: 'Asia/Singapore' } })).toEqual({ words: 'Every weekday at 15:00', small: 'Singapore time (SGT).' })
+    expect(whenWords({ schedule: { day: 'every_day', at: '17:30', time_zone: 'Asia/Singapore', owner_name: 'Alice' } })).toEqual({ words: 'Every day at 17:30', small: 'Singapore time (SGT).' })
+    expect(whenWords({ schedule: { day: 'weekdays', at: '15:00', time_zone: 'Asia/Singapore', owner_name: 'Alice' } })).toEqual({ words: 'Every weekday at 15:00', small: 'Singapore time (SGT).' })
   })
 
   it('keeps the schedule while the workflow is paused, because Paused shows in the next run', () => {

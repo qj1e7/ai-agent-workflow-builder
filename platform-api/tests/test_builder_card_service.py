@@ -9,6 +9,7 @@ import httpx
 import pytest
 
 from platform_api.app import create_app
+from platform_api.auth import DEV_PEOPLE
 from platform_api.builder import Builder, Watchlist
 from platform_api.builder.cards import VERSION_CHECKER
 from platform_api.builder.models import (
@@ -44,6 +45,7 @@ from platform_api.orchestration import (
     UnderstoodRow,
     WatchlistStanding,
 )
+from platform_api.orchestration.people_store import People
 from platform_api.shared import Principal, Role, RunId, SoftwareId, UseCaseId, UserId
 from tests.support import LOCAL_ENV
 
@@ -217,6 +219,7 @@ async def test_an_agent_use_case_shows_its_agents_and_the_line_a_run_draws(build
 async def test_a_schedule_saved_with_the_use_case_belongs_to_the_person_who_set_it_up(
     builder: Builder, db: Database
 ):
+    assert await People(db).seed_dev(DEV_PEOPLE)
     made = await builder.create_agent_use_case(
         ALICE,
         CreateAgentUseCase.model_validate(

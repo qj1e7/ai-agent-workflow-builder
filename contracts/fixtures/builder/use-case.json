@@ -14,7 +14,9 @@
   "schedule": {
     "day": "monday",
     "at": "09:00",
-    "time_zone": "Asia/Singapore"
+    "time_zone": "Asia/Singapore",
+    "owner_name": "Alice",
+    "held": null
   },
   "plan": [
     {

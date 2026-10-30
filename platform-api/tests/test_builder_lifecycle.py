@@ -11,6 +11,7 @@ import pytest
 from fastapi import FastAPI
 
 from platform_api.app import create_app
+from platform_api.auth import DEV_PEOPLE
 from platform_api.builder import Builder, Watchlist
 from platform_api.builder.cards import VERSION_CHECKER_ID
 from platform_api.builder.lifecycle import (
@@ -45,8 +46,9 @@ from platform_api.orchestration import (
     ScheduleTicker,
     UnderstandResult,
 )
+from platform_api.orchestration.people_store import People
 from platform_api.orchestration.runs import AwaitingApproval, StepName
-from platform_api.shared import N8nExecutionId, RunId, UseCaseId, UserId
+from platform_api.shared import N8nExecutionId, Role, RunId, UseCaseId, UserId
 from tests.conftest import PostgresUrls
 from tests.declared import declared_status
 from tests.support import CAROL, LOCAL_ENV, NOW
@@ -155,7 +157,13 @@ def test_the_columns_of_a_deleted_paused_use_case_keep_both_times():
 
 def test_a_paused_watchlist_s_schedule_shows_no_next_check():
     saved = SavedSchedule(
-        UseCaseId("uc_w"), Schedule("monday", "09:00"), CAROL_ID, "Carol", NOW, None
+        UseCaseId("uc_w"),
+        Schedule("monday", "09:00"),
+        CAROL_ID,
+        "Carol",
+        NOW,
+        None,
+        frozenset({Role.OPERATOR}),
     )
 
     on = schedule_view(saved, NOW, on=True)
@@ -234,6 +242,9 @@ async def lab(postgres: PostgresUrls) -> AsyncIterator[Lab]:
         builder = Builder(
             h.db, h.orchestrator, watchlist, "http://localhost:8000", ModelConnected()
         )
+        people = People(h.db)
+        assert await people.seed_dev(DEV_PEOPLE)
+        app.state.people = people
         app.state.builder = builder
         app.state.watchlist = watchlist
         app.state.orchestrator = h.orchestrator
@@ -242,8 +253,9 @@ async def lab(postgres: PostgresUrls) -> AsyncIterator[Lab]:
             yield Lab(h, app, client, builder)
 
 
-async def watchlist_workflow(lab: Lab) -> str:
-    r = await lab.call("alice", "POST", "/api/v1/watchlist/software", LANGGRAPH)
+async def watchlist_workflow(lab: Lab, by: str = "alice") -> str:
+    """The watchlist, with its first schedule owned by whoever added the first software."""
+    r = await lab.call(by, "POST", "/api/v1/watchlist/software", LANGGRAPH)
     assert r.status_code == 201
     return r.json()["use_case_id"]
 
@@ -298,6 +310,98 @@ async def test_resuming_shows_the_next_run_again(lab: Lab):
     assert (again.status_code, again.json()) == (200, resumed.json())
 
 
+async def test_a_held_schedule_names_no_next_run_until_an_operator_saves_it_again(lab: Lab):
+    use_case_id = await watchlist_workflow(lab)  # Alice owns its schedule
+    lost = await lab.call("carol", "PUT", "/api/v1/people/alice/operator", {"operator": False})
+    assert lost.status_code == 200
+
+    [listed] = await lab.listed()
+    read = (await lab.call("bob", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
+
+    for view in (listed, read):
+        assert (view["state"], view["next_run_at"]) == ("on", None)
+        assert (view["schedule"]["held"], view["schedule"]["owner_name"]) == (
+            "owner_not_an_operator",
+            "Alice",
+        )
+    body = {"day": "monday", "at": "09:00"}
+    assert (await lab.call("carol", "PUT", "/api/v1/watchlist/schedule", body)).status_code == 200
+    [taken] = await lab.listed()
+    assert at(taken["next_run_at"]) == FIRST_MONDAY_SLOT
+    assert (taken["schedule"]["held"], taken["schedule"]["owner_name"]) == (None, "Carol")
+
+
+async def test_a_schedule_whose_owner_left_the_list_names_no_next_run_until_it_is_taken_over(
+    lab: Lab,
+):
+    use_case_id = await watchlist_workflow(lab, by="carol")
+    assert (await lab.call("alice", "DELETE", "/api/v1/people/carol")).status_code == 204
+
+    [listed] = await lab.listed()
+    read = (await lab.call("bob", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
+
+    for view in (listed, read):
+        assert (view["state"], view["next_run_at"]) == ("on", None)
+        assert (view["schedule"]["held"], view["schedule"]["owner_name"]) == (
+            "owner_removed",
+            "Carol",
+        )
+    body = {"day": "monday", "at": "09:00"}
+    assert (await lab.call("alice", "PUT", "/api/v1/watchlist/schedule", body)).status_code == 200
+    taken = (await lab.call("bob", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
+    assert at(taken["next_run_at"]) == FIRST_MONDAY_SLOT
+    assert (taken["schedule"]["held"], taken["schedule"]["owner_name"]) == (None, "Alice")
+
+
+@pytest.mark.parametrize(
+    ("owner", "change", "held"),
+    [
+        pytest.param(
+            "alice",
+            ("carol", "PUT", "/api/v1/people/alice/operator", {"operator": False}),
+            "owner_not_an_operator",
+            id="not_an_operator",
+        ),
+        pytest.param(
+            "carol",
+            ("alice", "DELETE", "/api/v1/people/carol", None),
+            "owner_removed",
+            id="removed",
+        ),
+    ],
+)
+async def test_a_schedule_set_up_with_a_new_workflow_is_held_once_its_creator_cannot_run_it(
+    lab: Lab, owner: str, change: tuple[str, str, str, Any], held: str
+):
+    body = {
+        "name": "Watch LangGraph",
+        "instruction": "Check LangGraph for new releases.",
+        "agents": [{"card_id": VERSION_CHECKER_ID, "values": VALUES}],
+        "schedule": {"day": "monday", "at": "09:00"},
+    }
+    made = await lab.call(owner, "POST", "/api/v1/agent-use-cases", body)
+    assert made.status_code == 201, made.text
+    use_case_id = made.json()["use_case_id"]
+    name = owner.capitalize()
+
+    async def shown() -> list[tuple[datetime | None, str | None, str]]:
+        [listed] = (await lab.call("bob", "GET", "/api/v1/use-cases")).json()["use_cases"]
+        read = (await lab.call("bob", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
+        return [
+            (at(v["next_run_at"]), v["schedule"]["held"], v["schedule"]["owner_name"])
+            for v in (listed, read)
+        ]
+
+    assert await shown() == [(FIRST_MONDAY_SLOT, None, name)] * 2
+    by, method, path, change_body = change
+    assert (await lab.call(by, method, path, change_body)).status_code in (200, 204)
+    assert await shown() == [(None, held, name)] * 2
+    ticker = ScheduleTicker(lab.h.db, ScheduleBook(lab.h.db), lab.builder, lab.h.orchestrator)
+    lab.h.clock["now"] = FIRST_MONDAY_SLOT + timedelta(minutes=1)
+    assert await ticker.tick() == []
+    assert (await lab.call("bob", "GET", "/api/v1/runs")).json()["runs"] == []
+
+
 async def test_a_workflow_with_no_schedule_has_no_next_run(lab: Lab):
     use_case_id = await agent_workflow(lab)
     [listed] = await lab.listed()
@@ -308,7 +412,13 @@ async def test_a_workflow_with_no_schedule_has_no_next_run(lab: Lab):
     )
 
 
-MONDAYS_AT_NINE = {"day": "monday", "at": "09:00", "time_zone": "Asia/Singapore"}
+MONDAYS_AT_NINE = {
+    "day": "monday",
+    "at": "09:00",
+    "time_zone": "Asia/Singapore",
+    "owner_name": "Alice",
+    "held": None,
+}
 
 
 async def test_a_workflow_keeps_its_schedule_while_it_is_paused(lab: Lab):

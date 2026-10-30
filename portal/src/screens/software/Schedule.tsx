@@ -9,7 +9,7 @@ import { useFocusAfterReread } from '../../ui/focus'
 import { IconPlay } from '../../ui/icons'
 import { meansOutOfDate } from '../workflows/workflow'
 import { pressResume, SCHEDULE_PLACES_IN_PAGE_ORDER, schedulePlaces, type SchedulePlace } from './resume'
-import { checkClock, DAYS, dayOption, noScheduleWords, PAUSED_WORDS, scheduleOwnerWords, scheduleWords, singaporeTime } from './software'
+import { checkClock, DAYS, dayOption, nextCheckWords, noScheduleWords, scheduleOwnerWords, scheduleWords } from './software'
 import styles from './Software.module.css'
 
 export function ScheduleNote({ schedule, operator, paused }: { schedule: ScheduleView | null; operator: boolean; paused: boolean }) {
@@ -17,9 +17,9 @@ export function ScheduleNote({ schedule, operator, paused }: { schedule: Schedul
   return (
     <>
       <p>
-        <b>{scheduleWords(schedule)}</b> {schedule.next_at === null ? PAUSED_WORDS : `Next check ${singaporeTime(schedule.next_at)}, Singapore time.`}
+        <b>{scheduleWords(schedule)}</b> {nextCheckWords(schedule, paused)}
       </p>
-      <p className="muted">{scheduleOwnerWords(schedule)}</p>
+      {schedule.held ? null : <p className="muted">{scheduleOwnerWords(schedule)}</p>}
     </>
   )
 }

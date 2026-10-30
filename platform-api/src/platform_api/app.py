@@ -1,4 +1,6 @@
+import logging
 import os
+import sys
 from collections.abc import AsyncGenerator, Mapping
 from contextlib import asynccontextmanager
 from typing import Literal
@@ -47,7 +49,27 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         await runner.stop()
 
 
+_LOG_HANDLER = "platform_api"
+
+
+def _log_platform_api() -> None:
+    """Sends platform_api's lines at INFO and above to stderr. Uvicorn sets up only its own
+    loggers, so without this an INFO line, such as a skipped scheduled check, is dropped.
+    Uvicorn's loggers and the root logger are left alone, so no line prints twice. Building the
+    app again adds no second handler."""
+    logger = logging.getLogger("platform_api")
+    if any(handler.name == _LOG_HANDLER for handler in logger.handlers):
+        return
+    # sys.__stderr__, because a test runner swaps sys.stderr for a copy it closes later.
+    handler = logging.StreamHandler(sys.__stderr__)
+    handler.set_name(_LOG_HANDLER)
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+
+
 def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
+    _log_platform_api()
     settings = settings_from_env(os.environ if env is None else env)
     app = FastAPI(
         title="AI workflow builder platform API",

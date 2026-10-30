@@ -16,6 +16,7 @@
     "owner": "alice",
     "owner_name": "Alice",
     "saved_at": "2026-11-02T10:00:00Z",
-    "next_at": "2026-11-23T09:00:00+08:00"
+    "next_at": "2026-11-23T09:00:00+08:00",
+    "held": null
   }
 }
