@@ -386,14 +386,42 @@ async def test_a_check_that_reads_no_source_marks_every_software_cant_check_and_
     _, failed = await checked_once_then_failed(h)
     found = await standings(h)
     later = NOW + timedelta(hours=1)
+    own = {LANGGRAPH: "GitHub returned 503 Service Unavailable three times."}
     assert {sid: s.facts.latest_check for sid, s in found.software.items()} == {
-        sid: CouldNotCheck(failed, later, f"{UNREADABLE}.", KnownNewest(read, NOW))
+        sid: CouldNotCheck(failed, later, own.get(sid, f"{UNREADABLE}."), KnownNewest(read, NOW))
         for sid, read in READ_FIRST.items()
     }
     assert {s.status for s in found.software.values()} == {"cant_check"}
     assert found.software[REDIS].facts.our_version == FromFirstCheck("8.2.1", NOW)
     assert found.last_check is not None
     assert (found.last_check.run_id, found.last_check.state) == (failed, "failed")
+
+
+async def test_when_no_software_can_be_checked_each_keeps_the_reason_the_runtime_gave_it(
+    h: Harness,
+):
+    h.agent.mode = "failed"
+    h.agent.error = TaskError(
+        type="UpstreamRejected",
+        message="None of the 4 watched software could be checked. GitHub answered 404 Not Found",
+        retryable=False,
+    )
+    h.agent.findings = [
+        finding(LANGGRAPH, "cant_check", None, NOT_FOUND),
+        finding(REDIS, "cant_check", None, "GitHub answered 403 Forbidden."),
+        finding(FASTAPI, "cant_check", None, "No release has a plain version number."),
+        finding(POSTGRES, "cant_check", None, "GitHub answered 403 Forbidden."),
+    ]
+    run_id = await start_check(h)
+    reply = await h.orchestrator.on_step(run_id, StepName.RUN_AGENTS, WORK)
+    assert (reply.proceed, reply.outcome) == (False, "failed")
+    found = await standings(h)
+    assert {sid: s.facts.latest_check for sid, s in found.software.items()} == {
+        LANGGRAPH: CouldNotCheck(run_id, NOW, NOT_FOUND),
+        REDIS: CouldNotCheck(run_id, NOW, "GitHub answered 403 Forbidden."),
+        FASTAPI: CouldNotCheck(run_id, NOW, "No release has a plain version number."),
+        POSTGRES: CouldNotCheck(run_id, NOW, "GitHub answered 403 Forbidden."),
+    }
 
 
 async def test_a_software_that_cannot_be_read_keeps_the_newest_version_read_before_and_when(

@@ -276,8 +276,21 @@ def review(
 NOTHING_READABLE_TYPES = frozenset({"UpstreamUnavailable", "UpstreamRejected"})
 
 
-def all_could_not_read(task: WatchlistTask, error: TaskError) -> Reviewed | None:
+def all_could_not_read(
+    task: WatchlistTask, error: TaskError, findings: Sequence[Finding]
+) -> Reviewed | None:
+    """Each listed software keeps the reason the runtime gave it; the rest share the error's."""
     if error.type not in NOTHING_READABLE_TYPES:
         return None
-    problem = error.message if error.message.endswith(".") else f"{error.message}."
-    return Reviewed(tuple(CouldNotRead(software.id, problem) for software in task.software), ())
+    shared = error.message if error.message.endswith(".") else f"{error.message}."
+    own = {
+        SoftwareId(f.software_id): f.detail.strip()
+        for f in findings
+        if f.state == "cant_check" and f.detail.strip()
+    }
+    return Reviewed(
+        tuple(
+            CouldNotRead(software.id, own.get(software.id, shared)) for software in task.software
+        ),
+        (),
+    )
