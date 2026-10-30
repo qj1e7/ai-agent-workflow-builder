@@ -45,10 +45,12 @@ def explain_case(name: str) -> ExplainCase:
     return next(c for c in EXPLAIN.cases() if c.id == name)
 
 
-@pytest.mark.parametrize("job", [SUMMARISE, EXPLAIN, DRAFT, CHOOSE, UNDERSTAND])
-def test_each_job_has_10_to_15_cases_with_unique_ids(job: Any) -> None:
+@pytest.mark.parametrize(
+    ("job", "most"), [(SUMMARISE, 15), (EXPLAIN, 15), (DRAFT, 15), (CHOOSE, 15), (UNDERSTAND, 30)]
+)
+def test_each_job_has_a_small_golden_set_with_unique_ids(job: Any, most: int) -> None:
     ids = [case.id for case in job.cases()]
-    assert 10 <= len(ids) <= 15
+    assert 10 <= len(ids) <= most
     assert len(set(ids)) == len(ids)
 
 
@@ -462,6 +464,44 @@ def test_accepting_the_planted_order_fails_the_tool_checks() -> None:
     kept = [r for r in case.reference.rows if "Close" not in r.text]
     dropped = understand_answer(case, rows=kept)
     assert "marks_cant_do" in failed(UNDERSTAND.score(case, dropped))
+
+
+@pytest.mark.parametrize("case", [c for c in UNDERSTAND.cases() if c.cant_do], ids=lambda c: c.id)
+def test_marking_any_part_that_cannot_be_done_understood_fails_its_case(
+    case: UnderstandCase,
+) -> None:
+    for index, row in enumerate(case.reference.rows):
+        if row.state == "cant_do":
+            fooled = with_row(case, index, state="understood", note=None)
+            assert "model_held_to_the_tools" in failed(UNDERSTAND.score(case, fooled)), row.text
+
+
+@pytest.mark.parametrize(
+    "case",
+    [c for c in UNDERSTAND.cases() if c.cant_do and len(c.reference.rows) > 4],
+    ids=lambda c: c.id,
+)
+def test_folding_a_write_into_an_understood_part_fails_its_case(case: UnderstandCase) -> None:
+    rows = case.reference.rows
+    refused = next(r for r in rows if r.state == "cant_do" and r.kind == "do")
+    kept = [r for r in rows if r is not refused]
+    accepted = next(i for i, r in enumerate(kept) if r.kind == "do" and r.state == "understood")
+    folded = kept[accepted].model_copy(
+        update={"text": f"{kept[accepted].text}, then {refused.text}"}
+    )
+    answer = understand_answer(case, rows=[*kept[:accepted], folded, *kept[accepted + 1 :]])
+    assert "model_held_to_the_tools" in failed(UNDERSTAND.score(case, answer))
+
+
+@pytest.mark.parametrize(
+    "case",
+    [c for c in UNDERSTAND.cases() if c.id.startswith(("assigned-", "about-"))],
+    ids=lambda c: c.id,
+)
+def test_refusing_a_search_of_jira_tickets_fails_its_case(case: UnderstandCase) -> None:
+    index = next(i for i, r in enumerate(case.reference.rows) if r.kind == "look_for")
+    refused = with_row(case, index, state="cant_do", note="I can't read that yet.")
+    assert "right_states" in failed(UNDERSTAND.score(case, refused))
 
 
 def test_reading_gitlab_as_understood_fails_the_access_review() -> None:
