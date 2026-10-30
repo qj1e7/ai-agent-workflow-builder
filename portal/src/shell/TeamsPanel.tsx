@@ -269,14 +269,16 @@ export function TeamsButton({ person }: { person: Me | null }) {
   const waiting = useWaitingForYou(person)
   const label = teamsLabel(waiting)
   const badge = badgeText(waiting)
+  const drawn = open && person !== null
 
   // Chrome may put first focus on the panel's scrolling area, so focus goes to Close itself.
+  // A press before the person is known opens an empty dialog, and Close gets focus once the drawer is drawn.
   useEffect(() => {
     const node = dialog.current
-    if (!open || !node || node.open) return
-    node.showModal()
-    node.querySelector<HTMLElement>('[data-close]')?.focus()
-  }, [open])
+    if (!open || !node) return
+    if (!node.open) node.showModal()
+    if (drawn) node.querySelector<HTMLElement>('[data-close]')?.focus()
+  }, [open, drawn])
 
   function close(focusButton = true): void {
     const node = dialog.current
@@ -327,7 +329,7 @@ export function TeamsButton({ person }: { person: Me | null }) {
           if (event.target === event.currentTarget) close()
         }}
       >
-        {open && person ? <Drawer me={person} onClose={() => close()} onOpen={() => close(false)} /> : null}
+        {drawn ? <Drawer me={person} onClose={() => close()} onOpen={() => close(false)} /> : null}
       </dialog>
     </>
   )
