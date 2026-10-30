@@ -70,7 +70,7 @@ export function StepDescribe({ text, problem, thinking, said, onText, onPlan }: 
           </Button>
         </div>
       </div>
-      <div className={styles['panel']}>
+      <div className={styles['panel']} aria-live="polite">
         <PlannerSays state={reading ? 'thinking' : 'idle'}>{reading ? 'Give me a moment.' : (said ?? HELLO)}</PlannerSays>
         {reading ? (
           <ul className={styles['thinking']} aria-label="What the Planner is doing">

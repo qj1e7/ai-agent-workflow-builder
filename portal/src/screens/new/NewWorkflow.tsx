@@ -83,16 +83,18 @@ function Stepper({ step }: { step: Step }) {
   )
 }
 
-function useHeadingOnStep(step: Step): void {
-  const shown = useRef(step)
+/** A new step, or step 2 turning from the Software watchlist to the parts, moves focus to the heading. */
+function useHeadingOnStep(step: Step, watchlist: boolean): void {
+  const view = `${String(step)}:${String(watchlist)}`
+  const shown = useRef(view)
   useEffect(() => {
-    if (shown.current === step) return
-    shown.current = step
+    if (shown.current === view) return
+    shown.current = view
     const heading = document.querySelector<HTMLElement>('main h1')
     if (!heading) return
     heading.focus()
     document.title = `${heading.textContent.trim()} · ${PRODUCT}`
-  }, [step])
+  }, [view])
 }
 
 interface Start {
@@ -119,7 +121,7 @@ function NewWorkflow({ draftId, start }: { draftId: string | null; start: Start 
   const navigate = useNavigate()
   const words = useErrorWords()
   const latch = useLatch()
-  useHeadingOnStep(form.step)
+  useHeadingOnStep(form.step, form.redirect !== null)
 
   const task = planTask(form.rows)
   const rowsReady = form.step >= 2 && form.redirect === null && form.rows.length > 0 && rowBlockers(form.rows).length === 0

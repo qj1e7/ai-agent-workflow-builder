@@ -163,10 +163,6 @@ function AgentSteps({ agent }: { agent: PlanAgent }) {
           </li>
         )
       })}
-      <li>
-        <span>Ask an Approver for a yes in Teams, then make the change.</span>
-        <span className={styles['tag']}>Waits for a yes</span>
-      </li>
     </ol>
   )
 }

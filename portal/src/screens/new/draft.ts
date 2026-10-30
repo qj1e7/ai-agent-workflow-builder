@@ -377,7 +377,7 @@ export function checkedRows(form: Form): Checked[] {
     if (row.kind === 'schedule') {
       const chosen = whenWords(form.when)
       const asked = row.text
-      if (asked !== '' && row.state !== 'edited' && sameWhen(readWhen(asked), form.when)) return { ok: true, words: `${label}: ${chosen}, as you asked.` }
+      if (asked !== '' && sameWhen(readWhen(asked), form.when)) return { ok: true, words: `${label}: ${chosen}, as you asked.` }
       return { ok: false, words: asked !== '' ? `${label}: ${chosen}. You asked for “${asked}”.` : `${label}: ${chosen}. You chose this.` }
     }
     if (row.state === 'edited') return { ok: false, words: `${label}: ${row.text}. You changed this.` }
