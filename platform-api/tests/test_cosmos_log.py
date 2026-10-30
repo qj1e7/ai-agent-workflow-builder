@@ -1,3 +1,4 @@
+import asyncio
 import json
 import random
 from datetime import UTC, datetime, timedelta
@@ -17,9 +18,10 @@ from platform_api.monitoring import (
     RunRetriedData,
     activity_events_adapter,
 )
+from platform_api.monitoring.cosmos_log import CONTAINER, cosmos_client
 from platform_api.monitoring.log import COPIED_CHANNEL, LoggedEvent
 from platform_api.shared import RunId
-from tests.conftest import CosmosUnderTest, PostgresUrls
+from tests.conftest import COSMOS_TEST_DATABASE, CosmosUnderTest, PostgresUrls, cosmos_settings
 from tests.support import FIXTURES
 
 pytestmark = [pytest.mark.anyio, pytest.mark.cosmos]
@@ -137,6 +139,39 @@ async def test_ensure_is_safe_to_repeat(cosmos: CosmosUnderTest):
     await cosmos.events.ensure()
 
     assert await cosmos.seqs(RUN) == [1]
+
+
+async def test_ensure_names_the_same_generation_until_the_container_is_emptied(
+    cosmos: CosmosUnderTest,
+):
+    first = await cosmos.events.ensure()
+    await put(cosmos.events, 1)
+    assert await cosmos.events.ensure() == first
+    rid = (await cosmos.container.read())["_rid"]
+
+    async for item in cosmos.container.query_items("SELECT c.id, c.runId FROM c"):
+        await cosmos.container.delete_item(item["id"], partition_key=item["runId"])
+
+    assert (await cosmos.container.read())["_rid"] == rid
+    assert await cosmos.events.ensure() != first
+
+
+async def test_two_clients_that_make_a_new_container_agree_on_its_generation(
+    cosmos: CosmosUnderTest,
+):
+    await cosmos.database.delete_container(CONTAINER)
+    one, two = (
+        CosmosEvents(cosmos_client(cosmos_settings()), database=COSMOS_TEST_DATABASE)
+        for _ in range(2)
+    )
+    try:
+        generations = await asyncio.gather(one.ensure(), two.ensure())
+    finally:
+        await one.close()
+        await two.close()
+
+    assert generations[0] == generations[1]
+    assert await cosmos.events.ensure() == generations[0]
 
 
 def pending(n: int) -> PendingEvent:

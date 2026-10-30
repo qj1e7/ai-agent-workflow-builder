@@ -4,7 +4,7 @@ from contextlib import suppress
 import anyio
 import psycopg
 import pytest
-from azure.cosmos.exceptions import CosmosResourceNotFoundError
+from azure.cosmos.exceptions import CosmosHttpResponseError, CosmosResourceNotFoundError
 from psycopg import AsyncConnection
 
 from platform_api.db import Database
@@ -305,3 +305,109 @@ async def test_a_recreated_container_is_filled_again_from_postgresql(
         assert [e.seq for e in await fresh.read_after(RUN, 0)] == [1, 2]
     finally:
         await fresh.close()
+
+
+async def copied_seqs(cosmos: CosmosUnderTest, run_id: RunId = RUN) -> list[int]:
+    with suppress(CosmosHttpResponseError):
+        return await cosmos.seqs(run_id)
+    return []
+
+
+async def empty(cosmos: CosmosUnderTest) -> None:
+    async for item in cosmos.container.query_items("SELECT c.id, c.runId FROM c"):
+        await cosmos.container.delete_item(item["id"], partition_key=item["runId"])
+
+
+async def test_a_container_deleted_while_the_copier_runs_is_made_again_and_filled(
+    db: Database, cosmos: CosmosUnderTest
+):
+    copier = Copier(db, cosmos.events, retry_delay=0.05, reconnect_delay=0.1)
+    await append(db, 1, 2)
+    await copier.start()
+    try:
+        with anyio.fail_after(5):
+            while await copied_seqs(cosmos) != [1, 2]:
+                await anyio.sleep(0.02)
+        await cosmos.database.delete_container(CONTAINER)
+        await append(db, 3)
+        with anyio.fail_after(15):
+            while await copied_seqs(cosmos) != [1, 2, 3]:
+                await anyio.sleep(0.05)
+    finally:
+        await copier.stop()
+
+
+async def test_a_copier_that_starts_on_an_emptied_container_copies_every_run_again(
+    db: Database, cosmos: CosmosUnderTest
+):
+    await append(db, 1, 2)
+    assert await Copier(db, cosmos.events).copy_run(RUN) == 2
+    rid = (await cosmos.container.read())["_rid"]
+    await empty(cosmos)
+    assert (await cosmos.container.read())["_rid"] == rid
+
+    again = Copier(db, cosmos.events)
+
+    assert await again.runs_behind() == [RUN]
+    assert await again.copy_run(RUN) == 2
+    assert await cosmos.seqs(RUN) == [1, 2]
+
+
+async def test_a_container_emptied_while_the_copier_runs_is_filled_again(
+    db: Database, cosmos: CosmosUnderTest
+):
+    other = RunId("run_01FINISHED")
+    copier = Copier(db, cosmos.events, retry_delay=0.05, reconnect_delay=0.1)
+    await append(db, 1, run_id=other)
+    await append(db, 1, 2)
+    await copier.start()
+    try:
+        with anyio.fail_after(5):
+            while (await copied_seqs(cosmos), await copied_seqs(cosmos, other)) != ([1, 2], [1]):
+                await anyio.sleep(0.02)
+        await empty(cosmos)
+        await append(db, 3)
+        with anyio.fail_after(10):
+            while (await copied_seqs(cosmos), await copied_seqs(cosmos, other)) != ([1, 2, 3], [1]):
+                await anyio.sleep(0.05)
+    finally:
+        await copier.stop()
+
+
+async def test_a_second_copier_puts_nothing_again_once_the_first_filled_a_new_container(
+    db: Database, cosmos: CosmosUnderTest
+):
+    await append(db, 1, 2)
+    first = Watched(cosmos.events, "first")
+    second = Watched(cosmos.events, "second", order=first.order)
+    assert await Copier(db, first).copy_run(RUN) == 2
+    behind = Copier(db, second)
+    assert await behind.runs_behind() == []
+    await cosmos.database.delete_container(CONTAINER)
+
+    assert await Copier(db, first).copy_run(RUN) == 2
+    assert await behind.copy_run(RUN) == 2
+
+    assert (first.puts, second.puts) == ([1, 2, 1, 2], [])
+    assert await cosmos.seqs(RUN) == [1, 2]
+
+
+async def test_a_copier_whose_copy_keeps_failing_is_behind_until_it_catches_up(
+    db: Database, cosmos: CosmosUnderTest
+):
+    down = True
+    watched = Watched(cosmos.events, fails=lambda run_id, seq: down)
+    copier = Copier(db, watched, retry_delay=0.05, max_retry_delay=0.1, reconnect_delay=0.1)
+    await copier.start()
+    try:
+        assert copier.behind is False
+        await append(db, 1)
+        with anyio.fail_after(5):
+            while not copier.behind:
+                await anyio.sleep(0.02)
+        down = False
+        with anyio.fail_after(5):
+            while copier.behind or await cosmos.seqs(RUN) != [1]:
+                await anyio.sleep(0.02)
+    finally:
+        await copier.stop()
