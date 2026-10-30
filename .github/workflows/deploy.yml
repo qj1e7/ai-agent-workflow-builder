@@ -45,6 +45,8 @@ jobs:
       ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       TF_VAR_image_tag: ${{ github.sha }}
+      # Optional. Set AZURE_LOCATION when the subscription's policy refuses Southeast Asia.
+      TF_VAR_location: ${{ vars.AZURE_LOCATION || 'southeastasia' }}
       # docs/auth/entra-setup.md says where each sign-in value comes from. OIDC_JWKS_URL may stay unset.
       TF_VAR_oidc_issuer: ${{ vars.OIDC_ISSUER }}
       TF_VAR_oidc_audience: ${{ vars.OIDC_AUDIENCE }}
@@ -54,6 +56,14 @@ jobs:
       TF_VAR_n8n_owner_email: ${{ vars.N8N_OWNER_EMAIL }}
       # Optional. Without it agent-runtime calls GitHub anonymously, at 60 requests an hour.
       TF_VAR_github_token: ${{ secrets.GH_RELEASE_TOKEN }}
+      # The first people (ADR 0030), read only while the People list is empty.
+      TF_VAR_first_operator: ${{ vars.FIRST_OPERATOR }}
+      TF_VAR_first_approvers: ${{ vars.FIRST_APPROVERS }}
+      # Optional. Unset means platform-api's own practice Jira.
+      TF_VAR_practice_jira_url: ${{ vars.PRACTICE_JIRA_URL }}
+      # Optional, for a subscription that refuses Cosmos DB's free tier or its region (ADR 0031).
+      TF_VAR_cosmos_location: ${{ vars.COSMOS_LOCATION }}
+      TF_VAR_cosmos_serverless: ${{ vars.COSMOS_SERVERLESS || 'false' }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -138,4 +148,11 @@ jobs:
         run: ../../scripts/run-job.sh "$(terraform output -raw resource_group_name)" bootstrap 1200
 
       - name: Say where the Portal is
-        run: echo "The Portal is at $(terraform output -raw portal_url)" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          {
+            echo "The Portal is at $(terraform output -raw portal_url)"
+            echo
+            echo "platform-api is at $(terraform output -raw platform_api_url)"
+            echo
+            echo "The activity log's copy is in the Cosmos DB account $(terraform output -raw cosmos_account_name)"
+          } >> "$GITHUB_STEP_SUMMARY"
