@@ -13,7 +13,13 @@ from platform_api.auth import DEV_PEOPLE
 from platform_api.db import Database
 from platform_api.orchestration.approvals import Refusal, Verdict
 from platform_api.orchestration.confirmations import ConfirmationDecision
-from platform_api.orchestration.model_settings import KeyBox, ModelSettings, NotAnApprover, Saved
+from platform_api.orchestration.model_settings import (
+    KeyBox,
+    ModelSettings,
+    NoLongerAnOperator,
+    NotAnApprover,
+    Saved,
+)
 from platform_api.orchestration.people_store import People
 from platform_api.orchestration.service import DecisionRefused
 from platform_api.settings import FirstPeople
@@ -609,6 +615,43 @@ async def test_a_waiting_model_address_stays_when_someone_else_leaves(
         waiting["confirmation_id"]
     ]
     assert (await decide(client, BOB, waiting, "confirm")).status_code == 201
+
+
+class LosesRoleDuringTheTest(FakeChecks):
+    """Carol removes Alice's Operator role while Alice's new address is being tested."""
+
+    def __init__(self, client: httpx.AsyncClient) -> None:
+        super().__init__()
+        self._client = client
+
+    async def test_model(self, access: Any) -> object:
+        lost = await self._client.put(
+            "/api/v1/people/alice/operator", headers=CAROL, json={"operator": False}
+        )
+        assert lost.status_code == 200, lost.text
+        return await super().test_model(access)
+
+
+async def test_a_new_address_is_not_left_waiting_once_its_asker_is_no_longer_an_operator(
+    db: Database, client: httpx.AsyncClient, app: FastAPI, people: People
+):
+    app.state.model_settings = ModelSettings(
+        db,
+        LosesRoleDuringTheTest(client),  # type: ignore[arg-type]
+        KeyBox("test-settings-secret-not-real"),
+        people=people,
+    )
+    saved = await client.put(
+        "/api/v1/settings/model",
+        headers=ALICE,
+        json={"style": "openai", "base_url": NCS, "model": "ncs-llm-small", "api_key": "k-x"},
+    )
+    assert (saved.status_code, saved.json()) == (409, {"detail": NoLongerAnOperator().message})
+    declared_status(app, "PUT", "/api/v1/settings/model", saved)
+    assert await pending_for(client, BOB) == []
+    view = (await client.get("/api/v1/settings/model", headers=BOB)).json()
+    assert view["pending"] is None
+    assert [line for line in await history(client) if line["area"] == "model"] == []
 
 
 async def test_a_re_added_person_signs_in_afresh(client: httpx.AsyncClient, people: People):

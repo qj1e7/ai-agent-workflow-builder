@@ -22,7 +22,7 @@ from platform_api.orchestration.agents import (
     ModelTestResult,
 )
 from platform_api.orchestration.service import RolesNow
-from platform_api.shared import Principal, UserId, new_id
+from platform_api.shared import Principal, Role, UserId, new_id
 
 log = logging.getLogger(__name__)
 
@@ -151,6 +151,13 @@ class NotAnApprover:
 
 
 @dataclass(frozen=True)
+class NoLongerAnOperator:
+    message: str = (
+        "You are no longer an Operator, so the new address was not saved. Ask an Operator."
+    )
+
+
+@dataclass(frozen=True)
 class AddressDecided:
     confirmed: bool
 
@@ -239,10 +246,6 @@ class ModelStore:
 
 
 _history = confirmations.ConfirmationStore()
-
-# The lock People takes for every change to people and roles (PeopleStore.lock). A decision on
-# an address takes it first, so it never crosses a person leaving, who may close the address.
-_LOCK_PEOPLE = "LOCK TABLE orchestration.people IN SHARE ROW EXCLUSIVE MODE"
 
 
 async def _lock_waiting(
@@ -358,7 +361,7 @@ class ModelSettings:
         model: str,
         api_key: str | None,
         use_saved_key: bool,
-    ) -> Saved | ModelProblem | SettingsOff | KeyNeeded | RuntimeDown:
+    ) -> Saved | ModelProblem | SettingsOff | KeyNeeded | RuntimeDown | NoLongerAnOperator:
         box = self._box
         if box is None:
             return SettingsOff()
@@ -388,6 +391,14 @@ class ModelSettings:
                 at=uow.now,
             )
             if known is None and not await self._store.confirmed(uow, host):
+                # The same order as a person leaving, who closes the address they saved (#59):
+                # People, then the confirmation, then the pending address. The role is read
+                # again here, because the model test above can take seconds.
+                await uow.conn.execute(confirmations.LOCK_PEOPLE)
+                if self._people is not None:
+                    roles = await self._people.roles_now(uow, principal.user_id)
+                    if roles is None or Role.OPERATOR not in roles:
+                        return NoLongerAnOperator()
                 await self._lock_confirmation_then_pending(uow)
                 await self._store.put(uow, "pending", stored)
                 asked = await _history.ask(
@@ -444,7 +455,7 @@ class ModelSettings:
         if self._box is None:
             return SettingsOff()
         async with self._db.transaction("orchestration") as uow:
-            await uow.conn.execute(_LOCK_PEOPLE)
+            await uow.conn.execute(confirmations.LOCK_PEOPLE)
             waiting, pending = await self._lock_confirmation_then_pending(uow)
             if waiting is None or pending is None:
                 return NothingPending()

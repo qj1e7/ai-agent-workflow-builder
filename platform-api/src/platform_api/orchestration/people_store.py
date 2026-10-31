@@ -9,6 +9,7 @@ import psycopg
 from platform_api.db import Database, UnitOfWork
 from platform_api.orchestration import people as rules
 from platform_api.orchestration.confirmations import (
+    LOCK_PEOPLE,
     Confirmation,
     ConfirmationDecision,
     ConfirmationId,
@@ -65,7 +66,7 @@ def new_person_id() -> UserId:
 class PeopleStore:
     async def lock(self, uow: UnitOfWork) -> None:
         """Serializes changes to people and roles. Plain reads, such as sign-in, are not held up."""
-        await uow.conn.execute("LOCK TABLE orchestration.people IN SHARE ROW EXCLUSIVE MODE")
+        await uow.conn.execute(LOCK_PEOPLE)
 
     async def all(self, uow: UnitOfWork) -> list[Person]:
         rows = await (
