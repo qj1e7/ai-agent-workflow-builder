@@ -2,8 +2,10 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+# One v in front of the number, as in v2.14.2, is how many projects write a version, not a
+# family of its own, so v2.14.2 and 2.14.2 compare with each other.
 _TAG = re.compile(
-    r"^(?P<family>.*?)(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)"
+    r"^(?:[vV](?=\d)|(?P<family>.*?))(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)"
     r"(?:-(?P<pre>[0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$"
 )
 
@@ -39,7 +41,7 @@ def parse_tag(tag: str) -> ParsedTag | None:
         0 if pre else 1,
         identifiers,
     )
-    return ParsedTag(tag=tag, family=match["family"], key=key)
+    return ParsedTag(tag=tag, family=match["family"] or "", key=key)
 
 
 def family_of(tag: str) -> str | None:

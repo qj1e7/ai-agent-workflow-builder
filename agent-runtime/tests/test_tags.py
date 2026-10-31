@@ -7,7 +7,10 @@ from agent_runtime.tags import UnparseableTag, family_of, highest, newer_than
     ("tag", "family"),
     [
         ("1.2.14", ""),
-        ("v1.2.14", "v"),
+        ("v1.2.14", ""),
+        ("V1.2.14", ""),
+        ("vv1.2.14", "vv"),
+        ("v2.14.0b2", None),
         ("cli==0.4.37", "cli=="),
         ("sdk==0.4.8", "sdk=="),
         ("prebuilt==1.0.2", "prebuilt=="),
@@ -39,6 +42,11 @@ def test_family_is_what_comes_before_the_version(tag: str, family: str | None):
             ["1.0.0", "1.0.0-rc.2"],
         ),
         ("1.0.0-rc.2", ["1.0.0-rc.10", "1.0.0-rc.1"], ["1.0.0-rc.10"]),
+        ("2.0.0", ["v2.14.2", "v2.14.1", "v2.0.0", "v1.10.19"], ["v2.14.2", "v2.14.1"]),
+        ("v2.0.0", ["v2.14.2", "2.1.0", "V2.0.1", "2.0.0"], ["v2.14.2", "2.1.0", "V2.0.1"]),
+        ("v2.14.2", ["2.14.2", "v2.14.1"], []),
+        ("1.2.19", ["sdk==0.4.11", "v1.2.20"], ["v1.2.20"]),
+        ("sdk==0.4.11", ["1.2.19", "v1.2.20", "sdk==0.4.12"], ["sdk==0.4.12"]),
     ],
 )
 def test_newer_than_stays_in_the_family_and_orders_by_semver(
