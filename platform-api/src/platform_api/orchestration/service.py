@@ -292,7 +292,11 @@ def _decided(request: ApprovalRequest, decision: Decision, display: str) -> Pend
         "approval_decided",
         f"{display} {verdict}d {which} ({steps[decision.step_index].label}).",
         ApprovalDecidedData(
-            approval_id=request.id, step=decision.step_index, verdict=verdict, by=decision.by
+            approval_id=request.id,
+            step=decision.step_index,
+            verdict=verdict,
+            by=decision.by,
+            digest=decision.seen_digest,
         ),
     )
 

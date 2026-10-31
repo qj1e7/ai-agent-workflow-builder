@@ -1,5 +1,5 @@
 import json
-from collections.abc import AsyncIterator
+import logging
 from datetime import UTC, datetime
 
 import anyio
@@ -12,14 +12,16 @@ from platform_api.monitoring import (
     ActivityEvent,
     ActivityLog,
     AgentEventPost,
-    NotificationHub,
     PendingEvent,
     RunRetriedData,
     activity_events_adapter,
     agent_event_adapter,
+    user_actor,
 )
+from platform_api.monitoring.events import ApprovalDecided
+from platform_api.monitoring.log import COPIED_CHANNEL, PostgresEvents, copied_notice
 from platform_api.settings import Context
-from platform_api.shared import RunId, TaskId
+from platform_api.shared import RunId, TaskId, UserId
 from tests.conftest import PostgresUrls
 from tests.support import FIXTURES
 
@@ -40,13 +42,8 @@ def pending(n: int, ts: datetime | None = None, dedupe_key: str | None = None) -
 
 
 @pytest.fixture
-async def log(db: Database) -> AsyncIterator[ActivityLog]:
-    activity_log = ActivityLog(db)
-    await activity_log.start()
-    try:
-        yield activity_log
-    finally:
-        await activity_log.stop()
+def log(activity_log: ActivityLog) -> ActivityLog:
+    return activity_log
 
 
 async def append(log: ActivityLog, context: Context, *events: PendingEvent) -> list[ActivityEvent]:
@@ -202,8 +199,168 @@ async def test_subscribe_resumes_after_a_seq_and_follows_new_appends(
     assert received == [3, 4, 5]
 
 
-async def test_subscribers_wake_after_the_listener_reconnects(db: Database):
-    log = ActivityLog(db, hub=NotificationHub(db, reconnect_delay=0.1))
+async def test_a_decision_logged_before_decisions_named_their_digest_still_reads(
+    log: ActivityLog, postgres: PostgresUrls
+):
+    async with (
+        await AsyncConnection.connect(postgres.contexts.orchestration) as conn,
+        conn.transaction(),
+    ):
+        await conn.execute(
+            "INSERT INTO monitoring.run_events "
+            "(run_id, seq, ts, actor, kind, summary, data, dedupe_key) VALUES "
+            "(%(run)s, 1, now(), %(actor)s, 'approval_decided', 'Bob approved.', %(data)s, 'd1')",
+            {
+                "run": RUN,
+                "actor": user_actor(UserId("bob"), "Bob").model_dump_json(),
+                "data": '{"approval_id": "apr_old", "step": 0, "verdict": "approve", "by": "bob"}',
+            },
+        )
+        await conn.execute("SELECT pg_notify('run_events', %s)", (RUN,))
+
+    with anyio.fail_after(15):
+        [decided] = await log.read_after(RUN, 0)
+
+    assert isinstance(decided, ApprovalDecided)
+    assert (decided.data.by, decided.data.digest) == ("bob", None)
+
+
+async def test_subscribers_wake_after_the_listener_reconnects(log: ActivityLog):
+    received: list[int] = []
+
+    async def collect() -> None:
+        async for event in log.subscribe(RUN, after=0):
+            received.append(event.seq)
+            return
+
+    async with anyio.create_task_group() as tg:
+        tg.start_soon(collect)
+        await anyio.sleep(0.05)
+        async with log.database.connection("monitoring") as conn:
+            await conn.execute(
+                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                "WHERE pid <> pg_backend_pid() AND query LIKE 'LISTEN %'"
+            )
+        with anyio.fail_after(5):
+            while log.listening:
+                await anyio.sleep(0.01)
+            while not log.listening:
+                await anyio.sleep(0.01)
+            await append(log, "monitoring", pending(1))
+            while not received:
+                await anyio.sleep(0.01)
+
+    assert received == [1]
+
+
+class ShortOnce:
+    def __init__(self, db: Database) -> None:
+        self.inner = PostgresEvents(db)
+        self.short = False
+        self.reads = 0
+
+    async def read_after(self, run_id: RunId, after: int) -> list[ActivityEvent]:
+        self.reads += 1
+        events = await self.inner.read_after(run_id, after)
+        if self.short:
+            self.short = False
+            return events[:1]
+        return events
+
+
+class Failing:
+    async def read_after(self, run_id: RunId, after: int) -> list[ActivityEvent]:
+        raise RuntimeError("the copy is down")
+
+
+class FailsFirst(ShortOnce):
+    async def read_after(self, run_id: RunId, after: int) -> list[ActivityEvent]:
+        if self.reads == 0:
+            self.reads += 1
+            raise RuntimeError("the copy is down")
+        return await super().read_after(run_id, after)
+
+
+class Lagging:
+    async def read_after(self, run_id: RunId, after: int) -> list[ActivityEvent]:
+        return []
+
+
+async def notify_copied(db: Database, run_id: RunId, seq: int) -> None:
+    async with db.connection("monitoring") as conn, conn.transaction():
+        await conn.execute("SELECT pg_notify(%s, %s)", (COPIED_CHANNEL, copied_notice(run_id, seq)))
+
+
+async def appended(db: Database, *numbers: int) -> list[ActivityEvent]:
+    async with db.transaction("orchestration") as uow:
+        return await ActivityLog(db).append(uow, RUN, [pending(n) for n in numbers])
+
+
+async def test_a_stream_reads_again_when_a_read_comes_back_short_of_the_named_seq(db: Database):
+    copy = ShortOnce(db)
+    log = ActivityLog(db, copy=copy, short_read_recheck=0.05)
+    await log.start()
+    received: list[int] = []
+
+    async def collect() -> None:
+        async for event in log.subscribe(RUN, after=0):
+            received.append(event.seq)
+            if len(received) == 3:
+                return
+
+    try:
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(collect)
+            await anyio.sleep(0.05)
+            await appended(db, 1, 2, 3)
+            copy.short = True
+            await notify_copied(db, RUN, 3)
+            with anyio.fail_after(2):
+                while len(received) < 3:
+                    await anyio.sleep(0.01)
+    finally:
+        await log.stop()
+
+    assert received == [1, 2, 3]
+
+
+async def test_a_stream_reads_again_after_a_failed_read(db: Database):
+    log = ActivityLog(db, copy=FailsFirst(db), read_retry=0.05)
+    await log.start()
+    await appended(db, 1)
+    received: list[int] = []
+
+    async def collect() -> None:
+        async for event in log.subscribe(RUN, after=0):
+            received.append(event.seq)
+            return
+
+    try:
+        with anyio.fail_after(2):
+            await collect()
+    finally:
+        await log.stop()
+
+    assert received == [1]
+
+
+@pytest.mark.parametrize("copy", [Lagging(), Failing()], ids=["lagging", "failing"])
+async def test_a_one_off_read_falls_back_to_postgresql_when_the_copy_cannot_answer(
+    db: Database, copy: Lagging | Failing, caplog: pytest.LogCaptureFixture
+):
+    log = ActivityLog(db, copy=copy, copy_wait=0.2, read_retry=0.05)
+    stored = await appended(db, 1, 2)
+
+    with caplog.at_level(logging.WARNING), anyio.fail_after(2):
+        assert await log.read_after(RUN, 0) == stored
+
+    assert f"Read {RUN} from PostgreSQL" in caplog.text
+
+
+async def test_a_malformed_notice_is_skipped_and_the_listener_stays_up(
+    db: Database, caplog: pytest.LogCaptureFixture
+):
+    log = ActivityLog(db, copy=PostgresEvents(db), reconnect_delay=5)
     await log.start()
     received: list[int] = []
 
@@ -213,23 +370,161 @@ async def test_subscribers_wake_after_the_listener_reconnects(db: Database):
             return
 
     try:
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(collect)
-            await anyio.sleep(0.05)
-            async with db.connection("monitoring") as conn:
-                await conn.execute(
-                    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
-                    "WHERE pid <> pg_backend_pid() AND query = 'LISTEN run_events'"
-                )
-            with anyio.fail_after(5):
-                while log.listening:
-                    await anyio.sleep(0.01)
-                while not log.listening:
-                    await anyio.sleep(0.01)
-                await append(log, "monitoring", pending(1))
-                while not received:
-                    await anyio.sleep(0.01)
+        with caplog.at_level(logging.WARNING):
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(collect)
+                await anyio.sleep(0.05)
+                async with db.connection("monitoring") as conn, conn.transaction():
+                    await conn.execute(
+                        "SELECT pg_notify(%s, %s)", (COPIED_CHANNEL, f"{RUN} not-a-seq")
+                    )
+                await appended(db, 1)
+                await notify_copied(db, RUN, 1)
+                with anyio.fail_after(2):
+                    while not received:
+                        await anyio.sleep(0.01)
     finally:
         await log.stop()
 
     assert received == [1]
+    assert "Skipped a run_events_copied notice" in caplog.text
+    assert "lost its connection" not in caplog.text
+
+
+class Status:
+    def __init__(self, behind: bool) -> None:
+        self.behind = behind
+        self.nudges = 0
+
+    def check_soon(self) -> None:
+        self.nudges += 1
+
+
+class FromTheCopy:
+    def __init__(self, db: Database) -> None:
+        self.inner = PostgresEvents(db)
+
+    async def read_after(self, run_id: RunId, after: int) -> list[ActivityEvent]:
+        events = await self.inner.read_after(run_id, after)
+        return [e.model_copy(update={"summary": "from the copy"}) for e in events]
+
+
+async def test_a_stream_reads_postgresql_while_the_copy_is_behind(db: Database):
+    log = ActivityLog(db, copy=Lagging(), status=Status(behind=True), read_retry=0.05)
+    await log.start()
+    await appended(db, 1, 2)
+    received: list[int] = []
+
+    async def collect() -> None:
+        async for event in log.subscribe(RUN, after=0):
+            received.append(event.seq)
+            if event.seq == 3:
+                return
+
+    try:
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(collect)
+            with anyio.fail_after(2):
+                while len(received) < 2:
+                    await anyio.sleep(0.01)
+            await appended(db, 3)
+            with anyio.fail_after(2):
+                while len(received) < 3:
+                    await anyio.sleep(0.01)
+    finally:
+        await log.stop()
+
+    assert received == [1, 2, 3]
+
+
+async def test_a_stream_reads_the_copy_again_once_it_has_caught_up(db: Database):
+    status = Status(behind=True)
+    log = ActivityLog(db, copy=FromTheCopy(db), status=status, read_retry=0.05)
+    await log.start()
+    await appended(db, 1)
+    received: list[str] = []
+
+    async def collect() -> None:
+        async for event in log.subscribe(RUN, after=0):
+            received.append(event.summary)
+            if event.seq == 2:
+                return
+
+    try:
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(collect)
+            with anyio.fail_after(2):
+                while not received:
+                    await anyio.sleep(0.01)
+            status.behind = False
+            await appended(db, 2)
+            await notify_copied(db, RUN, 2)
+            with anyio.fail_after(2):
+                while len(received) < 2:
+                    await anyio.sleep(0.01)
+    finally:
+        await log.stop()
+
+    assert received == ["event 1", "from the copy"]
+
+
+async def test_a_failed_read_of_the_copy_nudges_the_copier(db: Database):
+    status = Status(behind=False)
+    log = ActivityLog(db, copy=FailsFirst(db), status=status, read_retry=0.05)
+    await log.start()
+    await appended(db, 1)
+
+    async def collect() -> int:
+        async for event in log.subscribe(RUN, after=0):
+            return event.seq
+        return 0
+
+    try:
+        with anyio.fail_after(2):
+            assert await collect() == 1
+    finally:
+        await log.stop()
+
+    assert status.nudges == 1
+
+
+async def test_a_one_off_read_while_the_copy_is_behind_reads_postgresql_at_once(db: Database):
+    log = ActivityLog(db, copy=Lagging(), status=Status(behind=True), copy_wait=5)
+    stored = await appended(db, 1, 2)
+
+    with anyio.fail_after(1):
+        assert await log.read_after(RUN, 0) == stored
+
+
+class Hanging:
+    async def read_after(self, run_id: RunId, after: int) -> list[ActivityEvent]:
+        await anyio.sleep_forever()
+        return []
+
+
+class BehindOnceNudged(Status):
+    def check_soon(self) -> None:
+        super().check_soon()
+        self.behind = True
+
+
+async def test_a_stream_whose_read_of_the_copy_hangs_falls_back_once_the_copier_says_behind(
+    db: Database,
+):
+    status = BehindOnceNudged(behind=False)
+    log = ActivityLog(db, copy=Hanging(), status=status, copy_wait=0.1, read_retry=0.05)
+    await log.start()
+    await appended(db, 1)
+
+    async def first() -> int:
+        async for event in log.subscribe(RUN, after=0):
+            return event.seq
+        return 0
+
+    try:
+        with anyio.fail_after(2):
+            assert await first() == 1
+    finally:
+        await log.stop()
+
+    assert status.nudges == 1

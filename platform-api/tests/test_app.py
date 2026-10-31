@@ -7,9 +7,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from platform_api.app import create_app, readiness_of
+from platform_api.bootstrap import record_status
 from platform_api.db import Database
 from platform_api.orchestration.approvals import Refusal
 from platform_api.orchestration.service import DecisionRefused, RetryLater
+from tests.conftest import PostgresUrls
 from tests.support import LOCAL_ENV as LOCAL
 
 ROUTES = {
@@ -136,6 +138,31 @@ def test_step_route_refuses_a_bad_step_name():
 
 
 @pytest.mark.anyio
+async def test_readiness_names_a_copier_that_is_not_listening(db: Database):
+    readiness = await readiness_of(db, True, copying=False)
+    assert [(c.name, c.ok) for c in readiness.checks][:2] == [
+        ("activity_log", True),
+        ("activity_copy", False),
+    ]
+    assert readiness.ready is False
+
+
+@pytest.mark.anyio
+async def test_readiness_says_the_copy_is_behind_and_stays_ready(
+    db: Database, postgres: PostgresUrls
+):
+    record_status(postgres.owner, ready=True, detail="all workflows loaded", workflows=[])
+
+    readiness = await readiness_of(db, True, copying=True, copy_behind=True)
+
+    copy = readiness.checks[1]
+    assert (copy.name, copy.ok, readiness.ready) == ("activity_copy", True, True)
+    assert copy.detail == (
+        "listening for events to copy to Cosmos DB, but the copy is behind and retrying"
+    )
+
+
+@pytest.mark.anyio
 async def test_readiness_is_not_ready_before_bootstrap(db: Database):
     readiness = await readiness_of(db, True)
     assert readiness.ready is False
@@ -233,12 +260,14 @@ logging.getLogger("uvicorn.access").info(
 )
 """
 STAMP = r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} "
+# CI points COSMOS_ENDPOINT at the emulator for the Cosmos DB tests, with no COSMOS_KEY.
+WITHOUT_COSMOS = {name: v for name, v in os.environ.items() if not name.startswith("COSMOS_")}
 
 
 def test_the_app_under_uvicorn_logs_each_skipped_scheduled_check_once():
     done = subprocess.run(
         [sys.executable, "-c", UNDER_UVICORN],
-        env={**os.environ, **LOCAL},
+        env={**WITHOUT_COSMOS, **LOCAL},
         capture_output=True,
         text=True,
         timeout=60,

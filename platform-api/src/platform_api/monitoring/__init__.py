@@ -5,6 +5,8 @@ from platform_api.monitoring.agent_events import (
     agent_event_adapter,
 )
 from platform_api.monitoring.callbacks import Callback, callback_for, verify_callback
+from platform_api.monitoring.copier import Copier
+from platform_api.monitoring.cosmos_log import CosmosEvents
 from platform_api.monitoring.events import (
     PLATFORM,
     SAFETY_CHECKER,
@@ -36,7 +38,7 @@ from platform_api.monitoring.events import (
     agent_actor,
     user_actor,
 )
-from platform_api.monitoring.log import ActivityLog, NotificationHub
+from platform_api.monitoring.log import ActivityLog
 from platform_api.monitoring.troubleshooter import Advice, explain_failure
 
 __all__ = [
@@ -52,13 +54,14 @@ __all__ = [
     "AgentEventPost",
     "AgentRef",
     "Callback",
+    "Copier",
+    "CosmosEvents",
     "ApprovalAnnounceFailedData",
     "ApprovalAnnouncedData",
     "ApprovalDecidedData",
     "ApprovalRequestedData",
     "DeniedReason",
     "LegDispatchedData",
-    "NotificationHub",
     "PendingEvent",
     "RunCreatedData",
     "RunFailedData",

@@ -73,13 +73,19 @@ def main(env: Mapping[str, str] | None = None) -> int:
     try:
         loaded, findings = load_into_n8n(settings, definitions, say)
     except (N8nError, httpx.HTTPError) as error:
-        return _finish(settings, say, [], [], f"could not load the workflows into n8n: {error}")
+        say(f"could not load the workflows into n8n: {error}")
+        detail = _detail_without_message("could not load the workflows into n8n", error)
+        return _finish(settings, say, [], [], detail)
     inactive = [w.name for w in loaded if not w.active]
     if inactive:
         return _finish(settings, say, loaded, findings, f"inactive in n8n: {', '.join(inactive)}")
     if findings:
         return _finish(settings, say, loaded, findings, "the live workflows fail the lint")
     return _finish(settings, say, loaded, [], "all workflows loaded, active and linted")
+
+
+def _detail_without_message(what: str, error: Exception) -> str:
+    return f"{what} ({type(error).__name__})"
 
 
 def _finish(

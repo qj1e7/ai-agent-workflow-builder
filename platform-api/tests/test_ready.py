@@ -1,11 +1,19 @@
+import asyncio
+import json
+import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 from platform_api.app import create_app
 from platform_api.bootstrap import LoadedWorkflow, previous_hashes, record_status
-from tests.conftest import PostgresUrls, truncate_all
-from tests.support import LOCAL_ENV
+from platform_api.monitoring import CosmosEvents, callback_for
+from platform_api.settings import CosmosSettings
+from platform_api.shared import RunId, TaskId
+from tests.conftest import PostgresUrls, cosmos_settings, truncate_all
+from tests.support import FIXTURES, LOCAL_ENV
 
 
 def env_for(postgres: PostgresUrls) -> dict[str, str]:
@@ -70,3 +78,56 @@ def test_the_workflows_check_names_each_loaded_workflow_and_whether_it_is_active
     assert detail.endswith(
         "; loaded: run active, schedule_tick active, run_failure_reporter inactive"
     )
+
+
+async def read_from_cosmos(settings: CosmosSettings, run_id: RunId) -> list[int]:
+    events = CosmosEvents.connect(settings)
+    try:
+        return [e.seq for e in await events.read_after(run_id, 0)]
+    finally:
+        await events.close()
+
+
+@pytest.mark.cosmos
+def test_with_activity_reader_cosmos_the_api_copies_each_event_and_reads_it_back(
+    postgres: PostgresUrls,
+):
+    settings = cosmos_settings()
+    truncate_all(postgres.owner)
+    record_status(postgres.owner, ready=True, detail="all workflows loaded", workflows=[])
+    env = {
+        **env_for(postgres),
+        "COSMOS_ENDPOINT": settings.endpoint,
+        "COSMOS_KEY": settings.key,
+        "ACTIVITY_READER": "cosmos",
+    }
+    run_id = RunId(f"run_ready{uuid.uuid4().hex[:12]}")
+    task_id = TaskId(f"{run_id}/work/1/1")
+    post = json.loads((FIXTURES / "agent" / "callback-event.json").read_text())
+    post["task_id"] = task_id
+    token = callback_for(
+        LOCAL_ENV["CALLBACK_SIGNING_KEY"],
+        LOCAL_ENV["PLATFORM_INTERNAL_URL"],
+        run_id,
+        task_id,
+        datetime.now(UTC) + timedelta(hours=1),
+    ).token
+
+    with TestClient(create_app(env)) as client:
+        ready = client.get("/healthz/ready")
+        assert ready.status_code == 200
+        assert {k: v for k, v in ready.json()["checks"][1].items() if k in ("name", "ok")} == {
+            "name": "activity_copy",
+            "ok": True,
+        }
+        posted = client.post(
+            f"/internal/v1/runs/{run_id}/agent-events",
+            params={"task": task_id},
+            json=post,
+            headers={"X-Callback-Token": token},
+        )
+        page = client.get(f"/api/v1/runs/{run_id}/events", headers={"X-Dev-User": "alice"})
+
+    assert posted.status_code == 202
+    assert [e["kind"] for e in page.json()["events"]] == ["agent_joined"]
+    assert asyncio.run(read_from_cosmos(settings, run_id)) == [1]

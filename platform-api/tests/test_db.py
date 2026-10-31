@@ -14,7 +14,7 @@ def test_each_context_has_a_version_table_in_its_own_schema(postgres: PostgresUr
         for context, head in (
             ("builder", "0005"),
             ("orchestration", "0008"),
-            ("monitoring", "0001"),
+            ("monitoring", "0002"),
         ):
             table = sql.Identifier(context, "alembic_version")
             row = conn.execute(sql.SQL("SELECT version_num FROM {}").format(table)).fetchone()
@@ -35,6 +35,8 @@ def test_each_context_has_a_version_table_in_its_own_schema(postgres: PostgresUr
         ("monitoring", "orchestration.people"),
         ("builder", "orchestration.confirmations"),
         ("monitoring", "orchestration.settings_changes"),
+        ("orchestration", "monitoring.run_events_copied"),
+        ("builder", "monitoring.run_events_copied"),
     ],
 )
 async def test_a_context_cannot_read_another_contexts_tables(
@@ -56,6 +58,18 @@ async def test_orchestration_may_insert_into_the_activity_log_only(db: Database)
     async with db.transaction("orchestration") as uow:
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             await uow.conn.execute("DELETE FROM monitoring.run_events")
+
+
+async def test_only_the_copier_moves_the_copied_mark_and_it_never_deletes(db: Database):
+    async with db.transaction("monitoring") as uow:
+        await uow.conn.execute(
+            "INSERT INTO monitoring.run_events_copied (run_id, generation, seq, copied_at) "
+            "VALUES ('run_1', 'g1', 1, now())"
+        )
+        await uow.conn.execute("UPDATE monitoring.run_events_copied SET seq = 2")
+    async with db.transaction("monitoring") as uow:
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            await uow.conn.execute("DELETE FROM monitoring.run_events_copied")
 
 
 async def test_the_settings_history_is_append_only(db: Database):

@@ -488,7 +488,9 @@ def _act_leg(tl: Timeline, decided_at: float) -> None:
         decided_at,
         USER_BOB,
         "Bob approved the request (Team approver).",
-        ApprovalDecidedData(approval_id=CHECK.approval_id, step=0, verdict="approve", by=BOB),
+        ApprovalDecidedData(
+            approval_id=CHECK.approval_id, step=0, verdict="approve", by=BOB, digest=DIGEST
+        ),
     )
     tl.add(
         LegDispatched,

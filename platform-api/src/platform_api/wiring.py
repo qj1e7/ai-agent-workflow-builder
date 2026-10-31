@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from platform_api.auth import DEV_PEOPLE, DevAuth, OidcAuth
 from platform_api.builder import Builder, Home, Watchlist
 from platform_api.db import Database
-from platform_api.monitoring import ActivityLog, callback_for
+from platform_api.monitoring import ActivityLog, Copier, CosmosEvents, callback_for
 from platform_api.orchestration.agents import HttpAgentRuntime
 from platform_api.orchestration.dispatch import N8nWebhooks, TeamsStub
 from platform_api.orchestration.model_settings import KeyBox, ModelSettings
@@ -37,6 +37,8 @@ class Services:
     mock_jira: MockJiraConnector
     model_settings: ModelSettings
     people: People
+    copier: Copier | None = None
+    cosmos: CosmosEvents | None = None
 
 
 def install(app: FastAPI, services: Services) -> None:
@@ -44,6 +46,7 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.step_key = services.settings.step_key
     app.state.db = services.db
     app.state.activity_log = services.activity_log
+    app.state.copier = services.copier
     app.state.orchestrator = services.orchestrator
     app.state.builder = services.builder
     app.state.home = services.home
@@ -58,8 +61,15 @@ def install(app: FastAPI, services: Services) -> None:
 async def build(settings: Settings) -> Services:
     db = Database(settings.database)
     await db.open()
-    activity = ActivityLog(db)
+    cosmos = None if settings.cosmos is None else CosmosEvents.connect(settings.cosmos)
+    copier = None if cosmos is None else Copier(db, cosmos)
+    if settings.activity_reader == "cosmos" and cosmos is not None:
+        activity = ActivityLog(db, copy=cosmos, status=copier)
+    else:
+        activity = ActivityLog(db)
     await activity.start()
+    if copier is not None:
+        await copier.start()
     people = People(db)
     match settings.auth:
         case DevAuth():
@@ -121,6 +131,8 @@ async def build(settings: Settings) -> Services:
         mock_jira=jira,
         model_settings=model_settings,
         people=people,
+        copier=copier,
+        cosmos=cosmos,
     )
 
 
@@ -138,5 +150,9 @@ class Runner:
         self._services.orchestrator.nudge()
         if self._task is not None:
             await self._task
+        if self._services.copier is not None:
+            await self._services.copier.stop()
         await self._services.activity_log.stop()
+        if self._services.cosmos is not None:
+            await self._services.cosmos.close()
         await self._services.db.close()

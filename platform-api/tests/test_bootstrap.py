@@ -5,10 +5,12 @@ from typing import Any
 import httpx
 import psycopg
 import pytest
+from fastapi.testclient import TestClient
 from psycopg import sql
 from pydantic import TypeAdapter
 
 from platform_api import bootstrap
+from platform_api.app import create_app
 from platform_api.bootstrap import (
     OLD_RUN_WORKFLOW,
     OLD_TASK_KIND,
@@ -25,7 +27,7 @@ from platform_api.orchestration.spec import RunSpec
 from platform_api.orchestration.workflows import load_all
 from platform_api.settings import BootstrapSettings
 from tests.conftest import PostgresUrls, truncate_all
-from tests.support import NOW, SPEC
+from tests.support import LOCAL_ENV, NOW, SPEC
 
 N8N = "http://n8n.test"
 TRUNK_HEADS = {"monitoring": "0001", "orchestration": "0004", "builder": "0003"}
@@ -123,8 +125,8 @@ def insert_old_use_case(owner_url: str) -> None:
 @pytest.fixture
 def at_trunk_heads(postgres: PostgresUrls) -> Iterator[None]:
     truncate_all(postgres.owner)
-    downgrade("orchestration", postgres.owner, TRUNK_HEADS["orchestration"])
-    downgrade("builder", postgres.owner, TRUNK_HEADS["builder"])
+    for context in MIGRATION_ORDER:
+        downgrade(context, postgres.owner, TRUNK_HEADS[context])
     try:
         yield
     finally:
@@ -321,3 +323,35 @@ def test_bootstrap_removes_the_old_run_workflow_by_its_exact_name_and_nothing_el
     ]
     assert "workflow:delete" in n8n.scopes
     assert any(line.startswith(f"workflow {OLD_RUN_WORKFLOW} (W1): removed") for line in said)
+
+
+SECRET_ADDRESS = "wab-secret-host.internal.example"
+
+
+def n8n_unreachable(*args: object) -> None:
+    raise httpx.ConnectError(f"Failed to reach http://{SECRET_ADDRESS}:5678/rest/login")
+
+
+def test_a_failure_logs_its_error_but_readiness_names_only_its_class(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    truncate_all(postgres.owner)
+    monkeypatch.setattr(bootstrap, "load_into_n8n", n8n_unreachable)
+
+    assert main(env_for(postgres.owner)) == 1
+
+    assert SECRET_ADDRESS in capsys.readouterr().out
+    assert engine_status(postgres.owner) == (
+        False,
+        "could not load the workflows into n8n (ConnectError)",
+    )
+    app_env = {
+        **LOCAL_ENV,
+        "DATABASE_URL_BUILDER": postgres.contexts.builder,
+        "DATABASE_URL_ORCHESTRATION": postgres.contexts.orchestration,
+        "DATABASE_URL_MONITORING": postgres.contexts.monitoring,
+    }
+    with TestClient(create_app(app_env)) as client:
+        ready = client.get("/healthz/ready")
+    assert ready.status_code == 503
+    assert SECRET_ADDRESS not in ready.text
