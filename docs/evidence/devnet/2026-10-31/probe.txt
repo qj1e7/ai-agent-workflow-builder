@@ -1,0 +1,33 @@
+== agent-runtime
+container a032813324af, HTTPS_PROXY=http://egress-proxy:3128
+through the proxy, on the allow list: https://api.github.com/zen -> HTTP 200
+through the proxy, on the allow list: https://login.microsoftonline.com/common/v2.0/.well-known/openid-configuration -> HTTP 200
+through the proxy, on the allow list: https://llm-gateway.aisg.sg/ -> HTTP 502
+through the proxy, off the list: https://api.openai.com/v1/models -> refused by the proxy: 403 Forbidden
+through the proxy, off the list: https://pypi.org/simple/ -> refused by the proxy: 403 Forbidden
+through the proxy, off the list: https://registry.npmjs.org/ -> refused by the proxy: 403 Forbidden
+through the proxy, off the list: https://example.com/ -> refused by the proxy: 403 Forbidden
+through the proxy, off the list, plain http: http://example.com/ -> HTTP 403 (the proxy's refusal page)
+around the proxy: https://api.github.com/zen -> ConnectError: [Errno -3] Temporary failure in name resolution
+name lookup of api.github.com -> gaierror: [Errno -3] Temporary failure in name resolution
+TCP straight to 1.1.1.1:443 -> OSError: [Errno 101] Network is unreachable
+TCP straight to 140.82.112.6:443 -> OSError: [Errno 101] Network is unreachable
+
+== platform-api
+container 7d2511b7deec, HTTPS_PROXY=http://egress-proxy:3128
+through the proxy, on the allow list: https://api.github.com/zen -> HTTP 200
+through the proxy, on the allow list: https://login.microsoftonline.com/common/v2.0/.well-known/openid-configuration -> HTTP 200
+through the proxy, on the allow list: https://llm-gateway.aisg.sg/ -> HTTP 502
+through the proxy, off the list: https://api.openai.com/v1/models -> refused by the proxy: 403 Forbidden
+through the proxy, off the list: https://pypi.org/simple/ -> refused by the proxy: 403 Forbidden
+through the proxy, off the list: https://registry.npmjs.org/ -> refused by the proxy: 403 Forbidden
+through the proxy, off the list: https://example.com/ -> refused by the proxy: 403 Forbidden
+through the proxy, off the list, plain http: http://example.com/ -> HTTP 403 (the proxy's refusal page)
+around the proxy: https://api.github.com/zen -> ConnectError: [Errno -3] Temporary failure in name resolution
+name lookup of api.github.com -> gaierror: [Errno -3] Temporary failure in name resolution
+TCP straight to 1.1.1.1:443 -> OSError: [Errno 101] Network is unreachable
+TCP straight to 140.82.112.6:443 -> OSError: [Errno 101] Network is unreachable
+
+== n8n, straight out with node
+straight out: no answer in 5 s
+straight out: ECONNRESET socket hang up

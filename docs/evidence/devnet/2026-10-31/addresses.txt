@@ -1,0 +1,6 @@
+agent-runtime p15-lock_default=172.25.0.5 
+platform-api p15-lock_default=172.25.0.7 
+n8n p15-lock_default=172.25.0.6 
+cosmos p15-lock_default=172.25.0.3 
+portal p15-lock_default=172.25.0.8 
+egress-proxy p15-lock_default=172.25.0.4 p15-lock_egress=172.26.0.2 
