@@ -429,6 +429,72 @@ test('@lane10 the Tools tab says the tool list is not available and keeps the ca
   await context.close()
 })
 
+// Lane 11. The unit tests cover pressClosesCard. This lane covers its pointerdown and click wiring in a real browser:
+// a press on the dimmed page beside the card closes it, and a press that starts or ends on the card does not.
+interface Spot {
+  x: number
+  y: number
+}
+interface Press {
+  name: string
+  from: Spot
+  to: Spot
+  under: string
+  closed: boolean
+}
+test('@lane11 a press on the dimmed page beside a card closes it, and a press that starts or ends on the card leaves it open', async ({ browser }) => {
+  onlyDev()
+  const context = await devContext(browser, 'alice')
+  const page = await context.newPage()
+  await openLibrary(page)
+  const tile = page.getByRole('link', { name: 'Version checker', exact: true })
+  const dialog = dialogOf(page)
+  await tile.click()
+  await expect(dialog).toBeVisible()
+  await settle(page)
+  const box = await dialog.boundingBox()
+  const title = await dialog.getByRole('heading', { name: 'Version checker', level: 2 }).boundingBox()
+  expect(box && title, 'the card and its title have a size').toBeTruthy()
+  if (!box || !title) return
+  expect(box.x, 'the page shows beside the card').toBeGreaterThan(40)
+  const y = box.y + box.height / 2
+  const beside = { x: Math.round(box.x / 2), y: Math.round(y) }
+  const edge = { x: Math.round(box.x + 6), y: Math.round(y) }
+  const onTitle = { x: Math.round(title.x + title.width / 2), y: Math.round(title.y + title.height / 2) }
+  const presses: Press[] = []
+  const press = async (name: string, from: Spot, to: Spot): Promise<boolean> => {
+    const under = await page.evaluate(({ x, y: at }) => {
+      const el = document.elementFromPoint(x, at)
+      if (!el) return 'nothing'
+      return el.matches('dialog[open]') ? 'the dialog itself' : `${el.tagName.toLowerCase()} inside the dialog: ${String(el.closest('dialog[open]') !== null)}`
+    }, from)
+    await page.mouse.move(from.x, from.y)
+    await page.mouse.down()
+    await page.mouse.move(to.x, to.y, { steps: 5 })
+    await page.mouse.up()
+    await page.waitForTimeout(500)
+    const closed = (await dialog.count()) === 0
+    presses.push({ name, from, to, under, closed })
+    return closed
+  }
+  const keptOpen = [
+    await press('on the card’s own edge, inside its padding', edge, edge),
+    await press('starts on the card’s title, ends on the page', onTitle, beside),
+    await press('starts on the page, ends on the card’s title', beside, onTitle),
+  ]
+  await shotTo(page, path.join(laneDir(11), 'p7-press-kept-open.png'))
+  const closedByPage = await press('on the dimmed page beside the card', beside, beside)
+  await expect(dialog).toHaveCount(0)
+  await expect(page).toHaveURL(/\/agents$/)
+  await expect(tile, 'focus is back on the card’s tile').toBeFocused()
+  await shotTo(page, path.join(laneDir(11), 'p7-press-closed.png'))
+  save(11, 'p7-press-beside.json', { viewport: DESKTOP, card: box, beside, edge, onTitle, presses, afterClose: new URL(page.url()).pathname })
+  expect(presses.map((p) => p.under), 'what each press starts on').toEqual(['the dialog itself', 'h2 inside the dialog: true', 'the dialog itself', 'the dialog itself'])
+  expect(keptOpen, 'a press on the card’s edge, or one that starts or ends on the card, leaves it open').toEqual([false, false, false])
+  expect(closedByPage, 'a press on the page beside the card closes it').toBe(true)
+  await context.close()
+})
+
 test('@perf largest contentful paint of the Agent library', async ({ browser }) => {
   onlyDev()
   test.skip(TARGET === 'trunk', 'trunk has no Agent library')

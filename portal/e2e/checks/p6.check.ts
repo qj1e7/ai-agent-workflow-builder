@@ -485,7 +485,26 @@ test('@lane5 bob, an Approver only, sees the list and no add, remove, schedule o
   })
 })
 
-test('@lane6 when the mock GitHub fails during a check of rows that were Up to date, each row says it can’t check with its own reason, keeps the newest version it last read, and will try at the next check', async ({ browser }) => {
+// The mock GitHub can fail for one repository while the others answer (e2e/mock_github/server.py). Setting a mode
+// for every repository, as setMockGithubMode does, clears each repository's own.
+async function setMockGithubRepoMode(repo: string, mode: 'ok' | 'unavailable' | 'not_found'): Promise<void> {
+  const http = await request.newContext()
+  try {
+    const answer = await http.post(`${MOCK_GITHUB_URL}/_admin/mode`, { data: { mode, repo } })
+    expect(answer.status(), `mock-github accepts mode ${mode} for ${repo}`).toBe(200)
+  } finally {
+    await http.dispose()
+  }
+}
+
+/** Waits until the clock is past the minute of the stamp, so a later check reads at a time the page shows apart. */
+async function intoTheNextMinute(stamp: string | null | undefined): Promise<number> {
+  const wait = stamp ? (Math.floor(Date.parse(stamp) / 60_000) + 1) * 60_000 + 1_000 - Date.now() : 0
+  if (wait > 0) await new Promise((done) => setTimeout(done, wait))
+  return Math.max(wait, 0)
+}
+
+test('@lane6 when GitHub fails for each row in its own way, each row says it can’t check with its own reason, keeps the newest version from its own last read, and will try at the next check', async ({ browser }) => {
   test.setTimeout(400_000)
   await withBackend(async (backend) => {
     const useCaseId = await backend.freshWatchlist('alice', [
@@ -493,59 +512,74 @@ test('@lane6 when the mock GitHub fails during a check of rows that were Up to d
       { ...REDIS, our_version: '8.2.1' },
     ])
     await backend.send('PUT', 'alice', '/api/v1/watchlist/schedule', { day: 'monday', at: '09:00' })
-    const first = await backend.checkNow('alice', useCaseId)
-    await backend.waitForState(first, ['succeeded'])
-    const before = await viewOf(backend)
-    await setMockGithubMode('unavailable')
+    let first = ''
+    let second = ''
     let runId = ''
+    let waited = 0
+    let before: View | undefined
+    let middle: View | undefined
     try {
+      // 1. Both rows read: Up to date.
+      first = await backend.checkNow('alice', useCaseId)
+      await backend.waitForState(first, ['succeeded'])
+      before = await viewOf(backend)
+      // 2. A minute on, Redis's source is down: LangGraph reads again, Redis can't check and keeps its first read.
+      waited = await intoTheNextMinute(before.software.find((r) => r.name === 'Redis')?.checked_at)
+      await setMockGithubRepoMode(REDIS.repo, 'unavailable')
+      second = await backend.checkNow('alice', useCaseId)
+      await backend.waitForState(second, ['succeeded'], 150_000)
+      middle = await viewOf(backend)
+      // 3. LangGraph's source is down and Redis's repository is gone: nothing can be checked, each for its own reason.
+      await setMockGithubRepoMode(LANGGRAPH.repo, 'unavailable')
+      await setMockGithubRepoMode(REDIS.repo, 'not_found')
       runId = await backend.checkNow('alice', useCaseId)
       await backend.waitForState(runId, ['failed'], 150_000)
     } finally {
       await setMockGithubMode('ok')
     }
     const view = await viewOf(backend)
+    const named = (v: View | undefined, name: string) => v?.software.find((r) => r.name === name)
+    const lastRead: Record<string, string | null | undefined> = { LangGraph: named(middle, 'LangGraph')?.checked_at, Redis: named(before, 'Redis')?.checked_at }
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
     const watch = watchPage(page)
     await openSoftware(page)
-    const onPage: Record<string, { row: string; history: string }> = {}
+    const onPage: Record<string, { row: string; lastRead: string; history: string }> = {}
     for (const name of ['LangGraph', 'Redis']) {
-      const was = before.software.find((r) => r.name === name)
-      const now = view.software.find((r) => r.name === name)
+      const now = named(view, name)
       const row = rowOf(page, name)
       await expect(row).toHaveAttribute('data-status', 'cant_check')
       await expect(row).toContainText('Can’t check')
       await expect(row).toContainText(`${now?.problem ?? 'missing'} It will try again at the next check.`)
-      await expect(row.locator('dd').nth(1)).toContainText(was?.newest_version ?? 'missing')
-      await expect(row.getByText(/^Last read /)).toBeVisible()
+      await expect(row.locator('dd').nth(1)).toContainText(named(before, name)?.newest_version ?? 'missing')
+      const read = row.getByText(/^Last read /)
+      await expect(read).toBeVisible()
       await row.getByRole('button', { name: /^History/ }).click()
       const history = row.getByRole('list', { name: `History of ${name}` })
       await expect(history).toContainText(`Couldn’t check. ${now?.problem ?? 'missing'}`)
-      await expect(history).toContainText(`Checked. The newest version is ${was?.newest_version ?? 'missing'}.`)
-      onPage[name] = { row: await text(row), history: await text(history) }
+      onPage[name] = { row: await text(row), lastRead: await text(read), history: await text(history) }
     }
     await expect(page.getByRole('heading', { name: /^Up to date/ })).toHaveCount(0)
     await expect(page.getByText('The last check stopped', { exact: false })).toHaveText('The last check stopped: an agent could not finish its work.')
     await expect(page.getByRole('link', { name: 'Open the run' })).toHaveAttribute('href', `/runs/${runId}`)
     await shotTo(page, 6, 'p6-cant-check.png', true)
-    save(6, 'p6-cant-check.json', {
-      first,
-      runId,
-      before: before.software.map((r) => ({ name: r.name, status: r.status, newest: r.newest_version, checked_at: r.checked_at })),
-      after: view.software.map((r) => ({ name: r.name, status: r.status, problem: r.problem, newest: r.newest_version, newest_read_at: r.newest_read_at, checked_at: r.checked_at })),
-      lastCheck: view.last_check,
-      onPage,
-    })
-    expect(before.software.map((r) => r.status), 'both rows were Up to date first').toEqual(['up_to_date', 'up_to_date'])
+    const rows = (v: View | undefined) => (v?.software ?? []).map((r) => ({ name: r.name, status: r.status, problem: r.problem, newest: r.newest_version, newest_read_at: r.newest_read_at, checked_at: r.checked_at }))
+    save(6, 'p6-cant-check.json', { runs: { first, second, third: runId }, waitedForTheNextMinuteMs: waited, before: rows(before), middle: rows(middle), after: rows(view), lastRead, lastCheck: view.last_check, onPage })
+    expect(rows(before).map((r) => r.status), 'check 1: both rows were Up to date').toEqual(['up_to_date', 'up_to_date'])
+    expect(rows(middle).map((r) => `${r.name} ${r.status}`).sort(), 'check 2: only Redis failed').toEqual(['LangGraph up_to_date', 'Redis cant_check'])
+    const problems = rows(view).map((r) => r.problem ?? '')
     for (const row of view.software) {
-      const was = before.software.find((r) => r.id === row.id)
       expect(row.status, `${row.name} status`).toBe('cant_check')
-      expect(row.problem, `${row.name} keeps its own reason`).toContain('GitHub')
+      expect(row.problem, `${row.name} says GitHub`).toContain('GitHub')
       expect(row.problem, `${row.name} has its own reason, not the shared sentence`).not.toMatch(/^None of the/)
-      expect(row.newest_version, `${row.name} keeps the newest version it last read`).toBe(was?.newest_version)
-      expect(row.newest_read_at, `${row.name} says when it was read`).toBe(was?.checked_at)
+      expect(row.newest_version, `${row.name} keeps the newest version it last read`).toBe(named(before, row.name)?.newest_version)
+      expect(row.newest_read_at, `${row.name} says when it was last read`).toBe(lastRead[row.name])
     }
+    expect(named(view, 'LangGraph')?.problem, 'LangGraph: its source did not answer').toContain('503')
+    expect(named(view, 'Redis')?.problem, 'Redis: its repository is gone').toContain('404')
+    expect(new Set(problems).size, 'the two rows give different reasons').toBe(2)
+    expect(lastRead['LangGraph'], 'LangGraph was last read by check 2, Redis by check 1').not.toBe(lastRead['Redis'])
+    expect(onPage['LangGraph']?.lastRead, 'the page shows each row’s own last read time').not.toBe(onPage['Redis']?.lastRead)
     expect(view.last_check).toMatchObject({ run_id: runId, state: 'failed' })
     assertClean(watch)
     await context.close()
@@ -797,7 +831,8 @@ test('@review-video alice adds software and runs a check, in 30 to 60 seconds', 
     const seconds = (Date.now() - started) / 1000
     await context.close()
     await video?.saveAs(path.join(EVID, 'p6-review.webm'))
-    save('video', 'p6-review.json', { seconds })
+    // The idle time at the end that keeps a fast run at the plan's 30 seconds at least.
+    save('video', 'p6-review.json', { seconds, paddedSeconds: Math.max(pad, 0) / 1000 })
     expect(seconds, 'the review video runs 30 to 60 seconds').toBeGreaterThanOrEqual(VIDEO_SECONDS.min)
     expect(seconds).toBeLessThanOrEqual(VIDEO_SECONDS.max)
   })

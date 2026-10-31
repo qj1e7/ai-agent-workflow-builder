@@ -668,7 +668,8 @@ test('@lane2 alice signs in through the mock identity provider and no X-Dev-User
   await expect(h1(page)).toHaveText(GREETING('Alice'))
   await expect(page.getByRole('banner')).toContainText('Alice')
   await expect(page.getByRole('banner')).toContainText('Operator and Approver')
-  await expect(mainMenu(page).getByRole('link')).toHaveText([...MENU])
+  // An Operator's menu has New workflow at the end since P13 (#75), as portal/src/shell/shell.test.tsx says.
+  await expect(mainMenu(page).getByRole('link')).toHaveText([...MENU, 'New workflow'])
   await expect(page.getByRole('button', { name: /Test controls/ }), 'real sign-in hides the test controls').toHaveCount(0)
   await shotTo(page, path.join(dir, 'p1-oidc-sign-in.png'))
   for (const label of ['Workflows', 'Software watchlist', 'Agent library', 'Home']) {
