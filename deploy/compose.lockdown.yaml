@@ -66,9 +66,7 @@ services:
   n8n:
     environment: *through-the-proxy
     ports: !reset []
-    # BusyBox wget ignores NO_PROXY and asks the proxy even for localhost, so its check turns the proxy off.
-    healthcheck:
-      test: ["CMD-SHELL", "wget -Y off -qO- http://localhost:5678/healthz/readiness || exit 1"]
+    # Its health check in compose.yaml already turns the proxy off (wget -Y off).
 
   agent-runtime:
     environment: *through-the-proxy

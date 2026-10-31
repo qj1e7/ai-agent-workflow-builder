@@ -25,3 +25,23 @@ export function createLatch(): Latch {
 export function useLatch(): Latch {
   return useState(createLatch)[0]
 }
+
+/** What a mutation calls back with. One shape for every press that goes through a latch. */
+export interface Outcome<T = void> {
+  onSuccess?: (value: T) => void
+  onError?: (error: unknown) => void
+  onSettled?: () => void
+}
+
+/** Sends one request for a press and drops the others until the platform answers. The caller's onSettled still runs. */
+export function pressOnce<T>(latch: Latch, send: (outcome: Outcome<T>) => void, outcome: Outcome<T>): void {
+  latch.run((settled) =>
+    send({
+      ...outcome,
+      onSettled: () => {
+        settled()
+        outcome.onSettled?.()
+      },
+    }),
+  )
+}

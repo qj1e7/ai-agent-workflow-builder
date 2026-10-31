@@ -108,11 +108,12 @@ describe('the Teams button', () => {
 const WAITING = waiting as RunViewOf<'awaiting_approval'>
 const MESSAGE = teams.messages[0] as TeamsStubMessage
 
-function manyWaiting(n: number, startedBy: string): { runs: RunView[]; messages: TeamsStubMessage[] } {
+function manyWaiting(n: number, startedBy: string, youCanDecide = true): { runs: RunView[]; messages: TeamsStubMessage[] } {
   const runs = Array.from({ length: n }, (_, i) => ({
     ...WAITING,
     run_id: `run_${i}`,
     started_by: startedBy,
+    you_can_decide: youCanDecide,
     started_at: new Date(Date.UTC(2026, 10, 3, 2, i)).toISOString(),
     approval: { ...WAITING.approval, approval_id: `apr_${i}`, link: `/approvals/apr_${i}` },
   }))
@@ -129,15 +130,22 @@ describe('what the badge asks the platform', () => {
 
   it('asks about the newest waiting runs with a Teams message, and no more than it shows', () => {
     const { runs, messages } = manyWaiting(40, 'carol')
-    const asks = badgeAsks(runs, messages.slice(1), 'bob')
+    const asks = badgeAsks(runs, messages.slice(1))
     expect(asks.ids).toEqual(Array.from({ length: BADGE_MAX_ASKS }, (_, i) => `apr_${39 - i}`))
     expect(asks.more).toBe(true)
-    expect(badgeAsks(runs.slice(0, 3), messages, 'bob')).toEqual({ ids: ['apr_2', 'apr_1', 'apr_0'], more: false })
+    expect(badgeAsks(runs.slice(0, 3), messages)).toEqual({ ids: ['apr_2', 'apr_1', 'apr_0'], more: false })
   })
 
-  it('skips the runs this person started, which they can never approve', () => {
-    const { runs, messages } = manyWaiting(40, 'alice')
-    expect(badgeAsks(runs, messages, 'alice')).toEqual({ ids: [], more: false })
+  it('skips the runs the platform says this person cannot decide', () => {
+    const { runs, messages } = manyWaiting(40, 'alice', false)
+    expect(badgeAsks(runs, messages)).toEqual({ ids: [], more: false })
+  })
+
+  it('still asks about an older run this person can decide when nine of their own come first', () => {
+    // Carol started all ten. Alice retried the nine newest, so they are her own work, though she did not start them.
+    const { runs, messages } = manyWaiting(10, 'carol')
+    const retried = runs.map((run, i) => (i === 0 ? run : { ...run, you_can_decide: false }))
+    expect(badgeAsks(retried, messages)).toEqual({ ids: ['apr_0'], more: false })
   })
 
   it('sends the same small number of approval requests on every poll, however many runs wait', async () => {
@@ -153,7 +161,7 @@ describe('what the badge asks the platform', () => {
     }
     const client = createApiClient(authorizedFetch(createDevSession(null), fetchImpl, 'http://portal.test'), 'http://portal.test')
     const queryClient = new QueryClient()
-    const asks = badgeAsks(runs, messages, 'bob')
+    const asks = badgeAsks(runs, messages)
     const observer = new QueriesObserver(queryClient, asks.ids.map((id) => approvalQuery(client, 'bob', id, { poll: BADGE_POLL_MS })))
     const stop = observer.subscribe(() => undefined)
     await vi.advanceTimersByTimeAsync(0)
