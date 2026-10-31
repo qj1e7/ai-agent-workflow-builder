@@ -8,7 +8,9 @@ export const draftsKey = (user: string) => ['drafts', user] as const
 export function useUnderstand() {
   const client = useApiClient()
   return useMutation({
-    mutationFn: async (text: string) => unwrap(await client.POST('/api/v1/builder/understand', { body: { text } })),
+    /** carriedOn: the Operator chose a new workflow over the Software watchlist, so the Planner reads the words in parts. */
+    mutationFn: async ({ text, carriedOn = false }: { readonly text: string; readonly carriedOn?: boolean }) =>
+      unwrap(await client.POST('/api/v1/builder/understand', { body: { text, carried_on: carriedOn } })),
   })
 }
 

@@ -41,6 +41,8 @@ export interface PlanState {
   readonly pending: boolean
   readonly error: string | null
   readonly retry: () => void
+  /** The drafted agents the Operator already saved, which Turn it on reuses. Null until the agent list is read. */
+  readonly reused: ReadonlySet<number> | null
 }
 
 function WatchlistStep({ redirect, onBack, onCarryOn }: { redirect: Redirect; onBack: () => void; onCarryOn: () => void }) {
@@ -248,6 +250,9 @@ function PlanPanel({ form, plan, kinds, ready, shown, onValue }: { form: Form; p
   else if (plan.view?.kind === 'agents') {
     const view = plan.view
     const drafted = view.agents.filter((agent) => agent.card.kind === 'drafted')
+    const known = plan.reused
+    const fresh = known === null ? [] : drafted.filter((agent) => !known.has(agent.index)).map((agent) => agent.name)
+    const reused = known === null ? [] : drafted.filter((agent) => known.has(agent.index)).map((agent) => agent.name)
     body = (
       <>
         {view.agents.map((agent) => (
@@ -255,7 +260,8 @@ function PlanPanel({ form, plan, kinds, ready, shown, onValue }: { form: Form; p
         ))}
         <p className={styles['note']}>
           Done by: {view.agents.map((agent) => agent.name).join(' and ')}. Nothing is changed without an Approver’s yes.
-          {drafted.length > 0 ? ` ${drafted.map((agent) => agent.name).join(' and ')} is a new agent. It’s saved to the Agent library when you turn this workflow on.` : ''}
+          {fresh.length > 0 ? ` ${fresh.join(' and ')} is a new agent. It’s saved to the Agent library when you turn this workflow on.` : ''}
+          {reused.length > 0 ? ` You already saved ${reused.join(' and ')} in the Agent library, so this workflow uses it.` : ''}
         </p>
         {view.problems.length > 0 || view.notIncluded.length > 0 ? (
           <ul id={PROBLEMS_ID} className={styles['problems']} tabIndex={-1}>

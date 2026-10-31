@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from types import SimpleNamespace
 from typing import Any
 
@@ -109,8 +110,13 @@ class FakeLog:
         return self._events
 
 
-def app_with(orchestrator: object = None, builder: object = None, log: object = None) -> FastAPI:
-    app = create_app(LOCAL_ENV)
+def app_with(
+    orchestrator: object = None,
+    builder: object = None,
+    log: object = None,
+    env: Mapping[str, str] | None = None,
+) -> FastAPI:
+    app = create_app({**LOCAL_ENV, **(env or {})})
     app.state.orchestrator = orchestrator or FakeOrchestrator()
     app.state.builder = builder or FakeBuilder()
     app.state.activity_log = log or FakeLog()

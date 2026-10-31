@@ -391,9 +391,9 @@ class Builder:
         library = (await self._cards.list())[:LIBRARY_LIMIT]
         return await plan(self._planner, library, task)
 
-    async def understand(self, text: str) -> UnderstandOut:
+    async def understand(self, text: str, carried_on: bool = False) -> UnderstandOut:
         """What the Planner understood of a task, or the starter workflows. Nothing is saved."""
-        return await understand(self._planner, text)
+        return await understand(self._planner, text, carried_on)
 
     async def create_agent_use_case(
         self, principal: Principal, body: CreateAgentUseCase

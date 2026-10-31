@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import datetime
 from typing import Annotated, Any, Literal, NoReturn, cast
 
@@ -14,32 +14,56 @@ class WireModel(BaseModel):
 
 
 NUL_MESSAGE = "This text holds a NUL character (\\u0000), which can't be saved. Remove it."
+BROKEN_TEXT_MESSAGE = (
+    "This text holds half of a character pair (a lone \\ud800 to \\udfff escape), "
+    "which can't be saved. Remove it."
+)
 
 
-def holds_nul(value: object) -> bool:
+def holds_text(value: object, bad: Callable[[str], bool]) -> bool:
+    """Whether any text in the value, a key included, is bad."""
     match value:
         case str():
-            return "\x00" in value
+            return bad(value)
         case BaseModel():
-            return any(holds_nul(v) for v in value.__dict__.values())
+            return any(holds_text(v, bad) for v in value.__dict__.values())
         case dict():
             entries = cast(dict[object, object], value)
-            return any(holds_nul(k) or holds_nul(v) for k, v in entries.items())
+            return any(holds_text(k, bad) or holds_text(v, bad) for k, v in entries.items())
         case list() | tuple():
-            return any(holds_nul(v) for v in cast(Sequence[object], value))
+            return any(holds_text(v, bad) for v in cast(Sequence[object], value))
         case _:
             return False
 
 
+def _has_nul(text: str) -> bool:
+    return "\x00" in text
+
+
+def _breaks_utf8(text: str) -> bool:
+    """A lone surrogate, such as one sent as the escape \\ud800, has no UTF-8 form."""
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError:
+        return True
+    return False
+
+
+def holds_nul(value: object) -> bool:
+    return holds_text(value, _has_nul)
+
+
 class WireIn(WireModel):
-    """A request body. PostgreSQL text cannot hold a NUL byte, so any text that holds one is
-    refused with a 422 naming its field, before it reaches a store."""
+    """A request body. PostgreSQL text cannot hold a NUL byte or a lone surrogate, so any text
+    that holds one is refused with a 422 naming its field, before it reaches a store."""
 
     @field_validator("*")
     @classmethod
-    def _no_nul(cls, value: object) -> object:
+    def _savable_text(cls, value: object) -> object:
         if holds_nul(value):
             raise PydanticCustomError("nul_character", NUL_MESSAGE)
+        if holds_text(value, _breaks_utf8):
+            raise PydanticCustomError("broken_character", BROKEN_TEXT_MESSAGE)
         return value
 
 

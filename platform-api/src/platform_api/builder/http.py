@@ -310,7 +310,7 @@ async def plan_task(body: PlanIn, principal: Operator, builder: CurrentBuilder) 
 async def understand_task(
     body: UnderstandIn, principal: Operator, builder: CurrentBuilder
 ) -> UnderstandOut:
-    return await builder.understand(body.text)
+    return await builder.understand(body.text, body.carried_on)
 
 
 @router.post(

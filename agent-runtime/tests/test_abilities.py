@@ -99,6 +99,64 @@ def test_a_place_that_says_a_write_is_cant_do(text: str, what: str):
 
 
 @pytest.mark.parametrize(
+    ("text", "what"),
+    [
+        ("let the team know in microsoft teams", "let the team know in microsoft teams"),
+        ("Let the team know in Microsoft Teams", "let the team know in Microsoft Teams"),
+        ("Jira project MOCK, then let the team know", "let the team know"),
+        ("Jira project MOCK and post it in Teams", "post it in Teams"),
+        ("Make sure the team sees it in Teams", "make sure the team sees it in Teams"),
+        ("Write a summary to Slack", "write a summary to Slack"),
+        ("Write it to Slack", "send results to Slack"),
+        ("To the boss", "send results to the boss"),
+        ("Somewhere the team can see it", "put results somewhere the team can see it"),
+    ],
+)
+def test_where_it_goes_that_says_an_action_or_a_person_reads_as_plain_english(text: str, what: str):
+    assert why_no_tool("where", text) == cant(what)
+
+
+@pytest.mark.parametrize(
+    ("text", "what"),
+    [
+        ("Let's post it in Teams", "post it in Teams"),
+        ("Go to Slack", "send results to Slack"),
+        ("It goes to Slack", "send results to Slack"),
+        ("Written to Slack", "send results to Slack"),
+        ("Posted in Teams", "put results in Teams"),
+        ("Shared with the team", "share with the team"),
+        ("I want it in Teams", "put results in Teams"),
+        ("We let the team know in Teams", "let the team know in Teams"),
+    ],
+)
+def test_where_it_goes_reads_as_plain_english_after_a_subject_a_placing_verb_or_a_past_form(
+    text: str, what: str
+):
+    assert why_no_tool("where", text) == cant(what)
+
+
+@pytest.mark.parametrize(
+    "text", ["Jira project MOCK, and then", "in", "in the", "To the", "Jira project MOCK, to"]
+)
+def test_where_it_goes_with_no_place_after_a_jira_place_or_a_bare_preposition_names_nothing(
+    text: str,
+):
+    assert why_no_tool("where", text) is None
+
+
+@pytest.mark.parametrize(
+    ("kind", "text"),
+    [
+        ("do", "Create a ticket to"),
+        ("do", "Write a summary to"),
+        ("schedule", "Every day, write a summary to"),
+    ],
+)
+def test_a_trailing_to_names_no_place_and_never_stops_the_check(kind: RowKind, text: str):
+    assert why_no_tool(kind, text) is None
+
+
+@pytest.mark.parametrize(
     ("text", "system"),
     [
         ("Who has admin access in GitLab", "GitLab"),

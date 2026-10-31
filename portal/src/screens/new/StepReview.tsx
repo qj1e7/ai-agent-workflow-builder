@@ -15,6 +15,8 @@ const partsOf = (form: Form, kind: RowKind) => textsOf(form.rows, kind).join(' a
 interface StepReviewProps {
   readonly form: Form
   readonly plan: PlanView
+  /** The drafted agents the Operator already saved, which Turn it on reuses. Null until the agent list is read. */
+  readonly reused: ReadonlySet<number> | null
   readonly nameProblem: string | null
   readonly busy: boolean
   readonly problems: readonly string[]
@@ -23,9 +25,11 @@ interface StepReviewProps {
   readonly onTurnOn: () => void
 }
 
-export function StepReview({ form, plan, nameProblem, busy, problems, onName, onBack, onTurnOn }: StepReviewProps) {
+export function StepReview({ form, plan, reused, nameProblem, busy, problems, onName, onBack, onTurnOn }: StepReviewProps) {
   const agents = plan.kind === 'agents' ? plan.agents : []
   const drafted = agents.filter((agent) => agent.card.kind === 'drafted')
+  const fresh = reused !== null && drafted.some((agent) => !reused.has(agent.index))
+  const again = reused !== null && drafted.some((agent) => reused.has(agent.index))
   return (
     <>
       <div className={styles['body']}>
@@ -58,7 +62,8 @@ export function StepReview({ form, plan, nameProblem, busy, problems, onName, on
           <dt>Done by</dt>
           <dd>
             {agents.map((agent) => agent.name).join(' and ')}
-            {drafted.length > 0 ? '. The new agent is saved to the Agent library.' : ''}
+            {fresh ? '. The new agent is saved to the Agent library.' : ''}
+            {again ? '. This workflow uses the agent you already saved in the Agent library.' : ''}
           </dd>
         </dl>
         <section className={styles['panel']} aria-labelledby="checked-h">

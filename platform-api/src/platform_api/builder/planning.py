@@ -69,7 +69,9 @@ class CardPlanner(Protocol):
 
 
 class TaskReader(Protocol):
-    async def understand(self, task: str) -> UnderstandResult | NoModel | RuntimeDown: ...
+    async def understand(
+        self, task: str, carried_on: bool = False
+    ) -> UnderstandResult | NoModel | RuntimeDown: ...
 
 
 class Planning(CardPlanner, TaskReader, Protocol): ...
@@ -89,7 +91,9 @@ class NoPlanner:
     async def draft(self, task: str) -> DraftResult | NoModel | RuntimeDown:
         return NoModel()
 
-    async def understand(self, task: str) -> UnderstandResult | NoModel | RuntimeDown:
+    async def understand(
+        self, task: str, carried_on: bool = False
+    ) -> UnderstandResult | NoModel | RuntimeDown:
         return NoModel()
 
 
@@ -316,7 +320,7 @@ def understood_out(answer: UnderstandResult | NoModel | RuntimeDown) -> Understa
             )
 
 
-async def understand(planner: TaskReader, text: str) -> UnderstandOut:
+async def understand(planner: TaskReader, text: str, carried_on: bool = False) -> UnderstandOut:
     """What the Planner understood of a task. Model trouble answers the starters: no model
     connected, the runtime down or refusing, a model problem, or no answer within the limit. A
     failure to read the model settings from the database is not model trouble, so it is raised
@@ -324,7 +328,7 @@ async def understand(planner: TaskReader, text: str) -> UnderstandOut:
     limit = UNDERSTAND_LIMIT_SECONDS
     try:
         async with asyncio.timeout(limit):
-            answer = await planner.understand(text)
+            answer = await planner.understand(text, carried_on)
     except TimeoutError:
         return _fall_back("too_slow", f"no answer within {limit:g} seconds")
     return understood_out(answer)
