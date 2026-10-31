@@ -35,12 +35,13 @@ import {
   pressChange,
   pressRunNow,
   rereadWhenOutOfDate,
+  mayChangeSchedule,
   rowAction,
+  scheduleSavedWords,
   rowsOf,
   runFact,
   runWhen,
   runsOf,
-  SET_UP_AGAIN_WORDS,
   stepTag,
   whenWords,
   workflowPath,
@@ -122,14 +123,15 @@ const heldBy = (held: ScheduleHold, owner_name = 'Carol'): UseCaseView => ({ ...
 
 describe('a schedule held because its owner can no longer run it', () => {
   it('says why on the workflow page, and the next run reads Not running', () => {
-    expect(heldNote(heldBy('owner_removed'))).toBe('Not running: Carol is no longer on the People list. An Operator can set it up again in New workflow.')
-    expect(heldNote(heldBy('owner_not_an_operator'))).toBe('Not running: Carol can no longer run workflows. An Operator can set it up again in New workflow.')
-    expect(heldNote(heldBy('owner_removed', ' '))).toBe('Not running: its owner is no longer on the People list. An Operator can set it up again in New workflow.')
+    expect(heldNote(heldBy('owner_removed'))).toBe('Not running: Carol is no longer on the People list. An Operator can take it over by saving the schedule.')
+    expect(heldNote(heldBy('owner_not_an_operator'))).toBe('Not running: Carol can no longer run workflows. An Operator can take it over by saving the schedule.')
+    expect(heldNote(heldBy('owner_removed', ' '))).toBe('Not running: its owner is no longer on the People list. An Operator can take it over by saving the schedule.')
     expect([nextRunWords(heldBy('owner_removed'), NOW), nextRunWords(HELD, NOW)]).toEqual(['Not running', 'Not running'])
   })
 
-  it('says why in the Software page’s words, and points to New workflow, since only the watchlist’s schedule can be saved again', () => {
-    expect(heldNote(HELD)).toBe(nextCheckWords(heldSchedule.schedule as ScheduleView, false).replace(TAKE_OVER_WORDS, SET_UP_AGAIN_WORDS))
+  it('says why in the Software page’s words, since an Operator takes either schedule over by saving it', () => {
+    expect(heldNote(HELD)).toBe(nextCheckWords(heldSchedule.schedule as ScheduleView, false))
+    expect(heldNote(heldBy('owner_removed'))).toContain(TAKE_OVER_WORDS)
   })
 
   it('gives way to Paused, and says nothing while the schedule runs', () => {
@@ -467,5 +469,29 @@ describe('rereading a workflow that changed under the Operator', () => {
   it('does nothing for any other answer', () => {
     expect(run(new ApiError(503, null))).toEqual([])
     expect(run(new Error('offline'))).toEqual([])
+  })
+})
+
+describe('changing a workflow’s schedule', () => {
+  it('is for Operators, and not for the Software watchlist, whose schedule is saved on the Software page', () => {
+    expect([ALICE, BOB, CAROL].map((viewer) => mayChangeSchedule(AGENTS, viewer))).toEqual([true, false, true])
+    expect([ALICE, CAROL].map((viewer) => mayChangeSchedule(WATCHLIST, viewer))).toEqual([false, false])
+  })
+
+  it('says the Operator owns it now, and when it runs next, in the schedule’s own time', () => {
+    const saved = { ...AGENTS, state: 'on' as const, next_run_at: '2026-11-09T01:00:00Z', schedule: { day: 'monday' as const, at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: null } }
+    expect(scheduleSavedWords(saved, NOW)).toBe('Schedule saved. You own it now. Next run Mon 9 Nov, 9:00.')
+  })
+
+  it('says a paused workflow runs on it once resumed, since a paused one names no next run', () => {
+    expect(scheduleSavedWords({ ...AGENTS, state: 'paused', next_run_at: null }, NOW)).toBe('Schedule saved. You own it now. It runs on this schedule once you resume it.')
+  })
+
+  it('reads the workflow again, off the pressed control, when the platform says it changed or is gone', () => {
+    const seen: string[] = []
+    const again = rereadWhenOutOfDate('uc_1', () => seen.push('focus'), (id) => seen.push(`reread ${id}`))('schedule')
+    again(new ApiError(409, { detail: 'The Software watchlist’s schedule is saved on the Software page.' }))
+    again(new ApiError(403, { detail: 'Only an Operator can change workflows.' }))
+    expect(seen).toEqual(['focus', 'reread uc_1'])
   })
 })

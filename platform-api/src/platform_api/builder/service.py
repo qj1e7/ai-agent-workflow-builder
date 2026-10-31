@@ -40,6 +40,7 @@ from platform_api.builder.models import (
     DraftList,
     DraftView,
     PlanOut,
+    ScheduleIn,
     SuggestOut,
     ToolList,
     UnderstandOut,
@@ -172,6 +173,11 @@ class WatchlistStays:
     pass
 
 
+@dataclass(frozen=True)
+class ScheduleOnSoftwarePage:
+    pass
+
+
 type Moved = Lifecycle | AlreadyDeleted | TooLate | WatchlistStays
 type Move = Callable[[Lifecycle, str, datetime], Moved]
 
@@ -283,6 +289,27 @@ class Builder:
                 return None
             case _:
                 return await self.get_use_case(use_case_id)
+
+    async def save_schedule(
+        self, use_case_id: str, principal: Principal, body: ScheduleIn
+    ) -> UseCaseView | ScheduleOnSoftwarePage | None:
+        """The same save as the watchlist's: the caller becomes the owner, which lifts a hold.
+        Saving is not a write to Jira or Confluence, so it needs no approval."""
+        async with self._db.connection("builder") as conn:
+            row = await (
+                await conn.execute(
+                    "SELECT v.template FROM builder.use_cases u JOIN builder.use_case_versions v"
+                    " ON v.use_case_id = u.use_case_id AND v.version = u.current_version"
+                    " WHERE u.use_case_id = %s AND u.deleted_at IS NULL",
+                    (use_case_id,),
+                )
+            ).fetchone()
+        if row is None:
+            return None
+        if row["template"] == SOFTWARE_WATCHLIST.key:
+            return ScheduleOnSoftwarePage()
+        await self._schedules.save(UseCaseId(use_case_id), Schedule(body.day, body.at), principal)
+        return await self.get_use_case(use_case_id)
 
     async def _move(self, use_case_id: str, move: Move) -> Moved | None:
         async with self._db.transaction("builder") as uow:

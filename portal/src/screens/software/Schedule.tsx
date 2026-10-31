@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { useSaveSchedule, useTurnOffSchedule } from '../../api/queries'
-import type { Day, ScheduleView } from '../../api/types'
+import type { Day, ScheduleIn, ScheduleView } from '../../api/types'
 import { useMoveWorkflow, useRereadWorkflow } from '../../api/workflowQueries'
 import { Button } from '../../ui/Button'
 import { useFocusAfterReread } from '../../ui/focus'
@@ -24,13 +24,28 @@ export function ScheduleNote({ schedule, operator, paused }: { schedule: Schedul
   )
 }
 
-const OWNER_WARNING = 'Saving makes you the owner of this schedule. Its checks then count as your work, so you won’t be able to approve them.'
+/** What a save needs from its mutation, so the Software page and the workflow page share one form. */
+export interface SaveSchedule {
+  readonly mutate: (body: ScheduleIn, answers: { onSuccess: () => void; onError: (failure: unknown) => void }) => void
+  readonly isPending: boolean
+}
 
-export function ScheduleEditor({ schedule, onDone }: { schedule: ScheduleView | null; onDone: () => void }) {
+const ownerWarning = (work: string) => `Saving makes you the owner of this schedule. Its ${work} then count as your work, so you won’t be able to approve them.`
+
+interface FormProps {
+  readonly schedule: Pick<ScheduleView, 'day' | 'at'> | null
+  /** What the schedule starts, in the owner warning: "checks" or "runs". */
+  readonly work: string
+  readonly save: SaveSchedule
+  readonly onDone: () => void
+  /** Called with the platform's refusal, after the form has shown it. */
+  readonly onRefused?: (failure: unknown) => void
+}
+
+export function ScheduleForm({ schedule, work, save, onDone, onRefused }: FormProps) {
   const [day, setDay] = useState<Day>(schedule?.day ?? 'monday')
   const [at, setAt] = useState(schedule?.at ?? '09:00')
   const [error, setError] = useState<string | undefined>()
-  const save = useSaveSchedule()
   const words = useErrorWords()
   const first = useRef<HTMLSelectElement>(null)
   useEffect(() => first.current?.focus(), [])
@@ -44,7 +59,16 @@ export function ScheduleEditor({ schedule, onDone }: { schedule: ScheduleView | 
       return
     }
     setError(undefined)
-    save.mutate({ day, at: clock.value }, { onSuccess: onDone, onError: (failure) => setError(words(failure)) })
+    save.mutate(
+      { day, at: clock.value },
+      {
+        onSuccess: onDone,
+        onError: (failure) => {
+          setError(words(failure))
+          onRefused?.(failure)
+        },
+      },
+    )
   }
 
   return (
@@ -64,7 +88,7 @@ export function ScheduleEditor({ schedule, onDone }: { schedule: ScheduleView | 
         <input id="sched-at" type="time" step={300} value={at} aria-invalid={error ? true : undefined} aria-describedby={error ? 'sched-error' : undefined} onChange={(event) => setAt(event.target.value)} />
       </div>
       <p className={styles['ownerNote']} id="sched-owner-note">
-        {OWNER_WARNING}
+        {ownerWarning(work)}
       </p>
       <div className={styles['actions']}>
         <Button type="submit" variant="primary" loading={save.isPending} aria-describedby="sched-owner-note">
@@ -81,7 +105,11 @@ export function ScheduleEditor({ schedule, onDone }: { schedule: ScheduleView | 
   )
 }
 
-function useEditorThatRefocusesItsOpener() {
+export function ScheduleEditor({ schedule, onDone }: { schedule: ScheduleView | null; onDone: () => void }) {
+  return <ScheduleForm schedule={schedule} work="checks" save={useSaveSchedule()} onDone={onDone} />
+}
+
+export function useEditorThatRefocusesItsOpener() {
   const [editing, setEditing] = useState(false)
   const opener = useRef<HTMLButtonElement>(null)
   const closing = useRef(false)

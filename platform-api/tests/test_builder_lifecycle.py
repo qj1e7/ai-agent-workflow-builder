@@ -851,3 +851,129 @@ async def test_drafts_are_for_operators_only(lab: Lab, method: str, path: str, t
     refused = await lab.call("bob", method, path, body, template=template)
     assert (refused.status_code, refused.json()) == (403, OPERATORS_ONLY)
     assert (await lab.call(None, method, path, body, template=template)).status_code == 401
+
+
+SCHEDULE_PATH = "/api/v1/use-cases/{use_case_id}/schedule"
+EVERY_MONDAY = {"day": "monday", "at": "09:00"}
+
+
+async def save_schedule(
+    lab: Lab, user: str | None, use_case_id: str, body: Any = None
+) -> httpx.Response:
+    return await lab.call(
+        user,
+        "PUT",
+        f"/api/v1/use-cases/{use_case_id}/schedule",
+        EVERY_MONDAY if body is None else body,
+        template=SCHEDULE_PATH,
+    )
+
+
+async def scheduled_workflow(lab: Lab, owner: str) -> str:
+    body = {
+        "name": "Watch LangGraph",
+        "instruction": "Check LangGraph for new releases.",
+        "agents": [{"card_id": VERSION_CHECKER_ID, "values": VALUES}],
+        "schedule": EVERY_MONDAY,
+    }
+    made = await lab.call(owner, "POST", "/api/v1/agent-use-cases", body)
+    assert made.status_code == 201, made.text
+    return made.json()["use_case_id"]
+
+
+async def test_an_operator_changes_a_workflows_schedule_and_becomes_its_owner(lab: Lab):
+    use_case_id = await scheduled_workflow(lab, "alice")
+
+    saved = await save_schedule(lab, "carol", use_case_id, {"day": "friday", "at": "17:30"})
+
+    assert saved.status_code == 200, saved.text
+    view = saved.json()
+    assert view["use_case_id"] == use_case_id
+    schedule = view["schedule"]
+    assert (schedule["day"], schedule["at"], schedule["time_zone"]) == (
+        "friday",
+        "17:30",
+        "Asia/Singapore",
+    )
+    assert (schedule["owner_name"], schedule["held"]) == ("Carol", None)
+    assert at(view["next_run_at"]) == datetime(
+        2026, 11, 6, 17, 30, tzinfo=ZoneInfo("Asia/Singapore")
+    )
+    [listed] = await lab.listed()
+    assert listed["schedule"] == schedule
+    assert await lab.runs() == [], "saving a schedule starts no run and asks for no approval"
+
+
+async def test_saving_a_schedule_takes_over_a_held_workflow_whose_owner_left_the_list(lab: Lab):
+    use_case_id = await scheduled_workflow(lab, "carol")
+    assert (await lab.call("alice", "DELETE", "/api/v1/people/carol")).status_code == 204
+    [held] = await lab.listed()
+    assert (held["schedule"]["held"], held["next_run_at"]) == ("owner_removed", None)
+
+    taken = await save_schedule(lab, "alice", use_case_id)
+
+    assert taken.status_code == 200
+    assert (taken.json()["schedule"]["held"], taken.json()["schedule"]["owner_name"]) == (
+        None,
+        "Alice",
+    )
+    assert at(taken.json()["next_run_at"]) == FIRST_MONDAY_SLOT
+
+
+async def test_a_workflow_held_for_a_former_operator_is_taken_over_only_by_an_operator(lab: Lab):
+    use_case_id = await scheduled_workflow(lab, "alice")
+    lost = await lab.call("carol", "PUT", "/api/v1/people/alice/operator", {"operator": False})
+    assert lost.status_code == 200
+    [held] = await lab.listed()
+    assert held["schedule"]["held"] == "owner_not_an_operator"
+
+    for user in ("alice", "bob"):
+        refused = await save_schedule(lab, user, use_case_id)
+        assert (refused.status_code, refused.json()) == (403, OPERATORS_ONLY), user
+    assert (await save_schedule(lab, None, use_case_id)).status_code == 401
+    [still] = await lab.listed()
+    assert still["schedule"]["held"] == "owner_not_an_operator", "a refused save changes nothing"
+
+    taken = await save_schedule(lab, "carol", use_case_id)
+    assert (taken.status_code, taken.json()["schedule"]["held"]) == (200, None)
+    assert taken.json()["schedule"]["owner_name"] == "Carol"
+
+
+async def test_a_workflow_with_no_schedule_gets_one_and_a_paused_one_stays_paused(lab: Lab):
+    use_case_id = await agent_workflow(lab)
+    [none] = await lab.listed()
+    assert (none["schedule"], none["next_run_at"]) == (None, None)
+    assert (await lab.move("alice", "pause", use_case_id)).status_code == 200
+
+    saved = await save_schedule(lab, "alice", use_case_id)
+
+    assert saved.status_code == 200
+    view = saved.json()
+    assert (view["state"], view["next_run_at"]) == ("paused", None)
+    assert (view["schedule"]["day"], view["schedule"]["owner_name"]) == ("monday", "Alice")
+    resumed = await lab.move("alice", "resume", use_case_id)
+    assert at(resumed.json()["next_run_at"]) == FIRST_MONDAY_SLOT
+
+
+async def test_a_schedule_cannot_be_saved_for_a_workflow_that_is_gone_or_the_watchlist(lab: Lab):
+    assert (await save_schedule(lab, "alice", "uc_nope")).status_code == 404
+    use_case_id = await agent_workflow(lab)
+    assert (await lab.move("alice", "delete", use_case_id)).status_code == 200
+    gone = await save_schedule(lab, "alice", use_case_id)
+    assert (gone.status_code, gone.json()) == (404, {"detail": "No such workflow"})
+
+    watchlist_id = await watchlist_workflow(lab)
+    refused = await save_schedule(lab, "alice", watchlist_id)
+    assert (refused.status_code, refused.json()) == (
+        409,
+        {"detail": "The Software watchlist's schedule is saved on the Software page."},
+    )
+
+
+@pytest.mark.parametrize(
+    "body", [{"day": "monday"}, {"day": "someday", "at": "09:00"}, {"day": "monday", "at": "09:03"}]
+)
+async def test_a_schedule_must_be_a_day_and_a_five_minute_time_in_singapore(lab: Lab, body: Any):
+    use_case_id = await agent_workflow(lab)
+    refused = await save_schedule(lab, "alice", use_case_id, body)
+    assert refused.status_code == 422

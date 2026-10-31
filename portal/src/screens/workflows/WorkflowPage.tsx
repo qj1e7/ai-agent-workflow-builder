@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type MouseEvent } from 'react'
+import { useEffect, useId, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router'
 import { ApiError } from '../../api/client'
 import { useErrorWords } from '../../api/context'
@@ -7,7 +7,7 @@ import { useLatch } from '../../api/latch'
 import { useDisplayName } from '../../api/people'
 import { useMe, useRuns, useStartRun, useUseCase } from '../../api/queries'
 import type { Me, UseCaseView } from '../../api/types'
-import { useDeleteWorkflow, useMoveWorkflow, useRereadWorkflow } from '../../api/workflowQueries'
+import { useDeleteWorkflow, useMoveWorkflow, useRereadWorkflow, useSaveWorkflowSchedule } from '../../api/workflowQueries'
 import { PageHead } from '../../shell/PageHead'
 import { AgentFace } from '../../ui/AgentFace'
 import { Button, ButtonLink } from '../../ui/Button'
@@ -15,6 +15,7 @@ import { useFocusAfterReread } from '../../ui/focus'
 import { FROM_LIST, openedFromList } from '../../ui/fromList'
 import { IconChevronLeft, IconPause, IconPlay, IconTrash } from '../../ui/icons'
 import { Toast, type ToastMessage } from '../../ui/Toast'
+import { ScheduleForm, useEditorThatRefocusesItsOpener, type SaveSchedule } from '../software/Schedule'
 import { useArrivalScroll } from './arrival'
 import { RecentRuns } from './RecentRuns'
 import { StatusPills, useChanges } from './Status'
@@ -24,6 +25,7 @@ import {
   changeWords,
   controlsOf,
   heldNote,
+  mayChangeSchedule,
   nextRunWords,
   placeOf,
   PLACES_IN_PAGE_ORDER,
@@ -34,6 +36,7 @@ import {
   rowAction,
   runFact,
   runsOf,
+  scheduleSavedWords,
   SOFTWARE_PAGE,
   stepTag,
   viewerOf,
@@ -61,13 +64,46 @@ function BackToList() {
   )
 }
 
-function When({ useCase }: { useCase: UseCaseView }) {
+function When({ useCase, change }: { useCase: UseCaseView; change: ReactNode }) {
   const { words, small } = whenWords(useCase)
   return (
     <dd>
       {words}
       <small>{small}</small>
+      {change}
     </dd>
+  )
+}
+
+interface ChangeScheduleProps {
+  readonly useCase: UseCaseView
+  readonly now: Date
+  readonly onSaved: (words: string) => void
+}
+
+/** The "When" section's Change control. Saving makes the Operator the owner, and a stale save reads the workflow again. */
+function ChangeSchedule({ useCase, now, onSaved }: ChangeScheduleProps) {
+  const id = useCase.use_case_id
+  const { editing, opener, open, close } = useEditorThatRefocusesItsOpener()
+  const save = useSaveWorkflowSchedule(id)
+  const reread = useRereadWorkflow()
+  const rereadIfOutOfDate = rereadWhenOutOfDate(id, () => undefined, reread)
+  const saveAndSay: SaveSchedule = {
+    isPending: save.isPending,
+    mutate: (body, answers) =>
+      save.mutate(body, {
+        onSuccess: (view) => {
+          answers.onSuccess()
+          onSaved(scheduleSavedWords(view, now))
+        },
+        onError: answers.onError,
+      }),
+  }
+  if (editing) return <ScheduleForm schedule={useCase.schedule} work="runs" save={saveAndSay} onDone={close} onRefused={rereadIfOutOfDate('schedule')} />
+  return (
+    <Button ref={opener} data-place="schedule" onClick={open}>
+      {useCase.schedule ? 'Change schedule' : 'Set a schedule'}
+    </Button>
   )
 }
 
@@ -284,7 +320,14 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
       <dl className={styles['facts']}>
         <div>
           <dt>When</dt>
-          <When useCase={useCase} />
+          <When
+            useCase={useCase}
+            change={
+              mayChangeSchedule(useCase, viewer) ? (
+                <ChangeSchedule useCase={useCase} now={now} onSaved={(text) => setSaid((before) => ({ id: (before?.id ?? 0) + 1, text }))} />
+              ) : null
+            }
+          />
         </div>
         <div>
           <dt>Next run</dt>
