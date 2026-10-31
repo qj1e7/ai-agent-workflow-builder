@@ -1,0 +1,87 @@
+# The lock-down test (docs/design/devnet-move.md): the stack with no route to the internet except
+# through a proxy that lets only the listed hosts through, as DevNet may allow. Layered over
+# compose.yaml only, so the agent runtime calls the real GitHub:
+#   docker compose -p wab-lockdown -f deploy/compose.yaml -f deploy/compose.lockdown.yaml up --build --wait
+# docs/evidence/devnet/lockdown-run.sh runs the whole test, and lockdown.md says what it found.
+#
+# The project's default network becomes internal, so Docker gives no container on it a route out,
+# and nothing can be published on the host. Only egress-proxy also joins a network that reaches the
+# internet. Each service that can use a proxy is told to use it. A refused call is a TCP_DENIED
+# line in the proxy's log: docker compose ... logs egress-proxy.
+
+networks:
+  default:
+    internal: true
+  egress: {}
+
+configs:
+  egress-proxy:
+    content: |
+      http_port 3128
+      # The hosts the app calls today: Entra ID sign-in, GitHub's API and the AI model's address.
+      acl allowed dstdomain login.microsoftonline.com api.github.com llm-gateway.aisg.sg
+      acl tls port 443
+      acl CONNECT method CONNECT
+      http_access deny CONNECT !tls
+      http_access allow allowed
+      http_access deny all
+      # A forward proxy only: it keeps nothing, and every request is logged with its answer.
+      cache deny all
+      access_log stdio:/var/log/squid/access.log squid
+      cache_log /var/log/squid/cache.log
+      pid_filename none
+      shutdown_lifetime 1 second
+
+# Internal names go straight to their service. Everything else goes to the proxy.
+x-through-the-proxy: &through-the-proxy
+  HTTP_PROXY: http://egress-proxy:3128
+  HTTPS_PROXY: http://egress-proxy:3128
+  http_proxy: http://egress-proxy:3128
+  https_proxy: http://egress-proxy:3128
+  NO_PROXY: localhost,127.0.0.1,postgres,cosmos,n8n,agent-runtime,bootstrap,platform-api,portal
+  no_proxy: localhost,127.0.0.1,postgres,cosmos,n8n,agent-runtime,bootstrap,platform-api,portal
+
+services:
+  egress-proxy:
+    # Squid 6 on Ubuntu 24.04, published 7 May 2026, pinned by digest.
+    image: ubuntu/squid:6.6-24.04_edge@sha256:8a3baed477e2c282ab8aa5edad442f69873246964f225c5c2ae8364b6610963c
+    configs:
+      - source: egress-proxy
+        target: /etc/squid/squid.conf
+    networks:
+      - default
+      - egress
+    # Each check is a line in the proxy's log from 127.0.0.1, so it checks often only while starting.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/3128"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+      start_interval: 1s
+
+  cosmos:
+    environment: *through-the-proxy
+
+  n8n:
+    environment: *through-the-proxy
+    ports: !reset []
+    # BusyBox wget ignores NO_PROXY and asks the proxy even for localhost, so its check turns the proxy off.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -Y off -qO- http://localhost:5678/healthz/readiness || exit 1"]
+
+  agent-runtime:
+    environment: *through-the-proxy
+    depends_on:
+      egress-proxy:
+        condition: service_healthy
+
+  bootstrap:
+    environment: *through-the-proxy
+
+  platform-api:
+    environment: *through-the-proxy
+    ports: !reset []
+
+  portal:
+    ports: !reset []
