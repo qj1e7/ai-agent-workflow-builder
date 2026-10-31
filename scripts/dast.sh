@@ -42,19 +42,39 @@ stack_seed openapi >"$stack_out/openapi.json"
 # Through nginx only the /api/ routes exist. /healthz and /internal are not published, and ZAP would flag the Portal page it gets back.
 stack_seed openapi-public >"$stack_out/openapi-public.json"
 
+# ZAP's proxy listens on a fixed port. Left to choose, the scan script picks a random port from
+# 32768 to 61000, the range the kernel also gives every outgoing connection, so once something in
+# the container held it when ZAP tried to bind (issue #79). 8090 is outside that range.
+zap_port=8090
+proxy_failed="unable to start the main proxy"
+
 # The scanner joins the project's own network and is given only that network's host names as targets.
+# If ZAP still cannot start its proxy, the scan runs once more, so a crash at start is not read as an alert.
 run_zap() {
-  local label="$1" rules="$2"
+  local label="$1" rules="$2" try code=0
   shift 2
-  # ZAP unpacks its add-ons into its home and temp folders. In memory, they leave nothing behind and need no free disk.
-  docker run --rm --name "$zap_name" --network "$network" \
-    --tmpfs /home/zap/.ZAP:rw,exec,uid=1000,gid=1000,size=1g --tmpfs /tmp:rw,exec,size=512m \
-    --volume "$root/$stack_out:/zap/wrk:rw" \
-    "$ZAP_IMAGE" "$@" -c "$rules" -z "$zap_options" \
-    -r "$label.html" -J "$label.json" -w "$label.md" >"$stack_out/$label.log" 2>&1
+  for try in 1 2; do
+    # ZAP unpacks its add-ons into its home and temp folders. In memory, they leave nothing behind and need no free disk.
+    docker run --rm --name "$zap_name" --network "$network" \
+      --tmpfs /home/zap/.ZAP:rw,exec,uid=1000,gid=1000,size=1g --tmpfs /tmp:rw,exec,size=512m \
+      --volume "$root/$stack_out:/zap/wrk:rw" \
+      "$ZAP_IMAGE" "$@" -P "$zap_port" -c "$rules" -z "$zap_options" \
+      -r "$label.html" -J "$label.json" -w "$label.md" >"$stack_out/$label.log" 2>&1
+    code=$?
+    if ! grep -q "$proxy_failed" "$stack_out/$label.log"; then
+      return "$code"
+    fi
+    echo "ZAP could not start its proxy for the $label scan (try $try of 2):" >&2
+    grep -E "BindException|$proxy_failed" "$stack_out/$label.log" >&2 || true
+  done
+  return "$code"
 }
 
 summary_line() {
+  if grep -q "$proxy_failed" "$1"; then
+    echo "ZAP did not start its proxy, so nothing was scanned"
+    return
+  fi
   grep -E "^FAIL-NEW" "$1" | tail -n 1 || echo "no summary"
 }
 
