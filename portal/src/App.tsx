@@ -48,7 +48,9 @@ function skipToMain(): void {
   target?.focus()
 }
 
-export function App({ now = () => new Date() }: { now?: () => Date }) {
+const WALL_CLOCK = () => new Date()
+
+export function App({ now = WALL_CLOCK }: { now?: () => Date }) {
   const me = useMe()
   const at = useNow(now)
   const { pathname } = useLocation()

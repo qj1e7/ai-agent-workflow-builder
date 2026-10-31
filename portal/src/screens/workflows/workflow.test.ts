@@ -33,6 +33,7 @@ import {
   PLACES_IN_PAGE_ORDER,
   pressChange,
   pressRunNow,
+  rereadWhenOutOfDate,
   rowAction,
   rowsOf,
   runFact,
@@ -40,7 +41,6 @@ import {
   runsOf,
   SET_UP_AGAIN_WORDS,
   stepTag,
-  rereadWhenOutOfDate,
   whenWords,
   workflowPath,
   type ChangeOutcome,
@@ -150,6 +150,21 @@ describe('when it runs', () => {
     expect(at('Europe/London')).toBe('London time.')
     expect(at('America/Los_Angeles')).toBe('Los Angeles time.')
     expect(at('UTC')).toBe('UTC.')
+    expect(at('Etc/GMT+8'), 'Etc/GMT+8 is eight hours behind UTC').toBe('GMT-8.')
+    expect(at('Etc/GMT-8')).toBe('GMT+8.')
+    expect(at('Etc/UTC')).toBe('UTC.')
+    expect(at('Pacific/Port_Moresby')).toBe('Port Moresby time.')
+    expect(at('Not/AZone'), 'a name the browser cannot read is shown as Singapore, as the times are').toBe('Singapore time (SGT).')
+    expect(at('Etc/GMT')).toBe('GMT+0.')
+    expect(at('')).toBe('Singapore time (SGT).')
+  })
+
+  it('shows the next run in the schedule’s own time zone', () => {
+    const london = { day: 'every_day' as const, at: '09:00', time_zone: 'Europe/London', owner_name: 'Alice' }
+    const next = { name: 'Watchlist', state: 'on' as const, next_run_at: '2026-11-04T09:00:00Z', schedule: london }
+    expect(nextRunWords(next, NOW)).toBe('Today, 9:00')
+    expect(nextRunWords({ ...next, schedule: { ...london, time_zone: 'Asia/Singapore' } }, NOW)).toBe('Today, 17:00')
+    expect(changeWords('resume', next, NOW)).toBe('Resumed. Next run Today, 9:00.')
   })
 
   it('keeps the schedule while the workflow is paused, because Paused shows in the next run', () => {

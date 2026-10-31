@@ -7,7 +7,7 @@ import { useMoveWorkflow, useRereadWorkflow } from '../../api/workflowQueries'
 import { Button } from '../../ui/Button'
 import { useFocusAfterReread } from '../../ui/focus'
 import { IconPlay } from '../../ui/icons'
-import { meansOutOfDate } from '../workflows/workflow'
+import { rereadWhenOutOfDate } from '../workflows/workflow'
 import { pressResume, SCHEDULE_PLACES_IN_PAGE_ORDER, schedulePlaces, type SchedulePlace } from './resume'
 import { checkClock, DAYS, dayOption, nextCheckWords, noScheduleWords, scheduleOwnerWords, scheduleWords } from './software'
 import styles from './Software.module.css'
@@ -105,6 +105,7 @@ function useResume(useCaseId: string, shown: readonly SchedulePlace[], answeredA
   const words = useErrorWords()
   const [problem, setProblem] = useState<string | null>(null)
   const refocus = useFocusAfterReread(SCHEDULE_PLACES_IN_PAGE_ORDER, shown, answeredAt)
+  const rereadIfOutOfDate = rereadWhenOutOfDate(useCaseId, refocus, reread)
   const press = () =>
     pressResume(
       latch,
@@ -117,9 +118,7 @@ function useResume(useCaseId: string, shown: readonly SchedulePlace[], answeredA
         },
         refused: (said, error) => {
           setProblem(said)
-          if (!meansOutOfDate(error)) return
-          refocus('resume')
-          reread(useCaseId)
+          rereadIfOutOfDate('resume')(error)
         },
       },
       words,

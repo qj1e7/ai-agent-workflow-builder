@@ -61,16 +61,17 @@ export function runFact(run: RunView, nameOf: NameOf): RunFact {
 }
 
 const TIME_ZONE = 'Asia/Singapore'
-const parts = new Intl.DateTimeFormat('en-GB', {
-  weekday: 'short',
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-  hour: 'numeric',
-  minute: '2-digit',
-  hourCycle: 'h23',
-  timeZone: TIME_ZONE,
-})
+const formatters = new Map<string, Intl.DateTimeFormat>()
+
+function partsIn(zone: string): Intl.DateTimeFormat {
+  const timeZone = usable(zone)
+  let formatter = formatters.get(timeZone)
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hourCycle: 'h23', timeZone })
+    formatters.set(timeZone, formatter)
+  }
+  return formatter
+}
 
 interface Moment {
   readonly weekday: string
@@ -80,8 +81,8 @@ interface Moment {
   readonly clock: string
 }
 
-function momentOf(at: Date): Moment {
-  const all = parts.formatToParts(at)
+function momentOf(at: Date, zone = TIME_ZONE): Moment {
+  const all = partsIn(zone).formatToParts(at)
   const part = (type: Intl.DateTimeFormatPartTypes) => all.find((p) => p.type === type)?.value ?? ''
   return { weekday: part('weekday'), day: part('day'), month: part('month'), year: part('year'), clock: `${Number(part('hour'))}:${part('minute')}` }
 }
@@ -93,10 +94,10 @@ function dayWords(at: Moment, now: Moment): string {
 
 const sameDay = (a: Moment, b: Moment) => a.day === b.day && a.month === b.month && a.year === b.year
 
-/** "Today, 10:14", "Tue 3 Nov, 10:14" or "Mon 4 Jan 2027, 9:00", in Singapore time. */
-export function runWhen(iso: string, now: Date): string {
-  const at = momentOf(new Date(iso))
-  const today = momentOf(now)
+/** "Today, 10:14", "Tue 3 Nov, 10:14" or "Mon 4 Jan 2027, 9:00", in Singapore time unless a schedule names another zone. */
+export function runWhen(iso: string, now: Date, zone = TIME_ZONE): string {
+  const at = momentOf(new Date(iso), zone)
+  const today = momentOf(now, zone)
   return `${sameDay(at, today) ? 'Today' : dayWords(at, today)}, ${at.clock}`
 }
 
@@ -110,7 +111,7 @@ export function lineWhen(iso: string, now: Date): string {
 export function nextRunWords(useCase: Pick<UseCaseView, 'state' | 'next_run_at' | 'schedule'>, now: Date): string {
   if (useCase.state === 'paused') return 'Paused'
   if (useCase.schedule?.held) return 'Not running'
-  return useCase.next_run_at ? runWhen(useCase.next_run_at, now) : 'Not scheduled'
+  return useCase.next_run_at ? runWhen(useCase.next_run_at, now, useCase.schedule?.time_zone) : 'Not scheduled'
 }
 
 /** No route saves a workflow's schedule, so a held one runs again only when it is set up again. */
@@ -132,11 +133,25 @@ export function whenWords({ schedule }: Pick<UseCaseView, 'schedule'>): When {
   return { words: words.charAt(0).toUpperCase() + words.slice(1), small: zoneWords(schedule.time_zone) }
 }
 
-/** Singapore keeps its short name. Another zone is named by its city, as in "London time." */
-function zoneWords(zone: string): string {
-  if (zone === 'Asia/Singapore') return 'Singapore time (SGT).'
-  const place = zone.split('/').pop()?.replaceAll('_', ' ') ?? zone
-  return place === 'UTC' ? 'UTC.' : `${place} time.`
+/** A zone the browser can format with. Anything else is shown as Singapore, in the times and in the words. */
+function usable(zone: string): string {
+  try {
+    new Intl.DateTimeFormat('en-GB', { timeZone: zone })
+    return zone
+  } catch {
+    return TIME_ZONE
+  }
+}
+
+/** Singapore keeps its short name. A real Area/City zone is named by its city, as in "London time." Any other zone gets its offset. */
+function zoneWords(name: string): string {
+  const zone = usable(name)
+  if (zone === TIME_ZONE) return 'Singapore time (SGT).'
+  if (zone === 'UTC' || zone === 'Etc/UTC') return 'UTC.'
+  const city = /^(?!Etc\/)[A-Z][A-Za-z]+\/(?:[A-Za-z_]+\/)?([A-Z][A-Za-z_]+)$/.exec(zone)?.[1]
+  if (city) return `${city.replaceAll('_', ' ')} time.`
+  const offset = new Intl.DateTimeFormat('en-GB', { timeZone: zone, timeZoneName: 'shortOffset' }).formatToParts(new Date()).find((p) => p.type === 'timeZoneName')
+  return `${offset?.value ?? zone}.`
 }
 
 const STEP_TAGS: Record<BlockKind, { readonly words: string; readonly writes: boolean }> = {
@@ -286,12 +301,12 @@ export type ChangeOutcome<T> = Outcome<T>
 
 export const pressChange = pressOnce
 
-export function changeWords(change: Change, useCase: Pick<UseCaseView, 'name' | 'state' | 'next_run_at'>, now: Date): string {
+export function changeWords(change: Change, useCase: Pick<UseCaseView, 'name' | 'state' | 'next_run_at'> & Partial<Pick<UseCaseView, 'schedule'>>, now: Date): string {
   switch (change) {
     case 'pause':
       return `Paused. ${useCase.name} won’t run until you resume it.`
     case 'resume':
-      return useCase.next_run_at ? `Resumed. Next run ${runWhen(useCase.next_run_at, now)}.` : `Resumed. ${useCase.name} can run again.`
+      return useCase.next_run_at ? `Resumed. Next run ${runWhen(useCase.next_run_at, now, useCase.schedule?.time_zone)}.` : `Resumed. ${useCase.name} can run again.`
     case 'delete':
       return `Deleted ${useCase.name}.`
     case 'restore':
