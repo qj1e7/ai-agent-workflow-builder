@@ -131,6 +131,13 @@ describe('the Software watchlist page', () => {
     expect(words).toContain('Alice can’t approve them')
   })
 
+  it('for a London schedule, names London next to the schedule and the next check', () => {
+    const london = { ...statuses, schedule: { ...statuses.schedule, time_zone: 'Europe/London', next_at: '2026-11-23T09:00:00Z' } }
+    const words = text(render(london, ALICE))
+    expect(words).toContain('Checked every Monday at 9:00 London time, set by Alice.')
+    expect(words).toContain('Next check Mon 23 Nov, 9:00, London time.')
+  })
+
   it('gives an Operator Check now, Remove, Change schedule and the add form', () => {
     const html = render(statuses, ALICE)
     expect(buttons(html)).toContain('Check now')
