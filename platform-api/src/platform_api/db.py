@@ -38,8 +38,9 @@ class UnitOfWork:
 
 
 class Database:
-    def __init__(self, urls: DatabaseUrls, clock: Clock = utcnow) -> None:
+    def __init__(self, urls: DatabaseUrls, clock: Clock = utcnow, pool_size: int = 8) -> None:
         self._urls = urls
+        self._pool_size = pool_size
         self._clock = clock
         self._pools: dict[Context, AsyncConnectionPool[Connection]] = {}
 
@@ -53,7 +54,7 @@ class Database:
                 self._urls.for_context(context),
                 open=False,
                 min_size=1,
-                max_size=8,
+                max_size=self._pool_size,
                 kwargs={"row_factory": dict_row},
             )
             await pool.open(wait=True, timeout=30)

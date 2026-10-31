@@ -32,7 +32,9 @@ from platform_api.builder.lifecycle import (
     resume,
     to_columns,
 )
+from platform_api.builder.models import ScheduleIn
 from platform_api.builder.watchlist import schedule_view
+from platform_api.db import Database
 from platform_api.orchestration import (
     ChooseResult,
     DraftResult,
@@ -51,7 +53,7 @@ from platform_api.orchestration.runs import AwaitingApproval, StepName
 from platform_api.shared import N8nExecutionId, Role, RunId, UseCaseId, UserId
 from tests.conftest import PostgresUrls
 from tests.declared import declared_status
-from tests.support import CAROL, LOCAL_ENV, NOW
+from tests.support import ALICE, CAROL, LOCAL_ENV, NOW
 from tests.test_builder_http import NothingLearned
 from tests.test_card_runs import output, ticket
 from tests.test_orchestrator import Harness, open_harness
@@ -1083,3 +1085,24 @@ async def test_a_delete_waits_for_a_schedule_save_that_has_checked_the_workflow(
     deleted = await asyncio.wait_for(deleting, 5)
     assert (saved.status_code, saved.json()["schedule"]["owner_name"]) == (200, "Carol")
     assert deleted.status_code == 200
+
+
+async def test_many_saves_at_once_do_not_use_up_a_small_pool(lab: Lab, postgres: PostgresUrls):
+    use_case_id = await agent_workflow(lab)
+    small = Database(postgres.contexts, pool_size=2)
+    await small.open()
+    try:
+        builder = Builder(
+            small,
+            lab.h.orchestrator,
+            lab.app.state.watchlist,
+            "http://localhost:8000",
+            ModelConnected(),
+        )
+        body = ScheduleIn(day="monday", at="09:00")
+        saves = [builder.save_schedule(use_case_id, ALICE, body) for _ in range(6)]
+        views = await asyncio.wait_for(asyncio.gather(*saves), 10)
+    finally:
+        await small.close()
+
+    assert all(view is not None for view in views)
