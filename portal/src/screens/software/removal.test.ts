@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../api/client'
 import { errorWords } from '../../api/errors'
 import { createLatch } from '../../api/latch'
-import { changeFeedback, NO_FEEDBACK, noticeButtons, noticeWords, pressRemove, pressUndo, PROBLEM_ID, UNDO_ID, type ChangeFeedback, type FeedbackEvent, type MutateCallbacks } from './removal'
+import { changeFeedback, escapeDismisses, NO_FEEDBACK, NOTICE_ID, noticeButtons, noticeWords, pressRemove, pressUndo, PROBLEM_ID, UNDO_ID, type ChangeFeedback, type FeedbackEvent, type MutateCallbacks } from './removal'
 
 const LANGGRAPH = { id: 'sw_lang', name: 'LangGraph' }
 const REDIS = { id: 'sw_redis', name: 'Redis' }
@@ -56,6 +56,14 @@ describe('removing software', () => {
     h.answer((outcome) => outcome.onError?.(new ApiError(404, { detail: 'No such watched software' })))
     expect(h.state().notice).toEqual({ kind: 'gone', name: 'LangGraph' })
     expect(h.state().problem).toBeNull()
+  })
+
+  it('moves focus to the notice when the software was already removed, as its row and Remove button are gone', () => {
+    const h = harness()
+    pressRemove(h.latch, h.send, REDIS, h.dispatch, words)
+    h.answer((outcome) => outcome.onError?.(new ApiError(404, { detail: 'No such watched software' })))
+    expect(NOTICE_ID).toBe('change-notice')
+    expect(h.state().focusTargetId).toBe(NOTICE_ID)
   })
 
   it('keeps the row and says what went wrong when the removal fails', () => {
@@ -154,6 +162,32 @@ describe('the message after a change to the list', () => {
     expect(changeFeedback(added, { type: 'dismissed' }).notice).toBeNull()
     expect(changeFeedback(added, { type: 'removing', row: LANGGRAPH }).notice).toBeNull()
     expect(changeFeedback(added, { type: 'added', name: 'Kafka' }).notice).toEqual({ kind: 'added', name: 'Kafka' })
+  })
+})
+
+describe('Escape on the Software page', () => {
+  const added: ChangeFeedback = { ...NO_FEEDBACK, notice: { kind: 'added', name: 'Kafka' } }
+  const on = (where: 'page' | 'dialog') => ({ closest: (selector: string) => (where === 'dialog' && selector === 'dialog' ? {} : null) })
+  const escape = (target: unknown, extra: { key?: string; defaultPrevented?: boolean } = {}) => ({ key: 'Escape', defaultPrevented: false, target, ...extra })
+
+  it('clears the notice wherever focus is on the page, such as on Add after adding, as the prototype does', () => {
+    expect(escapeDismisses(escape(on('page')), added)).toBe(true)
+    expect(escapeDismisses(escape(null), added)).toBe(true)
+  })
+
+  it('clears an Undo notice and an already-removed notice the same way', () => {
+    expect(escapeDismisses(escape(on('page')), { ...NO_FEEDBACK, notice: { kind: 'removed', row: REDIS } })).toBe(true)
+    expect(escapeDismisses(escape(on('page')), { ...NO_FEEDBACK, notice: { kind: 'gone', name: 'Redis' } })).toBe(true)
+  })
+
+  it('leaves the notice to an open dialog, such as the Teams panel, which Escape closes first', () => {
+    expect(escapeDismisses(escape(on('dialog')), added)).toBe(false)
+  })
+
+  it('does nothing with no notice, for another key, or when something else already used the Escape', () => {
+    expect(escapeDismisses(escape(on('page')), NO_FEEDBACK)).toBe(false)
+    expect(escapeDismisses(escape(on('page'), { key: 'Enter' }), added)).toBe(false)
+    expect(escapeDismisses(escape(on('page'), { defaultPrevented: true }), added)).toBe(false)
   })
 })
 

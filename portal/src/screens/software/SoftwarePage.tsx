@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useReducer, useRef, useState, type RefObject } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
@@ -11,7 +11,21 @@ import { AddSoftware } from './AddSoftware'
 import { pressCheckNow } from './checkNow'
 import { FindSoftware } from './FindSoftware'
 import { Schedule } from './Schedule'
-import { changeFeedback, NO_FEEDBACK, noticeButtons, noticeWords, pressRemove, pressUndo, PROBLEM_ID, removeButtonId, UNDO_ID, type ChangeFeedback, type Named } from './removal'
+import {
+  changeFeedback,
+  escapeDismisses,
+  NO_FEEDBACK,
+  NOTICE_ID,
+  noticeButtons,
+  noticeWords,
+  pressRemove,
+  pressUndo,
+  PROBLEM_ID,
+  removeButtonId,
+  UNDO_ID,
+  type ChangeFeedback,
+  type Named,
+} from './removal'
 import { SoftwareHistory } from './SoftwareHistory'
 import { cantCheckWords, countIn, emptyWords, groupsOf, newestOf, scheduleRuns, singaporeTime, statusLabel, statusTone, stoppedWords, versionSourceWords } from './software'
 import styles from './Software.module.css'
@@ -174,6 +188,7 @@ function LastCheckStopped({ last }: { last: LastCheckView }) {
 }
 
 interface NoticeProps {
+  readonly box: RefObject<HTMLDivElement | null>
   readonly feedback: ChangeFeedback
   readonly scheduled: boolean
   readonly paused: boolean
@@ -182,24 +197,21 @@ interface NoticeProps {
 }
 
 /** The status line stays on the page when it is empty, so a screen reader hears each new message. */
-function Notice({ feedback, scheduled, paused, onUndo, onDismiss }: NoticeProps) {
+function Notice({ box, feedback, scheduled, paused, onUndo, onDismiss }: NoticeProps) {
   const { notice } = feedback
-  const escape = (event: KeyboardEvent) => {
-    if (event.key === 'Escape') onDismiss()
-  }
   return (
     <>
-      <div className={styles['notice']}>
+      <div ref={box} id={NOTICE_ID} tabIndex={-1} className={styles['notice']}>
         <p role="status">{notice ? noticeWords(notice, { scheduled, paused }) : ''}</p>
         {notice ? (
           <div className={styles['actions']}>
             {noticeButtons(notice).map((label) =>
               label === 'Undo' && notice.kind === 'removed' ? (
-                <Button key={label} id={UNDO_ID} loading={feedback.busy?.act === 'restore'} onClick={() => onUndo(notice.row)} onKeyDown={escape}>
+                <Button key={label} id={UNDO_ID} loading={feedback.busy?.act === 'restore'} onClick={() => onUndo(notice.row)}>
                   Undo
                 </Button>
               ) : (
-                <Button key={label} onClick={onDismiss} onKeyDown={escape}>
+                <Button key={label} onClick={onDismiss}>
                   Dismiss
                 </Button>
               ),
@@ -225,13 +237,25 @@ function Loaded({ view, operator, answeredAt }: { view: WatchlistView | null; op
   const removal = useRemoveSoftware()
   const restore = useRestoreSoftware()
   const changes = useLatch()
+  const noticeBox = useRef<HTMLDivElement>(null)
   useFocusOnceRendered(feedback)
 
-  function dismiss() {
-    const next = document.getElementById('find-software') ?? document.querySelector<HTMLElement>('main h1')
-    next?.focus()
+  const dismiss = useCallback(() => {
+    // Only focus inside the notice goes with it. Escape from anywhere else on the page leaves focus where it is.
+    if (noticeBox.current?.contains(document.activeElement)) {
+      const next = document.getElementById('find-software') ?? document.querySelector<HTMLElement>('main h1')
+      next?.focus()
+    }
     dispatch({ type: 'dismissed' })
-  }
+  }, [])
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (escapeDismisses(event, feedback)) dismiss()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [feedback, dismiss])
 
   const software = view?.software ?? []
   const scheduled = scheduleRuns(view?.schedule)
@@ -254,7 +278,7 @@ function Loaded({ view, operator, answeredAt }: { view: WatchlistView | null; op
           onResumed={() => dispatch({ type: 'resumed' })}
         />
       ) : null}
-      <Notice feedback={feedback} scheduled={scheduled} paused={paused} onUndo={(row) => pressUndo(changes, restore.mutate, row, dispatch, words)} onDismiss={dismiss} />
+      <Notice box={noticeBox} feedback={feedback} scheduled={scheduled} paused={paused} onUndo={(row) => pressUndo(changes, restore.mutate, row, dispatch, words)} onDismiss={dismiss} />
       {software.length > 0 || searching ? <FindSoftware query={query} shown={shown} onChange={setQuery} /> : null}
       {software.length === 0 && !searching ? (
         <div className={styles['empty']}>
