@@ -324,6 +324,7 @@ choose_result_adapter: TypeAdapter[ChooseResult] = TypeAdapter(ChooseResult)
 class UnderstandRequest(WireModel):
     task: str
     model: ModelAccess
+    carried_on: bool = False
 
 
 type RowKind = Literal["schedule", "look_for", "do", "where"]

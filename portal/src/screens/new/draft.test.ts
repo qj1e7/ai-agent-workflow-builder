@@ -14,6 +14,7 @@ import {
   carryOn,
   changeRow,
   checkedRows,
+  checkOf,
   createBody,
   defaultName,
   draftContent,
@@ -219,13 +220,27 @@ describe('step 2, check what I understood', () => {
     expect(afterChecking(form, { kind: 'where', text: 'Jira project ABC' }, partRead('where', 'Jira project ABC', 'understood')).rows[3]).toMatchObject({ state: 'edited', note: null })
   })
 
-  it('checks each part filled in after carrying on, and takes a release part as one it can do, since the Operator chose a new workflow', () => {
-    const carried = carryOn(read(watchlist as UnderstandOut, 'Tell me when LangGraph has a new release'))
+  const carried = (): Form => carryOn(read(watchlist as UnderstandOut, 'Tell me when LangGraph has a new release'))
+
+  it('checks each part filled in after carrying on, telling the Planner the Operator chose a new workflow, and takes a release part it can do', () => {
     const words = 'New releases of langchain-ai/langgraph on GitHub'
-    const form = changeRow(carried, 1, words)
+    const form = changeRow(carried(), 1, words)
     expect(form.rows[1]).toMatchObject({ text: words, state: 'checking' })
-    expect(afterChecking(form, { kind: 'look_for', text: words }, watchlist as UnderstandOut).rows[1]).toMatchObject({ state: 'edited', note: null })
-    expect(afterChecking(form, { kind: 'look_for', text: words }, partRead('look_for', words, 'cant_do', 'I can’t read Slack yet.')).rows[1]).toMatchObject({ state: 'cant_do' })
+    expect(checkOf(form, { kind: 'look_for', text: words })).toEqual({ text: `Looks for: ${words}`, carriedOn: true })
+    expect(afterChecking(form, { kind: 'look_for', text: words }, partRead('look_for', words, 'understood')).rows[1]).toMatchObject({ state: 'edited', note: null })
+    expect(checkOf(changeRow(read(ROWS), 3, 'Jira project ABC'), { kind: 'where', text: 'Jira project ABC' })).toEqual({ text: 'Where it goes: Jira project ABC', carriedOn: false })
+  })
+
+  it.each([
+    [3, 'where', 'Post the release notes in the team’s Teams channel', 'post the release notes in the team’s Teams channel'],
+    [2, 'do', 'Email the upgrade list to the team', 'email the upgrade list to the team'],
+  ] as const)('keeps a part filled in after carrying on red when the tools can’t do it: %s, “%s”', (index, kind, words, what) => {
+    const form = changeRow(carried(), index, words)
+    const part = { kind, text: words }
+    expect(checkOf(form, part)).toMatchObject({ carriedOn: true })
+    const note = `I can't ${what} yet. ${CAN}`
+    expect(afterChecking(form, part, partRead(kind, words, 'cant_do', note)).rows[index]).toMatchObject({ state: 'cant_do', note })
+    expect(afterChecking(form, part, watchlist as UnderstandOut).rows[index]).toMatchObject({ state: 'cant_do' })
   })
 
   it('leaves out a part only when another of its kind stays', () => {
@@ -460,10 +475,11 @@ describe('pressing Turn it on', () => {
       blocks: (drafted.blocks ?? []).map((block) => ({ say: block.say, tool: (block.tool ?? null) as ToolId | null })),
     }
     const plan = planView(CLEAN_DRAFT, form().rows)
-    expect([...reusedAgents(plan, [starter, mine], 'alice')]).toEqual([0])
-    expect([...reusedAgents(plan, [starter, mine], 'bob')]).toEqual([])
-    expect([...reusedAgents(plan, undefined, 'alice')]).toEqual([])
-    expect([...reusedAgents(planView(USE_ONE, form().rows), [starter, mine], 'alice')]).toEqual([])
+    expect([...(reusedAgents(plan, [starter, mine], 'alice') ?? [])]).toEqual([0])
+    expect([...(reusedAgents(plan, [starter, mine], 'bob') ?? [])]).toEqual([])
+    expect(reusedAgents(plan, undefined, 'alice')).toBeNull()
+    expect(reusedAgents(plan, [starter, mine], undefined)).toBeNull()
+    expect([...(reusedAgents(planView(USE_ONE, form().rows), [starter, mine], 'alice') ?? [])]).toEqual([])
   })
 
   it('saves nothing new for a saved agent, and has no draft to delete for a workflow never saved as one', async () => {
@@ -489,11 +505,28 @@ describe('a draft', () => {
   })
 
   it('reopens at the step it was saved at, with the same form and plan', () => {
-    const form = { ...enterWhen(fixed(read(ROWS), 1, 'Bug tickets in MOCK with no update for 14 days')), step: 3 as const, typed: { '0:Jira project': 'ABC' } }
+    const form = { ...enterWhen(read(ROWS)), step: 3 as const, typed: { '0:Jira project': 'ABC' } }
     const plan = { task: taskWithoutSchedule(form.rows), answer: CLEAN_DRAFT }
     const content = JSON.parse(JSON.stringify(draftContent(form, plan))) as Record<string, unknown>
     expect(content['name']).toBe('Stale bug follow-up')
     expect(restoreDraft(saved(3, content))).toEqual({ form, plan })
+  })
+
+  it('sends a part changed by you back to the Planner when the draft reopens, at step 2 so Next waits for it', () => {
+    const form = { ...enterWhen(fixed(read(ROWS), 1, 'Bug tickets in MOCK with no update for 14 days')), step: 3 as const }
+    expect(form.rows[1]?.state).toBe('edited')
+    const content = JSON.parse(JSON.stringify(draftContent(form, null))) as Record<string, unknown>
+    const reopened = restoreDraft(saved(3, content)).form
+    expect(reopened.step).toBe(2)
+    expect(reopened.rows[1]).toMatchObject({ text: 'Bug tickets in MOCK with no update for 14 days', state: 'checking', note: null })
+    expect(reopened.rows[1]?.planner?.text).toBe('Bug tickets in MOCK with no update for 10 days')
+    expect(reopened.rows.filter((row) => row.state === 'checking')).toHaveLength(1)
+    expect(nextBlockers(reopened, null).words).toBe('Next opens when I’ve checked your new words.')
+  })
+
+  it('keeps that the Operator carried on past the watchlist when the draft reopens', () => {
+    const content = JSON.parse(JSON.stringify(draftContent(carryOn(read(watchlist as UnderstandOut, 'Tell me when LangGraph has a new release')), null))) as Record<string, unknown>
+    expect(restoreDraft(saved(2, content)).form.carriedOn).toBe(true)
   })
 
   it('saves a part still being checked as one I can’t do yet, so the reopened draft asks again', () => {

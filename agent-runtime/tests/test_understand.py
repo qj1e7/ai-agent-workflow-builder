@@ -11,12 +11,14 @@ from langchain_core.runnables import Runnable
 from agent_runtime.contract import (
     BelongsOnWatchlist,
     ModelProblem,
+    RowKind,
     Understood,
     UnderstoodRow,
 )
 from agent_runtime.contracts import FOLLOW_UP_TASK, RELEASE_TASK, understand_request
 from agent_runtime.planner import (
     CANT_YET,
+    CARRIED_ON_NOTE,
     NOT_SAID,
     READ_IN,
     UNDERSTAND_SYSTEM,
@@ -537,3 +539,68 @@ def test_the_route_answers_the_rows():
     assert answer.status_code == 200
     assert answer.json()["status"] == "understood"
     assert [row["state"] for row in answer.json()["rows"]] == ["understood"] * 4
+
+
+@pytest.mark.parametrize(
+    ("label", "kind", "text", "word", "what"),
+    [
+        (
+            "Where it goes",
+            "where",
+            "Post the release notes in the team's Teams channel",
+            "release",
+            "post the release notes in the team's Teams channel",
+        ),
+        (
+            "Does",
+            "do",
+            "Email the upgrade list to the team",
+            "upgrade",
+            "email the upgrade list to the team",
+        ),
+    ],
+)
+def test_a_part_carried_on_past_the_watchlist_is_held_to_the_tools_though_the_model_says_watchlist(
+    label: str, kind: RowKind, text: str, word: str, what: str
+):
+    answer = UnderstandAnswer.model_validate(
+        {
+            "belongs_on_watchlist": True,
+            "watchlist_word": word,
+            "rows": [{"kind": kind, "text": text, "state": "understood"}],
+        }
+    )
+    task = f"{label}: {text}"
+    assert isinstance(understood_of(answer, task), BelongsOnWatchlist)
+    result = understood_of(answer, task, carried_on=True)
+    assert isinstance(result, Understood), result
+    row = next(row for row in result.rows if row.kind == kind)
+    assert (row.state, row.note) == ("cant_do", why_no_tool(kind, text))
+    assert row.note is not None and row.note.startswith(f"I can't {what} yet.")
+
+
+def test_a_release_part_carried_on_stays_as_the_model_said_since_the_platform_checks_github():
+    text = "New releases of langchain-ai/langgraph on GitHub"
+    answer = UnderstandAnswer.model_validate(
+        {
+            "belongs_on_watchlist": True,
+            "watchlist_word": "releases",
+            "rows": [{"kind": "look_for", "text": text, "state": "understood"}],
+        }
+    )
+    result = understood_of(answer, f"Looks for: {text}", carried_on=True)
+    assert ("look_for", text, "understood") in shown(result)
+
+
+def test_a_carried_on_part_with_no_rows_is_unusable_never_the_watchlist():
+    answer = UnderstandAnswer(belongs_on_watchlist=True, watchlist_word="release", rows=[])
+    assert understood_of(answer, "Looks for: New LangGraph release", carried_on=True) is None
+
+
+def test_a_carried_on_task_tells_the_model_the_operator_chose_a_new_workflow():
+    chat = ScriptedChat(structured=[GOOD])
+    request = understand_request().model_copy(update={"carried_on": True})
+    assert shown(understand_task(request, lambda timeout: chat)) == shown(ask(GOOD))
+    _, human = chat.calls[0]
+    assert human == ("human", f"{CARRIED_ON_NOTE}\n\nThe task:\n{FOLLOW_UP_TASK}")
+    assert "watchlist" in CARRIED_ON_NOTE and "release" not in CARRIED_ON_NOTE.lower()

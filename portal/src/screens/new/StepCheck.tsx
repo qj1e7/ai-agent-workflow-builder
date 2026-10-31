@@ -41,8 +41,8 @@ export interface PlanState {
   readonly pending: boolean
   readonly error: string | null
   readonly retry: () => void
-  /** The drafted agents the Operator already saved, which Turn it on reuses. */
-  readonly reused: ReadonlySet<number>
+  /** The drafted agents the Operator already saved, which Turn it on reuses. Null until the agent list is read. */
+  readonly reused: ReadonlySet<number> | null
 }
 
 function WatchlistStep({ redirect, onBack, onCarryOn }: { redirect: Redirect; onBack: () => void; onCarryOn: () => void }) {
@@ -250,8 +250,9 @@ function PlanPanel({ form, plan, kinds, ready, shown, onValue }: { form: Form; p
   else if (plan.view?.kind === 'agents') {
     const view = plan.view
     const drafted = view.agents.filter((agent) => agent.card.kind === 'drafted')
-    const fresh = drafted.filter((agent) => !plan.reused.has(agent.index)).map((agent) => agent.name)
-    const reused = drafted.filter((agent) => plan.reused.has(agent.index)).map((agent) => agent.name)
+    const known = plan.reused
+    const fresh = known === null ? [] : drafted.filter((agent) => !known.has(agent.index)).map((agent) => agent.name)
+    const reused = known === null ? [] : drafted.filter((agent) => known.has(agent.index)).map((agent) => agent.name)
     body = (
       <>
         {view.agents.map((agent) => (

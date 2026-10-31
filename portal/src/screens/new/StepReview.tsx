@@ -15,8 +15,8 @@ const partsOf = (form: Form, kind: RowKind) => textsOf(form.rows, kind).join(' a
 interface StepReviewProps {
   readonly form: Form
   readonly plan: PlanView
-  /** The drafted agents the Operator already saved, which Turn it on reuses. */
-  readonly reused: ReadonlySet<number>
+  /** The drafted agents the Operator already saved, which Turn it on reuses. Null until the agent list is read. */
+  readonly reused: ReadonlySet<number> | null
   readonly nameProblem: string | null
   readonly busy: boolean
   readonly problems: readonly string[]
@@ -28,8 +28,8 @@ interface StepReviewProps {
 export function StepReview({ form, plan, reused, nameProblem, busy, problems, onName, onBack, onTurnOn }: StepReviewProps) {
   const agents = plan.kind === 'agents' ? plan.agents : []
   const drafted = agents.filter((agent) => agent.card.kind === 'drafted')
-  const fresh = drafted.some((agent) => !reused.has(agent.index))
-  const again = drafted.some((agent) => reused.has(agent.index))
+  const fresh = reused !== null && drafted.some((agent) => !reused.has(agent.index))
+  const again = reused !== null && drafted.some((agent) => reused.has(agent.index))
   return (
     <>
       <div className={styles['body']}>

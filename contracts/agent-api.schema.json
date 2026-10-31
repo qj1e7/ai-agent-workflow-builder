@@ -1864,6 +1864,12 @@
     "UnderstandRequest": {
       "additionalProperties": false,
       "properties": {
+        "carried_on": {
+          "default": false,
+          "description": "True when the Operator chose a new workflow over the Software watchlist. Then the task is read back in parts, never sent to the watchlist.",
+          "title": "Carried On",
+          "type": "boolean"
+        },
         "model": {
           "$ref": "#/$defs/ModelAccess"
         },

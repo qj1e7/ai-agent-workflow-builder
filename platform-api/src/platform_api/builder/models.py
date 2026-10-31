@@ -417,6 +417,11 @@ class CreateAgentUseCase(WireIn):
 
 class UnderstandIn(WireIn):
     text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
+    carried_on: bool = Field(
+        default=False,
+        description="True when the Operator chose a new workflow over the Software watchlist. "
+        "Then the Planner reads the text back in parts, and never answers the watchlist.",
+    )
 
 
 class UnderstoodRowView(WireModel):

@@ -69,7 +69,7 @@ const buttons = (html: string) => [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\
 const buttonTag = (html: string, name: string) => [...html.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)].find((m) => text(m[2] ?? '') === name)?.[1] ?? ''
 const read = (answer: UnderstandOut, words = FOLLOW_UP): Form => afterReading({ ...EMPTY_FORM, text: words }, answer)
 const noop = () => undefined
-const planState = (view: PlanState['view'], pending = false, reused: ReadonlySet<number> = new Set()): PlanState => ({ view, pending, error: null, retry: noop, reused })
+const planState = (view: PlanState['view'], pending = false, reused: ReadonlySet<number> | null = new Set()): PlanState => ({ view, pending, error: null, retry: noop, reused })
 
 function check(form: Form, plan: PlanState, tools: readonly ToolView[] = []): string {
   return wrap(<StepCheck form={form} plan={plan} onChangeRow={noop} onDropRow={noop} onValue={noop} onBack={noop} onNext={noop} onCarryOn={noop} />, {
@@ -221,6 +221,14 @@ describe('step 2', () => {
     expect(html).not.toContain('is a new agent')
   })
 
+  it('says neither that a drafted agent is new nor reused until the agent list is read', () => {
+    const form = read(rowsAnswer as UnderstandOut)
+    const html = text(check(form, planState(planView(DRAFTED, form.rows), false, null)))
+    expect(html).toContain('Done by: Stale bug follow-up. Nothing is changed without an Approver’s yes.')
+    expect(html).not.toContain('is a new agent')
+    expect(html).not.toContain('You already saved')
+  })
+
   it('shows a fixed row as changed by you, with what the request said', () => {
     const words = 'Bug tickets in MOCK with no update for 14 days'
     const changed = changeRow(read(rowsAnswer as UnderstandOut), 1, words)
@@ -281,6 +289,15 @@ describe('step 4', () => {
     )
     expect(html).toContain('Done by Stale bug follow-up. This workflow uses the agent you already saved in the Agent library.')
     expect(html).not.toContain('The new agent is saved')
+  })
+
+  it('says neither that a new agent is saved nor that a saved one is used until the agent list is read', () => {
+    const form = { ...enterWhen(read(rowsAnswer as UnderstandOut)), step: 4 as const, name: 'Stale bug follow-up' }
+    const html = text(
+      wrap(<StepReview form={form} plan={planView(DRAFTED, form.rows)} reused={null} nameProblem={null} busy={false} problems={[]} onName={noop} onBack={noop} onTurnOn={noop} />),
+    )
+    expect(html).toContain('Done by Stale bug follow-up Checked against your request')
+    expect(html).not.toContain('Agent library')
   })
 })
 

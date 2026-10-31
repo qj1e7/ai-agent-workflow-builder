@@ -129,6 +129,18 @@ async def test_understand_posts_the_task_and_model_and_parses_the_rows():
     assert seen[0].url.path == "/v1/planner/understand"
     assert seen[0].headers["X-Agent-Key"] == "agent-key-not-real"
     assert json.loads(seen[0].content)["task"] == "Every weekday"
+    assert json.loads(seen[0].content)["carried_on"] is False
+
+
+async def test_understand_posts_that_the_operator_chose_a_new_workflow_over_the_watchlist():
+    seen: list[httpx.Request] = []
+    row = {"kind": "where", "text": "Teams", "state": "cant_do", "note": "I can't yet."}
+    missing = {"text": "", "state": "missing", "note": "I couldn't tell from your words."}
+    rows = [row] + [{"kind": kind, **missing} for kind in ("schedule", "look_for", "do")]
+    await runtime(200, {"status": "understood", "rows": rows}, seen).understand(
+        UnderstandRequest(task="Where it goes: Teams", model=ACCESS, carried_on=True)
+    )
+    assert json.loads(seen[0].content)["carried_on"] is True
 
 
 async def test_understand_rows_of_an_unknown_kind_are_refused():

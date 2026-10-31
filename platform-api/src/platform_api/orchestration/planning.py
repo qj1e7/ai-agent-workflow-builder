@@ -69,12 +69,16 @@ class CardPlanning:
             return RuntimeDown(reply.detail)
         return reply
 
-    async def understand(self, task: str) -> UnderstandResult | NoModel | RuntimeDown:
+    async def understand(
+        self, task: str, carried_on: bool = False
+    ) -> UnderstandResult | NoModel | RuntimeDown:
         async with self._db.transaction("orchestration") as uow:
             model = await self._models.access(uow)
         if model is None:
             return NoModel()
-        reply = await self._agents.understand(UnderstandRequest(task=task, model=model))
+        reply = await self._agents.understand(
+            UnderstandRequest(task=task, model=model, carried_on=carried_on)
+        )
         if isinstance(reply, AgentUnavailable | AgentRejected):
             return RuntimeDown(reply.detail)
         return reply

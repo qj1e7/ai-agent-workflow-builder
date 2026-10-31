@@ -64,7 +64,7 @@ export interface Form {
   readonly typed: Readonly<Record<string, string>>
   readonly when: When
   readonly name: string
-  /** The Operator chose a new workflow over the Software watchlist, so a part about releases is not a reason to stop. */
+  /** The Operator chose a new workflow over the Software watchlist, so each part is checked as a part, never sent to the watchlist. */
   readonly carriedOn: boolean
 }
 
@@ -130,15 +130,18 @@ type Part = Pick<Row, 'kind' | 'text'>
 
 export const partWords = (part: Part) => `${ROW_LABEL[part.kind]}: ${part.text}`
 
-function stillCantDo(answer: UnderstandOut | null, carriedOn: boolean): string | null {
+/** What the Planner is asked to check for a changed part. */
+export const checkOf = (form: Form, part: Part) => ({ text: partWords(part), carriedOn: form.carriedOn })
+
+function stillCantDo(answer: UnderstandOut | null): string | null {
   if (answer === null || answer.answer === 'starters') return NOT_CHECKED
-  if (answer.answer === 'watchlist') return carriedOn ? null : answer.note
+  if (answer.answer === 'watchlist') return answer.note
   const cant = answer.rows.find((row) => row.state === 'cant_do')
   return cant ? (cant.note ?? CANT_YET) : null
 }
 
 export function afterChecking(form: Form, part: Part, answer: UnderstandOut | null): Form {
-  const why = stillCantDo(answer, form.carriedOn)
+  const why = stillCantDo(answer)
   const rows = form.rows.map((row): Row =>
     row.state === 'checking' && row.kind === part.kind && row.text === part.text ? { ...row, state: why === null ? 'edited' : 'cant_do', note: why } : row,
   )
@@ -439,9 +442,10 @@ export function savedCopyOf(cards: readonly CardView[], owner: string, card: Car
   return cards.find((saved) => saved.owner === owner && !saved.starter && shapeOf(saved) === shape)?.card_id ?? null
 }
 
-/** The drafted agents the Operator already saved with the same shape, which Turn it on reuses rather than saving again. */
-export function reusedAgents(plan: PlanView | null, cards: readonly CardView[] | undefined, owner: string | undefined): ReadonlySet<number> {
-  if (plan?.kind !== 'agents' || cards === undefined || owner === undefined) return new Set()
+/** The drafted agents the Operator already saved with the same shape, which Turn it on reuses rather than saving again. Null until the agent list and who is signed in are read. */
+export function reusedAgents(plan: PlanView | null, cards: readonly CardView[] | undefined, owner: string | undefined): ReadonlySet<number> | null {
+  if (cards === undefined || owner === undefined) return null
+  if (plan?.kind !== 'agents') return new Set()
   return new Set(plan.agents.flatMap((agent) => (agent.card.kind === 'drafted' && savedCopyOf(cards, owner, agent.card.definition) !== null ? [agent.index] : [])))
 }
 
@@ -518,10 +522,17 @@ function isPlanned(value: unknown): value is Planned {
   return isRecord(value) && isString(value['task']) && isRecord(value['answer']) && isString(value['answer']['decision'])
 }
 
+/** A part changed by you goes back to the Planner when a draft reopens, since a draft saved before every part was checked holds unchecked ones. Step 2 waits for the answer. */
+function checkedAgain(form: Form): Form {
+  if (!form.rows.some((row) => row.state === 'edited')) return form
+  const rows = form.rows.map((row): Row => (row.state === 'edited' ? { ...row, state: 'checking', note: null } : row))
+  return { ...form, rows, step: form.step > 2 ? 2 : form.step }
+}
+
 export function restoreDraft(draft: DraftView): { readonly form: Form; readonly plan: Planned | null } {
   const { form, plan, text, intent } = draft.content as Record<string, unknown>
   const carriedOn = isRecord(form) && form['carriedOn'] === true
-  if (isForm(form)) return { form: { ...form, carriedOn }, plan: isPlanned(plan) ? plan : null }
+  if (isForm(form)) return { form: checkedAgain({ ...form, carriedOn }), plan: isPlanned(plan) ? plan : null }
   const task = isString(text) ? text : isString(intent) ? intent : ''
   return { form: { ...EMPTY_FORM, text: task }, plan: null }
 }
