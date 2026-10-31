@@ -48,11 +48,25 @@ echo "4. Create the deploy identity and trust GitHub's azure-dev environment"
 az identity create --name "$deploy_identity" --resource-group "$state_group" --location "$location" --output none
 client_id=$(az identity show --name "$deploy_identity" --resource-group "$state_group" --query clientId --output tsv)
 principal_id=$(az identity show --name "$deploy_identity" --resource-group "$state_group" --query principalId --output tsv)
-if ! az identity federated-credential show --name github-azure-dev --identity-name "$deploy_identity" \
-  --resource-group "$state_group" --output none 2>/dev/null; then
-  az identity federated-credential create --name github-azure-dev --identity-name "$deploy_identity" \
-    --resource-group "$state_group" --issuer https://token.actions.githubusercontent.com \
-    --subject "repo:$repo:environment:azure-dev" --audiences api://AzureADTokenExchange --output none
+# GitHub's token names the repository either as owner/repo or, on newer repositories, with the
+# owner's and the repository's numeric IDs (owner@id/repo@id). Trust both forms of this one
+# repository's azure-dev environment. The IDs come from GitHub's API, which needs no sign-in for a
+# public repository, or set GITHUB_OWNER_ID and GITHUB_REPO_ID.
+trust() {
+  if ! az identity federated-credential show --name "$1" --identity-name "$deploy_identity" \
+    --resource-group "$state_group" --output none 2>/dev/null; then
+    az identity federated-credential create --name "$1" --identity-name "$deploy_identity" \
+      --resource-group "$state_group" --issuer https://token.actions.githubusercontent.com \
+      --subject "$2" --audiences api://AzureADTokenExchange --output none
+  fi
+}
+trust github-azure-dev "repo:$repo:environment:azure-dev"
+owner_id=${GITHUB_OWNER_ID:-$(curl -fsS "https://api.github.com/repos/$repo" | python3 -c 'import json,sys; print(json.load(sys.stdin)["owner"]["id"])' || true)}
+repo_id=${GITHUB_REPO_ID:-$(curl -fsS "https://api.github.com/repos/$repo" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])' || true)}
+if [ -n "$owner_id" ] && [ -n "$repo_id" ]; then
+  trust github-azure-dev-ids "repo:${repo%%/*}@${owner_id}/${repo#*/}@${repo_id}:environment:azure-dev"
+else
+  echo "   Could not read the repository's IDs from GitHub. Set GITHUB_OWNER_ID and GITHUB_REPO_ID and run again."
 fi
 
 echo "5. Give the deploy identity its roles, on the state container and on $app_group only"
@@ -70,11 +84,10 @@ az role assignment create --assignee-object-id "$principal_id" --assignee-princi
   --condition "$condition" --condition-version 2.0 --output none
 
 echo
-echo "Done. On the azure-dev GitHub environment, set these three as secrets, so GitHub masks them"
-echo "in the workflow logs:"
+echo "Done. On the azure-dev GitHub environment, set these five as secrets, so GitHub masks them"
+echo "in the workflow logs, which anyone can read while the repository is public:"
 echo "  AZURE_CLIENT_ID=$client_id"
 echo "  AZURE_TENANT_ID=$tenant"
 echo "  AZURE_SUBSCRIPTION_ID=$subscription"
-echo "And set these two as variables:"
 echo "  TFSTATE_RESOURCE_GROUP=$state_group"
 echo "  TFSTATE_STORAGE_ACCOUNT=$state_account"
