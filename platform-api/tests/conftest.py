@@ -4,7 +4,7 @@ import subprocess
 import time
 from collections import Counter
 from collections.abc import AsyncIterator, Iterator
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 
 import anyio
@@ -57,20 +57,22 @@ def _wait_ready(url: str, timeout: float = 60) -> None:
             time.sleep(0.3)
 
 
-def _superuser_url() -> Iterator[str]:
-    configured = os.environ.get("PLATFORM_TEST_DATABASE_URL")
-    if configured:
-        _wait_ready(configured)
-        yield configured
-        return
-    if shutil.which("docker") is None:
-        pytest.skip("no PostgreSQL: set PLATFORM_TEST_DATABASE_URL or install Docker")
+@contextmanager
+def throwaway_postgres() -> Iterator[str]:
+    """Starts a PostgreSQL container and yields its id. The container is removed on the way out.
+
+    The image declares a VOLUME for its data, so a plain `docker run` makes an anonymous volume
+    that `docker rm --force` leaves behind (issue #114). The data goes in memory instead, so none
+    of it lands on Docker's disk, and the clean-up still removes any volume a newer image adds.
+    """
     started = subprocess.run(
         [
             "docker",
             "run",
             "--detach",
             "--rm",
+            "--mount",
+            "type=tmpfs,destination=/var/lib/postgresql/data",
             "--env",
             "POSTGRES_PASSWORD=test",
             "--publish",
@@ -85,6 +87,22 @@ def _superuser_url() -> Iterator[str]:
         pytest.skip(f"docker could not start PostgreSQL: {started.stderr.strip()}")
     container = started.stdout.strip()
     try:
+        yield container
+    finally:
+        subprocess.run(
+            ["docker", "rm", "--force", "--volumes", container], capture_output=True, check=False
+        )
+
+
+def _superuser_url() -> Iterator[str]:
+    configured = os.environ.get("PLATFORM_TEST_DATABASE_URL")
+    if configured:
+        _wait_ready(configured)
+        yield configured
+        return
+    if shutil.which("docker") is None:
+        pytest.skip("no PostgreSQL: set PLATFORM_TEST_DATABASE_URL or install Docker")
+    with throwaway_postgres() as container:
         port_line = subprocess.run(
             ["docker", "port", container, "5432/tcp"], capture_output=True, text=True, check=True
         ).stdout.splitlines()[0]
@@ -92,8 +110,6 @@ def _superuser_url() -> Iterator[str]:
         url = f"postgresql://postgres:test@127.0.0.1:{port}/postgres"
         _wait_ready(url)
         yield url
-    finally:
-        subprocess.run(["docker", "rm", "--force", container], capture_output=True, check=False)
 
 
 @pytest.fixture(scope="session")

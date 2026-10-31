@@ -1259,7 +1259,7 @@ def lane11(api: Api, out: Path, key: str, count: int) -> bool:
     rows = sum(stack.last_seqs().values())
     before = stack.cosmos()
     api_before = stack.started_at("platform-api")
-    stack.run("rm", "-sf", "cosmos")
+    stack.run("rm", "-sfv", "cosmos")
     removed_at = datetime.now(UTC).isoformat()
     ready_gone = wait_behind(api)
     streams_gone = {run_id: replay(api, run_id, last_seq) for run_id, last_seq in runs.items()}
