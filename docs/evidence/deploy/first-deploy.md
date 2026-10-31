@@ -31,7 +31,7 @@ All ten P14 lanes and the speed check pass against the deployed app (`p14-summar
 | 7 | Plain http to the Portal and to platform-api gets a 301 to https | `p14-https.txt` |
 | 8 | platform-api restarts while a run page is open. The page opens a new stream and shows every event once | `p14-restart.png` |
 | 9 | Someone not on the People list is told to ask an Operator | `p14-not-on-list.png` |
-| 10 | The ZAP baseline scan of the Portal has 0 Medium or High alerts. Its one Low alert, no Strict-Transport-Security header, is issue #91 | `p14-zap.txt` |
+| 10 | The ZAP baseline scan of the Portal has 0 Medium or High alerts. Its one Low alert, no Strict-Transport-Security header, was issue #91, fixed by #96. A rerun on 1 Nov 2026 at `86fb131` no longer raises it | `p14-zap.txt`, `p14-zap-rerun.txt` |
 | perf | Home's median paint is 160 ms on Azure and 20 ms locally. The run page's 95th percentile event delay is 466 ms on Azure and 31 ms locally. The limits are 3 s and 2 s | `p14-perf.json` |
 
 The Settings screenshot had the test accounts' email addresses, which name the Entra tenant. The repository is public, so those two lines are covered in the saved copy.
@@ -44,3 +44,7 @@ The Settings screenshot had the test accounts' email addresses, which name the E
 | 8 | The page reconnected and showed every event once, but Chromium reported an uncaught `TypeError: network error` | The stream reader's clean-up called `cancel()` on a stream that had failed, which rejects with the same error, and nothing caught it | #94 |
 
 The run page and the AI troubleshooter named lane 4's cause on their own: "The agent was refused by the service it reads from, so retrying would get the same answer."
+
+### After the issue follow-ups, 1 Nov 2026
+
+The open issues from the rebuild were fixed in PRs #96 to #111 and deployed in run [41227430247](https://github.com/qj1e7/ai-agent-workflow-builder/actions/runs/41227430247) at `86fb131`. On that deploy, lanes 3, 7 and 10 pass again (`p14-zap-rerun.txt`). The live Portal now sends `Strict-Transport-Security: max-age=31536000` on https. ZAP passes 64 rules, up from 63, with 3 warnings, down from 4, and still no Medium or High alert.

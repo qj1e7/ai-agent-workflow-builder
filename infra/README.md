@@ -77,6 +77,7 @@ infra/
 | `COSMOS_ENDPOINT` | `http://cosmos:8081`, the emulator | the account's endpoint |
 | `COSMOS_KEY` | the emulator's published key | a Key Vault secret, copied from the account |
 | `ACTIVITY_READER` | `cosmos` by default | always `cosmos` |
+| `MAX_BODY_BYTES` | not set, so 2 MiB (2097152). platform-api refuses a larger request body with 413 | not set, so the same 2 MiB |
 | `SETTINGS_ENCRYPTION_KEY` | `.env` | a generated Key Vault secret. If it is lost, an Operator pastes the model key again |
 | `FIRST_OPERATOR`, `FIRST_APPROVERS` | `.env`, empty by default | from `first_operator` and `first_approvers`, only when they are set |
 | n8n database settings | `postgres` host, password from `.env` | the server's host name, TLS on, password from Key Vault |
