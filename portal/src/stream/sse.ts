@@ -78,7 +78,8 @@ export function createSseParser(): SseParser {
 export async function* textChunks(body: ReadableStream<Uint8Array>, signal: AbortSignal): AsyncGenerator<string> {
   const reader = body.getReader()
   const decoder = new TextDecoder()
-  const cancel = () => void reader.cancel()
+  // cancel() rejects with the stream's own error once it has failed. read() already passed that error on.
+  const cancel = () => void reader.cancel().catch(() => undefined)
   if (signal.aborted) {
     cancel()
     return

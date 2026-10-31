@@ -99,4 +99,23 @@ describe('sseFrames', () => {
     await expect(pending).resolves.toEqual([])
     expect(cancelled).toBe(true)
   })
+
+  it('passes a dropped connection to the caller and leaves no rejection behind', async () => {
+    // A failed stream rejects cancel() with its own error, as Chromium did when platform-api restarted (P14 lane 8).
+    const dropped = new TypeError('network error')
+    let fail: (error: unknown) => void = () => undefined
+    const open = new ReadableStream<Uint8Array>({ start: (controller) => void (fail = (error) => controller.error(error)) })
+    const unhandled: unknown[] = []
+    const record = (reason: unknown) => void unhandled.push(reason)
+    process.on('unhandledRejection', record)
+    try {
+      const pending = collect(sseFrames(open, new AbortController().signal))
+      fail(dropped)
+      await expect(pending).rejects.toBe(dropped)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(unhandled).toEqual([])
+    } finally {
+      process.off('unhandledRejection', record)
+    }
+  })
 })
