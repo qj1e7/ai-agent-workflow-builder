@@ -1,8 +1,8 @@
 """Keeps a request body the API can't read safely from turning into a 500 (#60).
 
 A body nested far deeper than any real request overflows the stack of the code that walks it,
-so it is refused before a route reads it. A 422 never echoes text that can't be written back
-out as UTF-8, such as a lone surrogate escape.
+so it is refused before a route reads it, as is a body that is not Unicode text. A 422 never
+echoes text that can't be written back out as UTF-8, such as a lone surrogate escape.
 """
 
 import json
@@ -19,51 +19,61 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 MAX_DEPTH = 64
 """The deepest a body may nest. Real bodies nest fewer than ten levels."""
 TOO_DEEP_MESSAGE = f"This body nests more than {MAX_DEPTH} levels deep, which can't be read."
+NOT_TEXT_MESSAGE = "This body is not UTF-8, UTF-16 or UTF-32 text, so it can't be read."
 
-# A JSON string, a bracket, or a quote that starts a string with no end. Strings are skipped
-# whole, so a bracket inside one is not counted. Possessive, so a string is scanned once.
-_TOKEN = re.compile(rb'"(?:[^"\\]|\\.)*+"|[\[\]{}]|"')
-_NO_BODY = frozenset({"GET", "HEAD", "OPTIONS"})
+# A JSON string, a bracket, or a quote the scan can't close. Strings are skipped whole, so a
+# bracket inside one is not counted. Possessive, so each string is scanned once.
+_TOKEN = re.compile(r'"(?:[^"\\]|\\.)*+"|[\[\]{}]|"')
+_OPENING = re.compile(r"[\[{]")
+NO_BODY = frozenset({"GET", "HEAD", "OPTIONS"})
+"""Methods whose requests pass unread, so an event stream starts at once. No route with one of
+them takes a body, and tests/test_unsafe_bodies.py checks that stays so."""
 
 
-def nests_deeper_than(body: bytes, limit: int) -> bool:
+def as_json_reads_it(body: bytes) -> str | None:
+    """The body as text, decoded as json.loads decodes the raw bytes Starlette hands it: UTF-8,
+    UTF-16 or UTF-32, told apart by the first bytes. None when it is none of them."""
+    try:
+        return body.decode(json.detect_encoding(body), "surrogatepass")
+    except UnicodeDecodeError:
+        return None
+
+
+def nests_deeper_than(text: str, limit: int) -> bool:
+    """Whether the brackets outside strings nest deeper than the limit. Valid JSON never has a
+    quote the scan can't close. After one, the scan may have lost its place, so it fails closed:
+    every opening bracket that follows counts, and none closes."""
     depth = 0
-    for token in _TOKEN.finditer(body):
+    for token in _TOKEN.finditer(text):
         match token.group():
-            case b"[" | b"{":
+            case "[" | "{":
                 depth += 1
-                if depth > limit:
-                    return True
-            case b"]" | b"}":
+            case "]" | "}":
                 depth -= 1
-            case b'"':
-                # A string with no end is not JSON, so FastAPI refuses it anyway.
-                return False
+            case '"':
+                return depth + sum(1 for _ in _OPENING.finditer(text, token.end())) > limit
             case _:
-                pass
+                continue
+        if depth > limit:
+            return True
     return False
 
 
-def _reads_as_json(scope: Scope) -> bool:
-    """FastAPI reads a body as JSON when its type is JSON or when it names no type."""
-    for name, value in scope["headers"]:
-        if name == b"content-type":
-            media = value.split(b";", 1)[0].strip().lower()
-            return media == b"application/json" or (
-                media.startswith(b"application/") and media.endswith(b"+json")
-            )
-    return True
+def _refusal(kind: str, message: str) -> JSONResponse:
+    return JSONResponse({"detail": [{"type": kind, "loc": ["body"], "msg": message}]}, 422)
 
 
 class RefuseDeepJson:
-    """Reads a JSON body whole, refuses it with a 422 if it nests too deep, and otherwise hands
-    the same bytes on. FastAPI reads the whole body before a route runs, so nothing streams."""
+    """Reads a request body whole and refuses it with a 422 if it is not Unicode text or nests
+    too deep. Otherwise it hands the same bytes on. It checks every body, whatever its
+    Content-Type, so it never has to guess which ones FastAPI will parse as JSON. FastAPI reads
+    the whole body before a route runs, so nothing streams."""
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or scope["method"] in _NO_BODY or not _reads_as_json(scope):
+        if scope["type"] != "http" or scope["method"] in NO_BODY:
             await self.app(scope, receive, send)
             return
         messages: list[Message] = []
@@ -76,10 +86,18 @@ class RefuseDeepJson:
             body += message.get("body", b"")
             if not message.get("more_body", False):
                 break
-        if nests_deeper_than(bytes(body), MAX_DEPTH):
-            problem = {"type": "json_too_deep", "loc": ["body"], "msg": TOO_DEEP_MESSAGE}
-            await JSONResponse({"detail": [problem]}, status_code=422)(scope, receive, send)
-            return
+        if body:
+            text = as_json_reads_it(bytes(body))
+            refusal = (
+                _refusal("json_invalid", NOT_TEXT_MESSAGE)
+                if text is None
+                else _refusal("json_too_deep", TOO_DEEP_MESSAGE)
+                if nests_deeper_than(text, MAX_DEPTH)
+                else None
+            )
+            if refusal is not None:
+                await refusal(scope, receive, send)
+                return
         waiting = iter(messages)
 
         async def replay() -> Message:

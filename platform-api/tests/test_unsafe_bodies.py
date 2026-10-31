@@ -12,7 +12,7 @@ import httpx
 import pytest
 
 from platform_api.app import create_app
-from platform_api.body_guard import nests_deeper_than
+from platform_api.body_guard import NO_BODY, as_json_reads_it, nests_deeper_than
 from platform_api.builder import Builder, Watchlist
 from platform_api.builder.cards import VERSION_CHECKER_ID
 from platform_api.db import Database
@@ -78,6 +78,17 @@ def test_the_served_api_has_json_body_routes_to_check():
     assert ("PUT", "/api/v1/drafts/x") in ROUTES
 
 
+def test_no_route_the_guard_lets_pass_unread_takes_a_body():
+    schema = create_app(LOCAL_ENV).openapi()
+    with_body = {
+        (method.upper(), path)
+        for path, item in schema["paths"].items()
+        for method, operation in item.items()
+        if "requestBody" in operation
+    }
+    assert {(m, p) for m, p in with_body if m in NO_BODY} == set()
+
+
 @pytest.mark.parametrize(("method", "path"), ROUTES)
 async def test_a_lone_surrogate_answers_422_without_echoing_it(
     client: httpx.AsyncClient, method: str, path: str
@@ -98,6 +109,80 @@ async def test_a_very_deep_body_answers_422_before_any_route_reads_it(
     assert response.status_code == 422, response.text
     [problem] = response.json()["detail"]
     assert (problem["type"], problem["loc"]) == ("json_too_deep", ["body"])
+
+
+def too_deep(response: httpx.Response) -> None:
+    assert response.status_code == 422, response.text
+    [problem] = response.json()["detail"]
+    assert (problem["type"], problem["loc"]) == ("json_too_deep", ["body"])
+
+
+@pytest.mark.parametrize(
+    "content_type", [None, "", "text/plain", "application/x-www-form-urlencoded"]
+)
+async def test_a_very_deep_body_is_refused_whatever_type_it_names(
+    client: httpx.AsyncClient, content_type: str | None
+):
+    headers = {k: v for k, v in HEADERS.items() if k != "Content-Type"}
+    if content_type is not None:
+        headers["Content-Type"] = content_type
+    too_deep(await client.put("/api/v1/drafts/x", content=DEEP, headers=headers))
+
+
+# U+2200 holds one 0x22 byte in UTF-16 and UTF-32. A scanner that reads the raw bytes takes it
+# for a quote, so it thinks the brackets that follow are inside a string.
+CRAFTED = '{"step":1,"content":{"a":"\u2200","b":' + "[" * 3000 + "]" * 3000 + "}}"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        DEEP.decode().encode("utf-16"),
+        DEEP.decode().encode("utf-32"),
+        CRAFTED.encode("utf-16-le"),
+        CRAFTED.encode("utf-16-be"),
+        CRAFTED.encode("utf-32-le"),
+    ],
+    ids=["utf-16", "utf-32", "crafted-utf-16-le", "crafted-utf-16-be", "crafted-utf-32-le"],
+)
+async def test_a_very_deep_body_in_another_unicode_encoding_is_refused(
+    client: httpx.AsyncClient, body: bytes
+):
+    too_deep(await client.put("/api/v1/drafts/x", content=body, headers=HEADERS))
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        b'{"name":"never ends' + b"[" * 3000,
+        b'{"name":"a\\' + b"\n" + b"[" * 3000 + b'"}',
+        b'{"name":"a"' + b'"' + b"[" * 3000,
+    ],
+    ids=["unterminated", "escaped-newline", "stray-quote"],
+)
+async def test_deep_brackets_after_a_string_the_scanner_cannot_close_are_refused(
+    client: httpx.AsyncClient, body: bytes
+):
+    too_deep(await client.put("/api/v1/drafts/x", content=body, headers=HEADERS))
+
+
+async def test_a_body_that_is_not_unicode_text_is_refused(client: httpx.AsyncClient):
+    response = await client.put(
+        "/api/v1/drafts/x", content=b'{"name":"\xff\xfe' + b"[" * 3000, headers=HEADERS
+    )
+    assert response.status_code == 422, response.text
+    [problem] = response.json()["detail"]
+    assert (problem["type"], problem["loc"]) == ("json_invalid", ["body"])
+
+
+async def test_an_ordinary_utf_16_body_still_reaches_validation(client: httpx.AsyncClient):
+    body = '{"task":' + "[" * 30 + "]" * 30 + "}"
+    response = await client.post(
+        "/api/v1/builder/plan", content=body.encode("utf-16"), headers=HEADERS
+    )
+    assert response.status_code == 422, response.text
+    [problem] = response.json()["detail"]
+    assert (problem["type"], problem["loc"]) == ("string_type", ["body", "task"])
 
 
 async def test_a_lone_surrogate_in_a_key_refuses_the_whole_body(client: httpx.AsyncClient):
@@ -148,11 +233,22 @@ async def test_a_body_nested_a_normal_amount_still_reaches_validation(
         (b'{"a":"' + b"[" * 100 + b'"}', False),
         (b'{"a":"\\"' + b"{" * 100 + b'"}', False),
         (b'{"a":"\\\\"' + b"," + b"[" * 65, True),
-        (b'{"a":"never ends' + b"[" * 100, False),
+        (b'{"a":"never ends' + b"[" * 100, True),
+        (b'{"a":"never ends' + b"[" * 63, False),
+        (b'{"a":"never ends"' + b'"' + b"]" * 100 + b"[" * 65, True),
     ],
 )
 def test_only_brackets_outside_strings_count_toward_depth(body: bytes, deep: bool):
-    assert nests_deeper_than(body, 64) is deep
+    assert nests_deeper_than(body.decode(), 64) is deep
+
+
+@pytest.mark.parametrize("encoding", ["utf-8", "utf-8-sig", "utf-16", "utf-16-le", "utf-32-be"])
+def test_the_guard_reads_text_as_json_loads_does(encoding: str):
+    assert as_json_reads_it('{"a":"\u2200"}'.encode(encoding)) == '{"a":"\u2200"}'
+
+
+def test_bytes_that_are_not_unicode_text_read_as_nothing():
+    assert as_json_reads_it(b'{"a":"\xff"}') is None
 
 
 USE_CASE = (
