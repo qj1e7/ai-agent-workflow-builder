@@ -17,7 +17,7 @@ To check every diagram, run `scripts/render-diagrams.sh`. It renders each Mermai
 
 ## Use case diagram
 
-Two roles use the app, and one person may hold both. The Operator sets up workflows, looks after the Software watchlist and Settings, and retries a stopped workflow. The Approver says yes or no to a run's proposal and confirms the risky setup changes. Each use case sits on the page that does it. The pages are the Portal's menu (Home, Workflows, Software watchlist, Agent library and New workflow), the run page, Settings (the gear) and the practice Teams panel (the Teams button). Everyone signs in with Entra ID, and the People list gives them their roles.
+Two roles use the app, and one person may hold both. The Operator sets up workflows, looks after the Software watchlist and Settings, and retries a stopped workflow. The Approver says yes or no to a run's proposal, on the run page or from its message in the practice Teams panel, and confirms the risky setup changes. Each use case sits on the page that does it. The pages are the Portal's menu (Home, Workflows, Software watchlist, Agent library and New workflow), the run page, Settings (the gear) and the practice Teams panel (the Teams button). Everyone signs in with Entra ID, and the People list gives them their roles.
 
 ```mermaid
 flowchart LR
@@ -60,6 +60,7 @@ flowchart LR
         end
         subgraph teamspanel["Teams approvals"]
             m1(["Read the approval request<br/>and open its run page"])
+            m2(["Approve or decline from the message,<br/>never for your own work"])
         end
     end
 
@@ -86,10 +87,14 @@ flowchart LR
     operator --- t1
     operator --- t2
     approver --- h1
+    approver --- w1
+    approver --- a1
     approver --- r1
     approver --- r2
+    approver --- r3
     approver --- t3
     approver --- m1
+    approver --- m2
 
     n1 --- planner
     n2 --- planner
@@ -104,7 +109,7 @@ flowchart LR
     classDef page fill:#ffffff,stroke:#111827,color:#111
     class operator,approver person
     class planner,model,github,jira,teams system
-    class h1,h2,w1,w2,w3,n1,n2,n3,n4,s1,s2,a1,r1,r2,r3,t1,t2,t3,m1 page
+    class h1,h2,w1,w2,w3,n1,n2,n3,n4,s1,s2,a1,r1,r2,r3,t1,t2,t3,m1,m2 page
 ```
 
 Each use case maps to a page that exists and to the routes it calls:
@@ -130,8 +135,9 @@ Each use case maps to a page that exists and to the routes it calls:
 | Add people and set their roles | Settings | Operator | `POST /api/v1/people`, `PUT /api/v1/people/{person_id}/operator`, `POST /api/v1/people/{person_id}/approver` |
 | Confirm a new Approver or a new AI model address | Settings | Approver | `POST /api/v1/confirmations/{confirmation_id}/decisions`, `POST /api/v1/settings/model/address-decision` |
 | Read the approval request and open its run page | Teams approvals, the Teams button | Approver | `GET /api/v1/teams-stub/messages` |
+| Approve or decline from the message | Teams approvals, the Teams button | Approver | `GET /api/v1/approvals/{approval_id}` says whether you may decide, then `POST /api/v1/approvals/{approval_id}/decisions`. Own work is refused with 403 |
 
-Some parts of the prototype wait for Phase 2, each with its own decision first. They have no page yet, so they are not in the diagram: Connections and AI usage in Settings, named Approvers with a backup and an expiry (ADR 0024), Approve buttons inside a Teams message, Report to support, Open in n8n (ADRs 0026 and 0027), the Vulnerability checker and the package registries (ADR 0025), and the sponsor's two real use cases, the quarterly access review with two Approvers in turn and patch housekeeping.
+Some parts of the prototype wait for Phase 2, each with its own decision first. They have no page yet, so they are not in the diagram: Connections and AI usage in Settings, named Approvers with a backup and an expiry (ADR 0024), Approve buttons inside a real Teams message, Report to support, Open in n8n (ADRs 0026 and 0027), the Vulnerability checker and the package registries (ADR 0025), and the sponsor's two real use cases, the quarterly access review with two Approvers in turn and patch housekeeping.
 
 ## Bounded contexts (DDD context map)
 
@@ -1000,7 +1006,7 @@ flowchart LR
     class browser,maint,gh,model,envfile ext
 ```
 
-Services start in this order. postgres and the Cosmos DB emulator become healthy, then n8n becomes ready, then bootstrap runs to completion. bootstrap runs the migrations, sets up n8n, lints the n8n workflow files and loads them, the error workflow first. platform-api starts after bootstrap succeeds and the agent runtime is healthy. The Portal starts last.
+Services start in this order. postgres becomes healthy, then n8n becomes ready, then bootstrap runs to completion. bootstrap runs the migrations, sets up n8n, lints the n8n workflow files and loads them, the error workflow first. platform-api starts after bootstrap succeeds and the agent runtime is healthy. The Portal starts last. The Cosmos DB emulator starts alongside them, and nothing waits for it. Until it answers, platform-api's copier marks the copy as behind and keeps retrying.
 
 | Secret in `deploy/.env` | Read by |
 |---|---|
@@ -1024,7 +1030,7 @@ flowchart LR
     model["AI model gateway<br/>(the address in Settings)"]
     actions["GitHub Actions<br/>deploy.yml, by hand, main only"]
 
-    subgraph rg["Resource group rg-wab-dev"]
+    subgraph rg["Resource group rg-wab-dev, region eastasia (AZURE_LOCATION)"]
         direction LR
         subgraph aca["Container Apps environment"]
             direction TB
@@ -1036,7 +1042,7 @@ flowchart LR
             boot["Container Apps Job bootstrap<br/>migrations and n8n setup,<br/>after each deploy"]
         end
         pg[("Azure Database for PostgreSQL<br/>Flexible Server, TLS only<br/>databases platform and n8n")]
-        cosmos[("Azure Cosmos DB for NoSQL<br/>free tier, Strong consistency<br/>activity / run_events, /runId")]
+        cosmos[("Azure Cosmos DB for NoSQL<br/>free tier, Strong consistency<br/>activity / run_events, /runId<br/>region koreacentral (COSMOS_LOCATION)")]
         kv["Key Vault<br/>generated secrets and the Cosmos DB key,<br/>read by each app's managed identity"]
         acr["Container Registry, Basic<br/>our images and copies of n8n and postgres"]
         logs["Log Analytics and App Insights"]
@@ -1069,6 +1075,8 @@ flowchart LR
     class browser,entra,gh,model,actions ext
 ```
 
+**Regions.** Terraform puts every resource in `location`, which is `southeastasia` unless the deploy workflow's `AZURE_LOCATION` variable sets another region. The Cosmos DB account goes in `cosmos_location`, from `COSMOS_LOCATION`, or in `location` when that is empty. The diagram shows what is set for the deploy of 31 Oct 2026. `AZURE_LOCATION` is `eastasia`, because the subscription's policy refuses `southeastasia`. `COSMOS_LOCATION` is `koreacentral`, because East Asia refused the Cosmos DB account for lack of capacity. This is what is configured, not proof of a working deploy: when this was written, that deploy had not finished. ADR 0031 should record the region choice. That is a follow-up for the team.
+
 The Azure shape keeps three rules from the design.
 
 - n8n holds no write key. The practice Jira lives inside platform-api, and a real Jira key would reach platform-api only, from Key Vault.
@@ -1087,7 +1095,6 @@ config:
 ---
 flowchart TB
     pr["A pull request,<br/>or a push to main"]
-    push["A push to main, or by hand"]
     hand["By hand, on main"]
     daily["Every pull request, every push to main,<br/>and daily at 01:00 UTC"]
 
@@ -1096,7 +1103,9 @@ flowchart TB
         checks["<b>job checks</b><br/>matrix: platform-api, agent-runtime, e2e<br/>1. uv sync<br/>2. ruff check and ruff format<br/>3. pyright<br/>4. lint-imports, platform-api only<br/>5. contracts are current<br/>6. unit tests in the image, with PostgreSQL<br/>and, for platform-api, the Cosmos DB emulator<br/>7. the emulator kept its pinned packages<br/>8. build the runtime image<br/>9. mock GitHub and mock model tests, e2e only"]
         portaljob["<b>job portal</b><br/>1. npm ci<br/>2. typecheck<br/>3. lint<br/>4. unit tests<br/>5. build<br/>6. nginx render test"]
         scans["<b>job scans</b><br/>1. SAST with Semgrep<br/>2. keep the Semgrep report<br/>3. secret scan with gitleaks"]
-        e2e["<b>job e2e</b>, push or by hand only<br/>1. scripts/e2e.sh: API tests, then the browser suite<br/>2. keep the logs, screenshots and video<br/>3. DAST: scripts/dast.sh, OWASP ZAP<br/>4. keep the ZAP reports<br/>5. load test: scripts/load.sh, k6<br/>6. keep the k6 summary"]
+        e2e["<b>job e2e</b>, on a push to main or by hand only<br/>1. scripts/e2e.sh: API tests, then the browser suite<br/>2. keep the logs, screenshots and video<br/>3. DAST: scripts/dast.sh, OWASP ZAP<br/>4. keep the ZAP reports<br/>5. load test: scripts/load.sh, k6<br/>6. keep the k6 summary"]
+        %% Invisible links keep the jobs in the file's order, left to right.
+        checks ~~~ portaljob ~~~ scans ~~~ e2e
     end
 
     subgraph deploywf["deploy.yml"]
@@ -1122,17 +1131,13 @@ flowchart TB
     azure[("Azure: rg-wab-dev")]
     artifacts[("Run artifacts: Semgrep report, e2e logs,<br/>ZAP reports, k6 summary, infra checks, eval results")]
 
-    pr --> checks
-    pr --> portaljob
-    pr --> scans
-    push --> e2e
+    pr --> ci
     pr --> infra
     hand --> deploy
     hand --> evals
     daily --> pstack
     deploy --> azure
-    scans -.-> artifacts
-    e2e -.-> artifacts
+    ci -.-> artifacts
     infra -.-> artifacts
     evals -.-> artifacts
 
@@ -1140,7 +1145,7 @@ flowchart TB
     classDef trigger fill:#e8f0fe,stroke:#1a56db,color:#111
     classDef ext fill:#f3f4f6,stroke:#6b7280,color:#111
     class checks,portaljob,scans,e2e,deploy,evals,infra,pstack job
-    class pr,push,hand,daily trigger
+    class pr,hand,daily trigger
     class azure,artifacts ext
 ```
 
@@ -1202,7 +1207,7 @@ sequenceDiagram
     end
     B-->>P: 200 the plan, each step marked reads, no system access, or changes data and waits for a yes
 
-    Note over Op,P: Step 3. When and who
+    Note over Op,P: Step 3. When it runs
     Op->>P: picks the day and the time, Singapore time
 
     Note over Op,P: Step 4. Turn it on
@@ -1225,7 +1230,7 @@ sequenceDiagram
     P-)B: PUT /api/v1/drafts/{draft_id} {step, content}
 ```
 
-When the Planner reads a release check in step 1, it answers "belongs on the Software watchlist", and the page offers to open the Software watchlist instead of making a look-alike workflow (design note, section 4).
+When the Planner reads a watchlist check in step 1, it answers "belongs on the Software watchlist", and the page offers to open the Software watchlist instead of making a look-alike workflow (design note, section 4).
 
 ## Sequence: a watchlist check runs to the approval gate in Teams
 
@@ -1394,7 +1399,7 @@ sequenceDiagram
 
     Op->>P: opens Home
     P->>B: GET /api/v1/home
-    Note over B,M: Home lists the stopped run with the reason in its run_failed event.<br/>The AI troubleshooter has one rule for each failure reason
+    Note over B,M: Home lists the stopped run<br/>with the reason in its<br/>run_failed event. The AI<br/>troubleshooter has one rule<br/>for each failure reason
     B-->>P: 200 a stopped row {reason, retryable, advice}
     P-->>Op: GitHub was unavailable. You can retry.
     opt the Operator opens the run page

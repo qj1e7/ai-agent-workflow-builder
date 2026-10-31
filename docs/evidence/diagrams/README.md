@@ -51,3 +51,4 @@ Both came from the stack of the second DAST run (`docs/evidence/dast/2026-11-reb
 - That each key in an ER diagram matches the database. We compared them by hand with `schema-2026-10-31.txt`.
 - That a sequence diagram's order of calls matches the code. The two run diagrams follow the recorded runs in `contracts/fixtures/runs/`, and the other two were read from the code.
 - The use case diagram against the running Portal. Its table names the page and the routes for each use case.
+- Where Mermaid places each box. The job check reads the page's text, not the PNG. So the CI/CD diagram joins its trigger to the `ci.yml` box as a whole and chains that file's jobs with invisible links, which makes the PNG draw them left to right in the file's order.
