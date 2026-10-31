@@ -16,6 +16,7 @@ resource "azurerm_container_app_job" "this" {
   container_app_environment_id = var.environment_id
   replica_timeout_in_seconds   = var.timeout_seconds
   replica_retry_limit          = 0
+  workload_profile_name        = "Consumption"
   tags                         = var.tags
 
   manual_trigger_config {
