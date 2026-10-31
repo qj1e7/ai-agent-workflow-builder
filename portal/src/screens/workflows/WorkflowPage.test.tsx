@@ -11,7 +11,7 @@ import { ApiError } from '../../api/client'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
 import type { Me, RunView, UseCaseView } from '../../api/types'
-import { WHO_APPROVES } from './WorkflowPage'
+import { ScheduleChangePanel, WHO_APPROVES } from './WorkflowPage'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
 const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
@@ -49,10 +49,25 @@ function render({ me = ALICE, useCase = AGENTS, runs = [], id }: Setup = {}): st
   )
 }
 
+function renderPanel(useCase: UseCaseView): string {
+  const session = createDevSession(null)
+  const queryClient = new QueryClient()
+  return renderToStaticMarkup(
+    <QueryClientProvider client={queryClient}>
+      <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
+        <ScheduleChangePanel useCase={useCase} now={NOW} onSaved={() => undefined} onDone={() => undefined} />
+      </ApiProvider>
+    </QueryClientProvider>,
+  )
+}
+
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replace(/\s+/g, ' ').trim()
 const mainOf = (html: string) => /<main\b[\s\S]*<\/main>/.exec(html)?.[0] ?? ''
 const buttons = (html: string) => [...mainOf(html).matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((m) => text(m[1] ?? ''))
 const factOf = (html: string, term: string) => text(new RegExp(`<dt>${term}</dt><dd>([\\s\\S]*?)</dd>`).exec(html)?.[1] ?? '')
+
+/** The When section's words, without who set it. */
+const whenOf = (html: string) => factOf(html, 'When').replace(/ Set by \w+\.$/, '')
 
 describe('a workflow page', () => {
   it('shows its name, what it does, and whether it is on', () => {
@@ -64,7 +79,7 @@ describe('a workflow page', () => {
 
   it('says when it runs, when it runs next, and who may approve', () => {
     const html = render()
-    expect(factOf(html, 'When')).toBe('No schedule An Operator starts it with Run now.')
+    expect(whenOf(html)).toBe('No schedule An Operator starts it with Run now.')
     expect(factOf(html, 'Next run')).toBe('Not scheduled')
     expect(factOf(html, 'Who approves')).toBe(`${WHO_APPROVES} Owned by Alice.`)
     expect(WHO_APPROVES).toBe('Any Approver except the people who start or own it')
@@ -72,22 +87,22 @@ describe('a workflow page', () => {
 
   it('gives its schedule’s day and time, and its next run', () => {
     const html = render({ useCase: { ...AGENTS, next_run_at: '2026-11-09T01:00:00Z', schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice' } } })
-    expect(factOf(html, 'When')).toBe('Every Monday at 9:00 Singapore time (SGT).')
+    expect(whenOf(html)).toBe('Every Monday at 9:00 Singapore time (SGT).')
     expect(factOf(html, 'Next run')).toBe('Mon 9 Nov, 9:00')
   })
 
   it('while paused, keeps its schedule in When and says Paused only in Next run', () => {
     const html = render({ useCase: { ...AGENTS, state: 'paused', next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice' } } })
-    expect(factOf(html, 'When')).toBe('Every Monday at 9:00 Singapore time (SGT).')
+    expect(whenOf(html)).toBe('Every Monday at 9:00 Singapore time (SGT).')
     expect(factOf(html, 'Next run')).toBe('Paused')
   })
 
   it('while its schedule is held, keeps the schedule in When and says in Next run why it is not running', () => {
     const removed = render({ useCase: { ...AGENTS, next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: 'owner_removed' } } })
     const notOperator = render({ useCase: { ...AGENTS, next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: 'owner_not_an_operator' } } })
-    expect(factOf(removed, 'When')).toBe('Every Monday at 9:00 Singapore time (SGT).')
-    expect(factOf(removed, 'Next run')).toBe('Not running: Alice is no longer on the People list. An Operator can set it up again in New workflow.')
-    expect(factOf(notOperator, 'Next run')).toBe('Not running: Alice can no longer run workflows. An Operator can set it up again in New workflow.')
+    expect(whenOf(removed)).toBe('Every Monday at 9:00 Singapore time (SGT).')
+    expect(factOf(removed, 'Next run')).toBe('Not running: Alice is no longer on the People list. An Operator can take it over by saving the schedule.')
+    expect(factOf(notOperator, 'Next run')).toBe('Not running: Alice can no longer run workflows. An Operator can take it over by saving the schedule.')
   })
 
   it('while paused and held, says Paused only, as the Software page does', () => {
@@ -111,6 +126,37 @@ describe('a workflow page', () => {
 
   it('gives an Operator Run now, Pause and Delete', () => {
     expect(buttons(render())).toEqual(expect.arrayContaining(['Run now', 'Pause', 'Delete']))
+  })
+
+  const SCHEDULED: UseCaseView = { ...AGENTS, next_run_at: '2026-11-09T01:00:00Z', schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Carol', held: null } }
+
+  it('puts Change schedule first in an Operator’s button row, or Set a schedule when there is none', () => {
+    const row = (html: string) => buttons(html).filter((label) => /schedule|Pause|Delete/.test(label))
+    expect(row(render({ useCase: SCHEDULED }))).toEqual(['Change schedule', 'Pause', 'Delete'])
+    expect(row(render())).toEqual(['Set a schedule', 'Pause', 'Delete'])
+    expect(factOf(render({ useCase: SCHEDULED }), 'When')).not.toContain('schedule')
+  })
+
+  it('says in When who set the schedule', () => {
+    expect(factOf(render({ useCase: SCHEDULED }), 'When')).toContain('Set by Carol.')
+  })
+
+  it('shows an Approver who is not an Operator neither schedule control', () => {
+    for (const useCase of [SCHEDULED, AGENTS]) expect(buttons(render({ me: BOB, useCase })).filter((label) => /schedule/i.test(label))).toEqual([])
+  })
+
+  it('opens the form as a panel headed Change schedule that says the runs then count as the Operator’s work', () => {
+    const html = renderPanel(SCHEDULED)
+    expect(text(html)).toContain('Change schedule')
+    expect(text(html)).toContain('Saving makes you the owner of this schedule. Its runs then count as your work, so you won’t be able to approve them.')
+    expect(text(html)).toContain('Save schedule')
+  })
+
+  it('tells everyone a held schedule can be taken over by saving it', () => {
+    const held: UseCaseView = { ...AGENTS, next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Carol', held: 'owner_removed' } }
+    for (const me of [ALICE, BOB]) {
+      expect(factOf(render({ me, useCase: held }), 'Next run')).toContain('An Operator can take it over by saving the schedule.')
+    }
   })
 
   it('gives an Approver who may approve and the recent runs, but no manage buttons', () => {

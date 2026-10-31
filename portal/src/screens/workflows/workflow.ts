@@ -1,12 +1,12 @@
 import { ApiError } from '../../api/client'
 import { failureReasonLabel } from '../../api/labels'
 import { pressOnce, type Latch, type Outcome } from '../../api/latch'
-import type { BlockKind, Me, RunView, UseCaseView } from '../../api/types'
+import type { BlockKind, Me, RunView, ScheduleIn, UseCaseView } from '../../api/types'
 import type { FaceState } from '../../ui/AgentFace'
 import { agentIdentity } from '../../ui/agents'
 import { andList, count, type NameOf } from '../run/words'
 import { faceId } from '../agents/agents'
-import { heldWords, repeatWords } from '../software/software'
+import { heldWords, repeatWords, TAKE_OVER_WORDS } from '../software/software'
 
 export type Tone = 'ok' | 'wait' | 'bad' | 'new'
 
@@ -132,12 +132,9 @@ export function nextRunWords(useCase: Pick<UseCaseView, 'state' | 'next_run_at' 
   return useCase.next_run_at ? runWhen(useCase.next_run_at, now, useCase.schedule?.time_zone) : 'Not scheduled'
 }
 
-/** No route saves a workflow's schedule, so a held one runs again only when it is set up again. */
-export const SET_UP_AGAIN_WORDS = 'An Operator can set it up again in New workflow.'
-
 /** Why the schedule starts no run while its owner can no longer run it, as the Software page says it. Paused wins, so null while paused. */
 export function heldNote({ state, schedule }: Pick<UseCaseView, 'state' | 'schedule'>): string | null {
-  return state === 'on' && schedule?.held ? heldWords(schedule.held, schedule.owner_name, SET_UP_AGAIN_WORDS) : null
+  return state === 'on' && schedule?.held ? heldWords(schedule.held, schedule.owner_name, TAKE_OVER_WORDS) : null
 }
 
 export interface When {
@@ -216,6 +213,51 @@ export type Place = 'run' | 'switch' | 'delete'
 export const PLACES_IN_PAGE_ORDER: readonly Place[] = ['run', 'switch', 'delete']
 const PLACE_OF: Record<Control, Place> = { run: 'run', pause: 'switch', resume: 'switch', delete: 'delete' }
 export const placeOf = (control: Control): Place => PLACE_OF[control]
+
+/** Only an Operator changes a schedule. The Software watchlist's is changed on the Software page. */
+export function mayChangeSchedule(useCase: Pick<UseCaseView, 'template'>, viewer: Viewer): boolean {
+  return viewer.operator && !looksAfterOnSoftwarePage(useCase)
+}
+
+/** The toast after a save: when it runs next. The owner is named under When, so the toast does not repeat it. */
+export function scheduleSavedWords(useCase: Pick<UseCaseView, 'state' | 'next_run_at' | 'schedule'>, now: Date): string {
+  if (useCase.state === 'paused') return 'Saved. It runs on this schedule once you resume it.'
+  return useCase.next_run_at ? `Saved. Next run ${runWhen(useCase.next_run_at, now, useCase.schedule?.time_zone)}.` : 'Saved.'
+}
+
+interface SavedAnswers {
+  readonly onSuccess: (view: UseCaseView) => void
+  readonly onError: (failure: unknown) => void
+}
+
+interface FormAnswers {
+  readonly onSuccess: () => void
+  readonly onError: (failure: unknown) => void
+}
+
+interface SaverTies {
+  readonly useCaseId: string
+  readonly now: Date
+  readonly say: (words: string) => void
+  readonly refocus: () => void
+  readonly reread: (useCaseId: string) => void
+}
+
+/** What a save does with the platform's answer: close the form and say so, or show the refusal and, if the workflow changed or is gone, read it again. */
+export function scheduleSaver(mutate: (body: ScheduleIn, answers: SavedAnswers) => void, { useCaseId, now, say, refocus, reread }: SaverTies) {
+  const rereadIfOutOfDate = rereadWhenOutOfDate(useCaseId, refocus, reread)('schedule')
+  return (body: ScheduleIn, form: FormAnswers): void =>
+    mutate(body, {
+      onSuccess: (view) => {
+        form.onSuccess()
+        say(scheduleSavedWords(view, now))
+      },
+      onError: (failure) => {
+        form.onError(failure)
+        rereadIfOutOfDate(failure)
+      },
+    })
+}
 
 export function controlsOf(useCase: Pick<UseCaseView, 'template' | 'state'>, viewer: Viewer): readonly Control[] {
   if (!viewer.operator || looksAfterOnSoftwarePage(useCase)) return []

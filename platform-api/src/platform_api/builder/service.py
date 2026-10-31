@@ -40,6 +40,7 @@ from platform_api.builder.models import (
     DraftList,
     DraftView,
     PlanOut,
+    ScheduleIn,
     SuggestOut,
     ToolList,
     UnderstandOut,
@@ -172,6 +173,11 @@ class WatchlistStays:
     pass
 
 
+@dataclass(frozen=True)
+class ScheduleOnSoftwarePage:
+    pass
+
+
 type Moved = Lifecycle | AlreadyDeleted | TooLate | WatchlistStays
 type Move = Callable[[Lifecycle, str, datetime], Moved]
 
@@ -283,6 +289,28 @@ class Builder:
                 return None
             case _:
                 return await self.get_use_case(use_case_id)
+
+    async def save_schedule(
+        self, use_case_id: str, principal: Principal, body: ScheduleIn
+    ) -> UseCaseView | ScheduleOnSoftwarePage | None:
+        """The same save as the watchlist's: the caller becomes the owner, which lifts a hold.
+        Saving is not a write to Jira or Confluence, so it needs no approval."""
+        # Read the workflow before the lock, so the lock holds one connection and no more.
+        view = await self.get_use_case(use_case_id)
+        if view is None:
+            return None
+        if view.template == SOFTWARE_WATCHLIST.key:
+            return ScheduleOnSoftwarePage()
+        async with self._db.transaction("builder") as uow:
+            # A delete holds this lock alone, so it waits until the schedule is stored, and a
+            # delete that came first is seen here. ScheduleBook.save takes no lock.
+            await hold_workflow(uow.conn, use_case_id, alone=False)
+            if not isinstance(await _lifecycle_now(uow.conn, use_case_id), On | Paused):
+                return None
+            await self._schedules.save(
+                UseCaseId(use_case_id), Schedule(body.day, body.at), principal
+            )
+        return await self.get_use_case(use_case_id)
 
     async def _move(self, use_case_id: str, move: Move) -> Moved | None:
         async with self._db.transaction("builder") as uow:

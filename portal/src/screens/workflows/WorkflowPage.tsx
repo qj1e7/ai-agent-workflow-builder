@@ -7,7 +7,7 @@ import { useLatch } from '../../api/latch'
 import { useDisplayName } from '../../api/people'
 import { useMe, useRuns, useStartRun, useUseCase } from '../../api/queries'
 import type { Me, UseCaseView } from '../../api/types'
-import { useDeleteWorkflow, useMoveWorkflow, useRereadWorkflow } from '../../api/workflowQueries'
+import { useDeleteWorkflow, useMoveWorkflow, useRereadWorkflow, useSaveWorkflowSchedule } from '../../api/workflowQueries'
 import { PageHead } from '../../shell/PageHead'
 import { AgentFace } from '../../ui/AgentFace'
 import { Button, ButtonLink } from '../../ui/Button'
@@ -15,6 +15,7 @@ import { useFocusAfterReread } from '../../ui/focus'
 import { FROM_LIST, openedFromList } from '../../ui/fromList'
 import { IconChevronLeft, IconPause, IconPlay, IconTrash } from '../../ui/icons'
 import { Toast, type ToastMessage } from '../../ui/Toast'
+import { ScheduleForm, useEditorThatRefocusesItsOpener, type SaveSchedule } from '../software/Schedule'
 import { useArrivalScroll } from './arrival'
 import { RecentRuns } from './RecentRuns'
 import { StatusPills, useChanges } from './Status'
@@ -24,6 +25,7 @@ import {
   changeWords,
   controlsOf,
   heldNote,
+  mayChangeSchedule,
   nextRunWords,
   placeOf,
   PLACES_IN_PAGE_ORDER,
@@ -34,6 +36,7 @@ import {
   rowAction,
   runFact,
   runsOf,
+  scheduleSaver,
   SOFTWARE_PAGE,
   stepTag,
   viewerOf,
@@ -67,7 +70,33 @@ function When({ useCase }: { useCase: UseCaseView }) {
     <dd>
       {words}
       <small>{small}</small>
+      {useCase.schedule ? <small>Set by {useCase.schedule.owner_name}.</small> : null}
     </dd>
+  )
+}
+
+interface PanelProps {
+  readonly useCase: UseCaseView
+  readonly now: Date
+  readonly onSaved: (words: string) => void
+  readonly onDone: () => void
+}
+
+/** The prototype's "Change schedule" panel under the facts. Saving makes the Operator the schedule owner, and a stale save reads the workflow again. */
+export function ScheduleChangePanel({ useCase, now, onSaved, onDone }: PanelProps) {
+  const id = useCase.use_case_id
+  const headingId = useId()
+  const save = useSaveWorkflowSchedule(id)
+  const reread = useRereadWorkflow()
+  const saveAndSay: SaveSchedule = {
+    isPending: save.isPending,
+    mutate: scheduleSaver((body, answers) => save.mutate(body, answers), { useCaseId: id, now, say: onSaved, refocus: () => undefined, reread }),
+  }
+  return (
+    <section className={`${styles['panel']} ${styles['change']}`} aria-labelledby={headingId}>
+      <h2 id={headingId}>Change schedule</h2>
+      <ScheduleForm schedule={useCase.schedule} work="runs" save={saveAndSay} onDone={onDone} />
+    </section>
   )
 }
 
@@ -186,6 +215,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
   const rereadIfOutOfDate = rereadWhenOutOfDate(id, onReread, reread)
   const runNow = useRunNow(id, rereadIfOutOfDate('run'))
   const deleteButton = useRef<HTMLButtonElement>(null)
+  const { editing: changingSchedule, opener: scheduleOpener, open: openSchedule, close: closeSchedule } = useEditorThatRefocusesItsOpener()
   const [asking, setAsking] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
   const [deleteProblem, setDeleteProblem] = useState<string | null>(null)
@@ -255,6 +285,11 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
       ) : null}
       {controls.length > 0 ? (
         <div className={styles['btns']}>
+          {mayChangeSchedule(useCase, viewer) && !changingSchedule ? (
+            <Button ref={scheduleOpener} data-place="schedule" onClick={openSchedule}>
+              {useCase.schedule ? 'Change schedule' : 'Set a schedule'}
+            </Button>
+          ) : null}
           {onOff ? (
             <Button icon={onOff === 'resume' ? IconPlay : IconPause} data-place={placeOf(onOff)} loading={move.isPending} onClick={() => pauseOrResume(onOff)}>
               {onOff === 'resume' ? 'Resume' : 'Pause'}
@@ -311,6 +346,9 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
           </dd>
         </div>
       </dl>
+      {changingSchedule && mayChangeSchedule(useCase, viewer) ? (
+        <ScheduleChangePanel useCase={useCase} now={now} onSaved={(text) => setSaid((before) => ({ id: (before?.id ?? 0) + 1, text }))} onDone={closeSchedule} />
+      ) : null}
       <div className={styles['body']}>
         <Steps useCase={useCase} />
         {runs.data ? (

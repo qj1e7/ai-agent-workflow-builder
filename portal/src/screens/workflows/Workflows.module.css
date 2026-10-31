@@ -418,6 +418,10 @@
   background: var(--surface);
 }
 
+.change {
+  margin-top: 16px;
+}
+
 .panel h2 {
   font-size: 1.125rem;
 }

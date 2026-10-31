@@ -2,7 +2,7 @@ import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-q
 import { unwrap, type ApiClient } from './client'
 import { useApiClient, useCacheScope } from './context'
 import { keys } from './queries'
-import type { UseCaseView } from './types'
+import type { ScheduleIn, UseCaseView } from './types'
 
 type Move = 'pause' | 'resume' | 'restore'
 
@@ -30,6 +30,13 @@ function changeList(queryClient: QueryClient, user: string, change: (list: UseCa
 
 function rereadWorkflowsAndWatchlist(queryClient: QueryClient): void {
   for (const key of ['use-cases', 'watchlist']) void queryClient.invalidateQueries({ queryKey: [key] })
+}
+
+/** The view the platform answered a change with: held for the page, put in the list, and the lists read again. */
+export function applySavedView(queryClient: QueryClient, user: string, view: UseCaseView): void {
+  queryClient.setQueryData(keys.useCase(user, view.use_case_id), view)
+  changeList(queryClient, user, (list) => withView(list, view))
+  rereadWorkflowsAndWatchlist(queryClient)
 }
 
 function markStaleWithoutReading(queryClient: QueryClient, queryKey: readonly unknown[]): void {
@@ -72,4 +79,20 @@ export function useDeleteWorkflow() {
       rereadWorkflowsAndWatchlist(queryClient)
     },
   })
+}
+
+/** Saving makes the caller the schedule owner, which lifts a hold. The view that comes back says so. */
+export function saveScheduleOptions(client: ApiClient, queryClient: QueryClient, user: string, useCaseId: string) {
+  return {
+    mutationFn: async (body: ScheduleIn) =>
+      unwrap(await client.PUT('/api/v1/use-cases/{use_case_id}/schedule', { params: { path: { use_case_id: useCaseId } }, body })),
+    onSuccess: (view: UseCaseView) => applySavedView(queryClient, user, view),
+  }
+}
+
+export function useSaveWorkflowSchedule(useCaseId: string) {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  return useMutation(saveScheduleOptions(client, queryClient, user, useCaseId))
 }

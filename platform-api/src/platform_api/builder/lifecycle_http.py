@@ -3,12 +3,13 @@ from fastapi import APIRouter, HTTPException
 from platform_api.auth import OPERATORS_ONLY
 from platform_api.builder.http import NO_SUCH, NOT_FOUND, CurrentBuilder, WorkflowOperator
 from platform_api.builder.lifecycle import TooLate
-from platform_api.builder.models import UseCaseDeleted, UseCaseView
-from platform_api.builder.service import WatchlistStays
+from platform_api.builder.models import ScheduleIn, UseCaseDeleted, UseCaseView
+from platform_api.builder.service import ScheduleOnSoftwarePage, WatchlistStays
 from platform_api.wire import error_response
 
 router = APIRouter(prefix="/api/v1", tags=["builder"])
 
+SCHEDULE_ON_SOFTWARE_PAGE = "The Software watchlist's schedule is saved on the Software page."
 WATCHLIST_STAYS = "The Software watchlist can't be deleted. Remove its software instead."
 
 
@@ -84,6 +85,31 @@ async def restore_use_case(
             raise HTTPException(
                 410, "This workflow was deleted more than a day ago, so it can't be put back."
             )
+        case None:
+            raise HTTPException(404, NO_SUCH)
+        case view:
+            return view
+
+
+@router.put(
+    "/use-cases/{use_case_id}/schedule",
+    description="Saves when the workflow runs on its own, in Singapore time. The caller "
+    "becomes the schedule owner, whose scheduled runs start as them and who can never approve "
+    "them. That lifts a hold, so an Operator takes over a workflow whose owner can no longer "
+    "run it by saving its schedule. A paused workflow stays paused. Saving is not a write to "
+    "Jira or Confluence, so it needs no approval.",
+    responses={
+        **OPERATORS_ONLY,
+        404: NOT_FOUND,
+        409: error_response(SCHEDULE_ON_SOFTWARE_PAGE),
+    },
+)
+async def save_schedule(
+    use_case_id: str, body: ScheduleIn, principal: WorkflowOperator, builder: CurrentBuilder
+) -> UseCaseView:
+    match await builder.save_schedule(use_case_id, principal, body):
+        case ScheduleOnSoftwarePage():
+            raise HTTPException(409, SCHEDULE_ON_SOFTWARE_PAGE)
         case None:
             raise HTTPException(404, NO_SUCH)
         case view:
