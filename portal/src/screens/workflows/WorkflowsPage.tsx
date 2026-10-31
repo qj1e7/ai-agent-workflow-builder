@@ -14,16 +14,10 @@ import { IconSearch } from '../../ui/icons'
 import { Toast, UNDO_ID, type ToastMessage } from '../../ui/Toast'
 import { useArrivalScroll } from './arrival'
 import { Faces, StatusPills } from './Status'
-import { agentsOf, changeProblem, changeWords, FILTERS, lineWhen, meansOutOfDate, nextRunWords, pressChange, rowsOf, runFact, workflowPath, type Filter, type Row, type RunFact, type Viewer } from './workflow'
+import { agentsOf, changeProblem, changeWords, FILTERS, lineWhen, meansOutOfDate, nextRunWords, pressChange, REFRESH_MS, rowsOf, runFact, viewerOf, workflowPath, type Filter, type Row, type RunFact } from './workflow'
 import styles from './Workflows.module.css'
 
-export const REFRESH_MS = 15_000
-
 export const rowLinkId = (useCaseId: string) => `workflow-${useCaseId}`
-
-export function viewerOf(me: Me): Viewer {
-  return { id: me.id, operator: me.roles.includes('operator'), approver: me.roles.includes('approver') }
-}
 
 interface Deleted {
   readonly id: string

@@ -24,22 +24,23 @@ import {
   changeWords,
   controlsOf,
   heldNote,
-  meansOutOfDate,
   nextRunWords,
   placeOf,
   PLACES_IN_PAGE_ORDER,
   pressChange,
   pressRunNow,
+  REFRESH_MS,
+  rereadWhenOutOfDate,
   rowAction,
   runFact,
   runsOf,
   SOFTWARE_PAGE,
   stepTag,
+  viewerOf,
   whenWords,
   workflowPath,
   type Place,
 } from './workflow'
-import { REFRESH_MS, viewerOf } from './WorkflowsPage'
 import styles from './Workflows.module.css'
 
 export const WHO_APPROVES = 'Any Approver except the people who start or own it'
@@ -182,11 +183,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
   const removal = useDeleteWorkflow()
   const reread = useRereadWorkflow()
   const changes = useLatch()
-  const rereadIfOutOfDate = (pressed: Place) => (error: unknown) => {
-    if (!meansOutOfDate(error)) return
-    onReread(pressed)
-    reread(id)
-  }
+  const rereadIfOutOfDate = rereadWhenOutOfDate(id, onReread, reread)
   const runNow = useRunNow(id, rereadIfOutOfDate('run'))
   const deleteButton = useRef<HTMLButtonElement>(null)
   const [asking, setAsking] = useState(false)

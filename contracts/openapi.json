@@ -1603,6 +1603,10 @@
           "use_case_version": {
             "title": "Use Case Version",
             "type": "integer"
+          },
+          "you_can_decide": {
+            "title": "You Can Decide",
+            "type": "boolean"
           }
         },
         "required": [
@@ -1617,7 +1621,8 @@
           "last_seq",
           "events_url",
           "proposal",
-          "approval"
+          "approval",
+          "you_can_decide"
         ],
         "title": "AwaitingApprovalView",
         "type": "object"

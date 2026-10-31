@@ -214,7 +214,9 @@ def test_a_step_told_to_retry_answers_the_documented_retry_body(refusing_client:
 UNDER_UVICORN = """
 import asyncio
 import logging
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 import uvicorn
 
@@ -248,9 +250,19 @@ class Specs:
         return NotOn("paused")
 
 
+class Conn:
+    async def execute(self, *args):
+        pass
+
+
 class Clock:
     def clock(self):
         return NOW
+
+    @asynccontextmanager
+    async def transaction(self, context):
+        # The tick holds the workflow's lock around a start (#56).
+        yield SimpleNamespace(conn=Conn())
 
 
 asyncio.run(ScheduleTicker(Clock(), Book(), Specs(), None).tick())
