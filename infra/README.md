@@ -6,7 +6,7 @@ This folder holds the Terraform code for the walking skeleton on Azure (ADR 0004
 
 ## What gets created
 
-One environment, `dev`, in Southeast Asia (`southeastasia`), in the resource group `rg-wab-dev`. Names follow `<type>-wab-<environment>`, plus a random 5-character suffix where Azure needs a globally unique name. Every resource carries the tags `project`, `environment` and `managed-by`.
+One environment, `dev`, in the resource group `rg-wab-dev`. The region is Southeast Asia (`southeastasia`) unless `AZURE_LOCATION` says otherwise. The first deploy, on 31 Oct 2026, used East Asia (`eastasia`), because the Azure for Students policy does not allow Southeast Asia, and Korea Central (`koreacentral`) for Cosmos DB alone ([the first deploy](../docs/evidence/deploy/first-deploy.md)). Names follow `<type>-wab-<environment>`, plus a random 5-character suffix where Azure needs a globally unique name. Every resource carries the tags `project`, `environment` and `managed-by`.
 
 | Resource | Name | Size and notes |
 |---|---|---|
