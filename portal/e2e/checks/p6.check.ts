@@ -269,6 +269,14 @@ test('@lane3 Remove reaches the platform at once; Undo, with no time limit of it
     const historyOnPage = await text(history)
     const kept = await rowNamed(backend, 'LangGraph')
     await shotTo(page, 3, 'p6-undo.png', true)
+    // Escape clears the notice wherever focus is on the page, as in the prototype, not only on its buttons.
+    // LangGraph and Redis are both listed here, so the search box is on the page.
+    await expect(notice(page)).toHaveText('Put LangGraph back on the list.')
+    const find = page.getByRole('searchbox', { name: 'Find software' })
+    await find.focus()
+    await page.keyboard.press('Escape')
+    await expect(notice(page), 'Escape from the search box clears the notice').toHaveText('')
+    await expect(find, 'and leaves focus where it was').toBeFocused()
 
     await rowOf(page, 'Redis').getByRole('button', { name: /^Remove/ }).click()
     await expect(rowOf(page, 'Redis')).toHaveCount(0)
@@ -291,12 +299,6 @@ test('@lane3 Remove reaches the platform at once; Undo, with no time limit of it
     const alertsAfterGone = await page.getByRole('alert').allInnerTexts()
     await expect(page.locator('#change-notice'), 'focus moves to the notice, as the row and its Remove button are gone').toBeFocused()
     await shotTo(page, 3, 'p6-gone.png', true)
-    // Escape clears the notice wherever focus is on the page, as in the prototype, not only on its buttons.
-    const find = page.getByRole('searchbox', { name: 'Find software' })
-    await find.focus()
-    await page.keyboard.press('Escape')
-    await expect(notice(page), 'Escape from the search box clears the notice').toHaveText('')
-    await expect(find, 'and leaves focus where it was').toBeFocused()
 
     await backend.post('alice', `/api/v1/watchlist/software/${redis.id}/restore`)
     await openSoftware(page)
