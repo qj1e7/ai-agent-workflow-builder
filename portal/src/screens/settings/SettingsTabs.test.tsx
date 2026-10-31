@@ -14,8 +14,8 @@ import pendingBob from '../../../../contracts/fixtures/settings/model.pending.bo
 import { App } from '../../App'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
-import type { ConfirmationOut, Me, PersonOut } from '../../api/types'
-import { MODEL_READ_ONLY_WORDS, NO_MODEL_WORDS } from './ModelTab'
+import type { ConfirmationOut, Me, ModelOut, PersonOut } from '../../api/types'
+import { MODEL_READ_ONLY_WORDS, NO_MODEL_WORDS, notNowWords } from './ModelTab'
 import { PEOPLE_LEAD } from './PeopleTab'
 import { ONLY_OPERATORS_WORDS, SETTINGS_OFF_WORDS } from './settings'
 import { SettingsTabs } from './SettingsTabs'
@@ -145,6 +145,10 @@ describe('the AI model tab', () => {
     const main = text(render({ model: modelEmpty }))
     expect(main).toContain('Not connected')
     expect(main).toContain(NO_MODEL_WORDS)
+    // An agent workflow run gets 409 "Connect an AI model in Settings to run agents." Only the watchlist summary has a template.
+    expect(main).toContain('Until you connect one, agent workflows can’t run and new workflows can’t be planned.')
+    expect(main).toContain('Only the Software watchlist’s summary uses a simple template instead.')
+    expect(main).not.toMatch(/simple text from templates|keep using simple templates/)
     expect(main).toContain('Connect a model')
     expect(main).not.toContain('Leave it empty')
   })
@@ -157,6 +161,17 @@ describe('the AI model tab', () => {
     expect(main).toContain('runs keep using claude-haiku-5-5')
     expect(main).toContain('You entered this address, so another Approver must confirm it.')
     expect(buttonsIn(html)).not.toContain('Confirm address')
+  })
+
+  it('says agent workflows can’t run while the first address waits, and that only the watchlist summary has a template', () => {
+    const main = text(render({ model: { ...pendingAlice, active: null } }))
+    expect(main).toContain('Until then, agent workflows can’t run, and only the Software watchlist’s summary uses a simple template.')
+    expect(main).not.toContain('keep using simple templates')
+  })
+
+  it('says what runs use after not now, with a model and without one', () => {
+    expect(notNowWords(modelActive.active as ModelOut)).toBe('You said not now. Runs keep using claude-haiku-5-5.')
+    expect(notNowWords(null)).toBe('You said not now. Agent workflows can’t run, and only the Software watchlist’s summary uses a simple template.')
   })
 
   it('lets an Approver who did not ask confirm the address or say not now, read-only otherwise', () => {
