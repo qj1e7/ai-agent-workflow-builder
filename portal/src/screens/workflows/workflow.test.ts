@@ -37,6 +37,7 @@ import {
   rereadWhenOutOfDate,
   mayChangeSchedule,
   rowAction,
+  scheduleSaver,
   scheduleSavedWords,
   rowsOf,
   runFact,
@@ -489,11 +490,11 @@ describe('changing a workflow’s schedule', () => {
 
   it('says the Operator owns it now, and when it runs next, in the schedule’s own time', () => {
     const saved = { ...AGENTS, state: 'on' as const, next_run_at: '2026-11-09T01:00:00Z', schedule: { day: 'monday' as const, at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: null } }
-    expect(scheduleSavedWords(saved, NOW)).toBe('Schedule saved. You own it now. Next run Mon 9 Nov, 9:00.')
+    expect(scheduleSavedWords(saved, NOW)).toBe('Saved. Next run Mon 9 Nov, 9:00.')
   })
 
   it('says a paused workflow runs on it once resumed, since a paused one names no next run', () => {
-    expect(scheduleSavedWords({ ...AGENTS, state: 'paused', next_run_at: null }, NOW)).toBe('Schedule saved. You own it now. It runs on this schedule once you resume it.')
+    expect(scheduleSavedWords({ ...AGENTS, state: 'paused', next_run_at: null }, NOW)).toBe('Saved. It runs on this schedule once you resume it.')
   })
 
   it('reads the workflow again, off the pressed control, when the platform says it changed or is gone', () => {
@@ -502,5 +503,37 @@ describe('changing a workflow’s schedule', () => {
     again(new ApiError(409, { detail: 'The Software watchlist’s schedule is saved on the Software page.' }))
     again(new ApiError(403, { detail: 'Only an Operator can change workflows.' }))
     expect(seen).toEqual(['focus', 'reread uc_1'])
+  })
+})
+
+describe('what happens when a schedule is saved', () => {
+  const saved = { ...AGENTS, next_run_at: '2026-11-09T01:00:00Z' } as UseCaseView
+  type Answers = { onSuccess: (view: UseCaseView) => void; onError: (failure: unknown) => void }
+  const setup = (answer: (answers: Answers) => void) => {
+    const seen: string[] = []
+    const form = { onSuccess: () => seen.push('closed'), onError: (failure: unknown) => seen.push(`shown ${(failure as ApiError).status}`) }
+    const mutate = (_body: unknown, answers: Answers) => answer(answers)
+    const save = scheduleSaver(mutate, {
+      useCaseId: 'uc_1',
+      now: NOW,
+      say: (text) => seen.push(`said ${text}`),
+      refocus: () => seen.push('focus'),
+      reread: (id) => seen.push(`reread ${id}`),
+    })
+    save({ day: 'monday', at: '09:00' }, form)
+    return seen
+  }
+
+  it('closes the form and says the schedule is saved, with the next run', () => {
+    expect(setup((answers) => answers.onSuccess(saved))).toEqual(['closed', 'said Saved. Next run Mon 9 Nov, 9:00.'])
+  })
+
+  it('shows the refusal and reads the workflow again when it changed or is gone', () => {
+    expect(setup((answers) => answers.onError(new ApiError(409, { detail: 'x' })))).toEqual(['shown 409', 'focus', 'reread uc_1'])
+    expect(setup((answers) => answers.onError(new ApiError(404, { detail: 'x' })))).toEqual(['shown 404', 'focus', 'reread uc_1'])
+  })
+
+  it('only shows any other refusal', () => {
+    expect(setup((answers) => answers.onError(new ApiError(403, { detail: 'x' })))).toEqual(['shown 403'])
   })
 })

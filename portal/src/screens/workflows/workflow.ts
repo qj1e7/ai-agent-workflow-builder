@@ -1,7 +1,7 @@
 import { ApiError } from '../../api/client'
 import { failureReasonLabel } from '../../api/labels'
 import { pressOnce, type Latch, type Outcome } from '../../api/latch'
-import type { BlockKind, Me, RunView, UseCaseView } from '../../api/types'
+import type { BlockKind, Me, RunView, ScheduleIn, UseCaseView } from '../../api/types'
 import type { FaceState } from '../../ui/AgentFace'
 import { agentIdentity } from '../../ui/agents'
 import { andList, count, type NameOf } from '../run/words'
@@ -219,11 +219,44 @@ export function mayChangeSchedule(useCase: Pick<UseCaseView, 'template'>, viewer
   return viewer.operator && !looksAfterOnSoftwarePage(useCase)
 }
 
-/** The toast after a save: who owns it now, and when it runs next. */
+/** The toast after a save: when it runs next. The owner is named under When, so the toast does not repeat it. */
 export function scheduleSavedWords(useCase: Pick<UseCaseView, 'state' | 'next_run_at' | 'schedule'>, now: Date): string {
-  const owned = 'Schedule saved. You own it now.'
-  if (useCase.state === 'paused') return `${owned} It runs on this schedule once you resume it.`
-  return useCase.next_run_at ? `${owned} Next run ${runWhen(useCase.next_run_at, now, useCase.schedule?.time_zone)}.` : owned
+  if (useCase.state === 'paused') return 'Saved. It runs on this schedule once you resume it.'
+  return useCase.next_run_at ? `Saved. Next run ${runWhen(useCase.next_run_at, now, useCase.schedule?.time_zone)}.` : 'Saved.'
+}
+
+interface SavedAnswers {
+  readonly onSuccess: (view: UseCaseView) => void
+  readonly onError: (failure: unknown) => void
+}
+
+interface FormAnswers {
+  readonly onSuccess: () => void
+  readonly onError: (failure: unknown) => void
+}
+
+interface SaverTies {
+  readonly useCaseId: string
+  readonly now: Date
+  readonly say: (words: string) => void
+  readonly refocus: () => void
+  readonly reread: (useCaseId: string) => void
+}
+
+/** What a save does with the platform's answer: close the form and say so, or show the refusal and, if the workflow changed or is gone, read it again. */
+export function scheduleSaver(mutate: (body: ScheduleIn, answers: SavedAnswers) => void, { useCaseId, now, say, refocus, reread }: SaverTies) {
+  const rereadIfOutOfDate = rereadWhenOutOfDate(useCaseId, refocus, reread)('schedule')
+  return (body: ScheduleIn, form: FormAnswers): void =>
+    mutate(body, {
+      onSuccess: (view) => {
+        form.onSuccess()
+        say(scheduleSavedWords(view, now))
+      },
+      onError: (failure) => {
+        form.onError(failure)
+        rereadIfOutOfDate(failure)
+      },
+    })
 }
 
 export function controlsOf(useCase: Pick<UseCaseView, 'template' | 'state'>, viewer: Viewer): readonly Control[] {

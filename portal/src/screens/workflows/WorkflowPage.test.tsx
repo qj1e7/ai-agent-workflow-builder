@@ -11,7 +11,7 @@ import { ApiError } from '../../api/client'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
 import type { Me, RunView, UseCaseView } from '../../api/types'
-import { WHO_APPROVES } from './WorkflowPage'
+import { ScheduleChangePanel, WHO_APPROVES } from './WorkflowPage'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
 const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
@@ -49,13 +49,25 @@ function render({ me = ALICE, useCase = AGENTS, runs = [], id }: Setup = {}): st
   )
 }
 
+function renderPanel(useCase: UseCaseView): string {
+  const session = createDevSession(null)
+  const queryClient = new QueryClient()
+  return renderToStaticMarkup(
+    <QueryClientProvider client={queryClient}>
+      <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
+        <ScheduleChangePanel useCase={useCase} now={NOW} onSaved={() => undefined} onDone={() => undefined} />
+      </ApiProvider>
+    </QueryClientProvider>,
+  )
+}
+
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replace(/\s+/g, ' ').trim()
 const mainOf = (html: string) => /<main\b[\s\S]*<\/main>/.exec(html)?.[0] ?? ''
 const buttons = (html: string) => [...mainOf(html).matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((m) => text(m[1] ?? ''))
 const factOf = (html: string, term: string) => text(new RegExp(`<dt>${term}</dt><dd>([\\s\\S]*?)</dd>`).exec(html)?.[1] ?? '')
 
-/** The When section's words, without its Change control. */
-const whenOf = (html: string) => factOf(html, 'When').replace(/ (Change schedule|Set a schedule)$/, '')
+/** The When section's words, without who set it. */
+const whenOf = (html: string) => factOf(html, 'When').replace(/ Set by \w+\.$/, '')
 
 describe('a workflow page', () => {
   it('shows its name, what it does, and whether it is on', () => {
@@ -116,15 +128,28 @@ describe('a workflow page', () => {
     expect(buttons(render())).toEqual(expect.arrayContaining(['Run now', 'Pause', 'Delete']))
   })
 
-  it('gives an Operator the Change schedule control in the When section, and Set a schedule when it has none', () => {
-    const scheduled: UseCaseView = { ...AGENTS, next_run_at: '2026-11-09T01:00:00Z', schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: null } }
-    expect(buttons(render({ useCase: scheduled }))).toContain('Change schedule')
-    expect(buttons(render())).toContain('Set a schedule')
-    expect(factOf(render({ useCase: scheduled }), 'When')).toContain('Change schedule')
+  const SCHEDULED: UseCaseView = { ...AGENTS, next_run_at: '2026-11-09T01:00:00Z', schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Carol', held: null } }
+
+  it('puts Change schedule first in an Operator’s button row, or Set a schedule when there is none', () => {
+    const row = (html: string) => buttons(html).filter((label) => /schedule|Pause|Delete/.test(label))
+    expect(row(render({ useCase: SCHEDULED }))).toEqual(['Change schedule', 'Pause', 'Delete'])
+    expect(row(render())).toEqual(['Set a schedule', 'Pause', 'Delete'])
+    expect(factOf(render({ useCase: SCHEDULED }), 'When')).not.toContain('schedule')
   })
 
-  it('shows an Approver who is not an Operator no schedule control', () => {
-    expect(buttons(render({ me: BOB }))).not.toContain('Change schedule')
+  it('says in When who set the schedule', () => {
+    expect(factOf(render({ useCase: SCHEDULED }), 'When')).toContain('Set by Carol.')
+  })
+
+  it('shows an Approver who is not an Operator neither schedule control', () => {
+    for (const useCase of [SCHEDULED, AGENTS]) expect(buttons(render({ me: BOB, useCase })).filter((label) => /schedule/i.test(label))).toEqual([])
+  })
+
+  it('opens the form as a panel headed Change schedule that says the runs then count as the Operator’s work', () => {
+    const html = renderPanel(SCHEDULED)
+    expect(text(html)).toContain('Change schedule')
+    expect(text(html)).toContain('Saving makes you the owner of this schedule. Its runs then count as your work, so you won’t be able to approve them.')
+    expect(text(html)).toContain('Save schedule')
   })
 
   it('tells everyone a held schedule can be taken over by saving it', () => {

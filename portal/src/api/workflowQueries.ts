@@ -32,6 +32,13 @@ function rereadWorkflowsAndWatchlist(queryClient: QueryClient): void {
   for (const key of ['use-cases', 'watchlist']) void queryClient.invalidateQueries({ queryKey: [key] })
 }
 
+/** The view the platform answered a change with: held for the page, put in the list, and the lists read again. */
+export function applySavedView(queryClient: QueryClient, user: string, view: UseCaseView): void {
+  queryClient.setQueryData(keys.useCase(user, view.use_case_id), view)
+  changeList(queryClient, user, (list) => withView(list, view))
+  rereadWorkflowsAndWatchlist(queryClient)
+}
+
 function markStaleWithoutReading(queryClient: QueryClient, queryKey: readonly unknown[]): void {
   void queryClient.invalidateQueries({ queryKey, refetchType: 'none' })
 }
@@ -82,10 +89,6 @@ export function useSaveWorkflowSchedule(useCaseId: string) {
   return useMutation({
     mutationFn: async (body: ScheduleIn) =>
       unwrap(await client.PUT('/api/v1/use-cases/{use_case_id}/schedule', { params: { path: { use_case_id: useCaseId } }, body })),
-    onSuccess: (view) => {
-      queryClient.setQueryData(keys.useCase(user, view.use_case_id), view)
-      changeList(queryClient, user, (list) => withView(list, view))
-      rereadWorkflowsAndWatchlist(queryClient)
-    },
+    onSuccess: (view) => applySavedView(queryClient, user, view),
   })
 }
