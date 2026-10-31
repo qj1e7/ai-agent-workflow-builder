@@ -35,7 +35,7 @@ platform-api's tests ran against a throwaway PostgreSQL 17 and a throwaway Cosmo
 
 `COSMOS_REQUIRED=1` makes any Cosmos DB test that skips count as a failure. pytest printed `Cosmos DB tests: 63 passed, 0 failed, 0 skipped`.
 
-CI's `checks` job runs the same tests inside each project's `test` image (`docker build --target test`), with the same PostgreSQL and emulator as services. We ran them on the laptop instead to save room on the shared Docker disk. The tests and their settings are the same.
+CI's `checks` job runs the same tests inside each project's `test` image (`docker build --target test`), with the same PostgreSQL and emulator as services. We ran them on the laptop instead to save room on the shared Docker disk. The tests and their settings are the same, with one difference. In CI's test image, agent-runtime skips 1 test, `test_the_evals_workflow_takes_its_keys_from_the_evals_environment` in `tests/test_eval_redaction.py`, because the workflows in `.github/workflows/` are not in the image. On the laptop it ran and passed. The P15 checker ran the tests in the CI images and got the same split: agent-runtime 820 passed and 1 skipped, platform-api 1,374 passed.
 
 ## What changed since the old app
 
