@@ -18,7 +18,7 @@ source scripts/lib/stack.sh
 
 zap_name="${project}-zap"
 cleanup() {
-  docker rm -f "$zap_name" >/dev/null 2>&1 || true
+  docker rm -fv "$zap_name" >/dev/null 2>&1 || true
   stack_stop
 }
 trap cleanup EXIT
