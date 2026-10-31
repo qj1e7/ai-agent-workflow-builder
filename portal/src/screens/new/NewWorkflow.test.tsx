@@ -12,7 +12,7 @@ import { createDevSession } from '../../api/session'
 import type { DraftView, Me, PlanOut, ToolView, UnderstandOut, UseCaseView } from '../../api/types'
 import { PAGES, wordsOf } from '../../shell/routes'
 import { DoneRoute } from './DonePage'
-import { afterReading, changeRow, draftContent, EMPTY_FORM, enterWhen, taskWithoutSchedule, planView, type Form } from './draft'
+import { afterChecking, afterReading, changeRow, draftContent, EMPTY_FORM, enterWhen, taskWithoutSchedule, planView, type Form } from './draft'
 import { NewWorkflowRoute } from './NewWorkflow'
 import { StepCheck, type PlanState } from './StepCheck'
 import { StepReview } from './StepReview'
@@ -69,7 +69,7 @@ const buttons = (html: string) => [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\
 const buttonTag = (html: string, name: string) => [...html.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)].find((m) => text(m[2] ?? '') === name)?.[1] ?? ''
 const read = (answer: UnderstandOut, words = FOLLOW_UP): Form => afterReading({ ...EMPTY_FORM, text: words }, answer)
 const noop = () => undefined
-const planState = (view: PlanState['view'], pending = false): PlanState => ({ view, pending, error: null, retry: noop })
+const planState = (view: PlanState['view'], pending = false, reused: ReadonlySet<number> = new Set()): PlanState => ({ view, pending, error: null, retry: noop, reused })
 
 function check(form: Form, plan: PlanState, tools: readonly ToolView[] = []): string {
   return wrap(<StepCheck form={form} plan={plan} onChangeRow={noop} onDropRow={noop} onValue={noop} onBack={noop} onNext={noop} onCarryOn={noop} />, {
@@ -206,8 +206,25 @@ describe('step 2', () => {
     expect(text(html)).toContain('I’ve marked what I wasn’t sure about or can’t do.')
   })
 
+  it('checks “Where it goes” changed to a Teams channel post, and keeps Next off until the Planner answers', () => {
+    const html = check(changeRow(read(rowsAnswer as UnderstandOut), 3, 'Post it in the team’s Teams channel'), planState(null))
+    expect(text(html)).toContain('Where it goes Post it in the team’s Teams channel , checking your new words Change Checking your new words')
+    expect(buttonTag(html, 'Next')).toContain('aria-disabled="true"')
+    expect(text(html)).toContain('Next opens when I’ve checked your new words.')
+    expect(text(html)).toContain('I’ll plan the steps once every part is clear.')
+  })
+
+  it('says the workflow reuses a drafted agent the Operator already saved, not that it is a new one', () => {
+    const form = read(rowsAnswer as UnderstandOut)
+    const html = text(check(form, planState(planView(DRAFTED, form.rows), false, new Set([0]))))
+    expect(html).toContain('You already saved Stale bug follow-up in the Agent library, so this workflow uses it.')
+    expect(html).not.toContain('is a new agent')
+  })
+
   it('shows a fixed row as changed by you, with what the request said', () => {
-    const form = changeRow(read(rowsAnswer as UnderstandOut), 1, 'Bug tickets in MOCK with no update for 14 days')
+    const words = 'Bug tickets in MOCK with no update for 14 days'
+    const changed = changeRow(read(rowsAnswer as UnderstandOut), 1, words)
+    const form = afterChecking(changed, { kind: 'look_for', text: words }, { answer: 'rows', rows: [{ kind: 'look_for', text: words, state: 'understood', note: null }] })
     expect(text(check(form, planState(null, true)))).toContain(
       'Looks for Bug tickets in MOCK with no update for 14 days , changed by you Change Your request said: “Bug tickets in MOCK with no update for 10 days”.',
     )
@@ -249,11 +266,21 @@ describe('step 3', () => {
 describe('step 4', () => {
   it('says any Approver but the person setting it up says yes, and checks it against the request', () => {
     const form = { ...enterWhen(read(rowsAnswer as UnderstandOut)), step: 4 as const, name: 'Stale bug follow-up' }
-    const html = wrap(<StepReview form={form} plan={planView(DRAFTED, form.rows)} nameProblem={null} busy={false} problems={[]} onName={noop} onBack={noop} onTurnOn={noop} />)
+    const html = wrap(<StepReview form={form} plan={planView(DRAFTED, form.rows)} reused={new Set()} nameProblem={null} busy={false} problems={[]} onName={noop} onBack={noop} onTurnOn={noop} />)
     expect(text(html)).toContain('Every weekday at 15:00 Singapore time, the agents find bug tickets in MOCK with no update for 10 days and create one follow-up ticket that lists them .')
     expect(text(html)).toContain('Who says yes Any Approver except you, in Teams. Nobody approves their own work.')
     expect(text(html)).toContain('When: Every weekday at 15:00, as you asked.')
+    expect(text(html)).toContain('Done by Stale bug follow-up. The new agent is saved to the Agent library.')
     expect(buttons(html)).toEqual(['Back', 'Turn it on'])
+  })
+
+  it('says it uses the agent the Operator already saved, not that a new agent is saved', () => {
+    const form = { ...enterWhen(read(rowsAnswer as UnderstandOut)), step: 4 as const, name: 'Stale bug follow-up' }
+    const html = text(
+      wrap(<StepReview form={form} plan={planView(DRAFTED, form.rows)} reused={new Set([0])} nameProblem={null} busy={false} problems={[]} onName={noop} onBack={noop} onTurnOn={noop} />),
+    )
+    expect(html).toContain('Done by Stale bug follow-up. This workflow uses the agent you already saved in the Agent library.')
+    expect(html).not.toContain('The new agent is saved')
   })
 })
 

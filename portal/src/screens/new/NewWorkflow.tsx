@@ -7,7 +7,7 @@ import { newIdempotencyKey } from '../../api/idempotency'
 import { useLatch } from '../../api/latch'
 import { isOperator } from '../../api/me'
 import { refusedWords, useDeleteDraft, useDrafts, usePlanFor, useReadAgentCards, useSaveDraft, useUnderstand } from '../../api/newQueries'
-import { useCreateAgentUseCase, useMe, useSaveCard } from '../../api/queries'
+import { useAgentCards, useCreateAgentUseCase, useMe, useSaveCard } from '../../api/queries'
 import { PRODUCT } from '../../shell/product'
 import { Button } from '../../ui/Button'
 import {
@@ -25,6 +25,7 @@ import {
   taskWithoutSchedule,
   planView,
   restoreDraft,
+  reusedAgents,
   rowBlockers,
   savedCopyOf,
   STEP_NAMES,
@@ -127,6 +128,7 @@ function NewWorkflow({ page, draftId, start }: { page: PageWords; draftId: strin
   const saveCard = useSaveCard()
   const readCards = useReadAgentCards()
   const me = useMe()
+  const library = useAgentCards()
   const create = useCreateAgentUseCase()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -140,6 +142,7 @@ function NewWorkflow({ page, draftId, start }: { page: PageWords; draftId: strin
   const planned = start.plan?.task === task ? start.plan.answer : undefined
   const plan = usePlanFor(task, rowsReady, planned)
   const view = plan.data ? planView(plan.data, form.rows) : null
+  const reused = reusedAgents(view, library.data, me.data?.id)
 
   useEffect(() => {
     if (!understand.isPending) return
@@ -263,6 +266,7 @@ function NewWorkflow({ page, draftId, start }: { page: PageWords; draftId: strin
             pending: plan.isFetching,
             error: plan.isError ? words(plan.error) : null,
             retry: () => void plan.refetch(),
+            reused,
           }}
           onChangeRow={changePart}
           onDropRow={(index) => setForm((before) => dropRow(before, index))}
@@ -290,6 +294,7 @@ function NewWorkflow({ page, draftId, start }: { page: PageWords; draftId: strin
         <StepReview
           form={form}
           plan={view}
+          reused={reused}
           nameProblem={nameError}
           busy={saveCard.isPending || create.isPending}
           problems={refused}

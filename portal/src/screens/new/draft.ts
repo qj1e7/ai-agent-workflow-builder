@@ -64,11 +64,13 @@ export interface Form {
   readonly typed: Readonly<Record<string, string>>
   readonly when: When
   readonly name: string
+  /** The Operator chose a new workflow over the Software watchlist, so a part about releases is not a reason to stop. */
+  readonly carriedOn: boolean
 }
 
 export const EMPTY_WHEN: When = { often: '', day: '', at: '', filledFrom: null }
 
-export const EMPTY_FORM: Form = { step: 1, text: '', rows: [], redirect: null, plannerSaid: null, typed: {}, when: EMPTY_WHEN, name: '' }
+export const EMPTY_FORM: Form = { step: 1, text: '', rows: [], redirect: null, plannerSaid: null, typed: {}, when: EMPTY_WHEN, name: '', carriedOn: false }
 
 export const ROW_LABEL: Record<RowKind, string> = { schedule: 'When', look_for: 'Looks for', do: 'Does', where: 'Where it goes' }
 
@@ -97,18 +99,19 @@ export function afterReading(form: Form, answer: UnderstandOut): Form {
         step: 2,
         plannerSaid: null,
         redirect: null,
+        carriedOn: false,
         when: EMPTY_WHEN,
         rows: answer.rows.map((row) => ({ kind: row.kind, text: row.text, state: row.state, note: row.note, planner: null })),
       }
     case 'watchlist':
-      return { ...form, step: 2, plannerSaid: null, rows: [], when: EMPTY_WHEN, redirect: { word: answer.word, software: answer.software, note: answer.note } }
+      return { ...form, step: 2, plannerSaid: null, rows: [], when: EMPTY_WHEN, carriedOn: false, redirect: { word: answer.word, software: answer.software, note: answer.note } }
     case 'starters':
       return { ...form, step: 1, plannerSaid: answer.message }
   }
 }
 
 export function carryOn(form: Form): Form {
-  return { ...form, step: 2, redirect: null, rows: KINDS.map((kind) => ({ kind, text: '', state: 'missing', note: null, planner: null })) }
+  return { ...form, step: 2, redirect: null, carriedOn: true, rows: KINDS.map((kind) => ({ kind, text: '', state: 'missing', note: null, planner: null })) }
 }
 
 export function changeRow(form: Form, index: number, typed: string): Form {
@@ -118,7 +121,7 @@ export function changeRow(form: Form, index: number, typed: string): Form {
     const text = typed.trim()
     if (text === planner.text) return { kind: row.kind, ...planner, planner: null }
     if (text === '') return { kind: row.kind, text: '', state: 'missing', note: null, planner }
-    return { kind: row.kind, text, state: planner.state === 'cant_do' ? 'checking' : 'edited', note: null, planner }
+    return { kind: row.kind, text, state: 'checking', note: null, planner }
   })
   return { ...form, rows }
 }
@@ -127,15 +130,15 @@ type Part = Pick<Row, 'kind' | 'text'>
 
 export const partWords = (part: Part) => `${ROW_LABEL[part.kind]}: ${part.text}`
 
-function stillCantDo(answer: UnderstandOut | null): string | null {
+function stillCantDo(answer: UnderstandOut | null, carriedOn: boolean): string | null {
   if (answer === null || answer.answer === 'starters') return NOT_CHECKED
-  if (answer.answer === 'watchlist') return answer.note
+  if (answer.answer === 'watchlist') return carriedOn ? null : answer.note
   const cant = answer.rows.find((row) => row.state === 'cant_do')
   return cant ? (cant.note ?? CANT_YET) : null
 }
 
 export function afterChecking(form: Form, part: Part, answer: UnderstandOut | null): Form {
-  const why = stillCantDo(answer)
+  const why = stillCantDo(answer, form.carriedOn)
   const rows = form.rows.map((row): Row =>
     row.state === 'checking' && row.kind === part.kind && row.text === part.text ? { ...row, state: why === null ? 'edited' : 'cant_do', note: why } : row,
   )
@@ -436,6 +439,12 @@ export function savedCopyOf(cards: readonly CardView[], owner: string, card: Car
   return cards.find((saved) => saved.owner === owner && !saved.starter && shapeOf(saved) === shape)?.card_id ?? null
 }
 
+/** The drafted agents the Operator already saved with the same shape, which Turn it on reuses rather than saving again. */
+export function reusedAgents(plan: PlanView | null, cards: readonly CardView[] | undefined, owner: string | undefined): ReadonlySet<number> {
+  if (plan?.kind !== 'agents' || cards === undefined || owner === undefined) return new Set()
+  return new Set(plan.agents.flatMap((agent) => (agent.card.kind === 'drafted' && savedCopyOf(cards, owner, agent.card.definition) !== null ? [agent.index] : [])))
+}
+
 export interface TurnOnCalls {
   readonly savedCard: (card: CardDefinition) => Promise<string | null>
   readonly saveCard: (card: CardDefinition) => Promise<string>
@@ -511,7 +520,8 @@ function isPlanned(value: unknown): value is Planned {
 
 export function restoreDraft(draft: DraftView): { readonly form: Form; readonly plan: Planned | null } {
   const { form, plan, text, intent } = draft.content as Record<string, unknown>
-  if (isForm(form)) return { form, plan: isPlanned(plan) ? plan : null }
+  const carriedOn = isRecord(form) && form['carriedOn'] === true
+  if (isForm(form)) return { form: { ...form, carriedOn }, plan: isPlanned(plan) ? plan : null }
   const task = isString(text) ? text : isString(intent) ? intent : ''
   return { form: { ...EMPTY_FORM, text: task }, plan: null }
 }
