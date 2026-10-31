@@ -9,7 +9,7 @@
 #                                          lint-imports and its tests on a throwaway PostgreSQL; agent-runtime ruff, pyright, tests
 #   up <worktree> <project> <tag> <portal-port> <api-port> <n8n-port> [--no-build]
 #                                          --no-build starts a second stack on the images an earlier up built with that tag;
-#                                          it builds the mocks first, for an earlier up from before they had a tag
+#                                          it builds the mocks with that tag first, for an earlier up from before they had a tag
 #   down <worktree> <project>
 #   check <project> [playwright arguments] run portal/e2e/checks/p6.check.ts in the runner image, in that project's Portal network
 #   live <project> [playwright arguments]  run the builder's live specs (portal/e2e/live) the same way
@@ -124,16 +124,17 @@ up() {
   disk
   [ -f "$ENV_FILE" ] || die "no $ENV_FILE; copy deploy/make-env.sh next to it and run it"
   mkdir -p "$EVID/stacks"
-  [ "$build" = --build ] || build_the_projects_own_mock_images "$worktree" "$project"
+  [ "$build" = --build ] || build_the_mock_images "$worktree" "$project" "$tag"
   WAB_IMAGE_TAG=$tag PORTAL_HOST_PORT=$portal_port PLATFORM_API_HOST_PORT=$api_port N8N_HOST_PORT=$n8n_port \
     compose "$worktree" "$project" up "$build" --wait --wait-timeout 400 >"$EVID/stacks/$project-up.log" 2>&1 ||
     { tail -n 30 "$EVID/stacks/$project-up.log" >&2; die "$project did not become healthy"; }
   curl -sS -o "$EVID/stacks/$project-ready.json" -w "GET /healthz/ready %{http_code}\n" "http://localhost:$api_port/healthz/ready" | tee "$EVID/stacks/$project-ready.txt"
 }
 
-build_the_projects_own_mock_images() {
-  local worktree=$1 project=$2
-  compose "$worktree" "$project" build mock-github mock-model >"$EVID/stacks/$project-build-mocks.log" 2>&1 ||
+# The mocks carry the stack's tag, so this builds wab/mock-github:<tag> and wab/mock-model:<tag>, never :dev.
+build_the_mock_images() {
+  local worktree=$1 project=$2 tag=$3
+  WAB_IMAGE_TAG=$tag compose "$worktree" "$project" build mock-github mock-model >"$EVID/stacks/$project-build-mocks.log" 2>&1 ||
     { tail -n 30 "$EVID/stacks/$project-build-mocks.log" >&2; die "$project could not build its mock images"; }
 }
 
