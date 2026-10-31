@@ -45,7 +45,11 @@ Against the old app on 22 Oct (`docs/evidence/dast/`): the same rules raised the
 
 Main's CI run 41098264253 failed the scan through nginx with "no summary". ZAP had stopped before scanning, because it could not bind its proxy port. ZAP's scan scripts pick a random port from 32768 to 61000 (`get_free_port` in `zap_common.py`), the range Linux also gives every outgoing connection, so something in the container can hold it at the moment ZAP binds. `scripts/dast.sh` now starts every scan with `-P 8090`, outside that range. If ZAP still cannot start its proxy, the script runs that scan once more, prints ZAP's error, and its summary says nothing was scanned instead of "no summary".
 
-Neither run here hit the bind failure. `zap-port-retry-test.sh` runs the script's own `run_zap` and `summary_line` with `docker` replaced by a stub. `zap-port-retry-test.txt` shows the three cases: a bind failure once (retried, then pass), a bind failure twice (exit 3, "ZAP did not start its proxy, so nothing was scanned"), and a real alert (exit 1, no retry). Every call passed `-P 8090`.
+Neither run here hit the bind failure. `zap-port-retry-test.sh` runs the script's own `run_zap` and `summary_line` with `docker` replaced by a stub. Part 1 of `zap-port-retry-test.txt` shows the three cases: a bind failure once (retried, then pass), a bind failure twice (exit 3, "ZAP did not start its proxy, so nothing was scanned"), and a real alert (exit 1, no retry). Every call passed `-P 8090`. The retry writes the same log file, so the second try's log replaces the first. The first try's error lines stay in the job's output.
+
+**After the P15 review.** The closing line used to call any failed scan an alert, even one where ZAP never started. Now `scripts/dast.sh` sorts each failed scan three ways. If ZAP did not start, it says "FAIL: ZAP did not start for N scan(s), so nothing was scanned there. Run the job again." and exits with 3. If ZAP stopped with an error before its summary, it says so and exits with 1. The alert sentence is kept for a real alert, which also exits with 1 and wins over a scan that only needs running again. Part 2 of `zap-port-retry-test.txt` runs the script's own closing lines on made-up logs for six cases, including a crash alone (exit 3, no alert sentence) and a crash with an alert (both sentences, exit 1). The two runs above used the script before this change. Both passed every scan, so the new closing lines would print the same thing for them.
+
+**The wait for ZAP to start is now 3 minutes, not 10.** ZAP's `-T` sets how long its scan script waits for ZAP to start, and then for the passive scan to finish. When the proxy cannot start, ZAP stops, but the script still waits the whole `-T` before it gives up. In run 41098264253 that cost 600 seconds for one try. That run's own log shows a normal start is fast: ZAP reached its proxy 5 seconds after Java started, and the direct API scan, passive wait included, took 48 seconds from loading the API document to the next scan starting. 3 minutes keeps a wide margin over both, and a scan that never starts now costs at most 6 minutes over its two tries, not 20, inside the CI job's 35-minute limit.
 
 ## Files
 
@@ -56,7 +60,7 @@ Neither run here hit the bind failure. `zap-port-retry-test.sh` runs the script'
 | `portal.html`, `portal.json` | The Portal baseline, run 1 |
 | `*-run1.log`, `*-run2.log` | ZAP's rule list and summary line for each scan in each run |
 | `dast-run1.txt`, `dast-run2.txt` | What `scripts/dast.sh` printed |
-| `zap-port-retry-test.sh`, `zap-port-retry-test.txt` | The stub test of the retry, and its output |
+| `zap-port-retry-test.sh`, `zap-port-retry-test.txt` | The stub test of the retry and of the closing lines, and its output. Run it as `bash docs/evidence/dast/2026-11-rebuild/zap-port-retry-test.sh scripts/dast.sh` |
 
 ## What this scan does not cover
 

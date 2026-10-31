@@ -1,3 +1,4 @@
+Part 1. run_zap, one scan
 case bind-once: exit 0, docker runs 2, port -P 8090 
   stderr: ZAP could not start its proxy for the api scan (try 1 of 2):
   stderr: ERROR org.parosproxy.paros.CommandLine - Terminating ZAP, unable to start the main proxy.
@@ -12,3 +13,48 @@ case bind-always: exit 3, docker runs 2, port -P 8090
   summary: ZAP did not start its proxy, so nothing was scanned
 case alert: exit 1, docker runs 1, port -P 8090 
   summary: FAIL-NEW: 1 FAIL-INPROG: 0 WARN-NEW: 0 WARN-INPROG: 0 INFO: 0 IGNORE: 0 PASS: 111
+
+Part 2. dast.sh's closing lines, three scans
+case all-pass:
+  PASS platform-api scan   : FAIL-NEW: 0	FAIL-INPROG: 0	WARN-NEW: 0	WARN-INPROG: 0	INFO: 0	IGNORE: 1	PASS: 112
+  PASS API through nginx   : FAIL-NEW: 0	FAIL-INPROG: 0	WARN-NEW: 0	WARN-INPROG: 0	INFO: 0	IGNORE: 1	PASS: 112
+  PASS Portal baseline     : FAIL-NEW: 0	FAIL-INPROG: 0	WARN-NEW: 0	WARN-INPROG: 0	INFO: 0	IGNORE: 1	PASS: 112
+  Reports: out/{api,api-via-portal,portal}.{html,json,md}
+  PASS: ZAP found nothing outside the reasons recorded in dast/zap-rules.conf.
+  exit 0
+case not-started:
+  FAIL platform-api scan    (exit 3): ZAP did not start its proxy, so nothing was scanned
+  PASS API through nginx   : FAIL-NEW: 0	FAIL-INPROG: 0	WARN-NEW: 0	WARN-INPROG: 0	INFO: 0	IGNORE: 1	PASS: 112
+  PASS Portal baseline     : FAIL-NEW: 0	FAIL-INPROG: 0	WARN-NEW: 0	WARN-INPROG: 0	INFO: 0	IGNORE: 1	PASS: 112
+  Reports: out/{api,api-via-portal,portal}.{html,json,md}
+  FAIL: ZAP did not start for 1 scan(s), so nothing was scanned there. Run the job again.
+  exit 3
+case two-not-started:
+  FAIL platform-api scan    (exit 3): ZAP did not start its proxy, so nothing was scanned
+  FAIL API through nginx    (exit 3): ZAP did not start its proxy, so nothing was scanned
+  PASS Portal baseline     : FAIL-NEW: 0	FAIL-INPROG: 0	WARN-NEW: 0	WARN-INPROG: 0	INFO: 0	IGNORE: 1	PASS: 112
+  Reports: out/{api,api-via-portal,portal}.{html,json,md}
+  FAIL: ZAP did not start for 2 scan(s), so nothing was scanned there. Run the job again.
+  exit 3
+case alert:
+  PASS platform-api scan   : FAIL-NEW: 0	FAIL-INPROG: 0	WARN-NEW: 0	WARN-INPROG: 0	INFO: 0	IGNORE: 1	PASS: 112
+  FAIL API through nginx    (exit 1): FAIL-NEW: 1	FAIL-INPROG: 0	WARN-NEW: 0	WARN-INPROG: 0	INFO: 0	IGNORE: 0	PASS: 111
+  PASS Portal baseline     : FAIL-NEW: 0	FAIL-INPROG: 0	WARN-NEW: 0	WARN-INPROG: 0	INFO: 0	IGNORE: 1	PASS: 112
+  Reports: out/{api,api-via-portal,portal}.{html,json,md}
+  FAIL: a rule not in dast/zap-rules.conf raised an alert. Fix the cause, or record a false positive there with its reason.
+  exit 1
+case not-started-and-alert:
+  FAIL platform-api scan    (exit 3): ZAP did not start its proxy, so nothing was scanned
+  FAIL API through nginx    (exit 1): FAIL-NEW: 1	FAIL-INPROG: 0	WARN-NEW: 0	WARN-INPROG: 0	INFO: 0	IGNORE: 0	PASS: 111
+  PASS Portal baseline     : FAIL-NEW: 0	FAIL-INPROG: 0	WARN-NEW: 0	WARN-INPROG: 0	INFO: 0	IGNORE: 1	PASS: 112
+  Reports: out/{api,api-via-portal,portal}.{html,json,md}
+  FAIL: ZAP did not start for 1 scan(s), so nothing was scanned there. Run the job again.
+  FAIL: a rule not in dast/zap-rules.conf raised an alert. Fix the cause, or record a false positive there with its reason.
+  exit 1
+case error-before-summary:
+  FAIL platform-api scan    (exit 3): no summary
+  PASS API through nginx   : FAIL-NEW: 0	FAIL-INPROG: 0	WARN-NEW: 0	WARN-INPROG: 0	INFO: 0	IGNORE: 1	PASS: 112
+  PASS Portal baseline     : FAIL-NEW: 0	FAIL-INPROG: 0	WARN-NEW: 0	WARN-INPROG: 0	INFO: 0	IGNORE: 1	PASS: 112
+  Reports: out/{api,api-via-portal,portal}.{html,json,md}
+  FAIL: ZAP stopped with an error before its summary for 1 scan(s). Read that scan's log in out/.
+  exit 1

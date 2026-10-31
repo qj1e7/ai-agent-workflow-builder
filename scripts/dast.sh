@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # OWASP ZAP against the real stack: an API scan of platform-api from its OpenAPI document, and a baseline scan of the Portal.
 # Needs Docker and nothing else. Prints PASS or FAIL. Reports land in dast/out/.
+# Exit codes: 0 pass; 1 an alert, or ZAP stopped with an error before its summary; 2 the stack did not start;
+# 3 ZAP did not start for a scan and nothing else failed, so running the job again is the fix.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -50,6 +52,8 @@ proxy_failed="unable to start the main proxy"
 
 # The scanner joins the project's own network and is given only that network's host names as targets.
 # If ZAP still cannot start its proxy, the scan runs once more, so a crash at start is not read as an alert.
+# The second try writes the same log file, so it overwrites the first try's log. The first try's error lines
+# are printed to the job's output before the retry, so they are kept there.
 run_zap() {
   local label="$1" rules="$2" try code=0
   shift 2
@@ -85,32 +89,62 @@ nginx_status=0
 cp dast/zap-rules.conf "$stack_out/rules.conf"
 cat dast/zap-rules.conf dast/zap-rules-via-portal.conf >"$stack_out/rules-via-portal.conf"
 
+# -T is how many minutes ZAP's scan script waits for ZAP to start, and then for the passive scan to finish.
+# When ZAP cannot start its proxy, the script waits all of it before it gives up, once per try.
+# 3 minutes is far above a normal start. In CI run 41098264253, ZAP reached its proxy 5 seconds after Java
+# started, and the whole API scan, passive wait included, took under a minute. A scan that never starts now
+# costs 2 x 3 minutes, not 2 x 10, inside the CI job's 35-minute limit.
+zap_wait=3
+
 set +e
-run_zap api rules.conf zap-api-scan.py -t openapi.json -f openapi -O http://platform-api:8000 -T 10
+run_zap api rules.conf zap-api-scan.py -t openapi.json -f openapi -O http://platform-api:8000 -T "$zap_wait"
 api_status=$?
-run_zap api-via-portal rules-via-portal.conf zap-api-scan.py -t openapi-public.json -f openapi -O http://portal:8080 -T 10
+run_zap api-via-portal rules-via-portal.conf zap-api-scan.py -t openapi-public.json -f openapi -O http://portal:8080 -T "$zap_wait"
 nginx_status=$?
-run_zap portal rules.conf zap-baseline.py -t http://portal:8080 -m 2 -T 10
+run_zap portal rules.conf zap-baseline.py -t http://portal:8080 -m 2 -T "$zap_wait"
 portal_status=$?
 set -e
 
 echo
 status=0
+not_started=0
+errored=0
+# A scan that fails is one of three things, and each gets its own closing line:
+# ZAP did not start (nothing was scanned, so run the job again), ZAP stopped with an error before its
+# summary, or a real alert (the summary line is there).
 report() {
   local name="$1" code="$2" label="$3"
   if [ "$code" -eq 0 ]; then
     echo "PASS $name: $(summary_line "$stack_out/$label.log")"
-  else
-    echo "FAIL $name (exit $code): $(summary_line "$stack_out/$label.log")"
+    return
+  fi
+  echo "FAIL $name (exit $code): $(summary_line "$stack_out/$label.log")"
+  if grep -q "$proxy_failed" "$stack_out/$label.log"; then
+    not_started=$((not_started + 1))
+  elif grep -q "^FAIL-NEW" "$stack_out/$label.log"; then
     status=1
+  else
+    errored=$((errored + 1))
   fi
 }
 report "platform-api scan   " "$api_status" api
 report "API through nginx   " "$nginx_status" api-via-portal
 report "Portal baseline     " "$portal_status" portal
 echo "Reports: $stack_out/{api,api-via-portal,portal}.{html,json,md}"
+if [ "$not_started" -ne 0 ]; then
+  echo "FAIL: ZAP did not start for $not_started scan(s), so nothing was scanned there. Run the job again."
+fi
+if [ "$errored" -ne 0 ]; then
+  echo "FAIL: ZAP stopped with an error before its summary for $errored scan(s). Read that scan's log in $stack_out/."
+fi
 if [ "$status" -ne 0 ]; then
   echo "FAIL: a rule not in dast/zap-rules.conf raised an alert. Fix the cause, or record a false positive there with its reason."
+fi
+# An alert or an error needs a person to look, so it wins over a scan that only needs running again.
+if [ "$status" -ne 0 ] || [ "$errored" -ne 0 ]; then
   exit 1
+fi
+if [ "$not_started" -ne 0 ]; then
+  exit 3
 fi
 echo "PASS: ZAP found nothing outside the reasons recorded in dast/zap-rules.conf."
