@@ -205,6 +205,8 @@ describe('the schedule', () => {
   it('shows the next check in Singapore time and names the owner', () => {
     expect(singaporeTime('2026-11-23T09:00:00+08:00')).toBe('Mon 23 Nov, 9:00')
     expect(singaporeTime('2026-11-23T01:00:00Z')).toBe('Mon 23 Nov, 9:00')
+    expect(singaporeTime('2026-11-01T16:30:00Z'), 'the midnight hour keeps its 0').toBe('Mon 2 Nov, 0:30')
+    expect(singaporeTime('not a time')).toBe('')
     expect(scheduleWords(SCHEDULE)).toBe('Checked every Monday at 9:00, set by Alice.')
     expect(scheduleOwnerWords(SCHEDULE)).toBe('Scheduled checks count as Alice’s work, so Alice can’t approve them.')
   })

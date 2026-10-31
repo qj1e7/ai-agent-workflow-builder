@@ -238,15 +238,9 @@ export function newestOf(row: WatchedSoftwareView): Newest {
   return { version: row.newest_version, note: keptFrom ? `Last read ${singaporeTime(keptFrom)}` : null }
 }
 
-const TIME_ZONE = 'Asia/Singapore'
-const day = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: TIME_ZONE })
-const clock = new Intl.DateTimeFormat('en-GB', { hour: 'numeric', minute: '2-digit', hourCycle: 'h23', timeZone: TIME_ZONE })
-
-/** "Mon 16 Nov, 9:00", in Singapore time. */
+/** "Mon 16 Nov, 9:00", in Singapore time. The midnight hour reads "0:30". */
 export function singaporeTime(iso: string): string {
-  const at = new Date(iso)
-  if (Number.isNaN(at.getTime())) return ''
-  return `${day.format(at).replace(',', '')}, ${clock.format(at).replace(/^0/, '')}`
+  return dateAndClock(iso)
 }
 
 function clockWords(at: string): string {
