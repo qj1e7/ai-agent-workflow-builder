@@ -21,6 +21,7 @@ from platform_api.orchestration.confirmations import (
     digest_of,
     why_not,
 )
+from platform_api.orchestration.model_settings import close_address_asked_by
 from platform_api.orchestration.people import Changed, Person, Refused
 from platform_api.settings import FirstPeople
 from platform_api.shared import (
@@ -401,6 +402,7 @@ class People:
     async def _close_stale(
         self, uow: UnitOfWork, me: Person, people: Sequence[Person], left: Person, removed: bool
     ) -> None:
+        why = "left the list" if removed else "is no longer an Operator"
         for c in await self._confirmations.open_ones(uow):
             if c.kind is not ConfirmationKind.APPROVER or c.about is None:
                 continue
@@ -412,7 +414,6 @@ class People:
                 )
             elif c.asked_by == left.id:
                 about_name = about.display if about is not None else "someone"
-                why = "left the list" if removed else "is no longer an Operator"
                 summary = (
                     f"{left.display}'s request to make {about_name} an Approver was closed, "
                     f"because {left.display} {why}."
@@ -425,6 +426,7 @@ class People:
             )
             if about is not None and about.id != left.id:
                 await self._drop_if_roleless(uow, me.id, about)
+        await close_address_asked_by(uow, left.id, left.display, me.id, why)
 
     async def _drop_if_roleless(self, uow: UnitOfWork, by: UserId, person: Person) -> None:
         dropped = rules.drop_if_roleless(person, await self._pending(uow), uow.now)

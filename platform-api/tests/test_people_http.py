@@ -532,6 +532,85 @@ async def test_a_request_whose_asker_lost_the_operator_role_is_closed(
     assert again.status_code == 202, again.text
 
 
+async def save_waiting_address(client: httpx.AsyncClient, who: dict[str, str]) -> dict[str, Any]:
+    saved = await client.put(
+        "/api/v1/settings/model",
+        headers=who,
+        json={"style": "openai", "base_url": NCS, "model": "ncs-llm-small", "api_key": "k-x"},
+    )
+    assert saved.json()["status"] == "awaiting_confirmation", saved.text
+    [waiting] = await pending_for(client, BOB)
+    assert waiting["kind"] == "model_address"
+    return waiting
+
+
+async def no_approver_can_confirm(
+    client: httpx.AsyncClient, people: People, waiting: dict[str, Any], closed_by: str
+) -> None:
+    assert await pending_for(client, BOB) == []
+    stale = await decide(client, BOB, waiting, "confirm")
+    assert (stale.status_code, stale.json()["refusal"]) == (409, "already_decided")
+    direct = await client.post(
+        "/api/v1/settings/model/address-decision",
+        headers=BOB,
+        json={"verdict": "confirm", "digest": waiting["digest"]},
+    )
+    assert direct.status_code == 404, direct.text
+    view = (await client.get("/api/v1/settings/model", headers=BOB)).json()
+    assert (view["pending"], view["active"]) == (None, None)
+    closed = await people.confirmation(waiting["confirmation_id"])
+    assert closed is not None
+    assert (closed.decision, closed.decided_by) == (ConfirmationDecision.CLOSED, closed_by)
+
+
+async def test_a_waiting_model_address_is_closed_when_its_asker_leaves_the_list(
+    client: httpx.AsyncClient, people: People
+):
+    dave = (await add(client, ALICE, "dave@example.test", "Dave", operator=True)).json()
+    waiting = await save_waiting_address(client, {"X-Dev-User": dave["id"]})
+    assert (await client.delete(f"/api/v1/people/{dave['id']}", headers=ALICE)).status_code == 204
+    await no_approver_can_confirm(client, people, waiting, closed_by="alice")
+    lines = await history(client)
+    assert [line["summary"] for line in lines[:2]] == [
+        "Alice removed Dave from the list.",
+        "Dave's request to use ncs-llm-small at ai-gateway.ncs.example was closed, because Dave "
+        "left the list. Its key was deleted.",
+    ]
+    assert (lines[1]["area"], lines[1]["by"], lines[1]["confirmed_by"]) == ("model", "alice", None)
+    assert lines[1]["confirmation_id"] == waiting["confirmation_id"]
+
+
+async def test_a_waiting_model_address_is_closed_when_its_asker_loses_the_operator_role(
+    client: httpx.AsyncClient, people: People
+):
+    waiting = await save_waiting_address(client, ALICE)
+    lost = await client.put(
+        "/api/v1/people/alice/operator", headers=CAROL, json={"operator": False}
+    )
+    assert lost.status_code == 200, lost.text
+    await no_approver_can_confirm(client, people, waiting, closed_by="carol")
+    lines = await history(client)
+    assert [line["summary"] for line in lines[:2]] == [
+        "Carol removed Alice's Operator role.",
+        "Alice's request to use ncs-llm-small at ai-gateway.ncs.example was closed, because "
+        "Alice is no longer an Operator. Its key was deleted.",
+    ]
+    assert (lines[1]["area"], lines[1]["by"], lines[1]["confirmed_by"]) == ("model", "carol", None)
+    assert lines[1]["confirmation_id"] == waiting["confirmation_id"]
+
+
+async def test_a_waiting_model_address_stays_when_someone_else_leaves(
+    client: httpx.AsyncClient,
+):
+    dave = (await add(client, ALICE, "dave@example.test", "Dave", operator=True)).json()
+    waiting = await save_waiting_address(client, ALICE)
+    assert (await client.delete(f"/api/v1/people/{dave['id']}", headers=CAROL)).status_code == 204
+    assert [c["confirmation_id"] for c in await pending_for(client, BOB)] == [
+        waiting["confirmation_id"]
+    ]
+    assert (await decide(client, BOB, waiting, "confirm")).status_code == 201
+
+
 async def test_a_re_added_person_signs_in_afresh(client: httpx.AsyncClient, people: People):
     dave = (await add(client, ALICE, "dave@example.test", "Dave", operator=True)).json()
     first = await people.resolve(ExternalIdentity("oid-dave", "dave@example.test", "Dave T"))

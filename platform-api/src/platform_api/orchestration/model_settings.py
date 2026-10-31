@@ -240,6 +240,42 @@ class ModelStore:
 
 _history = confirmations.ConfirmationStore()
 
+# The lock People takes for every change to people and roles (PeopleStore.lock). A decision on
+# an address takes it first, so it never crosses a person leaving, who may close the address.
+_LOCK_PEOPLE = "LOCK TABLE orchestration.people IN SHARE ROW EXCLUSIVE MODE"
+
+
+async def _lock_waiting(
+    uow: UnitOfWork, store: ModelStore
+) -> tuple[confirmations.Confirmation | None, StoredModel | None]:
+    waiting = await _history.open_one(
+        uow, confirmations.ConfirmationKind.MODEL_ADDRESS, None, lock=True
+    )
+    return waiting, await store.load(uow, "pending", lock=True)
+
+
+async def close_address_asked_by(
+    uow: UnitOfWork, asker: UserId, asker_name: str, closed_by: UserId, why: str
+) -> None:
+    """Closes the waiting address if the asker saved it, and deletes its key, when the asker
+    leaves the list or stops being an Operator. Nobody then confirms a change whose author is
+    gone (#59), as with an Approver request (ADR 0029)."""
+    store = ModelStore()
+    waiting, _ = await _lock_waiting(uow, store)
+    if waiting is None or waiting.asked_by != asker:
+        return
+    await _history.close(uow, waiting.id, closed_by)
+    await store.remove(uow, "pending")
+    model, host = waiting.change.get("model"), waiting.change.get("host")
+    await _history.record_change(
+        uow,
+        "model",
+        closed_by,
+        f"{asker_name}'s request to use {model} at {host} was closed, because {asker_name} "
+        f"{why}. Its key was deleted.",
+        confirmation_id=waiting.id,
+    )
+
 
 def _address_change(stored: StoredModel) -> dict[str, str]:
     return {
@@ -408,6 +444,7 @@ class ModelSettings:
         if self._box is None:
             return SettingsOff()
         async with self._db.transaction("orchestration") as uow:
+            await uow.conn.execute(_LOCK_PEOPLE)
             waiting, pending = await self._lock_confirmation_then_pending(uow)
             if waiting is None or pending is None:
                 return NothingPending()
@@ -456,10 +493,7 @@ class ModelSettings:
     async def _lock_confirmation_then_pending(
         self, uow: UnitOfWork
     ) -> tuple[confirmations.Confirmation | None, StoredModel | None]:
-        waiting = await _history.open_one(
-            uow, confirmations.ConfirmationKind.MODEL_ADDRESS, None, lock=True
-        )
-        return waiting, await self._store.load(uow, "pending", lock=True)
+        return await _lock_waiting(uow, self._store)
 
     async def _key_for(
         self, uow: UnitOfWork, box: KeyBox, base_url: str, api_key: str | None, use_saved_key: bool
