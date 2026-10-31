@@ -214,4 +214,11 @@ describe('what you wait on, your drafts and what runs next', () => {
     expect(comingUpOf({ ...BOB, coming_up: { ...BOB.coming_up!, template: 'agent_cards', more: 2 } }, NOW)).toMatchObject({ to: '/workflows/uc_01JB7', more: 2 })
     expect(comingUpOf(DAY_ONE, NOW)).toBeNull()
   })
+
+  it('gives what runs next in its schedule’s own zone, named when it is not Singapore, as the workflow page does', () => {
+    const at = (time_zone: string) => comingUpOf({ ...BOB, coming_up: { ...BOB.coming_up!, next_run_at: '2026-11-03T09:00:00Z', time_zone } }, NOW)?.when
+    expect(at('Europe/London')).toBe('Today, 9:00 London time')
+    expect(at('Asia/Singapore')).toBe('Today, 17:00')
+    expect(at('Factory'), 'a zone the browser cannot read').toBe('Today, 17:00 Singapore time')
+  })
 })

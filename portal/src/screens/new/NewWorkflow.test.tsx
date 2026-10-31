@@ -314,6 +314,20 @@ describe('the done page', () => {
     expect(html).toMatch(/<a [^>]*href="\/"[^>]*>Back to Home<\/a>/)
   })
 
+  it('gives the next run in its schedule’s own zone and names it, as the workflow page does', () => {
+    const view = useCase as UseCaseView
+    const said = (time_zone: string) =>
+      text(
+        wrap(<DoneRoute now={NOW} />, {
+          path: `/new/done/${view.use_case_id}`,
+          seed: (client, scope) => client.setQueryData(['use-case', scope, view.use_case_id], { ...view, next_run_at: '2026-11-03T09:00:00Z', schedule: { ...view.schedule!, day: 'every_day', time_zone } }),
+        }),
+      )
+    expect(said('Europe/London')).toContain(`${view.name} runs next today at 9:00 , London time.`)
+    expect(said('Asia/Singapore')).toContain(`${view.name} runs next today at 17:00 , Singapore time.`)
+    expect(said('Factory'), 'a zone the browser cannot read').toContain(`${view.name} runs next today at 17:00 , Singapore time.`)
+  })
+
   it('says the draft is still on Home when it could not be deleted, so nobody turns it on twice', () => {
     const view = useCase as UseCaseView
     const seed = (client: QueryClient, scope: string) => client.setQueryData(['use-case', scope, view.use_case_id], view)

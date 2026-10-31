@@ -69,7 +69,7 @@ export const formatterFactory = {
 
 interface Zone {
   readonly formatter: Intl.DateTimeFormat
-  /** False when the browser cannot read the name. Its times and words are then Singapore's. */
+  /** False when the browser cannot read the name. Its times are then Singapore's, and say so. */
   readonly known: boolean
 }
 
@@ -126,10 +126,30 @@ export function lineWhen(iso: string, now: Date): string {
   return sameDay(at, today) ? `Today ${at.clock}` : dayWords(at, today)
 }
 
+/** A blank zone means the platform named none, so its times are Singapore's. */
+const isSingapore = (zone: string | undefined) => !zone || zone === TIME_ZONE
+
+const SINGAPORE_TIME = 'Singapore time'
+
+/** The zone a schedule's times are shown in: its own when the browser can read it, otherwise Singapore. "London time", "UTC" or "Singapore time". */
+export function timesZone(zone: string | undefined): string {
+  if (!zone || isSingapore(zone) || !zoneOf(zone).known) return SINGAPORE_TIME
+  return zoneName(zone)
+}
+
+/**
+ * A next run, in the schedule's own zone, with that zone named after it unless it is Singapore, as every other time in the Portal is.
+ * The same next run reads the same on every page: "Today, 9:00 London time", or "Today, 17:00 Singapore time" for a zone the browser cannot read.
+ */
+export function nextRunAt(iso: string, now: Date, zone?: string): string {
+  const when = runWhen(iso, now, zone)
+  return isSingapore(zone) ? when : `${when} ${timesZone(zone)}`
+}
+
 export function nextRunWords(useCase: Pick<UseCaseView, 'state' | 'next_run_at' | 'schedule'>, now: Date): string {
   if (useCase.state === 'paused') return 'Paused'
   if (useCase.schedule?.held) return 'Not running'
-  return useCase.next_run_at ? runWhen(useCase.next_run_at, now, useCase.schedule?.time_zone) : 'Not scheduled'
+  return useCase.next_run_at ? nextRunAt(useCase.next_run_at, now, useCase.schedule?.time_zone) : 'Not scheduled'
 }
 
 /** Why the schedule starts no run while its owner can no longer run it, as the Software page says it. Paused wins, so null while paused. */
@@ -151,19 +171,23 @@ export function whenWords({ schedule }: Pick<UseCaseView, 'schedule'>): When {
 const UTC_NAMES = new Set(['UTC', 'Etc/UTC', 'GMT', 'Etc/GMT', 'Etc/UCT', 'UCT', 'Universal', 'Etc/Universal', 'Zulu', 'Etc/Zulu', 'Greenwich', 'Etc/Greenwich'])
 
 /**
- * Singapore keeps its short name. A real Area/City zone is named by its city, as in "London time." The fixed Etc/GMT+N zones
- * get their offset. Any other zone shows its id, because today's offset can be wrong on the run's date.
+ * Built from the zone's id alone, without Intl, so a zone the browser cannot read is still named for what it is. Singapore keeps its short name.
+ * A real Area/City zone is named by its city, as in "London time". The fixed Etc/GMT+N zones get their offset, whose sign is the other way round.
+ * Any other zone shows its id, because today's offset can be wrong on the run's date.
  */
-function zoneWords(name: string): string {
-  if (!zoneOf(name).known || name === TIME_ZONE) return 'Singapore time (SGT).'
-  if (UTC_NAMES.has(name)) return 'UTC.'
-  if (/^Etc\/GMT[+-]\d+$/.test(name)) {
-    const offset = new Intl.DateTimeFormat('en-GB', { timeZone: name, timeZoneName: 'shortOffset' }).formatToParts(new Date()).find((p) => p.type === 'timeZoneName')
-    return `${offset?.value ?? name}.`
+function zoneName(name: string): string {
+  if (isSingapore(name)) return 'Singapore time (SGT)'
+  if (UTC_NAMES.has(name)) return 'UTC'
+  const fixed = /^Etc\/GMT([+-])(\d+)$/.exec(name)
+  if (fixed) {
+    const hours = Number(fixed[2])
+    return hours === 0 ? 'UTC' : `GMT${fixed[1] === '+' ? '-' : '+'}${hours}`
   }
   const city = /^(?!Etc\/)[A-Z][A-Za-z]+\/(?:[A-Za-z_-]+\/)?([A-Z][A-Za-z_-]+)$/.exec(name)?.[1]
-  return city ? `${city.replaceAll(/[_-]/g, ' ')} time.` : `${name} time.`
+  return city ? `${city.replaceAll(/[_-]/g, ' ')} time` : `${name} time`
 }
+
+const zoneWords = (name: string) => `${zoneName(name)}.`
 
 const STEP_TAGS: Record<BlockKind, { readonly words: string; readonly writes: boolean }> = {
   agent: { words: 'Reads only', writes: false },
@@ -222,7 +246,7 @@ export function mayChangeSchedule(useCase: Pick<UseCaseView, 'template'>, viewer
 /** The toast after a save: when it runs next. The owner is named under When, so the toast does not repeat it. */
 export function scheduleSavedWords(useCase: Pick<UseCaseView, 'state' | 'next_run_at' | 'schedule'>, now: Date): string {
   if (useCase.state === 'paused') return 'Saved. It runs on this schedule once you resume it.'
-  return useCase.next_run_at ? `Saved. Next run ${runWhen(useCase.next_run_at, now, useCase.schedule?.time_zone)}.` : 'Saved.'
+  return useCase.next_run_at ? `Saved. Next run ${nextRunAt(useCase.next_run_at, now, useCase.schedule?.time_zone)}.` : 'Saved.'
 }
 
 interface SavedAnswers {
@@ -358,7 +382,7 @@ export function changeWords(change: Change, useCase: Pick<UseCaseView, 'name' | 
     case 'pause':
       return `Paused. ${useCase.name} won’t run until you resume it.`
     case 'resume':
-      return useCase.next_run_at ? `Resumed. Next run ${runWhen(useCase.next_run_at, now, useCase.schedule?.time_zone)}.` : `Resumed. ${useCase.name} can run again.`
+      return useCase.next_run_at ? `Resumed. Next run ${nextRunAt(useCase.next_run_at, now, useCase.schedule?.time_zone)}.` : `Resumed. ${useCase.name} can run again.`
     case 'delete':
       return `Deleted ${useCase.name}.`
     case 'restore':

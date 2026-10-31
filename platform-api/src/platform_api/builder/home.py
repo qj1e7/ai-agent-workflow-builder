@@ -95,6 +95,10 @@ class ComingUp(WireModel):
     name: str
     template: str
     next_run_at: datetime
+    time_zone: str = Field(
+        description="The time zone of its schedule, as on the workflow, so every page shows "
+        "the next run at the same hour."
+    )
     more: int = Field(description="How many other workflows have a next run.")
 
 
@@ -205,15 +209,20 @@ def _draft(draft: DraftView) -> DraftItem:
 
 
 def _coming_up(use_cases: Sequence[UseCaseView]) -> ComingUp | None:
-    scheduled = [(u.next_run_at, u) for u in use_cases if u.next_run_at is not None]
+    scheduled = [
+        (u.next_run_at, u.schedule, u)
+        for u in use_cases
+        if u.next_run_at is not None and u.schedule is not None
+    ]
     if not scheduled:
         return None
-    at, first = min(scheduled, key=lambda pair: (pair[0], pair[1].use_case_id))
+    at, schedule, first = min(scheduled, key=lambda row: (row[0], row[2].use_case_id))
     return ComingUp(
         use_case_id=first.use_case_id,
         name=first.name,
         template=first.template,
         next_run_at=at,
+        time_zone=schedule.time_zone,
         more=len(scheduled) - 1,
     )
 

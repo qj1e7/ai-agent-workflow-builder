@@ -88,6 +88,14 @@ describe('the Workflows list', () => {
     expect(text(rowOf(html, 'uc_bugs'))).toContain('Not scheduled')
   })
 
+  it('for a London schedule, names London next to its next run, and keeps its latest run’s start in Singapore time', () => {
+    const london: UseCaseView = { ...BUGS, next_run_at: '2026-11-04T09:00:00Z', schedule: { day: 'every_day', at: '09:00', time_zone: 'Europe/London', owner_name: 'Alice' } }
+    const ran = { ...(done as RunView), use_case_id: 'uc_bugs', started_at: '2026-11-04T06:00:00Z' }
+    const row = text(rowOf(render({ useCases: [london], runs: [ran] }), 'uc_bugs'))
+    expect(row).toContain('Next: Today, 9:00 London time')
+    expect(row).toContain('Today 14:00: done.')
+  })
+
   it('promises no next run on a row whose schedule is held, because its owner can no longer run it', () => {
     const held: UseCaseView = { ...BUGS, next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Carol', held: 'owner_removed' } }
     const row = text(rowOf(render({ useCases: [held] }), 'uc_bugs'))

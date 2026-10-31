@@ -29,6 +29,7 @@ import {
   lifeWords,
   lineWhen,
   meansOutOfDate,
+  nextRunAt,
   nextRunWords,
   placeOf,
   PLACES_IN_PAGE_ORDER,
@@ -44,6 +45,7 @@ import {
   runWhen,
   runsOf,
   stepTag,
+  timesZone,
   whenWords,
   workflowPath,
   type ChangeOutcome,
@@ -156,9 +158,12 @@ describe('when it runs', () => {
     expect(at('UTC')).toBe('UTC.')
     expect(at('Etc/GMT+8'), 'Etc/GMT+8 is eight hours behind UTC').toBe('GMT-8.')
     expect(at('Etc/GMT-8')).toBe('GMT+8.')
+    expect(at('Etc/GMT-14')).toBe('GMT+14.')
+    expect([at('Etc/GMT+0'), at('Etc/GMT-0')], 'no offset is UTC').toEqual(['UTC.', 'UTC.'])
     expect(at('Etc/UTC')).toBe('UTC.')
     expect(at('Pacific/Port_Moresby')).toBe('Port Moresby time.')
-    expect(at('Not/AZone'), 'a name the browser cannot read is shown as Singapore, as the times are').toBe('Singapore time (SGT).')
+    expect(at('Not/AZone'), 'a name the browser cannot read is named from its id').toBe('AZone time.')
+    expect(at('Factory'), 'Factory is a real id the browser rejects').toBe('Factory time.')
     for (const utc of ['GMT', 'Etc/GMT', 'Etc/UCT', 'UCT', 'Universal', 'Zulu', 'Greenwich']) expect(at(utc), utc).toBe('UTC.')
     expect(at('America/Port-au-Prince')).toBe('Port au Prince time.')
     expect(at('Africa/Porto-Novo')).toBe('Porto Novo time.')
@@ -179,12 +184,43 @@ describe('when it runs', () => {
     expect(new Set(zones).size, 'no name is built twice').toBe(zones.length)
   })
 
-  it('shows the next run in the schedule’s own time zone', () => {
+  it('shows the next run in the schedule’s own time zone, and names the zone when it is not Singapore', () => {
     const london = { day: 'every_day' as const, at: '09:00', time_zone: 'Europe/London', owner_name: 'Alice' }
     const next = { name: 'Watchlist', state: 'on' as const, next_run_at: '2026-11-04T09:00:00Z', schedule: london }
-    expect(nextRunWords(next, NOW)).toBe('Today, 9:00')
+    expect(nextRunWords(next, NOW)).toBe('Today, 9:00 London time')
+    expect(nextRunAt(next.next_run_at, NOW, 'Europe/London')).toBe('Today, 9:00 London time')
     expect(nextRunWords({ ...next, schedule: { ...london, time_zone: 'Asia/Singapore' } }, NOW)).toBe('Today, 17:00')
-    expect(changeWords('resume', next, NOW)).toBe('Resumed. Next run Today, 9:00.')
+    expect(nextRunAt(next.next_run_at, NOW, 'UTC')).toBe('Today, 9:00 UTC')
+    expect(changeWords('resume', next, NOW)).toBe('Resumed. Next run Today, 9:00 London time.')
+    expect(scheduleSavedWords(next, NOW)).toBe('Saved. Next run Today, 9:00 London time.')
+  })
+
+  it('says nothing more next to a Singapore time, or one with no zone, as every other time in the Portal is Singapore’s', () => {
+    expect(nextRunAt('2026-11-04T09:00:00Z', NOW, 'Asia/Singapore')).toBe('Today, 17:00')
+    expect(nextRunAt('2026-11-04T09:00:00Z', NOW)).toBe('Today, 17:00')
+    expect(nextRunAt('2026-11-04T09:00:00Z', NOW, '')).toBe('Today, 17:00')
+    expect([timesZone('Asia/Singapore'), timesZone(undefined), timesZone('Europe/London')]).toEqual(['Singapore time', 'Singapore time', 'London time'])
+  })
+
+  it('names a zone the browser cannot read from its id, and gives its times in Singapore with Singapore time next to them', () => {
+    const build = formatterFactory.build
+    const spy = vi.spyOn(formatterFactory, 'build').mockImplementation((zone) => {
+      if (zone === 'Europe/Kyiv') throw new RangeError(`Invalid time zone specified: ${zone}`)
+      return build(zone)
+    })
+    const kyiv = { day: 'every_day' as const, at: '09:00', time_zone: 'Europe/Kyiv', owner_name: 'Alice' }
+    const next = { state: 'on' as const, next_run_at: '2026-11-04T09:00:00Z', schedule: kyiv }
+    const factory = { ...next, schedule: { ...kyiv, time_zone: 'Factory' } }
+    try {
+      expect(whenWords(next).small).toBe('Kyiv time.')
+      expect(nextRunWords(next, NOW), 'Kyiv would be 11:00, so the time is Singapore’s and says so').toBe('Today, 17:00 Singapore time')
+      expect(timesZone('Europe/Kyiv')).toBe('Singapore time')
+      expect(whenWords(factory).small).toBe('Factory time.')
+      expect(nextRunWords(factory, NOW)).toBe('Today, 17:00 Singapore time')
+      expect(scheduleSavedWords(factory, NOW)).toBe('Saved. Next run Today, 17:00 Singapore time.')
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   it('keeps the schedule while the workflow is paused, because Paused shows in the next run', () => {
