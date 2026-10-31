@@ -1,0 +1,37 @@
+# The activity database in the Cosmos DB emulator, read on 31 Oct 2026 at about 02:35 UTC from inside platform-api,
+# on the second DAST run's stack (commit 22da245). The two runs are the scan's seeded watchlist checks.
+# Script: docs/evidence/diagrams/cosmos-items.py, run as: docker exec -i <project>-platform-api-1 python - < cosmos-items.py
+
+databases: ['activity']
+containers: ['run_events']
+partition key: {"kind": "Hash", "paths": ["/runId"], "version": 2}
+indexing: "consistent"
+items per partition: [{"runId": "copier", "n": 1}, {"runId": "run_01M67WVHRG63X24F90AYT2GFZD", "n": 15}, {"runId": "run_01M67WVR65E6Z2ASYCDJNQ056N", "n": 11}]
+generation item: {"id": "generation", "runId": "copier", "generation": "c7a707759dcdef9e9c3d9a1b78816526"}
+example item: {
+  "id": "13",
+  "runId": "run_01M67WVHRG63X24F90AYT2GFZD",
+  "seq": 13,
+  "ts": "2026-10-31T02:33:10.301314+00:00",
+  "actor": {
+    "id": "platform",
+    "kind": "platform",
+    "display": "Platform"
+  },
+  "kind": "approval_requested",
+  "summary": "Approval requested. Waiting for the Team approver.",
+  "data": {
+    "link": "/approvals/apr_01M67WVHWXETCD5ES3A31JGSHM",
+    "steps": [
+      {
+        "index": 0,
+        "label": "Team approver",
+        "status": "open",
+        "decided_at": null,
+        "decided_by": null
+      }
+    ],
+    "approval_id": "apr_01M67WVHWXETCD5ES3A31JGSHM"
+  },
+  "dedupeKey": "once:171dc915e723eb044af9ea29a0c2049c"
+}

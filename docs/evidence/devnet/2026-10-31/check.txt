@@ -1,0 +1,31 @@
+alice adds LangGraph 1.2.14 to the Software watchlist -> 201
+alice turns the schedule off, so only this check runs -> 200
+alice presses Check now -> 201, run run_01M67YTGS11NA61TB4KC828DPR
+the run is awaiting_approval after 1 s
+  proposed: {"connector": "jira", "operation": "create_ticket", "target": {"project": "MOCK"}, "fields": {"body": "LangGraph has 5 new releases on GitHub (langchain-ai/lang
+bob approves -> 201 {'status': 'approved', 'decision': {'step': 0, 'by': 'bob', 'verdict': 'approve', 'at': '2026-10-31T03:07:34.554727Z'}}
+the run is succeeded after 2 s in all
+its 21 activity events:
+   1 run_created: Alice started a run of the Software watchlist.
+   2 leg_dispatched: The work leg was queued for the workflow engine (attempt 1).
+   3 step_started: Workflow step run_agents started (n8n execution 1).
+   4 agent_joined: Planner brought in Version checker to read the source of LangGraph.
+   5 agent_message: Planner asked Version checker to check LangGraph for new releases.
+   6 agent_step_started: Version checker is reading the releases of LangGraph.
+   7 agent_step_finished: Version checker read LangGraph. 5 releases newer than 1.2.14.
+   8 agent_message: Version checker reported that LangGraph is behind and suggested one ticket.
+   9 agent_message: Planner agreed and will propose the ticket for approval.
+  10 write_action_proposed: The agents proposed 1 write action: Create Jira ticket in MOCK: Upgrade LangGraph from 1.2.14 to 1.2.19.
+  11 step_finished: Workflow step run_agents finished: LangGraph has a new release: 1.2.19.
+  12 step_started: Workflow step ask_approval started (n8n execution 1).
+  13 approval_requested: Approval requested. Waiting for the Team approver.
+  14 step_finished: Workflow step ask_approval finished: Approval apr_01M67YTHATYY929VX0CQSCP8HH opened.
+  15 approval_announced: The approval request was posted to the Teams channel CODESparks Ops.
+  16 approval_decided: Bob approved the request (Team approver).
+  17 leg_dispatched: The act leg was queued for the workflow engine (attempt 1).
+  18 step_started: Workflow step write_action started (n8n execution 2).
+  19 write_action_done: jira create_ticket done: MOCK-1, approved by bob.
+  20 step_finished: Workflow step write_action finished: Created MOCK-1.
+  21 run_succeeded: The run succeeded. 1 write action was done.
+  practice Jira: MOCK-1 Upgrade LangGraph from 1.2.14 to 1.2.19
+alice connects the AI Singapore gateway in Settings -> 200 {"status": "problem", "reason": "unreachable", "message": "Nobody answers for llm-gateway.aisg.sg. Check the address."}

@@ -1,0 +1,90 @@
+02:38:11
+p15-scan-agent-runtime-1 cpu=0.08% mem=149.8MiB / 7.65GiB
+p15-scan-cosmos-1 cpu=5.41% mem=370.8MiB / 7.65GiB
+p15-scan-mock-github-1 cpu=15.24% mem=20.04MiB / 7.65GiB
+p15-scan-mock-model-1 cpu=15.40% mem=22.54MiB / 7.65GiB
+p15-scan-n8n-1 cpu=0.25% mem=586.6MiB / 7.65GiB
+p15-scan-platform-api-1 cpu=0.49% mem=96.66MiB / 7.65GiB
+p15-scan-portal-1 cpu=0.03% mem=12.16MiB / 7.65GiB
+p15-scan-postgres-1 cpu=0.12% mem=80.28MiB / 7.65GiB
+02:38:18
+p15-scan-agent-runtime-1 cpu=0.07% mem=150.3MiB / 7.65GiB
+p15-scan-cosmos-1 cpu=2.29% mem=374.3MiB / 7.65GiB
+p15-scan-mock-github-1 cpu=9.74% mem=19.6MiB / 7.65GiB
+p15-scan-mock-model-1 cpu=0.01% mem=22.16MiB / 7.65GiB
+p15-scan-n8n-1 cpu=1.14% mem=585.6MiB / 7.65GiB
+p15-scan-platform-api-1 cpu=22.85% mem=99.92MiB / 7.65GiB
+p15-scan-portal-1 cpu=0.82% mem=16.08MiB / 7.65GiB
+p15-scan-postgres-1 cpu=6.95% mem=86.06MiB / 7.65GiB
+02:38:25
+p15-scan-agent-runtime-1 cpu=9.14% mem=150.4MiB / 7.65GiB
+p15-scan-cosmos-1 cpu=5.85% mem=379.7MiB / 7.65GiB
+p15-scan-mock-github-1 cpu=0.01% mem=19.45MiB / 7.65GiB
+p15-scan-mock-model-1 cpu=16.09% mem=22.27MiB / 7.65GiB
+p15-scan-n8n-1 cpu=22.96% mem=370.9MiB / 7.65GiB
+p15-scan-platform-api-1 cpu=22.55% mem=99.79MiB / 7.65GiB
+p15-scan-portal-1 cpu=0.90% mem=15.76MiB / 7.65GiB
+p15-scan-postgres-1 cpu=1.66% mem=87.14MiB / 7.65GiB
+02:38:32
+p15-scan-agent-runtime-1 cpu=0.06% mem=150.5MiB / 7.65GiB
+p15-scan-cosmos-1 cpu=7.22% mem=374.5MiB / 7.65GiB
+p15-scan-mock-github-1 cpu=0.00% mem=19.54MiB / 7.65GiB
+p15-scan-mock-model-1 cpu=0.01% mem=22.36MiB / 7.65GiB
+p15-scan-n8n-1 cpu=0.05% mem=375.9MiB / 7.65GiB
+p15-scan-platform-api-1 cpu=7.55% mem=100.1MiB / 7.65GiB
+p15-scan-portal-1 cpu=0.89% mem=15.98MiB / 7.65GiB
+p15-scan-postgres-1 cpu=1.37% mem=87.76MiB / 7.65GiB
+02:38:39
+p15-scan-agent-runtime-1 cpu=0.07% mem=150.6MiB / 7.65GiB
+p15-scan-cosmos-1 cpu=3.55% mem=374.2MiB / 7.65GiB
+p15-scan-mock-github-1 cpu=15.55% mem=20.4MiB / 7.65GiB
+p15-scan-mock-model-1 cpu=14.70% mem=22.48MiB / 7.65GiB
+p15-scan-n8n-1 cpu=1.19% mem=374.9MiB / 7.65GiB
+p15-scan-platform-api-1 cpu=7.53% mem=100.2MiB / 7.65GiB
+p15-scan-portal-1 cpu=0.86% mem=16.28MiB / 7.65GiB
+p15-scan-postgres-1 cpu=1.41% mem=88.4MiB / 7.65GiB
+02:38:46
+p15-scan-agent-runtime-1 cpu=0.69% mem=150.7MiB / 7.65GiB
+p15-scan-cosmos-1 cpu=2.35% mem=375.4MiB / 7.65GiB
+p15-scan-mock-github-1 cpu=3.83% mem=19.77MiB / 7.65GiB
+p15-scan-mock-model-1 cpu=0.01% mem=22.58MiB / 7.65GiB
+p15-scan-n8n-1 cpu=5.33% mem=375.2MiB / 7.65GiB
+p15-scan-platform-api-1 cpu=11.16% mem=100.5MiB / 7.65GiB
+p15-scan-portal-1 cpu=0.88% mem=17.3MiB / 7.65GiB
+p15-scan-postgres-1 cpu=3.94% mem=88.24MiB / 7.65GiB
+02:38:53
+p15-scan-agent-runtime-1 cpu=16.18% mem=151.5MiB / 7.65GiB
+p15-scan-cosmos-1 cpu=4.24% mem=379.6MiB / 7.65GiB
+p15-scan-mock-github-1 cpu=0.01% mem=19.86MiB / 7.65GiB
+p15-scan-mock-model-1 cpu=0.00% mem=22.68MiB / 7.65GiB
+p15-scan-n8n-1 cpu=0.04% mem=375.7MiB / 7.65GiB
+p15-scan-platform-api-1 cpu=8.01% mem=100.8MiB / 7.65GiB
+p15-scan-portal-1 cpu=0.86% mem=17.37MiB / 7.65GiB
+p15-scan-postgres-1 cpu=1.54% mem=91.12MiB / 7.65GiB
+02:39:00
+p15-scan-agent-runtime-1 cpu=15.20% mem=150.9MiB / 7.65GiB
+p15-scan-cosmos-1 cpu=2.30% mem=379MiB / 7.65GiB
+p15-scan-mock-github-1 cpu=0.01% mem=19.96MiB / 7.65GiB
+p15-scan-mock-model-1 cpu=0.00% mem=22.77MiB / 7.65GiB
+p15-scan-n8n-1 cpu=1.20% mem=377.9MiB / 7.65GiB
+p15-scan-platform-api-1 cpu=23.17% mem=100MiB / 7.65GiB
+p15-scan-portal-1 cpu=0.83% mem=16.54MiB / 7.65GiB
+p15-scan-postgres-1 cpu=3.78% mem=91.96MiB / 7.65GiB
+02:39:07
+p15-scan-agent-runtime-1 cpu=0.07% mem=151MiB / 7.65GiB
+p15-scan-cosmos-1 cpu=2.35% mem=379.1MiB / 7.65GiB
+p15-scan-mock-github-1 cpu=15.53% mem=21.5MiB / 7.65GiB
+p15-scan-mock-model-1 cpu=15.59% mem=23.89MiB / 7.65GiB
+p15-scan-n8n-1 cpu=6.24% mem=378.1MiB / 7.65GiB
+p15-scan-platform-api-1 cpu=7.73% mem=100.1MiB / 7.65GiB
+p15-scan-portal-1 cpu=0.80% mem=17.46MiB / 7.65GiB
+p15-scan-postgres-1 cpu=5.17% mem=92.29MiB / 7.65GiB
+02:39:14
+p15-scan-agent-runtime-1 cpu=0.07% mem=151.1MiB / 7.65GiB
+p15-scan-cosmos-1 cpu=7.44% mem=380.2MiB / 7.65GiB
+p15-scan-mock-github-1 cpu=15.28% mem=20.2MiB / 7.65GiB
+p15-scan-mock-model-1 cpu=12.43% mem=23MiB / 7.65GiB
+p15-scan-n8n-1 cpu=0.04% mem=377.1MiB / 7.65GiB
+p15-scan-platform-api-1 cpu=8.09% mem=101.1MiB / 7.65GiB
+p15-scan-portal-1 cpu=0.83% mem=17.01MiB / 7.65GiB
+p15-scan-postgres-1 cpu=1.51% mem=91.91MiB / 7.65GiB

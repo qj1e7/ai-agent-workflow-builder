@@ -1,0 +1,22 @@
+# The checks in scripts/render-diagrams.sh, run on docs/design/diagrams.md and on four copies of it,
+# each with one planted mistake. Run on 31 Oct 2026 at commit 22da245 plus this pull request's diagrams.
+
+## the page as committed: exit 0
+checked 17 diagrams, 21 event kinds, 31 tables and 8 jobs
+
+## builder.drafts renamed to builder.draftz in its ER diagram: exit 1
+FAIL: an ER diagram shows builder.draftz, which the migrations do not leave in place
+FAIL: the table builder.drafts is in the migrations but in no ER diagram
+checked 17 diagrams, 21 event kinds, 31 tables and 8 jobs
+
+## job checks moved after job scans in the CI/CD diagram: exit 1
+FAIL: the jobs of ci.yml are not in the file's order in the CI/CD diagram
+checked 17 diagrams, 21 event kinds, 31 tables and 8 jobs
+
+## the retired name Room lead in the use case diagram: exit 1
+FAIL: the banned name Room lead appears
+checked 17 diagrams, 21 event kinds, 31 tables and 8 jobs
+
+## an Agent API route that does not exist: exit 1
+FAIL: route /v1/planner/pick is not an Agent API route in agent_runtime/api.py
+checked 17 diagrams, 21 event kinds, 31 tables and 8 jobs

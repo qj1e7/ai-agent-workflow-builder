@@ -1,0 +1,7 @@
+platform-api requests answered: 34802
+/api/v1/approvals/{approval_id}/decisions, any method: 1226 (GET 405 x4, POST 403 x432, POST 404 x2, POST 422 x788)
+PUT /api/v1/settings/model: 1602 (200 x1188, 422 x414)
+GET /api/v1/people: 38 (200 x38)
+GET /api/v1/confirmations: 34 (200 x34)
+People and confirmations, other than GET: 404 x574, 405 x24, 409 x790, 422 x454
+People and confirmations, GET (any path below them): 200 x72, 404 x148, 405 x144

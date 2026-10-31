@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Renders every Mermaid block in docs/design/diagrams.md to a PNG in docs/evidence/diagrams/, which proves each one parses.
-# Then checks the routes, event kinds and identifiers in the file against the contracts and the code.
+# Then checks the routes, event kinds and identifiers in the file against the contracts and the code,
+# the ER diagrams' tables against the migrations, and the CI/CD diagram's jobs against .github/workflows/.
 # Needs Docker and python3. Prints PASS or FAIL.
 set -euo pipefail
 
@@ -26,8 +27,9 @@ awk -v dir="$work" '
   inside { print > file }
 ' "$doc"
 
+# Class diagrams draw with the state diagram's settings in this Mermaid version, so both say useMaxWidth false.
 cat > "$work/config.json" <<'JSON'
-{"theme": "default", "flowchart": {"useMaxWidth": false}, "sequence": {"useMaxWidth": false}}
+{"theme": "default", "flowchart": {"useMaxWidth": false}, "sequence": {"useMaxWidth": false}, "class": {"useMaxWidth": false}, "state": {"useMaxWidth": false}, "er": {"useMaxWidth": false}}
 JSON
 
 status=0
@@ -68,7 +70,7 @@ for route in sorted(set(re.findall(r"(/(?:api|internal)/v1/[A-Za-z0-9_{}./-]*[A-
         problems.append(f"route {route} is not in contracts/openapi.json")
 
 agent_api = pathlib.Path("agent-runtime/src/agent_runtime/api.py").read_text()
-for route in sorted(set(re.findall(r"(?<![a-z/])(/v1/[a-z]+)", doc))):
+for route in sorted(set(re.findall(r"(?<![a-z/])(/v1/[a-z]+(?:/[a-z]+)*)", doc))):
     if f'"{route}"' not in agent_api:
         problems.append(f"route {route} is not an Agent API route in agent_runtime/api.py")
 
@@ -94,10 +96,12 @@ if len(kinds) < 20:
 blocks = re.findall(r"```mermaid\n(.*?)```", doc, re.S)
 corpus = "\n".join(
     p.read_text()
-    for d in ("platform-api/src", "agent-runtime/src", "contracts", "deploy")
+    for d in ("platform-api/src", "agent-runtime/src", "contracts", "deploy", "infra", ".github/workflows")
     for p in pathlib.Path(d).rglob("*")
-    if p.is_file() and p.suffix in {".py", ".json", ".yaml", ".sh"}
+    if p.is_file() and p.suffix in {".py", ".json", ".yaml", ".yml", ".sh", ".tf", ".sql"}
 )
+# Alembic names the column of its own version table. No file of ours does.
+corpus += "\nversion_num"
 snake = re.compile(r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b")
 for block in blocks:
     for line in block.splitlines():
@@ -110,7 +114,41 @@ for block in blocks:
             if token not in kinds and not re.search(rf"\b{re.escape(token)}\b", corpus):
                 problems.append(f"{token} appears in a diagram but nowhere in the code or contracts")
 
+# Every table the migrations leave in place, and each schema's Alembic version table, is in an ER diagram.
+migrations = pathlib.Path("platform-api/src/platform_api/migrations")
+tables = set()
+for schema in sorted(p for p in migrations.iterdir() if (p / "versions").is_dir()):
+    tables.add(f"{schema.name}.alembic_version")
+    for version in sorted((schema / "versions").glob("*.py")):
+        upgrade = version.read_text().split("def downgrade", 1)[0]
+        tables |= set(re.findall(r"CREATE TABLE (\w+\.\w+)", upgrade))
+        tables -= set(re.findall(r"DROP TABLE (\w+\.\w+)", upgrade))
+er = "\n".join(block for block in blocks if block.lstrip().startswith("erDiagram"))
+drawn = set(re.findall(r'\["(\w+\.\w+)"\]', er))
+for table in sorted(tables - drawn):
+    problems.append(f"the table {table} is in the migrations but in no ER diagram")
+for table in sorted(drawn - tables):
+    problems.append(f"an ER diagram shows {table}, which the migrations do not leave in place")
+if len(tables) < 20:
+    problems.append(f"found only {len(tables)} tables in the migrations, so the check cannot be trusted")
+
+# Every job in .github/workflows/ is in the CI/CD diagram as "job <id>", in the file's order.
+cicd = "\n".join(blocks)
+jobs = 0
+for workflow in sorted(pathlib.Path(".github/workflows").glob("*.yml")):
+    names = re.findall(r"^  ([A-Za-z0-9_-]+):\s*$", workflow.read_text().split("\njobs:\n", 1)[1], re.M)
+    jobs += len(names)
+    at = [cicd.find(f"job {name}<") for name in names]
+    for name, where in zip(names, at):
+        if where < 0:
+            problems.append(f"job {name} in {workflow.name} is not in the CI/CD diagram")
+    found = [where for where in at if where >= 0]
+    if found != sorted(found):
+        problems.append(f"the jobs of {workflow.name} are not in the file's order in the CI/CD diagram")
+
 banned = ["Flint", "Forge", "Striker", "Spark Map", "Scout", "Analyst", "Messenger", "Clerk", "Fixer", "Kindling", "Firebreak", "Ember"]
+# The names the rebuild retired (GLOSSARY.md).
+banned += ["Room lead", "room_lead", "Release checker", "release_checker", "release_check", "release-check"]
 for name in banned:
     if re.search(rf"\b{name}\b", doc, re.I):
         problems.append(f"the banned name {name} appears")
@@ -120,7 +158,7 @@ for dash, label in (("—", "em dash"), ("–", "en dash")):
 
 for problem in sorted(set(problems)):
     print(f"FAIL: {problem}", file=sys.stderr)
-print(f"checked {len(blocks)} diagrams and {len(kinds)} event kinds")
+print(f"checked {len(blocks)} diagrams, {len(kinds)} event kinds, {len(tables)} tables and {jobs} jobs")
 sys.exit(1 if problems else 0)
 PY
 

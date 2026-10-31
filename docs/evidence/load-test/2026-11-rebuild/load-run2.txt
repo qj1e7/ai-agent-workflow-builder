@@ -1,0 +1,96 @@
+Starting the stack as compose project p15-scan (no host ports).
+time="2026-10-31T02:38:17Z" level=info msg="history before the test: 31 runs, all settled" source=console
+
+
+  █ THRESHOLDS 
+
+    checks
+    ✓ 'rate>0.99' rate=100.00%
+
+    http_req_duration{path:get_run}
+    ✓ 'p(95)<100' p(95)=7.16ms
+
+    http_req_duration{path:list_approvals}
+    ✓ 'p(95)<100' p(95)=5.03ms
+
+    http_req_duration{path:list_runs}
+    ✓ 'p(95)<250' p(95)=8.23ms
+
+    http_req_duration{path:portal_static}
+    ✓ 'p(95)<100' p(95)=489.72µs
+
+    http_req_duration{path:run_events}
+    ✓ 'p(95)<100' p(95)=11.23ms
+
+    http_req_duration{path:start_run}
+    ✓ 'p(95)<500' p(95)=16.3ms
+
+    http_req_failed{path:get_run}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{path:list_approvals}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{path:list_runs}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{path:portal_static}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{path:run_events}
+    ✓ 'rate<0.01' rate=0.00%
+
+    http_req_failed{path:start_run}
+    ✓ 'rate<0.01' rate=0.00%
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 3317    49.968478/s
+    checks_succeeded...: 100.00% 3317 out of 3317
+    checks_failed......: 0.00%   0 out of 3317
+
+    ✓ portal page is 200
+    ✓ portal asset is 200
+    ✓ approvals list is 200
+    ✓ get run is 200
+    ✓ list runs is 200
+    ✓ events page is 200
+    ✓ start run is 201
+
+    HTTP
+    http_req_duration..............: avg=4.59ms   med=5.29ms   p(90)=9.44ms   p(95)=10.18ms  p(99)=12.13ms  max=35.87ms
+      { expected_response:true }...: avg=4.59ms   med=5.29ms   p(90)=9.44ms   p(95)=10.18ms  p(99)=12.13ms  max=35.87ms
+      { path:get_run }.............: avg=5.83ms   med=5.67ms   p(90)=6.73ms   p(95)=7.16ms   p(99)=8.74ms   max=33ms   
+      { path:list_approvals }......: avg=3.86ms   med=3.72ms   p(90)=4.67ms   p(95)=5.03ms   p(99)=5.64ms   max=7.71ms 
+      { path:list_runs }...........: avg=6.92ms   med=6.75ms   p(90)=7.87ms   p(95)=8.23ms   p(99)=9.7ms    max=33.93ms
+      { path:portal_static }.......: avg=273.99µs med=233.68µs p(90)=425.05µs p(95)=489.72µs p(99)=697.42µs max=2.63ms 
+      { path:run_events }..........: avg=9.53ms   med=9.41ms   p(90)=10.68ms  p(95)=11.23ms  p(99)=13.14ms  max=35.87ms
+      { path:start_run }...........: avg=13.68ms  med=12.97ms  p(90)=15.61ms  p(95)=16.3ms   p(99)=16.92ms  max=17.07ms
+    http_req_failed................: 0.00%  0 out of 3355
+      { path:get_run }.............: 0.00%  0 out of 601
+      { path:list_approvals }......: 0.00%  0 out of 301
+      { path:list_runs }...........: 0.00%  0 out of 600
+      { path:portal_static }.......: 0.00%  0 out of 1202
+      { path:run_events }..........: 0.00%  0 out of 601
+      { path:start_run }...........: 0.00%  0 out of 12
+    http_reqs......................: 3355   50.540924/s
+
+    EXECUTION
+    iteration_duration.............: avg=5.61ms   med=6.08ms   p(90)=9.75ms   p(95)=10.43ms  p(99)=12.13ms  max=36.01ms
+    iterations.....................: 2716   40.914799/s
+    vus............................: 0      min=0         max=0 
+    vus_max........................: 55     min=55        max=55
+
+    NETWORK
+    data_received..................: 153 MB 2.3 MB/s
+    data_sent......................: 375 kB 5.6 kB/s
+
+
+
+
+PASS load: every threshold held. Summary: load/out/summary.json, log: load/out/k6.log
+real 95.13
+user 1.33
+sys 0.80
+exit 0

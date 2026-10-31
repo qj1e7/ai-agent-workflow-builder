@@ -1,0 +1,14 @@
+# The Cosmos DB copy after the lock-down test, read by the P15 checker on its rerun of lockdown-run.sh
+# (31 Oct 2026, about 03:45 UTC, commit 719bc22, compose project p15c-lock, KEEP=1), before the stack was taken down.
+# Line 1 is psql: run id | max(seq) in monitoring.run_events | seq in monitoring.run_events_copied.
+# The rest is docs/evidence/diagrams/cosmos-items.py run inside platform-api, cut at 8 lines by the checker's script.
+
+run_01M680T8JA1FMJZYWRAXRQKX0J|21|21
+databases: ['activity']
+containers: ['run_events']
+partition key: {"kind": "Hash", "paths": ["/runId"], "version": 2}
+indexing: "consistent"
+items per partition: [{"runId": "copier", "n": 1}, {"runId": "run_01M680T8JA1FMJZYWRAXRQKX0J", "n": 21}]
+generation item: {"id": "generation", "runId": "copier", "generation": "615a7e3b549e17c4d7ce0d008745b9bd"}
+example item: {
+  "id": "13",
