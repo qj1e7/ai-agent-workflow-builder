@@ -1,0 +1,200 @@
+"""A body the API can't read safely answers 422, never 500 (#60).
+
+A lone surrogate escape can't be written back out as UTF-8, and a very deep body overflows
+the stack of any code that walks it. Neither may reach a route, and the 422 never echoes them.
+"""
+
+import re
+from collections.abc import AsyncIterator
+from typing import Any
+
+import httpx
+import pytest
+
+from platform_api.app import create_app
+from platform_api.body_guard import nests_deeper_than
+from platform_api.builder import Builder, Watchlist
+from platform_api.builder.cards import VERSION_CHECKER_ID
+from platform_api.db import Database
+from platform_api.orchestration import ScheduleBook
+from platform_api.wire import BROKEN_TEXT_MESSAGE
+from tests.declared import ALICE, STEP_KEY, app_with
+from tests.support import LOCAL_ENV
+from tests.test_builder_http import NothingLearned, SecondCallRepeats
+
+pytestmark = pytest.mark.anyio
+
+SURROGATE = b'{"name":"a\\ud800b"}'
+DEEP = b'{"name":' + b"[" * 3000 + b"]" * 3000 + b"}"
+UNREADABLE = "Input should be a valid string, unable to parse raw data as a unicode string"
+HEADERS = {
+    **ALICE,
+    **STEP_KEY,
+    "Content-Type": "application/json",
+    "X-Callback-Token": "t",
+    "Authorization": "Bearer t",
+    "Idempotency-Key": "k",
+    "X-N8N-Execution": "41",
+}
+
+
+def json_body_routes() -> list[tuple[str, str]]:
+    schema = create_app(LOCAL_ENV).openapi()
+    return [
+        (method.upper(), re.sub(r"\{[^}]+\}", "x", path))
+        for path, item in schema["paths"].items()
+        for method, operation in item.items()
+        if "application/json" in operation.get("requestBody", {}).get("content", {})
+    ]
+
+
+ROUTES = json_body_routes()
+
+
+@pytest.fixture
+async def client() -> AsyncIterator[httpx.AsyncClient]:
+    app = app_with()
+    app.state.model_settings = None
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        yield c
+
+
+@pytest.fixture
+async def saving(db: Database) -> AsyncIterator[httpx.AsyncClient]:
+    """A client whose builder saves to a real database, so text that passes validation is
+    written to PostgreSQL."""
+    watchlist = Watchlist(db, NothingLearned(), ScheduleBook(db))
+    app = app_with(builder=Builder(db, SecondCallRepeats(), watchlist, "http://localhost:8000"))
+    app.state.watchlist = watchlist
+    app.state.model_settings = None
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        yield c
+
+
+def test_the_served_api_has_json_body_routes_to_check():
+    assert ("POST", "/api/v1/agent-cards") in ROUTES
+    assert ("PUT", "/api/v1/drafts/x") in ROUTES
+
+
+@pytest.mark.parametrize(("method", "path"), ROUTES)
+async def test_a_lone_surrogate_answers_422_without_echoing_it(
+    client: httpx.AsyncClient, method: str, path: str
+):
+    response = await client.request(method, path, content=SURROGATE, headers=HEADERS)
+    assert response.status_code == 422, response.text
+    problems: list[dict[str, Any]] = response.json()["detail"]
+    assert problems
+    assert all({"type", "loc", "msg"} <= set(p) for p in problems), problems
+    assert "\ud800" not in response.content.decode("utf-8", "surrogatepass")
+
+
+@pytest.mark.parametrize(("method", "path"), ROUTES)
+async def test_a_very_deep_body_answers_422_before_any_route_reads_it(
+    client: httpx.AsyncClient, method: str, path: str
+):
+    response = await client.request(method, path, content=DEEP, headers=HEADERS)
+    assert response.status_code == 422, response.text
+    [problem] = response.json()["detail"]
+    assert (problem["type"], problem["loc"]) == ("json_too_deep", ["body"])
+
+
+async def test_a_lone_surrogate_in_a_key_refuses_the_whole_body(client: httpx.AsyncClient):
+    body = b'{"task":"Check","a\\udfffb":1}'
+    response = await client.post("/api/v1/builder/plan", content=body, headers=HEADERS)
+    assert response.status_code == 422, response.text
+    assert response.json() == {
+        "detail": [
+            {
+                "type": "string_unicode",
+                "loc": ["body"],
+                "msg": UNREADABLE,
+            }
+        ]
+    }
+
+
+async def test_an_ordinary_invalid_body_keeps_its_422_shape(client: httpx.AsyncClient):
+    response = await client.post("/api/v1/builder/plan", json={"task": 7}, headers=ALICE)
+    assert response.status_code == 422, response.text
+    assert response.json() == {
+        "detail": [
+            {
+                "type": "string_type",
+                "loc": ["body", "task"],
+                "msg": "Input should be a valid string",
+                "input": 7,
+            }
+        ]
+    }
+
+
+async def test_a_body_nested_a_normal_amount_still_reaches_validation(
+    client: httpx.AsyncClient,
+):
+    body = b'{"task":' + b"[" * 30 + b"]" * 30 + b"}"
+    response = await client.post("/api/v1/builder/plan", content=body, headers=HEADERS)
+    assert response.status_code == 422, response.text
+    [problem] = response.json()["detail"]
+    assert (problem["type"], problem["loc"]) == ("string_type", ["body", "task"])
+
+
+@pytest.mark.parametrize(
+    ("body", "deep"),
+    [
+        (b"[" * 65 + b"]" * 65, True),
+        (b"[" * 64 + b"]" * 64, False),
+        (b'{"a":"' + b"[" * 100 + b'"}', False),
+        (b'{"a":"\\"' + b"{" * 100 + b'"}', False),
+        (b'{"a":"\\\\"' + b"," + b"[" * 65, True),
+        (b'{"a":"never ends' + b"[" * 100, False),
+    ],
+)
+def test_only_brackets_outside_strings_count_toward_depth(body: bytes, deep: bool):
+    assert nests_deeper_than(body, 64) is deep
+
+
+USE_CASE = (
+    b'{"name":"Watch\\ud800","instruction":"Check LangGraph for new releases.","agents":'
+    b'[{"card_id":"' + VERSION_CHECKER_ID.encode() + b'","values":'
+    b'{"GitHub repository":"langchain-ai/langgraph","Jira project":"MOCK"}}]}'
+)
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "body", "refusal"),
+    [
+        # A checked text field is refused by pydantic itself.
+        (
+            "POST",
+            "/api/v1/agent-use-cases",
+            USE_CASE,
+            ("string_unicode", ["body", "name"], UNREADABLE),
+        ),
+        # Free-form JSON is refused by WireIn, as a NUL byte is.
+        (
+            "PUT",
+            "/api/v1/drafts/d1",
+            b'{"step":1,"content":{"steps":[{"say":"x\\udc00"}]}}',
+            ("broken_character", ["body", "content"], BROKEN_TEXT_MESSAGE),
+        ),
+    ],
+)
+async def test_a_lone_surrogate_in_a_valid_body_is_refused_before_it_is_saved(
+    saving: httpx.AsyncClient, method: str, path: str, body: bytes, refusal: tuple[Any, ...]
+):
+    response = await saving.request(method, path, content=body, headers=HEADERS)
+    assert response.status_code == 422, response.text
+    [problem] = response.json()["detail"]
+    assert (problem["type"], problem["loc"], problem["msg"]) == refusal
+    assert "input" not in problem
+    assert (await saving.get("/api/v1/use-cases", headers=ALICE)).json()["use_cases"] == []
+
+
+async def test_an_emoji_sent_as_a_surrogate_pair_still_saves(saving: httpx.AsyncClient):
+    body = USE_CASE.replace(b"Watch\\ud800", b"Watch \\ud83d\\ude00")
+    response = await saving.post("/api/v1/agent-use-cases", content=body, headers=HEADERS)
+    assert response.status_code == 201, response.text
+    [saved] = (await saving.get("/api/v1/use-cases", headers=ALICE)).json()["use_cases"]
+    assert saved["name"] == "Watch \U0001f600"
