@@ -4,7 +4,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any, Literal, Protocol
 
-from platform_api.db import Connection, Database
+from platform_api.db import Connection, Database, hold_workflow
 from platform_api.orchestration.people import roles_from
 from platform_api.orchestration.schedule import (
     DEFAULT_AT,
@@ -240,19 +240,25 @@ class ScheduleTicker:
                 _HOLD_WORDS[starter],
             )
         else:
-            match await self._specs.check_spec(saved.use_case_id):
-                case RunSpec() as spec:
-                    result = await self._runs.start_run(
-                        replace(spec, trigger="schedule"),
-                        starter,
-                        f"schedule:{saved.use_case_id}:{slot.isoformat()}",
-                    )
-                    run_id = result.run_id if result.created else None
-                case NotOn(state):
-                    log.info(
-                        "skipped the scheduled check of %s, which is %s", saved.use_case_id, state
-                    )
-                case None:
-                    pass
+            # Held from the builder's state read to the run insert, so a pause or delete can't
+            # land in between (#56). Neither call takes the lock again.
+            async with self._db.transaction("orchestration") as uow:
+                await hold_workflow(uow.conn, saved.use_case_id, alone=False)
+                match await self._specs.check_spec(saved.use_case_id):
+                    case RunSpec() as spec:
+                        result = await self._runs.start_run(
+                            replace(spec, trigger="schedule"),
+                            starter,
+                            f"schedule:{saved.use_case_id}:{slot.isoformat()}",
+                        )
+                        run_id = result.run_id if result.created else None
+                    case NotOn(state):
+                        log.info(
+                            "skipped the scheduled check of %s, which is %s",
+                            saved.use_case_id,
+                            state,
+                        )
+                    case None:
+                        pass
         await self._book.use_up_slot(saved.use_case_id, slot)
         return run_id

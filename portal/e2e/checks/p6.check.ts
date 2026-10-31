@@ -269,6 +269,14 @@ test('@lane3 Remove reaches the platform at once; Undo, with no time limit of it
     const historyOnPage = await text(history)
     const kept = await rowNamed(backend, 'LangGraph')
     await shotTo(page, 3, 'p6-undo.png', true)
+    // Escape clears the notice wherever focus is on the page, as in the prototype, not only on its buttons.
+    // LangGraph and Redis are both listed here, so the search box is on the page.
+    await expect(notice(page)).toHaveText('Put LangGraph back on the list.')
+    const find = page.getByRole('searchbox', { name: 'Find software' })
+    await find.focus()
+    await page.keyboard.press('Escape')
+    await expect(notice(page), 'Escape from the search box clears the notice').toHaveText('')
+    await expect(find, 'and leaves focus where it was').toBeFocused()
 
     await rowOf(page, 'Redis').getByRole('button', { name: /^Remove/ }).click()
     await expect(rowOf(page, 'Redis')).toHaveCount(0)
@@ -289,6 +297,7 @@ test('@lane3 Remove reaches the platform at once; Undo, with no time limit of it
     await expect(notice(page)).toHaveText('LangGraph was already removed.')
     await expect(rowOf(page, 'LangGraph')).toHaveCount(0)
     const alertsAfterGone = await page.getByRole('alert').allInnerTexts()
+    await expect(page.locator('#change-notice'), 'focus moves to the notice, as the row and its Remove button are gone').toBeFocused()
     await shotTo(page, 3, 'p6-gone.png', true)
 
     await backend.post('alice', `/api/v1/watchlist/software/${redis.id}/restore`)
@@ -366,6 +375,37 @@ test('@lane3-day Undo more than a day after the removal is refused in plain word
     save(3, 'p6-undo-late.json', { softwareId: langgraph.id, late, listed, onPage: await text(problem(page)) })
     expect(late).toEqual({ status: 410, body: { detail: 'This software was removed more than a day ago, so it can\'t be put back.' } })
     expect(listed).toEqual(['Redis'])
+    assertClean(watch)
+    await context.close()
+  })
+})
+
+test('@lane3-near Undo just under a day after the removal still puts the row back; p6.sh lane 3 moves the removal back 23 hours while the page waits', async ({ browser }) => {
+  const ids = process.env['LATE_REMOVAL_IDS'] ?? ''
+  const moved = process.env['LATE_REMOVAL_MOVED'] ?? ''
+  test.skip(ids === '' || moved === '', 'p6.sh lane 3 runs this, as it moves the removal back 23 hours')
+  rmSync(ids, { force: true })
+  await withBackend(async (backend) => {
+    const useCaseId = await backend.freshWatchlist('alice', [LANGGRAPH, REDIS])
+    const langgraph = await rowNamed(backend, 'LangGraph')
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    await openSoftware(page)
+    await rowOf(page, 'LangGraph').getByRole('button', { name: /^Remove/ }).click()
+    const undo = page.getByRole('button', { name: 'Undo' })
+    await expect(undo).toBeFocused()
+    writeFileSync(ids, `use_case_id=${useCaseId}\nsoftware_id=${langgraph.id}\n`)
+    await expect.poll(() => existsSync(moved), { message: 'p6.sh lane 3 moves the removal back 23 hours', timeout: 90_000, intervals: [500] }).toBe(true)
+    await undo.click()
+    const row = rowOf(page, 'LangGraph')
+    await expect(notice(page)).toHaveText('Put LangGraph back on the list.')
+    await expect(row).toBeVisible()
+    await expect(row.getByRole('button', { name: /^Remove/ }), 'focus returns to the row').toBeFocused()
+    const listed = (await viewOf(backend)).software.map((r) => r.name)
+    await shotTo(page, 3, 'p6-undo-near.png', true)
+    save(3, 'p6-undo-near.json', { softwareId: langgraph.id, listed, onPage: await text(notice(page)) })
+    expect(listed).toEqual(expect.arrayContaining(['LangGraph', 'Redis']))
     assertClean(watch)
     await context.close()
   })

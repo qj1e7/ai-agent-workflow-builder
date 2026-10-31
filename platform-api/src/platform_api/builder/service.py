@@ -67,7 +67,7 @@ from platform_api.builder.templates import (
 )
 from platform_api.builder.views import template_view
 from platform_api.builder.watchlist import Watchlist
-from platform_api.db import Database, json
+from platform_api.db import Connection, Database, hold_workflow, json
 from platform_api.orchestration import (
     CardRun,
     CardsTask,
@@ -313,6 +313,7 @@ class Builder:
 
     async def _move(self, use_case_id: str, move: Move) -> Moved | None:
         async with self._db.transaction("builder") as uow:
+            await hold_workflow(uow.conn, use_case_id, alone=True)
             row = await (
                 await uow.conn.execute(
                     "SELECT u.paused_at, u.paused_by, u.deleted_at, u.deleted_by, v.template"
@@ -493,18 +494,13 @@ class Builder:
         )
 
     async def check_spec(self, use_case_id: UseCaseId) -> RunSpec | NotOn | None:
-        """What the schedule tick asks for. None means nothing to check."""
+        """What the schedule tick asks for. None means nothing to check. The tick holds the
+        workflow's lock around this read and the run insert, so this read does not take it."""
         async with self._db.connection("builder") as conn:
-            row = await (
-                await conn.execute(
-                    "SELECT paused_at, paused_by, deleted_at, deleted_by FROM builder.use_cases"
-                    " WHERE use_case_id = %s",
-                    (use_case_id,),
-                )
-            ).fetchone()
-        if row is None:
-            return None
-        match lifecycle_of(row):
+            state = await _lifecycle_now(conn, use_case_id)
+        match state:
+            case None:
+                return None
             case Paused():
                 return NotOn("paused")
             case Deleted():
@@ -526,4 +522,25 @@ class Builder:
             return spec
         if isinstance(spec.task, CardsTask) and not await self._planner.has_model():
             return NoModelToRun()
-        return await self._runs.start_run(spec, principal, idempotency_key)
+        async with self._db.transaction("builder") as uow:
+            # Read the state again under the lock, on this one connection, and hold the lock
+            # until the run is inserted, so a pause or delete can't land in between (#56).
+            await hold_workflow(uow.conn, use_case_id, alone=False)
+            match await _lifecycle_now(uow.conn, use_case_id):
+                case None | Deleted():
+                    return None
+                case Paused():
+                    return UseCasePaused()
+                case On():
+                    return await self._runs.start_run(spec, principal, idempotency_key)
+
+
+async def _lifecycle_now(conn: Connection, use_case_id: str) -> Lifecycle | None:
+    row = await (
+        await conn.execute(
+            "SELECT paused_at, paused_by, deleted_at, deleted_by FROM builder.use_cases"
+            " WHERE use_case_id = %s",
+            (use_case_id,),
+        )
+    ).fetchone()
+    return None if row is None else lifecycle_of(row)

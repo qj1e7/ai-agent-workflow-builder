@@ -231,7 +231,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
   const recent = runsOf(runs.data ?? [], id)
   const latest = recent[0] ?? null
   const fact = latest ? runFact(latest, nameOf) : null
-  const action = rowAction(useCase, latest, viewer)
+  const action = rowAction(latest, viewer)
   const paused = useCase.state === 'paused'
   const controls = controlsOf(useCase, viewer)
   const onOff = controls.find((control) => control === 'pause' || control === 'resume')

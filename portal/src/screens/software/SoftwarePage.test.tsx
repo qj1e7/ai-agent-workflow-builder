@@ -152,6 +152,10 @@ describe('the Software watchlist page', () => {
     expect(render(statuses, ALICE)).toContain('<p role="status"></p>')
   })
 
+  it('lets the notice take focus, for a removal the platform says was done already', () => {
+    expect(render(statuses, ALICE)).toMatch(/<div[^>]*id="change-notice"[^>]*tabindex="-1"[^>]*><p role="status"><\/p><\/div>/)
+  })
+
   it('invites an Operator to add the first software when the list is empty', () => {
     const html = render({ ...empty, schedule: null }, ALICE)
     expect(text(html)).toContain('No software yet')

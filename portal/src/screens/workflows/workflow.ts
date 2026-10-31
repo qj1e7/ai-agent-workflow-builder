@@ -250,15 +250,11 @@ export function faceStates(useCase: Pick<UseCaseView, 'state'>, latest: RunView 
 
 export type RowAction = { readonly kind: 'decide' | 'why'; readonly runId: string }
 
-function mayDecide(useCase: Pick<UseCaseView, 'owner'>, run: Pick<RunView, 'started_by'>, viewer: Viewer): boolean {
-  const party = run.started_by === viewer.id || useCase.owner === viewer.id
-  return viewer.approver && !party
-}
-
-export function rowAction(useCase: Pick<UseCaseView, 'owner'>, latest: RunView | null, viewer: Viewer): RowAction | null {
+/** The platform says whether the person can decide a waiting run. Only it knows who retried a run or is named on a step. */
+export function rowAction(latest: RunView | null, viewer: Viewer): RowAction | null {
   if (!latest) return null
   if (latest.state === 'awaiting_approval') {
-    return mayDecide(useCase, latest, viewer) ? { kind: 'decide', runId: latest.run_id } : null
+    return latest.you_can_decide ? { kind: 'decide', runId: latest.run_id } : null
   }
   if (latest.state === 'failed' && viewer.operator) return { kind: 'why', runId: latest.run_id }
   return null
@@ -298,7 +294,7 @@ export function rowsOf(useCases: readonly UseCaseView[], runs: readonly RunView[
   const words = query.trim().toLowerCase()
   const rows = useCases.map((useCase) => {
     const run = latest.get(useCase.use_case_id) ?? null
-    return { useCase, latest: run, action: rowAction(useCase, run, viewer) }
+    return { useCase, latest: run, action: rowAction(run, viewer) }
   })
   const needsYou = (row: Row) => (row.action ? 0 : 1)
   return rows.filter((row) => kept(row, filter, words)).sort((a, b) => needsYou(a) - needsYou(b))

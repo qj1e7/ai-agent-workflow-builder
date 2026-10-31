@@ -386,6 +386,7 @@ test('@lane10 the Tools tab says the tool list is not available and keeps the ca
   await expect(tiles(page), 'every tile has drawn').toHaveCount(PLATFORM_AGENTS.length + cardCount)
   const shown = await tiles(page).count()
   const served = await real
+  // p7.sh sets EXPECT_DOWN from the state compose reports after it stops the runtime.
   const runtimeStopped = process.env['EXPECT_DOWN'] === '1'
   save(10, 'p7-runtime-down-real.json', {
     runtimeStopped,

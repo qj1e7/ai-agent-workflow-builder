@@ -35,13 +35,17 @@ interface Setup {
   readonly state?: unknown
 }
 
+/** The platform answers for the person asking. In these tests only Bob may decide the waiting run. */
+const asSeenBy = (me: Me, runs: RunView[]): RunView[] =>
+  runs.map((run) => (run.state === 'awaiting_approval' ? { ...run, you_can_decide: me.id === 'bob' } : run))
+
 function render({ me = ALICE, useCases = [BUGS, WATCHLIST, LANGGRAPH], runs = RUNS, state }: Setup = {}): string {
   const session = createDevSession(null)
   const scope = session.cacheScope()
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   queryClient.setQueryData(['me', scope], me)
   queryClient.setQueryData(['dev-users'], [ALICE, BOB, CAROL])
-  queryClient.setQueryData(['runs', scope], runs)
+  queryClient.setQueryData(['runs', scope], asSeenBy(me, runs))
   if (useCases instanceof Error) queryClient.getQueryCache().build(queryClient, { queryKey: ['use-cases', scope] }).setState({ status: 'error', error: useCases, fetchStatus: 'idle' })
   else if (useCases !== 'loading') queryClient.setQueryData(['use-cases', scope], useCases)
   return renderToStaticMarkup(

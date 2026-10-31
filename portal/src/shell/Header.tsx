@@ -1,5 +1,5 @@
 import { Link, NavLink } from 'react-router'
-import { isOperator } from '../api/me'
+import { isOperator, notOnTheList } from '../api/me'
 import type { Me } from '../api/types'
 import { cx } from '../ui/cx'
 import { Mark, SettingsIcon } from './icons'
@@ -24,7 +24,8 @@ export function Header({ person }: { person: Me | null }) {
         </Link>
         <Menu operator={isOperator(person)} />
         <div className={styles['tools']}>
-          <TeamsButton person={person} />
+          {/* Its badge polls runs and Teams messages, which the platform refuses to someone not on the People list. */}
+          {notOnTheList(person) ? null : <TeamsButton person={person} />}
           <NavLink to={PAGES.settings.path} className={cx(iconButton['button'])} aria-label="Settings" title="Settings">
             <SettingsIcon />
           </NavLink>

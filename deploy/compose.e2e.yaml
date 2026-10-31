@@ -1,6 +1,9 @@
 # Relative paths resolve from deploy/, the directory of the first file.
+# The two mocks carry the stack's tag, as the platform images do, so a second project can start with
+# `up --no-build` on the images an earlier `up` built with that tag.
 services:
   mock-github:
+    image: wab/mock-github:${WAB_IMAGE_TAG:-dev}
     build:
       context: ../e2e/mock_github
       target: runtime
@@ -17,6 +20,7 @@ services:
   # An Anthropic-style model that answers by what the request asks for, so the card tests run
   # the real runtime without a real model. The runtime may reach it because it is listed below.
   mock-model:
+    image: wab/mock-model:${WAB_IMAGE_TAG:-dev}
     build:
       context: ../e2e/mock_model
       target: runtime
