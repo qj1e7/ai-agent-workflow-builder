@@ -5,9 +5,10 @@ name: deploy
 # which stops before applying a plan that would destroy or replace anything unless allow_destroy is
 # ticked. infra/README.md lists the one-time setup in the order that makes this true.
 #
-# The Azure IDs are secrets, which GitHub masks, and the steps print summaries only. Terraform's
-# full output and the plan stay on the runner. That keeps the logs safe if the repository is ever
-# made public.
+# The repository is public, so anyone can read these logs. Every setting that names a person, an
+# ID or the state storage is a secret, which GitHub masks. Only the region and the Cosmos DB
+# switches stay plain variables. The steps print summaries only, and Terraform's full output and
+# the plan stay on the runner.
 on:
   workflow_dispatch:
     inputs:
@@ -47,17 +48,17 @@ jobs:
       # Optional. Set AZURE_LOCATION when the subscription's policy refuses Southeast Asia.
       TF_VAR_location: ${{ vars.AZURE_LOCATION || 'southeastasia' }}
       # docs/auth/entra-setup.md says where each sign-in value comes from. OIDC_JWKS_URL may stay unset.
-      TF_VAR_oidc_issuer: ${{ vars.OIDC_ISSUER }}
-      TF_VAR_oidc_audience: ${{ vars.OIDC_AUDIENCE }}
-      TF_VAR_oidc_jwks_url: ${{ vars.OIDC_JWKS_URL }}
-      TF_VAR_oidc_client_id: ${{ vars.OIDC_CLIENT_ID }}
-      TF_VAR_oidc_scope: ${{ vars.OIDC_SCOPE }}
-      TF_VAR_n8n_owner_email: ${{ vars.N8N_OWNER_EMAIL }}
+      TF_VAR_oidc_issuer: ${{ secrets.OIDC_ISSUER }}
+      TF_VAR_oidc_audience: ${{ secrets.OIDC_AUDIENCE }}
+      TF_VAR_oidc_jwks_url: ${{ secrets.OIDC_JWKS_URL }}
+      TF_VAR_oidc_client_id: ${{ secrets.OIDC_CLIENT_ID }}
+      TF_VAR_oidc_scope: ${{ secrets.OIDC_SCOPE }}
+      TF_VAR_n8n_owner_email: ${{ secrets.N8N_OWNER_EMAIL }}
       # Optional. Without it agent-runtime calls GitHub anonymously, at 60 requests an hour.
       TF_VAR_github_token: ${{ secrets.GH_RELEASE_TOKEN }}
       # The first people (ADR 0030), read only while the People list is empty.
-      TF_VAR_first_operator: ${{ vars.FIRST_OPERATOR }}
-      TF_VAR_first_approvers: ${{ vars.FIRST_APPROVERS }}
+      TF_VAR_first_operator: ${{ secrets.FIRST_OPERATOR }}
+      TF_VAR_first_approvers: ${{ secrets.FIRST_APPROVERS }}
       # Optional. Unset means platform-api's own practice Jira.
       TF_VAR_practice_jira_url: ${{ vars.PRACTICE_JIRA_URL }}
       # Optional, for a subscription that refuses Cosmos DB's free tier or its region (ADR 0031).
@@ -81,8 +82,8 @@ jobs:
 
       - name: Connect to the remote state
         env:
-          STATE_GROUP: ${{ vars.TFSTATE_RESOURCE_GROUP }}
-          STATE_ACCOUNT: ${{ vars.TFSTATE_STORAGE_ACCOUNT }}
+          STATE_GROUP: ${{ secrets.TFSTATE_RESOURCE_GROUP }}
+          STATE_ACCOUNT: ${{ secrets.TFSTATE_STORAGE_ACCOUNT }}
         run: |
           terraform init -lockfile=readonly \
             -backend-config="resource_group_name=$STATE_GROUP" \

@@ -67,7 +67,7 @@ infra/
 |---|---|---|
 | `AUTH_MODE` | `dev` | always `oidc`, because dev mode refuses to start off localhost |
 | `PUBLIC_BASE_URL` | `http://localhost:8080` | the Portal's HTTPS URL, `https://portal.<domain>`, built from the environment's domain |
-| `OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_JWKS_URL` | not set | from variables. `OIDC_JWKS_URL` only when it is not empty |
+| `OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_JWKS_URL` | not set | from secrets. `OIDC_JWKS_URL` only when it is not empty |
 | `DATABASE_URL_*` | built from `.env` | Key Vault secrets, each a full URL with `sslmode=require` |
 | `AGENT_API_KEY`, `STEP_KEY`, `CALLBACK_SIGNING_KEY` | `.env` | Key Vault secrets |
 | `GITHUB_TOKEN` | `.env`, empty by default | a Key Vault secret from `GH_RELEASE_TOKEN`, only when that secret is set |
@@ -83,7 +83,7 @@ infra/
 | `N8N_ENCRYPTION_KEY` | `.env` | Key Vault secret. It must never change |
 | `N8N_SECURE_COOKIE` | `false`, for plain HTTP | not set, so n8n's default `true` applies over HTTPS |
 | Portal `API_UPSTREAM` | `http://platform-api:8000` | platform-api's HTTPS URL |
-| Portal `OIDC_AUTHORITY`, `OIDC_CLIENT_ID`, `OIDC_SCOPE` | not set | from variables, for `/config.json`. `OIDC_AUTHORITY` is the same value as `OIDC_ISSUER` |
+| Portal `OIDC_AUTHORITY`, `OIDC_CLIENT_ID`, `OIDC_SCOPE` | not set | from secrets, for `/config.json`. `OIDC_AUTHORITY` is the same value as `OIDC_ISSUER` |
 
 Apps call each other over HTTPS, because Container Apps redirects plain HTTP and our HTTP clients do not follow redirects. Traffic between apps in one environment stays inside it.
 
@@ -148,7 +148,7 @@ If the repository is made public later, add required reviewers and "Prevent self
    Do this before step 5. The deploy identity's federated credential trusts any workflow job that names `environment: azure-dev`. A workflow that names an environment that does not exist creates it, with no rules at all. So if the credential came first, a workflow on any branch could act as the deploy identity.
 5. **Create the state storage, the resource group and the deploy identity.** Follow [bootstrap/README.md](bootstrap/README.md). It prints five values for step 7.
 6. **Register the Entra ID apps.** Follow [docs/auth/entra-setup.md](../docs/auth/entra-setup.md). It creates the two app registrations, with the app roles `Operator` and `Approver` on platform-api's, and gives the values for the `OIDC_` variables in step 7. The Portal's address does not exist until the first deploy, so register the Portal app without its redirect URIs for now. If the university tenant does not let students register apps, this step needs a tenant that does, because app roles live on an app registration. The deploy identity from step 5 does not have this problem, because it is a managed identity.
-7. **Set the environment's secrets and variables.** On the `azure-dev` environment, add these. GitHub masks secret values wherever they appear in a log. So the Azure IDs go under Secrets, and the rest goes under Variables.
+7. **Set the environment's secrets and variables.** On the `azure-dev` environment, add these. The repository is public, so anyone can read the deploy's logs, and GitHub masks only secret values. So every value that names a person, an ID or the state storage goes under Secrets. Only the region and the Cosmos DB switches go under Variables.
 
    | Secret | Value |
    |---|---|
@@ -156,9 +156,6 @@ If the repository is made public later, add required reviewers and "Prevent self
    | `AZURE_TENANT_ID` | printed by the bootstrap script |
    | `AZURE_SUBSCRIPTION_ID` | printed by the bootstrap script |
    | `GH_RELEASE_TOKEN` | optional. A GitHub token for the release checker, as [Secrets](#secrets) describes |
-
-   | Variable | Value |
-   |---|---|
    | `TFSTATE_RESOURCE_GROUP` | printed by the bootstrap script |
    | `TFSTATE_STORAGE_ACCOUNT` | printed by the bootstrap script |
    | `OIDC_ISSUER` | `https://login.microsoftonline.com/<tenant-id>/v2.0`. The Portal uses it as its sign-in authority too |
@@ -169,12 +166,15 @@ If the repository is made public later, add required reviewers and "Prevent self
    | `N8N_OWNER_EMAIL` | the email for the n8n owner account |
    | `FIRST_OPERATOR` | the work email of the first Operator. Needed on the first deploy |
    | `FIRST_APPROVERS` | the work emails of the first two Approvers, separated by a comma. Two different people. The first Operator may be one of them |
+
+   | Variable | Value |
+   |---|---|
    | `PRACTICE_JIRA_URL` | optional. Leave it unset, and agent-runtime reads platform-api's own practice Jira |
    | `AZURE_LOCATION` | optional. The region for every resource. Unset means `southeastasia`. Set it before the first deploy only: changing it later replaces everything, PostgreSQL included |
    | `COSMOS_LOCATION` | optional. A region for Cosmos DB alone, when it is refused in `AZURE_LOCATION` |
    | `COSMOS_SERVERLESS` | optional. `true` makes a serverless Cosmos DB account, for when the free tier is refused. Unset means `false` |
 
-   With the GitHub CLI, each is one command, for example `gh secret set AZURE_TENANT_ID --env azure-dev` (it asks for the value) or `gh variable set OIDC_ISSUER --env azure-dev --body "https://login.microsoftonline.com/<tenant-id>/v2.0"`.
+   With the GitHub CLI, each is one command, for example `gh secret set AZURE_TENANT_ID --env azure-dev` (it asks for the value) or `gh variable set AZURE_LOCATION --env azure-dev --body eastasia`.
 8. **Run the deploy.** In the Actions tab, run the `deploy` workflow on `main`. Leave `allow_destroy` off. The workflow then:
    1. creates the registry if it is missing,
    2. copies n8n and PostgreSQL into the registry by digest, then builds and pushes our three images, tagged with the commit SHA,
