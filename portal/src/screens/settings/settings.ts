@@ -202,6 +202,8 @@ export interface PeopleProblem {
 export interface PeopleSaid {
   readonly notice: PeopleNotice | null
   readonly problem: PeopleProblem | null
+  /** Who someone else took off the list, said beside the notice or the problem. */
+  readonly left: { readonly personIds: readonly string[]; readonly words: string } | null
 }
 
 export function leftTheListWords(names: readonly string[]): string {
@@ -210,15 +212,30 @@ export function leftTheListWords(names: readonly string[]): string {
   return `${who} no longer on the list. The list now shows who is on it.`
 }
 
+/**
+ * A refusal or a fresh notice about someone still on the list stays, and the page says who left as well. What was said
+ * on a row that left goes with that row: its Undo can't work, and the left-the-list line names them instead.
+ */
 export function saidAfterListChange(before: readonly Pick<PersonOut, 'id' | 'display'>[], after: readonly Pick<PersonOut, 'id'>[], said: PeopleSaid): PeopleSaid {
   const still = new Set(after.map((person) => person.id))
   const left = before.filter((person) => !still.has(person.id))
-  const first = left[0]
-  if (!first) return said
-  const words = leftTheListWords(left.map((person) => person.display))
-  const problem = said.problem
-  if (problem && left.some((person) => person.id === problem.personId)) return { notice: null, problem: { personId: problem.personId, words } }
-  return { notice: { personId: first.id, words, undo: null }, problem: null }
+  if (left.length === 0) return said
+  const leftIds = new Set(left.map((person) => person.id))
+  const onLeftRow = (what: { readonly personId: string } | null) => what !== null && leftIds.has(what.personId)
+  return {
+    notice: onLeftRow(said.notice) ? null : said.notice,
+    problem: onLeftRow(said.problem) ? null : said.problem,
+    left: { personIds: left.map((person) => person.id), words: leftTheListWords(left.map((person) => person.display)) },
+  }
+}
+
+/**
+ * A refusal replaces the notice. When the list was read again before the refusal came, a refusal about someone the
+ * left line already names would only say the same thing twice, so the left line says it alone.
+ */
+export function saidAfterRefusal(said: PeopleSaid, problem: PeopleProblem): PeopleSaid {
+  const named = said.left?.personIds.includes(problem.personId) === true
+  return { notice: null, problem: named ? null : problem, left: said.left }
 }
 
 export function personStatusWords(person: PersonOut): string | null {

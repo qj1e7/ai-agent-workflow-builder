@@ -32,6 +32,7 @@ import {
   pendingApproverFor,
   personStatusWords,
   saidAfterListChange,
+  saidAfterRefusal,
   savedKeyFits,
   SETTINGS_OFF_WORDS,
   settingsErrorWords,
@@ -182,46 +183,74 @@ describe('a person who leaves the list while the page is open', () => {
   const IVAN = { ...DAVE, id: 'ivan', display: 'Ivan', email: 'ivan@example.test' }
   const BEFORE = [...PEOPLE, GINA, HANA, IVAN]
   const without = (...ids: string[]) => BEFORE.filter((person) => !ids.includes(person.id))
-  const NOTHING: PeopleSaid = { notice: null, problem: null }
+  const NOTHING: PeopleSaid = { notice: null, problem: null, left: null }
 
   it('is announced by name when nothing was shown on their row', () => {
     expect(saidAfterListChange(BEFORE, without('ivan'), NOTHING)).toEqual({
-      notice: { personId: 'ivan', words: 'Ivan is no longer on the list. The list now shows who is on it.', undo: null },
+      notice: null,
       problem: null,
+      left: { personIds: ['ivan'], words: 'Ivan is no longer on the list. The list now shows who is on it.' },
     })
   })
 
-  it('replaces the notice that was on their row, and its Undo', () => {
-    const said: PeopleSaid = { notice: { personId: 'hana', words: 'Hana is no longer an Operator.', undo: { name: 'Hana', operator: true } }, problem: null }
+  it('takes the notice that was on their row, and its Undo, and says who left instead', () => {
+    const said: PeopleSaid = { notice: { personId: 'hana', words: 'Hana is no longer an Operator.', undo: { name: 'Hana', operator: true } }, problem: null, left: null }
     expect(saidAfterListChange(BEFORE, without('hana'), said)).toEqual({
-      notice: { personId: 'hana', words: 'Hana is no longer on the list. The list now shows who is on it.', undo: null },
+      notice: null,
       problem: null,
+      left: { personIds: ['hana'], words: 'Hana is no longer on the list. The list now shows who is on it.' },
     })
   })
 
-  it('names them in the problem when someone acted on them after they left', () => {
-    const said: PeopleSaid = { notice: null, problem: { personId: 'gina', words: 'That person is no longer on the list. The list now shows who is on it.' } }
+  it('takes the problem that was on their row, and says who left instead', () => {
+    const said: PeopleSaid = { notice: null, problem: { personId: 'gina', words: 'That person is no longer on the list. The list now shows who is on it.' }, left: null }
     expect(saidAfterListChange(BEFORE, without('gina'), said)).toEqual({
       notice: null,
-      problem: { personId: 'gina', words: 'Gina is no longer on the list. The list now shows who is on it.' },
+      problem: null,
+      left: { personIds: ['gina'], words: 'Gina is no longer on the list. The list now shows who is on it.' },
     })
   })
 
-  it('replaces what was said about someone still on the list', () => {
-    const said: PeopleSaid = { notice: null, problem: { personId: 'bob', words: 'At least 2 people must be Approvers, so nobody has to approve their own work.' } }
-    expect(saidAfterListChange(BEFORE, without('ivan'), said)).toEqual({
-      notice: { personId: 'ivan', words: 'Ivan is no longer on the list. The list now shows who is on it.', undo: null },
-      problem: null,
+  it('keeps a refusal on someone still on the list, and says who left as well', () => {
+    const refusal = { personId: 'bob', words: 'At least 2 people must be Approvers, so nobody has to approve their own work.' }
+    expect(saidAfterListChange(BEFORE, without('ivan'), { notice: null, problem: refusal, left: null })).toEqual({
+      notice: null,
+      problem: refusal,
+      left: { personIds: ['ivan'], words: 'Ivan is no longer on the list. The list now shows who is on it.' },
     })
+  })
+
+  it('keeps a fresh Added message, even before the list shows them, and says who left as well', () => {
+    const added = { personId: 'zed', words: 'Added Zed as an Operator.', undo: null }
+    const after = [...without('ivan'), { ...DAVE, id: 'zed', display: 'Zed' }]
+    expect(saidAfterListChange(BEFORE, after, { notice: added, problem: null, left: null })).toEqual({
+      notice: added,
+      problem: null,
+      left: { personIds: ['ivan'], words: 'Ivan is no longer on the list. The list now shows who is on it.' },
+    })
+    expect(saidAfterListChange(BEFORE, without('ivan'), { notice: added, problem: null, left: null }).notice).toBe(added)
+  })
+
+  it('drops a refusal that only says what the left line already says, when the list was read again before the refusal came', () => {
+    const left = saidAfterListChange(BEFORE, without('gina'), NOTHING)
+    const gone = { personId: 'gina', words: 'That person is no longer on the list. The list now shows who is on it.' }
+    expect(saidAfterRefusal(left, gone)).toEqual({ notice: null, problem: null, left: left.left })
+  })
+
+  it('keeps a refusal about someone the left line does not name, with the left line', () => {
+    const left = saidAfterListChange(BEFORE, without('ivan'), NOTHING)
+    const refusal = { personId: 'bob', words: 'At least 2 people must be Approvers, so nobody has to approve their own work.' }
+    expect(saidAfterRefusal(left, refusal)).toEqual({ notice: null, problem: refusal, left: left.left })
+    expect(saidAfterRefusal(NOTHING, refusal)).toEqual({ notice: null, problem: refusal, left: null })
   })
 
   it('names everyone who left at once', () => {
-    expect(saidAfterListChange(BEFORE, without('gina', 'ivan'), NOTHING).notice?.words).toBe('Gina and Ivan are no longer on the list. The list now shows who is on it.')
+    expect(saidAfterListChange(BEFORE, without('gina', 'ivan'), NOTHING).left?.words).toBe('Gina and Ivan are no longer on the list. The list now shows who is on it.')
     expect(leftTheListWords(['Gina', 'Hana', 'Ivan'])).toBe('Gina, Hana and Ivan are no longer on the list. The list now shows who is on it.')
   })
 
   it('keeps what is shown when nobody left', () => {
-    const said: PeopleSaid = { notice: { personId: 'hana', words: 'Hana is no longer an Operator.', undo: { name: 'Hana', operator: true } }, problem: null }
+    const said: PeopleSaid = { notice: { personId: 'hana', words: 'Hana is no longer an Operator.', undo: { name: 'Hana', operator: true } }, problem: null, left: null }
     expect(saidAfterListChange(BEFORE, [...BEFORE, { ...DAVE, id: 'jo', display: 'Jo' }], said)).toBe(said)
     expect(saidAfterListChange(BEFORE, BEFORE.map((person) => ({ ...person, operator: !person.operator })), said)).toBe(said)
   })
