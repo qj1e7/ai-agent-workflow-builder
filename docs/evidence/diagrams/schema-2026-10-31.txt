@@ -1,0 +1,352 @@
+# The platform database's schemas, tables, columns and keys, read on 31 Oct 2026 at about 02:35 UTC from the PostgreSQL
+# of the second DAST run's stack (scripts/dast.sh, project p15-scan, commit 22da245), after its migrations ran.
+# Query: docker exec -i <project>-postgres-1 psql -U postgres -d platform -f - < the query below.
+#
+#   \pset pager off
+#   \echo '== tables'
+#   SELECT table_schema || '.' || table_name AS table_name FROM information_schema.tables
+#   WHERE table_schema IN ('builder','orchestration','monitoring') ORDER BY 1;
+#   \echo '== columns'
+#   SELECT table_schema || '.' || table_name AS t, column_name, data_type, is_nullable FROM information_schema.columns
+#   WHERE table_schema IN ('builder','orchestration','monitoring') ORDER BY table_schema, table_name, ordinal_position;
+#   \echo '== constraints (primary, unique, foreign)'
+#   SELECT n.nspname || '.' || c.relname AS t, con.conname, con.contype, pg_get_constraintdef(con.oid) AS def
+#   FROM pg_constraint con JOIN pg_class c ON c.oid = con.conrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+#   WHERE n.nspname IN ('builder','orchestration','monitoring') AND con.contype IN ('p','u','f') ORDER BY 1, 3, 2;
+#   \echo '== unique indexes that are not constraints'
+#   SELECT schemaname || '.' || tablename AS t, indexname, indexdef FROM pg_indexes i
+#   WHERE schemaname IN ('builder','orchestration','monitoring') AND indexdef LIKE 'CREATE UNIQUE%'
+#   AND NOT EXISTS (SELECT 1 FROM pg_constraint con WHERE con.conname = i.indexname) ORDER BY 1, 2;
+#   \echo '== other databases'
+#   SELECT datname FROM pg_database WHERE NOT datistemplate ORDER BY 1;
+
+== tables
+            table_name             
+-----------------------------------
+ builder.alembic_version
+ builder.card_versions
+ builder.cards
+ builder.drafts
+ builder.use_case_cards
+ builder.use_case_versions
+ builder.use_cases
+ builder.watched_software
+ monitoring.alembic_version
+ monitoring.run_events
+ monitoring.run_events_copied
+ orchestration.alembic_version
+ orchestration.approval_decisions
+ orchestration.approval_requests
+ orchestration.confirmations
+ orchestration.engine_status
+ orchestration.leg_attempts
+ orchestration.mock_jira_tickets
+ orchestration.model_hosts
+ orchestration.model_setting
+ orchestration.our_versions
+ orchestration.outbox
+ orchestration.people
+ orchestration.proposals
+ orchestration.proposed_tickets
+ orchestration.runs
+ orchestration.schedules
+ orchestration.settings_changes
+ orchestration.software_checks
+ orchestration.teams_stub_messages
+ orchestration.write_executions
+(31 rows)
+
+== columns
+                 t                 |    column_name     |        data_type         | is_nullable 
+-----------------------------------+--------------------+--------------------------+-------------
+ builder.alembic_version           | version_num        | character varying        | NO
+ builder.card_versions             | card_id            | text                     | NO
+ builder.card_versions             | version            | integer                  | NO
+ builder.card_versions             | name               | text                     | NO
+ builder.card_versions             | purpose            | text                     | NO
+ builder.card_versions             | good_for           | jsonb                    | NO
+ builder.card_versions             | inputs             | jsonb                    | NO
+ builder.card_versions             | blocks             | jsonb                    | NO
+ builder.card_versions             | approvals          | jsonb                    | NO
+ builder.card_versions             | created_by         | text                     | NO
+ builder.card_versions             | created_at         | timestamp with time zone | NO
+ builder.cards                     | card_id            | text                     | NO
+ builder.cards                     | owner              | text                     | NO
+ builder.cards                     | created_at         | timestamp with time zone | NO
+ builder.cards                     | current_version    | integer                  | NO
+ builder.drafts                    | author             | text                     | NO
+ builder.drafts                    | draft_id           | text                     | NO
+ builder.drafts                    | step               | integer                  | NO
+ builder.drafts                    | content            | jsonb                    | NO
+ builder.drafts                    | created_at         | timestamp with time zone | NO
+ builder.drafts                    | saved_at           | timestamp with time zone | NO
+ builder.use_case_cards            | use_case_id        | text                     | NO
+ builder.use_case_cards            | version            | integer                  | NO
+ builder.use_case_cards            | position           | integer                  | NO
+ builder.use_case_cards            | card_id            | text                     | NO
+ builder.use_case_cards            | card_version       | integer                  | NO
+ builder.use_case_cards            | values             | jsonb                    | NO
+ builder.use_case_versions         | use_case_id        | text                     | NO
+ builder.use_case_versions         | version            | integer                  | NO
+ builder.use_case_versions         | template           | text                     | NO
+ builder.use_case_versions         | name               | text                     | NO
+ builder.use_case_versions         | instruction        | text                     | NO
+ builder.use_case_versions         | params             | jsonb                    | NO
+ builder.use_case_versions         | created_at         | timestamp with time zone | NO
+ builder.use_cases                 | use_case_id        | text                     | NO
+ builder.use_cases                 | owner              | text                     | NO
+ builder.use_cases                 | created_at         | timestamp with time zone | NO
+ builder.use_cases                 | current_version    | integer                  | NO
+ builder.use_cases                 | paused_at          | timestamp with time zone | YES
+ builder.use_cases                 | paused_by          | text                     | YES
+ builder.use_cases                 | deleted_at         | timestamp with time zone | YES
+ builder.use_cases                 | deleted_by         | text                     | YES
+ builder.watched_software          | use_case_id        | text                     | NO
+ builder.watched_software          | version            | integer                  | NO
+ builder.watched_software          | software_id        | text                     | NO
+ builder.watched_software          | position           | integer                  | NO
+ builder.watched_software          | name               | text                     | NO
+ builder.watched_software          | source_kind        | text                     | NO
+ builder.watched_software          | source_ref         | text                     | NO
+ builder.watched_software          | starting_version   | text                     | YES
+ builder.watched_software          | added_by           | text                     | NO
+ builder.watched_software          | added_at           | timestamp with time zone | NO
+ monitoring.alembic_version        | version_num        | character varying        | NO
+ monitoring.run_events             | run_id             | text                     | NO
+ monitoring.run_events             | seq                | integer                  | NO
+ monitoring.run_events             | ts                 | timestamp with time zone | NO
+ monitoring.run_events             | actor              | jsonb                    | NO
+ monitoring.run_events             | kind               | text                     | NO
+ monitoring.run_events             | summary            | text                     | NO
+ monitoring.run_events             | data               | jsonb                    | NO
+ monitoring.run_events             | dedupe_key         | text                     | NO
+ monitoring.run_events_copied      | run_id             | text                     | NO
+ monitoring.run_events_copied      | generation         | text                     | NO
+ monitoring.run_events_copied      | seq                | integer                  | NO
+ monitoring.run_events_copied      | copied_at          | timestamp with time zone | NO
+ orchestration.alembic_version     | version_num        | character varying        | NO
+ orchestration.approval_decisions  | approval_id        | text                     | NO
+ orchestration.approval_decisions  | step_index         | integer                  | NO
+ orchestration.approval_decisions  | decided_by         | text                     | NO
+ orchestration.approval_decisions  | verdict            | text                     | NO
+ orchestration.approval_decisions  | seen_digest        | text                     | NO
+ orchestration.approval_decisions  | decided_at         | timestamp with time zone | NO
+ orchestration.approval_requests   | approval_id        | text                     | NO
+ orchestration.approval_requests   | run_id             | text                     | NO
+ orchestration.approval_requests   | proposal_id        | text                     | NO
+ orchestration.approval_requests   | digest             | text                     | NO
+ orchestration.approval_requests   | policy             | jsonb                    | NO
+ orchestration.approval_requests   | parties            | jsonb                    | NO
+ orchestration.approval_requests   | created_at         | timestamp with time zone | NO
+ orchestration.confirmations       | id                 | text                     | NO
+ orchestration.confirmations       | kind               | text                     | NO
+ orchestration.confirmations       | about              | text                     | YES
+ orchestration.confirmations       | change             | jsonb                    | NO
+ orchestration.confirmations       | digest             | text                     | NO
+ orchestration.confirmations       | asked_by           | text                     | NO
+ orchestration.confirmations       | asked_at           | timestamp with time zone | NO
+ orchestration.confirmations       | decided_by         | text                     | YES
+ orchestration.confirmations       | decision           | text                     | YES
+ orchestration.confirmations       | decided_at         | timestamp with time zone | YES
+ orchestration.engine_status       | id                 | integer                  | NO
+ orchestration.engine_status       | loaded_at          | timestamp with time zone | NO
+ orchestration.engine_status       | ready              | boolean                  | NO
+ orchestration.engine_status       | detail             | text                     | NO
+ orchestration.engine_status       | workflows          | jsonb                    | NO
+ orchestration.leg_attempts        | run_id             | text                     | NO
+ orchestration.leg_attempts        | leg                | text                     | NO
+ orchestration.leg_attempts        | attempt            | integer                  | NO
+ orchestration.leg_attempts        | n8n_execution_id   | text                     | YES
+ orchestration.leg_attempts        | recorded_at        | timestamp with time zone | NO
+ orchestration.mock_jira_tickets   | key                | text                     | NO
+ orchestration.mock_jira_tickets   | number             | integer                  | NO
+ orchestration.mock_jira_tickets   | project            | text                     | NO
+ orchestration.mock_jira_tickets   | title              | text                     | NO
+ orchestration.mock_jira_tickets   | body               | text                     | NO
+ orchestration.mock_jira_tickets   | created_at         | timestamp with time zone | NO
+ orchestration.mock_jira_tickets   | run_id             | text                     | NO
+ orchestration.mock_jira_tickets   | proposal_id        | text                     | NO
+ orchestration.mock_jira_tickets   | idempotency_key    | text                     | NO
+ orchestration.mock_jira_tickets   | status             | text                     | NO
+ orchestration.mock_jira_tickets   | done_at            | timestamp with time zone | YES
+ orchestration.model_hosts         | host               | text                     | NO
+ orchestration.model_hosts         | confirmed_by       | text                     | NO
+ orchestration.model_hosts         | confirmed_at       | timestamp with time zone | NO
+ orchestration.model_setting       | slot               | text                     | NO
+ orchestration.model_setting       | provider           | text                     | NO
+ orchestration.model_setting       | style              | text                     | NO
+ orchestration.model_setting       | base_url           | text                     | NO
+ orchestration.model_setting       | model              | text                     | NO
+ orchestration.model_setting       | sealed_key         | text                     | NO
+ orchestration.model_setting       | key_hint           | text                     | NO
+ orchestration.model_setting       | test_seconds       | real                     | NO
+ orchestration.model_setting       | saved_by           | text                     | NO
+ orchestration.model_setting       | saved_by_name      | text                     | NO
+ orchestration.model_setting       | saved_at           | timestamp with time zone | NO
+ orchestration.our_versions        | use_case_id        | text                     | NO
+ orchestration.our_versions        | software_id        | text                     | NO
+ orchestration.our_versions        | version            | text                     | NO
+ orchestration.our_versions        | source             | text                     | NO
+ orchestration.our_versions        | learned_at         | timestamp with time zone | NO
+ orchestration.our_versions        | ticket_key         | text                     | YES
+ orchestration.outbox              | id                 | bigint                   | NO
+ orchestration.outbox              | run_id             | text                     | NO
+ orchestration.outbox              | kind               | text                     | NO
+ orchestration.outbox              | payload            | jsonb                    | NO
+ orchestration.outbox              | attempt            | integer                  | NO
+ orchestration.outbox              | next_at            | timestamp with time zone | NO
+ orchestration.outbox              | status             | text                     | NO
+ orchestration.outbox              | last_error         | text                     | YES
+ orchestration.outbox              | created_at         | timestamp with time zone | NO
+ orchestration.people              | id                 | text                     | NO
+ orchestration.people              | entra_oid          | text                     | YES
+ orchestration.people              | email              | text                     | NO
+ orchestration.people              | display            | text                     | NO
+ orchestration.people              | is_operator        | boolean                  | NO
+ orchestration.people              | is_approver        | boolean                  | NO
+ orchestration.people              | added_by           | text                     | NO
+ orchestration.people              | added_at           | timestamp with time zone | NO
+ orchestration.people              | bound_at           | timestamp with time zone | YES
+ orchestration.people              | removed_at         | timestamp with time zone | YES
+ orchestration.proposals           | proposal_id        | text                     | NO
+ orchestration.proposals           | run_id             | text                     | NO
+ orchestration.proposals           | actions            | jsonb                    | NO
+ orchestration.proposals           | digest             | text                     | NO
+ orchestration.proposals           | created_at         | timestamp with time zone | NO
+ orchestration.proposed_tickets    | proposal_id        | text                     | NO
+ orchestration.proposed_tickets    | action_index       | integer                  | NO
+ orchestration.proposed_tickets    | run_id             | text                     | NO
+ orchestration.proposed_tickets    | use_case_id        | text                     | NO
+ orchestration.proposed_tickets    | software_id        | text                     | NO
+ orchestration.proposed_tickets    | version            | text                     | NO
+ orchestration.proposed_tickets    | status             | text                     | NO
+ orchestration.proposed_tickets    | ticket_key         | text                     | YES
+ orchestration.proposed_tickets    | done_at            | timestamp with time zone | YES
+ orchestration.runs                | run_id             | text                     | NO
+ orchestration.runs                | use_case_id        | text                     | NO
+ orchestration.runs                | idempotency_key    | text                     | NO
+ orchestration.runs                | spec               | jsonb                    | NO
+ orchestration.runs                | started_by         | text                     | NO
+ orchestration.runs                | started_at         | timestamp with time zone | NO
+ orchestration.runs                | updated_at         | timestamp with time zone | NO
+ orchestration.runs                | version            | integer                  | NO
+ orchestration.runs                | state              | text                     | NO
+ orchestration.runs                | state_data         | jsonb                    | NO
+ orchestration.runs                | deadline_at        | timestamp with time zone | YES
+ orchestration.runs                | retried_by         | jsonb                    | NO
+ orchestration.runs                | carry_forward      | text                     | YES
+ orchestration.schedules           | use_case_id        | text                     | NO
+ orchestration.schedules           | day                | text                     | NO
+ orchestration.schedules           | at                 | text                     | NO
+ orchestration.schedules           | time_zone          | text                     | NO
+ orchestration.schedules           | owner_id           | text                     | NO
+ orchestration.schedules           | owner_name         | text                     | NO
+ orchestration.schedules           | saved_at           | timestamp with time zone | NO
+ orchestration.schedules           | last_slot_started  | timestamp with time zone | YES
+ orchestration.settings_changes    | id                 | bigint                   | NO
+ orchestration.settings_changes    | changed_at         | timestamp with time zone | NO
+ orchestration.settings_changes    | area               | text                     | NO
+ orchestration.settings_changes    | changed_by         | text                     | NO
+ orchestration.settings_changes    | confirmed_by       | text                     | YES
+ orchestration.settings_changes    | confirmation_id    | text                     | YES
+ orchestration.settings_changes    | summary            | text                     | NO
+ orchestration.software_checks     | use_case_id        | text                     | NO
+ orchestration.software_checks     | software_id        | text                     | NO
+ orchestration.software_checks     | run_id             | text                     | NO
+ orchestration.software_checks     | checked_at         | timestamp with time zone | NO
+ orchestration.software_checks     | newest_version     | text                     | YES
+ orchestration.software_checks     | problem            | text                     | YES
+ orchestration.software_checks     | newest_at          | timestamp with time zone | YES
+ orchestration.teams_stub_messages | id                 | text                     | NO
+ orchestration.teams_stub_messages | ts                 | timestamp with time zone | NO
+ orchestration.teams_stub_messages | channel            | text                     | NO
+ orchestration.teams_stub_messages | text               | text                     | NO
+ orchestration.teams_stub_messages | link               | text                     | NO
+ orchestration.teams_stub_messages | run_id             | text                     | NO
+ orchestration.teams_stub_messages | approval_id        | text                     | NO
+ orchestration.write_executions    | proposal_id        | text                     | NO
+ orchestration.write_executions    | action_index       | integer                  | NO
+ orchestration.write_executions    | run_id             | text                     | NO
+ orchestration.write_executions    | idempotency_key    | text                     | NO
+ orchestration.write_executions    | status             | text                     | NO
+ orchestration.write_executions    | started_at         | timestamp with time zone | NO
+ orchestration.write_executions    | done_at            | timestamp with time zone | YES
+ orchestration.write_executions    | external_reference | text                     | YES
+(213 rows)
+
+== constraints (primary, unique, foreign)
+                 t                 |                    conname                     | contype |                                              def                                              
+-----------------------------------+------------------------------------------------+---------+-----------------------------------------------------------------------------------------------
+ builder.alembic_version           | alembic_version_pkc                            | p       | PRIMARY KEY (version_num)
+ builder.card_versions             | card_versions_card_id_fkey                     | f       | FOREIGN KEY (card_id) REFERENCES builder.cards(card_id)
+ builder.card_versions             | card_versions_pkey                             | p       | PRIMARY KEY (card_id, version)
+ builder.cards                     | cards_pkey                                     | p       | PRIMARY KEY (card_id)
+ builder.drafts                    | drafts_pkey                                    | p       | PRIMARY KEY (author, draft_id)
+ builder.use_case_cards            | use_case_cards_use_case_id_version_fkey        | f       | FOREIGN KEY (use_case_id, version) REFERENCES builder.use_case_versions(use_case_id, version)
+ builder.use_case_cards            | use_case_cards_pkey                            | p       | PRIMARY KEY (use_case_id, version, "position")
+ builder.use_case_cards            | use_case_cards_use_case_id_version_card_id_key | u       | UNIQUE (use_case_id, version, card_id)
+ builder.use_case_versions         | use_case_versions_use_case_id_fkey             | f       | FOREIGN KEY (use_case_id) REFERENCES builder.use_cases(use_case_id)
+ builder.use_case_versions         | use_case_versions_pkey                         | p       | PRIMARY KEY (use_case_id, version)
+ builder.use_cases                 | use_cases_pkey                                 | p       | PRIMARY KEY (use_case_id)
+ builder.watched_software          | watched_software_use_case_id_version_fkey      | f       | FOREIGN KEY (use_case_id, version) REFERENCES builder.use_case_versions(use_case_id, version)
+ builder.watched_software          | watched_software_pkey                          | p       | PRIMARY KEY (use_case_id, version, software_id)
+ monitoring.alembic_version        | alembic_version_pkc                            | p       | PRIMARY KEY (version_num)
+ monitoring.run_events             | run_events_pkey                                | p       | PRIMARY KEY (run_id, seq)
+ monitoring.run_events             | run_events_run_id_dedupe_key_key               | u       | UNIQUE (run_id, dedupe_key)
+ monitoring.run_events_copied      | run_events_copied_pkey                         | p       | PRIMARY KEY (run_id)
+ orchestration.alembic_version     | alembic_version_pkc                            | p       | PRIMARY KEY (version_num)
+ orchestration.approval_decisions  | approval_decisions_approval_id_fkey            | f       | FOREIGN KEY (approval_id) REFERENCES orchestration.approval_requests(approval_id)
+ orchestration.approval_decisions  | approval_decisions_pkey                        | p       | PRIMARY KEY (approval_id, step_index)
+ orchestration.approval_requests   | approval_requests_proposal_id_fkey             | f       | FOREIGN KEY (proposal_id) REFERENCES orchestration.proposals(proposal_id)
+ orchestration.approval_requests   | approval_requests_run_id_fkey                  | f       | FOREIGN KEY (run_id) REFERENCES orchestration.runs(run_id)
+ orchestration.approval_requests   | approval_requests_pkey                         | p       | PRIMARY KEY (approval_id)
+ orchestration.confirmations       | confirmations_about_fkey                       | f       | FOREIGN KEY (about) REFERENCES orchestration.people(id)
+ orchestration.confirmations       | confirmations_pkey                             | p       | PRIMARY KEY (id)
+ orchestration.engine_status       | engine_status_pkey                             | p       | PRIMARY KEY (id)
+ orchestration.leg_attempts        | leg_attempts_run_id_fkey                       | f       | FOREIGN KEY (run_id) REFERENCES orchestration.runs(run_id)
+ orchestration.leg_attempts        | leg_attempts_pkey                              | p       | PRIMARY KEY (run_id, leg, attempt)
+ orchestration.mock_jira_tickets   | mock_jira_tickets_pkey                         | p       | PRIMARY KEY (key)
+ orchestration.mock_jira_tickets   | mock_jira_tickets_idempotency_key_key          | u       | UNIQUE (idempotency_key)
+ orchestration.mock_jira_tickets   | mock_jira_tickets_number_key                   | u       | UNIQUE (number)
+ orchestration.model_hosts         | model_hosts_pkey                               | p       | PRIMARY KEY (host)
+ orchestration.model_setting       | model_setting_pkey                             | p       | PRIMARY KEY (slot)
+ orchestration.our_versions        | our_versions_pkey                              | p       | PRIMARY KEY (use_case_id, software_id)
+ orchestration.outbox              | outbox_run_id_fkey                             | f       | FOREIGN KEY (run_id) REFERENCES orchestration.runs(run_id)
+ orchestration.outbox              | outbox_pkey                                    | p       | PRIMARY KEY (id)
+ orchestration.people              | people_pkey                                    | p       | PRIMARY KEY (id)
+ orchestration.people              | people_entra_oid_key                           | u       | UNIQUE (entra_oid)
+ orchestration.proposals           | proposals_run_id_fkey                          | f       | FOREIGN KEY (run_id) REFERENCES orchestration.runs(run_id)
+ orchestration.proposals           | proposals_pkey                                 | p       | PRIMARY KEY (proposal_id)
+ orchestration.proposed_tickets    | proposed_tickets_proposal_id_fkey              | f       | FOREIGN KEY (proposal_id) REFERENCES orchestration.proposals(proposal_id)
+ orchestration.proposed_tickets    | proposed_tickets_run_id_fkey                   | f       | FOREIGN KEY (run_id) REFERENCES orchestration.runs(run_id)
+ orchestration.proposed_tickets    | proposed_tickets_pkey                          | p       | PRIMARY KEY (proposal_id, action_index)
+ orchestration.runs                | runs_pkey                                      | p       | PRIMARY KEY (run_id)
+ orchestration.runs                | runs_use_case_id_idempotency_key_key           | u       | UNIQUE (use_case_id, idempotency_key)
+ orchestration.schedules           | schedules_pkey                                 | p       | PRIMARY KEY (use_case_id)
+ orchestration.settings_changes    | settings_changes_confirmation_id_fkey          | f       | FOREIGN KEY (confirmation_id) REFERENCES orchestration.confirmations(id)
+ orchestration.settings_changes    | settings_changes_pkey                          | p       | PRIMARY KEY (id)
+ orchestration.software_checks     | software_checks_run_id_fkey                    | f       | FOREIGN KEY (run_id) REFERENCES orchestration.runs(run_id)
+ orchestration.software_checks     | software_checks_pkey                           | p       | PRIMARY KEY (use_case_id, software_id)
+ orchestration.teams_stub_messages | teams_stub_messages_pkey                       | p       | PRIMARY KEY (id)
+ orchestration.teams_stub_messages | teams_stub_messages_approval_id_key            | u       | UNIQUE (approval_id)
+ orchestration.write_executions    | write_executions_proposal_id_fkey              | f       | FOREIGN KEY (proposal_id) REFERENCES orchestration.proposals(proposal_id)
+ orchestration.write_executions    | write_executions_pkey                          | p       | PRIMARY KEY (proposal_id, action_index)
+ orchestration.write_executions    | write_executions_idempotency_key_key           | u       | UNIQUE (idempotency_key)
+(55 rows)
+
+== unique indexes that are not constraints
+              t              |                indexname                |                                                                          indexdef                                                                          
+-----------------------------+-----------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------
+ builder.watched_software    | watched_software_one_source_per_version | CREATE UNIQUE INDEX watched_software_one_source_per_version ON builder.watched_software USING btree (use_case_id, version, source_kind, lower(source_ref))
+ orchestration.confirmations | confirmations_one_open_key              | CREATE UNIQUE INDEX confirmations_one_open_key ON orchestration.confirmations USING btree (kind, COALESCE(about, ''::text)) WHERE (decided_at IS NULL)
+ orchestration.people        | people_email_key                        | CREATE UNIQUE INDEX people_email_key ON orchestration.people USING btree (lower(email))
+(3 rows)
+
+== other databases
+ datname  
+----------
+ n8n
+ platform
+ postgres
+(3 rows)
+
