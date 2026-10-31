@@ -5,7 +5,9 @@ from typing import Literal
 
 from platform_api.orchestration import AnyApprover, ApprovalPolicy, ApprovalStep, Binding
 
-TAG_PATTERN = r"^\d+\.\d+\.\d+$"
+TAG_PATTERN = r"^[vV]?\d+\.\d+\.\d+$"
+"""A plain version number, with or without one v in front, such as 1.2.14 or v2.14.2. The
+Agent API takes only patterns from its fixed list, and this is one of them."""
 
 
 @dataclass(frozen=True)

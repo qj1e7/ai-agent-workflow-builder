@@ -120,6 +120,14 @@ async def test_the_watchlist_is_null_until_software_is_added_then_lists_it(
     assert again.json() == {"watchlist": view}
 
 
+async def test_our_version_may_start_with_v_as_release_tags_often_do(client: httpx.AsyncClient):
+    pydantic = {"name": "Pydantic", "repo": "pydantic/pydantic", "our_version": "v2.0.0"}
+    added = await client.post("/api/v1/watchlist/software", json=pydantic, headers=ALICE)
+    assert added.status_code == 201
+    [row] = added.json()["software"]
+    assert (row["our_version"], row["our_version_source"]["kind"]) == ("v2.0.0", "given")
+
+
 async def test_a_repository_watched_twice_is_a_409(client: httpx.AsyncClient):
     await client.post("/api/v1/watchlist/software", json=LANGGRAPH, headers=ALICE)
     r = await client.post(
@@ -136,7 +144,8 @@ async def test_a_repository_watched_twice_is_a_409(client: httpx.AsyncClient):
         ({**LANGGRAPH, "name": "x" * 81}, "name"),
         ({**LANGGRAPH, "repo": "langgraph"}, "repo"),
         ({**LANGGRAPH, "repo": "owner/.."}, "repo"),
-        ({**LANGGRAPH, "our_version": "v1.2.14"}, "our_version"),
+        ({**LANGGRAPH, "our_version": "vv1.2.14"}, "our_version"),
+        ({**LANGGRAPH, "our_version": "v1.2.14b2"}, "our_version"),
         ({**LANGGRAPH, "our_version": "1.2"}, "our_version"),
         ({**LANGGRAPH, "colour": "red"}, "colour"),
         ({"repo": "redis/redis"}, "name"),
