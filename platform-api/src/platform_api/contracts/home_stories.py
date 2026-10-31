@@ -34,6 +34,7 @@ COMING_UP = ComingUp(
     name=USE_CASE_NAME,
     template=SOFTWARE_WATCHLIST.key,
     next_run_at=datetime(2026, 11, 9, 1, 0, tzinfo=UTC),
+    time_zone="Asia/Singapore",
     more=0,
 )
 
