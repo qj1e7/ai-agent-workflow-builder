@@ -248,6 +248,38 @@ ANOTHER_SYSTEMS_PLACE = [
     "Write a summary (Slack)",
     "Write a summary: Teams",
     "Write a summary. Teams",
+    "Write a summary for the Slack workspace",
+    "Write a summary for the Slack huddle",
+    "Write a summary for the Slack app",
+    "Write a summary for the Slack webhook",
+    "Write a summary for the Slack integration",
+    "Write a summary for the Slack folks",
+    "Write a summary for the Slack guild",
+    "Write a summary for the Confluence space",
+    "Write a summary for the Confluence blog",
+    "Write a summary for the Confluence template",
+    "Write a summary for Confluence readers",
+    "Write a summary for the Confluence editors",
+    "Write a summary for the Teams meeting",
+    "Write a summary for the Teams admins",
+    "Write a summary for the Teams tab",
+    "Write a summary for the Teams tenant",
+    "Write a summary for the Teams channel owner",
+    "Write a summary for the SharePoint library",
+    "Write a summary for the SharePoint owners",
+    "Write a summary for the Gmail account",
+    "Write a summary for the Telegram bot",
+    "Write a summary for the Notion workspace",
+    "Write a summary for the Notion board",
+    "Write a summary for the Trello board",
+    "Write a summary for the GitHub issue",
+    "Write a summary for the GitHub discussion",
+    "Write a summary for the GitLab issue",
+    "Create a ticket listing them for the Slack bot",
+    "Write a summary of the week for the Slack channel readers",
+    "Write a summary for Slack's general channel",
+    "Write a summary for Slack’s general channel",
+    "Create a ticket from the Slack outage",
 ]
 
 
@@ -275,10 +307,20 @@ def test_a_place_after_a_comma_is_still_checked():
         "Write a summary about the Slack migration",
         "Create one ticket for the GitLab access review",
         "Write a summary (short)",
+        "Write a summary of the Teams outage tickets",
+        "Create a ticket about the Slack rollout",
+        "Create a ticket for the Entra incident",
+        "Write a summary of the Slack tickets",
     ],
 )
 def test_another_system_named_only_as_the_topic_stays_as_the_model_said(kind: RowKind, text: str):
     assert why_no_tool(kind, text) is None
+
+
+def test_a_possessive_after_a_system_still_names_it_and_teams_needs_a_capital():
+    assert why_no_tool("where", "Slack's channel") == cant("put results in Slack's channel")
+    assert why_no_tool("look_for", "Users from Entra's directory") == cant("read Entra")
+    assert why_no_tool("do", "Write a summary for the teams's lead") is None
 
 
 @pytest.mark.parametrize(

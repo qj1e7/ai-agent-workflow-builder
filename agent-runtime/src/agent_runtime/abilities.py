@@ -146,7 +146,10 @@ PLACING: Final = words("put go")
 PLACE_ADVERBS: Final = words("somewhere anywhere everywhere elsewhere wherever here there")
 PLACING_FORMS: Final = words("put puts putting go goes going went gone")
 DELIVERS: Final = words("post send share save publish")
-AUDIENCE: Final = words("team teams group groups people staff users members everyone")
+TOPICS: Final = words(
+    "outage outages incident incidents migration migrations rollout rollouts downtime "
+    "problem problems error errors decommission decommissioning review reviews"
+) | frozenset(RELEASE_ROOTS)
 SUBJECTS: Final = words("i we you")
 WANTING: Final = words("want wants need needs would like prefer")
 
@@ -241,9 +244,12 @@ class _Word:
 
     @property
     def system(self) -> str | None:
-        if self.low in CASE_SENSITIVE and not self.capital:
+        """The system the word names, also with an 's, as in "Slack's". A trailing s' never
+        reaches here: TOKEN drops an apostrophe with no letter after it."""
+        name = self.low.removesuffix("'s")
+        if name in CASE_SENSITIVE and not self.capital:
             return None
-        return self.low if self.low in SYSTEMS else None
+        return name if name in SYSTEMS else None
 
     @property
     def product(self) -> bool:
@@ -416,6 +422,26 @@ def _phrases(clause: Clause, start: int, reader: _Reader) -> Phrases:
     return [(prep, tuple(phrase)) for prep, phrase in phrases]
 
 
+def _every_phrase(clause: Clause, start: int, reader: _Reader) -> Phrases:
+    """Every phrase from `start` on, read as `_phrases` reads them, and also the ones after a
+    later verb or "that", as in "listing them for the Slack bot". A topic that is also a verb,
+    as in "the GitLab access review", stays in its phrase."""
+    phrases: list[tuple[str, list[_Word]]] = []
+    taking = False
+    for word in clause[start:]:
+        if word.low in PREPS or word.mark:
+            phrases.append((word.low, []))
+            taking = True
+            continue
+        last = phrases[-1][1][-1] if phrases and phrases[-1][1] else None
+        topic = last is not None and word.low in TOPICS
+        if word.low in ENDS or (reader.acts(word) and not _noun_place(last) and not topic):
+            taking = False
+        elif taking:
+            phrases[-1][1].append(word)
+    return [(prep, tuple(phrase)) for prep, phrase in phrases]
+
+
 def _head(thing: Clause) -> _Word | None:
     return next((w for w in reversed(thing) if not w.raw.isdigit() and not w.key), None)
 
@@ -429,21 +455,27 @@ def _elsewhere(phrase: Clause, reaches: frozenset[str], products: bool = True) -
     return False
 
 
+def _only_the_topic(phrase: Clause) -> bool:
+    """Whether a phrase names another system only as what a result is about: it ends in a topic
+    such as "outage" or "release", or in Jira tickets, as in "the Teams outage tickets", but not
+    in that system's own, as in "the GitHub issue"."""
+    for at in range(len(phrase) - 1, -1, -1):
+        word = phrase[at]
+        if word.raw.isdigit() or word.key:
+            continue
+        before = phrase[at - 1].system if at else None
+        return word.low in TOPICS or (word.low in TICKETS and before not in TICKET_SYSTEMS)
+    return False
+
+
 def _another_systems_place(prep: str, phrase: Clause, known: frozenset[str]) -> bool:
-    """Whether a phrase names a system the platform neither reaches nor reads as a place, a
-    source, or the people a result is for, as in "for the Slack channel", "from Slack", "over
-    Slack" or "(Slack)". A system named only as the topic, as in "a ticket for the Teams
-    outage", is not one."""
+    """Whether a phrase names a system the platform neither reaches nor reads, as in "for the
+    Slack workspace" or "for the Teams admins", other than as the topic, as in "a ticket for the
+    Teams outage". After "from" or a mark, as in "from the Slack outage" or "(Slack)", even a
+    topic counts."""
     if all(word.system is None or word.system in known for word in phrase):
         return False
-    head = _head(phrase)
-    return (
-        prep == "from"
-        or not prep[:1].isalnum()
-        or head is None
-        or head.system is not None
-        or head.low in PLACES | AUDIENCE
-    )
+    return prep == "from" or not prep[:1].isalnum() or not _only_the_topic(phrase)
 
 
 def _names_jira(phrase: Clause) -> bool:
@@ -507,9 +539,12 @@ def _makes(ability: Ability, makes: frozenset[str], thing: Clause, phrases: Phra
     )
 
 
-def _fits(ability: Ability, thing: Clause, phrases: Phrases, read: frozenset[str]) -> bool:
+def _fits(
+    ability: Ability, thing: Clause, phrases: Phrases, around: Phrases, read: frozenset[str]
+) -> bool:
     """Whether one thing the action is done to, and every phrase after it, fits the ability.
-    `read` is every system the platform reads for this clause."""
+    `phrases` are the ones right after the thing, `around` every phrase to the end of the
+    clause, and `read` every system the platform reads for this clause."""
     if ability.makes is None:
         reads = any(w.low in TICKETS for w in thing) or not _elsewhere(
             thing, ability.reaches, False
@@ -527,9 +562,8 @@ def _fits(ability: Ability, thing: Clause, phrases: Phrases, read: frozenset[str
         named = prep == "for" and all(w.system or w.low in DETERMINERS for w in phrase)
         if (prep in IN_PLACE | TO_PLACE or named) and _elsewhere(phrase, ability.reaches):
             return False
-        if _another_systems_place(prep, phrase, ability.reaches | read):
-            return False
-    return True
+    known = ability.reaches | read
+    return not any(_another_systems_place(prep, phrase, known) for prep, phrase in around)
 
 
 def _asks_for_change(clause: Clause, at: int) -> bool:
@@ -584,8 +618,11 @@ def _do(clause: Clause, reader: _Reader) -> str | None:
     ]
     things, end = _objects(clause, at if implied else at + 1, reader)
     phrases = _phrases(clause, end, reader)
+    around = _every_phrase(clause, end, reader)
     read = frozenset(place for ability in _reading(reader, clause) for place in ability.reaches)
-    fits = bool(able) and all(any(_fits(a, t, phrases, read) for a in able) for t in things or [()])
+    fits = bool(able) and all(
+        any(_fits(a, t, phrases, around, read) for a in able) for t in things or [()]
+    )
     if fits and not _writes_in(clause, at, reader):
         return None
     return _cant_phrase(clause[at:], reader)
