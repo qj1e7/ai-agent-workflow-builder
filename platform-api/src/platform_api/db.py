@@ -1,3 +1,4 @@
+import hashlib
 from collections.abc import AsyncGenerator, Callable, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -89,3 +90,22 @@ def create_roles_sql(passwords: Mapping[str, str]) -> list[sql.Composed]:
             )
         )
     return statements
+
+
+def workflow_lock_key(use_case_id: str) -> int:
+    """The advisory lock key for one workflow. Both contexts derive it here, so they name the
+    same lock."""
+    digest = hashlib.blake2b(f"use_case:{use_case_id}".encode(), digest_size=8).digest()
+    return int.from_bytes(digest, "big", signed=True)
+
+
+async def hold_workflow(conn: Connection, use_case_id: str, *, alone: bool) -> None:
+    """Orders a run's start against a pause or delete of its workflow (#56), until the
+    transaction on conn ends. A start holds it shared, from the state read to the run insert,
+    so starts don't wait for each other. A pause or delete holds it alone, so it waits for a
+    start that has read the state, and a start waits for it, then reads the new state.
+
+    Take it once per start, on one connection. A second request for it on another connection
+    queues behind a pause that is already waiting, and neither ever moves."""
+    take = "pg_advisory_xact_lock" if alone else "pg_advisory_xact_lock_shared"
+    await conn.execute(f"SELECT {take}(%s)", (workflow_lock_key(use_case_id),))

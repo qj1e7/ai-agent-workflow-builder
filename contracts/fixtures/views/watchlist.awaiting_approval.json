@@ -61,5 +61,6 @@
         "decided_at": null
       }
     ]
-  }
+  },
+  "you_can_decide": true
 }

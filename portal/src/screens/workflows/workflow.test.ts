@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import agentUseCase from '../../../../contracts/fixtures/cards/use-case.json'
 import watchlistUseCase from '../../../../contracts/fixtures/builder/use-case.json'
 import heldWatchlist from '../../../../contracts/fixtures/builder/use-case.held.json'
@@ -22,6 +22,7 @@ import {
   changeProblem,
   controlsOf,
   faceStates,
+  formatterFactory,
   changeWords,
   heldNote,
   latestRuns,
@@ -33,6 +34,7 @@ import {
   PLACES_IN_PAGE_ORDER,
   pressChange,
   pressRunNow,
+  rereadWhenOutOfDate,
   rowAction,
   rowsOf,
   runFact,
@@ -142,6 +144,44 @@ describe('when it runs', () => {
     expect(whenWords(WATCHLIST)).toEqual({ words: 'Every Monday at 9:00', small: 'Singapore time (SGT).' })
     expect(whenWords({ schedule: { day: 'every_day', at: '17:30', time_zone: 'Asia/Singapore', owner_name: 'Alice' } })).toEqual({ words: 'Every day at 17:30', small: 'Singapore time (SGT).' })
     expect(whenWords({ schedule: { day: 'weekdays', at: '15:00', time_zone: 'Asia/Singapore', owner_name: 'Alice' } })).toEqual({ words: 'Every weekday at 15:00', small: 'Singapore time (SGT).' })
+  })
+
+  it('names the schedule’s own time zone when it is not Singapore', () => {
+    const at = (time_zone: string) => whenWords({ schedule: { day: 'every_day', at: '17:30', time_zone, owner_name: 'Alice' } }).small
+    expect(at('Europe/London')).toBe('London time.')
+    expect(at('America/Los_Angeles')).toBe('Los Angeles time.')
+    expect(at('UTC')).toBe('UTC.')
+    expect(at('Etc/GMT+8'), 'Etc/GMT+8 is eight hours behind UTC').toBe('GMT-8.')
+    expect(at('Etc/GMT-8')).toBe('GMT+8.')
+    expect(at('Etc/UTC')).toBe('UTC.')
+    expect(at('Pacific/Port_Moresby')).toBe('Port Moresby time.')
+    expect(at('Not/AZone'), 'a name the browser cannot read is shown as Singapore, as the times are').toBe('Singapore time (SGT).')
+    for (const utc of ['GMT', 'Etc/GMT', 'Etc/UCT', 'UCT', 'Universal', 'Zulu', 'Greenwich']) expect(at(utc), utc).toBe('UTC.')
+    expect(at('America/Port-au-Prince')).toBe('Port au Prince time.')
+    expect(at('Africa/Porto-Novo')).toBe('Porto Novo time.')
+    expect(at('America/Blanc-Sablon')).toBe('Blanc Sablon time.')
+    expect(at('Asia/Ust-Nera')).toBe('Ust Nera time.')
+    expect(at('America/Argentina/Buenos_Aires')).toBe('Buenos Aires time.')
+    expect(at('EST5EDT'), 'a zone with no city shows its id, because today’s offset can be wrong on the run’s date').toBe('EST5EDT time.')
+    expect(at('')).toBe('Singapore time (SGT).')
+  })
+
+  it('builds a formatter once per zone name, readable or not', () => {
+    const build = vi.spyOn(formatterFactory, 'build')
+    const now = new Date('2026-11-04T07:00:00Z')
+    for (let i = 0; i < 5; i++) for (const zone of ['Pacific/Fiji', 'Not/AnotherZone', 'Asia/Singapore']) runWhen('2026-11-04T09:00:00Z', now, zone)
+    const zones = build.mock.calls.map(([zone]) => zone)
+    build.mockRestore()
+    expect(zones.toSorted().filter((zone) => zone !== 'Asia/Singapore')).toEqual(['Not/AnotherZone', 'Pacific/Fiji'])
+    expect(new Set(zones).size, 'no name is built twice').toBe(zones.length)
+  })
+
+  it('shows the next run in the schedule’s own time zone', () => {
+    const london = { day: 'every_day' as const, at: '09:00', time_zone: 'Europe/London', owner_name: 'Alice' }
+    const next = { name: 'Watchlist', state: 'on' as const, next_run_at: '2026-11-04T09:00:00Z', schedule: london }
+    expect(nextRunWords(next, NOW)).toBe('Today, 9:00')
+    expect(nextRunWords({ ...next, schedule: { ...london, time_zone: 'Asia/Singapore' } }, NOW)).toBe('Today, 17:00')
+    expect(changeWords('resume', next, NOW)).toBe('Resumed. Next run Today, 9:00.')
   })
 
   it('keeps the schedule while the workflow is paused, because Paused shows in the next run', () => {
@@ -409,5 +449,23 @@ describe('a refusal that means the page shows an old state', () => {
   it('is not any other answer', () => {
     for (const status of [403, 410, 503]) expect(meansOutOfDate(new ApiError(status, null)), String(status)).toBe(false)
     expect(meansOutOfDate(new TypeError('Failed to fetch'))).toBe(false)
+  })
+})
+
+describe('rereading a workflow that changed under the Operator', () => {
+  const run = (error: unknown) => {
+    const said: string[] = []
+    rereadWhenOutOfDate('uc_1', (pressed: string) => said.push(`focus ${pressed}`), (id) => said.push(`reread ${id}`))('switch')(error)
+    return said
+  }
+
+  it('moves focus and rereads on a 409 or a 404', () => {
+    expect(run(new ApiError(409, null))).toEqual(['focus switch', 'reread uc_1'])
+    expect(run(new ApiError(404, null))).toEqual(['focus switch', 'reread uc_1'])
+  })
+
+  it('does nothing for any other answer', () => {
+    expect(run(new ApiError(503, null))).toEqual([])
+    expect(run(new Error('offline'))).toEqual([])
   })
 })

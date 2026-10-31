@@ -14,6 +14,7 @@ from platform_api.orchestration.approvals import (
     Declined,
     Refusal,
     Verdict,
+    why_not,
 )
 from platform_api.orchestration.dispatch import TeamsStub
 from platform_api.orchestration.runs import (
@@ -130,6 +131,7 @@ class AwaitingApprovalView(_RunBase):
     state: Literal["awaiting_approval"] = "awaiting_approval"
     proposal: ProposalView
     approval: ApprovalRef
+    you_can_decide: bool
 
 
 class ActingView(_RunBase):
@@ -349,7 +351,7 @@ class RunBaseFields(TypedDict):
     events_url: str
 
 
-def run_view(detail: RunDetail) -> RunView:
+def run_view(detail: RunDetail, viewer: Principal) -> RunView:
     record = detail.record
     base = RunBaseFields(
         run_id=record.run_id,
@@ -378,6 +380,8 @@ def run_view(detail: RunDetail) -> RunView:
                 **base,
                 proposal=proposal_view(detail.proposal),
                 approval=approval_ref(detail.approval, detail.decisions),
+                # The same rule, and the same person, as the approval's own view.
+                you_can_decide=why_not(detail.approval, detail.decisions, viewer) is None,
             )
         case Acting():
             assert detail.proposal is not None and detail.approval is not None
@@ -453,7 +457,7 @@ def _decision_out(decided: Decided) -> DecisionOut:
 
 @router.get("/api/v1/runs", tags=["orchestration"], responses=SIGNED_IN)
 async def list_runs(principal: CurrentPrincipal, orchestrator: CurrentOrchestrator) -> RunList:
-    return RunList(runs=[run_view(d) for d in await orchestrator.list_runs()])
+    return RunList(runs=[run_view(d, principal) for d in await orchestrator.list_runs()])
 
 
 @router.get(
@@ -467,7 +471,7 @@ async def get_run(
     detail = await orchestrator.get_run(run_id)
     if detail is None:
         raise HTTPException(status_code=404, detail="No such run")
-    return run_view(detail)
+    return run_view(detail, principal)
 
 
 @router.post(

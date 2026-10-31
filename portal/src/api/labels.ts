@@ -47,7 +47,7 @@ export const failureReasonLabel: Record<FailureReason, string> = {
 }
 
 export const refusalLabel: Record<Refusal, string> = {
-  own_work: 'You started this run, so another Approver must decide.',
+  own_work: 'This run is your own work, so another Approver must decide.',
   not_an_approver: 'Only Approvers can decide this request.',
   not_eligible: 'You are not one of the Approvers for this step.',
   decided_earlier_step: 'You decided an earlier step, so another Approver must decide.',
@@ -55,13 +55,6 @@ export const refusalLabel: Record<Refusal, string> = {
   not_open: 'This request is not open for a decision.',
   stale_digest: 'The request changed after you opened this page. Reload to see what will be written.',
   invalid_decisions: 'This approval has a problem. Ask a maintainer.',
-}
-
-/** A refusal in words. The owner of a schedule did not press a button, so their refusal names the schedule. */
-export function refusalWords(refusal: Refusal, trigger: Trigger | undefined): string {
-  return refusal === 'own_work' && trigger === 'schedule'
-    ? 'Your schedule started this check, so another Approver must decide.'
-    : refusalLabel[refusal]
 }
 
 export const approvalStepStatusLabel: Record<ApprovalStepStatus, string> = {

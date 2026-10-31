@@ -13,8 +13,9 @@ usage: python3 -I scripts/checks/p4_lanes.py <command> <api-base-url> <out-dir> 
   lane8 <api> <out>                      (own stack, libfaketime) two days pass before the yes
   lane9 <api> <out> <second-api> <key>   (own stack) two platform-api replicas stream one run
   lane10 <api> <out> <lane-1 json>       (own stack, ACTIVITY_READER=postgres) emulator stopped
-  lane11 <api> <out>                     (own stack) the emulator is made again while the API runs
-                                         and nothing is logged; then a new run
+  lane11 <api> <out> <signing-key> [n]   (own stack) n agent events [4000], then the emulator is
+                                         made again while the API runs and nothing is logged;
+                                         then a new run
   lane12 <api> <out>                     (own stack) down without -v, then up; every old run
 
 P4_COMPOSE holds the lane stack's docker compose command, for example
@@ -39,6 +40,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -1179,21 +1181,38 @@ def old_runs(api: Api, stack: Stack, count: int = 2) -> dict[str, int]:
     return runs
 
 
-def watch_the_refill(api: Api, stack: Stack, timeout: float = 90) -> list[dict[str, Any]]:
-    """Readiness first, then the copy: the copy only grows, so a sample that says caught up
-    while its copy is short is a real miss."""
-    deadline = time.monotonic() + timeout
+def backlog(api: Api, stack: Stack, key: str, count: int) -> dict[str, Any]:
+    """Agent events on a run of their own, all copied before the emulator goes, so that making
+    the copy again takes long enough to watch."""
+    run_id = f"run_p4lane11{uuid.uuid4().hex[:12]}"
+    accepted = post_agent_events([api], run_id, key, count, "p4_lane11")
+    found = wait_for_copy(stack, run_id, count, timeout=180)
+    return {"run_id": run_id, "posted": count, "accepted": accepted, "copied": len(found["items"])}
+
+
+def watch_the_refill(
+    api: Api, stack: Stack, stop: threading.Event, timeout: float = 420
+) -> list[dict[str, Any]]:
+    """Readiness, then the copy, then readiness again, from before the emulator is made again
+    until the copy is full. The copy only grows, so a sample that says caught up while its copy
+    is short is a real miss. Readiness read again right after a short copy ("behind_after") shows
+    the refill was seen while it ran."""
+    started = time.monotonic()
+    deadline = started + timeout
     samples: list[dict[str, Any]] = []
-    while time.monotonic() < deadline:
+    while time.monotonic() < deadline and not stop.is_set():
         ready = api.ready()
         found = stack.cosmos()
+        then = api.ready()
         samples.append(
             {
+                "t": round(time.monotonic() - started, 2),
                 "at": datetime.now(UTC).isoformat(),
                 "behind": copy_behind(ready),
                 "detail": ready["copy"]["detail"] if ready["copy"] else None,
                 "items": len(found["items"]),
                 "error": found.get("error"),
+                "behind_after": copy_behind(then),
             }
         )
         if not samples[-1]["behind"] and "error" not in found and samples[-1]["items"] > 0:
@@ -1202,10 +1221,42 @@ def watch_the_refill(api: Api, stack: Stack, timeout: float = 90) -> list[dict[s
     return samples
 
 
-def lane11(api: Api, out: Path) -> bool:
+def refill_lines(
+    samples: list[dict[str, Any]], rows: int, refill_seconds: float | None
+) -> list[tuple[bool, str]]:
+    said_caught_up_short = [
+        x for x in samples if not x["behind"] and (x["error"] or x["items"] < rows)
+    ]
+    # The emulator answered, its copy was short, and readiness said behind right after.
+    seen_behind = [x for x in samples if not x["error"] and x["items"] < rows and x["behind_after"]]
+    last = samples[-1] if samples else {"behind": True, "items": 0, "detail": None}
+    behind_samples = sum(x["behind"] for x in samples)
+    return [
+        (
+            bool(samples) and not last["behind"] and last["items"] == rows,
+            f"with nothing logged, the copy was full again {refill_seconds} s after the "
+            f"emulator first answered, and readiness then said {last['detail']!r}",
+        ),
+        (
+            bool(seen_behind),
+            f"readiness said behind right after the emulator answered with a short copy, in "
+            f"{len(seen_behind)} of {len(samples)} samples, so the next line can fail. Rerun "
+            "with a larger LANE11_EVENTS when this is 0",
+        ),
+        (
+            not said_caught_up_short,
+            f"readiness said behind until the refill ended ({behind_samples} of "
+            f"{len(samples)} samples); it never said caught up while the copy was short: "
+            f"{said_caught_up_short}",
+        ),
+    ]
+
+
+def lane11(api: Api, out: Path, key: str, count: int) -> bool:
     stack = Stack()
     runs = old_runs(api, stack)
-    rows = sum(runs.values())
+    queued = backlog(api, stack, key, count)
+    rows = sum(stack.last_seqs().values())
     before = stack.cosmos()
     api_before = stack.started_at("platform-api")
     stack.run("rm", "-sf", "cosmos")
@@ -1213,11 +1264,19 @@ def lane11(api: Api, out: Path) -> bool:
     ready_gone = wait_behind(api)
     streams_gone = {run_id: replay(api, run_id, last_seq) for run_id, last_seq in runs.items()}
     pages_gone = {run_id: timed_page(api, run_id) for run_id in runs}
-    stack.run("up", "-d", "--no-deps", "--wait", "cosmos")
-    made_again_at = datetime.now(UTC).isoformat()
-    started = time.monotonic()
-    samples = watch_the_refill(api, stack)
-    refill_seconds = round(time.monotonic() - started, 2)
+    # Sampling starts before `up`: the copy can be full again before `up --wait` returns.
+    stop = threading.Event()
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        watching = pool.submit(watch_the_refill, api, stack, stop)
+        try:
+            stack.run("up", "-d", "--no-deps", "--wait", "cosmos")
+        except BaseException:
+            stop.set()
+            raise
+        made_again_at = datetime.now(UTC).isoformat()
+        samples = watching.result()
+    answered = next((x for x in samples if not x["error"]), None)
+    refill_seconds = round(samples[-1]["t"] - answered["t"], 2) if answered else None
     logged_meanwhile = sum(stack.last_seqs().values()) - rows
     after = stack.cosmos()
     compared = settled_compare(stack)
@@ -1235,16 +1294,13 @@ def lane11(api: Api, out: Path) -> bool:
     ready = wait_caught_up(api)
     api_after = stack.started_at("platform-api")
     expected = {run_id: list(range(1, last_seq + 1)) for run_id, last_seq in runs.items()}
-    said_caught_up_short = [
-        x for x in samples if not x["behind"] and (x["error"] or x["items"] < rows)
-    ]
-    last = samples[-1] if samples else {"behind": True, "items": 0, "detail": None}
-    behind_samples = sum(x["behind"] for x in samples)
     save(
         out,
         "p4-emulator-made-again.json",
         {
             "old_runs": runs,
+            "backlog": queued,
+            "rows": rows,
             "removed_at": removed_at,
             "made_again_at": made_again_at,
             "platform_api_before": api_before,
@@ -1272,6 +1328,11 @@ def lane11(api: Api, out: Path) -> bool:
         [
             (api_before == api_after, f"platform-api ran throughout: {api_after}"),
             (
+                queued["accepted"] == count and queued["copied"] == count,
+                f"a backlog of {queued['accepted']} of {count} agent events on "
+                f"{queued['run_id']}, {queued['copied']} copied before the emulator went",
+            ),
+            (
                 len(runs) >= 2 and before["generation"] != after["generation"],
                 f"{len(runs)} old runs; the new container has a new generation: "
                 f"{before['generation']} then {after['generation']}",
@@ -1293,17 +1354,7 @@ def lane11(api: Api, out: Path) -> bool:
                 logged_meanwhile == 0,
                 f"nothing was logged while the copy was made again ({logged_meanwhile} new events)",
             ),
-            (
-                bool(samples) and not last["behind"] and last["items"] == rows,
-                f"with nothing logged, the copy was full again {refill_seconds} s after the "
-                f"emulator was back, and readiness then said {last['detail']!r}",
-            ),
-            (
-                not said_caught_up_short,
-                f"readiness said behind until the refill ended ({behind_samples} of "
-                f"{len(samples)} samples); it never said caught up while the copy was short: "
-                f"{said_caught_up_short}",
-            ),
+            *refill_lines(samples, rows, refill_seconds),
             (compared["ok"], compared_line(compared)),
             (
                 streams_after == expected,
@@ -1407,7 +1458,7 @@ def main(argv: list[str]) -> int:
         "lane8": lambda: lane8(api, out),
         "lane9": lambda: lane9(api, out, Api(rest[0]), rest[1]),
         "lane10": lambda: lane10(api, out, rest[0]),
-        "lane11": lambda: lane11(api, out),
+        "lane11": lambda: lane11(api, out, rest[0], int(rest[1]) if len(rest) > 1 else 4000),
         "lane12": lambda: lane12(api, out),
     }
     if command not in lanes:
