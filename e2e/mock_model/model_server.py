@@ -8,7 +8,9 @@ can be tested without a real model:
   answer follows the task's words. A task that names a GitHub repository picks the Version
   checker, any other gets a drafted agent (a follow-up one for a follow-up ticket task, else a
   summary one), and a release task belongs on the Software watchlist. One named part, such as
-  "Where it goes: Jira project MOCK", is read as that part alone, the others missing.
+  "Where it goes: Jira project MOCK", is read as that part alone, the others missing. When the
+  Planner says before the task that the staff member already chose a new workflow, a release
+  task is read back in parts like any other, as the real model does.
 - A request with tools and no forced tool is a card run. The mock calls github_read_releases,
   then jira_search, then jira_create_ticket, then writes a report, by what the conversation holds.
   The ticket's title follows the card: a release, a follow-up or a summary.
@@ -66,6 +68,8 @@ FOOLING_ORDER = re.compile(
     r"\bignore (?:your|all|the|previous) (?:rules|instructions)\b", re.IGNORECASE
 )
 ONE_PART = re.compile(r"^(When|Looks for|Does|Where it goes): (.+)$", re.DOTALL)
+CARRIED_ON = re.compile(r"\bset belongs_on_watchlist to false\b")
+TASK_MARK = "The task:\n"
 PART_KINDS = {"When": "schedule", "Looks for": "look_for", "Does": "do", "Where it goes": "where"}
 mode = "ok"
 
@@ -171,7 +175,14 @@ def user_text(body: dict[str, Any]) -> str:
 def task_text(body: dict[str, Any]) -> str:
     """Only the staff member's task. The Planner's request also lists the saved agents, whose
     purposes must not steer the mock's choice."""
-    return user_text(body).rpartition("The task:\n")[2]
+    return user_text(body).rpartition(TASK_MARK)[2]
+
+
+def says_carried_on(body: dict[str, Any]) -> bool:
+    """Whether the Planner's note before the task says the staff member already chose a new
+    workflow over the Software watchlist. Only the words before the first "The task:" line
+    count, so a task that carries its own such line cannot set it."""
+    return CARRIED_ON.search(user_text(body).partition(TASK_MARK)[0]) is not None
 
 
 def choice(task: str) -> dict[str, Any]:
@@ -248,8 +259,8 @@ def obey_fooling_orders(sentences: list[str]) -> list[dict[str, Any]]:
     return [{"kind": "do", "text": first_up(order), "state": "understood"} for order in orders]
 
 
-def understanding(task: str) -> dict[str, Any]:
-    if (word := RELEASE_WORDS.search(task)) is not None:
+def understanding(task: str, carried_on: bool = False) -> dict[str, Any]:
+    if not carried_on and (word := RELEASE_WORDS.search(task)) is not None:
         named = next((name for name in SOFTWARE if name.lower() in task.lower()), None)
         return {
             "belongs_on_watchlist": True,
@@ -295,7 +306,7 @@ def forced(body: dict[str, Any], name: str) -> dict[str, Any]:
     if "choice" in lowered:
         return call(name, choice(task_text(body)), 0)
     if "understand" in lowered:
-        return call(name, understanding(task_text(body)), 0)
+        return call(name, understanding(task_text(body), says_carried_on(body)), 0)
     return say(SENTENCE)
 
 

@@ -145,11 +145,221 @@ def test_where_it_goes_with_no_place_after_a_jira_place_or_a_bare_preposition_na
 
 
 @pytest.mark.parametrize(
+    "text",
+    [
+        "Posted in Jira project MOCK",
+        "I want it in Jira project MOCK",
+        "Let's put it in Jira project MOCK",
+        "Sent to Jira project MOCK",
+        "Written to Jira project MOCK",
+        "Summarised in Jira project MOCK",
+        "Jira project MOCK and then Jira project SUP",
+    ],
+)
+def test_lead_words_before_a_jira_place_stay_as_the_model_said(text: str):
+    assert why_no_tool("where", text) is None
+
+
+@pytest.mark.parametrize(
+    ("text", "what"),
+    [
+        ("Posted in Slack", "put results in Slack"),
+        ("I want it in Slack", "put results in Slack"),
+        ("Let's put it in Teams", "put results in Teams"),
+        ("Sent to Slack", "send results to Slack"),
+    ],
+)
+def test_the_same_lead_words_before_a_place_out_of_reach_are_cant_do(text: str, what: str):
+    assert why_no_tool("where", text) == cant(what)
+
+
+@pytest.mark.parametrize(
+    ("text", "what"),
+    [
+        ("Moved to Jira project MOCK", "move to Jira project MOCK"),
+        ("Deleted in Jira project MOCK", "delete in Jira project MOCK"),
+        ("I want it closed in Jira project MOCK", "close in Jira project MOCK"),
+    ],
+)
+def test_a_past_form_that_changes_data_before_a_jira_place_is_cant_do_and_named(
+    text: str, what: str
+):
+    assert why_no_tool("where", text) == cant(what)
+
+
+@pytest.mark.parametrize(
+    ("text", "what"),
+    [
+        ("Write a summary to Jira project MOCK", None),
+        ("Put a summary in Jira project MOCK", None),
+        ("Write a summary to", None),
+        ("Write a summary to Slack", "write a summary to Slack"),
+        ("Write a summary then post it in Teams", "post it in Teams"),
+    ],
+)
+def test_where_it_goes_that_starts_with_an_action_agrees_with_what_it_does(
+    text: str, what: str | None
+):
+    expected = None if what is None else cant(what)
+    assert (why_no_tool("where", text), why_no_tool("do", text)) == (expected, expected)
+
+
+@pytest.mark.parametrize("text", ["goes", "it", "it goes", "It goes", "them", "went"])
+def test_a_lone_word_that_names_no_place_names_nothing(text: str):
+    assert why_no_tool("where", text) is None
+
+
+@pytest.mark.parametrize(
+    ("kind", "text", "what"),
+    [
+        ("where", "Publié dans Teams", "put results in publié dans Teams"),
+        ("where", "Post it in Publié", "post it in Publié"),
+        ("where", "The Zürich team's channel", "put results in the Zürich team's channel"),
+        ("where", "El canal de niños", "put results in el canal de niños"),
+        ("do", "Post a summary in the 中文 channel", "post a summary in the 中文 channel"),
+        ("where", "The தமிழ் channel", "put results in the தமிழ் channel"),
+        ("where", "Publié dans Teams", "put results in publié dans Teams"),
+    ],
+)
+def test_letters_outside_ascii_stay_inside_their_word(kind: RowKind, text: str, what: str):
+    assert why_no_tool(kind, text) == cant(what)
+
+
+def test_a_jira_project_named_with_letters_outside_ascii_stays_as_the_model_said():
+    assert why_no_tool("where", "The Zürich project") is None
+
+
+ANOTHER_SYSTEMS_PLACE = [
+    "Write a summary for the Slack channel",
+    "Write a summary for the team's Teams channel",
+    "Write a summary for the Teams channel",
+    "Write a summary for the Slack team",
+    "Write a summary over Slack",
+    "Draft a report for the Confluence page",
+    "Write a summary for the Confluence wiki",
+    "Make a list for the Confluence page",
+    "Make a report for the SharePoint site",
+    "Create a ticket for the Slack channel",
+    "Create a ticket for the Confluence page",
+    "Create a ticket from Slack",
+    "Create a ticket from the Teams chat",
+    "Write a summary about the Teams chat",
+    "Write a report about the Slack channel",
+    "Write a summary (Slack)",
+    "Write a summary: Teams",
+    "Write a summary. Teams",
+    "Write a summary for the Slack workspace",
+    "Write a summary for the Slack huddle",
+    "Write a summary for the Slack app",
+    "Write a summary for the Slack webhook",
+    "Write a summary for the Slack integration",
+    "Write a summary for the Slack folks",
+    "Write a summary for the Slack guild",
+    "Write a summary for the Confluence space",
+    "Write a summary for the Confluence blog",
+    "Write a summary for the Confluence template",
+    "Write a summary for Confluence readers",
+    "Write a summary for the Confluence editors",
+    "Write a summary for the Teams meeting",
+    "Write a summary for the Teams admins",
+    "Write a summary for the Teams tab",
+    "Write a summary for the Teams tenant",
+    "Write a summary for the Teams channel owner",
+    "Write a summary for the SharePoint library",
+    "Write a summary for the SharePoint owners",
+    "Write a summary for the Gmail account",
+    "Write a summary for the Telegram bot",
+    "Write a summary for the Notion workspace",
+    "Write a summary for the Notion board",
+    "Write a summary for the Trello board",
+    "Write a summary for the GitHub issue",
+    "Write a summary for the GitHub discussion",
+    "Write a summary for the GitLab issue",
+    "Create a ticket listing them for the Slack bot",
+    "Write a summary of the week for the Slack channel readers",
+    "Write a summary for Slack's general channel",
+    "Write a summary for Slack’s general channel",
+    "Create a ticket from the Slack outage",
+]
+
+
+@pytest.mark.parametrize("kind", ["do", "where"])
+@pytest.mark.parametrize("text", ANOTHER_SYSTEMS_PLACE)
+def test_a_place_source_or_audience_in_another_system_is_cant_do_whatever_the_preposition(
+    kind: RowKind, text: str
+):
+    assert why_no_tool(kind, text) == cant(text[0].lower() + text[1:])
+
+
+def test_a_place_after_a_comma_is_still_checked():
+    text = "Write a summary for the team, in Slack"
+    assert why_no_tool("do", text) == cant("write a summary for the team, in Slack")
+    assert why_no_tool("where", text) == cant("put results in Slack")
+
+
+@pytest.mark.parametrize("kind", ["do", "where"])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Write a summary for the team",
+        "Write a summary of the GitHub releases",
+        "Create a ticket for the Teams outage",
+        "Write a summary about the Slack migration",
+        "Create one ticket for the GitLab access review",
+        "Write a summary (short)",
+        "Write a summary of the Teams outage tickets",
+        "Create a ticket about the Slack rollout",
+        "Create a ticket for the Entra incident",
+        "Write a summary of the Slack tickets",
+    ],
+)
+def test_another_system_named_only_as_the_topic_stays_as_the_model_said(kind: RowKind, text: str):
+    assert why_no_tool(kind, text) is None
+
+
+def test_a_possessive_after_a_system_still_names_it_and_teams_needs_a_capital():
+    assert why_no_tool("where", "Slack's channel") == cant("put results in Slack's channel")
+    assert why_no_tool("look_for", "Users from Entra's directory") == cant("read Entra")
+    assert why_no_tool("do", "Write a summary for the teams's lead") is None
+
+
+@pytest.mark.parametrize(
+    ("text", "what"),
+    [
+        ("Attached to ticket MOCK-12", "attach to ticket MOCK-12"),
+        ("Attached to MOCK-12", "attach to MOCK-12"),
+        ("Attached to Jira project MOCK", "attach to Jira project MOCK"),
+        ("Copied to MOCK-12", "copy to MOCK-12"),
+        ("Forwarded to Jira project MOCK", "forward to Jira project MOCK"),
+        ("Exported to Jira project MOCK", "export to Jira project MOCK"),
+        ("Uploaded to Jira project MOCK", "upload to Jira project MOCK"),
+        ("Posted to MOCK-12", "post to MOCK-12"),
+        ("Sent to the ticket", "send to the ticket"),
+    ],
+)
+def test_a_past_form_before_a_ticket_already_there_or_a_write_jira_lacks_is_cant_do(
+    text: str, what: str
+):
+    assert (why_no_tool("where", text), why_no_tool("do", text)) == (cant(what), cant(what))
+
+
+def test_results_put_in_a_ticket_already_there_are_cant_do_but_reading_it_is_not():
+    assert why_no_tool("where", "Summarised in MOCK-12") == cant("summarise in MOCK-12")
+    assert why_no_tool("do", "Summarised in MOCK-12") is None
+
+
+def test_a_past_form_before_a_new_ticket_stays_as_the_model_said():
+    assert why_no_tool("where", "Posted in a new ticket in MOCK") is None
+
+
+@pytest.mark.parametrize(
     ("kind", "text"),
     [
         ("do", "Create a ticket to"),
         ("do", "Write a summary to"),
         ("schedule", "Every day, write a summary to"),
+        ("where", "Posted to"),
+        ("where", "I want it sent to"),
     ],
 )
 def test_a_trailing_to_names_no_place_and_never_stops_the_check(kind: RowKind, text: str):
