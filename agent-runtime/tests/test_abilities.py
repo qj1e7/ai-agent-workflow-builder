@@ -116,8 +116,44 @@ def test_where_it_goes_that_says_an_action_or_a_person_reads_as_plain_english(te
     assert why_no_tool("where", text) == cant(what)
 
 
-def test_where_it_goes_with_only_a_jira_place_and_a_trailing_then_stays_as_the_model_said():
-    assert why_no_tool("where", "Jira project MOCK, and then") is None
+@pytest.mark.parametrize(
+    ("text", "what"),
+    [
+        ("Let's post it in Teams", "post it in Teams"),
+        ("Go to Slack", "send results to Slack"),
+        ("It goes to Slack", "send results to Slack"),
+        ("Written to Slack", "send results to Slack"),
+        ("Posted in Teams", "put results in Teams"),
+        ("Shared with the team", "share with the team"),
+        ("I want it in Teams", "put results in Teams"),
+        ("We let the team know in Teams", "let the team know in Teams"),
+    ],
+)
+def test_where_it_goes_reads_as_plain_english_after_a_subject_a_placing_verb_or_a_past_form(
+    text: str, what: str
+):
+    assert why_no_tool("where", text) == cant(what)
+
+
+@pytest.mark.parametrize(
+    "text", ["Jira project MOCK, and then", "in", "in the", "To the", "Jira project MOCK, to"]
+)
+def test_where_it_goes_with_no_place_after_a_jira_place_or_a_bare_preposition_names_nothing(
+    text: str,
+):
+    assert why_no_tool("where", text) is None
+
+
+@pytest.mark.parametrize(
+    ("kind", "text"),
+    [
+        ("do", "Create a ticket to"),
+        ("do", "Write a summary to"),
+        ("schedule", "Every day, write a summary to"),
+    ],
+)
+def test_a_trailing_to_names_no_place_and_never_stops_the_check(kind: RowKind, text: str):
+    assert why_no_tool(kind, text) is None
 
 
 @pytest.mark.parametrize(
