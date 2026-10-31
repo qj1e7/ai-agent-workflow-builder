@@ -15,3 +15,8 @@ GRANT n8n TO CURRENT_USER;
 GRANT wab_owner TO CURRENT_USER;
 ALTER DATABASE n8n OWNER TO n8n;
 ALTER DATABASE platform OWNER TO wab_owner;
+
+-- On Azure the public schema does not belong to the database's owner, so owning the database is
+-- not enough for n8n to create its tables there.
+\connect n8n
+GRANT USAGE, CREATE ON SCHEMA public TO n8n;
