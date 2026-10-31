@@ -134,7 +134,7 @@ Notes on the lanes:
 
 ## 6. Save the evidence here
 
-Copy these files from `EVID` into this folder, after you look at each screenshot. The screenshots show the test accounts' names, which is why the lanes use test accounts.
+Copy these files from `EVID` into this folder, after you look at each screenshot. The screenshots show the test accounts' names, which is why the lanes use test accounts. The repository is public, so cover the two email addresses in `p14-sign-in-settings.png` before you save it. They name the Entra tenant.
 
 | From `EVID` | To `docs/evidence/deploy/` |
 |---|---|

@@ -1,0 +1,11 @@
+PASS lane 3: GET /healthz/ready is 200, every part is ready, the copy to Cosmos DB and n8n's error workflow included
+PASS lane 7: plain http is refused or sent to https (lane-7/p14-https.txt)
+PASS lane 10: ZAP reports 0 Medium or High findings (lane-10/p14-zap.txt)
+PASS lane 2: Home names the first Operator and Settings shows them as Operator (lane-2/p14-sign-in.png)
+PASS lane 9: someone not on the People list is told to ask an Operator (lane-9/p14-not-on-list.png)
+PASS lane 6: Test and save succeeded, so SETTINGS_ENCRYPTION_KEY is set (lane-6/p14-model.png)
+PASS lane 4: the practice Jira holds the approved run's ticket (lane-4/p14-approved.png)
+PASS lane 8: the run page reconnected and showed every event once (lane-8/p14-restart.png)
+PASS lane 5: every one of the run's 23 events is in Cosmos DB under the run's partition (lane-5/p14-cosmos.json)
+PASS lane 1: the same steps to the approval gate on the local stack and on Azure (lane-1/p14-local-azure.png)
+PASS lane perf: Home's median paint under 3 s and the 95th percentile event delay under 2 s on Azure (perf/p14-perf.json)

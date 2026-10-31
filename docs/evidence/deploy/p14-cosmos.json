@@ -1,0 +1,169 @@
+{
+  "account": "cosmos-wab-dev-upurh",
+  "run_id": "run_01M69ACV5GV14SK8NXSFVBJF96",
+  "partition": "run_01M69ACV5GV14SK8NXSFVBJF96",
+  "count": 23,
+  "items": [
+    {
+      "id": "1",
+      "runId": "run_01M69ACV5GV14SK8NXSFVBJF96",
+      "seq": 1,
+      "kind": "run_created",
+      "ts": "2026-10-31T15:49:02.768410+00:00"
+    },
+    {
+      "id": "2",
+      "runId": "run_01M69ACV5GV14SK8NXSFVBJF96",
+      "seq": 2,
+      "kind": "leg_dispatched",
+      "ts": "2026-10-31T15:49:02.768410+00:00"
+    },
+    {
+      "id": "3",
+      "runId": "run_01M69ACV5GV14SK8NXSFVBJF96",
+      "seq": 3,
+      "kind": "step_started",
+      "ts": "2026-10-31T15:49:02.914389+00:00"
+    },
+    {
+      "id": "4",
+      "runId": "run_01M69ACV5GV14SK8NXSFVBJF96",
+      "seq": 4,
+      "kind": "agent_joined",
+      "ts": "2026-10-31T15:49:02.987337+00:00"
+    },
+    {
+      "id": "5",
+      "runId": "run_01M69ACV5GV14SK8NXSFVBJF96",
+      "seq": 5,
+      "kind": "agent_message",
+      "ts": "2026-10-31T15:49:03.071975+00:00"
+    },
+    {
+      "id": "6",
+      "runId": "run_01M69ACV5GV14SK8NXSFVBJF96",
+      "seq": 6,
+      "kind": "agent_step_started",
+      "ts": "2026-10-31T15:49:03.132760+00:00"
+    },
+    {
+      "id": "7",
+      "runId": "run_01M69ACV5GV14SK8NXSFVBJF96",
+      "seq": 7,
+      "kind": "agent_step_finished",
+      "ts": "2026-10-31T15:49:03.635257+00:00"
+    },
+    {
+      "id": "8",
+      "runId": "run_01M69ACV5GV14SK8NXSFVBJF96",
+      "seq": 8,
+      "kind": "agent_step_started",
+      "ts": "2026-10-31T15:49:03.651358+00:00"
+    },
+    {
+      "id": "9",
+      "runId": "run_01M69ACV5GV14SK8NXSFVBJF96",
+      "seq": 9,
+      "kind": "agent_step_finished",
+      "ts": "2026-10-31T15:49:04.026691+00:00"
+    },
+    {
+      "id": "10",
+      "runId": "run_01M69ACV5GV14SK8NXSFVBJF96",
+      "seq": 10,
+      "kind": "agent_message",
+      "ts": "2026-10-31T15:49:04.043220+00:00"
+    },
+    {
+      "id": "11",
+      "runId": "run_01M69ACV5GV14SK8NXSFVBJF96",
+      "seq": 11,
+      "kind": "agent_message",
+      "ts": "2026-10-31T15:49:06.294984+00:00"
+    },
+    {
+      "id": "12",
+      "runId": "run_01M69ACV5GV14SK8NXSFVBJF96",
+      "seq": 12,
+      "kind": "write_action_proposed",
+      "ts": "2026-10-31T15:49:06.378070+00:00"
+    },
+    {
+      "id": "13",
+      "runId": "run_01M69ACV5GV14SK8NXSFVBJF96",
+      "seq": 13,
+      "kind": "step_finished",
+      "ts": "2026-10-31T15:49:06.378070+00:00"
+    },
+    {
+      "id": "14",
+      "runId": "run_01M69ACV5GV14SK8NXSFVBJF96",
+      "seq": 14,
+      "kind": "step_started",
+      "ts": "2026-10-31T15:49:06.447811+00:00"
+    },
+    {
+      "id": "15",
+      "runId": "run_01M69ACV5GV14SK8NXSFVBJF96",
+      "seq": 15,
+      "kind": "approval_requested",
+      "ts": "2026-10-31T15:49:06.447811+00:00"
+    },
+    {
+      "id": "16",
+      "runId": "run_01M69ACV5GV14SK8NXSFVBJF96",
+      "seq": 16,
+      "kind": "step_finished",
+      "ts": "2026-10-31T15:49:06.447811+00:00"
+    },
+    {
+      "id": "17",
+      "runId": "run_01M69ACV5GV14SK8NXSFVBJF96",
+      "seq": 17,
+      "kind": "approval_announced",
+      "ts": "2026-10-31T15:49:06.476617+00:00"
+    },
+    {
+      "id": "18",
+      "runId": "run_01M69ACV5GV14SK8NXSFVBJF96",
+      "seq": 18,
+      "kind": "approval_decided",
+      "ts": "2026-10-31T15:49:08.164154+00:00"
+    },
+    {
+      "id": "19",
+      "runId": "run_01M69ACV5GV14SK8NXSFVBJF96",
+      "seq": 19,
+      "kind": "leg_dispatched",
+      "ts": "2026-10-31T15:49:08.164154+00:00"
+    },
+    {
+      "id": "20",
+      "runId": "run_01M69ACV5GV14SK8NXSFVBJF96",
+      "seq": 20,
+      "kind": "step_started",
+      "ts": "2026-10-31T15:49:08.297023+00:00"
+    },
+    {
+      "id": "21",
+      "runId": "run_01M69ACV5GV14SK8NXSFVBJF96",
+      "seq": 21,
+      "kind": "write_action_done",
+      "ts": "2026-10-31T15:49:08.409532+00:00"
+    },
+    {
+      "id": "22",
+      "runId": "run_01M69ACV5GV14SK8NXSFVBJF96",
+      "seq": 22,
+      "kind": "step_finished",
+      "ts": "2026-10-31T15:49:08.409532+00:00"
+    },
+    {
+      "id": "23",
+      "runId": "run_01M69ACV5GV14SK8NXSFVBJF96",
+      "seq": 23,
+      "kind": "run_succeeded",
+      "ts": "2026-10-31T15:49:08.409532+00:00"
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "method": "Largest contentful paint from the page's own PerformanceObserver, Home loaded once to sign in and warm up, then interleaved. Event delay as scripts/p95.py --stream reads it: the moment an event arrived on the run page's stream minus its ts, for events made after the stream opened. The browser's clock and Azure's both follow NTP, so a small skew stays in the Azure numbers.",
+  "samples": 5,
+  "local": {
+    "home_lcp_ms": [
+      16,
+      28,
+      20,
+      20,
+      28
+    ],
+    "home_lcp_median_ms": 20,
+    "run_id": "run_01M69AGG04VX3NP9C0KK48AYKT",
+    "live_events": 9,
+    "event_delay_p50_ms": 26,
+    "event_delay_p95_ms": 31,
+    "event_delay_max_ms": 31
+  },
+  "azure": {
+    "home_lcp_ms": [
+      160,
+      160,
+      160,
+      160,
+      160
+    ],
+    "home_lcp_median_ms": 160,
+    "run_id": "run_01M69AGMS3D8BAZW28AJ0SJXRM",
+    "live_events": 7,
+    "event_delay_p50_ms": 383,
+    "event_delay_p95_ms": 466,
+    "event_delay_max_ms": 466
+  }
+}
