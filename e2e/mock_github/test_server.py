@@ -10,6 +10,8 @@ from typing import Any
 import server
 
 RELEASES_URL = "/repos/langchain-ai/langgraph/releases"
+REDIS = "redis/redis"
+REDIS_URL = f"/repos/{REDIS}/releases"
 
 
 @contextmanager
@@ -128,6 +130,46 @@ class MockGithubTest(unittest.TestCase):
             call(base, "/_admin/mode", {"mode": "unavailable"})
             self.assertEqual(call(base, "/repos/redis/redis/releases")[0], 503)
             self.assertEqual(call(base, "/repos/someone/else/releases")[0], 503)
+
+    def test_one_repository_can_fail_while_the_others_answer(self) -> None:
+        with running() as base:
+            set_redis = call(base, "/_admin/mode", {"mode": "unavailable", "repo": REDIS})
+            self.assertEqual(set_redis, (200, {"mode": "unavailable", "repo": REDIS}))
+            self.assertEqual(call(base, REDIS_URL)[0], 503)
+            self.assertEqual(call(base, RELEASES_URL)[0], 200)
+            read_back = call(base, f"/_admin/mode?repo={REDIS}")
+            self.assertEqual(read_back, (200, {"mode": "unavailable", "repo": REDIS}))
+            self.assertEqual(call(base, "/_admin/mode"), (200, {"mode": "ok"}))
+
+    def test_not_found_mode_answers_404_for_a_repository_it_knows(self) -> None:
+        with running() as base:
+            call(base, "/_admin/mode", {"mode": "not_found", "repo": REDIS})
+            status, body = call(base, REDIS_URL)
+            self.assertEqual((status, body["message"]), (404, "Not Found"))
+            self.assertEqual(call(base, RELEASES_URL)[0], 200)
+
+    def test_two_repositories_can_fail_for_different_reasons(self) -> None:
+        with running() as base:
+            call(base, "/_admin/mode", {"mode": "unavailable", "repo": "langchain-ai/langgraph"})
+            call(base, "/_admin/mode", {"mode": "not_found", "repo": REDIS})
+            self.assertEqual(call(base, RELEASES_URL)[0], 503)
+            self.assertEqual(call(base, REDIS_URL)[0], 404)
+            self.assertEqual(call(base, "/repos/fastapi/fastapi/releases")[0], 200)
+
+    def test_a_mode_for_every_repository_clears_each_repositorys_own(self) -> None:
+        with running() as base:
+            call(base, "/_admin/mode", {"mode": "unavailable", "repo": REDIS})
+            self.assertEqual(call(base, "/_admin/mode", {"mode": "ok"}), (200, {"mode": "ok"}))
+            self.assertEqual(call(base, REDIS_URL)[0], 200)
+            self.assertEqual(call(base, f"/_admin/mode?repo={REDIS}")[1]["mode"], "ok")
+
+    def test_a_repository_mode_needs_an_owner_and_a_name(self) -> None:
+        with running() as base:
+            for repo in ("redis", 5):
+                asked = {"mode": "unavailable", "repo": repo}
+                self.assertEqual(call(base, "/_admin/mode", asked)[0], 400)
+            self.assertEqual(call(base, "/_admin/mode?repo=redis")[0], 400)
+            self.assertEqual(call(base, REDIS_URL)[0], 200)
 
 
 if __name__ == "__main__":

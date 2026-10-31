@@ -24,6 +24,11 @@ services:
     build:
       context: ../e2e/mock_model
       target: runtime
+    # A second address for the same model. A check can then save an address the platform has never
+    # confirmed while the first one is in use (scripts/checks/p10.sh, lanes 2 and 3).
+    networks:
+      default:
+        aliases: [mock-model-2]
     healthcheck:
       test:
         - CMD
@@ -38,7 +43,7 @@ services:
     environment:
       GITHUB_API_BASE: http://mock-github:8200
       PRACTICE_JIRA_URL: http://platform-api:8000
-      AGENT_MODEL_PRIVATE_HOSTS: mock-model
+      AGENT_MODEL_PRIVATE_HOSTS: mock-model,mock-model-2
     depends_on:
       mock-github:
         condition: service_healthy
