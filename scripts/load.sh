@@ -18,7 +18,7 @@ k6_name="${project}-k6"
 sampler_pid=""
 cleanup() {
   if [ -n "$sampler_pid" ]; then kill "$sampler_pid" 2>/dev/null || true; fi
-  docker rm -f "$k6_name" >/dev/null 2>&1 || true
+  docker rm -fv "$k6_name" >/dev/null 2>&1 || true
   stack_stop
 }
 trap cleanup EXIT

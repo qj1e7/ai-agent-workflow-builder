@@ -14,7 +14,7 @@ proxy=http://egress-proxy:3128
 failures=0
 
 cleanup() {
-  docker rm -f "$name" >/dev/null 2>&1 || true
+  docker rm -fv "$name" >/dev/null 2>&1 || true
   rm -rf "$work"
 }
 trap cleanup EXIT
@@ -49,7 +49,7 @@ check() {
     if [ "$waited" -ge 120 ] || [ "$(docker inspect -f '{{.State.Running}}' "$name")" != true ]; then
       bad "$label: n8n did not start"
       docker logs "$name" 2>&1 | tail -n 20
-      docker rm -f "$name" >/dev/null
+      docker rm -fv "$name" >/dev/null
       return
     fi
     sleep 1
@@ -76,7 +76,7 @@ check() {
   else
     bad "$label: the health check fails with a proxy set ($health):" && cat "$work/health.out"
   fi
-  docker rm -f "$name" >/dev/null
+  docker rm -fv "$name" >/dev/null
 }
 
 check "compose.yaml" compose.yaml
