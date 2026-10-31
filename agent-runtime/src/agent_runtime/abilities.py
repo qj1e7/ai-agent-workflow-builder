@@ -7,6 +7,7 @@ line names that, and every place it names is one the line reaches. Anything else
 a note that says what the platform can't do yet. A new tool is one more line."""
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from functools import cache
 from typing import Final, Literal, NamedTuple
@@ -144,6 +145,7 @@ NOT_KEYS: Final = words("AD AWS GCP SSO MFA VPN PR PRS MR CI CD API URL SMS CSV 
 PLACING: Final = words("put go")
 PLACE_ADVERBS: Final = words("somewhere anywhere everywhere elsewhere wherever here there")
 PLACING_FORMS: Final = words("put puts putting go goes going went gone")
+DELIVERS: Final = words("post send share save publish upload export copy forward attach")
 SUBJECTS: Final = words("i we you")
 WANTING: Final = words("want wants need needs would like prefer")
 
@@ -174,6 +176,7 @@ DETERMINERS: Final = words(
 )
 NOUN_AFTER: Final = words("with without of per about")
 PRONOUNS: Final = words("them it they these those all everything each both one ones")
+NAMES_NOTHING: Final = DETERMINERS | PREPS | PRONOUNS | PLACING_FORMS
 NEW: Final = words("a an one new single")
 MODALS: Final = words("should must will would can could may might shall to need needs")
 GETS: Final = words("get gets got getting gotten")
@@ -195,7 +198,15 @@ IRREGULAR: Final = {
     "build": ("built",),
 }
 VOWELS: Final = "aeiou"
-TOKEN: Final = re.compile(r"[A-Za-z0-9]+(?:['’][A-Za-z]+|[-/.][A-Za-z0-9]+)*|[,;:.!?&+()]")
+MARKS: Final = "".join(
+    chr(code) for code in range(0x300, 0x20000) if unicodedata.category(chr(code))[0] == "M"
+)
+"""Accents and vowel signs written as their own character, as in Tamil or a decomposed "é"."""
+LETTERS: Final = rf"[^\W\d_](?:[^\W\d_]|[{MARKS}])*"
+"""Letters of any script. On ASCII text it is exactly [A-Za-z]+."""
+LETTERS_DIGITS: Final = rf"[^\W_](?:[^\W_]|[{MARKS}])*"
+"""Letters and digits of any script. On ASCII text it is exactly [A-Za-z0-9]+."""
+TOKEN: Final = re.compile(rf"{LETTERS_DIGITS}(?:['’]{LETTERS}|[-/.]{LETTERS_DIGITS})*|[,;:.!?&+()]")
 KEY: Final = re.compile(r"[A-Z][A-Z0-9]{1,9}(?:-[0-9]{1,9})?")
 CAMEL: Final = re.compile(r"[A-Z][a-z0-9]+[A-Z][A-Za-z0-9]*")
 SAID_LIMIT: Final = 90
@@ -627,13 +638,16 @@ def _says_an_action(word: _Word, reader: _Reader) -> bool:
 
 def _places_it(word: _Word, reader: _Reader) -> bool:
     found = reader.verb(word)
-    return word.bare in PLACING_FORMS or (found is not None and found[1] == "ed")
+    if found is None or found[1] != "ed":
+        return word.bare in PLACING_FORMS
+    return found[0] not in reader.writes or found[0] in DELIVERS
 
 
 def _lead_in(part: Clause, reader: _Reader) -> Clause:
     """The part without the words before what it names: "then", "let's", "I want it", and a
-    placing verb or a past form just before a place, as in "it goes to Slack" or "posted in
-    Teams"."""
+    placing verb or a past form just before a place, as in "it goes to Slack", "posted in Teams"
+    or "summarised in MOCK". The past form of a write that only delivers, such as "posted" or
+    "sent", is a lead. One that changes data, as in "moved to" or "deleted in", stays."""
     at = 0
     while at < len(part) and (part[at].mark or part[at].low in (FILLER - TO_PLACE) | {"let's"}):
         at += 1
@@ -656,12 +670,14 @@ def _lead_in(part: Clause, reader: _Reader) -> Clause:
     return part[at:]
 
 
-def _not_a_place(part: Clause, reader: _Reader) -> str | None:
+def _not_a_place(part: Clause, reader: _Reader, places: frozenset[str]) -> str | None:
     """What the note says for one part of where it goes that is not a place the platform
     reaches: the action itself when the part says one, so the sentence never reads "put results
-    in let the team know". None when the part names nothing, such as "then" or "in the"."""
+    in let the team know". None when the part names nothing, such as "then", "in the" or "it
+    goes", or when its lead words come before a place it reaches, as in "Posted in Jira project
+    MOCK"."""
     lead = _lead_in(part, reader)
-    if all(word.mark or word.low in DETERMINERS | PREPS for word in lead):
+    if all(word.mark or word.low in NAMES_NOTHING for word in lead) or _is_place(lead, places):
         return None
     first, rest = lead[0], lead[1:]
     if first.low in TO_PLACE | IN_PLACE:
@@ -707,8 +723,9 @@ def _where_row(row: Clause, reader: _Reader) -> str | None:
         if not part or _is_place(part, places):
             continue
         if number == 0 and verb_at is not None and part[0].low not in TO_PLACE | IN_PLACE:
-            return _cant_phrase(row[verb_at : at + len(part)], reader)
-        what = _not_a_place(part, reader)
+            what = _do_row(row[verb_at : at + len(part)], reader)
+        else:
+            what = _not_a_place(part, reader, places)
         if what is not None:
             return what
     return None
