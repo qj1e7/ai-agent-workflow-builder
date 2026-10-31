@@ -16,7 +16,7 @@
 | `api-via-portal` | The 45 `/api/` routes (55 operations) through the Portal's nginx | Active scan | 112 pass, 0 warn, 0 fail, 1 ignored | the same |
 | `portal` | The Portal's page, scripts and styles through nginx | Passive baseline | 60 pass, 0 warn, 0 fail, 1 ignored | the same |
 
-The active scans sent about 34,800 requests to platform-api in each run. On 22 Oct the old app had 21 routes and the scans sent about 7,000.
+platform-api answered 34,802 requests in run 1 and 34,800 in run 2, nearly all of them from ZAP (`access-counts-run1.txt`, `access-counts-run2.txt`). On 22 Oct the old app had 21 routes and the scans sent about 7,000.
 
 ## Findings by risk
 
@@ -35,11 +35,13 @@ Against the old app on 22 Oct (`docs/evidence/dast/`): the same rules raised the
 
 ## What the scan shows
 
-- **The approval gate held.** In run 1, 1,226 of ZAP's requests went to the decision route. 432 were well formed enough to reach the check, and all 432 got 403, because Alice started the seeded run, and nobody approves their own work. 788 were malformed and got 422, 2 got 404 and 4 got 405. None was accepted.
-- **Nothing was written.** After run 2, before the stack was taken down: `orchestration.approval_decisions`, `write_executions`, `mock_jira_tickets` and `confirmations` had 0 rows, and `builder.cards` and `builder.drafts` had 0 rows. The People list still held only the three seeded people.
-- **The People and roles routes refused every change.** ZAP's requests to add a person, change a role, ask for an Approver or decide a confirmation got 404, 405, 409 or 422. Only the two read routes, `GET /api/v1/people` and `GET /api/v1/confirmations`, answered 200.
-- **No AI model setting was saved.** `PUT /api/v1/settings/model` answered 200 to 1,188 requests. That route answers 200 with the model test's result, and each test failed, because no address ZAP sent is a model service. `orchestration.model_setting` had 0 rows after run 2.
-- **The activity log reached Cosmos DB.** The scan's two runs wrote 26 events to `monitoring.run_events`, and the copier copied all 26 to the emulator, 15 and 11 items in two partitions (`docs/evidence/diagrams/cosmos-2026-10-31.txt`). The events route ZAP read was served from that copy.
+**Where these figures come from.** The request counts come from each run's compose log, the stack's own log that `scripts/dast.sh` writes to `dast/out/compose.log`. The logs are 8 MB each, so they are not saved here. `access-counts.py` recounts the figures from them, and its output is saved as `access-counts-run1.txt` and `access-counts-run2.txt`. The row counts come from psql queries on run 2's kept stack, before it was taken down. Their output was not saved, and that stack is gone, so they cannot be read again. The next scan run with `KEEP=1` should save them.
+
+- **The approval gate held.** From the compose log: in run 1, 1,226 of ZAP's requests went to the decision route. 432 were well formed enough to reach the check, and all 432 got 403, because Alice started the seeded run, and nobody approves their own work. 788 were malformed and got 422, 2 got 404 and 4 got 405. None was accepted.
+- **Nothing was written.** From psql, not saved: after run 2, before the stack was taken down, `orchestration.approval_decisions`, `write_executions`, `mock_jira_tickets` and `confirmations` had 0 rows, and `builder.cards` and `builder.drafts` had 0 rows. The People list still held only the three seeded people.
+- **The People and roles routes refused every change.** From the compose log: ZAP's requests to add a person, change a role, ask for an Approver or decide a confirmation got 404, 405, 409 or 422. Only the two read routes, `GET /api/v1/people` and `GET /api/v1/confirmations`, answered 200.
+- **No AI model setting was saved.** From the compose log, `PUT /api/v1/settings/model` answered 200 to 1,188 requests. That route answers 200 with the model test's result, and each test failed, because no address ZAP sent is a model service. From psql, not saved: `orchestration.model_setting` had 0 rows after run 2.
+- **The activity log reached Cosmos DB.** The scan's two runs wrote 26 events to `monitoring.run_events` (from psql, not saved), and the copier copied all 26 to the emulator, 15 and 11 items in two partitions (saved in `docs/evidence/diagrams/cosmos-2026-10-31.txt`). The events route ZAP read was served from that copy.
 
 ## Issue #79: ZAP's proxy port
 
@@ -60,6 +62,7 @@ Neither run here hit the bind failure. `zap-port-retry-test.sh` runs the script'
 | `portal.html`, `portal.json` | The Portal baseline, run 1 |
 | `*-run1.log`, `*-run2.log` | ZAP's rule list and summary line for each scan in each run |
 | `dast-run1.txt`, `dast-run2.txt` | What `scripts/dast.sh` printed |
+| `access-counts.py`, `access-counts-run1.txt`, `access-counts-run2.txt` | The count of platform-api's answers by route and status, from each run's compose log. Run it as `python3 -I access-counts.py dast/out/compose.log` |
 | `zap-port-retry-test.sh`, `zap-port-retry-test.txt` | The stub test of the retry and of the closing lines, and its output. Run it as `bash docs/evidence/dast/2026-11-rebuild/zap-port-retry-test.sh scripts/dast.sh` |
 
 ## What this scan does not cover
