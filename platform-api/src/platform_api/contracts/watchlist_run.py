@@ -569,6 +569,7 @@ def awaiting_approval_view(tl: Timeline) -> RunView:
             ],
         ),
         approval=approval_ref(CHECK, [open_step()]),
+        you_can_decide=True,  # As Bob, who decides it, sees the run.
     )
 
 
