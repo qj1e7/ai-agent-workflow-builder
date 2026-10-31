@@ -1,0 +1,2 @@
+http://platform-api.grayforest-1e5c8193.eastasia.azurecontainerapps.io/healthz/ready -> 301 https://platform-api.grayforest-1e5c8193.eastasia.azurecontainerapps.io/healthz/ready
+http://portal.grayforest-1e5c8193.eastasia.azurecontainerapps.io/ -> 301 https://portal.grayforest-1e5c8193.eastasia.azurecontainerapps.io/

@@ -1,0 +1,11 @@
+ZAP baseline scan of https://portal.grayforest-1e5c8193.eastasia.azurecontainerapps.io with zaproxy/zap-stable:20260807@sha256:781a2bdaea47324e7bab583e2263f21d257b0aee61ed51521a5be45f5f5081ef, exit 2
+WARN-NEW: Storable and Cacheable Content [10049] x 5 
+WARN-NEW: Cross-Origin-Embedder-Policy Header Missing or Invalid [90004] x 3 
+FAIL-NEW: 0	FAIL-INPROG: 0	WARN-NEW: 4	WARN-INPROG: 0	INFO: 0	IGNORE: 1	PASS: 63
+Medium or High alerts: 0
+Low (Medium)  90004  Cross-Origin-Embedder-Policy Header Missing or Invalid
+Low (High)  10035  Strict-Transport-Security Header Not Set
+Informational (Medium)  10109  Modern Web Application
+Informational (Low)  10015  Re-examine Cache-control Directives
+Informational (Medium)  10049  Storable and Cacheable Content
+Informational (Medium)  10049  Storable but Non-Cacheable Content
