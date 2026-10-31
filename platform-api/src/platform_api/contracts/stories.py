@@ -561,6 +561,7 @@ def awaiting_approval_view(story: Story, tl: Timeline) -> RunView:
         **_base(story, tl, seq),
         proposal=proposal_view(story),
         approval=approval_ref(story, [open_step()]),
+        you_can_decide=True,  # As Bob, who decides it, sees the run.
     )
 
 

@@ -44,13 +44,12 @@ export interface BadgeAsks {
   readonly more: boolean
 }
 
-const notStartedBy = (me: string) => (run: RunView) => run.started_by !== me
-
-export function badgeAsks(runs: readonly RunView[], messages: readonly TeamsStubMessage[], me: string): BadgeAsks {
+/** The platform says whether this person can decide each waiting run. Only it knows who owns or retried a run. */
+export function badgeAsks(runs: readonly RunView[], messages: readonly TeamsStubMessage[]): BadgeAsks {
   const posted = new Set(messages.map((message) => message.approval_id))
   const ids = runs
-    .filter(notStartedBy(me))
     .filter((run) => run.state === 'awaiting_approval')
+    .filter((run) => run.you_can_decide)
     .filter((run) => posted.has(run.approval.approval_id))
     .sort((a, b) => b.started_at.localeCompare(a.started_at))
     .map((run) => run.approval.approval_id)
@@ -255,7 +254,7 @@ function useWaitingForYou(person: Me | null): WaitingCount {
   const enabled = person !== null
   const messages = useTeamsMessages({ poll: BADGE_POLL_MS, enabled })
   const runs = useRuns({ poll: BADGE_POLL_MS, enabled })
-  const asks = badgeAsks(runs.data ?? [], messages.data ?? [], person?.id ?? '')
+  const asks = badgeAsks(runs.data ?? [], messages.data ?? [])
   const approvals = useApprovals(asks.ids, { poll: BADGE_POLL_MS })
   const count = approvals.filter((query) => query.data?.you_can_decide === true).length
   return { count, atLeast: asks.more && count === asks.ids.length }
