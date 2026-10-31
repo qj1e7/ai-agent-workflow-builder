@@ -165,6 +165,7 @@ describe('when it runs', () => {
     expect(at('Not/AZone'), 'a name the browser cannot read is named from its id').toBe('AZone time.')
     expect(at('Factory'), 'Factory is a real id the browser rejects').toBe('Factory time.')
     for (const utc of ['GMT', 'Etc/GMT', 'Etc/UCT', 'UCT', 'Universal', 'Zulu', 'Greenwich']) expect(at(utc), utc).toBe('UTC.')
+    for (const utc of ['Etc/GMT0', 'GMT0', 'GMT+0', 'GMT-0']) expect(at(utc), utc).toBe('UTC.')
     expect(at('America/Port-au-Prince')).toBe('Port au Prince time.')
     expect(at('Africa/Porto-Novo')).toBe('Porto Novo time.')
     expect(at('America/Blanc-Sablon')).toBe('Blanc Sablon time.')

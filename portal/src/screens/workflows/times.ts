@@ -97,7 +97,7 @@ export function nextRunAt(iso: string, now: Date, zone?: string): string {
   return isSingapore(zone) ? when : `${when} ${timesZone(zone)}`
 }
 
-const UTC_NAMES = new Set(['UTC', 'Etc/UTC', 'GMT', 'Etc/GMT', 'Etc/UCT', 'UCT', 'Universal', 'Etc/Universal', 'Zulu', 'Etc/Zulu', 'Greenwich', 'Etc/Greenwich'])
+const UTC_NAMES = new Set(['UTC', 'Etc/UTC', 'GMT', 'Etc/GMT', 'GMT0', 'Etc/GMT0', 'GMT+0', 'GMT-0', 'Etc/UCT', 'UCT', 'Universal', 'Etc/Universal', 'Zulu', 'Etc/Zulu', 'Greenwich', 'Etc/Greenwich'])
 
 /**
  * Built from the zone's id alone, without Intl, so a zone the browser cannot read is still named for what it is. Singapore keeps its short name.
