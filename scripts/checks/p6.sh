@@ -49,6 +49,26 @@ LATE_REMOVAL_MOVED=lane-3/late-removal.moved
 
 die() { echo "p6.sh: $*" >&2; exit 2; }
 
+# wab/*:dev and :latest are the images scripts/e2e.sh and a dev stack use, so a check never builds over them or removes them.
+own_tag() {
+  case "$1" in
+    '' | dev | latest) die "give this check its own image tag, not '$1': wab/*:dev and :latest belong to scripts/e2e.sh and dev stacks" ;;
+  esac
+}
+
+# Says what docker did with one image: removed it, only took away this tag (the image has another), or kept it and why.
+remove_image() {
+  local ref=$1 said
+  if said=$(docker image rm "$ref" 2>&1); then
+    case "$said" in
+      *Deleted:*) echo "removed $ref" ;;
+      *) echo "untagged $ref; the image keeps another tag" ;;
+    esac
+  else
+    echo "kept $ref: ${said%%$'\n'*}"
+  fi
+}
+
 compose() {
   local worktree=$1 project=$2
   shift 2
@@ -124,6 +144,7 @@ up() {
     --no-build) build=--no-build ;;
     *) die "unknown up option $7" ;;
   esac
+  own_tag "$tag"
   disk
   [ -f "$ENV_FILE" ] || die "no $ENV_FILE; copy deploy/make-env.sh next to it and run it"
   mkdir -p "$EVID/stacks"
@@ -143,17 +164,14 @@ build_the_mock_images() {
 
 down() {
   local worktree=$1 project=$2 tag=${3:-} image
+  [ -z "$tag" ] || own_tag "$tag"
   mkdir -p "$EVID/stacks"
   compose "$worktree" "$project" --profile e2e logs --no-color >"$EVID/stacks/$project-compose.log" 2>&1 || true
   compose "$worktree" "$project" --profile e2e down -v --remove-orphans
   [ -n "$tag" ] || return 0
   for image in wab/platform-api wab/agent-runtime wab/portal wab/mock-github wab/mock-model; do
     docker image inspect "$image:$tag" >/dev/null 2>&1 || continue
-    if docker image rm "$image:$tag" >/dev/null 2>&1; then
-      echo "removed $image:$tag"
-    else
-      echo "kept $image:$tag, which another stack still uses"
-    fi
+    remove_image "$image:$tag"
   done
 }
 
@@ -264,6 +282,7 @@ SQL
 
 lane6() {
   local worktree=$1 project=$2 tag=$3 portal_port=$4 api_port=$5 n8n_port=$6 status=0
+  own_tag "$tag"
   up "$worktree" "$project" "$tag" "$portal_port" "$api_port" "$n8n_port" "${7:-}"
   mkdir -p "$EVID/lane-6"
   check "$project" --grep '@lane6 ' 2>&1 | tee "$EVID/lane-6/playwright.log" || status=$?

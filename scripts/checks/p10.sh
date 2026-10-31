@@ -202,14 +202,22 @@ own() {
     2,3 | 4 | 5 | 6 | 11) ;;
     *) die "own runs \"2,3\", \"4\", \"5\", \"6\" or \"11\", not $lanes" ;;
   esac
+  down_on_exit down "$worktree" "$project"
   up ${build:+"$build"} "$worktree" "$project" "$tag" "$portal_port" "$api_port" "$n8n_port"
   for n in ${lanes//,/ }; do
     mkdir -p "$EVID/lane-$n"
     check "$project" --grep "@lane$n " 2>&1 | tee "$EVID/lane-$n/playwright.log" || status=$?
     [ "$status" -eq 0 ] || break
   done
+  trap - EXIT
   down "$worktree" "$project"
   return "$status"
+}
+
+# A command that brings up its own stack calls this first, so every way out, a failed step or a die included, takes
+# the stack down with its volumes. It clears the trap before its own down.
+down_on_exit() {
+  trap "$(printf '%q ' "$@")" EXIT
 }
 
 # The sign-in stack adds the mock identity provider. It publishes no host port, so it can run beside another stack.
@@ -217,6 +225,13 @@ compose_oidc() {
   local worktree=$1 project=$2
   shift 2
   compose "$worktree" "$project" -f "$worktree/deploy/compose.oidc.yaml" "$@"
+}
+
+down_oidc() {
+  local worktree=$1 project=$2
+  mkdir -p "$EVID/stacks"
+  compose_oidc "$worktree" "$project" --profile e2e logs --no-color >"$EVID/stacks/$project-compose.log" 2>&1 || true
+  compose_oidc "$worktree" "$project" --profile e2e down -v --remove-orphans
 }
 
 signin() {
@@ -229,19 +244,17 @@ signin() {
   disk
   [ -f "$ENV_FILE" ] || die "no $ENV_FILE; copy deploy/make-env.sh next to it and run it"
   mkdir -p "$EVID/stacks" "$out"
-  WAB_IMAGE_TAG=$tag compose_oidc "$worktree" "$project" up ${build:+"$build"} --wait --wait-timeout 400 >"$EVID/stacks/$project-up.log" 2>&1 || status=$?
-  if [ "$status" -ne 0 ]; then
-    tail -n 30 "$EVID/stacks/$project-up.log" >&2
-    compose_oidc "$worktree" "$project" --profile e2e down -v --remove-orphans
-    die "$project did not become healthy"
-  fi
+  down_on_exit down_oidc "$worktree" "$project"
+  WAB_IMAGE_TAG=$tag compose_oidc "$worktree" "$project" up ${build:+"$build"} --wait --wait-timeout 400 >"$EVID/stacks/$project-up.log" 2>&1 ||
+    { tail -n 30 "$EVID/stacks/$project-up.log" >&2; die "$project did not become healthy"; }
   portal=$(portal_of "$project")
-  docker exec "$portal" wget -qSO- http://platform-api:8000/healthz/ready 2>&1 | tee "$out/ready.txt"
+  [ -n "$portal" ] || die "no running Portal in project $project"
+  docker exec "$portal" wget -qSO- http://platform-api:8000/healthz/ready 2>&1 | tee "$out/ready.txt" || status=$?
   E2E_AUTH=oidc check "$project" --grep '@signin-not-on-list ' 2>&1 | tee "$out/not-on-list.log" || status=$?
   # P1's lane 2 writes its evidence under $EVID/signin/lane-2.
   E2E_AUTH=oidc RUNNER_EVID=/evidence/signin runner_in "$project" npx playwright test -c e2e/checks/playwright.config.ts p1.check.ts --grep '@lane2 ' 2>&1 | tee "$out/p1-lane2.log" || status=$?
-  compose_oidc "$worktree" "$project" --profile e2e logs --no-color >"$EVID/stacks/$project-compose.log" 2>&1 || true
-  compose_oidc "$worktree" "$project" --profile e2e down -v --remove-orphans
+  trap - EXIT
+  down_oidc "$worktree" "$project"
   return "$status"
 }
 
