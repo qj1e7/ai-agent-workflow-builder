@@ -203,7 +203,7 @@ export interface PeopleSaid {
   readonly notice: PeopleNotice | null
   readonly problem: PeopleProblem | null
   /** Who someone else took off the list, said beside the notice or the problem. */
-  readonly left: string | null
+  readonly left: { readonly personIds: readonly string[]; readonly words: string } | null
 }
 
 export function leftTheListWords(names: readonly string[]): string {
@@ -225,8 +225,17 @@ export function saidAfterListChange(before: readonly Pick<PersonOut, 'id' | 'dis
   return {
     notice: onLeftRow(said.notice) ? null : said.notice,
     problem: onLeftRow(said.problem) ? null : said.problem,
-    left: leftTheListWords(left.map((person) => person.display)),
+    left: { personIds: left.map((person) => person.id), words: leftTheListWords(left.map((person) => person.display)) },
   }
+}
+
+/**
+ * A refusal replaces the notice. When the list was read again before the refusal came, a refusal about someone the
+ * left line already names would only say the same thing twice, so the left line says it alone.
+ */
+export function saidAfterRefusal(said: PeopleSaid, problem: PeopleProblem): PeopleSaid {
+  const named = said.left?.personIds.includes(problem.personId) === true
+  return { notice: null, problem: named ? null : problem, left: said.left }
 }
 
 export function personStatusWords(person: PersonOut): string | null {

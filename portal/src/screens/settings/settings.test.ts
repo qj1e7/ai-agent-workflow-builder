@@ -32,6 +32,7 @@ import {
   pendingApproverFor,
   personStatusWords,
   saidAfterListChange,
+  saidAfterRefusal,
   savedKeyFits,
   SETTINGS_OFF_WORDS,
   settingsErrorWords,
@@ -188,7 +189,7 @@ describe('a person who leaves the list while the page is open', () => {
     expect(saidAfterListChange(BEFORE, without('ivan'), NOTHING)).toEqual({
       notice: null,
       problem: null,
-      left: 'Ivan is no longer on the list. The list now shows who is on it.',
+      left: { personIds: ['ivan'], words: 'Ivan is no longer on the list. The list now shows who is on it.' },
     })
   })
 
@@ -197,7 +198,7 @@ describe('a person who leaves the list while the page is open', () => {
     expect(saidAfterListChange(BEFORE, without('hana'), said)).toEqual({
       notice: null,
       problem: null,
-      left: 'Hana is no longer on the list. The list now shows who is on it.',
+      left: { personIds: ['hana'], words: 'Hana is no longer on the list. The list now shows who is on it.' },
     })
   })
 
@@ -206,7 +207,7 @@ describe('a person who leaves the list while the page is open', () => {
     expect(saidAfterListChange(BEFORE, without('gina'), said)).toEqual({
       notice: null,
       problem: null,
-      left: 'Gina is no longer on the list. The list now shows who is on it.',
+      left: { personIds: ['gina'], words: 'Gina is no longer on the list. The list now shows who is on it.' },
     })
   })
 
@@ -215,7 +216,7 @@ describe('a person who leaves the list while the page is open', () => {
     expect(saidAfterListChange(BEFORE, without('ivan'), { notice: null, problem: refusal, left: null })).toEqual({
       notice: null,
       problem: refusal,
-      left: 'Ivan is no longer on the list. The list now shows who is on it.',
+      left: { personIds: ['ivan'], words: 'Ivan is no longer on the list. The list now shows who is on it.' },
     })
   })
 
@@ -225,13 +226,26 @@ describe('a person who leaves the list while the page is open', () => {
     expect(saidAfterListChange(BEFORE, after, { notice: added, problem: null, left: null })).toEqual({
       notice: added,
       problem: null,
-      left: 'Ivan is no longer on the list. The list now shows who is on it.',
+      left: { personIds: ['ivan'], words: 'Ivan is no longer on the list. The list now shows who is on it.' },
     })
     expect(saidAfterListChange(BEFORE, without('ivan'), { notice: added, problem: null, left: null }).notice).toBe(added)
   })
 
+  it('drops a refusal that only says what the left line already says, when the list was read again before the refusal came', () => {
+    const left = saidAfterListChange(BEFORE, without('gina'), NOTHING)
+    const gone = { personId: 'gina', words: 'That person is no longer on the list. The list now shows who is on it.' }
+    expect(saidAfterRefusal(left, gone)).toEqual({ notice: null, problem: null, left: left.left })
+  })
+
+  it('keeps a refusal about someone the left line does not name, with the left line', () => {
+    const left = saidAfterListChange(BEFORE, without('ivan'), NOTHING)
+    const refusal = { personId: 'bob', words: 'At least 2 people must be Approvers, so nobody has to approve their own work.' }
+    expect(saidAfterRefusal(left, refusal)).toEqual({ notice: null, problem: refusal, left: left.left })
+    expect(saidAfterRefusal(NOTHING, refusal)).toEqual({ notice: null, problem: refusal, left: null })
+  })
+
   it('names everyone who left at once', () => {
-    expect(saidAfterListChange(BEFORE, without('gina', 'ivan'), NOTHING).left).toBe('Gina and Ivan are no longer on the list. The list now shows who is on it.')
+    expect(saidAfterListChange(BEFORE, without('gina', 'ivan'), NOTHING).left?.words).toBe('Gina and Ivan are no longer on the list. The list now shows who is on it.')
     expect(leftTheListWords(['Gina', 'Hana', 'Ivan'])).toBe('Gina, Hana and Ivan are no longer on the list. The list now shows who is on it.')
   })
 

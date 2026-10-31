@@ -36,16 +36,18 @@ describe('a notice that takes focus only when focus fell to the page', () => {
     return notice
   }
 
-  it('takes it when the focused row left and focus fell to the page body', () => {
+  it('takes it when the focused row left and focus fell to the page body, without scrolling the page', () => {
     const notice = page('body')
     focusIfFocusFell('people-left')
     expect(notice.focus).toHaveBeenCalledOnce()
+    // A refetch when the window gets focus back can bring the line while someone is further down the page.
+    expect(notice.focus).toHaveBeenCalledWith({ preventScroll: true })
   })
 
   it('takes it when nothing has focus', () => {
     const notice = page('nothing')
     focusIfFocusFell('people-left')
-    expect(notice.focus).toHaveBeenCalledOnce()
+    expect(notice.focus).toHaveBeenCalledWith({ preventScroll: true })
   })
 
   it('leaves focus where it is when it is still on another control', () => {

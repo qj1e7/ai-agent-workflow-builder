@@ -21,6 +21,7 @@ import {
   personStatusWords,
   ROLE_RULES,
   saidAfterListChange,
+  saidAfterRefusal,
   undoneWords,
   type PeopleNotice,
   type PeopleSaid,
@@ -124,7 +125,7 @@ function PeoplePanel({ people, confirmations, me }: PanelProps) {
         onSuccess: after,
         onError: (error) => {
           const why = words(error, act === 'confirm' || act === 'not_now' ? 'confirmation' : 'person', person.display)
-          setSaid((now) => ({ notice: null, problem: { personId: person.id, words: why }, left: now.left }))
+          setSaid((now) => saidAfterRefusal(now, { personId: person.id, words: why }))
         },
         onSettled: () => {
           setBusy(null)
@@ -191,11 +192,11 @@ function PeoplePanel({ people, confirmations, me }: PanelProps) {
         {problem?.words ?? notice?.words ?? ''}
       </p>
       <p className="visually-hidden" role="status">
-        {left ?? ''}
+        {left?.words ?? ''}
       </p>
       {left ? (
         <div id={LEFT_ID} tabIndex={-1} className={styles['said']}>
-          <span>{left}</span>
+          <span>{left.words}</span>
         </div>
       ) : null}
       {notice && !noticeHasRow ? noticeFor(null) : null}
