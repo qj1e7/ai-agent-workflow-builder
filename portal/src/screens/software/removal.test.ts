@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../api/client'
 import { errorWords } from '../../api/errors'
 import { createLatch } from '../../api/latch'
+import { menuTakesEscape } from '../../shell/PersonChip'
 import { changeFeedback, escapeDismisses, NO_FEEDBACK, NOTICE_ID, noticeButtons, noticeWords, pressRemove, pressUndo, PROBLEM_ID, UNDO_ID, type ChangeFeedback, type FeedbackEvent, type MutateCallbacks } from './removal'
 
 const LANGGRAPH = { id: 'sw_lang', name: 'LangGraph' }
@@ -182,6 +183,18 @@ describe('Escape on the Software page', () => {
 
   it('leaves the notice to an open dialog, such as the Teams panel, which Escape closes first', () => {
     expect(escapeDismisses(escape(on('dialog')), added)).toBe(false)
+  })
+
+  it('keeps the notice, and a waiting Undo, when the open person menu took the Escape to close itself', () => {
+    const key = { key: 'Escape', defaultPrevented: false, target: on('page'), preventDefault: () => (key.defaultPrevented = true) }
+    expect(menuTakesEscape(key, true)).toBe(true)
+    expect(escapeDismisses(key, { ...NO_FEEDBACK, notice: { kind: 'removed', row: REDIS } })).toBe(false)
+  })
+
+  it('leaves the Escape to the page when the person menu is closed', () => {
+    const key = { key: 'Escape', defaultPrevented: false, target: on('page'), preventDefault: () => (key.defaultPrevented = true) }
+    expect(menuTakesEscape(key, false)).toBe(false)
+    expect(escapeDismisses(key, added)).toBe(true)
   })
 
   it('does nothing with no notice, for another key, or when something else already used the Escape', () => {

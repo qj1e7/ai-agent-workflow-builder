@@ -9,6 +9,13 @@ import styles from './PersonChip.module.css'
 
 export const SIGN_OUT_FAILED_WORDS = 'Sign-out did not finish. Try again.'
 
+/** The open menu takes Escape for itself, so the page under it, such as the Software notice, keeps what it shows. */
+export function menuTakesEscape(event: Pick<KeyboardEvent, 'key' | 'preventDefault'>, open: boolean): boolean {
+  if (event.key !== 'Escape' || !open) return false
+  event.preventDefault()
+  return true
+}
+
 function Who({ person }: { person: Me }) {
   const tone = personTone(person.display)
   return (
@@ -60,7 +67,7 @@ function SignOutChip({ person, session }: { person: Me; session: OidcSession }) 
   }, [open])
 
   function onKeyDown(event: KeyboardEvent) {
-    if (event.key !== 'Escape' || !open) return
+    if (!menuTakesEscape(event, open)) return
     setOpen(false)
     button.current?.focus()
   }
