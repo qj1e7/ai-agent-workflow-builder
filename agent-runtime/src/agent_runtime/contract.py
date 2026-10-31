@@ -114,8 +114,11 @@ def _not_a_dot_segment(repo: str) -> str:
 type RepoName = Annotated[str, Field(pattern=REPO_PATTERN), AfterValidator(_not_a_dot_segment)]
 
 
-SEMVER_TAG_PATTERN = r"^\d+\.\d+\.\d+$"
-VETTED_TAG_PATTERNS = frozenset({SEMVER_TAG_PATTERN})
+RELEASE_TAG_PATTERN = r"^[vV]?\d+\.\d+\.\d+$"
+"""A plain version number, with or without one v in front, such as 1.2.14 or v2.14.2."""
+PLAIN_TAG_PATTERN = r"^\d+\.\d+\.\d+$"
+"""The pattern from before v tags counted. Runs saved with it still send it."""
+VETTED_TAG_PATTERNS = frozenset({RELEASE_TAG_PATTERN, PLAIN_TAG_PATTERN})
 
 
 def _vetted_tag_pattern(pattern: str) -> str:

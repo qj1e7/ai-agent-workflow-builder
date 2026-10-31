@@ -3,6 +3,7 @@ from datetime import timedelta
 
 import pytest
 
+from platform_api.builder import TEMPLATES
 from platform_api.orchestration.agents import Finding, ProposedIntentIn, TaskError
 from platform_api.orchestration.spec import WatchlistTask
 from platform_api.orchestration.watch import (
@@ -54,6 +55,12 @@ TASK = WATCHLIST_TASK
         ("8.2.1", "8.2", True),
         ("v2", "v1", True),
         ("v1", "v1", False),
+        ("v2.14.2", "2.0.0", True),
+        ("v2.14.2", "v2.0.0", True),
+        ("V2.14.2", "v2.14.1", True),
+        ("v2.14.2", "2.14.2", False),
+        ("2.14.2", "v2.14.2", False),
+        ("v2.0.0", "v2.14.2", False),
     ],
 )
 def test_newer_compares_version_numbers_part_by_part(candidate: str, than: str, expected: bool):
@@ -67,6 +74,7 @@ def test_newer_compares_version_numbers_part_by_part(candidate: str, than: str, 
         (replace(NOTHING, our_version=GIVEN), "not_checked"),
         (SoftwareFacts(GIVEN, NEWEST, None, None), "behind"),
         (SoftwareFacts(GIVEN, SAME, None, None), "up_to_date"),
+        (SoftwareFacts(GIVEN, Checked(RUN, LATER, "v1.2.14"), None, None), "up_to_date"),
         (SoftwareFacts(FromFirstCheck("1.2.16", LATER), NEWEST, None, None), "up_to_date"),
         (
             SoftwareFacts(FromTicketDone("1.2.16", LATER, "MOCK-7"), NEWEST, None, None),
@@ -173,6 +181,34 @@ def test_tickets_may_be_absent_but_every_software_needs_its_finding():
     missing = review(TASK, FINDINGS[:3], [])
     assert missing == Unusable("The agents did not report on PostgreSQL")
     assert review(TASK, [], []) == Unusable("The agents did not report on LangGraph")
+
+
+PYDANTIC = SoftwareId("sw_01JC2A3B4C5D6E7F8G9H0J1K2Q")
+V_TAGS = replace(
+    TASK,
+    tag_pattern=TEMPLATES["software_watchlist"].tag_pattern,
+    software=(watched(PYDANTIC, "Pydantic", "pydantic/pydantic", "2.0.0"),),
+)
+
+
+def test_the_watchlist_keeps_release_tags_that_start_with_v_as_the_source_wrote_them():
+    behind = Finding.model_validate(
+        {
+            "software_id": PYDANTIC,
+            "state": "behind",
+            "newest": "v2.14.2",
+            "new_versions": ["v2.14.2", "v2.14.1"],
+            "detail": "2 releases newer than 2.0.0.",
+        }
+    )
+    upgrade = ticket(PYDANTIC, "Pydantic", "2.0.0", "v2.14.2")
+    assert review(V_TAGS, [behind], [upgrade]) == Reviewed(
+        (ReadNewest(PYDANTIC, "v2.14.2", False),), (TicketToPropose(0, PYDANTIC, "v2.14.2"),)
+    )
+    for bad in ("vv2.14.2", "v2.14.0b2", "v2.14"):
+        wrong = behind.model_copy(update={"newest": bad, "new_versions": [bad]})
+        result = review(V_TAGS, [wrong], [])
+        assert isinstance(result, Unusable) and "not a tag" in result.detail, bad
 
 
 HELD = replace(

@@ -5,6 +5,7 @@ import pytest
 from pydantic import TypeAdapter
 
 from platform_api.auth import DevUsers
+from platform_api.builder import TEMPLATES
 from platform_api.builder.home import HomeOut
 from platform_api.builder.http import SuggestOut, TemplateList, UseCaseView
 from platform_api.builder.models import (
@@ -36,6 +37,7 @@ from platform_api.orchestration.agents import (
     TaskFinished,
     TaskRequest,
     UnderstandRequest,
+    WatchlistInputs,
     choose_result_adapter,
     connect_result_adapter,
     draft_result_adapter,
@@ -193,6 +195,12 @@ def load(relative: str) -> object:
 @pytest.mark.parametrize("relative", sorted(PARSERS))
 def test_fixture_parses(relative: str):
     PARSERS[relative].validate_python(load(relative))
+
+
+def test_the_watchlist_sends_the_tag_pattern_the_agent_api_was_recorded_with():
+    request = TypeAdapter(TaskRequest).validate_python(load("agent/watchlist-task-request.json"))
+    assert isinstance(request.inputs, WatchlistInputs)
+    assert request.inputs.tag_pattern == TEMPLATES["software_watchlist"].tag_pattern
 
 
 def test_every_fixture_file_has_a_parser():

@@ -41,7 +41,10 @@ from tests.fakes import FakeClock, FakeSource, RepoSource, langgraph_tags
 LANGGRAPH = "langchain-ai/langgraph"
 REDIS = "redis/redis"
 FASTAPI = "fastapi/fastapi"
+PYDANTIC = "pydantic/pydantic"
+PYDANTIC_ID = "sw_01JC2A3B4C5D6E7F8G9H0J1K2Q"
 TAGS = {LANGGRAPH: langgraph_tags(), REDIS: ["8.2.1", "8.2.0", "8.1.0"], FASTAPI: ["0.115.1"]}
+PLAIN_PATTERN = r"^\d+\.\d+\.\d+$"
 
 
 class Room:
@@ -159,6 +162,46 @@ def test_drafts_and_prereleases_are_skipped():
     ]
     result = finished(Room(source).run(request_for(langgraph("1.2.15"))))
     assert finding(result, LANGGRAPH_ID).new_versions == ["1.2.16"]
+
+
+def pydantic_releases() -> FakeSource:
+    source = FakeSource([])
+    source.releases = [
+        Release(tag="v2.16.0", draft=True),
+        Release(tag="v2.15.0", prerelease=True),
+        Release(tag="v2.14.0b2"),
+        Release(tag="v2.14.2"),
+        Release(tag="v2.14.1"),
+        Release(tag="v2.0.0"),
+        Release(tag="v1.10.19"),
+    ]
+    return source
+
+
+@pytest.mark.parametrize("ours", ["2.0.0", "v2.0.0"])
+def test_release_tags_that_start_with_v_are_versions_and_keep_their_v(ours: str):
+    pydantic = software(PYDANTIC_ID, "Pydantic", PYDANTIC, ours)
+    result = finished(Room(pydantic_releases()).run(request_for(pydantic)))
+    found = finding(result, PYDANTIC_ID)
+    assert (found.state, found.newest, found.new_versions, found.detail) == (
+        "behind",
+        "v2.14.2",
+        ["v2.14.2", "v2.14.1"],
+        f"2 releases newer than {ours}.",
+    )
+    [ticket] = result.output.proposed
+    assert ticket.fields["title"] == f"Upgrade Pydantic from {ours} to v2.14.2"
+    said = [e.data.text for e in result.events if isinstance(e, AgentMessageEvent)]
+    assert "Pydantic has a new release: v2.14.2. I suggest one ticket." in said
+
+
+def test_a_run_saved_with_the_plain_pattern_still_reads_plain_versions_only():
+    request = request_for(langgraph("1.2.14"))
+    inputs = WatchlistInputs(tag_pattern=PLAIN_PATTERN, software=[langgraph("1.2.14")])
+    saved = request.model_copy(update={"inputs": inputs})
+    source = RepoSource({LANGGRAPH: ["v1.2.17", *langgraph_tags()]})
+    result = finished(Room(source).run(saved))
+    assert finding(result, LANGGRAPH_ID).new_versions == ["1.2.16", "1.2.15"]
 
 
 def test_a_network_error_is_retried_the_same_way_as_a_5xx():

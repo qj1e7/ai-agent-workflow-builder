@@ -6,6 +6,7 @@ from pathlib import Path
 
 from agent_runtime.api import AGENT_CARDS
 from agent_runtime.contract import (
+    RELEASE_TAG_PATTERN,
     AgentAddressee,
     AgentApiSchema,
     AgentEvent,
@@ -108,7 +109,7 @@ def task_request(run_id: str) -> TaskRequest:
         task_id=task_id,
         run_id=run_id,
         instruction=INSTRUCTION,
-        inputs=WatchlistInputs(tag_pattern=r"^\d+\.\d+\.\d+$", software=[langgraph()]),
+        inputs=WatchlistInputs(tag_pattern=RELEASE_TAG_PATTERN, software=[langgraph()]),
         carry_forward=CarryForward(),
         callback=Callback(
             url=f"http://platform-api:8000/internal/v1/runs/{run_id}/agent-events?task={task_id}",
@@ -141,7 +142,7 @@ def watchlist_request(run_id: str) -> TaskRequest:
         task_id=task_id,
         run_id=run_id,
         instruction=INSTRUCTION,
-        inputs=WatchlistInputs(tag_pattern=r"^\d+\.\d+\.\d+$", software=watchlist_software()),
+        inputs=WatchlistInputs(tag_pattern=RELEASE_TAG_PATTERN, software=watchlist_software()),
         carry_forward=CarryForward(),
         callback=Callback(
             url=f"http://platform-api:8000/internal/v1/runs/{run_id}/agent-events?task={task_id}",

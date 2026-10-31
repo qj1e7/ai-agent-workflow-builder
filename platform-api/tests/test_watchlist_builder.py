@@ -487,7 +487,7 @@ async def test_a_check_carries_our_version_the_open_ticket_and_the_waiting_appro
     )
     assert spec.bindings == {"create_ticket": Binding("jira", "create_ticket", {"project": "MOCK"})}
     assert spec.task == WatchlistTask(
-        tag_pattern=r"^\d+\.\d+\.\d+$",
+        tag_pattern=r"^[vV]?\d+\.\d+\.\d+$",
         software=(
             WatchedSoftware(
                 by_name["Alpha"], "Alpha", SoftwareSource("owner/alpha"), "2.0.0", None, False

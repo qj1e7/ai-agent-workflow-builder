@@ -4,7 +4,7 @@
   "instruction": "Check the team's watched software for new releases and raise an upgrade ticket for each one that is behind.",
   "inputs": {
     "kind": "watchlist",
-    "tag_pattern": "^\\d+\\.\\d+\\.\\d+$",
+    "tag_pattern": "^[vV]?\\d+\\.\\d+\\.\\d+$",
     "software": [
       {
         "id": "sw_01JC2A3B4C5D6E7F8G9H0J1K2M",

@@ -6461,7 +6461,7 @@
         "type": "string"
       },
       "Version": {
-        "pattern": "^\\d+\\.\\d+\\.\\d+$",
+        "pattern": "^[vV]?\\d+\\.\\d+\\.\\d+$",
         "type": "string"
       },
       "VersionSourceKind": {

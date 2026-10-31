@@ -105,12 +105,14 @@ ATTENTION_ORDER: tuple[Status, ...] = (
 
 
 def _numbers(version: str) -> tuple[int, ...] | None:
-    parts = version.split(".")
+    bare = version[1:] if version[:1] in ("v", "V") else version
+    parts = bare.split(".")
     return tuple(int(p) for p in parts) if all(p.isdigit() for p in parts) else None
 
 
 def newer(candidate: str, than: str) -> bool:
-    """Plain version numbers compare part by part. Anything else counts as newer when it differs."""
+    """Plain version numbers, with or without one v in front, compare part by part. Anything
+    else counts as newer when it differs."""
     left, right = _numbers(candidate), _numbers(than)
     if left is None or right is None:
         return candidate != than

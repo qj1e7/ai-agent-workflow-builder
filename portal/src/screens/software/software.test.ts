@@ -96,10 +96,11 @@ describe('the other field checks', () => {
     expect(checkName('  Redis ')).toEqual({ ok: true, value: 'Redis' })
   })
 
-  it('lets our version stay empty and wants three numbers otherwise', () => {
+  it('lets our version stay empty and wants three numbers otherwise, with or without a v', () => {
     expect(checkVersion('')).toEqual({ ok: true, value: null })
     expect(checkVersion('1.2.14')).toEqual({ ok: true, value: '1.2.14' })
-    for (const bad of ['1.2', 'v1.2.3', '1.2.x', '1.2.3-beta']) expect(checkVersion(bad).ok, bad).toBe(false)
+    expect(checkVersion('v2.0.0')).toEqual({ ok: true, value: 'v2.0.0' })
+    for (const bad of ['1.2', 'v1.2', 'vv1.2.3', '1.2.x', '1.2.3-beta']) expect(checkVersion(bad).ok, bad).toBe(false)
   })
 
   it('takes a time on a 5-minute step', () => {

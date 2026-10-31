@@ -104,7 +104,7 @@ export const dayOption: Record<Day, string> = {
 
 const REPO = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9._-]{1,100}$/
 const DOT_SEGMENT = /\/\.\.?$/
-const VERSION = /^\d+\.\d+\.\d+$/
+const VERSION = /^[vV]?\d+\.\d+\.\d+$/
 const CLOCK = /^([01][0-9]|2[0-3]):[0-5][05]$/
 const NAME_LIMIT = 80
 
