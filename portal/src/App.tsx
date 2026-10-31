@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useLocation } from 'react-router'
 import { isOperator } from './api/me'
 import { useMe } from './api/queries'
+import { useNow } from './api/ticking'
 import { AskToBeAdded } from './shell/AskToBeAdded'
 import { Header } from './shell/Header'
 import { TabBar } from './shell/Menu'
@@ -49,6 +50,7 @@ function skipToMain(): void {
 
 export function App({ now = () => new Date() }: { now?: () => Date }) {
   const me = useMe()
+  const at = useNow(now)
   const { pathname } = useLocation()
   useHeadingFocus()
 
@@ -56,7 +58,7 @@ export function App({ now = () => new Date() }: { now?: () => Date }) {
   if (me.isPending) content = <p className="muted" role="status">Loading</p>
   else if (me.isError && platformIsDown(me.error)) content = <PlatformDown onRetry={() => void me.refetch()} />
   else if (me.data?.on_list === false) content = <AskToBeAdded display={me.data.display} />
-  else content = <AppRoutes context={{ name: me.data?.display ?? null, now: now() }} />
+  else content = <AppRoutes context={{ name: me.data?.display ?? null, now: at }} />
 
   return (
     <>

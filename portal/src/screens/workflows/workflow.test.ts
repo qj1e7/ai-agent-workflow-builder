@@ -40,6 +40,7 @@ import {
   runsOf,
   SET_UP_AGAIN_WORDS,
   stepTag,
+  rereadWhenOutOfDate,
   whenWords,
   workflowPath,
   type ChangeOutcome,
@@ -142,6 +143,13 @@ describe('when it runs', () => {
     expect(whenWords(WATCHLIST)).toEqual({ words: 'Every Monday at 9:00', small: 'Singapore time (SGT).' })
     expect(whenWords({ schedule: { day: 'every_day', at: '17:30', time_zone: 'Asia/Singapore', owner_name: 'Alice' } })).toEqual({ words: 'Every day at 17:30', small: 'Singapore time (SGT).' })
     expect(whenWords({ schedule: { day: 'weekdays', at: '15:00', time_zone: 'Asia/Singapore', owner_name: 'Alice' } })).toEqual({ words: 'Every weekday at 15:00', small: 'Singapore time (SGT).' })
+  })
+
+  it('names the schedule’s own time zone when it is not Singapore', () => {
+    const at = (time_zone: string) => whenWords({ schedule: { day: 'every_day', at: '17:30', time_zone, owner_name: 'Alice' } }).small
+    expect(at('Europe/London')).toBe('London time.')
+    expect(at('America/Los_Angeles')).toBe('Los Angeles time.')
+    expect(at('UTC')).toBe('UTC.')
   })
 
   it('keeps the schedule while the workflow is paused, because Paused shows in the next run', () => {
@@ -409,5 +417,23 @@ describe('a refusal that means the page shows an old state', () => {
   it('is not any other answer', () => {
     for (const status of [403, 410, 503]) expect(meansOutOfDate(new ApiError(status, null)), String(status)).toBe(false)
     expect(meansOutOfDate(new TypeError('Failed to fetch'))).toBe(false)
+  })
+})
+
+describe('rereading a workflow that changed under the Operator', () => {
+  const run = (error: unknown) => {
+    const said: string[] = []
+    rereadWhenOutOfDate('uc_1', (pressed: string) => said.push(`focus ${pressed}`), (id) => said.push(`reread ${id}`))('switch')(error)
+    return said
+  }
+
+  it('moves focus and rereads on a 409 or a 404', () => {
+    expect(run(new ApiError(409, null))).toEqual(['focus switch', 'reread uc_1'])
+    expect(run(new ApiError(404, null))).toEqual(['focus switch', 'reread uc_1'])
+  })
+
+  it('does nothing for any other answer', () => {
+    expect(run(new ApiError(503, null))).toEqual([])
+    expect(run(new Error('offline'))).toEqual([])
   })
 })

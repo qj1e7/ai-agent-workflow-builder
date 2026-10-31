@@ -1,7 +1,7 @@
 import { ApiError } from '../../api/client'
 import { failureReasonLabel } from '../../api/labels'
-import type { Latch } from '../../api/latch'
-import type { BlockKind, RunView, UseCaseView } from '../../api/types'
+import { pressOnce, type Latch, type Outcome } from '../../api/latch'
+import type { BlockKind, Me, RunView, UseCaseView } from '../../api/types'
 import type { FaceState } from '../../ui/AgentFace'
 import { agentIdentity } from '../../ui/agents'
 import { andList, count, type NameOf } from '../run/words'
@@ -129,7 +129,14 @@ export interface When {
 export function whenWords({ schedule }: Pick<UseCaseView, 'schedule'>): When {
   if (!schedule) return { words: 'No schedule', small: 'An Operator starts it with Run now.' }
   const words = repeatWords(schedule)
-  return { words: words.charAt(0).toUpperCase() + words.slice(1), small: 'Singapore time (SGT).' }
+  return { words: words.charAt(0).toUpperCase() + words.slice(1), small: zoneWords(schedule.time_zone) }
+}
+
+/** Singapore keeps its short name. Another zone is named by its city, as in "London time." */
+function zoneWords(zone: string): string {
+  if (zone === 'Asia/Singapore') return 'Singapore time (SGT).'
+  const place = zone.split('/').pop()?.replaceAll('_', ' ') ?? zone
+  return place === 'UTC' ? 'UTC.' : `${place} time.`
 }
 
 const STEP_TAGS: Record<BlockKind, { readonly words: string; readonly writes: boolean }> = {
@@ -259,11 +266,7 @@ export function rowsOf(useCases: readonly UseCaseView[], runs: readonly RunView[
   return rows.filter((row) => kept(row, filter, words)).sort((a, b) => needsYou(a) - needsYou(b))
 }
 
-export interface RunNowOutcome {
-  onSuccess?: (started: { readonly run_id: string }) => void
-  onError?: (error: unknown) => void
-  onSettled?: () => void
-}
+export type RunNowOutcome = Outcome<{ readonly run_id: string }>
 
 type Start = (input: { useCaseId: string; idempotencyKey: string }, outcome: RunNowOutcome) => void
 
@@ -274,28 +277,14 @@ interface RunNowAnswers {
 
 /** The caller keeps one key until a run starts, so a press after a lost answer cannot start a second run. */
 export function pressRunNow(latch: Latch, start: Start, input: { useCaseId: string; idempotencyKey: string }, { open, refused }: RunNowAnswers): void {
-  latch.run((settled) => start(input, { onSuccess: (started) => open(started.run_id), onError: refused, onSettled: settled }))
+  pressOnce<{ readonly run_id: string }>(latch, (outcome) => start(input, outcome), { onSuccess: (started) => open(started.run_id), onError: refused })
 }
 
 export type Change = 'pause' | 'resume' | 'delete' | 'restore'
 
-export interface ChangeOutcome<T> {
-  onSuccess?: (value: T) => void
-  onError?: (error: unknown) => void
-  onSettled?: () => void
-}
+export type ChangeOutcome<T> = Outcome<T>
 
-export function pressChange<T>(latch: Latch, send: (outcome: ChangeOutcome<T>) => void, outcome: ChangeOutcome<T>): void {
-  latch.run((settled) =>
-    send({
-      ...outcome,
-      onSettled: () => {
-        settled()
-        outcome.onSettled?.()
-      },
-    }),
-  )
-}
+export const pressChange = pressOnce
 
 export function changeWords(change: Change, useCase: Pick<UseCaseView, 'name' | 'state' | 'next_run_at'>, now: Date): string {
   switch (change) {
@@ -313,6 +302,22 @@ export function changeWords(change: Change, useCase: Pick<UseCaseView, 'name' | 
 const answered = (error: unknown, status: number) => error instanceof ApiError && error.status === status
 
 export const meansOutOfDate = (error: unknown) => answered(error, 409) || answered(error, 404)
+
+/** When the platform says the workflow changed or is gone, move focus off the pressed control and read it again. */
+export const rereadWhenOutOfDate =
+  <P>(useCaseId: string, refocus: (pressed: P) => void, reread: (useCaseId: string) => void) =>
+  (pressed: P) =>
+  (error: unknown): void => {
+    if (!meansOutOfDate(error)) return
+    refocus(pressed)
+    reread(useCaseId)
+  }
+
+export const REFRESH_MS = 15_000
+
+export function viewerOf(me: Me): Viewer {
+  return { id: me.id, operator: me.roles.includes('operator'), approver: me.roles.includes('approver') }
+}
 
 export function changeProblem(change: Change, name: string, error: unknown, words: (error: unknown) => string): string {
   const start = change === 'restore' ? `Could not put ${name} back.` : `Could not ${change} ${name}.`
