@@ -1,0 +1,4 @@
+$ terraform init -backend=false -input=false -lockfile=readonly && terraform validate -no-color   (on a scratch copy of infra/envs/dev, Terraform 1.16.5, at 7a0d931)
+Success! The configuration is valid.
+
+exit 0

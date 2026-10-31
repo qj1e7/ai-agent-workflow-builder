@@ -2,7 +2,7 @@
 
 This folder holds the Terraform code for the walking skeleton on Azure (ADR 0004, ADR 0013). It is written so it also runs under OpenTofu. Nothing here has been applied yet. Every check so far ran offline, without an Azure account.
 
-> **The first deploy needs Entra ID sign-in.** platform-api runs with `AUTH_MODE=oidc` on Azure, so the deploy needs two Entra ID app registrations, with the app roles `Operator` and `Approver` on platform-api's. [docs/auth/entra-setup.md](../docs/auth/entra-setup.md) has the steps, and the values it produces go into the variables below. The `AUTH_MODE=dev` guard stays as it is: dev sign-in only runs on localhost, so it can never reach a shared deployment.
+> **The first deploy needs Entra ID sign-in and the first people.** platform-api runs with `AUTH_MODE=oidc` on Azure, so the deploy needs two Entra ID app registrations. [docs/auth/entra-setup.md](../docs/auth/entra-setup.md) has the steps, and the values it produces go into the variables below. Who is an Operator or an Approver lives in the platform's People list, and the first deploy names the first people with `FIRST_OPERATOR` and `FIRST_APPROVERS` (ADR 0030). The `AUTH_MODE=dev` guard stays as it is: dev sign-in only runs on localhost, so it can never reach a shared deployment. [docs/evidence/deploy/README.md](../docs/evidence/deploy/README.md) is the runbook for the rebuilt app's deploy.
 
 ## What gets created
 
@@ -16,6 +16,7 @@ One environment, `dev`, in Southeast Asia (`southeastasia`), in the resource gro
 | Key Vault | `kv-wab-dev-<suffix>` | RBAC mode, purge protection, 7 days of soft delete |
 | Container registry | `crwabdev<suffix>` | Basic SKU, admin user off |
 | PostgreSQL Flexible Server | `psql-wab-dev-<suffix>` | Version 17, Burstable `B_Standard_B1ms`, 32 GB, TLS required, databases `platform` and `n8n` |
+| Cosmos DB for NoSQL account | `cosmos-wab-dev-<suffix>` | Free tier, capped at its 1000 RU/s, one region, Strong consistency. Database `activity`, container `run_events` at 1000 RU/s, partitioned by `/runId` (ADR 0031). The account key cannot create or change databases and containers |
 | Container Apps environment | `cae-wab-dev` | Consumption plan, logs to Log Analytics |
 | Container App | `platform-api` | External ingress on 8000, 0.25 vCPU, 1 replica always on for the `tick` loop |
 | Container App | `agent-runtime` | Internal ingress on 8100, 0.25 vCPU, scales to zero |
@@ -23,7 +24,7 @@ One environment, `dev`, in Southeast Asia (`southeastasia`), in the resource gro
 | Container App | `portal` | External ingress on 8080, 0.25 vCPU, scales to zero |
 | Container Apps Job | `db-init` | Creates the per-context database roles. Runs on every deploy |
 | Container Apps Job | `bootstrap` | Migrations, n8n owner, workflow load and lint. Runs on every deploy |
-| Managed identities | `id-<app>-wab-dev`, one per app and job | AcrPull on the registry, and Key Vault Secrets User on each secret it reads, nothing else |
+| Managed identities | `id-<app>-wab-dev`, one per app and job | AcrPull on the registry, and Key Vault Secrets User on each secret it reads. platform-api's also has Cosmos DB's built-in Data Contributor role on the `activity` database |
 
 PostgreSQL 17 matches Compose and is listed as supported in [Azure's version list](https://learn.microsoft.com/en-us/azure/postgresql/configure-maintain/concepts-supported-versions). We did not check that the Southeast Asia region offers it, because nothing here contacts Azure. If the first deploy says it does not, set `version = "16"` in `modules/postgres/main.tf`.
 
@@ -39,6 +40,7 @@ infra/
     key_vault/         the vault and its secrets
     registry/          the container registry
     postgres/          the server, its firewall rule and the databases
+    cosmos/            the Cosmos DB account, its database and container, and its data roles
     container_env/     the Container Apps environment
     workload_identity/ one identity and its role assignments
     container_app/     one Container App
@@ -53,7 +55,8 @@ infra/
 
 ## Secrets
 
-- No secret value is in any `.tf` file or tfvars file in git. Terraform generates every secret with `random_password` and writes it to Key Vault.
+- No secret value is in any `.tf` file or tfvars file in git. Terraform generates every secret with `random_password` and writes it to Key Vault. `SETTINGS_ENCRYPTION_KEY`, which seals the AI model keys that Operators save in Settings (ADR 0022), is one of them. The one secret Terraform does not generate is the Cosmos DB account key: Azure makes it with the account, and Terraform copies it into Key Vault.
+- platform-api signs in to Cosmos DB with that key (`COSMOS_KEY`), because its Cosmos DB adapter has no managed identity sign-in yet. Its identity already has the data role, so moving to identity sign-in is a code change in platform-api plus `local_authentication_enabled = false` in `modules/cosmos/main.tf`. ADR 0031 describes that end state.
 - The apps never hold a secret value in their own settings. Each Container App setting points at a Key Vault secret's URL, and Azure reads it with the app's own managed identity. Our code reads plain environment variables and never calls a Key Vault SDK, the same as in Compose.
 - **The generated secrets are also in the Terraform state file, in plain text.** That is how Terraform remembers a value so the next run keeps it. The state lives in Azure Storage with access keys turned off, so only identities with a blob data role can read it. [bootstrap/README.md](bootstrap/README.md) explains who that is. We kept stored random values over Terraform's newer write-only arguments, because a write-only value is new on every run, and a run that fails halfway would leave the database and Key Vault with different passwords.
 - The release checker in agent-runtime calls GitHub's API. Without a token, GitHub allows only 60 requests an hour per IP address. On the Consumption plan our outbound address can be shared with other Azure customers, so a demo could run out. A token raises the limit to 5,000 an hour. To use one, set the secret `GH_RELEASE_TOKEN` on the `azure-dev` environment (step 7 below). The deploy passes it to Terraform as `github_token`, Terraform stores it in Key Vault, and agent-runtime reads it as `GITHUB_TOKEN`. Leave the secret unset, and agent-runtime calls GitHub without a token. Where the token comes from is still open (placeholder: the team lead decides who owns it). A fine-grained personal access token with no extra permissions can read public repositories' releases.
@@ -70,6 +73,12 @@ infra/
 | `GITHUB_TOKEN` | `.env`, empty by default | a Key Vault secret from `GH_RELEASE_TOKEN`, only when that secret is set |
 | `AGENT_RUNTIME_URL`, `N8N_BASE_URL`, `PLATFORM_INTERNAL_URL` | `http://<service>:<port>` | `https://<app>.internal.<domain>` or `https://<app>.<domain>` |
 | `CALLBACK_ALLOWED_ORIGINS` | `http://platform-api:8000` | platform-api's HTTPS origin |
+| `PRACTICE_JIRA_URL` (agent-runtime) | `http://platform-api:8000` | platform-api's HTTPS URL, or `practice_jira_url` when it is set |
+| `COSMOS_ENDPOINT` | `http://cosmos:8081`, the emulator | the account's endpoint |
+| `COSMOS_KEY` | the emulator's published key | a Key Vault secret, copied from the account |
+| `ACTIVITY_READER` | `cosmos` by default | always `cosmos` |
+| `SETTINGS_ENCRYPTION_KEY` | `.env` | a generated Key Vault secret. If it is lost, an Operator pastes the model key again |
+| `FIRST_OPERATOR`, `FIRST_APPROVERS` | `.env`, empty by default | from `first_operator` and `first_approvers`, only when they are set |
 | n8n database settings | `postgres` host, password from `.env` | the server's host name, TLS on, password from Key Vault |
 | `N8N_ENCRYPTION_KEY` | `.env` | Key Vault secret. It must never change |
 | `N8N_SECURE_COOKIE` | `false`, for plain HTTP | not set, so n8n's default `true` applies over HTTPS |
@@ -83,6 +92,8 @@ Every app's address comes from the Container Apps environment's default domain: 
 ## Known risk: the database is reachable from Azure
 
 The PostgreSQL server has public access, with the firewall rule that lets Azure services in. That rule lets in any Azure customer's services, not only our apps. TLS and a 48-character generated password per role are what keep others out.
+
+The Cosmos DB account has public access with no IP filter at all, like Key Vault, because the apps have no fixed outbound address and the checker reads items from a laptop. Its account key and Entra ID data roles keep others out. The key cannot change databases or containers, and the account holds only a copy of the activity log: PostgreSQL keeps every event.
 
 The team lead accepted this for the dev and demo environment on 23 Oct 2026. Private networking comes with DevNet.
 
@@ -98,6 +109,7 @@ This is an **estimate** from Azure's published US-dollar list prices for pay-as-
 | Container Apps: platform-api and n8n always on (0.75 vCPU, 1.5 GiB) after the monthly free grant. Low end if Azure bills them at the idle rate, high end at the active rate | USD 16 to 54 |
 | Container Apps: agent-runtime and the Portal, scaled to zero between demos | about USD 0 |
 | Container registry, Basic | about USD 5 |
+| Cosmos DB on the free tier, capped at the free 1000 RU/s and well under its 25 GB | USD 0. Serverless, if the free tier is refused, costs cents at our volume |
 | Log Analytics, under the first 5 GB free | USD 0 to 3 |
 | Key Vault operations, Terraform state storage | under USD 1 |
 | **Total** | **about USD 35 to 85** |
@@ -117,7 +129,7 @@ Do these in order. Each one changes cloud resources or repository settings, so a
 
 The repository is private. On a private repository with GitHub Pro, an environment can be limited to certain branches, but it cannot have required reviewers, "Prevent self-review" or a wait timer. Those need a public repository or GitHub Enterprise. So the gate is:
 
-- Only code reviewed into `main` can deploy. The `azure-dev` environment only accepts `main`, and `main` only takes pull requests that someone other than the author approved.
+- Only code on `main` can deploy, because the `azure-dev` environment only accepts `main`. Since 29 Oct 2026 (PR #44) a pull request into `main` no longer needs a second person's approval, so what reaches `main` is checked by CI and by the team's review practice, not by a branch rule.
 - A person starts each deploy by hand. Anyone with write access to the repository can start one.
 - No second person approves each run. To make up for that, the deploy stops before any apply that would destroy or replace a resource, unless the person who starts it ticks `allow_destroy`.
 
@@ -155,18 +167,24 @@ If the repository is made public later, add required reviewers and "Prevent self
    | `OIDC_SCOPE` | `openid profile offline_access api://<api-client-id>/access_as_user` |
    | `OIDC_JWKS_URL` | optional. Leave it unset, and platform-api finds the keys through the issuer |
    | `N8N_OWNER_EMAIL` | the email for the n8n owner account |
+   | `FIRST_OPERATOR` | the work email of the first Operator. Needed on the first deploy |
+   | `FIRST_APPROVERS` | the work emails of the first two Approvers, separated by a comma. Two different people. The first Operator may be one of them |
+   | `PRACTICE_JIRA_URL` | optional. Leave it unset, and agent-runtime reads platform-api's own practice Jira |
+   | `AZURE_LOCATION` | optional. The region for every resource. Unset means `southeastasia`. Set it before the first deploy only: changing it later replaces everything, PostgreSQL included |
+   | `COSMOS_LOCATION` | optional. A region for Cosmos DB alone, when it is refused in `AZURE_LOCATION` |
+   | `COSMOS_SERVERLESS` | optional. `true` makes a serverless Cosmos DB account, for when the free tier is refused. Unset means `false` |
 
    With the GitHub CLI, each is one command, for example `gh secret set AZURE_TENANT_ID --env azure-dev` (it asks for the value) or `gh variable set OIDC_ISSUER --env azure-dev --body "https://login.microsoftonline.com/<tenant-id>/v2.0"`.
 8. **Run the deploy.** In the Actions tab, run the `deploy` workflow on `main`. Leave `allow_destroy` off. The workflow then:
    1. creates the registry if it is missing,
    2. copies n8n and PostgreSQL into the registry by digest, then builds and pushes our three images, tagged with the commit SHA,
-   3. creates the `db-init` job if it is missing and runs it, so the database roles exist before any app starts,
+   3. creates the `db-init` job if it is missing and runs it, so the database roles exist before any app starts. This step also creates the Cosmos DB account, because the job reads its secrets from Key Vault and Key Vault holds the account's key. A new account takes about 5 to 10 minutes,
    4. plans everything, puts the count of changes in the run summary, and applies that exact plan,
-   5. runs the `bootstrap` job, and prints the Portal's URL.
+   5. runs the `bootstrap` job, and prints the Portal's and platform-api's addresses and the Cosmos DB account's name.
 
    Each apply in steps 1, 3 and 4 first saves its plan and checks it. If the plan would destroy or replace any resource, the deploy stops before that apply and prints only the counts. Run it again with `allow_destroy` ticked only when you mean it, for example after renaming a resource on purpose.
 
-   The workflow never runs on a push. Only `workflow_dispatch` starts it. It prints summaries only: Terraform's summary lines, the plan's counts, the job names and the Portal's URL. The full plan and Terraform's full output stay in files on the runner and are never uploaded. On a failure it prints Terraform's errors, which can name a resource.
+   The workflow never runs on a push. Only `workflow_dispatch` starts it. It prints summaries only: Terraform's summary lines, the plan's counts, the job names, the two public addresses and the Cosmos DB account's name. The full plan and Terraform's full output stay in files on the runner and are never uploaded. On a failure it prints Terraform's errors, which can name a resource.
 9. **Add the Portal's redirect URIs.** In the Portal's app registration, add `https://<portal-host>/auth/callback` and `https://<portal-host>/signed-out` as single-page application redirect URIs, with the address the deploy printed. Sign-in works from then on. Repeat this after any deploy that creates a new environment, because its address changes.
 
 ### What to watch on the first deploy
@@ -178,6 +196,8 @@ These were not testable offline, so they are guesses until a real deploy confirm
 - `az acr import` should keep each image's digest, since the Terraform code pulls n8n and PostgreSQL by digest. If a pull fails with "manifest unknown", compare the digest in the registry with `public-images.json`.
 - The Azure admin role is not a superuser. `db-init` grants itself membership in `n8n` and `wab_owner` before it hands them their databases. A local PostgreSQL 17 run showed that the handover fails without that grant and works with it. On Azure it is still untested.
 - Container Apps ingress ends any request after 240 seconds. The live view's event stream reconnects on its own. Check that the live view keeps up after 4 minutes.
+- A subscription may have only one free-tier Cosmos DB account. If one exists, from a test by hand for example, the create fails. Delete the other account first, or set `COSMOS_SERVERLESS=true`. Azure may also refuse the region, as some Azure for Students subscriptions only allow a few. Then set `COSMOS_LOCATION` to an allowed region.
+- `free_tier_enabled` cannot change on an existing account. Changing `COSMOS_SERVERLESS` later replaces the account, so the deploy stops for `allow_destroy`. The copier fills a new account from PostgreSQL.
 
 ## Run the checks locally
 
@@ -199,11 +219,11 @@ The script runs, each in a Docker image pinned by digest:
 
 CI runs the same script in the `infra` workflow, only when a pull request changes `infra/` or one of the two infrastructure workflows. It also runs `actionlint` on every workflow. Semgrep's `p/terraform` rules run in the main CI's SAST step.
 
-Accepted findings are written next to the code they are about, with a one-line reason, in each tool's own syntax: `#checkov:skip=`, `# tflint-ignore:` and `# nosemgrep:`. Most come from the Basic registry tier and from having no virtual network. A virtual network and private endpoints would cost more than the credits allow, and they arrive with the move to DevNet (ADR 0005). [docs/evidence/iac/](../docs/evidence/iac/README.md) lists them all.
+Accepted findings are written next to the code they are about, with a one-line reason, in each tool's own syntax: `#checkov:skip=`, `# tflint-ignore:` and `# nosemgrep:`. Most come from the Basic registry tier and from having no virtual network. A virtual network and private endpoints would cost more than the credits allow, and they arrive with the move to DevNet (ADR 0005). [docs/evidence/iac/](../docs/evidence/iac/README.md) lists the first ones, and [docs/evidence/deploy/](../docs/evidence/deploy/README.md) the ones the Cosmos DB account added.
 
 ## How AWS stays possible
 
 ADR 0004 keeps a move to AWS open. This code does that in two ways:
 
 - **Modules per concern.** Each module wraps one kind of cloud service: logs, secrets, registry, database, container runtime, identity. A move to AWS replaces each module with its AWS twin (CloudWatch, Secrets Manager, ECR, RDS for PostgreSQL, ECS on Fargate, IAM roles) and keeps the same `envs/` table of apps and settings. The tooling stays the same: Terraform, the S3 state backend, the same checks and the same plan-and-apply workflow.
-- **No Azure-only logic in the apps.** The apps read plain environment variables and talk to PostgreSQL, HTTP and each other. They never call an Azure SDK, Key Vault or Managed Identity directly. The managed identities and Key Vault references live in this folder only.
+- **No Azure-only logic in the apps, except one adapter.** The apps read plain environment variables and talk to PostgreSQL, HTTP and each other. They never call Key Vault or Managed Identity directly. The managed identities and Key Vault references live in this folder only. The one Azure SDK is `azure-cosmos`, in platform-api's Cosmos DB adapter behind the `ActivityLog` port. A move to AWS adds a DynamoDB adapter behind the same port, or sets `ACTIVITY_READER=postgres` (ADR 0031).

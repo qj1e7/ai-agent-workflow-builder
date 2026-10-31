@@ -1,0 +1,38 @@
+Terraform v1.16.5
+ok    accepted  Entra values, no keys URL, no GitHub token
+ok    accepted  a keys URL
+ok    accepted  a GitHub token
+ok    accepted  the first people, the Operator also an Approver
+ok    accepted  the first people with spaces and capitals
+ok    accepted  another practice Jira
+ok    refused  issuer over http: oidc_issuer must be an https URL with a host and no query or fragment, made of letters, digits and . _ ~ : / % -. 
+ok    refused  issuer with no host: oidc_issuer must be an https URL with a host and no query or fragment, made of letters, digits and . _ ~ : / % -. 
+ok    refused  issuer with a query: oidc_issuer must be an https URL with a host and no query or fragment, made of letters, digits and . _ ~ : / % -. 
+ok    refused  issuer with a fragment: oidc_issuer must be an https URL with a host and no query or fragment, made of letters, digits and . _ ~ : / % -. 
+ok    refused  issuer with a quote: oidc_issuer must be an https URL with a host and no query or fragment, made of letters, digits and . _ ~ : / % -. 
+ok    refused  issuer on two lines: oidc_issuer must be an https URL with a host and no query or fragment, made of letters, digits and . _ ~ : / % -. 
+ok    refused  issuer not set: oidc_issuer must be an https URL with a host and no query or fragment, made of letters, digits and . _ ~ : / % -. 
+ok    refused  keys URL over http: oidc_jwks_url must be empty, or an https URL with a host and no query or fragment, made of letters, digits and . _ ~ : / % -. 
+ok    refused  keys URL with a query: oidc_jwks_url must be empty, or an https URL with a host and no query or fragment, made of letters, digits and . _ ~ : / % -. 
+ok    refused  audience not set: oidc_audience is not set. platform-api refuses to start without it. 
+ok    refused  audience as the api:// URI: oidc_audience is platform-api's Application (client) ID, not its api:// Application ID URI. Entra puts the client ID in the tokens' aud claim. 
+ok    refused  client ID not set: oidc_client_id must be set, and may only hold letters, digits and . _ -. The Portal refuses to start otherwise. 
+ok    refused  client ID with a space: oidc_client_id must be set, and may only hold letters, digits and . _ -. The Portal refuses to start otherwise. 
+ok    refused  client ID with a quote: oidc_client_id must be set, and may only hold letters, digits and . _ -. The Portal refuses to start otherwise. 
+ok    refused  client ID on two lines: oidc_client_id must be set, and may only hold letters, digits and . _ -. The Portal refuses to start otherwise. 
+ok    refused  scope not set: oidc_scope must be scopes separated by single spaces, made of letters, digits and . _ : / -. The Portal refuses to start otherwise. oidc_scope must include openid. The Portal refuses to start without it. 
+ok    refused  scope without openid: oidc_scope must include openid. The Portal refuses to start without it. 
+ok    refused  scope with openidx only: oidc_scope must include openid. The Portal refuses to start without it. 
+ok    refused  scope with a quote: oidc_scope must be scopes separated by single spaces, made of letters, digits and . _ : / -. The Portal refuses to start otherwise. 
+ok    refused  scope with two spaces: oidc_scope must be scopes separated by single spaces, made of letters, digits and . _ : / -. The Portal refuses to start otherwise. 
+ok    refused  scope on two lines: oidc_scope must be scopes separated by single spaces, made of letters, digits and . _ : / -. The Portal refuses to start otherwise. 
+ok    refused  an Operator and no Approvers: first_operator and first_approvers go together: one email, and two emails separated by a comma. 
+ok    refused  Approvers and no Operator: first_operator and first_approvers go together: one email, and two emails separated by a comma. 
+ok    refused  one Approver: first_approvers must name two different people, separated by a comma, so nobody has to approve their own work. 
+ok    refused  three Approvers: first_approvers must name two different people, separated by a comma, so nobody has to approve their own work. 
+ok    refused  the same Approver twice: first_approvers must name two different people, separated by a comma, so nobody has to approve their own work. 
+ok    refused  an Approver that is not an email: Each address in first_approvers must be an email. 
+ok    refused  an Operator that is not an email: first_operator must be empty or one email address. 
+ok    refused  practice Jira over http: practice_jira_url must be empty, or an https URL with a host and no query or fragment, made of letters, digits and . _ ~ : / % -. 
+ok    refused  practice Jira with a query: practice_jira_url must be empty, or an https URL with a host and no query or fragment, made of letters, digits and . _ ~ : / % -. 
+check-variables.sh: all cases behaved as expected

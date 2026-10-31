@@ -104,6 +104,74 @@ variable "github_api_base" {
   default     = "https://api.github.com"
 }
 
+variable "practice_jira_url" {
+  description = "Where agent-runtime reads the practice Jira (PRACTICE_JIRA_URL). Empty uses platform-api's own practice Jira, as Compose does. agent-runtime sends each task's callback token there, so it must be https."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.practice_jira_url == "" || can(regex("^https://[A-Za-z0-9._~%-]+([:/][A-Za-z0-9._~:/%-]*)?$", var.practice_jira_url))
+    error_message = "practice_jira_url must be empty, or an https URL with a host and no query or fragment, made of letters, digits and . _ ~ : / % -."
+  }
+}
+
+# The first people (ADR 0030). platform-api reads them only while its People list is empty, so a
+# later deploy cannot hand out roles. The rules match platform-api's startup check, so plan refuses
+# what would stop it. Real addresses go in the azure-dev environment's variables, never in git.
+# They are not secret. Sensitive only keeps the addresses out of Terraform's errors in the deploy log.
+
+variable "first_operator" {
+  description = "Work email of the first Operator (FIRST_OPERATOR). Needed on the first deploy, when the People list is empty."
+  type        = string
+  default     = ""
+  sensitive   = true
+
+  validation {
+    condition     = trimspace(var.first_operator) == "" || can(regex("^[^@,[:space:]]+@[^,[:space:]]*[.][^,[:space:]]*$", trimspace(var.first_operator)))
+    error_message = "first_operator must be empty or one email address."
+  }
+}
+
+variable "first_approvers" {
+  description = "Work emails of the first two Approvers, separated by a comma (FIRST_APPROVERS). They must be two different people, and the first Operator may be one of them."
+  type        = string
+  default     = ""
+  sensitive   = true
+
+  validation {
+    condition = trimspace(var.first_approvers) == "" || (
+      length([for email in split(",", var.first_approvers) : email if trimspace(email) != ""]) == 2 &&
+      length(distinct([for email in split(",", var.first_approvers) : lower(trimspace(email)) if trimspace(email) != ""])) == 2
+    )
+    error_message = "first_approvers must name two different people, separated by a comma, so nobody has to approve their own work."
+  }
+
+  validation {
+    condition = alltrue([
+      for email in split(",", var.first_approvers) :
+      can(regex("^[^@,[:space:]]+@[^,[:space:]]*[.][^,[:space:]]*$", trimspace(email))) if trimspace(email) != ""
+    ])
+    error_message = "Each address in first_approvers must be an email."
+  }
+
+  validation {
+    condition     = (trimspace(var.first_operator) == "") == (trimspace(var.first_approvers) == "")
+    error_message = "first_operator and first_approvers go together: one email, and two emails separated by a comma."
+  }
+}
+
+variable "cosmos_serverless" {
+  description = "False makes the Cosmos DB account on the free tier, which a subscription may have once. True makes it serverless, which has no free tier and bills each request. Use true only when the free tier is refused (ADR 0031)."
+  type        = bool
+  default     = false
+}
+
+variable "cosmos_location" {
+  description = "Region for the Cosmos DB account. Empty uses location. Set it when the subscription's policy or Azure's capacity refuses Cosmos DB in location."
+  type        = string
+  default     = ""
+}
+
 variable "log_daily_quota_gb" {
   description = "Daily Log Analytics ingestion cap in GB."
   type        = number

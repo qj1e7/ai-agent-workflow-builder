@@ -1,0 +1,239 @@
+One-off run at 7a0d931 with Terraform 1.16.5 and mocked providers. Nothing contacted Azure.
+What ran: a scratch copy of infra/ (backend.tf removed), with wiring.tftest.hcl in envs/dev and cosmos.tftest.hcl
+in modules/cosmos, then 'terraform init -backend=false -lockfile=readonly' and 'terraform test' in each.
+The mocks give realistic Azure IDs, because the provider checks the shape of each ID it is handed.
+
+== Output
+== infra/envs/dev: terraform test
+wiring.tftest.hcl... in progress
+  run "defaults"... pass
+  run "first_people_and_practice_jira"... pass
+wiring.tftest.hcl... tearing down
+wiring.tftest.hcl... pass
+
+Success! 2 passed, 0 failed.
+== infra/modules/cosmos: terraform test
+cosmos.tftest.hcl... in progress
+  run "free_tier"... pass
+  run "serverless"... pass
+cosmos.tftest.hcl... tearing down
+cosmos.tftest.hcl... pass
+
+Success! 2 passed, 0 failed.
+exit 0
+
+== envs/dev/wiring.tftest.hcl
+# P14 wiring test: infra/envs/dev with mocked providers. Nothing contacts Azure.
+mock_provider "azurerm" {
+  mock_data "azurerm_client_config" {
+    defaults = {
+      tenant_id = "00000000-0000-0000-0000-000000000000"
+      object_id = "00000000-0000-0000-0000-000000000001"
+    }
+  }
+  mock_resource "azurerm_container_registry" {
+    defaults = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-wab-dev/providers/Microsoft.ContainerRegistry/registries/crwabdevabcde", login_server = "crwabdevabcde.azurecr.io" }
+  }
+  mock_resource "azurerm_key_vault" {
+    defaults = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-wab-dev/providers/Microsoft.KeyVault/vaults/kv-wab-dev-abcde" }
+  }
+  mock_resource "azurerm_key_vault_secret" {
+    defaults = {
+      id                      = "https://kv-wab-dev-abcde.vault.azure.net/secrets/mock/0123456789abcdef0123456789abcdef"
+      versionless_id          = "https://kv-wab-dev-abcde.vault.azure.net/secrets/mock"
+      resource_id             = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-wab-dev/providers/Microsoft.KeyVault/vaults/kv-wab-dev-abcde/secrets/mock/versions/0123456789abcdef0123456789abcdef"
+      resource_versionless_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-wab-dev/providers/Microsoft.KeyVault/vaults/kv-wab-dev-abcde/secrets/mock"
+    }
+  }
+  mock_resource "azurerm_log_analytics_workspace" {
+    defaults = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-wab-dev/providers/Microsoft.OperationalInsights/workspaces/log-wab-dev" }
+  }
+  mock_resource "azurerm_postgresql_flexible_server" {
+    defaults = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-wab-dev/providers/Microsoft.DBforPostgreSQL/flexibleServers/psql-wab-dev-abcde", fqdn = "psql-wab-dev-abcde.postgres.database.azure.com" }
+  }
+  mock_resource "azurerm_container_app_environment" {
+    defaults = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-wab-dev/providers/Microsoft.App/managedEnvironments/cae-wab-dev", default_domain = "example-1234.southeastasia.azurecontainerapps.io" }
+  }
+  mock_resource "azurerm_user_assigned_identity" {
+    defaults = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-wab-dev/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-mock", principal_id = "22222222-2222-2222-2222-222222222222" }
+  }
+  mock_resource "azurerm_cosmosdb_account" {
+    defaults = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-wab-dev/providers/Microsoft.DocumentDB/databaseAccounts/cosmos-wab-dev-abcde", endpoint = "https://cosmos-wab-dev-abcde.documents.azure.com:443/" }
+  }
+}
+mock_provider "random" {}
+mock_provider "time" {}
+
+variables {
+  subscription_id = "00000000-0000-0000-0000-000000000000"
+  image_tag       = "test"
+  oidc_issuer     = "https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/v2.0"
+  oidc_audience   = "66666666-7777-8888-9999-000000000000"
+  oidc_client_id  = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+  oidc_scope      = "openid profile offline_access api://66666666-7777-8888-9999-000000000000/access_as_user"
+  n8n_owner_email = "owner@example.test"
+}
+
+run "defaults" {
+  command = apply
+
+  assert {
+    condition     = local.apps["platform-api"].env["ACTIVITY_READER"] == "cosmos"
+    error_message = "platform-api reads the activity log from Cosmos DB"
+  }
+  assert {
+    condition     = local.apps["platform-api"].env["COSMOS_ENDPOINT"] == module.cosmos.endpoint
+    error_message = "platform-api gets the account's endpoint"
+  }
+  assert {
+    condition     = local.apps["platform-api"].secrets["COSMOS_KEY"] == module.key_vault.secrets["cosmos-key"]
+    error_message = "COSMOS_KEY is a Key Vault reference"
+  }
+  assert {
+    condition     = local.apps["platform-api"].secrets["SETTINGS_ENCRYPTION_KEY"] == module.key_vault.secrets["settings-encryption-key"]
+    error_message = "SETTINGS_ENCRYPTION_KEY is a Key Vault reference"
+  }
+  assert {
+    condition     = !contains(keys(local.apps["platform-api"].env), "COSMOS_KEY") && !contains(keys(local.apps["platform-api"].env), "SETTINGS_ENCRYPTION_KEY")
+    error_message = "no key is a plain setting"
+  }
+  assert {
+    condition     = !contains(keys(local.apps["platform-api"].env), "FIRST_OPERATOR") && !contains(keys(local.apps["platform-api"].env), "FIRST_APPROVERS")
+    error_message = "with no first people set, platform-api gets neither setting"
+  }
+  assert {
+    condition     = local.apps["agent-runtime"].env["PRACTICE_JIRA_URL"] == local.url["platform-api"]
+    error_message = "agent-runtime reads platform-api's own practice Jira by default"
+  }
+  assert {
+    condition     = startswith(local.url["platform-api"], "https://platform-api.")
+    error_message = "the practice Jira address is https"
+  }
+  assert {
+    condition     = alltrue([for name in ["cosmos-key", "settings-encryption-key"] : contains(keys(module.key_vault.secrets), name)])
+    error_message = "Key Vault holds the Cosmos DB key and the settings key"
+  }
+  assert {
+    condition     = random_password.generated["settings-encryption-key"].length == 48 && !random_password.generated["settings-encryption-key"].special
+    error_message = "the settings key is generated like the other secrets"
+  }
+  assert {
+    condition     = module.cosmos.account_name == "cosmos-wab-dev-${random_string.suffix.result}"
+    error_message = "the account follows the naming rule"
+  }
+  assert {
+    condition     = output.cosmos_account_name == module.cosmos.account_name
+    error_message = "the deploy can print the account's name"
+  }
+}
+
+run "first_people_and_practice_jira" {
+  command = apply
+
+  variables {
+    first_operator    = " op@example.test "
+    first_approvers   = "op@example.test,ap@example.test"
+    practice_jira_url = "https://jira.example.test/practice"
+    cosmos_location   = "eastasia"
+  }
+
+  assert {
+    condition     = local.apps["platform-api"].env["FIRST_OPERATOR"] == "op@example.test"
+    error_message = "FIRST_OPERATOR is the trimmed address"
+  }
+  assert {
+    condition     = local.apps["platform-api"].env["FIRST_APPROVERS"] == "op@example.test,ap@example.test"
+    error_message = "FIRST_APPROVERS is passed as it is"
+  }
+  assert {
+    condition     = local.apps["agent-runtime"].env["PRACTICE_JIRA_URL"] == "https://jira.example.test/practice"
+    error_message = "practice_jira_url overrides the default"
+  }
+}
+
+== modules/cosmos/cosmos.tftest.hcl
+# P14 test of infra/modules/cosmos with a mocked provider. Nothing contacts Azure.
+mock_provider "azurerm" {
+  mock_resource "azurerm_cosmosdb_account" {
+    defaults = { id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-wab-dev/providers/Microsoft.DocumentDB/databaseAccounts/cosmos-wab-dev-abcde" }
+  }
+}
+
+variables {
+  name                = "cosmos-wab-dev-abcde"
+  location            = "southeastasia"
+  resource_group_name = "rg-wab-dev"
+  serverless          = false
+  data_contributors   = { platform-api = "11111111-1111-1111-1111-111111111111" }
+  tags                = { project = "ai-workflow-builder" }
+}
+
+run "free_tier" {
+  command = apply
+
+  assert {
+    condition     = azurerm_cosmosdb_account.this.free_tier_enabled && length(azurerm_cosmosdb_account.this.capabilities) == 0
+    error_message = "the default account is on the free tier, not serverless"
+  }
+  assert {
+    condition     = azurerm_cosmosdb_account.this.capacity[0].total_throughput_limit == 1000
+    error_message = "the account is capped at the free 1000 RU/s"
+  }
+  assert {
+    condition     = azurerm_cosmosdb_account.this.consistency_policy[0].consistency_level == "Strong"
+    error_message = "Strong consistency"
+  }
+  assert {
+    condition     = length(azurerm_cosmosdb_account.this.geo_location) == 1 && one(azurerm_cosmosdb_account.this.geo_location).location == "southeastasia"
+    error_message = "one region"
+  }
+  assert {
+    condition     = azurerm_cosmosdb_account.this.access_key_metadata_writes_enabled == false
+    error_message = "the key cannot create or change databases and containers"
+  }
+  assert {
+    condition     = azurerm_cosmosdb_sql_database.activity.name == "activity" && azurerm_cosmosdb_sql_container.run_events.name == "run_events"
+    error_message = "the names platform-api's adapter uses"
+  }
+  assert {
+    condition     = azurerm_cosmosdb_sql_container.run_events.partition_key_paths == tolist(["/runId"]) && azurerm_cosmosdb_sql_container.run_events.partition_key_version == 2
+    error_message = "partitioned by run id, as the SDK's default version 2"
+  }
+  assert {
+    condition     = azurerm_cosmosdb_sql_container.run_events.throughput == 1000
+    error_message = "the container uses the free 1000 RU/s"
+  }
+  assert {
+    condition     = endswith(azurerm_cosmosdb_sql_role_assignment.data_contributor["platform-api"].role_definition_id, "/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002")
+    error_message = "the built-in Data Contributor role"
+  }
+  assert {
+    condition     = endswith(azurerm_cosmosdb_sql_role_assignment.data_contributor["platform-api"].scope, "/dbs/activity")
+    error_message = "scoped to the activity database"
+  }
+  assert {
+    condition     = azurerm_cosmosdb_sql_role_assignment.data_contributor["platform-api"].principal_id == "11111111-1111-1111-1111-111111111111"
+    error_message = "given to platform-api's identity"
+  }
+}
+
+run "serverless" {
+  command = apply
+
+  variables {
+    serverless = true
+  }
+
+  assert {
+    condition     = !azurerm_cosmosdb_account.this.free_tier_enabled
+    error_message = "serverless has no free tier"
+  }
+  assert {
+    condition     = [for c in azurerm_cosmosdb_account.this.capabilities : c.name] == ["EnableServerless"]
+    error_message = "the serverless capability"
+  }
+  assert {
+    condition     = length(azurerm_cosmosdb_account.this.capacity) == 0
+    error_message = "no throughput cap on a serverless account"
+  }
+}

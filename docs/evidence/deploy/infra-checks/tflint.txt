@@ -1,0 +1,6 @@
+TFLint version 0.64.0
+
+Your version of TFLint is out of date! The latest version is 0.65.0.
+You can update by downloading from https://github.com/terraform-linters/tflint/releases
+Installing "azurerm" plugin...
+Installed "azurerm" (source: github.com/terraform-linters/tflint-ruleset-azurerm, version: 0.32.0)

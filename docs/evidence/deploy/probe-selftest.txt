@@ -1,0 +1,81 @@
+One-off self-test of installProbe in portal/e2e/checks/p14.check.ts at commit d867db7, with Playwright 1.55.1 and the
+installed Chrome, headless. The test reads installProbe's source from p14.check.ts, compiles it with TypeScript, and
+adds it to a page served by a fake server. The page reads a fake event stream itself. The stream sends three events,
+a keep-alive comment, and one event split across two chunks. Pass: the probe sees one stream and events 1, 2 and 3,
+and the page still reads every byte of its own copy. The fake server stamps every ts when the stream opens, so
+events 2 and 3 show their wait in the stream as delay.
+
+== Output
+
+Running 1 test using 1 worker
+
+{"streams":1,"seqs":[1,2,3],"delays":[5,906,906],"lcp":24,"title":"done 341","pageBytes":341}
+  ✓  1 <scratch>/probe/probe.selftest.ts:53:5 › installProbe times each event and leaves the page its own copy of the stream (2.0s)
+
+  1 passed (2.9s)
+
+== The test (<worktree> is the PR's worktree)
+// Self-test of installProbe from portal/e2e/checks/p14.check.ts, against a fake page and a fake event stream.
+import { expect, test } from '@playwright/test'
+import { readFileSync } from 'node:fs'
+import { createServer, type Server } from 'node:http'
+import ts from 'typescript'
+
+const SOURCE = '<worktree>/portal/e2e/checks/p14.check.ts'
+let server: Server
+let port = 0
+let pageBytes = 0
+
+function probeSource(): string {
+  const text = readFileSync(SOURCE, 'utf8')
+  const start = text.indexOf('function installProbe(): void {')
+  const end = text.indexOf('async function probeOf(')
+  const fn = text.slice(start, end)
+  return ts.transpileModule(fn, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText + '\ninstallProbe()\n'
+}
+
+test.beforeAll(async () => {
+  server = createServer((req, res) => {
+    if (req.url === '/') {
+      res.writeHead(200, { 'Content-Type': 'text/html' })
+      res.end(`<!doctype html><h1>Good morning, Probe</h1><p>${'x'.repeat(2000)}</p><script>
+        fetch('/api/v1/runs/run_x/events', { headers: { Accept: 'text/event-stream' } }).then(async (r) => {
+          const reader = r.body.getReader(); let n = 0
+          for (;;) { const { done, value } = await reader.read(); if (done) break; n += value.length; document.title = String(n) }
+          document.title = 'done ' + n
+        })</script>`)
+      return
+    }
+    if (req.url?.startsWith('/api/v1/runs/run_x/events')) {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache' })
+      const frame = (seq: number) => `id: ${seq}\ndata: ${JSON.stringify({ run_id: 'run_x', seq, kind: 'agent_message', ts: new Date().toISOString(), summary: 's' })}\n\n`
+      const parts = [frame(1), ': keep-alive\n\n', frame(2).slice(0, 25), frame(2).slice(25) + frame(3)]
+      pageBytes = parts.join('').length
+      let i = 0
+      const next = () => {
+        if (i < parts.length) { res.write(parts[i]); i += 1; setTimeout(next, 300) } else res.end()
+      }
+      next()
+      return
+    }
+    res.writeHead(404).end()
+  })
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()))
+  const address = server.address()
+  port = typeof address === 'object' && address ? address.port : 0
+})
+
+test.afterAll(() => server.close())
+
+test('installProbe times each event and leaves the page its own copy of the stream', async ({ page }) => {
+  await page.addInitScript({ content: probeSource() })
+  await page.goto(`http://127.0.0.1:${port}/`)
+  await expect(page).toHaveTitle(/^done /, { timeout: 10_000 })
+  const probe = await page.evaluate(() => (window as unknown as { __p14: { streams: { url: string }[]; frames: { seq: number; at: number; ts: string }[]; lcp: number } }).__p14)
+  console.log(JSON.stringify({ streams: probe.streams.length, seqs: probe.frames.map((f) => f.seq), delays: probe.frames.map((f) => f.at - Date.parse(f.ts)), lcp: probe.lcp, title: await page.title(), pageBytes }))
+  expect(probe.streams.length).toBe(1)
+  expect(probe.frames.map((f) => f.seq)).toEqual([1, 2, 3])
+  for (const f of probe.frames) expect(f.at - Date.parse(f.ts)).toBeLessThan(1_000)
+  expect(await page.title(), 'the page read every byte of its own copy').toBe(`done ${pageBytes}`)
+  expect(probe.lcp).toBeGreaterThan(0)
+})
