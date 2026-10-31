@@ -99,6 +99,28 @@ def test_a_place_that_says_a_write_is_cant_do(text: str, what: str):
 
 
 @pytest.mark.parametrize(
+    ("text", "what"),
+    [
+        ("let the team know in microsoft teams", "let the team know in microsoft teams"),
+        ("Let the team know in Microsoft Teams", "let the team know in Microsoft Teams"),
+        ("Jira project MOCK, then let the team know", "let the team know"),
+        ("Jira project MOCK and post it in Teams", "post it in Teams"),
+        ("Make sure the team sees it in Teams", "make sure the team sees it in Teams"),
+        ("Write a summary to Slack", "write a summary to Slack"),
+        ("Write it to Slack", "send results to Slack"),
+        ("To the boss", "send results to the boss"),
+        ("Somewhere the team can see it", "put results somewhere the team can see it"),
+    ],
+)
+def test_where_it_goes_that_says_an_action_or_a_person_reads_as_plain_english(text: str, what: str):
+    assert why_no_tool("where", text) == cant(what)
+
+
+def test_where_it_goes_with_only_a_jira_place_and_a_trailing_then_stays_as_the_model_said():
+    assert why_no_tool("where", "Jira project MOCK, and then") is None
+
+
+@pytest.mark.parametrize(
     ("text", "system"),
     [
         ("Who has admin access in GitLab", "GitLab"),
