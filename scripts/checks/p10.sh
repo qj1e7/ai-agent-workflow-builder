@@ -6,7 +6,7 @@
 #   disk                                   free space on the Docker disk; fails under 1.5 GB
 #   gates <worktree>                       typecheck, lint, unit tests, nginx render, build
 #   up [--no-build] <worktree> <project> <tag> <portal-port> <api-port> <n8n-port>
-#                                          --no-build starts the images already built with that tag
+#                                          --no-build starts the images already built with that tag, the mocks included
 #   down <worktree> <project>
 #   check <project> [playwright arguments] run portal/e2e/checks/p10.check.ts in the runner image, in that project's Portal network
 #   live <project> [playwright arguments]  run the builder's live specs (portal/e2e/live) the same way

@@ -9,7 +9,7 @@
 #                                          lint-imports and its tests on a throwaway PostgreSQL; agent-runtime ruff, pyright, tests
 #   up <worktree> <project> <tag> <portal-port> <api-port> <n8n-port> [--no-build]
 #                                          --no-build starts a second stack on the images an earlier up built with that tag;
-#                                          only the project's own mock images are built
+#                                          it builds the mocks first, for an earlier up from before they had a tag
 #   down <worktree> <project>
 #   check <project> [playwright arguments] run portal/e2e/checks/p6.check.ts in the runner image, in that project's Portal network
 #   live <project> [playwright arguments]  run the builder's live specs (portal/e2e/live) the same way

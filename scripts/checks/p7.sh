@@ -120,11 +120,15 @@ lanes() {
 }
 
 lane10() {
-  local worktree=$1 project=$2 out="$EVID/lane-10" status=0
+  local worktree=$1 project=$2 out="$EVID/lane-10" status=0 state down=0
   mkdir -p "$out"
   compose "$worktree" "$project" stop agent-runtime 2>&1 | tee "$out/stop.log"
   compose "$worktree" "$project" ps -a --format '{{.Service}} {{.State}}' | tee "$out/ps-while-down.txt"
-  EXPECT_DOWN=1 check "$project" --grep "@lane10" || status=$?
+  # The lane records the state compose measured, and fails if the runtime did not stop.
+  state=$(compose "$worktree" "$project" ps -a --format '{{.State}}' agent-runtime)
+  echo "agent-runtime ${state:-missing}" | tee "$out/agent-runtime-state.txt"
+  if [ "$state" = exited ]; then down=1; else echo "p7.sh: agent-runtime is ${state:-missing}, not exited" >&2; status=1; fi
+  EXPECT_DOWN=$down check "$project" --grep "@lane10" || status=$?
   compose "$worktree" "$project" start agent-runtime 2>&1 | tee "$out/start.log"
   return "$status"
 }
