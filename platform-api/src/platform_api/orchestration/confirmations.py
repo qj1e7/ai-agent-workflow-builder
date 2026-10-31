@@ -21,6 +21,11 @@ ConfirmationId = NewType("ConfirmationId", str)
 type Area = Literal["people", "model"]
 HISTORY_SHOWN = 50
 
+LOCK_PEOPLE = "LOCK TABLE orchestration.people IN SHARE ROW EXCLUSIVE MODE"
+"""The lock every change to people and roles takes, and every save or decision of a model
+address. Each path takes it first, then the waiting confirmation, then the pending address, so
+two paths never hold one lock each and wait for the other."""
+
 
 class ConfirmationKind(Enum):
     APPROVER = "approver"

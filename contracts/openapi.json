@@ -10058,7 +10058,7 @@
                 }
               }
             },
-            "description": "The saved key belongs to another address, or no longer opens"
+            "description": "The saved key belongs to another address or no longer opens, or the person saving is no longer an Operator"
           },
           "422": {
             "content": {
