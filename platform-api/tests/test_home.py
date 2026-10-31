@@ -16,6 +16,7 @@ from platform_api.orchestration import (
     AnyApprover,
     ApprovalPolicy,
     ApprovalStep,
+    Schedule,
     ScheduleBook,
 )
 from platform_api.orchestration.people import Person
@@ -28,6 +29,7 @@ from platform_api.shared import (
     Role,
     RunId,
     SeedPerson,
+    UseCaseId,
     UserId,
 )
 from tests.conftest import PostgresUrls
@@ -404,8 +406,20 @@ async def test_coming_up_names_the_next_scheduled_workflow_and_how_many_more(lab
         "name": "Software watchlist",
         "template": "software_watchlist",
         "next_run_at": scheduled.json()["schedule"]["next_at"],
+        "time_zone": "Asia/Singapore",
         "more": 0,
     }
+
+
+async def test_coming_up_carries_its_schedules_own_time_zone(lab: Lab):
+    use_case_id = await workflow(lab)
+    london = Schedule("every_day", "09:00", "Europe/London")
+    await ScheduleBook(lab.h.db).save(UseCaseId(use_case_id), london, ALICE_NOW)
+
+    coming_up = (await lab.home("bob"))["coming_up"]
+
+    assert coming_up["use_case_id"] == use_case_id
+    assert coming_up["time_zone"] == "Europe/London"
 
 
 async def test_someone_signed_in_but_not_on_the_list_is_refused(lab: Lab):

@@ -46,6 +46,7 @@
     "name": "Software watchlist",
     "template": "software_watchlist",
     "next_run_at": "2026-11-09T01:00:00Z",
+    "time_zone": "Asia/Singapore",
     "more": 0
   },
   "workflows": 1

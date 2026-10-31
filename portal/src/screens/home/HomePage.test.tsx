@@ -156,6 +156,14 @@ describe('Home with nothing to do on a team with workflows', () => {
     expect(text(html)).toContain('All quiet Next up: Software watchlist , Mon 9 Nov, 9:00.')
     expect(html).not.toContain('Coming up next')
   })
+
+  it('names London next to what runs next when its schedule is in London, in both places, as the workflow page does', () => {
+    const london = { ...BOB_HOME.coming_up!, name: 'Watch LangGraph', template: 'agent_cards', next_run_at: '2026-11-03T09:00:00Z', time_zone: 'Europe/London' }
+    const busy = mainOf(render(BOB, { ...BOB_HOME, coming_up: london }))
+    const quiet = mainOf(render(BOB, { ...BOB_HOME, approvals: [], approvals_total: 0, confirmations: [], coming_up: london }))
+    expect(text(busy)).toContain('Coming up next: Watch LangGraph , Today, 9:00 London time.')
+    expect(text(quiet)).toContain('All quiet Next up: Watch LangGraph , Today, 9:00 London time.')
+  })
 })
 
 describe('Home with many runs waiting', () => {

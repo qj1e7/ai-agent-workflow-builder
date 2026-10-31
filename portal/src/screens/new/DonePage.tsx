@@ -7,16 +7,17 @@ import { useStartRun, useUseCase } from '../../api/queries'
 import type { UseCaseView } from '../../api/types'
 import { Button, ButtonLink } from '../../ui/Button'
 import { IconCheck } from '../../ui/icons'
-import { runWhen } from '../workflows/workflow'
+import { runWhen, timesZone } from '../workflows/workflow'
 import styles from './NewWorkflow.module.css'
 
 function When({ useCase, now }: { useCase: UseCaseView; now: Date }) {
   if (useCase.state === 'paused') return <>is paused</>
   if (!useCase.next_run_at) return <>runs when an Operator starts it</>
-  const at = runWhen(useCase.next_run_at, now)
+  const zone = useCase.schedule?.time_zone
+  const at = runWhen(useCase.next_run_at, now, zone)
   return (
     <>
-      runs next <b>{at.startsWith('Today, ') ? `today at ${at.slice('Today, '.length)}` : `on ${at}`}</b>, Singapore time
+      runs next <b>{at.startsWith('Today, ') ? `today at ${at.slice('Today, '.length)}` : `on ${at}`}</b>, {timesZone(zone)}
     </>
   )
 }

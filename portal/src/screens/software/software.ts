@@ -1,6 +1,7 @@
 import { ApiError } from '../../api/client'
 import { failureReasonLabel } from '../../api/labels'
 import type { Day, FailureReason, ScheduleHold, ScheduleView, SoftwareStatus, VersionSourceView, WatchedSoftwareView } from '../../api/types'
+import { dateAndClock, scheduleZoneName, timesZone } from '../workflows/times'
 
 export const SOURCES_NOTE =
   'GitHub is the only place we can check today. Other places, such as npm or PyPI, are not available yet.'
@@ -39,10 +40,14 @@ export function heldWords(held: ScheduleHold, ownerName: string, howToRunAgain: 
   return `Not running: ${owner} ${heldWhy[held]}. ${howToRunAgain}`
 }
 
-/** What the schedule does next. The view names no next check while the watchlist is paused or the schedule is held, and paused wins over held. */
+/**
+ * What the schedule does next. The view names no next check while the watchlist is paused or the schedule is held, and paused wins over held.
+ * The next check is in the schedule's own zone, as on the Workflows list, and always names its zone, as this page always has.
+ */
 export function nextCheckWords(schedule: ScheduleView, paused: boolean): string {
   if (schedule.held && !paused) return heldWords(schedule.held, schedule.owner_name, TAKE_OVER_WORDS)
-  return schedule.next_at === null ? PAUSED_WORDS : `Next check ${singaporeTime(schedule.next_at)}, Singapore time.`
+  if (schedule.next_at === null) return PAUSED_WORDS
+  return `Next check ${dateAndClock(schedule.next_at, schedule.time_zone)}, ${timesZone(schedule.time_zone)}.`
 }
 
 export function noScheduleWords({ operator, paused }: { readonly operator: boolean; readonly paused: boolean }): string {
@@ -252,9 +257,10 @@ export function repeatWords({ day, at }: { readonly day: Day; readonly at: strin
   return `${dayLabel[day]} at ${clockWords(at)}`
 }
 
-/** "Checked every Monday at 9:00, set by Carol." */
+/** "Checked every Monday at 9:00, set by Carol.", with the schedule's zone after the time when it is not Singapore: "at 9:00 London time". */
 export function scheduleWords(schedule: ScheduleView): string {
-  return `Checked ${repeatWords(schedule)}, set by ${schedule.owner_name}.`
+  const zone = scheduleZoneName(schedule.time_zone)
+  return `Checked ${repeatWords(schedule)}${zone ? ` ${zone}` : ''}, set by ${schedule.owner_name}.`
 }
 
 export function stoppedWords(reason: FailureReason | null): string {
