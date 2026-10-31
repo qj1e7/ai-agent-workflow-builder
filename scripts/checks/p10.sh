@@ -217,6 +217,7 @@ own() {
 # A command that brings up its own stack calls this first, so every way out, a failed step or a die included, takes
 # the stack down with its volumes. It clears the trap before its own down.
 down_on_exit() {
+  # shellcheck disable=SC2064 # the worktree and project are fixed now, quoted by printf %q, as the caller's locals are gone at exit
   trap "$(printf '%q ' "$@")" EXIT
 }
 
