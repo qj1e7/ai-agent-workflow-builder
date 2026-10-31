@@ -145,6 +145,91 @@ def test_where_it_goes_with_no_place_after_a_jira_place_or_a_bare_preposition_na
 
 
 @pytest.mark.parametrize(
+    "text",
+    [
+        "Posted in Jira project MOCK",
+        "I want it in Jira project MOCK",
+        "Let's put it in Jira project MOCK",
+        "Sent to Jira project MOCK",
+        "Written to Jira project MOCK",
+        "Summarised in Jira project MOCK",
+        "Jira project MOCK and then Jira project SUP",
+    ],
+)
+def test_lead_words_before_a_jira_place_stay_as_the_model_said(text: str):
+    assert why_no_tool("where", text) is None
+
+
+@pytest.mark.parametrize(
+    ("text", "what"),
+    [
+        ("Posted in Slack", "put results in Slack"),
+        ("I want it in Slack", "put results in Slack"),
+        ("Let's put it in Teams", "put results in Teams"),
+        ("Sent to Slack", "send results to Slack"),
+    ],
+)
+def test_the_same_lead_words_before_a_place_out_of_reach_are_cant_do(text: str, what: str):
+    assert why_no_tool("where", text) == cant(what)
+
+
+@pytest.mark.parametrize(
+    ("text", "what"),
+    [
+        ("Moved to Jira project MOCK", "move to Jira project MOCK"),
+        ("Deleted in Jira project MOCK", "delete in Jira project MOCK"),
+        ("I want it closed in Jira project MOCK", "close in Jira project MOCK"),
+    ],
+)
+def test_a_past_form_that_changes_data_before_a_jira_place_is_cant_do_and_named(
+    text: str, what: str
+):
+    assert why_no_tool("where", text) == cant(what)
+
+
+@pytest.mark.parametrize(
+    ("text", "what"),
+    [
+        ("Write a summary to Jira project MOCK", None),
+        ("Put a summary in Jira project MOCK", None),
+        ("Write a summary to", None),
+        ("Write a summary to Slack", "write a summary to Slack"),
+        ("Write a summary then post it in Teams", "post it in Teams"),
+    ],
+)
+def test_where_it_goes_that_starts_with_an_action_agrees_with_what_it_does(
+    text: str, what: str | None
+):
+    expected = None if what is None else cant(what)
+    assert (why_no_tool("where", text), why_no_tool("do", text)) == (expected, expected)
+
+
+@pytest.mark.parametrize("text", ["goes", "it", "it goes", "It goes", "them", "went"])
+def test_a_lone_word_that_names_no_place_names_nothing(text: str):
+    assert why_no_tool("where", text) is None
+
+
+@pytest.mark.parametrize(
+    ("kind", "text", "what"),
+    [
+        ("where", "Publié dans Teams", "put results in publié dans Teams"),
+        ("where", "Post it in Publié", "post it in Publié"),
+        ("where", "The Zürich team's channel", "put results in the Zürich team's channel"),
+        ("where", "El canal de niños", "put results in el canal de niños"),
+        ("do", "Post a summary in the 中文 channel", "post a summary in the 中文 channel"),
+        ("where", "The தமிழ் channel", "put results in the தமிழ் channel"),
+        ("where", "Publié dans Teams", "put results in publié dans Teams"),
+    ],
+)
+def test_letters_outside_ascii_stay_inside_their_word(kind: RowKind, text: str, what: str):
+    assert why_no_tool(kind, text) == cant(what)
+
+
+def test_a_jira_project_named_with_letters_outside_ascii_stays_as_the_model_said():
+    assert why_no_tool("where", "The Zürich project") is None
+
+
+@pytest.mark.parametrize(
     ("kind", "text"),
     [
         ("do", "Create a ticket to"),
