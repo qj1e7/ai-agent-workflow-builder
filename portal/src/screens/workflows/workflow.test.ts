@@ -247,27 +247,35 @@ describe('the faces on a workflow', () => {
 })
 
 describe('the button at the end of a row', () => {
-  const waitingForYes = run(waiting)
   const stopped = run(failed)
 
-  it('asks an Approver who did not start or own the run to review and decide', () => {
-    expect(rowAction(WATCHLIST, waitingForYes, BOB)).toEqual({ kind: 'decide', runId: 'run_01JB8' })
+  const yes = (youCanDecide: boolean) => run(waiting, { you_can_decide: youCanDecide })
+
+  it('offers to decide exactly when the platform says the person can decide', () => {
+    expect(rowAction(yes(true), BOB)).toEqual({ kind: 'decide', runId: 'run_01JB8' })
+    expect(rowAction(yes(false), BOB)).toBeNull()
   })
 
-  it('offers nothing to decide to the person who started the run or owns the workflow, or to someone who is not an Approver', () => {
-    expect(rowAction(WATCHLIST, waitingForYes, ALICE)).toBeNull()
-    expect(rowAction({ ...WATCHLIST, owner: 'bob' }, run(waiting, { started_by: 'carol' }), BOB)).toBeNull()
-    expect(rowAction(WATCHLIST, waitingForYes, CAROL)).toBeNull()
+  it('offers nothing on a run the person retried, though they did not start it or own the workflow', () => {
+    // Bob is an Approver, did not start the run and does not own the workflow, but he retried it.
+    const retried = run(waiting, { started_by: 'carol', you_can_decide: false })
+    expect(rowAction(retried, BOB)).toBeNull()
+  })
+
+  it('offers nothing on a workflow the person owns, and follows the platform when it says yes', () => {
+    const owned = run(waiting, { started_by: 'carol', you_can_decide: false })
+    expect(rowAction(owned, ALICE)).toBeNull()
+    expect(rowAction(yes(true), CAROL)).toEqual({ kind: 'decide', runId: 'run_01JB8' })
   })
 
   it('shows Operators why a run stopped, and Approvers nothing', () => {
-    expect(rowAction(WATCHLIST, stopped, CAROL)).toEqual({ kind: 'why', runId: 'run_01JB9' })
-    expect(rowAction(WATCHLIST, stopped, BOB)).toBeNull()
+    expect(rowAction(stopped, CAROL)).toEqual({ kind: 'why', runId: 'run_01JB9' })
+    expect(rowAction(stopped, BOB)).toBeNull()
   })
 
   it('is empty when the latest run needs nobody', () => {
-    expect(rowAction(WATCHLIST, run(done), ALICE)).toBeNull()
-    expect(rowAction(WATCHLIST, null, ALICE)).toBeNull()
+    expect(rowAction(run(done), ALICE)).toBeNull()
+    expect(rowAction(null, ALICE)).toBeNull()
   })
 })
 
@@ -314,12 +322,13 @@ describe('the rows of the list', () => {
   const nudge: UseCaseView = { ...AGENTS, use_case_id: 'uc_nudge', name: 'Stale ticket nudge', instruction: 'Ask owners about old tickets.', state: 'paused' }
   const bugs: UseCaseView = { ...AGENTS, use_case_id: 'uc_bugs', name: 'Morning bug report check', instruction: 'Raise a ticket for each new bug report.' }
   const useCases = [nudge, WATCHLIST, bugs]
-  const runs = [run(failed, { use_case_id: 'uc_bugs', run_id: 'run_bugs' }), run(waiting)]
+  const runsFor = (viewer: Viewer) => [run(failed, { use_case_id: 'uc_bugs', run_id: 'run_bugs' }), run(waiting, { you_can_decide: viewer === BOB })]
+  const runs = runsFor(ALICE)
   const ids = (rows: { useCase: UseCaseView }[]) => rows.map((row) => row.useCase.use_case_id)
 
   it('put the rows that need you first and keep the platform’s order for the rest', () => {
-    expect(ids(rowsOf(useCases, runs, BOB, 'all', ''))).toEqual(['uc_01JB7', 'uc_nudge', 'uc_bugs'])
-    expect(ids(rowsOf(useCases, runs, CAROL, 'all', ''))).toEqual(['uc_bugs', 'uc_nudge', 'uc_01JB7'])
+    expect(ids(rowsOf(useCases, runsFor(BOB), BOB, 'all', ''))).toEqual(['uc_01JB7', 'uc_nudge', 'uc_bugs'])
+    expect(ids(rowsOf(useCases, runsFor(CAROL), CAROL, 'all', ''))).toEqual(['uc_bugs', 'uc_nudge', 'uc_01JB7'])
   })
 
   it('carry each workflow’s latest run, or none', () => {
@@ -328,15 +337,15 @@ describe('the rows of the list', () => {
   })
 
   it('filter to what needs you, what stopped and what is paused', () => {
-    expect(ids(rowsOf(useCases, runs, BOB, 'needs', ''))).toEqual(['uc_01JB7'])
-    expect(ids(rowsOf(useCases, runs, BOB, 'stopped', ''))).toEqual(['uc_bugs'])
-    expect(ids(rowsOf(useCases, runs, BOB, 'paused', ''))).toEqual(['uc_nudge'])
+    expect(ids(rowsOf(useCases, runsFor(BOB), BOB, 'needs', ''))).toEqual(['uc_01JB7'])
+    expect(ids(rowsOf(useCases, runsFor(BOB), BOB, 'stopped', ''))).toEqual(['uc_bugs'])
+    expect(ids(rowsOf(useCases, runsFor(BOB), BOB, 'paused', ''))).toEqual(['uc_nudge'])
   })
 
   it('find a workflow by words in its name or what it does, in any case', () => {
-    expect(ids(rowsOf(useCases, runs, BOB, 'all', '  BUG '))).toEqual(['uc_bugs'])
-    expect(ids(rowsOf(useCases, runs, BOB, 'all', 'old tickets'))).toEqual(['uc_nudge'])
-    expect(ids(rowsOf(useCases, runs, BOB, 'paused', 'bug'))).toEqual([])
+    expect(ids(rowsOf(useCases, runsFor(BOB), BOB, 'all', '  BUG '))).toEqual(['uc_bugs'])
+    expect(ids(rowsOf(useCases, runsFor(BOB), BOB, 'all', 'old tickets'))).toEqual(['uc_nudge'])
+    expect(ids(rowsOf(useCases, runsFor(BOB), BOB, 'paused', 'bug'))).toEqual([])
   })
 })
 
