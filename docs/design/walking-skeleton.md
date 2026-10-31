@@ -133,7 +133,7 @@ X-Dev-User: bob
 201 {"status": "approved", "decision": {"step": 0, "by": "bob", "verdict": "approve", "at": "..."}}
 ```
 
-Bob sending the same decision again gets `200` and the same decision. Alice started the run, so she gets `403 {"refusal": "own_work", "message": "You started this run, so another Approver must decide."}`. The page shows `why_not` from a dry run of the same rule, so the button and the server never disagree.
+Bob sending the same decision again gets `200` and the same decision. Alice started the run, so she gets `403 {"refusal": "own_work", "message": "This run is your own work, so another Approver must decide."}`. The page shows `why_not` from a dry run of the same rule, so the button and the server never disagree.
 
 ### n8n reports a failure, and the Operator retries
 

@@ -91,7 +91,7 @@ describe('the API client', () => {
   })
 
   it('turns a refusal into an ApiError that refusalOf can read', async () => {
-    const message = 'You started this run, so another Approver must decide.'
+    const message = 'This run is your own work, so another Approver must decide.'
     const client = clientFor('alice', () => json({ refusal: 'own_work', message }, 403))
     const attempt = async () =>
       unwrap(
