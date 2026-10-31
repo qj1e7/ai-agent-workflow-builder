@@ -64,6 +64,26 @@ CASES="$ROOT/e2e/mock_model/no_tool_cases.json"
 FOLLOW_UP="Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days and create one follow-up ticket that lists them"
 
 die() { echo "p12.sh: $*" >&2; exit 2; }
+
+# wab/*:dev and :latest are the images scripts/e2e.sh and a dev stack use, so a check never builds over them or removes them.
+own_tag() {
+  case "$1" in
+    '' | dev | latest) die "give this check its own image tag, not '$1': wab/*:dev and :latest belong to scripts/e2e.sh and dev stacks" ;;
+  esac
+}
+
+# Says what docker did with one image: removed it, only took away this tag (the image has another), or kept it and why.
+remove_image() {
+  local ref=$1 said
+  if said=$(docker image rm "$ref" 2>&1); then
+    case "$said" in
+      *Deleted:*) echo "removed $ref" ;;
+      *) echo "untagged $ref; the image keeps another tag" ;;
+    esac
+  else
+    echo "kept $ref: ${said%%$'\n'*}"
+  fi
+}
 lanes() { python3 -I "$HERE/p12_lanes.py" "$@"; }
 
 disk() {
@@ -177,6 +197,7 @@ healthy() {
 
 build() {
   local src=$1 tag=$2
+  own_tag "$tag"
   disk
   mkdir -p "$EVID/stacks"
   WAB_IMAGE_TAG=$tag compose "$src" p12-build dev build >"$EVID/stacks/build-$tag.log" 2>&1 \
@@ -185,9 +206,12 @@ build() {
 }
 
 rmi() {
-  local tag=$1
-  docker image rm "wab/platform-api:$tag" "wab/agent-runtime:$tag" "wab/portal:$tag" \
-    "wab/mock-github:$tag" "wab/mock-model:$tag" >/dev/null 2>&1 || true
+  local tag=$1 image
+  own_tag "$tag"
+  for image in wab/platform-api wab/agent-runtime wab/portal wab/mock-github wab/mock-model; do
+    docker image inspect "$image:$tag" >/dev/null 2>&1 || continue
+    remove_image "$image:$tag"
+  done
 }
 
 e2e() {

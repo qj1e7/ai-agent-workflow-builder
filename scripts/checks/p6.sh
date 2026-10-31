@@ -10,7 +10,8 @@
 #   up <worktree> <project> <tag> <portal-port> <api-port> <n8n-port> [--no-build]
 #                                          --no-build starts a second stack on the images an earlier up built with that tag;
 #                                          it builds the mocks with that tag first, for an earlier up from before they had a tag
-#   down <worktree> <project>
+#   down <worktree> <project> [<tag>]      stops the stack and deletes its volumes (down -v); with a tag, also removes the
+#                                          images an up built with it, wab/*:<tag> with the mocks, unless another stack uses them
 #   check <project> [playwright arguments] run portal/e2e/checks/p6.check.ts in the runner image, in that project's Portal network
 #   live <project> [playwright arguments]  run the builder's live specs (portal/e2e/live) the same way
 #   lane1 <head-project> [trunk-project]   add software and check it at head; trunk has no Software watchlist page
@@ -18,7 +19,8 @@
 #                                          a removal back 25 hours in the stack's PostgreSQL while the page waits, to try a late
 #                                          Undo, and another back 23 hours, to try an Undo just inside the day
 #   lane6 <worktree> <project> <tag> <portal-port> <api-port> <n8n-port> [--no-build]
-#                                          the mock GitHub fails during a check, on its own stack, which this brings up and down
+#                                          the mock GitHub fails for each row in its own way, on its own stack, which this brings
+#                                          up and down; it removes the tag's images unless --no-build used images built before
 #   size <trunk-worktree> <head-worktree>  gzip bytes of the JavaScript that dist/index.html loads
 #   perf <project> [samples]               largest contentful paint, and the time until all 14 rows are painted, median of the samples
 #   video <project>                        the review video of adding software and a check, 30 to 60 seconds, as $EVID/p6-review.webm
@@ -46,6 +48,26 @@ LATE_REMOVAL_IDS=lane-3/late-removal.txt
 LATE_REMOVAL_MOVED=lane-3/late-removal.moved
 
 die() { echo "p6.sh: $*" >&2; exit 2; }
+
+# wab/*:dev and :latest are the images scripts/e2e.sh and a dev stack use, so a check never builds over them or removes them.
+own_tag() {
+  case "$1" in
+    '' | dev | latest) die "give this check its own image tag, not '$1': wab/*:dev and :latest belong to scripts/e2e.sh and dev stacks" ;;
+  esac
+}
+
+# Says what docker did with one image: removed it, only took away this tag (the image has another), or kept it and why.
+remove_image() {
+  local ref=$1 said
+  if said=$(docker image rm "$ref" 2>&1); then
+    case "$said" in
+      *Deleted:*) echo "removed $ref" ;;
+      *) echo "untagged $ref; the image keeps another tag" ;;
+    esac
+  else
+    echo "kept $ref: ${said%%$'\n'*}"
+  fi
+}
 
 compose() {
   local worktree=$1 project=$2
@@ -122,6 +144,7 @@ up() {
     --no-build) build=--no-build ;;
     *) die "unknown up option $7" ;;
   esac
+  own_tag "$tag"
   disk
   [ -f "$ENV_FILE" ] || die "no $ENV_FILE; copy deploy/make-env.sh next to it and run it"
   mkdir -p "$EVID/stacks"
@@ -140,10 +163,16 @@ build_the_mock_images() {
 }
 
 down() {
-  local worktree=$1 project=$2
+  local worktree=$1 project=$2 tag=${3:-} image
+  [ -z "$tag" ] || own_tag "$tag"
   mkdir -p "$EVID/stacks"
   compose "$worktree" "$project" --profile e2e logs --no-color >"$EVID/stacks/$project-compose.log" 2>&1 || true
   compose "$worktree" "$project" --profile e2e down -v --remove-orphans
+  [ -n "$tag" ] || return 0
+  for image in wab/platform-api wab/agent-runtime wab/portal wab/mock-github wab/mock-model; do
+    docker image inspect "$image:$tag" >/dev/null 2>&1 || continue
+    remove_image "$image:$tag"
+  done
 }
 
 service_of() {
@@ -253,10 +282,11 @@ SQL
 
 lane6() {
   local worktree=$1 project=$2 tag=$3 portal_port=$4 api_port=$5 n8n_port=$6 status=0
+  own_tag "$tag"
   up "$worktree" "$project" "$tag" "$portal_port" "$api_port" "$n8n_port" "${7:-}"
   mkdir -p "$EVID/lane-6"
   check "$project" --grep '@lane6 ' 2>&1 | tee "$EVID/lane-6/playwright.log" || status=$?
-  down "$worktree" "$project"
+  if [ "${7:-}" = --no-build ]; then down "$worktree" "$project"; else down "$worktree" "$project" "$tag"; fi
   return "$status"
 }
 

@@ -17,6 +17,9 @@ const DESKTOP = { width: 1440, height: 900 }
 const PHONE = { width: 390, height: 844 }
 const GREETING = (name: string) => new RegExp(`^Good (morning|afternoon|evening), ${name}$`)
 const MENU = ['Home', 'Workflows', 'Software watchlist', 'Agent library'] as const
+// An Operator's menu also ends with New workflow, since P13 (#75), as portal/src/shell/shell.test.tsx says. The review
+// video still walks MENU only: whether it should show New workflow is a product choice.
+const OPERATOR_MENU = [...MENU, 'New workflow']
 const PAGES = [
   { label: 'Home', path: '/', heading: GREETING('Alice') },
   { label: 'Workflows', path: '/workflows', heading: /^Workflows$/ },
@@ -115,7 +118,7 @@ test('@lane1-capture sign in as alice and read the menu', async ({ browser }) =>
   if (TARGET === 'head') {
     expect(me.status(), 'GET /api/v1/me signs alice in').toBe(200)
     expect(meBody).toMatchObject({ id: 'alice', display: 'Alice' })
-    expect(menu, 'head menu').toEqual([...MENU])
+    expect(menu, 'head menu: alice is an Operator, so it ends with New workflow').toEqual(OPERATOR_MENU)
     expect(heading).toMatch(GREETING('Alice'))
     await expect(page.getByRole('banner')).toContainText('Alice')
     await expect(mainMenu(page).first().getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page')
@@ -668,7 +671,7 @@ test('@lane2 alice signs in through the mock identity provider and no X-Dev-User
   await expect(h1(page)).toHaveText(GREETING('Alice'))
   await expect(page.getByRole('banner')).toContainText('Alice')
   await expect(page.getByRole('banner')).toContainText('Operator and Approver')
-  await expect(mainMenu(page).getByRole('link')).toHaveText([...MENU])
+  await expect(mainMenu(page).getByRole('link')).toHaveText(OPERATOR_MENU)
   await expect(page.getByRole('button', { name: /Test controls/ }), 'real sign-in hides the test controls').toHaveCount(0)
   await shotTo(page, path.join(dir, 'p1-oidc-sign-in.png'))
   for (const label of ['Workflows', 'Software watchlist', 'Agent library', 'Home']) {

@@ -10,7 +10,8 @@
 #   down <worktree> <project>
 #   check <project> [playwright arguments] run portal/e2e/checks/p7.check.ts in the runner image, in that project's Portal network
 #   lane1 <trunk-project> <head-project>   trunk has no Agent library: record it; then lane 1 at head
-#   lanes <project>                        lanes 2 to 9 at head, one browser run per lane
+#   lanes <project>                        lanes 2 to 9 and 11 at head, one browser run per lane; lane 11 presses the
+#                                          dimmed page beside an agent card, and presses that start or end on the card
 #   lane10 <worktree> <project>            stop the agent runtime, open the Tools tab, start the runtime again
 #   size <trunk-worktree> <head-worktree>  gzip bytes of the JavaScript that each built dist/index.html loads; fails past +30 KB
 #   perf <head-project> [samples]          largest contentful paint of /agents; fails at a median of 2.5 s or more
@@ -113,7 +114,7 @@ lane1() {
 
 lanes() {
   local project=$1 status=0 lane
-  for lane in 2 3 4 5 6 7 8 9; do
+  for lane in 2 3 4 5 6 7 8 9 11; do
     check "$project" --grep "@lane$lane\b" || status=$?
   done
   return "$status"

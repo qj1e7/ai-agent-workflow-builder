@@ -80,6 +80,26 @@ SEED_COPIES=49
 
 die() { echo "p11.sh: $*" >&2; exit 2; }
 
+# wab/*:dev and :latest are the images scripts/e2e.sh and a dev stack use, so a check never builds over them or removes them.
+own_tag() {
+  case "$1" in
+    '' | dev | latest) die "give this check its own image tag, not '$1': wab/*:dev and :latest belong to scripts/e2e.sh and dev stacks" ;;
+  esac
+}
+
+# Says what docker did with one image: removed it, only took away this tag (the image has another), or kept it and why.
+remove_image() {
+  local ref=$1 said
+  if said=$(docker image rm "$ref" 2>&1); then
+    case "$said" in
+      *Deleted:*) echo "removed $ref" ;;
+      *) echo "untagged $ref; the image keeps another tag" ;;
+    esac
+  else
+    echo "kept $ref: ${said%%$'\n'*}"
+  fi
+}
+
 compose() {
   local worktree=$1 project=$2 mode=$3
   shift 3
@@ -165,6 +185,7 @@ up() {
       *) die "unknown up option $option" ;;
     esac
   done
+  own_tag "$tag"
   disk
   [ -f "$ENV_FILE" ] || die "no $ENV_FILE; copy deploy/make-env.sh next to it and run it"
   mkdir -p "$EVID/stacks"
@@ -192,17 +213,18 @@ down() {
       *) tag=$option ;;
     esac
   done
+  [ -z "$tag" ] || own_tag "$tag"
   mkdir -p "$EVID/stacks"
   compose "$worktree" "$project" "$mode" --profile e2e logs --no-color >"$EVID/stacks/$project-compose.log" 2>&1 || true
   compose "$worktree" "$project" "$mode" --profile e2e down -v --remove-orphans
   docker image ls --format '{{.Repository}}:{{.Tag}}' --filter "reference=$project-*" | while read -r image; do
-    docker image rm "$image" >/dev/null || echo "kept $image, which a container still uses"
+    remove_image "$image"
   done
   docker image prune -f --filter "label=com.docker.compose.project=$project" >/dev/null
   if [ -n "$tag" ]; then
     for image in wab/platform-api wab/agent-runtime wab/portal wab/mock-github wab/mock-model; do
       docker image inspect "$image:$tag" >/dev/null 2>&1 || continue
-      docker image rm "$image:$tag" >/dev/null 2>&1 || echo "kept $image:$tag, which another stack still uses"
+      remove_image "$image:$tag"
     done
   fi
   echo "images named after $project left: $(docker image ls -q --filter "reference=$project-*" | wc -l | tr -d ' ')"

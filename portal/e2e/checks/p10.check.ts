@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Browser, type Page } from '@playwright/test'
+import { expect, request, test, type Browser, type Page } from '@playwright/test'
 import { randomBytes } from 'node:crypto'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -14,6 +14,7 @@ import {
   settingsTab,
   SettingsApi,
   signedInAs,
+  type Person,
 } from '../live/support/settings'
 import { assertClean, watchPage } from '../support/test'
 
@@ -29,6 +30,12 @@ const NOT_SIGNED_IN = 'Hasn’t signed in yet'
 const TWO_APPROVERS = 'At least 2 people must be Approvers, so nobody has to approve their own work.'
 const SUMMARY_TASK = 'Every Friday summarise the tickets we finished in MOCK.'
 const WIDE_PENDING = 'wide-pending@example.test'
+// The same mock model under a second name (deploy/compose.e2e.yaml), so lane 2 can enter an address the platform has
+// never confirmed while the first one is in use.
+const SECOND_MODEL_URL = process.env['SECOND_MODEL_URL'] ?? 'http://mock-model-2:8300'
+const MOCK_OIDC_URL = process.env['MOCK_OIDC_URL'] ?? 'http://mock-oidc:8080/default'
+const LEFT = 'no longer on the list'
+const RUN_SETTLED = ['awaiting_approval', 'succeeded', 'rejected', 'failed']
 
 function laneDir(lane: number | string): string {
   const dir = path.join(EVID, typeof lane === 'number' ? `lane-${lane}` : lane)
@@ -68,6 +75,22 @@ async function runsNow(api: SettingsApi, lane: string) {
   expect(made.status, `alice sets up an agent workflow: ${JSON.stringify(made.body)}`).toBe(201)
   const run = await api.send('alice', 'POST', `/api/v1/use-cases/${made.body.use_case_id ?? ''}/runs`, undefined, { 'Idempotency-Key': `${lane}-${Date.now()}` })
   return { plan, made, run }
+}
+
+/** Polls a run until it waits for a yes or ends, so a lane can say the run did its work with the model. */
+async function runSettles(api: SettingsApi, runId: string): Promise<{ state: string; reason: string | null }> {
+  let last = { state: 'unknown', reason: null as string | null }
+  await expect
+    .poll(
+      async () => {
+        const answer = await api.send<{ state?: string; reason?: string | null }>('alice', 'GET', `/api/v1/runs/${runId}`)
+        last = { state: answer.body.state ?? `HTTP ${answer.status}`, reason: answer.body.reason ?? null }
+        return RUN_SETTLED.includes(last.state)
+      },
+      { message: `run ${runId} waits for a yes or ends`, timeout: 120_000, intervals: [1_000] },
+    )
+    .toBe(true)
+  return last
 }
 
 async function onlyAliceAndBobApprove(api: SettingsApi): Promise<void> {
@@ -147,29 +170,52 @@ test('@lane1 alice connects the mock model, tests and saves it, and only the key
   })
 })
 
-test('@lane2 carol enters an address that is not on the known list, it waits for an Approver, and runs keep the old model', async ({ browser }) => {
+test('@lane2 with no model runs get 409; with a model in use, carol enters an address not on the known list, it waits for an Approver, and runs keep the model in use', async ({ browser }) => {
+  test.setTimeout(300_000)
   await withApi(async (api) => {
+    const fresh = await api.model('alice')
+    expect(fresh.active, 'lane 2 needs a fresh stack, where no model was ever connected').toBeNull()
+    const noModel = await runsNow(api, 'lane2-no-model')
+    // alice connects the mock model and bob confirms its address, so runs have a model in use.
+    const alice = await as(browser, 'alice')
+    await openSettings(alice.page)
+    await connectAndSave(alice.page, { key: freshKey('lane2-first') })
+    await api.confirmAddress('bob')
+    assertClean(alice.watch)
+    await alice.context.close()
     const before = await api.model('alice')
-    expect(before.active, 'lane 2 needs a fresh stack, where no model was ever connected').toBeNull()
+    expect(before.active?.base_url, 'the first address is in use').toBe(MOCK_MODEL_URL)
+    expect(before.pending, 'nothing waits before carol').toBeNull()
+
     const { context, page, watch } = await as(browser, 'carol')
     await openSettings(page)
-    await connectAndSave(page, { key: freshKey('lane2') })
+    await connectAndSave(page, { address: SECOND_MODEL_URL, key: freshKey('lane2') })
     const waiting = page.locator('#model-waiting')
-    await expect(waiting, 'a fresh stack has never confirmed the mock model, so it waits').toBeVisible()
+    await expect(waiting, 'the platform has never confirmed the second address, so it waits').toBeVisible()
     await expect(waiting).toContainText('A new address is waiting for an Approver')
     await expect(waiting).toContainText('Entered by Carol')
     await expect(waiting.getByRole('button', { name: 'Confirm address' })).toHaveCount(0)
     await expect(settingsTab(page, 'AI model'), 'carol entered it and cannot confirm it, so the tab does not say it needs her').not.toContainText('needs you')
+    await expect(page.locator('#model-now'), 'the page still names the model in use').toContainText(MOCK_MODEL)
     await shotTo(page, 2, 'p10-pending-address.png')
     const after = await api.model('alice')
     const runs = await runsNow(api, 'lane2')
-    save(2, 'p10-pending-address.json', { before: before.active, after: after.active, pending: after.pending, runs })
+    const runId = (runs.run.body as { run_id?: string }).run_id ?? ''
+    const served = runs.run.status === 201 ? await runSettles(api, runId) : null
+    const still = await api.model('alice')
+    save(2, 'p10-pending-address.json', { noModel, before: before.active, after: after.active, pending: after.pending, runs, served, afterTheRun: { active: still.active, pending: still.pending } })
+    expect(noModel.plan.status, `with no model the Planner answers 409: ${JSON.stringify(noModel.plan.body)}`).toBe(409)
+    expect(noModel.run.status, `with no model an agent run answers 409: ${JSON.stringify(noModel.run.body)}`).toBe(409)
+    expect(JSON.stringify(noModel.run.body)).toContain('Connect an AI model in Settings to run agents.')
     expect(after.pending?.by).toBe('carol')
-    expect(after.pending?.base_url).toBe(MOCK_MODEL_URL)
-    expect(after.active, 'runs keep the old model').toEqual(before.active)
-    expect(runs.plan.status, `the Planner still has no model: ${JSON.stringify(runs.plan.body)}`).toBe(409)
-    expect(runs.run.status, `an agent run still has no model: ${JSON.stringify(runs.run.body)}`).toBe(409)
-    expect(JSON.stringify(runs.run.body)).toContain('Connect an AI model in Settings to run agents.')
+    expect(after.pending?.base_url).toBe(SECOND_MODEL_URL)
+    expect(after.active, 'runs keep the model in use').toEqual(before.active)
+    expect(runs.plan.status, `the Planner answers with the model in use: ${JSON.stringify(runs.plan.body)}`).toBe(200)
+    expect(runs.plan.body.decision, 'the Planner made a decision').toBeTruthy()
+    expect(runs.run.status, `an agent run starts with the model in use: ${JSON.stringify(runs.run.body)}`).toBe(201)
+    expect(served?.state, `the run did its work with the model in use: ${JSON.stringify(served)}`).toMatch(/^(awaiting_approval|succeeded)$/)
+    expect(still.active, 'the run left the model in use as it was').toEqual(before.active)
+    expect(still.pending?.base_url, 'carol’s address still waits').toBe(SECOND_MODEL_URL)
     assertClean(watch)
     await context.close()
   })
@@ -191,7 +237,7 @@ test('@lane3 bob confirms carol’s address, the Planner and agent runs use the 
     const history = await api.history('alice')
     const runs = await runsNow(api, 'lane3')
     save(3, 'p10-address-confirmed.json', { active: model.active, pending: model.pending, history: history.filter((line) => line.area === 'model'), runs })
-    expect(model.active?.base_url).toBe(MOCK_MODEL_URL)
+    expect(model.active?.base_url, 'carol’s address is the one in use now').toBe(SECOND_MODEL_URL)
     expect(model.pending).toBeNull()
     expect(history.some((line) => line.area === 'model' && line.by === 'carol' && line.confirmed_by === 'bob')).toBe(true)
     expect(runs.plan.status, `the Planner answers with the confirmed model: ${JSON.stringify(runs.plan.body)}`).toBe(200)
@@ -359,6 +405,208 @@ test('@lane8 bob sees every control read-only, and the page says only Operators 
   expect(waiting.decisions.some((name) => name.startsWith('Confirm')), 'bob can confirm the waiting request').toBe(true)
   expect(waiting.decisions.some((name) => name.startsWith('Not now')), 'bob can say not now to the waiting request').toBe(true)
   assertClean(watch)
+  await context.close()
+})
+
+// Lane 11 (D2 in the P10 recheck). Someone else takes people off the list while alice has People and roles open. The
+// page names who left on its own line, keeps a notice or a refusal about someone still listed, and gives the line focus
+// when the focused row left. Run on its own stack: it adds and removes people, and its last step needs alice and bob as
+// the only Approvers.
+const peopleSection = (page: Page) => page.locator('section[aria-labelledby="people-heading"]')
+const leftLine = (page: Page) => page.locator('#people-left')
+
+/** TanStack Query reads the list again when a browser tab comes back. */
+async function returnToTab(page: Page): Promise<void> {
+  await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')))
+  await page.waitForTimeout(1_500)
+}
+
+async function said(page: Page) {
+  const textOf = async (selector: string) => {
+    const at = page.locator(selector)
+    return (await at.count()) ? (await at.innerText()).trim() : null
+  }
+  return {
+    left: await textOf('#people-left'),
+    notice: await textOf('#people-notice'),
+    problem: await textOf('#people-problem'),
+    undo: await page.locator('#people-notice').getByRole('button', { name: 'Undo' }).count(),
+    status: await peopleSection(page).locator('p.visually-hidden[role="status"]').allInnerTexts(),
+    focus: await page.evaluate(() => {
+      const at = document.activeElement
+      return at === null || at === document.body ? 'body' : `${at.tagName.toLowerCase()}#${at.id}`
+    }),
+  }
+}
+
+test('@lane11 who left the People list is said on its own line, beside a notice or a refusal about someone still on it', async ({ browser }) => {
+  test.setTimeout(300_000)
+  const out: Record<string, unknown> = {}
+  await withApi(async (api) => {
+    await onlyAliceAndBobApprove(api)
+    const tag = randomBytes(2).toString('hex')
+    const add = async (name: string, approver = false): Promise<Person> => {
+      const person = await api.ensurePerson(`${name.toLowerCase()}-${tag}@example.test`, `${name} ${tag}`, { operator: true, approver })
+      if (approver && !person.approver) await api.confirmApprover(person.id)
+      return person
+    }
+    const remove = async (person: Person) => (await api.send('carol', 'DELETE', `/api/v1/people/${person.id}`)).status
+    const ivan = await add('Ivan')
+    // Hana is an Approver too, so she keeps a role when alice unticks Operator.
+    const hana = await add('Hana', true)
+    const gina = await add('Gina')
+    const jack = await add('Jack')
+    const kim = await add('Kim')
+    const lee = await add('Lee')
+    const ned = await add('Ned')
+    const pat = await add('Pat')
+    const leftWords = (...people: Person[]) => {
+      const names = people.map((p) => p.display)
+      return `${names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''} are` : `${names[0] ?? ''} is`} ${LEFT}.`
+    }
+    const { context, page, watch } = await as(browser, 'alice')
+    await openSettings(page, 'people')
+    await expect(personRow(page, ivan.email)).toBeVisible()
+
+    // a. Nothing was said. carol removes Ivan, and alice comes back to the tab.
+    out['a-quiet'] = { removed: await remove(ivan) }
+    await returnToTab(page)
+    await expect(leftLine(page)).toContainText(leftWords(ivan))
+    out['a-quiet'] = { ...(out['a-quiet'] as object), said: await said(page), row: await personRow(page, ivan.email).count() }
+
+    // b. alice unticks Hana's Operator role, so focus is on Hana's box and the notice has Undo. Then carol removes Hana.
+    const hanaBox = roleBox(page, 'Operator', hana.display)
+    await hanaBox.click()
+    await expect(page.locator('#people-notice')).toContainText(`${hana.display} is no longer an Operator.`)
+    await expect(hanaBox).toBeFocused()
+    const bBefore = await said(page)
+    const bRemoved = await remove(hana)
+    await returnToTab(page)
+    await expect(leftLine(page)).toContainText(leftWords(hana))
+    out['b-focused-row-leaves'] = { removed: bRemoved, before: bBefore, said: await said(page), row: await personRow(page, hana.email).count() }
+    await shotTo(page, 11, 'p10-left-focused-row.png')
+
+    // c. carol removes Gina, then alice ticks Approver for Gina before the list is read again.
+    const cRemoved = await remove(gina)
+    await roleBox(page, 'Approver', gina.display).click()
+    // One line on the page says it, the left line or the page-level problem. A hidden status line reads it out.
+    await expect(peopleSection(page).locator('#people-left, #people-problem').filter({ hasText: leftWords(gina) })).toHaveCount(1, { timeout: 15_000 })
+    await page.waitForTimeout(800)
+    out['c-act-on-someone-who-left'] = { removed: cRemoved, said: await said(page), row: await personRow(page, gina.email).count() }
+
+    // d. Three leave at once.
+    const dRemoved = [await remove(jack), await remove(kim), await remove(lee)]
+    await returnToTab(page)
+    await expect(leftLine(page)).toContainText(leftWords(jack, kim, lee))
+    out['d-three-leave'] = { removed: dRemoved, said: await said(page) }
+
+    // e. carol removes Ned, and alice adds Zed: "Added Zed" stays, and the left line names Ned.
+    const eRemoved = await remove(ned)
+    await page.getByLabel('Work email').fill(`zed-${tag}@example.test`)
+    await page.getByLabel('Name', { exact: true }).fill(`Zed ${tag}`)
+    await page.getByRole('button', { name: 'Add', exact: true }).click()
+    await expect(page.locator('#people-notice')).toContainText(`Added Zed ${tag}`)
+    await expect(leftLine(page)).toContainText(`Ned ${tag} is ${LEFT}.`)
+    await page.waitForTimeout(800)
+    out['e-own-add-finds-a-removal'] = { removed: eRemoved, said: await said(page), nedRow: await personRow(page, ned.email).count() }
+    await shotTo(page, 11, 'p10-left-beside-added.png')
+
+    // f. bob's Approver box is refused (two Approvers at least), then carol removes Pat.
+    const bobBox = roleBox(page, 'Approver', 'Bob')
+    await bobBox.click()
+    await expect(personRow(page, 'bob@example.test')).toContainText(TWO_APPROVERS)
+    const fRemoved = await remove(pat)
+    await returnToTab(page)
+    await expect(leftLine(page)).toContainText(leftWords(pat))
+    out['f-refusal-then-someone-leaves'] = {
+      removed: fRemoved,
+      said: await said(page),
+      bobRow: await personRow(page, 'bob@example.test').innerText(),
+      bobDescribedBy: await bobBox.getAttribute('aria-describedby'),
+    }
+    await shotTo(page, 11, 'p10-left-beside-refusal.png')
+    save(11, 'p10-left-the-list.json', out)
+
+    type Said = Awaited<ReturnType<typeof said>>
+    const a = out['a-quiet'] as { said: Said; row: number }
+    const b = out['b-focused-row-leaves'] as { said: Said; row: number }
+    const c = out['c-act-on-someone-who-left'] as { said: Said; row: number }
+    const d = out['d-three-leave'] as { said: Said }
+    const e = out['e-own-add-finds-a-removal'] as { said: Said; nedRow: number }
+    const f = out['f-refusal-then-someone-leaves'] as { said: Said; bobRow: string; bobDescribedBy: string | null }
+    expect([a.row, b.row, c.row, e.nedRow], 'every removed row is gone').toEqual([0, 0, 0, 0])
+    expect(a.said.status, 'a: a status line says who left').toContain(`${leftWords(ivan)} The list now shows who is on it.`)
+    expect(b.said.notice, 'b: what was said on Hana’s row goes with the row').toBeNull()
+    expect(b.said.undo, 'b: no Undo for a row that left').toBe(0)
+    expect(b.said.focus, 'b: focus was on Hana’s box, so the left line takes it').toBe('div#people-left')
+    const cSays = [c.said.left, c.said.problem].filter((line) => line?.includes(leftWords(gina)))
+    expect(cSays, 'c: the page says Gina left once, not twice').toHaveLength(1)
+    expect(c.said.focus, 'c: focus is on the line that says Gina left').toMatch(/^div#people-(left|problem)$/)
+    expect(d.said.left, 'd: one line names all three').toContain(leftWords(jack, kim, lee))
+    expect(e.said.notice, 'e: "Added Zed" stays').toContain(`Added Zed ${tag}`)
+    expect(e.said.left, 'e: and the left line names Ned').toContain(`Ned ${tag} is ${LEFT}.`)
+    expect(e.said.status.join(' | '), 'e: both are read out').toMatch(new RegExp(`Added Zed ${tag}.*\\| Ned ${tag} is ${LEFT}`))
+    expect(f.bobRow, 'f: bob’s refusal stays on his row').toContain(TWO_APPROVERS)
+    expect(f.bobDescribedBy, 'f: his box still points at it').toBe('person-bob-error')
+    expect(f.said.left, 'f: and the left line names Pat').toContain(leftWords(pat))
+    assertClean(watch)
+    await context.close()
+  })
+})
+
+// The sign-in checks on a stack with real sign-in through the mock identity provider (p10.sh signin). carol can sign
+// in but is not on the People list, so Settings shows the ask screen and the platform refuses her the Settings data.
+test('@signin-not-on-list carol signs in with real sign-in, is not on the list, and sees the ask screen, not Settings', async ({ browser }) => {
+  test.skip(process.env['E2E_AUTH'] !== 'oidc', 'needs the oidc stack')
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'en-SG', timezoneId: 'Asia/Singapore' })
+  const page = await context.newPage()
+  const tokens: string[] = []
+  page.on('response', async (r) => {
+    if (r.request().method() !== 'POST' || r.url() !== `${MOCK_OIDC_URL}/token` || !r.ok()) return
+    const body = (await r.json().catch(() => ({}))) as { access_token?: string }
+    if (body.access_token) tokens.push(body.access_token)
+  })
+  const seen: { url: string; status: number }[] = []
+  page.on('response', (r) => {
+    if (new URL(r.url()).pathname.startsWith('/api/')) seen.push({ url: new URL(r.url()).pathname, status: r.status() })
+  })
+  await page.goto('/settings')
+  const username = page.locator('input[name="username"]')
+  await expect(username, 'a signed-out person goes to the identity provider').toBeVisible({ timeout: 60_000 })
+  await username.fill('carol')
+  await page.locator('input[type="submit"]').click()
+  await expect(h1(page)).toHaveText('Ask an Operator to add you', { timeout: 30_000 })
+  const atSettings = {
+    url: page.url(),
+    main: await page.getByRole('main').innerText(),
+    tabs: await page.getByRole('group', { name: 'Settings sections' }).count(),
+    settingsHeadings: await page.getByRole('heading', { level: 2, name: /AI model|People and roles/ }).count(),
+    checkboxes: await page.getByRole('checkbox').count(),
+  }
+  await shotTo(page, 'signin', 'p10-not-on-list.png')
+  await page.goto('/settings?tab=people')
+  await expect(h1(page)).toHaveText('Ask an Operator to add you')
+  const atPeople = { url: page.url(), tabs: await page.getByRole('group', { name: 'Settings sections' }).count(), checkboxes: await page.getByRole('checkbox').count() }
+  const token = tokens.at(-1) ?? ''
+  const http = await request.newContext({ baseURL: BASE_URL })
+  const direct: Record<string, { status: number; body: string }> = {}
+  try {
+    for (const route of ['/api/v1/me', '/api/v1/people', '/api/v1/settings/model', '/api/v1/confirmations', '/api/v1/settings/history']) {
+      const answer = await http.get(route, { headers: { Authorization: `Bearer ${token}` } })
+      direct[route] = { status: answer.status(), body: (await answer.text()).slice(0, 300) }
+    }
+  } finally {
+    await http.dispose()
+  }
+  save('signin', 'p10-not-on-list.json', { atSettings, atPeople, direct, seenByThePage: seen, hadToken: token.length > 0 })
+  expect(token, 'the identity provider gave carol a token').not.toBe('')
+  expect(atSettings.tabs, 'no Settings tabs').toBe(0)
+  expect(atSettings.settingsHeadings, 'no Settings sections').toBe(0)
+  expect(atSettings.checkboxes, 'no role boxes').toBe(0)
+  expect(atPeople.tabs, 'no Settings tabs on the People link either').toBe(0)
+  expect(direct['/api/v1/me']?.status).toBe(200)
+  expect(direct['/api/v1/me']?.body).toContain('"on_list":false')
+  for (const route of ['/api/v1/people', '/api/v1/settings/model', '/api/v1/confirmations', '/api/v1/settings/history']) expect(direct[route]?.status, route).toBe(403)
   await context.close()
 })
 

@@ -9,7 +9,8 @@ from urllib.parse import parse_qs, urlparse
 REPO = "langchain-ai/langgraph"
 REDIS = "redis/redis"
 FASTAPI = "fastapi/fastapi"
-MODES = ("ok", "unavailable")
+MODES = ("ok", "unavailable", "not_found")
+REPO_NAME = re.compile(r"^[^/\s]+/[^/\s]+$")
 DEFAULT_PER_PAGE = 30
 MAX_PER_PAGE = 100
 
@@ -101,9 +102,15 @@ RELEASES_PATH = re.compile(r"^/repos/([^/]+)/([^/]+)/releases/?$")
 
 
 class State:
+    """The mode for every repository, and each repository's own mode, which wins over it.
+
+    Setting the mode for every repository clears each repository's own, so one call resets it.
+    """
+
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._mode = "ok"
+        self._repo_modes: dict[str, str] = {}
 
     @property
     def mode(self) -> str:
@@ -114,6 +121,15 @@ class State:
     def mode(self, value: str) -> None:
         with self._lock:
             self._mode = value
+            self._repo_modes.clear()
+
+    def mode_of(self, repo: str) -> str:
+        with self._lock:
+            return self._repo_modes.get(repo, self._mode)
+
+    def set_repo_mode(self, repo: str, value: str) -> None:
+        with self._lock:
+            self._repo_modes[repo] = value
 
 
 def page_of(releases: list[dict[str, Any]], query: dict[str, list[str]]) -> list[dict[str, Any]]:
@@ -138,12 +154,20 @@ def make_handler(state: State) -> type[BaseHTTPRequestHandler]:
             if url.path == "/healthz":
                 self.send_json(200, {"status": "ok"})
             elif url.path == "/_admin/mode":
-                self.send_json(200, {"mode": state.mode})
+                repo = parse_qs(url.query).get("repo", [None])[0]
+                if repo is None:
+                    self.send_json(200, {"mode": state.mode})
+                elif REPO_NAME.match(repo):
+                    self.send_json(200, {"mode": state.mode_of(repo), "repo": repo})
+                else:
+                    self.send_json(400, {"message": "repo must be owner/name"})
             elif (match := RELEASES_PATH.match(url.path)) is not None:
-                if state.mode == "unavailable":
+                repo = f"{match.group(1)}/{match.group(2)}"
+                mode = state.mode_of(repo)
+                if mode == "unavailable":
                     self.send_json(503, {"message": "Service Unavailable"})
                     return
-                releases = RELEASES_BY_REPO.get(f"{match.group(1)}/{match.group(2)}")
+                releases = None if mode == "not_found" else RELEASES_BY_REPO.get(repo)
                 if releases is None:
                     self.send_json(404, {"message": "Not Found"})
                     return
@@ -162,14 +186,21 @@ def make_handler(state: State) -> type[BaseHTTPRequestHandler]:
                 return
             length = int(self.headers.get("Content-Length", 0))
             try:
-                mode = json.loads(self.rfile.read(length)).get("mode")
+                asked = json.loads(self.rfile.read(length))
+                mode, repo = asked.get("mode"), asked.get("repo")
             except ValueError, AttributeError:
-                mode = None
+                mode, repo = None, None
             if mode not in MODES:
                 self.send_json(400, {"message": f"mode must be one of {list(MODES)}"})
                 return
-            state.mode = mode
-            self.send_json(200, {"mode": mode})
+            if repo is None:
+                state.mode = mode
+                self.send_json(200, {"mode": mode})
+            elif isinstance(repo, str) and REPO_NAME.match(repo):
+                state.set_repo_mode(repo, mode)
+                self.send_json(200, {"mode": mode, "repo": repo})
+            else:
+                self.send_json(400, {"message": "repo must be owner/name"})
 
         def log_message(self, format: str, *args: Any) -> None:
             return

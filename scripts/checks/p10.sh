@@ -15,7 +15,13 @@
 #                                          then searches the stack's container logs and a database dump for the key
 #   own [--no-build] <lanes> <worktree> <project> <tag> <portal-port> <api-port> <n8n-port>
 #                                          lanes that change the People list or need a model address never confirmed:
-#                                          "2,3" (in that order), "4", "5" or "6", each on a fresh stack this brings up and down
+#                                          "2,3" (in that order), "4", "5", "6" or "11", each on a fresh stack this brings up
+#                                          and down. Lane 2 connects the mock model, then saves its second address
+#                                          (mock-model-2 in deploy/compose.e2e.yaml), which waits. Lane 11 takes people off
+#                                          the list while alice has People and roles open (D2 in the P10 recheck)
+#   signin [--no-build] <worktree> <project> <tag>
+#                                          the sign-in checks on a fresh stack with real sign-in (deploy/compose.oidc.yaml,
+#                                          no host ports): carol is not on the list, and P1's lane 2; brings it up and down
 #   size <trunk-worktree> <head-worktree>  gzip bytes of the JavaScript that dist/index.html loads
 #   perf <project> [samples]               seeds 30 people once, then the largest contentful paint of People and roles
 #                                          and the time until every row is drawn
@@ -114,9 +120,10 @@ runner_in() {
     e2e_mounts+=(-v "$checker_root/portal/e2e/$folder:/work/e2e/$folder:ro")
   done
   docker run --rm --network "container:$portal" --ipc=host \
-    -e BASE_URL=http://localhost:8080 -e E2E_AUTH=dev -e EVID=/evidence \
+    -e BASE_URL=http://localhost:8080 -e E2E_AUTH="${E2E_AUTH:-dev}" -e EVID="${RUNNER_EVID:-/evidence}" \
     -e TARGET="${TARGET:-head}" -e SAMPLE="${SAMPLE:-0}" -e MOCK_GITHUB_URL=http://mock-github:8200 \
-    -e MOCK_MODEL_URL=http://mock-model:8300 -e PLAIN_HTTP_URL=http://portal:8080 \
+    -e MOCK_MODEL_URL=http://mock-model:8300 -e SECOND_MODEL_URL=http://mock-model-2:8300 \
+    -e MOCK_OIDC_URL=http://mock-oidc:8080/default -e PLAIN_HTTP_URL=http://portal:8080 \
     "${e2e_mounts[@]}" -v "$EVID:/evidence" -v "$EVID/.live-out:/work/e2e/out/live" \
     -w /work "$RUNNER" "$@"
 }
@@ -192,16 +199,63 @@ own() {
   fi
   local lanes=$1 worktree=$2 project=$3 tag=$4 portal_port=$5 api_port=$6 n8n_port=$7 status=0 n
   case "$lanes" in
-    2,3 | 4 | 5 | 6) ;;
-    *) die "own runs \"2,3\", \"4\", \"5\" or \"6\", not $lanes" ;;
+    2,3 | 4 | 5 | 6 | 11) ;;
+    *) die "own runs \"2,3\", \"4\", \"5\", \"6\" or \"11\", not $lanes" ;;
   esac
+  down_on_exit down "$worktree" "$project"
   up ${build:+"$build"} "$worktree" "$project" "$tag" "$portal_port" "$api_port" "$n8n_port"
   for n in ${lanes//,/ }; do
     mkdir -p "$EVID/lane-$n"
     check "$project" --grep "@lane$n " 2>&1 | tee "$EVID/lane-$n/playwright.log" || status=$?
     [ "$status" -eq 0 ] || break
   done
+  trap - EXIT
   down "$worktree" "$project"
+  return "$status"
+}
+
+# A command that brings up its own stack calls this first, so every way out, a failed step or a die included, takes
+# the stack down with its volumes. It clears the trap before its own down.
+down_on_exit() {
+  # shellcheck disable=SC2064 # the worktree and project are fixed now, quoted by printf %q, as the caller's locals are gone at exit
+  trap "$(printf '%q ' "$@")" EXIT
+}
+
+# The sign-in stack adds the mock identity provider. It publishes no host port, so it can run beside another stack.
+compose_oidc() {
+  local worktree=$1 project=$2
+  shift 2
+  compose "$worktree" "$project" -f "$worktree/deploy/compose.oidc.yaml" "$@"
+}
+
+down_oidc() {
+  local worktree=$1 project=$2
+  mkdir -p "$EVID/stacks"
+  compose_oidc "$worktree" "$project" --profile e2e logs --no-color >"$EVID/stacks/$project-compose.log" 2>&1 || true
+  compose_oidc "$worktree" "$project" --profile e2e down -v --remove-orphans
+}
+
+signin() {
+  local build=
+  if [ "${1:-}" = --no-build ]; then
+    build=--no-build
+    shift
+  fi
+  local worktree=$1 project=$2 tag=$3 out="$EVID/signin" status=0 portal
+  disk
+  [ -f "$ENV_FILE" ] || die "no $ENV_FILE; copy deploy/make-env.sh next to it and run it"
+  mkdir -p "$EVID/stacks" "$out"
+  down_on_exit down_oidc "$worktree" "$project"
+  WAB_IMAGE_TAG=$tag compose_oidc "$worktree" "$project" up ${build:+"$build"} --wait --wait-timeout 400 >"$EVID/stacks/$project-up.log" 2>&1 ||
+    { tail -n 30 "$EVID/stacks/$project-up.log" >&2; die "$project did not become healthy"; }
+  portal=$(portal_of "$project")
+  [ -n "$portal" ] || die "no running Portal in project $project"
+  docker exec "$portal" wget -qSO- http://platform-api:8000/healthz/ready 2>&1 | tee "$out/ready.txt" || status=$?
+  E2E_AUTH=oidc check "$project" --grep '@signin-not-on-list ' 2>&1 | tee "$out/not-on-list.log" || status=$?
+  # P1's lane 2 writes its evidence under $EVID/signin/lane-2.
+  E2E_AUTH=oidc RUNNER_EVID=/evidence/signin runner_in "$project" npx playwright test -c e2e/checks/playwright.config.ts p1.check.ts --grep '@lane2 ' 2>&1 | tee "$out/p1-lane2.log" || status=$?
+  trap - EXIT
+  down_oidc "$worktree" "$project"
   return "$status"
 }
 
@@ -266,9 +320,9 @@ video() {
 }
 
 command=${1:-}
-[ -n "$command" ] || die "usage: p10.sh <disk|gates|up|down|check|live|lane1|lane|own|size|perf|video> ..."
+[ -n "$command" ] || die "usage: p10.sh <disk|gates|up|down|check|live|lane1|lane|own|signin|size|perf|video> ..."
 shift
 case "$command" in
-  disk | gates | up | down | check | live | lane1 | lane | own | size | perf | video) "$command" "$@" ;;
+  disk | gates | up | down | check | live | lane1 | lane | own | signin | size | perf | video) "$command" "$@" ;;
   *) die "unknown command $command" ;;
 esac
