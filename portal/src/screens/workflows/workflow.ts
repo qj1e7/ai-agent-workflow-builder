@@ -61,17 +61,35 @@ export function runFact(run: RunView, nameOf: NameOf): RunFact {
 }
 
 const TIME_ZONE = 'Asia/Singapore'
-const formatters = new Map<string, Intl.DateTimeFormat>()
-
-function partsIn(zone: string): Intl.DateTimeFormat {
-  const timeZone = usable(zone)
-  let formatter = formatters.get(timeZone)
-  if (!formatter) {
-    formatter = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hourCycle: 'h23', timeZone })
-    formatters.set(timeZone, formatter)
-  }
-  return formatter
+/** Where the formatters are built, so a test can count the builds. */
+export const formatterFactory = {
+  build: (timeZone: string) =>
+    new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hourCycle: 'h23', timeZone }),
 }
+
+interface Zone {
+  readonly formatter: Intl.DateTimeFormat
+  /** False when the browser cannot read the name. Its times and words are then Singapore's. */
+  readonly known: boolean
+}
+
+const zones = new Map<string, Zone>()
+
+/** Built once per zone name, the unreadable ones included. */
+function zoneOf(name: string): Zone {
+  let zone = zones.get(name)
+  if (!zone) {
+    try {
+      zone = { formatter: formatterFactory.build(name), known: true }
+    } catch {
+      zone = { formatter: name === TIME_ZONE ? formatterFactory.build(TIME_ZONE) : zoneOf(TIME_ZONE).formatter, known: false }
+    }
+    zones.set(name, zone)
+  }
+  return zone
+}
+
+const partsIn = (name: string) => zoneOf(name).formatter
 
 interface Moment {
   readonly weekday: string
@@ -133,25 +151,21 @@ export function whenWords({ schedule }: Pick<UseCaseView, 'schedule'>): When {
   return { words: words.charAt(0).toUpperCase() + words.slice(1), small: zoneWords(schedule.time_zone) }
 }
 
-/** A zone the browser can format with. Anything else is shown as Singapore, in the times and in the words. */
-function usable(zone: string): string {
-  try {
-    new Intl.DateTimeFormat('en-GB', { timeZone: zone })
-    return zone
-  } catch {
-    return TIME_ZONE
-  }
-}
+const UTC_NAMES = new Set(['UTC', 'Etc/UTC', 'GMT', 'Etc/GMT', 'Etc/UCT', 'UCT', 'Universal', 'Etc/Universal', 'Zulu', 'Etc/Zulu', 'Greenwich', 'Etc/Greenwich'])
 
-/** Singapore keeps its short name. A real Area/City zone is named by its city, as in "London time." Any other zone gets its offset. */
+/**
+ * Singapore keeps its short name. A real Area/City zone is named by its city, as in "London time." The fixed Etc/GMT+N zones
+ * get their offset. Any other zone shows its id, because today's offset can be wrong on the run's date.
+ */
 function zoneWords(name: string): string {
-  const zone = usable(name)
-  if (zone === TIME_ZONE) return 'Singapore time (SGT).'
-  if (zone === 'UTC' || zone === 'Etc/UTC') return 'UTC.'
-  const city = /^(?!Etc\/)[A-Z][A-Za-z]+\/(?:[A-Za-z_]+\/)?([A-Z][A-Za-z_]+)$/.exec(zone)?.[1]
-  if (city) return `${city.replaceAll('_', ' ')} time.`
-  const offset = new Intl.DateTimeFormat('en-GB', { timeZone: zone, timeZoneName: 'shortOffset' }).formatToParts(new Date()).find((p) => p.type === 'timeZoneName')
-  return `${offset?.value ?? zone}.`
+  if (!zoneOf(name).known || name === TIME_ZONE) return 'Singapore time (SGT).'
+  if (UTC_NAMES.has(name)) return 'UTC.'
+  if (/^Etc\/GMT[+-]\d+$/.test(name)) {
+    const offset = new Intl.DateTimeFormat('en-GB', { timeZone: name, timeZoneName: 'shortOffset' }).formatToParts(new Date()).find((p) => p.type === 'timeZoneName')
+    return `${offset?.value ?? name}.`
+  }
+  const city = /^(?!Etc\/)[A-Z][A-Za-z]+\/(?:[A-Za-z_-]+\/)?([A-Z][A-Za-z_-]+)$/.exec(name)?.[1]
+  return city ? `${city.replaceAll(/[_-]/g, ' ')} time.` : `${name} time.`
 }
 
 const STEP_TAGS: Record<BlockKind, { readonly words: string; readonly writes: boolean }> = {

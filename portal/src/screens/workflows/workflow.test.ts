@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import agentUseCase from '../../../../contracts/fixtures/cards/use-case.json'
 import watchlistUseCase from '../../../../contracts/fixtures/builder/use-case.json'
 import heldWatchlist from '../../../../contracts/fixtures/builder/use-case.held.json'
@@ -22,6 +22,7 @@ import {
   changeProblem,
   controlsOf,
   faceStates,
+  formatterFactory,
   changeWords,
   heldNote,
   latestRuns,
@@ -155,8 +156,24 @@ describe('when it runs', () => {
     expect(at('Etc/UTC')).toBe('UTC.')
     expect(at('Pacific/Port_Moresby')).toBe('Port Moresby time.')
     expect(at('Not/AZone'), 'a name the browser cannot read is shown as Singapore, as the times are').toBe('Singapore time (SGT).')
-    expect(at('Etc/GMT')).toBe('GMT+0.')
+    for (const utc of ['GMT', 'Etc/GMT', 'Etc/UCT', 'UCT', 'Universal', 'Zulu', 'Greenwich']) expect(at(utc), utc).toBe('UTC.')
+    expect(at('America/Port-au-Prince')).toBe('Port au Prince time.')
+    expect(at('Africa/Porto-Novo')).toBe('Porto Novo time.')
+    expect(at('America/Blanc-Sablon')).toBe('Blanc Sablon time.')
+    expect(at('Asia/Ust-Nera')).toBe('Ust Nera time.')
+    expect(at('America/Argentina/Buenos_Aires')).toBe('Buenos Aires time.')
+    expect(at('EST5EDT'), 'a zone with no city shows its id, because today’s offset can be wrong on the run’s date').toBe('EST5EDT time.')
     expect(at('')).toBe('Singapore time (SGT).')
+  })
+
+  it('builds a formatter once per zone name, readable or not', () => {
+    const build = vi.spyOn(formatterFactory, 'build')
+    const now = new Date('2026-11-04T07:00:00Z')
+    for (let i = 0; i < 5; i++) for (const zone of ['Pacific/Fiji', 'Not/AnotherZone', 'Asia/Singapore']) runWhen('2026-11-04T09:00:00Z', now, zone)
+    const zones = build.mock.calls.map(([zone]) => zone)
+    build.mockRestore()
+    expect(zones.toSorted().filter((zone) => zone !== 'Asia/Singapore')).toEqual(['Not/AnotherZone', 'Pacific/Fiji'])
+    expect(new Set(zones).size, 'no name is built twice').toBe(zones.length)
   })
 
   it('shows the next run in the schedule’s own time zone', () => {

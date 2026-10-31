@@ -4,7 +4,6 @@ const hooks = vi.hoisted(() => ({ deps: [] as unknown[][], redraw: () => undefin
 
 vi.mock('react', () => ({
   useReducer: () => [0, hooks.redraw],
-  useState: (start: unknown) => [typeof start === 'function' ? (start as () => unknown)() : start, hooks.redraw],
   useEffect: (_run: unknown, deps: unknown[]) => void hooks.deps.push(deps),
 }))
 
