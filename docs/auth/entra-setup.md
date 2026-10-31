@@ -64,10 +64,12 @@ The Terraform variables that feed these settings are:
 | `oidc_jwks_url` | `OIDC_JWKS_URL`, only when it is not empty. Empty by default |
 | `oidc_client_id` | `OIDC_CLIENT_ID` (the Portal app) |
 | `oidc_scope` | `OIDC_SCOPE` |
+| `first_operator` | `FIRST_OPERATOR`. Empty by default. Set it and `first_approvers` together, or leave both empty |
+| `first_approvers` | `FIRST_APPROVERS`. Empty by default. Terraform refuses a value that does not name two different people |
 
-Terraform sets the other two settings itself, with no variable. `AUTH_MODE` is always `oidc`, because dev mode refuses to start anywhere but localhost. `PUBLIC_BASE_URL` is the Portal's address, `https://portal.<domain>`, built from the Container Apps environment's default domain, which nobody knows before the first deploy. The deploy workflow fills each variable from the GitHub environment variable of the same name in capitals, such as `OIDC_SCOPE`.
+Terraform sets the other two settings itself, with no variable. `AUTH_MODE` is always `oidc`, because dev mode refuses to start anywhere but localhost. `PUBLIC_BASE_URL` is the Portal's address, `https://portal.<domain>`, built from the Container Apps environment's default domain, which nobody knows before the first deploy. The deploy workflow fills each variable from the `azure-dev` environment's setting of the same name in capitals, such as `OIDC_SCOPE`.
 
-None of these values is a secret. They can live in plain Terraform variables, not in Key Vault.
+None of these values is a secret key, so none needs Key Vault. `first_operator` and `first_approvers` name people, so both variables are marked sensitive in `infra/envs/dev/variables.tf`.
 
 ## Check the setup
 

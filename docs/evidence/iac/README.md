@@ -86,6 +86,20 @@ Each one is written next to its code, with its reason, in the tool's own syntax:
 |---|---|---|
 | `keyvault-ensure-secret-expires` | Key Vault secrets | The same reason as CKV_AZURE_41. |
 
+### Added with the Cosmos DB account (P14, 31 Oct 2026)
+
+The deploy of the rebuilt app (P14) added `infra/modules/cosmos/` and accepted five more findings, written next to its code in the same way. With them, Checkov skips 19 checks in all and TFLint ignores 6 findings. The run that shows them is `docs/evidence/deploy/infra-checks/`: Checkov passed 7, failed 0 and skipped 19, and TFLint found 0 issues. [The deploy evidence](../deploy/README.md) lists them too.
+
+| Tool | Rule | Where | Why we accept it |
+|---|---|---|---|
+| Checkov | CKV_AZURE_140 | Cosmos DB account | Local auth stays on, because platform-api signs in with the account key today. The key is in Key Vault, and platform-api's identity already has the data role, so turning it off is a code change in platform-api plus one line in `modules/cosmos/main.tf`. |
+| Checkov | CKV_AZURE_99 | Cosmos DB account | No IP or network filter. Container Apps without a virtual network have no fixed outbound address. The key and the data roles are the control, as for Key Vault. |
+| Checkov | CKV_AZURE_101 | Cosmos DB account | Public network access stays on, for the same reason. A private endpoint comes with DevNet (ADR 0005). |
+| Checkov | CKV_AZURE_100 | Cosmos DB account | Microsoft-managed keys encrypt the data. A customer-managed key needs a Key Vault key and an identity for the account, for an account that holds only a copy of the activity log. |
+| TFLint | `azurerm_resources_missing_prevent_destroy` | Cosmos DB account, its `activity` database and its `run_events` container, one finding each | They hold only a copy. PostgreSQL keeps every event, and the copier fills a new account, so `terraform destroy` stays the way to stop spending credits. |
+
+One Checkov check passes that the account could have failed: CKV_AZURE_132, because the account key may not create or change databases and containers.
+
 ## What these checks do not cover
 
 - **Azure itself.** Nothing was planned against or applied to Azure. Region support for PostgreSQL 17, quotas, how long role assignments take to reach Key Vault, Key Vault references and `az acr import` are all untested. The infra README lists what to watch on the first deploy.
