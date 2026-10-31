@@ -1,9 +1,18 @@
+# HSTS only for https. Container Apps ends TLS and forwards plain http with X-Forwarded-Proto: https,
+# and local dev is plain http with no such header. Browsers ignore HSTS sent over plain http, so a
+# client that sets the header itself on local http changes nothing.
+map $http_x_forwarded_proto $portal_hsts {
+  default "";
+  https "max-age=31536000";
+}
+
 server {
   listen 8080;
   server_tokens off;
 
   root /usr/share/nginx/html;
 
+  # Every add_header sits here, at server level. A location with its own add_header would drop all of them.
   add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'${PORTAL_CSP_AUTH}; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
   add_header X-Content-Type-Options "nosniff" always;
   add_header Referrer-Policy "no-referrer" always;
@@ -11,6 +20,8 @@ server {
   add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=()" always;
   add_header Cross-Origin-Opener-Policy "same-origin" always;
   add_header Cross-Origin-Resource-Policy "same-origin" always;
+  # nginx leaves a header out when its value is empty, so plain http gets none.
+  add_header Strict-Transport-Security $portal_hsts always;
 
   location /api/ {
     # A variable makes nginx look the host up per request, so it starts when platform-api is down.

@@ -25,7 +25,38 @@ render() {
     sh -c '/docker-entrypoint.sh nginx -t >/tmp/entrypoint.log 2>&1 || { cat /tmp/entrypoint.log; exit 1; }; cat /etc/nginx/conf.d/default.conf'
 }
 
-served_lines() { grep -E 'Content-Security-Policy|"mode"' "$1"; }
+served_lines() { grep -E 'Content-Security-Policy|Strict-Transport-Security|max-age|"mode"' "$1"; }
+
+# Starts nginx with the real nginx.conf and prints each response's Strict-Transport-Security header.
+# Container Apps ends TLS and forwards plain http with X-Forwarded-Proto: https. Local dev sends no such header.
+hsts_headers() {
+  docker run --rm --pull never --name "$prefix-hsts" \
+    -v "$here/nginx.conf:/etc/nginx/nginx.conf:ro" \
+    -v "$here/default.conf.template:/etc/nginx/templates/default.conf.template:ro" \
+    -v "$here/16-portal-auth.envsh:/docker-entrypoint.d/16-portal-auth.envsh:ro" \
+    -e API_UPSTREAM=http://platform-api:8000 -e NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1 -e PORTAL_MODE=live \
+    "$image" \
+    sh -c '/docker-entrypoint.sh nginx >/tmp/entrypoint.log 2>&1 || { cat /tmp/entrypoint.log; exit 1; }
+      for path in / /config.json /healthz /assets/missing.js /api/health; do
+        for proto in none http https; do
+          if [ "$proto" = none ]; then set --; else set -- -H "X-Forwarded-Proto: $proto"; fi
+          hsts=$(curl -s -o /dev/null -D - "$@" "http://127.0.0.1:8080$path" | tr -d "\r" | sed -n "s/^[Ss]trict-[Tt]ransport-[Ss]ecurity: //p")
+          echo "hsts $path $proto ${hsts:-(none)}"
+        done
+      done'
+}
+
+expect_hsts() {
+  if ! hsts_headers >"$work/hsts.out" 2>&1; then
+    bad "nginx serves for the HSTS check:" && cat "$work/hsts.out"
+    return
+  fi
+  if grep '^hsts ' "$work/hsts.out" | diff - "$here/testdata/hsts.golden" >"$work/hsts.diff"; then
+    ok "HSTS is sent only when X-Forwarded-Proto is https, on every location"
+  else
+    bad "HSTS headers differ from the golden lines:" && cat "$work/hsts.diff"
+  fi
+}
 
 expect_golden() {
   name=$1
@@ -80,6 +111,7 @@ CLIENT='66666666-7777-8888-9999-000000000000'
 SCOPE='openid profile offline_access api://platform-api/.default'
 
 expect_golden live
+expect_hsts
 
 expect_oidc entra 'https://login.microsoftonline.com' \
   ",\"auth\":{\"authority\":\"$ENTRA\",\"client_id\":\"$CLIENT\",\"scope\":\"$SCOPE\"}" \
