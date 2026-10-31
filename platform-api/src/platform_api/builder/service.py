@@ -295,20 +295,18 @@ class Builder:
     ) -> UseCaseView | ScheduleOnSoftwarePage | None:
         """The same save as the watchlist's: the caller becomes the owner, which lifts a hold.
         Saving is not a write to Jira or Confluence, so it needs no approval."""
-        async with self._db.connection("builder") as conn:
-            row = await (
-                await conn.execute(
-                    "SELECT v.template FROM builder.use_cases u JOIN builder.use_case_versions v"
-                    " ON v.use_case_id = u.use_case_id AND v.version = u.current_version"
-                    " WHERE u.use_case_id = %s AND u.deleted_at IS NULL",
-                    (use_case_id,),
-                )
-            ).fetchone()
-        if row is None:
-            return None
-        if row["template"] == SOFTWARE_WATCHLIST.key:
-            return ScheduleOnSoftwarePage()
-        await self._schedules.save(UseCaseId(use_case_id), Schedule(body.day, body.at), principal)
+        async with self._db.transaction("builder") as uow:
+            # A delete holds this lock alone, so it waits until the schedule is stored, and a
+            # delete that came first is seen here. ScheduleBook.save takes no lock.
+            await hold_workflow(uow.conn, use_case_id, alone=False)
+            view = await self.get_use_case(use_case_id)
+            if view is None:
+                return None
+            if view.template == SOFTWARE_WATCHLIST.key:
+                return ScheduleOnSoftwarePage()
+            await self._schedules.save(
+                UseCaseId(use_case_id), Schedule(body.day, body.at), principal
+            )
         return await self.get_use_case(use_case_id)
 
     async def _move(self, use_case_id: str, move: Move) -> Moved | None:

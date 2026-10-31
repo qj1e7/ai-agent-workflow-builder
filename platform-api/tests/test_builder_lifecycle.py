@@ -1038,3 +1038,46 @@ async def test_a_schedule_must_be_a_day_and_a_five_minute_time_in_singapore(lab:
     use_case_id = await agent_workflow(lab)
     refused = await save_schedule(lab, "alice", use_case_id, body)
     assert refused.status_code == 422
+
+
+class HeldSave:
+    """Saves for real, but only once the test lets it. The builder has checked the workflow by
+    then, so a delete can try to land before the schedule is stored."""
+
+    def __init__(self, schedules: ScheduleBook) -> None:
+        self._schedules = schedules
+        self.reached = asyncio.Event()
+        self.go = asyncio.Event()
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._schedules, name)
+
+    async def save(self, use_case_id: UseCaseId, schedule: Schedule, owner: Any) -> None:
+        self.reached.set()
+        await self.go.wait()
+        await self._schedules.save(use_case_id, schedule, owner)
+
+
+async def test_a_delete_waits_for_a_schedule_save_that_has_checked_the_workflow(lab: Lab):
+    use_case_id = await agent_workflow(lab)
+    held = HeldSave(ScheduleBook(lab.h.db))
+    lab.app.state.builder = Builder(
+        lab.h.db,
+        lab.h.orchestrator,
+        lab.app.state.watchlist,
+        "http://localhost:8000",
+        ModelConnected(),
+        schedules=held,  # type: ignore[arg-type]
+    )
+    saving = asyncio.create_task(save_schedule(lab, "carol", use_case_id))
+    await asyncio.wait_for(held.reached.wait(), 5)
+
+    deleting = asyncio.create_task(lab.move("alice", "delete", use_case_id))
+    await asyncio.sleep(0.3)
+    assert not deleting.done(), "the delete landed between the check and the save"
+    held.go.set()
+
+    saved = await asyncio.wait_for(saving, 5)
+    deleted = await asyncio.wait_for(deleting, 5)
+    assert (saved.status_code, saved.json()["schedule"]["owner_name"]) == (200, "Carol")
+    assert deleted.status_code == 200
