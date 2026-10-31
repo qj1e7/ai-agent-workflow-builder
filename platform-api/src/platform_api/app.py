@@ -6,9 +6,11 @@ from contextlib import asynccontextmanager
 from typing import Literal
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from platform_api import auth, wiring
+from platform_api.body_guard import RefuseDeepJson, refuse_invalid_request
 from platform_api.builder import drafts_http, lifecycle_http, watchlist_http
 from platform_api.builder import http as builder_http
 from platform_api.db import Database
@@ -84,6 +86,8 @@ def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
     app.state.step_key = settings.step_key
     app.state.authenticator = auth.authenticator_for(settings.auth)
     app.add_middleware(RefuseNul)
+    app.add_middleware(RefuseDeepJson, max_bytes=settings.max_body_bytes)
+    app.add_exception_handler(RequestValidationError, refuse_invalid_request)
     app.state.people = auth.people_for(settings.auth)
     app.add_middleware(SecurityHeaders)
     app.include_router(builder_http.router)
