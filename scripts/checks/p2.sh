@@ -63,7 +63,7 @@ export_tree() {
 }
 
 pg_up() {
-  docker rm -f "$PG_NAME" >/dev/null 2>&1 || true
+  docker rm -fv "$PG_NAME" >/dev/null 2>&1 || true
   docker run -d --name "$PG_NAME" -e POSTGRES_PASSWORD=test -p "127.0.0.1:$PG_PORT:5432" "$PG_IMAGE" >/dev/null
   for _ in $(seq 1 60); do
     docker exec "$PG_NAME" pg_isready -U postgres >/dev/null 2>&1 && { echo "postgres up on $PG_PORT"; return 0; }
@@ -72,7 +72,7 @@ pg_up() {
   die "postgres did not become ready"
 }
 
-pg_down() { docker rm -f "$PG_NAME" >/dev/null 2>&1 || true; }
+pg_down() { docker rm -fv "$PG_NAME" >/dev/null 2>&1 || true; }
 
 gates() {
   local wt=$1 out="$EVID/gates" status=0
