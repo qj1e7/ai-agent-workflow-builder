@@ -3,7 +3,7 @@
 **Date.** 23 Oct 2026 (Singapore time).
 **Code.** Branch `infra/terraform-azure`, the code in `infra/`, `.github/workflows/infra.yml` and `.github/workflows/deploy.yml`.
 **Main command.** `infra/scripts/check.sh docs/evidence/iac`. The other commands are listed below.
-**Azure.** Nothing here contacted Azure. No check had Azure credentials, and `terraform init` skipped the state backend. Every tool ran in a Docker image pinned by digest.
+**Azure.** No check here contacted Azure. No check had Azure credentials, and `terraform init` skipped the state backend. Every tool ran in a Docker image pinned by digest. This was true when the checks ran. Since then, on 31 Oct 2026, the one-time setup and the deploy workflow have run against Azure. "What these checks do not cover" says what that changes.
 
 ## What ran
 
@@ -88,7 +88,7 @@ Each one is written next to its code, with its reason, in the tool's own syntax:
 
 ### Added with the Cosmos DB account (P14, 31 Oct 2026)
 
-The deploy of the rebuilt app (P14) added `infra/modules/cosmos/` and accepted five more findings, written next to its code in the same way. With them, Checkov skips 19 checks in all and TFLint ignores 6 findings. The run that shows them is `docs/evidence/deploy/infra-checks/`: Checkov passed 7, failed 0 and skipped 19, and TFLint found 0 issues. [The deploy evidence](../deploy/README.md) lists them too.
+These are offline checks too, like the rest of this page. The deploy of the rebuilt app (P14) added `infra/modules/cosmos/` and accepted five more findings, written next to its code in the same way. With them, Checkov skips 19 checks in all and TFLint ignores 6 findings. The run that shows them is `docs/evidence/deploy/infra-checks/`: Checkov passed 7, failed 0 and skipped 19, and TFLint found 0 issues. [The deploy evidence](../deploy/README.md) lists them too.
 
 | Tool | Rule | Where | Why we accept it |
 |---|---|---|---|
@@ -98,13 +98,13 @@ The deploy of the rebuilt app (P14) added `infra/modules/cosmos/` and accepted f
 | Checkov | CKV_AZURE_100 | Cosmos DB account | Microsoft-managed keys encrypt the data. A customer-managed key needs a Key Vault key and an identity for the account, for an account that holds only a copy of the activity log. |
 | TFLint | `azurerm_resources_missing_prevent_destroy` | Cosmos DB account, its `activity` database and its `run_events` container, one finding each | They hold only a copy. PostgreSQL keeps every event, and the copier fills a new account, so `terraform destroy` stays the way to stop spending credits. |
 
-One Checkov check passes that the account could have failed: CKV_AZURE_132, because the account key may not create or change databases and containers.
+One Checkov check passes that the account could have failed: CKV_AZURE_132, because the account key may not create or change databases and containers (`access_key_metadata_writes_enabled = false`, `infra/modules/cosmos/main.tf:27`).
 
 ## What these checks do not cover
 
-- **Azure itself.** Nothing was planned against or applied to Azure. Region support for PostgreSQL 17, quotas, how long role assignments take to reach Key Vault, Key Vault references and `az acr import` are all untested. The infra README lists what to watch on the first deploy.
-- **The one-time setup.** `infra/bootstrap/setup-azure.sh` has never run. Its role condition follows Microsoft's "Constrain ACR management" example character for character, with our four roles, but Azure has not checked it.
-- **The deploy workflow.** It has never run.
+- **Azure itself.** These checks planned nothing against Azure and applied nothing. The deploy workflow did, after they ran, on 31 Oct 2026. Run 41158792708 stopped at the Azure sign-in. Run 41158886844 applied Terraform until Azure refused to create the Cosmos DB account in East Asia, because of high demand there. The next deploy is set to put that account in koreacentral (`COSMOS_LOCATION`). The infra README lists what to watch on a deploy. What the deploys show about regions, quotas, role assignments, Key Vault references and `az acr import` belongs with the deploy, not with these checks.
+- **The one-time setup.** These checks did not run `infra/bootstrap/setup-azure.sh`. It ran on 31 Oct 2026, and every step finished, including the role assignment with the condition that follows Microsoft's "Constrain ACR management" example.
+- **The deploy workflow.** These checks did not run it. Its first runs, on 31 Oct 2026, are described under "Azure itself" above.
 - **Sign-in on Azure.** Row 12 shows the Portal starts with Terraform's settings. Signing in through Entra ID on Azure is not tested.
 
 ## Run the checks again
