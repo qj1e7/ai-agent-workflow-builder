@@ -40,6 +40,12 @@ class FirstPeople:
     approvers: tuple[str, str]
 
 
+MAX_BODY_BYTES_DEFAULT = 2 * 1024 * 1024
+"""The largest request body the API reads, unless MAX_BODY_BYTES says otherwise. The largest
+real body is a New workflow draft. Its content may be 32 KB (DRAFT_LIMIT_BYTES), which is about
+100 KB as JSON even with every character escaped, so 2 MiB leaves about 20 times that."""
+
+
 @dataclass(frozen=True)
 class Settings:
     auth: AuthConfig
@@ -56,6 +62,7 @@ class Settings:
     first_people: FirstPeople | None = None
     activity_reader: ActivityReader = "postgres"
     cosmos: CosmosSettings | None = None
+    max_body_bytes: int = MAX_BODY_BYTES_DEFAULT
 
 
 def _required(env: Mapping[str, str], name: str) -> str:
@@ -113,6 +120,19 @@ def activity_reader_from_env(
             raise ConfigError(f"ACTIVITY_READER takes postgres or cosmos, not {other!r}.")
 
 
+def max_body_bytes_from_env(env: Mapping[str, str]) -> int:
+    raw = env.get("MAX_BODY_BYTES", "").strip()
+    if not raw:
+        return MAX_BODY_BYTES_DEFAULT
+    try:
+        value = int(raw)
+    except ValueError:
+        value = 0
+    if value <= 0:
+        raise ConfigError(f"MAX_BODY_BYTES takes a whole number of bytes above 0, not {raw!r}.")
+    return value
+
+
 def settings_from_env(env: Mapping[str, str]) -> Settings:
     auth = auth_config(env)
     cosmos = cosmos_from_env(env)
@@ -135,6 +155,7 @@ def settings_from_env(env: Mapping[str, str]) -> Settings:
         settings_encryption_key=env.get("SETTINGS_ENCRYPTION_KEY") or None,
         activity_reader=activity_reader_from_env(env, cosmos),
         cosmos=cosmos,
+        max_body_bytes=max_body_bytes_from_env(env),
     )
 
 

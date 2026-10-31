@@ -106,6 +106,7 @@ async def hold_workflow(conn: Connection, use_case_id: str, *, alone: bool) -> N
     start that has read the state, and a start waits for it, then reads the new state.
 
     Take it once per start, on one connection. A second request for it on another connection
-    queues behind a pause that is already waiting, and neither ever moves."""
+    queues behind a pause that is already waiting, and neither ever moves. It works only because
+    every context's database URL names the same PostgreSQL database, so they share its locks."""
     take = "pg_advisory_xact_lock" if alone else "pg_advisory_xact_lock_shared"
     await conn.execute(f"SELECT {take}(%s)", (workflow_lock_key(use_case_id),))

@@ -1,8 +1,9 @@
 """Keeps a request body the API can't read safely from turning into a 500 (#60).
 
 A body nested far deeper than any real request overflows the stack of the code that walks it,
-so it is refused before a route reads it, as is a body that is not Unicode text. A 422 never
-echoes text that can't be written back out as UTF-8, such as a lone surrogate escape.
+so it is refused before a route reads it, as is a body that is not Unicode text. A body larger
+than the API takes is refused before it is held in memory. A 422 never echoes text that can't be
+written back out as UTF-8, such as a lone surrogate escape.
 """
 
 import json
@@ -20,6 +21,7 @@ MAX_DEPTH = 64
 """The deepest a body may nest. Real bodies nest fewer than ten levels."""
 TOO_DEEP_MESSAGE = f"This body nests more than {MAX_DEPTH} levels deep, which can't be read."
 NOT_TEXT_MESSAGE = "This body is not UTF-8, UTF-16 or UTF-32 text, so it can't be read."
+TOO_LARGE_MESSAGE = "This body is larger than %d bytes, the most the API takes."
 
 # A JSON string, a bracket, or a quote the scan can't close. Strings are skipped whole, so a
 # bracket inside one is not counted. Possessive, so each string is scanned once.
@@ -63,17 +65,42 @@ def _refusal(kind: str, message: str) -> JSONResponse:
     return JSONResponse({"detail": [{"type": kind, "loc": ["body"], "msg": message}]}, 422)
 
 
+def _too_large(max_bytes: int) -> JSONResponse:
+    return JSONResponse({"detail": TOO_LARGE_MESSAGE % max_bytes}, 413)
+
+
+def _declared_length(scope: Scope) -> int | None:
+    for name, value in scope["headers"]:
+        if name == b"content-length":
+            try:
+                return int(value)
+            except ValueError:
+                return None
+    return None
+
+
 class RefuseDeepJson:
     """Reads a request body whole and refuses it with a 422 if it is not Unicode text or nests
     too deep. Otherwise it hands the same bytes on. It checks every body, whatever its
     Content-Type, so it never has to guess which ones FastAPI will parse as JSON. FastAPI reads
-    the whole body before a route runs, so nothing streams."""
+    the whole body before a route runs, so nothing streams.
 
-    def __init__(self, app: ASGIApp) -> None:
+    A body over max_bytes answers 413 before sign-in: at once when its Content-Length says so,
+    and otherwise as soon as the bytes read pass the cap. Nothing past the cap is read."""
+
+    def __init__(self, app: ASGIApp, max_bytes: int) -> None:
         self.app = app
+        self.max_bytes = max_bytes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or scope["method"] in NO_BODY:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        declared = _declared_length(scope)
+        if declared is not None and declared > self.max_bytes:
+            await _too_large(self.max_bytes)(scope, receive, send)
+            return
+        if scope["method"] in NO_BODY:
             await self.app(scope, receive, send)
             return
         messages: list[Message] = []
@@ -84,6 +111,9 @@ class RefuseDeepJson:
             if message["type"] != "http.request":
                 break
             body += message.get("body", b"")
+            if len(body) > self.max_bytes:
+                await _too_large(self.max_bytes)(scope, receive, send)
+                return
             if not message.get("more_body", False):
                 break
         if body:

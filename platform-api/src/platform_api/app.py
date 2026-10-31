@@ -86,7 +86,7 @@ def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
     app.state.step_key = settings.step_key
     app.state.authenticator = auth.authenticator_for(settings.auth)
     app.add_middleware(RefuseNul)
-    app.add_middleware(RefuseDeepJson)
+    app.add_middleware(RefuseDeepJson, max_bytes=settings.max_body_bytes)
     app.add_exception_handler(RequestValidationError, refuse_invalid_request)
     app.state.people = auth.people_for(settings.auth)
     app.add_middleware(SecurityHeaders)

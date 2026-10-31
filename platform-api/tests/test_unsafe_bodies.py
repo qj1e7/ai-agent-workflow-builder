@@ -5,18 +5,28 @@ the stack of any code that walks it. Neither may reach a route, and the 422 neve
 """
 
 import re
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
 import httpx
 import pytest
+from starlette.responses import JSONResponse
+from starlette.types import Message, Receive, Scope, Send
 
 from platform_api.app import create_app
-from platform_api.body_guard import NO_BODY, as_json_reads_it, nests_deeper_than
+from platform_api.auth import ConfigError
+from platform_api.body_guard import (
+    NO_BODY,
+    TOO_LARGE_MESSAGE,
+    RefuseDeepJson,
+    as_json_reads_it,
+    nests_deeper_than,
+)
 from platform_api.builder import Builder, Watchlist
 from platform_api.builder.cards import VERSION_CHECKER_ID
 from platform_api.db import Database
 from platform_api.orchestration import ScheduleBook
+from platform_api.settings import settings_from_env
 from platform_api.wire import BROKEN_TEXT_MESSAGE
 from tests.declared import ALICE, STEP_KEY, app_with
 from tests.support import LOCAL_ENV
@@ -294,3 +304,94 @@ async def test_an_emoji_sent_as_a_surrogate_pair_still_saves(saving: httpx.Async
     assert response.status_code == 201, response.text
     [saved] = (await saving.get("/api/v1/use-cases", headers=ALICE)).json()["use_cases"]
     assert saved["name"] == "Watch \U0001f600"
+
+
+# A body over the cap is refused before it is held in memory. The cap is small in these tests.
+CAP = 1024
+
+
+async def capped(
+    headers: list[tuple[bytes, bytes]], chunks: Iterator[bytes], method: str = "POST"
+) -> tuple[int, int, bool]:
+    """Sends chunks to the guard around a stand-in app. Answers the status, how many chunks the
+    guard read, and whether the request reached the app."""
+    read = 0
+    reached = False
+    sent: list[Message] = []
+
+    async def app(scope: Scope, receive: Receive, send: Send) -> None:
+        nonlocal reached
+        reached = True
+        while (await receive()).get("more_body", False):
+            pass
+        await JSONResponse({}, 200)(scope, receive, send)
+
+    async def receive() -> Message:
+        nonlocal read
+        chunk = next(chunks, None)
+        if chunk is None:
+            return {"type": "http.disconnect"}
+        read += 1
+        return {"type": "http.request", "body": chunk, "more_body": True}
+
+    async def send(message: Message) -> None:
+        sent.append(message)
+
+    scope = {"type": "http", "method": method, "path": "/api/v1/use-cases/x/pause"}
+    await RefuseDeepJson(app, max_bytes=CAP)({**scope, "headers": headers}, receive, send)
+    return sent[0]["status"], read, reached
+
+
+async def test_a_body_whose_content_length_is_over_the_cap_is_refused_unread():
+    status, read, reached = await capped(
+        [(b"content-length", str(500 * 1024 * 1024).encode())], iter([b"x" * 512] * 10**6)
+    )
+    assert (status, read, reached) == (413, 0, False)
+
+
+async def test_a_body_that_streams_past_the_cap_is_refused_once_it_passes():
+    status, read, reached = await capped([], iter([b"x" * 512] * 10**6))
+    assert (status, read, reached) == (413, CAP // 512 + 1, False)
+
+
+@pytest.fixture
+async def small_cap() -> AsyncIterator[httpx.AsyncClient]:
+    app = app_with(env={"MAX_BODY_BYTES": str(CAP)})
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        yield c
+
+
+def padded(size: int) -> bytes:
+    body = b'{"task":7}'
+    return body + b" " * (size - len(body))
+
+
+async def test_a_body_at_the_cap_still_reaches_validation(small_cap: httpx.AsyncClient):
+    response = await small_cap.post("/api/v1/builder/plan", content=padded(CAP), headers=HEADERS)
+    assert response.status_code == 422, response.text
+    [problem] = response.json()["detail"]
+    assert (problem["type"], problem["loc"]) == ("string_type", ["body", "task"])
+
+
+async def test_a_body_one_byte_over_the_cap_answers_413(small_cap: httpx.AsyncClient):
+    response = await small_cap.post(
+        "/api/v1/builder/plan", content=padded(CAP + 1), headers=HEADERS
+    )
+    assert (response.status_code, response.json()) == (413, {"detail": TOO_LARGE_MESSAGE % CAP})
+
+
+async def test_a_body_over_the_cap_is_refused_before_sign_in(small_cap: httpx.AsyncClient):
+    response = await small_cap.post("/api/v1/use-cases/x/pause", content=b"x" * (CAP + 1))
+    assert response.status_code == 413
+
+
+def test_the_cap_is_two_mebibytes_unless_max_body_bytes_says_otherwise():
+    assert settings_from_env(LOCAL_ENV).max_body_bytes == 2 * 1024 * 1024
+    assert settings_from_env({**LOCAL_ENV, "MAX_BODY_BYTES": "4096"}).max_body_bytes == 4096
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "lots", "1.5"])
+def test_max_body_bytes_must_be_a_whole_number_above_zero(value: str):
+    with pytest.raises(ConfigError, match="MAX_BODY_BYTES"):
+        settings_from_env({**LOCAL_ENV, "MAX_BODY_BYTES": value})
