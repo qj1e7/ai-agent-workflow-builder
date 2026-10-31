@@ -3,7 +3,7 @@ import { DRAFT_STEPS } from '../../api/drafts'
 import { connectorLabel, starterName } from '../../api/labels'
 import type { ApprovalItem, ConfirmationItem, DraftItem, HomeOut, StoppedItem, WaitingItem } from '../../api/types'
 import { count, withCurrentNames } from '../run/words'
-import { lineWhen, runWhen, workflowPath } from '../workflows/workflow'
+import { lineWhen, nextRunAt, runWhen, workflowPath } from '../workflows/workflow'
 
 export const NEEDS_SHOWN = 10
 
@@ -197,7 +197,7 @@ export interface Next {
 export function comingUpOf(home: HomeOut, now: Date): Next | null {
   const next = home.coming_up
   if (!next) return null
-  return { name: next.name, to: workflowPath(next), when: runWhen(next.next_run_at, now), more: next.more }
+  return { name: next.name, to: workflowPath(next), when: nextRunAt(next.next_run_at, now, next.time_zone), more: next.more }
 }
 
 export const HOW_IT_WORKS: readonly (readonly [string, string])[] = [

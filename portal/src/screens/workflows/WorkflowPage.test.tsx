@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import agentUseCase from '../../../../contracts/fixtures/cards/use-case.json'
 import watchlistUseCase from '../../../../contracts/fixtures/builder/use-case.json'
 import failed from '../../../../contracts/fixtures/views/failure.final.json'
@@ -11,6 +11,7 @@ import { ApiError } from '../../api/client'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
 import type { Me, RunView, UseCaseView } from '../../api/types'
+import { formatterFactory } from './workflow'
 import { ScheduleChangePanel, WHO_APPROVES } from './WorkflowPage'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
@@ -89,6 +90,38 @@ describe('a workflow page', () => {
     const html = render({ useCase: { ...AGENTS, next_run_at: '2026-11-09T01:00:00Z', schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice' } } })
     expect(whenOf(html)).toBe('Every Monday at 9:00 Singapore time (SGT).')
     expect(factOf(html, 'Next run')).toBe('Mon 9 Nov, 9:00')
+  })
+
+  it('for a London schedule, gives the next run in London time and says so, under When, in Next run and in Recent runs', () => {
+    const london: UseCaseView = { ...AGENTS, next_run_at: '2026-11-04T09:00:00Z', schedule: { day: 'every_day', at: '09:00', time_zone: 'Europe/London', owner_name: 'Alice' } }
+    const html = render({ useCase: london })
+    expect(whenOf(html)).toBe('Every day at 9:00 London time.')
+    expect(factOf(html, 'Next run')).toBe('Today, 9:00 London time')
+    expect(text(mainOf(html))).toContain('No runs yet. The first one is Today, 9:00 London time.')
+  })
+
+  it('for a London schedule, keeps each run’s start in Singapore time, as every time without a zone named is', () => {
+    const london: UseCaseView = { ...AGENTS, next_run_at: '2026-11-04T09:00:00Z', schedule: { day: 'every_day', at: '09:00', time_zone: 'Europe/London', owner_name: 'Alice' } }
+    const ran = { ...(done as RunView), use_case_id: london.use_case_id, started_at: '2026-11-03T09:00:00Z' }
+    const html = render({ useCase: london, runs: [ran] })
+    expect(factOf(html, 'Next run')).toBe('Today, 9:00 London time')
+    expect(text(mainOf(html))).toContain('Tue 3 Nov, 17:00 Done.')
+  })
+
+  it('for a zone the browser cannot read, names it from its id and gives the next run in Singapore time, saying so', () => {
+    const build = formatterFactory.build
+    const spy = vi.spyOn(formatterFactory, 'build').mockImplementation((zone) => {
+      if (zone === 'Europe/Kyiv') throw new RangeError(`Invalid time zone specified: ${zone}`)
+      return build(zone)
+    })
+    try {
+      const html = render({ useCase: { ...AGENTS, next_run_at: '2026-11-04T07:00:00Z', schedule: { day: 'every_day', at: '09:00', time_zone: 'Europe/Kyiv', owner_name: 'Alice' } } })
+      expect(whenOf(html)).toBe('Every day at 9:00 Kyiv time.')
+      expect(factOf(html, 'Next run')).toBe('Today, 15:00 Singapore time')
+      expect(text(mainOf(html))).toContain('The first one is Today, 15:00 Singapore time.')
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   it('while paused, keeps its schedule in When and says Paused only in Next run', () => {

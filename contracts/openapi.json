@@ -2139,6 +2139,11 @@
             "title": "Template",
             "type": "string"
           },
+          "time_zone": {
+            "description": "The time zone of its schedule, as on the workflow, so every page shows the next run at the same hour.",
+            "title": "Time Zone",
+            "type": "string"
+          },
           "use_case_id": {
             "title": "Use Case Id",
             "type": "string"
@@ -2149,6 +2154,7 @@
           "name",
           "template",
           "next_run_at",
+          "time_zone",
           "more"
         ],
         "title": "ComingUp",

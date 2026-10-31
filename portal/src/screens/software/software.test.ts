@@ -1,5 +1,5 @@
 import statuses from '@contracts/fixtures/watchlist/statuses.json'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../api/client'
 import type { ScheduleView, WatchedSoftwareView } from '../../api/types'
 import {
@@ -27,6 +27,7 @@ import {
   statusLabel,
   versionSourceWords,
 } from './software'
+import { formatterFactory, nextRunWords } from '../workflows/workflow'
 
 const ROWS = statuses.software as WatchedSoftwareView[]
 const SCHEDULE = statuses.schedule as ScheduleView
@@ -204,8 +205,35 @@ describe('the schedule', () => {
   it('shows the next check in Singapore time and names the owner', () => {
     expect(singaporeTime('2026-11-23T09:00:00+08:00')).toBe('Mon 23 Nov, 9:00')
     expect(singaporeTime('2026-11-23T01:00:00Z')).toBe('Mon 23 Nov, 9:00')
+    expect(singaporeTime('2026-11-01T16:30:00Z'), 'the midnight hour keeps its 0').toBe('Mon 2 Nov, 0:30')
+    expect(singaporeTime('not a time')).toBe('')
     expect(scheduleWords(SCHEDULE)).toBe('Checked every Monday at 9:00, set by Alice.')
     expect(scheduleOwnerWords(SCHEDULE)).toBe('Scheduled checks count as Alice’s work, so Alice can’t approve them.')
+  })
+
+  it('for a London schedule, names London after its time and gives the next check in London, as the watchlist’s row on the Workflows list does', () => {
+    const london: ScheduleView = { ...SCHEDULE, time_zone: 'Europe/London', next_at: '2026-11-23T09:00:00Z' }
+    expect(scheduleWords(london)).toBe('Checked every Monday at 9:00 London time, set by Alice.')
+    expect(nextCheckWords(london, false)).toBe('Next check Mon 23 Nov, 9:00, London time.')
+    const row = { state: 'on' as const, next_run_at: london.next_at, schedule: { day: london.day, at: london.at, time_zone: london.time_zone, owner_name: london.owner_name } }
+    expect(nextRunWords(row, new Date('2026-11-04T15:00:00+08:00'))).toBe('Mon 23 Nov, 9:00 London time')
+  })
+
+  it('for a zone the browser cannot read, names it from its id and gives the next check in Singapore time, saying so', () => {
+    const build = formatterFactory.build
+    const spy = vi.spyOn(formatterFactory, 'build').mockImplementation((zone) => {
+      if (zone === 'Europe/Kyiv') throw new RangeError(`Invalid time zone specified: ${zone}`)
+      return build(zone)
+    })
+    try {
+      for (const [time_zone, name] of [['Europe/Kyiv', 'Kyiv'], ['Factory', 'Factory']] as const) {
+        const schedule: ScheduleView = { ...SCHEDULE, time_zone, next_at: '2026-11-23T09:00:00Z' }
+        expect(scheduleWords(schedule)).toBe(`Checked every Monday at 9:00 ${name} time, set by Alice.`)
+        expect(nextCheckWords(schedule, false)).toBe('Next check Mon 23 Nov, 17:00, Singapore time.')
+      }
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   it('says why a held schedule is not running, and paused wins over held', () => {
