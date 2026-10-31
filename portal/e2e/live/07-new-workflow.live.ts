@@ -127,6 +127,30 @@ test('a task that posts in Teams marks that part can’t do yet, says why, and o
   await context.close()
 })
 
+test('a part the Planner could do, once changed or filled in, goes back to the Planner, so a Teams post is marked can’t do', async ({ browser }) => {
+  const context = await devContext(browser, 'alice')
+  const changed = await context.newPage()
+  await changed.goto('/new')
+  await planIt(changed, FOLLOW_UP)
+  const where = rowOf(changed, 'Where it goes')
+  await expect(where).toContainText('from your words')
+  await fixRow(changed, 'Where it goes', 'Post it in the team’s Teams channel')
+  await expect(where).toContainText('can’t do this yet')
+  await expect(where).toContainText('post it in the team’s Teams channel yet')
+  await expect(nextButton(changed)).toHaveAttribute('aria-disabled', 'true')
+
+  const filled = await context.newPage()
+  await filled.goto('/new')
+  await planIt(filled, 'Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days')
+  const does = rowOf(filled, 'Does')
+  await expect(does).toContainText('please fill in')
+  await fixRow(filled, 'Does', 'Post a summary of them in the Teams channel')
+  await expect(does).toContainText('can’t do this yet')
+  await expect(does).toContainText('post a summary of them in the Teams channel yet')
+  await expect(nextButton(filled)).toHaveAttribute('aria-disabled', 'true')
+  await context.close()
+})
+
 test('a saved draft shows on Home and opens at the step it was saved at', async ({ browser }) => {
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()

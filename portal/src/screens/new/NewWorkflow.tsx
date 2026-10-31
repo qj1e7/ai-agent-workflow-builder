@@ -7,7 +7,7 @@ import { newIdempotencyKey } from '../../api/idempotency'
 import { useLatch } from '../../api/latch'
 import { isOperator } from '../../api/me'
 import { refusedWords, useDeleteDraft, useDrafts, usePlanFor, useReadAgentCards, useSaveDraft, useUnderstand } from '../../api/newQueries'
-import { useCreateAgentUseCase, useMe, useSaveCard } from '../../api/queries'
+import { useAgentCards, useCreateAgentUseCase, useMe, useSaveCard } from '../../api/queries'
 import { PRODUCT } from '../../shell/product'
 import { Button } from '../../ui/Button'
 import {
@@ -15,16 +15,17 @@ import {
   afterReading,
   carryOn,
   changeRow,
+  checkOf,
   defaultName,
   draftContent,
   dropRow,
   EMPTY_FORM,
   enterWhen,
   nameProblem,
-  partWords,
   taskWithoutSchedule,
   planView,
   restoreDraft,
+  reusedAgents,
   rowBlockers,
   savedCopyOf,
   STEP_NAMES,
@@ -33,6 +34,7 @@ import {
   whenProblems,
   type Form,
   type Planned,
+  type Row,
   type Step,
   type WhenField,
 } from './draft'
@@ -127,6 +129,7 @@ function NewWorkflow({ page, draftId, start }: { page: PageWords; draftId: strin
   const saveCard = useSaveCard()
   const readCards = useReadAgentCards()
   const me = useMe()
+  const library = useAgentCards()
   const create = useCreateAgentUseCase()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -140,6 +143,7 @@ function NewWorkflow({ page, draftId, start }: { page: PageWords; draftId: strin
   const planned = start.plan?.task === task ? start.plan.answer : undefined
   const plan = usePlanFor(task, rowsReady, planned)
   const view = plan.data ? planView(plan.data, form.rows) : null
+  const reused = reusedAgents(view, library.data, me.data?.id)
 
   useEffect(() => {
     if (!understand.isPending) return
@@ -156,7 +160,7 @@ function NewWorkflow({ page, draftId, start }: { page: PageWords; draftId: strin
     }
     setBeat(1)
     latch.run((settled) =>
-      understand.mutate(form.text.trim(), {
+      understand.mutate({ text: form.text.trim() }, {
         onSuccess: (answer) => setForm((before) => afterReading({ ...before, plannerSaid: null }, answer)),
         onError: (error) => setForm((before) => ({ ...before, plannerSaid: words(error) })),
         onSettled: settled,
@@ -164,15 +168,27 @@ function NewWorkflow({ page, draftId, start }: { page: PageWords; draftId: strin
     )
   }
 
+  const checkPart = (asked: Form, part: Row) => {
+    check.mutateAsync(checkOf(asked, part)).then(
+      (answer) => setForm((before) => afterChecking(before, part, answer)),
+      () => setForm((before) => afterChecking(before, part, null)),
+    )
+  }
+
+  const reopened = useRef(false)
+  useEffect(() => {
+    if (reopened.current) return
+    reopened.current = true
+    for (const part of start.form.rows) if (part.state === 'checking') checkPart(start.form, part)
+    // Only the parts a reopened draft sends back are checked here, once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const changePart = (index: number, text: string) => {
     const next = changeRow(form, index, text)
     setForm(next)
     const part = next.rows[index]
-    if (part?.state !== 'checking') return
-    check.mutateAsync(partWords(part)).then(
-      (answer) => setForm((before) => afterChecking(before, part, answer)),
-      () => setForm((before) => afterChecking(before, part, null)),
-    )
+    if (part?.state === 'checking') checkPart(next, part)
   }
 
   const toWhen = () => setForm((before) => enterWhen({ ...before, step: 3 }))
@@ -263,6 +279,7 @@ function NewWorkflow({ page, draftId, start }: { page: PageWords; draftId: strin
             pending: plan.isFetching,
             error: plan.isError ? words(plan.error) : null,
             retry: () => void plan.refetch(),
+            reused,
           }}
           onChangeRow={changePart}
           onDropRow={(index) => setForm((before) => dropRow(before, index))}
@@ -290,6 +307,7 @@ function NewWorkflow({ page, draftId, start }: { page: PageWords; draftId: strin
         <StepReview
           form={form}
           plan={view}
+          reused={reused}
           nameProblem={nameError}
           busy={saveCard.isPending || create.isPending}
           problems={refused}

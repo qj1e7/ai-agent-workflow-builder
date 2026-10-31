@@ -288,9 +288,13 @@ class FakeReader:
     answer: UnderstandResult | NoModel | RuntimeDown = field(default_factory=lambda: ROWS)
     wait: float = 0.0
     asked: list[str] = field(default_factory=lambda: [])
+    carried: list[bool] = field(default_factory=lambda: [])
 
-    async def understand(self, task: str) -> UnderstandResult | NoModel | RuntimeDown:
+    async def understand(
+        self, task: str, carried_on: bool = False
+    ) -> UnderstandResult | NoModel | RuntimeDown:
         self.asked.append(task)
+        self.carried.append(carried_on)
         await asyncio.sleep(self.wait)
         return self.answer
 
@@ -351,7 +355,9 @@ async def test_an_answer_slower_than_the_limit_shows_the_starters_in_time(
 
 
 class SettingsUnreadable:
-    async def understand(self, task: str) -> UnderstandResult | NoModel | RuntimeDown:
+    async def understand(
+        self, task: str, carried_on: bool = False
+    ) -> UnderstandResult | NoModel | RuntimeDown:
         raise ConnectionError("the database is down")
 
 
@@ -371,3 +377,10 @@ def test_the_starters_are_the_prototypes_three_phrased_with_the_jira_tools_we_ha
     for starter in STARTERS[1:]:
         assert starter.task and "MOCK" in starter.task and "ticket" in starter.task
         assert not any(word in starter.task for word in ("Teams", "Confluence", "email"))
+
+
+async def test_the_reader_is_told_when_the_operator_chose_a_new_workflow_over_the_watchlist():
+    reader = FakeReader()
+    await understand(reader, "Looks for: New LangGraph releases", carried_on=True)
+    await understand(reader, "the task")
+    assert reader.carried == [True, False]

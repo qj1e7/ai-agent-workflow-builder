@@ -185,7 +185,9 @@ class ModelConnected:
     async def draft(self, task: str) -> DraftResult | NoModel | RuntimeDown:
         raise AssertionError("not asked")
 
-    async def understand(self, task: str) -> UnderstandResult | NoModel | RuntimeDown:
+    async def understand(
+        self, task: str, carried_on: bool = False
+    ) -> UnderstandResult | NoModel | RuntimeDown:
         raise AssertionError("not asked")
 
 

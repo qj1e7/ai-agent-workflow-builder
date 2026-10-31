@@ -142,6 +142,10 @@ WHERE_WORDS: Final = words(
 )
 NOT_KEYS: Final = words("AD AWS GCP SSO MFA VPN PR PRS MR CI CD API URL SMS CSV PDF HR OK")
 PLACING: Final = words("put go")
+PLACE_ADVERBS: Final = words("somewhere anywhere everywhere elsewhere wherever here there")
+PLACING_FORMS: Final = words("put puts putting go goes going went gone")
+SUBJECTS: Final = words("i we you")
+WANTING: Final = words("want wants need needs would like prefer")
 
 STRONG: Final = words("then also afterwards afterward finally additionally")
 SOFT: Final = words("and or plus but next later before after while & + , ; : . ! ? ( )")
@@ -347,7 +351,9 @@ def _cant_phrase(clause: Clause, reader: _Reader) -> str:
     titled = first.raw[1:] == first.raw[1:].lower()
     if found is not None:
         shown = found[0]
-    elif first.system is None and first.capital and titled and first.starts:
+    elif first.low in CAUSATIVES or (
+        first.system is None and first.capital and titled and first.starts and first.raw != "I"
+    ):
         shown = first.low
     else:
         shown = first.raw
@@ -439,6 +445,8 @@ def _jira_place_word(word: _Word, before: _Word | None, after: _Word | None) -> 
 
 
 def _jira_place(phrase: Clause) -> bool:
+    if not phrase:
+        return False
     beside = zip((None, *phrase[:-1]), phrase, (*phrase[1:], None), strict=True)
     return (
         all(_jira_place_word(word, before, after) for before, word, after in beside)
@@ -482,6 +490,8 @@ def _fits(ability: Ability, thing: Clause, phrases: Phrases) -> bool:
     if not reads:
         return False
     for at, (prep, phrase) in enumerate(phrases):
+        if not phrase:
+            continue
         strict = at == 0 and prep in TO_PLACE and ability.makes is not None
         if strict and not _is_place(phrase, ability.reaches):
             return False
@@ -609,18 +619,77 @@ def _look_for_row(row: Clause, reader: _Reader) -> str | None:
     return next((what for c in later if (what := _do(c, reader))), None)
 
 
+def _says_an_action(word: _Word, reader: _Reader) -> bool:
+    found = reader.verb(word)
+    named = found is not None and found[1] != "s" and not word.proper
+    return named or word.bare in CAUSATIVES | PLACING_FORMS
+
+
+def _places_it(word: _Word, reader: _Reader) -> bool:
+    found = reader.verb(word)
+    return word.bare in PLACING_FORMS or (found is not None and found[1] == "ed")
+
+
+def _lead_in(part: Clause, reader: _Reader) -> Clause:
+    """The part without the words before what it names: "then", "let's", "I want it", and a
+    placing verb or a past form just before a place, as in "it goes to Slack" or "posted in
+    Teams"."""
+    at = 0
+    while at < len(part) and (part[at].mark or part[at].low in (FILLER - TO_PLACE) | {"let's"}):
+        at += 1
+    if at < len(part) and part[at].low in SUBJECTS:
+        at += 1
+        wants = at
+        while at < len(part) and part[at].low in WANTING:
+            at += 1
+        while wants < at < len(part) and part[at].low in PRONOUNS:
+            at += 1
+    verb = at
+    while verb < len(part) and part[verb].low in PRONOUNS:
+        verb += 1
+    if verb < len(part) and _places_it(part[verb], reader):
+        after = verb + 1
+        while after < len(part) and part[after].low in PRONOUNS:
+            after += 1
+        if after < len(part) and part[after].low in TO_PLACE | IN_PLACE:
+            at = after
+    return part[at:]
+
+
+def _not_a_place(part: Clause, reader: _Reader) -> str | None:
+    """What the note says for one part of where it goes that is not a place the platform
+    reaches: the action itself when the part says one, so the sentence never reads "put results
+    in let the team know". None when the part names nothing, such as "then" or "in the"."""
+    lead = _lead_in(part, reader)
+    if all(word.mark or word.low in DETERMINERS | PREPS for word in lead):
+        return None
+    first, rest = lead[0], lead[1:]
+    if first.low in TO_PLACE | IN_PLACE:
+        verb = "send results to" if first.low == "to" else "put results in"
+        return f"{verb} {_cant_phrase(rest, reader)}"
+    if _says_an_action(first, reader):
+        return _cant_phrase(lead, reader)
+    if first.low in PLACE_ADVERBS:
+        return f"put results {_cant_phrase(lead, reader)}"
+    return f"put results in {_cant_phrase(lead, reader)}"
+
+
 def _where_row(row: Clause, reader: _Reader) -> str | None:
     at = _action_at(row)
     if at is None:
         return None
+    verb_at: int | None = None
     found = reader.verb(row[at])
     if found is not None and found[1] != "ed":
         able = {verb for ability in reader.abilities for verb in ability.verbs}
         if found[0] not in able | PLACING:
             return _cant_phrase(row[at:], reader)
+        verb_at = at
         at += 1
         while at < len(row) and row[at].low in PRONOUNS:
             at += 1
+    elif at and row[at - 1].low in TO_PLACE:
+        at -= 1
     places = frozenset(
         place
         for ability in reader.abilities
@@ -633,10 +702,15 @@ def _where_row(row: Clause, reader: _Reader) -> str | None:
             parts.append([])
         else:
             parts[-1].append(word)
-    for part in (tuple(p) for p in parts if p):
-        if not _is_place(part, places):
-            lead = part[1:] if len(part) > 1 and part[0].low in TO_PLACE | IN_PLACE else part
-            return f"put results in {_cant_phrase(lead, reader)}"
+    for number, words_of_part in enumerate(parts):
+        part = tuple(words_of_part)
+        if not part or _is_place(part, places):
+            continue
+        if number == 0 and verb_at is not None and part[0].low not in TO_PLACE | IN_PLACE:
+            return _cant_phrase(row[verb_at : at + len(part)], reader)
+        what = _not_a_place(part, reader)
+        if what is not None:
+            return what
     return None
 
 

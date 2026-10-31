@@ -6039,6 +6039,12 @@
       "UnderstandIn": {
         "additionalProperties": false,
         "properties": {
+          "carried_on": {
+            "default": false,
+            "description": "True when the Operator chose a new workflow over the Software watchlist. Then the Planner reads the text back in parts, and never answers the watchlist.",
+            "title": "Carried On",
+            "type": "boolean"
+          },
           "text": {
             "maxLength": 2000,
             "minLength": 1,

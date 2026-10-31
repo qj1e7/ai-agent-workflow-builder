@@ -544,6 +544,11 @@ type ChooseResult = Annotated[Chosen | ModelProblem, Field(discriminator="status
 class UnderstandRequest(WireModel):
     task: str = Field(min_length=1, max_length=2000)
     model: ModelAccess
+    carried_on: bool = Field(
+        default=False,
+        description="True when the Operator chose a new workflow over the Software watchlist. "
+        "Then the task is read back in parts, never sent to the watchlist.",
+    )
 
 
 type RowKind = Literal["schedule", "look_for", "do", "where"]

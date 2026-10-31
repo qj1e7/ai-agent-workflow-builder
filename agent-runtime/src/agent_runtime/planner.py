@@ -303,6 +303,10 @@ INVISIBLE: Final = frozenset(
     + "".join(map(chr, range(0xE0100, 0xE01F0)))
 )
 QUOTES: Final = "\"'“”‘’"
+CARRIED_ON_NOTE: Final = (
+    "The staff member already chose to set this up as a new workflow, not on the Software "
+    "watchlist. So set belongs_on_watchlist to false and read the task back in parts."
+)
 
 UNDERSTAND_SYSTEM: Final = (
     "You are the Planner on a platform used by the support staff of CODESparks, a team in "
@@ -442,12 +446,15 @@ def _task_form_of(task: str, said: str | None) -> str | None:
     return next((w for w in forms if w.casefold() == wanted), forms[0])
 
 
-def understood_of(answer: UnderstandAnswer, task: str) -> Understood | BelongsOnWatchlist | None:
+def understood_of(
+    answer: UnderstandAnswer, task: str, carried_on: bool = False
+) -> Understood | BelongsOnWatchlist | None:
     """What the Operator is shown. Every part has a row, a part the model left out is missing,
     and a part that needs a tool we don't have is can't do. None when the answer does not hold
     together: no rows, or a watchlist word that is not in the task or not one of the words the
-    prompt names."""
-    if answer.belongs_on_watchlist:
+    prompt names. Once the Operator chose a new workflow over the watchlist, a watchlist answer
+    is ignored, so its rows are still held to the tools."""
+    if answer.belongs_on_watchlist and not carried_on:
         word = _task_form_of(task, answer.watchlist_word)
         if word is None:
             return None
@@ -463,13 +470,15 @@ def understand_task(request: UnderstandRequest, chat_for: ChatFor) -> Understand
     answer = ask_model(
         chat_for,
         UNDERSTAND_SYSTEM,
-        f"The task:\n{request.task}",
+        f"{CARRIED_ON_NOTE}\n\nThe task:\n{request.task}"
+        if request.carried_on
+        else f"The task:\n{request.task}",
         UnderstandAnswer,
         timeout=UNDERSTAND_TIMEOUT_SECONDS,
     )
     if isinstance(answer, ModelProblem):
         return answer
-    result = understood_of(answer, request.task)
+    result = understood_of(answer, request.task, request.carried_on)
     if result is None:
         log.warning("UnderstandAnswer: no rows, or a watchlist word the task or prompt lacks")
         return UNUSABLE

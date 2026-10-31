@@ -85,6 +85,7 @@ class Planner:
     understood: UnderstandResult | NoModel | RuntimeDown = field(default_factory=lambda: NoModel())
     wait: float = 0.0
     read: list[str] = field(default_factory=lambda: [])
+    carried: list[bool] = field(default_factory=lambda: [])
 
     async def has_model(self) -> bool:
         return self.model
@@ -96,8 +97,11 @@ class Planner:
     async def draft(self, task: str) -> DraftResult | NoModel | RuntimeDown:
         return NoModel()
 
-    async def understand(self, task: str) -> UnderstandResult | NoModel | RuntimeDown:
+    async def understand(
+        self, task: str, carried_on: bool = False
+    ) -> UnderstandResult | NoModel | RuntimeDown:
         self.read.append(task)
+        self.carried.append(carried_on)
         await asyncio.sleep(self.wait)
         return self.understood
 
@@ -589,7 +593,19 @@ async def test_understand_reads_the_task_back_for_an_operator_and_saves_nothing(
     assert r.json()["answer"] == "rows"
     assert [row["state"] for row in r.json()["rows"]] == ["understood"] * 4
     assert planner.read == [FOLLOW_UP]
+    assert planner.carried == [False]
     assert (await client.get("/api/v1/use-cases", headers=AS_ALICE)).json()["use_cases"] == []
+
+
+async def test_understand_passes_on_that_the_operator_chose_a_new_workflow_over_the_watchlist(
+    client: httpx.AsyncClient, planner: Planner
+):
+    planner.understood = FOUR_ROWS
+    part = "Where it goes: Post the release notes in the team's Teams channel"
+    body = {"text": part, "carried_on": True}
+    r = await client.post("/api/v1/builder/understand", json=body, headers=AS_ALICE)
+    assert r.status_code == 200
+    assert (planner.read, planner.carried) == ([part], [True])
 
 
 async def test_understand_is_for_operators_only_and_needs_some_text(
