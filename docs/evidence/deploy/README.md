@@ -44,16 +44,19 @@ Once the setup is done, the `deploy` workflow runs only on `main`, because the `
    - an **outsider**, who is not on the People list.
 
    Assign all three to platform-api's enterprise application, so each one can get a token. The outsider gets a token but no place on the People list, which is what lane 9 checks.
-5. **Set the `azure-dev` environment's variables.** On top of [the infra README's list](../../../infra/README.md#steps):
+5. **Set the `azure-dev` environment's secrets and variables.** On top of [the infra README's list](../../../infra/README.md#steps). The repository is public, so the test accounts' emails go under Secrets, where GitHub masks them in the logs:
 
-   | Variable | Value |
+   | Secret | Value |
    |---|---|
    | `FIRST_OPERATOR` | the Operator test account's email |
    | `FIRST_APPROVERS` | the Operator's and the Approver's emails, separated by a comma |
+
+   | Variable | Value |
+   |---|---|
    | `PRACTICE_JIRA_URL` | leave unset. agent-runtime then reads platform-api's own practice Jira |
    | `AZURE_LOCATION`, `COSMOS_LOCATION`, `COSMOS_SERVERLESS` | only if step 1 or 2 asked for them |
 
-   For example `gh variable set FIRST_APPROVERS --env azure-dev --body "operator@<tenant>,approver@<tenant>"`. The secret `GH_RELEASE_TOKEN` is optional, but set it for the lanes: each lane's check reads GitHub, and without a token Azure's shared address can run out of GitHub's 60 requests an hour.
+   For example `gh secret set FIRST_APPROVERS --env azure-dev` (it asks for the value). The secret `GH_RELEASE_TOKEN` is optional, but set it for the lanes: each lane's check reads GitHub, and without a token Azure's shared address can run out of GitHub's 60 requests an hour.
 
    Terraform refuses these values before it changes anything if they would stop platform-api: an Operator with no Approvers, one Approver, the same Approver twice, or an address that is not an email. The addresses are not secret, but Terraform keeps them out of its error output, so they stay out of the deploy log.
 
