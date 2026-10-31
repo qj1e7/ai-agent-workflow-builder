@@ -34,7 +34,9 @@
 #   p4.sh down $EVID/head p4-check; STACK_TAG=p4check-trunk p4.sh down $EVID/trunk p4-check-trunk
 # Lane 8 builds a small libfaketime layer on the head image, which needs apt's network. It moves
 # only platform-api's clock, which stamps the run's events and the decision.
-# Lane 11 makes the emulator again while platform-api runs and nothing is logged, then starts a run.
+# Lane 11 logs a backlog of $LANE11_EVENTS agent events and waits for its copy, then makes the
+# emulator again while platform-api runs and nothing is logged, then starts a run. It samples
+# readiness from before the emulator comes back, and needs one "behind" while the copy is short.
 # Lane 12 runs down without -v, then up. Every `up` builds first and starts with --no-build, so
 # PRUNE=1 (or a `docker builder prune -af` by hand, then NO_BUILD=1) frees the build cache between.
 # Own-stack lanes reuse the head images, the mocks included: every stack names its mock images
@@ -63,6 +65,7 @@
 #   HEAD_SRC [$EVID/head]     the exported head tree, for lane 2, 3 and 7
 #   OVERLAYS                  extra compose files ("-f a.yaml -f b.yaml") for every stack and lane
 #   LANE5_EVENTS [4000]       lane 5's backlog; raise it when the kill lands after the copy ends
+#   LANE11_EVENTS [4000]      lane 11's backlog; raise it when no sample sees the copy made again
 set -euo pipefail
 
 EVID=${EVID:-/tmp/swarm-p4}
@@ -380,7 +383,11 @@ lane10() {
   STACK_ENV=ACTIVITY_READER=postgres own_stack_lane 10 "$1" "$EVID/lane-1/p4-stream-trunk-head.json"
 }
 
-lane11() { own_stack_lane 11 "$1"; }
+lane11() {
+  local key
+  key=$(signing_key)
+  own_stack_lane 11 "$1" "$key" "${LANE11_EVENTS:-4000}"
+}
 
 lane12() { own_stack_lane 12 "$1"; }
 
@@ -435,7 +442,8 @@ cleanup() {
     docker rmi "$image" >/dev/null || true
   done
   for project in $(projects); do
-    for id in $(docker images -q --filter "label=com.docker.compose.project=$project" | sort -u); do
+    # -a: compose builds one image name for platform-api and bootstrap, so one copy has no tag.
+    for id in $(docker images -aq --filter "label=com.docker.compose.project=$project" | sort -u); do
       docker rmi "$id" >/dev/null 2>&1 || true
     done
   done
