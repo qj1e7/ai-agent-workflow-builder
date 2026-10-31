@@ -133,10 +133,12 @@ jobs:
           done
 
       # Each wait is twice the job's own timeout_seconds in main.tf, because pulling the image on a
-      # cold start counts against the wait but not against the job's timeout.
+      # cold start counts against the wait but not against the job's timeout. The job reaches the
+      # server through its firewall rule and hands out the databases, and neither is something the
+      # job refers to, so module.postgres is targeted as well.
       - name: Create the database roles
         run: |
-          ../../scripts/guarded-apply.sh db-init -target='module.job["db-init"]'
+          ../../scripts/guarded-apply.sh db-init -target='module.job["db-init"]' -target=module.postgres
           ../../scripts/run-job.sh "$(terraform output -raw resource_group_name)" db-init 600
 
       # The full plan names every resource, so it stays in a file on the runner and is never
