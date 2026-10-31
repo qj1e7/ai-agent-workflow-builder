@@ -180,8 +180,9 @@ def task_text(body: dict[str, Any]) -> str:
 
 def says_carried_on(body: dict[str, Any]) -> bool:
     """Whether the Planner's note before the task says the staff member already chose a new
-    workflow over the Software watchlist. Words in the task itself never count."""
-    return CARRIED_ON.search(user_text(body).rpartition(TASK_MARK)[0]) is not None
+    workflow over the Software watchlist. Only the words before the first "The task:" line
+    count, so a task that carries its own such line cannot set it."""
+    return CARRIED_ON.search(user_text(body).partition(TASK_MARK)[0]) is not None
 
 
 def choice(task: str) -> dict[str, Any]:
