@@ -145,7 +145,8 @@ NOT_KEYS: Final = words("AD AWS GCP SSO MFA VPN PR PRS MR CI CD API URL SMS CSV 
 PLACING: Final = words("put go")
 PLACE_ADVERBS: Final = words("somewhere anywhere everywhere elsewhere wherever here there")
 PLACING_FORMS: Final = words("put puts putting go goes going went gone")
-DELIVERS: Final = words("post send share save publish upload export copy forward attach")
+DELIVERS: Final = words("post send share save publish")
+AUDIENCE: Final = words("team teams group groups people staff users members everyone")
 SUBJECTS: Final = words("i we you")
 WANTING: Final = words("want wants need needs would like prefer")
 
@@ -398,20 +399,18 @@ def _objects(clause: Clause, start: int, reader: _Reader) -> _Objects:
 
 
 def _phrases(clause: Clause, start: int, reader: _Reader) -> Phrases:
+    """The phrases after what the action is done to, each with its preposition. The words after
+    a mark, as in "(Slack)" or ": Teams", are a phrase too, with the mark in place of the
+    preposition."""
     phrases: list[tuple[str, list[_Word]]] = []
     for word in clause[start:]:
         if word.low in PARTICLES and not phrases:
             continue
-        if word.low in PREPS:
+        if word.low in PREPS or word.mark:
             phrases.append((word.low, []))
             continue
         last = phrases[-1][1][-1] if phrases and phrases[-1][1] else None
-        if (
-            not phrases
-            or word.mark
-            or word.low in ENDS
-            or (reader.acts(word) and not _noun_place(last))
-        ):
+        if not phrases or word.low in ENDS or (reader.acts(word) and not _noun_place(last)):
             break
         phrases[-1][1].append(word)
     return [(prep, tuple(phrase)) for prep, phrase in phrases]
@@ -428,6 +427,23 @@ def _elsewhere(phrase: Clause, reaches: frozenset[str], products: bool = True) -
         if word.low in PLACES or (products and word.product):
             return True
     return False
+
+
+def _another_systems_place(prep: str, phrase: Clause, known: frozenset[str]) -> bool:
+    """Whether a phrase names a system the platform neither reaches nor reads as a place, a
+    source, or the people a result is for, as in "for the Slack channel", "from Slack", "over
+    Slack" or "(Slack)". A system named only as the topic, as in "a ticket for the Teams
+    outage", is not one."""
+    if all(word.system is None or word.system in known for word in phrase):
+        return False
+    head = _head(phrase)
+    return (
+        prep == "from"
+        or not prep[:1].isalnum()
+        or head is None
+        or head.system is not None
+        or head.low in PLACES | AUDIENCE
+    )
 
 
 def _names_jira(phrase: Clause) -> bool:
@@ -491,7 +507,9 @@ def _makes(ability: Ability, makes: frozenset[str], thing: Clause, phrases: Phra
     )
 
 
-def _fits(ability: Ability, thing: Clause, phrases: Phrases) -> bool:
+def _fits(ability: Ability, thing: Clause, phrases: Phrases, read: frozenset[str]) -> bool:
+    """Whether one thing the action is done to, and every phrase after it, fits the ability.
+    `read` is every system the platform reads for this clause."""
     if ability.makes is None:
         reads = any(w.low in TICKETS for w in thing) or not _elsewhere(
             thing, ability.reaches, False
@@ -508,6 +526,8 @@ def _fits(ability: Ability, thing: Clause, phrases: Phrases) -> bool:
             return False
         named = prep == "for" and all(w.system or w.low in DETERMINERS for w in phrase)
         if (prep in IN_PLACE | TO_PLACE or named) and _elsewhere(phrase, ability.reaches):
+            return False
+        if _another_systems_place(prep, phrase, ability.reaches | read):
             return False
     return True
 
@@ -539,6 +559,16 @@ def _writes_in(clause: Clause, at: int, reader: _Reader) -> bool:
     return False
 
 
+def _reading(reader: _Reader, clause: Clause) -> list[Ability]:
+    """The abilities that read, and that fit what the clause is about."""
+    return [
+        ability
+        for ability in reader.abilities
+        if ability.makes is None
+        and (ability.about is None or any(w.low in ability.about for w in clause))
+    ]
+
+
 def _do(clause: Clause, reader: _Reader) -> str | None:
     at = _action_at(clause)
     if at is None:
@@ -554,7 +584,8 @@ def _do(clause: Clause, reader: _Reader) -> str | None:
     ]
     things, end = _objects(clause, at if implied else at + 1, reader)
     phrases = _phrases(clause, end, reader)
-    fits = bool(able) and all(any(_fits(a, t, phrases) for a in able) for t in things or [()])
+    read = frozenset(place for ability in _reading(reader, clause) for place in ability.reaches)
+    fits = bool(able) and all(any(_fits(a, t, phrases, read) for a in able) for t in things or [()])
     if fits and not _writes_in(clause, at, reader):
         return None
     return _cant_phrase(clause[at:], reader)
@@ -613,12 +644,7 @@ def _look_for_row(row: Clause, reader: _Reader) -> str | None:
         found = reader.verb(first[at])
         if found is not None and found[1] != "ed" and found[0] in reader.writes:
             return _cant_phrase(first[at:], reader)
-    reads = [
-        ability
-        for ability in reader.abilities
-        if ability.makes is None
-        and (ability.about is None or any(w.low in ability.about for w in row))
-    ]
+    reads = _reading(reader, row)
     reaches = frozenset(place for ability in reads for place in ability.reaches)
     source = _its_own_tickets(first, reaches) or _read_from(first, reaches)
     if source is not None:
@@ -636,18 +662,32 @@ def _says_an_action(word: _Word, reader: _Reader) -> bool:
     return named or word.bare in CAUSATIVES | PLACING_FORMS
 
 
-def _places_it(word: _Word, reader: _Reader) -> bool:
+def _a_ticket_already_there(place: Clause) -> bool:
+    """Whether a place names a ticket that is already there, such as MOCK-12 or "the ticket",
+    not a project or a new ticket."""
+    return any(
+        (word.key and "-" in word.raw)
+        or (word.low in TICKETS and not (before and before.low in NEW))
+        for before, word in zip((None, *place), place, strict=False)
+    )
+
+
+def _places_it(word: _Word, reader: _Reader, place: Clause) -> bool:
     found = reader.verb(word)
     if found is None or found[1] != "ed":
         return word.bare in PLACING_FORMS
+    if _a_ticket_already_there(place):
+        return False
     return found[0] not in reader.writes or found[0] in DELIVERS
 
 
 def _lead_in(part: Clause, reader: _Reader) -> Clause:
     """The part without the words before what it names: "then", "let's", "I want it", and a
     placing verb or a past form just before a place, as in "it goes to Slack", "posted in Teams"
-    or "summarised in MOCK". The past form of a write that only delivers, such as "posted" or
-    "sent", is a lead. One that changes data, as in "moved to" or "deleted in", stays."""
+    or "summarised in MOCK". The past form of a write that only delivers (post, send, share,
+    save, publish) is a lead. One that changes data, as in "moved to" or "attached to", stays,
+    and so does any past form before a ticket that is already there, as in "posted to
+    MOCK-12"."""
     at = 0
     while at < len(part) and (part[at].mark or part[at].low in (FILLER - TO_PLACE) | {"let's"}):
         at += 1
@@ -661,12 +701,12 @@ def _lead_in(part: Clause, reader: _Reader) -> Clause:
     verb = at
     while verb < len(part) and part[verb].low in PRONOUNS:
         verb += 1
-    if verb < len(part) and _places_it(part[verb], reader):
-        after = verb + 1
-        while after < len(part) and part[after].low in PRONOUNS:
-            after += 1
-        if after < len(part) and part[after].low in TO_PLACE | IN_PLACE:
-            at = after
+    after = verb + 1
+    while after < len(part) and part[after].low in PRONOUNS:
+        after += 1
+    to_place = after < len(part) and part[after].low in TO_PLACE | IN_PLACE
+    if to_place and _places_it(part[verb], reader, part[after + 1 :]):
+        at = after
     return part[at:]
 
 
