@@ -1,0 +1,49 @@
+{
+  "trunk": "Trunk was never deployed with these modules, so the local stack at head stands in for it.",
+  "local": {
+    "runId": "run_01M69AFK3NZ1A3V6HY0R6JNY9S",
+    "stages": [
+      "run_created",
+      "leg_dispatched",
+      "step_started",
+      "agent_joined",
+      "agent_message",
+      "agent_step_started",
+      "agent_step_finished",
+      "write_action_proposed",
+      "step_finished",
+      "approval_requested"
+    ],
+    "stations": [
+      "done: Done: Started",
+      "done: Done: Pick agents",
+      "done: Done: Read every source",
+      "wait: Approval gate",
+      "todo: Not reached yet: Create Jira tickets",
+      "todo: Not reached yet: Done"
+    ]
+  },
+  "azure": {
+    "runId": "run_01M69AFQ2M1R0SWMTXM9W649HE",
+    "stages": [
+      "run_created",
+      "leg_dispatched",
+      "step_started",
+      "agent_joined",
+      "agent_message",
+      "agent_step_started",
+      "agent_step_finished",
+      "write_action_proposed",
+      "step_finished",
+      "approval_requested"
+    ],
+    "stations": [
+      "done: Done: Started",
+      "done: Done: Pick agents",
+      "done: Done: Read every source",
+      "wait: Approval gate",
+      "todo: Not reached yet: Create Jira tickets",
+      "todo: Not reached yet: Done"
+    ]
+  }
+}
