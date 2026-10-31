@@ -11,6 +11,13 @@ provider "azurerm" {
   }
 }
 
+# Only modules/container_env uses azapi, to set a setting that azurerm cannot set yet. It signs in
+# the same way as azurerm, from the ARM_ variables, and for the same reason registers no providers.
+provider "azapi" {
+  subscription_id            = var.subscription_id
+  skip_provider_registration = true
+}
+
 resource "random_string" "suffix" {
   length  = 5
   upper   = false
