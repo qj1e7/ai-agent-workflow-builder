@@ -15,7 +15,8 @@
 #   live <project> [playwright arguments]  run the builder's live specs (portal/e2e/live) the same way
 #   lane1 <head-project> [trunk-project]   add software and check it at head; trunk has no Software watchlist page
 #   lane <n> <project>                     lanes 2, 3, 4, 5, 7, 8, 9, 10 and 11, one at a time on a shared stack; lane 3 also moves
-#                                          one removal back a day in the stack's PostgreSQL while the page waits, to try a late Undo
+#                                          a removal back 25 hours in the stack's PostgreSQL while the page waits, to try a late
+#                                          Undo, and another back 23 hours, to try an Undo just inside the day
 #   lane6 <worktree> <project> <tag> <portal-port> <api-port> <n8n-port> [--no-build]
 #                                          the mock GitHub fails during a check, on its own stack, which this brings up and down
 #   size <trunk-worktree> <head-worktree>  gzip bytes of the JavaScript that dist/index.html loads
@@ -205,18 +206,20 @@ lane() {
   mkdir -p "$EVID/lane-$n"
   check "$project" --grep "@lane$n " 2>&1 | tee "$EVID/lane-$n/playwright.log" || status=$?
   if [ "$n" = 3 ]; then
-    undo_after_the_removal_is_moved_back_a_day "$project" || status=$?
+    undo_after_the_removal_is_moved_back "$project" 25 "@lane3-day " || status=$?
+    undo_after_the_removal_is_moved_back "$project" 23 "@lane3-near " || status=$?
   fi
   return "$status"
 }
 
-undo_after_the_removal_is_moved_back_a_day() {
-  local project=$1 dir="$EVID/lane-3" ids="$EVID/$LATE_REMOVAL_IDS" moved="$EVID/$LATE_REMOVAL_MOVED" pg pid uc sw status=0
+# 25 hours is just past the day an Undo has; 23 hours is just inside it.
+undo_after_the_removal_is_moved_back() {
+  local project=$1 hours=$2 test=$3 dir="$EVID/lane-3" ids="$EVID/$LATE_REMOVAL_IDS" moved="$EVID/$LATE_REMOVAL_MOVED" pg pid uc sw status=0
   pg=$(service_of "$project" postgres)
   [ -n "$pg" ] || die "no running PostgreSQL in project $project"
   mkdir -p "$dir"
   rm -f "$ids" "$moved"
-  LATE_REMOVAL_IDS_IN_RUNNER="/evidence/$LATE_REMOVAL_IDS" check "$project" --grep "@lane3-day " >"$dir/playwright-day.log" 2>&1 &
+  LATE_REMOVAL_IDS_IN_RUNNER="/evidence/$LATE_REMOVAL_IDS" check "$project" --grep "$test" >"$dir/playwright-${hours}h.log" 2>&1 &
   pid=$!
   for _ in $(seq 1 180); do
     [ -f "$ids" ] && break
@@ -226,16 +229,16 @@ undo_after_the_removal_is_moved_back_a_day() {
   uc=$(sed -n 's/^use_case_id=\([A-Za-z0-9_]*\)$/\1/p' "$ids" 2>/dev/null || true)
   sw=$(sed -n 's/^software_id=\([A-Za-z0-9_]*\)$/\1/p' "$ids" 2>/dev/null || true)
   if [ -n "$uc" ] && [ -n "$sw" ]; then
-    docker exec -i "$pg" psql -U postgres -d platform -v ON_ERROR_STOP=1 -v uc="$uc" -v sw="$sw" >"$dir/late-removal.sql.log" 2>&1 <<'SQL' || true
-UPDATE builder.use_case_versions SET created_at = created_at - interval '25 hours'
+    docker exec -i "$pg" psql -U postgres -d platform -v ON_ERROR_STOP=1 -v uc="$uc" -v sw="$sw" -v hours="$hours" >"$dir/removal-${hours}h.sql.log" 2>&1 <<'SQL' || true
+UPDATE builder.use_case_versions SET created_at = created_at - make_interval(hours => :hours)
 WHERE use_case_id = :'uc' AND version = (
   SELECT max(version) + 1 FROM builder.watched_software WHERE use_case_id = :'uc' AND software_id = :'sw'
 );
 SQL
-    if grep -qx 'UPDATE 1' "$dir/late-removal.sql.log"; then
+    if grep -qx 'UPDATE 1' "$dir/removal-${hours}h.sql.log"; then
       touch "$moved"
     else
-      echo "lane 3: the removal was not moved back; see $dir/late-removal.sql.log" >&2
+      echo "lane 3: the removal was not moved back $hours hours; see $dir/removal-${hours}h.sql.log" >&2
       status=1
     fi
   else
@@ -243,7 +246,7 @@ SQL
     status=1
   fi
   wait "$pid" || status=$?
-  cat "$dir/playwright-day.log"
+  cat "$dir/playwright-${hours}h.log"
   return "$status"
 }
 
