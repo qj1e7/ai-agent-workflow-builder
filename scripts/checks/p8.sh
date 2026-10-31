@@ -39,6 +39,13 @@ REPO=$(cd "$HERE/../.." && pwd)
 
 die() { echo "p8.sh: $*" >&2; exit 2; }
 
+# wab/*:dev and :latest are the images scripts/e2e.sh and a dev stack use, so a check never builds over them or removes them.
+own_tag() {
+  case "$1" in
+    '' | dev | latest) die "give this check its own image tag, not '$1': wab/*:dev and :latest belong to scripts/e2e.sh and dev stacks" ;;
+  esac
+}
+
 disk() {
   local avail
   docker exec "$DISK_CONTAINER" df -h / | tail -n 1
@@ -114,6 +121,7 @@ compose() {
 
 up() {
   local src=$1 project=$2 tag=$3 portal=$4 api=$5 n8n=$6 log
+  own_tag "$tag"
   disk
   mkdir -p "$EVID/stacks"
   log="$EVID/stacks/$project-up-$(cut -c1-7 "$src/.SHA").log"
@@ -137,6 +145,7 @@ down() {
 
 e2e() {
   local src=$1 project=$2 tag=$3 portal=$4 api=$5 n8n=$6 out="$EVID/e2e"
+  own_tag "$tag"
   disk
   mkdir -p "$out"
   local status=0
@@ -171,6 +180,7 @@ lane3() {
 
 dast() {
   local src=$1 project=$2 tag=$3 out="$EVID/lane-10" status=0
+  own_tag "$tag"
   disk
   mkdir -p "$out"
   (cd "$src" && env E2E_PROJECT="$project" WAB_IMAGE_TAG="$tag" scripts/dast.sh) >"$out/run.log" 2>&1 || status=$?

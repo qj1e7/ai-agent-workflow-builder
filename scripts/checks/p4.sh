@@ -94,6 +94,18 @@ SOURCE_REPO=${SOURCE_REPO:-$REPO}
 
 die() { echo "p4.sh: $*" >&2; exit 2; }
 
+# wab/*:dev and :latest are the images scripts/e2e.sh and a dev stack use, so a check never builds over them or removes them.
+own_tag() {
+  case "$1" in
+    '' | dev | latest) die "give this check its own image tag, not '$1': wab/*:dev and :latest belong to scripts/e2e.sh and dev stacks" ;;
+  esac
+}
+
+# Every command builds, starts or removes wab/*:$TAG and :$TRUNK_TAG (and :$STACK_TAG when it is set), so check them first.
+own_tag "$TAG"
+own_tag "$TRUNK_TAG"
+[ -z "${STACK_TAG:-}" ] || own_tag "$STACK_TAG"
+
 free_kib() { docker exec "$DISK_CONTAINER" df -k / | awk 'NR==2 {print $4}'; }
 
 disk() {
