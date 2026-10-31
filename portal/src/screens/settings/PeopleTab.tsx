@@ -4,6 +4,7 @@ import { useLatch } from '../../api/latch'
 import { useAddPerson, useAskApprover, useConfirmations, useDecideConfirmation, usePeopleList, useRemoveApprover, useSetOperator } from '../../api/settingsQueries'
 import type { ConfirmationOut, Me, PersonOut } from '../../api/types'
 import { Button } from '../../ui/Button'
+import { focusIfFocusFell } from '../../ui/focus'
 import { personTone } from '../../ui/personTone'
 import { ClockMark, ShieldMark } from './marks'
 import {
@@ -20,6 +21,7 @@ import {
   personStatusWords,
   ROLE_RULES,
   saidAfterListChange,
+  saidAfterRefusal,
   undoneWords,
   type PeopleNotice,
   type PeopleSaid,
@@ -29,13 +31,14 @@ import styles from './Settings.module.css'
 
 const NOTICE_ID = 'people-notice'
 const PROBLEM_ID = 'people-problem'
+const LEFT_ID = 'people-left'
 export const PEOPLE_LEAD = 'Operators set up workflows and change settings. Approvers say yes or no to changes. People sign in with their NCS account.'
 
 const operatorBoxId = (personId: string) => `person-${personId}-operator`
 const approverBoxId = (personId: string) => `person-${personId}-approver`
 const rowErrorId = (personId: string) => `person-${personId}-error`
 
-const NOTHING_SAID: PeopleSaid = { notice: null, problem: null }
+const NOTHING_SAID: PeopleSaid = { notice: null, problem: null, left: null }
 
 interface Settled {
   readonly onSuccess: () => void
@@ -98,8 +101,8 @@ function PeoplePanel({ people, confirmations, me }: PanelProps) {
     setListed(people)
     setSaid(saidAfterListChange(listed, people, said))
   }
-  const { notice, problem } = said
-  const tell = (next: PeopleNotice) => setSaid({ notice: next, problem: null })
+  const { notice, problem, left } = said
+  const tell = (next: PeopleNotice) => setSaid((now) => ({ notice: next, problem: null, left: now.left }))
 
   const waiting = approverConfirmationsByPerson(confirmations)
   const names = new Map(people.map((person) => [person.id, person.display]))
@@ -109,15 +112,20 @@ function PeoplePanel({ people, confirmations, me }: PanelProps) {
   useEffect(() => {
     if (problemLostRow) document.getElementById(PROBLEM_ID)?.focus()
   }, [problemLostRow])
+  // When the focused row is the one that left, focus would fall to the page body, so the line that says so takes it.
+  useEffect(() => {
+    if (left) focusIfFocusFell(LEFT_ID)
+  }, [left])
 
   function change(person: PersonOut, act: Busy['act'], to: boolean | undefined, send: (done: Settled) => void, after: () => void) {
     latch.run((settled) => {
       setBusy(to === undefined ? { personId: person.id, act } : { personId: person.id, act, to })
-      setSaid((now) => ({ notice: now.notice, problem: null }))
+      setSaid((now) => ({ notice: now.notice, problem: null, left: null }))
       send({
         onSuccess: after,
         onError: (error) => {
-          setSaid({ notice: null, problem: { personId: person.id, words: words(error, act === 'confirm' || act === 'not_now' ? 'confirmation' : 'person', person.display) } })
+          const why = words(error, act === 'confirm' || act === 'not_now' ? 'confirmation' : 'person', person.display)
+          setSaid((now) => saidAfterRefusal(now, { personId: person.id, words: why }))
         },
         onSettled: () => {
           setBusy(null)
@@ -183,6 +191,14 @@ function PeoplePanel({ people, confirmations, me }: PanelProps) {
       <p className="visually-hidden" role="status">
         {problem?.words ?? notice?.words ?? ''}
       </p>
+      <p className="visually-hidden" role="status">
+        {left?.words ?? ''}
+      </p>
+      {left ? (
+        <div id={LEFT_ID} tabIndex={-1} className={styles['said']}>
+          <span>{left.words}</span>
+        </div>
+      ) : null}
       {notice && !noticeHasRow ? noticeFor(null) : null}
       {problemLostRow ? (
         <div id={PROBLEM_ID} tabIndex={-1}>

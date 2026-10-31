@@ -469,6 +469,67 @@ async def test_a_paused_workflow_cannot_be_started_by_hand(lab: Lab):
     await start_run(lab, use_case_id)
 
 
+class HeldStart:
+    """Starts the run for real, but only once the test lets it. The builder has read the
+    workflow's state by then, so a pause can try to land before the run is inserted (#56)."""
+
+    def __init__(self, runs: Any) -> None:
+        self._runs = runs
+        self.reached = asyncio.Event()
+        self.go = asyncio.Event()
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._runs, name)
+
+    async def start_run(self, spec: Any, principal: Any, idempotency_key: str) -> Any:
+        self.reached.set()
+        await self.go.wait()
+        return await self._runs.start_run(spec, principal, idempotency_key)
+
+
+async def pause_waits_for(lab: Lab, held: HeldStart, starting: asyncio.Task[Any], uc: str) -> Any:
+    await asyncio.wait_for(held.reached.wait(), 5)
+    pausing = asyncio.create_task(lab.move("carol", "pause", uc))
+    await asyncio.sleep(0.3)
+    assert not pausing.done(), "the pause landed between the state read and the run insert"
+    held.go.set()
+    started = await asyncio.wait_for(starting, 5)
+    paused = await asyncio.wait_for(pausing, 5)
+    assert (paused.status_code, paused.json()["state"]) == (200, "paused")
+    return started
+
+
+async def test_a_pause_waits_for_a_start_that_has_read_the_state(lab: Lab):
+    use_case_id = await agent_workflow(lab)
+    held = HeldStart(lab.h.orchestrator)
+    lab.app.state.builder = Builder(
+        lab.h.db, held, lab.app.state.watchlist, "http://localhost:8000", ModelConnected()
+    )
+    starting = asyncio.create_task(
+        lab.call("alice", "POST", f"/api/v1/use-cases/{use_case_id}/runs")
+    )
+
+    started = await pause_waits_for(lab, held, starting, use_case_id)
+
+    assert started.status_code == 201, started.text
+    [run] = await lab.runs()
+    assert (run["run_id"], run["state"]) == (started.json()["run_id"], "pending")
+    refused = await lab.call("alice", "POST", f"/api/v1/use-cases/{use_case_id}/runs")
+    assert refused.status_code == 409
+
+
+async def test_a_pause_waits_for_a_scheduled_start_that_has_read_the_state(lab: Lab):
+    use_case_id = await watchlist_workflow(lab)
+    held = HeldStart(lab.h.orchestrator)
+    ticker = ScheduleTicker(lab.h.db, ScheduleBook(lab.h.db), lab.builder, held)
+    lab.h.clock["now"] = FIRST_MONDAY_SLOT + timedelta(minutes=1)
+
+    started = await pause_waits_for(lab, held, asyncio.create_task(ticker.tick()), use_case_id)
+
+    [run] = await lab.runs()
+    assert started == [RunId(run["run_id"])]
+
+
 async def test_pausing_twice_keeps_the_first_pause(lab: Lab):
     use_case_id = await agent_workflow(lab)
     first = await lab.move("alice", "pause", use_case_id)

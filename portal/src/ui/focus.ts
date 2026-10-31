@@ -44,3 +44,13 @@ export function useFocusAfterReread<T extends string>(order: readonly T[], shown
     armed.current = { pressed, answeredAt: drawn.current }
   }, [])
 }
+
+/**
+ * Focuses the element with this id, but only when focus fell to the page body, as it does when the focused control left
+ * the page with its row. Focus on any other control stays where it is, and the page does not scroll.
+ */
+export function focusIfFocusFell(id: string): void {
+  const active = document.activeElement
+  if (active && active !== document.body) return
+  document.getElementById(id)?.focus({ preventScroll: true })
+}

@@ -13,10 +13,10 @@
 #                                          after); agent-runtime ruff, pyright and tests
 #   up <worktree> <project> <tag> <portal-port> <api-port> <n8n-port> [--reuse]
 #                                          --reuse starts a second stack on the images an earlier up built with that tag;
-#                                          it still builds this project's mock-github and mock-model, which have no tag
+#                                          it builds mock-github and mock-model first, for an earlier up from before they had a tag
 #   down <worktree> <project> [<tag>]      stops the stack, deletes its volumes (down -v), and removes the images named after
-#                                          the project (mock-github, mock-model, e2e) and its dangling ones; with a tag, also
-#                                          wab/*:<tag> unless another stack still uses them
+#                                          the project (e2e) and its dangling ones; with a tag, also wab/*:<tag>, the mocks
+#                                          included, unless another stack still uses them
 #   check <project> [playwright arguments] run portal/e2e/checks/p9.check.ts in the runner image, in that project's Portal network
 #   live <project> [playwright arguments]  run portal/e2e/live, such as 04-workflows.live.ts, the same way
 #   lane1 <head-project> [trunk-project]   trunk has no Workflows page: record it; then two seeded rows at head
@@ -159,7 +159,7 @@ down() {
   done
   docker image prune -f --filter "label=com.docker.compose.project=$project" >/dev/null
   if [ -n "$tag" ]; then
-    for image in wab/platform-api wab/agent-runtime wab/portal; do
+    for image in wab/platform-api wab/agent-runtime wab/portal wab/mock-github wab/mock-model; do
       docker image inspect "$image:$tag" >/dev/null 2>&1 || continue
       docker image rm "$image:$tag" >/dev/null 2>&1 || echo "kept $image:$tag, which another stack still uses"
     done

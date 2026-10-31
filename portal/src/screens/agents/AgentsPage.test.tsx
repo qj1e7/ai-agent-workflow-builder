@@ -1,3 +1,5 @@
+/// <reference types="node" />
+import { readFileSync } from 'node:fs'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router'
@@ -87,6 +89,16 @@ describe('a card', () => {
     expect(dialog).toContain('Changes data Create a Jira ticket Waits for a yes from 1 Approver')
     expect(dialog).toContain(CHANGE_LATER_NOTE)
     expect(dialog).toContain('Close')
+  })
+
+  it('numbers its How it works steps with muted markers, as the prototype’s plan does', () => {
+    const dialog = dialogOf(render({ path: '/agents/crd_version_checker' }))
+    expect(dialog).toMatch(/<h3>How it works<\/h3><ol\b[^>]*class="[^"]*steps[^"]*"[^>]*><li>/)
+    // Vitest blanks a CSS import, so the rules are read from the file. base.css takes every list's numbers away.
+    const css = readFileSync(new URL('./AgentsPage.module.css', import.meta.url), 'utf8')
+    const rule = (selector: string) => new RegExp(`(^|\\n)${selector.replace(/[.:]/g, '\\$&')}\\s*\\{([^}]*)\\}`).exec(css)?.[2] ?? ''
+    expect(rule('.steps')).toMatch(/list-style:\s*decimal;/)
+    expect(rule('.steps li::marker')).toMatch(/color:\s*var\(--muted\);/)
   })
 
   it('has a Close button at the top, beside its title, and another after the card', () => {

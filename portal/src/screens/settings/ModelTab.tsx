@@ -48,7 +48,19 @@ const FOCUS_FOR: Record<ModelField, string> = {
   form: MODEL_IDS.submit,
 }
 
-export const NO_MODEL_WORDS = 'Until you connect one, agents write simple text from templates and can’t plan new workflows.'
+// Without a model, an agent workflow run gets 409 "Connect an AI model in Settings to run agents." and planning gets 409 too.
+// Only the watchlist check's summary falls back to a template.
+export const NO_MODEL_WORDS = 'Until you connect one, agent workflows can’t run and new workflows can’t be planned. Only the Software watchlist’s summary uses a simple template instead.'
+const WITHOUT_A_MODEL = 'agent workflows can’t run, and only the Software watchlist’s summary uses a simple template'
+
+/** What runs do until a new address is confirmed, after "Until then, ". */
+const untilThenWords = (active: ModelOut | null) => (active ? `runs keep using ${active.model}` : WITHOUT_A_MODEL)
+
+export function notNowWords(active: ModelOut | null): string {
+  const then = untilThenWords(active)
+  return `You said not now. ${then.charAt(0).toUpperCase()}${then.slice(1)}.`
+}
+
 export const MODEL_READ_ONLY_WORDS = `${ONLY_OPERATORS_WORDS} Approvers confirm a new address before runs use it.`
 
 type Errors = Partial<Record<ModelField, string>>
@@ -100,14 +112,14 @@ function ModelPanel({ view }: { view: ModelSettingsView }) {
   }
 
   function onDecide(pending: PendingModelOut, verdict: Verdict) {
-    const keeps = view.active ? view.active.model : 'simple templates'
+    const active = view.active
     latch.run((settled) => {
       setProblem(null)
       setPressed(verdict)
       decide.mutate(
         { verdict, digest: pending.digest },
         {
-          onSuccess: () => tell(verdict === 'confirm' ? `Confirmed. Runs now use ${pending.model}.` : `You said not now. Runs keep using ${keeps}.`, 'now'),
+          onSuccess: () => tell(verdict === 'confirm' ? `Confirmed. Runs now use ${pending.model}.` : notNowWords(active), 'now'),
           onError: (error) => {
             const why = words(error, 'address')
             setProblem(why)
@@ -187,7 +199,6 @@ interface WaitingProps {
 }
 
 function WaitingAddress({ pending, active, pressed, problem, onDecide }: WaitingProps) {
-  const keeps = active ? active.model : 'simple templates'
   return (
     <div id={MODEL_IDS.waiting} tabIndex={-1} className={styles['waiting']}>
       <ShieldMark size={20} />
@@ -195,7 +206,7 @@ function WaitingAddress({ pending, active, pressed, problem, onDecide }: Waiting
         <b>A new address is waiting for an Approver</b>
         <span>
           {pending.base_url} · {pending.model}. Entered by {pending.by_name}. It answered the test in {secondsWords(pending.test_seconds)}. Agents
-          send their prompts to this address, so someone else must confirm it. Until then, runs keep using {keeps}.
+          send their prompts to this address, so someone else must confirm it. Until then, {untilThenWords(active)}.
         </span>
         {pending.you_can_decide ? null : <span>{pending.why_not ?? 'Waiting for an Approver.'}</span>}
         <FieldError id="model-waiting-error" words={problem ?? undefined} />

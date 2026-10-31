@@ -13,6 +13,7 @@ from platform_api.orchestration.model_settings import (
     KeyNeeded,
     KnownProviderId,
     ModelSettings,
+    NoLongerAnOperator,
     NotAnApprover,
     NothingPending,
     OwnAddress,
@@ -150,6 +151,10 @@ Approver = Annotated[Principal, Depends(require_approver)]
 SETTINGS_OFF = error_response("Settings are off until SETTINGS_ENCRYPTION_KEY is set")
 RUNTIME_DOWN = error_response("The agent runtime did not answer, so nothing was checked")
 WRONG_SAVED_KEY = error_response("The saved key belongs to another address, or no longer opens")
+SAVE_REFUSED = error_response(
+    "The saved key belongs to another address or no longer opens, or the person saving is no "
+    "longer an Operator"
+)
 
 
 def _model_out(model: StoredModel) -> ModelOut:
@@ -230,7 +235,7 @@ async def connect_model(
 @router.put(
     "/api/v1/settings/model",
     tags=["settings"],
-    responses={**OPERATORS_ONLY, 409: WRONG_SAVED_KEY, 502: RUNTIME_DOWN, 503: SETTINGS_OFF},
+    responses={**OPERATORS_ONLY, 409: SAVE_REFUSED, 502: RUNTIME_DOWN, 503: SETTINGS_OFF},
 )
 async def save_model(body: SaveIn, principal: Operator, settings: CurrentModelSettings) -> SaveOut:
     result = await settings.save(
@@ -243,7 +248,7 @@ async def save_model(body: SaveIn, principal: Operator, settings: CurrentModelSe
             return SavedOut(seconds=test.seconds, text=test.text)
         case SettingsOff(message):
             raise HTTPException(status_code=503, detail=message)
-        case KeyNeeded(message):
+        case KeyNeeded(message) | NoLongerAnOperator(message):
             raise HTTPException(status_code=409, detail=message)
         case RuntimeDown(message):
             raise HTTPException(status_code=502, detail=message)

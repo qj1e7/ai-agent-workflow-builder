@@ -32,6 +32,8 @@ export const UNDO_ID = 'undo-removal'
 
 export const PROBLEM_ID = 'change-problem'
 
+export const NOTICE_ID = 'change-notice'
+
 export const removeButtonId = (id: string) => `remove-${id}`
 
 export function changeFeedback(state: ChangeFeedback, event: FeedbackEvent): ChangeFeedback {
@@ -43,7 +45,8 @@ export function changeFeedback(state: ChangeFeedback, event: FeedbackEvent): Cha
     case 'removed':
       return { notice: { kind: 'removed', row: event.row }, problem: null, busy: null, focusTargetId: UNDO_ID }
     case 'gone':
-      return { notice: { kind: 'gone', name: event.row.name }, problem: null, busy: null, focusTargetId: null }
+      // The row and its Remove button go with the next read of the list, so focus moves to the words, as for a refusal.
+      return { notice: { kind: 'gone', name: event.row.name }, problem: null, busy: null, focusTargetId: NOTICE_ID }
     case 'restoring':
       return { ...state, problem: null, busy: { id: event.row.id, act: 'restore' }, focusTargetId: null }
     case 'restored':
@@ -86,6 +89,25 @@ export function noticeWords(notice: Notice, checking: Checking): string {
 
 export function noticeButtons(notice: Notice): readonly ('Undo' | 'Dismiss')[] {
   return notice.kind === 'removed' ? ['Undo', 'Dismiss'] : ['Dismiss']
+}
+
+interface EscapeKey {
+  readonly key: string
+  readonly defaultPrevented: boolean
+  readonly target: unknown
+}
+
+interface Placed {
+  closest(selector: string): unknown
+}
+
+const placed = (target: unknown): target is Placed => typeof target === 'object' && target !== null && typeof (target as Partial<Placed>).closest === 'function'
+
+const inDialog = (target: unknown) => placed(target) && target.closest('dialog') !== null
+
+/** Escape anywhere on the page clears the notice, as in the prototype. An open dialog, such as the Teams panel, takes it first. */
+export function escapeDismisses(event: EscapeKey, feedback: ChangeFeedback): boolean {
+  return event.key === 'Escape' && !event.defaultPrevented && feedback.notice !== null && !inDialog(event.target)
 }
 
 export interface MutateCallbacks {

@@ -67,6 +67,16 @@
   margin-top: var(--space-3);
 }
 
+/* It takes focus by script after a removal the platform says was done already, as Settings' notices do. */
+.notice:focus {
+  outline: none;
+}
+
+.notice:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
 .find {
   display: grid;
   gap: 6px;
