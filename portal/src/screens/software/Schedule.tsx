@@ -38,11 +38,9 @@ interface FormProps {
   readonly work: string
   readonly save: SaveSchedule
   readonly onDone: () => void
-  /** Called with the platform's refusal, after the form has shown it. */
-  readonly onRefused?: (failure: unknown) => void
 }
 
-export function ScheduleForm({ schedule, work, save, onDone, onRefused }: FormProps) {
+export function ScheduleForm({ schedule, work, save, onDone }: FormProps) {
   const [day, setDay] = useState<Day>(schedule?.day ?? 'monday')
   const [at, setAt] = useState(schedule?.at ?? '09:00')
   const [error, setError] = useState<string | undefined>()
@@ -63,10 +61,7 @@ export function ScheduleForm({ schedule, work, save, onDone, onRefused }: FormPr
       { day, at: clock.value },
       {
         onSuccess: onDone,
-        onError: (failure) => {
-          setError(words(failure))
-          onRefused?.(failure)
-        },
+        onError: (failure) => setError(words(failure)),
       },
     )
   }

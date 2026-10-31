@@ -488,7 +488,7 @@ describe('changing a workflow’s schedule', () => {
     expect([ALICE, CAROL].map((viewer) => mayChangeSchedule(WATCHLIST, viewer))).toEqual([false, false])
   })
 
-  it('says the Operator owns it now, and when it runs next, in the schedule’s own time', () => {
+  it('says when it runs next, in the schedule’s own time', () => {
     const saved = { ...AGENTS, state: 'on' as const, next_run_at: '2026-11-09T01:00:00Z', schedule: { day: 'monday' as const, at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: null } }
     expect(scheduleSavedWords(saved, NOW)).toBe('Saved. Next run Mon 9 Nov, 9:00.')
   })

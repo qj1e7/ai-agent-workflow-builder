@@ -93,7 +93,7 @@ export function ScheduleChangePanel({ useCase, now, onSaved, onDone }: PanelProp
     mutate: scheduleSaver((body, answers) => save.mutate(body, answers), { useCaseId: id, now, say: onSaved, refocus: () => undefined, reread }),
   }
   return (
-    <section className={styles['panel']} aria-labelledby={headingId}>
+    <section className={`${styles['panel']} ${styles['change']}`} aria-labelledby={headingId}>
       <h2 id={headingId}>Change schedule</h2>
       <ScheduleForm schedule={useCase.schedule} work="runs" save={saveAndSay} onDone={onDone} />
     </section>

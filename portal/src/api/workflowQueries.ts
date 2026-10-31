@@ -82,13 +82,17 @@ export function useDeleteWorkflow() {
 }
 
 /** Saving makes the caller the schedule owner, which lifts a hold. The view that comes back says so. */
+export function saveScheduleOptions(client: ApiClient, queryClient: QueryClient, user: string, useCaseId: string) {
+  return {
+    mutationFn: async (body: ScheduleIn) =>
+      unwrap(await client.PUT('/api/v1/use-cases/{use_case_id}/schedule', { params: { path: { use_case_id: useCaseId } }, body })),
+    onSuccess: (view: UseCaseView) => applySavedView(queryClient, user, view),
+  }
+}
+
 export function useSaveWorkflowSchedule(useCaseId: string) {
   const client = useApiClient()
   const queryClient = useQueryClient()
   const user = useCacheScope()
-  return useMutation({
-    mutationFn: async (body: ScheduleIn) =>
-      unwrap(await client.PUT('/api/v1/use-cases/{use_case_id}/schedule', { params: { path: { use_case_id: useCaseId } }, body })),
-    onSuccess: (view) => applySavedView(queryClient, user, view),
-  })
+  return useMutation(saveScheduleOptions(client, queryClient, user, useCaseId))
 }
