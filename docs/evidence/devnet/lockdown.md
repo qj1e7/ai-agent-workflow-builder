@@ -69,6 +69,13 @@ Issue [#86](https://github.com/qj1e7/ai-agent-workflow-builder/issues/86) tracks
 2. **n8n's list of MCP servers.** n8n asks `api.n8n.io` for it on its own, through the proxy. The proxy refuses it, and n8n logs "Error fetching from Strapi API" and "A system task run failed" each time the task runs. Nothing in our runs depends on it. We have not found the n8n setting that turns this task off.
 3. **n8n's health check, until the overlay changed it.** n8n's image checks its health with BusyBox `wget`, which ignores `NO_PROXY` and asked the proxy for `localhost`. The proxy refused, n8n was marked unhealthy, and the stack did not start. `deploy/compose.lockdown.yaml` now runs the check with `wget -Y off`. Inside DevNet, the same change is needed wherever n8n is given a proxy.
 
+**Since then, 1 Nov 2026.** Items 2 and 3 are fixed in `deploy/compose.yaml`, so every stack built on it has them, not only this overlay.
+
+- `N8N_DISABLED_MODULES=mcp-registry` turns off the n8n module that fetches the list from `https://api.n8n.io/api/mcp-servers`. In the pinned n8n 2.42.6 image, `@n8n/backend-common` reads the setting (`dist/modules/modules.config.js`, where `mcp-registry` is one of the allowed names), and the call is in n8n's `dist/modules/mcp-registry/`. We use no MCP servers in n8n.
+- n8n's health check in `deploy/compose.yaml` now runs `wget -Y off` itself, so the overlay no longer changes it.
+
+`n8n-proxy.test.sh` in this folder checks both without starting the stack. It starts one n8n container from the compose settings, with no network and a proxy that never answers. The whole lock-down test has not been run again since. Item 1 still waits for NCS's answers.
+
 Nothing else broke. The agent runtime's GitHub client and Python's own HTTP library in the health checks honour `NO_PROXY`, so the services still reach each other directly.
 
 ## What this test does not show
@@ -86,3 +93,5 @@ docs/evidence/devnet/lockdown-run.sh
 ```
 
 It needs Docker, room on the Docker disk for the stack's images, and the internet for the proxy. `LOCKDOWN_PROJECT` names the compose project (default `wab-lockdown`), and `KEEP=1` leaves the stack running. Its output lands in `docs/evidence/devnet/out/`, which git ignores. The proxy writes a tunnel's log line only when the connection closes, so the script stops the callers before it reads the log.
+
+`docs/evidence/devnet/n8n-proxy.test.sh` checks only n8n's two settings. It takes about a minute and needs only the n8n image on the machine.
