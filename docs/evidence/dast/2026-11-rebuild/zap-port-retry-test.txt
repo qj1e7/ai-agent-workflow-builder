@@ -1,0 +1,14 @@
+case bind-once: exit 0, docker runs 2, port -P 8090 
+  stderr: ZAP could not start its proxy for the api scan (try 1 of 2):
+  stderr: ERROR org.parosproxy.paros.CommandLine - Terminating ZAP, unable to start the main proxy.
+  summary: FAIL-NEW: 0 FAIL-INPROG: 0 WARN-NEW: 0 WARN-INPROG: 0 INFO: 0 IGNORE: 1 PASS: 112
+case bind-always: exit 3, docker runs 2, port -P 8090 
+  stderr: ZAP could not start its proxy for the api scan (try 1 of 2):
+  stderr: WARN ExtensionNetwork - Failed to start the main proxy: java.net.BindException Address already in use
+  stderr: ERROR org.parosproxy.paros.CommandLine - Terminating ZAP, unable to start the main proxy.
+  stderr: ZAP could not start its proxy for the api scan (try 2 of 2):
+  stderr: WARN ExtensionNetwork - Failed to start the main proxy: java.net.BindException Address already in use
+  stderr: ERROR org.parosproxy.paros.CommandLine - Terminating ZAP, unable to start the main proxy.
+  summary: ZAP did not start its proxy, so nothing was scanned
+case alert: exit 1, docker runs 1, port -P 8090 
+  summary: FAIL-NEW: 1 FAIL-INPROG: 0 WARN-NEW: 0 WARN-INPROG: 0 INFO: 0 IGNORE: 0 PASS: 111

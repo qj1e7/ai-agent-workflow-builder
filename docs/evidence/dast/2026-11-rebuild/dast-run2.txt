@@ -1,0 +1,12 @@
+Starting the stack as compose project p15-scan (no host ports).
+
+PASS platform-api scan   : FAIL-NEW: 0	FAIL-INPROG: 0	WARN-NEW: 0	WARN-INPROG: 0	INFO: 0	IGNORE: 0	PASS: 112
+PASS API through nginx   : FAIL-NEW: 0	FAIL-INPROG: 0	WARN-NEW: 0	WARN-INPROG: 0	INFO: 0	IGNORE: 1	PASS: 112
+PASS Portal baseline     : FAIL-NEW: 0	FAIL-INPROG: 0	WARN-NEW: 0	WARN-INPROG: 0	INFO: 0	IGNORE: 1	PASS: 60
+Reports: dast/out/{api,api-via-portal,portal}.{html,json,md}
+PASS: ZAP found nothing outside the reasons recorded in dast/zap-rules.conf.
+KEEP=1: stack left running. Stop it with: docker compose -p p15-scan -f deploy/compose.yaml -f deploy/compose.e2e.yaml -f deploy/compose.scan.yaml down -v
+real 101.28
+user 0.63
+sys 0.55
+exit 0
