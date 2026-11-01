@@ -36,9 +36,30 @@ resource "azurerm_container_app" "this" {
     }
   }
 
+  # The names are plain and the values stay sensitive, as in modules/key_vault.
+  dynamic "secret" {
+    for_each = toset(nonsensitive(keys(var.inline_secrets)))
+    content {
+      name  = lower(replace(secret.value, "_", "-"))
+      value = var.inline_secrets[secret.value]
+    }
+  }
+
   ingress {
     external_enabled = var.ingress.external
     target_port      = var.ingress.target_port
+
+    # Container Apps cannot mix Allow and Deny rules. With Allow rules, it refuses every address
+    # outside them with "RBAC: access denied". No ingress field forces a replace in azurerm 5.7.0,
+    # so adding or removing rules updates the app in place.
+    dynamic "ip_security_restriction" {
+      for_each = var.ingress.allowed_cidrs
+      content {
+        name             = ip_security_restriction.value.name
+        action           = "Allow"
+        ip_address_range = ip_security_restriction.value.cidr
+      }
+    }
 
     traffic_weight {
       percentage      = 100
@@ -70,6 +91,14 @@ resource "azurerm_container_app" "this" {
         content {
           name        = env.key
           secret_name = lower(replace(env.key, "_", "-"))
+        }
+      }
+
+      dynamic "env" {
+        for_each = toset(nonsensitive(keys(var.inline_secrets)))
+        content {
+          name        = env.value
+          secret_name = lower(replace(env.value, "_", "-"))
         }
       }
     }

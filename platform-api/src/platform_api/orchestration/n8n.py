@@ -26,6 +26,11 @@ API_KEY_SCOPES = (
     "credential:delete",
 )
 _OWNER_EXISTS = "Instance owner already setup"
+# n8n 2.42.6 limits /rest/login to 5 tries a minute per email and 1000 per 5 minutes per address,
+# and answers 429 with Retry-After in seconds. Anyone who can reach n8n can use up those tries,
+# so the sign-in waits them out, up to this long in all.
+LOGIN_RATE_LIMIT_WAIT = 180.0
+_RETRY_AFTER_DEFAULT = 10.0
 
 
 class N8nError(Exception):
@@ -111,10 +116,22 @@ class N8nClient:
         self._login(email, password)
         return outcome
 
-    def _login(self, email: str, password: str) -> None:
-        response = self._http.post(
-            "/rest/login", json={"emailOrLdapLoginId": email, "password": password}
-        )
+    def _login(self, email: str, password: str, wait_limit: float = LOGIN_RATE_LIMIT_WAIT) -> None:
+        waited = 0.0
+        while True:
+            response = self._http.post(
+                "/rest/login", json={"emailOrLdapLoginId": email, "password": password}
+            )
+            if response.status_code != 429 or waited >= wait_limit:
+                break
+            delay = min(_retry_after(response), wait_limit - waited)
+            self._sleep(delay)
+            waited += delay
+        if response.status_code == 429:
+            raise N8nError(
+                f"could not sign in as {email}: n8n's sign-in was still rate limited after "
+                f"{waited:.0f}s"
+            )
         if response.status_code != 200:
             raise N8nError(f"could not sign in as {email}: HTTP {response.status_code}")
 
@@ -224,6 +241,15 @@ def _ok(response: httpx.Response) -> dict[str, Any]:
 
 def _record(item: dict[str, Any]) -> WorkflowRecord:
     return WorkflowRecord(str(item["id"]), str(item["name"]), bool(item["active"]), item)
+
+
+def _retry_after(response: httpx.Response) -> float:
+    """Seconds from a Retry-After header, at least one. n8n sends whole seconds, so anything
+    else, such as an HTTP date, gets the default."""
+    value = response.headers.get("Retry-After", "").strip()
+    if not value.isdigit():
+        return _RETRY_AFTER_DEFAULT
+    return max(float(value), 1.0)
 
 
 def _short(response: httpx.Response) -> str:

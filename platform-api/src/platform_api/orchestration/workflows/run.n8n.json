@@ -39,7 +39,7 @@
       "credentials": { "httpHeaderAuth": { "id": "${STEP_KEY_CREDENTIAL_ID}", "name": "X-Step-Key" } },
       "parameters": {
         "method": "POST",
-        "url": "=${PLATFORM_INTERNAL_URL}/internal/v1/runs/{{ $('Start work').first().json.body.run_id }}/steps/run_agents",
+        "url": "=${PLATFORM_INTERNAL_URL}/internal/v1/runs/{{ encodeURIComponent($('Start work').first().json.body.run_id) }}/steps/run_agents",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
@@ -81,7 +81,7 @@
       "credentials": { "httpHeaderAuth": { "id": "${STEP_KEY_CREDENTIAL_ID}", "name": "X-Step-Key" } },
       "parameters": {
         "method": "POST",
-        "url": "=${PLATFORM_INTERNAL_URL}/internal/v1/runs/{{ $('Start work').first().json.body.run_id }}/steps/ask_approval",
+        "url": "=${PLATFORM_INTERNAL_URL}/internal/v1/runs/{{ encodeURIComponent($('Start work').first().json.body.run_id) }}/steps/ask_approval",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
@@ -127,7 +127,7 @@
       "credentials": { "httpHeaderAuth": { "id": "${STEP_KEY_CREDENTIAL_ID}", "name": "X-Step-Key" } },
       "parameters": {
         "method": "POST",
-        "url": "=${PLATFORM_INTERNAL_URL}/internal/v1/runs/{{ $('Start act').first().json.body.run_id }}/steps/write_action",
+        "url": "=${PLATFORM_INTERNAL_URL}/internal/v1/runs/{{ encodeURIComponent($('Start act').first().json.body.run_id) }}/steps/write_action",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,

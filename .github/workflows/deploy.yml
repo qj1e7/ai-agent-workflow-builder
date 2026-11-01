@@ -67,6 +67,15 @@ jobs:
       # Optional, for a subscription that refuses Cosmos DB's free tier or its region (ADR 0031).
       TF_VAR_cosmos_location: ${{ vars.COSMOS_LOCATION }}
       TF_VAR_cosmos_serverless: ${{ vars.COSMOS_SERVERLESS || 'false' }}
+      # Optional, n8n's editor (ADR 0034). "true" asks to open it behind n8n's own sign-in. Unset
+      # keeps n8n internal. The step "Check that n8n may open" turns it into TF_VAR_n8n_editor_external.
+      N8N_EDITOR_EXTERNAL: ${{ vars.N8N_EDITOR_EXTERNAL || 'false' }}
+      # Optional. With the editor open, only these addresses reach n8n, separated by commas. A secret,
+      # because addresses point at people. Unset lets every address reach n8n's sign-in page.
+      TF_VAR_n8n_editor_allowed_ips: ${{ secrets.N8N_EDITOR_ALLOWED_IPS }}
+      # Optional. The inside ranges that list adds for the platform's own calls to n8n. Unset uses
+      # the ranges Microsoft reserves in a workload profiles environment.
+      TF_VAR_n8n_internal_allowed_cidrs: ${{ vars.N8N_INTERNAL_ALLOWED_CIDRS }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -144,6 +153,15 @@ jobs:
           ../../scripts/guarded-apply.sh db-init -target='module.job["db-init"]' -target=module.postgres
           ../../scripts/run-job.sh "$(terraform output -raw resource_group_name)" db-init 600
 
+      # Until n8n has an owner, its setup page lets the first visitor become the owner, and only the
+      # bootstrap job after this apply creates one. So n8n opens only once a bootstrap has succeeded
+      # here. The targeted applies above leave n8n alone, so they need no value.
+      - name: Check that n8n may open
+        run: |
+          external=$(../../scripts/n8n-editor-gate.sh "$N8N_EDITOR_EXTERNAL" "$(terraform output -raw resource_group_name)")
+          echo "n8n's editor open: $external"
+          echo "TF_VAR_n8n_editor_external=$external" >>"$GITHUB_ENV"
+
       # The full plan names every resource, so it stays in a file on the runner and is never
       # uploaded. The run summary gets only the count of changes.
       - name: Plan, check and apply everything
@@ -160,4 +178,9 @@ jobs:
             echo "platform-api is at $(terraform output -raw platform_api_url)"
             echo
             echo "The activity log's copy is in the Cosmos DB account $(terraform output -raw cosmos_account_name)"
+            editor=$(terraform output -raw n8n_editor_url)
+            if [ -n "$editor" ]; then
+              echo
+              echo "n8n's editor is at $editor"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"

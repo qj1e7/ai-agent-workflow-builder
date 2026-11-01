@@ -51,12 +51,34 @@ locals {
     { for name in ["platform-api", "agent-runtime", "portal"] : name => "${module.registry.login_server}/${name}:${var.image_tag}" },
   )
 
+  # n8n's editor (ADR 0034). The addresses only point at people, and the app table's for_each
+  # needs plain values, so they are made plain here, as the first people are. One address is /32.
+  n8n_editor_cidrs = [
+    for entry in split(",", nonsensitive(var.n8n_editor_allowed_ips)) :
+    strcontains(entry, "/") ? trimspace(entry) : "${trimspace(entry)}/32"
+    if trimspace(entry) != ""
+  ]
+  # platform-api and the bootstrap job call n8n from inside the Container Apps environment. A
+  # workload profiles environment reserves these ranges for itself, as "Restrictions for subnet
+  # address ranges" in https://learn.microsoft.com/en-us/azure/container-apps/custom-virtual-networks
+  # lists. ADR 0034 says what the deploy must confirm about them.
+  n8n_internal_cidrs = [
+    for entry in split(",", trimspace(var.n8n_internal_allowed_cidrs) == "" ? "100.100.0.0/17,100.100.128.0/19,100.100.160.0/19,100.100.192.0/19" : var.n8n_internal_allowed_cidrs) :
+    strcontains(entry, "/") ? trimspace(entry) : "${trimspace(entry)}/32"
+    if trimspace(entry) != ""
+  ]
+  # With no addresses listed, there are no rules, and every address reaches n8n's sign-in page.
+  n8n_allowed_cidrs = var.n8n_editor_external && length(local.n8n_editor_cidrs) > 0 ? concat(
+    [for i, cidr in local.n8n_editor_cidrs : { name = "editor-${i + 1}", cidr = cidr }],
+    [for i, cidr in local.n8n_internal_cidrs : { name = "inside-environment-${i + 1}", cidr = cidr }],
+  ) : []
+
   # Container Apps redirect plain HTTP to HTTPS, and our services do not follow redirects, so
   # every call between apps uses the HTTPS host name. Internal apps have "internal." in theirs.
   ingress = {
     platform-api  = { external = true, target_port = 8000 }
     agent-runtime = { external = false, target_port = 8100 }
-    n8n           = { external = false, target_port = 5678 }
+    n8n           = { external = var.n8n_editor_external, target_port = 5678, allowed_cidrs = local.n8n_allowed_cidrs }
     portal        = { external = true, target_port = 8080 }
   }
   url = {
@@ -245,19 +267,44 @@ locals {
       memory       = "1Gi"
       min_replicas = 1
       max_replicas = 1
-      env = {
-        DB_TYPE                           = "postgresdb"
-        DB_POSTGRESDB_HOST                = module.postgres.fqdn
-        DB_POSTGRESDB_PORT                = "5432"
-        DB_POSTGRESDB_DATABASE            = "n8n"
-        DB_POSTGRESDB_USER                = "n8n"
-        DB_POSTGRESDB_SSL_ENABLED         = "true"
-        WEBHOOK_URL                       = "${local.url["n8n"]}/"
-        N8N_DIAGNOSTICS_ENABLED           = "false"
-        N8N_VERSION_NOTIFICATIONS_ENABLED = "false"
-        N8N_PERSONALIZATION_ENABLED       = "false"
-        N8N_HIRING_BANNER_ENABLED         = "false"
-      }
+      # With its editor open, n8n builds its links from its public address. n8n listens on 5678,
+      # so without N8N_EDITOR_BASE_URL it would add :5678 to them.
+      #
+      # N8N_PROXY_HOPS trusts the one X-Forwarded-For hop that Container Apps' ingress adds. Without
+      # it n8n sees the proxy's address for everyone, so one visitor could use up the sign-in
+      # limit for all, the bootstrap included.
+      #
+      # It also creates its owner from these settings, so its setup page never offers the owner to
+      # a visitor. n8n 2.42.6 runs this in start.js's init(), before server.start() registers any
+      # REST route, and rewrites the owner on every start (OwnerInstanceSettingsLoader,
+      # overwriteExisting). The bootstrap's own setup call then gets "Instance owner already setup"
+      # and signs in, as on any later run. The names match the ones the bootstrap uses. The hash is
+      # in local.inline_secrets.
+      env = merge(
+        {
+          DB_TYPE                           = "postgresdb"
+          DB_POSTGRESDB_HOST                = module.postgres.fqdn
+          DB_POSTGRESDB_PORT                = "5432"
+          DB_POSTGRESDB_DATABASE            = "n8n"
+          DB_POSTGRESDB_USER                = "n8n"
+          DB_POSTGRESDB_SSL_ENABLED         = "true"
+          WEBHOOK_URL                       = "${local.url["n8n"]}/"
+          N8N_DIAGNOSTICS_ENABLED           = "false"
+          N8N_VERSION_NOTIFICATIONS_ENABLED = "false"
+          N8N_PERSONALIZATION_ENABLED       = "false"
+          N8N_HIRING_BANNER_ENABLED         = "false"
+        },
+        var.n8n_editor_external ? {
+          N8N_PROTOCOL                      = "https"
+          N8N_HOST                          = trimprefix(local.url["n8n"], "https://")
+          N8N_EDITOR_BASE_URL               = "${local.url["n8n"]}/"
+          N8N_PROXY_HOPS                    = "1"
+          N8N_INSTANCE_OWNER_MANAGED_BY_ENV = "true"
+          N8N_INSTANCE_OWNER_EMAIL          = var.n8n_owner_email
+          N8N_INSTANCE_OWNER_FIRST_NAME     = "Platform"
+          N8N_INSTANCE_OWNER_LAST_NAME      = "Bootstrap"
+        } : {},
+      )
       secrets = {
         DB_POSTGRESDB_PASSWORD = local.secret["n8n-db-password"]
         N8N_ENCRYPTION_KEY     = local.secret["n8n-encryption-key"]
@@ -280,6 +327,15 @@ locals {
       }
       secrets = {}
     }
+  }
+
+  # Secrets that are not in Key Vault, by app. They stay out of the app table, because its
+  # for_each needs plain values. n8n's owner password hash is the stored bcrypt hash of the
+  # password the bootstrap signs in with, so it is the same on every plan.
+  inline_secrets = {
+    n8n = var.n8n_editor_external ? {
+      N8N_INSTANCE_OWNER_PASSWORD_HASH = random_password.generated["n8n-owner-password"].bcrypt_hash
+    } : {}
   }
 
   jobs = {
@@ -346,6 +402,7 @@ module "app" {
   ingress             = local.ingress[each.key]
   env                 = each.value.env
   secrets             = each.value.secrets
+  inline_secrets      = lookup(local.inline_secrets, each.key, {})
   tags                = local.tags
 }
 
