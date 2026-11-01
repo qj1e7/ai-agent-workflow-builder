@@ -15,7 +15,7 @@ const SAMPLE = Number(process.env['SAMPLE'] ?? '0')
 
 const DESKTOP = { width: 1440, height: 900 }
 const PHONE = { width: 390, height: 844 }
-const GREETING = (name: string) => new RegExp(`^Good (morning|afternoon|evening), ${name}$`)
+const GREETING = (name: string) => new RegExp(`^Good (morning|afternoon|evening)! ${name}$`)
 const MENU = ['Home', 'Workflows', 'Software watchlist', 'Agent library'] as const
 // An Operator's menu also ends with New workflow, since P13 (#75), as portal/src/shell/shell.test.tsx says. The review
 // video still walks MENU only: whether it should show New workflow is a product choice.

@@ -393,7 +393,7 @@ test('lane 2: the first Operator signs in with Entra ID, Home names them and Set
   const { people } = await get<{ people: { id: string; display: string; email: string; operator: boolean; approver: boolean }[] }>(operator, '/api/v1/people')
   const person = people.find((p) => p.id === me.id)
   expect(person, 'the People list holds the signed-in person').toBeDefined()
-  await expect(h1(operator.page)).toHaveText(/^Good (morning|afternoon|evening), /)
+  await expect(h1(operator.page)).toHaveText(/^Good (morning|afternoon|evening)! /)
   await expect(h1(operator.page), 'Home names the person').toContainText(me.display.split(' ')[0] ?? me.display)
   await expect(operator.page.getByRole('banner')).toContainText('Operator')
   await shot(operator.page, 'lane-2', 'p14-sign-in.png')
@@ -539,7 +539,7 @@ test("perf: Home's largest contentful paint and the run page's event delay, on t
       const person = people.get(target.name)
       if (!person) continue
       await person.page.goto('/')
-      await expect(h1(person.page)).toHaveText(/^Good (morning|afternoon|evening), /, { timeout: 60_000 })
+      await expect(h1(person.page)).toHaveText(/^Good (morning|afternoon|evening)! /, { timeout: 60_000 })
       await person.page.waitForLoadState('networkidle').catch(() => undefined)
       await sleep(1_000)
       paints[target.name]?.push(Math.round((await probeOf(person.page)).lcp))

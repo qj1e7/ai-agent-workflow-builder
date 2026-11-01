@@ -40,7 +40,7 @@ export const PAGES: Readonly<Record<PageId, PageEntry>> = {
     menuLabel: 'Home',
     tabLabel: 'Home',
     icon: HomeIcon,
-    heading: ({ name, now }) => (name ? `${greeting(now)}, ${name}` : greeting(now)),
+    heading: ({ name, now }) => (name ? `${greeting(now)}! ${name}` : greeting(now)),
     lead: ({ now }) => `${today(now)}.`,
     inMenu: true,
   },

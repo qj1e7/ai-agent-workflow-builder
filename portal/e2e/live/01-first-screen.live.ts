@@ -5,7 +5,7 @@ import { outOfVisualOrder, walkTabs, withoutVisibleFocus } from '../support/keyb
 import { expect, test } from './support/test'
 import { openContext, OUT, shot } from './support/ui'
 
-const GREETING = (name: string) => new RegExp(`^Good (morning|afternoon|evening), ${name}$`)
+const GREETING = (name: string) => new RegExp(`^Good (morning|afternoon|evening)! ${name}$`)
 
 const MENU = [
   { label: 'Home', path: '/', heading: GREETING('Alice'), built: true },
@@ -46,7 +46,7 @@ test('Home greets the signed-in person and the menu reads Home, Workflows, Softw
   await expect(page.getByRole('banner')).toContainText('Operator and Approver')
   await expect(mainMenu(page).getByRole('link')).toHaveText(MENU.map((item) => item.label))
   await expect(mainMenu(page).getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page')
-  await expect(page).toHaveTitle(/^Good (morning|afternoon|evening), Alice · AI Workflow Builder$/)
+  await expect(page).toHaveTitle(/^Good (morning|afternoon|evening)! Alice · AI Workflow Builder$/)
   await shot(page, info, 'p1-01-home')
 })
 

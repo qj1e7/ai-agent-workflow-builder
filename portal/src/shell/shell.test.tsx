@@ -111,7 +111,7 @@ describe('the menu', () => {
     expect(html).toContain(`href="${path}"`)
     const heading = headings(html)
     expect(heading).toHaveLength(1)
-    expect(heading[0]).toBe(id === 'home' ? 'Good morning, Alice' : menuLabel)
+    expect(heading[0]).toBe(id === 'home' ? 'Good morning! Alice' : menuLabel)
     expect(new Set(currentLinks(html))).toEqual(new Set([path]))
   })
 
@@ -167,7 +167,7 @@ describe('the pages', () => {
 
   it('open Home with the greeting and today in Singapore time', () => {
     const main = text(mainOf(render()))
-    expect(main).toContain('Good morning, Alice')
+    expect(main).toContain('Good morning! Alice')
     expect(main).toContain('Thursday 29 October.')
   })
 

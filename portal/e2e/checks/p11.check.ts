@@ -112,7 +112,7 @@ test('@lane1-trunk trunk has no Home: the P1 empty page', async ({ browser }) =>
   const context = await devContext(browser, 'bob')
   const page = await context.newPage()
   await page.goto('/')
-  await expect(h1(page)).toHaveText(/^Good (morning|afternoon|evening), Bob$/)
+  await expect(h1(page)).toHaveText(/^Good (morning|afternoon|evening)! Bob$/)
   await shotTo(page, 1, 'p11-home-trunk.png')
   save(1, 'p11-home-trunk.json', { target: 'trunk', main: await page.getByRole('main').innerText() })
   await expect(page.getByRole('main')).toContainText(NOT_BUILT)

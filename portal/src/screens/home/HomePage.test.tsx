@@ -59,7 +59,7 @@ describe('Home for an Approver with a run waiting for his yes', () => {
   const html = mainOf(render(BOB, BOB_HOME))
 
   it('says how many things need him under the greeting, and what runs next', () => {
-    expect(text(html)).toContain('Good afternoon, Bob Tuesday 3 November. 3 things need you. Everything else is running.')
+    expect(text(html)).toContain('Good afternoon! Bob Tuesday 3 November. 3 things need you. Everything else is running.')
     expect(text(html)).toContain('Coming up next: Software watchlist , Mon 9 Nov, 9:00.')
     expect(linksIn(html)).toContainEqual(['Software watchlist', '/software'])
     expect(linksIn(html)).toContainEqual(['See all workflows', '/workflows'])
@@ -181,7 +181,7 @@ describe('Home with many runs waiting', () => {
 describe('Home before it knows', () => {
   it('keeps the greeting and says it is loading', () => {
     const html = mainOf(render(BOB, 'loading'))
-    expect(text(html)).toContain('Good afternoon, Bob Tuesday 3 November. Loading what needs you')
+    expect(text(html)).toContain('Good afternoon! Bob Tuesday 3 November. Loading what needs you')
   })
 
   it('says it could not load, and offers to try again', () => {
