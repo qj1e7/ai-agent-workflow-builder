@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 import logging
+import traceback
 from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
@@ -65,6 +66,7 @@ from platform_api.orchestration.dispatch import (
     OutcomeVerdict,
     RetryPolicy,
     WorkflowEngine,
+    without_addresses,
 )
 from platform_api.orchestration.person_runs import PersonRuns, runs_of
 from platform_api.orchestration.runs import (
@@ -251,7 +253,8 @@ async def _through_channel[T](call: Awaitable[T]) -> T:
     except DispatchFailure:
         raise
     except Exception as error:
-        log.exception("the Teams adapter failed")
+        # The traceback helps a maintainer, but an adapter's error may name a secret address.
+        log.error("the Teams adapter failed: %s", without_addresses(traceback.format_exc()))
         raise DispatchFailure(f"the Teams adapter failed ({type(error).__name__})") from None
 
 
@@ -262,7 +265,7 @@ def _asked_steps(request: ApprovalRequest, names: Mapping[UserId, str]) -> list[
             case approvals.AnyApprover():
                 who: list[str] = []
             case approvals.OneOf(users):
-                who = [names.get(u, u) for u in sorted(users)]
+                who = sorted({names[u] for u in users})
         steps.append({"label": step.label, "who": who})
     return steps
 
@@ -679,7 +682,7 @@ class Orchestrator:
                     "lines": [describe(a).line for a in proposal.actions],
                     "digest": request.digest,
                     "steps": _asked_steps(request, names),
-                    "not_deciding": sorted(names[p] for p in request.parties),
+                    "not_deciding": sorted({names[p] for p in request.parties}),
                 },
                 uow.now,
             )
@@ -913,9 +916,37 @@ class Orchestrator:
     async def tick(self, now: datetime | None = None) -> None:
         now = now or self._db.clock()
         async with self._db.transaction("orchestration") as uow:
-            due = await self._store.due_outbox(uow, now)
+            due = await self._store.take_due_outbox(uow, now, self._retry.lease, self._retry.batch)
         for row in due:
-            await self._dispatch(row, now)
+            # Sends before this one may have taken a while, so the lease is renewed first, and a
+            # row another replica took meanwhile is left to it.
+            async with self._db.transaction("orchestration") as uow:
+                held = await self._store.renew_lease(
+                    uow, row, max(now, self._db.clock()) + self._retry.lease
+                )
+            if held is None:
+                log.info("another tick took outbox row %s, so this one leaves it", row.id)
+                continue
+            try:
+                await self._dispatch(held, now)
+            except Exception as error:
+                # One broken row must not stop the rest. It counts as a failed try, as a
+                # DispatchFailure does, so it waits, is given up after the usual tries, and its
+                # run hears so. Only the error's type is kept, as it may name an address.
+                log.error(
+                    "outbox row %s could not be sent: %s",
+                    row.id,
+                    without_addresses(traceback.format_exc()),
+                )
+                detail = f"the outbox could not send it ({type(error).__name__})"
+                try:
+                    await self._dispatch_failed(held, now, detail)
+                except Exception:
+                    log.error(
+                        "outbox row %s could not be retried: %s",
+                        row.id,
+                        without_addresses(traceback.format_exc()),
+                    )
         async with self._db.transaction("orchestration") as uow:
             overdue = await self._store.runs_past_deadline(uow, now)
         for run_id in overdue:
@@ -1038,6 +1069,19 @@ class Orchestrator:
                 return
         if ref is None:
             raise DispatchFailure("the approval request is not in Teams yet")
+        if ref.adapter != self._channel.adapter:
+            # The platform moved between the practice copy and real Teams since the post. The
+            # adapter in use cannot show the outcome on a message it did not post.
+            log.info(
+                "not showing the outcome of %s in Teams: it was posted by %s, and the platform "
+                "now posts through %s",
+                approval_id,
+                ref.adapter,
+                self._channel.adapter,
+            )
+            async with self._db.transaction("orchestration") as uow:
+                await self._store.outbox_sent(uow, row.id)
+            return
         outcome = ApprovalOutcome(
             verdict=row.payload["verdict"],
             by=tuple(row.payload["by"]),
@@ -1067,7 +1111,9 @@ class Orchestrator:
             if record is None:
                 return
             if row.kind == ANNOUNCE:
-                approval_id = ApprovalId(row.payload["approval_id"])
+                approval_id = row.payload.get("approval_id")
+                if approval_id is None:
+                    return
                 await self._activity.append(
                     uow,
                     row.run_id,
@@ -1078,17 +1124,24 @@ class Orchestrator:
                             "The approval request could not be posted to Teams. Share the "
                             "approval link by hand.",
                             ApprovalAnnounceFailedData(
-                                approval_id=approval_id, channel=self._channel.name, message=error
+                                approval_id=ApprovalId(approval_id),
+                                channel=self._channel.name,
+                                message=error,
                             ),
                         )
                     ],
                 )
                 return
+            # A row whose payload is broken is given up all the same.
+            attempt = row.payload.get("attempt")
             match record.state:
-                case Pending() | Acting() as state if state.attempt == int(row.payload["attempt"]):
+                case Pending() | Acting() as state if attempt is not None and state.attempt == int(
+                    attempt
+                ):
                     failure = Failure(
                         FailureReason.DISPATCH_FAILED,
-                        f"The workflow engine did not take the {row.payload['leg']} leg: {error}",
+                        f"The workflow engine did not take the "
+                        f"{row.payload.get('leg', 'next')} leg: {error}",
                         retryable=True,
                     )
                     await self._commit(uow, record, fail(state, failure))

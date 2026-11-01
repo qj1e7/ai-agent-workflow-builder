@@ -36,6 +36,21 @@ def without(env: dict[str, str], name: str) -> dict[str, str]:
             "PUBLIC_BASE_URL is not set",
             id="oidc without a base URL",
         ),
+        *(
+            pytest.param(
+                {**OIDC, "PUBLIC_BASE_URL": url},
+                "PUBLIC_BASE_URL must be an absolute https URL",
+                id=f"oidc base URL {name}",
+            )
+            for name, url in (
+                ("over http on a shared host", "http://portal.example.test"),
+                ("with no host", "https:///portal"),
+                ("with a query", "https://portal.example.test/?next=1"),
+                ("with a fragment", "https://portal.example.test/#top"),
+                ("with no scheme", "portal.example.test"),
+                ("of another scheme", "ftp://portal.example.test"),
+            )
+        ),
         pytest.param(
             {**OIDC, "OIDC_ISSUER": HTTP_ISSUER},
             "OIDC_ISSUER must be an absolute https URL",
@@ -104,6 +119,13 @@ def without(env: dict[str, str], name: str) -> dict[str, str]:
 def test_bad_auth_config_refuses_to_start(env: dict[str, str], reason: str):
     with pytest.raises(ConfigError, match=reason):
         create_app(env)
+
+
+@pytest.mark.parametrize(
+    "url", ["https://portal.example.test", "https://portal.example.test/", "http://localhost:8080"]
+)
+def test_oidc_mode_starts_with_an_https_portal_or_one_on_localhost(url: str):
+    create_app({**OIDC, "PUBLIC_BASE_URL": url})
 
 
 def test_oidc_mode_starts_with_the_test_only_http_issuer_on_localhost():

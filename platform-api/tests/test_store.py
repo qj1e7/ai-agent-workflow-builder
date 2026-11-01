@@ -157,14 +157,14 @@ async def test_outbox_rows_wait_retry_and_cancel(db: Database):
         await store.insert_run(uow, record(), "k1")
         await store.enqueue(uow, RUN, "start_leg", {"leg": "work"}, NOW)
         await store.enqueue(uow, RUN, "start_leg", {"leg": "work"}, LATER)
-        due = await store.due_outbox(uow, NOW)
+        due = await store.take_due_outbox(uow, NOW)
         assert [r.payload for r in due] == [{"leg": "work"}]
         await store.outbox_retry(uow, due[0].id, LATER, "n8n refused the connection")
-        assert await store.due_outbox(uow, NOW) == []
-        retried = await store.due_outbox(uow, LATER)
+        assert await store.take_due_outbox(uow, NOW) == []
+        retried = await store.take_due_outbox(uow, LATER)
         assert [(r.attempt) for r in retried] == [1, 0]
         await store.cancel_outbox(uow, RUN)
-        assert await store.due_outbox(uow, LATER + timedelta(days=1)) == []
+        assert await store.take_due_outbox(uow, LATER + timedelta(days=1)) == []
         assert await store.pending_outbox(uow, RUN) == 0
 
 
@@ -211,3 +211,20 @@ def test_policies_with_either_eligibility_survive_the_round_trip():
     )
     adapter = TypeAdapter(ApprovalPolicy)
     assert adapter.validate_python(adapter.dump_python(policy, mode="json")) == policy
+
+
+async def test_a_lease_renews_only_while_it_is_still_this_ticks(db: Database):
+    store = Store()
+    async with db.transaction("orchestration") as uow:
+        await store.insert_run(uow, record(), "k1")
+        await store.enqueue(uow, RUN, "announce", {"approval_id": "apr_1"}, NOW)
+        [row] = await store.take_due_outbox(uow, NOW, timedelta(minutes=1))
+        assert row.leased_until == NOW + timedelta(minutes=1)
+        renewed = await store.renew_lease(uow, row, NOW + timedelta(minutes=2))
+        assert renewed is not None and renewed.leased_until == NOW + timedelta(minutes=2)
+        # Another replica took the row after this tick's lease ran out, so its lease is not ours.
+        await uow.conn.execute(
+            "UPDATE orchestration.outbox SET leased_until = %s WHERE id = %s",
+            (NOW + timedelta(minutes=5), row.id),
+        )
+        assert await store.renew_lease(uow, renewed, NOW + timedelta(minutes=3)) is None

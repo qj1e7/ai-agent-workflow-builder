@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -45,6 +46,7 @@ class Services:
     people: People
     copier: Copier | None = None
     cosmos: CosmosEvents | None = None
+    teams_webhook: TeamsWorkflowsWebhook | None = None
     practice_jira: PracticeJira | None = None
 
 
@@ -85,10 +87,27 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.watchlist = services.watchlist
     app.state.schedule_ticker = services.schedule_ticker
     app.state.teams_stub = services.teams_stub
+    app.state.teams_webhook = services.teams_webhook
     app.state.jira = services.jira
     app.state.practice_jira = services.practice_jira
     app.state.model_settings = services.model_settings
     app.state.people = services.people
+
+
+def approval_channel(
+    settings: Settings, practice: TeamsStub, client: httpx.AsyncClient | None = None
+) -> tuple[ApprovalChannel, TeamsWorkflowsWebhook | None]:
+    """Where approval cards go (ADR 0036): the practice copy, or real Teams when
+    TEAMS_WEBHOOK_URL is set. Returns the channel, and the webhook adapter to close on shutdown."""
+    if settings.teams_webhook_url is None:
+        return practice, None
+    # httpx and httpcore log every request's full address at INFO, and the webhook's address
+    # carries its own signature. So with a webhook set, they log only warnings, for every client
+    # in this process, n8n's and the agent runtime's too. Their warnings and errors still show.
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+    webhook = TeamsWorkflowsWebhook(settings.teams_webhook_url, settings.teams_channel, client)
+    return webhook, webhook
 
 
 async def build(settings: Settings) -> Services:
@@ -112,9 +131,7 @@ async def build(settings: Settings) -> Services:
     jira_client = httpx.AsyncClient(timeout=JIRA_TIMEOUT_SECONDS, follow_redirects=False)
     jira, practice_jira = jira_for(settings, db, jira_client)
     teams = TeamsStub(db, settings.teams_channel)
-    channel: ApprovalChannel = teams
-    if settings.teams_webhook_url is not None:
-        channel = TeamsWorkflowsWebhook(settings.teams_webhook_url, settings.teams_channel)
+    channel, webhook = approval_channel(settings, teams)
 
     def mint(run_id: RunId, task_id: TaskId, expires_at: datetime) -> tuple[str, str]:
         callback = callback_for(
@@ -174,6 +191,7 @@ async def build(settings: Settings) -> Services:
         people=people,
         copier=copier,
         cosmos=cosmos,
+        teams_webhook=webhook,
     )
 
 
@@ -191,6 +209,8 @@ class Runner:
         self._services.orchestrator.nudge()
         if self._task is not None:
             await self._task
+        if self._services.teams_webhook is not None:
+            await self._services.teams_webhook.close()
         if self._services.copier is not None:
             await self._services.copier.stop()
         await self._services.activity_log.stop()

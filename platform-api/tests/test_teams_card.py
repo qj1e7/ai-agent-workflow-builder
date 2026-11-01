@@ -1,4 +1,5 @@
 import json
+import logging
 from dataclasses import fields, replace
 from typing import Any
 
@@ -6,6 +7,7 @@ import httpx
 import pytest
 from jsonschema import Draft6Validator
 
+from platform_api.db import Database
 from platform_api.orchestration.dispatch import (
     ApprovalNotice,
     ApprovalOutcome,
@@ -18,14 +20,19 @@ from platform_api.orchestration.teams import (
     OPEN_IN,
     TEAMS_MESSAGE_LIMIT,
     AdaptiveCard,
+    TeamsStub,
     TeamsWorkflowsWebhook,
     approval_card,
+    check_card,
+    inert,
     outcome_card,
     webhook_message,
     with_outcome,
 )
+from platform_api.settings import settings_from_env
 from platform_api.shared import ApprovalId, RunId
-from tests.support import FIXTURES
+from platform_api.wiring import approval_channel
+from tests.support import FIXTURES, LOCAL_ENV
 
 pytestmark = pytest.mark.anyio
 
@@ -80,6 +87,7 @@ def every_card() -> dict[str, AdaptiveCard]:
             with_outcome(approval_card(NOTICE), DECLINED), APPROVED
         ),
         "outcome on its own": outcome_card(APPROVED),
+        "the one-time check": check_card(),
     }
 
 
@@ -140,7 +148,9 @@ def test_the_one_button_opens_the_approval_page_at_an_absolute_address(name: str
         {"type": "Action.OpenUrl", "title": OPEN_IN, "url": card["actions"][0]["url"]}
     ]
     assert card["actions"][0]["url"].startswith(("https://", "http://localhost:"))
-    assert card["actions"][0]["url"].endswith(("/approvals/apr_1", "/approvals/apr_old"))
+    assert card["actions"][0]["url"].endswith(
+        ("/approvals/apr_1", "/approvals/apr_old", "/approvals/apr_check")
+    )
 
 
 def test_a_notice_queued_before_the_card_lists_its_phrases_and_any_approver():
@@ -154,8 +164,41 @@ def test_text_we_did_not_write_goes_only_in_text_runs_which_show_no_markdown():
     ours = texts(card, "TextBlock", "text") + [card["fallbackText"]]
     assert not any("Approve now" in text or "evil" in text for text in ours)
     runs = texts(card, "TextRun", "text")
-    assert any(run.startswith("**Approve now** [here](https://evil.example)") for run in runs)
+    assert any(run.startswith("**Approve now** [here] (https[:]//evil[.]example)") for run in runs)
     assert all("\n" not in run for run in runs)
+
+
+INERT = (
+    "See https://evil.example and www.evil.example or [click](http://x.example) "
+    "or HTTPS://EVIL.EXAMPLE or mailto:bob@evil.example or <https://evil.example>"
+)
+
+
+def test_web_addresses_and_markdown_links_in_text_we_did_not_write_are_inert():
+    # Teams' webhook page says every text field supports basic markdown, and nothing says
+    # whether it links a bare address in a TextRun. So nothing we did not write can be a link.
+    notice = replace(
+        NOTICE,
+        use_case_name=INERT,
+        lines=(INERT,),
+        summary=INERT,
+        steps=(AskedStep(INERT, (INERT,)), AskedStep("Second", ())),
+        not_deciding=(INERT,),
+    )
+    outcome = ApprovalOutcome("approved", (INERT,), INERT, OPEN_URL)
+    for card in (approval_card(notice), with_outcome(approval_card(notice), outcome)):
+        runs = texts(wire(card), "TextRun", "text")
+        assert runs and all(INERT not in run for run in runs)
+        for run in runs:
+            lowered = run.lower()
+            assert "://" not in lowered and "](" not in lowered and "www." not in lowered, run
+            assert "mailto:" not in lowered, run
+        assert wire(card)["actions"][0]["url"] == OPEN_URL
+    lone = texts(wire(outcome_card(outcome)), "TextRun", "text")
+    assert all("://" not in run and "www." not in run.lower() for run in lone)
+    assert "See https[:]//evil[.]example and www[.]evil[.]example" in " ".join(
+        texts(wire(approval_card(notice)), "TextRun", "text")
+    )
 
 
 def test_the_card_says_what_would_be_written_what_the_agents_found_and_who_decides():
@@ -246,7 +289,7 @@ async def test_the_webhook_posts_the_card_as_one_adaptive_card_attachment():
     teams = TeamsWorkflowsWebhook(WEBHOOK, "CODESparks Ops", recording(202, seen))
     ref = await teams.announce(NOTICE)
     await teams.update(ref, APPROVED)
-    assert ref == MessageRef("CODESparks Ops", "apr_1")
+    assert ref == MessageRef("CODESparks Ops", "apr_1", "teams_workflows")
     assert teams.name == "CODESparks Ops"
     posted = [json.loads(r.content) for r in seen]
     assert [str(r.url) for r in seen] == [WEBHOOK, WEBHOOK]
@@ -295,3 +338,94 @@ def test_every_card_in_the_contract_fixtures_matches_the_adaptive_card_schema(na
     for message in messages:
         assert [e.message for e in validator.iter_errors(message["card"])] == []
         assert message["card"] == AdaptiveCard.model_validate(message["card"]).as_json()
+
+
+def test_building_the_webhook_adapter_leaves_the_process_logging_alone():
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.NOTSET)
+    TeamsWorkflowsWebhook(WEBHOOK, "CODESparks Ops", recording(202, []))
+    assert [logging.getLogger(n).level for n in ("httpx", "httpcore")] == [0, 0]
+
+
+@pytest.mark.parametrize("status", [202, 500])
+async def test_the_webhook_address_never_reaches_a_log_line(
+    status: int, caplog: pytest.LogCaptureFixture
+):
+    # The wiring quiets httpx on purpose when it builds the webhook adapter.
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.NOTSET)
+    caplog.set_level(logging.DEBUG)
+    settings = settings_from_env({**LOCAL_ENV, "TEAMS_WEBHOOK_URL": WEBHOOK})
+    practice = TeamsStub(Database(settings.database), settings.teams_channel)
+    channel, webhook = approval_channel(settings, practice, recording(status, []))
+    assert channel is webhook and webhook is not None
+    teams = webhook
+    try:
+        ref = await teams.announce(NOTICE)
+        await teams.update(ref, APPROVED)
+    except DispatchFailure:
+        pass
+    assert "s3cr3t" not in caplog.text
+    assert all("logic.azure.com" not in record.getMessage() for record in caplog.records)
+
+
+def test_the_one_time_check_card_carries_every_kind_of_markup_made_harmless():
+    runs = texts(wire(check_card()), "TextRun", "text")
+    joined = " ".join(runs)
+    for typed in (
+        "**Approve now**",
+        "<at>Bob</at>",
+        "_ok_",
+        "# Heading",
+        "https[:]//example[.]com",
+        # inert() leaves these as written, so the manual check shows whether Teams links them.
+        "example.com/approve",
+        "sub.example.com",
+        "someone@example.com",
+        "аррӏе.com",
+        "https[:]//аррӏе[.]com",
+    ):
+        assert typed in joined
+    assert not any("://" in run or "](" in run for run in runs)
+
+
+@pytest.mark.parametrize(
+    ("raw", "shown"),
+    [
+        ("_https://evil.example", "_https[:]//evil[.]example"),
+        ("*https://evil.example*", "*https[:]//evil[.]example*"),
+        ("1www.evil.example", "1www[.]evil[.]example"),
+        ("x_mailto:a@b.example", "x_mailto[:]a@b.example"),
+        ("HTTPS://EVIL.EXAMPLE", "HTTPS[:]//EVIL[.]EXAMPLE"),
+        ("WWW.EVIL.EXAMPLE", "WWW[.]EVIL[.]EXAMPLE"),
+        ("MAILTO:A@B.EXAMPLE", "MAILTO[:]A@B.EXAMPLE"),
+        ("https:\u200b//evil.example", "https[:]//evil[.]example"),
+        ("w\u200dww.evil\u2060.example", "www[.]evil[.]example"),
+        ("mail\ufeffto:a@b.example", "mailto[:]a@b.example"),
+        ("[x](https://evil.example)", "[x] (https[:]//evil[.]example)"),
+        ("www.a.example/https://b.example", "www[.]a[.]example/https[:]//b[.]example"),
+        ("Upgrade LangGraph to 1.2.16.", "Upgrade LangGraph to 1.2.16."),
+        *(
+            (f"https:{mark}//evil.example", "https[:]//evil[.]example")
+            for mark in ("\u200e", "\u200f", "\u2066", "\u2069", "\u034f", "\u061c", "\u180e")
+        ),
+        ("ww\u2067w.evil.example", "www[.]evil[.]example"),
+        ("_www.evil.example", "_www[.]evil[.]example"),
+        ("(www.evil.example)", "(www[.]evil[.]example)"),
+        ("see www.аррӏе.com", "see www[.]аррӏе[.]com"),
+        ("/var/www.conf", "/var/www.conf"),
+        ("/static/www.min.js", "/static/www.min.js"),
+        ("cdn.www.example", "cdn.www.example"),
+        ("the www. prefix", "the www. prefix"),
+        ("www..", "www.."),
+    ],
+)
+def test_an_address_is_broken_wherever_it_starts_even_inside_a_word(raw: str, shown: str):
+    # A word character before the scheme must not hide it: Teams may still link from "https" on.
+    assert inert(raw) == shown
+
+
+def test_without_a_webhook_the_channel_is_the_practice_copy():
+    settings = settings_from_env(LOCAL_ENV)
+    practice = TeamsStub(Database(settings.database), settings.teams_channel)
+    assert approval_channel(settings, practice) == (practice, None)

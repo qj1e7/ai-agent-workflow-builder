@@ -1,3 +1,4 @@
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
@@ -20,6 +21,12 @@ class RetryPolicy:
     )
     operator_retry_delay: timedelta = timedelta(seconds=3)
     tick_interval: timedelta = timedelta(seconds=5)
+    lease: timedelta = timedelta(minutes=1)
+    """How long a tick holds an outbox row, so another replica does not send it too. Each row's
+    lease is renewed just before it is sent, and one send takes far less: every client's
+    timeout is 10 seconds. A row a stopped replica held is sent once its lease runs out."""
+    batch: int = 10
+    """The most rows one tick takes, so a tick with a slow Teams does not hold many for long."""
 
     @property
     def tries(self) -> int:
@@ -74,10 +81,12 @@ class ApprovalNotice:
 
 @dataclass(frozen=True)
 class MessageRef:
-    """Where an approval request was posted, so the channel can show its outcome later."""
+    """Where an approval request was posted, and which adapter posted it, so the channel can
+    show its outcome later, and only the adapter that posted it tries to."""
 
     channel: str
     id: str
+    adapter: str
 
 
 type OutcomeVerdict = Literal["approved", "declined"]
@@ -97,9 +106,22 @@ class ApprovalChannel(Protocol):
     @property
     def name(self) -> str: ...
 
+    @property
+    def adapter(self) -> str:
+        """Which adapter this is, such as "practice" or "teams_workflows"."""
+        ...
+
     async def announce(self, notice: ApprovalNotice) -> MessageRef: ...
 
     async def update(self, ref: MessageRef, outcome: ApprovalOutcome) -> None: ...
+
+
+_ADDRESS = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://\S+")
+
+
+def without_addresses(text: str) -> str:
+    """text with every web address hidden, for a log line. A webhook's address is a secret."""
+    return _ADDRESS.sub("<address hidden>", text)
 
 
 class N8nWebhooks:
