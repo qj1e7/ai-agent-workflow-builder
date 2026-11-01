@@ -82,7 +82,7 @@ def test_values_must_fit_their_kind(kind: str, value: str, fits: bool):
         ("AB_1", False),
         ("ab-1", False),
         ("_A-1", False),
-        ("A-1", False),
+        ("A-1", True),
         ("MOCK-0", False),
         ("MOCK-07", False),
         ("MOCK-123456789", True),
@@ -100,3 +100,9 @@ def test_ticket_keys_take_the_shapes_jira_allows(key: str, fits: bool):
 
 def test_a_search_takes_a_project_key_with_an_underscore():
     BY_ID["jira.search"].parse({"project": "AB_1"})
+
+
+def test_a_stored_one_letter_project_can_still_be_searched_but_not_entered():
+    # A card saved before ADR 0035 may name a one-letter project, and its runs keep working.
+    BY_ID["jira.search"].parse({"project": "A"})
+    assert value_problem("jira_project", "A") is not None

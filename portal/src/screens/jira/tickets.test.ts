@@ -102,12 +102,19 @@ describe('ticket keys in a line of words', () => {
   it('prefers the address the platform gave with the write: a path opens in place, a Jira address opens outside', () => {
     const browse = 'https://jira.example.test/browse/{key}'
     expect(ticketHref('OPS-142', browse, '/jira/OPS-142')).toEqual({ href: '/jira/OPS-142', external: false })
+    expect(ticketHref('A-1', browse, '/jira/A-1')).toEqual({ href: '/jira/A-1', external: false })
     expect(ticketHref('OPS-142', null, 'https://jira.real.test/browse/OPS-142')).toEqual({ href: 'https://jira.real.test/browse/OPS-142', external: true })
     expect(ticketHref('OPS-142', browse, null)).toEqual({ href: 'https://jira.example.test/browse/OPS-142', external: true })
   })
 
   it('ignores an address from the platform that is not a path or an http(s) address', () => {
     for (const given of ['javascript:alert(1)', '//evil.test/x', 'ftp://jira.example.test/OPS-142', ''])
+      expect(ticketHref('OPS-142', null, given)).toEqual({ href: '/jira/OPS-142', external: false })
+  })
+
+  it('takes a path from the platform only when it is exactly a practice ticket page', () => {
+    const tricks = ['/\\evil', '/\t/evil', '/\n/evil', '/approvals/x', '/../x', '/jira/../approvals', '/jira/%2e%2e/x', '/jira/OPS-142/x', '/jira/OPS-0', '/jira/ops-1']
+    for (const given of tricks)
       expect(ticketHref('OPS-142', null, given)).toEqual({ href: '/jira/OPS-142', external: false })
   })
 })

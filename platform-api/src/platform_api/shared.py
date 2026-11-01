@@ -21,8 +21,13 @@ digit or underscore, such as MOCK or AB_1. Data Center allows 255 characters at 
 type TicketStatus = Literal["To Do", "Done"]
 """A Jira ticket's status as the platform reads it: Done is Jira's status category done, and
 every other status counts as To Do, not done yet."""
+STORED_JIRA_PROJECT_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{0,254}\Z")
+"""A project key as the platform once allowed it, one letter included. Values saved then keep
+working when read or run. Only a key being entered must take JIRA_PROJECT_PATTERN."""
 JIRA_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{1,254}-[1-9][0-9]{0,8}\Z")
 """A ticket key: a project key, a dash and the ticket's number, such as AB_1-12."""
+STORED_JIRA_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{0,254}-[1-9][0-9]{0,8}\Z")
+"""A ticket key in a project of the older shape, such as A-12."""
 
 
 class Role(Enum):

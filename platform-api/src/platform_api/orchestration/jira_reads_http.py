@@ -24,7 +24,12 @@ from platform_api.orchestration.jira import (
 from platform_api.orchestration.spec import CardsTask
 from platform_api.orchestration.store import Store
 from platform_api.settings import Settings
-from platform_api.shared import JIRA_KEY_PATTERN, JIRA_PROJECT_PATTERN, RunId, TaskId
+from platform_api.shared import (
+    STORED_JIRA_KEY_PATTERN,
+    STORED_JIRA_PROJECT_PATTERN,
+    RunId,
+    TaskId,
+)
 from platform_api.wire import WireModel, error_response
 
 MIN_WORD = 3
@@ -110,7 +115,7 @@ async def search_tickets(
     """At most 50 tickets, newest first. An empty filter is not applied. Words of `text` shorter
     than 3 characters are ignored, and text with no word left matches nothing."""
     allowed = await _admit(request, run_id, task, token)
-    if project and JIRA_PROJECT_PATTERN.match(project) is None:
+    if project and STORED_JIRA_PROJECT_PATTERN.match(project) is None:
         raise HTTPException(422, "project is not a Jira project key")
     wanted: dict[str, TicketStatus | None] = {"": None, "To Do": "To Do", "Done": "Done"}
     if status not in wanted:
@@ -148,7 +153,7 @@ async def read_ticket(
     jira: Jira,
 ) -> PracticeTicket:
     allowed = await _admit(request, run_id, task, token)
-    if JIRA_KEY_PATTERN.match(key) is None or key.rsplit("-", 1)[0] not in allowed:
+    if STORED_JIRA_KEY_PATTERN.match(key) is None or key.rsplit("-", 1)[0] not in allowed:
         raise HTTPException(status_code=404, detail="No such ticket")
     try:
         ticket = await jira.get_issue(key)

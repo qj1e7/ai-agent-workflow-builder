@@ -236,3 +236,11 @@ def test_a_proposal_with_no_binding_is_reported():
 
 def test_the_rule_ids_are_keyed_for_lookup():
     assert set(RULES) == {r.id for r in TOOL_RULES}
+
+
+def test_a_stored_card_with_a_one_letter_project_still_runs_though_a_new_one_is_refused():
+    # Keys took one letter before ADR 0035. A card saved then keeps working, and the
+    # two-character rule applies only where a key is entered.
+    assert check_value("jira_project", "A") is not None
+    bindings = card_bindings(card(), {"Repo": "a/b", "Project": "A"})
+    assert [b.target for b in bindings.values()] == [{"project": "A"}]

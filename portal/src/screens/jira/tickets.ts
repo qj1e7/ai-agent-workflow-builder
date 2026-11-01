@@ -21,12 +21,16 @@ export interface TicketHref {
  * as an outside link. Without one it is the practice Jira page, open at that ticket.
  */
 const OUTSIDE = /^https?:\/\/[^/\s]/i
+// Only a practice ticket's own page, as the platform builds it. Browsers read "\" as "/" and drop
+// tabs and line breaks, so a looser path could lead to another site.
+const PRACTICE_PAGE = /^\/jira\/[A-Z][A-Z0-9_]*-[1-9][0-9]*$/
 
 /** Where a ticket key leads. An address the platform gave with the write comes first (ADR 0035): a
- * path opens in the Portal, an http(s) address opens Jira. Anything else from it is ignored. */
+ * practice ticket's page opens in the Portal, an http(s) address opens Jira. Anything else from it
+ * is ignored. */
 export function ticketHref(key: string, browseUrl: string | null, given: string | null = null): TicketHref {
   if (given) {
-    if (given.startsWith('/') && !given.startsWith('//')) return { href: given, external: false }
+    if (PRACTICE_PAGE.test(given)) return { href: given, external: false }
     if (OUTSIDE.test(given)) return { href: given, external: true }
   }
   if (browseUrl === null || browseUrl === '') return { href: ticketPath(key), external: false }
