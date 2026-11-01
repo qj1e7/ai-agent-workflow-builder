@@ -2,7 +2,7 @@ import httpx
 import pytest
 
 from agent_runtime.contracts import card_request
-from agent_runtime.jira import JiraUnavailable, PracticeJiraFor
+from agent_runtime.jira import JiraUnavailable, PlatformJiraFor
 
 BASE = "http://platform-api:8000"
 TICKET = {
@@ -18,7 +18,7 @@ TICKET = {
 def reader(handler: httpx.MockTransport, base: str = BASE):
     request = card_request("run_01JD1")
     client = httpx.Client(transport=handler, follow_redirects=True)
-    reader = PracticeJiraFor(base, client)(request)
+    reader = PlatformJiraFor(base, client)(request)
     assert reader is not None
     return reader, request
 
@@ -35,7 +35,7 @@ def test_a_search_asks_the_platform_with_the_task_and_the_token_in_a_header():
     assert [t.key for t in found] == ["MOCK-7"]
     [sent] = seen
     assert sent.url.host == "platform-api"
-    assert sent.url.path == "/internal/v1/runs/run_01JD1/practice-jira/tickets"
+    assert sent.url.path == "/internal/v1/runs/run_01JD1/jira/tickets"
     assert dict(sent.url.params) == {
         "task": request.task_id,
         "project": "MOCK",
@@ -57,7 +57,7 @@ def test_a_read_asks_for_one_ticket_and_returns_its_body():
     jira, request = reader(httpx.MockTransport(handler))
     ticket = jira.read("MOCK-7")
     assert ticket.body == "Soon."
-    assert seen[0].url.path == "/internal/v1/runs/run_01JD1/practice-jira/tickets/MOCK-7"
+    assert seen[0].url.path == "/internal/v1/runs/run_01JD1/jira/tickets/MOCK-7"
     assert seen[0].url.params["task"] == request.task_id
 
 

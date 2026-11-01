@@ -213,7 +213,7 @@ export type PlanView =
   | { readonly kind: 'trouble'; readonly message: string }
 
 const INPUT_KINDS: readonly InputKind[] = ['github_repo', 'jira_project', 'text']
-const PROJECT_IN = /\b(?:project|in)\s+([A-Z][A-Z0-9]{1,9})\b/
+const PROJECT_IN = /\b(?:project|in)\s+([A-Z][A-Z0-9_]{1,9})\b/
 const REPO_IN = /(?:github\.com\/)?\b([A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]+)/
 
 function foundIn(rows: readonly Row[], kind: InputKind): string | null {
@@ -281,7 +281,8 @@ export function valueOf(form: Form, agent: PlanAgent, input: string): string {
   return form.typed[valueKey(agent.index, input)] ?? agent.found[input] ?? ''
 }
 
-const PROJECT = /^[A-Z][A-Z0-9]{0,9}$/
+// Jira's own shape (ADR 0035): a capital letter, then capital letters, digits or underscores.
+const PROJECT = /^[A-Z][A-Z0-9_]{0,254}$/
 
 function normalised(kind: InputKind, value: string): string {
   const text = value.trim()

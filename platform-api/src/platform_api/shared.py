@@ -1,3 +1,4 @@
+import re
 import secrets
 import time
 from dataclasses import dataclass
@@ -13,6 +14,12 @@ Digest = NewType("Digest", str)
 N8nExecutionId = NewType("N8nExecutionId", str)
 TaskId = NewType("TaskId", str)
 SoftwareId = NewType("SoftwareId", str)
+
+JIRA_PROJECT_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{0,254}\Z")
+"""A Jira project key as Jira allows it: a capital letter, then capital letters, digits or
+underscores, such as MOCK or AB_1. Data Center allows 255 characters at most (ADR 0035)."""
+JIRA_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{0,254}-[1-9][0-9]{0,8}\Z")
+"""A ticket key: a project key, a dash and the ticket's number, such as AB_1-12."""
 
 
 class Role(Enum):

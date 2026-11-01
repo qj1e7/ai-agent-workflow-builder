@@ -73,7 +73,7 @@ infra/
 | `GITHUB_TOKEN` | `.env`, empty by default | a Key Vault secret from `GH_RELEASE_TOKEN`, only when that secret is set |
 | `AGENT_RUNTIME_URL`, `N8N_BASE_URL`, `PLATFORM_INTERNAL_URL` | `http://<service>:<port>` | `https://<app>.internal.<domain>` or `https://<app>.<domain>` |
 | `CALLBACK_ALLOWED_ORIGINS` | `http://platform-api:8000` | platform-api's HTTPS origin |
-| `PRACTICE_JIRA_URL` (agent-runtime) | `http://platform-api:8000` | platform-api's HTTPS URL, or `practice_jira_url` when it is set |
+| `PLATFORM_JIRA_URL` (agent-runtime) | `http://platform-api:8000` | platform-api's HTTPS URL. It must be one of `CALLBACK_ALLOWED_ORIGINS` (ADR 0035) |
 | `COSMOS_ENDPOINT` | `http://cosmos:8081`, the emulator | the account's endpoint |
 | `COSMOS_KEY` | the emulator's published key | a Key Vault secret, copied from the account |
 | `ACTIVITY_READER` | `cosmos` by default | always `cosmos` |
@@ -170,7 +170,6 @@ If the repository is made public later, add required reviewers and "Prevent self
 
    | Variable | Value |
    |---|---|
-   | `PRACTICE_JIRA_URL` | optional. Leave it unset, and agent-runtime reads platform-api's own practice Jira |
    | `AZURE_LOCATION` | optional. The region for every resource. Unset means `southeastasia`. Set it before the first deploy only: changing it later replaces everything, PostgreSQL included |
    | `COSMOS_LOCATION` | optional. A region for Cosmos DB alone, when it is refused in `AZURE_LOCATION` |
    | `COSMOS_SERVERLESS` | optional. `true` makes a serverless Cosmos DB account, for when the free tier is refused. Unset means `false` |

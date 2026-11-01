@@ -66,7 +66,7 @@ An agent card is data: a name, a purpose, inputs and numbered blocks, each block
 
 - A running agent is offered only its card's tools. A write tool takes `title` and `body` and never a target. It only records a proposal: `kind` is the tool id and `subject` is the card id.
 - Each tool call is a step pair. `step` is the tool id with `_` for `.`, such as `jira_search`. A finished read has one list of text in `result` for the live view (`tags`, or ticket keys with titles).
-- Jira reads call the platform's practice Jira at `PRACTICE_JIRA_URL` with the task's callback token. A search or a read can only reach the Jira project on the card.
+- Jira reads call the platform at `PLATFORM_JIRA_URL`, `/internal/v1/runs/{run_id}/jira/tickets`, with the task's callback token. The platform answers from the practice Jira or a real one (ADR 0035), so the agent never holds a Jira key. `PLATFORM_JIRA_URL` must be one of `CALLBACK_ALLOWED_ORIGINS`. A search or a read can only reach the Jira project on the card.
 - A task has 50 seconds and each agent 8 model turns.
 
 ## What the Planner understood

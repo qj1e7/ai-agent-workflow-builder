@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from platform_api.auth import AuthConfig, ConfigError, auth_config
+from platform_api.shared import JIRA_PROJECT_PATTERN
 
 type Context = Literal["builder", "orchestration", "monitoring"]
 type ActivityReader = Literal["postgres", "cosmos"]
@@ -46,6 +47,10 @@ real body is a New workflow draft. Its content may be 32 KB (DRAFT_LIMIT_BYTES),
 100 KB as JSON even with every character escaped, so 2 MiB leaves about 20 times that."""
 
 
+PRACTICE_JIRA_PROJECT = "MOCK"
+"""The practice Jira's project, where the watchlist raises tickets unless told otherwise."""
+
+
 @dataclass(frozen=True)
 class Settings:
     auth: AuthConfig
@@ -63,6 +68,8 @@ class Settings:
     activity_reader: ActivityReader = "postgres"
     cosmos: CosmosSettings | None = None
     max_body_bytes: int = MAX_BODY_BYTES_DEFAULT
+    practice_systems: bool = True
+    watchlist_jira_project: str = PRACTICE_JIRA_PROJECT
 
 
 def _required(env: Mapping[str, str], name: str) -> str:
@@ -133,6 +140,27 @@ def max_body_bytes_from_env(env: Mapping[str, str]) -> int:
     return value
 
 
+def practice_systems_from_env(env: Mapping[str, str]) -> bool:
+    """Whether the practice copies' own routes are served (ADR 0035). On unless set to off."""
+    match env.get("PRACTICE_SYSTEMS", "").strip().lower() or "on":
+        case "on":
+            return True
+        case "off":
+            return False
+        case other:
+            raise ConfigError(f"PRACTICE_SYSTEMS takes on or off, not {other!r}.")
+
+
+def watchlist_jira_project_from_env(env: Mapping[str, str]) -> str:
+    project = env.get("WATCHLIST_JIRA_PROJECT", "").strip() or PRACTICE_JIRA_PROJECT
+    if JIRA_PROJECT_PATTERN.match(project) is None:
+        raise ConfigError(
+            f"WATCHLIST_JIRA_PROJECT must be a Jira project key, such as MOCK or AB_1: a capital "
+            f"letter, then capital letters, digits or underscores. {project!r} is not one."
+        )
+    return project
+
+
 def settings_from_env(env: Mapping[str, str]) -> Settings:
     auth = auth_config(env)
     cosmos = cosmos_from_env(env)
@@ -156,6 +184,8 @@ def settings_from_env(env: Mapping[str, str]) -> Settings:
         activity_reader=activity_reader_from_env(env, cosmos),
         cosmos=cosmos,
         max_body_bytes=max_body_bytes_from_env(env),
+        practice_systems=practice_systems_from_env(env),
+        watchlist_jira_project=watchlist_jira_project_from_env(env),
     )
 
 

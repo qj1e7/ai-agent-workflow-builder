@@ -1,8 +1,8 @@
-"""The practice Jira, read by the agents while a card run works (ADR 0023).
+"""Jira, read by the agents while a card run works (ADR 0023, ADR 0035).
 
-Only a running task may read it: the callback token names one run and one task, and the agent
-runtime holds it for that task alone. The routes are under /internal/, so the Portal's proxy
-never serves them.
+The agents read through our platform, never from Jira itself, so they hold no Jira key. Only a
+running task may read: the callback token names one run and one task, and the agent runtime holds
+it for that task alone. The routes are under /internal/, so the Portal's proxy never serves them.
 """
 
 import re
@@ -12,12 +12,12 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 
 from platform_api.monitoring import verify_callback
-from platform_api.orchestration.cards import JIRA_PROJECT_PATTERN, read_projects
+from platform_api.orchestration.cards import read_projects
 from platform_api.orchestration.http import current_mock_jira
 from platform_api.orchestration.spec import CardsTask
 from platform_api.orchestration.write_actions import MockJiraConnector, MockTicket, TicketStatus
 from platform_api.settings import Settings
-from platform_api.shared import RunId, TaskId
+from platform_api.shared import JIRA_PROJECT_PATTERN, RunId, TaskId
 from platform_api.wire import WireModel, error_response
 
 MIN_WORD = 3
@@ -57,7 +57,7 @@ def _words(text: str) -> list[str]:
     return list(dict.fromkeys(word.lower() for word in _WORD.findall(text)))
 
 
-router = APIRouter(prefix="/internal/v1/runs/{run_id}/practice-jira", tags=["internal"])
+router = APIRouter(prefix="/internal/v1/runs/{run_id}/jira", tags=["internal"])
 Jira = Annotated[MockJiraConnector, Depends(current_mock_jira)]
 CallbackToken = Annotated[str, Header(alias="X-Callback-Token")]
 UNAUTHORIZED = error_response("The callback token is not valid for this run and task")

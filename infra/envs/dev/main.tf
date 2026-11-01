@@ -223,7 +223,7 @@ locals {
       env = {
         GITHUB_API_BASE          = var.github_api_base
         CALLBACK_ALLOWED_ORIGINS = local.url["platform-api"]
-        PRACTICE_JIRA_URL        = var.practice_jira_url == "" ? local.url["platform-api"] : var.practice_jira_url
+        PLATFORM_JIRA_URL        = local.url["platform-api"]
       }
       secrets = merge(
         { AGENT_API_KEY = local.secret["agent-api-key"] },

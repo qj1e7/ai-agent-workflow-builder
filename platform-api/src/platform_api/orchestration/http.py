@@ -272,6 +272,8 @@ class MockJiraTickets(WireModel):
 
 
 router = APIRouter()
+practice_jira_router = APIRouter()
+"""The practice Jira's own pages, mounted only while PRACTICE_SYSTEMS is on (ADR 0035)."""
 
 StepKey = Annotated[str, Header(alias="X-Step-Key")]
 
@@ -649,12 +651,12 @@ def mock_jira_ticket(ticket: MockTicket) -> MockJiraTicket:
 MockJira = Annotated[MockJiraConnector, Depends(current_mock_jira)]
 
 
-@router.get("/api/v1/mock-jira/tickets", tags=["stubs"], responses=SIGNED_IN)
+@practice_jira_router.get("/api/v1/mock-jira/tickets", tags=["stubs"], responses=SIGNED_IN)
 async def list_mock_jira_tickets(principal: CurrentPrincipal, jira: MockJira) -> MockJiraTickets:
     return MockJiraTickets(tickets=[mock_jira_ticket(t) for t in await jira.tickets()])
 
 
-@router.post(
+@practice_jira_router.post(
     "/api/v1/mock-jira/tickets/{key}/done",
     tags=["stubs"],
     description=(

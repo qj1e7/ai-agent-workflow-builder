@@ -104,17 +104,6 @@ variable "github_api_base" {
   default     = "https://api.github.com"
 }
 
-variable "practice_jira_url" {
-  description = "Where agent-runtime reads the practice Jira (PRACTICE_JIRA_URL). Empty uses platform-api's own practice Jira, as Compose does. agent-runtime sends each task's callback token there, so it must be https."
-  type        = string
-  default     = ""
-
-  validation {
-    condition     = var.practice_jira_url == "" || can(regex("^https://[A-Za-z0-9._~%-]+([:/][A-Za-z0-9._~:/%-]*)?$", var.practice_jira_url))
-    error_message = "practice_jira_url must be empty, or an https URL with a host and no query or fragment, made of letters, digits and . _ ~ : / % -."
-  }
-}
-
 # The first people (ADR 0030). platform-api reads them only while its People list is empty, so a
 # later deploy cannot hand out roles. The rules match platform-api's startup check, so plan refuses
 # what would stop it. Real addresses go in the azure-dev environment's variables, never in git.

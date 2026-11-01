@@ -298,6 +298,10 @@ describe('the plan in step 2', () => {
   it('checks each value by its kind', () => {
     expect(valueProblem('jira_project', 'mock')).toBeNull()
     expect(valueProblem('jira_project', 'MO CK')).toBe('Write the project key, such as MOCK.')
+    expect(valueProblem('jira_project', 'ab_1')).toBeNull()
+    expect(valueProblem('jira_project', 'A' + 'B'.repeat(254))).toBeNull()
+    expect(valueProblem('jira_project', 'A' + 'B'.repeat(255))).toBe('Write the project key, such as MOCK.')
+    expect(valueProblem('jira_project', '_AB')).toBe('Write the project key, such as MOCK.')
     expect(valueProblem('github_repo', 'https://github.com/langchain-ai/langgraph')).toBeNull()
     expect(valueProblem('github_repo', 'langgraph')).toBe('Write it as owner/name, such as langchain-ai/langgraph.')
     expect(valueProblem('text', '')).toBe('Fill this in.')

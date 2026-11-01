@@ -115,7 +115,7 @@ def search(
     **query: str,
 ):
     return client.get(
-        f"/internal/v1/runs/{run}/practice-jira/tickets",
+        f"/internal/v1/runs/{run}/jira/tickets",
         params={"task": TASK, **query},
         headers=header(token),
     )
@@ -123,7 +123,7 @@ def search(
 
 def read(client: httpx.AsyncClient, key: str, run: RunId = CARD_RUN, token: str | None = None):
     return client.get(
-        f"/internal/v1/runs/{run}/practice-jira/tickets/{key}",
+        f"/internal/v1/runs/{run}/jira/tickets/{key}",
         params={"task": TASK},
         headers=header(token),
     )
@@ -215,9 +215,7 @@ async def test_a_bad_or_expired_token_gets_nothing(client: httpx.AsyncClient, ba
 
 
 async def test_no_token_header_gets_nothing(client: httpx.AsyncClient):
-    r = await client.get(
-        f"/internal/v1/runs/{CARD_RUN}/practice-jira/tickets", params={"task": TASK}
-    )
+    r = await client.get(f"/internal/v1/runs/{CARD_RUN}/jira/tickets", params={"task": TASK})
     assert r.status_code == 422 and "MOCK" not in r.text
 
 

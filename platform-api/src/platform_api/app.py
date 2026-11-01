@@ -18,7 +18,7 @@ from platform_api.monitoring import Copier
 from platform_api.monitoring import http as monitoring_http
 from platform_api.nul_guard import RefuseNul
 from platform_api.orchestration import http as orchestration_http
-from platform_api.orchestration import people_http, practice_jira_http, settings_http
+from platform_api.orchestration import jira_reads_http, people_http, settings_http
 from platform_api.security_headers import SecurityHeaders
 from platform_api.settings import Settings, settings_from_env
 from platform_api.wire import WireModel
@@ -95,7 +95,9 @@ def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
     app.include_router(drafts_http.router)
     app.include_router(watchlist_http.router)
     app.include_router(orchestration_http.router)
-    app.include_router(practice_jira_http.router)
+    if settings.practice_systems:
+        app.include_router(orchestration_http.practice_jira_router)
+    app.include_router(jira_reads_http.router)
     app.include_router(settings_http.router)
     app.include_router(people_http.router)
     app.include_router(monitoring_http.router)
