@@ -128,6 +128,7 @@ expect refused jira_email "a Cloud Jira with no email" -var jira_base_url=https:
   -var jira_api_flavor=cloud -var jira_api_token=t
 expect refused jira_browse_url "a Jira browse address with no key" -var jira_browse_url=https://jira.example.test/browse/
 expect refused watchlist_jira_project "a project key in small letters" -var watchlist_jira_project=ops
+expect refused watchlist_jira_project "a one-letter project key" -var watchlist_jira_project=A
 
 if [ "$failures" = 0 ]; then
   echo "check-variables.sh: all cases behaved as expected"

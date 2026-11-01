@@ -90,6 +90,7 @@ def test_every_write_tool_has_a_target_a_minimum_and_a_connector():
         ("jira_project", "A" + "B" * 254, True),
         ("jira_project", "A" + "B" * 255, False),
         ("jira_project", "_AB", False),
+        ("jira_project", "A", False),
         ("jira_project", "1ABC", False),
         ("text", "Quarterly review", True),
         ("text", "two\nlines", False),

@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -546,3 +547,15 @@ async def test_the_same_project_setting_or_no_watchlist_changes_nothing(
     await watchlist.adopt_ticket_project()
     view = await watchlist.view()
     assert view is not None and view.version == first.version
+
+
+async def test_moving_the_watchlist_to_the_settings_project_says_so_in_the_log(
+    db: Database, facts: FakeFacts, caplog: pytest.LogCaptureFixture
+):
+    await added(Watchlist(db, facts, ScheduleBook(db)), LANGGRAPH)
+    with caplog.at_level(logging.INFO, logger="platform_api"):
+        await Watchlist(db, facts, ScheduleBook(db), ticket_project="OPS").adopt_ticket_project()
+    assert (
+        "watchlist moved from MOCK to OPS by the deploy setting WATCHLIST_JIRA_PROJECT, version 2"
+        in caplog.messages
+    )

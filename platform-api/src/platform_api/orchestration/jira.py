@@ -194,6 +194,9 @@ class JiraWriteConnector:
         self._jira = jira
         self.records = JiraWriteRecords(db)
 
+    def link(self, reference: str) -> str:
+        return self._jira.browse_url(reference)
+
     async def execute(self, action: WriteAction, key: WriteKey) -> str:
         try:
             return await self._execute(action, key)

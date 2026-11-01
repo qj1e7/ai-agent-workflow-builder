@@ -390,6 +390,7 @@ def success_events() -> Timeline:
             connector="jira",
             operation="create_ticket",
             external_reference=TICKET_KEY,
+            url=f"/jira/{TICKET_KEY}",
             approved_by=[decided.data.by],
         ),
     )
@@ -573,6 +574,7 @@ def success_final_view(tl: Timeline) -> RunView:
                 connector="jira",
                 operation="create_ticket",
                 external_reference=TICKET_KEY,
+                url=f"/jira/{TICKET_KEY}",
                 approved_by=[BOB],
             )
         ],

@@ -4,6 +4,7 @@ from typing import NamedTuple
 import pytest
 
 from platform_api.monitoring import ActionLine, user_actor
+from platform_api.monitoring.events import WriteActionDoneData
 from platform_api.orchestration.runs import (
     CALLBACK_LIFETIME,
     DEADLINES,
@@ -310,3 +311,15 @@ def test_each_step_belongs_to_one_leg():
     assert LEG_STEPS[Leg.WORK] == (StepName.RUN_AGENTS, StepName.ASK_APPROVAL)
     assert LEG_STEPS[Leg.ACT] == (StepName.WRITE_ACTION,)
     assert set(STEP_LEG) == set(StepName)
+
+
+def test_a_written_ticket_carries_where_people_open_it():
+    linked = WriteDone("jira", "create_ticket", "MOCK-1", (UserId("bob"),), "/jira/MOCK-1")
+    moved = ACTING_UNCLAIMED.begin_write(HOLDER).state.succeed(HOLDER, (linked,), "Created MOCK-1")
+    data = moved.events[0].data.model_dump()
+    assert (data["external_reference"], data["url"]) == ("MOCK-1", "/jira/MOCK-1")
+
+
+def test_an_event_from_before_links_still_reads_with_no_url():
+    old = {"connector": "jira", "operation": "create_ticket", "external_reference": "MOCK-1"}
+    assert WriteActionDoneData.model_validate({**old, "approved_by": ["bob"]}).url is None

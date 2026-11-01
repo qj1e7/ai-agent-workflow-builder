@@ -42,6 +42,7 @@ describe('a run that was approved and wrote its ticket', () => {
     expect(model.phase).toEqual({ state: 'succeeded', outcome: 'written' })
     expect(model.written.map((w) => [w.connector, w.operation])).toEqual([['jira', 'create_ticket']])
     expect(model.written.map((w) => w.ref)).toEqual(['MOCK-142'])
+    expect(model.written.map((w) => w.url)).toEqual(['/jira/MOCK-142'])
     expect(model.approvedBy).toEqual(['bob'])
     expect(model.startedBy).toBe('alice')
     expect(model.people).toMatchObject({ alice: 'Alice', bob: 'Bob' })

@@ -395,6 +395,7 @@ def card_run_events() -> Timeline:
             connector="jira",
             operation="create_ticket",
             external_reference=TICKET_KEY,
+            url=f"/jira/{TICKET_KEY}",
             approved_by=[decided.data.by],
         ),
     )

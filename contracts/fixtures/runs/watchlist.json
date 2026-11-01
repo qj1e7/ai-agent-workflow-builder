@@ -570,7 +570,8 @@
       "external_reference": "MOCK-143",
       "approved_by": [
         "bob"
-      ]
+      ],
+      "url": "/jira/MOCK-143"
     }
   },
   {
@@ -590,7 +591,8 @@
       "external_reference": "MOCK-144",
       "approved_by": [
         "bob"
-      ]
+      ],
+      "url": "/jira/MOCK-144"
     }
   },
   {
@@ -610,7 +612,8 @@
       "external_reference": "MOCK-145",
       "approved_by": [
         "bob"
-      ]
+      ],
+      "url": "/jira/MOCK-145"
     }
   },
   {

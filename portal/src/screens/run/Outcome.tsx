@@ -27,6 +27,7 @@ export function Outcome({ model, nameOf }: { model: RunModel; nameOf: NameOf }) 
     )
   }
   const refs = model.written.map((written) => written.ref)
+  const urls = new Map(model.written.map((written) => [written.ref, written.url ?? null]))
   const jiraRefs = new Set(model.written.filter((written) => written.connector === 'jira' && written.ref !== '').map((written) => written.ref))
   const tickets = model.written.length > 0 && model.written.every((written) => written.operation === 'create_ticket')
   const approvers = andList(model.approvedBy.map(nameOf)) || 'An Approver'
@@ -46,7 +47,7 @@ export function Outcome({ model, nameOf }: { model: RunModel; nameOf: NameOf }) 
           {refs.map((ref) => (
             <li key={ref} className={styles['chip']}>
               <IconCheck size={12} />
-              {jiraRefs.has(ref) ? <TicketLink ticketKey={ref} /> : ref}
+              {jiraRefs.has(ref) ? <TicketLink ticketKey={ref} href={urls.get(ref)} /> : ref}
             </li>
           ))}
         </ul>

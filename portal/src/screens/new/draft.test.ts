@@ -302,6 +302,8 @@ describe('the plan in step 2', () => {
     expect(valueProblem('jira_project', 'A' + 'B'.repeat(254))).toBeNull()
     expect(valueProblem('jira_project', 'A' + 'B'.repeat(255))).toBe('Write the project key, such as MOCK.')
     expect(valueProblem('jira_project', '_AB')).toBe('Write the project key, such as MOCK.')
+    expect(valueProblem('jira_project', 'A')).toBe('Write the project key, such as MOCK.')
+    expect(valueProblem('jira_project', 'AB')).toBeNull()
     expect(valueProblem('github_repo', 'https://github.com/langchain-ai/langgraph')).toBeNull()
     expect(valueProblem('github_repo', 'langgraph')).toBe('Write it as owner/name, such as langchain-ai/langgraph.')
     expect(valueProblem('text', '')).toBe('Fill this in.')

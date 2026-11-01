@@ -256,8 +256,8 @@ variable "watchlist_jira_project" {
   default     = "MOCK"
 
   validation {
-    condition     = can(regex("^[A-Z][A-Z0-9_]{0,254}$", var.watchlist_jira_project))
-    error_message = "watchlist_jira_project must be a Jira project key: a capital letter, then capital letters, digits or underscores."
+    condition     = can(regex("^[A-Z][A-Z0-9_]{1,254}$", var.watchlist_jira_project))
+    error_message = "watchlist_jira_project must be a Jira project key: a capital letter, then 1 or more capital letters, digits or underscores."
   }
 }
 

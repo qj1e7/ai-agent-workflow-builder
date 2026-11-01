@@ -20,7 +20,15 @@ export interface TicketHref {
  * The one place that decides where a ticket key links. With a Jira address in /config.json it is the real Jira,
  * as an outside link. Without one it is the practice Jira page, open at that ticket.
  */
-export function ticketHref(key: string, browseUrl: string | null): TicketHref {
+const OUTSIDE = /^https?:\/\/[^/\s]/i
+
+/** Where a ticket key leads. An address the platform gave with the write comes first (ADR 0035): a
+ * path opens in the Portal, an http(s) address opens Jira. Anything else from it is ignored. */
+export function ticketHref(key: string, browseUrl: string | null, given: string | null = null): TicketHref {
+  if (given) {
+    if (given.startsWith('/') && !given.startsWith('//')) return { href: given, external: false }
+    if (OUTSIDE.test(given)) return { href: given, external: true }
+  }
   if (browseUrl === null || browseUrl === '') return { href: ticketPath(key), external: false }
   return {
     href: browseUrl.replaceAll('{key}', encodeURIComponent(key)),

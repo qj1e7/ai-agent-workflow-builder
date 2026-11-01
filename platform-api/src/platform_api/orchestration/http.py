@@ -93,6 +93,7 @@ class WriteDoneView(WireModel):
     operation: str
     external_reference: str
     approved_by: list[UserId]
+    url: str | None = None
 
 
 class _RunBase(WireModel):
@@ -374,6 +375,7 @@ def run_view(detail: RunDetail, viewer: Principal) -> RunView:
                         connector=w.connector,
                         operation=w.operation,
                         external_reference=w.external_reference,
+                        url=w.url,
                         approved_by=list(w.approved_by),
                     )
                     for w in state.written

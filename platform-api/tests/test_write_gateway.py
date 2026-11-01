@@ -68,6 +68,9 @@ class BlockingConnector:
         await self.release.wait()
         return f"MOCK-{len(self.calls)}"
 
+    def link(self, reference: str) -> str | None:
+        return None
+
 
 def authorized(connector: BlockingConnector | PracticeKit) -> AuthorizedWrite:
     verdict = check(ACTING, PROPOSAL, REQUEST, APPROVED, registry_of([connector]))
@@ -191,3 +194,11 @@ async def test_a_write_jira_refuses_fails_for_good_and_one_it_cannot_reach_may_b
     with pytest.raises(WriteFailed) as down:
         await WriteGateway(db, [jira], connector_timeout=timedelta(0)).execute(authorized(jira))
     assert down.value.retryable is True
+
+
+async def test_each_written_ticket_says_where_people_open_it(db: Database):
+    await seed_run(db)
+    jira = PracticeKit(db)
+    [done] = await WriteGateway(db, [jira]).execute(authorized(jira))
+    assert (done.external_reference, done.url) == ("MOCK-1", "/jira/MOCK-1")
+    assert BlockingConnector().link("MOCK-9") is None

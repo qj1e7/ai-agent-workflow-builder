@@ -270,6 +270,10 @@ class WriteConnector(Protocol):
 
     async def execute(self, action: WriteAction, key: WriteKey) -> str: ...
 
+    def link(self, reference: str) -> str | None:
+        """Where people open what execute made, or None when it has no page."""
+        ...
+
 
 def registry_of(connectors: Iterable[WriteConnector]) -> Registry:
     return {connector.name: connector.operations for connector in connectors}
@@ -309,7 +313,10 @@ class WriteGateway:
         done: list[WriteDone] = []
         for index, action in enumerate(write.proposal.actions):
             reference = await self._execute_one(write.proposal, index, action)
-            done.append(WriteDone(action.connector, action.operation, reference, write.approvers))
+            link = self._connectors[action.connector].link(reference)
+            done.append(
+                WriteDone(action.connector, action.operation, reference, write.approvers, link)
+            )
         return tuple(done)
 
     async def _execute_one(self, proposal: Proposal, index: int, action: WriteAction) -> str:

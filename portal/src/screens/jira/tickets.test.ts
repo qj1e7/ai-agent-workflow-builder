@@ -98,6 +98,18 @@ describe('ticket keys in a line of words', () => {
     expect(ticketHref('OPS-142', 'https://jira.example.test/browse/{key}')).toEqual({ href: 'https://jira.example.test/browse/OPS-142', external: true })
     expect(ticketHref('A B/1', 'https://jira.example.test/browse/{key}').href).toBe('https://jira.example.test/browse/A%20B%2F1')
   })
+
+  it('prefers the address the platform gave with the write: a path opens in place, a Jira address opens outside', () => {
+    const browse = 'https://jira.example.test/browse/{key}'
+    expect(ticketHref('OPS-142', browse, '/jira/OPS-142')).toEqual({ href: '/jira/OPS-142', external: false })
+    expect(ticketHref('OPS-142', null, 'https://jira.real.test/browse/OPS-142')).toEqual({ href: 'https://jira.real.test/browse/OPS-142', external: true })
+    expect(ticketHref('OPS-142', browse, null)).toEqual({ href: 'https://jira.example.test/browse/OPS-142', external: true })
+  })
+
+  it('ignores an address from the platform that is not a path or an http(s) address', () => {
+    for (const given of ['javascript:alert(1)', '//evil.test/x', 'ftp://jira.example.test/OPS-142', ''])
+      expect(ticketHref('OPS-142', null, given)).toEqual({ href: '/jira/OPS-142', external: false })
+  })
 })
 
 describe('the words on the practice Jira page', () => {

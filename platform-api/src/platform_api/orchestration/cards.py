@@ -103,7 +103,8 @@ INPUT_KINDS: tuple[str, ...] = get_args(InputKind.__value__)
 KIND_EXAMPLES: Mapping[str, str] = {
     "github_repo": "owner/name, for example langchain-ai/langgraph",
     "jira_project": (
-        "a capital letter, then capital letters, digits or underscores, for example MOCK or AB_1"
+        "2 or more capital letters, digits or underscores, starting with a letter, for example "
+        "MOCK or AB_1"
     ),
     "text": f"one line of 1 to {TEXT_LIMIT} characters",
 }

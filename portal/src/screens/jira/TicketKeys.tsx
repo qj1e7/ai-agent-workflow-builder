@@ -4,8 +4,8 @@ import { IconExternal } from '../../ui/icons'
 import { splitKeys, ticketHref } from './tickets'
 
 /** A ticket key as a link. Every ticket key in the app goes through here, so ticketHref is the only place that picks where it leads. */
-export function TicketLink({ ticketKey, className }: { ticketKey: string; className?: string }) {
-  const { href, external } = ticketHref(ticketKey, useJiraBrowseUrl())
+export function TicketLink({ ticketKey, className, href: given }: { ticketKey: string; className?: string; href?: string | null | undefined }) {
+  const { href, external } = ticketHref(ticketKey, useJiraBrowseUrl(), given ?? null)
   if (!external) {
     return (
       <Link to={href} className={className}>
@@ -23,6 +23,6 @@ export function TicketLink({ ticketKey, className }: { ticketKey: string; classN
 }
 
 /** Words that hold ticket keys the Portal already knows, such as "Created OPS-142 in Jira.", with exactly those keys as links. */
-export function TicketKeys({ text, keys }: { text: string; keys: readonly string[] }) {
-  return <>{splitKeys(text, keys).map((piece, index) => (piece.key ? <TicketLink key={index} ticketKey={piece.text} /> : piece.text))}</>
+export function TicketKeys({ text, keys, hrefs }: { text: string; keys: readonly string[]; hrefs?: Readonly<Record<string, string>> | undefined }) {
+  return <>{splitKeys(text, keys).map((piece, index) => (piece.key ? <TicketLink key={index} ticketKey={piece.text} href={hrefs?.[piece.text]} /> : piece.text))}</>
 }
