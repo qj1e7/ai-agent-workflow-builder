@@ -33,7 +33,7 @@ from platform_api.builder.templates import (
     WATCHLIST_INSTRUCTION,
     WATCHLIST_LIMIT,
     WATCHLIST_NAME,
-    WATCHLIST_PARAMS,
+    WATCHLIST_PROJECT,
 )
 from platform_api.db import Connection, Database, UnitOfWork, json
 from platform_api.orchestration import (
@@ -316,10 +316,28 @@ async def _write_list(
 
 
 class Watchlist:
-    def __init__(self, db: Database, facts: WatchlistFacts, schedules: ScheduleBook) -> None:
+    def __init__(
+        self,
+        db: Database,
+        facts: WatchlistFacts,
+        schedules: ScheduleBook,
+        ticket_project: str = WATCHLIST_PROJECT,
+    ) -> None:
         self._db = db
         self._facts = facts
         self._schedules = schedules
+        self._project = ticket_project
+
+    async def adopt_ticket_project(self) -> None:
+        """Moves the watchlist to the Jira project the deploy names (WATCHLIST_JIRA_PROJECT), in a
+        new version, as a change to the list would. Until the Portal can set the project, the
+        setting wins (ADR 0035). Nothing changes when there is no watchlist or it is there."""
+        async with self._db.transaction("builder") as uow:
+            await uow.conn.execute("SELECT pg_advisory_xact_lock(hashtext('builder.watchlist'))")
+            record = await _current(uow.conn, lock=True)
+            if record is None or record.ticket_project == self._project:
+                return
+            await self._next_version(uow, record, record.software, ticket_project=self._project)
 
     async def view(self) -> WatchlistView | None:
         async with self._db.connection("builder") as conn:
@@ -457,27 +475,31 @@ class Watchlist:
                 SOFTWARE_WATCHLIST.key,
                 WATCHLIST_NAME,
                 WATCHLIST_INSTRUCTION,
-                json(dict(WATCHLIST_PARAMS)),
+                json({"ticket_project": self._project}),
                 uow.now,
             ),
         )
         await _write_list(uow, use_case_id, 1, (first,))
-        return WatchlistRecord(
-            use_case_id, 1, principal.user_id, WATCHLIST_PARAMS["ticket_project"], (first,), On()
-        )
+        return WatchlistRecord(use_case_id, 1, principal.user_id, self._project, (first,), On())
 
     async def _next_version(
-        self, uow: UnitOfWork, record: WatchlistRecord, software: tuple[ListedSoftware, ...]
+        self,
+        uow: UnitOfWork,
+        record: WatchlistRecord,
+        software: tuple[ListedSoftware, ...],
+        ticket_project: str | None = None,
     ) -> WatchlistRecord:
         """The list belongs to the use case version, so a change is a new version that every
-        later check records as the version it used."""
+        later check records as the version it used. The project moves only when one is given."""
         version = record.version + 1
+        project = record.ticket_project if ticket_project is None else ticket_project
         await uow.conn.execute(
             "INSERT INTO builder.use_case_versions (use_case_id, version, template, name, "
             "instruction, params, created_at) "
-            "SELECT use_case_id, %s, template, name, instruction, params, %s "
+            "SELECT use_case_id, %s, template, name, instruction, "
+            "jsonb_set(params, '{ticket_project}', to_jsonb(%s::text)), %s "
             "FROM builder.use_case_versions WHERE use_case_id = %s AND version = %s",
-            (version, uow.now, record.use_case_id, record.version),
+            (version, project, uow.now, record.use_case_id, record.version),
         )
         await uow.conn.execute(
             "UPDATE builder.use_cases SET current_version = %s WHERE use_case_id = %s",
@@ -485,10 +507,5 @@ class Watchlist:
         )
         await _write_list(uow, record.use_case_id, version, software)
         return WatchlistRecord(
-            record.use_case_id,
-            version,
-            record.owner,
-            record.ticket_project,
-            software,
-            record.lifecycle,
+            record.use_case_id, version, record.owner, project, software, record.lifecycle
         )

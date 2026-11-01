@@ -76,7 +76,7 @@ infra/
 | n8n's `N8N_PROTOCOL`, `N8N_HOST`, `N8N_EDITOR_BASE_URL`, `N8N_PROXY_HOPS` | not set | not set while n8n is internal. With its editor open, `https`, `n8n.<domain>`, `https://n8n.<domain>/` and `1` |
 | n8n's `N8N_INSTANCE_OWNER_*` | not set | not set while n8n is internal. With its editor open, `MANAGED_BY_ENV=true`, the `N8N_OWNER_EMAIL` address, the names `Platform Bootstrap`, and `PASSWORD_HASH` as the app's own secret |
 | `CALLBACK_ALLOWED_ORIGINS` | `http://platform-api:8000` | platform-api's HTTPS origin |
-| `PRACTICE_JIRA_URL` (agent-runtime) | `http://platform-api:8000` | platform-api's HTTPS URL, or `practice_jira_url` when it is set |
+| `PLATFORM_JIRA_URL` (agent-runtime) | `http://platform-api:8000` | platform-api's HTTPS URL. It must be one of `CALLBACK_ALLOWED_ORIGINS` (ADR 0035) |
 | `COSMOS_ENDPOINT` | `http://cosmos:8081`, the emulator | the account's endpoint |
 | `COSMOS_KEY` | the emulator's published key | a Key Vault secret, copied from the account |
 | `ACTIVITY_READER` | `cosmos` by default | always `cosmos` |
@@ -176,7 +176,7 @@ If the repository is made public later, add required reviewers and "Prevent self
    Do this before step 5. The deploy identity's federated credential trusts any workflow job that names `environment: azure-dev`. A workflow that names an environment that does not exist creates it, with no rules at all. So if the credential came first, a workflow on any branch could act as the deploy identity.
 5. **Create the state storage, the resource group and the deploy identity.** Follow [bootstrap/README.md](bootstrap/README.md). It prints five values for step 7.
 6. **Register the Entra ID apps.** Follow [docs/auth/entra-setup.md](../docs/auth/entra-setup.md). It creates the two app registrations, with the app roles `Operator` and `Approver` on platform-api's, and gives the values for the `OIDC_` variables in step 7. The Portal's address does not exist until the first deploy, so register the Portal app without its redirect URIs for now. If the university tenant does not let students register apps, this step needs a tenant that does, because app roles live on an app registration. The deploy identity from step 5 does not have this problem, because it is a managed identity.
-7. **Set the environment's secrets and variables.** On the `azure-dev` environment, add these. The repository is public, so anyone can read the deploy's logs, and GitHub masks only secret values. So every value that names a person, an ID or the state storage goes under Secrets, and so do the addresses allowed to reach n8n. Only settings that name nobody go under Variables: the region, the practice Jira, the Cosmos DB switches, and n8n's switch and inside ranges.
+7. **Set the environment's secrets and variables.** On the `azure-dev` environment, add these. The repository is public, so anyone can read the deploy's logs, and GitHub masks only secret values. So every value that names a person, an ID or the state storage goes under Secrets, and so do the addresses allowed to reach n8n. Only settings that name nobody go under Variables: the region, the Cosmos DB switches, and n8n's switch and inside ranges.
 
    | Secret | Value |
    |---|---|
@@ -199,7 +199,6 @@ If the repository is made public later, add required reviewers and "Prevent self
 
    | Variable | Value |
    |---|---|
-   | `PRACTICE_JIRA_URL` | optional. Leave it unset, and agent-runtime reads platform-api's own practice Jira |
    | `TEAMS_CHANNEL` | optional. The Teams channel's name, as the approval card and the activity log name it. Unset means `CODESparks Ops` |
    | `AZURE_LOCATION` | optional. The region for every resource. Unset means `southeastasia`. Set it before the first deploy only: changing it later replaces everything, PostgreSQL included |
    | `COSMOS_LOCATION` | optional. A region for Cosmos DB alone, when it is refused in `AZURE_LOCATION` |

@@ -176,7 +176,7 @@ flowchart TB
 
     orch -. "Agent API /v1/tasks and the Planner's routes,<br/>X-Agent-Key. Contract: agent-api.schema.json" .-> runtime
     runtime -. "POST /internal/v1/runs/{run_id}/agent-events,<br/>X-Callback-Token, to the address it was given" .-> mon
-    runtime -. "practice Jira reads:<br/>/internal/v1/runs/{run_id}/practice-jira/tickets" .-> orch
+    runtime -. "Jira reads:<br/>/internal/v1/runs/{run_id}/jira/tickets" .-> orch
     n8n -. "POST /internal/v1/runs/{run_id}/steps/{step},<br/>/internal/v1/workflow-failures, /internal/v1/schedules/tick, X-Step-Key" .-> orch
     orch -. "WorkflowEngine port: POST /webhook/run/work or act" .-> n8n
     mon -. "the Copier writes items,<br/>the readers query one partition" .-> cosmos

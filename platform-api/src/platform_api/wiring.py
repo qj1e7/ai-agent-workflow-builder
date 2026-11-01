@@ -114,7 +114,8 @@ async def build(settings: Settings) -> Services:
         public_base_url=settings.public_base_url,
     )
     schedules = ScheduleBook(db)
-    watchlist = Watchlist(db, WatchFacts(db, jira), schedules)
+    watchlist = Watchlist(db, WatchFacts(db, jira), schedules, settings.watchlist_jira_project)
+    await watchlist.adopt_ticket_project()
     builder = Builder(
         db,
         orchestrator,

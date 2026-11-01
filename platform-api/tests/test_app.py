@@ -61,8 +61,8 @@ ROUTES = {
     ("POST", "/api/v1/mock-jira/tickets/{key}/done"),
     ("POST", "/internal/v1/runs/{run_id}/steps/{step}"),
     ("POST", "/internal/v1/runs/{run_id}/agent-events"),
-    ("GET", "/internal/v1/runs/{run_id}/practice-jira/tickets"),
-    ("GET", "/internal/v1/runs/{run_id}/practice-jira/tickets/{key}"),
+    ("GET", "/internal/v1/runs/{run_id}/jira/tickets"),
+    ("GET", "/internal/v1/runs/{run_id}/jira/tickets/{key}"),
     ("POST", "/internal/v1/schedules/tick"),
     ("POST", "/internal/v1/workflow-failures"),
     ("GET", "/api/v1/settings/model"),
@@ -91,6 +91,16 @@ def test_openapi_lists_every_route(client: TestClient):
     paths = client.get("/openapi.json").json()["paths"]
     listed = {(method.upper(), path) for path, ops in paths.items() for method in ops}
     assert listed == ROUTES
+
+
+def test_with_practice_systems_off_no_practice_jira_route_is_served():
+    client = TestClient(create_app({**LOCAL, "PRACTICE_SYSTEMS": "off"}))
+    paths = client.get("/openapi.json").json()["paths"]
+    assert [path for path in paths if "mock-jira" in path] == []
+    assert "/api/v1/teams-stub/messages" in paths
+    alice = {"X-Dev-User": "alice"}
+    assert client.get("/api/v1/mock-jira/tickets", headers=alice).status_code == 404
+    assert client.post("/api/v1/mock-jira/tickets/MOCK-1/done", headers=alice).status_code == 404
 
 
 @pytest.mark.parametrize(

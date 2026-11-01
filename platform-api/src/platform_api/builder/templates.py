@@ -120,7 +120,8 @@ WATCHLIST_INSTRUCTION = (
     "Check the team's watched software for new releases and raise an upgrade ticket for each "
     "one that is behind."
 )
-WATCHLIST_PARAMS: Mapping[str, str] = {"ticket_project": "MOCK"}
+WATCHLIST_PROJECT = "MOCK"
+"""The practice Jira's project. A deploy names another with WATCHLIST_JIRA_PROJECT (ADR 0035)."""
 WATCHLIST_LIMIT = 100
 
 
