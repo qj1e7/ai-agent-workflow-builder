@@ -5,8 +5,8 @@ made through the API with no run behind it, so its run columns may be empty. Eac
 made gets its write label, and the platform's practice account as its maker.
 
 orchestration.jira_writes is the Jira connector's own record of each write key: when it began to
-make the ticket and, once Jira answered, the ticket's key. A retry trusts this record, never a
-label in Jira that anyone could add.
+make the ticket, which try holds it now, and, once Jira answered, the ticket's key. A retry trusts
+this record, never a label in Jira that anyone could add.
 """
 
 from alembic import op
@@ -32,12 +32,19 @@ def upgrade() -> None:
         CREATE TABLE orchestration.jira_writes (
             idempotency_key text PRIMARY KEY,
             started_at timestamptz NOT NULL,
-            ticket_key text
+            ticket_key text,
+            claimed_at timestamptz
         );
         INSERT INTO orchestration.jira_writes (idempotency_key, started_at, ticket_key)
             SELECT idempotency_key, started_at, external_reference
             FROM orchestration.write_executions
             WHERE status = 'done' AND idempotency_key IS NOT NULL;
+        -- A ticket from a write whose gateway record never said done, as after an old crash,
+        -- is that write's ticket too, so a retry does not make a second one.
+        INSERT INTO orchestration.jira_writes (idempotency_key, started_at, ticket_key)
+            SELECT idempotency_key, created_at, key FROM orchestration.mock_jira_tickets
+            WHERE idempotency_key IS NOT NULL
+            ON CONFLICT (idempotency_key) DO NOTHING;
         GRANT SELECT, INSERT, UPDATE, DELETE ON orchestration.jira_writes TO wab_orchestration;
     """)
 

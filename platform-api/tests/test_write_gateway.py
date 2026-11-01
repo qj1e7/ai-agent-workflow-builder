@@ -191,3 +191,15 @@ async def test_a_write_jira_refuses_fails_for_good_and_one_it_cannot_reach_may_b
     with pytest.raises(WriteFailed) as down:
         await WriteGateway(db, [jira], connector_timeout=timedelta(0)).execute(authorized(jira))
     assert down.value.retryable is True
+
+
+async def test_two_gateways_racing_on_one_write_make_one_ticket(db: Database):
+    await seed_run(db)
+    jira = PracticeKit(db)
+    write = authorized(jira)
+    first, second = await asyncio.gather(
+        WriteGateway(db, [jira], poll=0.05).execute(write),
+        WriteGateway(db, [jira], poll=0.05).execute(write),
+    )
+    assert first == second
+    assert [t.key for t in await jira.tickets()] == ["MOCK-1"]

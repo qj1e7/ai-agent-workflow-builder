@@ -3,6 +3,7 @@
 import hashlib
 import hmac
 import re
+from collections import deque
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -13,6 +14,9 @@ from platform_api.shared import TicketStatus
 
 PRACTICE_EMAIL = "practice@platform.invalid"
 """The account the adapter names when the practice Jira speaks Cloud's API."""
+PRACTICE_ZONE = "Asia/Singapore"
+"""The practice account's time zone. Jira reads JQL dates in the account's zone, so the practice
+Jira does too, and a date sent in the wrong zone shows in the contract suite."""
 PRACTICE_ACCOUNT = "wab-platform"
 """The platform's account in the practice Jira: what /myself answers, and who made its tickets."""
 
@@ -82,8 +86,10 @@ class PracticeJira:
         self.token = token
         self.portal_url = portal_url.rstrip("/")
         self._failures: list[Failure] = []
-        self.calls: list[str] = []
-        """Each REST call, as "GET /rest/api/2/search", so a test can see what was asked."""
+        self.time_zone = PRACTICE_ZONE
+        self.calls: deque[str] = deque(maxlen=200)
+        """The latest signed-in REST calls, as "GET /rest/api/2/search", so a test can see what
+        was asked. Bounded, because the practice Jira may be reached from outside."""
 
     def fail_next(self, status: int, times: int = 1, retry_after: int | None = None) -> None:
         """Answers the next calls with this status, as a busy or broken Jira would. For tests."""
@@ -103,6 +109,7 @@ class PracticeJira:
         labels: Sequence[str],
         issue_type: str,
         creator: str | None = PRACTICE_ACCOUNT,
+        created_at: datetime | None = None,
     ) -> PracticeTicket:
         """A new ticket, numbered after every other. A label in our write-key shape also fills
         the run columns, so the practice Jira's page can link to the run."""
@@ -130,7 +137,7 @@ class PracticeJira:
                         project,
                         title,
                         body,
-                        _to_ms(uow.now),
+                        _to_ms(created_at or uow.now),
                         None if ours is None else ours.group(1),
                         None if ours is None else ours.group(2),
                         list(dict.fromkeys(labels)),

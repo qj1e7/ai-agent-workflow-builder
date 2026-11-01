@@ -12,6 +12,7 @@ set, the same tests run against a real sandbox too:
 Every ticket a test makes carries a fresh marker, so the tests never assume an empty Jira.
 """
 
+import asyncio
 import os
 import uuid
 from collections.abc import AsyncIterator
@@ -24,8 +25,11 @@ from fastapi import FastAPI
 
 from platform_api.db import Database
 from platform_api.orchestration.jira import (
+    CLAIM_LEASE,
+    CONNECTOR_DEADLINE,
     IssueSearch,
     JiraFlavor,
+    JiraIssue,
     JiraRefused,
     JiraUnavailable,
     JiraWriteConnector,
@@ -33,7 +37,12 @@ from platform_api.orchestration.jira import (
     write_label,
 )
 from platform_api.orchestration.jira_rest import JiraAuth, JiraRestAdapter
-from platform_api.orchestration.write_actions import WriteAction, WriteKey, WriteRefused
+from platform_api.orchestration.write_actions import (
+    CONNECTOR_TIMEOUT,
+    WriteAction,
+    WriteKey,
+    WriteRefused,
+)
 from platform_api.practice_jira import PRACTICE_EMAIL, PracticeJira, practice_token
 from platform_api.practice_jira import router as practice_router
 from platform_api.shared import ProposalId, RunId
@@ -267,7 +276,7 @@ async def test_a_retry_after_a_made_ticket_uses_our_record_and_never_searches(
     first = await connector.execute(ACTION, WRITE)
     practice.calls.clear()
     assert await connector.execute(ACTION, WRITE) == first
-    assert practice.calls == []
+    assert list(practice.calls) == []
     other = await connector.execute(ACTION, WriteKey(WRITE.run_id, WRITE.proposal_id, 1))
     tickets = await practice.tickets()
     assert [t.key for t in tickets] == [first, other]
@@ -281,7 +290,7 @@ async def test_a_crash_after_jiras_201_finds_our_own_ticket_and_makes_no_second(
     practice = target.needs_practice()
     connector = JiraWriteConnector(target.jira, db)
     # As if the platform stopped after Jira made the ticket and before it noted the key.
-    await connector.records.creating(WRITE.text)
+    await crashed(connector, WRITE)
     made = await target.jira.create_issue(
         NewIssue("MOCK", "Upgrade", "Soon.", (write_label(WRITE),))
     )
@@ -303,7 +312,7 @@ async def test_a_ticket_someone_else_planted_with_our_label_is_never_taken_as_ou
     # After a crash, a label match that another account made needs a person.
     other = WriteKey(WRITE.run_id, WRITE.proposal_id, 2)
     await practice.create("MOCK", "Planted", "", [write_label(other)], "Task", creator="mallory")
-    await connector.records.creating(other.text)
+    await crashed(connector, other)
     with pytest.raises(WriteRefused, match="did not make it"):
         await connector.execute(ACTION, other)
 
@@ -333,8 +342,9 @@ async def test_the_connector_turns_a_refusal_into_a_write_that_is_not_retried(
 
 
 async def crashed(connector: JiraWriteConnector, key: WriteKey) -> None:
-    """As if a try for this key began, and the platform stopped before noting a ticket."""
-    await connector.records.creating(key.text)
+    """As if a try for this key began, and stopped before noting a ticket, its claim gone."""
+    assert await connector.records.claim(key.text) is not None
+    await connector.records.release(key.text)
 
 
 async def ours(target: Target, title: str, labels: list[str]) -> str:
@@ -381,3 +391,81 @@ async def test_a_found_ticket_with_another_title_is_refused(target: Target, db: 
     await crashed(connector, WRITE)
     with pytest.raises(WriteRefused, match="title"):
         await connector.execute(ACTION, WRITE)
+
+
+async def test_two_tries_of_one_write_at_once_make_one_ticket(target: Target, db: Database):
+    practice = target.needs_practice()
+    connector = JiraWriteConnector(target.jira, db)
+    results = await asyncio.gather(
+        connector.execute(ACTION, WRITE), connector.execute(ACTION, WRITE), return_exceptions=True
+    )
+    keys = [r for r in results if isinstance(r, str)]
+    others = [r for r in results if not isinstance(r, str)]
+    assert len(await practice.tickets()) == 1
+    assert keys and all(key == keys[0] for key in keys)
+    assert all(
+        isinstance(e, JiraUnavailable) and e.retryable and "in progress" in str(e) for e in others
+    )
+
+
+class HangingJira:
+    """A Jira that never answers."""
+
+    async def find_by_label(self, project: str, label: str) -> JiraIssue | None:
+        await asyncio.sleep(3600)
+        return None
+
+    async def create_issue(self, issue: NewIssue) -> str:
+        await asyncio.sleep(3600)
+        return ""
+
+    def browse_url(self, key: str) -> str:
+        return key
+
+
+def test_a_try_ends_before_its_claim_and_the_claim_before_the_gateway_calls_it_lost():
+    assert CONNECTOR_DEADLINE < CLAIM_LEASE < CONNECTOR_TIMEOUT
+    assert timedelta(seconds=5) <= CLAIM_LEASE - CONNECTOR_DEADLINE
+
+
+async def test_a_jira_that_never_answers_fails_the_try_in_time_and_frees_the_write(db: Database):
+    connector = JiraWriteConnector(HangingJira(), db, deadline=timedelta(seconds=0.2))  # type: ignore[arg-type]
+    started = asyncio.get_running_loop().time()
+    with pytest.raises(JiraUnavailable) as failed:
+        await connector.execute(ACTION, WRITE)
+    assert failed.value.retryable is True
+    assert asyncio.get_running_loop().time() - started < 2
+    record = await connector.records.get(WRITE.text)
+    assert record is not None and record.claimed_at is None and record.ticket_key is None
+
+
+async def test_a_found_ticket_made_before_the_write_began_is_refused(target: Target, db: Database):
+    practice = target.needs_practice()
+    connector = JiraWriteConnector(target.jira, db)
+    earlier = practice.now() - timedelta(minutes=10)
+    await practice.create("MOCK", "Upgrade", "", [write_label(WRITE)], "Task", created_at=earlier)
+    await crashed(connector, WRITE)
+    with pytest.raises(WriteRefused, match="before this write began"):
+        await connector.execute(ACTION, WRITE)
+
+
+async def test_the_practice_jira_notes_only_signed_in_calls_and_only_the_latest(target: Target):
+    practice = target.needs_practice()
+    version = "3" if target.flavor == "cloud" else "2"
+    await target.client.get(f"{target.base_url}/rest/api/{version}/project/MOCK")
+    assert list(practice.calls) == []
+    assert practice.calls.maxlen is not None and practice.calls.maxlen <= 500
+
+
+async def test_done_since_means_the_same_moment_in_jiras_own_time_zone(target: Target):
+    word = marker()
+    key = await made(target, f"Done just now {word}")
+    await target.jira.move_to_done(key)
+    issue = await target.jira.get_issue(key)
+    assert issue is not None and issue.done_at is not None
+    later = issue.done_at + timedelta(minutes=2)
+    earlier = issue.done_at - timedelta(minutes=2)
+    project = (target.project,)
+    assert await target.jira.search(IssueSearch(project, (word,), done_since=later)) == []
+    found = await target.jira.search(IssueSearch(project, (word,), done_since=earlier))
+    assert [i.key for i in found] == [key]

@@ -71,7 +71,6 @@ def _signed_in(practice: PracticeJira, header: str) -> bool:
 
 def _gate(request: Request, practice: PracticeJira, version: str) -> JSONResponse | None:
     """What every REST call meets first: a failure a test asked for, the API version, sign-in."""
-    practice.calls.append(f"{request.method} {request.url.path.removeprefix('/practice-jira')}")
     failure = practice.take_failure()
     if failure is not None:
         headers = {} if failure.retry_after is None else {"Retry-After": str(failure.retry_after)}
@@ -84,6 +83,7 @@ def _gate(request: Request, practice: PracticeJira, version: str) -> JSONRespons
         return _errors(
             401, ["You are not authenticated. Authentication required to perform this operation."]
         )
+    practice.calls.append(f"{request.method} {request.url.path.removeprefix('/practice-jira')}")
     return None
 
 
@@ -201,7 +201,7 @@ async def _search(
     request: Request, practice: PracticeJira, version: str, jql: str, max_results: int
 ) -> dict[str, Any] | JSONResponse:
     try:
-        query = parse(jql)
+        query = parse(jql, practice.time_zone)
     except JqlError as error:
         return _errors(400, [str(error)])
     tickets = await practice.newest_first()
@@ -332,7 +332,13 @@ async def myself(version: str, request: Request, practice: Practice) -> Response
     platform's own account."""
     if (refused := _gate(request, practice, version)) is not None:
         return refused
-    return JSONResponse({**_account(version, PRACTICE_ACCOUNT), "emailAddress": PRACTICE_EMAIL})
+    return JSONResponse(
+        {
+            **_account(version, PRACTICE_ACCOUNT),
+            "emailAddress": PRACTICE_EMAIL,
+            "timeZone": practice.time_zone,
+        }
+    )
 
 
 @router.get(API + "/project/{key}", include_in_schema=False)

@@ -8,7 +8,8 @@ on created or key. Anything else is refused the way Jira refuses it, with a mess
 import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, time
+from datetime import date, datetime, time
+from zoneinfo import ZoneInfo
 
 from platform_api.practice_jira.store import PracticeTicket
 
@@ -63,17 +64,19 @@ def _value(token: str) -> str:
     return token
 
 
-def _when(text: str) -> datetime:
+def _when(text: str, zone: ZoneInfo) -> datetime:
+    """A JQL date, read in the account's time zone, as Jira reads it."""
     match = _DAY.match(text)
     if match is None:
         raise JqlError(f"Date value '{text}' for field 'resolutiondate' is invalid.")
     year, month, day, hour, minute = match.groups()
     at = time(int(hour or 0), int(minute or 0))
-    return datetime.combine(date(int(year), int(month), int(day)), at, UTC)
+    return datetime.combine(date(int(year), int(month), int(day)), at, zone)
 
 
 class _Parser:
-    def __init__(self, text: str) -> None:
+    def __init__(self, text: str, zone: ZoneInfo) -> None:
+        self._zone = zone
         self._tokens = _tokens(text)
         self._at = 0
         self.keys: list[str] = []
@@ -177,7 +180,7 @@ class _Parser:
                     ) from None
                 test = lambda t: t.status in statuses  # noqa: E731
             case "resolutiondate", ">=" | ">" | "<=" | "<":
-                return _dated(op, _when(values[0]))
+                return _dated(op, _when(values[0], self._zone))
             case (("project" | "key" | "issuekey" | "labels" | "text" | "statuscategory"), _):
                 raise JqlError(f"The operator '{op}' is not supported by the '{name}' field.")
             case _:
@@ -207,8 +210,8 @@ def _dated(op: str, at: datetime) -> Predicate:
     return test
 
 
-def parse(text: str) -> Query:
-    return _Parser(text).parse()
+def parse(text: str, zone: str = "UTC") -> Query:
+    return _Parser(text, ZoneInfo(zone)).parse()
 
 
 def ordered(tickets: Sequence[PracticeTicket], query: Query) -> list[PracticeTicket]:

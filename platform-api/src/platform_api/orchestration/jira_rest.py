@@ -8,10 +8,11 @@ import asyncio
 import base64
 from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from email.utils import parsedate_to_datetime
 from typing import Any, Final
 from urllib.parse import quote
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 
@@ -32,8 +33,9 @@ type Sleep = Callable[[float], Awaitable[None]]
 ATTEMPTS: Final = 3
 """Each call is tried at most three times when Jira is busy or down."""
 MAX_WAIT_SECONDS: Final = 5.0
-"""The longest the adapter waits between tries, whatever Retry-After asks. The gateway treats a
-write as lost after 30 seconds, so every wait together stays well under that."""
+"""The longest the adapter waits between tries, whatever Retry-After asks. Three tries of up to
+10 seconds and two waits can take 40 seconds, so a write's connector call has its own deadline
+(CONNECTOR_DEADLINE, 20 seconds), well inside the gateway's 30 second in-flight timeout."""
 FIELDS: Final = (
     "summary,description,status,project,labels,created,updated,resolutiondate,"
     "statuscategorychangedate,creator"
@@ -85,6 +87,18 @@ def _when(text: object) -> datetime | None:
     except ValueError:
         return None
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+
+
+_A_DAY: Final = timedelta(days=1)
+
+
+def _zone(name: object) -> ZoneInfo | None:
+    if not isinstance(name, str) or not name:
+        return None
+    try:
+        return ZoneInfo(name)
+    except ValueError, ZoneInfoNotFoundError:
+        return None
 
 
 def _one_line(text: str, limit: int) -> str:
@@ -144,6 +158,7 @@ class JiraRestAdapter:
         self._sleep = sleep
         self._api = f"{self._base}/rest/api/{'3' if flavor == 'cloud' else '2'}"
         self._me: str | None = None
+        self._zone: ZoneInfo | None = None
 
     @property
     def auth_header(self) -> str:
@@ -221,11 +236,18 @@ class JiraRestAdapter:
             response = await self._call("GET", "/myself")
             if response.status_code != 200:
                 raise self._failure(response, "say which account the token is")
-            me = self._account(_body(response))
+            body = _body(response)
+            me = self._account(body)
             if me is None:
                 raise JiraUnavailable("Jira gave an account that could not be read.")
             self._me = me
+            self._zone = _zone(body.get("timeZone"))
         return self._me
+
+    async def _time_zone(self) -> ZoneInfo | None:
+        """The account's time zone, from /myself. Jira reads JQL dates in it."""
+        await self.whoami()
+        return self._zone
 
     def _issue(self, raw: object) -> JiraIssue:
         issue = json_object(raw)
@@ -310,11 +332,16 @@ class JiraRestAdapter:
             clauses.append("statusCategory = Done")
         elif query.status == "To Do":
             clauses.append("statusCategory != Done")
+        zone = None if query.done_since is None else await self._time_zone()
         if query.done_since is not None:
-            clauses.append(
-                f"resolutiondate >= {_quoted(query.done_since.strftime('%Y-%m-%d %H:%M'))}"
-            )
-        return await self._jql(" AND ".join(clauses) + " ORDER BY created DESC", query.limit)
+            # Jira reads the date in the account's zone. With no zone, ask a day wider and keep
+            # only the tickets done since the moment asked for.
+            since = query.done_since.astimezone(zone) if zone else query.done_since - _A_DAY
+            clauses.append(f"resolutiondate >= {_quoted(since.strftime('%Y-%m-%d %H:%M'))}")
+        found = await self._jql(" AND ".join(clauses) + " ORDER BY created DESC", query.limit)
+        if query.done_since is not None and zone is None:
+            found = [i for i in found if i.done_at is not None and i.done_at >= query.done_since]
+        return found
 
     async def find_by_label(self, project: str, label: str) -> JiraIssue | None:
         """The first ticket in the project with this label. The caller decides whether it is

@@ -6,6 +6,7 @@ Jira. Nothing here decides whether a write may happen: only an AuthorizedWrite r
 gateway, and the gateway alone calls the connector.
 """
 
+import asyncio
 import re
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
@@ -13,7 +14,12 @@ from datetime import datetime, timedelta
 from typing import Literal, Protocol
 
 from platform_api.db import Database
-from platform_api.orchestration.write_actions import WriteAction, WriteKey, WriteRefused
+from platform_api.orchestration.write_actions import (
+    CONNECTOR_TIMEOUT,
+    WriteAction,
+    WriteKey,
+    WriteRefused,
+)
 from platform_api.shared import TicketStatus
 
 type JiraFlavor = Literal["datacenter", "cloud"]
@@ -114,12 +120,27 @@ def write_label(key: WriteKey) -> str:
 
 RECOVERY_SKEW = timedelta(minutes=2)
 """How far Jira's clock may run behind ours when a ticket found after a crash is checked."""
+CONNECTOR_DEADLINE = timedelta(seconds=20)
+"""The longest one connector call may take, recovery and create together, whatever Jira does.
+Without it, one search could take 3 tries of 10 seconds and 2 waits of 5, which is 40 seconds."""
+CLAIM_LEASE = timedelta(seconds=25)
+"""How long a try's claim on a write key holds. It outlives the try's deadline, and ends before
+the gateway's in-flight timeout, so a second try starts only after the first has stopped."""
+assert CONNECTOR_DEADLINE < CLAIM_LEASE < CONNECTOR_TIMEOUT
 
 
 @dataclass(frozen=True)
 class JiraWrite:
     started_at: datetime
     ticket_key: str | None
+    claimed_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class Claim:
+    started_at: datetime
+    fresh: bool
+    """True when no earlier try of this key began, so there is nothing in Jira to look for."""
 
 
 class JiraWriteRecords:
@@ -132,21 +153,41 @@ class JiraWriteRecords:
         async with self._db.transaction("orchestration") as uow:
             row = await (
                 await uow.conn.execute(
-                    "SELECT started_at, ticket_key FROM orchestration.jira_writes "
+                    "SELECT started_at, ticket_key, claimed_at FROM orchestration.jira_writes "
                     "WHERE idempotency_key = %s",
                     (key,),
                 )
             ).fetchone()
-        return None if row is None else JiraWrite(row["started_at"], row["ticket_key"])
+        if row is None:
+            return None
+        return JiraWrite(row["started_at"], row["ticket_key"], row["claimed_at"])
 
-    async def creating(self, key: str) -> None:
-        """Notes that a ticket for this key may be made from now on. An earlier note is kept,
-        so a ticket made by an earlier try still counts as made after the write began."""
+    async def claim(self, key: str) -> Claim | None:
+        """Claims the key for this try, in one statement. None when another try holds a live
+        claim, or the ticket is already noted. An earlier try's start is kept, so a ticket it
+        made still counts as made after the write began."""
+        async with self._db.transaction("orchestration") as uow:
+            row = await (
+                await uow.conn.execute(
+                    "INSERT INTO orchestration.jira_writes "
+                    "(idempotency_key, started_at, claimed_at) VALUES (%s, %s, %s) "
+                    "ON CONFLICT (idempotency_key) DO UPDATE SET claimed_at = EXCLUDED.claimed_at "
+                    "WHERE orchestration.jira_writes.ticket_key IS NULL "
+                    "AND (orchestration.jira_writes.claimed_at IS NULL "
+                    "OR orchestration.jira_writes.claimed_at <= %s) "
+                    "RETURNING started_at, (xmax = 0) AS fresh",
+                    (key, uow.now, uow.now, uow.now - CLAIM_LEASE),
+                )
+            ).fetchone()
+        return None if row is None else Claim(row["started_at"], bool(row["fresh"]))
+
+    async def release(self, key: str) -> None:
+        """Ends this try's claim. A noted ticket or a dropped row is left as it is."""
         async with self._db.transaction("orchestration") as uow:
             await uow.conn.execute(
-                "INSERT INTO orchestration.jira_writes (idempotency_key, started_at) "
-                "VALUES (%s, %s) ON CONFLICT (idempotency_key) DO NOTHING",
-                (key, uow.now),
+                "UPDATE orchestration.jira_writes SET claimed_at = NULL "
+                "WHERE idempotency_key = %s AND ticket_key IS NULL",
+                (key,),
             )
 
     async def recorded_for(self, ticket: str) -> str | None:
@@ -164,7 +205,8 @@ class JiraWriteRecords:
     async def made(self, key: str, ticket: str) -> None:
         async with self._db.transaction("orchestration") as uow:
             await uow.conn.execute(
-                "UPDATE orchestration.jira_writes SET ticket_key = %s WHERE idempotency_key = %s",
+                "UPDATE orchestration.jira_writes SET ticket_key = %s, claimed_at = NULL "
+                "WHERE idempotency_key = %s",
                 (ticket, key),
             )
 
@@ -190,9 +232,15 @@ class JiraWriteConnector:
     name = "jira"
     operations = frozenset({"create_ticket"})
 
-    def __init__(self, jira: JiraPort, db: Database) -> None:
+    def __init__(
+        self, jira: JiraPort, db: Database, deadline: timedelta = CONNECTOR_DEADLINE
+    ) -> None:
         self._jira = jira
+        self._deadline = deadline
         self.records = JiraWriteRecords(db)
+
+    def link(self, reference: str) -> str:
+        return self._jira.browse_url(reference)
 
     async def execute(self, action: WriteAction, key: WriteKey) -> str:
         try:
@@ -201,19 +249,34 @@ class JiraWriteConnector:
             raise WriteRefused(str(refused)) from refused
 
     async def _execute(self, action: WriteAction, key: WriteKey) -> str:
-        project = str(action.target.get("project", ""))
-        label = write_label(key)
         record = await self.records.get(key.text)
         if record is not None and record.ticket_key is not None:
             return record.ticket_key
+        claim = await self.records.claim(key.text)
+        if claim is None:
+            again = await self.records.get(key.text)
+            if again is not None and again.ticket_key is not None:
+                return again.ticket_key
+            raise JiraUnavailable("Another try of this write is in progress.")
+        try:
+            async with asyncio.timeout(self._deadline.total_seconds()):
+                return await self._write(action, key, claim)
+        except TimeoutError as late:
+            seconds = round(self._deadline.total_seconds())
+            raise JiraUnavailable(f"Jira did not finish within {seconds} seconds.") from late
+        finally:
+            await self.records.release(key.text)
+
+    async def _write(self, action: WriteAction, key: WriteKey, claim: Claim) -> str:
+        project = str(action.target.get("project", ""))
+        label = write_label(key)
         title = str(action.fields.get("title", ""))
-        if record is not None:
+        if not claim.fresh:
             found = await self._jira.find_by_label(project, label)
             if found is not None:
-                await self._accept(found, key, label, title, record)
+                await self._accept(found, key, label, title, claim.started_at)
                 await self.records.made(key.text, found.key)
                 return found.key
-        await self.records.creating(key.text)
         try:
             ticket = await self._jira.create_issue(
                 NewIssue(project, title, str(action.fields.get("body", "")), (label,))
@@ -227,7 +290,7 @@ class JiraWriteConnector:
         return ticket
 
     async def _accept(
-        self, found: JiraIssue, key: WriteKey, label: str, title: str, record: JiraWrite
+        self, found: JiraIssue, key: WriteKey, label: str, title: str, started_at: datetime
     ) -> None:
         """Refuses, for a person to check, a ticket found by this write's label that the
         platform can't prove it made for this write: made by another account, or by no
@@ -242,7 +305,7 @@ class JiraWriteConnector:
 
         if found.creator is None or found.creator != await self._jira.whoami():
             raise refuse("the platform did not make it")
-        if found.created_at < record.started_at - RECOVERY_SKEW:
+        if found.created_at < started_at - RECOVERY_SKEW:
             raise refuse("it was made before this write began")
         recorded = await self.records.recorded_for(found.key)
         if recorded is not None and recorded != key.text:

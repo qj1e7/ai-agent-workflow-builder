@@ -244,3 +244,26 @@ async def test_the_practice_jira_answers_in_jiras_shape(db: Database, flavor: Ji
         )
     ).json()
     assert set(created) == set(fixture(flavor, "create.201.json"))
+
+
+@pytest.mark.parametrize("flavor", ["datacenter", "cloud"])
+async def test_no_permission_is_a_refusal_for_good(flavor: JiraFlavor):
+    seen: list[httpx.Request] = []
+    jira = jira_answering(flavor, {("POST", "/issue"): (403, "error.403.json")}, seen)
+    with pytest.raises(JiraRefused, match="do not have permission") as refused:
+        await jira.create_issue(NewIssue("OPS", "Upgrade", ""))
+    assert refused.value.retryable is False
+
+
+@pytest.mark.parametrize("flavor", ["datacenter", "cloud"])
+async def test_the_label_search_and_the_done_check_quote_every_value(flavor: JiraFlavor):
+    seen: list[httpx.Request] = []
+    search = "/search/jql" if flavor == "cloud" else "/search"
+    listed = "search-jql.json" if flavor == "cloud" else "search.json"
+    jira = jira_answering(flavor, {("GET", search): (200, listed)}, seen)
+    await jira.find_by_label("OPS", "wab-run_1-prp_1-0")
+    await jira.done_tickets(["OPS-7", "OPS-8"])
+    assert [request.url.params["jql"] for request in seen] == [
+        'project = "OPS" AND labels = "wab-run_1-prp_1-0" ORDER BY created ASC',
+        'key in ("OPS-7", "OPS-8") AND statusCategory = Done',
+    ]
