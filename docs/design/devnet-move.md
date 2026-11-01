@@ -10,7 +10,8 @@ It was written on 29 Oct 2026 from a check of the repo at commit `9ab68f5`.
 |---|---|---|
 | Portal, platform-api, agent runtime, n8n, PostgreSQL | Moves as is | Each is a container pinned by digest (ADR 0006). The Portal serves its own fonts and code (ADR 0014). NCS needs an internal registry for our images, and https certificates, because sign-in needs https (ADR 0018). |
 | Sign-in | Moves with settings | NCS IT registers our app in NCS's Entra tenant (ADR 0018). The rest is settings. |
-| Jira and Confluence | Needs real adapters | The adapter slots exist (ADR 0005). If NCS runs the self-hosted editions, their API and keys differ from the cloud editions. |
+| Jira | Moves with settings | One adapter speaks Jira's REST API, Data Center (v2) or Cloud (v3), and the practice Jira speaks the same API (ADR 0035). The move sets `JIRA_BASE_URL`, `JIRA_API_FLAVOR` and a token, and the contract suite runs against the real Jira first. |
+| Confluence | Needs a real adapter | No code yet. It needs its own ADR (ADR 0023), and can follow Jira's pattern. |
 | Azure | Needs Terraform work | Our Terraform opens PostgreSQL to the internet (`infra/modules/postgres/main.tf:15`) and gives Key Vault no firewall (`infra/modules/key_vault/main.tf:5`). NCS will very likely require a private network, with private endpoints for each service. |
 | Cosmos DB | Likely fine, with a fallback | NCS's Azure must allow it on a private endpoint. If it does not, the app reads its activity log from PostgreSQL, which keeps every event (ADR 0031). |
 | GitLab | New work | We have tools for GitHub only. The sponsor's real use cases need GitLab tools, and each new system needs its own ADR (ADR 0023). |
@@ -62,6 +63,6 @@ Each step starts once NCS answers the question it depends on.
 - Change the Terraform to a private network with private endpoints (question 1).
 - Register the Entra app in NCS's tenant and get https certificates (question 7).
 - Point the AI model at the service NCS allows (question 2).
-- Build the real Jira and Confluence adapters, and the GitLab tools with their ADR (question 3).
+- Point Jira at NCS's Jira with its settings, run the Jira contract suite against it, and build the Confluence adapter and the GitLab tools with their ADRs (question 3).
 - Set the proxy and the address guard for the watchlist's sources (question 5).
 - Move the code to GitLab and the pipeline to GitLab CI (question 9).

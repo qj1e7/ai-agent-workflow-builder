@@ -94,13 +94,25 @@ def test_openapi_lists_every_route(client: TestClient):
 
 
 def test_with_practice_systems_off_no_practice_jira_route_is_served():
-    client = TestClient(create_app({**LOCAL, "PRACTICE_SYSTEMS": "off"}))
+    real_jira = {"JIRA_BASE_URL": "https://jira.example.com", "JIRA_API_TOKEN": "pat"}
+    client = TestClient(create_app({**LOCAL, **real_jira, "PRACTICE_SYSTEMS": "off"}))
     paths = client.get("/openapi.json").json()["paths"]
     assert [path for path in paths if "mock-jira" in path] == []
     assert "/api/v1/teams-stub/messages" in paths
     alice = {"X-Dev-User": "alice"}
     assert client.get("/api/v1/mock-jira/tickets", headers=alice).status_code == 404
     assert client.post("/api/v1/mock-jira/tickets/MOCK-1/done", headers=alice).status_code == 404
+    rest = "/practice-jira/rest/api/2/issue/MOCK-1"
+    assert client.get(rest, headers={"Authorization": "Bearer x"}).status_code == 404
+
+
+def test_with_a_real_jira_the_practice_jira_is_not_served_even_with_practice_systems_on():
+    real_jira = {"JIRA_BASE_URL": "https://jira.example.com", "JIRA_API_TOKEN": "pat"}
+    client = TestClient(create_app({**LOCAL, **real_jira}))
+    alice = {"X-Dev-User": "alice"}
+    assert client.get("/api/v1/mock-jira/tickets", headers=alice).status_code == 404
+    assert client.get("/practice-jira/browse/MOCK-1").status_code == 404
+    assert "/api/v1/teams-stub/messages" in client.get("/openapi.json").json()["paths"]
 
 
 @pytest.mark.parametrize(

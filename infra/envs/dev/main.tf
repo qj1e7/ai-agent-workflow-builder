@@ -36,6 +36,18 @@ locals {
 
   # Whether a token is set is not secret, and plain is needed to choose which secrets exist.
   github_token_set = nonsensitive(var.github_token != "")
+  jira_token_set   = nonsensitive(var.jira_api_token != "")
+
+  # A real Jira (ADR 0035). Each setting is passed only when it is set, so an unset JIRA_BASE_URL
+  # keeps platform-api's own practice Jira. The account's email is not secret.
+  jira_settings = {
+    for name, value in {
+      JIRA_BASE_URL   = var.jira_base_url
+      JIRA_EMAIL      = trimspace(nonsensitive(var.jira_email))
+      JIRA_BROWSE_URL = var.jira_browse_url
+    } : name => value if value != ""
+  }
+
   # The same for the Teams Workflows webhook (ADR 0036). Unset keeps the practice Teams copy.
   teams_webhook_set = nonsensitive(var.teams_webhook_url != "")
 
@@ -193,6 +205,7 @@ module "key_vault" {
     },
     { "cosmos-key" = module.cosmos.primary_key },
     local.github_token_set ? { "github-token" = var.github_token } : {},
+    local.jira_token_set ? { "jira-api-token" = var.jira_api_token } : {},
     local.teams_webhook_set ? { "teams-webhook-url" = var.teams_webhook_url } : {},
   )
 }
@@ -213,19 +226,23 @@ locals {
       # depend on each other.
       env = merge(
         {
-          AUTH_MODE             = "oidc"
-          PUBLIC_BASE_URL       = local.url["portal"]
-          OIDC_ISSUER           = var.oidc_issuer
-          OIDC_AUDIENCE         = var.oidc_audience
-          AGENT_RUNTIME_URL     = local.url["agent-runtime"]
-          N8N_BASE_URL          = local.url["n8n"]
-          PLATFORM_INTERNAL_URL = local.url["platform-api"]
-          COSMOS_ENDPOINT       = module.cosmos.endpoint
-          ACTIVITY_READER       = "cosmos"
+          AUTH_MODE              = "oidc"
+          PUBLIC_BASE_URL        = local.url["portal"]
+          OIDC_ISSUER            = var.oidc_issuer
+          OIDC_AUDIENCE          = var.oidc_audience
+          AGENT_RUNTIME_URL      = local.url["agent-runtime"]
+          N8N_BASE_URL           = local.url["n8n"]
+          PLATFORM_INTERNAL_URL  = local.url["platform-api"]
+          COSMOS_ENDPOINT        = module.cosmos.endpoint
+          ACTIVITY_READER        = "cosmos"
+          JIRA_API_FLAVOR        = var.jira_api_flavor
+          JIRA_ISSUE_TYPE        = var.jira_issue_type
+          WATCHLIST_JIRA_PROJECT = var.watchlist_jira_project
         },
         var.oidc_jwks_url == "" ? {} : { OIDC_JWKS_URL = var.oidc_jwks_url },
         var.teams_channel == "" ? {} : { TEAMS_CHANNEL = var.teams_channel },
         local.first_people,
+        local.jira_settings,
       )
       secrets = merge(
         {
@@ -238,6 +255,7 @@ locals {
           SETTINGS_ENCRYPTION_KEY    = local.secret["settings-encryption-key"]
           COSMOS_KEY                 = local.secret["cosmos-key"]
         },
+        local.jira_token_set ? { JIRA_API_TOKEN = local.secret["jira-api-token"] } : {},
         local.teams_webhook_set ? { TEAMS_WEBHOOK_URL = local.secret["teams-webhook-url"] } : {},
       )
     }

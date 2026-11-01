@@ -1,7 +1,7 @@
 #!/bin/sh
-# Checks the variable rules in a variables.tf for sign-in, the first people, n8n's allow list and
-# Teams: good values pass, and plan refuses what platform-api, agent-runtime or the Portal would
-# refuse, or what would open n8n wider than meant. It plans a module that holds only that
+# Checks the variable rules in a variables.tf for sign-in, the first people, n8n's allow list,
+# Teams and a real Jira: good values pass, and plan refuses what platform-api, agent-runtime or
+# the Portal would refuse, or what would open n8n wider than meant. It plans a module that holds only that
 # file, so it needs no provider and no credentials. check.sh runs it in the Terraform image.
 # Usage: check-variables.sh <variables.tf>
 set -eu
@@ -66,6 +66,12 @@ expect accepted - "a Teams webhook and channel" \
   -var 'teams_webhook_url=https://prod.example.logic.azure.com/workflows/a/triggers/manual/run?sig=x' \
   -var 'teams_channel=CODESparks Support'
 
+expect accepted - "a Data Center Jira" -var jira_base_url=https://jira.example.test -var jira_api_token=pat
+expect accepted - "a Cloud Jira with its email" -var jira_base_url=https://example.atlassian.net \
+  -var jira_api_flavor=cloud -var jira_api_token=t -var jira_email=bot@example.test
+expect accepted - "a Jira browse address and another project" \
+  -var 'jira_browse_url=https://jira.example.test/browse/{key}' -var watchlist_jira_project=AB_1
+
 expect refused oidc_issuer "issuer over http" -var oidc_issuer=http://mock-oidc:8080/default
 expect refused oidc_issuer "issuer with no host" -var oidc_issuer=https:///tenant/v2.0
 expect refused oidc_issuer "issuer with a query" -var "oidc_issuer=$ISSUER?x=1"
@@ -121,6 +127,13 @@ expect refused n8n_editor_allowed_ips "a good n8n editor address and a bad one" 
 expect refused n8n_internal_allowed_cidrs "an inside range that is a word" -var n8n_internal_allowed_cidrs=internal
 expect refused n8n_internal_allowed_cidrs "an inside range wider than /16" -var n8n_internal_allowed_cidrs=100.64.0.0/10
 expect refused n8n_internal_allowed_cidrs "an inside range that starts mid-range" -var n8n_internal_allowed_cidrs=100.100.0.51/17
+expect refused jira_base_url "a Jira over http" -var jira_base_url=http://jira.example.test -var jira_api_token=pat
+expect refused jira_api_token "a Jira with no token" -var jira_base_url=https://jira.example.test
+expect refused jira_api_flavor "a Jira flavor that is not one" -var jira_api_flavor=server
+expect refused jira_email "a Cloud Jira with no email" -var jira_base_url=https://example.atlassian.net \
+  -var jira_api_flavor=cloud -var jira_api_token=t
+expect refused jira_browse_url "a Jira browse address with no key" -var jira_browse_url=https://jira.example.test/browse/
+expect refused watchlist_jira_project "a project key in small letters" -var watchlist_jira_project=ops
 
 if [ "$failures" = 0 ]; then
   echo "check-variables.sh: all cases behaved as expected"

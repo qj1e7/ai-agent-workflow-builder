@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from typing import Any, TypeAliasType, get_args
 
 import pytest
@@ -51,8 +52,6 @@ from platform_api.orchestration.confirmations import DecideRefusal
 from platform_api.orchestration.http import (
     ApprovalView,
     DecisionOut,
-    MockJiraTicket,
-    MockJiraTickets,
     RefusalOut,
     StepResponseOut,
     TeamsStubMessages,
@@ -74,6 +73,7 @@ from platform_api.orchestration.people_http import (
 from platform_api.orchestration.runs import FailureReason, Leg, Stage, StepName
 from platform_api.orchestration.settings_http import ModelSettingsView, SaveOut
 from platform_api.orchestration.write_actions import DenyReason
+from platform_api.practice_jira.http import MockJiraTicket, MockJiraTickets
 from platform_api.wire import FailureReason as WireFailureReason
 from platform_api.wire import FailureStage
 from platform_api.wire import Leg as WireLeg
@@ -205,8 +205,16 @@ def test_the_watchlist_sends_the_tag_pattern_the_agent_api_was_recorded_with():
 
 
 def test_every_fixture_file_has_a_parser():
-    on_disk = {str(p.relative_to(FIXTURES)) for p in FIXTURES.rglob("*.json")}
+    # jira/ holds Jira's own answers, not ours. test_jira_fixtures.py reads each of them.
+    files = [p.relative_to(FIXTURES) for p in FIXTURES.rglob("*.json")]
+    on_disk = {str(p) for p in files if p.parts[0] != "jira"}
     assert on_disk == set(PARSERS)
+
+
+def test_every_jira_answer_is_read_by_the_jira_fixture_tests():
+    read = (Path(__file__).parent / "test_jira_fixtures.py").read_text()
+    names = {p.name for p in (FIXTURES / "jira").rglob("*.json")}
+    assert names and all(f'"{name}"' in read for name in names)
 
 
 @pytest.mark.parametrize("story", ["success", "failure", "rejected", "watchlist", "card"])

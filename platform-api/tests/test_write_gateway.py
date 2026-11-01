@@ -16,7 +16,6 @@ from platform_api.orchestration.runs import Acting, Pending, WriteDone
 from platform_api.orchestration.store import RunRecord, Store
 from platform_api.orchestration.write_actions import (
     AuthorizedWrite,
-    MockJiraConnector,
     Proposal,
     WriteAction,
     WriteFailed,
@@ -28,6 +27,7 @@ from platform_api.orchestration.write_actions import (
 )
 from platform_api.shared import ApprovalId, ProposalId, RunId, UserId
 from tests.conftest import PostgresUrls
+from tests.practice import PracticeKit
 from tests.support import ALICE, NOW, SPEC
 
 pytestmark = pytest.mark.anyio
@@ -69,7 +69,7 @@ class BlockingConnector:
         return f"MOCK-{len(self.calls)}"
 
 
-def authorized(connector: BlockingConnector | MockJiraConnector) -> AuthorizedWrite:
+def authorized(connector: BlockingConnector | PracticeKit) -> AuthorizedWrite:
     verdict = check(ACTING, PROPOSAL, REQUEST, APPROVED, registry_of([connector]))
     assert isinstance(verdict, AuthorizedWrite)
     return verdict
@@ -139,7 +139,7 @@ async def test_a_done_row_is_returned_without_calling_the_connector(db: Database
 
 async def test_mock_jira_makes_one_ticket_per_idempotency_key(db: Database):
     await seed_run(db)
-    jira = MockJiraConnector(db)
+    jira = PracticeKit(db)
     key = WriteKey(RUN, PRP, 0)
     assert await jira.execute(ACTION, key) == "MOCK-1"
     assert await jira.execute(ACTION, key) == "MOCK-1"
@@ -155,7 +155,7 @@ async def test_mock_jira_makes_one_ticket_per_idempotency_key(db: Database):
 
 async def test_mock_jira_tickets_start_as_to_do_and_mark_done_is_idempotent(db: Database):
     await seed_run(db)
-    jira = MockJiraConnector(db)
+    jira = PracticeKit(db)
     await jira.execute(ACTION, WriteKey(RUN, PRP, 0))
     [ticket] = await jira.tickets()
     assert (ticket.status, ticket.done_at) == ("To Do", None)
@@ -166,3 +166,40 @@ async def test_mock_jira_tickets_start_as_to_do_and_mark_done_is_idempotent(db: 
     assert await jira.done_tickets(["MOCK-1", "MOCK-9"]) == {"MOCK-1": done.done_at}
     assert await jira.done_tickets([]) == {}
     assert await jira.mark_done("MOCK-9") is None
+
+
+async def test_a_write_jira_refuses_fails_for_good_and_one_it_cannot_reach_may_be_retried(
+    db: Database,
+):
+    await seed_run(db)
+    jira = PracticeKit(db)
+    gateway = WriteGateway(db, [jira])
+    refused = WriteAction("jira", "create_ticket", {"project": "MOCK"}, {"title": "", "body": ""})
+    proposal = Proposal(PRP, RUN, (refused,), digest((refused,)))
+    request = ApprovalRequest(
+        APR, RUN, PRP, proposal.digest, REQUEST.policy, frozenset({ALICE.user_id})
+    )
+    decisions = (Decision(APR, 0, BOB, Verdict.APPROVE, proposal.digest, NOW),)
+    write = check(ACTING, proposal, request, decisions, registry_of([jira]))
+    assert isinstance(write, AuthorizedWrite)
+    with pytest.raises(WriteFailed) as failed:
+        await gateway.execute(write)
+    assert failed.value.retryable is False
+    assert "summary" in str(failed.value)
+
+    jira.store.fail_next(503, times=3)
+    with pytest.raises(WriteFailed) as down:
+        await WriteGateway(db, [jira], connector_timeout=timedelta(0)).execute(authorized(jira))
+    assert down.value.retryable is True
+
+
+async def test_two_gateways_racing_on_one_write_make_one_ticket(db: Database):
+    await seed_run(db)
+    jira = PracticeKit(db)
+    write = authorized(jira)
+    first, second = await asyncio.gather(
+        WriteGateway(db, [jira], poll=0.05).execute(write),
+        WriteGateway(db, [jira], poll=0.05).execute(write),
+    )
+    assert first == second
+    assert [t.key for t in await jira.tickets()] == ["MOCK-1"]

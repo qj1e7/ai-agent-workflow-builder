@@ -1,0 +1,159 @@
+{
+  "issues": [
+    {
+      "expand": "renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations",
+      "id": "10042",
+      "self": "https://example.atlassian.net/rest/api/3/issue/10042",
+      "key": "OPS-7",
+      "fields": {
+        "summary": "Upgrade LangGraph from 1.2.14 to 1.2.16",
+        "description": {
+          "type": "doc",
+          "version": 1,
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "LangGraph has 2 new releases."
+                },
+                {
+                  "type": "hardBreak"
+                },
+                {
+                  "type": "text",
+                  "text": "Release notes: "
+                },
+                {
+                  "type": "text",
+                  "text": "https://github.com/langchain-ai/langgraph/releases",
+                  "marks": [
+                    {
+                      "type": "link",
+                      "attrs": {
+                        "href": "https://github.com/langchain-ai/langgraph/releases"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Raised by the AI Workflow Builder."
+                }
+              ]
+            }
+          ]
+        },
+        "project": {
+          "self": "https://example.atlassian.net/rest/api/3/project/10000",
+          "id": "10000",
+          "key": "OPS",
+          "name": "Operations",
+          "projectTypeKey": "software"
+        },
+        "issuetype": {
+          "self": "https://example.atlassian.net/rest/api/3/issuetype/10002",
+          "id": "10002",
+          "name": "Task",
+          "subtask": false
+        },
+        "labels": [
+          "wab-run_01JB8-prp_01JB9-0"
+        ],
+        "status": {
+          "self": "https://example.atlassian.net/rest/api/3/status/1",
+          "description": "",
+          "name": "Done",
+          "id": "1",
+          "statusCategory": {
+            "self": "https://example.atlassian.net/rest/api/3/statuscategory/3",
+            "id": 3,
+            "key": "done",
+            "colorName": "green",
+            "name": "Done"
+          }
+        },
+        "created": "2026-11-03T10:20:31.123+0800",
+        "updated": "2026-11-05T16:12:00.000+0800",
+        "resolutiondate": "2026-11-05T16:12:00.000+0800",
+        "statuscategorychangedate": "2026-11-05T16:12:00.000+0800",
+        "creator": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10ac8d82e05b22cc7d4ef5",
+          "accountId": "5b10ac8d82e05b22cc7d4ef5",
+          "accountType": "atlassian",
+          "displayName": "AI Workflow Builder",
+          "active": true
+        },
+        "reporter": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10ac8d82e05b22cc7d4ef5",
+          "accountId": "5b10ac8d82e05b22cc7d4ef5",
+          "accountType": "atlassian",
+          "displayName": "AI Workflow Builder",
+          "active": true
+        }
+      }
+    },
+    {
+      "expand": "renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations",
+      "id": "10043",
+      "self": "https://example.atlassian.net/rest/api/3/issue/10043",
+      "key": "OPS-8",
+      "fields": {
+        "summary": "Upgrade Redis",
+        "description": null,
+        "project": {
+          "self": "https://example.atlassian.net/rest/api/3/project/10000",
+          "id": "10000",
+          "key": "OPS",
+          "name": "Operations",
+          "projectTypeKey": "software"
+        },
+        "issuetype": {
+          "self": "https://example.atlassian.net/rest/api/3/issuetype/10002",
+          "id": "10002",
+          "name": "Task",
+          "subtask": false
+        },
+        "labels": [],
+        "status": {
+          "self": "https://example.atlassian.net/rest/api/3/status/1",
+          "description": "",
+          "name": "Done",
+          "id": "1",
+          "statusCategory": {
+            "self": "https://example.atlassian.net/rest/api/3/statuscategory/3",
+            "id": 3,
+            "key": "done",
+            "colorName": "green",
+            "name": "Done"
+          }
+        },
+        "created": "2026-11-03T10:20:31.123+0800",
+        "updated": "2026-11-06T09:31:00.000+0800",
+        "resolutiondate": null,
+        "statuscategorychangedate": "2026-11-06T09:30:00.000+0800",
+        "creator": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10ac8d82e05b22cc7d4ef5",
+          "accountId": "5b10ac8d82e05b22cc7d4ef5",
+          "accountType": "atlassian",
+          "displayName": "AI Workflow Builder",
+          "active": true
+        },
+        "reporter": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10ac8d82e05b22cc7d4ef5",
+          "accountId": "5b10ac8d82e05b22cc7d4ef5",
+          "accountType": "atlassian",
+          "displayName": "AI Workflow Builder",
+          "active": true
+        }
+      }
+    }
+  ],
+  "isLast": true
+}

@@ -8,13 +8,13 @@ from platform_api.db import Database
 from platform_api.orchestration.runs import Pending
 from platform_api.orchestration.store import RunRecord, Store
 from platform_api.orchestration.write_actions import (
-    MockJiraConnector,
     Proposal,
     WriteAction,
     WriteKey,
     digest,
 )
 from platform_api.shared import ProposalId, RunId
+from tests.practice import PracticeKit
 from tests.support import ALICE, LOCAL_ENV, NOW, SPEC
 
 pytestmark = pytest.mark.anyio
@@ -36,10 +36,10 @@ async def client(db: Database) -> AsyncIterator[httpx.AsyncClient]:
             "k",
         )
         await Store().insert_proposal(uow, Proposal(PRP, RUN, (ACTION,), digest((ACTION,))))
-    jira = MockJiraConnector(db)
+    jira = PracticeKit(db)
     assert await jira.execute(ACTION, WriteKey(RUN, PRP, 0)) == "MOCK-1"
     app = create_app(LOCAL_ENV)
-    app.state.mock_jira = jira
+    app.state.practice_jira = jira.store
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         yield c

@@ -725,7 +725,7 @@ class Orchestrator:
                     return StepReply(False, "superseded", "The run moved on during the write")
                 detail = str(error)
                 moved2 = acting.fail(
-                    Failure(FailureReason.WRITE_FAILED, detail, retryable=True)
+                    Failure(FailureReason.WRITE_FAILED, detail, retryable=error.retryable)
                 ).preceded_by(step_finished(StepName.WRITE_ACTION, execution, 1, "failed", detail))
                 await self._commit(uow, current, moved2)
                 await self._store.cancel_outbox(uow, run_id)

@@ -89,7 +89,15 @@ describe('the practice Jira page', () => {
     expect(text(rowOf(html, 'OPS-141'))).toContain('Done')
   })
 
-  it('shows Mark done on tickets that are not Done for an Operator', () => {
+  it('shows no run link for a ticket that no run made, such as one made through the API by hand', () => {
+    const byHand: MockJiraTicket = { ...FIRST, key: 'OPS-143', run_id: null, proposal_id: null }
+    const html = render({ tickets: [byHand, FIRST] })
+    expect(rowOf(html, 'OPS-143')).not.toContain('href="/runs/')
+    expect(text(rowOf(html, 'OPS-143'))).not.toContain('See the run')
+    expect(rowOf(html, 'OPS-142')).toContain('href="/runs/run_01JB8"')
+  })
+
+    it('shows Mark done on tickets that are not Done for an Operator', () => {
     const html = render()
     expect(buttons(rowOf(html, 'OPS-142'))).toContain('Mark done OPS-142')
     expect(buttons(rowOf(html, 'OPS-141')).join(' ')).not.toContain('Mark done')

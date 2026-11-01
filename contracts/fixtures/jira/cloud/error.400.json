@@ -1,0 +1,6 @@
+{
+  "errorMessages": [],
+  "errors": {
+    "summary": "You must specify a summary of the issue."
+  }
+}

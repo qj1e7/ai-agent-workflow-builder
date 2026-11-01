@@ -127,3 +127,9 @@ Every error the API sends from its own code has the body `{"detail": "..."}`, an
 ## The agent callback
 
 The task request gives the agent `callback {url, token}`. The agent posts each event to `url` with the token in the `X-Callback-Token` header, never in the URL, because query strings end up in access logs. The handler must compare the token in constant time, bind it to the run and task, and give it an expiry.
+
+## Jira's own answers
+
+`fixtures/jira/datacenter/` and `fixtures/jira/cloud/` hold Jira's answers to the calls the one Jira adapter makes (ADR 0035): an issue, a search, a create, the transitions and two errors. They follow Atlassian's REST reference for Data Center v2 and Cloud v3, with made-up values and `example.com` hosts. `platform-api/tests/test_jira_fixtures.py` checks that the adapter reads them and that the practice Jira answers in the same shape. When a sandbox is reachable, replace them with real answers, with every name, address and id changed, and keep the shape.
+
+`platform-api/tests/test_jira_contract.py` runs the adapter against the practice Jira in both flavors in CI. Set `JIRA_CONTRACT_URL`, `JIRA_CONTRACT_FLAVOR`, `JIRA_CONTRACT_TOKEN`, `JIRA_CONTRACT_EMAIL` (Cloud) and `JIRA_CONTRACT_PROJECT`, and the same tests run against that Jira. Each test makes tickets with a fresh marker in their title and labels, so use a sandbox project.

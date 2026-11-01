@@ -25,9 +25,17 @@ def test_an_agent_refused_by_its_source_is_told_to_check_the_use_case():
     assert "new run" in advice.suggestion
 
 
+def test_a_write_jira_refused_is_told_to_check_jira_and_start_again():
+    assert explain_failure(failure("WriteFailed", True)) == explain("WriteFailed")
+    advice = explain_failure(failure("WriteFailed", False))
+    assert advice != explain("WriteFailed")
+    assert advice.suggested_action == "ask_maintainer"
+    assert "Jira" in advice.likely_cause and "new run" in advice.suggestion
+
+
 def test_other_reasons_ignore_the_retryable_flag():
     for reason in get_args(FailureReason.__value__):
-        if reason == "AgentError":
+        if reason in {"AgentError", "WriteFailed"}:
             continue
         assert explain_failure(failure(reason, False)) == explain(reason)
         assert explain_failure(failure(reason, True)) == explain(reason)

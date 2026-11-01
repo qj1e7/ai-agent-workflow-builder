@@ -77,6 +77,8 @@ infra/
 | n8n's `N8N_INSTANCE_OWNER_*` | not set | not set while n8n is internal. With its editor open, `MANAGED_BY_ENV=true`, the `N8N_OWNER_EMAIL` address, the names `Platform Bootstrap`, and `PASSWORD_HASH` as the app's own secret |
 | `CALLBACK_ALLOWED_ORIGINS` | `http://platform-api:8000` | platform-api's HTTPS origin |
 | `PLATFORM_JIRA_URL` (agent-runtime) | `http://platform-api:8000` | platform-api's HTTPS URL. It must be one of `CALLBACK_ALLOWED_ORIGINS` (ADR 0035) |
+| `JIRA_BASE_URL`, `JIRA_API_FLAVOR`, `JIRA_EMAIL`, `JIRA_ISSUE_TYPE`, `JIRA_BROWSE_URL`, `WATCHLIST_JIRA_PROJECT` | `.env`, unset by default: the practice Jira, `datacenter`, `Task`, `MOCK` | the `JIRA_*` and `WATCHLIST_JIRA_PROJECT` variables, unset by default ([A real Jira](#a-real-jira)) |
+| `JIRA_API_TOKEN` | `.env`, empty | a Key Vault secret, `jira-api-token`, from `JIRA_API_TOKEN`, only when that secret is set |
 | `COSMOS_ENDPOINT` | `http://cosmos:8081`, the emulator | the account's endpoint |
 | `COSMOS_KEY` | the emulator's published key | a Key Vault secret, copied from the account |
 | `ACTIVITY_READER` | `cosmos` by default | always `cosmos` |
@@ -126,6 +128,18 @@ The offline checks cannot show these:
 3. **With a list, from a listed address.** The editor opens.
 4. **With a list, from any other address,** such as a phone on mobile data. The answer is "RBAC: access denied". This also shows that the inside ranges do not let outsiders in.
 5. **With a list, the platform's own calls.** The bootstrap job succeeds, and a test run completes. This is the one check of the inside ranges. If either fails with HTTP 403 ("RBAC: access denied"), unset `N8N_EDITOR_ALLOWED_IPS` and deploy again, which restores runs. Then find where the calls come from. If they leave through the environment's public address, `az containerapp show --name platform-api --resource-group rg-wab-dev --query properties.outboundIpAddresses` lists it, and it goes in `N8N_INTERNAL_ALLOWED_CIDRS`. That address can be shared with other Azure customers, so n8n's sign-in matters again.
+
+## A real Jira
+
+With no `JIRA_BASE_URL`, platform-api serves a practice Jira at `/practice-jira` and calls it over HTTP, the way it would call a real one ([ADR 0035](../docs/adr/0035-reach-jira-through-one-rest-adapter-and-let-the-practice-jira-speak-jiras-api.md)). To switch to a real Jira, set these on the `azure-dev` environment and deploy:
+
+- the variable `JIRA_BASE_URL`, an https address such as `https://jira.example.com`;
+- the variable `JIRA_API_FLAVOR`, `datacenter` (REST v2) or `cloud` (REST v3);
+- the secret `JIRA_API_TOKEN`, a personal access token for Data Center or an API token for Cloud;
+- for Cloud, the secret `JIRA_EMAIL`, the account's email;
+- if needed, `JIRA_ISSUE_TYPE` (default `Task`), `JIRA_BROWSE_URL` (default `JIRA_BASE_URL/browse/{key}`) and `WATCHLIST_JIRA_PROJECT` (default `MOCK`).
+
+The plan updates platform-api in place, and adds the `jira-api-token` secret to Key Vault. The practice Jira's routes are then not served. `platform-api/tests/test_jira_contract.py` runs against the real Jira first, with `JIRA_CONTRACT_URL` and the settings its docstring names.
 
 ## Cost estimate
 

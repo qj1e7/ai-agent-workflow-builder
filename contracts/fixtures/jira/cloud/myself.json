@@ -1,0 +1,9 @@
+{
+  "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10ac8d82e05b22cc7d4ef5",
+  "accountId": "5b10ac8d82e05b22cc7d4ef5",
+  "accountType": "atlassian",
+  "emailAddress": "svc-wab@example.com",
+  "displayName": "AI Workflow Builder",
+  "active": true,
+  "timeZone": "Asia/Singapore"
+}

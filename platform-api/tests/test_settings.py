@@ -1,3 +1,5 @@
+import re
+
 import pytest
 
 from platform_api.auth import ConfigError
@@ -66,7 +68,8 @@ def test_practice_systems_are_on_and_the_watchlist_writes_to_mock_by_default():
     ("raw", "on"), [("on", True), ("off", False), (" OFF ", False), ("", True)]
 )
 def test_practice_systems_take_on_or_off(raw: str, on: bool):
-    assert settings_from_env({**LOCAL_ENV, "PRACTICE_SYSTEMS": raw}).practice_systems is on
+    env = {**LOCAL_ENV, **REAL_JIRA, "PRACTICE_SYSTEMS": raw}
+    assert settings_from_env(env).practice_systems is on
 
 
 def test_practice_systems_refuse_any_other_word():
@@ -84,3 +87,67 @@ def test_the_watchlist_project_takes_any_jira_project_key(project: str):
 def test_the_watchlist_project_refuses_what_jira_would(project: str):
     with pytest.raises(ConfigError, match="WATCHLIST_JIRA_PROJECT"):
         settings_from_env({**LOCAL_ENV, "WATCHLIST_JIRA_PROJECT": project})
+
+
+REAL_JIRA = {"JIRA_BASE_URL": "https://jira.example.com/", "JIRA_API_TOKEN": "pat-123"}
+
+
+def test_without_a_jira_address_the_platform_uses_the_practice_jira():
+    jira = settings_from_env(LOCAL_ENV).jira
+    assert jira.practice and jira.base_url is None
+    assert (jira.flavor, jira.issue_type) == ("datacenter", "Task")
+    assert jira.browse_url == "/jira/{key}"
+
+
+def test_a_data_center_jira_needs_only_its_address_and_a_token():
+    jira = settings_from_env({**LOCAL_ENV, **REAL_JIRA}).jira
+    assert not jira.practice
+    assert (jira.base_url, jira.flavor, jira.token) == (
+        "https://jira.example.com",
+        "datacenter",
+        "pat-123",
+    )
+    assert jira.browse_url == "https://jira.example.com/browse/{key}"
+
+
+def test_a_cloud_jira_takes_an_email_an_issue_type_and_a_browse_address():
+    env = {
+        **LOCAL_ENV,
+        **REAL_JIRA,
+        "JIRA_API_FLAVOR": "cloud",
+        "JIRA_EMAIL": "bot@example.com",
+        "JIRA_ISSUE_TYPE": "Story",
+        "JIRA_BROWSE_URL": "https://jira.example.com/jira/browse/{key}",
+    }
+    jira = settings_from_env(env).jira
+    assert (jira.flavor, jira.email, jira.issue_type) == ("cloud", "bot@example.com", "Story")
+    assert jira.browse_url == "https://jira.example.com/jira/browse/{key}"
+
+
+@pytest.mark.parametrize(
+    ("env", "reason"),
+    [
+        pytest.param({"JIRA_API_FLAVOR": "server"}, "datacenter or cloud", id="unknown flavor"),
+        pytest.param(
+            {"JIRA_BASE_URL": "https://jira.example.com"}, "JIRA_API_TOKEN", id="no token"
+        ),
+        pytest.param({**REAL_JIRA, "JIRA_BASE_URL": "http://jira.example.com"}, "https", id="http"),
+        pytest.param(
+            {**REAL_JIRA, "JIRA_BASE_URL": "https://jira.example.com/?a=1"}, "query", id="query"
+        ),
+        pytest.param({**REAL_JIRA, "JIRA_API_FLAVOR": "cloud"}, "JIRA_EMAIL", id="cloud no email"),
+        pytest.param(
+            {**REAL_JIRA, "JIRA_BROWSE_URL": "https://j.example.com/"}, "{key}", id="no key"
+        ),
+        pytest.param({**REAL_JIRA, "JIRA_ISSUE_TYPE": " "}, "JIRA_ISSUE_TYPE", id="blank type"),
+        pytest.param({"PRACTICE_SYSTEMS": "off"}, "JIRA_BASE_URL", id="no Jira at all"),
+    ],
+)
+def test_jira_settings_that_cannot_work_refuse_to_start(env: dict[str, str], reason: str):
+    with pytest.raises(ConfigError, match=re.escape(reason)):
+        settings_from_env({**LOCAL_ENV, **env})
+
+
+def test_a_real_jira_with_practice_systems_off_starts():
+    settings = settings_from_env({**LOCAL_ENV, **REAL_JIRA, "PRACTICE_SYSTEMS": "off"})
+    assert not settings.practice_systems and not settings.jira.practice

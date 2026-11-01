@@ -17,7 +17,8 @@ from platform_api.builder.models import (
 )
 from platform_api.builder.watchlist import attention_first
 from platform_api.contracts.stories import SUCCESS, TICKET_BODY, TICKET_TITLE
-from platform_api.orchestration.http import MockJiraTicket, PendingView, TickOut
+from platform_api.orchestration.http import PendingView, TickOut
+from platform_api.practice_jira.http import MockJiraTicket
 from platform_api.shared import ApprovalId, RunId, SoftwareId, UserId
 from platform_api.wire import WireModel
 
