@@ -67,6 +67,9 @@ jobs:
       TF_VAR_jira_issue_type: ${{ vars.JIRA_ISSUE_TYPE || 'Task' }}
       TF_VAR_jira_browse_url: ${{ vars.JIRA_BROWSE_URL }}
       TF_VAR_watchlist_jira_project: ${{ vars.WATCHLIST_JIRA_PROJECT || 'MOCK' }}
+      # Optional (ADR 0036). Unset keeps the practice Teams copy and its channel name.
+      TF_VAR_teams_webhook_url: ${{ secrets.TEAMS_WEBHOOK_URL }}
+      TF_VAR_teams_channel: ${{ vars.TEAMS_CHANNEL }}
       # Optional, for a subscription that refuses Cosmos DB's free tier or its region (ADR 0031).
       TF_VAR_cosmos_location: ${{ vars.COSMOS_LOCATION }}
       TF_VAR_cosmos_serverless: ${{ vars.COSMOS_SERVERLESS || 'false' }}

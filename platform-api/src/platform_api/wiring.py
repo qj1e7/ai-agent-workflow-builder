@@ -10,7 +10,7 @@ from platform_api.builder import Builder, Home, Watchlist
 from platform_api.db import Database
 from platform_api.monitoring import ActivityLog, Copier, CosmosEvents, callback_for
 from platform_api.orchestration.agents import HttpAgentRuntime
-from platform_api.orchestration.dispatch import N8nWebhooks, TeamsStub
+from platform_api.orchestration.dispatch import ApprovalChannel, N8nWebhooks
 from platform_api.orchestration.jira import JiraWriteConnector
 from platform_api.orchestration.jira_rest import JiraAuth, JiraRestAdapter
 from platform_api.orchestration.model_settings import KeyBox, ModelSettings
@@ -19,6 +19,7 @@ from platform_api.orchestration.planning import CardPlanning
 from platform_api.orchestration.runs import Leg
 from platform_api.orchestration.schedule_store import ScheduleBook, ScheduleTicker
 from platform_api.orchestration.service import Orchestrator
+from platform_api.orchestration.teams import TeamsStub, TeamsWorkflowsWebhook
 from platform_api.orchestration.watch_store import WatchFacts
 from platform_api.orchestration.workflows import load_all
 from platform_api.orchestration.write_actions import WriteGateway
@@ -111,6 +112,9 @@ async def build(settings: Settings) -> Services:
     jira_client = httpx.AsyncClient(timeout=JIRA_TIMEOUT_SECONDS, follow_redirects=False)
     jira, practice_jira = jira_for(settings, db, jira_client)
     teams = TeamsStub(db, settings.teams_channel)
+    channel: ApprovalChannel = teams
+    if settings.teams_webhook_url is not None:
+        channel = TeamsWorkflowsWebhook(settings.teams_webhook_url, settings.teams_channel)
 
     def mint(run_id: RunId, task_id: TaskId, expires_at: datetime) -> tuple[str, str]:
         callback = callback_for(
@@ -134,12 +138,13 @@ async def build(settings: Settings) -> Services:
         db,
         activity,
         N8nWebhooks(settings.n8n_base_url, path_for),
-        teams,
+        channel,
         agents,
         WriteGateway(db, [JiraWriteConnector(jira, db)]),
         mint,
         models=model_settings,
         people=people,
+        public_base_url=settings.public_base_url,
     )
     schedules = ScheduleBook(db)
     watchlist = Watchlist(db, WatchFacts(db, jira), schedules, settings.watchlist_jira_project)

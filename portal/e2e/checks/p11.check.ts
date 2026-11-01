@@ -160,7 +160,7 @@ test('@lane2 alice, who started the run, sees it under Waiting on others with no
   })
 })
 
-test('@lane3 bob approves from Home and the item leaves his Home without a reload, from the run page and from Teams', async ({ browser }) => {
+test('@lane3 bob approves from Home and the item leaves his Home without a reload, from the run page and from the Teams card’s link', async ({ browser }) => {
   test.setTimeout(400_000)
   await withBackend(async (backend) => {
     const viaRunPage: WaitingRun = await backend.waitingRun('alice')
@@ -178,20 +178,26 @@ test('@lane3 bob approves from Home and the item leaves his Home without a reloa
 
     const viaTeams = await backend.waitingRun('alice')
     await expect(approvalItem(page, viaTeams.approvalId)).toBeVisible({ timeout: 20_000 })
+    // Like real Teams, the card has no Approve button: its link opens the approval page, and Bob decides there.
     await page.getByRole('button', { name: /^Teams, practice copy/ }).click()
     const message = page.getByRole('dialog', { name: 'Teams, practice copy' }).locator(`li[data-approval-id="${viaTeams.approvalId}"]`)
     await message.scrollIntoViewIfNeeded()
-    await message.getByRole('button', { name: 'Approve' }).click()
-    await expect(message).toContainText('Approved by Bob')
+    await expect(message.getByRole('button', { name: /^(Approve|Decline)/ })).toHaveCount(0)
+    await message.getByRole('link', { name: 'Open in AI Workflow Builder' }).click()
+    await page.getByRole('button', { name: 'Approve 1 ticket' }).click()
     const decidedAt = Date.now()
-    await page.keyboard.press('Escape')
+    await backend.waitToLeave(viaTeams.runId, 'awaiting_approval')
+    await mainMenu(page).getByRole('link', { name: 'Home' }).click()
     await expect(approvalItem(page, viaTeams.approvalId)).toHaveCount(0, { timeout: 5_000 })
     const leftAfterMs = Date.now() - decidedAt
+    await page.getByRole('button', { name: /^Teams, practice copy/ }).click()
+    await expect(message).toContainText('Approved by Bob', { timeout: 30_000 })
+    await page.keyboard.press('Escape')
     const sameAfterTeams = await stillTheSamePage(page)
     await shotTo(page, 3, 'p11-after-teams-yes.png')
     save(3, 'p11-after-approve.json', { viaRunPage, viaTeams, sameAfterRunPage, sameAfterTeams, leftAfterMs })
     expect(sameAfterRunPage, 'no reload between the run page and Home').toBe(true)
-    expect(sameAfterTeams, 'no reload after the yes in Teams').toBe(true)
+    expect(sameAfterTeams, 'no reload after the yes from the Teams card’s link').toBe(true)
     await page.context().close()
   })
 })

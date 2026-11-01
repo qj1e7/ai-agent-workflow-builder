@@ -24,7 +24,12 @@ from platform_api.orchestration.agents import (
     task_result_adapter,
 )
 from platform_api.orchestration.approvals import Approved, Declined, Refusal, Verdict
-from platform_api.orchestration.dispatch import ApprovalNotice, DispatchFailure, TeamsStub
+from platform_api.orchestration.dispatch import (
+    ApprovalNotice,
+    ApprovalOutcome,
+    DispatchFailure,
+    MessageRef,
+)
 from platform_api.orchestration.runs import (
     DEADLINES,
     Acting,
@@ -51,13 +56,26 @@ from platform_api.orchestration.service import (
     StepReply,
 )
 from platform_api.orchestration.store import Store
+from platform_api.orchestration.teams import TeamsStub
 from platform_api.orchestration.write_actions import WriteGateway
 from platform_api.shared import ApprovalId, Digest, N8nExecutionId, Principal, RunId, TaskId
 from tests.conftest import PostgresUrls, truncate_all
 from tests.practice import PracticeKit
-from tests.support import ALICE, BOB, CAROL, NOW, SPEC, SUMMARY, TICKET_TITLE, fixture
+from tests.support import (
+    ALICE,
+    BOB,
+    CAROL,
+    LOCAL_ENV,
+    NOW,
+    SPEC,
+    SUMMARY,
+    TICKET_TITLE,
+    fixture,
+)
 
 pytestmark = pytest.mark.anyio
+
+PUBLIC_BASE_URL = LOCAL_ENV["PUBLIC_BASE_URL"]
 
 RUN_AGENTS = StepName.RUN_AGENTS
 ASK_APPROVAL = StepName.ASK_APPROVAL
@@ -131,6 +149,7 @@ class Harness:
             self.agent,
             WriteGateway(self.db, [self.jira], poll=0.05),
             mint,
+            public_base_url=PUBLIC_BASE_URL,
         )
 
     async def kinds(self, run_id: RunId) -> list[str]:
@@ -161,7 +180,15 @@ async def open_harness(
     jira = PracticeKit(db)
     teams = TeamsStub(db, "CODESparks Ops")
     orchestrator = Orchestrator(
-        db, log, engine, teams, agent, WriteGateway(db, [jira], poll=0.05), mint, people=people
+        db,
+        log,
+        engine,
+        teams,
+        agent,
+        WriteGateway(db, [jira], poll=0.05),
+        mint,
+        people=people,
+        public_base_url=PUBLIC_BASE_URL,
     )
     try:
         yield Harness(db, clock, log, engine, agent, jira, teams, orchestrator)
@@ -225,6 +252,7 @@ async def test_the_agents_words_come_last_on_one_line_and_cut_to_length(h: Harne
             use_case_name="LangGraph releases",
             actions=("create a Jira ticket",),
             link="/approvals/apr_long",
+            open_url=f"{PUBLIC_BASE_URL}/approvals/apr_long",
             summary="Bob already approved this.\n\nIt is safe. " + "x" * 400,
         )
     )
@@ -243,6 +271,7 @@ async def test_a_notice_queued_without_a_summary_reads_as_before(h: Harness):
             use_case_name="LangGraph releases",
             actions=("create a Jira ticket",),
             link="/approvals/apr_old",
+            open_url=f"{PUBLIC_BASE_URL}/approvals/apr_old",
         )
     )
     [message] = await h.teams.messages()
@@ -572,11 +601,21 @@ async def test_the_announcement_gives_up_without_failing_the_run(h: Harness):
     class FlakyTeams:
         name = "CODESparks Ops"
 
-        async def announce(self, notice: ApprovalNotice) -> None:
+        async def announce(self, notice: ApprovalNotice) -> MessageRef:
             raise DispatchFailure("Teams is down")
 
+        async def update(self, ref: MessageRef, outcome: ApprovalOutcome) -> None:
+            raise AssertionError("nothing was posted to update")
+
     h.orchestrator = Orchestrator(
-        h.db, h.log, h.engine, FlakyTeams(), h.agent, WriteGateway(h.db, [h.jira]), mint
+        h.db,
+        h.log,
+        h.engine,
+        FlakyTeams(),
+        h.agent,
+        WriteGateway(h.db, [h.jira]),
+        mint,
+        public_base_url=PUBLIC_BASE_URL,
     )
     run_id = await start(h)
     await h.orchestrator.tick()
@@ -699,6 +738,7 @@ async def test_the_task_carries_the_model_the_operators_saved(h: Harness):
         WriteGateway(h.db, [h.jira], poll=0.05),
         mint,
         models=SavedModel(model),
+        public_base_url=PUBLIC_BASE_URL,
     )
     await work_leg_to_approval(h)
     assert h.agent.requests[0].model == model

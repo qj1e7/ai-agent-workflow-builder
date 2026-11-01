@@ -229,6 +229,7 @@ On 28 Oct 2026, four published design skills reviewed the prototype: UX heuristi
 
 - **Practice Jira page.** The prototype only has a read-only ticket dialog, opened from the ticket pills. The app also has a Practice Jira page at `/jira`, and `/jira/KEY` opens one ticket. An Operator can mark a ticket Done there, which the demo needs ("check, approve, ticket created, mark done, up to date"). It is not in the main menu, so the menu does not look like a copy of Jira. A header button labelled "Jira", next to Teams, leads to it.
 - **Why a page.** Its address maps one to one onto a real Jira browse address. Every ticket key in the app links through one function. When the Portal's `/config.json` has a `jira_browse_url` (set from `JIRA_BROWSE_URL`), the keys go to the real Jira instead, and the header button is hidden, so switching to the real Jira needs no Portal change.
+- **The Teams panel has no Approve or Decline.** The prototype's Teams messages have them. The app's practice copy draws the Adaptive Card a real Teams channel gets ([ADR 0036](../adr/0036-the-approval-request-goes-to-teams-as-an-adaptive-card-that-opens-our-approval-page.md)): what would be written, what the agents found, who can decide, and one button, Open in AI Workflow Builder. The Approver decides on the approval page, as they will from real Teams. Once decided, the card says who approved or declined. Buttons inside Teams wait for a Teams bot.
 
 ## Motion and the agents' faces
 

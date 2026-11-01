@@ -362,3 +362,22 @@ def test_migration_0008_lets_a_schedule_run_on_weekdays_and_a_downgrade_drops_th
         finally:
             upgrade("orchestration", postgres.owner)
         conn.execute(insert, ("uc_again", "weekdays", NOW))
+
+
+async def test_migration_0010_records_each_old_practice_ticket_as_the_write_that_made_it(
+    postgres: PostgresUrls, db: Database
+):
+    downgrade("orchestration", postgres.owner, "0009")
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO orchestration.mock_jira_tickets (key, number, project, title, body, "
+            "created_at, run_id, proposal_id, idempotency_key) VALUES ('MOCK-7', 7, 'MOCK', 't', "
+            "'b', now(), 'run_old', 'prp_old', 'run_old/prp_old/0')"
+        )
+    upgrade("orchestration", postgres.owner)
+    with psycopg.connect(postgres.owner) as conn:
+        row = conn.execute(
+            "SELECT ticket_key FROM orchestration.jira_writes WHERE idempotency_key = %s",
+            ("run_old/prp_old/0",),
+        ).fetchone()
+    assert row is not None and row[0] == "MOCK-7"

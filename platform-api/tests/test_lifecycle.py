@@ -7,7 +7,6 @@ import pytest
 from platform_api.db import Database
 from platform_api.monitoring import ActivityLog
 from platform_api.orchestration.approvals import Verdict
-from platform_api.orchestration.dispatch import TeamsStub
 from platform_api.orchestration.runs import (
     AwaitingApproval,
     Failed,
@@ -17,6 +16,7 @@ from platform_api.orchestration.runs import (
     Succeeded,
 )
 from platform_api.orchestration.service import Orchestrator, Retried
+from platform_api.orchestration.teams import TeamsStub
 from platform_api.orchestration.workflows import load_all
 from platform_api.orchestration.write_actions import WriteGateway
 from platform_api.shared import ApprovalId, RunId
@@ -74,6 +74,7 @@ async def stack(postgres: PostgresUrls) -> AsyncIterator[Stack]:
         agent,
         WriteGateway(db, [jira], poll=0.05),
         mint,
+        public_base_url="http://localhost:8000",
     )
     engine.bind(orchestrator)
     try:

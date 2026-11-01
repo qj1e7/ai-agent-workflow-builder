@@ -136,6 +136,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "internal/workflow-failure.json": TypeAdapter(WorkflowFailureIn),
     "stubs/dev-users.json": TypeAdapter(DevUsers),
     "stubs/teams-messages.json": TypeAdapter(TeamsStubMessages),
+    "stubs/teams-messages.decided.json": TypeAdapter(TeamsStubMessages),
     "stubs/mock-jira-tickets.json": TypeAdapter(MockJiraTickets),
     "stubs/mock-jira-ticket.done.json": TypeAdapter(MockJiraTicket),
     "troubleshooting/failure.json": TypeAdapter(TroubleshootingOut),

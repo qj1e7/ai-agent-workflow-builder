@@ -330,7 +330,10 @@ class WriteGateway:
                     continue
                 case InFlight() | None:
                     pass
-            await self._mark_started(key)
+            if not await self._claim(key):
+                # Another try claimed this key between our read and our claim.
+                await asyncio.sleep(self._poll)
+                continue
             try:
                 reference = await self._connectors[action.connector].execute(action, key)
             except WriteRefused as refused:
@@ -359,16 +362,31 @@ class WriteGateway:
             return Done(str(row["external_reference"]))
         return InFlight(row["started_at"])
 
-    async def _mark_started(self, key: WriteKey) -> None:
+    async def _claim(self, key: WriteKey) -> bool:
+        """Claims the key in one statement: a new row, or a started one whose try is older than
+        the in-flight timeout. False means another try holds it or it is done, so two tries
+        never call the connector for one key at once."""
         async with self._db.transaction("orchestration") as uow:
-            await uow.conn.execute(
-                "INSERT INTO orchestration.write_executions "
-                "(proposal_id, action_index, run_id, idempotency_key, status, started_at) "
-                "VALUES (%s, %s, %s, %s, 'started', %s) "
-                "ON CONFLICT (idempotency_key) DO UPDATE SET started_at = EXCLUDED.started_at "
-                "WHERE orchestration.write_executions.status = 'started'",
-                (key.proposal_id, key.index, key.run_id, key.text, uow.now),
-            )
+            row = await (
+                await uow.conn.execute(
+                    "INSERT INTO orchestration.write_executions "
+                    "(proposal_id, action_index, run_id, idempotency_key, status, started_at) "
+                    "VALUES (%s, %s, %s, %s, 'started', %s) "
+                    "ON CONFLICT (idempotency_key) DO UPDATE SET started_at = EXCLUDED.started_at "
+                    "WHERE orchestration.write_executions.status = 'started' "
+                    "AND orchestration.write_executions.started_at <= %s "
+                    "RETURNING idempotency_key",
+                    (
+                        key.proposal_id,
+                        key.index,
+                        key.run_id,
+                        key.text,
+                        uow.now,
+                        uow.now - self._timeout,
+                    ),
+                )
+            ).fetchone()
+        return row is not None
 
     async def _mark_done(self, key: WriteKey, reference: str) -> None:
         async with self._db.transaction("orchestration") as uow:

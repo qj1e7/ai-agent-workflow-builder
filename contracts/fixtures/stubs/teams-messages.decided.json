@@ -1,0 +1,101 @@
+{
+  "messages": [
+    {
+      "id": "tm_01JB8",
+      "ts": "2026-11-03T02:14:10.612000Z",
+      "channel": "CODESparks Ops",
+      "text": "A run of the Software watchlist needs an Approver. It would create a Jira ticket in MOCK titled \"Upgrade LangGraph from 1.2.14 to 1.2.16\". Open the approval page to decide. The agents said: LangGraph has a new release: 1.2.16.",
+      "link": "/approvals/apr_01JB8",
+      "run_id": "run_01JB8",
+      "approval_id": "apr_01JB8",
+      "card": {
+        "type": "AdaptiveCard",
+        "version": "1.4",
+        "fallbackText": "An approval request is waiting in AI Workflow Builder.",
+        "body": [
+          {
+            "type": "RichTextBlock",
+            "id": "outcome",
+            "inlines": [
+              {
+                "type": "TextRun",
+                "text": "Approved by Bob",
+                "weight": "bolder",
+                "color": "good"
+              }
+            ]
+          },
+          {
+            "type": "RichTextBlock",
+            "inlines": [
+              {
+                "type": "TextRun",
+                "text": "Software watchlist",
+                "weight": "bolder"
+              },
+              {
+                "type": "TextRun",
+                "text": " wants to make 1 change. Nothing is written until an Approver says yes."
+              }
+            ]
+          },
+          {
+            "type": "RichTextBlock",
+            "inlines": [
+              {
+                "type": "TextRun",
+                "text": "\u2022 Create Jira ticket in MOCK: Upgrade LangGraph from 1.2.14 to 1.2.16"
+              }
+            ]
+          },
+          {
+            "type": "TextBlock",
+            "text": "What the agents found",
+            "wrap": true,
+            "weight": "bolder"
+          },
+          {
+            "type": "RichTextBlock",
+            "inlines": [
+              {
+                "type": "TextRun",
+                "text": "LangGraph has a new release: 1.2.16."
+              }
+            ]
+          },
+          {
+            "type": "TextBlock",
+            "text": "Who can decide",
+            "wrap": true,
+            "weight": "bolder"
+          },
+          {
+            "type": "RichTextBlock",
+            "inlines": [
+              {
+                "type": "TextRun",
+                "text": "Any Approver"
+              }
+            ]
+          },
+          {
+            "type": "RichTextBlock",
+            "inlines": [
+              {
+                "type": "TextRun",
+                "text": "Alice can\u2019t decide, because this run is their own work."
+              }
+            ]
+          }
+        ],
+        "actions": [
+          {
+            "type": "Action.OpenUrl",
+            "title": "Open in AI Workflow Builder",
+            "url": "http://localhost:8080/approvals/apr_01JB8"
+          }
+        ]
+      }
+    }
+  ]
+}

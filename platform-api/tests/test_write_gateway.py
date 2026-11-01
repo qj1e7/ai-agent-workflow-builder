@@ -202,3 +202,15 @@ async def test_each_written_ticket_says_where_people_open_it(db: Database):
     [done] = await WriteGateway(db, [jira]).execute(authorized(jira))
     assert (done.external_reference, done.url) == ("MOCK-1", "/jira/MOCK-1")
     assert BlockingConnector().link("MOCK-9") is None
+
+
+async def test_two_gateways_racing_on_one_write_make_one_ticket(db: Database):
+    await seed_run(db)
+    jira = PracticeKit(db)
+    write = authorized(jira)
+    first, second = await asyncio.gather(
+        WriteGateway(db, [jira], poll=0.05).execute(write),
+        WriteGateway(db, [jira], poll=0.05).execute(write),
+    )
+    assert first == second
+    assert [t.key for t in await jira.tickets()] == ["MOCK-1"]

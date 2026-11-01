@@ -58,6 +58,7 @@ from platform_api.monitoring.http import TroubleshootingOut
 from platform_api.monitoring.troubleshooter import explain
 from platform_api.orchestration import BelongsOnWatchlist, Understood, UnderstoodRow
 from platform_api.orchestration.approvals import Refusal, Verdict
+from platform_api.orchestration.dispatch import ApprovalNotice, ApprovalOutcome, AskedStep
 from platform_api.orchestration.http import (
     ApprovalRef,
     ApprovalView,
@@ -78,6 +79,7 @@ from platform_api.orchestration.http import (
     WriteActionView,
     WriteDoneView,
 )
+from platform_api.orchestration.teams import approval_card, practice_text, with_outcome
 from platform_api.orchestration.write_actions import WriteAction, digest
 from platform_api.practice_jira.http import MockJiraTicket, MockJiraTickets
 from platform_api.shared import ApprovalId, ProposalId, RunId, UserId
@@ -680,20 +682,42 @@ WORKFLOW_FAILURE = WorkflowFailureIn(
 )
 
 
-def teams_messages(tl: Timeline) -> TeamsStubMessages:
+PORTAL_URL = "http://localhost:8080"
+"""The Portal's address in the local stack, which PUBLIC_BASE_URL names."""
+
+APPROVAL_NOTICE = ApprovalNotice(
+    run_id=SUCCESS.run_id,
+    approval_id=SUCCESS.approval_id,
+    use_case_name=USE_CASE_NAME,
+    actions=(f'create a Jira ticket in MOCK titled "{TICKET_TITLE}"',),
+    link=SUCCESS.approval_link,
+    open_url=f"{PORTAL_URL}{SUCCESS.approval_link}",
+    summary=SUMMARY,
+    lines=(ACTION_LINE.line,),
+    digest=DIGEST,
+    steps=(AskedStep("Team approver"),),
+    not_deciding=("Alice",),
+)
+
+
+def teams_messages(tl: Timeline, decided: bool = False) -> TeamsStubMessages:
+    """The practice Teams copy as the run asks for a yes, and, when decided, after Bob's yes."""
     announced = next(e for e in tl.events if e.kind == "approval_announced")
+    card = approval_card(APPROVAL_NOTICE)
+    if decided:
+        outcome = ApprovalOutcome("approved", ("Bob",), USE_CASE_NAME, APPROVAL_NOTICE.open_url)
+        card = with_outcome(card, outcome)
     return TeamsStubMessages(
         messages=[
             TeamsStubMessage(
                 id="tm_01JB8",
                 ts=announced.ts,
                 channel=CHANNEL,
-                text=f"A run of the {USE_CASE_NAME} needs an Approver. It would create a Jira "
-                f'ticket in MOCK titled "{TICKET_TITLE}". Open the approval page to decide. '
-                f"The agents said: {SUMMARY}",
+                text=practice_text(APPROVAL_NOTICE),
                 link=SUCCESS.approval_link,
                 run_id=SUCCESS.run_id,
                 approval_id=SUCCESS.approval_id,
+                card=card,
             )
         ]
     )
@@ -773,6 +797,7 @@ def fixtures() -> dict[str, WireModel | list[WireModel]]:
         "internal/workflow-failure.json": WORKFLOW_FAILURE,
         "stubs/dev-users.json": DEV_USERS,
         "stubs/teams-messages.json": teams_messages(success),
+        "stubs/teams-messages.decided.json": teams_messages(success, decided=True),
         "stubs/mock-jira-tickets.json": mock_jira_tickets(success),
         "troubleshooting/failure.json": troubleshooting(failure),
     }
