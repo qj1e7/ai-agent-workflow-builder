@@ -262,6 +262,12 @@ locals {
       max_replicas = 1
       # With its editor open, n8n builds its links from its public address. n8n listens on 5678,
       # so without N8N_EDITOR_BASE_URL it would add :5678 to them.
+      #
+      # It also creates its owner from these settings, so its setup page never offers the owner to
+      # a visitor. n8n 2.42.6 runs this in start.js's init(), before server.start(), and rewrites
+      # the owner on every start (OwnerInstanceSettingsLoader, overwriteExisting). The bootstrap's
+      # own setup call then gets "Instance owner already setup" and signs in, as on any later run.
+      # The names match the ones the bootstrap uses. The hash is in local.inline_secrets.
       env = merge(
         {
           DB_TYPE                           = "postgresdb"
@@ -277,9 +283,13 @@ locals {
           N8N_HIRING_BANNER_ENABLED         = "false"
         },
         var.n8n_editor_external ? {
-          N8N_PROTOCOL        = "https"
-          N8N_HOST            = trimprefix(local.url["n8n"], "https://")
-          N8N_EDITOR_BASE_URL = "${local.url["n8n"]}/"
+          N8N_PROTOCOL                      = "https"
+          N8N_HOST                          = trimprefix(local.url["n8n"], "https://")
+          N8N_EDITOR_BASE_URL               = "${local.url["n8n"]}/"
+          N8N_INSTANCE_OWNER_MANAGED_BY_ENV = "true"
+          N8N_INSTANCE_OWNER_EMAIL          = var.n8n_owner_email
+          N8N_INSTANCE_OWNER_FIRST_NAME     = "Platform"
+          N8N_INSTANCE_OWNER_LAST_NAME      = "Bootstrap"
         } : {},
       )
       secrets = {
@@ -304,6 +314,15 @@ locals {
       }
       secrets = {}
     }
+  }
+
+  # Secrets that are not in Key Vault, by app. They stay out of the app table, because its
+  # for_each needs plain values. n8n's owner password hash is the stored bcrypt hash of the
+  # password the bootstrap signs in with, so it is the same on every plan.
+  inline_secrets = {
+    n8n = var.n8n_editor_external ? {
+      N8N_INSTANCE_OWNER_PASSWORD_HASH = random_password.generated["n8n-owner-password"].bcrypt_hash
+    } : {}
   }
 
   jobs = {
@@ -370,6 +389,7 @@ module "app" {
   ingress             = local.ingress[each.key]
   env                 = each.value.env
   secrets             = each.value.secrets
+  inline_secrets      = lookup(local.inline_secrets, each.key, {})
   tags                = local.tags
 }
 

@@ -36,6 +36,15 @@ resource "azurerm_container_app" "this" {
     }
   }
 
+  # The names are plain and the values stay sensitive, as in modules/key_vault.
+  dynamic "secret" {
+    for_each = toset(nonsensitive(keys(var.inline_secrets)))
+    content {
+      name  = lower(replace(secret.value, "_", "-"))
+      value = var.inline_secrets[secret.value]
+    }
+  }
+
   ingress {
     external_enabled = var.ingress.external
     target_port      = var.ingress.target_port
@@ -82,6 +91,14 @@ resource "azurerm_container_app" "this" {
         content {
           name        = env.key
           secret_name = lower(replace(env.key, "_", "-"))
+        }
+      }
+
+      dynamic "env" {
+        for_each = toset(nonsensitive(keys(var.inline_secrets)))
+        content {
+          name        = env.value
+          secret_name = lower(replace(env.value, "_", "-"))
         }
       }
     }

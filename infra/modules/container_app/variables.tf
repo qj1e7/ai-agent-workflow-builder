@@ -99,6 +99,13 @@ variable "secrets" {
   }))
 }
 
+variable "inline_secrets" {
+  description = "Environment variables kept as the app's own secrets, by variable name, for values Terraform makes that are not in Key Vault. A new Key Vault secret would give the app's identity a new role, which replaces its role wait, and the deploy's plan guard stops on any replace."
+  type        = map(string)
+  default     = {}
+  sensitive   = true
+}
+
 variable "tags" {
   description = "Tags for every resource."
   type        = map(string)

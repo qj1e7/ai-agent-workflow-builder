@@ -52,6 +52,10 @@ for env_dir in "$infra"/envs/*/; do
     "cp -R /src/. /work && rm -rf /work/.cache /work/envs/$env/.terraform /work/envs/$env/.terraform.lock.hcl && cd /work/envs/$env && tofu version && tofu init -backend=false -input=false -no-color >/dev/null && tofu validate -no-color"
 done
 
+# The deploy's gate for n8n's editor, against a fake az.
+run n8n-editor-gate tool --volume "$infra:/infra:ro" --entrypoint /bin/sh "$TERRAFORM_IMAGE" \
+  /infra/scripts/check-n8n-editor-gate.sh
+
 run tflint tool \
   --volume "$infra:/infra" --volume "$cache/tflint:/plugins" --env TFLINT_PLUGIN_DIR=/plugins \
   ${GITHUB_TOKEN:+--env GITHUB_TOKEN} --workdir /infra --entrypoint /bin/sh "$TFLINT_IMAGE" -c \
