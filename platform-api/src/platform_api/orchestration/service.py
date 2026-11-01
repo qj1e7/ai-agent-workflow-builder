@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 import logging
+import traceback
 from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
@@ -65,6 +66,7 @@ from platform_api.orchestration.dispatch import (
     OutcomeVerdict,
     RetryPolicy,
     WorkflowEngine,
+    without_addresses,
 )
 from platform_api.orchestration.person_runs import PersonRuns, runs_of
 from platform_api.orchestration.runs import (
@@ -251,7 +253,8 @@ async def _through_channel[T](call: Awaitable[T]) -> T:
     except DispatchFailure:
         raise
     except Exception as error:
-        log.exception("the Teams adapter failed")
+        # The traceback helps a maintainer, but an adapter's error may name a secret address.
+        log.error("the Teams adapter failed: %s", without_addresses(traceback.format_exc()))
         raise DispatchFailure(f"the Teams adapter failed ({type(error).__name__})") from None
 
 
@@ -262,7 +265,7 @@ def _asked_steps(request: ApprovalRequest, names: Mapping[UserId, str]) -> list[
             case approvals.AnyApprover():
                 who: list[str] = []
             case approvals.OneOf(users):
-                who = [names.get(u, u) for u in sorted(users)]
+                who = sorted({names[u] for u in users})
         steps.append({"label": step.label, "who": who})
     return steps
 
@@ -679,7 +682,7 @@ class Orchestrator:
                     "lines": [describe(a).line for a in proposal.actions],
                     "digest": request.digest,
                     "steps": _asked_steps(request, names),
-                    "not_deciding": sorted(names[p] for p in request.parties),
+                    "not_deciding": sorted({names[p] for p in request.parties}),
                 },
                 uow.now,
             )
@@ -913,7 +916,7 @@ class Orchestrator:
     async def tick(self, now: datetime | None = None) -> None:
         now = now or self._db.clock()
         async with self._db.transaction("orchestration") as uow:
-            due = await self._store.due_outbox(uow, now)
+            due = await self._store.take_due_outbox(uow, now, self._retry.lease)
         for row in due:
             await self._dispatch(row, now)
         async with self._db.transaction("orchestration") as uow:
@@ -1038,6 +1041,19 @@ class Orchestrator:
                 return
         if ref is None:
             raise DispatchFailure("the approval request is not in Teams yet")
+        if ref.adapter != self._channel.adapter:
+            # The platform moved between the practice copy and real Teams since the post. The
+            # adapter in use cannot show the outcome on a message it did not post.
+            log.info(
+                "not showing the outcome of %s in Teams: it was posted by %s, and the platform "
+                "now posts through %s",
+                approval_id,
+                ref.adapter,
+                self._channel.adapter,
+            )
+            async with self._db.transaction("orchestration") as uow:
+                await self._store.outbox_sent(uow, row.id)
+            return
         outcome = ApprovalOutcome(
             verdict=row.payload["verdict"],
             by=tuple(row.payload["by"]),

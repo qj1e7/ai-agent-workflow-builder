@@ -88,8 +88,25 @@ def _test_only_http_origin(env: Mapping[str, str], issuer: str, base_url: str) -
     return origin_of(issuer) if urlsplit(issuer).scheme == "http" else None
 
 
+def _is_portal_url(url: str) -> bool:
+    """The Portal's address, which Teams cards and sign-in send people to: https with a host and
+    no query or fragment. Plain http only on this machine, for the local sign-in stack."""
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return False
+    if not parts.hostname or parts.query or parts.fragment:
+        return False
+    return parts.scheme == "https" or (parts.scheme == "http" and parts.hostname in LOCAL_HOSTS)
+
+
 def _oidc_config(env: Mapping[str, str]) -> OidcAuth:
     base_url = _required(env, "PUBLIC_BASE_URL")
+    if not _is_portal_url(base_url):
+        raise ConfigError(
+            "PUBLIC_BASE_URL must be an absolute https URL with a host and no query or fragment, "
+            f"not {base_url!r}. Plain http works only on localhost or 127.0.0.1."
+        )
     issuer = _required(env, "OIDC_ISSUER")
     audience = _required(env, "OIDC_AUDIENCE")
     http_origin = _test_only_http_origin(env, issuer, base_url)

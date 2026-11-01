@@ -599,6 +599,7 @@ async def test_a_failed_write_is_retried_as_acting_and_makes_one_ticket(h: Harne
 async def test_the_announcement_gives_up_without_failing_the_run(h: Harness):
     class FlakyTeams:
         name = "CODESparks Ops"
+        adapter = "flaky"
 
         async def announce(self, notice: ApprovalNotice) -> MessageRef:
             raise DispatchFailure("Teams is down")

@@ -60,6 +60,11 @@ infra/
 - The apps never hold a secret value in their own settings. Each Container App setting points at a Key Vault secret's URL, and Azure reads it with the app's own managed identity. Our code reads plain environment variables and never calls a Key Vault SDK, the same as in Compose.
 - **The generated secrets are also in the Terraform state file, in plain text.** That is how Terraform remembers a value so the next run keeps it. The state lives in Azure Storage with access keys turned off, so only identities with a blob data role can read it. [bootstrap/README.md](bootstrap/README.md) explains who that is. We kept stored random values over Terraform's newer write-only arguments, because a write-only value is new on every run, and a run that fails halfway would leave the database and Key Vault with different passwords.
 - The release checker in agent-runtime calls GitHub's API. Without a token, GitHub allows only 60 requests an hour per IP address. On the Consumption plan our outbound address can be shared with other Azure customers, so a demo could run out. A token raises the limit to 5,000 an hour. To use one, set the secret `GH_RELEASE_TOKEN` on the `azure-dev` environment (step 7 below). The deploy passes it to Terraform as `github_token`, Terraform stores it in Key Vault, and agent-runtime reads it as `GITHUB_TOKEN`. Leave the secret unset, and agent-runtime calls GitHub without a token. Where the token comes from is still open (placeholder: the team lead decides who owns it). A fine-grained personal access token with no extra permissions can read public repositories' releases.
+- Approval cards go to a real Teams channel only when the secret `TEAMS_WEBHOOK_URL` is set (ADR 0036). The address carries its own signature, so the deploy passes it to Terraform as `teams_webhook_url`, Terraform stores it in Key Vault, and platform-api reads it as `TEAMS_WEBHOOK_URL`. **Before you set it, run a one-time check.** Nobody has yet confirmed how Teams shows markdown and web addresses in the card's text.
+  1. In a test channel, not the real one, create a Workflows flow from "When a Teams webhook request is received" with "Post card in a chat or channel", and copy its address.
+  2. From the repository root, run `TEAMS_TEST_WEBHOOK_URL='<that address>' scripts/teams-card-check.sh`. It should print `Teams answered 202`.
+  3. In Teams, open the card. Its text must show exactly as typed: the `**` marks, the brackets, `<at>Bob</at>`, `# Heading` and the broken addresses such as `https[:]//example[.]com`. Nothing may be bold, a heading or a link, except the "Open in AI Workflow Builder" button.
+  4. If anything shows as formatting or as a link, stop and tell the team. Otherwise delete the test flow, and set `TEAMS_WEBHOOK_URL` to the real channel's address.
 
 ### How each setting maps from Compose
 
@@ -184,7 +189,7 @@ If the repository is made public later, add required reviewers and "Prevent self
    | `AZURE_TENANT_ID` | printed by the bootstrap script |
    | `AZURE_SUBSCRIPTION_ID` | printed by the bootstrap script |
    | `GH_RELEASE_TOKEN` | optional. A GitHub token for the release checker, as [Secrets](#secrets) describes |
-   | `TEAMS_WEBHOOK_URL` | optional. A Teams Workflows webhook's address, so approval cards go to a real channel (ADR 0036). Leave it unset for the practice Teams copy |
+   | `TEAMS_WEBHOOK_URL` | optional. A Teams Workflows webhook's address, so approval cards go to a real channel (ADR 0036). Run the one-time check in [Secrets](#secrets) first. Leave it unset for the practice Teams copy |
    | `TFSTATE_RESOURCE_GROUP` | printed by the bootstrap script |
    | `TFSTATE_STORAGE_ACCOUNT` | printed by the bootstrap script |
    | `OIDC_ISSUER` | `https://login.microsoftonline.com/<tenant-id>/v2.0`. The Portal uses it as its sign-in authority too |

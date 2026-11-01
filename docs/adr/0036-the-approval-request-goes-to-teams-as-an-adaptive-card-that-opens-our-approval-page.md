@@ -14,6 +14,8 @@ So the platform builds one Adaptive Card for each approval request, and both the
 - The button's address is absolute, built from `PUBLIC_BASE_URL`, because Teams opens it outside the Portal.
 - **Version 1.4.** Microsoft says Teams renders Adaptive Cards up to 1.6 for a bot. Reports on the Workflows webhook say 1.4 renders well and some 1.5 parts do not. The card uses nothing newer than 1.2, and a test checks each part against the version it needs.
 - **Text we did not write goes only in a `TextRun`.** That covers the agents' summary, the ticket titles, the workflow's name and people's names. The Adaptive Card schema says a `TextRun` has no markdown, so `**Approve now**` shows as typed and cannot pose as our own words. Our fixed headings are in a `TextBlock`, which Teams reads as markdown. The card has no `FactSet`, because a fact's value is markdown too. Each line is one line, cut to 300 characters.
+- **Nothing we did not write can be a link.** Microsoft's webhook page says every text field in a card supports basic markdown, which may reach a `TextRun` too. So in text we did not write, each web address and `www.` name has its `://` and dots broken (`https[:]//example[.]com`), a markdown link loses its `](`, and `mailto:` loses its colon. The card's one button keeps its real address.
+- **A name we cannot read is "someone on this run".** Under real sign-in, a person not on the People list has only an Entra object id, so the card never shows one.
 - **No secret reaches a card.** The notice holds only what the card shows, plus the run and approval ids and the proposal's digest. A test pins its fields, so a new one gets a second look.
 - **Under 28 KB.** Teams refuses a webhook message over 28 KB. A test builds a card for 40 writes and keeps it under.
 
@@ -24,7 +26,11 @@ So the platform builds one Adaptive Card for each approval request, and both the
 - `announce(notice) -> MessageRef` posts the card and says where it went. The platform keeps that reference in `orchestration.approval_messages`.
 - `update(ref, outcome)` shows the outcome once the request is approved or declined. A decision queues it in the outbox, so a slow Teams never holds up the decision. It waits while the request itself is still queued. It still runs when the run fails after the yes, because the outcome is still true. After its retries it gives up and only logs, because the approval page shows the outcome anyway.
 
-Any error an adapter raises is now a `DispatchFailure`. Before, anything else ended the whole tick, and the next tick met the same message first, every 5 seconds.
+Any error an adapter raises is now a `DispatchFailure`. Before, anything else ended the whole tick, and the next tick met the same message first, every 5 seconds. Its traceback is logged with every web address hidden, and httpx's own request lines are off, because each holds the webhook's full address.
+
+**Posts are sent at least once.** If Teams accepts a post but its answer is lost, for example to a read timeout, the outbox retries and the channel gets the card twice. A Workflows webhook has no idempotency key to stop that. A second card for the same request is harmless: both open the same approval page, and a decision is recorded once. Two replicas never send the same outbox row, though, as during a revision switch: each tick takes its rows with `FOR UPDATE SKIP LOCKED` and leases them for a minute. A row a stopped replica held is sent once its lease runs out.
+
+**Each post records its adapter.** `MessageRef` and `approval_messages` say which adapter posted the request, `practice` or `teams_workflows`. When the platform moves between the practice copy and real Teams, an outcome for a request the other adapter posted is skipped and logged. So the switch never posts a stray outcome card, and never retries an update that cannot work.
 
 There are two adapters:
 
@@ -48,7 +54,8 @@ The approval gate. `Orchestrator.decide()` is unchanged, so the same rules decid
 - **Moving to real Teams is configuration.** In the channel, create a Workflows flow from "When a Teams webhook request is received" with "Post card in a chat or channel". Put its address in the `azure-dev` environment's secret `TEAMS_WEBHOOK_URL`, and the channel's name in the variable `TEAMS_CHANNEL`. The deploy passes both to Terraform, and Terraform puts the address in Key Vault. In Compose, set them in `.env`.
 - **The practice panel shows the card a real channel gets.** The tests and live checks that pressed Approve in the panel now decide on the approval page.
 - **A new test-only dependency.** `jsonschema`, in platform-api's dev group, checks every card against the Adaptive Card schema. The schema is a copy in `contracts/schemas/adaptive-card-1.5.json`, with its source address and checksum in `contracts/README.md`, and tests never fetch it.
-- **Migration 0009** adds the card and its outcome to the practice copy's messages, and the `approval_messages` table.
+- **Migration 0009** adds the card and its outcome to the practice copy's messages, and the `approval_messages` table. **Migration 0011** adds each outbox row's lease and each post's adapter.
+- **The button is only as good as `PUBLIC_BASE_URL`.** Under real sign-in, platform-api refuses to start unless it is https with a host and no query or fragment. Plain http works only on localhost, for the local sign-in stack.
 - **No real mention yet.** A Workflows webhook posts as the flow's owner and cannot mention a person reliably, so the card names who can decide in its text (ADR 0024).
 - **Questions for NCS:** a bot or a Workflows webhook, who owns the flow, one channel or one for each workflow (ADR 0027), and whether DevNet lets platform-api reach the webhook's address.
-- **Not confirmed:** whether Teams turns a plain web address inside a `TextRun` into a link. The card labels the agents' words as theirs, under "What the agents found".
+- **Not confirmed:** whether Teams turns a plain web address inside a `TextRun` into a link, or applies markdown there. The card breaks every address and markdown link in text we did not write, and labels the agents' words as theirs, under "What the agents found". Before `TEAMS_WEBHOOK_URL` is set, someone posts a check card full of such text to a test channel once and looks at it in Teams (`scripts/teams-card-check.sh`, in `infra/README.md`). A bare name such as `example.com`, with no `www.` and no `://`, is left as written.

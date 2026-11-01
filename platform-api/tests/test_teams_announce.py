@@ -1,8 +1,12 @@
+import asyncio
+import logging
 from collections.abc import AsyncIterator
 from datetime import timedelta
 
 import pytest
+from fastapi.testclient import TestClient
 
+from platform_api.app import create_app
 from platform_api.auth import DEV_PEOPLE
 from platform_api.orchestration.approvals import Verdict
 from platform_api.orchestration.dispatch import (
@@ -15,10 +19,11 @@ from platform_api.orchestration.dispatch import (
 from platform_api.orchestration.people_store import People
 from platform_api.orchestration.runs import Leg
 from platform_api.orchestration.service import Orchestrator
-from platform_api.orchestration.teams import approval_card
+from platform_api.orchestration.store import Store
+from platform_api.orchestration.teams import TeamsWorkflowsWebhook, approval_card
 from platform_api.orchestration.write_actions import WriteGateway
 from platform_api.shared import ApprovalId, Digest, N8nExecutionId, RunId
-from tests.conftest import PostgresUrls
+from tests.conftest import PostgresUrls, truncate_all
 from tests.support import BOB, SPEC, SUMMARY, TICKET_TITLE
 from tests.test_orchestrator import (
     ASK_APPROVAL,
@@ -30,6 +35,7 @@ from tests.test_orchestrator import (
     start,
     work_leg_to_approval,
 )
+from tests.test_ready import env_for
 
 pytestmark = pytest.mark.anyio
 
@@ -42,28 +48,36 @@ async def h(postgres: PostgresUrls) -> AsyncIterator[Harness]:
 
 class RecordingChannel:
     name = "CODESparks Ops"
+    adapter = "recording"
 
-    def __init__(self) -> None:
+    def __init__(self, pause: float = 0.0) -> None:
+        self.pause = pause
         self.announced: list[ApprovalNotice] = []
         self.updated: list[tuple[MessageRef, ApprovalOutcome]] = []
         self.down_for = 0
         self.breaks_with: Exception | None = None
 
     async def announce(self, notice: ApprovalNotice) -> MessageRef:
+        if self.pause:
+            await asyncio.sleep(self.pause)
         if self.breaks_with is not None:
             raise self.breaks_with
         if self.down_for > 0:
             self.down_for -= 1
             raise DispatchFailure("Teams is down")
         self.announced.append(notice)
-        return MessageRef(self.name, f"m-{notice.approval_id}")
+        return MessageRef(self.name, f"m-{notice.approval_id}", self.adapter)
 
     async def update(self, ref: MessageRef, outcome: ApprovalOutcome) -> None:
         self.updated.append((ref, outcome))
 
 
 def through(h: Harness, channel: RecordingChannel) -> None:
-    h.orchestrator = Orchestrator(
+    h.orchestrator = orchestrator_for(h, channel)
+
+
+def orchestrator_for(h: Harness, channel: RecordingChannel) -> Orchestrator:
+    return Orchestrator(
         h.db,
         h.log,
         h.engine,
@@ -126,7 +140,7 @@ async def test_the_outcome_goes_to_the_message_the_announcement_posted(h: Harnes
     await h.orchestrator.tick()
     assert channel.updated == [
         (
-            MessageRef("CODESparks Ops", f"m-{approval_id}"),
+            MessageRef("CODESparks Ops", f"m-{approval_id}", "recording"),
             ApprovalOutcome(
                 "approved",
                 ("Bob",),
@@ -203,3 +217,96 @@ async def test_a_message_posted_before_cards_reads_without_one(h: Harness):
         "An old message.",
         RunId("run_old"),
     )
+
+
+async def test_an_adapter_error_that_names_the_address_never_reaches_a_log_line(
+    h: Harness, caplog: pytest.LogCaptureFixture
+):
+    caplog.set_level(logging.DEBUG)
+    channel = RecordingChannel()
+    channel.breaks_with = RuntimeError("no route to https://hook.example/run?sig=s3cr3t")
+    through(h, channel)
+    run_id = await start(h)
+    await h.orchestrator.tick()
+    await h.orchestrator.on_step(run_id, RUN_AGENTS, N8nExecutionId("41"))
+    await h.orchestrator.on_step(run_id, ASK_APPROVAL, N8nExecutionId("41"))
+    await h.orchestrator.tick()
+    assert "s3cr3t" not in caplog.text and "hook.example" not in caplog.text
+    failed = [r for r in caplog.records if "the Teams adapter failed" in r.getMessage()]
+    assert failed and "RuntimeError" in caplog.text
+
+
+async def test_two_ticks_at_once_post_each_request_once(h: Harness):
+    # During a revision switch two replicas tick the same outbox.
+    channel = RecordingChannel(pause=0.3)
+    through(h, channel)
+    other = orchestrator_for(h, channel)
+    run_id = await start(h)
+    await h.orchestrator.tick()
+    await h.orchestrator.on_step(run_id, RUN_AGENTS, N8nExecutionId("41"))
+    await h.orchestrator.on_step(run_id, ASK_APPROVAL, N8nExecutionId("41"))
+    await asyncio.gather(h.orchestrator.tick(), other.tick())
+    assert len(channel.announced) == 1
+
+
+async def test_a_row_a_stopped_replica_had_taken_is_sent_once_its_lease_runs_out(h: Harness):
+    channel = RecordingChannel()
+    through(h, channel)
+    run_id = await start(h)
+    await h.orchestrator.tick()
+    await h.orchestrator.on_step(run_id, RUN_AGENTS, N8nExecutionId("41"))
+    await h.orchestrator.on_step(run_id, ASK_APPROVAL, N8nExecutionId("41"))
+    async with h.db.transaction("orchestration") as uow:
+        taken = await Store().take_due_outbox(uow, h.clock["now"])
+    assert [row.kind for row in taken] == ["announce"]
+    await h.orchestrator.tick()
+    assert channel.announced == []
+    h.advance(timedelta(minutes=2))
+    await h.orchestrator.tick()
+    assert len(channel.announced) == 1
+
+
+async def test_an_outcome_for_a_message_another_adapter_posted_is_skipped(
+    h: Harness, caplog: pytest.LogCaptureFixture
+):
+    # The practice copy posted the request, then the platform moved to real Teams.
+    caplog.set_level(logging.INFO)
+    _, _, approval_id = await work_leg_to_approval(h)
+    channel = RecordingChannel()
+    through(h, channel)
+    await h.orchestrator.decide(
+        approval_id, BOB, 0, Verdict.APPROVE, await digest_of(h, approval_id)
+    )
+    await h.orchestrator.tick()
+    assert channel.updated == []
+    async with h.db.transaction("orchestration") as uow:
+        row = await (
+            await uow.conn.execute(
+                "SELECT status, attempt FROM orchestration.outbox WHERE kind = 'show_outcome'"
+            )
+        ).fetchone()
+    assert row is not None and (row["status"], row["attempt"]) == ("sent", 0)
+    assert any("posted by practice" in r.getMessage() for r in caplog.records)
+
+
+async def test_someone_not_on_the_people_list_shows_as_someone_on_this_run(h: Harness):
+    # Under real sign-in an id is an Entra object id, which nobody can read.
+    await work_leg_to_approval(h)
+    [message] = await h.teams.messages()
+    assert message.card is not None
+    text = " ".join(
+        run["text"] for block in message.card.as_json()["body"] for run in block.get("inlines", [])
+    )
+    assert "Someone on this run can’t decide, because this run is their own work." in text
+    assert "alice" not in text
+
+
+def test_shutting_down_closes_the_teams_webhook_client(postgres: PostgresUrls):
+    truncate_all(postgres.owner)
+    app = create_app(
+        {**env_for(postgres), "TEAMS_WEBHOOK_URL": "https://hook.example.test/r?sig=x"}
+    )
+    with TestClient(app):
+        webhook = app.state.teams_webhook
+        assert isinstance(webhook, TeamsWorkflowsWebhook) and not webhook.closed
+    assert webhook.closed

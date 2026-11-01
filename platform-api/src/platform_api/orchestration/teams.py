@@ -5,10 +5,13 @@ real Teams channel, so both show the same card. The card has one button, "Open i
 Builder", and the Approver decides on our approval page under their own sign-in (ADR 0009).
 
 Text we did not write, such as the agents' summary, the workflow's name and people's names, goes
-only in a TextRun, which Teams shows as it is: a TextRun has no markdown. Our own fixed words go in
-a TextBlock. The card holds only what the notice holds, so no token or key can reach a channel.
+only in a TextRun, which Teams shows as it is: a TextRun has no markdown. Its web addresses and
+markdown links are also broken, so none can become a link. Our own fixed words go in a
+TextBlock. The card holds only what the notice holds, so no token or key can reach a channel.
 """
 
+import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, Any, Literal
@@ -106,8 +109,28 @@ def _runs(*runs: TextRun) -> RichTextBlock:
     return RichTextBlock(inlines=list(runs))
 
 
-def _plain(text: str, limit: int = LINE_LIMIT) -> TextRun:
-    return TextRun(text=one_line(text, limit))
+_LINKLIKE = re.compile(r"(?i)\b(?:[a-z][a-z0-9+.-]*://|www\.)[^\s<>()\[\]]+")
+
+
+def _break_address(match: re.Match[str]) -> str:
+    return match.group(0).replace("://", "[:]//").replace(".", "[.]")
+
+
+def inert(text: str) -> str:
+    """text with nothing a reader could follow: each web address and www name has its "://" and
+    dots broken, a markdown link loses its "](", and "mailto:" loses its colon. Teams says every
+    card text field takes basic markdown, and nothing says whether it links a bare address in a
+    TextRun, so text we did not write never holds a working link (ADR 0036)."""
+    text = _LINKLIKE.sub(_break_address, text)
+    text = text.replace("](", "] (")
+    return re.sub(r"(?i)\bmailto:", lambda m: m.group(0)[:-1] + "[:]", text)
+
+
+def _plain(
+    text: str, limit: int = LINE_LIMIT, weight: Weight | None = None, color: Color | None = None
+) -> TextRun:
+    """Text we did not write: on one line, cut to length, and with no working link."""
+    return TextRun(text=one_line(inert(text), limit), weight=weight, color=color)
 
 
 def _either(names: tuple[str, ...]) -> str:
@@ -136,7 +159,7 @@ def _what(notice: ApprovalNotice) -> list[CardElement]:
         shown.append(_runs(TextRun(text=f"And {more} more. Open the request to see them all.")))
     return [
         _runs(
-            TextRun(text=one_line(notice.use_case_name, LINE_LIMIT), weight="bolder"),
+            _plain(notice.use_case_name, weight="bolder"),
             TextRun(
                 text=f" wants to make {_changes(len(lines))}. "
                 "Nothing is written until an Approver says yes."
@@ -150,7 +173,10 @@ def _found(notice: ApprovalNotice) -> list[CardElement]:
     said = one_line(notice.summary, SUMMARY_LIMIT)
     if not said:
         return []
-    return [TextBlock(text="What the agents found", weight="bolder"), _runs(TextRun(text=said))]
+    return [
+        TextBlock(text="What the agents found", weight="bolder"),
+        _runs(_plain(notice.summary, SUMMARY_LIMIT)),
+    ]
 
 
 def _deciders(notice: ApprovalNotice) -> list[CardElement]:
@@ -174,8 +200,10 @@ def _deciders(notice: ApprovalNotice) -> list[CardElement]:
         who.append(
             _runs(
                 _plain(
-                    f"{listed(notice.not_deciding)} can’t decide, "
-                    "because this run is their own work."
+                    _first_upper(
+                        f"{listed(notice.not_deciding)} can’t decide, "
+                        "because this run is their own work."
+                    )
                 )
             )
         )
@@ -198,9 +226,7 @@ def _outcome_block(outcome: ApprovalOutcome) -> RichTextBlock:
     color: Color = "good" if outcome.verdict == "approved" else "attention"
     return RichTextBlock(
         id=OUTCOME_ID,
-        inlines=[
-            TextRun(text=one_line(_decided(outcome), LINE_LIMIT), weight="bolder", color=color)
-        ],
+        inlines=[_plain(_decided(outcome), weight="bolder", color=color)],
     )
 
 
@@ -216,7 +242,7 @@ def outcome_card(outcome: ApprovalOutcome) -> AdaptiveCard:
     return AdaptiveCard(
         body=[
             _runs(
-                TextRun(text=one_line(outcome.use_case_name, LINE_LIMIT), weight="bolder"),
+                _plain(outcome.use_case_name, weight="bolder"),
                 _plain(f": {_decided(outcome).lower()}{after}"),
             )
         ],
@@ -236,6 +262,29 @@ def webhook_message(card: AdaptiveCard) -> dict[str, Any]:
             }
         ],
     }
+
+
+CHECK_NOTICE = ApprovalNotice(
+    run_id=RunId("run_check"),
+    approval_id=ApprovalId("apr_check"),
+    use_case_name="**Card check** [open](https://example.com)",
+    actions=("create a Jira ticket",),
+    link="/approvals/apr_check",
+    open_url="https://example.com/approvals/apr_check",
+    summary=(
+        "**Approve now** [here](https://example.com) or https://example.com or www.example.com "
+        "or mailto:someone@example.com. <at>Bob</at> _ok_ # Heading - item 1. item"
+    ),
+    lines=("Create Jira ticket in MOCK: **bold** [link](https://example.com) www.example.com",),
+    steps=(AskedStep("Approver"),),
+    not_deciding=("**Alice** [x](https://example.com)",),
+)
+"""A card full of text that must show as typed, with no bold, no heading and no link but the
+button. infra/README.md says to post it to a test channel once, before TEAMS_WEBHOOK_URL is set."""
+
+
+def check_card() -> AdaptiveCard:
+    return approval_card(CHECK_NOTICE)
 
 
 def _agents_said(summary: str) -> str:
@@ -282,6 +331,10 @@ class TeamsStub:
     def name(self) -> str:
         return self._channel
 
+    @property
+    def adapter(self) -> str:
+        return "practice"
+
     async def announce(self, notice: ApprovalNotice) -> MessageRef:
         card = approval_card(notice).as_json()
         async with self._db.transaction("orchestration") as uow:
@@ -308,7 +361,7 @@ class TeamsStub:
                 )
             ).fetchone()
         assert row is not None
-        return MessageRef(channel=row["channel"], id=row["id"])
+        return MessageRef(channel=row["channel"], id=row["id"], adapter=self.adapter)
 
     async def update(self, ref: MessageRef, outcome: ApprovalOutcome) -> None:
         async with self._db.transaction("orchestration") as uow:
@@ -364,6 +417,9 @@ class TeamsWorkflowsWebhook:
     """
 
     def __init__(self, url: str, channel: str, client: httpx.AsyncClient | None = None) -> None:
+        # httpx logs each request's full address at INFO, and this address is a secret.
+        for name in ("httpx", "httpcore"):
+            logging.getLogger(name).setLevel(logging.WARNING)
         self._url = url
         self._channel = channel
         self._client = client or httpx.AsyncClient(timeout=10.0)
@@ -372,9 +428,17 @@ class TeamsWorkflowsWebhook:
     def name(self) -> str:
         return self._channel
 
+    @property
+    def adapter(self) -> str:
+        return "teams_workflows"
+
+    @property
+    def closed(self) -> bool:
+        return self._client.is_closed
+
     async def announce(self, notice: ApprovalNotice) -> MessageRef:
         await self._post(approval_card(notice))
-        return MessageRef(channel=self._channel, id=notice.approval_id)
+        return MessageRef(channel=self._channel, id=notice.approval_id, adapter=self.adapter)
 
     async def update(self, ref: MessageRef, outcome: ApprovalOutcome) -> None:
         await self._post(outcome_card(outcome))

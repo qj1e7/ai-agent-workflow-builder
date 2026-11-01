@@ -1,6 +1,6 @@
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 import psycopg
@@ -8,7 +8,7 @@ from pydantic import TypeAdapter
 
 from platform_api.db import UnitOfWork, json
 from platform_api.orchestration.approvals import ApprovalPolicy, ApprovalRequest, Decision, Verdict
-from platform_api.orchestration.dispatch import MessageRef
+from platform_api.orchestration.dispatch import RETRY_POLICY, MessageRef
 from platform_api.orchestration.runs import (
     Acting,
     AwaitingApproval,
@@ -77,6 +77,9 @@ ANNOUNCE = "announce"
 SHOW_OUTCOME = "show_outcome"
 """Shows a decided request's outcome on its Teams card. The outcome holds however the run ends,
 so cancelling a run's outbox leaves these rows."""
+
+
+SOMEONE = "someone on this run"
 
 
 @dataclass(frozen=True)
@@ -403,14 +406,23 @@ class Store:
             (run_id, kind, json(payload), next_at, uow.now),
         )
 
-    async def due_outbox(self, uow: UnitOfWork, now: datetime) -> list[OutboxRow]:
+    async def take_due_outbox(
+        self, uow: UnitOfWork, now: datetime, lease: timedelta = RETRY_POLICY.lease
+    ) -> list[OutboxRow]:
+        """The rows due now that no other tick holds, held for `lease`. Two replicas ticking at
+        once each take different rows. A row stays held only until it is sent, retried or given
+        up, or until the lease runs out, when a stopped replica held it."""
         rows = await (
             await uow.conn.execute(
-                "SELECT id, run_id, kind, payload, attempt FROM orchestration.outbox "
-                "WHERE status = 'pending' AND next_at <= %s ORDER BY next_at, id",
-                (now,),
+                "UPDATE orchestration.outbox o SET leased_until = %s "
+                "FROM (SELECT id FROM orchestration.outbox WHERE status = 'pending' "
+                "AND next_at <= %s AND (leased_until IS NULL OR leased_until <= %s) "
+                "ORDER BY next_at, id FOR UPDATE SKIP LOCKED) due WHERE o.id = due.id "
+                "RETURNING o.id, o.run_id, o.kind, o.payload, o.attempt, o.next_at",
+                (now + lease, now, now),
             )
         ).fetchall()
+        rows.sort(key=lambda r: (r["next_at"], r["id"]))
         return [
             OutboxRow(int(r["id"]), RunId(r["run_id"]), r["kind"], r["payload"], int(r["attempt"]))
             for r in rows
@@ -427,7 +439,7 @@ class Store:
     ) -> None:
         await uow.conn.execute(
             "UPDATE orchestration.outbox SET attempt = attempt + 1, next_at = %s, "
-            "last_error = %s WHERE id = %s AND status = 'pending'",
+            "last_error = %s, leased_until = NULL WHERE id = %s AND status = 'pending'",
             (next_at, error[:500], row_id),
         )
 
@@ -460,31 +472,35 @@ class Store:
     ) -> None:
         await uow.conn.execute(
             "INSERT INTO orchestration.approval_messages "
-            "(approval_id, channel, message_id, posted_at) VALUES (%s, %s, %s, %s) "
+            "(approval_id, channel, message_id, adapter, posted_at) VALUES (%s, %s, %s, %s, %s) "
             "ON CONFLICT (approval_id) DO UPDATE SET channel = EXCLUDED.channel, "
-            "message_id = EXCLUDED.message_id, posted_at = EXCLUDED.posted_at",
-            (approval_id, ref.channel, ref.id, uow.now),
+            "message_id = EXCLUDED.message_id, adapter = EXCLUDED.adapter, "
+            "posted_at = EXCLUDED.posted_at",
+            (approval_id, ref.channel, ref.id, ref.adapter, uow.now),
         )
 
     async def message_ref(self, uow: UnitOfWork, approval_id: ApprovalId) -> MessageRef | None:
         row = await (
             await uow.conn.execute(
-                "SELECT channel, message_id FROM orchestration.approval_messages "
+                "SELECT channel, message_id, adapter FROM orchestration.approval_messages "
                 "WHERE approval_id = %s",
                 (approval_id,),
             )
         ).fetchone()
-        return None if row is None else MessageRef(row["channel"], row["message_id"])
+        if row is None:
+            return None
+        return MessageRef(row["channel"], row["message_id"], row["adapter"])
 
     async def names(self, uow: UnitOfWork, ids: Collection[UserId]) -> dict[UserId, str]:
-        """People's names from the People list. Someone not on it keeps their id."""
+        """People's names from the People list. Someone not on it is "someone on this run":
+        under real sign-in their id is an Entra object id, which nobody can read."""
         rows = await (
             await uow.conn.execute(
                 "SELECT id, display FROM orchestration.people WHERE id = ANY(%s)", (list(ids),)
             )
         ).fetchall()
         found = {UserId(row["id"]): str(row["display"]) for row in rows}
-        return {user: found.get(user, user) for user in ids}
+        return {user: found.get(user, SOMEONE) for user in ids}
 
     async def pending_outbox(self, uow: UnitOfWork, run_id: RunId) -> int:
         row = await (

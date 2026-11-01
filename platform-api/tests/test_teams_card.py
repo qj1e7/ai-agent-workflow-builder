@@ -1,4 +1,5 @@
 import json
+import logging
 from dataclasses import fields, replace
 from typing import Any
 
@@ -20,6 +21,7 @@ from platform_api.orchestration.teams import (
     AdaptiveCard,
     TeamsWorkflowsWebhook,
     approval_card,
+    check_card,
     outcome_card,
     webhook_message,
     with_outcome,
@@ -80,6 +82,7 @@ def every_card() -> dict[str, AdaptiveCard]:
             with_outcome(approval_card(NOTICE), DECLINED), APPROVED
         ),
         "outcome on its own": outcome_card(APPROVED),
+        "the one-time check": check_card(),
     }
 
 
@@ -140,7 +143,9 @@ def test_the_one_button_opens_the_approval_page_at_an_absolute_address(name: str
         {"type": "Action.OpenUrl", "title": OPEN_IN, "url": card["actions"][0]["url"]}
     ]
     assert card["actions"][0]["url"].startswith(("https://", "http://localhost:"))
-    assert card["actions"][0]["url"].endswith(("/approvals/apr_1", "/approvals/apr_old"))
+    assert card["actions"][0]["url"].endswith(
+        ("/approvals/apr_1", "/approvals/apr_old", "/approvals/apr_check")
+    )
 
 
 def test_a_notice_queued_before_the_card_lists_its_phrases_and_any_approver():
@@ -154,8 +159,41 @@ def test_text_we_did_not_write_goes_only_in_text_runs_which_show_no_markdown():
     ours = texts(card, "TextBlock", "text") + [card["fallbackText"]]
     assert not any("Approve now" in text or "evil" in text for text in ours)
     runs = texts(card, "TextRun", "text")
-    assert any(run.startswith("**Approve now** [here](https://evil.example)") for run in runs)
+    assert any(run.startswith("**Approve now** [here] (https[:]//evil[.]example)") for run in runs)
     assert all("\n" not in run for run in runs)
+
+
+INERT = (
+    "See https://evil.example and www.evil.example or [click](http://x.example) "
+    "or HTTPS://EVIL.EXAMPLE or mailto:bob@evil.example or <https://evil.example>"
+)
+
+
+def test_web_addresses_and_markdown_links_in_text_we_did_not_write_are_inert():
+    # Teams' webhook page says every text field supports basic markdown, and nothing says
+    # whether it links a bare address in a TextRun. So nothing we did not write can be a link.
+    notice = replace(
+        NOTICE,
+        use_case_name=INERT,
+        lines=(INERT,),
+        summary=INERT,
+        steps=(AskedStep(INERT, (INERT,)), AskedStep("Second", ())),
+        not_deciding=(INERT,),
+    )
+    outcome = ApprovalOutcome("approved", (INERT,), INERT, OPEN_URL)
+    for card in (approval_card(notice), with_outcome(approval_card(notice), outcome)):
+        runs = texts(wire(card), "TextRun", "text")
+        assert runs and all(INERT not in run for run in runs)
+        for run in runs:
+            lowered = run.lower()
+            assert "://" not in lowered and "](" not in lowered and "www." not in lowered, run
+            assert "mailto:" not in lowered, run
+        assert wire(card)["actions"][0]["url"] == OPEN_URL
+    lone = texts(wire(outcome_card(outcome)), "TextRun", "text")
+    assert all("://" not in run and "www." not in run.lower() for run in lone)
+    assert "See https[:]//evil[.]example and www[.]evil[.]example" in " ".join(
+        texts(wire(approval_card(notice)), "TextRun", "text")
+    )
 
 
 def test_the_card_says_what_would_be_written_what_the_agents_found_and_who_decides():
@@ -246,7 +284,7 @@ async def test_the_webhook_posts_the_card_as_one_adaptive_card_attachment():
     teams = TeamsWorkflowsWebhook(WEBHOOK, "CODESparks Ops", recording(202, seen))
     ref = await teams.announce(NOTICE)
     await teams.update(ref, APPROVED)
-    assert ref == MessageRef("CODESparks Ops", "apr_1")
+    assert ref == MessageRef("CODESparks Ops", "apr_1", "teams_workflows")
     assert teams.name == "CODESparks Ops"
     posted = [json.loads(r.content) for r in seen]
     assert [str(r.url) for r in seen] == [WEBHOOK, WEBHOOK]
@@ -295,3 +333,32 @@ def test_every_card_in_the_contract_fixtures_matches_the_adaptive_card_schema(na
     for message in messages:
         assert [e.message for e in validator.iter_errors(message["card"])] == []
         assert message["card"] == AdaptiveCard.model_validate(message["card"]).as_json()
+
+
+@pytest.mark.parametrize("status", [202, 500])
+async def test_the_webhook_address_never_reaches_a_log_line(
+    status: int, caplog: pytest.LogCaptureFixture
+):
+    caplog.set_level(logging.DEBUG)
+    teams = TeamsWorkflowsWebhook(WEBHOOK, "CODESparks Ops", recording(status, []))
+    try:
+        ref = await teams.announce(NOTICE)
+        await teams.update(ref, APPROVED)
+    except DispatchFailure:
+        pass
+    assert "s3cr3t" not in caplog.text
+    assert all("logic.azure.com" not in record.getMessage() for record in caplog.records)
+
+
+def test_the_one_time_check_card_carries_every_kind_of_markup_made_harmless():
+    runs = texts(wire(check_card()), "TextRun", "text")
+    joined = " ".join(runs)
+    for typed in (
+        "**Approve now**",
+        "<at>Bob</at>",
+        "_ok_",
+        "# Heading",
+        "https[:]//example[.]com",
+    ):
+        assert typed in joined
+    assert not any("://" in run or "](" in run for run in runs)

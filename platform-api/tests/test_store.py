@@ -157,14 +157,14 @@ async def test_outbox_rows_wait_retry_and_cancel(db: Database):
         await store.insert_run(uow, record(), "k1")
         await store.enqueue(uow, RUN, "start_leg", {"leg": "work"}, NOW)
         await store.enqueue(uow, RUN, "start_leg", {"leg": "work"}, LATER)
-        due = await store.due_outbox(uow, NOW)
+        due = await store.take_due_outbox(uow, NOW)
         assert [r.payload for r in due] == [{"leg": "work"}]
         await store.outbox_retry(uow, due[0].id, LATER, "n8n refused the connection")
-        assert await store.due_outbox(uow, NOW) == []
-        retried = await store.due_outbox(uow, LATER)
+        assert await store.take_due_outbox(uow, NOW) == []
+        retried = await store.take_due_outbox(uow, LATER)
         assert [(r.attempt) for r in retried] == [1, 0]
         await store.cancel_outbox(uow, RUN)
-        assert await store.due_outbox(uow, LATER + timedelta(days=1)) == []
+        assert await store.take_due_outbox(uow, LATER + timedelta(days=1)) == []
         assert await store.pending_outbox(uow, RUN) == 0
 
 

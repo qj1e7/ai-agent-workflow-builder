@@ -40,6 +40,7 @@ class Services:
     people: People
     copier: Copier | None = None
     cosmos: CosmosEvents | None = None
+    teams_webhook: TeamsWorkflowsWebhook | None = None
 
 
 def install(app: FastAPI, services: Services) -> None:
@@ -54,6 +55,7 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.watchlist = services.watchlist
     app.state.schedule_ticker = services.schedule_ticker
     app.state.teams_stub = services.teams_stub
+    app.state.teams_webhook = services.teams_webhook
     app.state.mock_jira = services.mock_jira
     app.state.model_settings = services.model_settings
     app.state.people = services.people
@@ -79,9 +81,12 @@ async def build(settings: Settings) -> Services:
             await people.seed_first(settings.first_people)
     jira = MockJiraConnector(db)
     teams = TeamsStub(db, settings.teams_channel)
-    channel: ApprovalChannel = teams
-    if settings.teams_webhook_url is not None:
-        channel = TeamsWorkflowsWebhook(settings.teams_webhook_url, settings.teams_channel)
+    webhook = (
+        None
+        if settings.teams_webhook_url is None
+        else TeamsWorkflowsWebhook(settings.teams_webhook_url, settings.teams_channel)
+    )
+    channel: ApprovalChannel = teams if webhook is None else webhook
 
     def mint(run_id: RunId, task_id: TaskId, expires_at: datetime) -> tuple[str, str]:
         callback = callback_for(
@@ -139,6 +144,7 @@ async def build(settings: Settings) -> Services:
         people=people,
         copier=copier,
         cosmos=cosmos,
+        teams_webhook=webhook,
     )
 
 
@@ -156,6 +162,8 @@ class Runner:
         self._services.orchestrator.nudge()
         if self._task is not None:
             await self._task
+        if self._services.teams_webhook is not None:
+            await self._services.teams_webhook.close()
         if self._services.copier is not None:
             await self._services.copier.stop()
         await self._services.activity_log.stop()
