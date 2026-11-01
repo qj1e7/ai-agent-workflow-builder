@@ -225,6 +225,11 @@ Version 1 was tested by an independent evaluator (ChatGPT) and in an internal wa
 
 On 28 Oct 2026, four published design skills reviewed the prototype: UX heuristics, interaction design, accessibility (WCAG 2.2 AA) and n8n workflow patterns. What they found, what changed and how it was checked is in [`docs/evidence/usability/2026-10-28-design-skill-audits.md`](../evidence/usability/2026-10-28-design-skill-audits.md). It also lists the n8n audit's design proposals, which need a team decision.
 
+## Where the built app differs from the prototype
+
+- **Practice Jira page.** The prototype only has a read-only ticket dialog, opened from the ticket pills. The app also has a Practice Jira page at `/jira`, and `/jira/KEY` opens one ticket. An Operator can mark a ticket Done there, which the demo needs ("check, approve, ticket created, mark done, up to date"). It is not in the main menu, so the menu does not look like a copy of Jira. A header button labelled "Jira", next to Teams, leads to it.
+- **Why a page.** Its address maps one to one onto a real Jira browse address. Every ticket key in the app links through one function. When the Portal's `/config.json` has a `jira_browse_url` (set from `JIRA_BROWSE_URL`), the keys go to the real Jira instead, and the header button is hidden, so switching to the real Jira needs no Portal change.
+
 ## Motion and the agents' faces
 
 Animation should first make it clear what is happening and what changed. Only then is it allowed to be friendly. Nothing waits for an animation: a press, a page change or a save happens at once, and the motion only shows it.

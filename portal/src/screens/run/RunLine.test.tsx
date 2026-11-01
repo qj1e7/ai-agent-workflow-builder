@@ -3,9 +3,11 @@ import failure from '@contracts/fixtures/runs/failure.json'
 import rejected from '@contracts/fixtures/runs/rejected.json'
 import success from '@contracts/fixtures/runs/success.json'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import type { BlockKind } from '../../api/types'
 import { Chat } from './Chat'
+import { Outcome } from './Outcome'
 import { RunLine } from './RunLine'
 import { emptyModel, foldWire, reachOf, stationsOf, type PlanBlock, type RunModel } from './runModel'
 import { headlineOf, writeLabel } from './words'
@@ -95,7 +97,11 @@ describe('the run line', () => {
 
 describe('the chat', () => {
   function chat(model: RunModel, loadedUpTo = model.seq): string {
-    return renderToStaticMarkup(<Chat items={model.chat} loadedUpTo={loadedUpTo} nameOf={nameOf} trigger="person" last={null} />)
+    return renderToStaticMarkup(
+      <MemoryRouter>
+        <Chat items={model.chat} loadedUpTo={loadedUpTo} nameOf={nameOf} trigger="person" last={null} />
+      </MemoryRouter>,
+    )
   }
 
   it('tells a done run with the gate’s words in its own markers', () => {
@@ -141,5 +147,45 @@ describe('the heading', () => {
     expect(head(replay(success))).toMatchObject({ text: '1 ticket created in Jira', pill: { label: 'Done', tone: 'ok' } })
     expect(head(replay(rejected))).toMatchObject({ text: 'Declined, nothing was written', pill: { label: 'Declined' } })
     expect(head(replay(failure))).toMatchObject({ text: 'Stopped at Read every source', pill: { label: 'Stopped', tone: 'bad' } })
+  })
+})
+
+describe('ticket keys on the run page', () => {
+  // The project is a setting, so the keys the run holds are not always MOCK.
+  const ops = JSON.parse(JSON.stringify(success).replaceAll('MOCK-142', 'OPS-142')) as Raw[]
+  const link = (key: string) => new RegExp(`<a\\b[^>]*href="/jira/${key}"[^>]*>(?:(?!</a>)[\\s\\S])*${key}`)
+
+  function chatHtml(items: RunModel['chat']): string {
+    return renderToStaticMarkup(
+      <MemoryRouter>
+        <Chat items={items} loadedUpTo={99} nameOf={nameOf} trigger="person" last={null} />
+      </MemoryRouter>,
+    )
+  }
+
+  it('links the key a Jira write names, in any project', () => {
+    expect(chatHtml(replay(ops).chat)).toMatch(link('OPS-142'))
+  })
+
+  it('does not link a key in a write to some other system, or key-like words in what an agent said', () => {
+    const html = chatHtml([
+      { kind: 'written', seq: 1, connector: 'confluence', operation: 'update_page', refs: ['OPS-9'] },
+      { kind: 'said', seq: 2, speaker: { id: 'version_checker', display: 'Version checker' }, text: 'UTF-8 and CVE-2024-1234 and OPS-9', bad: false },
+    ])
+    expect(html).not.toContain('href="/jira/')
+  })
+
+  it('links the ticket chip in the Done panel, and not a written reference from another system', () => {
+    const outcome = (model: RunModel) =>
+      renderToStaticMarkup(
+        <MemoryRouter>
+          <Outcome model={model} nameOf={nameOf} />
+        </MemoryRouter>,
+      )
+    expect(outcome(replay(ops))).toMatch(link('OPS-142'))
+    const confluence = { ...replay(ops), written: [{ connector: 'confluence', operation: 'update_page', ref: 'PAGE-9' }] }
+    expect(outcome(confluence)).not.toContain('href="/jira/')
+    const empty = { ...replay(ops), written: [{ connector: 'jira', operation: 'create_ticket', ref: '' }] }
+    expect(outcome(empty)).not.toContain('href="/jira/"')
   })
 })

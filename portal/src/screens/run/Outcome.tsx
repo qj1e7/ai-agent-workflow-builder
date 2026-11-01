@@ -2,6 +2,7 @@ import { failureReasonLabel } from '../../api/labels'
 import type { TroubleshootingOut } from '../../api/types'
 import { ButtonLink } from '../../ui/Button'
 import { IconCheck } from '../../ui/icons'
+import { TicketLink } from '../jira/TicketKeys'
 import type { Phase, RunModel } from './runModel'
 import { andList, withCurrentNames, type NameOf } from './words'
 import styles from './panels.module.css'
@@ -26,6 +27,7 @@ export function Outcome({ model, nameOf }: { model: RunModel; nameOf: NameOf }) 
     )
   }
   const refs = model.written.map((written) => written.ref)
+  const jiraRefs = new Set(model.written.filter((written) => written.connector === 'jira' && written.ref !== '').map((written) => written.ref))
   const tickets = model.written.length > 0 && model.written.every((written) => written.operation === 'create_ticket')
   const approvers = andList(model.approvedBy.map(nameOf)) || 'An Approver'
   let did = 'There was nothing to write.'
@@ -44,7 +46,7 @@ export function Outcome({ model, nameOf }: { model: RunModel; nameOf: NameOf }) 
           {refs.map((ref) => (
             <li key={ref} className={styles['chip']}>
               <IconCheck size={12} />
-              {ref}
+              {jiraRefs.has(ref) ? <TicketLink ticketKey={ref} /> : ref}
             </li>
           ))}
         </ul>

@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { App } from '../App'
 import { ApiError } from '../api/client'
 import { ApiProvider } from '../api/context'
+import { TicketLinksProvider } from '../api/ticketLinks'
 import { createDevSession, SIGNED_IN, type Session } from '../api/session'
 import type { Me } from '../api/types'
 import { focusMovedOutside } from './PersonChip'
@@ -34,9 +35,10 @@ interface Setup {
   readonly me?: Me
   readonly meError?: Error
   readonly oidc?: boolean
+  readonly browseUrl?: string | null
 }
 
-function render({ path = '/', me = ALICE, meError, oidc = false }: Setup = {}): string {
+function render({ path = '/', me = ALICE, meError, oidc = false, browseUrl = null }: Setup = {}): string {
   const session = oidc ? oidcSession : createDevSession(null)
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   const key = ['me', session.cacheScope()]
@@ -46,9 +48,11 @@ function render({ path = '/', me = ALICE, meError, oidc = false }: Setup = {}): 
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={session} platformFetch={fetch} origin={ORIGIN}>
-        <MemoryRouter initialEntries={[path]}>
-          <App now={() => MORNING} />
-        </MemoryRouter>
+        <TicketLinksProvider config={{ jiraBrowseUrl: browseUrl }}>
+          <MemoryRouter initialEntries={[path]}>
+            <App now={() => MORNING} />
+          </MemoryRouter>
+        </TicketLinksProvider>
       </ApiProvider>
     </QueryClientProvider>,
   )
@@ -268,5 +272,31 @@ describe('when the platform is down', () => {
 
   it('keeps the test controls, so a stale person can be swapped', () => {
     expect(render({ meError: new ApiError(401, null) })).toContain('Test controls')
+  })
+})
+
+describe('the way in to the practice Jira', () => {
+  const jiraLink = /<a\b[^>]*aria-label="Jira, practice copy"[^>]*href="\/jira"[^>]*>[\s\S]*?<\/a>/
+
+  it('is a header link next to Teams and Settings, with a visible Jira label, and not in the menu', () => {
+    const html = render()
+    const link = jiraLink.exec(headerOf(html))?.[0] ?? ''
+    expect(text(link)).toBe('Jira')
+    expect(menuLabels(html)).not.toContain('Practice Jira')
+  })
+
+  it('is left out for someone who is not on the People list, as Teams is', () => {
+    const mallory: Me = { id: 'mallory', display: 'Mallory', roles: [], on_list: false }
+    expect(headerOf(render({ me: mallory }))).not.toContain('href="/jira"')
+  })
+
+  it('is left out when a real Jira address is configured, because the page has nothing to show then', () => {
+    expect(headerOf(render({ browseUrl: 'https://jira.example.test/browse/{key}' }))).not.toContain('href="/jira"')
+  })
+
+  it('shows the practice Jira page at /jira/KEY with its own heading, loaded on demand', () => {
+    const html = render({ path: '/jira/OPS-1' })
+    expect(headings(html)).toEqual(['Practice Jira'])
+    expect(text(mainOf(html))).toContain('Loading')
   })
 })
