@@ -157,6 +157,14 @@ services:
       FIRST_APPROVERS: ${FIRST_APPROVERS:-}
       # The practice Jira's own pages are served while this is on (ADR 0035).
       PRACTICE_SYSTEMS: ${PRACTICE_SYSTEMS:-on}
+      # A real Jira (ADR 0035). With JIRA_BASE_URL unset, platform-api serves and calls its own
+      # practice Jira, which speaks both flavors. JIRA_EMAIL is for Cloud only.
+      JIRA_BASE_URL: ${JIRA_BASE_URL:-}
+      JIRA_API_FLAVOR: ${JIRA_API_FLAVOR:-datacenter}
+      JIRA_API_TOKEN: ${JIRA_API_TOKEN:-}
+      JIRA_EMAIL: ${JIRA_EMAIL:-}
+      JIRA_ISSUE_TYPE: ${JIRA_ISSUE_TYPE:-Task}
+      JIRA_BROWSE_URL: ${JIRA_BROWSE_URL:-}
       # The Jira project the watchlist raises tickets in. MOCK is the practice Jira's.
       WATCHLIST_JIRA_PROJECT: ${WATCHLIST_JIRA_PROJECT:-MOCK}
     ports:

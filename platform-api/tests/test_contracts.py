@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from typing import Any, TypeAliasType, get_args
 
 import pytest
@@ -203,8 +204,16 @@ def test_the_watchlist_sends_the_tag_pattern_the_agent_api_was_recorded_with():
 
 
 def test_every_fixture_file_has_a_parser():
-    on_disk = {str(p.relative_to(FIXTURES)) for p in FIXTURES.rglob("*.json")}
+    # jira/ holds Jira's own answers, not ours. test_jira_fixtures.py reads each of them.
+    files = [p.relative_to(FIXTURES) for p in FIXTURES.rglob("*.json")]
+    on_disk = {str(p) for p in files if p.parts[0] != "jira"}
     assert on_disk == set(PARSERS)
+
+
+def test_every_jira_answer_is_read_by_the_jira_fixture_tests():
+    read = (Path(__file__).parent / "test_jira_fixtures.py").read_text()
+    names = {p.name for p in (FIXTURES / "jira").rglob("*.json")}
+    assert names and all(f'"{name}"' in read for name in names)
 
 
 @pytest.mark.parametrize("story", ["success", "failure", "rejected", "watchlist", "card"])

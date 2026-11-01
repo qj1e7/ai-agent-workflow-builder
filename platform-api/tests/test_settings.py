@@ -77,7 +77,7 @@ def test_without_a_jira_address_the_platform_uses_the_practice_jira():
     jira = settings_from_env(LOCAL_ENV).jira
     assert jira.practice and jira.base_url is None
     assert (jira.flavor, jira.issue_type) == ("datacenter", "Task")
-    assert jira.browse_url == "http://localhost:8000/jira/{key}"
+    assert jira.browse_url == "/jira/{key}"
 
 
 def test_a_data_center_jira_needs_only_its_address_and_a_token():

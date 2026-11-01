@@ -36,6 +36,17 @@ locals {
 
   # Whether a token is set is not secret, and plain is needed to choose which secrets exist.
   github_token_set = nonsensitive(var.github_token != "")
+  jira_token_set   = nonsensitive(var.jira_api_token != "")
+
+  # A real Jira (ADR 0035). Each setting is passed only when it is set, so an unset JIRA_BASE_URL
+  # keeps platform-api's own practice Jira. The account's email is not secret.
+  jira_settings = {
+    for name, value in {
+      JIRA_BASE_URL   = var.jira_base_url
+      JIRA_EMAIL      = trimspace(nonsensitive(var.jira_email))
+      JIRA_BROWSE_URL = var.jira_browse_url
+    } : name => value if value != ""
+  }
 
   # The first people's addresses are not secret, and the app table's for_each needs plain values.
   first_people = trimspace(nonsensitive(var.first_operator)) == "" ? {} : {
@@ -191,6 +202,7 @@ module "key_vault" {
     },
     { "cosmos-key" = module.cosmos.primary_key },
     local.github_token_set ? { "github-token" = var.github_token } : {},
+    local.jira_token_set ? { "jira-api-token" = var.jira_api_token } : {},
   )
 }
 
@@ -210,29 +222,36 @@ locals {
       # depend on each other.
       env = merge(
         {
-          AUTH_MODE             = "oidc"
-          PUBLIC_BASE_URL       = local.url["portal"]
-          OIDC_ISSUER           = var.oidc_issuer
-          OIDC_AUDIENCE         = var.oidc_audience
-          AGENT_RUNTIME_URL     = local.url["agent-runtime"]
-          N8N_BASE_URL          = local.url["n8n"]
-          PLATFORM_INTERNAL_URL = local.url["platform-api"]
-          COSMOS_ENDPOINT       = module.cosmos.endpoint
-          ACTIVITY_READER       = "cosmos"
+          AUTH_MODE              = "oidc"
+          PUBLIC_BASE_URL        = local.url["portal"]
+          OIDC_ISSUER            = var.oidc_issuer
+          OIDC_AUDIENCE          = var.oidc_audience
+          AGENT_RUNTIME_URL      = local.url["agent-runtime"]
+          N8N_BASE_URL           = local.url["n8n"]
+          PLATFORM_INTERNAL_URL  = local.url["platform-api"]
+          COSMOS_ENDPOINT        = module.cosmos.endpoint
+          ACTIVITY_READER        = "cosmos"
+          JIRA_API_FLAVOR        = var.jira_api_flavor
+          JIRA_ISSUE_TYPE        = var.jira_issue_type
+          WATCHLIST_JIRA_PROJECT = var.watchlist_jira_project
         },
         var.oidc_jwks_url == "" ? {} : { OIDC_JWKS_URL = var.oidc_jwks_url },
         local.first_people,
+        local.jira_settings,
       )
-      secrets = {
-        DATABASE_URL_BUILDER       = local.secret["database-url-builder"]
-        DATABASE_URL_ORCHESTRATION = local.secret["database-url-orchestration"]
-        DATABASE_URL_MONITORING    = local.secret["database-url-monitoring"]
-        AGENT_API_KEY              = local.secret["agent-api-key"]
-        STEP_KEY                   = local.secret["step-key"]
-        CALLBACK_SIGNING_KEY       = local.secret["callback-signing-key"]
-        SETTINGS_ENCRYPTION_KEY    = local.secret["settings-encryption-key"]
-        COSMOS_KEY                 = local.secret["cosmos-key"]
-      }
+      secrets = merge(
+        {
+          DATABASE_URL_BUILDER       = local.secret["database-url-builder"]
+          DATABASE_URL_ORCHESTRATION = local.secret["database-url-orchestration"]
+          DATABASE_URL_MONITORING    = local.secret["database-url-monitoring"]
+          AGENT_API_KEY              = local.secret["agent-api-key"]
+          STEP_KEY                   = local.secret["step-key"]
+          CALLBACK_SIGNING_KEY       = local.secret["callback-signing-key"]
+          SETTINGS_ENCRYPTION_KEY    = local.secret["settings-encryption-key"]
+          COSMOS_KEY                 = local.secret["cosmos-key"]
+        },
+        local.jira_token_set ? { JIRA_API_TOKEN = local.secret["jira-api-token"] } : {},
+      )
     }
 
     agent-runtime = {

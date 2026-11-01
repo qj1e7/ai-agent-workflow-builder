@@ -211,7 +211,8 @@ def jira_from_env(
                 "JIRA_API_FLAVOR and JIRA_API_TOKEN for a real one."
             )
         base_url, token, email = None, None, None
-        default_browse = f"{public_base_url}/jira/{{key}}"
+        # The Portal's own Practice Jira page, as a path, so the Portal opens it in place.
+        default_browse = "/jira/{key}"
     else:
         # The token goes to this address with every call, so it is https only.
         base_url = _web_address("JIRA_BASE_URL", raw_base, https_only=True)

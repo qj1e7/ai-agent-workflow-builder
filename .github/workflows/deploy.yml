@@ -59,6 +59,14 @@ jobs:
       # The first people (ADR 0030), read only while the People list is empty.
       TF_VAR_first_operator: ${{ secrets.FIRST_OPERATOR }}
       TF_VAR_first_approvers: ${{ secrets.FIRST_APPROVERS }}
+      # Optional, a real Jira (ADR 0035). Unset JIRA_BASE_URL keeps platform-api's own practice Jira.
+      TF_VAR_jira_base_url: ${{ vars.JIRA_BASE_URL }}
+      TF_VAR_jira_api_flavor: ${{ vars.JIRA_API_FLAVOR || 'datacenter' }}
+      TF_VAR_jira_api_token: ${{ secrets.JIRA_API_TOKEN }}
+      TF_VAR_jira_email: ${{ secrets.JIRA_EMAIL }}
+      TF_VAR_jira_issue_type: ${{ vars.JIRA_ISSUE_TYPE || 'Task' }}
+      TF_VAR_jira_browse_url: ${{ vars.JIRA_BROWSE_URL }}
+      TF_VAR_watchlist_jira_project: ${{ vars.WATCHLIST_JIRA_PROJECT || 'MOCK' }}
       # Optional, for a subscription that refuses Cosmos DB's free tier or its region (ADR 0031).
       TF_VAR_cosmos_location: ${{ vars.COSMOS_LOCATION }}
       TF_VAR_cosmos_serverless: ${{ vars.COSMOS_SERVERLESS || 'false' }}
