@@ -4,7 +4,7 @@ import { loadConfig, parseConfig, PortalConfigError } from './config'
 import { fetchEventPage, refusalOf } from './queries'
 import { authorizedFetch, createDevSession } from './session'
 
-const LIVE_DEV = { mode: 'live', signIn: { kind: 'dev' } }
+const LIVE_DEV = { mode: 'live', signIn: { kind: 'dev' }, jiraBrowseUrl: null }
 const AUTH = { authority: 'https://login.example.test/tenant/v2.0', client_id: 'portal', scope: 'openid profile offline_access' }
 
 describe('parseConfig', () => {
@@ -18,6 +18,7 @@ describe('parseConfig', () => {
   it('reads OpenID Connect sign-in settings', () => {
     expect(parseConfig({ mode: 'live', auth: AUTH })).toEqual({
       mode: 'live',
+      jiraBrowseUrl: null,
       signIn: { kind: 'oidc', authority: AUTH.authority, clientId: 'portal', scope: AUTH.scope },
     })
     expect(parseConfig({ mode: 'live', auth: { ...AUTH, authority: 'http://mock-oidc:8080/default' } })).toMatchObject({
@@ -38,6 +39,30 @@ describe('parseConfig', () => {
     expect(() => parseConfig({ mode: 'live', auth })).toThrow(PortalConfigError)
   })
 
+})
+
+describe('parseConfig and the Jira address', () => {
+  const BROWSE = 'https://jira.example.test/browse/{key}'
+
+  it('has no Jira address unless the file gives one, and treats an empty one as none', () => {
+    expect(parseConfig({ mode: 'live' })).toMatchObject({ jiraBrowseUrl: null })
+    expect(parseConfig({ mode: 'live', jira_browse_url: '' })).toMatchObject({ jiraBrowseUrl: null })
+  })
+
+  it('reads the address where tickets are viewed, next to the sign-in settings', () => {
+    expect(parseConfig({ mode: 'live', jira_browse_url: BROWSE })).toMatchObject({ jiraBrowseUrl: BROWSE, signIn: { kind: 'dev' } })
+    expect(parseConfig({ mode: 'live', auth: AUTH, jira_browse_url: BROWSE })).toMatchObject({ jiraBrowseUrl: BROWSE, signIn: { kind: 'oidc' } })
+  })
+
+  it.each([
+    ['a relative address', '/browse/{key}'],
+    ['a non-http address', 'ftp://jira.example.test/{key}'],
+    ['an address without {key}', 'https://jira.example.test/browse/'],
+    ['an address without a host', 'https:///{key}'],
+    ['a number', 7],
+  ])('refuses %s', (_name, value) => {
+    expect(() => parseConfig({ mode: 'live', jira_browse_url: value })).toThrow(PortalConfigError)
+  })
 })
 
 describe('loadConfig', () => {

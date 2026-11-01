@@ -27,6 +27,8 @@ function drawn(name: string, shapes: ReactNode): Icon {
 
 export const ChatIcon = drawn('ChatIcon', <path d="M4 5h16v11H9l-5 4z" />)
 
+export const TicketIcon = drawn('TicketIcon', <path d="M4 8a2 2 0 0 0 0 4v0a2 2 0 0 0 0 4v2h16v-2a2 2 0 0 0 0-4v0a2 2 0 0 0 0-4V6H4zM9 6v12" />)
+
 export const SettingsIcon = drawn(
   'SettingsIcon',
   <>

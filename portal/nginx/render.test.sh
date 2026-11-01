@@ -120,6 +120,29 @@ expect_oidc mock 'http://mock-oidc:8080' \
   ",\"auth\":{\"authority\":\"$MOCK\",\"client_id\":\"portal\",\"scope\":\"openid profile offline_access platform-api\"}" \
   -e "OIDC_AUTHORITY=$MOCK" -e "OIDC_TEST_ONLY_HTTP_AUTHORITY=$MOCK" -e OIDC_CLIENT_ID=portal -e 'OIDC_SCOPE=openid profile offline_access platform-api'
 
+JIRA='https://jira.example.test/browse/{key}'
+expect_jira() {
+  if ! render jira -e PORTAL_MODE=live -e "JIRA_BROWSE_URL=$JIRA" >"$work/jira.conf"; then
+    bad "jira renders"
+    return
+  fi
+  diff "$work/live.conf" "$work/jira.conf" | grep '^[<>]' >"$work/jira.changes" || true
+  config="    return 200 '{\"mode\":\"live\",\"jira_browse_url\":\"$JIRA\"}';"
+  if [ "$(grep -c '^[<>]' "$work/jira.changes")" = 2 ] && grep -Fxq "> $config" "$work/jira.changes"; then
+    ok "jira changes only the /config.json body"
+  else
+    bad "jira changed these lines against dev:" && cat "$work/jira.changes"
+  fi
+}
+expect_jira
+
+expect_refused jira-no-key JIRA_BROWSE_URL -e 'JIRA_BROWSE_URL=https://jira.example.test/browse/'
+expect_refused jira-no-host JIRA_BROWSE_URL -e 'JIRA_BROWSE_URL=https:///{key}'
+expect_refused jira-ftp JIRA_BROWSE_URL -e 'JIRA_BROWSE_URL=ftp://jira.example.test/browse/{key}'
+expect_refused jira-quote JIRA_BROWSE_URL -e 'JIRA_BROWSE_URL=https://jira.example.test/"/browse/{key}'
+expect_refused jira-query JIRA_BROWSE_URL -e 'JIRA_BROWSE_URL=https://jira.example.test/browse/{key}?x=1'
+expect_refused jira-newline JIRA_BROWSE_URL -e "JIRA_BROWSE_URL=https://jira.example.test/browse/{key}
+\"}"
 expect_refused only-authority OIDC_CLIENT_ID -e "OIDC_AUTHORITY=$ENTRA"
 expect_refused only-client-id OIDC_AUTHORITY -e "OIDC_CLIENT_ID=$CLIENT"
 expect_refused only-scope OIDC_AUTHORITY -e "OIDC_SCOPE=$SCOPE"
