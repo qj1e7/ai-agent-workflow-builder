@@ -2,6 +2,7 @@ import { failureReasonLabel } from '../../api/labels'
 import type { TroubleshootingOut } from '../../api/types'
 import { ButtonLink } from '../../ui/Button'
 import { IconCheck } from '../../ui/icons'
+import { TicketKeys } from '../jira/TicketKeys'
 import type { Phase, RunModel } from './runModel'
 import { andList, withCurrentNames, type NameOf } from './words'
 import styles from './panels.module.css'
@@ -29,7 +30,8 @@ export function Outcome({ model, nameOf }: { model: RunModel; nameOf: NameOf }) 
   const tickets = model.written.length > 0 && model.written.every((written) => written.operation === 'create_ticket')
   const approvers = andList(model.approvedBy.map(nameOf)) || 'An Approver'
   let did = 'There was nothing to write.'
-  if (refs.length > 0) did = `${approvers} approved, and the platform ${tickets ? `created the ${refs.length === 1 ? 'ticket' : 'tickets'}` : 'wrote the changes'}.`
+  if (refs.length > 0)
+    did = `${approvers} approved, and the platform ${tickets ? `created the ${refs.length === 1 ? 'ticket' : 'tickets'}` : 'wrote the changes'}.`
   return (
     <div className={styles['panel']}>
       <h2>
@@ -44,7 +46,7 @@ export function Outcome({ model, nameOf }: { model: RunModel; nameOf: NameOf }) 
           {refs.map((ref) => (
             <li key={ref} className={styles['chip']}>
               <IconCheck size={12} />
-              {ref}
+              <TicketKeys text={ref} />
             </li>
           ))}
         </ul>

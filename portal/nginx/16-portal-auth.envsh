@@ -4,6 +4,7 @@
 
 export PORTAL_CONFIG_AUTH=""
 export PORTAL_CSP_AUTH=""
+export PORTAL_CONFIG_JIRA=""
 
 portal_auth_refuse() {
   echo "portal: $1" >&2
@@ -45,4 +46,12 @@ if [ -n "${OIDC_AUTHORITY:-}${OIDC_CLIENT_ID:-}${OIDC_SCOPE:-}" ]; then
   portal_auth_origin=$(printf '%s' "$OIDC_AUTHORITY" | sed -E 's#^(https?://[^/]+).*$#\1#')
   export PORTAL_CONFIG_AUTH=",\"auth\":{\"authority\":\"$OIDC_AUTHORITY\",\"client_id\":\"$OIDC_CLIENT_ID\",\"scope\":\"$OIDC_SCOPE\"}"
   export PORTAL_CSP_AUTH=" $portal_auth_origin"
+fi
+
+# Where a ticket is viewed in a real Jira, with {key} where the ticket key goes. Empty means the Portal's own practice Jira page.
+if [ -n "${JIRA_BROWSE_URL:-}" ]; then
+  portal_auth_one_line JIRA_BROWSE_URL "$JIRA_BROWSE_URL"
+  printf '%s' "$JIRA_BROWSE_URL" | grep -Eq '^https?://[A-Za-z0-9._~:/%-]+\{key\}[A-Za-z0-9._~:/%-]*$' \
+    || portal_auth_refuse "JIRA_BROWSE_URL must be an http(s) address with {key} in it, such as https://jira.example.com/browse/{key}, and no query or fragment"
+  export PORTAL_CONFIG_JIRA=",\"jira_browse_url\":\"$JIRA_BROWSE_URL\""
 fi

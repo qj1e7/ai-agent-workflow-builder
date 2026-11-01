@@ -3,9 +3,11 @@ import failure from '@contracts/fixtures/runs/failure.json'
 import rejected from '@contracts/fixtures/runs/rejected.json'
 import success from '@contracts/fixtures/runs/success.json'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import type { BlockKind } from '../../api/types'
 import { Chat } from './Chat'
+import { Outcome } from './Outcome'
 import { RunLine } from './RunLine'
 import { emptyModel, foldWire, reachOf, stationsOf, type PlanBlock, type RunModel } from './runModel'
 import { headlineOf, writeLabel } from './words'
@@ -15,7 +17,10 @@ interface Raw {
   readonly seq: number
 }
 
-const PLAN: PlanBlock[] = useCase.plan.map((block) => ({ name: block.name, kind: block.kind as BlockKind }))
+const PLAN: PlanBlock[] = useCase.plan.map((block) => ({
+  name: block.name,
+  kind: block.kind as BlockKind,
+}))
 const NAMES: Record<string, string> = { alice: 'Alice', bob: 'Bob' }
 const nameOf = (id: string) => NAMES[id] ?? id
 
@@ -24,7 +29,12 @@ function replay(raw: readonly Raw[], upTo = Infinity): RunModel {
   return foldWire(emptyModel, kept, kept[0]?.run_id ?? '')
 }
 
-const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replace(/\s+/g, ' ').trim()
+const text = (html: string) =>
+  html
+    .replace(/<[^>]*>/g, ' ')
+    .replaceAll('&#x27;', "'")
+    .replace(/\s+/g, ' ')
+    .trim()
 
 function line(model: RunModel): string {
   const stations = stationsOf(model, PLAN, writeLabel)
@@ -72,12 +82,7 @@ describe('the run line', () => {
   })
 
   it('marks where a failed run stopped', () => {
-    expect(stepsSaid(line(replay(failure))).slice(2)).toEqual([
-      'Read every source Stopped here',
-      'Not reached yet: Approval gate',
-      'Not reached yet: Create Jira tickets',
-      'Not reached yet: Done',
-    ])
+    expect(stepsSaid(line(replay(failure))).slice(2)).toEqual(['Read every source Stopped here', 'Not reached yet: Approval gate', 'Not reached yet: Create Jira tickets', 'Not reached yet: Done'])
   })
 
   it('lands the step reached while the page watched, and no other', () => {
@@ -95,7 +100,11 @@ describe('the run line', () => {
 
 describe('the chat', () => {
   function chat(model: RunModel, loadedUpTo = model.seq): string {
-    return renderToStaticMarkup(<Chat items={model.chat} loadedUpTo={loadedUpTo} nameOf={nameOf} trigger="person" last={null} />)
+    return renderToStaticMarkup(
+      <MemoryRouter>
+        <Chat items={model.chat} loadedUpTo={loadedUpTo} nameOf={nameOf} trigger="person" last={null} />
+      </MemoryRouter>,
+    )
   }
 
   it('tells a done run with the gate’s words in its own markers', () => {
@@ -136,10 +145,46 @@ describe('the chat', () => {
 describe('the heading', () => {
   it('says what the run needs or did', () => {
     const head = (model: RunModel) => headlineOf(model, stationsOf(model, PLAN, writeLabel), null)
-    expect(head(replay(success, 6))).toMatchObject({ text: 'The agents are working', pill: { label: 'Working' } })
-    expect(head(replay(success, 15))).toMatchObject({ text: 'Waiting for a yes', pill: { label: 'Waiting for a yes', tone: 'wait' } })
-    expect(head(replay(success))).toMatchObject({ text: '1 ticket created in Jira', pill: { label: 'Done', tone: 'ok' } })
-    expect(head(replay(rejected))).toMatchObject({ text: 'Declined, nothing was written', pill: { label: 'Declined' } })
-    expect(head(replay(failure))).toMatchObject({ text: 'Stopped at Read every source', pill: { label: 'Stopped', tone: 'bad' } })
+    expect(head(replay(success, 6))).toMatchObject({
+      text: 'The agents are working',
+      pill: { label: 'Working' },
+    })
+    expect(head(replay(success, 15))).toMatchObject({
+      text: 'Waiting for a yes',
+      pill: { label: 'Waiting for a yes', tone: 'wait' },
+    })
+    expect(head(replay(success))).toMatchObject({
+      text: '1 ticket created in Jira',
+      pill: { label: 'Done', tone: 'ok' },
+    })
+    expect(head(replay(rejected))).toMatchObject({
+      text: 'Declined, nothing was written',
+      pill: { label: 'Declined' },
+    })
+    expect(head(replay(failure))).toMatchObject({
+      text: 'Stopped at Read every source',
+      pill: { label: 'Stopped', tone: 'bad' },
+    })
+  })
+})
+
+describe('ticket keys on the run page', () => {
+  it('links the key in the chat to the practice Jira, open at that ticket', () => {
+    const model = replay(success)
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <Chat items={model.chat} loadedUpTo={model.seq} nameOf={nameOf} trigger="person" last={null} />
+      </MemoryRouter>,
+    )
+    expect(html).toMatch(/<a\b[^>]*href="\/jira\/MOCK-142"[^>]*>MOCK-142<\/a>/)
+  })
+
+  it('links the ticket chip in the Done panel the same way', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <Outcome model={replay(success)} nameOf={nameOf} />
+      </MemoryRouter>,
+    )
+    expect(html).toMatch(/<a\b[^>]*href="\/jira\/MOCK-142"[^>]*>[\s\S]*MOCK-142[\s\S]*<\/a>/)
   })
 })

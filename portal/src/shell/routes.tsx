@@ -7,7 +7,8 @@ import { IconPlus, type Icon } from '../ui/icons'
 import { WorkflowRoute } from '../screens/workflows/WorkflowPage'
 import { WorkflowsPage } from '../screens/workflows/WorkflowsPage'
 import { NEW_WORKFLOW_PATH } from '../screens/new/starters'
-import { BotIcon, BoxIcon, GridIcon, HomeIcon, SettingsIcon } from './icons'
+import { JIRA_PATH } from '../screens/jira/tickets'
+import { BotIcon, BoxIcon, GridIcon, HomeIcon, SettingsIcon, TicketIcon } from './icons'
 import { NotFoundPage } from './NotFoundPage'
 import { PageHead } from './PageHead'
 import { greeting, today } from './today'
@@ -30,7 +31,7 @@ export interface PageEntry {
   readonly forOperators?: boolean
 }
 
-export const PAGE_IDS = ['home', 'workflows', 'software', 'agents', 'new', 'settings'] as const
+export const PAGE_IDS = ['home', 'workflows', 'software', 'agents', 'new', 'jira', 'settings'] as const
 export type PageId = (typeof PAGE_IDS)[number]
 
 export const PAGES: Readonly<Record<PageId, PageEntry>> = {
@@ -80,6 +81,15 @@ export const PAGES: Readonly<Record<PageId, PageEntry>> = {
     inMenu: true,
     forOperators: true,
   },
+  jira: {
+    path: JIRA_PATH,
+    menuLabel: 'Practice Jira',
+    tabLabel: 'Jira',
+    icon: TicketIcon,
+    heading: 'Practice Jira',
+    lead: 'The tickets the platform created in project MOCK. An Operator marks one Done, as a person would in Jira.',
+    inMenu: false,
+  },
   settings: {
     path: '/settings',
     menuLabel: 'Settings',
@@ -92,6 +102,7 @@ export const PAGES: Readonly<Record<PageId, PageEntry>> = {
 }
 
 const RunRoute = lazy(() => import('../screens/run/RunPage').then((module) => ({ default: module.RunRoute })))
+const JiraRoute = lazy(() => import('../screens/jira/JiraPage').then((module) => ({ default: module.JiraRoute })))
 const SoftwareRoute = lazy(() => import('../screens/software/SoftwarePage').then((module) => ({ default: module.SoftwareRoute })))
 const ApprovalRoute = lazy(() => import('../screens/run/RunPage').then((module) => ({ default: module.ApprovalRoute })))
 const NewWorkflowRoute = lazy(() => import('../screens/new/NewWorkflow').then((module) => ({ default: module.NewWorkflowRoute })))
@@ -141,6 +152,17 @@ export function AppRoutes({ context }: { context: PageContext }) {
             <PageHead heading={wordsOf(PAGES.software.heading, context)} lead={wordsOf(PAGES.software.lead, context)} />
             <Lazy>
               <SoftwareRoute />
+            </Lazy>
+          </>
+        }
+      />
+      <Route
+        path={`${PAGES.jira.path}/:key?`}
+        element={
+          <>
+            <PageHead heading={wordsOf(PAGES.jira.heading, context)} lead={wordsOf(PAGES.jira.lead, context)} />
+            <Lazy>
+              <JiraRoute />
             </Lazy>
           </>
         }

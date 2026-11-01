@@ -44,7 +44,7 @@ server {
   location = /config.json {
     default_type application/json;
     expires -1;
-    return 200 '{"mode":"${PORTAL_MODE}"${PORTAL_CONFIG_AUTH}}';
+    return 200 '{"mode":"${PORTAL_MODE}"${PORTAL_CONFIG_AUTH}${PORTAL_CONFIG_JIRA}}';
   }
 
   location = /healthz {
