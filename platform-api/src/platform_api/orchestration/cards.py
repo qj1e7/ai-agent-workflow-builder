@@ -31,7 +31,7 @@ from platform_api.orchestration.write_actions import (
     WriteAction,
     bind,
 )
-from platform_api.shared import JIRA_PROJECT_PATTERN
+from platform_api.shared import JIRA_PROJECT_PATTERN, STORED_JIRA_PROJECT_PATTERN
 from platform_api.wire import RepoName
 
 TEXT_LIMIT = 200
@@ -103,7 +103,8 @@ INPUT_KINDS: tuple[str, ...] = get_args(InputKind.__value__)
 KIND_EXAMPLES: Mapping[str, str] = {
     "github_repo": "owner/name, for example langchain-ai/langgraph",
     "jira_project": (
-        "a capital letter, then capital letters, digits or underscores, for example MOCK or AB_1"
+        "2 or more capital letters, digits or underscores, starting with a letter, for example "
+        "MOCK or AB_1"
     ),
     "text": f"one line of 1 to {TEXT_LIMIT} characters",
 }
@@ -140,6 +141,14 @@ def write_tools_used(tools: Iterable[str | None]) -> tuple[ToolRule, ...]:
     return tuple(rule for rule in rules if rule is not None and rule.kind == "write")
 
 
+def _stored_value_fits(kind: str, value: str) -> bool:
+    """Whether a saved value can still be used. A project key saved before ADR 0035 may have one
+    letter, so it is checked against the older shape. New values go through check_value."""
+    if kind == "jira_project":
+        return STORED_JIRA_PROJECT_PATTERN.match(value) is not None
+    return check_value(kind, value) is None
+
+
 def card_bindings(card: CardSpec, values: Mapping[str, str]) -> Mapping[str, Binding]:
     """Where each of the card's write tools lands, from the tool rules and the card's values.
 
@@ -153,7 +162,7 @@ def card_bindings(card: CardSpec, values: Mapping[str, str]) -> Mapping[str, Bin
         if len(names) != 1:
             raise ValueError(f"{card.name} needs exactly one {rule.target_input} input")
         value = values.get(names[0])
-        if value is None or check_value(rule.target_input, value) is not None:
+        if value is None or not _stored_value_fits(rule.target_input, value):
             raise ValueError(f"{card.name} has no valid value for {names[0]}")
         bindings[rule.id] = Binding(rule.connector, rule.operation, {rule.target_key: value})
     return bindings

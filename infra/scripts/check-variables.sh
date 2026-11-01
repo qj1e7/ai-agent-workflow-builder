@@ -69,6 +69,7 @@ expect accepted - "a Teams webhook and channel" \
 expect accepted - "a Data Center Jira" -var jira_base_url=https://jira.example.test -var jira_api_token=pat
 expect accepted - "a Cloud Jira with its email" -var jira_base_url=https://example.atlassian.net \
   -var jira_api_flavor=cloud -var jira_api_token=t -var jira_email=bot@example.test
+expect accepted - "a Jira address with a port and a path" -var jira_base_url=https://jira.example.test:8443/jira -var jira_api_token=pat
 expect accepted - "a Jira browse address and another project" \
   -var 'jira_browse_url=https://jira.example.test/browse/{key}' -var watchlist_jira_project=AB_1
 
@@ -133,7 +134,12 @@ expect refused jira_api_flavor "a Jira flavor that is not one" -var jira_api_fla
 expect refused jira_email "a Cloud Jira with no email" -var jira_base_url=https://example.atlassian.net \
   -var jira_api_flavor=cloud -var jira_api_token=t
 expect refused jira_browse_url "a Jira browse address with no key" -var jira_browse_url=https://jira.example.test/browse/
+expect refused jira_browse_url "a Jira browse address with a query" -var 'jira_browse_url=https://jira.example.test/browse/{key}?x=1'
+expect refused jira_browse_url "a Jira browse host with an underscore" -var 'jira_browse_url=https://jira_1.example.test/browse/{key}'
+expect refused jira_browse_url "a Jira browse address with no path" -var 'jira_browse_url=https://jira.example.test{key}'
+expect refused jira_base_url "a Jira host with an underscore" -var jira_base_url=https://jira_1.example.test -var jira_api_token=pat
 expect refused watchlist_jira_project "a project key in small letters" -var watchlist_jira_project=ops
+expect refused watchlist_jira_project "a one-letter project key" -var watchlist_jira_project=A
 
 if [ "$failures" = 0 ]; then
   echo "check-variables.sh: all cases behaved as expected"

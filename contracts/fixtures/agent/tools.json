@@ -67,7 +67,7 @@
         "additionalProperties": false,
         "properties": {
           "key": {
-            "pattern": "^[A-Z][A-Z0-9_]{0,254}-[0-9]{1,9}$",
+            "pattern": "^[A-Z][A-Z0-9_]{0,254}-[1-9][0-9]{0,8}$",
             "type": "string",
             "description": "The ticket key, such as MOCK-7."
           }

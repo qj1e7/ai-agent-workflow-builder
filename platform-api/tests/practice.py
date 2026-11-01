@@ -36,11 +36,16 @@ class PracticeKit:
         app.include_router(practice_router)
         self.client = httpx.AsyncClient(transport=httpx.ASGITransport(app=app))
         auth = JiraAuth.of(flavor, token, PRACTICE_EMAIL)
-        self.jira = JiraRestAdapter(BASE, flavor, auth, self.client, sleep=no_wait)
+        self.jira = JiraRestAdapter(
+            BASE, flavor, auth, self.client, browse_url="/jira/{key}", sleep=no_wait
+        )
         self.connector = JiraWriteConnector(self.jira, db)
 
     async def execute(self, action: WriteAction, key: WriteKey) -> str:
         return await self.connector.execute(action, key)
+
+    def link(self, reference: str) -> str:
+        return self.connector.link(reference)
 
     async def done_tickets(self, keys: Collection[str]) -> Mapping[str, datetime]:
         return await self.jira.done_tickets(keys)

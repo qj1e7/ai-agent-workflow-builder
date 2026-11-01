@@ -32,7 +32,7 @@ The write gateway's Jira connector, the watchlist's Done check and the agents' J
 | `JIRA_ISSUE_TYPE` | the issue type of each new ticket | `Task` |
 | `JIRA_BROWSE_URL` | where people open a ticket, with `{key}` where the key goes | `{JIRA_BASE_URL}/browse/{key}`, or `/jira/{key}`, the Portal's Practice Jira page, for the practice Jira |
 | `WATCHLIST_JIRA_PROJECT` | the project the watchlist raises tickets in | `MOCK` |
-| `PRACTICE_SYSTEMS` | `on` mounts the practice Jira's routes. `off` with no `JIRA_BASE_URL` refuses to start, because there would be no Jira | `on` |
+| `PRACTICE_SYSTEMS` | `on` mounts the practice Jira's routes. `off` is only for use together with a real Jira: with no `JIRA_BASE_URL` it refuses to start, because there would be no Jira | `on` |
 
 **The practice Jira speaks the same API.** It becomes a small server that answers the part of Jira's REST API we use, for both flavors:
 - create an issue, and read one;
@@ -65,13 +65,13 @@ It checks the `Authorization` header, answers errors in Jira's own shape (`{"err
 - **Search means what it says.** The agents' text search matches any word of three or more letters or digits. The adapter writes that as `(text ~ "a" OR text ~ "b")`, because Jira's `text ~ "a b"` may need every word.
 - **A key that no longer exists.** If Jira refuses a `key in (...)` search because a key is gone, the adapter reads those tickets one at a time and skips any that answer 404.
 
-**Project and ticket keys take Jira's real shapes.** A project key is a capital letter, then capital letters, digits or underscores, such as `MOCK` or `AB_1`. A ticket key is a project key, a dash and a number. platform-api, the agent runtime's tools and the Portal check the same shape.
+**Project and ticket keys take Jira's real shapes.** A project key is a capital letter, then 1 to 254 capital letters, digits or underscores, such as `MOCK` or `AB_1`. A ticket key is a project key, a dash and a number from 1. platform-api, the agent runtime, the Portal and Terraform check the same shape wherever a key is entered. A value saved before, such as a one-letter project on a card, still loads and runs.
 
 **The agents still talk to our platform, not to Jira.** Agents stay reusable and hold no Jira key (ADR 0023). The agent runtime's setting is renamed from `PRACTICE_JIRA_URL` to `PLATFORM_JIRA_URL`, and its reads go to `/internal/v1/runs/{run_id}/jira/tickets`. The runtime refuses to start if that address is not one of `CALLBACK_ALLOWED_ORIGINS`, because it sends the task's callback token there. It also refuses the old name, so a stale setting can't turn the Jira tools off without a word. Behind that route, platform-api checks the token and the card's projects as today, then reads through the `JiraPort`.
 
 **The watchlist's project is a setting.** `WATCHLIST_JIRA_PROJECT` names the project, `MOCK` for the practice Jira. When platform-api starts and the watchlist's current version names another project, it saves a new version with the setting's project, as a change to the list would. Until the Portal can set the project, the setting wins.
 
-**Each ticket links to where it lives.** The `write_action_done` event keeps `external_reference`, the ticket key, and adds `url`, the ticket's browse address. For the practice Jira that address is the Portal's own Practice Jira page.
+**Each ticket links to where it lives.** The `write_action_done` event keeps `external_reference`, the ticket key, and adds `url`, the ticket's browse address. For the practice Jira that address is the Portal's own Practice Jira page, `/jira/{key}`, a path the Portal opens in place. The Portal prefers this address. For a ticket key with no event behind it, such as the watchlist's open ticket, it uses its own `JIRA_BROWSE_URL`.
 
 ## What stays the same
 
@@ -91,6 +91,6 @@ The approval gate, the safety checker and `write_actions.check` do not change. E
 - **The deploy gains settings, not resources.** Compose and Terraform pass the new settings, and Key Vault gets a slot, `jira-api-token`, which is empty by default so the practice Jira is used. The Container Apps change in place.
 - **NCS has to tell us** whether Jira is Data Center or Cloud and which version, how the service account signs in, the issue type and any required fields, whether labels are allowed, and which status means Done. These are question 3 in `docs/design/devnet-move.md`.
 - **Jira Cloud's search can lag behind a create** for a few seconds. A try after a crash starts only once the earlier claim has ended, 25 seconds after it began, so the label search still finds a ticket created just before a crash.
-- **A deploy with a real Jira and `PRACTICE_SYSTEMS` on** still serves the practice Teams, but not the practice Jira. The Portal's Practice Jira page then has nothing to show.
+- **A deploy with a real Jira and `PRACTICE_SYSTEMS` on** still serves the practice Teams, but not the practice Jira. The Portal learns nothing from `PRACTICE_SYSTEMS`. It hides its Practice Jira page when its own `JIRA_BROWSE_URL` is set, and Terraform sets that whenever `JIRA_BASE_URL` is set. Compose leaves it to the person who sets a real Jira.
 - **The practice table stays in the orchestration schema,** so no database role changes. Its rows gain labels, an issue type and the account that made them, and its run columns may be empty for a ticket made by hand. The connector's record is a new table, `orchestration.jira_writes`, in the same schema.
 - **Confluence can follow the same pattern** when it gets its ADR (ADR 0023): a port, one REST adapter, and a practice server that speaks its API.

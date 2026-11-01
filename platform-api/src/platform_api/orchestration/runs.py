@@ -90,6 +90,8 @@ class WriteDone:
     operation: str
     external_reference: str
     approved_by: tuple[UserId, ...]
+    url: str | None = None
+    """Where people open what was written, such as the ticket's page in Jira (ADR 0035)."""
 
 
 @dataclass(frozen=True)
@@ -253,6 +255,7 @@ class Acting:
                     operation=w.operation,
                     external_reference=w.external_reference,
                     approved_by=list(w.approved_by),
+                    url=w.url,
                 ),
             )
             for w in written

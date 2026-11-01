@@ -175,6 +175,18 @@ describe('ticket keys on the run page', () => {
     expect(html).not.toContain('href="/jira/')
   })
 
+  it('links a written ticket to the address the platform gave, in the chat and in the Done panel', () => {
+    const real = JSON.parse(JSON.stringify(ops).replaceAll('/jira/OPS-142', 'https://jira.real.test/browse/OPS-142')) as Raw[]
+    const model = replay(real)
+    expect(chatHtml(model.chat)).toContain('href="https://jira.real.test/browse/OPS-142"')
+    const done = renderToStaticMarkup(
+      <MemoryRouter>
+        <Outcome model={model} nameOf={nameOf} />
+      </MemoryRouter>,
+    )
+    expect(done).toContain('href="https://jira.real.test/browse/OPS-142"')
+  })
+
   it('links the ticket chip in the Done panel, and not a written reference from another system', () => {
     const outcome = (model: RunModel) =>
       renderToStaticMarkup(

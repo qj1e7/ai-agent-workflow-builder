@@ -61,6 +61,8 @@ def test_the_tool_list_schema_equals_what_a_run_validates_against():
         ("jira_project", "A" + "B" * 254, True),
         ("jira_project", "A" + "B" * 255, False),
         ("jira_project", "_AB", False),
+        ("jira_project", "A", False),
+        ("jira_project", "AB", True),
         ("jira_project", "1AB", False),
         ("text", "Support team", True),
         ("text", "", False),
@@ -74,7 +76,18 @@ def test_values_must_fit_their_kind(kind: str, value: str, fits: bool):
 
 @pytest.mark.parametrize(
     ("key", "fits"),
-    [("MOCK-7", True), ("AB_1-12", True), ("AB_1", False), ("ab-1", False), ("_A-1", False)],
+    [
+        ("MOCK-7", True),
+        ("AB_1-12", True),
+        ("AB_1", False),
+        ("ab-1", False),
+        ("_A-1", False),
+        ("A-1", True),
+        ("MOCK-0", False),
+        ("MOCK-07", False),
+        ("MOCK-123456789", True),
+        ("MOCK-1234567890", False),
+    ],
 )
 def test_ticket_keys_take_the_shapes_jira_allows(key: str, fits: bool):
     tool = BY_ID["jira.read_ticket"]
@@ -87,3 +100,9 @@ def test_ticket_keys_take_the_shapes_jira_allows(key: str, fits: bool):
 
 def test_a_search_takes_a_project_key_with_an_underscore():
     BY_ID["jira.search"].parse({"project": "AB_1"})
+
+
+def test_a_stored_one_letter_project_can_still_be_searched_but_not_entered():
+    # A card saved before ADR 0035 may name a one-letter project, and its runs keep working.
+    BY_ID["jira.search"].parse({"project": "A"})
+    assert value_problem("jira_project", "A") is not None

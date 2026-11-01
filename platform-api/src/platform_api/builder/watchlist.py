@@ -5,6 +5,7 @@ each software (our version, the newest release, tickets) comes from orchestratio
 the WatchlistFacts port, and the two are composed into the view the Portal shows.
 """
 
+import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -55,6 +56,8 @@ from platform_api.orchestration import (
     WatchlistTask,
 )
 from platform_api.shared import Principal, SoftwareId, UseCaseId, UserId, new_id
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -337,7 +340,16 @@ class Watchlist:
             record = await _current(uow.conn, lock=True)
             if record is None or record.ticket_project == self._project:
                 return
-            await self._next_version(uow, record, record.software, ticket_project=self._project)
+            moved = await self._next_version(
+                uow, record, record.software, ticket_project=self._project
+            )
+        log.info(
+            "watchlist moved from %s to %s by the deploy setting WATCHLIST_JIRA_PROJECT, "
+            "version %d",
+            record.ticket_project,
+            moved.ticket_project,
+            moved.version,
+        )
 
     async def view(self) -> WatchlistView | None:
         async with self._db.connection("builder") as conn:

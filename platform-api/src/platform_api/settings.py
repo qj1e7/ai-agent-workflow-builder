@@ -187,8 +187,9 @@ def watchlist_jira_project_from_env(env: Mapping[str, str]) -> str:
     project = env.get("WATCHLIST_JIRA_PROJECT", "").strip() or PRACTICE_JIRA_PROJECT
     if JIRA_PROJECT_PATTERN.match(project) is None:
         raise ConfigError(
-            f"WATCHLIST_JIRA_PROJECT must be a Jira project key, such as MOCK or AB_1: a capital "
-            f"letter, then capital letters, digits or underscores. {project!r} is not one."
+            "WATCHLIST_JIRA_PROJECT must be a Jira project key, such as MOCK or AB_1: a capital "
+            "letter, then 1 or more capital letters, digits or underscores. "
+            f"{project!r} is not one."
         )
     return project
 

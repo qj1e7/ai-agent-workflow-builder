@@ -211,8 +211,9 @@ variable "jira_base_url" {
   default     = ""
 
   validation {
-    condition     = var.jira_base_url == "" || can(regex("^https://[A-Za-z0-9._~%-]+([:/][A-Za-z0-9._~:/%-]*)?$", var.jira_base_url))
-    error_message = "jira_base_url must be empty, or an https URL with a host and no query or fragment, made of letters, digits and . _ ~ : / % -."
+    # The Portal's browse address is built from it, so it takes the Portal's own rule (16-portal-auth.envsh).
+    condition     = var.jira_base_url == "" || can(regex("^https://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~:/%-]*)?$", var.jira_base_url))
+    error_message = "jira_base_url must be empty, or an https URL: a host of letters, digits, . and -, an optional port, and a path of letters, digits and . _ ~ : / % -, with no query or fragment."
   }
 }
 
@@ -268,8 +269,10 @@ variable "jira_browse_url" {
   default     = ""
 
   validation {
-    condition     = var.jira_browse_url == "" || (strcontains(var.jira_browse_url, "{key}") && can(regex("^https?://[^/?#\\s]+", var.jira_browse_url)))
-    error_message = "jira_browse_url must be empty, or an http or https address with {key} in it."
+    # The same rule as the Portal's start-up check (portal/nginx/16-portal-auth.envsh), so a value
+    # that passes the plan never stops the Portal starting.
+    condition     = var.jira_browse_url == "" || can(regex("^https?://[A-Za-z0-9.-]+(:[0-9]+)?/[A-Za-z0-9._~:/%-]*[{]key[}][A-Za-z0-9._~:/%-]*$", var.jira_browse_url))
+    error_message = "jira_browse_url must be empty, or an http or https address with {key} in its path, such as https://jira.example.com/browse/{key}, with no query or fragment."
   }
 }
 
@@ -279,8 +282,8 @@ variable "watchlist_jira_project" {
   default     = "MOCK"
 
   validation {
-    condition     = can(regex("^[A-Z][A-Z0-9_]{0,254}$", var.watchlist_jira_project))
-    error_message = "watchlist_jira_project must be a Jira project key: a capital letter, then capital letters, digits or underscores."
+    condition     = can(regex("^[A-Z][A-Z0-9_]{1,254}$", var.watchlist_jira_project))
+    error_message = "watchlist_jira_project must be a Jira project key: a capital letter, then 1 or more capital letters, digits or underscores."
   }
 }
 
