@@ -64,6 +64,15 @@ jobs:
       # Optional, for a subscription that refuses Cosmos DB's free tier or its region (ADR 0031).
       TF_VAR_cosmos_location: ${{ vars.COSMOS_LOCATION }}
       TF_VAR_cosmos_serverless: ${{ vars.COSMOS_SERVERLESS || 'false' }}
+      # Optional, n8n's editor (ADR 0034). "true" opens it behind n8n's own sign-in. Unset keeps n8n
+      # internal.
+      TF_VAR_n8n_editor_external: ${{ vars.N8N_EDITOR_EXTERNAL || 'false' }}
+      # Optional. With the editor open, only these addresses reach n8n, separated by commas. A secret,
+      # because addresses point at people. Unset lets every address reach n8n's sign-in page.
+      TF_VAR_n8n_editor_allowed_ips: ${{ secrets.N8N_EDITOR_ALLOWED_IPS }}
+      # Optional. The inside ranges that list adds for the platform's own calls to n8n. Unset uses
+      # the ranges Microsoft reserves in a workload profiles environment.
+      TF_VAR_n8n_internal_allowed_cidrs: ${{ vars.N8N_INTERNAL_ALLOWED_CIDRS }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:

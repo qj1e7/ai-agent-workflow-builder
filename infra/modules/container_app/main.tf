@@ -40,6 +40,18 @@ resource "azurerm_container_app" "this" {
     external_enabled = var.ingress.external
     target_port      = var.ingress.target_port
 
+    # Container Apps cannot mix Allow and Deny rules. With Allow rules, it refuses every address
+    # outside them with "RBAC: access denied". No ingress field forces a replace in azurerm 5.7.0,
+    # so adding or removing rules updates the app in place.
+    dynamic "ip_security_restriction" {
+      for_each = var.ingress.allowed_cidrs
+      content {
+        name             = ip_security_restriction.value.name
+        action           = "Allow"
+        ip_address_range = ip_security_restriction.value.cidr
+      }
+    }
+
     traffic_weight {
       percentage      = 100
       latest_revision = true

@@ -91,6 +91,81 @@ variable "n8n_owner_email" {
   type        = string
 }
 
+# n8n's editor on Azure (ADR 0034). Off, n8n is internal, as before. On, its ingress is external.
+# With no addresses listed, every address reaches n8n's sign-in page. With addresses, Container
+# Apps lets in only those and the inside ranges below, and refuses the rest.
+
+variable "n8n_editor_external" {
+  description = "True opens n8n's editor at https://n8n.<domain>, behind n8n's own sign-in. False keeps n8n internal, reachable only by the other apps."
+  type        = bool
+  default     = false
+}
+
+# The addresses are not secret, but they point at people, and the deploy logs are public. Sensitive
+# only keeps them out of Terraform's errors there.
+variable "n8n_editor_allowed_ips" {
+  description = "Public IPv4 addresses or ranges, separated by commas, that may reach n8n when n8n_editor_external is true, such as 203.0.113.7,198.51.100.0/24. One address means that address alone (/32). Empty lets every address reach n8n. Unused while n8n_editor_external is false."
+  type        = string
+  default     = ""
+  sensitive   = true
+
+  validation {
+    condition = alltrue([
+      for entry in split(",", var.n8n_editor_allowed_ips) :
+      can(regex("^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])[.]){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])(/(1[6-9]|2[0-9]|3[0-2]))?$", trimspace(entry)))
+      if trimspace(entry) != ""
+    ])
+    error_message = "Each entry in n8n_editor_allowed_ips must be an IPv4 address, such as 203.0.113.7, or a range of /16 or narrower, such as 198.51.100.0/24."
+  }
+
+  validation {
+    condition = alltrue([
+      for entry in split(",", var.n8n_editor_allowed_ips) :
+      try(cidrhost(trimspace(entry), 0) == split("/", trimspace(entry))[0], true)
+      if strcontains(entry, "/")
+    ])
+    error_message = "A range in n8n_editor_allowed_ips must start at its first address, such as 198.51.100.0/24, not 198.51.100.7/24."
+  }
+
+  # Azure only sees an address from the internet. These ranges are inside a home, an office, an
+  # internet provider or Azure, so an entry in one of them can never match.
+  validation {
+    condition = alltrue([
+      for entry in split(",", var.n8n_editor_allowed_ips) :
+      !anytrue([
+        for private in ["0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16", "172.16.0.0/12", "192.168.0.0/16"] :
+        try(cidrhost("${split("/", trimspace(entry))[0]}/${split("/", private)[1]}", 0) == split("/", private)[0], false)
+      ])
+      if trimspace(entry) != ""
+    ])
+    error_message = "n8n_editor_allowed_ips must hold public addresses. Addresses such as 10.x, 172.16.x to 172.31.x, 192.168.x and 100.64.x to 100.127.x are inside a network, so Azure never sees them. Use the address that a \"what is my IP\" page shows."
+  }
+}
+
+variable "n8n_internal_allowed_cidrs" {
+  description = "IPv4 ranges, separated by commas, that n8n's allow list also lets in, so platform-api and the bootstrap job still reach n8n. Empty uses the ranges Microsoft reserves in a workload profiles environment: 100.100.0.0/17, 100.100.128.0/19, 100.100.160.0/19 and 100.100.192.0/19. Used only when n8n_editor_allowed_ips is set and n8n_editor_external is true."
+  type        = string
+  default     = ""
+
+  validation {
+    condition = alltrue([
+      for entry in split(",", var.n8n_internal_allowed_cidrs) :
+      can(regex("^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])[.]){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])(/(1[6-9]|2[0-9]|3[0-2]))?$", trimspace(entry)))
+      if trimspace(entry) != ""
+    ])
+    error_message = "Each entry in n8n_internal_allowed_cidrs must be an IPv4 address or a range of /16 or narrower, such as 100.100.0.0/17."
+  }
+
+  validation {
+    condition = alltrue([
+      for entry in split(",", var.n8n_internal_allowed_cidrs) :
+      try(cidrhost(trimspace(entry), 0) == split("/", trimspace(entry))[0], true)
+      if strcontains(entry, "/")
+    ])
+    error_message = "A range in n8n_internal_allowed_cidrs must start at its first address, such as 100.100.0.0/17, not 100.100.0.51/17."
+  }
+}
+
 variable "github_token" {
   description = "Optional GitHub token for agent-runtime's release checker (GITHUB_TOKEN). Without one, GitHub allows 60 requests an hour per IP address, and Container Apps can share that address with other Azure customers. Empty sends no token."
   type        = string
