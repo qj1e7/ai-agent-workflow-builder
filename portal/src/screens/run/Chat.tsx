@@ -5,6 +5,7 @@ import { AgentFace, type FaceState } from '../../ui/AgentFace'
 import { agentIdentity } from '../../ui/agents'
 import { cx } from '../../ui/cx'
 import { IconShield } from '../../ui/icons'
+import { TicketKeys } from '../jira/TicketKeys'
 import { usePauseUnseen } from '../../ui/loops'
 import type { ChatItem } from './runModel'
 import { lineOf, speakerName, type NameOf, type Speaker } from './words'
@@ -71,7 +72,7 @@ function Item({ item, fresh, nameOf, trigger }: { item: ChatItem; fresh: boolean
             ))}
           </span>
         ) : null}
-        {line.text}
+        <TicketKeys text={line.text} keys={item.kind === 'written' && item.connector === 'jira' ? item.refs : []} />
       </span>
     </li>
   )

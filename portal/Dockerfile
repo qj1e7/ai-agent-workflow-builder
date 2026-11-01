@@ -13,6 +13,7 @@ ENV PORTAL_MODE=live \
     API_UPSTREAM=http://platform-api:8000 \
     NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1 \
     PORTAL_CONFIG_AUTH="" \
+    PORTAL_CONFIG_JIRA="" \
     PORTAL_CSP_AUTH=""
 COPY portal/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY portal/nginx/default.conf.template /etc/nginx/templates/default.conf.template

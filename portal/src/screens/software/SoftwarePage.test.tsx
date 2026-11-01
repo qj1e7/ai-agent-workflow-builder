@@ -9,11 +9,13 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import { ApiProvider } from '../../api/context'
+import { TicketLinksProvider } from '../../api/ticketLinks'
 import { createDevSession } from '../../api/session'
-import type { Me, ScheduleHold, WatchlistView } from '../../api/types'
+import type { Me, ScheduleHold, WatchedSoftwareView, WatchlistView } from '../../api/types'
 import { AddSoftwareFields, EMPTY_VALUES } from './AddSoftware'
 import { FindSoftware } from './FindSoftware'
 import { SoftwareRoute } from './SoftwarePage'
+import { SoftwareHistory } from './SoftwareHistory'
 import { ScheduleEditor, ScheduleNote } from './Schedule'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
@@ -281,5 +283,54 @@ describe('the schedule note', () => {
   it('says no schedule is set and how a check starts then', () => {
     expect(text(renderToStaticMarkup(<ScheduleNote schedule={null} operator paused={false} />))).toBe('No schedule. Press Check now to check by hand.')
     expect(text(renderToStaticMarkup(<ScheduleNote schedule={null} operator={false} paused={false} />))).toBe('No schedule. An Operator can press Check now to check by hand.')
+  })
+})
+
+describe('ticket keys on the Software watchlist', () => {
+  // The project is a setting, so none of these keys is MOCK.
+  const rows = (statuses as WatchlistView).software
+  const open = rows.find((row) => row.status === 'ticket_open')!
+  const view = {
+    ...statuses,
+    software: rows.map((row) =>
+      row.id === open.id
+        ? { ...row, open_ticket: 'OPS-143', our_version_source: { kind: 'ticket_done', at: '2026-11-13T14:30:00+08:00', ticket: 'OPS-140' } }
+        : row,
+    ),
+  }
+  const link = (key: string) => new RegExp(`<a\\b[^>]*href="/jira/${key}"[^>]*>${key}`)
+
+  it('links the open ticket and the ticket our version came from, whatever the project', () => {
+    const html = render(view, ALICE)
+    expect(html).toMatch(link('OPS-143'))
+    expect(html).toMatch(link('OPS-140'))
+  })
+
+  it('links the keys in the history lines', () => {
+    const row = view.software.find((item) => item.id === open.id)!
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <SoftwareHistory row={row as WatchedSoftwareView} nameOf={(id) => id} id="h" />
+      </MemoryRouter>,
+    )
+    expect(html).toMatch(link('OPS-143'))
+    expect(html).toMatch(link('OPS-140'))
+    expect(text(html)).toContain('OPS-143 is open in Jira for the upgrade.')
+  })
+
+  it('does not link key-like words that are not tickets the row holds', () => {
+    const html = render({ ...view, software: view.software.map((row) => ({ ...row, problem: 'UTF-8 and CVE-2024-1234' })) }, ALICE)
+    expect(html).not.toContain('href="/jira/UTF-8"')
+    expect(html).not.toContain('href="/jira/CVE-2024-1234"')
+  })
+
+  it('links to the real Jira in a new tab, safely, when an address is configured', () => {
+    const html = render(view, ALICE, [], (
+      <TicketLinksProvider config={{ jiraBrowseUrl: 'https://jira.example.test/browse/{key}' }}>
+        <SoftwareRoute />
+      </TicketLinksProvider>
+    ))
+    expect(html).toMatch(/<a\b[^>]*href="https:\/\/jira.example.test\/browse\/OPS-143"[^>]*target="_blank"[^>]*rel="noopener noreferrer"[^>]*>OPS-143/)
+    expect(html).not.toContain('href="/jira/OPS-143"')
   })
 })

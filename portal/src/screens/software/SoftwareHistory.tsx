@@ -1,5 +1,6 @@
 import type { WatchedSoftwareView } from '../../api/types'
-import { historyOf } from './software'
+import { TicketKeys } from '../jira/TicketKeys'
+import { historyOf, ticketsOf } from './software'
 import styles from './Software.module.css'
 
 export function SoftwareHistory({ row, nameOf, id }: { row: WatchedSoftwareView; nameOf: (id: string) => string; id: string }) {
@@ -9,7 +10,9 @@ export function SoftwareHistory({ row, nameOf, id }: { row: WatchedSoftwareView;
         {historyOf(row, nameOf).map((line, index) => (
           <li key={index}>
             <b>{line.when}</b>
-            <span>{line.words}</span>
+            <span>
+              <TicketKeys text={line.words} keys={ticketsOf(row)} />
+            </span>
           </li>
         ))}
       </ol>
