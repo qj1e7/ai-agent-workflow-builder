@@ -263,11 +263,16 @@ locals {
       # With its editor open, n8n builds its links from its public address. n8n listens on 5678,
       # so without N8N_EDITOR_BASE_URL it would add :5678 to them.
       #
+      # N8N_PROXY_HOPS trusts the one X-Forwarded-For hop that Container Apps' ingress adds. Without
+      # it n8n sees the proxy's address for everyone, so one visitor could use up the sign-in
+      # limit for all, the bootstrap included.
+      #
       # It also creates its owner from these settings, so its setup page never offers the owner to
-      # a visitor. n8n 2.42.6 runs this in start.js's init(), before server.start(), and rewrites
-      # the owner on every start (OwnerInstanceSettingsLoader, overwriteExisting). The bootstrap's
-      # own setup call then gets "Instance owner already setup" and signs in, as on any later run.
-      # The names match the ones the bootstrap uses. The hash is in local.inline_secrets.
+      # a visitor. n8n 2.42.6 runs this in start.js's init(), before server.start() registers any
+      # REST route, and rewrites the owner on every start (OwnerInstanceSettingsLoader,
+      # overwriteExisting). The bootstrap's own setup call then gets "Instance owner already setup"
+      # and signs in, as on any later run. The names match the ones the bootstrap uses. The hash is
+      # in local.inline_secrets.
       env = merge(
         {
           DB_TYPE                           = "postgresdb"
@@ -286,6 +291,7 @@ locals {
           N8N_PROTOCOL                      = "https"
           N8N_HOST                          = trimprefix(local.url["n8n"], "https://")
           N8N_EDITOR_BASE_URL               = "${local.url["n8n"]}/"
+          N8N_PROXY_HOPS                    = "1"
           N8N_INSTANCE_OWNER_MANAGED_BY_ENV = "true"
           N8N_INSTANCE_OWNER_EMAIL          = var.n8n_owner_email
           N8N_INSTANCE_OWNER_FIRST_NAME     = "Platform"
