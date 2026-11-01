@@ -65,8 +65,6 @@ from platform_api.orchestration.http import (
     DecisionOut,
     DecisionView,
     FailedView,
-    MockJiraTicket,
-    MockJiraTickets,
     ProposalView,
     RefusalOut,
     RejectedView,
@@ -81,6 +79,7 @@ from platform_api.orchestration.http import (
     WriteDoneView,
 )
 from platform_api.orchestration.write_actions import WriteAction, digest
+from platform_api.practice_jira.http import MockJiraTicket, MockJiraTickets
 from platform_api.shared import ApprovalId, ProposalId, RunId, UserId
 from platform_api.wire import ApprovalStepView, Trigger, WireModel
 

@@ -120,7 +120,7 @@ def app_with(
     app.state.orchestrator = orchestrator or FakeOrchestrator()
     app.state.builder = builder or FakeBuilder()
     app.state.activity_log = log or FakeLog()
-    app.state.mock_jira = FakeMockJira()
+    app.state.practice_jira = FakeMockJira()
     app.state.watchlist = FakeWatchlist()
     app.state.schedule_ticker = FakeTicker()
     return app

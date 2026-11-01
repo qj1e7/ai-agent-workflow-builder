@@ -51,8 +51,6 @@ from platform_api.orchestration.confirmations import DecideRefusal
 from platform_api.orchestration.http import (
     ApprovalView,
     DecisionOut,
-    MockJiraTicket,
-    MockJiraTickets,
     RefusalOut,
     StepResponseOut,
     TeamsStubMessages,
@@ -74,6 +72,7 @@ from platform_api.orchestration.people_http import (
 from platform_api.orchestration.runs import FailureReason, Leg, Stage, StepName
 from platform_api.orchestration.settings_http import ModelSettingsView, SaveOut
 from platform_api.orchestration.write_actions import DenyReason
+from platform_api.practice_jira.http import MockJiraTicket, MockJiraTickets
 from platform_api.wire import FailureReason as WireFailureReason
 from platform_api.wire import FailureStage
 from platform_api.wire import Leg as WireLeg

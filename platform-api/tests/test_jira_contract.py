@@ -1,0 +1,279 @@
+"""The Jira contract (ADR 0035): what the platform needs from any Jira, run against a target.
+
+CI always runs it against the practice Jira, in both flavors, over HTTP. With JIRA_CONTRACT_URL
+set, the same tests run against a real sandbox too:
+
+    JIRA_CONTRACT_URL      the sandbox, such as https://example.atlassian.net
+    JIRA_CONTRACT_FLAVOR   datacenter or cloud (default datacenter)
+    JIRA_CONTRACT_TOKEN    the token (a personal access token, or an API token for Cloud)
+    JIRA_CONTRACT_EMAIL    the account's email, for Cloud
+    JIRA_CONTRACT_PROJECT  a project the account may write to
+
+Every ticket a test makes carries a fresh marker, so the tests never assume an empty Jira.
+"""
+
+import os
+import uuid
+from collections.abc import AsyncIterator
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+
+import httpx
+import pytest
+from fastapi import FastAPI
+
+from platform_api.db import Database
+from platform_api.orchestration.jira import (
+    IssueSearch,
+    JiraFlavor,
+    JiraRefused,
+    JiraUnavailable,
+    JiraWriteConnector,
+    NewIssue,
+    write_label,
+)
+from platform_api.orchestration.jira_rest import JiraAuth, JiraRestAdapter
+from platform_api.orchestration.write_actions import WriteAction, WriteKey, WriteRefused
+from platform_api.practice_jira import PRACTICE_EMAIL, PracticeJira, practice_token
+from platform_api.practice_jira import router as practice_router
+from platform_api.shared import ProposalId, RunId
+
+pytestmark = pytest.mark.anyio
+
+SIGNING_KEY = "test-callback-key"
+PRACTICE_BASE = "http://platform-api:8000/practice-jira"
+PORTAL = "http://localhost:8080"
+MARKUP = "*bold* _it_ -gone- {code}x{code} [a link|https://evil.test] !img.png! h1. top"
+SANDBOX = os.environ.get("JIRA_CONTRACT_URL", "").strip()
+
+
+@dataclass
+class Waits:
+    seconds: list[float] = field(default_factory=list[float])
+
+    async def __call__(self, seconds: float) -> None:
+        self.seconds.append(seconds)
+
+
+@dataclass
+class Target:
+    name: str
+    flavor: JiraFlavor
+    project: str
+    jira: JiraRestAdapter
+    waits: Waits
+    client: httpx.AsyncClient
+    base_url: str
+    practice: PracticeJira | None = None
+
+    def adapter(self, auth: JiraAuth) -> JiraRestAdapter:
+        return JiraRestAdapter(self.base_url, self.flavor, auth, self.client, sleep=self.waits)
+
+    def needs_practice(self) -> PracticeJira:
+        if self.practice is None:
+            pytest.skip("only the practice Jira can be told to fail")
+        return self.practice
+
+
+def practice_app(practice: PracticeJira) -> FastAPI:
+    app = FastAPI()
+    app.state.practice_jira = practice
+    app.include_router(practice_router)
+    return app
+
+
+@pytest.fixture(params=["practice-datacenter", "practice-cloud", "sandbox"])
+async def target(request: pytest.FixtureRequest, db: Database) -> AsyncIterator[Target]:
+    waits = Waits()
+    name: str = request.param
+    if name == "sandbox":
+        if not SANDBOX:
+            pytest.skip("JIRA_CONTRACT_URL is not set")
+        flavor: JiraFlavor = (
+            "cloud" if os.environ.get("JIRA_CONTRACT_FLAVOR") == "cloud" else "datacenter"
+        )
+        token = os.environ["JIRA_CONTRACT_TOKEN"]
+        auth = (
+            JiraAuth.basic(os.environ["JIRA_CONTRACT_EMAIL"], token)
+            if flavor == "cloud"
+            else JiraAuth.bearer(token)
+        )
+        async with httpx.AsyncClient(timeout=20) as client:
+            jira = JiraRestAdapter(SANDBOX, flavor, auth, client, sleep=waits)
+            yield Target(
+                name, flavor, os.environ["JIRA_CONTRACT_PROJECT"], jira, waits, client, SANDBOX
+            )
+        return
+    flavor = "cloud" if name == "practice-cloud" else "datacenter"
+    practice = PracticeJira(db, practice_token(SIGNING_KEY), PORTAL)
+    transport = httpx.ASGITransport(app=practice_app(practice))
+    async with httpx.AsyncClient(transport=transport) as client:
+        auth = JiraAuth.of(flavor, practice_token(SIGNING_KEY), PRACTICE_EMAIL)
+        jira = JiraRestAdapter(PRACTICE_BASE, flavor, auth, client, sleep=waits)
+        yield Target(name, flavor, "MOCK", jira, waits, client, PRACTICE_BASE, practice)
+
+
+def marker() -> str:
+    return "wab" + uuid.uuid4().hex[:12]
+
+
+async def made(target: Target, title: str, body: str = "", label: str | None = None) -> str:
+    labels = (label,) if label else ()
+    return await target.jira.create_issue(NewIssue(target.project, title, body, labels))
+
+
+def as_stored(target: Target, body: str) -> str:
+    """Data Center's body sits in a {noformat} block, so a {noformat} inside it is broken up."""
+    if target.flavor == "datacenter":
+        return body.replace("{noformat", "{ noformat")
+    return body
+
+
+async def test_a_new_ticket_reads_back_as_written(target: Target):
+    word = marker()
+    body = f"First line {word}.\nSecond line.\n\nA new paragraph.\n{MARKUP} {{noformat}} end"
+    key = await made(target, f"Upgrade LangGraph to 1.2.16 {word}", body, f"{word}-label")
+    assert key.startswith(f"{target.project}-")
+    issue = await target.jira.get_issue(key)
+    assert issue is not None
+    assert (issue.key, issue.project) == (key, target.project)
+    assert issue.title == f"Upgrade LangGraph to 1.2.16 {word}"
+    assert issue.body == as_stored(target, body)
+    assert issue.status == "To Do" and issue.done_at is None
+    assert f"{word}-label" in issue.labels
+    assert abs(issue.created_at - datetime.now(UTC)) < timedelta(minutes=5)
+
+
+async def test_our_write_label_finds_the_ticket_and_nothing_else(target: Target):
+    word = marker()
+    key = await made(target, f"Labelled {word}", label=f"{word}-write")
+    assert await target.jira.find_by_label(target.project, f"{word}-write") == key
+    assert await target.jira.find_by_label(target.project, f"{word}-other") is None
+
+
+async def test_a_search_matches_any_word_in_the_projects_newest_first(target: Target):
+    first, second = marker(), marker()
+    older = await made(target, f"Older {first}")
+    newer = await made(target, "Newer", f"The body names {second}.")
+    found = await target.jira.search(IssueSearch((target.project,), (first, second)))
+    assert [issue.key for issue in found] == [newer, older]
+    only = await target.jira.search(IssueSearch((target.project,), (second,)))
+    assert [issue.key for issue in only] == [newer]
+
+
+async def test_moving_a_ticket_to_done_sets_its_status_and_resolution_day(target: Target):
+    word = marker()
+    open_key = await made(target, f"Stays open {word}")
+    done_key = await made(target, f"Gets done {word}")
+    await target.jira.move_to_done(done_key)
+    issue = await target.jira.get_issue(done_key)
+    assert issue is not None and issue.status == "Done" and issue.done_at is not None
+    done = await target.jira.search(IssueSearch((target.project,), (word,), status="Done"))
+    assert [i.key for i in done] == [done_key]
+    to_do = await target.jira.search(IssueSearch((target.project,), (word,), status="To Do"))
+    assert [i.key for i in to_do] == [open_key]
+    since = datetime.now(UTC) - timedelta(days=1)
+    recent = await target.jira.search(IssueSearch((target.project,), (word,), done_since=since))
+    assert [i.key for i in recent] == [done_key]
+
+
+async def test_done_tickets_answers_the_done_ones_and_skips_a_key_that_is_gone(target: Target):
+    word = marker()
+    open_key = await made(target, f"Open {word}")
+    done_key = await made(target, f"Done {word}")
+    await target.jira.move_to_done(done_key)
+    gone = f"{target.project}-987654"
+    done = await target.jira.done_tickets([open_key, done_key, gone])
+    assert list(done) == [done_key]
+
+
+async def test_a_ticket_that_is_not_there_is_none(target: Target):
+    assert await target.jira.get_issue(f"{target.project}-987654") is None
+
+
+async def test_a_ticket_with_no_title_is_refused_for_good(target: Target):
+    with pytest.raises(JiraRefused) as refused:
+        await made(target, "")
+    assert refused.value.retryable is False
+    assert "summary" in str(refused.value).lower()
+
+
+async def test_a_wrong_token_is_a_failure_that_may_be_retried(target: Target):
+    wrong = target.adapter(JiraAuth.bearer("not-the-token"))
+    with pytest.raises(JiraUnavailable) as failed:
+        await wrong.get_issue(f"{target.project}-1")
+    assert failed.value.retryable is True
+    assert "token" in str(failed.value)
+
+
+async def test_errors_come_in_jiras_own_shape(target: Target):
+    version = "3" if target.flavor == "cloud" else "2"
+    response = await target.client.post(
+        f"{target.base_url}/rest/api/{version}/issue",
+        json={"fields": {"project": {"key": target.project}, "issuetype": {"name": "Task"}}},
+        headers={"Authorization": target.jira.auth_header},
+    )
+    assert response.status_code == 400
+    body = response.json()
+    assert isinstance(body["errorMessages"], list) and isinstance(body["errors"], dict)
+    assert "summary" in body["errors"]
+    anonymous = await target.client.get(f"{target.base_url}/rest/api/{version}/project/MOCK")
+    assert anonymous.status_code == 401
+
+
+async def test_a_busy_jira_is_waited_for_by_its_retry_after(target: Target):
+    practice = target.needs_practice()
+    practice.fail_next(429, times=1, retry_after=2)
+    assert await target.jira.get_issue("MOCK-987654") is None
+    assert target.waits.seconds == [2]
+
+
+async def test_a_long_retry_after_is_cut_short(target: Target):
+    practice = target.needs_practice()
+    practice.fail_next(503, times=1, retry_after=600)
+    assert await target.jira.get_issue("MOCK-987654") is None
+    assert target.waits.seconds == [5]
+
+
+async def test_jira_down_three_times_fails_in_a_way_that_may_be_retried(target: Target):
+    practice = target.needs_practice()
+    practice.fail_next(503, times=3)
+    with pytest.raises(JiraUnavailable) as failed:
+        await target.jira.get_issue("MOCK-1")
+    assert failed.value.retryable is True
+    assert len(target.waits.seconds) == 2
+
+
+async def test_a_rate_limited_create_is_tried_again_and_makes_one_ticket(target: Target):
+    practice = target.needs_practice()
+    practice.fail_next(429, times=1, retry_after=1)
+    key = await made(target, "Made after one wait")
+    assert [t.key for t in await practice.tickets()] == [key]
+
+
+async def test_the_connector_makes_one_ticket_per_write_key_after_a_lost_record(target: Target):
+    practice = target.needs_practice()
+    connector = JiraWriteConnector(target.jira)
+    action = WriteAction(
+        "jira", "create_ticket", {"project": "MOCK"}, {"title": "Upgrade", "body": "Soon."}
+    )
+    key = WriteKey(RunId("run_01ABC"), ProposalId("prp_01DEF"), 0)
+    first = await connector.execute(action, key)
+    # As if the gateway crashed after Jira's 201 and before it recorded the ticket.
+    again = await connector.execute(action, key)
+    other = await connector.execute(
+        action, WriteKey(RunId("run_01ABC"), ProposalId("prp_01DEF"), 1)
+    )
+    assert first == again != other
+    tickets = await practice.tickets()
+    assert [t.key for t in tickets] == [first, other]
+    assert tickets[0].labels == (write_label(key),)
+    assert (tickets[0].run_id, tickets[0].proposal_id) == ("run_01ABC", "prp_01DEF")
+
+
+async def test_the_connector_turns_a_refusal_into_a_write_that_is_not_retried(target: Target):
+    target.needs_practice()
+    connector = JiraWriteConnector(target.jira)
+    action = WriteAction("jira", "create_ticket", {"project": "MOCK"}, {"title": "", "body": ""})
+    with pytest.raises(WriteRefused):
+        await connector.execute(action, WriteKey(RunId("run_1"), ProposalId("prp_1"), 0))

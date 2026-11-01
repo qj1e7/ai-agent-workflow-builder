@@ -90,3 +90,23 @@ source_modules = [
 ]
 forbidden_modules = ["platform_api.oidc"]
 allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "The practice Jira knows nothing of the bounded contexts, as an outside system would"
+type = "forbidden"
+source_modules = ["platform_api.practice_jira"]
+forbidden_modules = [
+    "platform_api.builder",
+    "platform_api.orchestration",
+    "platform_api.monitoring",
+]
+
+[[tool.importlinter.contracts]]
+name = "No bounded context reaches the practice Jira, only the app and the wiring"
+type = "forbidden"
+source_modules = [
+    "platform_api.builder",
+    "platform_api.orchestration",
+    "platform_api.monitoring",
+]
+forbidden_modules = ["platform_api.practice_jira"]

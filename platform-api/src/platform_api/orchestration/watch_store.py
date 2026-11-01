@@ -1,9 +1,11 @@
+import logging
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
 from platform_api.db import Database, UnitOfWork
+from platform_api.orchestration.jira import JiraError
 from platform_api.orchestration.runs import (
     STATE_NAMES,
     Acting,
@@ -34,6 +36,8 @@ from platform_api.orchestration.watch import (
 )
 from platform_api.shared import ApprovalId, ProposalId, RunId, SoftwareId, UseCaseId
 from platform_api.wire import RunState as RunStateName
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -317,7 +321,12 @@ class WatchFacts:
             written = await self._store.written_tickets(uow, use_case_id)
         if not written:
             return
-        done = await self._tickets.done_tickets([ticket.key for ticket in written])
+        try:
+            done = await self._tickets.done_tickets([ticket.key for ticket in written])
+        except JiraError as error:
+            # The watchlist still shows what the platform knows. The next view asks Jira again.
+            log.warning("could not ask Jira which tickets are done: %s", error)
+            return
         if not done:
             return
         async with self._db.transaction("orchestration") as uow:

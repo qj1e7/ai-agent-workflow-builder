@@ -87,6 +87,17 @@ AGENT_REFUSED = Advice(
 )
 
 
+WRITE_REFUSED = Advice(
+    explanation="The other system refused the approved write, so retrying would get the same "
+    "answer.",
+    likely_cause="Jira does not accept the ticket as it is: the project, the issue type or a "
+    "required field is not what Jira expects, or the platform's Jira account may not write there.",
+    suggested_action="ask_maintainer",
+    suggestion="Read what Jira said in the run's failure, ask a maintainer to fix the Jira "
+    "settings or the project, then start a new run.",
+)
+
+
 def explain(reason: FailureReason) -> Advice:
     return ADVICE[reason]
 
@@ -94,4 +105,6 @@ def explain(reason: FailureReason) -> Advice:
 def explain_failure(failure: RunFailedData) -> Advice:
     if failure.reason == "AgentError" and not failure.retryable:
         return AGENT_REFUSED
+    if failure.reason == "WriteFailed" and not failure.retryable:
+        return WRITE_REFUSED
     return ADVICE[failure.reason]

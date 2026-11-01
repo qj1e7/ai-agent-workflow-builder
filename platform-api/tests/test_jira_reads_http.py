@@ -1,4 +1,5 @@
-"""The practice Jira the agents read while a card run works: one run, one task, its projects."""
+"""The Jira the agents read while a card run works: one run, one task, its projects. It reads
+the practice Jira through the one adapter, over HTTP, as it would read a real Jira."""
 
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
@@ -16,13 +17,13 @@ from platform_api.orchestration.runs import Pending
 from platform_api.orchestration.spec import RunSpec
 from platform_api.orchestration.store import RunRecord, Store
 from platform_api.orchestration.write_actions import (
-    MockJiraConnector,
     Proposal,
     WriteAction,
     WriteKey,
     digest,
 )
 from platform_api.shared import ProposalId, RunId, TaskId, UseCaseId, UserId
+from tests.practice import PracticeKit
 from tests.support import ALICE, LOCAL_ENV, NOW, SPEC
 
 pytestmark = pytest.mark.anyio
@@ -86,7 +87,7 @@ async def client(db: Database) -> AsyncIterator[httpx.AsyncClient]:
                 name,
             )
         await Store().insert_proposal(uow, Proposal(PRP, CARD_RUN, (), digest(())))
-    jira = MockJiraConnector(db)
+    jira = PracticeKit(db)
     for index, (project, title, body) in enumerate(
         [
             ("MOCK", "Upgrade LangGraph to 1.2.16", "Release notes."),
@@ -100,7 +101,8 @@ async def client(db: Database) -> AsyncIterator[httpx.AsyncClient]:
         await jira.execute(action, WriteKey(CARD_RUN, PRP, index))
     await jira.mark_done("MOCK-2")
     app = create_app(LOCAL_ENV)
-    app.state.mock_jira = jira
+    app.state.jira = jira.jira
+    app.state.db = db
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as c:

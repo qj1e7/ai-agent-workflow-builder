@@ -18,10 +18,11 @@ from platform_api.orchestration.runs import (
 )
 from platform_api.orchestration.service import Orchestrator, Retried
 from platform_api.orchestration.workflows import load_all
-from platform_api.orchestration.write_actions import MockJiraConnector, WriteGateway
+from platform_api.orchestration.write_actions import WriteGateway
 from platform_api.shared import ApprovalId, RunId
 from tests.conftest import PostgresUrls, truncate_all
 from tests.fake_engine import FakeWorkflowEngine
+from tests.practice import PracticeKit
 from tests.support import ALICE, BOB, NOW, SPEC, fixture
 from tests.test_orchestrator import FakeAgent, mint
 
@@ -35,7 +36,7 @@ class Stack:
     log: ActivityLog
     engine: FakeWorkflowEngine
     agent: FakeAgent
-    jira: MockJiraConnector
+    jira: PracticeKit
     orchestrator: Orchestrator
 
     async def state(self, run_id: RunId) -> RunState:
@@ -64,7 +65,7 @@ async def stack(postgres: PostgresUrls) -> AsyncIterator[Stack]:
     log = ActivityLog(db)
     engine = FakeWorkflowEngine(load_all())
     agent = FakeAgent()
-    jira = MockJiraConnector(db)
+    jira = PracticeKit(db)
     orchestrator = Orchestrator(
         db,
         log,
