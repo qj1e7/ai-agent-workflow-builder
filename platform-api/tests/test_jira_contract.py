@@ -54,6 +54,8 @@ PRACTICE_BASE = "http://platform-api:8000/practice-jira"
 PORTAL = "http://localhost:8080"
 MARKUP = "*bold* _it_ -gone- {code}x{code} [a link|https://evil.test] !img.png! h1. top"
 SANDBOX = os.environ.get("JIRA_CONTRACT_URL", "").strip()
+TIME_LIMIT = 10.0
+"""Seconds a test that waits on a deadline or on two tries at once may take."""
 
 
 @dataclass
@@ -396,8 +398,13 @@ async def test_a_found_ticket_with_another_title_is_refused(target: Target, db: 
 async def test_two_tries_of_one_write_at_once_make_one_ticket(target: Target, db: Database):
     practice = target.needs_practice()
     connector = JiraWriteConnector(target.jira, db)
-    results = await asyncio.gather(
-        connector.execute(ACTION, WRITE), connector.execute(ACTION, WRITE), return_exceptions=True
+    results = await asyncio.wait_for(
+        asyncio.gather(
+            connector.execute(ACTION, WRITE),
+            connector.execute(ACTION, WRITE),
+            return_exceptions=True,
+        ),
+        TIME_LIMIT,
     )
     keys = [r for r in results if isinstance(r, str)]
     others = [r for r in results if not isinstance(r, str)]
@@ -432,7 +439,8 @@ async def test_a_jira_that_never_answers_fails_the_try_in_time_and_frees_the_wri
     connector = JiraWriteConnector(HangingJira(), db, deadline=timedelta(seconds=0.2))  # type: ignore[arg-type]
     started = asyncio.get_running_loop().time()
     with pytest.raises(JiraUnavailable) as failed:
-        await connector.execute(ACTION, WRITE)
+        # Its own limit, so a deadline that stops working fails here in seconds.
+        await asyncio.wait_for(connector.execute(ACTION, WRITE), TIME_LIMIT)
     assert failed.value.retryable is True
     assert asyncio.get_running_loop().time() - started < 2
     record = await connector.records.get(WRITE.text)

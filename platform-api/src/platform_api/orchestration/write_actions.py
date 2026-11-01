@@ -7,6 +7,8 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Protocol
 
+import psycopg
+
 from platform_api.db import Database
 from platform_api.monitoring import ActionLine
 from platform_api.orchestration.approvals import (
@@ -365,27 +367,35 @@ class WriteGateway:
     async def _claim(self, key: WriteKey) -> bool:
         """Claims the key in one statement: a new row, or a started one whose try is older than
         the in-flight timeout. False means another try holds it or it is done, so two tries
-        never call the connector for one key at once."""
-        async with self._db.transaction("orchestration") as uow:
-            row = await (
-                await uow.conn.execute(
-                    "INSERT INTO orchestration.write_executions "
-                    "(proposal_id, action_index, run_id, idempotency_key, status, started_at) "
-                    "VALUES (%s, %s, %s, %s, 'started', %s) "
-                    "ON CONFLICT (idempotency_key) DO UPDATE SET started_at = EXCLUDED.started_at "
-                    "WHERE orchestration.write_executions.status = 'started' "
-                    "AND orchestration.write_executions.started_at <= %s "
-                    "RETURNING idempotency_key",
-                    (
-                        key.proposal_id,
-                        key.index,
-                        key.run_id,
-                        key.text,
-                        uow.now,
-                        uow.now - self._timeout,
-                    ),
-                )
-            ).fetchone()
+        never call the connector for one key at once.
+
+        The table has a second unique key, (proposal_id, action_index), which ON CONFLICT does not
+        name. Two tries that insert at the same moment can meet there instead, and that means
+        the same thing: another try holds the key."""
+        try:
+            async with self._db.transaction("orchestration") as uow:
+                row = await (
+                    await uow.conn.execute(
+                        "INSERT INTO orchestration.write_executions "
+                        "(proposal_id, action_index, run_id, idempotency_key, status, started_at) "
+                        "VALUES (%s, %s, %s, %s, 'started', %s) "
+                        "ON CONFLICT (idempotency_key) "
+                        "DO UPDATE SET started_at = EXCLUDED.started_at "
+                        "WHERE orchestration.write_executions.status = 'started' "
+                        "AND orchestration.write_executions.started_at <= %s "
+                        "RETURNING idempotency_key",
+                        (
+                            key.proposal_id,
+                            key.index,
+                            key.run_id,
+                            key.text,
+                            uow.now,
+                            uow.now - self._timeout,
+                        ),
+                    )
+                ).fetchone()
+        except psycopg.errors.UniqueViolation:
+            return False
         return row is not None
 
     async def _mark_done(self, key: WriteKey, reference: str) -> None:
