@@ -21,7 +21,12 @@ from fastapi.responses import JSONResponse, RedirectResponse, Response
 from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
 from platform_api.jira_format import from_adf, from_wiki, json_list, json_object, to_adf, to_wiki
 from platform_api.practice_jira.jql import JqlError, ordered, parse
-from platform_api.practice_jira.store import PracticeJira, PracticeTicket
+from platform_api.practice_jira.store import (
+    PRACTICE_ACCOUNT,
+    PRACTICE_EMAIL,
+    PracticeJira,
+    PracticeTicket,
+)
 from platform_api.shared import (
     JIRA_KEY_PATTERN,
     JIRA_PROJECT_PATTERN,
@@ -66,6 +71,7 @@ def _signed_in(practice: PracticeJira, header: str) -> bool:
 
 def _gate(request: Request, practice: PracticeJira, version: str) -> JSONResponse | None:
     """What every REST call meets first: a failure a test asked for, the API version, sign-in."""
+    practice.calls.append(f"{request.method} {request.url.path.removeprefix('/practice-jira')}")
     failure = practice.take_failure()
     if failure is not None:
         headers = {} if failure.retry_after is None else {"Retry-After": str(failure.retry_after)}
@@ -93,6 +99,14 @@ def _category(status: TicketStatus) -> dict[str, Any]:
     return {"id": 2, "key": "new", "name": "To Do", "colorName": "blue-gray"}
 
 
+def _account(version: str, account: str) -> dict[str, Any]:
+    """A user as Jira shows one: Cloud names it by accountId, Data Center by name and key."""
+    shown = {"displayName": account, "active": True}
+    if version == "3":
+        return {"accountId": account, **shown}
+    return {"name": account, "key": account, **shown}
+
+
 def _issue(request: Request, version: str, ticket: PracticeTicket) -> dict[str, Any]:
     description: object
     if not ticket.body:
@@ -112,6 +126,8 @@ def _issue(request: Request, version: str, ticket: PracticeTicket) -> dict[str, 
             "project": {"id": ticket.project, "key": ticket.project, "name": ticket.project},
             "issuetype": {"name": ticket.issue_type},
             "labels": list(ticket.labels),
+            "creator": None if ticket.creator is None else _account(version, ticket.creator),
+            "reporter": None if ticket.creator is None else _account(version, ticket.creator),
             "status": {"name": ticket.status, "statusCategory": _category(ticket.status)},
             "resolution": None if ticket.done_at is None else {"name": "Done"},
             "created": _stamp(ticket.created_at),
@@ -308,6 +324,15 @@ async def make_transition(version: str, key: str, request: Request, practice: Pr
         return _errors(400, [f"Transition id '{wanted}' is not valid for this issue."])
     await practice.mark_done(key.upper())
     return Response(status_code=204)
+
+
+@router.get(API + "/myself", include_in_schema=False)
+async def myself(version: str, request: Request, practice: Practice) -> Response:
+    """The account the token signs in as. Every token the practice Jira accepts is the
+    platform's own account."""
+    if (refused := _gate(request, practice, version)) is not None:
+        return refused
+    return JSONResponse({**_account(version, PRACTICE_ACCOUNT), "emailAddress": PRACTICE_EMAIL})
 
 
 @router.get(API + "/project/{key}", include_in_schema=False)

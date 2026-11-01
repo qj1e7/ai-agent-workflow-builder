@@ -37,6 +37,20 @@
     },
     "created": "2026-11-03T10:20:31.123+0800",
     "updated": "2026-11-03T10:20:31.123+0800",
-    "resolutiondate": null
+    "resolutiondate": null,
+    "creator": {
+      "self": "https://jira.example.com/rest/api/2/user?username=svc-wab",
+      "key": "JIRAUSER10100",
+      "name": "svc-wab",
+      "displayName": "AI Workflow Builder",
+      "active": true
+    },
+    "reporter": {
+      "self": "https://jira.example.com/rest/api/2/user?username=svc-wab",
+      "key": "JIRAUSER10100",
+      "name": "svc-wab",
+      "displayName": "AI Workflow Builder",
+      "active": true
+    }
   }
 }

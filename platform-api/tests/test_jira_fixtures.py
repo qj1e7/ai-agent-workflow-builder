@@ -121,6 +121,27 @@ async def test_a_create_sends_jiras_fields_and_answers_the_new_key(flavor: JiraF
         assert fields["description"] == "{noformat}\nLine *one*.\n\nTwo.\n{noformat}"
 
 
+@pytest.mark.parametrize(
+    ("flavor", "account"), [("datacenter", "svc-wab"), ("cloud", "5b10ac8d82e05b22cc7d4ef5")]
+)
+async def test_the_platform_learns_its_own_account_once_and_reads_who_made_a_ticket(
+    flavor: JiraFlavor, account: str
+):
+    seen: list[httpx.Request] = []
+    answers = {
+        ("GET", "/myself"): (200, "myself.json"),
+        ("GET", "/issue/OPS-7"): (200, "issue.json"),
+    }
+    jira = jira_answering(flavor, answers, seen)
+    assert await jira.whoami() == account
+    assert await jira.whoami() == account
+    issue = await jira.get_issue("OPS-7")
+    assert issue is not None and issue.creator == account
+    assert [r.url.path for r in seen].count(
+        f"/rest/api/{'3' if flavor == 'cloud' else '2'}/myself"
+    ) == 1
+
+
 @pytest.mark.parametrize("flavor", ["datacenter", "cloud"])
 async def test_moving_to_done_takes_the_transition_into_the_done_category(flavor: JiraFlavor):
     seen: list[httpx.Request] = []
@@ -162,6 +183,7 @@ READ = (
     ".fields.description",
     ".fields.project.key",
     ".fields.labels",
+    ".fields.creator",
     ".fields.status.statusCategory.key",
     ".fields.created",
     ".fields.resolutiondate",

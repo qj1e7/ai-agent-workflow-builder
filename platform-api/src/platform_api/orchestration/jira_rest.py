@@ -36,7 +36,7 @@ write as lost after 30 seconds, so every wait together stays well under that."""
 SUMMARY_LIMIT: Final = 255
 FIELDS: Final = (
     "summary,description,status,project,labels,created,updated,resolutiondate,"
-    "statuscategorychangedate"
+    "statuscategorychangedate,creator,reporter"
 )
 KEYS_PER_SEARCH: Final = 50
 _RETRY_STATUSES: Final = frozenset({429, 500, 502, 503, 504})
@@ -143,6 +143,7 @@ class JiraRestAdapter:
         self._browse = browse_url or f"{self._base}/browse/{{key}}"
         self._sleep = sleep
         self._api = f"{self._base}/rest/api/{'3' if flavor == 'cloud' else '2'}"
+        self._me: str | None = None
 
     @property
     def auth_header(self) -> str:
@@ -204,6 +205,28 @@ class JiraRestAdapter:
             return JiraRefused(f"Jira refused to {doing} ({status}).{detail}", status)
         return JiraUnavailable(f"Jira could not {doing} ({status}).{detail}", status)
 
+    def _account(self, raw: object) -> str | None:
+        """A user's id: Cloud's accountId, or Data Center's user name (its key as a fallback)."""
+        user = json_object(raw)
+        names = ("accountId",) if self.flavor == "cloud" else ("name", "key")
+        for name in names:
+            value = user.get(name)
+            if isinstance(value, str) and value:
+                return value
+        return None
+
+    async def whoami(self) -> str:
+        """The platform's own Jira account, from Jira's /myself. Asked once."""
+        if self._me is None:
+            response = await self._call("GET", "/myself")
+            if response.status_code != 200:
+                raise self._failure(response, "say which account the token is")
+            me = self._account(_body(response))
+            if me is None:
+                raise JiraUnavailable("Jira gave an account that could not be read.")
+            self._me = me
+        return self._me
+
     def _issue(self, raw: object) -> JiraIssue:
         issue = json_object(raw)
         fields = json_object(issue.get("fields"))
@@ -232,6 +255,7 @@ class JiraRestAdapter:
             created_at=created,
             done_at=done_at,
             labels=tuple(str(label) for label in json_list(fields.get("labels"))),
+            creator=self._account(fields.get("creator")) or self._account(fields.get("reporter")),
         )
 
     async def create_issue(self, issue: NewIssue) -> str:
@@ -290,10 +314,12 @@ class JiraRestAdapter:
             )
         return await self._jql(" AND ".join(clauses) + " ORDER BY created DESC", query.limit)
 
-    async def find_by_label(self, project: str, label: str) -> str | None:
+    async def find_by_label(self, project: str, label: str) -> JiraIssue | None:
+        """The first ticket in the project with this label. The caller decides whether it is
+        ours, from its creator and when it was made."""
         jql = f"project = {_quoted(project)} AND labels = {_quoted(label)} ORDER BY created ASC"
         found = await self._jql(jql, 1)
-        return found[0].key if found else None
+        return found[0] if found else None
 
     async def done_tickets(self, keys: Collection[str]) -> Mapping[str, datetime]:
         """Which of these tickets are Done, and when. A key Jira no longer has is skipped: Jira

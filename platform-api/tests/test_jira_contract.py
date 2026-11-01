@@ -144,10 +144,12 @@ async def test_a_new_ticket_reads_back_as_written(target: Target):
     assert abs(issue.created_at - datetime.now(UTC)) < timedelta(minutes=5)
 
 
-async def test_our_write_label_finds_the_ticket_and_nothing_else(target: Target):
+async def test_our_write_label_finds_the_ticket_and_who_made_it(target: Target):
     word = marker()
     key = await made(target, f"Labelled {word}", label=f"{word}-write")
-    assert await target.jira.find_by_label(target.project, f"{word}-write") == key
+    found = await target.jira.find_by_label(target.project, f"{word}-write")
+    assert found is not None and found.key == key
+    assert found.creator is not None and found.creator == await target.jira.whoami()
     assert await target.jira.find_by_label(target.project, f"{word}-other") is None
 
 
@@ -251,29 +253,80 @@ async def test_a_rate_limited_create_is_tried_again_and_makes_one_ticket(target:
     assert [t.key for t in await practice.tickets()] == [key]
 
 
-async def test_the_connector_makes_one_ticket_per_write_key_after_a_lost_record(target: Target):
+ACTION = WriteAction(
+    "jira", "create_ticket", {"project": "MOCK"}, {"title": "Upgrade", "body": "Soon."}
+)
+WRITE = WriteKey(RunId("run_01ABC"), ProposalId("prp_01DEF"), 0)
+
+
+async def test_a_retry_after_a_made_ticket_uses_our_record_and_never_searches(
+    target: Target, db: Database
+):
     practice = target.needs_practice()
-    connector = JiraWriteConnector(target.jira)
-    action = WriteAction(
-        "jira", "create_ticket", {"project": "MOCK"}, {"title": "Upgrade", "body": "Soon."}
-    )
-    key = WriteKey(RunId("run_01ABC"), ProposalId("prp_01DEF"), 0)
-    first = await connector.execute(action, key)
-    # As if the gateway crashed after Jira's 201 and before it recorded the ticket.
-    again = await connector.execute(action, key)
-    other = await connector.execute(
-        action, WriteKey(RunId("run_01ABC"), ProposalId("prp_01DEF"), 1)
-    )
-    assert first == again != other
+    connector = JiraWriteConnector(target.jira, db)
+    first = await connector.execute(ACTION, WRITE)
+    practice.calls.clear()
+    assert await connector.execute(ACTION, WRITE) == first
+    assert practice.calls == []
+    other = await connector.execute(ACTION, WriteKey(WRITE.run_id, WRITE.proposal_id, 1))
     tickets = await practice.tickets()
     assert [t.key for t in tickets] == [first, other]
-    assert tickets[0].labels == (write_label(key),)
+    assert tickets[0].labels == (write_label(WRITE),)
     assert (tickets[0].run_id, tickets[0].proposal_id) == ("run_01ABC", "prp_01DEF")
 
 
-async def test_the_connector_turns_a_refusal_into_a_write_that_is_not_retried(target: Target):
+async def test_a_crash_after_jiras_201_finds_our_own_ticket_and_makes_no_second(
+    target: Target, db: Database
+):
+    practice = target.needs_practice()
+    connector = JiraWriteConnector(target.jira, db)
+    # As if the platform stopped after Jira made the ticket and before it noted the key.
+    await connector.records.creating(WRITE.text)
+    made = await target.jira.create_issue(
+        NewIssue("MOCK", "Upgrade", "Soon.", (write_label(WRITE),))
+    )
+    assert await connector.execute(ACTION, WRITE) == made
+    assert [t.key for t in await practice.tickets()] == [made]
+
+
+async def test_a_ticket_someone_else_planted_with_our_label_is_never_taken_as_ours(
+    target: Target, db: Database
+):
+    practice = target.needs_practice()
+    planted = await practice.create(
+        "MOCK", "Looks like ours", "", [write_label(WRITE)], "Task", creator="mallory"
+    )
+    connector = JiraWriteConnector(target.jira, db)
+    # With no record of our own, the platform does not search: it makes its own ticket.
+    ours = await connector.execute(ACTION, WRITE)
+    assert ours != planted.key
+    # After a crash, a label match that another account made needs a person.
+    other = WriteKey(WRITE.run_id, WRITE.proposal_id, 2)
+    await practice.create("MOCK", "Planted", "", [write_label(other)], "Task", creator="mallory")
+    await connector.records.creating(other.text)
+    with pytest.raises(WriteRefused, match="did not make it"):
+        await connector.execute(ACTION, other)
+
+
+async def test_a_create_jira_refused_or_was_too_busy_for_is_tried_fresh_next_time(
+    target: Target, db: Database
+):
+    practice = target.needs_practice()
+    connector = JiraWriteConnector(target.jira, db)
+    practice.fail_next(429, times=3, retry_after=1)
+    with pytest.raises(JiraUnavailable):
+        await connector.execute(ACTION, WRITE)
+    practice.calls.clear()
+    made = await connector.execute(ACTION, WRITE)
+    assert not [call for call in practice.calls if "search" in call]
+    assert [t.key for t in await practice.tickets()] == [made]
+
+
+async def test_the_connector_turns_a_refusal_into_a_write_that_is_not_retried(
+    target: Target, db: Database
+):
     target.needs_practice()
-    connector = JiraWriteConnector(target.jira)
+    connector = JiraWriteConnector(target.jira, db)
     action = WriteAction("jira", "create_ticket", {"project": "MOCK"}, {"title": "", "body": ""})
     with pytest.raises(WriteRefused):
         await connector.execute(action, WriteKey(RunId("run_1"), ProposalId("prp_1"), 0))

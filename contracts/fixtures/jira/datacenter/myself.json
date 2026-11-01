@@ -1,0 +1,9 @@
+{
+  "self": "https://jira.example.com/rest/api/2/user?username=svc-wab",
+  "key": "JIRAUSER10100",
+  "name": "svc-wab",
+  "emailAddress": "svc-wab@example.com",
+  "displayName": "AI Workflow Builder",
+  "active": true,
+  "timeZone": "Asia/Singapore"
+}

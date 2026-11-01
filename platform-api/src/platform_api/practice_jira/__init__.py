@@ -7,10 +7,18 @@ orchestration.mock_jira_tickets, so it needs no database role of its own.
 
 from platform_api.practice_jira.http import router
 from platform_api.practice_jira.store import (
+    PRACTICE_ACCOUNT,
     PRACTICE_EMAIL,
     PracticeJira,
     PracticeTicket,
     practice_token,
 )
 
-__all__ = ["PRACTICE_EMAIL", "PracticeJira", "PracticeTicket", "practice_token", "router"]
+__all__ = [
+    "PRACTICE_ACCOUNT",
+    "PRACTICE_EMAIL",
+    "PracticeJira",
+    "PracticeTicket",
+    "practice_token",
+    "router",
+]

@@ -13,10 +13,12 @@ from platform_api.shared import TicketStatus
 
 PRACTICE_EMAIL = "practice@platform.invalid"
 """The account the adapter names when the practice Jira speaks Cloud's API."""
+PRACTICE_ACCOUNT = "wab-platform"
+"""The platform's account in the practice Jira: what /myself answers, and who made its tickets."""
 
 _COLUMNS = (
     "key, number, project, title, body, created_at, run_id, proposal_id, status, done_at, "
-    "labels, issue_type"
+    "labels, issue_type, creator"
 )
 _OUR_LABEL = re.compile(r"^wab-(run_[A-Za-z0-9]+)-(prp_[A-Za-z0-9]+)-([0-9]+)$")
 
@@ -45,6 +47,7 @@ class PracticeTicket:
     done_at: datetime | None
     labels: tuple[str, ...]
     issue_type: str
+    creator: str | None = None
 
 
 @dataclass(frozen=True)
@@ -67,6 +70,7 @@ def _ticket(row: Mapping[str, Any]) -> PracticeTicket:
         done_at=row["done_at"],
         labels=tuple(row["labels"] or ()),
         issue_type=row["issue_type"],
+        creator=row["creator"],
     )
 
 
@@ -78,6 +82,8 @@ class PracticeJira:
         self.token = token
         self.portal_url = portal_url.rstrip("/")
         self._failures: list[Failure] = []
+        self.calls: list[str] = []
+        """Each REST call, as "GET /rest/api/2/search", so a test can see what was asked."""
 
     def fail_next(self, status: int, times: int = 1, retry_after: int | None = None) -> None:
         """Answers the next calls with this status, as a busy or broken Jira would. For tests."""
@@ -90,7 +96,13 @@ class PracticeJira:
         return self._db.clock()
 
     async def create(
-        self, project: str, title: str, body: str, labels: Sequence[str], issue_type: str
+        self,
+        project: str,
+        title: str,
+        body: str,
+        labels: Sequence[str],
+        issue_type: str,
+        creator: str = PRACTICE_ACCOUNT,
     ) -> PracticeTicket:
         """A new ticket, numbered after every other. A label in our write-key shape also fills
         the run columns, so the practice Jira's page can link to the run."""
@@ -109,7 +121,8 @@ class PracticeJira:
                 await uow.conn.execute(
                     "INSERT INTO orchestration.mock_jira_tickets "
                     "(key, number, project, title, body, created_at, run_id, proposal_id, "
-                    "labels, issue_type) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                    "labels, issue_type, creator) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
                     f"RETURNING {_COLUMNS}",
                     (
                         f"{project}-{number}",
@@ -122,6 +135,7 @@ class PracticeJira:
                         None if ours is None else ours.group(2),
                         list(dict.fromkeys(labels)),
                         issue_type,
+                        creator,
                     ),
                 )
             ).fetchone()

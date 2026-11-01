@@ -136,7 +136,7 @@ async def build(settings: Settings) -> Services:
         N8nWebhooks(settings.n8n_base_url, path_for),
         teams,
         agents,
-        WriteGateway(db, [JiraWriteConnector(jira)]),
+        WriteGateway(db, [JiraWriteConnector(jira, db)]),
         mint,
         models=model_settings,
         people=people,

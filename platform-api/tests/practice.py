@@ -37,7 +37,7 @@ class PracticeKit:
         self.client = httpx.AsyncClient(transport=httpx.ASGITransport(app=app))
         auth = JiraAuth.of(flavor, token, PRACTICE_EMAIL)
         self.jira = JiraRestAdapter(BASE, flavor, auth, self.client, sleep=no_wait)
-        self.connector = JiraWriteConnector(self.jira)
+        self.connector = JiraWriteConnector(self.jira, db)
 
     async def execute(self, action: WriteAction, key: WriteKey) -> str:
         return await self.connector.execute(action, key)

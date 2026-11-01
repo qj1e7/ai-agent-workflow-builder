@@ -82,7 +82,21 @@
         "created": "2026-11-03T10:20:31.123+0800",
         "updated": "2026-11-05T16:12:00.000+0800",
         "resolutiondate": "2026-11-05T16:12:00.000+0800",
-        "statuscategorychangedate": "2026-11-05T16:12:00.000+0800"
+        "statuscategorychangedate": "2026-11-05T16:12:00.000+0800",
+        "creator": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10ac8d82e05b22cc7d4ef5",
+          "accountId": "5b10ac8d82e05b22cc7d4ef5",
+          "accountType": "atlassian",
+          "displayName": "AI Workflow Builder",
+          "active": true
+        },
+        "reporter": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10ac8d82e05b22cc7d4ef5",
+          "accountId": "5b10ac8d82e05b22cc7d4ef5",
+          "accountType": "atlassian",
+          "displayName": "AI Workflow Builder",
+          "active": true
+        }
       }
     },
     {
@@ -123,7 +137,21 @@
         "created": "2026-11-03T10:20:31.123+0800",
         "updated": "2026-11-06T09:31:00.000+0800",
         "resolutiondate": null,
-        "statuscategorychangedate": "2026-11-06T09:30:00.000+0800"
+        "statuscategorychangedate": "2026-11-06T09:30:00.000+0800",
+        "creator": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10ac8d82e05b22cc7d4ef5",
+          "accountId": "5b10ac8d82e05b22cc7d4ef5",
+          "accountType": "atlassian",
+          "displayName": "AI Workflow Builder",
+          "active": true
+        },
+        "reporter": {
+          "self": "https://example.atlassian.net/rest/api/3/user?accountId=5b10ac8d82e05b22cc7d4ef5",
+          "accountId": "5b10ac8d82e05b22cc7d4ef5",
+          "accountType": "atlassian",
+          "displayName": "AI Workflow Builder",
+          "active": true
+        }
       }
     }
   ],
