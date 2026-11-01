@@ -122,6 +122,9 @@ class WriteActionDoneData(WireModel):
     operation: str
     external_reference: str
     approved_by: list[UserId]
+    url: str | None = None
+    """Where people open it: a Jira ticket's browse address, or a path in the Portal for the
+    practice Jira. Events from before links have none (ADR 0035)."""
 
 
 class RunSucceededData(WireModel):

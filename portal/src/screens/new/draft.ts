@@ -282,7 +282,7 @@ export function valueOf(form: Form, agent: PlanAgent, input: string): string {
 }
 
 // Jira's own shape (ADR 0035): a capital letter, then capital letters, digits or underscores.
-const PROJECT = /^[A-Z][A-Z0-9_]{0,254}$/
+const PROJECT = /^[A-Z][A-Z0-9_]{1,254}$/
 
 function normalised(kind: InputKind, value: string): string {
   const text = value.trim()

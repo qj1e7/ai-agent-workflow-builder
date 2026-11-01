@@ -15,14 +15,19 @@ N8nExecutionId = NewType("N8nExecutionId", str)
 TaskId = NewType("TaskId", str)
 SoftwareId = NewType("SoftwareId", str)
 
-JIRA_PROJECT_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{0,254}\Z")
-"""A Jira project key as Jira allows it: a capital letter, then capital letters, digits or
-underscores, such as MOCK or AB_1. Data Center allows 255 characters at most (ADR 0035)."""
+JIRA_PROJECT_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{1,254}\Z")
+"""A Jira project key as Jira allows it: a capital letter, then at least one more capital letter,
+digit or underscore, such as MOCK or AB_1. Data Center allows 255 characters at most (ADR 0035)."""
 type TicketStatus = Literal["To Do", "Done"]
 """A Jira ticket's status as the platform reads it: Done is Jira's status category done, and
 every other status counts as To Do, not done yet."""
-JIRA_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{0,254}-[1-9][0-9]{0,8}\Z")
+STORED_JIRA_PROJECT_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{0,254}\Z")
+"""A project key as the platform once allowed it, one letter included. Values saved then keep
+working when read or run. Only a key being entered must take JIRA_PROJECT_PATTERN."""
+JIRA_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{1,254}-[1-9][0-9]{0,8}\Z")
 """A ticket key: a project key, a dash and the ticket's number, such as AB_1-12."""
+STORED_JIRA_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{0,254}-[1-9][0-9]{0,8}\Z")
+"""A ticket key in a project of the older shape, such as A-12."""
 
 
 class Role(Enum):

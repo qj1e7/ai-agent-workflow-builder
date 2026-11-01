@@ -336,13 +336,19 @@ locals {
       memory       = "0.5Gi"
       min_replicas = 0
       max_replicas = 1
-      env = {
-        PORTAL_MODE    = "live"
-        API_UPSTREAM   = local.url["platform-api"]
-        OIDC_AUTHORITY = var.oidc_issuer
-        OIDC_CLIENT_ID = var.oidc_client_id
-        OIDC_SCOPE     = var.oidc_scope
-      }
+      # With a real Jira, ticket keys link there and the Portal hides its Practice Jira page.
+      env = merge(
+        {
+          PORTAL_MODE    = "live"
+          API_UPSTREAM   = local.url["platform-api"]
+          OIDC_AUTHORITY = var.oidc_issuer
+          OIDC_CLIENT_ID = var.oidc_client_id
+          OIDC_SCOPE     = var.oidc_scope
+        },
+        var.jira_base_url == "" ? {} : {
+          JIRA_BROWSE_URL = var.jira_browse_url != "" ? var.jira_browse_url : "${trimsuffix(var.jira_base_url, "/")}/browse/{key}"
+        },
+      )
       secrets = {}
     }
   }

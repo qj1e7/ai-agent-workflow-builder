@@ -144,7 +144,7 @@ With no `JIRA_BASE_URL`, platform-api serves a practice Jira at `/practice-jira`
 - for Cloud, the secret `JIRA_EMAIL`, the account's email;
 - if needed, `JIRA_ISSUE_TYPE` (default `Task`), `JIRA_BROWSE_URL` (default `JIRA_BASE_URL/browse/{key}`) and `WATCHLIST_JIRA_PROJECT` (default `MOCK`).
 
-The plan updates platform-api in place, and adds the `jira-api-token` secret to Key Vault. The practice Jira's routes are then not served. `platform-api/tests/test_jira_contract.py` runs against the real Jira first, with `JIRA_CONTRACT_URL` and the settings its docstring names.
+The plan updates platform-api and the Portal in place, and adds the `jira-api-token` secret to Key Vault. The practice Jira's routes are then not served. The Portal gets `JIRA_BROWSE_URL` too, so ticket keys with no address of their own link to the real Jira, and the Portal hides its Practice Jira page. `platform-api/tests/test_jira_contract.py` runs against the real Jira first, with `JIRA_CONTRACT_URL` and the settings its docstring names.
 
 ## Cost estimate
 

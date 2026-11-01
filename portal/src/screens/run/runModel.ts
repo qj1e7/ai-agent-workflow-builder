@@ -45,6 +45,8 @@ export interface Written {
   readonly connector: string
   readonly operation: string
   readonly ref: string
+  /** Where people open it, as the platform gave it. Older events have none. */
+  readonly url?: string | null
 }
 
 export type ChatItem =
@@ -53,7 +55,14 @@ export type ChatItem =
   | { readonly kind: 'said'; readonly seq: number; readonly speaker: AgentRef; readonly text: string; readonly bad: boolean }
   | { readonly kind: 'asked'; readonly seq: number; readonly channel: string | null; readonly posted: boolean | null }
   | { readonly kind: 'decided'; readonly seq: number; readonly by: string; readonly verdict: Verdict; readonly step: string | null }
-  | { readonly kind: 'written'; readonly seq: number; readonly connector: string; readonly operation: string; readonly refs: readonly string[] }
+  | {
+      readonly kind: 'written'
+      readonly seq: number
+      readonly connector: string
+      readonly operation: string
+      readonly refs: readonly string[]
+      readonly urls?: Readonly<Record<string, string>>
+    }
   | { readonly kind: 'denied'; readonly seq: number }
   | { readonly kind: 'retried'; readonly seq: number; readonly by: string | null }
   | { readonly kind: 'finished'; readonly seq: number; readonly outcome: RunOutcome; readonly count: number; readonly operation: string | null }
@@ -206,13 +215,15 @@ function decided(model: RunModel, event: EventOf<'approval_decided'>): RunModel 
 
 function wrote(model: RunModel, event: EventOf<'write_action_done'>): RunModel {
   const { connector, operation, external_reference: ref } = event.data
-  let next: RunModel = { ...model, connector, written: [...model.written, { connector, operation, ref }], phase: { state: 'acting' } }
+  const url = event.data.url ?? null
+  let next: RunModel = { ...model, connector, written: [...model.written, { connector, operation, ref, url }], phase: { state: 'acting' } }
   next = advanceTo(next, { at: 'write' }, event.seq)
+  const linked = url === null ? {} : { [ref]: url }
   const last = next.chat.at(-1)
   if (last?.kind === 'written' && last.connector === connector && last.operation === operation) {
-    return { ...next, chat: [...next.chat.slice(0, -1), { ...last, refs: [...last.refs, ref] }] }
+    return { ...next, chat: [...next.chat.slice(0, -1), { ...last, refs: [...last.refs, ref], urls: { ...last.urls, ...linked } }] }
   }
-  return say(next, { kind: 'written', seq: event.seq, connector, operation, refs: [ref] })
+  return say(next, { kind: 'written', seq: event.seq, connector, operation, refs: [ref], urls: linked })
 }
 
 function retried(model: RunModel, event: EventOf<'run_retried'>): RunModel {

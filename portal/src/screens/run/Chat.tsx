@@ -72,7 +72,11 @@ function Item({ item, fresh, nameOf, trigger }: { item: ChatItem; fresh: boolean
             ))}
           </span>
         ) : null}
-        <TicketKeys text={line.text} keys={item.kind === 'written' && item.connector === 'jira' ? item.refs : []} />
+        <TicketKeys
+          text={line.text}
+          keys={item.kind === 'written' && item.connector === 'jira' ? item.refs : []}
+          hrefs={item.kind === 'written' ? item.urls : undefined}
+        />
       </span>
     </li>
   )

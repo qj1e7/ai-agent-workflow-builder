@@ -53,7 +53,6 @@ Once the setup is done, the `deploy` workflow runs only on `main`, because the `
 
    | Variable | Value |
    |---|---|
-   | `PRACTICE_JIRA_URL` | leave unset. agent-runtime then reads platform-api's own practice Jira |
    | `AZURE_LOCATION`, `COSMOS_LOCATION`, `COSMOS_SERVERLESS` | only if step 1 or 2 asked for them |
 
    For example `gh secret set FIRST_APPROVERS --env azure-dev` (it asks for the value). The secret `GH_RELEASE_TOKEN` is optional, but set it for the lanes: each lane's check reads GitHub, and without a token Azure's shared address can run out of GitHub's 60 requests an hour.

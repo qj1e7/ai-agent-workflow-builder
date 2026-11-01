@@ -516,6 +516,7 @@ def _act_leg(tl: Timeline, decided_at: float) -> None:
                 connector="jira",
                 operation="create_ticket",
                 external_reference=key,
+                url=f"/jira/{key}",
                 approved_by=[decided.data.by],
             ),
         )

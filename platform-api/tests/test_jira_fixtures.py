@@ -12,7 +12,13 @@ import httpx
 import pytest
 
 from platform_api.db import Database
-from platform_api.orchestration.jira import IssueSearch, JiraFlavor, JiraRefused, NewIssue
+from platform_api.orchestration.jira import (
+    IssueSearch,
+    JiraFlavor,
+    JiraRefused,
+    JiraWriteConnector,
+    NewIssue,
+)
 from platform_api.orchestration.jira_rest import JiraAuth, JiraRestAdapter
 from tests.practice import PracticeKit
 from tests.support import FIXTURES
@@ -267,3 +273,18 @@ async def test_the_label_search_and_the_done_check_quote_every_value(flavor: Jir
         'project = "OPS" AND labels = "wab-run_1-prp_1-0" ORDER BY created ASC',
         'key in ("OPS-7", "OPS-8") AND statusCategory = Done',
     ]
+
+
+async def test_a_browse_address_puts_the_key_in_made_safe(db: Database):
+    client = httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(500)))
+    template = "https://jira.example.com/jira/browse/{key}?from=wab"
+    jira = JiraRestAdapter(
+        BASES["cloud"], "cloud", JiraAuth.bearer("t"), client, browse_url=template
+    )
+    assert jira.browse_url("A B/1") == "https://jira.example.com/jira/browse/A%20B%2F1?from=wab"
+    plain = JiraRestAdapter(BASES["datacenter"], "datacenter", JiraAuth.bearer("t"), client)
+    assert plain.browse_url("OPS-7") == "https://jira.example.com/browse/OPS-7"
+    assert (
+        JiraWriteConnector(jira, db).link("A B/1")
+        == "https://jira.example.com/jira/browse/A%20B%2F1?from=wab"
+    )

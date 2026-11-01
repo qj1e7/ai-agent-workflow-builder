@@ -438,7 +438,8 @@
       "external_reference": "MOCK-150",
       "approved_by": [
         "bob"
-      ]
+      ],
+      "url": "/jira/MOCK-150"
     }
   },
   {
