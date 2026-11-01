@@ -23,6 +23,11 @@ output "platform_api_url" {
   value       = local.url["platform-api"]
 }
 
+output "n8n_editor_url" {
+  description = "Where n8n's editor opens when n8n_editor_external is true. Empty while n8n is internal."
+  value       = var.n8n_editor_external ? local.url["n8n"] : ""
+}
+
 output "job_names" {
   description = "Container Apps Jobs, in the order the deploy workflow runs them."
   value       = [module.job["db-init"].name, module.job["bootstrap"].name]

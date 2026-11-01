@@ -69,3 +69,14 @@ def new_id(prefix: str) -> str:
     head = "".join(_CROCKFORD[(value >> (5 * i)) & 31] for i in range(9, -1, -1))
     tail = "".join(secrets.choice(_CROCKFORD) for _ in range(16))
     return f"{prefix}_{head}{tail}"
+
+
+def has_id_shape(value: str, prefix: str) -> bool:
+    """Whether value looks like new_id(prefix) made it: the prefix, _, and 26 characters."""
+    head, underscore, body = value.partition("_")
+    return (
+        head == prefix
+        and underscore == "_"
+        and len(body) == 26
+        and all(c in _CROCKFORD for c in body)
+    )
