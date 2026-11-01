@@ -11,8 +11,8 @@ label in Jira that anyone could add.
 
 from alembic import op
 
-revision = "0009"
-down_revision = "0008"
+revision = "0010"
+down_revision = "0009"
 
 
 def upgrade() -> None:
