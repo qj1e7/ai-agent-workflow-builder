@@ -1,6 +1,7 @@
 #!/bin/sh
-# Checks the variable rules in a variables.tf for sign-in and the first people:
-# good values pass, and plan refuses what platform-api, agent-runtime or the Portal would refuse. It plans a module that holds only that
+# Checks the variable rules in a variables.tf for sign-in, the first people and n8n's
+# allow list: good values pass, and plan refuses what platform-api, agent-runtime or the Portal
+# would refuse, or what would open n8n wider than meant. It plans a module that holds only that
 # file, so it needs no provider and no credentials. check.sh runs it in the Terraform image.
 # Usage: check-variables.sh <variables.tf>
 set -eu
@@ -54,6 +55,13 @@ expect accepted - "the first people, the Operator also an Approver" \
   -var first_operator=op@example.test -var first_approvers=op@example.test,ap@example.test
 expect accepted - "the first people with spaces and capitals" \
   -var 'first_operator= Op@Example.test ' -var 'first_approvers=Op@Example.test , ap@example.test'
+expect accepted - "n8n's editor open to every address" -var n8n_editor_external=true
+expect accepted - "n8n's editor open to one address" \
+  -var n8n_editor_external=true -var n8n_editor_allowed_ips=203.0.113.7
+expect accepted - "n8n editor addresses and a range, with spaces" \
+  -var n8n_editor_external=true -var 'n8n_editor_allowed_ips= 203.0.113.7/32 , 198.51.100.0/24'
+expect accepted - "n8n editor addresses kept while the editor is closed" -var n8n_editor_allowed_ips=203.0.113.7
+expect accepted - "other inside ranges for n8n" -var n8n_internal_allowed_cidrs=100.100.0.0/16,203.0.113.9
 
 expect refused oidc_issuer "issuer over http" -var oidc_issuer=http://mock-oidc:8080/default
 expect refused oidc_issuer "issuer with no host" -var oidc_issuer=https:///tenant/v2.0
@@ -92,6 +100,21 @@ expect refused first_approvers "an Approver that is not an email" \
   -var first_operator=op@example.test -var first_approvers=a@example.test,bob
 expect refused first_operator "an Operator that is not an email" \
   -var first_operator=alice -var first_approvers=a@example.test,b@example.test
+
+expect refused n8n_editor_allowed_ips "an n8n editor address that is a name" -var n8n_editor_allowed_ips=my-laptop
+expect refused n8n_editor_allowed_ips "an n8n editor address past 255" -var n8n_editor_allowed_ips=203.0.113.256
+expect refused n8n_editor_allowed_ips "an n8n editor address with a leading zero" -var n8n_editor_allowed_ips=203.0.113.07
+expect refused n8n_editor_allowed_ips "an IPv6 n8n editor address" -var n8n_editor_allowed_ips=2001:db8::1
+expect refused n8n_editor_allowed_ips "an n8n editor prefix past 32" -var n8n_editor_allowed_ips=203.0.113.7/33
+expect refused n8n_editor_allowed_ips "the whole internet for n8n's editor" -var n8n_editor_allowed_ips=0.0.0.0/0
+expect refused n8n_editor_allowed_ips "an n8n editor range wider than /16" -var n8n_editor_allowed_ips=198.50.0.0/15
+expect refused n8n_editor_allowed_ips "an n8n editor range that starts mid-range" -var n8n_editor_allowed_ips=198.51.100.7/24
+expect refused n8n_editor_allowed_ips "a home network address for n8n's editor" -var n8n_editor_allowed_ips=192.168.1.23
+expect refused n8n_editor_allowed_ips "an inside address for n8n's editor" -var n8n_editor_allowed_ips=100.100.0.51
+expect refused n8n_editor_allowed_ips "a good n8n editor address and a bad one" -var n8n_editor_allowed_ips=203.0.113.7,10.0.0.1
+expect refused n8n_internal_allowed_cidrs "an inside range that is a word" -var n8n_internal_allowed_cidrs=internal
+expect refused n8n_internal_allowed_cidrs "an inside range wider than /16" -var n8n_internal_allowed_cidrs=100.64.0.0/10
+expect refused n8n_internal_allowed_cidrs "an inside range that starts mid-range" -var n8n_internal_allowed_cidrs=100.100.0.51/17
 
 if [ "$failures" = 0 ]; then
   echo "check-variables.sh: all cases behaved as expected"

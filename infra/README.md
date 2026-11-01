@@ -20,7 +20,7 @@ One environment, `dev`, in the resource group `rg-wab-dev`. The region is Southe
 | Container Apps environment | `cae-wab-dev` | Workload profiles mode with the Consumption profile, logs to Log Analytics |
 | Container App | `platform-api` | External ingress on 8000, 0.25 vCPU, 1 replica always on for the `tick` loop |
 | Container App | `agent-runtime` | Internal ingress on 8100, 0.25 vCPU, scales to zero |
-| Container App | `n8n` | Internal ingress on 5678, 0.5 vCPU, exactly 1 replica |
+| Container App | `n8n` | Internal ingress on 5678, or external when `N8N_EDITOR_EXTERNAL` is `true` ([n8n's editor](#n8ns-editor)), 0.5 vCPU, exactly 1 replica |
 | Container App | `portal` | External ingress on 8080, 0.25 vCPU, scales to zero |
 | Container Apps Job | `db-init` | Creates the per-context database roles. Runs on every deploy |
 | Container Apps Job | `bootstrap` | Migrations, n8n owner, workflow load and lint. Runs on every deploy |
@@ -72,6 +72,9 @@ infra/
 | `AGENT_API_KEY`, `STEP_KEY`, `CALLBACK_SIGNING_KEY` | `.env` | Key Vault secrets |
 | `GITHUB_TOKEN` | `.env`, empty by default | a Key Vault secret from `GH_RELEASE_TOKEN`, only when that secret is set |
 | `AGENT_RUNTIME_URL`, `N8N_BASE_URL`, `PLATFORM_INTERNAL_URL` | `http://<service>:<port>` | `https://<app>.internal.<domain>` or `https://<app>.<domain>` |
+| n8n's `WEBHOOK_URL` | `http://n8n:5678/` | n8n's own address, internal or public |
+| n8n's `N8N_PROTOCOL`, `N8N_HOST`, `N8N_EDITOR_BASE_URL`, `N8N_PROXY_HOPS` | not set | not set while n8n is internal. With its editor open, `https`, `n8n.<domain>`, `https://n8n.<domain>/` and `1` |
+| n8n's `N8N_INSTANCE_OWNER_*` | not set | not set while n8n is internal. With its editor open, `MANAGED_BY_ENV=true`, the `N8N_OWNER_EMAIL` address, the names `Platform Bootstrap`, and `PASSWORD_HASH` as the app's own secret |
 | `CALLBACK_ALLOWED_ORIGINS` | `http://platform-api:8000` | platform-api's HTTPS origin |
 | `PLATFORM_JIRA_URL` (agent-runtime) | `http://platform-api:8000` | platform-api's HTTPS URL. It must be one of `CALLBACK_ALLOWED_ORIGINS` (ADR 0035) |
 | `COSMOS_ENDPOINT` | `http://cosmos:8081`, the emulator | the account's endpoint |
@@ -88,7 +91,7 @@ infra/
 
 Apps call each other over HTTPS, because Container Apps redirects plain HTTP and our HTTP clients do not follow redirects. Traffic between apps in one environment stays inside it.
 
-Every app's address comes from the Container Apps environment's default domain: `https://<app>.<domain>`, or `https://<app>.internal.<domain>` for an internal app. So the Portal and platform-api can each know the other's address without waiting for the other app to exist. Azure picks the domain when it creates the environment, so a new environment gets a new one.
+Every app's address comes from the Container Apps environment's default domain: `https://<app>.<domain>`, or `https://<app>.internal.<domain>` for an internal app. So the Portal and platform-api can each know the other's address without waiting for the other app to exist. Azure picks the domain when it creates the environment, so a new environment gets a new one. n8n's address changes with `N8N_EDITOR_EXTERNAL`, and platform-api and the bootstrap job follow it.
 
 ## Known risk: the database is reachable from Azure
 
@@ -99,6 +102,28 @@ The Cosmos DB account has public access with no IP filter at all, like Key Vault
 The team lead accepted this for the dev and demo environment on 23 Oct 2026. Private networking comes with DevNet.
 
 Changing it later is not a small edit. Private access needs the Container Apps environment inside a virtual network, and an environment cannot join one after it is created. So the move means recreating the environment, which also gives it a new domain and new app addresses.
+
+## n8n's editor
+
+n8n is internal unless the `N8N_EDITOR_EXTERNAL` variable is `true` ([ADR 0034](../docs/adr/0034-open-n8ns-editor-on-azure-with-an-optional-list-of-allowed-addresses.md)). Then its editor is at `https://n8n.<domain>`, the Portal's address with `portal` changed to `n8n`. `terraform output -raw n8n_editor_url` prints it.
+
+- **Sign-in.** Use n8n's owner account: the email in `N8N_OWNER_EMAIL`, and the password in the Key Vault secret `n8n-owner-password`. Reading the secret needs a data role on the vault, such as Key Vault Secrets User, which no person has by default. While the editor is open, n8n refuses to change that account's password or email, because its settings manage the account. The password stays as Terraform holds it: n8n rewrites the owner from Terraform's bcrypt hash on every start, so a hand edit in Key Vault breaks the bootstrap's sign-in until the next apply. To rotate it, mark `random_password.generated["n8n-owner-password"]` for replacement and deploy with `allow_destroy`, while the switch is on.
+- **Who can reach it.** With `N8N_EDITOR_ALLOWED_IPS` unset, every address reaches n8n's sign-in page. That is the operator's choice for now (1 Nov 2026). With it set, Container Apps lets in only those addresses and the ranges in `N8N_INTERNAL_ALLOWED_CIDRS`, and answers anyone else with "RBAC: access denied". n8n reads each visitor's own address (`N8N_PROXY_HOPS=1`), so its sign-in limit of 1000 tries in 5 minutes is per visitor. Its second limit, 5 tries a minute for one email, still lets anyone who knows the owner's email lock out the owner and the bootstrap, which waits up to three minutes and then fails the deploy. Only the list removes that. Set the list before the sponsor demo, and before any real credentials go into n8n. ADR 0034 lists the risks of running without it.
+- **No race for the owner.** Until n8n has an owner, its setup page lets the first visitor become the owner. Two things close that gap:
+  - **The deploy's gate.** The step "Check that n8n may open" (`scripts/n8n-editor-gate.sh`) opens n8n only once the `bootstrap` job has a Succeeded execution in the resource group. On a new environment, n8n stays internal for the first deploy, and the run summary says: "n8n stays internal until the first bootstrap has created its owner. Run the deploy again to open the editor." Later deploys pass the check, so nothing flips. If `az` fails, the deploy stops rather than closing an open editor.
+  - **n8n's own setting.** While the switch is on, n8n creates the owner from its settings (`N8N_INSTANCE_OWNER_MANAGED_BY_ENV`) before it registers any REST route. The password hash is the stored bcrypt hash of `n8n-owner-password`, kept as the n8n app's own secret.
+- **Hand edits.** Each deploy's bootstrap reloads the platform's own n8n workflows, `run`, `schedule_tick` and `run_failure_reporter`, from git. Edits to those three are lost. Other n8n workflows stay.
+- **The plan.** Turning the switch or the list on or off updates the n8n app, platform-api and the bootstrap job in place. In azurerm 5.7.0, no ingress field forces a replace, so the plan guard lets the deploy go ahead. n8n restarts once. The apply changes n8n and platform-api side by side, so for about a minute platform-api can still call n8n's old address. Deploy while no run is in progress.
+
+### What the deploy must confirm
+
+The offline checks cannot show these:
+
+1. **Switch on, no list.** The editor opens at `n8n_editor_url`, which the run summary prints, and the owner can sign in. n8n's log says "N8N_INSTANCE_OWNER_MANAGED_BY_ENV is enabled". The bootstrap job succeeds and logs "owner <email>: signed in", and a test run completes, so platform-api reaches n8n at its new address.
+2. **The gate on a new environment, if one is made.** The first deploy keeps n8n internal and writes the note to the run summary. The second deploy opens it.
+3. **With a list, from a listed address.** The editor opens.
+4. **With a list, from any other address,** such as a phone on mobile data. The answer is "RBAC: access denied". This also shows that the inside ranges do not let outsiders in.
+5. **With a list, the platform's own calls.** The bootstrap job succeeds, and a test run completes. This is the one check of the inside ranges. If either fails with HTTP 403 ("RBAC: access denied"), unset `N8N_EDITOR_ALLOWED_IPS` and deploy again, which restores runs. Then find where the calls come from. If they leave through the environment's public address, `az containerapp show --name platform-api --resource-group rg-wab-dev --query properties.outboundIpAddresses` lists it, and it goes in `N8N_INTERNAL_ALLOWED_CIDRS`. That address can be shared with other Azure customers, so n8n's sign-in matters again.
 
 ## Cost estimate
 
@@ -149,7 +174,7 @@ If the repository is made public later, add required reviewers and "Prevent self
    Do this before step 5. The deploy identity's federated credential trusts any workflow job that names `environment: azure-dev`. A workflow that names an environment that does not exist creates it, with no rules at all. So if the credential came first, a workflow on any branch could act as the deploy identity.
 5. **Create the state storage, the resource group and the deploy identity.** Follow [bootstrap/README.md](bootstrap/README.md). It prints five values for step 7.
 6. **Register the Entra ID apps.** Follow [docs/auth/entra-setup.md](../docs/auth/entra-setup.md). It creates the two app registrations, with the app roles `Operator` and `Approver` on platform-api's, and gives the values for the `OIDC_` variables in step 7. The Portal's address does not exist until the first deploy, so register the Portal app without its redirect URIs for now. If the university tenant does not let students register apps, this step needs a tenant that does, because app roles live on an app registration. The deploy identity from step 5 does not have this problem, because it is a managed identity.
-7. **Set the environment's secrets and variables.** On the `azure-dev` environment, add these. The repository is public, so anyone can read the deploy's logs, and GitHub masks only secret values. So every value that names a person, an ID or the state storage goes under Secrets. Only the region and the Cosmos DB switches go under Variables.
+7. **Set the environment's secrets and variables.** On the `azure-dev` environment, add these. The repository is public, so anyone can read the deploy's logs, and GitHub masks only secret values. So every value that names a person, an ID or the state storage goes under Secrets, and so do the addresses allowed to reach n8n. Only settings that name nobody go under Variables: the region, the Cosmos DB switches, and n8n's switch and inside ranges.
 
    | Secret | Value |
    |---|---|
@@ -167,12 +192,15 @@ If the repository is made public later, add required reviewers and "Prevent self
    | `N8N_OWNER_EMAIL` | the email for the n8n owner account |
    | `FIRST_OPERATOR` | the work email of the first Operator. Needed on the first deploy |
    | `FIRST_APPROVERS` | the work emails of the first two Approvers, separated by a comma. Two different people. The first Operator may be one of them |
+   | `N8N_EDITOR_ALLOWED_IPS` | optional. Public IPv4 addresses or ranges that may reach n8n, separated by commas, such as `203.0.113.7,198.51.100.0/24`. Used only while `N8N_EDITOR_EXTERNAL` is `true`. Unset lets every address reach n8n's sign-in page ([n8n's editor](#n8ns-editor)) |
 
    | Variable | Value |
    |---|---|
    | `AZURE_LOCATION` | optional. The region for every resource. Unset means `southeastasia`. Set it before the first deploy only: changing it later replaces everything, PostgreSQL included |
    | `COSMOS_LOCATION` | optional. A region for Cosmos DB alone, when it is refused in `AZURE_LOCATION` |
    | `COSMOS_SERVERLESS` | optional. `true` makes a serverless Cosmos DB account, for when the free tier is refused. Unset means `false` |
+   | `N8N_EDITOR_EXTERNAL` | optional. `true` opens n8n's editor at `https://n8n.<domain>`, once a bootstrap has succeeded. Unset means `false`: n8n stays internal ([n8n's editor](#n8ns-editor)) |
+   | `N8N_INTERNAL_ALLOWED_CIDRS` | optional. Ranges, separated by commas, that `N8N_EDITOR_ALLOWED_IPS` adds for the platform's own calls to n8n. Unset means `100.100.0.0/17,100.100.128.0/19,100.100.160.0/19,100.100.192.0/19`. Change it only if the deploy shows those calls come from elsewhere |
 
    With the GitHub CLI, each is one command, for example `gh secret set AZURE_TENANT_ID --env azure-dev` (it asks for the value) or `gh variable set AZURE_LOCATION --env azure-dev --body eastasia`.
 8. **Run the deploy.** In the Actions tab, run the `deploy` workflow on `main`. Leave `allow_destroy` off. The workflow then:
@@ -217,10 +245,11 @@ The script runs, each in a Docker image pinned by digest:
 
 1. `terraform fmt -check -recursive`
 2. `terraform init -backend=false`, then `terraform validate`, for each environment
-3. `scripts/check-variables.sh`, which plans each environment's `variables.tf` alone with good sign-in values and with each kind of value that platform-api or the Portal would refuse at startup
+3. `scripts/check-variables.sh`, which plans each environment's `variables.tf` alone with good sign-in values and with each kind of value that platform-api or the Portal would refuse at startup, or that would open n8n wider than meant
 4. `tofu init -backend=false`, then `tofu validate`, on a copy without the lock file
-5. `tflint` with the `terraform` and `azurerm` rulesets (`.tflint.hcl`)
-6. Checkov's Terraform checks
+5. `scripts/check-n8n-editor-gate.sh`, which runs the deploy's gate for n8n's editor against a fake `az`
+6. `tflint` with the `terraform` and `azurerm` rulesets (`.tflint.hcl`)
+7. Checkov's Terraform checks
 
 CI runs the same script in the `infra` workflow, only when a pull request changes `infra/` or one of the two infrastructure workflows. It also runs `actionlint` on every workflow. Semgrep's `p/terraform` rules run in the main CI's SAST step.
 

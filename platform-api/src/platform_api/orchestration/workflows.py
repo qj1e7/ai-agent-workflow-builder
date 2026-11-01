@@ -32,9 +32,10 @@ TICK_INTERVAL = [{"field": "minutes", "minutesInterval": 5}]
 MIN_RETRY_WAIT = timedelta(milliseconds=2000)
 
 _PLACEHOLDER = re.compile(r"\$\{([A-Z_]+)\}")
+# run_id comes from a webhook body, so it is encoded: "../schedules/tick#" must stay one segment.
 _STEP_URL = re.compile(
     r"^(?P<base>.+)/internal/v1/runs/"
-    r"\{\{ \$\('(?P<webhook>[^']+)'\)\.first\(\)\.json\.body\.run_id \}\}"
+    r"\{\{ encodeURIComponent\(\$\('(?P<webhook>[^']+)'\)\.first\(\)\.json\.body\.run_id\) \}\}"
     r"/steps/(?P<step>[a-z_]+)$"
 )
 
@@ -351,8 +352,8 @@ def _step_order(d: WorkflowDefinition) -> list[Finding]:
                     Finding(
                         Rule.STEP_ORDER,
                         d.name,
-                        f"'{node.name}' must call .../runs/{{{{ $('{webhook.name}')"
-                        f".first().json.body.run_id }}}}/steps/<step>",
+                        f"'{node.name}' must call .../runs/{{{{ encodeURIComponent("
+                        f"$('{webhook.name}').first().json.body.run_id) }}}}/steps/<step>",
                     )
                 )
             elif parsed.webhook != webhook.name:

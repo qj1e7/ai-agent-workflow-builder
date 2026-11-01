@@ -154,7 +154,7 @@ def test_step_route_refuses_a_bad_step_name():
     app.state.orchestrator = None
     client = TestClient(app)
     r = client.post(
-        "/internal/v1/runs/run_1/steps/delete_everything",
+        "/internal/v1/runs/run_01JD1Z7K9Q3M5N8P2R4T6V8W0X/steps/delete_everything",
         headers={"X-Step-Key": LOCAL["STEP_KEY"], "X-N8N-Execution": "1"},
     )
     assert r.status_code == 422
@@ -223,13 +223,49 @@ def test_a_refused_decision_answers_the_documented_refusal_body(refusing_client:
     }
 
 
+# The shape new_id("run") makes: run_ and 26 characters of Crockford's base 32.
+A_RUN_ID = "run_01JD1Z7K9Q3M5N8P2R4T6V8W0X"
+
+
 def test_a_step_told_to_retry_answers_the_documented_retry_body(refusing_client: TestClient):
     r = refusing_client.post(
-        "/internal/v1/runs/run_1/steps/run_agents",
+        f"/internal/v1/runs/{A_RUN_ID}/steps/run_agents",
         headers={"X-Step-Key": LOCAL["STEP_KEY"], "X-N8N-Execution": "1"},
     )
     assert r.status_code == 503
     assert r.json() == {"detail": "n8n is still starting", "retryable": True}
+
+
+@pytest.mark.parametrize(
+    "run_id",
+    [
+        "run_1",
+        A_RUN_ID[:-1],
+        A_RUN_ID + "X",
+        A_RUN_ID.lower(),
+        A_RUN_ID[:-1] + "O",
+        "apr_" + A_RUN_ID.removeprefix("run_"),
+        "run_01JD1Z7K9Q3M5N8P2R4T6V8W0X#",
+    ],
+)
+def test_step_route_refuses_a_run_id_that_is_not_one(refusing_client: TestClient, run_id: str):
+    """n8n's run workflow takes run_id from a webhook that anyone may call while the editor is
+    open (ADR 0034). The step key is real, so the route checks the id's shape before the
+    orchestrator sees it. The refusing orchestrator would answer 503."""
+    r = refusing_client.post(
+        f"/internal/v1/runs/{run_id.replace('#', '%23')}/steps/run_agents",
+        headers={"X-Step-Key": LOCAL["STEP_KEY"], "X-N8N-Execution": "1"},
+    )
+    assert r.status_code == 422
+    assert r.json() == {"detail": "Not a run id"}
+
+
+def test_a_bad_step_key_is_refused_before_the_run_id_is_looked_at(refusing_client: TestClient):
+    r = refusing_client.post(
+        "/internal/v1/runs/run_1/steps/run_agents",
+        headers={"X-Step-Key": "wrong", "X-N8N-Execution": "1"},
+    )
+    assert r.status_code == 401
 
 
 # The image's command, `uvicorn platform_api.app:create_app --factory`: uvicorn sets up its own
