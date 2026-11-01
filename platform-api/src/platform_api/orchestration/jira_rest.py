@@ -24,6 +24,7 @@ from platform_api.orchestration.jira import (
     JiraUnavailable,
     NewIssue,
     TicketStatus,
+    jira_summary,
 )
 
 type Sleep = Callable[[float], Awaitable[None]]
@@ -33,10 +34,9 @@ ATTEMPTS: Final = 3
 MAX_WAIT_SECONDS: Final = 5.0
 """The longest the adapter waits between tries, whatever Retry-After asks. The gateway treats a
 write as lost after 30 seconds, so every wait together stays well under that."""
-SUMMARY_LIMIT: Final = 255
 FIELDS: Final = (
     "summary,description,status,project,labels,created,updated,resolutiondate,"
-    "statuscategorychangedate,creator,reporter"
+    "statuscategorychangedate,creator"
 )
 KEYS_PER_SEARCH: Final = 50
 _RETRY_STATUSES: Final = frozenset({429, 500, 502, 503, 504})
@@ -255,13 +255,15 @@ class JiraRestAdapter:
             created_at=created,
             done_at=done_at,
             labels=tuple(str(label) for label in json_list(fields.get("labels"))),
-            creator=self._account(fields.get("creator")) or self._account(fields.get("reporter")),
+            # Only the creator says who made a ticket. Anyone allowed to modify the reporter can
+            # name any account there, so the reporter proves nothing.
+            creator=self._account(fields.get("creator")),
         )
 
     async def create_issue(self, issue: NewIssue) -> str:
         fields: dict[str, Any] = {
             "project": {"key": issue.project},
-            "summary": _one_line(issue.title, SUMMARY_LIMIT),
+            "summary": jira_summary(issue.title),
             "issuetype": {"name": self._issue_type},
         }
         if issue.body:

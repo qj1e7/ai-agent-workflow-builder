@@ -102,7 +102,7 @@ class PracticeJira:
         body: str,
         labels: Sequence[str],
         issue_type: str,
-        creator: str = PRACTICE_ACCOUNT,
+        creator: str | None = PRACTICE_ACCOUNT,
     ) -> PracticeTicket:
         """A new ticket, numbered after every other. A label in our write-key shape also fills
         the run columns, so the practice Jira's page can link to the run."""
@@ -172,6 +172,14 @@ class PracticeJira:
                 )
             ).fetchall()
         return [_ticket(row) for row in rows]
+
+    async def set_labels(self, key: str, labels: Sequence[str]) -> None:
+        """Changes a ticket's labels, as a person may in Jira's own screens. For tests."""
+        async with self._db.transaction("orchestration") as uow:
+            await uow.conn.execute(
+                "UPDATE orchestration.mock_jira_tickets SET labels = %s WHERE key = %s",
+                (list(labels), key),
+            )
 
     async def mark_done(self, key: str) -> PracticeTicket | None:
         """Moves a ticket to Done. A ticket already Done keeps its first done time."""

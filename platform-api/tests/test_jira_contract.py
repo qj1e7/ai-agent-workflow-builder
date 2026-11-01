@@ -330,3 +330,54 @@ async def test_the_connector_turns_a_refusal_into_a_write_that_is_not_retried(
     action = WriteAction("jira", "create_ticket", {"project": "MOCK"}, {"title": "", "body": ""})
     with pytest.raises(WriteRefused):
         await connector.execute(action, WriteKey(RunId("run_1"), ProposalId("prp_1"), 0))
+
+
+async def crashed(connector: JiraWriteConnector, key: WriteKey) -> None:
+    """As if a try for this key began, and the platform stopped before noting a ticket."""
+    await connector.records.creating(key.text)
+
+
+async def ours(target: Target, title: str, labels: list[str]) -> str:
+    return await target.jira.create_issue(NewIssue("MOCK", title, "", tuple(labels)))
+
+
+async def test_a_found_ticket_with_no_creator_is_refused(target: Target, db: Database):
+    practice = target.needs_practice()
+    connector = JiraWriteConnector(target.jira, db)
+    await practice.create("MOCK", "Upgrade", "", [write_label(WRITE)], "Task", creator=None)
+    await crashed(connector, WRITE)
+    with pytest.raises(WriteRefused, match="did not make it"):
+        await connector.execute(ACTION, WRITE)
+
+
+async def test_a_found_ticket_already_recorded_for_another_write_is_refused(
+    target: Target, db: Database
+):
+    target.needs_practice()
+    connector = JiraWriteConnector(target.jira, db)
+    other = WriteKey(WRITE.run_id, WRITE.proposal_id, 5)
+    theirs = await connector.execute(ACTION, other)
+    # A person gave that ticket this write's label and took the other one off.
+    await target.needs_practice().set_labels(theirs, [write_label(WRITE)])
+    await crashed(connector, WRITE)
+    with pytest.raises(WriteRefused, match="another write"):
+        await connector.execute(ACTION, WRITE)
+
+
+async def test_a_found_ticket_with_another_writes_label_is_refused(target: Target, db: Database):
+    target.needs_practice()
+    connector = JiraWriteConnector(target.jira, db)
+    other = WriteKey(WRITE.run_id, WRITE.proposal_id, 6)
+    await ours(target, "Upgrade", [write_label(other), write_label(WRITE)])
+    await crashed(connector, WRITE)
+    with pytest.raises(WriteRefused, match="another write"):
+        await connector.execute(ACTION, WRITE)
+
+
+async def test_a_found_ticket_with_another_title_is_refused(target: Target, db: Database):
+    target.needs_practice()
+    connector = JiraWriteConnector(target.jira, db)
+    await ours(target, "Rotate the keys", [write_label(WRITE)])
+    await crashed(connector, WRITE)
+    with pytest.raises(WriteRefused, match="title"):
+        await connector.execute(ACTION, WRITE)

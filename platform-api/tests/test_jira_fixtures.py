@@ -143,6 +143,25 @@ async def test_the_platform_learns_its_own_account_once_and_reads_who_made_a_tic
 
 
 @pytest.mark.parametrize("flavor", ["datacenter", "cloud"])
+async def test_who_made_a_ticket_comes_from_its_creator_never_its_reporter(flavor: JiraFlavor):
+    raw = fixture(flavor, "issue.json")
+    mine = raw["fields"]["creator"]
+    someone = {"accountId": "mallory", "name": "mallory", "key": "mallory"}
+    planted = {**raw, "fields": {**raw["fields"], "creator": someone, "reporter": mine}}
+    orphan = {**raw, "fields": {**raw["fields"], "creator": None, "reporter": mine}}
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=planted if request.url.path.endswith("OPS-1") else orphan)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(answer))
+    jira = JiraRestAdapter(BASES[flavor], flavor, JiraAuth.bearer("t"), client)
+    first = await jira.get_issue("OPS-1")
+    second = await jira.get_issue("OPS-2")
+    assert first is not None and first.creator == "mallory"
+    assert second is not None and second.creator is None
+
+
+@pytest.mark.parametrize("flavor", ["datacenter", "cloud"])
 async def test_moving_to_done_takes_the_transition_into_the_done_category(flavor: JiraFlavor):
     seen: list[httpx.Request] = []
     answers = {

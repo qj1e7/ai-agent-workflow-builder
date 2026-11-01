@@ -6,6 +6,7 @@ Jira. Nothing here decides whether a write may happen: only an AuthorizedWrite r
 gateway, and the gateway alone calls the connector.
 """
 
+import re
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -94,6 +95,17 @@ class JiraPort(Protocol):
     def browse_url(self, key: str) -> str: ...
 
 
+SUMMARY_LIMIT = 255
+
+
+def jira_summary(title: str) -> str:
+    """A title as Jira's summary: one line of at most 255 characters."""
+    return " ".join(title.split())[:SUMMARY_LIMIT]
+
+
+_WRITE_LABEL = re.compile(r"^wab-run_[A-Za-z0-9]+-prp_[A-Za-z0-9]+-[0-9]+$")
+
+
 def write_label(key: WriteKey) -> str:
     """Our write key as a Jira label. It is only a hint for finding a ticket after a crash: anyone
     who can edit tickets in the project can add it, so it never proves a ticket is ours."""
@@ -136,6 +148,18 @@ class JiraWriteRecords:
                 "VALUES (%s, %s) ON CONFLICT (idempotency_key) DO NOTHING",
                 (key, uow.now),
             )
+
+    async def recorded_for(self, ticket: str) -> str | None:
+        """The write key our record gives this ticket, if any."""
+        async with self._db.transaction("orchestration") as uow:
+            row = await (
+                await uow.conn.execute(
+                    "SELECT idempotency_key FROM orchestration.jira_writes WHERE ticket_key = %s "
+                    "LIMIT 1",
+                    (ticket,),
+                )
+            ).fetchone()
+        return None if row is None else str(row["idempotency_key"])
 
     async def made(self, key: str, ticket: str) -> None:
         async with self._db.transaction("orchestration") as uow:
@@ -182,27 +206,17 @@ class JiraWriteConnector:
         record = await self.records.get(key.text)
         if record is not None and record.ticket_key is not None:
             return record.ticket_key
+        title = str(action.fields.get("title", ""))
         if record is not None:
             found = await self._jira.find_by_label(project, label)
             if found is not None:
-                ours = found.creator is not None and found.creator == await self._jira.whoami()
-                if not ours or found.created_at < record.started_at - RECOVERY_SKEW:
-                    raise WriteRefused(
-                        f"Jira already has {found.key} with this write's label, but the "
-                        "platform did not make it. A person needs to check that ticket, then "
-                        "start a new run."
-                    )
+                await self._accept(found, key, label, title, record)
                 await self.records.made(key.text, found.key)
                 return found.key
         await self.records.creating(key.text)
         try:
             ticket = await self._jira.create_issue(
-                NewIssue(
-                    project,
-                    str(action.fields.get("title", "")),
-                    str(action.fields.get("body", "")),
-                    (label,),
-                )
+                NewIssue(project, title, str(action.fields.get("body", "")), (label,))
             )
         except JiraError as error:
             # A 4xx answer means Jira made nothing. A 5xx or no answer may hide a made ticket.
@@ -211,3 +225,29 @@ class JiraWriteConnector:
             raise
         await self.records.made(key.text, ticket)
         return ticket
+
+    async def _accept(
+        self, found: JiraIssue, key: WriteKey, label: str, title: str, record: JiraWrite
+    ) -> None:
+        """Refuses, for a person to check, a ticket found by this write's label that the
+        platform can't prove it made for this write: made by another account, or by no
+        account; made before the write began; already recorded for another write; carrying
+        another write's label; or with another title."""
+
+        def refuse(why: str) -> WriteRefused:
+            return WriteRefused(
+                f"Jira already has {found.key} with this write's label, but {why}. A person "
+                "needs to check that ticket, then start a new run."
+            )
+
+        if found.creator is None or found.creator != await self._jira.whoami():
+            raise refuse("the platform did not make it")
+        if found.created_at < record.started_at - RECOVERY_SKEW:
+            raise refuse("it was made before this write began")
+        recorded = await self.records.recorded_for(found.key)
+        if recorded is not None and recorded != key.text:
+            raise refuse("the platform made it for another write")
+        if any(_WRITE_LABEL.match(other) and other != label for other in found.labels):
+            raise refuse("it also carries another write's label")
+        if found.title != jira_summary(title):
+            raise refuse("its title is not this write's title")
