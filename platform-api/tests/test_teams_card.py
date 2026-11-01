@@ -22,6 +22,7 @@ from platform_api.orchestration.teams import (
     TeamsWorkflowsWebhook,
     approval_card,
     check_card,
+    inert,
     outcome_card,
     webhook_message,
     with_outcome,
@@ -362,3 +363,26 @@ def test_the_one_time_check_card_carries_every_kind_of_markup_made_harmless():
     ):
         assert typed in joined
     assert not any("://" in run or "](" in run for run in runs)
+
+
+@pytest.mark.parametrize(
+    ("raw", "shown"),
+    [
+        ("_https://evil.example", "_https[:]//evil[.]example"),
+        ("*https://evil.example*", "*https[:]//evil[.]example*"),
+        ("1www.evil.example", "1www[.]evil[.]example"),
+        ("x_mailto:a@b.example", "x_mailto[:]a@b.example"),
+        ("HTTPS://EVIL.EXAMPLE", "HTTPS[:]//EVIL[.]EXAMPLE"),
+        ("WWW.EVIL.EXAMPLE", "WWW[.]EVIL[.]EXAMPLE"),
+        ("MAILTO:A@B.EXAMPLE", "MAILTO[:]A@B.EXAMPLE"),
+        ("https:\u200b//evil.example", "https[:]//evil[.]example"),
+        ("w\u200dww.evil\u2060.example", "www[.]evil[.]example"),
+        ("mail\ufeffto:a@b.example", "mailto[:]a@b.example"),
+        ("[x](https://evil.example)", "[x] (https[:]//evil[.]example)"),
+        ("www.a.example/https://b.example", "www[.]a[.]example/https[:]//b[.]example"),
+        ("Upgrade LangGraph to 1.2.16.", "Upgrade LangGraph to 1.2.16."),
+    ],
+)
+def test_an_address_is_broken_wherever_it_starts_even_inside_a_word(raw: str, shown: str):
+    # A word character before the scheme must not hide it: Teams may still link from "https" on.
+    assert inert(raw) == shown

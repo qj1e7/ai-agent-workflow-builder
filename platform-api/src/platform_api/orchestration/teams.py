@@ -109,21 +109,23 @@ def _runs(*runs: TextRun) -> RichTextBlock:
     return RichTextBlock(inlines=list(runs))
 
 
-_LINKLIKE = re.compile(r"(?i)\b(?:[a-z][a-z0-9+.-]*://|www\.)[^\s<>()\[\]]+")
-
-
-def _break_address(match: re.Match[str]) -> str:
-    return match.group(0).replace("://", "[:]//").replace(".", "[.]")
+_INVISIBLE = re.compile("[\u00ad\u200b-\u200d\u2060\ufeff]")
+_AFTER_MARKER = re.compile(r"(?i)(?:(?<=://)|(?<=www\.))[^\s<>()\[\]]+")
 
 
 def inert(text: str) -> str:
-    """text with nothing a reader could follow: each web address and www name has its "://" and
-    dots broken, a markdown link loses its "](", and "mailto:" loses its colon. Teams says every
-    card text field takes basic markdown, and nothing says whether it links a bare address in a
-    TextRun, so text we did not write never holds a working link (ADR 0036)."""
-    text = _LINKLIKE.sub(_break_address, text)
-    text = text.replace("](", "] (")
-    return re.sub(r"(?i)\bmailto:", lambda m: m.group(0)[:-1] + "[:]", text)
+    """text with nothing a reader could follow. Invisible characters go first, so none can split a
+    marker. Then every "://" becomes "[:]//", every "www." becomes "www[.]", every "mailto:" loses
+    its colon, and the dots after "://" or "www." are broken, wherever they appear, even inside a
+    word, in any case. A markdown link loses its "](". Teams says every card text field takes
+    basic markdown, and nothing says whether it links a bare address in a TextRun, so text we did
+    not write never holds a working link (ADR 0036)."""
+    text = _INVISIBLE.sub("", text)
+    text = _AFTER_MARKER.sub(lambda m: m.group(0).replace(".", "[.]"), text)
+    text = text.replace("://", "[:]//")
+    text = re.sub(r"(?i)www\.", lambda m: m.group(0)[:3] + "[.]", text)
+    text = re.sub(r"(?i)mailto:", lambda m: m.group(0)[:6] + "[:]", text)
+    return text.replace("](", "] (")
 
 
 def _plain(
