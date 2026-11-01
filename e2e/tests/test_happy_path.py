@@ -37,6 +37,11 @@ def test_a_watchlist_check_runs_through_approval_to_one_ticket(api: Api) -> None
     assert message["approval_id"] == approval_id
     assert approval_id in message["link"]
     assert EXPECTED_TITLE in message["text"]
+    # The practice copy keeps the Adaptive Card a real channel gets (ADR 0036). Its one button opens
+    # the approval page at its full address, because Teams opens it outside the Portal.
+    [button] = message["card"]["actions"]
+    assert button["type"] == "Action.OpenUrl"
+    assert button["url"].startswith("http") and button["url"].endswith(f"/approvals/{approval_id}")
 
     alice_view = api.get("alice", f"/api/v1/approvals/{approval_id}")
     assert alice_view["you_can_decide"] is False

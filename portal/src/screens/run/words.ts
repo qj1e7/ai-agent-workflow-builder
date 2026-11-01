@@ -222,10 +222,6 @@ export function lockWords(whyNot: Refusal | null, party: Party | null): string {
   }
 }
 
-export function teamsLockWords(whyNot: Refusal | null): string {
-  return whyNot === 'own_work' ? 'This run is your own work, so another Approver must decide.' : lockWords(whyNot, null)
-}
-
 export const RUN_MISSING = { heading: 'Run not found', lead: 'There is no run at this address.' } as const
 export const RUN_PROBLEM = { heading: 'We couldn’t load this run', lead: 'Check your connection, or try again in a moment.' } as const
 

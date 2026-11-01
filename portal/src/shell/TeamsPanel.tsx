@@ -1,16 +1,13 @@
-import { useCallback, useEffect, useRef, useState, type RefObject, type SyntheticEvent } from 'react'
-import { displayName, usePeople } from '../api/people'
-import { POLL_MS, useApproval, useApprovals, useRuns, useTeamsMessages } from '../api/queries'
-import type { ApprovalView, Me, RunView, TeamsStubMessage } from '../api/types'
-import { useDecision, type Decision } from '../screens/run/decision'
-import { andList, shortTime, teamsLockWords, type NameOf } from '../screens/run/words'
-import { Button, ButtonLink } from '../ui/Button'
-import { cx } from '../ui/cx'
-import { useFocusWhenReady } from '../ui/focus'
-import { IconCheck, IconLock, IconX } from '../ui/icons'
+import { useCallback, useEffect, useRef, useState, type SyntheticEvent } from 'react'
+import { useApprovals, useRuns, useTeamsMessages } from '../api/queries'
+import type { Me, RunView, TeamsStubMessage } from '../api/types'
+import { shortTime } from '../screens/run/words'
+import { ButtonLink } from '../ui/Button'
+import { IconX } from '../ui/icons'
 import { motionAllowed } from '../ui/motion'
 import { ChatIcon, Mark } from './icons'
 import { PRODUCT } from './product'
+import { AdaptiveCardView } from './TeamsCard'
 import iconButton from './IconButton.module.css'
 import styles from './TeamsPanel.module.css'
 
@@ -56,119 +53,36 @@ export function badgeAsks(runs: readonly RunView[], messages: readonly TeamsStub
   return { ids: ids.slice(0, BADGE_MAX_ASKS), more: ids.length > BADGE_MAX_ASKS }
 }
 
-export type TeamsAction =
-  | { readonly kind: 'loading' }
-  | { readonly kind: 'decide' }
-  | { readonly kind: 'locked'; readonly words: string }
-  | { readonly kind: 'decided'; readonly verdict: 'approve' | 'decline'; readonly by: string }
-
-export function teamsActionOf(approval: ApprovalView | undefined, nameOf: NameOf): TeamsAction {
-  if (!approval) return { kind: 'loading' }
-  const declined = approval.steps.find((step) => step.status === 'declined')
-  if (declined) return { kind: 'decided', verdict: 'decline', by: nameOf(declined.decided_by ?? '') }
-  if (approval.steps.length > 0 && approval.steps.every((step) => step.status === 'approved')) {
-    return { kind: 'decided', verdict: 'approve', by: andList(approval.steps.map((step) => nameOf(step.decided_by ?? ''))) }
-  }
-  if (approval.you_can_decide) return { kind: 'decide' }
-  return { kind: 'locked', words: teamsLockWords(approval.why_not) }
-}
-
-interface ActionsProps {
-  readonly action: TeamsAction
-  readonly link: string
-  readonly decision: Pick<Decision, 'pending' | 'error' | 'decide'>
-  readonly onOpen: () => void
-}
-
-export function TeamsActions({ action, link, decision, onOpen }: ActionsProps) {
-  const open = (
-    <ButtonLink to={link} onClick={onOpen}>
-      Open in {PRODUCT}
-    </ButtonLink>
-  )
-  switch (action.kind) {
-    case 'loading':
-      return <div className={styles['buttons']}>{open}</div>
-    case 'decide': {
-      const busy = decision.pending !== null
-      return (
-        <>
-          <div className={styles['buttons']}>
-            <Button variant="approve" loading={decision.pending === 'approve'} disabled={busy && decision.pending !== 'approve'} onClick={() => decision.decide('approve')}>
-              Approve
-            </Button>
-            <Button loading={decision.pending === 'decline'} disabled={busy && decision.pending !== 'decline'} onClick={() => decision.decide('decline')}>
-              Decline
-            </Button>
-            {open}
-          </div>
-          {decision.error ? (
-            <p className={styles['error']} role="alert">
-              {decision.error}
-            </p>
-          ) : null}
-        </>
-      )
-    }
-    case 'locked':
-      return (
-        <>
-          <div className={styles['lock']}>
-            <IconLock size={18} />
-            <span>{action.words}</span>
-          </div>
-          <div className={styles['buttons']}>{open}</div>
-        </>
-      )
-    case 'decided':
-      return (
-        <>
-          <span className={cx(styles['pill'], action.verdict === 'approve' ? styles['ok'] : styles['bad'])} tabIndex={-1} data-decided="">
-            {action.verdict === 'approve' ? <IconCheck size={12} /> : <IconX size={12} />}
-            {action.verdict === 'approve' ? `Approved by ${action.by}` : `Declined by ${action.by}`}
-          </span>
-          <div className={styles['buttons']}>{open}</div>
-        </>
-      )
-  }
-}
-
 function linkOf(message: TeamsStubMessage): string {
   return message.link.startsWith('/') ? message.link : `/approvals/${message.approval_id}`
 }
 
-interface OnScreen {
-  readonly now: boolean
-  readonly ever: boolean
-}
-
-const ALWAYS_ON_SCREEN: OnScreen = { now: true, ever: true }
-
-function useOnScreen(ref: RefObject<Element | null>): OnScreen {
-  const [seen, setSeen] = useState<OnScreen>(() => (typeof IntersectionObserver === 'function' ? { now: false, ever: false } : ALWAYS_ON_SCREEN))
-  useEffect(() => {
-    const node = ref.current
-    if (!node || typeof IntersectionObserver !== 'function') return
-    const watch = new IntersectionObserver((entries) => {
-      const now = entries.at(-1)?.isIntersecting ?? false
-      setSeen((was) => (was.now === now ? was : { now, ever: was.ever || now }))
-    })
-    watch.observe(node)
-    return () => watch.disconnect()
-  }, [ref])
-  return seen
-}
-
-function Message({ message, nameOf, onOpen }: { message: TeamsStubMessage; nameOf: NameOf; onOpen: () => void }) {
-  const item = useRef<HTMLLIElement>(null)
-  const onScreen = useOnScreen(item)
-  const approval = useApproval(message.approval_id, { poll: onScreen.now ? POLL_MS : false, enabled: onScreen.ever })
-  const action = teamsActionOf(approval.data, nameOf)
-  const focusPill = useFocusWhenReady(action.kind === 'decided', () => item.current?.querySelector<HTMLElement>('[data-decided]'))
-  const decision = useDecision(approval.data, null, focusPill)
-
+/**
+ * The message as a real Teams channel shows it: the platform's Adaptive Card, with one link to the
+ * approval page and no Approve or Decline button (ADR 0036). The Approver decides on that page.
+ */
+export function MessageBody({ message, onOpen }: { message: TeamsStubMessage; onOpen: () => void }) {
   return (
-    <li className={styles['message']} ref={item} data-approval-id={message.approval_id}>
+    <div className={styles['card']}>
+      {message.card ? (
+        <AdaptiveCardView card={message.card} onOpen={onOpen} />
+      ) : (
+        <>
+          <p>{message.text}</p>
+          <div className={styles['buttons']}>
+            <ButtonLink to={linkOf(message)} onClick={onOpen}>
+              Open in {PRODUCT}
+            </ButtonLink>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function Message({ message, onOpen }: { message: TeamsStubMessage; onOpen: () => void }) {
+  return (
+    <li className={styles['message']} data-approval-id={message.approval_id}>
       <span className={styles['app']}>
         <Mark height={14} />
       </span>
@@ -176,10 +90,7 @@ function Message({ message, nameOf, onOpen }: { message: TeamsStubMessage; nameO
         <p className={styles['meta']}>
           <b>{PRODUCT}</b> · {shortTime(message.ts)}
         </p>
-        <div className={styles['card']}>
-          <p>{message.text}</p>
-          <TeamsActions action={action} link={linkOf(message)} decision={decision} onOpen={onOpen} />
-        </div>
+        <MessageBody message={message} onOpen={onOpen} />
       </div>
     </li>
   )
@@ -212,8 +123,6 @@ function useStuckToBottom(): (node: HTMLDivElement | null) => (() => void) | und
 
 function Drawer({ me, onClose, onOpen }: { me: Me; onClose: () => void; onOpen: () => void }) {
   const messages = useTeamsMessages({ poll: true })
-  const people = usePeople()
-  const nameOf: NameOf = (id) => displayName(people, id)
   const shown = (messages.data ?? []).slice(-SHOWN_MESSAGES)
   const channel = shown.at(-1)?.channel
   const inner = useStuckToBottom()
@@ -239,7 +148,7 @@ function Drawer({ me, onClose, onOpen }: { me: Me; onClose: () => void; onOpen: 
         {shown.length > 0 ? (
           <ol className={styles['messages']} aria-label="Messages">
             {shown.map((message) => (
-              <Message key={message.id} message={message} nameOf={nameOf} onOpen={onOpen} />
+              <Message key={message.id} message={message} onOpen={onOpen} />
             ))}
           </ol>
         ) : (

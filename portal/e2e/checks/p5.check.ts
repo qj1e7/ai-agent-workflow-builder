@@ -28,6 +28,8 @@ interface Approval {
 }
 
 const OPEN_LINK = 'Open in AI Workflow Builder'
+/** The card is the same for everyone in the channel, so it names who cannot decide rather than telling the reader. */
+const CARD_OWN_WORK = 'Alice can’t decide, because this run is their own work.'
 const TEAMS_BUTTON = /^Teams, practice copy/
 const TEAMS_PANEL = 'Teams, practice copy'
 
@@ -306,12 +308,12 @@ async function cannotDecide(browser: Browser, user: 'alice' | 'carol', lane: 4 |
 }
 
 test('@lane4 alice sees that someone else must say yes, with no Approve or Decline anywhere', async ({ browser }) => {
-  const seen = await cannotDecide(browser, 'alice', 4, 'p5-own-run.png', 'own_work', 'This run is your own work, so another Approver must decide.')
+  const seen = await cannotDecide(browser, 'alice', 4, 'p5-own-run.png', 'own_work', CARD_OWN_WORK)
   expect(seen.onRunPage.text).toContain('You started this run, so you can’t approve it. Nobody approves their own work.')
 })
 
 test('@lane5 carol sees the proposal, with no Approve or Decline anywhere', async ({ browser }) => {
-  const seen = await cannotDecide(browser, 'carol', 5, 'p5-not-approver.png', 'not_an_approver', 'Only an Approver can decide.')
+  const seen = await cannotDecide(browser, 'carol', 5, 'p5-not-approver.png', 'not_an_approver', CARD_OWN_WORK)
   expect(seen.onRunPage.text).toContain('Only an Approver can decide.')
   expect(seen.onRunPage.text).toContain('This is exactly what will be written, and nothing else.')
 })
@@ -387,7 +389,7 @@ test('@lane7 a reload mid-run redraws the steps so far and keeps following new e
   })
 })
 
-test('@lane8 the Teams link opens a run at the decision, and approving in the panel updates the run page', async ({ browser }) => {
+test('@lane8 the Teams link opens a run at the decision, and a yes there shows on the Teams card', async ({ browser }) => {
   await withBackend(async (backend) => {
     const first = await backend.waitingRun('alice')
     const message = (await backend.teamsMessages()).find((m) => m.approval_id === first.approvalId)
@@ -418,17 +420,21 @@ test('@lane8 the Teams link opens a run at the decision, and approving in the pa
     await expect(page.getByRole('button', { name: 'Approve 1 ticket' })).toBeVisible()
     const panelLink = { url: page.url(), heading: await h1(page).innerText(), focused: await page.evaluate(() => document.activeElement?.id ?? '') }
 
-    await page.goto(`/runs/${second.runId}`)
-    await expect(h1(page)).toHaveText('1 ticket is waiting for a yes')
+    // Like real Teams, the card has no Approve button: Bob opens the approval page from it and decides there.
+    await page.goto('/')
     await page.evaluate(() => {
       ;(window as unknown as { kept: boolean }).kept = true
     })
     const posts = decisionPosts(page)
     const forBob = await backend.get<Approval>('bob', `/api/v1/approvals/${second.approvalId}`)
     const secondCard = await scrollToTeamsCard(await openTeams(page), second.approvalId)
-    await secondCard.getByRole('button', { name: 'Approve' }).click()
-    await expect(secondCard.getByText('Approved by Bob')).toBeVisible({ timeout: 30_000 })
+    const inTeams = await decisionButtons(secondCard)
+    await secondCard.getByRole('link', { name: OPEN_LINK }).click()
+    await expect(page).toHaveURL(new RegExp(`/approvals/${second.approvalId}$`))
+    await page.getByRole('button', { name: 'Approve 1 ticket' }).click()
     await expect(h1(page)).toHaveText('1 ticket created in Jira', { timeout: 60_000 })
+    const decidedCard = await scrollToTeamsCard(await openTeams(page), second.approvalId)
+    await expect(decidedCard.getByText('Approved by Bob')).toBeVisible({ timeout: 30_000 })
     await shotTo(page, 8, 'p5-teams-approve.png')
     const kept = await page.evaluate(() => (window as unknown as { kept?: boolean }).kept === true)
     await page.keyboard.press('Escape')
@@ -438,6 +444,7 @@ test('@lane8 the Teams link opens a run at the decision, and approving in the pa
       second,
       freshLoad,
       panelLink,
+      inTeams,
       posts,
       secondRun: await backend.run(second.runId),
       firstRun: await backend.run(first.runId),
@@ -448,9 +455,10 @@ test('@lane8 the Teams link opens a run at the decision, and approving in the pa
     expect(freshLoad).toMatchObject({ focused: 'decision', buttons: { approve: 1, decline: 1 } })
     expect(freshLoad.url.endsWith(linkPath)).toBe(true)
     expect(panelLink.focused).toBe('decision')
-    expect(posts.map((post) => post.url), 'the panel posted to the second run’s approval only').toEqual([`/api/v1/approvals/${second.approvalId}/decisions`])
+    expect(inTeams, 'no Approve or Decline on the Teams card').toEqual({ approve: 0, decline: 0 })
+    expect(posts.map((post) => post.url), 'the approval page posted to the second run’s approval only').toEqual([`/api/v1/approvals/${second.approvalId}/decisions`])
     expect(JSON.parse(posts[0]?.body ?? '{}')).toEqual({ step: 0, verdict: 'approve', digest: forBob.digest })
-    expect(kept, 'the run page updated without a reload').toBe(true)
+    expect(kept, 'the card’s link and the yes worked without a reload').toBe(true)
     expect((await backend.run(first.runId)).state, 'opening the link decides nothing').toBe('awaiting_approval')
     assertClean(watch)
     await context.close()
