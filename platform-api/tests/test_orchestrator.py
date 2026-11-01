@@ -57,9 +57,10 @@ from platform_api.orchestration.service import (
 )
 from platform_api.orchestration.store import Store
 from platform_api.orchestration.teams import TeamsStub
-from platform_api.orchestration.write_actions import MockJiraConnector, WriteGateway
+from platform_api.orchestration.write_actions import WriteGateway
 from platform_api.shared import ApprovalId, Digest, N8nExecutionId, Principal, RunId, TaskId
 from tests.conftest import PostgresUrls, truncate_all
+from tests.practice import PracticeKit
 from tests.support import (
     ALICE,
     BOB,
@@ -132,7 +133,7 @@ class Harness:
     log: ActivityLog
     engine: RecordingEngine
     agent: FakeAgent
-    jira: MockJiraConnector
+    jira: PracticeKit
     teams: TeamsStub
     orchestrator: Orchestrator
 
@@ -176,7 +177,7 @@ async def open_harness(
     log = ActivityLog(db)
     engine = RecordingEngine()
     agent = FakeAgent()
-    jira = MockJiraConnector(db)
+    jira = PracticeKit(db)
     teams = TeamsStub(db, "CODESparks Ops")
     orchestrator = Orchestrator(
         db,

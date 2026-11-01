@@ -1,11 +1,11 @@
 import asyncio
 import hashlib
 import json
-from collections.abc import Collection, Iterable, Mapping, Sequence, Set
+from collections.abc import Iterable, Mapping, Sequence, Set
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Literal, LiteralString, Protocol
+from typing import Protocol
 
 from platform_api.db import Database
 from platform_api.monitoring import ActionLine
@@ -18,9 +18,6 @@ from platform_api.orchestration.approvals import (
 )
 from platform_api.orchestration.runs import Acting, WriteDone
 from platform_api.shared import ApprovalId, Digest, ProposalId, RunId, UserId
-
-if TYPE_CHECKING:
-    from platform_api.orchestration.spec import RunSpec
 
 type Json = str | int | float | bool | None | Mapping[str, Json] | Sequence[Json]
 
@@ -240,7 +237,17 @@ def intents(actions: Sequence[WriteAction]) -> tuple[str, ...]:
     return tuple(phrases)
 
 
-class WriteFailed(Exception): ...
+class WriteFailed(Exception):
+    """A write did not happen. When retryable, a retry of the run may make it."""
+
+    def __init__(self, message: str, retryable: bool = True) -> None:
+        super().__init__(message)
+        self.retryable = retryable
+
+
+class WriteRefused(Exception):
+    """The other system refused the write itself, such as a missing project or no permission.
+    A connector raises it so the run says to start again, not to retry (ADR 0035)."""
 
 
 @dataclass(frozen=True)
@@ -266,179 +273,6 @@ class WriteConnector(Protocol):
 
 def registry_of(connectors: Iterable[WriteConnector]) -> Registry:
     return {connector.name: connector.operations for connector in connectors}
-
-
-SEARCH_LIMIT = 50
-
-
-class MockJiraConnector:
-    name = "jira"
-    operations = frozenset({"create_ticket"})
-
-    def __init__(self, db: Database) -> None:
-        self._db = db
-
-    async def execute(self, action: WriteAction, key: WriteKey) -> str:
-        async with self._db.transaction("orchestration") as uow:
-            await uow.conn.execute("LOCK TABLE orchestration.mock_jira_tickets IN EXCLUSIVE MODE")
-            existing = await (
-                await uow.conn.execute(
-                    "SELECT key FROM orchestration.mock_jira_tickets WHERE idempotency_key = %s",
-                    (key.text,),
-                )
-            ).fetchone()
-            if existing is not None:
-                return str(existing["key"])
-            number_row = await (
-                await uow.conn.execute(
-                    "SELECT coalesce(max(number), 0) + 1 AS number "
-                    "FROM orchestration.mock_jira_tickets"
-                )
-            ).fetchone()
-            assert number_row is not None
-            number = int(number_row["number"])
-            project = str(action.target.get("project", "MOCK"))
-            ticket = f"{project}-{number}"
-            await uow.conn.execute(
-                "INSERT INTO orchestration.mock_jira_tickets "
-                "(key, number, project, title, body, created_at, run_id, proposal_id, "
-                "idempotency_key) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                (
-                    ticket,
-                    number,
-                    project,
-                    str(action.fields.get("title", "")),
-                    str(action.fields.get("body", "")),
-                    uow.now,
-                    key.run_id,
-                    key.proposal_id,
-                    key.text,
-                ),
-            )
-            return ticket
-
-    async def tickets(self) -> list[MockTicket]:
-        async with self._db.transaction("orchestration") as uow:
-            rows = await (
-                await uow.conn.execute(
-                    f"SELECT {TICKET_COLUMNS} FROM orchestration.mock_jira_tickets ORDER BY number"
-                )
-            ).fetchall()
-        return [_ticket(row) for row in rows]
-
-    async def mark_done(self, key: str) -> MockTicket | None:
-        """Marks a ticket Done. A ticket already Done keeps its first done time."""
-        async with self._db.transaction("orchestration") as uow:
-            row = await (
-                await uow.conn.execute(
-                    "UPDATE orchestration.mock_jira_tickets SET status = 'Done', "
-                    "done_at = coalesce(done_at, %s) WHERE key = %s "
-                    f"RETURNING {TICKET_COLUMNS}",
-                    (uow.now, key),
-                )
-            ).fetchone()
-        return None if row is None else _ticket(row)
-
-    def now(self) -> datetime:
-        return self._db.clock()
-
-    async def search(
-        self,
-        projects: Sequence[str],
-        words: Sequence[str],
-        status: TicketStatus | None,
-        done_since: datetime | None,
-        limit: int = SEARCH_LIMIT,
-    ) -> list[MockTicket]:
-        """Tickets for an agent's search, newest first. Words are already cut to plain letters
-        and digits, and a ticket matches when any of them is in its title or body."""
-        where: list[LiteralString] = []
-        args: list[Any] = []
-        where.append("project = ANY(%s)")
-        args.append(list(projects))
-        if words:
-            where.append("(title ILIKE ANY(%s) OR body ILIKE ANY(%s))")
-            patterns = [f"%{word}%" for word in words]
-            args.extend((patterns, patterns))
-        if status is not None:
-            where.append("status = %s")
-            args.append(status)
-        if done_since is not None:
-            where.append("done_at >= %s")
-            args.append(done_since)
-        clause = f" WHERE {' AND '.join(where)}" if where else ""
-        async with self._db.transaction("orchestration") as uow:
-            rows = await (
-                await uow.conn.execute(
-                    f"SELECT {TICKET_COLUMNS} FROM orchestration.mock_jira_tickets{clause} "
-                    "ORDER BY number DESC LIMIT %s",
-                    (*args, limit),
-                )
-            ).fetchall()
-        return [_ticket(row) for row in rows]
-
-    async def find(self, key: str) -> MockTicket | None:
-        async with self._db.transaction("orchestration") as uow:
-            row = await (
-                await uow.conn.execute(
-                    f"SELECT {TICKET_COLUMNS} FROM orchestration.mock_jira_tickets WHERE key = %s",
-                    (key,),
-                )
-            ).fetchone()
-        return None if row is None else _ticket(row)
-
-    async def run_spec(self, run_id: RunId) -> RunSpec | None:
-        from platform_api.orchestration.store import Store  # store imports this module
-
-        async with self._db.transaction("orchestration") as uow:
-            record = await Store().load_run(uow, run_id)
-        return None if record is None else record.spec
-
-    async def done_tickets(self, keys: Collection[str]) -> Mapping[str, datetime]:
-        if not keys:
-            return {}
-        async with self._db.transaction("orchestration") as uow:
-            rows = await (
-                await uow.conn.execute(
-                    "SELECT key, done_at FROM orchestration.mock_jira_tickets "
-                    "WHERE key = ANY(%s) AND status = 'Done'",
-                    (list(keys),),
-                )
-            ).fetchall()
-        return {str(row["key"]): row["done_at"] for row in rows}
-
-
-type TicketStatus = Literal["To Do", "Done"]
-
-TICKET_COLUMNS = "key, project, title, body, created_at, run_id, proposal_id, status, done_at"
-
-
-@dataclass(frozen=True)
-class MockTicket:
-    key: str
-    project: str
-    title: str
-    body: str
-    created_at: datetime
-    run_id: RunId
-    proposal_id: ProposalId
-    status: TicketStatus = "To Do"
-    done_at: datetime | None = None
-
-
-def _ticket(row: Mapping[str, Any]) -> MockTicket:
-    status: TicketStatus = "Done" if row["status"] == "Done" else "To Do"
-    return MockTicket(
-        key=row["key"],
-        project=row["project"],
-        title=row["title"],
-        body=row["body"],
-        created_at=row["created_at"],
-        run_id=RunId(row["run_id"]),
-        proposal_id=ProposalId(row["proposal_id"]),
-        status=status,
-        done_at=row["done_at"],
-    )
 
 
 CONNECTOR_TIMEOUT = timedelta(seconds=30)
@@ -489,9 +323,16 @@ class WriteGateway:
                     continue
                 case InFlight() | None:
                     pass
-            await self._mark_started(key)
+            if not await self._claim(key):
+                # Another try claimed this key between our read and our claim.
+                await asyncio.sleep(self._poll)
+                continue
             try:
                 reference = await self._connectors[action.connector].execute(action, key)
+            except WriteRefused as refused:
+                raise WriteFailed(
+                    f"{action.connector} {action.operation} was refused: {refused}", retryable=False
+                ) from refused
             except Exception as error:
                 raise WriteFailed(
                     f"{action.connector} {action.operation} failed: {error}"
@@ -514,16 +355,31 @@ class WriteGateway:
             return Done(str(row["external_reference"]))
         return InFlight(row["started_at"])
 
-    async def _mark_started(self, key: WriteKey) -> None:
+    async def _claim(self, key: WriteKey) -> bool:
+        """Claims the key in one statement: a new row, or a started one whose try is older than
+        the in-flight timeout. False means another try holds it or it is done, so two tries
+        never call the connector for one key at once."""
         async with self._db.transaction("orchestration") as uow:
-            await uow.conn.execute(
-                "INSERT INTO orchestration.write_executions "
-                "(proposal_id, action_index, run_id, idempotency_key, status, started_at) "
-                "VALUES (%s, %s, %s, %s, 'started', %s) "
-                "ON CONFLICT (idempotency_key) DO UPDATE SET started_at = EXCLUDED.started_at "
-                "WHERE orchestration.write_executions.status = 'started'",
-                (key.proposal_id, key.index, key.run_id, key.text, uow.now),
-            )
+            row = await (
+                await uow.conn.execute(
+                    "INSERT INTO orchestration.write_executions "
+                    "(proposal_id, action_index, run_id, idempotency_key, status, started_at) "
+                    "VALUES (%s, %s, %s, %s, 'started', %s) "
+                    "ON CONFLICT (idempotency_key) DO UPDATE SET started_at = EXCLUDED.started_at "
+                    "WHERE orchestration.write_executions.status = 'started' "
+                    "AND orchestration.write_executions.started_at <= %s "
+                    "RETURNING idempotency_key",
+                    (
+                        key.proposal_id,
+                        key.index,
+                        key.run_id,
+                        key.text,
+                        uow.now,
+                        uow.now - self._timeout,
+                    ),
+                )
+            ).fetchone()
+        return row is not None
 
     async def _mark_done(self, key: WriteKey, reference: str) -> None:
         async with self._db.transaction("orchestration") as uow:

@@ -35,10 +35,12 @@ function TicketRow({ ticket, open, operator, marking, onToggle, onMarkDone }: Ro
             {ticket.status}
           </span>
           <span>{createdWords(ticket.created_at)}</span>
-          <Link to={`/runs/${ticket.run_id}`}>
-            See the run
-            <span className="visually-hidden"> that created {ticket.key}</span>
-          </Link>
+          {ticket.run_id ? (
+            <Link to={`/runs/${ticket.run_id}`}>
+              See the run
+              <span className="visually-hidden"> that created {ticket.key}</span>
+            </Link>
+          ) : null}
         </div>
       </div>
       <div className={styles['acts']}>

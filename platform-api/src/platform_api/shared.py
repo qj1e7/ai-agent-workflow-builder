@@ -3,7 +3,7 @@ import secrets
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import NewType
+from typing import Literal, NewType
 
 RunId = NewType("RunId", str)
 ApprovalId = NewType("ApprovalId", str)
@@ -18,6 +18,9 @@ SoftwareId = NewType("SoftwareId", str)
 JIRA_PROJECT_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{0,254}\Z")
 """A Jira project key as Jira allows it: a capital letter, then capital letters, digits or
 underscores, such as MOCK or AB_1. Data Center allows 255 characters at most (ADR 0035)."""
+type TicketStatus = Literal["To Do", "Done"]
+"""A Jira ticket's status as the platform reads it: Done is Jira's status category done, and
+every other status counts as To Do, not done yet."""
 JIRA_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{0,254}-[1-9][0-9]{0,8}\Z")
 """A ticket key: a project key, a dash and the ticket's number, such as AB_1-12."""
 

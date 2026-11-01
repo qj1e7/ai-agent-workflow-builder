@@ -202,6 +202,88 @@ variable "github_api_base" {
   default     = "https://api.github.com"
 }
 
+# A real Jira (ADR 0035). Leave jira_base_url empty to keep platform-api's own practice Jira. The
+# rules match platform-api's startup check, so plan refuses what would stop it.
+
+variable "jira_base_url" {
+  description = "A real Jira's address (JIRA_BASE_URL), such as https://jira.example.com. Empty uses platform-api's own practice Jira. The token goes there with every call, so it must be https."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.jira_base_url == "" || can(regex("^https://[A-Za-z0-9._~%-]+([:/][A-Za-z0-9._~:/%-]*)?$", var.jira_base_url))
+    error_message = "jira_base_url must be empty, or an https URL with a host and no query or fragment, made of letters, digits and . _ ~ : / % -."
+  }
+}
+
+variable "jira_api_flavor" {
+  description = "Which Jira API to speak (JIRA_API_FLAVOR): datacenter (REST v2) or cloud (REST v3). The practice Jira speaks both."
+  type        = string
+  default     = "datacenter"
+
+  validation {
+    condition     = contains(["datacenter", "cloud"], var.jira_api_flavor)
+    error_message = "jira_api_flavor must be datacenter or cloud."
+  }
+}
+
+variable "jira_api_token" {
+  description = "The Jira token (JIRA_API_TOKEN), kept in Key Vault as jira-api-token: a personal access token for Data Center, or an API token for Cloud. Needed with jira_base_url."
+  type        = string
+  default     = ""
+  sensitive   = true
+
+  validation {
+    condition     = var.jira_base_url == "" || var.jira_api_token != ""
+    error_message = "jira_api_token must be set when jira_base_url is."
+  }
+}
+
+variable "jira_email" {
+  description = "The Jira account's email (JIRA_EMAIL). Cloud signs in with it and the token."
+  type        = string
+  default     = ""
+  sensitive   = true
+
+  validation {
+    condition     = var.jira_base_url == "" || var.jira_api_flavor != "cloud" || trimspace(var.jira_email) != ""
+    error_message = "jira_email must be set for a Cloud Jira."
+  }
+}
+
+variable "jira_issue_type" {
+  description = "The issue type of each new ticket (JIRA_ISSUE_TYPE)."
+  type        = string
+  default     = "Task"
+
+  validation {
+    condition     = trimspace(var.jira_issue_type) != ""
+    error_message = "jira_issue_type must name an issue type, such as Task."
+  }
+}
+
+variable "jira_browse_url" {
+  description = "Where people open a ticket (JIRA_BROWSE_URL), with {key} where the key goes. Empty uses jira_base_url/browse/{key}, or the Portal's Practice Jira page."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.jira_browse_url == "" || (strcontains(var.jira_browse_url, "{key}") && can(regex("^https?://[^/?#\\s]+", var.jira_browse_url)))
+    error_message = "jira_browse_url must be empty, or an http or https address with {key} in it."
+  }
+}
+
+variable "watchlist_jira_project" {
+  description = "The Jira project the watchlist raises tickets in (WATCHLIST_JIRA_PROJECT). MOCK is the practice Jira's."
+  type        = string
+  default     = "MOCK"
+
+  validation {
+    condition     = can(regex("^[A-Z][A-Z0-9_]{0,254}$", var.watchlist_jira_project))
+    error_message = "watchlist_jira_project must be a Jira project key: a capital letter, then capital letters, digits or underscores."
+  }
+}
+
 # The first people (ADR 0030). platform-api reads them only while its People list is empty, so a
 # later deploy cannot hand out roles. The rules match platform-api's startup check, so plan refuses
 # what would stop it. Real addresses go in the azure-dev environment's variables, never in git.

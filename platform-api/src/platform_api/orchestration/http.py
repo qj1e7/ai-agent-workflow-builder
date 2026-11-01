@@ -42,12 +42,7 @@ from platform_api.orchestration.service import (
 )
 from platform_api.orchestration.service import RetryLater as RetryLaterError
 from platform_api.orchestration.teams import AdaptiveCard, TeamsStub
-from platform_api.orchestration.write_actions import (
-    MockJiraConnector,
-    MockTicket,
-    Proposal,
-    TicketStatus,
-)
+from platform_api.orchestration.write_actions import Proposal
 from platform_api.shared import (
     ApprovalId,
     Digest,
@@ -260,25 +255,7 @@ class TeamsStubMessages(WireModel):
     messages: list[TeamsStubMessage]
 
 
-class MockJiraTicket(WireModel):
-    key: str
-    project: str
-    title: str
-    body: str
-    created_at: datetime
-    run_id: RunId
-    proposal_id: ProposalId
-    status: TicketStatus
-    done_at: datetime | None
-
-
-class MockJiraTickets(WireModel):
-    tickets: list[MockJiraTicket]
-
-
 router = APIRouter()
-practice_jira_router = APIRouter()
-"""The practice Jira's own pages, mounted only while PRACTICE_SYSTEMS is on (ADR 0035)."""
 
 StepKey = Annotated[str, Header(alias="X-Step-Key")]
 
@@ -296,11 +273,6 @@ def current_ticker(request: Request) -> ScheduleTicker:
 def current_teams_stub(request: Request) -> TeamsStub:
     stub: TeamsStub = request.app.state.teams_stub
     return stub
-
-
-def current_mock_jira(request: Request) -> MockJiraConnector:
-    jira: MockJiraConnector = request.app.state.mock_jira
-    return jira
 
 
 def check_step_key(request: Request, step_key: StepKey) -> None:
@@ -642,44 +614,3 @@ async def list_teams_stub_messages(
             for m in await stub.messages()
         ]
     )
-
-
-def mock_jira_ticket(ticket: MockTicket) -> MockJiraTicket:
-    return MockJiraTicket(
-        key=ticket.key,
-        project=ticket.project,
-        title=ticket.title,
-        body=ticket.body,
-        created_at=ticket.created_at,
-        run_id=ticket.run_id,
-        proposal_id=ticket.proposal_id,
-        status=ticket.status,
-        done_at=ticket.done_at,
-    )
-
-
-MockJira = Annotated[MockJiraConnector, Depends(current_mock_jira)]
-
-
-@practice_jira_router.get("/api/v1/mock-jira/tickets", tags=["stubs"], responses=SIGNED_IN)
-async def list_mock_jira_tickets(principal: CurrentPrincipal, jira: MockJira) -> MockJiraTickets:
-    return MockJiraTickets(tickets=[mock_jira_ticket(t) for t in await jira.tickets()])
-
-
-@practice_jira_router.post(
-    "/api/v1/mock-jira/tickets/{key}/done",
-    tags=["stubs"],
-    description=(
-        "Marks a practice Jira ticket Done, as a person would in Jira. The watchlist then "
-        "moves our version to the version the ticket named, so only an Operator may do it. "
-        "Marking a Done ticket again changes nothing."
-    ),
-    responses={**OPERATORS_ONLY, 404: error_response("No such ticket")},
-)
-async def mark_mock_jira_ticket_done(
-    key: str, principal: Operator, jira: MockJira
-) -> MockJiraTicket:
-    ticket = await jira.mark_done(key)
-    if ticket is None:
-        raise HTTPException(status_code=404, detail="No such ticket")
-    return mock_jira_ticket(ticket)

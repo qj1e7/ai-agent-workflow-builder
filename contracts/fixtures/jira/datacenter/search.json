@@ -1,0 +1,118 @@
+{
+  "expand": "schema,names",
+  "startAt": 0,
+  "maxResults": 50,
+  "total": 2,
+  "issues": [
+    {
+      "expand": "renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations",
+      "id": "10042",
+      "self": "https://jira.example.com/rest/api/2/issue/10042",
+      "key": "OPS-7",
+      "fields": {
+        "summary": "Upgrade LangGraph from 1.2.14 to 1.2.16",
+        "description": "{noformat}\nLangGraph has 2 new releases.\nRelease notes: https://github.com/langchain-ai/langgraph/releases\n{noformat}",
+        "project": {
+          "self": "https://jira.example.com/rest/api/2/project/10000",
+          "id": "10000",
+          "key": "OPS",
+          "name": "Operations",
+          "projectTypeKey": "software"
+        },
+        "issuetype": {
+          "self": "https://jira.example.com/rest/api/2/issuetype/10002",
+          "id": "10002",
+          "name": "Task",
+          "subtask": false
+        },
+        "labels": [
+          "wab-run_01JB8-prp_01JB9-0"
+        ],
+        "status": {
+          "self": "https://jira.example.com/rest/api/2/status/1",
+          "description": "",
+          "name": "To Do",
+          "id": "1",
+          "statusCategory": {
+            "self": "https://jira.example.com/rest/api/2/statuscategory/2",
+            "id": 2,
+            "key": "new",
+            "colorName": "blue-gray",
+            "name": "To Do"
+          }
+        },
+        "created": "2026-11-03T10:20:31.123+0800",
+        "updated": "2026-11-03T10:20:31.123+0800",
+        "resolutiondate": null,
+        "creator": {
+          "self": "https://jira.example.com/rest/api/2/user?username=svc-wab",
+          "key": "JIRAUSER10100",
+          "name": "svc-wab",
+          "displayName": "AI Workflow Builder",
+          "active": true
+        },
+        "reporter": {
+          "self": "https://jira.example.com/rest/api/2/user?username=svc-wab",
+          "key": "JIRAUSER10100",
+          "name": "svc-wab",
+          "displayName": "AI Workflow Builder",
+          "active": true
+        }
+      }
+    },
+    {
+      "expand": "renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations",
+      "id": "10040",
+      "self": "https://jira.example.com/rest/api/2/issue/10040",
+      "key": "OPS-5",
+      "fields": {
+        "summary": "Check the backup job",
+        "description": "*Written by hand* in Jira, with [a link|https://example.com].",
+        "project": {
+          "self": "https://jira.example.com/rest/api/2/project/10000",
+          "id": "10000",
+          "key": "OPS",
+          "name": "Operations",
+          "projectTypeKey": "software"
+        },
+        "issuetype": {
+          "self": "https://jira.example.com/rest/api/2/issuetype/10002",
+          "id": "10002",
+          "name": "Task",
+          "subtask": false
+        },
+        "labels": [],
+        "status": {
+          "self": "https://jira.example.com/rest/api/2/status/1",
+          "description": "",
+          "name": "Closed",
+          "id": "1",
+          "statusCategory": {
+            "self": "https://jira.example.com/rest/api/2/statuscategory/3",
+            "id": 3,
+            "key": "done",
+            "colorName": "green",
+            "name": "Done"
+          }
+        },
+        "created": "2026-10-28T09:00:00.000+0800",
+        "updated": "2026-10-30T17:45:12.000+0800",
+        "resolutiondate": "2026-10-30T17:45:12.000+0800",
+        "creator": {
+          "self": "https://jira.example.com/rest/api/2/user?username=svc-wab",
+          "key": "JIRAUSER10100",
+          "name": "svc-wab",
+          "displayName": "AI Workflow Builder",
+          "active": true
+        },
+        "reporter": {
+          "self": "https://jira.example.com/rest/api/2/user?username=svc-wab",
+          "key": "JIRAUSER10100",
+          "name": "svc-wab",
+          "displayName": "AI Workflow Builder",
+          "active": true
+        }
+      }
+    }
+  ]
+}
