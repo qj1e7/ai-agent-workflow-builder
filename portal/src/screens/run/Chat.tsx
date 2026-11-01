@@ -57,7 +57,7 @@ function Item({ item, fresh, nameOf, trigger }: { item: ChatItem; fresh: boolean
       <li className={cx(styles['marker'], tone, fresh && styles['in'])} tabIndex={-1} data-gate-said={item.seq}>
         <span>
           <IconShield size={14} />
-          <TicketKeys text={line.text} />
+          {line.text}
         </span>
       </li>
     )
@@ -72,7 +72,7 @@ function Item({ item, fresh, nameOf, trigger }: { item: ChatItem; fresh: boolean
             ))}
           </span>
         ) : null}
-        <TicketKeys text={line.text} />
+        <TicketKeys text={line.text} keys={item.kind === 'written' && item.connector === 'jira' ? item.refs : []} />
       </span>
     </li>
   )

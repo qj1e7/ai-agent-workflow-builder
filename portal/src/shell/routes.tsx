@@ -87,7 +87,7 @@ export const PAGES: Readonly<Record<PageId, PageEntry>> = {
     tabLabel: 'Jira',
     icon: TicketIcon,
     heading: 'Practice Jira',
-    lead: 'The tickets the platform created in project MOCK. An Operator marks one Done, as a person would in Jira.',
+    lead: 'Practice copy. Nothing reaches a real Jira.',
     inMenu: false,
   },
   settings: {

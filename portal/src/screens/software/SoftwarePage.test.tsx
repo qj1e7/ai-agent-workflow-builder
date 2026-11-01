@@ -11,24 +11,19 @@ import { describe, expect, it } from 'vitest'
 import { ApiProvider } from '../../api/context'
 import { TicketLinksProvider } from '../../api/ticketLinks'
 import { createDevSession } from '../../api/session'
-import type { Me, ScheduleHold, WatchlistView } from '../../api/types'
+import type { Me, ScheduleHold, WatchedSoftwareView, WatchlistView } from '../../api/types'
 import { AddSoftwareFields, EMPTY_VALUES } from './AddSoftware'
 import { FindSoftware } from './FindSoftware'
 import { SoftwareRoute } from './SoftwarePage'
+import { SoftwareHistory } from './SoftwareHistory'
 import { ScheduleEditor, ScheduleNote } from './Schedule'
 
-const ALICE: Me = {
-  id: 'alice',
-  display: 'Alice',
-  roles: ['operator', 'approver'],
-}
+const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
 const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
 
 function render(view: unknown, me: Me, runs: readonly { run_id: string }[] = [], page: ReactNode = <SoftwareRoute />): string {
   const session = createDevSession(null)
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retryOnMount: false } },
-  })
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   queryClient.setQueryData(['me', session.cacheScope()], me)
   queryClient.setQueryData(['watchlist', session.cacheScope()], view)
   for (const run of runs) queryClient.setQueryData(['run', session.cacheScope(), run.run_id], run)
@@ -42,12 +37,7 @@ function render(view: unknown, me: Me, runs: readonly { run_id: string }[] = [],
   )
 }
 
-const text = (html: string) =>
-  html
-    .replace(/<[^>]*>/g, ' ')
-    .replaceAll('&#x27;', "'")
-    .replace(/\s+/g, ' ')
-    .trim()
+const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replace(/\s+/g, ' ').trim()
 const buttons = (html: string) => [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((match) => text(match[1] ?? ''))
 
 describe('the Software watchlist page', () => {
@@ -80,14 +70,7 @@ describe('the Software watchlist page', () => {
   })
 
   it('says the last check stopped, why, and when, and links to its run', () => {
-    const stopped = {
-      ...statuses,
-      last_check: {
-        run_id: failedRun.run_id,
-        state: 'failed',
-        started_at: failedRun.started_at,
-      },
-    }
+    const stopped = { ...statuses, last_check: { run_id: failedRun.run_id, state: 'failed', started_at: failedRun.started_at } }
     const html = render(stopped, BOB, [failedRun])
     expect(text(html)).toContain('The last check stopped: an agent could not finish its work. Started Wed 4 Nov, 10:14, Singapore time.')
     expect(html).toContain(`href="/runs/${failedRun.run_id}"`)
@@ -151,14 +134,7 @@ describe('the Software watchlist page', () => {
   })
 
   it('for a London schedule, names London next to the schedule and the next check', () => {
-    const london = {
-      ...statuses,
-      schedule: {
-        ...statuses.schedule,
-        time_zone: 'Europe/London',
-        next_at: '2026-11-23T09:00:00Z',
-      },
-    }
+    const london = { ...statuses, schedule: { ...statuses.schedule, time_zone: 'Europe/London', next_at: '2026-11-23T09:00:00Z' } }
     const words = text(render(london, ALICE))
     expect(words).toContain('Checked every Monday at 9:00 London time, set by Alice.')
     expect(words).toContain('Next check Mon 23 Nov, 9:00, London time.')
@@ -226,16 +202,15 @@ describe('the search box', () => {
 })
 
 describe('the add form', () => {
-  const fields = (errors: Parameters<typeof AddSoftwareFields>[0]['errors']) => renderToStaticMarkup(<AddSoftwareFields values={EMPTY_VALUES} errors={errors} busy={false} />)
+  const fields = (errors: Parameters<typeof AddSoftwareFields>[0]['errors']) =>
+    renderToStaticMarkup(<AddSoftwareFields values={EMPTY_VALUES} errors={errors} busy={false} />)
 
   it('says only GitHub works today', () => {
     expect(text(fields({}))).toContain('GitHub is the only place we can check today')
   })
 
   it('shows each error beside its field and marks the field invalid', () => {
-    const html = fields({
-      repo: 'That doesn’t look like a GitHub project. Paste its GitHub link, or type owner/name.',
-    })
+    const html = fields({ repo: 'That doesn’t look like a GitHub project. Paste its GitHub link, or type owner/name.' })
     expect(html).toContain('aria-invalid="true"')
     expect(html).toContain('id="sw-repo-error"')
     expect(html).toContain('aria-describedby="sw-repo-error"')
@@ -255,10 +230,7 @@ describe('a schedule held because its owner can no longer run it', () => {
   const heldFor = (hold: ScheduleHold, ownerName = 'Alice') => {
     const view = held as WatchlistView
     if (view.schedule === null) throw new Error('the held fixture has a schedule')
-    return {
-      ...view,
-      schedule: { ...view.schedule, held: hold, owner_name: ownerName },
-    }
+    return { ...view, schedule: { ...view.schedule, held: hold, owner_name: ownerName } }
   }
 
   it('says the owner is no longer on the People list, and promises no next check anywhere on the page', () => {
@@ -314,21 +286,51 @@ describe('the schedule note', () => {
   })
 })
 
-describe('the open ticket on the Software watchlist', () => {
-  it('links the key to the practice Jira, open at that ticket, when no Jira address is configured', () => {
-    expect(render(statuses, ALICE)).toMatch(/<a\b[^>]*href="\/jira\/MOCK-143"[^>]*>MOCK-143<\/a>/)
+describe('ticket keys on the Software watchlist', () => {
+  // The project is a setting, so none of these keys is MOCK.
+  const rows = (statuses as WatchlistView).software
+  const open = rows.find((row) => row.status === 'ticket_open')!
+  const view = {
+    ...statuses,
+    software: rows.map((row) =>
+      row.id === open.id
+        ? { ...row, open_ticket: 'OPS-143', our_version_source: { kind: 'ticket_done', at: '2026-11-13T14:30:00+08:00', ticket: 'OPS-140' } }
+        : row,
+    ),
+  }
+  const link = (key: string) => new RegExp(`<a\\b[^>]*href="/jira/${key}"[^>]*>${key}`)
+
+  it('links the open ticket and the ticket our version came from, whatever the project', () => {
+    const html = render(view, ALICE)
+    expect(html).toMatch(link('OPS-143'))
+    expect(html).toMatch(link('OPS-140'))
   })
 
-  it('links the key to the real Jira in a new tab when an address is configured', () => {
-    const html = render(
-      statuses,
-      ALICE,
-      [],
-      <TicketLinksProvider browseUrl="https://jira.example.test/browse/{key}">
-        <SoftwareRoute />
-      </TicketLinksProvider>,
+  it('links the keys in the history lines', () => {
+    const row = view.software.find((item) => item.id === open.id)!
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <SoftwareHistory row={row as WatchedSoftwareView} nameOf={(id) => id} id="h" />
+      </MemoryRouter>,
     )
-    expect(html).toMatch(/<a\b[^>]*href="https:\/\/jira.example.test\/browse\/MOCK-143"[^>]*target="_blank"[^>]*>MOCK-143/)
-    expect(html).not.toContain('href="/jira/MOCK-143"')
+    expect(html).toMatch(link('OPS-143'))
+    expect(html).toMatch(link('OPS-140'))
+    expect(text(html)).toContain('OPS-143 is open in Jira for the upgrade.')
+  })
+
+  it('does not link key-like words that are not tickets the row holds', () => {
+    const html = render({ ...view, software: view.software.map((row) => ({ ...row, problem: 'UTF-8 and CVE-2024-1234' })) }, ALICE)
+    expect(html).not.toContain('href="/jira/UTF-8"')
+    expect(html).not.toContain('href="/jira/CVE-2024-1234"')
+  })
+
+  it('links to the real Jira in a new tab, safely, when an address is configured', () => {
+    const html = render(view, ALICE, [], (
+      <TicketLinksProvider config={{ jiraBrowseUrl: 'https://jira.example.test/browse/{key}' }}>
+        <SoftwareRoute />
+      </TicketLinksProvider>
+    ))
+    expect(html).toMatch(/<a\b[^>]*href="https:\/\/jira.example.test\/browse\/OPS-143"[^>]*target="_blank"[^>]*rel="noopener noreferrer"[^>]*>OPS-143/)
+    expect(html).not.toContain('href="/jira/OPS-143"')
   })
 })

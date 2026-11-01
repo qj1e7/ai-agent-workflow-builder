@@ -31,9 +31,11 @@ export function Header({ person }: { person: Me | null }) {
         <div className={styles['tools']}>
           {/* Its badge polls runs and Teams messages, which the platform refuses to someone not on the People list. */}
           {notOnTheList(person) ? null : <TeamsButton person={person} />}
+          {/* Like Teams, it needs the People list: the platform refuses its tickets to someone who is not on it. */}
           {practiceJira && !notOnTheList(person) ? (
             <NavLink to={PAGES.jira.path} className={cx(iconButton['button'])} aria-label={JIRA_TITLE} title={JIRA_TITLE}>
               <TicketIcon />
+              <span className={iconButton['label']}>Jira</span>
             </NavLink>
           ) : null}
           <NavLink to={PAGES.settings.path} className={cx(iconButton['button'])} aria-label="Settings" title="Settings">

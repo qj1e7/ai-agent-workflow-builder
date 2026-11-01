@@ -137,6 +137,7 @@ expect_jira() {
 expect_jira
 
 expect_refused jira-no-key JIRA_BROWSE_URL -e 'JIRA_BROWSE_URL=https://jira.example.test/browse/'
+expect_refused jira-no-host JIRA_BROWSE_URL -e 'JIRA_BROWSE_URL=https:///{key}'
 expect_refused jira-ftp JIRA_BROWSE_URL -e 'JIRA_BROWSE_URL=ftp://jira.example.test/browse/{key}'
 expect_refused jira-quote JIRA_BROWSE_URL -e 'JIRA_BROWSE_URL=https://jira.example.test/"/browse/{key}'
 expect_refused jira-query JIRA_BROWSE_URL -e 'JIRA_BROWSE_URL=https://jira.example.test/browse/{key}?x=1'

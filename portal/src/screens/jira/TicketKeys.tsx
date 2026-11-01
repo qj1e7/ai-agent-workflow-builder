@@ -22,7 +22,7 @@ export function TicketLink({ ticketKey, className }: { ticketKey: string; classN
   )
 }
 
-/** Words that may hold ticket keys, such as "Created MOCK-142 in Jira.", with each key as a link. */
-export function TicketKeys({ text }: { text: string }) {
-  return <>{splitKeys(text).map((piece, index) => (piece.key ? <TicketLink key={index} ticketKey={piece.text} /> : piece.text))}</>
+/** Words that hold ticket keys the Portal already knows, such as "Created OPS-142 in Jira.", with exactly those keys as links. */
+export function TicketKeys({ text, keys }: { text: string; keys: readonly string[] }) {
+  return <>{splitKeys(text, keys).map((piece, index) => (piece.key ? <TicketLink key={index} ticketKey={piece.text} /> : piece.text))}</>
 }

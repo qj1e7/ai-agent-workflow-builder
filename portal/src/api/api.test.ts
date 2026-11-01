@@ -5,11 +5,7 @@ import { fetchEventPage, refusalOf } from './queries'
 import { authorizedFetch, createDevSession } from './session'
 
 const LIVE_DEV = { mode: 'live', signIn: { kind: 'dev' }, jiraBrowseUrl: null }
-const AUTH = {
-  authority: 'https://login.example.test/tenant/v2.0',
-  client_id: 'portal',
-  scope: 'openid profile offline_access',
-}
+const AUTH = { authority: 'https://login.example.test/tenant/v2.0', client_id: 'portal', scope: 'openid profile offline_access' }
 
 describe('parseConfig', () => {
   it('reads live mode with dev sign-in when there are no sign-in settings', () => {
@@ -23,19 +19,9 @@ describe('parseConfig', () => {
     expect(parseConfig({ mode: 'live', auth: AUTH })).toEqual({
       mode: 'live',
       jiraBrowseUrl: null,
-      signIn: {
-        kind: 'oidc',
-        authority: AUTH.authority,
-        clientId: 'portal',
-        scope: AUTH.scope,
-      },
+      signIn: { kind: 'oidc', authority: AUTH.authority, clientId: 'portal', scope: AUTH.scope },
     })
-    expect(
-      parseConfig({
-        mode: 'live',
-        auth: { ...AUTH, authority: 'http://mock-oidc:8080/default' },
-      }),
-    ).toMatchObject({
+    expect(parseConfig({ mode: 'live', auth: { ...AUTH, authority: 'http://mock-oidc:8080/default' } })).toMatchObject({
       signIn: { authority: 'http://mock-oidc:8080/default' },
     })
   })
@@ -52,18 +38,15 @@ describe('parseConfig', () => {
   ])('refuses sign-in settings with %s rather than falling back to dev sign-in', (_name, auth) => {
     expect(() => parseConfig({ mode: 'live', auth })).toThrow(PortalConfigError)
   })
+
 })
 
 describe('parseConfig and the Jira address', () => {
   const BROWSE = 'https://jira.example.test/browse/{key}'
 
   it('has no Jira address unless the file gives one, and treats an empty one as none', () => {
-    expect(parseConfig({ mode: 'live' })).toMatchObject({
-      jiraBrowseUrl: null,
-    })
-    expect(parseConfig({ mode: 'live', jira_browse_url: '' })).toMatchObject({
-      jiraBrowseUrl: null,
-    })
+    expect(parseConfig({ mode: 'live' })).toMatchObject({ jiraBrowseUrl: null })
+    expect(parseConfig({ mode: 'live', jira_browse_url: '' })).toMatchObject({ jiraBrowseUrl: null })
   })
 
   it('reads the address where tickets are viewed, next to the sign-in settings', () => {
@@ -75,6 +58,7 @@ describe('parseConfig and the Jira address', () => {
     ['a relative address', '/browse/{key}'],
     ['a non-http address', 'ftp://jira.example.test/{key}'],
     ['an address without {key}', 'https://jira.example.test/browse/'],
+    ['an address without a host', 'https:///{key}'],
     ['a number', 7],
   ])('refuses %s', (_name, value) => {
     expect(() => parseConfig({ mode: 'live', jira_browse_url: value })).toThrow(PortalConfigError)
@@ -91,22 +75,14 @@ describe('loadConfig', () => {
   it('reads sign-in settings, and lets a bad set through as an error', async () => {
     const body = JSON.stringify({ mode: 'live', auth: AUTH })
     expect(await loadConfig(() => Promise.resolve(new Response(body)))).toMatchObject({ signIn: { kind: 'oidc' } })
-    const bad = JSON.stringify({
-      mode: 'live',
-      auth: { ...AUTH, scope: 'profile' },
-    })
+    const bad = JSON.stringify({ mode: 'live', auth: { ...AUTH, scope: 'profile' } })
     await expect(loadConfig(() => Promise.resolve(new Response(bad)))).rejects.toThrow(PortalConfigError)
   })
 })
 
 describe('the API client', () => {
   const json = (body: unknown, status = 200) =>
-    Promise.resolve(
-      new Response(JSON.stringify(body), {
-        status,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    )
+    Promise.resolve(new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }))
 
   function clientFor(user: string, fetchImpl: typeof fetch) {
     const session = createDevSession(null)
@@ -146,11 +122,7 @@ describe('the API client', () => {
       unwrap(
         await client.POST('/api/v1/approvals/{approval_id}/decisions', {
           params: { path: { approval_id: 'apr_01JB8' } },
-          body: {
-            step: 0,
-            verdict: 'approve',
-            digest: 'sha256:0be2129632d1283e015efcae22757aa3e182793e0153503bdd30dc0327a42576',
-          },
+          body: { step: 0, verdict: 'approve', digest: 'sha256:0be2129632d1283e015efcae22757aa3e182793e0153503bdd30dc0327a42576' },
         }),
       )
     const error = await attempt().catch((caught: unknown) => caught)

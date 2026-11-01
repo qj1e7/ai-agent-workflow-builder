@@ -305,6 +305,10 @@ export function useMockJiraTickets(options?: QueryOptions) {
   })
 }
 
+export function invalidateAfterMarkDone(queryClient: QueryClient): Promise<unknown> {
+  return Promise.all(['jira-tickets', 'watchlist'].map((key) => queryClient.invalidateQueries({ queryKey: [key] })))
+}
+
 /** Marks a practice Jira ticket Done. The watchlist then moves our version, so both refresh. */
 export function useMarkDone() {
   const client = useApiClient()
@@ -312,8 +316,7 @@ export function useMarkDone() {
   return useMutation({
     mutationFn: async (key: string) =>
       unwrap(await client.POST('/api/v1/mock-jira/tickets/{key}/done', { params: { path: { key } } })),
-    onSettled: () =>
-      Promise.all(['jira-tickets', 'watchlist'].map((key) => queryClient.invalidateQueries({ queryKey: [key] }))),
+    onSettled: () => invalidateAfterMarkDone(queryClient),
   })
 }
 

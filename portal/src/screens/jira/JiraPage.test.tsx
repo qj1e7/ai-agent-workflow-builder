@@ -16,10 +16,10 @@ const ALICE: Me = {
 }
 const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
 
-const FIRST = (stubs.tickets as MockJiraTicket[])[0] as MockJiraTicket
+const FIRST = { ...(stubs.tickets as MockJiraTicket[])[0], key: 'OPS-142', project: 'OPS' } as MockJiraTicket
 const OLDER: MockJiraTicket = {
   ...FIRST,
-  key: 'MOCK-141',
+  key: 'OPS-141',
   title: 'Upgrade FastAPI from 0.115.0 to 0.115.2',
   body: 'FastAPI has 1 new release.',
   created_at: '2026-11-02T02:00:00Z',
@@ -79,24 +79,20 @@ describe('the practice Jira page', () => {
   it('lists every ticket newest first with key, title, status, when it was made and a link to its run', () => {
     const html = render()
     const keys = [...html.matchAll(/data-ticket="([^"]*)"/g)].map((match) => match[1])
-    expect(keys).toEqual(['MOCK-142', 'MOCK-141'])
-    const first = text(rowOf(html, 'MOCK-142'))
+    expect(keys).toEqual(['OPS-142', 'OPS-141'])
+    const first = text(rowOf(html, 'OPS-142'))
     expect(first).toContain('Upgrade LangGraph from 1.2.14 to 1.2.16')
     expect(first).toContain('To Do')
     expect(first).toContain('Created Tue 3 Nov, 10:20')
-    expect(rowOf(html, 'MOCK-142')).toContain('href="/runs/run_01JB8"')
-    expect(rowOf(html, 'MOCK-141')).toContain('href="/runs/run_00A"')
-    expect(text(rowOf(html, 'MOCK-141'))).toContain('Done')
-  })
-
-  it('says it is a practice copy', () => {
-    expect(text(render())).toContain('Practice copy of Jira. Nothing reaches a real Jira.')
+    expect(rowOf(html, 'OPS-142')).toContain('href="/runs/run_01JB8"')
+    expect(rowOf(html, 'OPS-141')).toContain('href="/runs/run_00A"')
+    expect(text(rowOf(html, 'OPS-141'))).toContain('Done')
   })
 
   it('shows Mark done on tickets that are not Done for an Operator', () => {
     const html = render()
-    expect(buttons(rowOf(html, 'MOCK-142'))).toContain('Mark done MOCK-142')
-    expect(buttons(rowOf(html, 'MOCK-141')).join(' ')).not.toContain('Mark done')
+    expect(buttons(rowOf(html, 'OPS-142'))).toContain('Mark done OPS-142')
+    expect(buttons(rowOf(html, 'OPS-141')).join(' ')).not.toContain('Mark done')
   })
 
   it('shows no Mark done to an Approver who is not an Operator', () => {
@@ -106,20 +102,20 @@ describe('the practice Jira page', () => {
   it('keeps the description out of sight until a ticket is opened', () => {
     const html = render()
     expect(html).not.toContain('Proposed by the AI workflow builder')
-    expect(rowOf(html, 'MOCK-142')).toContain('aria-expanded="false"')
+    expect(rowOf(html, 'OPS-142')).toContain('aria-expanded="false"')
   })
 
   it('opens the ticket a link names, with its description, and says the toggle is expanded', () => {
-    const html = render({ path: '/jira/MOCK-142' })
-    expect(text(rowOf(html, 'MOCK-142'))).toContain('Proposed by the AI workflow builder')
-    expect(rowOf(html, 'MOCK-142')).toContain('aria-expanded="true"')
-    expect(rowOf(html, 'MOCK-141')).toContain('aria-expanded="false"')
+    const html = render({ path: '/jira/OPS-142' })
+    expect(text(rowOf(html, 'OPS-142'))).toContain('Proposed by the AI workflow builder')
+    expect(rowOf(html, 'OPS-142')).toContain('aria-expanded="true"')
+    expect(rowOf(html, 'OPS-141')).toContain('aria-expanded="false"')
   })
 
   it('says when a linked ticket is not in the list, and still lists the others', () => {
-    const html = render({ path: '/jira/MOCK-99' })
-    expect(text(html)).toContain('MOCK-99 is not in the practice Jira.')
-    expect(html).toContain('data-ticket="MOCK-142"')
+    const html = render({ path: '/jira/OPS-99' })
+    expect(text(html)).toContain('OPS-99 is not in the practice Jira.')
+    expect(html).toContain('data-ticket="OPS-142"')
   })
 
   it('has an empty state', () => {

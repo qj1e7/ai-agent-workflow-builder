@@ -28,7 +28,7 @@ import {
   type Named,
 } from './removal'
 import { SoftwareHistory } from './SoftwareHistory'
-import { cantCheckWords, countIn, emptyWords, groupsOf, newestOf, scheduleRuns, singaporeTime, statusLabel, statusTone, stoppedWords, versionSourceWords } from './software'
+import { cantCheckWords, countIn, emptyWords, groupsOf, newestOf, scheduleRuns, singaporeTime, statusLabel, statusTone, stoppedWords, ticketsOf, versionSourceWords } from './software'
 import styles from './Software.module.css'
 
 const REFRESH_MS = 15_000
@@ -77,7 +77,7 @@ function Row({ row, operator, scheduled, paused, open, removing, nameOf, onToggl
           <dt>Ours</dt>
           <dd>
             {row.our_version ?? 'Not known yet'}
-            <span className={styles['src']}><TicketKeys text={versionSourceWords(row.our_version_source)} /></span>
+            <span className={styles['src']}><TicketKeys text={versionSourceWords(row.our_version_source)} keys={ticketsOf(row)} /></span>
           </dd>
         </div>
         <div>

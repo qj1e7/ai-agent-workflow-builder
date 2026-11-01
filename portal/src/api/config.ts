@@ -1,11 +1,6 @@
 export type SignInConfig =
   | { readonly kind: 'dev' }
-  | {
-      readonly kind: 'oidc'
-      readonly authority: string
-      readonly clientId: string
-      readonly scope: string
-    }
+  | { readonly kind: 'oidc'; readonly authority: string; readonly clientId: string; readonly scope: string }
 
 export type OidcSignIn = Extract<SignInConfig, { kind: 'oidc' }>
 
@@ -23,11 +18,7 @@ export class PortalConfigError extends Error {
   }
 }
 
-const LIVE_DEV: PortalConfig = {
-  mode: 'live',
-  signIn: { kind: 'dev' },
-  jiraBrowseUrl: null,
-}
+const LIVE_DEV: PortalConfig = { mode: 'live', signIn: { kind: 'dev' }, jiraBrowseUrl: null }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -56,18 +47,16 @@ function parseSignIn(auth: unknown): SignInConfig {
 
 function parseJiraBrowseUrl(value: unknown): string | null {
   if (value === undefined || value === '') return null
-  if (!isHttpUrl(value) || !value.includes('{key}')) throw new PortalConfigError('The jira_browse_url in /config.json is not an absolute http(s) URL with {key} in it.')
+  if (!isHttpUrl(value) || !value.includes('{key}') || !/^https?:\/\/[A-Za-z0-9.-]+(:[0-9]+)?\//.test(value)) {
+    throw new PortalConfigError('The jira_browse_url in /config.json is not an absolute http(s) URL with a host and {key} in it.')
+  }
   return value
 }
 
 export function parseConfig(raw: unknown): PortalConfig {
   if (!isRecord(raw)) return LIVE_DEV
   const jiraBrowseUrl = parseJiraBrowseUrl(raw['jira_browse_url'])
-  return {
-    mode: 'live',
-    signIn: raw['auth'] === undefined ? LIVE_DEV.signIn : parseSignIn(raw['auth']),
-    jiraBrowseUrl,
-  }
+  return { mode: 'live', signIn: raw['auth'] === undefined ? LIVE_DEV.signIn : parseSignIn(raw['auth']), jiraBrowseUrl }
 }
 
 export async function loadConfig(fetchConfig: typeof fetch = (input, init) => fetch(input, init)): Promise<PortalConfig> {

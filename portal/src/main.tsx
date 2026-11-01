@@ -45,7 +45,7 @@ async function start(): Promise<void> {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <ApiProvider session={boot.session} platformFetch={(input, init) => window.fetch(input, init)}>
-          <TicketLinksProvider browseUrl={config.jiraBrowseUrl}>
+          <TicketLinksProvider config={config}>
             <BrowserRouter>
               <SignInGate>
                 <App />

@@ -16,16 +16,8 @@ import { MENU_PAGE_IDS, PAGES } from './routes'
 const ORIGIN = 'http://portal.test'
 const MORNING = new Date('2026-10-29T03:00:00Z')
 
-const ALICE: Me = {
-  id: '0a11ce00-0000-4000-8000-000000000001',
-  display: 'Alice',
-  roles: ['operator', 'approver'],
-}
-const BOB: Me = {
-  id: '0b0b0000-0000-4000-8000-000000000002',
-  display: 'Bob',
-  roles: ['approver'],
-}
+const ALICE: Me = { id: '0a11ce00-0000-4000-8000-000000000001', display: 'Alice', roles: ['operator', 'approver'] }
+const BOB: Me = { id: '0b0b0000-0000-4000-8000-000000000002', display: 'Bob', roles: ['approver'] }
 
 const oidcSession: Session = {
   kind: 'oidc',
@@ -48,9 +40,7 @@ interface Setup {
 
 function render({ path = '/', me = ALICE, meError, oidc = false, browseUrl = null }: Setup = {}): string {
   const session = oidc ? oidcSession : createDevSession(null)
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retryOnMount: false } },
-  })
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   const key = ['me', session.cacheScope()]
   if (meError === undefined) queryClient.setQueryData(key, me)
   else queryClient.getQueryCache().build(queryClient, { queryKey: key }).setState({ status: 'error', error: meError, fetchStatus: 'idle' })
@@ -58,7 +48,7 @@ function render({ path = '/', me = ALICE, meError, oidc = false, browseUrl = nul
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={session} platformFetch={fetch} origin={ORIGIN}>
-        <TicketLinksProvider browseUrl={browseUrl}>
+        <TicketLinksProvider config={{ jiraBrowseUrl: browseUrl }}>
           <MemoryRouter initialEntries={[path]}>
             <App now={() => MORNING} />
           </MemoryRouter>
@@ -68,12 +58,7 @@ function render({ path = '/', me = ALICE, meError, oidc = false, browseUrl = nul
   )
 }
 
-const text = (html: string) =>
-  html
-    .replace(/<[^>]*>/g, ' ')
-    .replaceAll('&#x27;', "'")
-    .replace(/\s+/g, ' ')
-    .trim()
+const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replace(/\s+/g, ' ').trim()
 const headings = (html: string) => [...html.matchAll(/<h1\b[^>]*>(.*?)<\/h1>/g)].map((match) => text(match[1] ?? ''))
 const mainOf = (html: string) => /<main\b[\s\S]*<\/main>/.exec(html)?.[0] ?? ''
 const headerOf = (html: string) => /<header\b[\s\S]*<\/header>/.exec(html)?.[0] ?? ''
@@ -113,7 +98,9 @@ describe('the menu', () => {
 
   it('has the menu’s items on the phone tab bar too', () => {
     const html = render()
-    const bars = [...html.matchAll(/<nav\b[^>]*aria-label="Main"[^>]*>([\s\S]*?)<\/nav>/g)].map((match) => [...(match[1] ?? '').matchAll(/<a\b[^>]*href="([^"]*)"/g)].map((link) => link[1]))
+    const bars = [...html.matchAll(/<nav\b[^>]*aria-label="Main"[^>]*>([\s\S]*?)<\/nav>/g)].map((match) =>
+      [...(match[1] ?? '').matchAll(/<a\b[^>]*href="([^"]*)"/g)].map((link) => link[1]),
+    )
     expect(bars).toHaveLength(2)
     expect(bars[1]).toEqual(MENU_PAGE_IDS.map((id) => PAGES[id].path))
   })
@@ -174,10 +161,7 @@ describe('the pages', () => {
     for (const path of [...DRAWN_AT_ONCE.map((id) => PAGES[id].path), '/settings', '/nowhere']) {
       const tags = [...render({ path }).matchAll(/<h1\b[^>]*>/g)]
       expect(tags.length, path).toBeGreaterThan(0)
-      expect(
-        tags.every((tag) => tag[0].includes('tabindex="-1"')),
-        path,
-      ).toBe(true)
+      expect(tags.every((tag) => tag[0].includes('tabindex="-1"')), path).toBe(true)
     }
   })
 
@@ -219,9 +203,7 @@ describe('the person', () => {
 })
 
 describe('the person chip panel', () => {
-  const root = {
-    contains: (node: unknown) => node === 'inside',
-  } as unknown as Pick<Node, 'contains'>
+  const root = { contains: (node: unknown) => node === 'inside' } as unknown as Pick<Node, 'contains'>
 
   it('stays open when focus is lost with no target, as Safari does on a press of Sign out', () => {
     expect(focusMovedOutside(root, null)).toBe(false)
@@ -294,19 +276,27 @@ describe('when the platform is down', () => {
 })
 
 describe('the way in to the practice Jira', () => {
-  it('is a header link next to Teams and Settings, labelled as a practice copy, and not in the menu', () => {
+  const jiraLink = /<a\b[^>]*aria-label="Jira, practice copy"[^>]*href="\/jira"[^>]*>[\s\S]*?<\/a>/
+
+  it('is a header link next to Teams and Settings, with a visible Jira label, and not in the menu', () => {
     const html = render()
-    expect(headerOf(html)).toMatch(/<a\b[^>]*aria-label="Jira, practice copy"[^>]*href="\/jira"/)
+    const link = jiraLink.exec(headerOf(html))?.[0] ?? ''
+    expect(text(link)).toBe('Jira')
     expect(menuLabels(html)).not.toContain('Practice Jira')
   })
 
-  it('shows the practice Jira page at /jira with its own heading, and loads it on demand', () => {
-    const html = render({ path: '/jira/MOCK-1' })
-    expect(headings(html)).toEqual(['Practice Jira'])
-    expect(text(mainOf(html))).toContain('Loading')
+  it('is left out for someone who is not on the People list, as Teams is', () => {
+    const mallory: Me = { id: 'mallory', display: 'Mallory', roles: [], on_list: false }
+    expect(headerOf(render({ me: mallory }))).not.toContain('href="/jira"')
   })
 
-  it('is left out of the header when a real Jira address is configured, because it has nothing to show then', () => {
+  it('is left out when a real Jira address is configured, because the page has nothing to show then', () => {
     expect(headerOf(render({ browseUrl: 'https://jira.example.test/browse/{key}' }))).not.toContain('href="/jira"')
+  })
+
+  it('shows the practice Jira page at /jira/KEY with its own heading, loaded on demand', () => {
+    const html = render({ path: '/jira/OPS-1' })
+    expect(headings(html)).toEqual(['Practice Jira'])
+    expect(text(mainOf(html))).toContain('Loading')
   })
 })

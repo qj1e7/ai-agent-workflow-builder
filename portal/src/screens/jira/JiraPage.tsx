@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useErrorWords } from '../../api/context'
-import { useLatch, pressOnce } from '../../api/latch'
+import { useLatch } from '../../api/latch'
 import { useMarkDone, useMe, useMockJiraTickets } from '../../api/queries'
 import type { MockJiraTicket } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { useFocusWhenReady } from '../../ui/focus'
-import { cx } from '../../ui/cx'
-import { createdWords, detailsId, doneWords, EMPTY_WORDS, LOAD_WORDS, markDoneProblem, missingWords, newestFirst, PRACTICE_NOTE, showMarkDone } from './tickets'
+import { createdWords, detailsId, EMPTY_WORDS, LOAD_WORDS, missingWords, newestFirst, pressMarkDone, showMarkDone } from './tickets'
 import styles from './Jira.module.css'
 
 const STATUS_ID = 'jira-status'
@@ -90,18 +89,26 @@ function Loaded({ tickets, operator, openKey }: LoadedProps) {
   }, [openKey])
 
   function press(key: string) {
-    setProblem(null)
-    setSaid('')
-    setMarking(key)
-    pressOnce(latch, (outcome) => mark.mutate(key, outcome), {
-      onSuccess: () => {
-        setMarked(key)
-        focusAfter()
-        setSaid(doneWords(key))
+    pressMarkDone(
+      latch,
+      (ticketKey, outcome) => mark.mutate(ticketKey, outcome),
+      key,
+      {
+        start: () => {
+          setProblem(null)
+          setSaid('')
+          setMarking(key)
+        },
+        armFocus: () => {
+          setMarked(key)
+          focusAfter()
+        },
+        done: setSaid,
+        fail: setProblem,
+        settled: () => setMarking(null),
       },
-      onError: (error) => setProblem(markDoneProblem(error, key, words)),
-      onSettled: () => setMarking(null),
-    })
+      words,
+    )
   }
 
   return (
@@ -149,11 +156,9 @@ export function JiraRoute() {
   const { key } = useParams()
   const me = useMe()
   const tickets = useMockJiraTickets({ poll: 10_000 })
-  const note = <p className={cx(styles['note'])}>{PRACTICE_NOTE}</p>
   if ((tickets.isError && !tickets.data) || me.isError) {
     return (
       <>
-        {note}
         <p className={styles['error']}>{LOAD_WORDS}</p>
         <Button onClick={() => void Promise.all([tickets.refetch(), me.refetch()])}>Try again</Button>
       </>
@@ -162,7 +167,6 @@ export function JiraRoute() {
   if (!tickets.data || !me.data) {
     return (
       <>
-        {note}
         <p className="muted" role="status">
           Loading the tickets
         </p>
@@ -171,7 +175,6 @@ export function JiraRoute() {
   }
   return (
     <>
-      {note}
       <Loaded tickets={tickets.data} operator={me.data.roles.includes('operator')} openKey={key} />
     </>
   )
