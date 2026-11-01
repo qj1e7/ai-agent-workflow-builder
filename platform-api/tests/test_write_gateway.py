@@ -50,6 +50,9 @@ REQUEST = ApprovalRequest(
 )
 APPROVED = (Decision(APR, 0, BOB, Verdict.APPROVE, PROPOSAL.digest, NOW),)
 ACTING = Acting(RUN, PRP, APR, 1, None, NOW)
+RACE_LIMIT = 20.0
+"""Seconds a test of tries running together may take, so a claim that never settles fails in
+seconds instead of hanging CI."""
 
 
 class BlockingConnector:
@@ -99,7 +102,7 @@ async def test_a_retry_during_a_slow_write_holds_and_returns_the_same_ticket(db:
     await asyncio.sleep(0.2)
     assert not first.done() and not second.done()
     connector.release.set()
-    results = await asyncio.gather(first, second)
+    results = await asyncio.wait_for(asyncio.gather(first, second), RACE_LIMIT)
     assert results[0] == results[1] == (WriteDone("jira", "create_ticket", "MOCK-1", (BOB,)),)
     assert connector.calls == [f"{RUN}/{PRP}/0"]
 
@@ -208,9 +211,42 @@ async def test_two_gateways_racing_on_one_write_make_one_ticket(db: Database):
     await seed_run(db)
     jira = PracticeKit(db)
     write = authorized(jira)
-    first, second = await asyncio.gather(
-        WriteGateway(db, [jira], poll=0.05).execute(write),
-        WriteGateway(db, [jira], poll=0.05).execute(write),
+    first, second = await asyncio.wait_for(
+        asyncio.gather(
+            WriteGateway(db, [jira], poll=0.05).execute(write),
+            WriteGateway(db, [jira], poll=0.05).execute(write),
+        ),
+        RACE_LIMIT,
     )
     assert first == second
     assert [t.key for t in await jira.tickets()] == ["MOCK-1"]
+
+
+async def test_a_claim_that_meets_the_other_unique_key_says_someone_else_holds_it(db: Database):
+    # write_executions has two unique keys, and ON CONFLICT names only idempotency_key. A row
+    # that holds this write's (proposal_id, action_index) under another idempotency key is the
+    # same collision that two tries inserting at once can meet, made certain.
+    await seed_run(db)
+    async with db.transaction("orchestration") as uow:
+        await uow.conn.execute(
+            "INSERT INTO orchestration.write_executions "
+            "(proposal_id, action_index, run_id, idempotency_key, status, started_at) "
+            "VALUES (%s, 0, %s, 'held-by-another-try', 'started', %s)",
+            (PRP, RUN, uow.now),
+        )
+    gateway = WriteGateway(db, [BlockingConnector()])
+    assert await asyncio.wait_for(gateway._claim(WriteKey(RUN, PRP, 0)), RACE_LIMIT) is False
+
+
+@pytest.mark.parametrize("race", range(10))
+async def test_five_gateways_racing_on_one_write_call_the_connector_once(db: Database, race: int):
+    await seed_run(db)
+    connector = BlockingConnector()
+    connector.release.set()
+    write = authorized(connector)
+    gateways = [WriteGateway(db, [connector], poll=0.02) for _ in range(5)]
+    results = await asyncio.wait_for(
+        asyncio.gather(*(gateway.execute(write) for gateway in gateways)), RACE_LIMIT
+    )
+    assert all(result == results[0] for result in results)
+    assert connector.calls == [f"{RUN}/{PRP}/0"]
