@@ -1,0 +1,23 @@
+.block {
+  margin: 0;
+}
+
+.heading {
+  margin-top: 4px;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.block [data-color='good'] {
+  color: var(--green-ink);
+}
+
+.block [data-color='attention'] {
+  color: var(--red-ink);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

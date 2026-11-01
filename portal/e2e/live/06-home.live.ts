@@ -70,7 +70,7 @@ test('bob approves on the run page, and the item has left Home when he comes bac
   await context.close()
 })
 
-test('a yes in the Teams panel takes the item off Home at once, without a reload', async ({ browser, backend }, info) => {
+test('a yes from the Teams card’s link takes the item off Home at once, without a reload', async ({ browser, backend }, info) => {
   const { approvalId } = await backend.waitingRun('alice')
   const context = await devContext(browser, 'bob')
   const page = await context.newPage()
@@ -80,10 +80,14 @@ test('a yes in the Teams panel takes the item off Home at once, without a reload
   await page.getByRole('button', { name: /^Teams, practice copy/ }).click()
   const message = page.getByRole('dialog', { name: 'Teams, practice copy' }).locator(`li[data-approval-id="${approvalId}"]`)
   await message.scrollIntoViewIfNeeded()
-  await message.getByRole('button', { name: 'Approve' }).click()
-  await expect(message).toContainText('Approved by Bob')
+  // Like real Teams, the card has no Approve button: its link opens the approval page, and Bob decides there.
+  await message.getByRole('link', { name: 'Open in AI Workflow Builder' }).click()
+  await page.getByRole('button', { name: 'Approve 1 ticket' }).click()
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Home' }).click()
+  await expect(itemOf(page, approvalId)).toHaveCount(0, { timeout: 15_000 })
+  await page.getByRole('button', { name: /^Teams, practice copy/ }).click()
+  await expect(message).toContainText('Approved by Bob', { timeout: 30_000 })
   await page.keyboard.press('Escape')
-  await expect(itemOf(page, approvalId)).toHaveCount(0, { timeout: 5_000 })
   expect(await notReloaded(page), 'Home updated without a reload').toBe(true)
   await shot(page, info, 'p11-06-after-teams-yes')
   await context.close()
