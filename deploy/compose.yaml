@@ -98,7 +98,9 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       AGENT_API_KEY: ${AGENT_API_KEY:?run deploy/make-env.sh}
       CALLBACK_ALLOWED_ORIGINS: http://platform-api:8000
-      PRACTICE_JIRA_URL: http://platform-api:8000
+      # The Jira tools read through platform-api, never from Jira itself (ADR 0035). It must be one of
+      # CALLBACK_ALLOWED_ORIGINS, because each read carries the task's callback token.
+      PLATFORM_JIRA_URL: http://platform-api:8000
       AGENT_SUMMARY_MODEL: ${AGENT_SUMMARY_MODEL:-}
       AGENT_MODEL_BASE_URL: ${AGENT_MODEL_BASE_URL:-}
       AGENT_MODEL_API_KEY: ${AGENT_MODEL_API_KEY:-}
@@ -153,6 +155,10 @@ services:
       # with real sign-in; dev mode seeds alice, bob and carol instead.
       FIRST_OPERATOR: ${FIRST_OPERATOR:-}
       FIRST_APPROVERS: ${FIRST_APPROVERS:-}
+      # The practice Jira's own pages are served while this is on (ADR 0035).
+      PRACTICE_SYSTEMS: ${PRACTICE_SYSTEMS:-on}
+      # The Jira project the watchlist raises tickets in. MOCK is the practice Jira's.
+      WATCHLIST_JIRA_PROJECT: ${WATCHLIST_JIRA_PROJECT:-MOCK}
     ports:
       - "${PLATFORM_API_HOST_PORT:-8000}:8000"
     healthcheck:

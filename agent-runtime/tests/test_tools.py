@@ -57,6 +57,11 @@ def test_the_tool_list_schema_equals_what_a_run_validates_against():
         ("jira_project", "MOCK", True),
         ("jira_project", "mock", False),
         ("jira_project", "MOCK-1", False),
+        ("jira_project", "AB_1", True),
+        ("jira_project", "A" + "B" * 254, True),
+        ("jira_project", "A" + "B" * 255, False),
+        ("jira_project", "_AB", False),
+        ("jira_project", "1AB", False),
         ("text", "Support team", True),
         ("text", "", False),
         ("text", "two\nlines", False),
@@ -65,3 +70,20 @@ def test_the_tool_list_schema_equals_what_a_run_validates_against():
 )
 def test_values_must_fit_their_kind(kind: str, value: str, fits: bool):
     assert (value_problem(kind, value) is None) is fits  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("key", "fits"),
+    [("MOCK-7", True), ("AB_1-12", True), ("AB_1", False), ("ab-1", False), ("_A-1", False)],
+)
+def test_ticket_keys_take_the_shapes_jira_allows(key: str, fits: bool):
+    tool = BY_ID["jira.read_ticket"]
+    if fits:
+        tool.parse({"key": key})
+    else:
+        with pytest.raises(ValidationError):
+            tool.parse({"key": key})
+
+
+def test_a_search_takes_a_project_key_with_an_underscore():
+    BY_ID["jira.search"].parse({"project": "AB_1"})

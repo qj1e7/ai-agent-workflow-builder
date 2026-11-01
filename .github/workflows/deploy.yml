@@ -59,8 +59,6 @@ jobs:
       # The first people (ADR 0030), read only while the People list is empty.
       TF_VAR_first_operator: ${{ secrets.FIRST_OPERATOR }}
       TF_VAR_first_approvers: ${{ secrets.FIRST_APPROVERS }}
-      # Optional. Unset means platform-api's own practice Jira.
-      TF_VAR_practice_jira_url: ${{ vars.PRACTICE_JIRA_URL }}
       # Optional, for a subscription that refuses Cosmos DB's free tier or its region (ADR 0031).
       TF_VAR_cosmos_location: ${{ vars.COSMOS_LOCATION }}
       TF_VAR_cosmos_serverless: ${{ vars.COSMOS_SERVERLESS || 'false' }}

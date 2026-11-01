@@ -1,6 +1,6 @@
 #!/bin/sh
-# Checks the variable rules in a variables.tf for sign-in, the first people, the practice Jira and
-# n8n's allow list: good values pass, and plan refuses what platform-api, agent-runtime or the Portal
+# Checks the variable rules in a variables.tf for sign-in, the first people and n8n's
+# allow list: good values pass, and plan refuses what platform-api, agent-runtime or the Portal
 # would refuse, or what would open n8n wider than meant. It plans a module that holds only that
 # file, so it needs no provider and no credentials. check.sh runs it in the Terraform image.
 # Usage: check-variables.sh <variables.tf>
@@ -55,7 +55,6 @@ expect accepted - "the first people, the Operator also an Approver" \
   -var first_operator=op@example.test -var first_approvers=op@example.test,ap@example.test
 expect accepted - "the first people with spaces and capitals" \
   -var 'first_operator= Op@Example.test ' -var 'first_approvers=Op@Example.test , ap@example.test'
-expect accepted - "another practice Jira" -var practice_jira_url=https://jira.example.test/practice
 expect accepted - "n8n's editor open to every address" -var n8n_editor_external=true
 expect accepted - "n8n's editor open to one address" \
   -var n8n_editor_external=true -var n8n_editor_allowed_ips=203.0.113.7
@@ -101,9 +100,6 @@ expect refused first_approvers "an Approver that is not an email" \
   -var first_operator=op@example.test -var first_approvers=a@example.test,bob
 expect refused first_operator "an Operator that is not an email" \
   -var first_operator=alice -var first_approvers=a@example.test,b@example.test
-
-expect refused practice_jira_url "practice Jira over http" -var practice_jira_url=http://platform-api:8000
-expect refused practice_jira_url "practice Jira with a query" -var 'practice_jira_url=https://jira.example.test/?x=1'
 
 expect refused n8n_editor_allowed_ips "an n8n editor address that is a name" -var n8n_editor_allowed_ips=my-laptop
 expect refused n8n_editor_allowed_ips "an n8n editor address past 255" -var n8n_editor_allowed_ips=203.0.113.256

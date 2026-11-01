@@ -2,9 +2,17 @@ import json
 from typing import Any
 
 import httpx
+import pytest
 from fastapi.testclient import TestClient
 
-from agent_runtime.api import HttpCallbacks, Runtime, Settings, build_runtime, create_app
+from agent_runtime.api import (
+    HttpCallbacks,
+    Runtime,
+    Settings,
+    SettingsError,
+    build_runtime,
+    create_app,
+)
 from agent_runtime.card_runner import CardRunner
 from agent_runtime.contract import ModelAccess
 from agent_runtime.contracts import (
@@ -18,7 +26,7 @@ from agent_runtime.contracts import (
     draft_request,
 )
 from agent_runtime.drafting import AgentAnswer, ChoiceAnswer
-from agent_runtime.jira import PracticeJiraFor
+from agent_runtime.jira import PlatformJiraFor
 from agent_runtime.planner import FixedPlanner
 from agent_runtime.summary import ChatFor, TemplateSummarizer
 from agent_runtime.version_checker import VersionChecker
@@ -161,17 +169,44 @@ def test_a_model_that_fails_is_a_problem_not_an_http_error():
     assert EXAMPLE_KEY not in response.text
 
 
-def test_the_practice_jira_address_comes_from_the_environment():
-    assert SETTINGS.practice_jira_url is None
-    settings = Settings.from_env({**BASE_ENV, "PRACTICE_JIRA_URL": ORIGIN})
-    assert settings.practice_jira_url == ORIGIN
+def test_the_platform_jira_address_comes_from_the_environment():
+    assert SETTINGS.platform_jira_url is None
+    settings = Settings.from_env({**BASE_ENV, "PLATFORM_JIRA_URL": ORIGIN})
+    assert settings.platform_jira_url == ORIGIN
     runtime = build_runtime(settings)
     assert runtime.cards is not None
-    reader = PracticeJiraFor(ORIGIN)(card_request("run_01JD1"))
+    reader = PlatformJiraFor(ORIGIN)(card_request("run_01JD1"))
     assert reader is not None
 
 
-def test_without_a_practice_jira_address_the_jira_tools_have_no_reader():
+@pytest.mark.parametrize(
+    "address",
+    [
+        "https://jira.example.com",
+        "http://platform-api:9000",
+        "https://platform-api:8000",
+        "http://platform-api.evil.test:8000",
+        "not a url",
+    ],
+)
+def test_a_platform_jira_address_outside_the_callback_origins_is_refused(address: str):
+    # The runtime sends each task's callback token there, so it may only be our platform.
+    with pytest.raises(SettingsError, match="PLATFORM_JIRA_URL"):
+        Settings.from_env({**BASE_ENV, "PLATFORM_JIRA_URL": address})
+
+
+def test_a_platform_jira_address_may_carry_a_path_on_an_allowed_origin():
+    settings = Settings.from_env({**BASE_ENV, "PLATFORM_JIRA_URL": f"{ORIGIN}/platform"})
+    assert settings.platform_jira_url == f"{ORIGIN}/platform"
+
+
+def test_the_old_practice_jira_setting_is_refused_by_name():
+    # A stale setting would otherwise turn the Jira tools off without a word.
+    with pytest.raises(SettingsError, match="PRACTICE_JIRA_URL is now PLATFORM_JIRA_URL"):
+        Settings.from_env({**BASE_ENV, "PRACTICE_JIRA_URL": ORIGIN})
+
+
+def test_without_a_platform_jira_address_the_jira_tools_have_no_reader():
     runtime = build_runtime(SETTINGS)
     assert runtime.cards is not None
     assert runtime.cards.jira_for(card_request("run_01JD1")) is None

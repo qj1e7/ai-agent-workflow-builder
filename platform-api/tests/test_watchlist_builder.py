@@ -508,3 +508,41 @@ async def test_an_emptied_watchlist_has_nothing_to_check(watchlist: Watchlist, b
     await watchlist.remove(view.software[0].id)
     assert await builder.run_spec_for(UseCaseId(view.use_case_id)) == NothingToCheck()
     assert await builder.start_run(UseCaseId(view.use_case_id), ALICE, "k") == NothingToCheck()
+
+
+async def test_the_first_add_raises_tickets_in_the_configured_project(
+    db: Database, facts: FakeFacts
+):
+    watchlist = Watchlist(db, facts, ScheduleBook(db), ticket_project="AB_1")
+    view = await added(watchlist, LANGGRAPH)
+    assert view.ticket_project == "AB_1"
+
+
+async def test_a_new_project_setting_moves_the_watchlist_there_in_a_new_version(
+    db: Database, facts: FakeFacts
+):
+    first = await added(Watchlist(db, facts, ScheduleBook(db)), LANGGRAPH)
+    assert (first.ticket_project, first.version) == ("MOCK", 1)
+    moved = Watchlist(db, facts, ScheduleBook(db), ticket_project="OPS")
+    await moved.adopt_ticket_project()
+    view = await moved.view()
+    assert view is not None
+    assert (view.ticket_project, view.version) == ("OPS", 2)
+    assert [row.name for row in view.software] == ["LangGraph"]
+    task = await moved.task_for(UseCaseId(view.use_case_id), view.version)
+    assert task is not None
+    await moved.adopt_ticket_project()
+    again = await moved.view()
+    assert again is not None and again.version == 2
+
+
+async def test_the_same_project_setting_or_no_watchlist_changes_nothing(
+    db: Database, facts: FakeFacts
+):
+    watchlist = Watchlist(db, facts, ScheduleBook(db), ticket_project="MOCK")
+    await watchlist.adopt_ticket_project()
+    assert await watchlist.view() is None
+    first = await added(watchlist, LANGGRAPH)
+    await watchlist.adopt_ticket_project()
+    view = await watchlist.view()
+    assert view is not None and view.version == first.version
