@@ -929,14 +929,24 @@ class Orchestrator:
                 continue
             try:
                 await self._dispatch(held, now)
-            except Exception:
-                # One broken row must not stop the rest. It keeps its lease, so it is tried
-                # again once that runs out, not on every tick.
+            except Exception as error:
+                # One broken row must not stop the rest. It counts as a failed try, as a
+                # DispatchFailure does, so it waits, is given up after the usual tries, and its
+                # run hears so. Only the error's type is kept, as it may name an address.
                 log.error(
                     "outbox row %s could not be sent: %s",
                     row.id,
                     without_addresses(traceback.format_exc()),
                 )
+                detail = f"the outbox could not send it ({type(error).__name__})"
+                try:
+                    await self._dispatch_failed(held, now, detail)
+                except Exception:
+                    log.error(
+                        "outbox row %s could not be retried: %s",
+                        row.id,
+                        without_addresses(traceback.format_exc()),
+                    )
         async with self._db.transaction("orchestration") as uow:
             overdue = await self._store.runs_past_deadline(uow, now)
         for run_id in overdue:
@@ -1101,7 +1111,9 @@ class Orchestrator:
             if record is None:
                 return
             if row.kind == ANNOUNCE:
-                approval_id = ApprovalId(row.payload["approval_id"])
+                approval_id = row.payload.get("approval_id")
+                if approval_id is None:
+                    return
                 await self._activity.append(
                     uow,
                     row.run_id,
@@ -1112,17 +1124,24 @@ class Orchestrator:
                             "The approval request could not be posted to Teams. Share the "
                             "approval link by hand.",
                             ApprovalAnnounceFailedData(
-                                approval_id=approval_id, channel=self._channel.name, message=error
+                                approval_id=ApprovalId(approval_id),
+                                channel=self._channel.name,
+                                message=error,
                             ),
                         )
                     ],
                 )
                 return
+            # A row whose payload is broken is given up all the same.
+            attempt = row.payload.get("attempt")
             match record.state:
-                case Pending() | Acting() as state if state.attempt == int(row.payload["attempt"]):
+                case Pending() | Acting() as state if attempt is not None and state.attempt == int(
+                    attempt
+                ):
                     failure = Failure(
                         FailureReason.DISPATCH_FAILED,
-                        f"The workflow engine did not take the {row.payload['leg']} leg: {error}",
+                        f"The workflow engine did not take the "
+                        f"{row.payload.get('leg', 'next')} leg: {error}",
                         retryable=True,
                     )
                     await self._commit(uow, record, fail(state, failure))

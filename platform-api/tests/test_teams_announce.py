@@ -397,3 +397,63 @@ async def test_a_row_that_raises_does_not_stop_the_rows_after_it(
     assert [run_id for _, _, run_id in h.engine.legs] == [second]
     assert any("RuntimeError" in r.getMessage() for r in caplog.records)
     assert isinstance(await h.state(first), Pending)
+
+
+class SharedLog(RecordingChannel):
+    """One replica's channel. Both replicas' channels post into one list."""
+
+    def __init__(self, h: Harness, posted: list[ApprovalNotice], pause: float) -> None:
+        super().__init__(pause=pause)
+        self.h = h
+        self.announced = posted
+        self.posts = 0
+        self.meanwhile: Callable[[], None] | None = None
+
+    async def announce(self, notice: ApprovalNotice) -> MessageRef:
+        self.posts += 1
+        self.h.advance(timedelta(seconds=40))
+        if self.posts == 2 and self.meanwhile is not None:
+            meanwhile, self.meanwhile = self.meanwhile, None
+            meanwhile()
+        return await super().announce(notice)
+
+
+async def test_a_row_another_replica_is_still_sending_is_left_to_it(h: Harness):
+    # The second replica takes the third request while the first is on its second send, and is
+    # still sending it when the first reaches it. Only the lease says whose the row is now.
+    runs = await asking_runs(h, 3)
+    posted: list[ApprovalNotice] = []
+    first_channel = SharedLog(h, posted, pause=0.2)
+    second_channel = SharedLog(h, posted, pause=1.0)
+    first = orchestrator_for(h, first_channel)
+    second = orchestrator_for(h, second_channel)
+    started: list[asyncio.Task[None]] = []
+    first_channel.meanwhile = lambda: started.append(asyncio.create_task(second.tick()))
+    await first.tick()
+    await asyncio.gather(*started)
+    ids = [n.approval_id for n in posted]
+    assert len(ids) == len(set(ids)) == len(runs)
+
+
+async def test_a_row_that_raises_outside_the_adapter_is_retried_then_given_up(h: Harness):
+    # A payload missing a key raises in the platform's own code, not in the adapter. It must
+    # still count its tries, wait between them and give up, as any other failed send does.
+    run_id, _, approval_id = await work_leg_to_approval(h)
+    async with h.db.transaction("orchestration") as uow:
+        await Store().enqueue(
+            uow, run_id, "announce", {"run_id": run_id, "approval_id": approval_id}, uow.now
+        )
+    for _ in range(20):
+        await h.orchestrator.tick()
+        h.advance(timedelta(seconds=10))
+    async with h.db.transaction("orchestration") as uow:
+        row = await (
+            await uow.conn.execute(
+                "SELECT status, attempt, last_error FROM orchestration.outbox "
+                "WHERE kind = 'announce' AND NOT payload ? 'use_case_name'"
+            )
+        ).fetchone()
+    assert row is not None
+    assert (row["status"], row["attempt"]) == ("given_up", RETRY_POLICY.tries - 1)
+    assert row["last_error"] == "the outbox could not send it (KeyError)"
+    assert (await h.kinds(run_id))[-1] == "approval_announce_failed"
