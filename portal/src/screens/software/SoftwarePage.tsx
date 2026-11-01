@@ -7,6 +7,7 @@ import { useMe, useRemoveSoftware, useRestoreSoftware, useRun, useStartRun, useW
 import type { LastCheckView, WatchedSoftwareView, WatchlistView } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { IconExternal } from '../../ui/icons'
+import { TicketKeys, TicketLink } from '../jira/TicketKeys'
 import { AddSoftware } from './AddSoftware'
 import { pressCheckNow } from './checkNow'
 import { FindSoftware } from './FindSoftware'
@@ -27,7 +28,7 @@ import {
   type Named,
 } from './removal'
 import { SoftwareHistory } from './SoftwareHistory'
-import { cantCheckWords, countIn, emptyWords, groupsOf, newestOf, scheduleRuns, singaporeTime, statusLabel, statusTone, stoppedWords, versionSourceWords } from './software'
+import { cantCheckWords, countIn, emptyWords, groupsOf, newestOf, scheduleRuns, singaporeTime, statusLabel, statusTone, stoppedWords, ticketsOf, versionSourceWords } from './software'
 import styles from './Software.module.css'
 
 const REFRESH_MS = 15_000
@@ -76,7 +77,7 @@ function Row({ row, operator, scheduled, paused, open, removing, nameOf, onToggl
           <dt>Ours</dt>
           <dd>
             {row.our_version ?? 'Not known yet'}
-            <span className={styles['src']}>{versionSourceWords(row.our_version_source)}</span>
+            <span className={styles['src']}><TicketKeys text={versionSourceWords(row.our_version_source)} keys={ticketsOf(row)} /></span>
           </dd>
         </div>
         <div>
@@ -92,7 +93,11 @@ function Row({ row, operator, scheduled, paused, open, removing, nameOf, onToggl
           {statusLabel[row.status]}
         </span>
         {row.status === 'cant_check' ? <span className={styles['src']}>{cantCheckWords(row.problem, { scheduled, paused })}</span> : null}
-        {row.status === 'ticket_open' && row.open_ticket ? <span className={styles['src']}>{row.open_ticket}</span> : null}
+        {row.status === 'ticket_open' && row.open_ticket ? (
+          <span className={styles['src']}>
+            <TicketLink ticketKey={row.open_ticket} />
+          </span>
+        ) : null}
         {row.status === 'awaiting_approval' && row.approval_id ? (
           <Link to={`/approvals/${row.approval_id}`} className={styles['src']}>
             Review and decide

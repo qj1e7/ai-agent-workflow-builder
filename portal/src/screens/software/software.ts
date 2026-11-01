@@ -267,6 +267,11 @@ export function scheduleOwnerWords(schedule: ScheduleView): string {
   return `Scheduled checks count as ${schedule.owner_name}’s work, so ${schedule.owner_name} can’t approve them.`
 }
 
+/** The ticket keys one row holds: the open one, and the one our version came from. These are the only keys its words may link. */
+export function ticketsOf(row: WatchedSoftwareView): string[] {
+  return [row.open_ticket, row.our_version_source?.ticket].filter((key): key is string => typeof key === 'string' && key !== '')
+}
+
 interface HistoryLine {
   readonly when: string
   readonly words: string
