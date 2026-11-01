@@ -93,9 +93,11 @@ function Row({ row, operator, scheduled, paused, open, removing, nameOf, onToggl
           {statusLabel[row.status]}
         </span>
         {row.status === 'cant_check' ? <span className={styles['src']}>{cantCheckWords(row.problem, { scheduled, paused })}</span> : null}
-        {row.status === 'ticket_open' && row.open_ticket ? <span className={styles['src']}>
+        {row.status === 'ticket_open' && row.open_ticket ? (
+          <span className={styles['src']}>
             <TicketLink ticketKey={row.open_ticket} />
-          </span> : null}
+          </span>
+        ) : null}
         {row.status === 'awaiting_approval' && row.approval_id ? (
           <Link to={`/approvals/${row.approval_id}`} className={styles['src']}>
             Review and decide

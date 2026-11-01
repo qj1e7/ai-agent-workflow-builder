@@ -64,6 +64,19 @@ describe('ticket keys in a line of words', () => {
     expect(splitKeys('OPS-12 and XOPS-1', ['OPS-1'])).toEqual([{ text: 'OPS-12 and XOPS-1', key: false }])
   })
 
+  it('does not take a key from inside a longer one joined by an underscore', () => {
+    expect(splitKeys('Created CS_OPS-3', ['OPS-3'])).toEqual([{ text: 'Created CS_OPS-3', key: false }])
+    expect(splitKeys('OPS-3_x', ['OPS-3'])).toEqual([{ text: 'OPS-3_x', key: false }])
+  })
+
+  it('ignores an empty key', () => {
+    expect(splitKeys('Created OPS-3', [''])).toEqual([{ text: 'Created OPS-3', key: false }])
+    expect(splitKeys('Created OPS-3', ['', 'OPS-3'])).toEqual([
+      { text: 'Created ', key: false },
+      { text: 'OPS-3', key: true },
+    ])
+  })
+
   it('takes a key that holds regex characters literally', () => {
     expect(splitKeys('See A.B-1', ['A.B-1'])).toEqual([
       { text: 'See ', key: false },

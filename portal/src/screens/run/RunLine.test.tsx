@@ -185,5 +185,7 @@ describe('ticket keys on the run page', () => {
     expect(outcome(replay(ops))).toMatch(link('OPS-142'))
     const confluence = { ...replay(ops), written: [{ connector: 'confluence', operation: 'update_page', ref: 'PAGE-9' }] }
     expect(outcome(confluence)).not.toContain('href="/jira/')
+    const empty = { ...replay(ops), written: [{ connector: 'jira', operation: 'create_ticket', ref: '' }] }
+    expect(outcome(empty)).not.toContain('href="/jira/"')
   })
 })

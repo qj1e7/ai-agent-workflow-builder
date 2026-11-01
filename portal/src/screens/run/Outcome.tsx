@@ -27,7 +27,7 @@ export function Outcome({ model, nameOf }: { model: RunModel; nameOf: NameOf }) 
     )
   }
   const refs = model.written.map((written) => written.ref)
-  const jiraRefs = new Set(model.written.filter((written) => written.connector === 'jira').map((written) => written.ref))
+  const jiraRefs = new Set(model.written.filter((written) => written.connector === 'jira' && written.ref !== '').map((written) => written.ref))
   const tickets = model.written.length > 0 && model.written.every((written) => written.operation === 'create_ticket')
   const approvers = andList(model.approvedBy.map(nameOf)) || 'An Approver'
   let did = 'There was nothing to write.'

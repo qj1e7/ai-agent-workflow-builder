@@ -45,9 +45,10 @@ export interface Piece {
 
 /** Splits words on exactly these ticket keys. It never guesses at what looks like a key, so UTF-8 and CVE-2024-1234 stay words. */
 export function splitKeys(words: string, keys: readonly string[]): Piece[] {
-  if (keys.length === 0) return words === '' ? [] : [{ text: words, key: false }]
-  const escaped = [...new Set(keys)].sort((a, b) => b.length - a.length).map((key) => key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-  const pattern = new RegExp(`(?<![A-Za-z0-9-])(?:${escaped.join('|')})(?![A-Za-z0-9-])`, 'g')
+  const given = keys.filter((key) => key !== '')
+  if (given.length === 0) return words === '' ? [] : [{ text: words, key: false }]
+  const escaped = [...new Set(given)].sort((a, b) => b.length - a.length).map((key) => key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  const pattern = new RegExp(`(?<![A-Za-z0-9_-])(?:${escaped.join('|')})(?![A-Za-z0-9_-])`, 'g')
   const pieces: Piece[] = []
   let from = 0
   for (const match of words.matchAll(pattern)) {
