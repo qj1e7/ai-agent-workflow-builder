@@ -80,6 +80,8 @@ infra/
 | `COSMOS_ENDPOINT` | `http://cosmos:8081`, the emulator | the account's endpoint |
 | `COSMOS_KEY` | the emulator's published key | a Key Vault secret, copied from the account |
 | `ACTIVITY_READER` | `cosmos` by default | always `cosmos` |
+| `TEAMS_CHANNEL` | `CODESparks Ops` unless `.env` sets it | the `TEAMS_CHANNEL` variable when it is set, else platform-api's default, `CODESparks Ops` |
+| `TEAMS_WEBHOOK_URL` | `.env`, empty by default, so the practice Teams copy | a Key Vault secret from `TEAMS_WEBHOOK_URL`, only when that secret is set (ADR 0036) |
 | `MAX_BODY_BYTES` | not set, so 2 MiB (2097152). platform-api refuses a larger request body with 413 | not set, so the same 2 MiB |
 | `SETTINGS_ENCRYPTION_KEY` | `.env` | a generated Key Vault secret. If it is lost, an Operator pastes the model key again |
 | `FIRST_OPERATOR`, `FIRST_APPROVERS` | `.env`, empty by default | from `first_operator` and `first_approvers`, only when they are set |
@@ -182,6 +184,7 @@ If the repository is made public later, add required reviewers and "Prevent self
    | `AZURE_TENANT_ID` | printed by the bootstrap script |
    | `AZURE_SUBSCRIPTION_ID` | printed by the bootstrap script |
    | `GH_RELEASE_TOKEN` | optional. A GitHub token for the release checker, as [Secrets](#secrets) describes |
+   | `TEAMS_WEBHOOK_URL` | optional. A Teams Workflows webhook's address, so approval cards go to a real channel (ADR 0036). Leave it unset for the practice Teams copy |
    | `TFSTATE_RESOURCE_GROUP` | printed by the bootstrap script |
    | `TFSTATE_STORAGE_ACCOUNT` | printed by the bootstrap script |
    | `OIDC_ISSUER` | `https://login.microsoftonline.com/<tenant-id>/v2.0`. The Portal uses it as its sign-in authority too |
@@ -196,6 +199,7 @@ If the repository is made public later, add required reviewers and "Prevent self
 
    | Variable | Value |
    |---|---|
+   | `TEAMS_CHANNEL` | optional. The Teams channel's name, as the approval card and the activity log name it. Unset means `CODESparks Ops` |
    | `AZURE_LOCATION` | optional. The region for every resource. Unset means `southeastasia`. Set it before the first deploy only: changing it later replaces everything, PostgreSQL included |
    | `COSMOS_LOCATION` | optional. A region for Cosmos DB alone, when it is refused in `AZURE_LOCATION` |
    | `COSMOS_SERVERLESS` | optional. `true` makes a serverless Cosmos DB account, for when the free tier is refused. Unset means `false` |

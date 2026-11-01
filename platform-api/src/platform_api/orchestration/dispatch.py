@@ -1,14 +1,12 @@
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from typing import Protocol
+from datetime import timedelta
+from typing import Literal, Protocol
 
 import httpx
 
-from platform_api.db import Database
-from platform_api.orchestration.runs import Leg, sentence
-from platform_api.orchestration.write_actions import listed, one_line
-from platform_api.shared import ApprovalId, N8nExecutionId, RunId, new_id
+from platform_api.orchestration.runs import Leg
+from platform_api.shared import ApprovalId, N8nExecutionId, RunId
 
 
 @dataclass(frozen=True)
@@ -43,97 +41,65 @@ class WorkflowEngine(Protocol):
 
 
 @dataclass(frozen=True)
+class AskedStep:
+    """One approval step as the card says it: its label, and the names of who may decide it.
+    No names means any Approver who is not a party to the run."""
+
+    label: str
+    who: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class ApprovalNotice:
+    """What the approval card shows, and nothing else, so no token or key can reach a channel.
+
+    `actions` are the writes in one phrase each, for a sentence. `lines` are the writes one by
+    one, as the approval page lists them, for the card. `link` is the approval page's path, for
+    the activity log, and `open_url` the same page as an absolute address, for the card's button.
+    `digest` is the proposal's digest: a bot that lets Approvers decide inside Teams sends it
+    back with the decision, as the approval page does."""
+
     run_id: RunId
     approval_id: ApprovalId
     use_case_name: str
     actions: tuple[str, ...]
     link: str
+    open_url: str
     summary: str = ""
-
-
-class ApprovalChannel(Protocol):
-    @property
-    def name(self) -> str: ...
-
-    async def announce(self, notice: ApprovalNotice) -> None: ...
-
-
-SUMMARY_LIMIT = 300
-
-
-def _agents_said(summary: str) -> str:
-    """The agents' summary, labelled, on one line and cut to length.
-
-    It is model text, so it goes last: nothing the platform says can follow it and be mistaken
-    for it, and it cannot pose as the action line above it.
-    """
-    flat = one_line(summary, SUMMARY_LIMIT)
-    return f" The agents said: {sentence(flat)}" if flat else ""
+    lines: tuple[str, ...] = ()
+    digest: str = ""
+    steps: tuple[AskedStep, ...] = ()
+    not_deciding: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
-class TeamsMessage:
-    id: str
-    ts: datetime
+class MessageRef:
+    """Where an approval request was posted, so the channel can show its outcome later."""
+
     channel: str
-    text: str
-    link: str
-    run_id: RunId
-    approval_id: ApprovalId
+    id: str
 
 
-class TeamsStub:
-    def __init__(self, db: Database, channel: str) -> None:
-        self._db = db
-        self._channel = channel
+type OutcomeVerdict = Literal["approved", "declined"]
+
+
+@dataclass(frozen=True)
+class ApprovalOutcome:
+    verdict: OutcomeVerdict
+    by: tuple[str, ...]
+    use_case_name: str
+    open_url: str
+
+
+class ApprovalChannel(Protocol):
+    """Teams, or its practice copy. An adapter raises DispatchFailure when the post fails."""
 
     @property
-    def name(self) -> str:
-        return self._channel
+    def name(self) -> str: ...
 
-    async def announce(self, notice: ApprovalNotice) -> None:
-        text = (
-            f"A run of the {notice.use_case_name} needs an Approver. "
-            f"It would {listed(notice.actions)}. "
-            f"Open the approval page to decide.{_agents_said(notice.summary)}"
-        )
-        async with self._db.transaction("orchestration") as uow:
-            await uow.conn.execute(
-                "INSERT INTO orchestration.teams_stub_messages "
-                "(id, ts, channel, text, link, run_id, approval_id) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT (approval_id) DO NOTHING",
-                (
-                    new_id("tm"),
-                    uow.now,
-                    self._channel,
-                    text,
-                    notice.link,
-                    notice.run_id,
-                    notice.approval_id,
-                ),
-            )
+    async def announce(self, notice: ApprovalNotice) -> MessageRef: ...
 
-    async def messages(self) -> list[TeamsMessage]:
-        async with self._db.transaction("orchestration") as uow:
-            rows = await (
-                await uow.conn.execute(
-                    "SELECT id, ts, channel, text, link, run_id, approval_id "
-                    "FROM orchestration.teams_stub_messages ORDER BY ts, id"
-                )
-            ).fetchall()
-        return [
-            TeamsMessage(
-                id=row["id"],
-                ts=row["ts"],
-                channel=row["channel"],
-                text=row["text"],
-                link=row["link"],
-                run_id=RunId(row["run_id"]),
-                approval_id=ApprovalId(row["approval_id"]),
-            )
-            for row in rows
-        ]
+    async def update(self, ref: MessageRef, outcome: ApprovalOutcome) -> None: ...
 
 
 class N8nWebhooks:

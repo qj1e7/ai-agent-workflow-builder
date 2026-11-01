@@ -36,6 +36,8 @@ locals {
 
   # Whether a token is set is not secret, and plain is needed to choose which secrets exist.
   github_token_set = nonsensitive(var.github_token != "")
+  # The same for the Teams Workflows webhook (ADR 0036). Unset keeps the practice Teams copy.
+  teams_webhook_set = nonsensitive(var.teams_webhook_url != "")
 
   # The first people's addresses are not secret, and the app table's for_each needs plain values.
   first_people = trimspace(nonsensitive(var.first_operator)) == "" ? {} : {
@@ -191,6 +193,7 @@ module "key_vault" {
     },
     { "cosmos-key" = module.cosmos.primary_key },
     local.github_token_set ? { "github-token" = var.github_token } : {},
+    local.teams_webhook_set ? { "teams-webhook-url" = var.teams_webhook_url } : {},
   )
 }
 
@@ -221,18 +224,22 @@ locals {
           ACTIVITY_READER       = "cosmos"
         },
         var.oidc_jwks_url == "" ? {} : { OIDC_JWKS_URL = var.oidc_jwks_url },
+        var.teams_channel == "" ? {} : { TEAMS_CHANNEL = var.teams_channel },
         local.first_people,
       )
-      secrets = {
-        DATABASE_URL_BUILDER       = local.secret["database-url-builder"]
-        DATABASE_URL_ORCHESTRATION = local.secret["database-url-orchestration"]
-        DATABASE_URL_MONITORING    = local.secret["database-url-monitoring"]
-        AGENT_API_KEY              = local.secret["agent-api-key"]
-        STEP_KEY                   = local.secret["step-key"]
-        CALLBACK_SIGNING_KEY       = local.secret["callback-signing-key"]
-        SETTINGS_ENCRYPTION_KEY    = local.secret["settings-encryption-key"]
-        COSMOS_KEY                 = local.secret["cosmos-key"]
-      }
+      secrets = merge(
+        {
+          DATABASE_URL_BUILDER       = local.secret["database-url-builder"]
+          DATABASE_URL_ORCHESTRATION = local.secret["database-url-orchestration"]
+          DATABASE_URL_MONITORING    = local.secret["database-url-monitoring"]
+          AGENT_API_KEY              = local.secret["agent-api-key"]
+          STEP_KEY                   = local.secret["step-key"]
+          CALLBACK_SIGNING_KEY       = local.secret["callback-signing-key"]
+          SETTINGS_ENCRYPTION_KEY    = local.secret["settings-encryption-key"]
+          COSMOS_KEY                 = local.secret["cosmos-key"]
+        },
+        local.teams_webhook_set ? { TEAMS_WEBHOOK_URL = local.secret["teams-webhook-url"] } : {},
+      )
     }
 
     agent-runtime = {
