@@ -39,6 +39,25 @@ def test_bad_activity_settings_refuse_to_start(env: dict[str, str], reason: str)
         settings_from_env({**LOCAL_ENV, **env})
 
 
+def test_teams_stays_the_practice_copy_until_a_webhook_is_set():
+    settings = settings_from_env(LOCAL_ENV)
+    assert (settings.teams_channel, settings.teams_webhook_url) == ("CODESparks Ops", None)
+
+
+def test_a_teams_webhook_and_channel_name_come_from_the_environment():
+    hook = "https://prod.example.logic.azure.com/workflows/abc/triggers/manual/run?sig=x"
+    settings = settings_from_env(
+        {**LOCAL_ENV, "TEAMS_WEBHOOK_URL": hook, "TEAMS_CHANNEL": "CODESparks Support"}
+    )
+    assert (settings.teams_channel, settings.teams_webhook_url) == ("CODESparks Support", hook)
+
+
+@pytest.mark.parametrize("hook", ["http://hook.example/run?sig=x", "hook.example", "https://"])
+def test_a_teams_webhook_that_is_not_https_refuses_to_start(hook: str):
+    with pytest.raises(ConfigError, match="TEAMS_WEBHOOK_URL must be the https:// address"):
+        settings_from_env({**LOCAL_ENV, "TEAMS_WEBHOOK_URL": hook})
+
+
 def test_practice_systems_are_on_and_the_watchlist_writes_to_mock_by_default():
     settings = settings_from_env(LOCAL_ENV)
     assert settings.practice_systems is True

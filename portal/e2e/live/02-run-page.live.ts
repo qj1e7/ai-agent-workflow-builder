@@ -80,7 +80,9 @@ test('the link in a Teams message opens the run page at the decision', async ({ 
   await teams.click()
   const drawer = page.getByRole('dialog', { name: 'Teams, practice copy' })
   const card = drawer.locator(`li[data-approval-id="${approvalId}"]`)
-  await expect(card.getByRole('button', { name: 'Approve' })).toBeVisible()
+  // The card a real Teams channel gets: one link to the approval page at its full address, and no Approve or Decline.
+  await expect(card.getByRole('link', { name: 'Open in AI Workflow Builder' })).toHaveAttribute('href', new RegExp(`^https?://[^/]+/approvals/${approvalId}$`))
+  await expect(card.getByRole('button', { name: /^(Approve|Decline)/ })).toHaveCount(0)
   await shot(page, info, 'p5-02-teams-drawer')
   await card.getByRole('link', { name: 'Open in AI Workflow Builder' }).click()
   await expect(page).toHaveURL(new RegExp(`/approvals/${approvalId}$`))

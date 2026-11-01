@@ -173,6 +173,29 @@ variable "github_token" {
   sensitive   = true
 }
 
+variable "teams_channel" {
+  description = "The Teams channel the approval card names (TEAMS_CHANNEL). Empty keeps platform-api's default, CODESparks Ops."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.teams_channel == "" || can(regex("^[^\\x00-\\x1f]{1,100}$", var.teams_channel))
+    error_message = "teams_channel must be empty, or a channel name of at most 100 characters on one line."
+  }
+}
+
+variable "teams_webhook_url" {
+  description = "Optional Teams Workflows webhook that receives the approval cards (TEAMS_WEBHOOK_URL, ADR 0036). Its address carries its own signature, so it is a secret. Empty keeps the practice Teams copy."
+  type        = string
+  default     = ""
+  sensitive   = true
+
+  validation {
+    condition     = var.teams_webhook_url == "" || can(regex("^https://[^\\s]+$", var.teams_webhook_url))
+    error_message = "teams_webhook_url must be empty, or the https address Teams Workflows gave, with no spaces."
+  }
+}
+
 variable "github_api_base" {
   description = "GitHub API that the release checker reads."
   type        = string

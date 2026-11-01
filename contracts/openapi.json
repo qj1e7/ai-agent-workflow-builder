@@ -249,6 +249,48 @@
         ],
         "type": "string"
       },
+      "AdaptiveCard": {
+        "additionalProperties": false,
+        "description": "The subset of the Adaptive Card schema our cards use, and the Portal draws.",
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/OpenUrl"
+            },
+            "title": "Actions",
+            "type": "array"
+          },
+          "body": {
+            "items": {
+              "$ref": "#/components/schemas/CardElement"
+            },
+            "title": "Body",
+            "type": "array"
+          },
+          "fallbackText": {
+            "default": "An approval request is waiting in AI Workflow Builder.",
+            "title": "Fallbacktext",
+            "type": "string"
+          },
+          "type": {
+            "const": "AdaptiveCard",
+            "default": "AdaptiveCard",
+            "title": "Type",
+            "type": "string"
+          },
+          "version": {
+            "default": "1.4",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "body",
+          "actions"
+        ],
+        "title": "AdaptiveCard",
+        "type": "object"
+      },
       "AddPersonIn": {
         "additionalProperties": false,
         "properties": {
@@ -1875,6 +1917,23 @@
         "title": "CardDefinition",
         "type": "object"
       },
+      "CardElement": {
+        "discriminator": {
+          "mapping": {
+            "RichTextBlock": "#/components/schemas/RichTextBlock",
+            "TextBlock": "#/components/schemas/TextBlock"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/RichTextBlock"
+          },
+          {
+            "$ref": "#/components/schemas/TextBlock"
+          }
+        ]
+      },
       "CardInput": {
         "additionalProperties": false,
         "properties": {
@@ -2116,6 +2175,14 @@
           "09:00"
         ],
         "pattern": "^([01][0-9]|2[0-3]):[0-5][05]$",
+        "type": "string"
+      },
+      "Color": {
+        "enum": [
+          "default",
+          "good",
+          "attention"
+        ],
         "type": "string"
       },
       "ComingUp": {
@@ -3661,6 +3728,31 @@
         "title": "NewAgent",
         "type": "object"
       },
+      "OpenUrl": {
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "type": {
+            "const": "Action.OpenUrl",
+            "default": "Action.OpenUrl",
+            "title": "Type",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "url"
+        ],
+        "title": "OpenUrl",
+        "type": "object"
+      },
       "OperatorIn": {
         "additionalProperties": false,
         "properties": {
@@ -4491,6 +4583,40 @@
           "detail"
         ],
         "title": "RetryLater",
+        "type": "object"
+      },
+      "RichTextBlock": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "inlines": {
+            "items": {
+              "$ref": "#/components/schemas/TextRun"
+            },
+            "title": "Inlines",
+            "type": "array"
+          },
+          "type": {
+            "const": "RichTextBlock",
+            "default": "RichTextBlock",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "inlines"
+        ],
+        "title": "RichTextBlock",
         "type": "object"
       },
       "Role": {
@@ -5806,6 +5932,17 @@
             "title": "Approval Id",
             "type": "string"
           },
+          "card": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AdaptiveCard"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The Adaptive Card a real Teams channel gets, with its outcome on top once decided. Null only for a message posted before cards."
+          },
           "channel": {
             "title": "Channel",
             "type": "string"
@@ -5839,7 +5976,8 @@
           "text",
           "link",
           "run_id",
-          "approval_id"
+          "approval_id",
+          "card"
         ],
         "title": "TeamsStubMessage",
         "type": "object"
@@ -5916,6 +6054,94 @@
           "params"
         ],
         "title": "TemplateView",
+        "type": "object"
+      },
+      "TextBlock": {
+        "additionalProperties": false,
+        "description": "Our own fixed words only: Teams reads a TextBlock's text as markdown.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "type": {
+            "const": "TextBlock",
+            "default": "TextBlock",
+            "title": "Type",
+            "type": "string"
+          },
+          "weight": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Weight"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "wrap": {
+            "default": true,
+            "title": "Wrap",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "TextBlock",
+        "type": "object"
+      },
+      "TextRun": {
+        "additionalProperties": false,
+        "description": "Text shown as it is. Teams applies no markdown to a TextRun.",
+        "properties": {
+          "color": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Color"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "type": {
+            "const": "TextRun",
+            "default": "TextRun",
+            "title": "Type",
+            "type": "string"
+          },
+          "weight": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Weight"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "TextRun",
         "type": "object"
       },
       "TickOut": {
@@ -6840,6 +7066,13 @@
         ],
         "title": "WatchlistView",
         "type": "object"
+      },
+      "Weight": {
+        "enum": [
+          "default",
+          "bolder"
+        ],
+        "type": "string"
       },
       "WireVerdict": {
         "enum": [

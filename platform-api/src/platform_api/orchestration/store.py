@@ -8,6 +8,7 @@ from pydantic import TypeAdapter
 
 from platform_api.db import UnitOfWork, json
 from platform_api.orchestration.approvals import ApprovalPolicy, ApprovalRequest, Decision, Verdict
+from platform_api.orchestration.dispatch import MessageRef
 from platform_api.orchestration.runs import (
     Acting,
     AwaitingApproval,
@@ -69,6 +70,13 @@ class Stale(Exception): ...
 
 
 class DecisionConflict(Exception): ...
+
+
+START_LEG = "start_leg"
+ANNOUNCE = "announce"
+SHOW_OUTCOME = "show_outcome"
+"""Shows a decided request's outcome on its Teams card. The outcome holds however the run ends,
+so cancelling a run's outbox leaves these rows."""
 
 
 @dataclass(frozen=True)
@@ -433,9 +441,50 @@ class Store:
     async def cancel_outbox(self, uow: UnitOfWork, run_id: RunId) -> None:
         await uow.conn.execute(
             "UPDATE orchestration.outbox SET status = 'cancelled' "
-            "WHERE run_id = %s AND status = 'pending'",
-            (run_id,),
+            "WHERE run_id = %s AND status = 'pending' AND kind <> %s",
+            (run_id, SHOW_OUTCOME),
         )
+
+    async def announcement_pending(self, uow: UnitOfWork, approval_id: ApprovalId) -> bool:
+        row = await (
+            await uow.conn.execute(
+                "SELECT 1 FROM orchestration.outbox WHERE kind = %s AND status = 'pending' "
+                "AND payload->>'approval_id' = %s LIMIT 1",
+                (ANNOUNCE, approval_id),
+            )
+        ).fetchone()
+        return row is not None
+
+    async def save_message_ref(
+        self, uow: UnitOfWork, approval_id: ApprovalId, ref: MessageRef
+    ) -> None:
+        await uow.conn.execute(
+            "INSERT INTO orchestration.approval_messages "
+            "(approval_id, channel, message_id, posted_at) VALUES (%s, %s, %s, %s) "
+            "ON CONFLICT (approval_id) DO UPDATE SET channel = EXCLUDED.channel, "
+            "message_id = EXCLUDED.message_id, posted_at = EXCLUDED.posted_at",
+            (approval_id, ref.channel, ref.id, uow.now),
+        )
+
+    async def message_ref(self, uow: UnitOfWork, approval_id: ApprovalId) -> MessageRef | None:
+        row = await (
+            await uow.conn.execute(
+                "SELECT channel, message_id FROM orchestration.approval_messages "
+                "WHERE approval_id = %s",
+                (approval_id,),
+            )
+        ).fetchone()
+        return None if row is None else MessageRef(row["channel"], row["message_id"])
+
+    async def names(self, uow: UnitOfWork, ids: Collection[UserId]) -> dict[UserId, str]:
+        """People's names from the People list. Someone not on it keeps their id."""
+        rows = await (
+            await uow.conn.execute(
+                "SELECT id, display FROM orchestration.people WHERE id = ANY(%s)", (list(ids),)
+            )
+        ).fetchall()
+        found = {UserId(row["id"]): str(row["display"]) for row in rows}
+        return {user: found.get(user, user) for user in ids}
 
     async def pending_outbox(self, uow: UnitOfWork, run_id: RunId) -> int:
         row = await (
