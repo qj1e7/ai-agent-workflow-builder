@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import timedelta
 
 import pytest
@@ -10,6 +10,7 @@ from platform_api.app import create_app
 from platform_api.auth import DEV_PEOPLE
 from platform_api.orchestration.approvals import Verdict
 from platform_api.orchestration.dispatch import (
+    RETRY_POLICY,
     ApprovalNotice,
     ApprovalOutcome,
     AskedStep,
@@ -17,7 +18,7 @@ from platform_api.orchestration.dispatch import (
     MessageRef,
 )
 from platform_api.orchestration.people_store import People
-from platform_api.orchestration.runs import Leg
+from platform_api.orchestration.runs import Leg, Pending
 from platform_api.orchestration.service import Orchestrator
 from platform_api.orchestration.store import Store
 from platform_api.orchestration.teams import TeamsWorkflowsWebhook, approval_card
@@ -30,6 +31,7 @@ from tests.test_orchestrator import (
     PUBLIC_BASE_URL,
     RUN_AGENTS,
     Harness,
+    RecordingEngine,
     mint,
     open_harness,
     start,
@@ -310,3 +312,88 @@ def test_shutting_down_closes_the_teams_webhook_client(postgres: PostgresUrls):
         webhook = app.state.teams_webhook
         assert isinstance(webhook, TeamsWorkflowsWebhook) and not webhook.closed
     assert webhook.closed
+
+
+async def asking_runs(h: Harness, count: int) -> list[RunId]:
+    """Runs whose approval requests are queued and not yet posted."""
+    runs = [await start(h, key=f"ask-{n}") for n in range(count)]
+    await h.orchestrator.tick()
+    for run_id in runs:
+        state = await h.state(run_id)
+        assert isinstance(state, Pending) and state.claimant is not None
+        await h.orchestrator.on_step(run_id, RUN_AGENTS, state.claimant)
+        await h.orchestrator.on_step(run_id, ASK_APPROVAL, state.claimant)
+    return runs
+
+
+class SlowTeams(RecordingChannel):
+    """Each post takes 40 seconds. During the second, another replica ticks."""
+
+    def __init__(self, h: Harness) -> None:
+        super().__init__()
+        self.h = h
+        self.posts = 0
+        self.meanwhile: Callable[[], Awaitable[None]] | None = None
+
+    async def announce(self, notice: ApprovalNotice) -> MessageRef:
+        self.posts += 1
+        self.h.advance(timedelta(seconds=40))
+        if self.posts == 2 and self.meanwhile is not None:
+            meanwhile, self.meanwhile = self.meanwhile, None
+            await meanwhile()
+        return await super().announce(notice)
+
+
+async def test_a_slow_teams_never_lets_a_second_replica_post_a_request_twice(h: Harness):
+    # Three requests taken in one tick outlast the first lease: the third is due again by the time
+    # the first replica reaches it, and a second replica takes it meanwhile.
+    runs = await asking_runs(h, 3)
+    channel = SlowTeams(h)
+    first, second = orchestrator_for(h, channel), orchestrator_for(h, channel)
+    channel.meanwhile = second.tick
+    await first.tick()
+    posted = [n.approval_id for n in channel.announced]
+    assert len(posted) == len(set(posted)) == len(runs)
+
+
+async def test_a_tick_takes_at_most_a_batch_of_rows(h: Harness):
+    for n in range(RETRY_POLICY.batch + 2):
+        await start(h, key=f"many-{n}")
+    await h.orchestrator.tick()
+    assert len(h.engine.legs) == RETRY_POLICY.batch
+    await h.orchestrator.tick()
+    assert len(h.engine.legs) == RETRY_POLICY.batch + 2
+
+
+class FirstLegBreaks:
+    def __init__(self, inner: RecordingEngine) -> None:
+        self.inner = inner
+        self.broke = False
+
+    async def start_leg(self, workflow: str, leg: Leg, run_id: RunId) -> N8nExecutionId:
+        if not self.broke:
+            self.broke = True
+            raise RuntimeError("a bug in the engine client")
+        return await self.inner.start_leg(workflow, leg, run_id)
+
+
+async def test_a_row_that_raises_does_not_stop_the_rows_after_it(
+    h: Harness, caplog: pytest.LogCaptureFixture
+):
+    caplog.set_level(logging.ERROR)
+    h.orchestrator = Orchestrator(
+        h.db,
+        h.log,
+        FirstLegBreaks(h.engine),
+        h.teams,
+        h.agent,
+        WriteGateway(h.db, [h.jira], poll=0.05),
+        mint,
+        public_base_url=PUBLIC_BASE_URL,
+    )
+    first = await start(h, key="breaks")
+    second = await start(h, key="after")
+    await h.orchestrator.tick()
+    assert [run_id for _, _, run_id in h.engine.legs] == [second]
+    assert any("RuntimeError" in r.getMessage() for r in caplog.records)
+    assert isinstance(await h.state(first), Pending)

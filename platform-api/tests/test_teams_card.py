@@ -7,6 +7,7 @@ import httpx
 import pytest
 from jsonschema import Draft6Validator
 
+from platform_api.db import Database
 from platform_api.orchestration.dispatch import (
     ApprovalNotice,
     ApprovalOutcome,
@@ -19,6 +20,7 @@ from platform_api.orchestration.teams import (
     OPEN_IN,
     TEAMS_MESSAGE_LIMIT,
     AdaptiveCard,
+    TeamsStub,
     TeamsWorkflowsWebhook,
     approval_card,
     check_card,
@@ -27,8 +29,10 @@ from platform_api.orchestration.teams import (
     webhook_message,
     with_outcome,
 )
+from platform_api.settings import settings_from_env
 from platform_api.shared import ApprovalId, RunId
-from tests.support import FIXTURES
+from platform_api.wiring import approval_channel
+from tests.support import FIXTURES, LOCAL_ENV
 
 pytestmark = pytest.mark.anyio
 
@@ -336,12 +340,26 @@ def test_every_card_in_the_contract_fixtures_matches_the_adaptive_card_schema(na
         assert message["card"] == AdaptiveCard.model_validate(message["card"]).as_json()
 
 
+def test_building_the_webhook_adapter_leaves_the_process_logging_alone():
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.NOTSET)
+    TeamsWorkflowsWebhook(WEBHOOK, "CODESparks Ops", recording(202, []))
+    assert [logging.getLogger(n).level for n in ("httpx", "httpcore")] == [0, 0]
+
+
 @pytest.mark.parametrize("status", [202, 500])
 async def test_the_webhook_address_never_reaches_a_log_line(
     status: int, caplog: pytest.LogCaptureFixture
 ):
+    # The wiring quiets httpx on purpose when it builds the webhook adapter.
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.NOTSET)
     caplog.set_level(logging.DEBUG)
-    teams = TeamsWorkflowsWebhook(WEBHOOK, "CODESparks Ops", recording(status, []))
+    settings = settings_from_env({**LOCAL_ENV, "TEAMS_WEBHOOK_URL": WEBHOOK})
+    practice = TeamsStub(Database(settings.database), settings.teams_channel)
+    channel, webhook = approval_channel(settings, practice, recording(status, []))
+    assert channel is webhook and webhook is not None
+    teams = webhook
     try:
         ref = await teams.announce(NOTICE)
         await teams.update(ref, APPROVED)
@@ -360,6 +378,12 @@ def test_the_one_time_check_card_carries_every_kind_of_markup_made_harmless():
         "_ok_",
         "# Heading",
         "https[:]//example[.]com",
+        # inert() leaves these as written, so the manual check shows whether Teams links them.
+        "example.com/approve",
+        "sub.example.com",
+        "someone@example.com",
+        "аррӏе.com",
+        "https[:]//аррӏе[.]com",
     ):
         assert typed in joined
     assert not any("://" in run or "](" in run for run in runs)
@@ -381,8 +405,27 @@ def test_the_one_time_check_card_carries_every_kind_of_markup_made_harmless():
         ("[x](https://evil.example)", "[x] (https[:]//evil[.]example)"),
         ("www.a.example/https://b.example", "www[.]a[.]example/https[:]//b[.]example"),
         ("Upgrade LangGraph to 1.2.16.", "Upgrade LangGraph to 1.2.16."),
+        *(
+            (f"https:{mark}//evil.example", "https[:]//evil[.]example")
+            for mark in ("\u200e", "\u200f", "\u2066", "\u2069", "\u034f", "\u061c", "\u180e")
+        ),
+        ("ww\u2067w.evil.example", "www[.]evil[.]example"),
+        ("_www.evil.example", "_www[.]evil[.]example"),
+        ("(www.evil.example)", "(www[.]evil[.]example)"),
+        ("see www.аррӏе.com", "see www[.]аррӏе[.]com"),
+        ("/var/www.conf", "/var/www.conf"),
+        ("/static/www.min.js", "/static/www.min.js"),
+        ("cdn.www.example", "cdn.www.example"),
+        ("the www. prefix", "the www. prefix"),
+        ("www..", "www.."),
     ],
 )
 def test_an_address_is_broken_wherever_it_starts_even_inside_a_word(raw: str, shown: str):
     # A word character before the scheme must not hide it: Teams may still link from "https" on.
     assert inert(raw) == shown
+
+
+def test_without_a_webhook_the_channel_is_the_practice_copy():
+    settings = settings_from_env(LOCAL_ENV)
+    practice = TeamsStub(Database(settings.database), settings.teams_channel)
+    assert approval_channel(settings, practice) == (practice, None)

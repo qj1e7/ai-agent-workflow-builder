@@ -89,6 +89,8 @@ class OutboxRow:
     kind: str
     payload: dict[str, Any]
     attempt: int
+    leased_until: datetime | None = None
+    """The lease this tick holds on the row, which only it can renew."""
 
 
 def _deadline_of(state: RunState) -> datetime | None:
@@ -407,26 +409,52 @@ class Store:
         )
 
     async def take_due_outbox(
-        self, uow: UnitOfWork, now: datetime, lease: timedelta = RETRY_POLICY.lease
+        self,
+        uow: UnitOfWork,
+        now: datetime,
+        lease: timedelta = RETRY_POLICY.lease,
+        limit: int = RETRY_POLICY.batch,
     ) -> list[OutboxRow]:
-        """The rows due now that no other tick holds, held for `lease`. Two replicas ticking at
-        once each take different rows. A row stays held only until it is sent, retried or given
-        up, or until the lease runs out, when a stopped replica held it."""
+        """At most `limit` rows due now that no other tick holds, held for `lease`. Two replicas
+        ticking at once each take different rows. A row stays held only until it is sent,
+        retried or given up, or until the lease runs out, when a stopped replica held it."""
         rows = await (
             await uow.conn.execute(
                 "UPDATE orchestration.outbox o SET leased_until = %s "
                 "FROM (SELECT id FROM orchestration.outbox WHERE status = 'pending' "
                 "AND next_at <= %s AND (leased_until IS NULL OR leased_until <= %s) "
-                "ORDER BY next_at, id FOR UPDATE SKIP LOCKED) due WHERE o.id = due.id "
-                "RETURNING o.id, o.run_id, o.kind, o.payload, o.attempt, o.next_at",
-                (now + lease, now, now),
+                "ORDER BY next_at, id LIMIT %s FOR UPDATE SKIP LOCKED) due WHERE o.id = due.id "
+                "RETURNING o.id, o.run_id, o.kind, o.payload, o.attempt, o.next_at, "
+                "o.leased_until",
+                (now + lease, now, now, limit),
             )
         ).fetchall()
         rows.sort(key=lambda r: (r["next_at"], r["id"]))
         return [
-            OutboxRow(int(r["id"]), RunId(r["run_id"]), r["kind"], r["payload"], int(r["attempt"]))
+            OutboxRow(
+                int(r["id"]),
+                RunId(r["run_id"]),
+                r["kind"],
+                r["payload"],
+                int(r["attempt"]),
+                r["leased_until"],
+            )
             for r in rows
         ]
+
+    async def renew_lease(
+        self, uow: UnitOfWork, row: OutboxRow, until: datetime
+    ) -> OutboxRow | None:
+        """The row with its lease moved to `until`, or None when the lease is no longer this
+        tick's: another replica took the row after the lease ran out, or it was sent."""
+        renewed = await (
+            await uow.conn.execute(
+                "UPDATE orchestration.outbox SET leased_until = %s WHERE id = %s "
+                "AND leased_until = %s AND status = 'pending' RETURNING id",
+                (until, row.id, row.leased_until),
+            )
+        ).fetchone()
+        return None if renewed is None else replace(row, leased_until=until)
 
     async def outbox_sent(self, uow: UnitOfWork, row_id: int) -> None:
         await uow.conn.execute(

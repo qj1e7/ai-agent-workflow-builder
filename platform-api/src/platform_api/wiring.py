@@ -1,7 +1,9 @@
 import asyncio
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 
+import httpx
 from fastapi import FastAPI
 
 from platform_api.auth import DEV_PEOPLE, DevAuth, OidcAuth
@@ -61,6 +63,22 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.people = services.people
 
 
+def approval_channel(
+    settings: Settings, practice: TeamsStub, client: httpx.AsyncClient | None = None
+) -> tuple[ApprovalChannel, TeamsWorkflowsWebhook | None]:
+    """Where approval cards go (ADR 0036): the practice copy, or real Teams when
+    TEAMS_WEBHOOK_URL is set. Returns the channel, and the webhook adapter to close on shutdown."""
+    if settings.teams_webhook_url is None:
+        return practice, None
+    # httpx and httpcore log every request's full address at INFO, and the webhook's address
+    # carries its own signature. So with a webhook set, they log only warnings, for every client
+    # in this process, n8n's and the agent runtime's too. Their warnings and errors still show.
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+    webhook = TeamsWorkflowsWebhook(settings.teams_webhook_url, settings.teams_channel, client)
+    return webhook, webhook
+
+
 async def build(settings: Settings) -> Services:
     db = Database(settings.database)
     await db.open()
@@ -81,12 +99,7 @@ async def build(settings: Settings) -> Services:
             await people.seed_first(settings.first_people)
     jira = MockJiraConnector(db)
     teams = TeamsStub(db, settings.teams_channel)
-    webhook = (
-        None
-        if settings.teams_webhook_url is None
-        else TeamsWorkflowsWebhook(settings.teams_webhook_url, settings.teams_channel)
-    )
-    channel: ApprovalChannel = teams if webhook is None else webhook
+    channel, webhook = approval_channel(settings, teams)
 
     def mint(run_id: RunId, task_id: TaskId, expires_at: datetime) -> tuple[str, str]:
         callback = callback_for(

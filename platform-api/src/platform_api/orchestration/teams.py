@@ -10,8 +10,8 @@ markdown links are also broken, so none can become a link. Our own fixed words g
 TextBlock. The card holds only what the notice holds, so no token or key can reach a channel.
 """
 
-import logging
 import re
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, Any, Literal
@@ -109,21 +109,41 @@ def _runs(*runs: TextRun) -> RichTextBlock:
     return RichTextBlock(inlines=list(runs))
 
 
-_INVISIBLE = re.compile("[\u00ad\u200b-\u200d\u2060\ufeff]")
-_AFTER_MARKER = re.compile(r"(?i)(?:(?<=://)|(?<=www\.))[^\s<>()\[\]]+")
+_IGNORABLE_MARKS = frozenset("\u034f\u115f\u1160\u17b4\u17b5\u3164\uffa0")
+"""Characters shown as nothing that are not format characters (Unicode category Cf)."""
+_TOKEN = r"[^\s<>()\[\]]*"
+_AFTER_SCHEME = re.compile(r"://(" + _TOKEN + ")")
+_WWW_HOST = re.compile(r"(?i)(?<![/.])(www)\.(?=[^\W_])(" + _TOKEN + ")")
+
+
+def _visible(text: str) -> str:
+    """text without the characters shown as nothing: every format character (Cf), such as a
+    zero-width space or a direction mark, plus a few others, and variation selectors."""
+    return "".join(
+        c
+        for c in text
+        if unicodedata.category(c) != "Cf"
+        and c not in _IGNORABLE_MARKS
+        and not ("\ufe00" <= c <= "\ufe0f" or "\U000e0100" <= c <= "\U000e01ef")
+    )
 
 
 def inert(text: str) -> str:
-    """text with nothing a reader could follow. Invisible characters go first, so none can split a
-    marker. Then every "://" becomes "[:]//", every "www." becomes "www[.]", every "mailto:" loses
-    its colon, and the dots after "://" or "www." are broken, wherever they appear, even inside a
-    word, in any case. A markdown link loses its "](". Teams says every card text field takes
-    basic markdown, and nothing says whether it links a bare address in a TextRun, so text we did
-    not write never holds a working link (ADR 0036)."""
-    text = _INVISIBLE.sub("", text)
-    text = _AFTER_MARKER.sub(lambda m: m.group(0).replace(".", "[.]"), text)
-    text = text.replace("://", "[:]//")
-    text = re.sub(r"(?i)www\.", lambda m: m.group(0)[:3] + "[.]", text)
+    """text with nothing a reader could follow (ADR 0036). Characters shown as nothing go first,
+    so none can split a marker. Then:
+
+    - every "://" becomes "[:]//", and the dots of the address after it are broken,
+    - "www." that starts a host becomes "www[.]", with the host's dots broken. It starts a host
+      unless a "/" or "." comes before it, as in a path or a longer name, and a letter or digit
+      comes after it. A word character before it does not stop it, so "_www.evil.example" is
+      broken too,
+    - every "mailto:" loses its colon, and a markdown link loses its "](".
+
+    Any case counts. Teams says every card text field takes basic markdown, and nothing says
+    whether it links a bare address in a TextRun, so text we did not write never holds a link."""
+    text = _visible(text)
+    text = _AFTER_SCHEME.sub(lambda m: "[:]//" + m.group(1).replace(".", "[.]"), text)
+    text = _WWW_HOST.sub(lambda m: m.group(1) + "[.]" + m.group(2).replace(".", "[.]"), text)
     text = re.sub(r"(?i)mailto:", lambda m: m.group(0)[:6] + "[:]", text)
     return text.replace("](", "] (")
 
@@ -277,12 +297,20 @@ CHECK_NOTICE = ApprovalNotice(
         "**Approve now** [here](https://example.com) or https://example.com or www.example.com "
         "or mailto:someone@example.com. <at>Bob</at> _ok_ # Heading - item 1. item"
     ),
-    lines=("Create Jira ticket in MOCK: **bold** [link](https://example.com) www.example.com",),
+    lines=(
+        "Create Jira ticket in MOCK: **bold** [link](https://example.com) www.example.com",
+        # inert() leaves these as written. The check shows whether Teams links them.
+        "A bare name: example.com/approve, and a longer one: sub.example.com",
+        "A bare email: someone@example.com",
+        "A look-alike name: аррӏе.com, and with a scheme: https://аррӏе.com",
+    ),
     steps=(AskedStep("Approver"),),
     not_deciding=("**Alice** [x](https://example.com)",),
 )
 """A card full of text that must show as typed, with no bold, no heading and no link but the
-button. infra/README.md says to post it to a test channel once, before TEAMS_WEBHOOK_URL is set."""
+button. It also holds what inert() leaves alone: a bare name, a longer name, a bare email and a
+look-alike name in Cyrillic letters. infra/README.md says to post it to a test channel once,
+before TEAMS_WEBHOOK_URL is set, and look at whether Teams links any of them."""
 
 
 def check_card() -> AdaptiveCard:
@@ -419,9 +447,8 @@ class TeamsWorkflowsWebhook:
     """
 
     def __init__(self, url: str, channel: str, client: httpx.AsyncClient | None = None) -> None:
-        # httpx logs each request's full address at INFO, and this address is a secret.
-        for name in ("httpx", "httpcore"):
-            logging.getLogger(name).setLevel(logging.WARNING)
+        # httpx logs each request's full address at INFO, and this address is a secret. The
+        # wiring quiets httpx when it builds this adapter (approval_channel in wiring.py).
         self._url = url
         self._channel = channel
         self._client = client or httpx.AsyncClient(timeout=10.0)

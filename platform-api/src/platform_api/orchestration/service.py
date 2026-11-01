@@ -916,9 +916,27 @@ class Orchestrator:
     async def tick(self, now: datetime | None = None) -> None:
         now = now or self._db.clock()
         async with self._db.transaction("orchestration") as uow:
-            due = await self._store.take_due_outbox(uow, now, self._retry.lease)
+            due = await self._store.take_due_outbox(uow, now, self._retry.lease, self._retry.batch)
         for row in due:
-            await self._dispatch(row, now)
+            # Sends before this one may have taken a while, so the lease is renewed first, and a
+            # row another replica took meanwhile is left to it.
+            async with self._db.transaction("orchestration") as uow:
+                held = await self._store.renew_lease(
+                    uow, row, max(now, self._db.clock()) + self._retry.lease
+                )
+            if held is None:
+                log.info("another tick took outbox row %s, so this one leaves it", row.id)
+                continue
+            try:
+                await self._dispatch(held, now)
+            except Exception:
+                # One broken row must not stop the rest. It keeps its lease, so it is tried
+                # again once that runs out, not on every tick.
+                log.error(
+                    "outbox row %s could not be sent: %s",
+                    row.id,
+                    without_addresses(traceback.format_exc()),
+                )
         async with self._db.transaction("orchestration") as uow:
             overdue = await self._store.runs_past_deadline(uow, now)
         for run_id in overdue:

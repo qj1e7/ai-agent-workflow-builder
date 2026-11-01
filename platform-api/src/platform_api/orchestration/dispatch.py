@@ -22,8 +22,11 @@ class RetryPolicy:
     operator_retry_delay: timedelta = timedelta(seconds=3)
     tick_interval: timedelta = timedelta(seconds=5)
     lease: timedelta = timedelta(minutes=1)
-    """How long a tick holds the outbox rows it took, so another replica does not send them too.
-    Longer than any one send, and a row a stopped replica held is sent once it runs out."""
+    """How long a tick holds an outbox row, so another replica does not send it too. Each row's
+    lease is renewed just before it is sent, and one send takes far less: every client's
+    timeout is 10 seconds. A row a stopped replica held is sent once its lease runs out."""
+    batch: int = 10
+    """The most rows one tick takes, so a tick with a slow Teams does not hold many for long."""
 
     @property
     def tries(self) -> int:
