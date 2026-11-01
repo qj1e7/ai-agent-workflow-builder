@@ -44,7 +44,7 @@ from agent_runtime.drafting import choose_agents, draft_card
 from agent_runtime.events import Clock, EventLog, EventSink
 from agent_runtime.github import GitHubReleaseSource
 from agent_runtime.guarded import GuardedModels
-from agent_runtime.jira import JiraReaderFor, PracticeJiraFor, no_jira
+from agent_runtime.jira import JiraReaderFor, PlatformJiraFor, no_jira
 from agent_runtime.model_access import ModelProbe, chat_for, summarizer_for
 from agent_runtime.origins import Origin, origin_of, parse_origin_list
 from agent_runtime.planner import FixedPlanner, Planner, run_cards, run_task, understand_task
@@ -114,6 +114,22 @@ def _required(env: Mapping[str, str], name: str) -> str:
     return value
 
 
+def _platform_jira_url(env: Mapping[str, str], origins: frozenset[Origin]) -> str | None:
+    """Where the Jira tools read, through the platform (ADR 0035). Each read carries the task's
+    callback token, so the address must be one the callbacks may go to."""
+    if env.get("PRACTICE_JIRA_URL", "").strip():
+        raise SettingsError("PRACTICE_JIRA_URL is now PLATFORM_JIRA_URL. Rename the setting.")
+    url = env.get("PLATFORM_JIRA_URL", "").strip()
+    if not url:
+        return None
+    if origin_of(url) not in origins:
+        raise SettingsError(
+            "PLATFORM_JIRA_URL must be at one of CALLBACK_ALLOWED_ORIGINS, because the Jira "
+            "tools send each task's callback token there"
+        )
+    return url
+
+
 @dataclass(frozen=True)
 class Settings:
     agent_api_key: str
@@ -124,7 +140,7 @@ class Settings:
     model_base_url: str | None
     model_api_key: str | None
     model_private_hosts: frozenset[str] = frozenset()
-    practice_jira_url: str | None = None
+    platform_jira_url: str | None = None
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> Self:
@@ -147,7 +163,7 @@ class Settings:
                 for host in env.get("AGENT_MODEL_PRIVATE_HOSTS", "").split(",")
                 if host.strip()
             ),
-            practice_jira_url=env.get("PRACTICE_JIRA_URL") or None,
+            platform_jira_url=_platform_jira_url(env, origins),
         )
 
     @property
@@ -248,7 +264,7 @@ def build_runtime(settings: Settings) -> Runtime:
         return None
 
     jira_for: JiraReaderFor = (
-        PracticeJiraFor(settings.practice_jira_url) if settings.practice_jira_url else no_jira
+        PlatformJiraFor(settings.platform_jira_url) if settings.platform_jira_url else no_jira
     )
     return Runtime(
         checker=VersionChecker(source, build_summarizer(settings), sleep=time.sleep),

@@ -12276,10 +12276,10 @@
         ]
       }
     },
-    "/internal/v1/runs/{run_id}/practice-jira/tickets": {
+    "/internal/v1/runs/{run_id}/jira/tickets": {
       "get": {
         "description": "At most 50 tickets, newest first. An empty filter is not applied. Words of `text` shorter\nthan 3 characters are ignored, and text with no word left matches nothing.",
-        "operationId": "search_tickets_internal_v1_runs__run_id__practice_jira_tickets_get",
+        "operationId": "search_tickets_internal_v1_runs__run_id__jira_tickets_get",
         "parameters": [
           {
             "in": "path",
@@ -12407,9 +12407,9 @@
         ]
       }
     },
-    "/internal/v1/runs/{run_id}/practice-jira/tickets/{key}": {
+    "/internal/v1/runs/{run_id}/jira/tickets/{key}": {
       "get": {
-        "operationId": "read_ticket_internal_v1_runs__run_id__practice_jira_tickets__key__get",
+        "operationId": "read_ticket_internal_v1_runs__run_id__jira_tickets__key__get",
         "parameters": [
           {
             "in": "path",

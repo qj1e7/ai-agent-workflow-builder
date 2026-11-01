@@ -196,7 +196,7 @@ The platform's account in another system, such as GitHub, Jira or Teams, with it
 _Avoid_: Integration, credential
 
 **Practice copy**:
-A stand-in for Jira or Teams that the platform runs itself, so demos and tests write without touching a real system.
+A stand-in for Jira or Teams that the platform runs itself, so demos and tests write without touching a real system. Each one answers the same API as the real system, so moving to the real one is a change of settings (ADR 0035). The setting `PRACTICE_SYSTEMS` turns their own pages on or off.
 _Avoid_: Mock (in the app), sandbox
 
 **Confirmation**:

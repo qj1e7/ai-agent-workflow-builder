@@ -54,3 +54,33 @@ def test_a_teams_webhook_and_channel_name_come_from_the_environment():
 def test_a_teams_webhook_that_is_not_https_refuses_to_start(hook: str):
     with pytest.raises(ConfigError, match="TEAMS_WEBHOOK_URL must be the https:// address"):
         settings_from_env({**LOCAL_ENV, "TEAMS_WEBHOOK_URL": hook})
+
+
+def test_practice_systems_are_on_and_the_watchlist_writes_to_mock_by_default():
+    settings = settings_from_env(LOCAL_ENV)
+    assert settings.practice_systems is True
+    assert settings.watchlist_jira_project == "MOCK"
+
+
+@pytest.mark.parametrize(
+    ("raw", "on"), [("on", True), ("off", False), (" OFF ", False), ("", True)]
+)
+def test_practice_systems_take_on_or_off(raw: str, on: bool):
+    assert settings_from_env({**LOCAL_ENV, "PRACTICE_SYSTEMS": raw}).practice_systems is on
+
+
+def test_practice_systems_refuse_any_other_word():
+    with pytest.raises(ConfigError, match="PRACTICE_SYSTEMS takes on or off"):
+        settings_from_env({**LOCAL_ENV, "PRACTICE_SYSTEMS": "yes"})
+
+
+@pytest.mark.parametrize("project", ["OPS", "AB_1", "A", "A" + "B" * 254])
+def test_the_watchlist_project_takes_any_jira_project_key(project: str):
+    settings = settings_from_env({**LOCAL_ENV, "WATCHLIST_JIRA_PROJECT": project})
+    assert settings.watchlist_jira_project == project
+
+
+@pytest.mark.parametrize("project", ["ops", "1AB", "_AB", "AB-1", "A B", "A" + "B" * 255])
+def test_the_watchlist_project_refuses_what_jira_would(project: str):
+    with pytest.raises(ConfigError, match="WATCHLIST_JIRA_PROJECT"):
+        settings_from_env({**LOCAL_ENV, "WATCHLIST_JIRA_PROJECT": project})

@@ -8,7 +8,6 @@ Approver, so both come only from here and from the card's saved values.
 Pure. The run itself is in service.py.
 """
 
-import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import get_args
@@ -32,9 +31,9 @@ from platform_api.orchestration.write_actions import (
     WriteAction,
     bind,
 )
+from platform_api.shared import JIRA_PROJECT_PATTERN
 from platform_api.wire import RepoName
 
-JIRA_PROJECT_PATTERN = re.compile(r"^[A-Z][A-Z0-9]{0,9}\Z")
 TEXT_LIMIT = 200
 TITLE_LIMIT = 200
 BODY_LIMIT = 5000
@@ -103,7 +102,9 @@ INPUT_KINDS: tuple[str, ...] = get_args(InputKind.__value__)
 
 KIND_EXAMPLES: Mapping[str, str] = {
     "github_repo": "owner/name, for example langchain-ai/langgraph",
-    "jira_project": "1 to 10 capital letters or digits, starting with a letter, for example MOCK",
+    "jira_project": (
+        "a capital letter, then capital letters, digits or underscores, for example MOCK or AB_1"
+    ),
     "text": f"one line of 1 to {TEXT_LIMIT} characters",
 }
 

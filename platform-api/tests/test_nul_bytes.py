@@ -179,7 +179,7 @@ async def test_a_path_with_a_nul_byte_names_nothing(
 
 async def test_a_query_with_a_nul_byte_is_a_422_naming_the_parameter(client: httpx.AsyncClient):
     response = await client.get(
-        "/internal/v1/runs/run_x/practice-jira/tickets?project=MOCK&task=t%00",
+        "/internal/v1/runs/run_x/jira/tickets?project=MOCK&task=t%00",
         headers={"Authorization": "Bearer t"},
     )
     assert refused(response) == ["query", "task"]

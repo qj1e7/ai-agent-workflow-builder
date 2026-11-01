@@ -17,8 +17,10 @@ from agent_runtime.contract import (
     ToolSpec,
 )
 
-JIRA_PROJECT_PATTERN = r"^[A-Z][A-Z0-9]{0,9}$"
-JIRA_KEY_PATTERN = r"^[A-Z][A-Z0-9]{0,9}-[0-9]{1,9}$"
+# Jira's own shapes: a capital letter, then capital letters, digits or underscores, at most 255 in
+# all (Data Center's longest), and a ticket key is a project key, a dash and a number.
+JIRA_PROJECT_PATTERN = r"^[A-Z][A-Z0-9_]{0,254}$"
+JIRA_KEY_PATTERN = r"^[A-Z][A-Z0-9_]{0,254}-[0-9]{1,9}$"
 DATE_PATTERN = r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
 TEXT_INPUT_MAX = 200
 TITLE_MAX = 200

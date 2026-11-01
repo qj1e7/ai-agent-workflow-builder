@@ -1,5 +1,6 @@
-"""Reading Jira for an agent. The agent only ever reads through the JiraReader port, so the
-practice Jira can be swapped for the real one later (ADR 0003)."""
+"""Reading Jira for an agent. The agent only ever reads through the JiraReader port, and the
+platform answers it, from the practice Jira or a real one (ADR 0035). The agent holds no Jira
+key."""
 
 from collections.abc import Callable
 from typing import Final, Protocol
@@ -54,16 +55,14 @@ def no_jira(request: TaskRequest) -> JiraReader | None:
     return None
 
 
-class PracticeJira:
-    """Reads the practice Jira through the platform. The task's callback token goes only to the
-    platform address it was set up with, no redirect is followed, and every call times out."""
+class PlatformJira:
+    """Reads Jira through the platform. The task's callback token goes only to the platform
+    address it was set up with, no redirect is followed, and every call times out."""
 
     def __init__(
         self, base_url: str, run_id: str, task_id: str, token: str, client: httpx.Client
     ) -> None:
-        self._base = (
-            f"{base_url.rstrip('/')}/internal/v1/runs/{quote(run_id, safe='')}/practice-jira"
-        )
+        self._base = f"{base_url.rstrip('/')}/internal/v1/runs/{quote(run_id, safe='')}/jira"
         self._task_id = task_id
         self._headers = {TOKEN_HEADER: token}
         self._client = client
@@ -109,13 +108,13 @@ class PracticeJira:
         return response.content
 
 
-class PracticeJiraFor:
+class PlatformJiraFor:
     def __init__(self, base_url: str, client: httpx.Client | None = None) -> None:
         self._base_url = base_url
         self._client = client or httpx.Client(timeout=TIMEOUT_SECONDS, follow_redirects=False)
 
     def __call__(self, request: TaskRequest) -> JiraReader | None:
-        return PracticeJira(
+        return PlatformJira(
             self._base_url,
             request.run_id,
             request.task_id,
