@@ -1,5 +1,5 @@
 #!/bin/sh
-# Checks the variable rules in a variables.tf for sign-in, the first people and the practice Jira:
+# Checks the variable rules in a variables.tf for sign-in, the first people, the practice Jira and Teams:
 # good values pass, and plan refuses what platform-api, agent-runtime or the Portal would refuse. It plans a module that holds only that
 # file, so it needs no provider and no credentials. check.sh runs it in the Terraform image.
 # Usage: check-variables.sh <variables.tf>
@@ -55,6 +55,9 @@ expect accepted - "the first people, the Operator also an Approver" \
 expect accepted - "the first people with spaces and capitals" \
   -var 'first_operator= Op@Example.test ' -var 'first_approvers=Op@Example.test , ap@example.test'
 expect accepted - "another practice Jira" -var practice_jira_url=https://jira.example.test/practice
+expect accepted - "a Teams webhook and channel" \
+  -var 'teams_webhook_url=https://prod.example.logic.azure.com/workflows/a/triggers/manual/run?sig=x' \
+  -var 'teams_channel=CODESparks Support'
 
 expect refused oidc_issuer "issuer over http" -var oidc_issuer=http://mock-oidc:8080/default
 expect refused oidc_issuer "issuer with no host" -var oidc_issuer=https:///tenant/v2.0
@@ -68,6 +71,9 @@ expect refused oidc_jwks_url "keys URL over http" -var oidc_jwks_url=http://idp.
 expect refused oidc_jwks_url "keys URL with a query" -var 'oidc_jwks_url=https://idp.test/keys?x=1'
 
 expect refused oidc_audience "audience not set" -var oidc_audience=
+
+expect refused teams_webhook_url "Teams webhook over http" -var teams_webhook_url=http://hook.example.test/run
+expect refused teams_channel "Teams channel on two lines" -var "teams_channel=Ops${nl}Other"
 expect refused oidc_audience "audience as the api:// URI" -var "oidc_audience=api://$AUDIENCE"
 
 expect refused oidc_client_id "client ID not set" -var oidc_client_id=

@@ -149,6 +149,10 @@ services:
       CALLBACK_SIGNING_KEY: ${CALLBACK_SIGNING_KEY:?run deploy/make-env.sh}
       # Optional: without it the Portal's AI model settings are off (ADR 0022).
       SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:-}
+      # The Teams channel the approval card names. With TEAMS_WEBHOOK_URL set, the card goes to
+      # that real channel through a Teams Workflows webhook; unset keeps the practice copy (ADR 0036).
+      TEAMS_CHANNEL: ${TEAMS_CHANNEL:-CODESparks Ops}
+      TEAMS_WEBHOOK_URL: ${TEAMS_WEBHOOK_URL:-}
       # The first deploy's people (ADR 0030). Read only while the People list is empty, and only
       # with real sign-in; dev mode seeds alice, bob and carol instead.
       FIRST_OPERATOR: ${FIRST_OPERATOR:-}

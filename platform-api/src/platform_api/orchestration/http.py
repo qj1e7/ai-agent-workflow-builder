@@ -16,7 +16,6 @@ from platform_api.orchestration.approvals import (
     Verdict,
     why_not,
 )
-from platform_api.orchestration.dispatch import TeamsStub
 from platform_api.orchestration.runs import (
     Acting,
     AwaitingApproval,
@@ -42,6 +41,7 @@ from platform_api.orchestration.service import (
     steps_view,
 )
 from platform_api.orchestration.service import RetryLater as RetryLaterError
+from platform_api.orchestration.teams import AdaptiveCard, TeamsStub
 from platform_api.orchestration.write_actions import (
     MockJiraConnector,
     MockTicket,
@@ -249,6 +249,10 @@ class TeamsStubMessage(WireModel):
     link: str
     run_id: RunId
     approval_id: ApprovalId
+    card: AdaptiveCard | None = Field(
+        description="The Adaptive Card a real Teams channel gets, with its outcome on top once "
+        "decided. Null only for a message posted before cards."
+    )
 
 
 class TeamsStubMessages(WireModel):
@@ -626,6 +630,7 @@ async def list_teams_stub_messages(
                 link=m.link,
                 run_id=m.run_id,
                 approval_id=m.approval_id,
+                card=m.card,
             )
             for m in await stub.messages()
         ]

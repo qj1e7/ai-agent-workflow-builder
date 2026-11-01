@@ -1,7 +1,7 @@
 import asyncio
 import contextlib
 import logging
-from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any, Protocol
@@ -58,7 +58,11 @@ from platform_api.orchestration.dispatch import (
     RETRY_POLICY,
     ApprovalChannel,
     ApprovalNotice,
+    ApprovalOutcome,
+    AskedStep,
     DispatchFailure,
+    MessageRef,
+    OutcomeVerdict,
     RetryPolicy,
     WorkflowEngine,
 )
@@ -98,6 +102,9 @@ from platform_api.orchestration.spec import (
     WatchlistTask,
 )
 from platform_api.orchestration.store import (
+    ANNOUNCE,
+    SHOW_OUTCOME,
+    START_LEG,
     DecisionConflict,
     OutboxRow,
     RunRecord,
@@ -231,12 +238,41 @@ class NotRetryable:
 
 type RetryResult = Retried | NotRetryable | NotFound
 
-START_LEG = "start_leg"
-ANNOUNCE = "announce"
-
 
 def approval_link(approval_id: ApprovalId) -> str:
     return f"/approvals/{approval_id}"
+
+
+async def _through_channel[T](call: Awaitable[T]) -> T:
+    """An adapter's call, with any error it raises as a DispatchFailure. Anything else would end
+    the whole tick, and the next tick would meet the same message first."""
+    try:
+        return await call
+    except DispatchFailure:
+        raise
+    except Exception as error:
+        log.exception("the Teams adapter failed")
+        raise DispatchFailure(f"the Teams adapter failed ({type(error).__name__})") from None
+
+
+def _asked_steps(request: ApprovalRequest, names: Mapping[UserId, str]) -> list[dict[str, Any]]:
+    steps: list[dict[str, Any]] = []
+    for step in request.policy.steps:
+        match step.eligible:
+            case approvals.AnyApprover():
+                who: list[str] = []
+            case approvals.OneOf(users):
+                who = [names.get(u, u) for u in sorted(users)]
+        steps.append({"label": step.label, "who": who})
+    return steps
+
+
+def _notice_people(request: ApprovalRequest) -> set[UserId]:
+    people = set(request.parties)
+    for step in request.policy.steps:
+        if isinstance(step.eligible, approvals.OneOf):
+            people |= step.eligible.users
+    return people
 
 
 def steps_view(request: ApprovalRequest, decisions: Iterable[Decision]) -> list[ApprovalStepView]:
@@ -324,8 +360,11 @@ class Orchestrator:
         retry_policy: RetryPolicy = RETRY_POLICY,
         models: ActiveModel | None = None,
         people: RolesNow | None = None,
+        *,
+        public_base_url: str,
     ) -> None:
         self._db = db
+        self._public_base_url = public_base_url.rstrip("/")
         self._models = models
         self._people = people
         self._store = Store()
@@ -625,25 +664,22 @@ class Orchestrator:
             link = approval_link(request.id)
             moved = proposed.open_approval(request.id, steps_view(request, ()), link)
             await self._commit(uow, record, moved)
-            notice = ApprovalNotice(
-                run_id=run_id,
-                approval_id=request.id,
-                use_case_name=record.spec.use_case_name,
-                actions=intents(proposal.actions),
-                link=link,
-                summary=proposed.summary,
-            )
+            names = await self._store.names(uow, _notice_people(request))
             await self._store.enqueue(
                 uow,
                 run_id,
                 ANNOUNCE,
                 {
-                    "run_id": notice.run_id,
-                    "approval_id": notice.approval_id,
-                    "use_case_name": notice.use_case_name,
-                    "actions": list(notice.actions),
-                    "link": notice.link,
-                    "summary": notice.summary,
+                    "run_id": run_id,
+                    "approval_id": request.id,
+                    "use_case_name": record.spec.use_case_name,
+                    "actions": list(intents(proposal.actions)),
+                    "link": link,
+                    "summary": proposed.summary,
+                    "lines": [describe(a).line for a in proposal.actions],
+                    "digest": request.digest,
+                    "steps": _asked_steps(request, names),
+                    "not_deciding": sorted(names[p] for p in request.parties),
                 },
                 uow.now,
             )
@@ -783,6 +819,8 @@ class Orchestrator:
                     if not isinstance(record.state, AwaitingApproval):
                         await self._activity.append(uow, record.run_id, [decided])
                         return Decided(status, decision, False)
+                    if isinstance(status, Approved | Declined):
+                        await self._enqueue_outcome(uow, record, request, status, principal)
                     match status:
                         case Approved():
                             moved = record.state.approve(uow.now).preceded_by(decided)
@@ -889,6 +927,8 @@ class Orchestrator:
                 await self._dispatch_leg(row)
             elif row.kind == ANNOUNCE:
                 await self._dispatch_announcement(row)
+            elif row.kind == SHOW_OUTCOME:
+                await self._dispatch_outcome(row)
             else:
                 raise DispatchFailure(f"unknown outbox kind {row.kind}")
         except DispatchFailure as error:
@@ -914,18 +954,30 @@ class Orchestrator:
                 case _:
                     pass
 
+    def approval_url(self, approval_id: ApprovalId) -> str:
+        """The approval page as an absolute address, for a card read outside the Portal."""
+        return f"{self._public_base_url}{approval_link(approval_id)}"
+
     async def _dispatch_announcement(self, row: OutboxRow) -> None:
+        payload = row.payload
+        approval_id = ApprovalId(payload["approval_id"])
+        # A notice queued before a field was added has none of it.
         notice = ApprovalNotice(
-            run_id=RunId(row.payload["run_id"]),
-            approval_id=ApprovalId(row.payload["approval_id"]),
-            use_case_name=row.payload["use_case_name"],
-            actions=tuple(row.payload["actions"]),
-            link=row.payload["link"],
-            # Notices queued before the summary was added have none.
-            summary=row.payload.get("summary", ""),
+            run_id=RunId(payload["run_id"]),
+            approval_id=approval_id,
+            use_case_name=payload["use_case_name"],
+            actions=tuple(payload["actions"]),
+            link=payload["link"],
+            open_url=self.approval_url(approval_id),
+            summary=payload.get("summary", ""),
+            lines=tuple(payload.get("lines", ())),
+            digest=payload.get("digest", ""),
+            steps=tuple(AskedStep(s["label"], tuple(s["who"])) for s in payload.get("steps", ())),
+            not_deciding=tuple(payload.get("not_deciding", ())),
         )
-        await self._channel.announce(notice)
+        ref = await _through_channel(self._channel.announce(notice))
         async with self._db.transaction("orchestration") as uow:
+            await self._store.save_message_ref(uow, approval_id, ref)
             await self._store.outbox_sent(uow, row.id)
             await self._activity.append(
                 uow,
@@ -946,6 +998,56 @@ class Orchestrator:
                 ],
             )
 
+    async def _enqueue_outcome(
+        self,
+        uow: UnitOfWork,
+        record: RunRecord,
+        request: ApprovalRequest,
+        status: Approved | Declined,
+        decider: Principal,
+    ) -> None:
+        match status:
+            case Approved(approvers):
+                verdict: OutcomeVerdict = "approved"
+                deciders = approvers
+            case Declined(by):
+                verdict = "declined"
+                deciders = (by,)
+        names = {**await self._store.names(uow, deciders), decider.user_id: decider.display}
+        await self._store.enqueue(
+            uow,
+            record.run_id,
+            SHOW_OUTCOME,
+            {
+                "approval_id": request.id,
+                "verdict": verdict,
+                "by": [names[d] for d in deciders],
+                "use_case_name": record.spec.use_case_name,
+            },
+            uow.now,
+        )
+
+    async def _dispatch_outcome(self, row: OutboxRow) -> None:
+        approval_id = ApprovalId(row.payload["approval_id"])
+        async with self._db.transaction("orchestration") as uow:
+            ref: MessageRef | None = await self._store.message_ref(uow, approval_id)
+            waiting = ref is None and await self._store.announcement_pending(uow, approval_id)
+            if ref is None and not waiting:
+                # The request was never posted, so there is no card to show it on.
+                await self._store.outbox_sent(uow, row.id)
+                return
+        if ref is None:
+            raise DispatchFailure("the approval request is not in Teams yet")
+        outcome = ApprovalOutcome(
+            verdict=row.payload["verdict"],
+            by=tuple(row.payload["by"]),
+            use_case_name=row.payload["use_case_name"],
+            open_url=self.approval_url(approval_id),
+        )
+        await _through_channel(self._channel.update(ref, outcome))
+        async with self._db.transaction("orchestration") as uow:
+            await self._store.outbox_sent(uow, row.id)
+
     async def _dispatch_failed(self, row: OutboxRow, now: datetime, error: str) -> None:
         failures = row.attempt + 1
         if failures <= len(self._retry.delays):
@@ -953,6 +1055,11 @@ class Orchestrator:
                 await self._store.outbox_retry(
                     uow, row.id, now + self._retry.delays[failures - 1], error
                 )
+            return
+        if row.kind == SHOW_OUTCOME:
+            async with self._db.transaction("orchestration") as uow:
+                await self._store.outbox_give_up(uow, row.id, error)
+            log.warning("gave up showing the outcome of %s in Teams: %s", row.payload, error)
             return
         async with self._db.transaction("orchestration") as uow:
             await self._store.outbox_give_up(uow, row.id, error)
