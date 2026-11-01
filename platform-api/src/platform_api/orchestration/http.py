@@ -57,6 +57,7 @@ from platform_api.shared import (
     Role,
     RunId,
     UserId,
+    has_id_shape,
 )
 from platform_api.wire import (
     ApprovalStepView,
@@ -573,6 +574,10 @@ async def run_step(
     orchestrator: CurrentOrchestrator,
 ) -> StepResponseOut | JSONResponse:
     check_step_key(request, step_key)
+    # n8n's run workflow copies run_id from a webhook body that anyone may send while its editor
+    # is open (ADR 0034), so only an id that new_id could have made goes on.
+    if not has_id_shape(run_id, "run"):
+        raise HTTPException(status_code=422, detail="Not a run id")
     try:
         reply = await orchestrator.on_step(run_id, DomainStep(step), N8nExecutionId(n8n_execution))
     except RetryLaterError as error:

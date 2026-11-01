@@ -136,7 +136,16 @@ def approval_step_missing(docs: dict[str, Document]) -> None:
 def run_id_read_from_the_other_leg(docs: dict[str, Document]) -> None:
     node(docs["run"], "Run agents")["parameters"]["url"] = (
         f"={PLATFORM_INTERNAL_URL}/internal/v1/runs/"
-        "{{ $('Start act').first().json.body.run_id }}/steps/run_agents"
+        "{{ encodeURIComponent($('Start act').first().json.body.run_id) }}/steps/run_agents"
+    )
+
+
+def run_id_not_encoded(docs: dict[str, Document]) -> None:
+    """The webhook's body can say anything, so an unencoded run_id such as
+    "../schedules/tick#" would move the call to another route, with the real step key."""
+    node(docs["run"], "Run agents")["parameters"]["url"] = (
+        f"={PLATFORM_INTERNAL_URL}/internal/v1/runs/"
+        "{{ $('Start work').first().json.body.run_id }}/steps/run_agents"
     )
 
 
@@ -241,6 +250,7 @@ MUTATIONS: list[tuple[Rule, Callable[[dict[str, Document]], None]]] = [
     (Rule.STEP_ORDER, run_id_read_from_json),
     (Rule.STEP_ORDER, approval_step_missing),
     (Rule.STEP_ORDER, run_id_read_from_the_other_leg),
+    (Rule.STEP_ORDER, run_id_not_encoded),
     (Rule.RETRY_WAIT, short_retry_wait),
     (Rule.RETRY_WAIT, no_retry),
     (Rule.DEADLINES, run_agents_outlasts_working),

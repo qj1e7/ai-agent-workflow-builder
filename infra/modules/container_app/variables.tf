@@ -65,11 +65,25 @@ variable "max_replicas" {
 }
 
 variable "ingress" {
-  description = "Whether the app is reachable from the internet, and the port it listens on."
+  description = "Whether the app is reachable from the internet, the port it listens on, and which addresses may reach it. Empty allowed_cidrs lets every address in. Otherwise each entry is an Allow rule, and Container Apps refuses every other address."
   type = object({
     external    = bool
     target_port = number
+    allowed_cidrs = optional(list(object({
+      name = string
+      cidr = string
+    })), [])
   })
+
+  validation {
+    condition     = length(distinct([for rule in var.ingress.allowed_cidrs : rule.name])) == length(var.ingress.allowed_cidrs)
+    error_message = "Each entry in allowed_cidrs needs its own name."
+  }
+
+  validation {
+    condition     = alltrue([for rule in var.ingress.allowed_cidrs : can(cidrhost(rule.cidr, 0)) && strcontains(rule.cidr, "/")])
+    error_message = "Each entry in allowed_cidrs must be an IPv4 range in CIDR form, such as 203.0.113.7/32."
+  }
 }
 
 variable "env" {
@@ -83,6 +97,13 @@ variable "secrets" {
     url   = string
     scope = string
   }))
+}
+
+variable "inline_secrets" {
+  description = "Environment variables kept as the app's own secrets, by variable name, for values Terraform makes that are not in Key Vault. A new Key Vault secret would give the app's identity a new role, which replaces its role wait, and the deploy's plan guard stops on any replace."
+  type        = map(string)
+  default     = {}
+  sensitive   = true
 }
 
 variable "tags" {
