@@ -1,16 +1,29 @@
-import json
-import urllib.request
 import base64
+import json
+import os
+import urllib.request
 
-JIRA_URL = "https://lustrouscx.atlassian.net"
-JIRA_USER = "lustrouscx@gmail.com"
-JIRA_API_TOKEN = "ATATT3xFfGF0htRCgNmn1sQGe1DE09XJX-NV36C428bvoUa5fAl0gXt6RgDg9QqrmydhRjbKgkqv8rTNcTk9K2MX5at_NwfURBMLYC7vJ9Mtny3-WW6CFGXzZCQiLpRNSaYS0n91QkQGmL31UtEHb1n2-25BCgOA-F5VH_5p9-AkaPoA2ALlS3E=D2097BB1"
+if not os.getenv("JIRA_API_TOKEN") and os.path.exists("deploy/.env"):
+    with open("deploy/.env", "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, val = line.split("=", 1)
+                val = val.strip().strip('"').strip("'")
+                os.environ[key.strip()] = val
+
+JIRA_URL = os.getenv("JIRA_URL", "https://lustrouscx.atlassian.net")
+JIRA_USER = os.getenv("JIRA_USER", "lustrouscx@gmail.com")
+JIRA_API_TOKEN = os.getenv("JIRA_API_TOKEN", "")
 ISSUE_KEY = "SCRUM-1"
+
+if not JIRA_API_TOKEN:
+    print("ERROR: JIRA_API_TOKEN environment variable is not set or is empty!")
+    exit(1)
 
 def test_live_jira():
     url = f"{JIRA_URL}/rest/api/3/issue/{ISSUE_KEY}"
     
-    # Construct Basic Auth header
     credentials = f"{JIRA_USER}:{JIRA_API_TOKEN}"
     encoded_credentials = base64.b64encode(credentials.encode("utf-8")).decode("utf-8")
     
@@ -27,14 +40,14 @@ def test_live_jira():
         with urllib.request.urlopen(req) as response:
             if response.status == 200:
                 data = json.loads(response.read().decode("utf-8"))
-                print("\n SUCCESS: Connected to real Jira successfully!")
+                print("\nSUCCESS: Connected to real Jira successfully!")
                 print(f"   - Issue Key: {data.get('key')}")
                 print(f"   - Summary:   {data.get('fields', {}).get('summary')}")
                 print(f"   - Status:    {data.get('fields', {}).get('status', {}).get('name')}")
             else:
-                print(f"\n FAILED: Jira returned status code {response.status}")
+                print(f"\nFAILED: Jira returned status code {response.status}")
     except Exception as e:
-        print(f"\n ERROR: Could not connect to Jira: {e}")
+        print(f"\nERROR: Could not connect to Jira: {e}")
 
 if __name__ == "__main__":
     test_live_jira()
