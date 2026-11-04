@@ -21,18 +21,15 @@ if not JIRA_API_TOKEN:
     print("ERROR: JIRA_API_TOKEN environment variable is not set or is empty!")
     exit(1)
 
+
 def test_live_jira():
     url = f"{JIRA_URL}/rest/api/3/issue/{ISSUE_KEY}"
-    
+
     credentials = f"{JIRA_USER}:{JIRA_API_TOKEN}"
     encoded_credentials = base64.b64encode(credentials.encode("utf-8")).decode("utf-8")
-    
+
     req = urllib.request.Request(
-        url, 
-        headers={
-            "Accept": "application/json",
-            "Authorization": f"Basic {encoded_credentials}"
-        }
+        url, headers={"Accept": "application/json", "Authorization": f"Basic {encoded_credentials}"}
     )
 
     print(f"Connecting to live Jira at {JIRA_URL} for issue {ISSUE_KEY}...")
@@ -48,6 +45,7 @@ def test_live_jira():
                 print(f"\nFAILED: Jira returned status code {response.status}")
     except Exception as e:
         print(f"\nERROR: Could not connect to Jira: {e}")
+
 
 if __name__ == "__main__":
     test_live_jira()
