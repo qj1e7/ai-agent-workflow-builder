@@ -4,7 +4,7 @@ import os
 import urllib.request
 
 if not os.getenv("JIRA_API_TOKEN") and os.path.exists("deploy/.env"):
-    with open("deploy/.env", "r", encoding="utf-8") as f:
+    with open("deploy/.env", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if line and not line.startswith("#") and "=" in line:
