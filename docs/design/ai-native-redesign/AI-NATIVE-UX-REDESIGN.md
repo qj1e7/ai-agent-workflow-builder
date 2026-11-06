@@ -266,7 +266,7 @@ From top to bottom, each section shown only when it has something:
    - a one-line purpose;
    - a status (Running, Waiting for a yes, Stopped, Paused, Test run);
    - the next run;
-   - at most one action, such as Retry, Review and decide, or Resume.
+   - at most one action, such as Retry, Review and decide, or Resume. A workflow whose action already shows under Needs you keeps only its status here, so no page offers the same button twice.
    
    No agent faces and no step details in the list. A search button in the section header opens a search box and the All, Stopped and Paused filters. They stay hidden until then.
 
@@ -362,7 +362,7 @@ From top to bottom:
    - the name;
    - the version we run;
    - the newest version;
-   - the status (Up to date, New version, Can't check);
+   - the status (Up to date, New version, Can't check). A Can't check with no fix the person can make, such as a rate limit that clears by itself, stays in the table with its reason instead of becoming a Needs attention card;
    - the source.
    
    **Add software** takes plain words ("Kubernetes"). It finds the GitHub project and shows where the guess came from. When more than one project matches, she chooses. She never needs to know what a package registry is.
@@ -439,7 +439,8 @@ It has no Approve or Decline. After a decision, the drawer shows the request's s
 | AI suggestion | Grey chip, "Filled in by me" |
 | Draft | Listed under Drafts, never runs |
 | Waiting for a yes | Amber pill |
-| Running | Pill with the step now running |
+| On | Pill, with the next run beside it, for a workflow that is switched on and between runs |
+| Running | Pill with the step now running, only while a run is in progress |
 | Done | Green pill, with what was written and who said yes |
 | Stopped | Red pill, with the troubleshooter's reason |
 | Test run | Marked "Test run" everywhere it appears |
