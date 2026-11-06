@@ -394,6 +394,18 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .kind { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.875rem; font-weight: 600; white-space: nowrap; }
 .pcard-s { display: grid; gap: 10px; padding: 12px 16px 14px; border-top: 1px solid var(--rule); }
 .pcard-s h4 { margin: 0; font-size: 0.875rem; font-weight: 700; color: var(--muted); }
+/* When: the schedule in words and Change; the picker only after Change, or when it is the one thing left (spec 7.1). */
+.when-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0; }
+.when-line > svg { flex: none; color: var(--muted); }
+.when-line > span { flex: 1 1 12rem; }
+.pcard .apsum { margin: 0; }
+/* How this workflow works, collapsed: the steps with their agents, then the agents' jobs and the tools. */
+.pcard details.how { border-top: 1px solid var(--rule); padding: 0 16px; }
+.pcard details.how > summary { padding: 12px 0; font-size: 0.9375rem; }
+.pcard details.how .more-body { display: grid; gap: 10px; padding: 0 0 14px; }
+.agents-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0; font-size: 0.9375rem; }
+.agents-line .face { flex: none; }
+.agents-line > span { margin-right: 8px; }
 .pcard-f { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 14px 16px; border-top: 1px solid var(--rule); background: var(--sunk); }
 .pcard-f .push { margin-left: auto; }
 .left { color: var(--amber-ink); font-weight: 600; font-size: 0.9375rem; }
@@ -1527,12 +1539,19 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const ticketLabel = (k, d) => (k === 'old' ? `Open tickets created more than ${d || 10} days ago` : TICKETS[k]);
   /* What a workflow can do with what it finds. Messaging ticket owners needs Teams, which isn't an ability yet, so
      "nudge" is read only to answer that it can't be done. */
-  const ACTIONS = { summary: 'Write a short summary', list: 'List them, with each one’s title and status', compare: 'Compare them with the week before' };
+  const ACTIONS = { summary: 'Sum them up', list: 'List them', compare: 'Compare them with the week before' };
+  /* Which of her words make a part hers (UX audit SC1). A part is hers only when every pattern is in her request;
+     anything mapped, widened or added is "Filled in by me". The patterns are the ones parseIntent reads. */
+  const OWN = {
+    tickets: { closed: [/\b(closed|resolved|completed|finished|done)\b/i, /\bweek\b/i], created: [/\b(new|created|opened|raised)\b/i, /\bweek\b/i], open: [/\bopen\b|\bunresolved\b/i], old: [/\b\d+\s*days?\b/i] },
+    action: { summary: [/summar|sum up|\breport\b|\bdigest\b|\boverview\b/i], list: [/\blist\b|\bshow me\b/i], compare: [/\bcompare\b|\bweek[- ]on[- ]week\b|\bagainst the week before\b|\bversus\b|\bvs\b/i] },
+  };
+  const hers = (key, value, text) => !!value && (OWN[key] ? (OWN[key][value] || []).every((re) => re.test(text)) : true);
   /* What a request needs that the Jira read can't give, in the Planner's words. */
   const NEEDS = { updated: 'I can’t see when a ticket was last updated yet', owners: 'I can’t see who owns a ticket yet', type: 'I can’t tell a ticket’s type yet' };
   /* The only place a result can go today is one Jira ticket, after a yes. Any other destination is read so the
      Planner can say it can't do that yet. */
-  const destText = (f) => `Put the ${thingOf(f)} in one Jira ticket in ${f.project || 'your Jira project'}, after a yes`;
+  const destText = (f) => `Put the ${thingOf(f)} in one new Jira ticket`;
   function parseIntent(text) {
     const t = ` ${text.toLowerCase()} `;
     const it = {};
@@ -1594,8 +1613,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function fieldRow(key, label, value, asked, askedLabel, edited, options, block, okNote) {
     let state;
     let note;
-    if (!value) { state = 'missing'; note = 'I couldn’t tell from your words.'; }
-    else if (edited && edited !== asked) { state = 'changed'; note = asked ? `Your request said: ${askedLabel}.` : 'You chose this.'; }
+    if (!value) { state = 'missing'; note = ''; }
+    else if (edited && edited !== asked) { state = 'changed'; note = asked ? `Your request said: ${askedLabel}.` : ''; }
+    else if (!hers(key, asked, S.wiz.text)) { state = 'filled'; note = ''; }
     else { state = 'ok'; note = okNote || ''; }
     return { key, label, value, state, note, options, block, selected: edited || asked || '' };
   }
@@ -1616,7 +1636,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     rows.push(fieldRow('project', 'Jira project', f.project, it.project, it.project, e.project, PROJECTS.map((p) => [p, p]), 'you choose the Jira project', 'It reads tickets here and writes here. It can’t reach other projects.'));
     rows.push(fieldRow('action', 'What it does', ACTIONS[f.action] || '', it.action, ACTIONS[it.action], e.action, [['summary', ACTIONS.summary], ['list', ACTIONS.list], ['compare', ACTIONS.compare]], 'you choose what it does'));
     /* The result can only go in a Jira ticket today, so the destination is filled in unless the request said so. */
-    rows.push({ key: 'dest', label: 'Where it goes', value: destText(f), state: it.dest === 'jira' ? 'ok' : 'filled', note: it.dest === 'jira' ? '' : 'You didn’t say where it goes. A Jira ticket is the only place I can write today, so it goes in one ticket in your project, after a yes.' });
+    rows.push({ key: 'dest', label: 'Where it goes', value: destText(f), state: it.dest === 'jira' ? 'ok' : 'filled', note: '' });
     return rows;
   }
   function planOf(f) {
@@ -2672,9 +2692,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
 
   /* ---------- The set-up card's parts: the read-back chips and the understood sentence ---------- */
   const lc = (s) => s.charAt(0).toLowerCase() + s.slice(1);
-  /* The schedule picker shows while a gap is left, or after the person opened it, until they press Done. */
-  const whenShown = () => !!S.wiz.sched && (Object.keys(schedProblems(S.wiz.sched)).length > 0 || S.wiz.whenOpen);
-  const CHIP_HINT = { ok: 'from your words', changed: 'changed by you', missing: 'please choose', cant: 'can’t do this yet', later: 'please choose when it runs', filled: 'filled in by me' };
+  /* The schedule picker opens after Change, or by itself when the schedule is the one thing left (spec 7.1). */
+  const whenShown = () => !!S.wiz.sched && (S.wiz.whenOpen || (Object.keys(schedProblems(S.wiz.sched)).length > 0 && setupLeft().length === 1));
+  const CHIP_HINT = { ok: 'your words', changed: 'chosen by you', missing: 'please choose', cant: 'can’t do this yet', later: 'please choose when it runs', filled: 'filled in by me' };
   function sentenceChip(r, text) {
     const hint = CHIP_HINT[r.state];
     if (r.key === 'when') return `<button type="button" class="schip ${r.state}" title="${cap(hint)}" data-act="whenOpen" aria-expanded="${whenShown()}" aria-label="${r.label}: ${text}, ${hint}. Change it">${text}${I.down(14)}</button>`;
@@ -2682,15 +2702,18 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const inOpts = r.options.some(([v]) => v === r.selected);
     return `<span class="schip ${r.state}" title="${cap(hint)}"><span data-val="chip:${r.key}">${text}</span>${I.down(14)}<select id="fix-${r.key}" data-fix="${r.key}" aria-label="${r.label}: ${r.value ? esc(r.value) : 'not sure'}, ${hint}. Change it">${opt('', r.value ? 'Change…' : 'Choose…', inOpts ? null : '')}${r.options.map(([v, l]) => opt(v, l, inOpts ? r.selected : null)).join('')}</select></span>`;
   }
-  /* What the Planner understood, as one sentence. Notes under it say what's missing, changed, filled in or not possible. */
-  function understoodSentence(rows, picker = '') {
+  /* What will happen, as one sentence (spec 7.1). The time is plain words here; the When section holds its control.
+     Notes under it only for a changed part or one the platform can't do. */
+  function understoodSentence(rows) {
     const k = Object.fromEntries(rows.map((r) => [r.key, r]));
     const chip = (key, fallback, keepCase) => sentenceChip(k[key], k[key].value ? (keepCase ? esc(k[key].value) : lc(esc(k[key].value))) : fallback);
-    const notes = rows.filter((r) => r.note && !(r.key === 'when' && r.state === 'ok'));
-    const icon = { cant: I.alert(16), missing: I.alert(16), later: I.clock(16), changed: I.edit(16), ok: I.info(16), filled: I.info(16) };
+    const notes = rows.filter((r) => r.note && r.key !== 'when' && ['changed', 'cant'].includes(r.state));
+    const icon = { cant: I.alert(16), changed: I.edit(16) };
     const glue = (html, mark) => `<span class="glue">${html}${mark}</span>`;
-    return `<p class="sentence-line">${glue(sentenceChip(k.when, k.when.value ? esc(k.when.value) : 'On a schedule you choose below'), ',')} find ${chip('tickets', 'which tickets')} in ${chip('project', 'a Jira project', true)} and ${glue(chip('action', 'what it does'), '.')} Then ${glue(chip('dest', 'where it goes'), '.')}</p>
-      ${picker}
+    const when = k.when.value ? `${esc(k.when.value)}, find` : 'Find';
+    const the = /^tickets/i.test(k.tickets.value || '') ? 'the ' : '';
+    const project = sentenceChip(k.project, k.project.value ? `Jira project ${esc(k.project.value)}` : 'a Jira project');
+    return `<p class="sentence-line">${when} ${the}${chip('tickets', 'which tickets')} in ${glue(project, ',')} ${glue(chip('action', 'what it does'), ',')} and ${glue(chip('dest', 'where it goes'), '.')}</p>
       ${notes.length ? `<ul class="snotes">${notes.map((r) => `<li class="${r.state}">${icon[r.state]}<span><b>${r.label}:</b> ${r.note}${r.key === 'source' ? ` ${sentToTeam(r.value) ? '<span class="pill wait">Asked the team</span>' : `<button class="linkbtn" data-act="teamReq" data-arg="${esc(r.value)}|wiz">Ask the team</button>`}` : ''}</span></li>`).join('')}</ul>` : ''}`;
   }
 
@@ -2892,11 +2915,13 @@ details > .m-close { animation: fold 140ms ease-in both; }
     return left;
   }
   const leftWords = (n) => (n === 1 ? '1 choice left' : `${n} choices left`);
-  const PROMISES = 'Nothing changes without a yes. You can pause, change or delete it at any time. If it stops, the AI troubleshooter tells you why.';
+  /* The promises live in the confirmation, where they matter (spec 7.2). */
+  const PROMISES = 'You can pause, change or delete it at any time. If it stops, the AI troubleshooter tells you why.';
 
+  /* The set-up card (spec 7): what will happen, when, what needs a yes, then how it works, collapsed, and Turn it on. */
   function setupCard(m) {
     const c = m.card;
-    if (c.done) return `<div class="pdone"><span class="tick">${I.check(14)}</span><div><b>${esc(c.done.name)} is on.</b><span>First run ${c.done.next}, Singapore time. When it needs a yes, any Approver on your team except you gets an approval request in Teams. A test run does the real work once, so it still waits for a yes.${c.done.newAgent ? ` The ${AGENTS[c.done.newAgent].name} is saved in the Agent library.` : ''}</span><span class="btns"><button class="linkbtn" data-act="go" data-arg="workflows">See it in Workflows</button><button class="linkbtn" data-act="testRun">Do a test run</button><button class="linkbtn" data-act="n8nAsk" data-arg="conf" data-unbuilt="Open in n8n (ADR 0026, 0027)">Open in n8n</button></span></div></div>`;
+    if (c.done) return `<div class="pdone"><span class="tick">${I.check(14)}</span><div><b>${esc(c.done.name)} is on.</b><span>First run ${c.done.next}, Singapore time. Before its ticket is created, any Approver on your team except you is asked for a yes in Teams.${c.done.newAgent ? ` The ${AGENTS[c.done.newAgent].name} is saved in the Agent library.` : ''}</span><span>${PROMISES}</span><span class="btns"><button class="btn primary sm" data-act="testRun">Do a test run</button><button class="linkbtn" data-act="go" data-arg="workflows">See it in Workflows</button><span class="small muted">A test run does the real work once, so it still waits for a yes.</span></span></div></div>`;
     if (c.discarded) return '<p class="small muted">Discarded.</p>';
     if (c.saved) return '<p class="small muted">Saved as a draft. Open it from Workflows to carry on.</p>';
     const w = S.wiz;
@@ -2907,20 +2932,27 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const writer = writerOf(f);
     const steps = planOf(f).map((s, i) => s.concat(i === 0 ? 'jira' : i === 1 ? writer : 'platform', i === 1 && isNewAgent(writer)));
     const title = w.name.trim() || f.name;
-    const picker = whenShown() ? `<div class="whenpick">${schedFields('sched', w.sched, w.schedErr)}<div class="btns"><button class="btn sm" data-act="whenDone">Done</button></div></div>` : '';
+    const timeOk = !Object.keys(schedProblems(w.sched)).length;
+    const picker = whenShown() ? `<div class="whenpick" id="whenpick">${schedFields('sched', w.sched, w.schedErr)}<div class="btns"><button class="btn sm" data-act="whenDone">Done</button></div></div>` : '';
+    const job = { list: 'lists them', compare: 'compares them with the week before' }[f.action] || 'sums them up';
     return `<div class="pcard" data-pres="setup:${m.id}">
       <div class="pcard-h">${w.renaming
         ? `<label class="vh" for="rname">Workflow name</label><input type="text" id="rname" data-input="name" value="${esc(w.name || f.name)}"><button class="btn sm" data-act="renameDone">Done</button>`
-        : `<h3>${esc(title)}</h3><button class="linkbtn" data-act="rename">Rename</button><span class="kind">${I.grid(16)}Workflow</span>`}</div>
-      <section class="pcard-s"><h4>What I understood</h4>
-        ${understoodSentence(rows, picker)}
+        : `<h3 tabindex="-1">${esc(title)}</h3><button class="linkbtn" data-act="rename">Rename</button>`}</div>
+      <section class="pcard-s"><h4>What will happen</h4>
+        ${understoodSentence(rows)}
         ${similar ? `<p class="similar">${I.info(16)}<span>You already have a similar workflow, <i>Weekly closed-ticket summary</i>. <button class="linkbtn" data-act="workflow" data-arg="nudge">Open it</button></span></p>` : ''}
       </section>
-      <section class="pcard-s"><h4>The plan</h4>${stepsList(steps, true, 'plan:draft')}
-        <p class="note">Done by the Jira reader and the ${AGENTS[writer].name}${isNewAgent(writer) ? ', a new agent I drafted because no saved agent sums up closed work' : ''}. The platform creates the ticket.</p>
+      <section class="pcard-s"><h4>When</h4>
+        <p class="when-line">${I.clock(16)}<span data-val="when">${timeOk ? `${schedText(w.sched)}, Singapore time` : '<span class="schip missing">Choose when it runs</span>'}</span>${picker ? '' : '<button class="btn sm" data-act="whenOpen" aria-expanded="false" aria-controls="whenpick">Change</button>'}</p>
+        ${picker}
       </section>
-      <section class="pcard-s"><h4>Who says yes</h4><p class="apsum">${I.info(16)}<span>Any Approver on your team except you, in Teams.</span></p></section>
-      <section class="pcard-s"><p class="note promises">${PROMISES}</p></section>
+      <section class="pcard-s"><h4>What needs a yes</h4><p class="apsum">${I.shield(16)}<span>Creating the Jira ticket changes data, so each run waits for a yes in Teams. Any Approver on your team except you can say yes.${shows('namedApprovers') ? ` Named Approvers, with a backup and a stop time, come later. ${PLANNED_TAG}` : ''}</span></p></section>
+      <details class="more how" data-unbuilt="How this workflow works"><summary>How this workflow works</summary><div class="more-body">
+        ${stepsList(steps, true, 'plan:draft')}
+        <p class="agents-line">${face('jira', 26)}<span><b>${AGENTS.jira.name}</b> reads the tickets.</span>${face(writer, 26)}<span><b>${AGENTS[writer].name}</b> ${job}.${isNewAgent(writer) ? ' <span class="tag">New agent, saved to the Agent library when you turn this on</span>' : ''}</span></p>
+        <p class="note">Tools: ${TOOLS.jiraSearch[0]} and ${TOOLS.jiraRead[0]} read Jira. ${TOOLS.jiraCreate[0]} writes to Jira, after a yes.</p>
+      </div></details>
       <div class="pcard-f"><button class="btn primary" data-act="turnOn"${left.length ? ' disabled' : ''}>Turn it on</button>
         ${left.length ? `<span class="left">${leftWords(left.length)}: ${andList(left)}.</span>` : '<span class="note">Nothing is unclear. One yes turns it on.</span>'}</div>
     </div>`;
@@ -3023,13 +3055,17 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const ans = ANSWERS[a.kind];
       const say = ans.say(a);
       const mood = typeof ans.mood === 'function' ? ans.mood(a) : ans.mood || 'idle';
+      /* The finished sentence is announced once (spec 15.8). A card answer takes focus at its heading; any other
+         answer hands focus back to the box. */
       const done = () => {
         Object.assign(wait, { say, mood });
         c.hero = 'idle';
         c.busy = false;
+        announce(say);
         if (onHome()) {
           render();
-          if (!['setup', 'watch'].includes(a.kind)) focusComposer();
+          const h = ['setup', 'watch'].includes(a.kind) ? $app.querySelector(`[data-mid="${wait.id}"] .pcard-h h3`) : null;
+          if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); } else focusComposer();
         }
         if (mood === 'sorry') setTimeout(() => { wait.mood = 'idle'; if (onHome()) render(); }, 1800);
       };
