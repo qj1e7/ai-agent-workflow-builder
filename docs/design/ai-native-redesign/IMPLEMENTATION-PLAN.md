@@ -652,6 +652,18 @@ A new `answer` job in `agent-runtime/evals/answer.py` **(new)** with cases in `a
 
 The AI Singapore gateway caches byte-identical requests, so repeat runs use the marker that `marked` in `agent-runtime/evals/jobs.py` already adds.
 
+### 7.6 Design rules on every screen
+
+`portal/e2e/live/design-rules.spec.ts` **(new)** turns the checkable parts of `docs/design/ai-native-principles.md` into tests. It lands with N10, the first new screen, and every later screen PR adds its states to it. On each screen state that section 8 lists, it checks:
+
+- **One primary action.** At most one primary button is visible (principle 3).
+- **Nothing unbuilt shown as working.** Every capability name on the screen is Ready, or sits in a Not yet list, a can't answer, or a part tagged Planned. The test reads the states from the registry route (N6), not from a copy (principle 5).
+- **No claims the system can't back.** No "Sent to", and no "all tickets", on screens that read Jira (principle 5).
+- **One source per fact.** The Needs you count on Home, on Workflows, on the tab badge and in the Planner's answer is the same number (principle 7).
+- **No dead buttons.** With the AI model off and with Jira down, no visible run button fails on click. Each one is replaced by its reason (principle 9).
+
+A failure names the principle it broke.
+
 ## 8. Accessibility tests
 
 These use tools already in the repo:
