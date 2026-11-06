@@ -12,6 +12,8 @@ Every new or changed screen, component or flow in the AI Workflow Builder follow
 
 ## The principles
 
+AGENTS.md lists these twelve in one line each, so every AI tool sees them. Change both together.
+
 ### 1. Start from intent
 
 People say what they want in one place, Home's Planner box, and never have to choose a page first. A request is classified and routed by the platform. Suggestions come from what is going on now, not a fixed list.
