@@ -36,7 +36,7 @@ testpaths = ["tests"]
 filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecated"]
 
 [tool.pyright]
-include = ["src", "tests", "evals"]
+include = ["src", "tests", "evals", "scripts"]
 strict = ["src"]
 pythonVersion = "3.14"
 
