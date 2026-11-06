@@ -16,6 +16,8 @@ from agent_runtime.contract import (
     ConnectResult,
     DraftRequest,
     DraftResult,
+    FindSoftwareRequest,
+    FindSoftwareResult,
     GitHubCheckResult,
     ModelAccess,
     ModelTestResult,
@@ -58,6 +60,8 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "planner-understand-request.json": TypeAdapter(UnderstandRequest),
     "planner-understood.json": TypeAdapter(UnderstandResult),
     "planner-watchlist.json": TypeAdapter(UnderstandResult),
+    "software-find-request.json": TypeAdapter(FindSoftwareRequest),
+    "software-found.json": TypeAdapter(FindSoftwareResult),
 }
 
 

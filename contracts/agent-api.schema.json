@@ -1128,6 +1128,44 @@
       "title": "Drafted",
       "type": "object"
     },
+    "FindSoftwareRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "The software as a person wrote it, such as Kubernetes.",
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "FindSoftwareRequest",
+      "type": "object"
+    },
+    "FindSoftwareResult": {
+      "discriminator": {
+        "mapping": {
+          "found": "#/$defs/FoundSoftware",
+          "not_checked": "#/$defs/SoftwareNotChecked",
+          "not_known": "#/$defs/SoftwareNotKnown"
+        },
+        "propertyName": "status"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/FoundSoftware"
+        },
+        {
+          "$ref": "#/$defs/SoftwareNotKnown"
+        },
+        {
+          "$ref": "#/$defs/SoftwareNotChecked"
+        }
+      ]
+    },
     "Finding": {
       "additionalProperties": false,
       "properties": {
@@ -1207,6 +1245,32 @@
         "suggested"
       ],
       "title": "FoundModel",
+      "type": "object"
+    },
+    "FoundSoftware": {
+      "additionalProperties": false,
+      "properties": {
+        "matches": {
+          "description": "Every project the name could mean. More than one means the person chooses. A match is a guess from a reviewed list, never a certainty.",
+          "items": {
+            "$ref": "#/$defs/SoftwareMatch"
+          },
+          "maxItems": 5,
+          "minItems": 1,
+          "title": "Matches",
+          "type": "array"
+        },
+        "status": {
+          "const": "found",
+          "default": "found",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "matches"
+      ],
+      "title": "FoundSoftware",
       "type": "object"
     },
     "GitHubCheckResult": {
@@ -1596,6 +1660,93 @@
         "cant_do"
       ],
       "type": "string"
+    },
+    "SoftwareMatch": {
+      "additionalProperties": false,
+      "properties": {
+        "newest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The tag of the newest stable release. None when there is none.",
+          "title": "Newest"
+        },
+        "releases": {
+          "description": "Whether the project has a stable release. With none, a watch would have nothing to compare.",
+          "enum": [
+            "published",
+            "none"
+          ],
+          "title": "Releases",
+          "type": "string"
+        },
+        "repo": {
+          "$ref": "#/$defs/RepoName",
+          "description": "A GitHub project that exists, as owner/name. Checked just now."
+        },
+        "why": {
+          "description": "Where the guess came from, in plain words, for the person to read.",
+          "maxLength": 300,
+          "title": "Why",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo",
+        "why",
+        "releases",
+        "newest"
+      ],
+      "title": "SoftwareMatch",
+      "type": "object"
+    },
+    "SoftwareNotChecked": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "description": "GitHub did not answer, so no project is offered. Nothing unchecked is shown.",
+          "maxLength": 300,
+          "title": "Message",
+          "type": "string"
+        },
+        "status": {
+          "const": "not_checked",
+          "default": "not_checked",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "message"
+      ],
+      "title": "SoftwareNotChecked",
+      "type": "object"
+    },
+    "SoftwareNotKnown": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "maxLength": 300,
+          "title": "Message",
+          "type": "string"
+        },
+        "status": {
+          "const": "not_known",
+          "default": "not_known",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "message"
+      ],
+      "title": "SoftwareNotKnown",
+      "type": "object"
     },
     "SoftwareToCheck": {
       "additionalProperties": false,
@@ -2128,6 +2279,12 @@
     "planner_understand_result": {
       "$ref": "#/$defs/UnderstandResult"
     },
+    "software_find_request": {
+      "$ref": "#/$defs/FindSoftwareRequest"
+    },
+    "software_find_result": {
+      "$ref": "#/$defs/FindSoftwareResult"
+    },
     "task_request": {
       "$ref": "#/$defs/TaskRequest"
     },
@@ -2154,7 +2311,9 @@
     "planner_choose_request",
     "planner_choose_result",
     "planner_understand_request",
-    "planner_understand_result"
+    "planner_understand_result",
+    "software_find_request",
+    "software_find_result"
   ],
   "title": "AgentApiSchema",
   "type": "object"

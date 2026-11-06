@@ -1,0 +1,11 @@
+{
+  "status": "found",
+  "matches": [
+    {
+      "repo": "kubernetes/kubernetes",
+      "why": "Our list of known projects says Kubernetes is usually kubernetes/kubernetes. GitHub has it just now.",
+      "releases": "published",
+      "newest": "v1.31.2"
+    }
+  ]
+}

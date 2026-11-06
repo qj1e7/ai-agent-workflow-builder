@@ -42,7 +42,9 @@ from agent_runtime.contract import (
     DraftInput,
     DraftRequest,
     Finding,
+    FindSoftwareRequest,
     FoundModel,
+    FoundSoftware,
     GitHubProblem,
     GithubSource,
     GitHubWorking,
@@ -54,6 +56,7 @@ from agent_runtime.contract import (
     ModelTestPassed,
     ProposedIntent,
     RoomAddressee,
+    SoftwareMatch,
     SoftwareToCheck,
     TaskError,
     TaskFailed,
@@ -801,6 +804,24 @@ def belongs_on_watchlist() -> WireModel:
     return result
 
 
+def find_software_request() -> FindSoftwareRequest:
+    return FindSoftwareRequest(name="Kubernetes")
+
+
+def found_software() -> FoundSoftware:
+    return FoundSoftware(
+        matches=[
+            SoftwareMatch(
+                repo="kubernetes/kubernetes",
+                why="Our list of known projects says Kubernetes is usually "
+                "kubernetes/kubernetes. GitHub has it just now.",
+                releases="published",
+                newest="v1.31.2",
+            )
+        ]
+    )
+
+
 def fixtures() -> dict[str, WireModel]:
     finished = finished_task()
     return {
@@ -842,6 +863,8 @@ def fixtures() -> dict[str, WireModel]:
         "planner-understand-request.json": understand_request(),
         "planner-understood.json": understood(),
         "planner-watchlist.json": belongs_on_watchlist(),
+        "software-find-request.json": find_software_request(),
+        "software-found.json": found_software(),
     }
 
 
