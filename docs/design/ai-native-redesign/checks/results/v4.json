@@ -1997,13 +1997,13 @@
       "failed": null,
       "failures": [],
       "counts": {
-        "clicks": 19,
+        "clicks": 20,
         "fields": 2,
         "selects": 0,
         "navs": 0,
         "decisions": 3,
         "screens": 1,
-        "interactions": 21
+        "interactions": 22
       },
       "screenList": [
         "home"
@@ -2115,18 +2115,18 @@
         },
         {
           "n": 14,
-          "kind": "field",
-          "label": "Type the time",
+          "kind": "click",
+          "label": "Tab towards the time",
           "nav": false,
-          "decision": true,
+          "decision": false,
           "screen": "home"
         },
         {
           "n": 15,
-          "kind": "click",
-          "label": "Tab towards Turn it on",
+          "kind": "field",
+          "label": "Type the time",
           "nav": false,
-          "decision": false,
+          "decision": true,
           "screen": "home"
         },
         {
@@ -2171,6 +2171,14 @@
         },
         {
           "n": 21,
+          "kind": "click",
+          "label": "Tab towards Turn it on",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 22,
           "kind": "click",
           "label": "Turn it on",
           "nav": false,

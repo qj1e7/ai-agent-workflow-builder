@@ -530,7 +530,7 @@ Everything in the prototype is simulated. Specifically:
 
 ## 20. How it was checked
 
-All results below are for commit 513b95a. Their files are in `checks/results/`. `USER-JOURNEY-COMPARISON.md` compares each scenario.
+All results below are for version 4 after fix round D (merge a78daf1, 7 Nov), which answered the outside review. Their files are in `checks/results/`. `USER-JOURNEY-COMPARISON.md` compares each scenario.
 
 - **Scenarios.** The same harness (`checks/run.cjs`) ran scenarios A to H and the 15 tasks of version 3 on both versions, counting clicks, typed fields, choices and pages.
   - Version 3 passed 27 of 27. Removing a draft was not possible in version 3.
@@ -554,9 +554,9 @@ All results below are for commit 513b95a. Their files are in `checks/results/`. 
   - three primary buttons on Home.
 
   The builders' gates caught fewer. At b6cc589 they missed the count drift, an alternative offered without checking it sets up, and a Planner crash. Fix round C added gate checks that fail on the crash and on count drift. No builder gate yet catches the unchecked alternative. Only the judge's `alternatives-set-up-cleanly` does.
-- **The builders' gates.** `gates-p0.cjs` passed 36 checks, `gates-p1a.cjs` 58, `gates-p1b.cjs` 54 and `gates-p2.cjs` 63. Each gate's seeded controls still fail. The gates check I1 to I9 by name.
+- **The builders' gates.** `gates-p0.cjs` passed 36 checks, `gates-p1a.cjs` 65, `gates-p1b.cjs` 55 and `gates-p2.cjs` 66. Each gate's seeded controls still fail. The gates check I1 to I9 by name.
 - **Quality.** `checks/quality.cjs` checked 26 screens at 1280 and 390 px.
-  - axe found 0 critical and 0 serious problems. It found 12 moderate (heading order, regions) and 2 minor.
+  - axe found no problems of any level: 0 critical, 0 serious, 0 moderate and 0 minor.
   - Nothing scrolls sideways at 390 px.
   - No animation runs under reduced motion.
   - The keyboard reaches the Operator's box in 9 Tab presses and Bob's Review and decide in 8, with visible focus at every stop.

@@ -44,7 +44,7 @@ Real scenarios: 40 passed, 0 failed, 0 not possible. Control (must fail): failed
 | OFFLINE | 390 | No AI model: Home says so and offers Connect a model | yes | 1 | 0 | 0 | 0 | 2 |  |
 | DOWN | 1280 | Jira stops answering: the Planner says so, then Jira works again | yes | 1 | 1 | 0 | 0 | 1 |  |
 | PREVIEW | 1280 | Planned features shown: each planned item is tagged | yes | 3 | 0 | 0 | 0 | 4 |  |
-| KEYS-A | 1280 | Scenario A with the keyboard only | yes | 19 | 2 | 0 | 3 | 1 |  |
+| KEYS-A | 1280 | Scenario A with the keyboard only | yes | 20 | 2 | 0 | 3 | 1 |  |
 | KEYS-C | 1280 | Scenario C with the keyboard only | yes | 12 | 0 | 0 | 1 | 2 |  |
 
 A click includes a key press on a button. Menu steps and page changes are included. A decision is also counted as a click, a select or a field. Test controls are never counted.

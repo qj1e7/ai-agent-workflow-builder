@@ -160,7 +160,7 @@ When email is the only missing part, the Planner does offer the rest. "Every Fri
 
 **The task.** A person types "Monitor Kubernetes releases" on Home and should end with Kubernetes on the Software watchlist, without knowing where that page is.
 
-**Both versions.** Type, press Enter, Looks right, "Not sure? Start from the newest", Add Kubernetes. 4 clicks, 1 field, 1 screen.
+**Both versions.** Type, press Enter, Looks right, "Not sure? Start from the newest", Add Kubernetes. 4 clicks, 1 field, 1 screen. In version 3, "Start from the newest" recorded the newest release as the version the team runs. Version 4 keeps the version as Not known and watches for releases from now, because the newest release isn't what the team has installed (outside review finding F-05).
 
 **Is the request routed without navigation knowledge?** Yes in both. The Planner sends the request to the watchlist from Home. Version 4 also stops showing the security-advisory, package-registry and support-date sources as working. Those sources aren't built (I9). By default they read "Not yet". With Planned features on, they are tagged Planned.
 
@@ -218,7 +218,7 @@ These have no version 3 baseline, because version 3 had no way to do them.
 | OFFLINE. No AI model | 1 / 0 / 0 / 0 / 2 | Home says agent workflows can't run without a model, in the built app's words, and offers one Connect a model button. |
 | DOWN. Jira stops answering | 1 / 1 / 0 / 0 / 1 | The Planner says Jira isn't answering and offers to keep the request as a draft, so nothing is lost and nothing is set up on a system that's down. |
 | PREVIEW. Planned features shown | 3 / 0 / 0 / 0 / 4 | Every planned part carries a Planned tag (`preview-tags-planned`). |
-| KEYS-A. Scenario A by keyboard only | 19 key presses, 2 fields, 3 decisions | Every step is reachable with Tab and Enter, with visible focus. |
+| KEYS-A. Scenario A by keyboard only | 20 key presses, 2 fields, 3 decisions | Every step is reachable with Tab and Enter, with visible focus. |
 | KEYS-C. Scenario C by keyboard only | 12 key presses, 1 decision | Approve is reachable with visible focus. |
 | H2. Discard a draft | 2 / 0 / 0 / 1 / 2 | Version 3 had no way to remove a draft. |
 
@@ -233,7 +233,7 @@ Version 4 is not lighter everywhere. Home on a normal week carries more.
 | Version 3, normal week | 61 | 6 |
 | Version 4, normal week | 92 | 10 |
 | Version 3, day one | 122 | 5 |
-| Version 4, day one | 114 | 5 |
+| Version 4, day one | 121 | 5 |
 
 Measured by `checks/home-weight.cjs` at 1280 px (`checks/results/home-weight.json`). Words are the words visible on the page. Controls are visible buttons, links, text boxes and drop-downs.
 

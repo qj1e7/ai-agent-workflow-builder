@@ -3622,7 +3622,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     };
     return `<div class="abil"><h2 class="vh">What I can do</h2>
       ${STATE_GROUPS.map(([g, states]) => group(g, states)).join('')}
-      <p class="abil-foot">Anything that changes data waits for a yes in Teams. Need something that isn’t here? Ask, and I’ll pass it to the team.</p>
+      <p class="abil-foot">Anything that changes data waits for a yes in Teams. Need something that isn’t here? Ask, and I’ll save it as a request for the team.</p>
     </div>`;
   }
   function focusComposer() {
@@ -4034,7 +4034,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       ? `<details class="cap-fold"><summary>What can’t I do yet?</summary><section class="cap-${g}" aria-label="${groupTitle(g)}"><ul class="cap-list">${list.map(line).join('')}</ul></section></details>`
       : `<section class="section cap-${g}" aria-labelledby="cap-${g}-h"><h2 id="cap-${g}-h"><span class="cap-ic" aria-hidden="true">${GROUP_ICON[g]}</span>${groupTitle(g)} <span class="count">${list.length}</span></h2><ul class="cap-list">${list.map(line).join('')}</ul></section>`);
     return `<div data-unbuilt="What it can do tab">${STATE_GROUPS.map(([g, states]) => { const list = caps.filter((c) => states.includes(c.st)); return list.length ? group(g, list) : ''; }).join('')}
-      <p class="note" style="margin-top:24px">Anything that changes data waits for a yes in Teams. Need something that isn’t here? Ask the Planner on Home, and it passes the request to the team.</p></div>`;
+      <p class="note" style="margin-top:24px">Anything that changes data waits for a yes in Teams. Need something that isn’t here? Ask the Planner on Home, and it saves it as a request for the team.</p></div>`;
   }
   const oneLine = (a) => a.what.split(/(?<=\.)\s/)[0];
   function libraryView() {
