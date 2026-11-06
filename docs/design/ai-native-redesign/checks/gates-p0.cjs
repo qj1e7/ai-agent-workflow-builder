@@ -240,6 +240,7 @@ check('preview-on-tags-planned', async (browser) => session(browser, 1280, async
 check('two-approvers-access-review', async (browser) => session(browser, 1280, async (t) => {
   await t.ctl('preview', 'on');
   await t.go('workflows'); await t.click('[data-act="workflow"][data-arg="access"]');
+  await t.click('details.tech summary');
   const text = await t.text();
   assert(/First Bob.*Then Alice/.test(text), `two Approvers in turn: ${text.match(/Who approves[^\n]*\n[^\n]*/)}`);
   assert(text.includes('2 Approvers, one after the other'), 'plan says two Approvers');

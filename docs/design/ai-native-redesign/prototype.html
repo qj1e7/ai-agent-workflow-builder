@@ -441,11 +441,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .faces .face:first-child { margin-left: 0; }
 
 /* Workflow page */
-.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px 24px; padding: 18px 20px; background: var(--surface); border: 1px solid var(--hair); border-radius: var(--r-card); }
-.facts dt { font-size: 0.875rem; font-weight: 600; color: var(--muted); }
-.facts dd { font-weight: 600; margin-top: 2px; }
-.facts .fact-wide { grid-column: 1 / -1; }
-.facts .agent-chips { margin: 6px 0 0; }
 /* The status banner: one sentence and one primary action, tinted by state, never by colour alone (the pill and icon say it). */
 .banner { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 12px 14px; align-items: center; padding: 16px 20px; border: 1px solid var(--hair); border-radius: var(--r-card); background: var(--surface); }
 .banner p { margin: 0; font-weight: 600; }
@@ -578,6 +573,9 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 .found { display: grid; gap: 8px; }
 .found li { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; align-items: start; font-size: 0.95rem; }
 .found .face { width: 24px; height: 24px; }
+/* On a phone the evidence links and the speed control reach 44 px too. The .seg rule above is more specific than the
+   shared coarse-pointer rule, so this one is scoped to the run detail. */
+@media (pointer: coarse) { .approval .links a { display: inline-flex; align-items: center; min-height: 44px; } .run-detail .seg button { min-height: 44px; } }
 /* The run as a group chat: system events are quiet markers, agents speak in bubbles,
    and the approval gate or the AI troubleshooter has the last word, with the buttons in its message. */
 .chat { max-width: 800px; margin: 0 auto; display: grid; gap: 20px; }
@@ -797,6 +795,7 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 .qa dd { overflow-wrap: anywhere; }
 @media (max-width: 480px) { .btn { white-space: normal; } }
 .result-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (pointer: coarse) { .result-chips .pillbtn { min-height: 44px; } }
 
 /* Software */
 .sched, .apprbar { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px 18px; border-radius: var(--r-card); margin-bottom: 24px; }
@@ -952,6 +951,8 @@ button.schip { cursor: pointer; }
 .findbox input:focus-visible { outline: none; }
 .filters { gap: 6px; }
 .filters button { border: 1px solid var(--rail); background: var(--surface); border-radius: 999px; padding: 6px 14px; font-weight: 600; cursor: pointer; min-height: 36px; transition: background-color var(--dur-press) ease, border-color var(--dur-press) ease, color var(--dur-press) ease; }
+/* On a phone the Workflows search box and its filters reach 44 px. Scoped, because .filters button above outranks the shared coarse-pointer rule. */
+@media (pointer: coarse) { .findbar .findbox input, .findbar .filters button { min-height: 44px; } }
 .filters button[aria-pressed="true"] { background: var(--primary); border-color: var(--primary); color: var(--on-ink); }
 .casebox { padding: 14px 16px; border: 1px solid var(--hair); border-radius: var(--r-card); background: var(--sunk); display: grid; gap: 8px; }
 .case-top { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; }
@@ -980,7 +981,6 @@ button.schip { cursor: pointer; }
 .apstep { border: 0; padding: 0; margin: 0 0 14px; min-width: 0; }
 .apstep legend { font-weight: 700; padding: 0; margin-bottom: 8px; }
 .st.gate.noans .st-dot { background: var(--sunk); border-color: var(--muted); color: var(--ink); outline: 0; }
-.facts dd small { display: block; font-weight: 400; font-size: 0.875rem; color: var(--muted); margin-top: 4px; }
 /* Open in n8n: the workflow as n8n shows it, as boxes in a row. */
 .n8n-canvas { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 6px; margin: 16px 0; padding: 16px; border-radius: var(--r-well); background: var(--sunk); }
 .n8n-canvas li { display: inline-flex; align-items: center; gap: 6px; }
