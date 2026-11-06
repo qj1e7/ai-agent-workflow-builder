@@ -40,7 +40,7 @@ async function loaded(page: Page): Promise<void> {
 }
 
 /** A menu link's name, which carries ", N need you" when something waits for the person. */
-const linkName = (label: string) => new RegExp(`^${label}(, \\d+ need you)?$`)
+const linkName = (label: string) => new RegExp(`^${label}(\\s*, \\d+ need you)?$`)
 
 test('Home greets the signed-in person and the menu reads Home, Workflows, Software watchlist, Agent library, New workflow', async ({ page }, info) => {
   await page.goto('/')
