@@ -4,7 +4,7 @@ import bobHome from '../../../../contracts/fixtures/builder/home.bob.json'
 import dayOne from '../../../../contracts/fixtures/builder/home.day-one.json'
 import type { ApprovalItem, HomeOut, StoppedItem, WaitingItem } from '../../api/types'
 import { ApiError } from '../../api/client'
-import { actionsOf, comingUpOf, draftWords, HOME_NEEDS_SHOWN, leadLine, moreWords, NEEDS_SHOWN, needsOf, needsTotal, retryProblem, waitingWords, wordsOf, type Need } from './home'
+import { actionsOf, comingUpOf, draftWords, HOME_NEEDS_SHOWN, leadLine, moreWords, needsOf, needsTotal, retryProblem, waitingWords, wordsOf, type Need } from './home'
 
 const BOB = bobHome as HomeOut
 const ALICE = aliceHome as HomeOut
@@ -49,14 +49,14 @@ describe('the order of what needs you', () => {
     expect(keys(once.shown)).toEqual(keys(again.shown))
   })
 
-  it(`shows at most ${NEEDS_SHOWN} and counts the rest from the platform's totals`, () => {
+  it('shows everything the platform returned, and counts what it left out from its totals', () => {
     const approvals = Array.from({ length: 10 }, (_, n) => ask(`run_${String(n).padStart(2, '0')}`, `2026-11-03T01:${String(n).padStart(2, '0')}:00Z`))
     const home: HomeOut = { ...BOB, approvals, approvals_total: 50, stopped: [STOP], stopped_total: 1 }
     const needs = needsOf(home)
-    expect(needs.shown).toHaveLength(NEEDS_SHOWN)
+    expect(needs.shown).toHaveLength(10 + 1 + BOB.confirmations.length)
     expect(needs.shown[0]?.key).toBe('stopped:run_01JB9')
     expect(needs.total).toBe(53)
-    expect(needs.more).toEqual({ approvals: 41, others: 2 })
+    expect(needs.more).toEqual({ approvals: 40, others: 0 })
   })
 
   it(`shows ${HOME_NEEDS_SHOWN} on Home with the most urgent first, and counts the same total`, () => {

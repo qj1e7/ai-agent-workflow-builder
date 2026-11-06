@@ -241,20 +241,21 @@ function kept(row: Row, filter: Filter, words: string): boolean {
 
 const NOTHING: ReadonlySet<string> = new Set()
 
-/** A workflow Needs you already lists has no row button, so the page keeps one way to act on each request. */
+/** A row's action is on its workflow's latest run. When Needs you already offers that run, the row keeps only its status, so no run is offered twice. */
 export function rowsOf(
   useCases: readonly UseCaseView[],
   runs: readonly RunView[],
   viewer: Viewer,
   filter: Filter,
   query: string,
-  inNeeds: ReadonlySet<string> = NOTHING,
+  runsInNeeds: ReadonlySet<string> = NOTHING,
 ): Row[] {
   const latest = latestRuns(runs)
   const words = query.trim().toLowerCase()
   const rows = useCases.map((useCase) => {
     const run = latest.get(useCase.use_case_id) ?? null
-    return { useCase, latest: run, action: inNeeds.has(useCase.use_case_id) ? null : rowAction(run, viewer) }
+    const action = rowAction(run, viewer)
+    return { useCase, latest: run, action: action && runsInNeeds.has(action.runId) ? null : action }
   })
   const needsYou = (row: Row) => (row.action ? 0 : 1)
   return rows.filter((row) => kept(row, filter, words)).sort((a, b) => needsYou(a) - needsYou(b))

@@ -5,9 +5,7 @@ import type { ApprovalItem, ConfirmationItem, DraftItem, HomeOut, StoppedItem, W
 import { count, withCurrentNames } from '../run/words'
 import { lineWhen, nextRunAt, runWhen, workflowPath } from '../workflows/workflow'
 
-/** What the list shows in full: the Workflows page, and Home for someone who is not an Operator. */
-export const NEEDS_SHOWN = 10
-/** Home for an Operator shows the most urgent few. Workflows has the rest. */
+/** Home for an Operator shows the most urgent few. Workflows, and Home for someone who is not an Operator, show everything the platform returned. */
 export const HOME_NEEDS_SHOWN = 3
 
 export type Need =
@@ -32,11 +30,11 @@ const urgentFirst = (a: Need, b: Need) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind
 
 export const needsTotal = (home: HomeOut) => home.approvals_total + home.confirmations.length + home.stopped_total
 
-/** The workflows Needs you shows a request for, so a list of workflows need not offer the same action again. A request cut from the shown rows keeps its row button. */
-export const workflowsInNeeds = (home: HomeOut): ReadonlySet<string> =>
-  new Set(needsOf(home).shown.flatMap((need) => (need.kind === 'confirmation' ? [] : [need.item.use_case_id])))
+/** The runs Needs you on Workflows offers an action on, so the list of workflows under it need not offer the same run again. */
+export const runsInNeeds = (home: HomeOut): ReadonlySet<string> =>
+  new Set(needsOf(home).shown.flatMap((need) => (need.kind === 'confirmation' ? [] : [need.item.run_id])))
 
-export function needsOf(home: HomeOut, limit: number = NEEDS_SHOWN): Needs {
+export function needsOf(home: HomeOut, limit = Infinity): Needs {
   const all: Need[] = [
     ...home.approvals.map((item): Need => ({ kind: 'approval', key: `approval:${item.approval_id}`, at: item.started_at, item })),
     ...home.confirmations.map((item): Need => ({ kind: 'confirmation', key: `confirmation:${item.confirmation_id}`, at: item.asked_at, item })),

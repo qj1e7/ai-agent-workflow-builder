@@ -9,7 +9,7 @@ import { Button } from '../../ui/Button'
 import { useFocusWhenReady } from '../../ui/focus'
 import { IconClock } from '../../ui/icons'
 import { useGlide, usePresence } from '../../ui/presence'
-import { comingUpOf, HOME_NEEDS_SHOWN, HOW_IT_WORKS, leadLine, moreWords, NEEDS_SHOWN, needsOf, needsTotal, seeAllWords, type Next } from './home'
+import { comingUpOf, HOME_NEEDS_SHOWN, HOW_IT_WORKS, leadLine, moreWords, needsOf, needsTotal, seeAllWords, type Next } from './home'
 import { FirstWorkflow } from './FirstWorkflow'
 import { DraftRow, WaitingRow } from './HomeItem'
 import { NeedsSection, useArrival, type Arrival } from './NeedsSection'
@@ -121,7 +121,7 @@ function HowItWorks() {
 
 function Loaded({ now, home, next }: { now: Date; home: HomeOut; next: Next | null }) {
   const operator = isOperator(useMe().data)
-  const needs = useMemo(() => needsOf(home, operator ? HOME_NEEDS_SHOWN : NEEDS_SHOWN), [home, operator])
+  const needs = useMemo(() => (operator ? needsOf(home, HOME_NEEDS_SHOWN) : needsOf(home)), [home, operator])
   const dayOne = home.workflows === 0
   const firstWorkflow = dayOne && operator
   const arrival = useArrival([

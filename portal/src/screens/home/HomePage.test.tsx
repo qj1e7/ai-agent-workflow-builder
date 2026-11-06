@@ -219,7 +219,7 @@ describe('Home for an Operator with more than three things waiting', () => {
 
   it('shows an Approver who is not an Operator the whole list instead, with no link', () => {
     const html = mainOf(render(BOB, { ...BOB_HOME, approvals, approvals_total: 5 }))
-    expect([...html.matchAll(/data-home-item="/g)]).toHaveLength(Math.min(10, 5 + BOB_HOME.confirmations.length))
+    expect([...html.matchAll(/data-home-item="/g)]).toHaveLength(5 + BOB_HOME.confirmations.length)
     expect(text(html)).not.toContain('on Workflows')
   })
 })

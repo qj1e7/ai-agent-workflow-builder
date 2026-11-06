@@ -216,7 +216,7 @@ describe('one action per workflow on Workflows', () => {
     expect(rowOf(html, 'uc_01JB7')).not.toContain('Review and decide')
   })
 
-  it('still offers a row its button when Needs you does not list that workflow', () => {
+  it('still offers a row its button when Needs you does not list that run', () => {
     const quiet: HomeOut = { ...(bobHome as HomeOut), approvals: [], approvals_total: 0, confirmations: [], stopped: [], stopped_total: 0 }
     const html = render({ me: BOB, home: quiet })
     expect(primaries(mainOf(html))).toBe(1)
