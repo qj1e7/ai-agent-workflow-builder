@@ -50,6 +50,7 @@ BROKEN: dict[str, Any] = {
 }
 RELEASE_WORDS = re.compile(r"\b(?:releases?|versions?|upgrades?|patch(?:es)?)\b", re.IGNORECASE)
 VULNERABILITY_WORDS = re.compile(r"\b(?:vulnerab\w*|cves?|nvd|advisor(?:y|ies))\b", re.IGNORECASE)
+TICKET_WORDS = re.compile(r"\b(?:tickets?|jira)\b", re.IGNORECASE)
 SOFTWARE = ("LangGraph", "Redis", "FastAPI", "PostgreSQL", "Terraform", "Log4j", "Kubernetes")
 SCHEDULE = re.compile(
     r"\b(?:every|each)\s+(?:week ?day|day|morning|monday|tuesday|wednesday|thursday|friday|"
@@ -287,7 +288,8 @@ def parts(task: str) -> list[dict[str, Any]]:
 
 
 def no_vulnerability_tool(row: dict[str, Any]) -> dict[str, Any]:
-    if VULNERABILITY_WORDS.search(row.get("text", "")) is None:
+    text = row.get("text", "")
+    if VULNERABILITY_WORDS.search(text) is None or TICKET_WORDS.search(text) is not None:
         return row
     return {**row, "state": "cant_do", "note": "No tool checks for known vulnerabilities yet."}
 

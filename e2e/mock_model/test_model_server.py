@@ -231,6 +231,13 @@ class UnderstandTest(unittest.TestCase):
             read_back("Watch LangGraph releases and check them for CVEs"),
         )
 
+    def test_a_search_of_tickets_about_a_vulnerability_stays_understood(self) -> None:
+        task = "Every Monday, find tickets in MOCK about the Log4j vulnerability and list them"
+        self.assertIn(
+            ("look_for", "Tickets in MOCK about the Log4j vulnerability", "understood"),
+            read_back(task),
+        )
+
     def test_a_task_with_no_schedule_has_it_missing(self) -> None:
         task = FOLLOW_UP.removeprefix("Every weekday at 3pm, ")
         self.assertEqual(read_back(task)[0], ("schedule", "", "missing"))
