@@ -479,9 +479,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .banner.off { background: var(--sunk); }
 @media (max-width: 600px) { .banner { grid-template-columns: 20px minmax(0, 1fr); } .banner > .btns { grid-column: 2; } }
 .factrows { display: grid; background: var(--surface); border: 1px solid var(--hair); border-radius: var(--r-card); }
-.factrows > div { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 14px 20px; }
+.factrows > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px; align-items: center; padding: 14px 20px; }
 .factrows > div + div { border-top: 1px solid var(--rule); }
-.factrows > div > div { flex: 1 1 260px; min-width: 0; }
+.factrows > div > dt, .factrows > div > dd { grid-column: 1; min-width: 0; }
+.factrows > div > dd.act { grid-column: 2; grid-row: 1 / span 2; margin: 0; }
 .factrows dt { font-size: 0.875rem; font-weight: 600; color: var(--muted); }
 .factrows dd { font-weight: 600; margin-top: 2px; }
 .factrows dd small { display: block; font-weight: 400; font-size: 0.875rem; color: var(--muted); margin-top: 4px; }
@@ -1418,7 +1419,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const copyAppr = (a) => ({ ...a, steps: a.steps.map((s) => ({ ...s })) });
   /* The one workflow being set up: the request, what was understood, the operator's corrections and when it runs.
      Who says yes is today's rule, any Approver except the owner, so the card has no Approver fields. */
-  const newWiz = () => ({ text: '', extra: '', intent: null, edits: {}, name: '', sched: null, schedErr: {}, whenOpen: false, renaming: false });
+  const newWiz = () => ({ text: '', intent: null, edits: {}, name: '', sched: null, schedErr: {}, whenOpen: false, renaming: false });
   /* The keys the platform holds. Day one starts with fresh keys, so a new team sees no warning. `down` is set by the
      test control "Jira stops answering"; `tested` is when the connection was last seen working. */
   const connsFor = (firstDay) => ({
@@ -1435,8 +1436,12 @@ details > .m-close { animation: fold 140ms ease-in both; }
     sw: 'waiting', swBy: null, swOwner: 'carol',
     issues: 'failed',
     /* The Friday summary: failed, then after the fix waiting, approved or declined, with who decided. */
-    nudge: 'failed', nudgeBy: null, report: 0, supportCase: null,
-    conf: 'none', confYes: [], confAsk: 0, confReq: null, nr: null,
+    nudge: 'failed', nudgeBy: null, report: 0, supportCase: null, reportNote: '',
+    conf: 'none', confYes: [], confAsk: 0, confReq: null, confStarter: null, nr: null,
+    /* The access review (Planned): a removal request waiting for two Approvers in turn. Carol started the review by hand. */
+    access: 'waiting', accessYes: [], accessBy: null, accessRun: { by: 'carol', sub: 'Mon 19 Oct, 9:00' },
+    /* Who retried each workflow's run, in order. A retrier is a party to the run, so they can't approve it. */
+    retried: {}, menu: null,
     appr: {}, editingAppr: null, apprForm: null, apprErr: {}, apprMore: false,
     agentEdits: {}, agentDraft: null, modalBack: [],
     model: { provider: 'aisg', model: 'claude-sonnet-5-5', keyEnd: '7f', checked: 'today, 9:00', secs: '1.8', address: '' },
@@ -1499,7 +1504,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const jiraDown = () => capState('jiraRead') === 'down';
   /* Planned features (spec 16): hidden unless the test control shows them, then each carries a Planned tag. A feature is
      a planned capability in CAPS, or one of these designs that isn't a capability. */
-  const PLANNED_FEATURES = { namedApprovers: 'ADR 0024', toolDraft: 'ADR 0037' };
+  const PLANNED_FEATURES = { namedApprovers: 'ADR 0024', toolDraft: 'ADR 0037', n8n: 'ADR 0026, 0027' };
   const shows = (f) => S.preview && (f in PLANNED_FEATURES || (f in CAPS && CAPS[f].base === 'planned'));
   const PLANNED_TAG = '<span class="tag planned" title="On the team’s plan. Not built.">Planned</span>';
   /* The one answer for a tool that doesn't exist yet, on Home, on Tools and in an agent's dialog (I3). */
@@ -1549,7 +1554,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const parts = a.steps.map((s) => `If ${nm(s.first)} hasn’t answered after ${afterWord(a.after)}, ${hasBackup(s) ? `${nm(s.backup)} is asked too` : `${nm(s.first)} gets a reminder`}.`);
     return `${parts.join(' ')} If nobody says yes ${stopWords(a, sched)}, it stops and nothing changes.`;
   }
-  const whoOr = (ids) => ids.map(nm).join(' or ');
+  const whoOr = (ids) => { const n = ids.map(nm); return n.length < 2 ? n.join('') : `${n.slice(0, -1).join(', ')} or ${n[n.length - 1]}`; };
   const whoAnd = (ids) => ids.map(nm).join(' and ');
   function apprProblems(a) {
     const e = {};
@@ -1879,12 +1884,16 @@ details > .m-close { animation: fold 140ms ease-in both; }
       case 'conf': {
         if (S.conf === 'waiting') return { tone: 'wait', label: 'Waiting for a yes', last: `Test run today: waiting for ${whoOr(req('conf').may)}.` };
         if (S.conf === 'expired') return { tone: 'off', label: 'No answer', last: 'Test run today: nobody answered in time, so nothing was written.' };
-        if (S.conf === 'approved') return { tone: 'ok', last: `Test run today: ${confWrite(S.nr).shortDone}, approved by ${confYesText()}.` };
+        if (S.conf === 'approved') return { tone: 'ok', last: `Test run today: ${confWrite(S.nr).shortDone}, approved by ${yesText('conf')}.` };
         if (S.conf === 'declined') return { tone: 'ok', last: `Test run today: declined by ${nm(S.confBy)}. Nothing was written.` };
         return { tone: 'ok', last: `Turned on today. First run ${R('conf').next}.` };
       }
-      case 'access':
-        return { tone: 'ok', last: 'Mon 5 Oct: 3 people lost access, approved by Bob, then Alice.' };
+      case 'access': {
+        const when = S.accessRun.sub.replace(/, .*$/, '');
+        if (S.access === 'waiting') return { tone: 'wait', label: 'Waiting for a yes', last: `${when}: 3 people would lose access. Waiting for a yes.` };
+        if (S.access === 'approved') return { tone: 'ok', last: `${when}: 3 people lost access, approved by ${yesText('access')}.` };
+        return { tone: 'ok', last: `${when}: declined by ${nm(S.accessBy)}. Nothing was removed.` };
+      }
       default:
         return { tone: 'ok', last: madeOf(id).last };
     }
@@ -1899,7 +1908,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     try { m = runModel(id); } catch (e) { m = null; }
     if (!m || !m.stations) return out;
     if (tone === 'bad' && m.fail != null && AGENTS[m.stations[m.fail].who]) out[m.stations[m.fail].who] = 'error';
-    if (tone === 'wait') { const g = m.stations.findIndex((s) => s.gate); const w = g > 0 ? m.stations[g - 1].who : null; if (AGENTS[w]) out[w] = 'waiting'; }
+    if (tone === 'wait') { const w = m.end > 0 ? m.stations[m.end - 1].who : null; if (AGENTS[w]) out[w] = 'waiting'; }
     return out;
   }
   const pill = (st) => `<span class="pill ${st.tone}">${st.tone === 'ok' ? I.check(12) : st.tone === 'bad' ? I.x(12) : st.tone === 'off' ? I.clock(12) : I.lock(12)}${st.label}</span>`;
@@ -1911,48 +1920,83 @@ details > .m-close { animation: fold 140ms ease-in both; }
   };
 
   /* ---------- Who can approve ---------- */
-  const starterOf = { sw: 'carol', conf: 'alice', nudge: 'alice' };
-  /* This week's software check asked Bob on Monday at 9:41. Nobody answered in 4 working hours, so Alice was asked too. */
+  /* The parties of a run can't approve it, as the built gate counts them (service.py, ADR 0036): the workflow's owner,
+     read live, whoever started the run, and anyone who retried it. The sample runs were started by their owners'
+     schedules. A test run is started by whoever pressed Test it, and the access review by hand. */
+  const STARTED_BY = { sw: 'carol', issues: 'alice', nudge: 'alice' };
+  const starterOf = (id) => (id === 'conf' ? S.confStarter : id === 'access' ? S.accessRun.by : STARTED_BY[id] || null);
+  const retriersOf = (id) => S.retried[id] || [];
+  const retry = (id) => { S.retried[id] = [...retriersOf(id), S.user]; };
+  const partiesOf = (id) => [...new Set([ownerOf(id), starterOf(id), ...retriersOf(id)].filter(Boolean))];
+  /* Why one person is a party, as a verb phrase after their name or "You": "set this up and started this run". A retry
+     stands in for the start it repeats. */
+  function partyWhy(id, u) {
+    const why = [];
+    if (ownerOf(id) === u) why.push('set this up');
+    if (retriersOf(id).includes(u)) why.push('retried this run');
+    else if (starterOf(id) === u) why.push('started this run');
+    return why.length ? andList(why) : null;
+  }
+  /* The gate's reason, said in the run's feed: "Carol set this up and started this run, so Carol can’t approve." */
+  const partiesLine = (id) => { const p = partiesOf(id); return `${p.map((u) => `${nm(u)} ${partyWhy(id, u)}`).join(', and ')}, so ${whoAnd(p)} can’t approve.`; };
+  /* Each workflow's approval request as one record: its state, who said yes so far in order, and who declined. Needs
+     you, the run page, the Teams drawer and its badge all read it, so none can disagree. */
+  const REQ_IDS = ['sw', 'nudge', 'conf', 'access'];
+  const yesOf = (id) => (id === 'conf' ? S.confYes : id === 'access' ? S.accessYes : []);
+  function reqRecord(id) {
+    if (!has(id)) return null;
+    switch (id) {
+      case 'sw': return { state: S.sw, yes: S.sw === 'approved' ? [S.swBy] : [], by: S.swBy };
+      case 'nudge': return S.nudge === 'failed' ? null : { state: S.nudge, yes: S.nudge === 'approved' ? [S.nudgeBy] : [], by: S.nudgeBy };
+      case 'conf': return ['waiting', 'approved', 'expired', 'declined'].includes(S.conf) ? { state: S.conf, yes: S.confYes, by: S.confBy } : null;
+      case 'access': return { state: S.access, yes: S.accessYes, by: S.accessBy };
+      default: return null;
+    }
+  }
+  /* The named Approvers a request was sent with. A test run keeps its copy, so a later change doesn't move it. */
+  const reqAppr = (id) => (id === 'conf' ? S.confReq : apprOf(id));
+  const yesText = (id) => yesOf(id).map(nm).join(', then ');
+  /* The same names as the subject of a sentence: "Siti, then Arun, approved". */
+  const yesWho = (id) => `${yesText(id)}${yesOf(id).length > 1 ? ',' : ''}`;
+  /* This week's software check asked Bob on Monday at 9:41. Nobody answered in 4 working hours, so Alice was asked too.
+     The access review's removals were asked on Monday at 9:30. */
   const SW_ASKED = new Date(2026, 9, 26, 9, 41);
+  const ACCESS_ASKED = new Date(2026, 9, 26, 9, 30);
   /* A waiting approval request. It keeps the people and waits it was sent with, even if the workflow changes later. */
   function req(id) {
-    let a; let asked; let escalated; let step = 0;
-    if (id === 'sw') {
-      if (!has('sw') || S.sw !== 'waiting') return null;
-      a = apprOf('sw'); asked = SW_ASKED; escalated = true;
-    } else if (id === 'conf') {
-      if (!has('conf') || !['waiting', 'expired'].includes(S.conf)) return null;
-      a = S.confReq; asked = NOW; escalated = S.confAsk > 0; step = a ? Math.min(S.confYes.length, a.steps.length - 1) : 0;
-    } else if (id === 'nudge') {
-      if (!has('nudge') || S.nudge !== 'waiting') return null;
-      a = apprOf('nudge'); asked = NOW; escalated = false;
-    } else return null;
-    const expired = id === 'conf' && S.conf === 'expired';
-    /* Today's rule: every Approver but the starter is asked at once, nobody is a backup, and it waits until someone
+    const rec = reqRecord(id);
+    if (!rec || !['waiting', 'expired'].includes(rec.state)) return null;
+    const a = reqAppr(id);
+    const step = a ? Math.min(rec.yes.length, a.steps.length - 1) : 0;
+    const asked = id === 'sw' ? SW_ASKED : id === 'access' && !rec.yes.length ? ACCESS_ASKED : NOW;
+    const escalated = id === 'sw' || (id === 'access' && !rec.yes.length) || (id === 'conf' && S.confAsk > 0);
+    const expired = rec.state === 'expired';
+    const parties = partiesOf(id);
+    /* Today's rule: every Approver but the parties is asked at once, nobody is a backup, and it waits until someone
        decides. A stop time, a backup and escalation exist only with named Approvers (ADR 0024). */
-    if (!a) return { id, team: true, step: 0, steps: 1, first: null, backup: null, asked, backupAt: null, expiresAt: null, capped: false, escalated: false, expired, backupInTime: false, may: approverPool().filter((u) => u !== starterOf[id]) };
+    if (!a) return { id, team: true, step: 0, steps: 1, first: null, backup: null, asked, backupAt: null, expiresAt: null, capped: false, escalated: false, expired, backupInTime: false, may: approverPool().filter((u) => !parties.includes(u)) };
     const s = a.steps[step];
     const backup = hasBackup(s) ? s.backup : null;
     const backupAt = addWorkHours(asked, a.after);
     let expiresAt = addWorkHours(asked, a.expire * (DAY_END - DAY_START));
-    const next = S.paused[id] ? null : nextRunDate(R(id).sched);
+    const next = S.paused[id] || !R(id).sched ? null : nextRunDate(R(id).sched);
     const capped = !!next && next < expiresAt;
     if (capped) expiresAt = next;
     return {
       id, step, steps: a.steps.length, first: s.first, backup, asked, backupAt, expiresAt, capped,
       escalated, expired, backupInTime: backupAt < expiresAt,
-      may: [s.first, backup].filter((u) => u && u !== starterOf[id]),
+      may: [s.first, backup].filter((u) => u && !parties.includes(u)),
     };
   }
   /* A request that is still waiting, not one that already stopped. */
   const waitingReq = (id) => { const q = req(id); return q && !q.expired ? q : null; };
+  /* The gate. `may` already leaves the parties out; the check is repeated here because this is the rule, not the display. */
   const canApprove = (id, user = S.user) => {
-    const q = req(id);
-    return !!q && !q.expired && PEOPLE[user].ap && starterOf[id] !== user && q.may.includes(user);
+    const q = waitingReq(id);
+    return !!q && PEOPLE[user].ap && !partiesOf(id).includes(user) && q.may.includes(user);
   };
-  const confYesText = () => S.confYes.map(nm).join(', then ');
-  /* The same names as the subject of a sentence: "Siti, then Arun, approved". */
-  const confYesWho = () => `${confYesText()}${S.confYes.length > 1 ? ',' : ''}`;
+  /* The open requests this person can decide, for the Teams badge and the one approval count. */
+  const mayDecide = () => REQ_IDS.filter((id) => canApprove(id));
   /* The people a request has actually asked so far. */
   const askedOf = (q) => (q.team ? q.may : q.escalated && q.backup ? [q.first, q.backup] : [q.first]);
   const stopText = (q) => (q.team ? 'It waits until one of them decides. Nothing is written before that.' : `If nobody says yes by ${at(q.expiresAt)}${q.capped ? ', before the next run' : ''}, it stops and nothing is written.`);
@@ -1970,19 +2014,21 @@ details > .m-close { animation: fold 140ms ease-in both; }
     else t = `${F} has been asked in Teams${role ? `, as ${role}` : ''}.${B && q.backupInTime ? ` If ${F} hasn’t answered by ${at(q.backupAt)}, ${B} is asked too.` : ''}`;
     return `${t} ${stopText(q)}`;
   }
-  const askLineHtml = (q, viewer) => `<p class="askline">${I.clock(16)}<span>${askLine(q, viewer)}</span></p>`;
+  /* Named Approvers, backups and stop times are ADR 0024, so a line that names them carries the Planned tag. */
+  const namedTag = (q) => (q.team ? '' : ` ${PLANNED_TAG}`);
+  const askLineHtml = (q, viewer) => `<p class="askline">${I.clock(16)}<span>${askLine(q, viewer)}${namedTag(q)}</span></p>`;
 
   /* What the approval gate says in the run's feed while it waits. */
   function gateText(q, starter) {
     if (q.team) return `Asked every Approver on the team in Teams. ${starter}`;
     const F = nm(q.first);
     const B = q.backup ? nm(q.backup) : null;
-    const said = q.step > 0 ? `${confYesText()} said yes. ` : '';
+    const said = q.step > 0 ? `${yesText(q.id)} said yes. ` : '';
     const whom = q.steps > 1 ? `${F}, the ${q.step === 0 ? 'first' : 'second'} Approver,` : F;
     const asked = q.escalated
       ? (B ? `Asked ${whom} in Teams. No answer by ${at(q.backupAt)}, so ${B}, the backup, was asked too.` : `Asked ${whom} in Teams, and sent a reminder ${on(q.backupAt)}.`)
       : `Asked ${whom} in Teams.${B && q.backupInTime ? ` If there’s no answer by ${at(q.backupAt)}, ${B}, the backup, is asked too.` : ''}`;
-    return `${said}${asked} ${starter}`;
+    return `${said}${asked} ${starter}${namedTag(q)}`;
   }
 
   /* ---------- Runs: the live activity view ---------- */
@@ -2006,19 +2052,20 @@ details > .m-close { animation: fold 140ms ease-in both; }
     }
     if (id === 'sw') {
       const st = S.sw;
-      const gate = st === 'waiting' ? { tone: 'wait', who: 'gate', text: gateText(req('sw'), 'Carol can’t approve, because Carol’s schedule started this run.') }
+      const gate = st === 'waiting' ? { tone: 'wait', who: 'gate', text: gateText(req('sw'), partiesLine('sw')) }
         : st === 'approved' ? { tone: 'ok', who: 'gate', text: `${nm(S.swBy)} approved 3 tickets.` }
           : { tone: 'bad', who: 'gate', text: `${nm(S.swBy)} declined. Nothing was written.` };
       const full = shows('registries');
+      const by = starterOf('sw');
       const stations = [
-        { label: 'Started', sub: 'Mon 9:00', who: 'p:carol', msg: { who: 'portal', text: 'Carol’s schedule started the Monday check.' } },
-        { label: 'Pick agents', who: 'lead', msg: { who: 'lead', text: `14 tools to check. I’m bringing in the Version checker${full ? ', the Vulnerability checker' : ''} and the Ticket writer.` } },
-        { label: `Read ${TRACKED.length - UNREADABLE.length} of ${TRACKED.length}`, who: 'checker', msg: { who: 'checker', text: full ? 'I read each tool’s registry (Maven Central, PyPI, Docker Hub) and cross-checked GitHub. Log4j core, LangGraph and FastAPI have newer versions. For FastAPI, GitHub shows 0.120.2, but it isn’t on PyPI yet, so I used 0.120.1. Grafana couldn’t be read: Docker Hub and GitHub didn’t answer. From endoflife.date: PostgreSQL 14 stops getting fixes on 12 Nov, and Node.js 22 on 30 Apr.' : 'I read each tool’s releases on GitHub. Log4j core, LangGraph and FastAPI have newer versions. Grafana couldn’t be read: GitHub’s hourly limit was reached.' } },
-        ...(full ? [{ label: 'Check vulnerabilities', who: 'vuln', msg: { who: 'vuln', text: 'I matched the versions we run in OSV, read the official records from NVD, checked vendor advisories, and checked CISA’s list of actively exploited vulnerabilities. Log4j core 2.14.1 has 4 known vulnerabilities, found in OSV, NVD and Apache’s own advisory. The worst, CVE-2021-44228 (Log4Shell), is rated critical, 10.0, and CISA lists it as actively exploited. None are listed for the other tools.' } }] : []),
-        { label: 'Draft tickets', who: 'writer', msg: { who: 'writer', text: `I drafted 3 upgrade tickets.${full ? ' The Log4j core one is marked urgent.' : ''} Nothing is in Jira yet.` } },
+        { label: 'Started', sub: 'Mon 9:00', who: `p:${by}`, msg: { who: 'portal', text: `${nm(by)}’s schedule started the Monday check.` } },
+        { label: 'Pick agents', who: 'lead', msg: { who: 'lead', text: `14 tools to check. I’m bringing in the Version checker${full ? ', the Vulnerability checker' : ''} and the Ticket writer.${full ? ` ${PLANNED_TAG}` : ''}` } },
+        { label: `Read ${TRACKED.length - UNREADABLE.length} of ${TRACKED.length}`, who: 'checker', msg: { who: 'checker', text: full ? 'I read each tool’s registry (Maven Central, PyPI, Docker Hub) and cross-checked GitHub. Log4j core, LangGraph and FastAPI have newer versions. For FastAPI, GitHub shows 0.120.2, but it isn’t on PyPI yet, so I used 0.120.1. Grafana couldn’t be read: Docker Hub and GitHub didn’t answer. From endoflife.date: PostgreSQL 14 stops getting fixes on 12 Nov, and Node.js 22 on 30 Apr. ' + PLANNED_TAG : 'I read each tool’s releases on GitHub. Log4j core, LangGraph and FastAPI have newer versions. Grafana couldn’t be read: GitHub’s hourly limit was reached.' } },
+        ...(full ? [{ label: `Check vulnerabilities ${PLANNED_TAG}`, who: 'vuln', msg: { who: 'vuln', text: 'I matched the versions we run in OSV, read the official records from NVD, checked vendor advisories, and checked CISA’s list of actively exploited vulnerabilities. Log4j core 2.14.1 has 4 known vulnerabilities, found in OSV, NVD and Apache’s own advisory. The worst, CVE-2021-44228 (Log4Shell), is rated critical, 10.0, and CISA lists it as actively exploited. None are listed for the other tools. ' + PLANNED_TAG } }] : []),
+        { label: 'Draft tickets', who: 'writer', msg: { who: 'writer', text: `I drafted 3 upgrade tickets.${full ? ' The Log4j core one is marked urgent.' : ''} Nothing is in Jira yet.${full ? ` ${PLANNED_TAG}` : ''}` } },
         { label: 'Approval gate', gate: true, msg: gate },
         { label: 'Create in Jira', who: 'platform', skip: st === 'declined', msg: { who: 'platform', text: 'Created MOCK-14, MOCK-15 and MOCK-16. Only the approved tickets were written.' } },
-        { label: 'Done', msg: { who: 'portal', tone: 'ok', text: st === 'declined' ? 'Done. The tickets will be proposed again next Monday.' : `Done. 3 upgrade tickets are in Jira${urgentNote()}.` } },
+        { label: 'Done', msg: { who: 'portal', tone: 'ok', text: st === 'declined' ? 'Done. The tickets will be proposed again next Monday.' : `Done. 3 upgrade tickets are in Jira${urgentNote()}.${full ? ` ${PLANNED_TAG}` : ''}` } },
       ];
       const gi = stations.findIndex((s) => s.gate);
       return {
@@ -2030,11 +2077,12 @@ details > .m-close { animation: fold 140ms ease-in both; }
     /* Stopped because Jira, an outside system, didn't answer. A retry is safe: it reads again, and its ticket still waits for a yes. */
     if (id === 'issues') {
       const ok = S.issues === 'fixed';
+      const by = ok ? retriersOf('issues').slice(-1)[0] : starterOf('issues');
       return {
         workflow: 'issues', end: ok ? 6 : 2, fail: ok ? null : 2, state: ok ? 'done' : 'failed',
         headline: ok ? 'Done, nothing new today' : 'Stopped at Find new tickets',
         stations: [
-          { label: 'Started', sub: ok ? 'Today, retry' : 'Today 8:00', who: 'p:alice', msg: { who: 'portal', text: ok ? 'Alice retried the run.' : 'Alice’s schedule started the morning check.' } },
+          { label: 'Started', sub: ok ? 'Today, retry' : 'Today 8:00', who: `p:${by}`, msg: { who: 'portal', text: ok ? `${nm(by)} retried the run.` : `${nm(by)}’s schedule started the morning check.` } },
           { label: 'Pick agents', who: 'lead', msg: { who: 'lead', text: 'I’m bringing in the Jira reader and the Summary writer.' } },
           { label: 'Find new tickets', who: 'jira', msg: ok ? { who: 'jira', text: 'Jira answered. No tickets were created in MOCK since the last run.' } : { who: 'jira', tone: 'bad', text: 'Jira didn’t answer. I stopped here.' } },
           { label: 'Write summary', who: 'summary', skip: ok },
@@ -2046,15 +2094,16 @@ details > .m-close { animation: fold 140ms ease-in both; }
     }
     if (id === 'nudge') {
       const ok = S.nudge !== 'failed';
+      const by = ok ? retriersOf('nudge').slice(-1)[0] : starterOf('nudge');
       return {
         workflow: 'nudge', end: !ok ? 2 : S.nudge === 'waiting' ? 4 : 6, fail: ok ? null : 2, state: !ok ? 'failed' : S.nudge === 'waiting' ? 'waiting' : 'done',
         headline: !ok ? 'Stopped at Read closed tickets' : S.nudge === 'waiting' ? '1 ticket is waiting for a yes' : S.nudge === 'approved' ? 'Summary ticket created in Jira' : 'Declined, nothing was written',
         stations: [
-          { label: 'Started', sub: ok ? 'Today, retry' : 'Fri 16:00', who: 'p:alice', msg: { who: 'portal', text: ok ? 'Alice retried the run after the fix went live.' : 'Alice’s schedule started the Friday summary.' } },
+          { label: 'Started', sub: ok ? 'Today, retry' : 'Fri 16:00', who: `p:${by}`, msg: { who: 'portal', text: ok ? `${nm(by)} retried the run after the fix went live.` : `${nm(by)}’s schedule started the Friday summary.` } },
           { label: 'Pick agents', who: 'lead', msg: { who: 'lead', text: 'I’m bringing in the Jira reader and the Summary writer.' } },
           { label: 'Read closed tickets', who: 'jira', msg: ok ? { who: 'jira', text: '11 tickets were closed in MOCK last week. MOCK-31’s description was read this time.' } : { who: 'jira', tone: 'bad', text: 'I stopped while reading MOCK-31. Its description is in a form the platform couldn’t read.' } },
           { label: 'Write summary', who: 'summary', msg: { who: 'summary', text: 'I wrote a short summary of the 11 tickets, with counts. Nothing is created yet.' } },
-          { label: 'Approval gate', gate: true, msg: S.nudge === 'waiting' ? { who: 'gate', tone: 'wait', text: ok ? gateText(req('nudge'), 'Alice started this run, so Alice can’t approve it.') : '' } : S.nudge === 'approved' ? { who: 'gate', tone: 'ok', text: `${nm(S.nudgeBy)} approved the ticket.` } : { who: 'gate', tone: 'bad', text: `${nm(S.nudgeBy)} declined. Nothing was written.` } },
+          { label: 'Approval gate', gate: true, msg: S.nudge === 'waiting' ? { who: 'gate', tone: 'wait', text: ok ? gateText(req('nudge'), partiesLine('nudge')) : '' } : S.nudge === 'approved' ? { who: 'gate', tone: 'ok', text: `${nm(S.nudgeBy)} approved the ticket.` } : { who: 'gate', tone: 'bad', text: `${nm(S.nudgeBy)} declined. Nothing was written.` } },
           { label: 'Create in Jira', who: 'platform', skip: S.nudge === 'declined', msg: { who: 'platform', text: 'Created MOCK-34 with the approved summary.' } },
           { label: 'Done', msg: { who: 'portal', tone: 'ok', text: S.nudge === 'declined' ? 'Done. Nothing was written, because it was declined.' : 'Done. The summary is in MOCK-34.' } },
         ],
@@ -2066,15 +2115,16 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const st = S.conf;
       const q = req('conf');
       const writer = writerOf(f);
-      const gateMsg = st === 'waiting' ? { who: 'gate', tone: 'wait', text: gateText(q, 'Alice started this run, so Alice can’t approve it.') }
+      const gateMsg = st === 'waiting' ? { who: 'gate', tone: 'wait', text: gateText(q, partiesLine('conf')) }
         : st === 'expired' ? { who: 'gate', text: `Nobody answered by ${at(q.expiresAt)}, so the request stopped. Nothing was written.` }
           : st === 'declined' ? { who: 'gate', tone: 'bad', text: `${nm(S.confBy)} declined. Nothing was written.` }
-            : { who: 'gate', tone: 'ok', text: `${confYesWho()} approved it.` };
+            : { who: 'gate', tone: 'ok', text: `${yesWho('conf')} approved it.` };
+      const by = starterOf('conf');
       return {
         workflow: 'conf', end: st === 'waiting' ? 4 : 6, state: st === 'waiting' ? 'waiting' : st === 'expired' ? 'expired' : 'done',
         headline: st === 'waiting' ? w.waitHead : st === 'expired' ? 'No answer, nothing was written' : st === 'declined' ? 'Declined, nothing was written' : w.doneHead,
         stations: [
-          { label: 'Started', sub: 'Today, test', who: 'p:alice', msg: { who: 'portal', text: 'Alice started a test run.' } },
+          { label: 'Started', sub: 'Today, test', who: `p:${by}`, msg: { who: 'portal', text: `${nm(by)} started a test run.` } },
           { label: 'Pick agents', who: 'lead', msg: { who: 'lead', text: `I’m bringing in the Jira reader and the ${AGENTS[writer].name}.` } },
           { label: { closed: 'Find closed tickets', created: 'Find new tickets', old: 'Find old tickets', open: 'Find open tickets' }[f.tickets], who: 'jira', msg: { who: 'jira', text: { closed: `14 tickets were closed in ${f.project} this week.`, created: `9 tickets were created in ${f.project} this week${f.action === 'compare' ? ', and 12 the week before' : ''}.`, old: `5 open tickets in ${f.project} were created more than ${f.days} days ago.`, open: `18 tickets are open in ${f.project}.` }[f.tickets] } },
           { label: `Write ${thingOf(f)}`, who: writer, msg: { who: writer, text: `I wrote a short ${thingOf(f)}. Nothing is created yet.` } },
@@ -2084,7 +2134,37 @@ details > .m-close { animation: fold 140ms ease-in both; }
         ],
       };
     }
+    /* The access review (Planned): two writes, each behind a gate. Sending the confirmations was approved. Removing the
+       access nobody confirmed waits for two Approvers in turn, Bob then Alice. */
+    if (id === 'access') {
+      const st = S.access;
+      const by = starterOf('access');
+      const gate = st === 'waiting' ? { who: 'gate', tone: 'wait', text: gateText(req('access'), partiesLine('access')) }
+        : st === 'approved' ? { who: 'gate', tone: 'ok', text: `${yesWho('access')} approved the removals.` }
+          : { who: 'gate', tone: 'bad', text: `${nm(S.accessBy)} declined. Nothing was removed.` };
+      const stations = [
+        { label: 'Started', sub: S.accessRun.sub, who: `p:${by}`, msg: { who: 'portal', text: `${nm(by)} started the review by hand.` } },
+        { label: 'Pick agents', who: 'lead', msg: { who: 'lead', text: '48 people to review. I’m bringing in the Access checker and the Ticket writer.' } },
+        { label: 'List who has access', who: 'access', msg: { who: 'access', text: 'I listed 48 people with access to Entra ID, the admin tools or GitLab, and the manager of each.' } },
+        { label: 'Draft the questions', who: 'writer', msg: { who: 'writer', text: 'I drafted a question for each of 6 managers, asking them to confirm their people. Nothing is asked yet.' } },
+        { label: 'Approval gate', gate: true, msg: { who: 'gate', tone: 'ok', text: 'Bob, then Alice, approved sending the questions.' } },
+        { label: 'Ask the managers', who: 'platform', msg: { who: 'platform', text: 'Asked 6 managers in Teams. By Fri 23 Oct, 45 people were confirmed. 3 weren’t confirmed by anyone.' } },
+        { label: 'Draft the removals', who: 'writer', msg: { who: 'writer', text: 'I drafted the removal of access for the 3 people nobody confirmed. Nothing is removed yet.' } },
+        { label: 'Approval gate', gate: true, msg: gate },
+        { label: 'Remove access', who: 'platform', skip: st === 'declined', msg: { who: 'platform', text: 'Removed access for 3 people. Only the approved removals were made.' } },
+        { label: 'Done', msg: { who: 'portal', tone: 'ok', text: st === 'declined' ? 'Done. Nothing was removed, because it was declined.' : 'Done. 3 people lost access, and their managers were told in Teams.' } },
+      ];
+      return {
+        workflow: 'access', end: st === 'waiting' ? 7 : stations.length - 1, state: st === 'waiting' ? 'waiting' : 'done',
+        headline: st === 'waiting' ? '3 removals are waiting for a yes' : st === 'approved' ? '3 people lost access' : 'Declined, nothing was removed',
+        stations,
+      };
+    }
   }
+  /* The write of the access review's waiting request, and the people in it. */
+  const ACCESS_WRITE = { panelTitle: '3 people will lose access', teamsVerb: 'remove access for 3 people' };
+  const ACCESS_REMOVALS = ['Jun Wei: GitLab. Left the team in September.', 'Priya: the admin tools. Moved to another team.', 'Marcus: Entra ID. His contract ended.'];
+  const accessPreview = () => `<div class="preview"><b>Nobody confirmed these 3</b><ul class="mini-list">${ACCESS_REMOVALS.map((x) => `<li>${x}</li>`).join('')}</ul></div><p class="note">Their managers were asked in Teams on Mon 19 Oct and hadn’t confirmed them by Fri 23 Oct. Access a manager confirmed is never removed.</p>`;
 
   const P = { run: null, at: 0, shown: 0, timer: null, speed: reduce ? 'instant' : '1x', feedSeen: 0, feedNext: 0 };
   let follow = false;
@@ -2236,9 +2316,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
       if (has('nudge') && S.nudge === 'failed' && S.report === 0) out.push({ wf: 'nudge', kind: 'bad', icon: I.alert(22), title: 'Weekly closed-ticket summary stopped', meta: 'Fri 23 Oct, 16:00', body: '', why: 'This is a problem in the platform, not in your workflow. You can’t fix it from here. Report it and support gets everything they need.', actions: `<button class="btn primary" data-act="report" data-unbuilt="Report to support">Report to support</button><button class="btn" data-act="run" data-arg="nudge">See the run</button>` });
       if (has('nudge') && S.nudge === 'failed' && S.report === 4) out.push({ wf: 'nudge', kind: 'ok', icon: I.check(22), title: 'The fix for Weekly closed-ticket summary is live', meta: `Case ${S.supportCase.id} · fixed by Dana`, body: `<p class="small muted">Retry the run to catch up on last week.</p>`, actions: `<button class="btn primary" data-act="retryNudge">Retry the run</button>` });
     }
-    if (has('sw') && S.sw === 'waiting' && canApprove('sw')) out.push({ wf: 'sw', kind: 'wait', rank: urgentNote() ? 1 : 2, icon: I.shield(22), title: `3 upgrade tickets are waiting for your yes${urgentNote()}`, meta: 'Keep our software up to date · Software watchlist, Mon 26 Oct, 9:00', body: `<ul class="mini-list"><li>${shows('registries') ? '<b>Log4j core 2.14.1 → 2.25.2, urgent: critical and actively exploited</b>' : 'Log4j core 2.14.1 → 2.25.2'}</li><li>LangGraph 1.2.14 → 1.2.17</li><li>FastAPI 0.118.0 → 0.120.1</li></ul>${askLineHtml(req('sw'), u)}`, actions: `<button class="btn primary" data-act="run" data-arg="sw">Review and decide</button>` });
-    if (has('nudge') && S.nudge === 'waiting' && canApprove('nudge')) out.push({ wf: 'nudge', kind: 'wait', icon: I.shield(22), title: '1 summary ticket is waiting for your yes', meta: 'Weekly closed-ticket summary · retried today after the fix', body: askLineHtml(req('nudge'), u), actions: `<button class="btn primary" data-act="run" data-arg="nudge">Review and decide</button>` });
-    if (has('conf') && S.conf === 'waiting' && canApprove('conf')) out.push({ wf: 'conf', kind: 'wait', icon: I.shield(22), title: confWrite(S.nr).needTitle, meta: `${esc(S.nr.name)} · test run by Alice`, body: askLineHtml(req('conf'), u), actions: `<button class="btn primary" data-act="run" data-arg="conf">Review and decide</button>` });
+    /* The approvals this person can decide, from the same request records as the Teams badge. */
+    mayDecide().forEach((id) => { const c = NEED_CARD[id](); out.push({ wf: id, kind: 'wait', icon: I.shield(22), ...c, body: `${c.body || ''}${askLineHtml(req(id), u)}`, actions: `<button class="btn primary" data-act="run" data-arg="${id}">Review and decide</button>` }); });
+    if (op && lsProblem()) out.push({ kind: 'wait', rank: 3, icon: I.alert(22), ...lsProblem() });
     if (has('conf') && S.conf === 'declined' && u === 'alice') out.push({ kind: 'wait', rank: 4, icon: I.x(22), title: `${nm(S.confBy)} declined your test run`, meta: `${esc(S.nr.name)} · nothing was written`, body: '', actions: '<button class="btn primary" data-act="run" data-arg="conf">See the run</button><button class="btn" data-act="testRun">Do a test run again</button>' });
     if (has('conf') && S.conf === 'expired' && u === 'alice') out.push({ wf: 'conf', kind: 'wait', rank: 4, icon: I.clock(22), title: 'Nobody answered on your test run', meta: `${esc(S.nr.name)} · stopped ${at(req('conf').expiresAt)}`, body: `<p class="small muted">${whoAnd(askedOf(req('conf')))} didn’t answer in time, so nothing was written. Run it again${shows('namedApprovers') ? ', or choose other Approvers' : ''}.</p>`, actions: `<button class="btn primary" data-act="testRun">Do a test run again</button>${changeApproversBtn('conf', 'apprFromRun')}` });
     Object.entries(S.roles).filter(([w, r]) => r.pendingAp && PEOPLE[u].ap && u !== r.pendingBy && u !== w).forEach(([w]) => out.push({ kind: 'tool', icon: I.shield(22), title: `Confirm ${nm(w)} as an Approver`, meta: `Asked by ${nm(S.roles[w].pendingBy)}`, body: '<p class="small muted">Approvers say yes or no to the changes a workflow wants to make.</p>', actions: '<button class="btn primary" data-act="setGo" data-arg="people">Review in Settings</button>' }));
@@ -2247,11 +2327,24 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (S.modelPending && PEOPLE[u].ap && u !== S.modelPending.byId) out.push({ kind: 'tool', icon: I.shield(22), title: 'Confirm a new AI model address', meta: `${esc(S.modelPending.address)} · entered by ${nm(S.modelPending.byId)}`, body: '<p class="small muted">Agents would send their prompts to this address. Until you confirm it, runs keep using the current model.</p>', actions: '<button class="btn primary" data-act="go" data-arg="settings">Review in Settings</button>' });
     if (shows('toolDraft') && S.jiraComp === 'asked' && canOkTool() && u !== S.jiraCompAsker) out.push({ kind: 'tool', icon: I.tool(22), title: `OK a new tool: ${TOOLS.jiraComp[0]}`, meta: `Asked by ${nm(S.jiraCompAsker)} for the Ticket writer`, body: `<p class="small muted">It changes data, so an Approver must OK it once before any agent can use it.</p>${PLANNED_TAG}`, actions: '<button class="btn primary" data-act="toolOpen" data-arg="jiraComp">Review the tool</button>' });
     if (shows('toolDraft') && S.jiraComp === 'ok' && u === S.jiraCompAsker && !S.jiraCompSeen) out.push({ kind: 'ok', icon: I.check(22), title: `${nm(S.jiraCompBy)} OK’d the new tool. You can give it to the Ticket writer.`, meta: TOOLS.jiraComp[0], body: PLANNED_TAG, actions: '<button class="btn primary" data-act="toolAddTo" data-arg="writer">Give it to the Ticket writer</button>' });
-    if (op) Object.entries(S.n8nChg).forEach(([id, c]) => out.push({ kind: 'wait', icon: I.alert(22), title: `${nm(c.by)}’s change in n8n removed Ask for a yes`, meta: `${esc(R(id).name)} · published ${c.when}`, body: '<p class="small muted">The next run will stop before it changes anything. Undo the change, or put the step back in n8n.</p>', actions: `<button class="btn primary" data-act="n8nUndo" data-arg="${id}">Undo ${nm(c.by)}’s change</button><button class="btn" data-act="workflow" data-arg="${id}">See the workflow</button>` }));
-    /* Most urgent first (spec 5.1): stopped runs, then approvals (urgent ones first), then keys and usage, then confirmations. */
-    return out.sort((a, b) => (a.rank ?? NEED_RANK[a.kind]) - (b.rank ?? NEED_RANK[b.kind]));
+    if (op) Object.entries(S.n8nChg).forEach(([id, c]) => out.push({ wf: id, kind: 'wait', icon: I.alert(22), title: `${nm(c.by)}’s change in n8n removed Ask for a yes`, meta: `${esc(R(id).name)} · published ${c.when}`, body: `<p class="small muted">The next run will stop before it changes anything. Undo the change, or put the step back in n8n.</p>${PLANNED_TAG}`, actions: `<button class="btn primary" data-act="n8nUndo" data-arg="${id}">Undo ${nm(c.by)}’s change</button><button class="btn" data-act="workflow" data-arg="${id}">See the workflow</button>` }));
+    /* A paused workflow asks nothing of anyone until it's resumed. Most urgent first (spec 5.1): stopped runs, then
+       approvals (urgent ones first), then keys and usage, then confirmations. */
+    return out.filter((x) => !x.wf || !S.paused[x.wf]).sort((a, b) => (a.rank ?? NEED_RANK[a.kind]) - (b.rank ?? NEED_RANK[b.kind]));
   }
   const NEED_RANK = { bad: 0, wait: 2, ok: 2, tool: 4 };
+  /* What each waiting request asks of the reader, in Needs you. The ask line and the button are added by needs(). */
+  const NEED_CARD = {
+    sw: () => ({ rank: urgentNote() ? 1 : 2, title: `3 upgrade tickets are waiting for your yes${urgentNote()}`, meta: 'Keep our software up to date · Software watchlist, Mon 26 Oct, 9:00', body: `<ul class="mini-list"><li>${shows('registries') ? `<b>Log4j core 2.14.1 → 2.25.2, urgent: critical and actively exploited</b> ${PLANNED_TAG}` : 'Log4j core 2.14.1 → 2.25.2'}</li><li>LangGraph 1.2.14 → 1.2.17</li><li>FastAPI 0.118.0 → 0.120.1</li></ul>` }),
+    nudge: () => ({ title: '1 summary ticket is waiting for your yes', meta: 'Weekly closed-ticket summary · retried today after the fix' }),
+    conf: () => ({ title: confWrite(S.nr).needTitle, meta: `${esc(S.nr.name)} · test run by ${nm(starterOf('conf'))}` }),
+    access: () => ({ title: `3 people would lose access. Your yes is ${req('access').step === 0 ? 'the first of two' : 'the second of two'}`, meta: `Quarterly access review · started by ${nm(starterOf('access'))}, ${S.accessRun.sub}`, body: `<ul class="mini-list">${ACCESS_REMOVALS.map((x) => `<li>${x}</li>`).join('')}</ul>${PLANNED_TAG}` }),
+  };
+  /* The watchlist's moved project, as one item for Needs you and the watchlist's Needs attention. */
+  function lsProblem() {
+    if (S.firstDay || S.lsFixed || S.removed.includes('ls')) return null;
+    return { title: `GitHub can’t find ${LS_OLD}. It moved to ${LS_NEW}.`, meta: 'Software watchlist · LangServe', body: '<p class="small muted">LangServe is skipped until this is fixed. The AI troubleshooter suggests reading it from the new address.</p>', actions: `<button class="btn primary" data-act="useNewAddress" data-unbuilt="Use the new address (no route changes a watched software’s address yet)">Use the new address<span class="vh"> for LangServe</span></button><button class="btn" data-act="go" data-arg="software">See the watchlist</button>` };
+  }
   /* Change who approves exists only with named Approvers (ADR 0024), so it is tagged Planned wherever it shows. */
   const changeApproversBtn = (id, act = 'editAppr', cls = 'btn') => (shows('namedApprovers') ? `<button class="${cls}" data-act="${act}" data-arg="${id}" data-unbuilt="Named Approvers (ADR 0024)">${cls.includes('sm') ? I.edit() : ''}Change who approves ${PLANNED_TAG}</button>` : '');
   function says(text) { return `<div class="says">${face('trouble', 32)}<div><b>AI troubleshooter</b>${text}</div></div>`; }
@@ -2386,9 +2479,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
 
   /* The one action a workflow row or page offers (rule 1). */
   function actionFor(id) {
-    if (id === 'sw' && S.sw === 'waiting' && canApprove('sw')) return `<button class="btn primary sm" data-act="run" data-arg="sw">Review and decide</button>`;
-    if (id === 'conf' && S.conf === 'waiting' && canApprove('conf')) return `<button class="btn primary sm" data-act="run" data-arg="conf">Review and decide</button>`;
-    if (id === 'nudge' && S.nudge === 'waiting' && canApprove('nudge')) return `<button class="btn primary sm" data-act="run" data-arg="nudge">Review and decide</button>`;
+    if (canApprove(id)) return `<button class="btn primary sm" data-act="run" data-arg="${id}">Review and decide</button>`;
     if (!me().op) return '';
     if (S.paused[id]) return `<button class="btn primary sm" data-act="resume" data-arg="${id}">Resume</button>`;
     if (id === 'conf' && S.conf === 'expired') return `<button class="btn primary sm" data-act="testRun">Test it again</button>`;
@@ -2416,10 +2507,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const drafts = me().op ? draftRows() : [];
     const rowList = (items) => `<div class="rows">${items.map(([a, b, act, arg]) => `<button class="row-btn" data-act="${act}" data-arg="${arg}"><div><div class="row-name">${a}</div><div class="row-sub">${b}</div></div>${I.right(16)}</button>`).join('')}</div>`;
     const needLine = (d) => (d.need.length ? `Needs ${andList(d.need)}` : 'Nothing is unclear. One yes turns it on.');
-    return `${n ? needsSection(items) : ''}
+    return `${n ? `<div data-unbuilt="Needs you on Workflows (the built app has it on Home)">${needsSection(items)}</div>` : ''}
       ${drafts.length ? `<section class="section" aria-labelledby="drafts-h" data-unbuilt="Drafts here (the built app lists them on Home)"><h2 id="drafts-h">Drafts <span class="count">${drafts.length}</span></h2>
         <div class="rows">${drafts.map((d) => `<div class="row draft-row" data-flip="draft:${d.id}"><div><div class="row-name">${esc(d.name)}</div><div class="row-sub">${needLine(d)}</div></div><span class="btns"><button class="btn sm" data-act="openDraft" data-arg="${d.id}">Resume<span class="vh"> ${esc(d.name)}</span></button><button class="btn sm" data-act="discardDraft" data-arg="${d.id}">Discard<span class="vh"> ${esc(d.name)}</span></button></span></div>`).join('')}</div></section>` : ''}
-      ${waitingOn.length ? `<section class="section"><h2>Waiting on others</h2>${rowList(waitingOn)}</section>` : ''}
+      ${waitingOn.length ? `<section class="section" data-unbuilt="Waiting on others on Workflows (the built app has it on Home)"><h2>Waiting on others</h2>${rowList(waitingOn)}</section>` : ''}
       ${following}`;
   }
 
@@ -2465,7 +2556,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       ${empty}
       ${ids.length && !order.length ? '<div class="quiet"><b>No workflows match</b>Try other words, or see them all.<div class="btns quiet-act"><button class="btn sm" data-act="clearFind" data-arg="workflows">Show all workflows</button></div></div>' : ''}
       ${rows || add ? `<ul class="wf-list" aria-label="Workflows" data-flip-group="wf-list">${rows}${add}</ul>` : ''}
-      ${canAdd && S.preview ? `<p class="small muted n8n-start" data-unbuilt="Start in n8n (ADR 0026, 0027)">Prefer to build it yourself? <button class="linkbtn" data-act="n8nNew">Start in n8n</button> ${PLANNED_TAG}</p>` : ''}
+      ${canAdd && shows('n8n') ? `<p class="small muted n8n-start" data-unbuilt="Start in n8n (ADR 0026, 0027)">Prefer to build it yourself? <button class="linkbtn" data-act="n8nNew">Start in n8n</button> ${PLANNED_TAG}</p>` : ''}
       </section>`;
   }
   /* A plan's steps. Each step keeps its place by position, so a step that changes is highlighted, and an added or removed one slides the rest. */
@@ -2561,14 +2652,14 @@ details > .m-close { animation: fold 140ms ease-in both; }
         ${open ? `<tr role="row" class="hist" id="hist-${r.key}" data-flip="swh:${r.key}" data-enter="reveal"><td role="cell" colspan="5"><ol class="timeline">${hist.map(([d, t]) => `<li><b>${d}</b><span>${t}</span></li>`).join('')}</ol></td></tr>` : ''}`;
     }).join('')}</tbody></table></div>`;
     const r = R('sw');
-    const owner = nm(S.swOwner);
+    const owner = nm(ownerOf('sw'));
 
     /* Needs attention: a yes that waits, software the check couldn't read, and with Planned features the findings. */
     const waiting = has('sw') && S.sw === 'waiting';
-    const moved = !day1 && !S.lsFixed && !S.removed.includes('ls');
+    const moved = lsProblem();
     const attn = [];
-    if (waiting) attn.push(`<div class="apprbar">${I.shield(20)}<div><b>This week’s check wants to raise 3 upgrade tickets${urgentNote(', 1 of them urgent')}.</b><span>Started by Carol’s schedule, Mon 26 Oct, 9:00. ${askLine(req('sw'), S.user)}</span></div>${canApprove('sw') ? '<button class="btn primary sm" data-act="run" data-arg="sw">Review and decide</button>' : `<span class="note">Waiting for ${whoOr(req('sw').may)}</span>`}</div>`);
-    if (moved) attn.push(`<div class="attn" id="attn-ls">${face('trouble', 40)}<div><b>GitHub can’t find ${LS_OLD}. It moved to ${LS_NEW}.</b><span>LangServe is skipped until this is fixed. The AI troubleshooter suggests reading it from the new address.</span></div>${op ? `<button class="btn primary sm" data-act="useNewAddress" data-unbuilt="Use the new address (no route changes a watched software’s address yet)">Use the new address<span class="vh"> for LangServe</span></button>` : '<span class="note">An Operator can fix this.</span>'}</div>`);
+    if (waiting) attn.push(`<div class="apprbar">${I.shield(20)}<div><b>This week’s check wants to raise 3 upgrade tickets${urgentNote(', 1 of them urgent')}.</b><span>Started by ${nm(starterOf('sw'))}’s schedule, Mon 26 Oct, 9:00. ${askLine(req('sw'), S.user)}${namedTag(req('sw'))}</span></div>${canApprove('sw') ? '<button class="btn primary sm" data-act="run" data-arg="sw">Review and decide</button>' : `<span class="note">Waiting for ${whoOr(req('sw').may)}</span>`}</div>`);
+    if (moved) attn.push(`<div class="attn" id="attn-ls">${face('trouble', 40)}<div><b>${moved.title}</b><span>${moved.body.replace(/<[^>]+>/g, '')}</span></div>${op ? firstButton(moved.actions).replace('class="btn sm"', 'class="btn primary sm"') : '<span class="note">An Operator can fix this.</span>'}</div>`);
     const findings = full && rows.some((x) => x.key === 'lj') ? `<h3 class="attn-h">Security risks ${PLANNED_TAG}</h3>${riskCard('lj', waiting ? '<span class="pill wait">Ticket waiting for a yes</span>' : S.sw === 'approved' ? ticketBtn('MOCK-16') : '<span class="pill off">Proposed again next Monday</span>')}` : '';
     const ending = full && !day1 ? SUPPORT_ENDING.filter((x) => hit(x.name, '')) : [];
     const endingHtml = ending.length ? `<h3 class="attn-h">Support ending ${PLANNED_TAG}</h3><div class="panel"><p class="note">From endoflife.date, read by the Version checker. After these dates, these versions get no more fixes, including security fixes.</p><div class="rows">${ending.map((x) => `<div class="row"><div><div class="row-name">${x.name}</div><div class="row-sub">Security fixes end ${x.ends}, ${x.left}. ${extLink(`https://endoflife.date/${x.slug}`, 'Dates on endoflife.date', 'endoflife.date')}</div></div><span class="pill wait">${I.clock(12)}Plan an upgrade</span></div>`).join('')}</div></div>` : '';
@@ -2607,7 +2698,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const how = `<section class="section" aria-labelledby="sw-how-h"><h2 id="sw-how-h">How it’s checked</h2><div class="panel">
       ${day1 ? '<p><b>Every Monday at 9:00, Singapore time</b>, once you add software. One approval covers all the upgrade tickets.</p>'
         : `<p><b>${cap(r.when)}, ${TZ}.</b> One approval covers all the upgrade tickets. Next check ${r.next}.</p>
-        <p class="small muted">Set by ${owner}. Scheduled checks count as ${owner}’s work, so ${owner} can’t approve them. Who approves: ${r.approves}.${apprOf('sw') ? ` ${PLANNED_TAG}` : ''}</p>`}
+        <p class="small muted">Set by ${owner}. Its checks count as the work of ${whoAnd(partiesOf('sw'))}, who can’t approve them. Who approves: ${r.approves}.${apprOf('sw') ? ` ${PLANNED_TAG}` : ''}</p>`}
       <ul class="srcs" aria-label="Sources">${srcRow('GitHub releases', 'ghReleases')}${srcRow('Package registries', 'registries')}${srcRow('Security advisories', 'registries')}${srcRow('Support end dates', 'registries')}</ul>
       ${day1 || !op ? '' : `<div class="btns"><button class="btn sm" data-act="editSched" data-arg="sw">${I.edit()}Change schedule</button>${changeApproversBtn('sw', 'editAppr', 'btn sm')}</div>`}
       ${S.editing === 'sw' ? `<div data-flip="ed:s:sw" data-enter="reveal">${schedEditor('sw')}</div>` : ''}
@@ -2640,22 +2731,22 @@ details > .m-close { animation: fold 140ms ease-in both; }
     return `<div class="banner ${tone}" data-val="banner:${id}"><span class="banner-ic">${icon}</span><p>${text}</p>${act ? `<div class="btns">${act}</div>` : ''}</div>`;
   }
   /* More actions: a menu with the quieter actions, Delete last and in red (spec 9). */
+  /* Which workflows this prototype has a sample run for. Run now and See the run show only on these. */
+  const hasRun = (id) => ['sw', 'issues', 'nudge', 'access'].includes(id) || (id === 'conf' && S.conf !== 'on');
   function moreMenu(id) {
     const open = S.menu === id;
     const item = (act, label, extra = '') => `<button role="menuitem" data-act="menuPick" data-arg="${act}:${id}"${extra}>${label}</button>`;
-    return `<div class="menuwrap"><button class="btn sm" data-act="menu" data-arg="${id}" aria-haspopup="menu" aria-expanded="${open}" aria-controls="menu-${id}">More actions${I.down(14)}</button>
+    return `<div class="menuwrap" data-unbuilt="More actions menu (the built page has the actions as buttons)"><button class="btn sm" data-act="menu" data-arg="${id}" aria-haspopup="menu" aria-expanded="${open}" aria-controls="menu-${id}">More actions${I.down(14)}</button>
       ${open ? `<div class="menu" id="menu-${id}" role="menu" aria-label="More actions">
-        ${item('runNow', 'Run now', ' data-unbuilt="Run now"')}
-        ${S.paused[id] ? item('resume', 'Resume') : item('pause', 'Pause')}
+        ${hasRun(id) ? item('runNow', 'Run now') : ''}
         ${BASE[id] && BASE[id].fixedSchedule ? '' : item('editSched', 'Change schedule')}
-        ${item('n8nAsk', `Open in n8n${I.ext(14)}`, ' data-unbuilt="Open in n8n (ADR 0026, 0027)"')}
+        ${shows('n8n') ? item('n8nAsk', `Open in n8n${I.ext(14)} ${PLANNED_TAG}`, ' data-unbuilt="Open in n8n (ADR 0026, 0027)"') : ''}
         <hr role="separator">
         ${item('askDelete', `${I.trash()}Delete`, ' class="danger"')}
       </div>` : ''}</div>`;
   }
   function routineView(id) {
     const r = R(id);
-    const hasRun = ['sw', 'issues', 'nudge'].includes(id) || (id === 'conf' && S.conf !== 'on');
     const caseId = S.supportCase ? S.supportCase.id : '';
     const st = status(id);
     const recent = {
@@ -2666,7 +2757,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       nudge: S.nudge !== 'failed'
         ? [['Today, retry', cap(st.last.replace(/^Today, retried after the fix: /, '')), true], ['Fri 23 Oct, 16:00', `Stopped on a ticket the platform couldn’t read. Reported as ${caseId}.`], ['Fri 16 Oct, 16:00', '1 ticket created (MOCK-11), approved by Bob']]
         : [['Fri 23 Oct, 16:00', S.report ? `Stopped on a ticket the platform couldn’t read. Reported as ${caseId}.` : 'Stopped on a ticket the platform couldn’t read.', true], ['Fri 16 Oct, 16:00', '1 ticket created (MOCK-11), approved by Bob']],
-      access: [['Mon 5 Oct, 9:00', '3 people lost access, approved by Bob, then Alice']],
+      access: [[`${S.accessRun.sub}, by hand`, cap(st.last.replace(/^[^:]+: /, '')), true], ['Mon 6 Jul, 9:00', '2 people lost access, approved by Bob, then Alice']],
       conf: S.conf === 'on' ? [] : [['Today, test run', cap(st.last.replace(/^Test run today: /, '')), true]],
     }[id] || [];
     const held = S.n8n[id];
@@ -2678,24 +2769,24 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const history = (S.n8nLog[id] || []).map((e) => `<li><b>${e.when}</b><span>${e.text}</span></li>`);
     if (S.sched[id]) history.unshift(`<li><b>Today</b><span>Schedule changed to ${r.when}.</span></li>`);
     return `<button class="back" data-act="go" data-arg="workflows">${I.left(16)}Workflows</button>
-      <div class="pagehead"><div><div style="margin-bottom:8px">${pills(id)}${BASE[id] && BASE[id].planned ? ` ${PLANNED_TAG}` : ''}</div><h1 tabindex="-1">${esc(r.name)}</h1><p>${r.what}</p></div>${me().op && id !== 'sw' ? moreMenu(id) : ''}</div>
-      ${banner(id)}
+      <div class="pagehead"><div><div style="margin-bottom:8px">${pills(id)}${BASE[id] && BASE[id].planned ? ` ${PLANNED_TAG}` : ''}</div><h1 tabindex="-1">${esc(r.name)}</h1><p>${r.what}</p></div>${me().op && id !== 'sw' ? `<div class="btns">${S.paused[id] ? `<button class="btn sm" data-act="resume" data-arg="${id}">${I.play(14)}Resume</button>` : `<button class="btn sm" data-act="pause" data-arg="${id}">${I.pause(14)}Pause</button>`}${moreMenu(id)}</div>` : ''}</div>
+      <div data-unbuilt="Status banner">${banner(id)}</div>
       ${n8nWarn(id)}
       ${id === 'nudge' && S.report > 0 && S.nudge === 'failed' ? `<div class="panel" style="margin-top:16px" data-unbuilt="Support cases"><h2>Support case</h2>${caseBox()}${reportTrack(true)}</div>` : ''}
       <dl class="factrows" style="margin-top:16px">
-        <div><div><dt>Schedule</dt><dd>${r.when}, Singapore time${S.paused[id] ? '' : `<small>Next run ${r.next}</small>`}</dd></div>${canSched ? `<button class="btn sm" data-act="editSched" data-arg="${id}">${I.edit()}Change<span class="vh"> schedule</span></button>` : ''}</div>
-        <div><div><dt>Approval</dt><dd>${approval}<small>${timingText(named, r.sched)}</small></dd></div>${changeApproversBtn(id, 'editAppr', 'btn sm')}</div>
+        <div><dt>Schedule</dt><dd>${r.when}, Singapore time${S.paused[id] ? '' : `<small>Next run ${r.next}</small>`}</dd>${canSched ? `<dd class="act"><button class="btn sm" data-act="editSched" data-arg="${id}">${I.edit()}Change<span class="vh"> schedule</span></button></dd>` : ''}</div>
+        <div><dt>Approval</dt><dd>${approval}<small>${timingText(named, r.sched)}</small></dd>${changeApproversBtn(id, 'editAppr', 'btn sm') ? `<dd class="act">${changeApproversBtn(id, 'editAppr', 'btn sm')}</dd>` : ''}</div>
       </dl>
       ${S.editing === id ? `<div data-flip="ed:s:${id}" data-enter="reveal">${schedEditor(id)}</div>` : ''}
       ${S.editingAppr === id ? `<div data-flip="ed:a:${id}" data-enter="reveal" data-unbuilt="Named Approvers (ADR 0024)">${apprEditor(id)}</div>` : ''}
-      <div class="panel" style="margin-top:16px"><h2>Recent activity</h2>${S.editRun && S.editRun.wf === id ? `<div class="rows"><button class="row-btn" data-act="watch" data-arg="edit"><div><div class="row-name">Today, 9:15</div><div class="row-sub">Stopped before changing anything: Carol’s change removed Ask for a yes.</div></div><span class="btns small" style="font-weight:700">See the run ${I.right(16)}</span></button></div>` : ''}${recent.length ? `<div class="rows">${recent.map(([when, what, live]) => live && hasRun
+      <div class="panel" style="margin-top:16px"><h2>Recent activity</h2>${S.editRun && S.editRun.wf === id ? `<div class="rows"><button class="row-btn" data-act="watch" data-arg="edit"><div><div class="row-name">Today, 9:15</div><div class="row-sub">Stopped before changing anything: Carol’s change removed Ask for a yes.</div></div><span class="btns small" style="font-weight:700">See the run ${I.right(16)}</span></button></div>` : ''}${recent.length ? `<div class="rows">${recent.map(([when, what, live]) => live && hasRun(id)
           ? `<button class="row-btn" data-act="watch" data-arg="${id}"><div><div class="row-name">${when}</div><div class="row-sub">${what}</div></div><span class="btns small" style="font-weight:700">See the run ${I.right(16)}</span></button>`
           : `<div class="row"><div><div class="row-name">${when}</div><div class="row-sub">${what}</div></div></div>`).join('')}</div>` : `<p class="muted">No runs yet. The first one is ${r.next}.</p>`}</div>
-      <details class="tech" style="margin-top:16px"><summary>Technical details</summary><div class="tech-body">
+      <details class="tech" style="margin-top:16px" data-unbuilt="Technical details"><summary>Technical details</summary><div class="tech-body">
         <section><h3>Steps</h3>${stepsList(planFor(id), false, `plan:${id}`)}</section>
         <section><h3>Agents and tools</h3><ul class="agent-tool-list">${r.agents.map((a) => { const s = agentStates(id)[a]; const t = tools(a); return `<li><button class="agent-chip" data-act="agent" data-arg="${a}">${face(a, 28, s || 'idle', { k: `wfp:${id}:${a}` })}<span>${AGENTS[a].name}${s ? `<span class="vh">, ${STATE_WORD[s]}</span>` : ''}</span></button>${t.length ? `<span class="small muted">${t.join(', ')}</span>` : ''}</li>`; }).join('')}</ul></section>
-        <section data-unbuilt="n8n changes in the Portal (ADR 0026, 0027)"><h3>In n8n</h3><p>${held ? `${held.by === S.user ? 'You have' : `${nm(held.by)} has`} it open in n8n since ${held.since}.` : 'Nobody has it open in n8n.'}</p>${held && held.by === S.user ? `<div class="btns"><button class="btn sm" data-act="n8nGiveBack" data-arg="${id}">Give it back</button></div>` : ''}</section>
-        <section><h3>Change history</h3>${history.length ? `<ol class="timeline">${history.join('')}</ol><p class="note">The Portal keeps every version published in n8n, with who published it.</p>` : '<p class="muted">No changes since it was turned on.</p>'}</section>
+        ${shows('n8n') ? `<section data-unbuilt="n8n changes in the Portal (ADR 0026, 0027)"><h3>In n8n ${PLANNED_TAG}</h3><p>${held ? `${held.by === S.user ? 'You have' : `${nm(held.by)} has`} it open in n8n since ${held.since}.` : 'Nobody has it open in n8n.'}</p>${held && held.by === S.user ? `<div class="btns"><button class="btn sm" data-act="n8nGiveBack" data-arg="${id}">Give it back</button></div>` : ''}</section>
+        <section data-unbuilt="Change history (ADR 0027)"><h3>Change history ${PLANNED_TAG}</h3>${history.length ? `<ol class="timeline">${history.join('')}</ol><p class="note">The Portal keeps every version published in n8n, with who published it.</p>` : '<p class="muted">No changes since it was turned on.</p>'}</section>` : ''}
       </div></details>`;
   }
   /* The live activity view of one run (spec 10): the headline, the station strip in plain words, then what needs the
@@ -2717,7 +2808,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     };
     /* Each face says what that agent is doing in this run. Only the step running now moves. */
     const gi = m.stations.findIndex((s) => s.gate);
-    const declined = (m.workflow === 'sw' && S.sw === 'declined') || (m.workflow === 'conf' && S.conf === 'declined') || (m.workflow === 'nudge' && S.nudge === 'declined');
+    const rec = reqRecord(m.workflow);
+    const declined = !!rec && rec.state === 'declined';
     let lastAgent = -1;
     m.stations.forEach((s, i) => { if (i <= m.end && AGENTS[s.who] && !s.skip) lastAgent = i; });
     const faceOf = (s, i, st) => {
@@ -2744,7 +2836,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     /* While a finished run replays, the heading describes the replay, so it never claims "Done" before the line gets there. */
     const pillTone = !finished ? { tone: 'ok', label: 'Replaying' } : m.state === 'waiting' ? { tone: 'wait', label: 'Waiting for a yes' } : m.state === 'failed' ? { tone: 'bad', label: 'Stopped' } : m.state === 'expired' ? { tone: 'off', label: 'No answer' } : { tone: 'ok', label: 'Done' };
     const headline = finished ? m.headline : 'Replaying the run';
-    const test = m.workflow === 'conf' ? '<span class="tag">Test run</span>' : '';
+    const test = m.workflow === 'conf' ? '<span class="tag">Test run</span>' : BASE[m.workflow] && BASE[m.workflow].planned ? PLANNED_TAG : '';
     return `<button class="back" data-act="workflow" data-arg="${m.workflow}">${I.left(16)}${m.workflow === 'sw' ? 'Software watchlist' : esc(r.name)}</button>
       <div class="runhead">
         <div class="runhead-top"><div class="runtitle"><h1 tabindex="-1">${headline}</h1>${finished ? pill(pillTone) : `<span class="tag">${I.play(12)}Replaying</span>`}${test}</div></div>
@@ -2752,9 +2844,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
       </div>
       <div class="stage"><ol class="line" style="--n:${n}" aria-label="Steps of this run"><li class="line-track" aria-hidden="true"></li><li class="line-fill" aria-hidden="true" style="--f:${P.shown / (n - 1)}"></li>${line}</ol></div>
       ${finished ? `<ol class="chat" aria-label="What needs you">${chatAct(id, m)}</ol>` : ''}
-      <div class="run-detail"><button class="btn sm" data-act="runDetail" aria-expanded="${open}" aria-controls="run-detail">${open ? 'Hide what each agent did' : 'Show what each agent did'}</button>
+      <div class="run-detail"><button class="btn sm" data-act="runDetail" aria-expanded="${open}" aria-controls="run-detail" data-unbuilt="Show what each agent did (the built run page always shows the chat)">${open ? 'Hide what each agent did' : 'Show what each agent did'}</button>
         ${open ? `<div id="run-detail" class="run-detail-body" data-pres="detail:${id}">
-          <div class="btns">${finished ? `<button class="btn sm" data-act="replay">${I.play(12)}Replay the run</button>` : ''}<div class="seg" role="group" aria-label="Speed">${['1x', '2x', 'instant'].map((sp) => `<button data-act="speed" data-arg="${sp}" aria-pressed="${P.speed === sp}">${sp === 'instant' ? 'Instant' : sp}</button>`).join('')}</div></div>
+          <div class="btns" data-unbuilt="Replay and speed">${finished ? `<button class="btn sm" data-act="replay">${I.play(12)}Replay the run</button>` : ''}<div class="seg" role="group" aria-label="Speed">${['1x', '2x', 'instant'].map((sp) => `<button data-act="speed" data-arg="${sp}" aria-pressed="${P.speed === sp}">${sp === 'instant' ? 'Instant' : sp}</button>`).join('')}</div></div>
           <ol class="chat" aria-label="What the agents said">${chat}</ol>
         </div>` : ''}
       </div>`;
@@ -2768,7 +2860,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (g.who === 'portal' || g.who === 'platform') return `<li class="chat-marker ${cls}"><span>${g.text}</span></li>`;
     if (g.who === 'gate') return `<li class="chat-marker gate-said ${cls}" data-gate="1" tabindex="-1"><span>${I.shield(14)}${g.text}</span></li>`;
     const joined = g.who === 'lead' ? R(m.workflow).agents.filter((a) => a !== 'lead') : [];
-    return `<li class="cmsg ${cls}"><span class="cmsg-av">${face(g.who, 40, g.tone === 'bad' ? 'error' : 'idle', { k: `chat:${keyOf(g.text)}` })}</span><div class="cmsg-body"><span class="cmsg-who" style="color:${feedHue(g.who)}">${feedName(g.who)}</span><div class="cmsg-bubble">${g.text}</div></div></li>${joined.length ? `<li class="chat-marker${isNew ? ' in' : ''}"><span>${faces(joined, 22)}${andList(joined.map((a) => AGENTS[a].name))} joined</span></li>` : ''}`;
+    return `<li class="cmsg ${cls}"><span class="cmsg-av">${face(g.who, 40, g.tone === 'bad' ? 'error' : 'idle', { k: `chat:${keyOf(g.text)}` })}</span><div class="cmsg-body"><span class="cmsg-who" style="color:${feedHue(g.who)}">${feedName(g.who)}</span><div class="cmsg-bubble">${g.text}</div></div></li>${joined.length ? `<li class="chat-marker${isNew ? ' in' : ''}"><span>${faces(joined, 22)}${andList(joined.map((a) => AGENTS[a].name))} joined${joined.includes('vuln') ? ` ${PLANNED_TAG}` : ''}</span></li>` : ''}`;
   }
   /* The last word goes to whoever needs the person: the approval gate with the buttons, the AI troubleshooter with the fix, or Workflow Builder when it's done. */
   function chatAct(id, m) {
@@ -2786,31 +2878,31 @@ details > .m-close { animation: fold 140ms ease-in both; }
      checks the decision again on the server. This summary helps the reader; it is not the check. */
   function approvePanel(id) {
     const ok = canApprove(id);
-    const self = starterOf[id] === S.user;
+    const why = partyWhy(id, S.user);
     const sw = id === 'sw';
-    const w = sw ? null : id === 'nudge' ? NUDGE_WRITE : confWrite(S.nr);
+    const w = sw ? null : id === 'nudge' ? NUDGE_WRITE : id === 'access' ? ACCESS_WRITE : confWrite(S.nr);
     const m = runModel(id);
-    const body = id === 'nudge' ? nudgePreview() : sw
+    const body = id === 'nudge' ? nudgePreview() : id === 'access' ? accessPreview() : sw
       ? releases().map((x) => `<div class="ticket${x.urgent ? ' urgent' : ''}"><b>Upgrade ${x.tool} from ${x.from} to ${x.to}</b>${x.urgent ? `<span class="pill bad">${I.alert(12)}Urgent security fix</span> ${PLANNED_TAG}<div class="risk compact">${riskFacts(x.row, true)}</div>` : ''}
           <span>Newest release ${x.date}. ${x.count} releases since our version, on ${srcName(x.kind || 'github')}.</span>
           ${x.urgent ? '' : `<span>${x.notes}</span>`}
           <span class="links">${ticketLinks(x)}</span></div>`).join('')
       : confPreview(S.nr);
-    const gi = m.stations.findIndex((s) => s.gate);
-    const found = m.stations.slice(0, gi).filter((s) => s.msg && AGENTS[s.msg.who] && s.msg.who !== 'lead').map((s) => `<li>${face(s.msg.who, 24)}<span><b>${AGENTS[s.msg.who].name}:</b> ${s.msg.text}</span></li>`).join('');
+    /* The run waits at the gate at m.end. What the agents found is everything they said before it. */
+    const found = m.stations.slice(0, m.end).filter((s) => s.msg && AGENTS[s.msg.who] && s.msg.who !== 'lead').map((s) => `<li>${face(s.msg.who, 24)}<span><b>${AGENTS[s.msg.who].name}:</b> ${s.msg.text}</span></li>`).join('');
     const first = m.stations[0];
     const q = req(id);
-    const part = self ? 'You set this up and started this run, so another Approver must decide. Nobody approves their own work.'
-      : ok && q.step > 0 ? `${confYesText()} said yes. Your yes is the second of two.`
+    const part = why ? `You ${why}, so another Approver must decide. Nobody approves their own work.`
+      : ok && q.step > 0 ? `${yesText(id)} said yes. Your yes is the second of two.`
         : ok ? 'You can decide because you didn’t set this up.'
           : me().ap ? `Only ${whoOr(q.may)} can decide this one.${apprOf(id) ? ` ${nm(ownerOf(id))} chose who approves this workflow.` : ''}`
             : 'Only an Approver can decide.';
     return `<div class="panel approval">
       <dl class="qa"><dt>What will change</dt><dd><b>${sw ? '3 tickets will be created in Jira project MOCK' : w.panelTitle}</b>${body}<p class="note">This is exactly what will be written, and nothing else.</p></dd></dl>
-      <dl class="qa"><dt>Why</dt><dd>${found ? `<ul class="found">${found}</ul>` : 'See what each agent did, below.'}</dd></dl>
-      <dl class="qa"><dt>Who asked</dt><dd>${esc(R(m.workflow).name)}, set up by ${nm(ownerOf(m.workflow))}. ${first.msg ? first.msg.text : ''}${first.sub ? ` (${first.sub})` : ''}</dd></dl>
-      <dl class="qa"><dt>What happens</dt><dd>Nothing is written until you say yes. If you decline, nothing is written. ${askLine(q, S.user)}${sw ? ' You approve or decline the whole check. If you decline, the tickets are proposed again next Monday.' : ''}</dd></dl>
-      <dl class="qa"><dt>Your part</dt><dd>${part}</dd></dl>
+      <dl class="qa" data-unbuilt="Why, in the approval panel"><dt>Why</dt><dd>${found ? `<ul class="found">${found}</ul>` : 'See what each agent did, below.'}</dd></dl>
+      <dl class="qa" data-unbuilt="Who asked, in the approval panel"><dt>Who asked</dt><dd>${esc(R(m.workflow).name)}, set up by ${nm(ownerOf(m.workflow))}. ${first.msg ? first.msg.text : ''}${first.sub ? ` (${first.sub})` : ''}</dd></dl>
+      <dl class="qa"><dt>What happens</dt><dd><span>Nothing is written until you say yes. If you decline, nothing is written. ${askLine(q, S.user)}${namedTag(q)}${sw ? ' You approve or decline the whole check. If you decline, the tickets are proposed again next Monday.' : ''}</span></dd></dl>
+      <dl class="qa" data-unbuilt="Your part, in the approval panel"><dt>Your part</dt><dd>${part}</dd></dl>
       ${ok ? `<div class="btns"><button class="btn good" data-act="approve" data-arg="${id}">${I.check(16)}Approve</button><button class="btn bad" data-act="decline" data-arg="${id}">Decline</button></div>` : ''}
     </div>`;
   }
@@ -2851,7 +2943,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
         ? `<h2><span class="ok-mark">${I.check(18)}</span>Back to normal</h2><p>The fix from support is live, MOCK-31 was read without stopping the run, and ${nm(S.nudgeBy)} approved the summary.</p><div class="result-chips"><span class="pill ok">${I.check(12)}MOCK-34 created</span></div>`
         : `<h2>Declined</h2><p>${nm(S.nudgeBy)} declined, so nothing was written. The next summary runs on Friday.</p>`,
       conf: S.conf === 'declined' ? `<h2>Declined</h2><p>${nm(S.confBy)} declined, so nothing was written. Change what it does, or run the test again.</p>${me().op ? '<div class="btns"><button class="btn primary" data-act="testRun">Do a test run again</button></div>' : ''}`
-        : S.nr ? `<h2><span class="ok-mark">${I.check(18)}</span>Done</h2><p>${confYesWho()} approved, and the platform ${confWrite(S.nr).doneText}.</p><div class="result-chips"><span class="pill ok">${I.check(12)}${confWrite(S.nr).result}</span></div>` : '',
+        : S.nr ? `<h2><span class="ok-mark">${I.check(18)}</span>Done</h2><p>${yesWho('conf')} approved, and the platform ${confWrite(S.nr).doneText}.</p><div class="result-chips"><span class="pill ok">${I.check(12)}${confWrite(S.nr).result}</span></div>` : '',
+      access: S.access === 'approved'
+        ? `<h2><span class="ok-mark">${I.check(18)}</span>Done</h2><p>${yesWho('access')} approved, and the platform removed access for 3 people. Their managers were told in Teams.</p>`
+        : `<h2>Declined</h2><p>${nm(S.accessBy)} declined, so nothing was removed. The 3 people keep their access until the next review.</p>`,
     }[id];
     return `<div class="panel">${done}<div class="btns"><button class="btn" data-act="go" data-arg="home">Back to Home</button></div></div>`;
   }
@@ -3089,7 +3184,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* The set-up card (spec 7): what will happen, when, what needs a yes, then how it works, collapsed, and Turn it on. */
   function setupCard(m) {
     const c = m.card;
-    if (c.done) return `<div class="pdone"><span class="tick">${I.check(14)}</span><div><b>${esc(c.done.name)} is on.</b><span>First run ${c.done.next}, Singapore time. Before its ticket is created, any Approver on your team except you is asked for a yes in Teams.${c.done.newAgent ? ` The ${AGENTS[c.done.newAgent].name} is saved in the Agent library.` : ''}</span><span>${PROMISES}</span><span class="btns"><button class="btn primary sm" data-act="testRun">Do a test run</button><button class="linkbtn" data-act="go" data-arg="workflows">See it in Workflows</button><span class="small muted">A test run does the real work once, so it still waits for a yes.</span></span></div></div>`;
+    if (c.done) return `<div class="pdone"><span class="tick">${I.check(14)}</span><div><b>${esc(c.done.name)} is on.</b><span>First run ${c.done.next}, Singapore time. Before its ticket is created, any Approver on your team except you is asked for a yes in Teams.${c.done.newAgent ? ` The ${AGENTS[c.done.newAgent].name} is saved in the Agent library.` : ''}</span><span>${PROMISES}</span><span class="btns">${c.done.id === 'conf' ? '<button class="btn primary sm" data-act="testRun">Do a test run</button>' : ''}<button class="linkbtn" data-act="go" data-arg="workflows">See it in Workflows</button>${c.done.id === 'conf' ? '<span class="small muted">A test run does the real work once, so it still waits for a yes.</span>' : ''}</span></div></div>`;
     if (c.discarded) return '<p class="small muted">Discarded.</p>';
     if (c.saved) return '<p class="small muted">Saved as a draft. Open it from Workflows to carry on.</p>';
     const w = S.wiz;
@@ -3906,43 +4001,46 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* The approval card ADR 0036 describes (spec 14): what needs approval, the workflow and its owner, each change, what
      the agents found, who can decide, and one button that opens the approval page. Nobody approves inside Teams. After
      a decision the card shows the request's state, read from the platform. Teams carries nothing else. */
-  const teamsCard = (c) => `<b>${c.what}</b><dl class="kv tcard"><dt>Workflow</dt><dd>${c.workflow}, set up by ${c.owner}</dd><dt>Changes</dt><dd><ul class="mini-list">${c.changes.map((x) => `<li>${x}</li>`).join('')}</ul></dd><dt>Found</dt><dd>${c.found}</dd><dt>Who can decide</dt><dd>${c.who}</dd></dl>`;
+  /* What each request's card says: when it was posted, what it wants, each change and what the agents found. The
+     workflow, its owner, who can decide and who can't come from the request record and partiesOf. */
+  const TEAMS_CARD = {
+    sw: () => ({ time: 'Mon 9:41', what: 'Keep our software up to date wants to create 3 Jira tickets',
+      changes: [`Upgrade Log4j core to 2.25.2${shows('registries') ? ` (urgent: critical and actively exploited) ${PLANNED_TAG}` : ''}`, 'Upgrade LangGraph to 1.2.17', 'Upgrade FastAPI to 0.120.1'],
+      found: shows('registries') ? `Newer versions on the registries and GitHub, and 4 known vulnerabilities in Log4j core 2.14.1. ${PLANNED_TAG}` : 'Newer releases on GitHub for 3 of the 14 projects on the Software watchlist.' }),
+    nudge: () => ({ time: `Today ${hm(NOW)}`, what: 'Weekly closed-ticket summary wants to create 1 Jira ticket', changes: ['Create one ticket in MOCK with the summary of the week of 19 Oct'], found: '11 tickets closed in MOCK in the week of 19 Oct.' }),
+    conf: () => ({ time: 'Today 9:10', what: `${esc(S.nr.name)} wants to ${confWrite(S.nr).teamsVerb} (test run)`, changes: [`Create one ticket in ${S.nr.project} with the ${thingOf(S.nr)}`], found: confPreview(S.nr).replace(/<p class="note">[\s\S]*$/, '').replace(/<\/?div[^>]*>/g, '') }),
+    access: () => ({ time: 'Mon 9:30', what: `Quarterly access review wants to ${ACCESS_WRITE.teamsVerb}`, changes: ACCESS_REMOVALS.map((x) => `Remove ${x.replace(/\. .*$/, '')}`), found: '48 people reviewed. Their managers confirmed 45 in Teams. Nobody confirmed these 3.', planned: true }),
+  };
+  function teamsCard(id) {
+    const c = TEAMS_CARD[id]();
+    const q = req(id);
+    const cant = partiesOf(id).map((u) => `${nm(u)}, who ${partyWhy(id, u)}`);
+    return `<b>${c.what}</b>${c.planned ? ` ${PLANNED_TAG}` : ''}<dl class="kv tcard"><dt>Workflow</dt><dd>${esc(R(id).name)}, set up by ${nm(ownerOf(id))}</dd><dt>Changes</dt><dd><ul class="mini-list">${c.changes.map((x) => `<li>${x}</li>`).join('')}</ul></dd><dt>Found</dt><dd>${c.found}</dd><dt>Who can decide</dt><dd>${q ? `${whoOr(q.may)}${q.steps > 1 ? `, as the ${q.step === 0 ? 'first' : 'second'} of 2 Approvers` : ''}` : R(id).approves}</dd><dt>Who can’t</dt><dd>${cant.join('; ')}. Nobody approves their own work.</dd></dl>`;
+  }
   const decidedAt = (by) => `${nm(by)} at ${hm(NOW)} today`;
+  /* The request's outcome, read from the platform, as the card shows it after a decision. */
+  const decidedLine = (rec) => (rec.state === 'approved' ? `Approved by ${rec.yes.map(decidedAt).join(', then ')}` : rec.state === 'declined' ? `Declined by ${decidedAt(rec.by)}` : rec.state === 'expired' ? 'No answer' : null);
   function teamsItems() {
     const list = [];
-    if (has('sw')) {
+    const card = (id) => { const rec = reqRecord(id); return { time: TEAMS_CARD[id]().time, id, html: teamsCard(id), decided: decidedLine(rec), decidedTone: rec.state === 'expired' ? 'off' : rec.state === 'declined' ? 'bad' : 'ok' }; };
+    if (reqRecord('sw')) {
       const q = req('sw');
-      list.push({ time: 'Mon 9:41', id: 'sw', html: teamsCard({ what: 'Keep our software up to date wants to create 3 Jira tickets', workflow: 'Keep our software up to date', owner: 'Carol',
-        changes: [`Upgrade Log4j core to 2.25.2${shows('registries') ? ' (urgent: critical and actively exploited)' : ''}`, 'Upgrade LangGraph to 1.2.17', 'Upgrade FastAPI to 0.120.1'],
-        found: shows('registries') ? 'Newer versions on the registries and GitHub, and 4 known vulnerabilities in Log4j core 2.14.1.' : 'Newer releases on GitHub for 3 of the 14 projects on the Software watchlist.',
-        who: q ? whoOr(q.may) : R('sw').approves }),
-        decided: S.sw !== 'waiting' ? (S.sw === 'approved' ? `Approved by ${decidedAt(S.swBy)}` : `Declined by ${decidedAt(S.swBy)}`) : null, decidedTone: S.sw === 'declined' ? 'bad' : 'ok' });
+      list.push(card('sw'));
       if (q && shows('namedApprovers') && q.backup) list.push({ time: `Mon ${hm(q.backupAt)}`, html: `${nm(q.first)} hasn’t answered yet, so ${nm(q.backup)} is asked as the backup for <b>Keep our software up to date</b>. ${PLANNED_TAG}` });
     }
-    if (has('nudge') && S.nudge !== 'failed') {
-      const q = req('nudge');
-      list.push({ time: `Today ${hm(NOW)}`, id: 'nudge', html: teamsCard({ what: 'Weekly closed-ticket summary wants to create 1 Jira ticket', workflow: 'Weekly closed-ticket summary', owner: 'Alice', changes: ['Create one ticket in MOCK with the summary of the week of 19 Oct'], found: '11 tickets closed in MOCK in the week of 19 Oct.', who: q ? whoOr(q.may) : R('nudge').approves }),
-        decided: S.nudge === 'approved' ? `Approved by ${decidedAt(S.nudgeBy)}` : S.nudge === 'declined' ? `Declined by ${decidedAt(S.nudgeBy)}` : null, decidedTone: S.nudge === 'declined' ? 'bad' : 'ok' });
-    }
+    if (reqRecord('access')) list.push(card('access'));
+    if (reqRecord('nudge')) list.push(card('nudge'));
     if (shows('toolDraft') && ['asked', 'ok'].includes(S.jiraComp)) list.push({ time: 'Today', html: `${nm(S.jiraCompAsker)} asked for a new tool: <b>${TOOLS.jiraComp[0]}</b>. It changes data, so an Approver must OK it once. ${PLANNED_TAG}`, jtool: true, decided: S.jiraComp === 'ok' ? `OK’d by ${nm(S.jiraCompBy)}` : null });
-    if (has('conf') && ['waiting', 'approved', 'expired', 'declined'].includes(S.conf)) {
+    if (reqRecord('conf')) {
       const q = req('conf');
-      const w = confWrite(S.nr);
-      list.push({ time: 'Today 9:10', id: 'conf', html: teamsCard({ what: `${esc(S.nr.name)} wants to ${w.teamsVerb} (test run)`, workflow: esc(S.nr.name), owner: 'Alice', changes: [`Create one ticket in ${S.nr.project} with the ${thingOf(S.nr)}`], found: confPreview(S.nr).replace(/<p class="note">[\s\S]*$/, '').replace(/<\/?div[^>]*>/g, ''), who: q ? whoOr(q.may) : R('conf').approves }),
-        decided: S.conf === 'approved' ? `Approved by ${S.confYes.map((u) => decidedAt(u)).join(', then ')}` : S.conf === 'expired' ? 'No answer' : S.conf === 'declined' ? `Declined by ${decidedAt(S.confBy)}` : null, decidedTone: S.conf === 'expired' ? 'off' : S.conf === 'declined' ? 'bad' : 'ok' });
+      list.push(card('conf'));
       if (q && q.escalated) list.push({ time: `Today ${hm(q.backupAt)}`, html: `${q.backup ? `${nm(q.first)} hasn’t answered yet, so ${nm(q.backup)} is asked as the backup.` : `A reminder for ${nm(q.first)}: <b>${esc(S.nr.name)}</b> is still waiting for a yes.`} ${PLANNED_TAG}` });
       if (q && q.expired) list.push({ time: at(q.expiresAt), html: `<b>${esc(S.nr.name)}</b>: nobody answered in time, so the request stopped. Nothing was written. ${PLANNED_TAG}` });
     }
     return list;
   }
-  function teamsCount() {
-    let n = 0;
-    if (has('sw') && S.sw === 'waiting' && canApprove('sw')) n++;
-    if (has('conf') && S.conf === 'waiting' && canApprove('conf')) n++;
-    if (has('nudge') && S.nudge === 'waiting' && canApprove('nudge')) n++;
-    if (shows('toolDraft') && S.jiraComp === 'asked' && canOkTool() && S.user !== S.jiraCompAsker) n++;
-    return n;
-  }
+  /* The requests in Teams this person can decide: the same records Needs you reads, plus a tool waiting for an OK. */
+  const teamsCount = () => mayDecide().length + (shows('toolDraft') && S.jiraComp === 'asked' && canOkTool() && S.user !== S.jiraCompAsker ? 1 : 0);
   function teamsDrawer() {
     if (!S.teams) return '';
     const msgs = teamsItems().map((m) => {
@@ -3969,7 +4067,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
         <dt>The AI troubleshooter found</dt><dd>Reading MOCK-31 failed. Its description is in a form the platform couldn’t read, and the platform crashed instead of skipping it.</dd>
         <dt>Attached</dt><dd>The run’s full record</dd>
       </dl>
-      <div class="field"><label for="extra">Anything to add? <span class="muted">(optional)</span></label><textarea id="extra" data-input="extra" rows="3" style="min-height:80px">${esc(S.wiz.extra)}</textarea><span class="help">Support sees your note with the case.</span></div>
+      <div class="field"><label for="extra">Anything to add? <span class="muted">(optional)</span></label><textarea id="extra" data-note rows="3" style="min-height:80px">${esc(S.reportNote)}</textarea><span class="help">Support sees your note with the case.</span></div>
       <div class="btns" style="justify-content:flex-end"><button class="btn" data-act="closeModal">Cancel</button><button class="btn primary" data-act="sendReport">Send report</button></div>`;
   }
   /* Sent. The reference shows at once; the bar and the mark only confirm what the text already says. */
@@ -4055,7 +4153,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     }
     const toggle = (act, on, labels) => `<span class="mseg"><button data-act="${act}" data-arg="on" aria-pressed="${on}">${labels[0]}</button><button data-act="${act}" data-arg="off" aria-pressed="${!on}">${labels[1]}</button></span>`;
     if (S.report > 0 && S.report < 4) sims.push(['advance', '', `Support moves case ${S.supportCase.id} on`]);
-    const n8nId = S.view.name === 'workflow' && S.view.id !== 'sw' ? S.view.id : null;
+    const n8nId = shows('n8n') && S.view.name === 'workflow' && S.view.id !== 'sw' ? S.view.id : null;
     if (n8nId && me().op && !S.n8nChg[n8nId]) sims.push(['n8nChange', n8nId, 'Carol changes it in n8n and publishes']);
     if (n8nId && S.n8nChg[n8nId] && !S.editRun) sims.push(['n8nRun', n8nId, 'The next run starts with Carol’s change']);
     return `<div class="testctl">
@@ -4077,6 +4175,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
           <li>A typed task is understood with simple word rules, not a real AI model.</li>
           <li>Planned features are designs with an ADR or a sponsor request behind them. Nothing in the product claims them until they’re built.</li>
           <li>Mark what isn’t built outlines each screen part the built Portal doesn’t have yet.</li>
+          <li>Run now and See the run show only where this prototype has a sample run: the sample workflows and the first one you make on Home. The built app runs every workflow.</li>
           <li>Time stands still at Tuesday 27 October, 9:10. Use “Make something happen” to let time pass while a test run waits for a yes.</li>
           <li>Siti and Arun are Approvers you can’t act as. Their answers are under “Make something happen”.</li>
           <li>GitHub links open the real project pages. The versions shown here are samples.</li>
@@ -4498,17 +4597,19 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function approveAs(id, user) {
     if (!canApprove(id, user)) return;
     const mine = user === S.user;
+    const q = req(id);
     if (id === 'sw') { S.sw = 'approved'; S.swBy = user; }
     else if (id === 'nudge') { S.nudge = 'approved'; S.nudgeBy = user; }
     else {
-      S.confYes.push(user);
-      if (S.confReq && S.confYes.length < S.confReq.steps.length) {
+      yesOf(id).push(user);
+      /* A request with two steps waits for the next Approver after the first yes. */
+      if (yesOf(id).length < q.steps) {
         S.confAsk = 0;
-        toast(`${mine ? 'Approved' : `${nm(user)} said yes`}. ${nm(S.confReq.steps[S.confYes.length].first)} is asked next, as the second Approver.`);
+        toast(`${mine ? 'Approved' : `${nm(user)} said yes`}. ${nm(reqAppr(id).steps[yesOf(id).length].first)} is asked next, as the second Approver.`);
         render();
         return;
       }
-      S.conf = 'approved';
+      if (id === 'access') S.access = 'approved'; else S.conf = 'approved';
     }
     toast(`${mine ? 'Approved' : `${nm(user)} said yes`}. The platform is writing now.`);
     if (S.view.name === 'run' && S.view.id === id) continueRun();
@@ -4613,7 +4714,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     approve: (id) => approveAs(id, S.user),
     decline: (id) => {
       if (!canApprove(id)) return;
-      if (id === 'sw') { S.sw = 'declined'; S.swBy = S.user; } else if (id === 'nudge') { S.nudge = 'declined'; S.nudgeBy = S.user; } else { S.conf = 'declined'; S.confBy = S.user; }
+      if (id === 'sw') { S.sw = 'declined'; S.swBy = S.user; } else if (id === 'nudge') { S.nudge = 'declined'; S.nudgeBy = S.user; } else if (id === 'access') { S.access = 'declined'; S.accessBy = S.user; } else { S.conf = 'declined'; S.confBy = S.user; }
       toast('Declined. Nothing was written.');
       if (S.view.name === 'run' && S.view.id === id) continueRun();
       render();
@@ -4899,12 +5000,12 @@ details > .m-close { animation: fold 140ms ease-in both; }
       render();
     },
     apprFromRun: (id) => { go('workflow', id); A.editAppr(id); },
-    retryIssues: () => { S.issues = 'fixed'; go('run', 'issues', { live: true }); },
+    retryIssues: () => { S.issues = 'fixed'; retry('issues'); go('run', 'issues', { live: true }); },
     report: () => openModal('report', null, '.btn.primary'),
     closeModal: () => closeModal(),
     sendReport: () => {
       S.report = 1;
-      S.supportCase = { id: 'SUP-1042', sent: 'Tue 27 Oct, 9:12', owner: 'Dana, support developer', target: 'Wed 28 Oct, 9:12 (1 working day)', note: S.wiz.extra.trim() };
+      S.supportCase = { id: 'SUP-1042', sent: 'Tue 27 Oct, 9:12', owner: 'Dana, support developer', target: 'Wed 28 Oct, 9:12 (1 working day)', note: S.reportNote.trim() };
       S.modal = 'reportSent';
       render();
       announce('Reported to support. Your case reference is SUP-1042.');
@@ -4912,7 +5013,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       if (done) done.focus();
     },
     advance: () => { if (S.report < 4) S.report += 1; if (S.report === 4) toast(`Dana merged the fix for ${S.supportCase.id}. It’s live.`); render(); },
-    retryNudge: () => { S.nudge = 'waiting'; S.nudgeBy = null; go('run', 'nudge', { live: true }); },
+    retryNudge: () => { S.nudge = 'waiting'; S.nudgeBy = null; retry('nudge'); go('run', 'nudge', { live: true }); },
     skipMain: () => { const h = $app.querySelector('main h1'); if (h) { h.focus(); h.scrollIntoView({ block: 'start' }); } },
     askPlanner: () => { go('home'); focusComposer(); },
     abil: () => { S.chat.abil = !S.chat.abil; render(); const b = $app.querySelector('[data-act="abil"]'); if (b) b.focus(); },
@@ -5029,44 +5130,45 @@ details > .m-close { animation: fold 140ms ease-in both; }
       if (!m || setupLeft().length) return;
       const f = draftNr();
       const newAgent = isNewAgent(writerOf(f)) ? writerOf(f) : null;
-      /* A workflow already on from Home keeps its place on Workflows: it moves to the made list with its last state. */
+      const nr = { ...f, sched: { ...S.wiz.sched }, name: S.wiz.name.trim() || f.name };
+      /* The first workflow made on Home keeps the slot with the sample run and request. Each later one takes a new
+         made:N slot, so nothing already on loses its run, its open request or its history. */
+      let k = 'conf';
       if (has('conf')) {
-        S.made.push({ nr: S.nr, last: status('conf').last });
-        const k = `made:${S.made.length - 1}`;
-        if (S.sched.conf) S.sched[k] = S.sched.conf;
-        if (S.paused.conf) S.paused[k] = true;
+        S.made.push({ nr, last: '' });
+        k = `made:${S.made.length - 1}`;
+        S.made[S.made.length - 1].last = `Turned on today. First run ${R(k).next}.`;
+      } else {
+        S.nr = nr;
+        S.conf = 'on';
+        delete S.deleted.conf; delete S.paused.conf; delete S.sched.conf; delete S.appr.conf;
       }
-      S.nr = { ...f, sched: { ...S.wiz.sched }, name: S.wiz.name.trim() || f.name };
-      S.conf = 'on';
-      delete S.deleted.conf; delete S.paused.conf; delete S.sched.conf; delete S.appr.conf;
       S.wiz = newWiz();
-      m.card.done = { name: S.nr.name, next: R('conf').next, newAgent };
+      m.card.done = { id: k, name: nr.name, next: R(k).next, newAgent };
       m.mood = 'success';
-      m.say = `${S.nr.name} is on. Its first run is ${R('conf').next}.`;
-      S.justOn = 'conf';
+      m.say = `${nr.name} is on. Its first run is ${R(k).next}.`;
+      S.justOn = k;
       render();
       scrollToMsg(m.id, 'start');
       const b = $app.querySelector(`[data-mid="${m.id}"] .linkbtn`);
       if (b) b.focus();
     },
-    testRun: () => { S.conf = 'waiting'; S.confYes = []; S.confAsk = 0; S.confReq = apprOf('conf') ? copyAppr(apprOf('conf')) : null; go('run', 'conf', { live: true }); },
+    testRun: () => { S.conf = 'waiting'; S.confYes = []; S.confAsk = 0; S.confStarter = S.user; S.confReq = apprOf('conf') ? copyAppr(apprOf('conf')) : null; go('run', 'conf', { live: true }); },
     editSched: (id) => { S.editing = id; S.editingAppr = null; S.schedForm = { monthDay: '1', ...R(id).sched }; S.schedErr = {}; render(); const f = document.getElementById('sf-freq'); if (f) f.focus(); },
     cancelSched: () => { const id = S.editing; S.editing = null; render(); const b = $app.querySelector(`main [data-act="editSched"][data-arg="${id}"]`); if (b) b.focus(); },
     saveSched: (id) => {
       S.schedErr = schedProblems(S.schedForm);
       const keys = Object.keys(S.schedErr);
       if (keys.length) { render(); const first = document.getElementById(`sf-${keys[0]}`); if (first) first.focus(); return; }
+      /* Work everything out first, then write, so a failure leaves nothing half-saved. Saving the watchlist's schedule
+         makes the saver its owner, and an owner can't be one of its named Approvers, so they come off that list. */
+      let off = false;
+      const named = id === 'sw' && apprOf('sw') ? copyAppr(apprOf('sw')) : null;
+      if (named) named.steps.forEach((s) => { if (s.first === S.user) { s.first = hasBackup(s) ? s.backup : ''; s.backup = 'none'; off = true; } else if (s.backup === S.user) { s.backup = 'none'; off = true; } });
       S.sched[id] = { ...S.schedForm };
       if (id === 'conf') S.nr = { ...S.nr, sched: { ...S.schedForm } };
+      if (id === 'sw') { S.swOwner = S.user; if (off) S.appr.sw = named; }
       S.editing = null;
-      let off = false;
-      if (id === 'sw') {
-        S.swOwner = S.user;
-        /* The owner can't be one of its Approvers, so saving takes them off. */
-        const a = copyAppr(apprOf('sw'));
-        a.steps.forEach((s) => { if (s.first === S.user) { s.first = hasBackup(s) ? s.backup : ''; s.backup = 'none'; off = true; } else if (s.backup === S.user) { s.backup = 'none'; off = true; } });
-        if (off) S.appr.sw = a;
-      }
       toast(`Saved. Next run ${R(id).next}.${id === 'sw' ? ` You now own this schedule, so you can’t approve its checks.${off ? ' You’re no longer one of its Approvers, so choose a new backup under Change who approves.' : ''}` : ''}`);
       render();
     },
@@ -5082,7 +5184,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
        first, so a dialog the item opens returns there when it closes. */
     menu: (id) => { S.menu = S.menu === id ? null : id; render(); const el = $app.querySelector(S.menu ? '.menu [role="menuitem"]' : `[data-act="menu"][data-arg="${id}"]`); if (el) el.focus(); },
     menuClose: () => { if (!S.menu) return; const id = S.menu; S.menu = null; render(); const b = $app.querySelector(`[data-act="menu"][data-arg="${id}"]`); if (b) b.focus(); },
-    menuPick: (arg) => { const [act, id] = arg.split(':'); S.menu = null; const b = $app.querySelector(`[data-act="menu"][data-arg="${id}"]`); if (b) b.focus(); A[act](id); },
+    menuPick: (arg) => { const at = arg.indexOf(':'); const act = arg.slice(0, at); const id = arg.slice(at + 1); S.menu = null; const b = $app.querySelector(`[data-act="menu"][data-arg="${id}"]`); if (b) b.focus(); A[act](id); },
     /* Run now does what the prototype can show for this workflow, and says so when it can't. */
     runNow: (id) => {
       if (id === 'sw') { A.checkNow(); return; }
@@ -5090,6 +5192,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
       if (id === 'issues' && S.issues === 'failed') { A.retryIssues(); return; }
       if (id === 'nudge' && S.nudge === 'failed') { if (S.report === 4) A.retryNudge(); else { toast('It would stop in the same place until support fixes the platform. Report it first.'); render(); } return; }
       if (id === 'conf') { A.testRun(); return; }
+      /* Starting the access review by hand makes the starter a party to it, so they can't approve its removals. */
+      if (id === 'access') { S.access = 'waiting'; S.accessYes = []; S.accessBy = null; S.accessRun = { by: S.user, sub: 'Today, 9:10' }; }
       toast(`Started. ${esc(R(id).name)} asks for a yes before it writes anything.`);
       go('run', id, { live: true });
     },
@@ -5182,6 +5286,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       return;
     }
     if (d.askteam !== undefined) { S.teamAskText = e.target.value; return; }
+    if (d.note !== undefined) { S.reportNote = e.target.value; return; }
     if (d.sw) { S.swForm[d.sw] = e.target.value; return; }
     if (d.agent) { S.agentDraft.text = e.target.value; return; }
     if (d.toolask) { S.toolAsk.text = e.target.value; return; }

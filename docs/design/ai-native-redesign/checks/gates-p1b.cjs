@@ -10,7 +10,9 @@ const { execFileSync, spawnSync } = require('child_process');
 const file = path.resolve(process.argv[2] || path.join(__dirname, '..', 'prototype.html'));
 const here = path.resolve(__dirname, '..', '..', '..', '..');
 const common = (() => { try { return path.dirname(path.resolve(here, execFileSync('git', ['rev-parse', '--git-common-dir'], { cwd: here }).toString().trim())); } catch (e) { return here; } })();
-const { chromium } = require(require.resolve('playwright', { paths: [path.join(here, 'portal'), path.join(common, 'portal')] }));
+const searchPaths = [path.join(here, 'portal'), path.join(common, 'portal')];
+const { chromium } = require(require.resolve('playwright', { paths: searchPaths }));
+const axeSource = fs.readFileSync(searchPaths.map((p) => path.join(p, 'node_modules', 'axe-core', 'axe.min.js')).find((p) => fs.existsSync(p)), 'utf8');
 const url = `file://${file}`;
 const source = fs.readFileSync(file, 'utf8');
 
@@ -222,7 +224,8 @@ both('wp-more-actions-menu', async (t) => {
   await t.click('[data-act="menu"]');
   assert.strictEqual(await btn.getAttribute('aria-expanded'), 'true', 'menu open');
   const items = await t.page.$$eval('#menu-issues[role="menu"] > *', (els) => els.map((e) => (e.tagName === 'HR' ? '---' : e.textContent.trim())));
-  assert.deepStrictEqual(items, ['Run now', 'Pause', 'Change schedule', 'Open in n8n', '---', 'Delete'], `items: ${items.join(' | ')}`);
+  /* Open in n8n is Planned (ADR 0026, 0027), so it is not in the default menu. */
+  assert.deepStrictEqual(items, ['Run now', 'Change schedule', '---', 'Delete'], `items: ${items.join(' | ')}`);
   assert(await t.has('#menu-issues [role="menuitem"].danger:last-child'), 'Delete is last and red');
   assert((await t.focused()).startsWith('button[menuPick]'), 'focus moves into the menu');
   await t.page.keyboard.press('Escape'); await t.wait(200);
@@ -231,13 +234,13 @@ both('wp-more-actions-menu', async (t) => {
   await t.click('[data-act="menu"]');
   await t.page.mouse.click(10, 400); await t.wait(200);
   assert(!(await t.has('.menu')), 'a click outside closes the menu');
-  await t.click('[data-act="menu"]'); await t.click('[data-act="menuPick"][data-arg="pause:issues"]');
+  /* Pause is common and reversible, so it is a visible button beside More actions, not a menu item. */
+  await t.click('.pagehead [data-act="pause"][data-arg="issues"]');
   const paused = await t.text();
   assert(paused.includes('Paused') && paused.includes('won’t run until you resume it'), 'Pause pauses it, with the banner saying so');
   assert.strictEqual(await t.page.locator('.banner .btn.primary').innerText(), 'Resume', 'Resume is the one action while paused');
-  await t.click('[data-act="menu"]');
-  assert.strictEqual(await t.page.locator('#menu-issues [role="menuitem"]').nth(1).innerText(), 'Resume', 'menu offers Resume while paused');
-  await t.click('[data-act="menuPick"][data-arg="resume:issues"]');
+  assert.strictEqual(await t.page.locator('.pagehead [data-act="resume"]').innerText(), 'Resume', 'the button offers Resume while paused');
+  await t.click('.pagehead [data-act="resume"][data-arg="issues"]');
   await t.click('[data-act="menu"]'); await t.click('[data-act="menuPick"][data-arg="editSched:issues"]');
   assert.strictEqual(await t.focused(), 'select#sf-freq', 'Change schedule opens the editor and focuses it');
   await t.click('[data-act="cancelSched"]');
@@ -270,7 +273,7 @@ both('wp-technical-details', async (t) => {
   assert(!(await t.text()).includes('Reads Jira'), 'steps hidden until opened');
   await t.click('details.tech summary');
   const text = await t.page.innerText('details.tech');
-  inOrder(text, ['Steps', 'Reads Jira', 'No system access', 'Changes data, waits for a yes', 'Agents and tools', 'Planner', 'Jira reader', 'Search Jira', 'In n8n', 'Change history']);
+  inOrder(text, ['Steps', 'Reads Jira', 'No system access', 'Changes data, waits for a yes', 'Agents and tools', 'Planner', 'Jira reader', 'Search Jira']);
   await t.noSideScroll('technical details'); await t.targets('technical details');
 });
 both('wp-recent-activity-opens-run', async (t) => {
@@ -370,11 +373,130 @@ check('keyboard-reaches-menu-and-detail', async (browser) => session(browser, 12
   const ring = await t.page.evaluate(() => { const s = getComputedStyle(document.activeElement); return s.outlineStyle !== 'none' || s.backgroundColor !== 'rgba(0, 0, 0, 0)'; });
   assert(ring, 'the focused menu item is visibly marked');
   await t.page.keyboard.press('Tab'); await t.page.keyboard.press('Enter'); await t.wait(200);
-  assert((await t.text()).includes('Paused'), 'the second item, Pause, works from the keyboard');
+  assert.strictEqual(await t.focused(), 'select#sf-freq', 'the second item, Change schedule, works from the keyboard');
   await t.click('.panel [data-act="watch"][data-arg="issues"]'); await t.wait(300);
   await t.page.focus('[data-act="runDetail"]'); await t.page.keyboard.press('Enter'); await t.wait(200);
   assert((await t.count('.cmsg-bubble')) >= 1, 'Enter opens the detail');
 }));
+
+
+/* Fix round A, item 4: n8n in the Portal is ADR 0026 and 0027, both proposed, so it shows only as a Planned feature. */
+both('wp-n8n-planned-only', async (t) => {
+  await t.workflow('issues');
+  await t.click('[data-act="menu"]');
+  let items = await t.page.$$eval('#menu-issues [role="menuitem"]', (els) => els.map((e) => e.textContent.trim()));
+  assert(!items.some((i) => i.includes('n8n')), `no Open in n8n by default: ${items.join(' | ')}`);
+  await t.page.keyboard.press('Escape'); await t.wait(200);
+  await t.click('details.tech summary');
+  let tech = await t.page.innerText('details.tech');
+  assert(!tech.includes('In n8n') && !tech.includes('Change history'), 'no n8n hold or change history by default');
+  assert.strictEqual(await t.count('[data-unbuilt="Run now"]'), 0, 'Run now is built, so it carries no mark');
+  await t.ctl('preview', 'on'); await t.workflow('issues');
+  await t.click('[data-act="menu"]');
+  items = await t.page.$$eval('#menu-issues [role="menuitem"]', (els) => els.map((e) => e.textContent.trim()));
+  assert(items.includes('Open in n8n Planned'), `tagged Planned when shown: ${items.join(' | ')}`);
+  await t.page.keyboard.press('Escape'); await t.wait(200);
+  await t.click('details.tech summary');
+  tech = await t.page.innerText('details.tech');
+  assert(/In n8n\s*Planned/i.test(tech) && /Change history\s*Planned/i.test(tech), 'the n8n sections are tagged Planned');
+});
+
+/* Item 7: a second workflow made on Home takes its own slot, so the first keeps its run and its open request. */
+both('wp-made-workflows-keep-requests', async (t) => {
+  await t.turnOn(EX_SUMMARY);
+  await t.click('[data-act="testRun"]'); await t.wait(400);
+  const badge = async () => ((await t.has('[data-val="teams-n"]')) ? await t.page.innerText('[data-val="teams-n"]') : '0');
+  await t.ctl('user', 'bob'); const before = await badge(); await t.ctl('user', 'alice');
+  assert.strictEqual(before, '2', `Bob has two requests in Teams before: ${before}`);
+  await t.go('workflows');
+  assert((await t.text()).includes('Waiting on others\nA yes from any Approver on your test run'), 'Alice waits on her test run');
+  await t.go('home'); await t.click('[data-act="newChat"]');
+  await t.turnOn(EX_COMPARE);
+  assert((await t.text()).includes('Monday new ticket comparison is on.'), 'the second workflow is on');
+  assert.strictEqual(await t.count('.pdone [data-act="testRun"]'), 0, 'its done box offers no test run, because the prototype has no run for it');
+  await t.ctl('user', 'bob'); const after = await badge(); await t.ctl('user', 'alice');
+  assert.strictEqual(after, before, `the open request did not vanish: Teams badge ${before} then ${after}`);
+  await t.go('workflows');
+  assert((await t.text()).includes('Waiting on others\nA yes from any Approver on your test run'), 'Alice still waits on her test run');
+  const rows = await t.page.$$eval('.wf-row h2', (els) => els.map((e) => e.textContent.trim()));
+  assert(rows.includes('Friday closed ticket summary') && rows.includes('Monday new ticket comparison'), `both listed: ${rows.join(' | ')}`);
+  await t.click('[data-act="workflow"][data-arg="made:0"]');
+  assert((await t.page.innerText('main h1')).includes('Monday new ticket comparison'), 'the made workflow has its page');
+  await t.click('[data-act="menu"]');
+  const items = await t.page.$$eval('#menu-made\\:0[role="menu"] > *', (els) => els.map((e) => (e.tagName === 'HR' ? '---' : e.textContent.trim())));
+  assert.deepStrictEqual(items, ['Change schedule', '---', 'Delete'], `no Run now without a run: ${items.join(' | ')}`);
+  await t.page.keyboard.press('Escape'); await t.wait(200);
+  await t.click('.pagehead [data-act="pause"][data-arg="made:0"]');
+  assert((await t.page.innerText('.banner')).includes('Paused'), 'Pause works on a made workflow');
+  await t.click('.pagehead [data-act="resume"][data-arg="made:0"]');
+  assert((await t.page.innerText('.banner')).startsWith('On.'), 'Resume works');
+  await t.click('[data-act="menu"]'); await t.click('[data-act="menuPick"][data-arg="editSched:made:0"]');
+  assert.strictEqual(await t.focused(), 'select#sf-freq', 'Change schedule opens the editor');
+  await t.page.selectOption('#sf-freq', 'day'); await t.wait(100); await t.click('[data-act="saveSched"][data-arg="made:0"]');
+  assert((await t.text()).includes('Every day at'), 'the schedule saves');
+  await t.click('[data-act="menu"]'); await t.click('[data-act="menuPick"][data-arg="askDelete:made:0"]');
+  assert((await t.page.innerText('[role="alertdialog"]')).includes('Delete Monday new ticket comparison?'), 'Delete asks first');
+  await t.click('[data-act="confirmDelete"]');
+  assert(!(await t.text()).includes('Monday new ticket comparison'), 'deleted');
+  await t.click('.toast [data-act="undoDelete"]');
+  assert((await t.text()).includes('Monday new ticket comparison'), 'Undo puts it back');
+});
+
+/* The workflow page and its open menu pass axe at the serious and critical levels (the dl was invalid before). */
+both('a11y-workflow-page-axe', async (t) => {
+  const axe = async () => { await t.page.evaluate(axeSource); const r = await t.page.evaluate(() => axe.run(document.querySelector('main'), { runOnly: ['wcag2a', 'wcag2aa'] })); return r.violations.filter((v) => ['serious', 'critical'].includes(v.impact)).map((v) => `${v.id} (${v.nodes.length})`); };
+  await t.workflow('issues');
+  assert.deepStrictEqual(await axe(), [], 'the workflow page');
+  await t.click('[data-act="menu"]');
+  assert.deepStrictEqual(await axe(), [], 'with the menu open');
+  await t.page.keyboard.press('Escape'); await t.wait(200);
+  await t.ctl('preview', 'on'); await t.workflow('access');
+  assert.deepStrictEqual(await axe(), [], 'the access review page with named Approvers');
+});
+
+/* Item 11: a paused workflow asks nothing of anyone. */
+both('needs-skips-paused', async (t) => {
+  const count = () => t.page.$$eval('.badge[data-val="needs-n"]', (els) => (els[0] ? els[0].textContent.replace(/\D/g, '') : '0'));
+  await t.workflow('issues');
+  const before = +(await count());
+  await t.click('.pagehead [data-act="pause"][data-arg="issues"]');
+  assert.strictEqual(+(await count()), before - 1, `the count drops by one: ${before} then ${await count()}`);
+  await t.go('workflows');
+  assert(!(await t.text()).includes('Morning new-ticket check stopped'), 'the paused, stopped workflow leaves Needs you');
+  await t.click('[data-act="workflow"][data-arg="issues"]'); await t.click('.pagehead [data-act="resume"][data-arg="issues"]');
+  assert.strictEqual(+(await count()), before, 'and comes back on Resume');
+});
+
+/* Item 1 (A13): "Your part" names the reason, from the same parties as the gate. */
+both('run-your-part-names-the-reason', async (t) => {
+  await t.workflow('nudge'); await t.run('nudge');
+  await t.click('#decision [data-act="report"]'); await t.wait(200); await t.click('[data-act="sendReport"]'); await t.wait(200); await t.page.keyboard.press('Escape'); await t.wait(200);
+  for (let i = 0; i < 3; i += 1) await t.sim('Support moves case');
+  await t.click('#decision [data-act="retryNudge"]'); await t.wait(600);
+  assert((await t.page.innerText('#decision')).includes('You set this up and retried this run, so another Approver must decide.'), 'the retried run says so');
+  /* The review's request is waiting, so Bob declines it first. Then Alice starts a new review by hand. */
+  await t.ctl('preview', 'on'); await t.ctl('user', 'bob'); await t.go('home'); await t.run('access'); await t.click('[data-act="decline"][data-arg="access"]'); await t.wait(300);
+  await t.ctl('user', 'alice'); await t.workflow('access');
+  await t.click('[data-act="menu"]'); await t.click('[data-act="menuPick"][data-arg="runNow:access"]'); await t.wait(600);
+  const panel = await t.page.innerText('#decision');
+  assert(panel.includes('Alice started the review by hand'), `the run names its starter: ${panel.match(/Who asked[^\n]*\n[^\n]*/)}`);
+  assert(panel.includes('You started this run, so another Approver must decide.'), 'a starter who is not the owner is still a party');
+  assert.strictEqual(await t.count('[data-act="approve"]'), 0, 'and gets no Approve');
+});
+
+/* Item 4: the marks come from the plan's "Prototype only" cells. */
+both('unbuilt-marks-follow-the-plan', async (t) => {
+  await t.ctl('markUnbuilt', 'on');
+  await t.workflow('issues');
+  for (const mark of ['Status banner', 'More actions menu (the built page has the actions as buttons)', 'Technical details']) assert(await t.has(`[data-unbuilt="${mark}"]`), `workflow page marks ${mark}`);
+  await t.ctl('user', 'bob'); await t.go('home'); await t.run('sw');
+  for (const mark of ['Why, in the approval panel', 'Who asked, in the approval panel', 'Your part, in the approval panel', 'Show what each agent did (the built run page always shows the chat)']) assert(await t.has(`[data-unbuilt="${mark}"]`), `run page marks ${mark}`);
+  await t.click('[data-act="runDetail"]');
+  assert(await t.has('[data-unbuilt="Replay and speed"]'), 'replay is marked');
+  await t.ctl('user', 'alice'); await t.go('home'); await t.turnOn(EX_SUMMARY); await t.click('[data-act="testRun"]'); await t.wait(300); await t.go('workflows');
+  assert(await t.has('[data-unbuilt^="Needs you on Workflows"]') && (await t.has('[data-unbuilt^="Waiting on others on Workflows"]')), 'Workflows marks Needs you and Waiting on others');
+  assert.strictEqual(await t.count('[data-unbuilt="Run now"]'), 0, 'Run now is not marked');
+});
 
 (async () => {
   const browser = await chromium.launch();
