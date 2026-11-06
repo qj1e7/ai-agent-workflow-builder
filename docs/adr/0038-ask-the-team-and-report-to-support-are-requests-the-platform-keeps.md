@@ -28,26 +28,52 @@ This is a draft. The team and the sponsor must confirm the open questions below 
   - each reply, with who wrote it and when.
 
   Writing to our own database is not an agent write action, so it needs no Approver's yes. The audit log records each request and each reply.
-- **Everyone on the team can read them.** One list, Team requests, sits under Settings. Every Operator and Approver can see it. Any Operator can reply to a request, mark it Answered or Done, or say it won't be done and why. No new role is added.
+- **Everyone on the team can read and answer them.** One list, Team requests, sits under Settings. Every Operator and Approver can see it. Anyone on the team can reply to a request, mark it Answered or Done, or say it won't be done and why. No new role is added.
 - **A new request posts a card to the team's existing Teams channel.** It reuses the approval card's webhook (`TEAMS_WEBHOOK_URL`) and ADR 0036's pattern:
   - the card has one button, Open in AI Workflow Builder, which opens the request in the app;
-  - nothing can be decided or answered inside Teams.
+  - nothing can be decided or answered inside Teams;
+  - an optional setting, `TEAMS_REQUESTS_WEBHOOK_URL`, sends these cards to a different channel instead. When it is unset, they go to the approvals channel;
+  - the list in the app is the record. The card is only a nudge, so the feature still works where the app can't post to Teams.
 - **The person hears back in the app.** Their own requests and support cases show under "Following up" on Workflows, with the status and the latest reply. A reply also puts the request in that person's Needs you until they open it. No Teams message is sent for a reply, so the channel only sees new requests.
 - **Report to support uses the same list,** marked "Platform problem", with the run attached. The support case track the prototype shows (Reported, Support is looking at it, Fixed) is set by whoever handles it in the list. The coding-agent stages stay Planned.
 - **What a request may contain.**
   - The box says "Don't paste passwords or keys."
   - Requests are never sent to the AI model.
   - A request is plain text with a length limit. The plan sets the limit with the API.
-- **How long requests are kept.** As long as the audit log. Done requests leave the list but stay in the record.
+- **How long requests are kept.** As long as the activity log. A request marked Done leaves the list after 30 days but stays in the record.
 
 The confirmation in the app then says what is true, for example "Saved as a request for the team. Everyone on the team can see it, and you'll see replies under Following up."
 
-## Questions for the team and the sponsor
+## Open questions, with recommended answers
 
-1. **After handover, who looks at "Platform problem" reports?** During the project it is our team. After handover it is whoever at CODESparks or NCS looks after the platform. The sponsor should name that group, even if the app itself needs no change.
-2. **Is the approvals channel the right place for new-request cards?** If CODESparks wants them in a different channel, that needs a second webhook setting, `TEAMS_REQUESTS_WEBHOOK_URL`. It falls back to the approvals one when unset.
-3. **Should requests be kept as long as the audit log,** or for a shorter, fixed time?
-4. **Should Approvers who are not Operators be able to reply?** The draft says no, because replying changes a request's status, and only Operators set things up.
+The team lead recommended these answers on 7 Nov. Questions 1 and 3 still need the sponsor, or NCS through the sponsor.
+
+1. **After handover, who looks at "Platform problem" reports?**
+   - Recommended:
+     - until handover, our team, with one named person each week;
+     - after handover, the developers who take over the code. The sponsor names that group.
+   - Why: a platform problem is a fault in code, and CODESparks support staff aren't developers. The answer goes in the handover guide, not in the app, so a change of owner needs no change to the app.
+   - Needs: the sponsor's answer.
+2. **Should new-request cards go to the approvals channel?**
+   - Recommended: yes, to start, with the optional `TEAMS_REQUESTS_WEBHOOK_URL` built from the first version.
+   - Why:
+     - one channel is one place to look for a small team;
+     - requests should be rare next to approvals;
+     - moving them later is a setting, not a change to the code.
+
+     If cards start burying approvals, set the second channel.
+   - Whether the app can post to Teams inside DevNet at all is already question 4 in `docs/design/devnet-move.md`. The in-app list doesn't depend on that answer.
+3. **How long are requests kept?**
+   - Recommended: as long as the activity log, with Done requests leaving the list after 30 days.
+   - Why: a request links to runs and to replies about what the team decided, so it belongs with the rest of the record. One retention rule is simpler than two.
+   - Needs: the project has no retention rule for the activity log either. Add "How long must activity and audit records be kept?" to the NCS questions in `docs/design/devnet-move.md`.
+4. **Can Approvers who are not Operators reply?**
+   - Recommended: yes. This changes the first draft, which said no.
+   - Why:
+     - the people who decide whether the team gets email or a new tool are often the senior people who approve;
+     - stopping them would make them ask an Operator to type their answer;
+     - a reply changes no workflow and writes nothing outside the app, so it can't weaken the approval gate;
+     - every reply is logged with who wrote it.
 
 ## Considered options
 
