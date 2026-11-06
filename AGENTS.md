@@ -54,9 +54,26 @@ These come from the sponsor and from our October feasibility test. Do not weaken
 
 ## Designing screens
 
-The design target is prototype version 4, `docs/design/ai-native-redesign/prototype.html`, with its spec `AI-NATIVE-UX-REDESIGN.md` and build plan `IMPLEMENTATION-PLAN.md` in the same folder. The 6 Nov prototype in `docs/design/portal-routines/` is kept as the record of version 3. `docs/design/prototypes/` is out of date.
+The design target is prototype version 4, `docs/design/ai-native-redesign/prototype.html`, with its spec `AI-NATIVE-UX-REDESIGN.md` and build plan `IMPLEMENTATION-PLAN.md` in the same folder.
 
-Every new or changed screen, component or flow follows `docs/design/ai-native-principles.md`. Read it before any UI work.
+- It is the source of truth for screens, flows and names. The app is built from it.
+- The 6 Nov prototype in `docs/design/portal-routines/` is kept only as the record of version 3.
+- `docs/design/prototypes/` is out of date. Do not use it.
+
+Every new or changed screen, component or flow follows `docs/design/ai-native-principles.md`. Read it and the spec before any UI work. In short, the twelve principles are:
+
+1. **Start from intent.** People say what they want in the Planner's box on Home, and never have to pick a page first.
+2. **Decisions first, details on request.** Each screen leads with what the person must understand or decide.
+3. **One primary action per state.** A destructive action sits last and always asks to confirm.
+4. **Infer, but show it.** Every guess is visible and can be changed. A time is never guessed, and no part of a request is dropped.
+5. **Never claim more than the platform can do.** One capability registry decides what every screen says. Nothing unbuilt is shown as working.
+6. **People approve every write.** The AI's summary is help for the reader, never the check.
+7. **Honest states, one source per fact.** The same words mean the same state everywhere, and counts never disagree.
+8. **Show what the AI is doing.** Plain step names, and the live activity view while a run is going.
+9. **The person stays in control.** They can review, correct, pause, retry, discard and delete, and no button is shown dead.
+10. **Not chat-only.** Chips, menus and buttons wherever they are faster than typing.
+11. **Calm, plain and accessible.** A calm Home, plain words, the keyboard, phones at 390 px, and reduced motion.
+12. **Evidence, not looks.** Measure the tasks, and test with real users.
 
 - Design a new screen or component in the prototype first, then build it in the Portal.
 - Walk the checklist there before you build. If you break a principle on purpose, say why in the design note or an ADR.
