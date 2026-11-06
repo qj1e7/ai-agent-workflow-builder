@@ -84,6 +84,8 @@ async def test_a_cloud_issue_reads_its_document_and_its_done_day():
         == f"LangGraph has 2 new releases.\n{NOTES}\n\nRaised by the AI Workflow Builder."
     )
     assert (issue.status, issue.done_at) == ("Done", datetime(2026, 11, 5, 16, 12, tzinfo=SGT))
+    assert issue.updated_at == datetime(2026, 11, 5, 16, 12, tzinfo=SGT)
+    assert issue.updated_at != issue.created_at
     assert (issue.issue_type, issue.assignee) == ("Task", "Dana Lim")
     assert seen[0].url.path == "/rest/api/3/issue/OPS-7"
     assert seen[0].headers["authorization"].startswith("Basic ")
