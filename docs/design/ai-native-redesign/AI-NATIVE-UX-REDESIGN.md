@@ -108,12 +108,14 @@ Taken from `agent-runtime/src/agent_runtime/tools.py` and `abilities.py` on 6 No
 
 ### 5.1 Operator, a normal week
 
+Home keeps version 3's look in every state: the Visor bot centred at the top (128 px, 96 px on a phone), a large centred heading, then the box and the suggestions. The user chose this on 7 Nov over an earlier version 4 layout that put the bot beside a smaller heading. Needs you sits under the suggestions in the same column. On a phone, the first Needs you row and its action still fit on the first screen.
+
 From top to bottom:
 
-1. **Greeting and a one-line state.**
+1. **The Visor bot, then the greeting and a one-line state,** centred.
    - "Good morning! Alice", the greeting the built app uses since commit 8a2a549. The line under it is computed from `needs()` and the workflows. It names what needs her without repeating the count the section heading already shows, for example "Here's what needs you. Your other workflows are on."
    - When nothing needs her, the line says when the next run is.
-2. **The box.** One large text box, with the Visor bot beside it.
+2. **The box.** One large text box under the greeting.
    - Placeholder: "What would you like to automate, check or fix?"
    - Enter sends. The send button is labelled for screen readers.
 3. **Three suggestions,** chosen from her state, never fixed:

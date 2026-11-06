@@ -337,17 +337,20 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .quiet-act { justify-content: center; margin-top: 14px; }
 .quiet-line { color: var(--muted); margin-bottom: 8px; }
 
-/* Home: the Planner, every day. The Visor bot sits beside the greeting and its one-line state, then the box (spec 5.1). */
+/* Home: the Planner, every day. The Visor bot stands centred above the greeting and its one-line state, as in
+   version 3, then the box, the suggestions and Needs you (spec 5.1). */
 .planner { display: grid; gap: 24px; }
-.welcome { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 20px; padding-top: 8px; }
-.welcome h1 { font-size: 1.75rem; }
-.welcome .lead { color: var(--muted); font-size: 1.05rem; max-width: 52ch; margin-top: 4px; }
-.welcome .face { width: 96px; height: 96px; }
+.welcome { display: grid; justify-items: center; text-align: center; gap: 10px; padding-top: 16px; }
+.welcome .hello-text { display: grid; justify-items: center; gap: 10px; }
+.welcome h1 { font-size: 2rem; max-width: 22ch; text-wrap: balance; }
+.welcome .lead { color: var(--muted); font-size: 1.05rem; max-width: 52ch; }
+.welcome .face { width: 128px; height: 128px; }
 /* Once the conversation starts, the welcome folds to one line, so the thread has the page. */
-.welcome.compact { column-gap: 12px; padding-top: 0; }
-.welcome.compact h1 { font-size: 1.25rem; }
+.welcome.compact { justify-items: start; text-align: left; padding-top: 0; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 12px; }
+.welcome.compact .hello-text { justify-items: start; }
+.welcome.compact h1 { font-size: 1.25rem; max-width: none; }
 .welcome.compact .face { width: 52px; height: 52px; }
-@media (max-width: 600px) { .welcome { column-gap: 14px; } .welcome .face { width: 72px; height: 72px; } .welcome h1 { font-size: 1.375rem; } }
+@media (max-width: 600px) { .welcome .face { width: 96px; height: 96px; } .welcome h1 { font-size: 1.5rem; } }
 .composer { display: flex; align-items: flex-end; gap: 8px; padding: 10px 10px 10px 16px; border: 1px solid var(--edge); border-radius: 12px; background: var(--surface); }
 .composer:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 .composer textarea { flex: 1; min-width: 0; min-height: 0; border: 0; resize: none; background: none; padding: 7px 0; line-height: 1.45; max-height: 160px; font-size: 1.0625rem; }
@@ -389,7 +392,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .composer textarea:disabled { color: var(--muted); }
 /* No AI model: the Planner's sorry pose and one way forward (spec 5.4). */
 .welcome.offline h1 { font-size: 1.5rem; max-width: 30ch; }
-.welcome.offline .btns { margin-top: 12px; }
+.welcome.offline .btns { margin-top: 2px; justify-content: center; }
 .composer.team-ask { margin-top: 16px; }
 .draft-row .btns { gap: 6px; }
 .tcard { margin-top: 8px; }
@@ -2570,7 +2573,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       : dayOne ? '<h1 tabindex="-1">What does your team do again and again?</h1><p class="lead">Tell me a task in plain English. I’ll set it up to run by itself. Anything that changes data waits for a yes from an Approver in Teams.</p>'
         : `<h1 tabindex="-1">Good morning! ${me().name}</h1><p class="lead">${stateLine(items)}</p>`;
     return `<div class="home planner" data-unbuilt="The Planner’s box on Home (ADR 0037)">
-      <div class="welcome${empty ? '' : ' compact'}">${face('lead', empty ? 96 : 52, c.hero, { live: empty && c.hero === 'idle', id: 'hero' })}<div class="hello-text">${hello}</div></div>
+      <div class="welcome${empty ? '' : ' compact'}">${face('lead', empty ? 128 : 52, c.hero, { live: empty && c.hero === 'idle', id: 'hero' })}<div class="hello-text">${hello}</div></div>
       ${empty ? '' : threadHTML()}
       ${composer(c, empty)}
       ${empty ? `<div class="chips examples" role="group" aria-label="${dayOne ? 'Starting points' : 'Suggestions'}"${dayOne ? '' : ' data-unbuilt="Suggestions from your state"'}>${suggestions().map((e, i) => `<button class="chip" data-act="example" data-arg="${i}">${e}</button>`).join('')}</div>` : '<div class="btns"><button class="linkbtn" data-act="newChat">New chat</button></div>'}
@@ -2586,7 +2589,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function offlineHome() {
     const items = homeNeeds();
     return `<div class="home planner" data-unbuilt="The offline Home (ADR 0037)">
-      <div class="welcome offline">${face('lead', 96, 'sorry', { id: 'hero' })}<div class="hello-text"><h1 tabindex="-1">I can’t read new requests until an AI model is connected</h1><p class="lead">Until then, agent workflows can’t run and new ones can’t be planned. Only the Software watchlist keeps going, with a simple summary instead of a written one. Approvers can still decide.</p>
+      <div class="welcome offline">${face('lead', 128, 'sorry', { id: 'hero' })}<div class="hello-text"><h1 tabindex="-1">I can’t read new requests until an AI model is connected</h1><p class="lead">Until then, agent workflows can’t run and new ones can’t be planned. Only the Software watchlist keeps going, with a simple summary instead of a written one. Approvers can still decide.</p>
         <div class="btns"><button class="btn primary" data-act="setGo" data-arg="model">Connect a model</button></div></div></div>
       ${items.length ? needsStrip(items, 3, '', { total: needs().length, primary: false }) : ''}
       ${abilitiesHTML()}
