@@ -615,16 +615,41 @@
   },
   {
     "id": "vulnerabilities",
-    "note": "A vulnerability check belongs on the Software watchlist too.",
+    "note": "ADR 0025 proposes a vulnerability check, but no tool does it yet, so the check is can't do, not the Software watchlist.",
     "task": "Warn me about any known vulnerabilities in Log4j",
-    "watchlist": [
+    "cant_do": [
       "vulnerab*"
     ],
     "reference": {
-      "belongs_on_watchlist": true,
-      "watchlist_word": "vulnerabilities",
-      "software": "Log4j",
-      "rows": []
+      "belongs_on_watchlist": false,
+      "watchlist_word": null,
+      "software": null,
+      "rows": [
+        {
+          "kind": "schedule",
+          "text": "",
+          "state": "missing",
+          "note": "You didn't say when it runs."
+        },
+        {
+          "kind": "look_for",
+          "text": "Known vulnerabilities in Log4j",
+          "state": "cant_do",
+          "note": "No tool checks for known vulnerabilities yet."
+        },
+        {
+          "kind": "do",
+          "text": "Warn you about them",
+          "state": "cant_do",
+          "note": "No tool sends warnings yet."
+        },
+        {
+          "kind": "where",
+          "text": "",
+          "state": "missing",
+          "note": "You didn't say where it goes."
+        }
+      ]
     }
   },
   {

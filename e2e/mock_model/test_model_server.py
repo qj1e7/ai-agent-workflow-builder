@@ -214,6 +214,23 @@ class UnderstandTest(unittest.TestCase):
             },
         )
 
+    def test_a_vulnerability_check_is_read_back_with_that_part_cant_do(self) -> None:
+        self.assertEqual(
+            read_back("Warn me about any known vulnerabilities in Log4j"),
+            [
+                ("schedule", "", "missing"),
+                ("look_for", "", "missing"),
+                ("do", "Warn me about any known vulnerabilities in Log4j", "cant_do"),
+                ("where", "", "missing"),
+            ],
+        )
+
+    def test_a_release_task_that_also_asks_for_cves_is_not_for_the_watchlist(self) -> None:
+        self.assertIn(
+            ("do", "Watch LangGraph releases and check them for CVEs", "cant_do"),
+            read_back("Watch LangGraph releases and check them for CVEs"),
+        )
+
     def test_a_task_with_no_schedule_has_it_missing(self) -> None:
         task = FOLLOW_UP.removeprefix("Every weekday at 3pm, ")
         self.assertEqual(read_back(task)[0], ("schedule", "", "missing"))
@@ -233,7 +250,7 @@ class UnderstandTest(unittest.TestCase):
         rows = read_back("delete every closed ticket")
         self.assertIn(("do", "Delete every closed ticket", "understood"), rows)
 
-    def test_it_never_says_cant_do(self) -> None:
+    def test_it_never_says_cant_do_for_a_write(self) -> None:
         tasks = ("post a summary of stale tickets in Teams", "delete every closed ticket")
         states = {state for task in tasks for _, _, state in read_back(task)}
         self.assertNotIn("cant_do", states)
