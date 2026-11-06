@@ -3,13 +3,18 @@
   "results": [
     {
       "name": "counts-agree",
-      "status": "FAIL",
-      "detail": "normal week: Home says 5, but See all null"
+      "status": "PASS",
+      "detail": ""
     },
     {
       "name": "card-agrees",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "card-ticket-set-follows-schedule",
       "status": "FAIL",
-      "detail": "page.selectOption: Timeout 8000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#fix-tickets')\u001b[22m\n\u001b[2m    - locator resolved to <select id=\"fix-tickets\" data-fix=\"tickets\" aria-label=\"Which tickets: Tickets closed this week, your words. Change it\">…</select>\u001b[22m\n\u001b[2m  - attempting select option action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible and enabled\u001b[22m\n\u001b[2m      - did not find some options\u001b[22m\n\u001b[2m    - retrying select option action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible and enabled\u001b[22m\n\u001b[2m      - did not find some options\u001b[22m\n\u001b[2m    - retrying select option action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    16 × waiting for element to be visible and enabled\u001b[22m\n\u001b[2m       - did not find some options\u001b[22m\n\u001b[2m     - retrying select option action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n"
+      "detail": "after choosing “Tickets created this week” on a Friday card, then Every day: the card reads “tickets created this week”, not amber, Turn it on ready, and the choices offer closed@week, created@week, open"
     },
     {
       "name": "roles-bob-creates-nothing",
@@ -27,6 +32,11 @@
       "detail": ""
     },
     {
+      "name": "roles-owner-after-schedule-save",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
       "name": "teams-drawer-never-approves",
       "status": "PASS",
       "detail": ""
@@ -34,12 +44,12 @@
     {
       "name": "safety-words",
       "status": "FAIL",
-      "detail": "locator.click: Timeout 8000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[data-act=\"setTab\"][data-arg=\"usage\"]').first()\u001b[22m\n"
+      "detail": "1 screens could not be reached: [planner confluence] page.waitForFunction: Timeout 20000ms exceeded."
     },
     {
       "name": "preview-tags-planned",
       "status": "FAIL",
-      "detail": "4 planned parts without a Planned tag: [teams] access in dd.: “Quarterly access review, set up by Carol” || [teams] access in li.: “Remove Jun Wei: GitLab” || [teams] access in li.: “Remove Priya: the admin tools” || [teams] access in li.: “Remove Marcus: Entra ID”"
+      "detail": "1 planned parts without a Planned tag: [agent writer] access in button.linkbtn: “Quarterly access review”"
     },
     {
       "name": "refusals",
@@ -67,14 +77,74 @@
       "detail": ""
     },
     {
+      "name": "offline-honest",
+      "status": "FAIL",
+      "detail": "with no AI model, Retry the run finished the Morning new-ticket check, an agent workflow: “The retry read Jira. No tickets were created in the last day, so there was nothing to write.”"
+    },
+    {
+      "name": "morning-check-reads",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "alternatives-set-up-cleanly",
+      "status": "FAIL",
+      "detail": "“Every Friday, update the Confluence page with the closed tickets” got no answer: Maximum call stack size exceeded || “Every Monday, update the wiki page with the open tickets” got no answer: Maximum call stack size exceeded"
+    },
+    {
+      "name": "cant-claims-honest",
+      "status": "FAIL",
+      "detail": "“email me a list of open bugs every Monday”: the Planner says “I can make that list”, but “Every Monday, list the open bugs” gets “I can find tickets by when they were created or closed, but I can’t tell a ticket’s type y” || “Every Friday, sum up the open bugs and email me”: the Planner says “I can write that summary”, but “Every Friday, sum up the open bugs” gets “I can find tickets by when they were created or closed, but I can’t tell a ticket’s type y”"
+    },
+    {
+      "name": "no-silent-drop",
+      "status": "FAIL",
+      "detail": "a request for the Platform component gets a plain set-up card that never mentions the component; its parts read “tickets closed this week | a Jira project | sum them up”"
+    },
+    {
+      "name": "home-one-primary",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "home-day-one",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "planned-hidden-by-default",
+      "status": "FAIL",
+      "detail": "by default, the Agents tab says agents can be changed: “Open an agent to see how it works and to change it in plain English” || the coding-agent stage “Fix ready, waiting for the support developer” has no Planned tag"
+    },
+    {
+      "name": "i6-new-agent-drafted",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "i7-no-dead-pointers",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "planner-answers-live",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "teams-messages-are-articles",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
       "name": "one-version-per-fact",
       "status": "PASS",
       "detail": ""
     },
     {
       "name": "keyboard-primary-actions",
-      "status": "FAIL",
-      "detail": "D Set that up NOT REACHED"
+      "status": "PASS",
+      "detail": ""
     },
     {
       "name": "menu-keys",
@@ -85,7 +155,14 @@
       "name": "control-bob-has-a-text-box",
       "status": "EXPECTED-FAIL",
       "detail": "seeded control: Bob has the Planner box"
+    },
+    {
+      "name": "no-console-errors",
+      "status": "FAIL",
+      "detail": "1 page or console errors: pageerror Maximum call stack size exceeded"
     }
   ],
-  "consoleErrors": []
+  "consoleErrors": [
+    "pageerror Maximum call stack size exceeded"
+  ]
 }

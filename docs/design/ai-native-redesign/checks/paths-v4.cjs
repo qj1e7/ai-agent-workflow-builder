@@ -89,7 +89,7 @@ add('A', 'First-time Operator sets up a weekly Jira summary and turns it on', as
   await t.expect('The Planner asks back for when it runs and the Jira project', left, /2 choices left: when it runs and the Jira project/);
   await t.select(S.project, 'MOCK', 'Choose the Jira project', { decision: true });
   await t.field(S.time, '17:00', 'Choose the time', { decision: true });
-  await t.expectText('Nothing is unclear before turning on', /Nothing is unclear\. One yes turns it on\./);
+  await t.expectText('Nothing is unclear before turning on', /Nothing is unclear\. Turn it on when you’re ready\./);
   await t.click(S.turnOn, 'Turn it on', { decision: true });
   await t.expectText('The workflow is on', /Friday closed ticket summary is on/);
 }, [1280, 390]);
@@ -97,8 +97,8 @@ add('A', 'First-time Operator sets up a weekly Jira summary and turns it on', as
 /* B. Experienced Operator, a normal week. Through Workflows, as in version 3. B-home does it from Home. */
 add('B', 'Experienced Operator finds what needs attention and fixes the stopped Morning new-ticket check', async (t) => {
   await t.menu('workflows', 'Open Workflows');
-  await t.expectText('Needs you lists four things', /Needs you\s+4/);
-  await t.expectText('The stopped Morning new-ticket check is listed with what happened and a fix', /Morning new-ticket check stopped[\s\S]*Jira didn’t answer at 8:00[\s\S]*A retry is safe[\s\S]*Retry the run/);
+  await t.expectText('Needs you lists five things, the moved LangServe project among them', /Needs you\s+5[\s\S]*GitHub can’t find/);
+  await t.expectText('The stopped Morning new-ticket check is listed with what happened and a fix', /Morning new-ticket check stopped[\s\S]*Jira didn’t answer at 8:00\. It’s answering again[\s\S]*A retry reads the tickets again[\s\S]*Retry the run/);
   await t.click(S.retry, 'Retry the run', { decision: true, until: retriedText });
   await t.expectText('The retry finished', retriedText);
   await t.setup((k) => k.go('workflows'));
@@ -131,13 +131,12 @@ add('C-self', 'Alice turns on a workflow, does a test run, and cannot approve he
 }, [1280], { changed: 'Normal-week Home suggests from state (spec 5.1). Set-up examples sit behind “Set up another workflow”, one tap more.' });
 
 /* D. Unsupported request. */
-add('D', 'An Operator asks to email a weekly list, and the limit is explained with an alternative', async (t) => {
+add('D', 'An Operator asks to email a weekly list, and the limit is explained with a next step', async (t) => {
   await t.ask(EMAIL, 'email me a list of open bugs every Monday');
-  await t.expectText('The Planner says it cannot send email', /I can’t send email\. Email and Slack aren’t connected to the platform/);
-  await t.expectText('An alternative is offered', /What I can do instead[\s\S]*The same thing, with the result put in one Jira ticket, after a yes\./);
-  await t.expectCount('Set that up is offered', '[data-act="instead"]', 1);
-  await t.expectCount('Ask the team is offered', '[data-act="teamReq"]:has-text("Ask the team")', 1);
-});
+  await t.expectText('The Planner says it cannot send email', /I can’t send email\. Email isn’t on the team’s plan\. Ask the team if you need it\./);
+  await t.expectCount('No alternative is offered, because a list of bugs needs the ticket type', '[data-act="instead"]', 0);
+  await t.expectCount('Ask the team is the next step', '[data-act="teamReq"]:has-text("Ask the team")', 1);
+}, [1280], { changed: 'An alternative is offered only when it sets up cleanly (review item 2). “Open bugs” needs the ticket type, which agents can’t see, so the only next step is Ask the team.' });
 
 /* E. Misunderstanding, corrected on the card. */
 add('E', 'The user corrects the Planner’s guess of project and schedule on the card, without starting again', async (t) => {
@@ -192,10 +191,10 @@ add('H', 'Pause a workflow, change its schedule, and delete one with its confirm
   await t.click('[data-act="saveSched"]', 'Save the schedule');
   await t.expectText('The schedule is saved', /Saved\. Next run/, S.toast);
   await t.expectText('The page shows the new schedule', /Every Friday at 9:30/);
-  await t.click(S.more, 'More actions');
-  await t.click(S.pick('pause', 'issues'), 'Pause', { decision: true });
+  await t.click('main [data-act="pause"][data-arg="issues"]', 'Pause', { decision: true });
   await t.expectText('The workflow is paused', /Paused\. Morning new-ticket check won’t run until you resume it/, S.toast);
-  await t.expectCount('A Resume button replaces Pause', 'main [data-act="resume"]', 1);
+  await t.expectCount('Pause is gone', 'main [data-act="pause"]', 0);
+  await t.expectCount('One Resume button replaces Pause (spec 8: no page offers the same button twice)', 'main [data-act="resume"]', 1);
   await t.click('main [data-act="go"][data-arg="workflows"]', 'Back to Workflows');
   await t.click(S.row('nudge'), 'Open Weekly closed-ticket summary');
   await t.click(S.more, 'More actions');
@@ -204,7 +203,7 @@ add('H', 'Pause a workflow, change its schedule, and delete one with its confirm
   await t.click('[data-act="confirmDelete"]', 'Delete workflow', { decision: true });
   await t.expectText('It is deleted, with Undo', /Deleted Weekly closed-ticket summary\.\s*Undo/, S.toast);
   await t.expectCount('It is gone from Workflows', 'main [data-act="workflow"][data-arg="nudge"]', 0);
-}, [1280], { changed: 'Pause and Delete moved into the More actions menu (spec 9), one tap more each.' });
+}, [1280], { changed: 'Delete moved into the More actions menu (spec 9), one tap more. Pause is a button beside it.' });
 
 /* The fifteen tasks in 03b section 6. */
 const T = (n, title, run, extra) => add(`T${n}`, title, run, [1280], extra);
@@ -220,7 +219,7 @@ T(1, 'Set up a workflow from example 1: example, time, Jira project, Turn it on'
 
 T(2, 'Set up a typed workflow with every part stated: type, Enter, Turn it on', async (t) => {
   await t.ask('Every Friday at 17:00, sum up the tickets we closed this week in project MOCK', 'a request with every part stated');
-  await t.expectText('Nothing is unclear', /Nothing is unclear\. One yes turns it on\./);
+  await t.expectText('Nothing is unclear', /Nothing is unclear\. Turn it on when you’re ready\./);
   await t.click(S.turnOn, 'Turn it on', { decision: true });
   await t.expectText('The workflow is on', /is on\./);
 }, { changed: 'The v3 request needs a ticket’s update date, which the Jira tool can’t see (UX audit X2), so v4 answers “Part I can do”. The typed request is one the tools can do.' });
@@ -291,10 +290,9 @@ T(10, 'Report a platform bug: Workflows, Report to support, Send report, Done', 
 T(11, 'Pause a workflow: Workflows, row, Pause', async (t) => {
   await t.menu('workflows', 'Open Workflows');
   await t.click(S.row('issues'), 'Open Morning new-ticket check');
-  await t.click(S.more, 'More actions');
-  await t.click(S.pick('pause', 'issues'), 'Pause', { decision: true });
+  await t.click('main [data-act="pause"][data-arg="issues"]', 'Pause', { decision: true });
   await t.expectText('The workflow is paused', /Paused\. Morning new-ticket check won’t run until you resume it/, S.toast);
-}, { changed: 'The quarterly access review is Planned and hidden by default (I2), so another workflow is paused. Pause is in the More actions menu (spec 9).' });
+}, { changed: 'The quarterly access review is Planned and hidden by default (I2), so another workflow is paused.' });
 
 T(12, 'Delete a workflow: Workflows, row, Delete, Delete workflow', async (t) => {
   await t.menu('workflows', 'Open Workflows');
@@ -317,14 +315,16 @@ T(13, 'Change who approves: Workflows, row, Change who approves, Save', async (t
 }, { changed: 'Named Approvers are ADR 0024, which is not built. The task exists only with Planned features shown, tagged Planned (I4).' });
 
 T(14, 'Change an agent in plain English: Agent library, Details and changes, chip, Suggest a change, Save', async (t) => {
+  await t.setup((k) => ctl(k, 'preview', 'on'));
   await t.menu('agents', 'Open Agent library');
   await t.click('[data-act="libTab"][data-arg="agents"]', 'Open the Agents tab');
   await t.click('[data-act="agent"][data-arg="writer"]:has-text("Details and changes")', 'Ticket writer: Details and changes');
+  await t.expectCount('Changing an agent is tagged Planned in its dialog', '.dialog .tag.planned', (n) => n >= 1);
   await t.click('[data-act="agentChip"]', 'Pick a suggested change');
   await t.click('[data-act="agentSuggest"]', 'Suggest a change');
   await t.click('[data-act="agentSave"]', 'Save as version 2', { decision: true });
   await t.expectText('Saved as version 2', /Saved as version 2\. Ticket writer uses it from the next run/, S.toast);
-}, { changed: 'The Agent library opens on “What it can do” (spec 12), so the agents are one tab away.' });
+}, { changed: 'Changing an agent in plain English is Planned (handover L04) and the agent dialog is read only by default, so the task exists only with Planned features shown, tagged Planned. The Agent library opens on “What it can do” (spec 12), so the agents are one tab away.' });
 
 T(15, 'Ask the team for a new system, after a "can’t" answer', async (t) => {
   await t.setup((k) => k.ask(EMAIL));
@@ -343,11 +343,11 @@ add('H2', 'Discard a draft set-up card from Workflows', async (t) => {
 
 /* New tasks in version 4. */
 add('B-home', 'Find and act on the stopped workflow from Home’s Needs you', async (t) => {
-  await t.expectText('Home lists the stopped workflow first, with its fix', /Needs you\s+4\s+Morning new-ticket check stopped\s+Jira didn’t answer at 8:00\.\s+Retry the run/);
+  await t.expectText('Home lists the stopped workflow first, with its fix', /Needs you\s+5\s+Morning new-ticket check stopped\s+Jira didn’t answer at 8:00\.\s+Retry the run/);
   await t.click(S.retry, 'Retry the run', { decision: true, until: retriedText });
   await t.expectText('The retry finished', retriedText);
   await t.setup((k) => k.go('home'));
-  await t.expectText('Home now has three things', /3 things need you/);
+  await t.expectText('Home now has four things', /Needs you\s+4\b/);
   await t.expect('The stopped row is gone from Home', t.page.innerText('main'), (v) => !/Morning new-ticket check stopped/.test(v));
 }, [1280, 390]);
 
@@ -359,16 +359,17 @@ add('ASK-status', '“Check my workflows” from the suggestions', async (t) => 
 }, [1280, 390]);
 
 add('ASK-why', '“Why did Morning new-ticket check stop?” ending in a retry from the answer', async (t) => {
-  await t.click(S.example(1), 'Tap Why did Morning new-ticket check stop?', { reply: true });
+  await t.expect('No Why chip for the stop that is already the first Needs you row', t.page.innerText('main .examples'), (v) => !/Why did Morning new-ticket check stop/.test(v));
+  await t.ask('Why did Morning new-ticket check stop?');
   await t.expectText('The four answers', /What happened[\s\S]*What was affected[\s\S]*Can it be fixed safely[\s\S]*What to do/, 'main .thread');
   await t.click('main .thread [data-act="retryIssues"]', 'Retry the run', { decision: true, until: retriedText });
   await t.expectText('The retry finished', retriedText);
-}, [1280]);
+}, [1280], { changed: 'Home offers no Why chip for a stop that is already the first Needs you row (review item 8), so the question is typed.' });
 
 add('ASK-needs', '“What needs me?”', async (t) => {
   await t.ask('What needs me?');
-  await t.expectText('The Planner counts what needs her', /4 things need you\./, 'main .thread');
-  await t.expectCount('The Needs you rows are in the answer', 'main .thread .needs-row, main .thread [data-act="retryIssues"], main .thread [data-act="report"], main .thread [data-act="run"][data-arg="sw"], main .thread [data-act="setGo"]', (n) => n >= 4);
+  await t.expectText('The Planner counts what needs her', /5 things need you\./, 'main .thread');
+  await t.expectCount('One Needs you row per thing in the answer', 'main .thread li.nrow', 5);
 }, [1280]);
 
 add('OFFLINE', 'No AI model: Home says so and offers Connect a model', async (t) => {
@@ -452,7 +453,7 @@ const screens = [
   { name: 'drafts', prepare: async (k) => { await k.ask(WEEKLY_SUMMARY); await open(k, '[data-act="newChat"]'); await k.go('workflows'); } },
   { name: 'home-needs-you', prepare: async (k) => { await k.page.evaluate(() => { const h = [...document.querySelectorAll('main h2')].find((x) => /Needs you/.test(x.textContent)); if (h) h.scrollIntoView(); }); } },
   { name: 'planner-check-workflows', prepare: async (k) => { await open(k, S.example(0)); } },
-  { name: 'planner-why-stopped', prepare: async (k) => { await open(k, S.example(1)); } },
+  { name: 'planner-why-stopped', prepare: async (k) => { await k.ask('Why did Morning new-ticket check stop?'); } },
   { name: 'workflow-more-menu', prepare: async (k) => { await k.go('workflows'); await open(k, S.row('issues')); await open(k, S.more); } },
   { name: 'run-detailed-activity', prepare: async (k) => { await k.go('workflows'); await open(k, S.seeRun); await open(k, 'main [data-act="runDetail"]'); } },
   { name: 'software-attention', prepare: async (k) => { await k.go('software'); await k.page.evaluate(() => { const h = document.getElementById('sw-attn-h'); if (h) h.scrollIntoView(); }); } },

@@ -48,8 +48,10 @@ async function check(browser, name, fn, { expectedFail = false } = {}) {
 
 const num = (s) => { const m = String(s || '').match(/\d+/); return m ? +m[0] : null; };
 
-/* Every place that shows how many things need this person, read from the screen. */
-async function needCounts(k, page, { operator }) {
+/* Every place that shows how many things need this person, read from the screen. An Operator's Home shows a strip of
+   at most three rows and a "See all on Workflows" link with no number; the heading carries the count. With no model,
+   the strip leaves out the model row, which the hero already is, so it has one row fewer to show. */
+async function needCounts(k, page, { operator, planner = operator }) {
   const out = {};
   const badge = async () => num(await page.locator('.hdr .badge[data-val="needs-n"]').first().innerText().catch(() => ''));
   if (operator) {
@@ -64,9 +66,10 @@ async function needCounts(k, page, { operator }) {
   const rows = await page.locator('main section[aria-labelledby="needs-h"] li.nrow').count();
   const queue = await page.locator('main section[aria-labelledby="needs-h"] .queue > li').count();
   out.homeRows = rows || (queue + ((await page.locator('main section[aria-labelledby="needs-h"]').count()) ? 1 : 0));
-  out.homeSeeAll = num((home.match(/See all (\d+) on Workflows/) || [])[1]);
+  out.seeAll = (home.match(/See all[^\n]*/) || [null])[0];
   out.homeLine = num((home.match(/(\d+) (things need|thing needs|requests? (is|are) waiting)/) || [])[1]);
-  if (operator) {
+  if (operator) out.leadDigit = /\d/.test(await page.locator('main .welcome .lead').innerText().catch(() => ''));
+  if (planner) {
     await k.ask('What needs me?');
     out.plannerSay = num((await page.locator('.thread [data-say]').last().innerText()).match(/^(\d+)/)?.[1]);
     out.plannerRows = await page.locator('.thread li.cmsg:last-child li.nrow').count();
@@ -74,16 +77,18 @@ async function needCounts(k, page, { operator }) {
   }
   return out;
 }
-function agree(label, c) {
+function agree(label, c, { strip = c.leadDigit !== undefined, offline = false } = {}) {
   const n = c.homeHeader;
   const bad = [];
   ok(n !== null && n > 0, `${label}: Home shows no Needs you count (${JSON.stringify(c)})`);
+  const shown = offline ? n - 1 : n;
   if (c.workflowsHeader !== undefined && c.workflowsHeader !== n) bad.push(`Workflows header ${c.workflowsHeader}`);
   if (c.workflowsItems !== undefined && c.workflowsItems !== n) bad.push(`Workflows lists ${c.workflowsItems} items`);
   if (c.badge !== n) bad.push(`tab badge ${c.badge}`);
-  if (c.homeRows !== Math.min(n, c.plannerSay === undefined ? n : 3)) bad.push(`Home rows ${c.homeRows}`);
-  if (n > 3 && c.plannerSay !== undefined && c.homeSeeAll !== n) bad.push(`See all ${c.homeSeeAll}`);
-  if (n <= 3 && c.homeSeeAll !== null) bad.push(`See all shown with only ${n}`);
+  if (c.homeRows !== (strip ? Math.min(shown, 3) : n)) bad.push(`Home rows ${c.homeRows}`);
+  if (strip && shown > 3 && c.seeAll !== 'See all on Workflows') bad.push(`See all reads “${c.seeAll}” with ${shown} to show`);
+  if ((!strip || shown <= 3) && c.seeAll !== null) bad.push(`“${c.seeAll}” shown with only ${shown}`);
+  if (c.leadDigit) bad.push('the state line under the greeting has a number');
   if (c.homeLine !== null && c.homeLine !== n) bad.push(`greeting line says ${c.homeLine}`);
   if (c.plannerSay !== undefined && c.plannerSay !== n) bad.push(`Planner says ${c.plannerSay}`);
   if (c.plannerRows !== undefined && c.plannerRows !== n) bad.push(`Planner lists ${c.plannerRows} rows`);
@@ -128,6 +133,8 @@ async function sweep(page, { preview = false } = {}) {
         if (/^(LI|TR|P|ARTICLE|FIGURE|DD|SECTION)$/.test(b.tagName) || b.classList.contains('alt')) {
           if ([...b.querySelectorAll('.cap-note, small, .small')].some((x) => /^\s*Planned\s*$/.test(x.textContent))) return 'planned note';
           if ([...b.querySelectorAll('*')].some((x) => !x.children.length && /^\s*Planned\s*$/i.test(x.textContent))) return 'planned mark';
+          /* By default a planned capability may be named as a plain "Not yet" limitation (spec section 1). */
+          if (!preview && [...b.querySelectorAll('*')].some((x) => !x.children.length && /^\s*Not yet\s*$/.test(x.textContent))) return 'not-yet mark';
           const NEG = /can’t|cannot|isn’t (built|connected|here)|not built|Not yet|on the team’s plan|so far|ask the team to add/i;
           if ([...b.querySelectorAll('h2, h3, h4, legend')].some((h) => NEG.test(h.textContent))) return 'negated heading';
           const said = b.innerText.split(/(?<=[.?!])\s+|\n+/).filter((x) => re.test(x));
@@ -198,6 +205,23 @@ async function main() {
     await session(b, async (k, page) => { await k.setUser('bob'); seen.push(agree('Bob', await needCounts(k, page, { operator: false }))); });
     await session(b, async (k, page) => { await k.ctl('Jira stops answering'); seen.push(agree('Jira down', await needCounts(k, page, { operator: true }))); });
     await session(b, async (k, page) => {
+      await k.go('software'); await k.click('main [data-act="editSched"][data-arg="sw"]'); await k.click('[data-act="saveSched"]');
+      seen.push(agree('after Alice saves the watchlist schedule', await needCounts(k, page, { operator: true })));
+    });
+    await session(b, async (k, page) => {
+      await k.go('workflows'); await k.click('main [data-act="workflow"][data-arg="issues"]'); await k.click('main [data-act="pause"][data-arg="issues"]');
+      seen.push(agree('after pausing the stopped workflow', await needCounts(k, page, { operator: true })));
+    });
+    await session(b, async (k, page) => { await k.ctl('modelOn', 'off'); seen.push(agree('no AI model', await needCounts(k, page, { operator: true, planner: false }), { strip: true, offline: true })); });
+    await session(b, async (k, page) => {
+      await k.setDay('one');
+      const badge = await page.locator('.hdr .badge[data-val="needs-n"]').count();
+      const head = await page.locator('main #needs-h').count();
+      ok(!badge && !head, `day one: tab badge ${badge ? 'shown' : 'none'}, Home Needs you ${head ? 'shown' : 'none'}; both should be empty`);
+      await k.ctl('Jira stops answering');
+      seen.push(agree('day one with Jira down', await needCounts(k, page, { operator: true })));
+    });
+    await session(b, async (k, page) => {
       const tab = num(await page.locator('.tabbar .badge').first().innerText().catch(() => ''));
       const head = num(await page.locator('main #needs-h .count').innerText().catch(() => ''));
       ok(tab === head, `phone tab bar badge ${tab}, Home says ${head}`);
@@ -225,16 +249,56 @@ async function main() {
       ok(!/\d+ (more )?(choices?|answers?)/.test(say), `${label}: the chat sentence repeats a count: ${say}`);
       return `${label} ${n}`;
     };
+    /* The ticket choices carry the period the schedule sets (created@week, closed@day), so pick by kind. */
+    const pickTickets = async (kind) => {
+      const v = await page.$$eval('#fix-tickets option', (os, kd) => (os.find((o) => o.value === kd || o.value.startsWith(`${kd}@`)) || {}).value, kind);
+      ok(v, `the ticket choice has no ${kind} option`);
+      await page.selectOption('#fix-tickets', v); await k.settle();
+    };
     const log = [await read('start')];
-    await page.selectOption('#fix-tickets', 'created'); await k.settle(); log.push(await read('tickets'));
+    await pickTickets('created'); log.push(await read('tickets'));
     await page.selectOption('#fix-action', 'list'); await k.settle(); log.push(await read('action'));
     await page.selectOption('#fix-project', 'MOCK'); await k.settle(); log.push(await read('project'));
     await page.fill('#sched-time', '17:00'); await k.settle(); log.push(await read('time'));
+    ok(/Nothing is unclear\. Turn it on when you’re ready\./.test(await page.locator('.pcard .pcard-f').innerText()), 'with nothing left, the footer does not read “Nothing is unclear. Turn it on when you’re ready.”');
+    if (!(await page.$('#sched-freq'))) await k.click('[data-act="whenOpen"]');
     await page.selectOption('#sched-freq', 'day'); await k.settle(); log.push(await read('how often'));
-    await page.selectOption('#fix-tickets', 'old'); await k.settle(); log.push(await read('tickets again'));
+    await pickTickets('open'); log.push(await read('tickets again'));
     await page.selectOption('#fix-project', 'OPS'); await k.settle(); log.push(await read('project again'));
     console.log(`              ${log.join('; ')}`);
   }));
+
+  /* Review item 13: the ticket set follows the schedule, or turns amber when her words and the schedule disagree, so a
+     daily run never reads "this week" without her choosing it. */
+  await check(B, 'card-ticket-set-follows-schedule', async (b) => {
+    const bad = [];
+    const sentence = (page) => page.locator('.pcard [data-val="chip:tickets"]').innerText().catch(() => 'no ticket chip');
+    await session(b, async (k, page) => {
+      await k.ask('every day, sum up the tickets created');
+      const s = await sentence(page);
+      if (!/created in the last day/.test(s)) bad.push(`“every day … tickets created” reads “${s.slice(0, 90)}”`);
+    });
+    await session(b, async (k, page) => {
+      await k.ask('every day, sum up the tickets created this week');
+      const amber = await page.locator('.pcard .schip.missing:has(#fix-tickets)').count();
+      const off = await page.locator('.pcard [data-act="turnOn"]').isDisabled();
+      if (!amber || !off) bad.push(`“every day … this week” is not amber with Turn it on held (amber ${amber}, disabled ${off})`);
+    });
+    await session(b, async (k, page) => {
+      await k.ask(WEEKLY_SUMMARY);
+      const v = await page.$$eval('#fix-tickets option', (os) => (os.find((o) => o.value.startsWith('created@')) || {}).value);
+      await page.selectOption('#fix-tickets', v); await k.settle();
+      await page.selectOption('#fix-project', 'MOCK'); await k.settle();
+      await page.fill('#sched-time', '17:00'); await k.settle();
+      if (!(await page.$('#sched-freq'))) await k.click('[data-act="whenOpen"]');
+      await page.selectOption('#sched-freq', 'day'); await k.settle();
+      const s = await sentence(page);
+      const amber = await page.locator('.pcard .schip.missing:has(#fix-tickets)').count();
+      const opts = await page.$$eval('#fix-tickets option', (os) => os.map((o) => o.value).filter(Boolean));
+      if (!/in the last day/.test(s) && !amber) bad.push(`after choosing “Tickets created this week” on a Friday card, then Every day: the card reads “${s.slice(0, 80)}”, not amber, Turn it on ${(await page.locator('.pcard [data-act="turnOn"]').isDisabled()) ? 'held' : 'ready'}, and the choices offer ${opts.join(', ')}`);
+    });
+    ok(!bad.length, bad.join(' || '));
+  });
 
   await check(B, 'roles-bob-creates-nothing', async (b) => {
     for (const preview of [false, true]) {
@@ -280,16 +344,65 @@ async function main() {
     ok(card && !/Who can decide\s*[^\n]*Alice/.test(card), `the Teams card lists Alice as able to decide on her own run: ${card.slice(0, 200)}`);
   }));
 
+  /* With Planned features shown, the access review has a waiting request with two steps: Bob, then Alice. Each can
+     decide only their own step, in order, and Carol, who set it up and started it, decides neither. */
   await check(B, 'roles-access-review-two-approvers', async (b) => session(b, async (k, page) => {
+    const review = 'main [data-act="run"][data-arg="access"]:has-text("Review and decide")';
+    const approve = '[data-act="approve"][data-arg="access"]';
     await k.go('workflows');
     ok((await page.locator('main [data-act="workflow"][data-arg="access"]').count()) === 0, 'the access review shows with Planned features hidden');
     await k.ctl('preview', 'on');
     await k.go('workflows'); await k.click('main [data-act="workflow"][data-arg="access"]');
     const text = await k.main();
     ok(/First Bob, with Siti as backup\. Then Alice, with Arun as backup\./.test(text), 'the access review does not name two Approvers in turn');
-    ok(/approved by Bob, then Alice/.test(text), 'its last run does not show two yeses in turn');
     ok((await page.locator('main .tag.planned').count()) >= 1, 'the access review is not tagged Planned');
+    await k.go('workflows');
+    ok((await page.locator(review).count()) === 0, 'Alice, the second Approver, is offered the first step');
+    await k.setUser('bob');
+    ok(/3 people would lose access\. Your yes is the first of two/.test(await k.main()), 'Bob is not told his yes is the first of two');
+    await k.click(review);
+    ok((await page.locator(approve).count()) === 1, 'Bob has no Approve on the first step');
+    await k.click(approve);
+    ok(/Alice is asked next, as the second Approver/.test(await page.locator('.toast').innerText().catch(() => '')), 'after Bob’s yes, nobody says Alice is asked next');
+    ok((await page.locator(approve).count()) === 0, 'Bob can say yes to the second step too');
+    ok(!/removed access/.test(await k.main()), 'one yes removed access');
+    await k.setUser('alice');
+    await k.go('workflows');
+    await k.click(review);
+    ok(/Bob said yes\. Your yes is the second of two\./.test(await k.main()), 'Alice is not told Bob said yes and hers is the second of two');
+    await k.click(approve);
+    await k.waitText(/Bob, then Alice, approved, and the platform removed access/);
   }));
+
+  /* Review item 1: one partiesOf. Saving the watchlist schedule makes Alice its owner, so she can't approve this
+     week's check anywhere, the Teams card says so, and Bob still can. The save must not throw. */
+  await check(B, 'roles-owner-after-schedule-save', async (b) => {
+    for (const preview of [false, true]) {
+      await session(b, async (k, page) => {
+        const errs = [];
+        page.on('pageerror', (e) => errs.push(e.message));
+        if (preview) await k.ctl('preview', 'on');
+        const label = preview ? ' (Planned shown)' : '';
+        await k.click('main [data-act="run"][data-arg="sw"]:has-text("Review and decide")');
+        ok((await page.locator('[data-act="approve"][data-arg="sw"]').count()) === 1, `before the save Alice has no Approve${label}`);
+        await k.go('software'); await k.click('main [data-act="editSched"][data-arg="sw"]'); await k.click('[data-act="saveSched"]');
+        ok(/you can’t approve its checks/.test(await page.locator('.toast').innerText().catch(() => '')), `the save does not tell Alice she can’t approve${label}`);
+        ok((await page.locator('main [data-act="run"][data-arg="sw"]:has-text("Review and decide")').count()) === 0, `the watchlist still offers Alice Review and decide${label}`);
+        await page.evaluate(() => history.back()); await k.settle(600);
+        ok(/^#run/.test(await page.evaluate(() => location.hash)), 'Back did not return to the run page');
+        ok((await page.locator('[data-act="approve"][data-arg="sw"]').count()) === 0, `the run page still offers Alice Approve after she took ownership${label}`);
+        await k.go('home');
+        ok((await page.locator('main [data-act="run"][data-arg="sw"]:has-text("Review and decide")').count()) === 0, `Home still offers Alice Review and decide${label}`);
+        await k.click('.hdr [data-act="teams"]');
+        const card = await page.locator('.drawer article:has-text("Keep our software up to date wants")').innerText();
+        ok(/set up by Alice/.test(card) && /Who can’t\s*Alice, who set this up/.test(card) && !/Who can decide\s*[^\n]*Alice/.test(card), `the Teams card disagrees${label}: ${card.replace(/\n/g, ' / ').slice(0, 300)}`);
+        await page.keyboard.press('Escape'); await k.settle();
+        await k.setUser('bob');
+        ok((await page.locator('main [data-act="run"][data-arg="sw"]:has-text("Review and decide")').count()) === 1, `Bob can no longer decide${label}`);
+        ok(!errs.length, `the save threw${label}: ${errs.join(' | ')}`);
+      });
+    }
+  });
 
   await check(B, 'teams-drawer-never-approves', async (b) => {
     const looks = async (k, page, label) => {
@@ -327,7 +440,8 @@ async function main() {
       ['library agents', async (k) => { await k.go('agents'); await k.click('[data-act="libTab"][data-arg="agents"]'); }],
       ['library tools', async (k) => { await k.go('agents'); await k.click('[data-act="libTab"][data-arg="tools"]'); }],
       ...['lead', 'trouble', 'checker', 'writer', 'jira', 'summary'].map((id) => [`agent ${id}`, async (k, page) => { await k.go('agents'); await k.click('[data-act="libTab"][data-arg="agents"]'); await k.click(`main [data-act="agent"][data-arg="${id}"]`); await page.$$eval('.dialog details', (ds) => ds.forEach((d) => { d.open = true; })); }]),
-      ...['connections', 'people', 'model', 'usage'].map((tab) => [`settings ${tab}`, async (k) => { await k.click('.hdr [data-act="go"][data-arg="settings"]'); await k.click(`[data-act="setTab"][data-arg="${tab}"]`); }]),
+      ...['connections', 'people', 'model'].map((tab) => [`settings ${tab}`, async (k) => { await k.click('.hdr [data-act="go"][data-arg="settings"]'); await k.click(`[data-act="setTab"][data-arg="${tab}"]`); }]),
+      ['support case', async (k) => { await k.go('workflows'); await k.click('main [data-act="report"]'); await k.click('[data-act="sendReport"]'); await k.click('.dialog [data-act="closeModal"]'); await k.click('main [data-act="workflow"][data-arg="nudge"]'); }],
       ['teams', async (k) => k.click('.hdr [data-act="teams"]')],
       ['planner check', async (k) => k.click('main [data-act="example"][data-arg="0"]').then(() => k.replied())],
       ['planner why', async (k) => k.click('main [data-act="example"][data-arg="1"]').then(() => k.replied())],
@@ -346,10 +460,14 @@ async function main() {
       ['bob run', async (k) => { await k.setUser('bob'); await k.click('main [data-act="run"][data-arg="sw"]'); }],
       ['bob workflows', async (k) => { await k.setUser('bob'); await k.go('workflows'); }],
     ];
+    const broken = [];
     for (const [screen, prep] of states) {
-      await session(b, async (k, page) => { await prep(k, page); await k.settle(400); await look(page, screen); });
+      await session(b, async (k, page) => {
+        try { await prep(k, page); } catch (e) { broken.push(`[${screen}] ${String(e.message).split('\n')[0]}`); }
+        await k.settle(400); await look(page, screen);
+      });
     }
-    if (hits.length) fail(`${hits.length} unallowed: ${hits.map((h) => `[${h.screen}] ${h.cap} in ${h.where}: “${h.text}”`).join(' || ')}`);
+    ok(!hits.length && !broken.length, [hits.length ? `${hits.length} unallowed: ${hits.map((h) => `[${h.screen}] ${h.cap} in ${h.where}: “${h.text}”`).join(' || ')}` : '', broken.length ? `${broken.length} screens could not be reached: ${broken.join(' || ')}` : ''].filter(Boolean).join(' ;; '));
   });
 
   await check(B, 'preview-tags-planned', async (b) => {
@@ -364,6 +482,11 @@ async function main() {
       ['library tools', async (k) => { await k.go('agents'); await k.click('[data-act="libTab"][data-arg="tools"]'); }],
       ['teams', async (k) => k.click('.hdr [data-act="teams"]')],
       ['bob home', async (k) => k.setUser('bob')],
+      ['workflow issues menu', async (k) => { await k.go('workflows'); await k.click('main [data-act="workflow"][data-arg="issues"]'); await k.click('main [data-act="menu"]'); }],
+      ...['connections', 'usage'].map((tab) => [`settings ${tab}`, async (k) => { await k.click('.hdr [data-act="go"][data-arg="settings"]'); await k.click(`[data-act="setTab"][data-arg="${tab}"]`); }]),
+      ['agent writer', async (k, page) => { await k.go('agents'); await k.click('[data-act="libTab"][data-arg="agents"]'); await k.click('main [data-act="agent"][data-arg="writer"]'); await page.$$eval('.dialog details', (ds) => ds.forEach((d) => { d.open = true; })); }],
+      ['support case', async (k) => { await k.go('workflows'); await k.click('main [data-act="report"]'); await k.click('[data-act="sendReport"]'); await k.click('.dialog [data-act="closeModal"]'); await k.click('main [data-act="workflow"][data-arg="nudge"]'); }],
+      ['planner card', async (k, page) => { await k.ask(WEEKLY_SUMMARY); await page.$$eval('main details', (ds) => ds.forEach((d) => { d.open = true; })); }],
     ];
     for (const [screen, prep] of states) {
       await session(b, async (k, page) => { await k.ctl('preview', 'on'); await prep(k, page); await k.settle(400); (await sweep(page, { preview: true })).forEach((h) => hits.push({ screen, ...h })); });
@@ -442,15 +565,273 @@ async function main() {
     console.log(`              checked ${files.length - missing.length} files${missing.length ? `; not there to check: ${missing.join(', ')}` : ''}`);
   });
 
+  /* Review item 3: the troubleshooter and Retry read the connection's state. While Jira is down nothing says it works
+     again, and a retry doesn't run: the stop stays, and Needs you keeps the same count. */
   await check(B, 'down-state-honest', async (b) => session(b, async (k, page) => {
     await k.ctl('Jira stops answering');
     await k.go('workflows');
     const text = await k.main();
+    const before = num(await page.locator('main #needs-h .count').innerText());
     ok(/Jira isn’t answering/.test(text), 'Workflows does not say Jira is down');
-    ok(!/it’s working again now/.test(text), 'with Jira down, the AI troubleshooter on Workflows says Jira is “working again now” and calls a retry safe');
+    ok(!/answering again|working again/.test(text), 'with Jira down, the AI troubleshooter on Workflows says Jira answers again');
+    ok(/still isn’t answering/.test(text), 'with Jira down, the AI troubleshooter does not say Jira still isn’t answering');
+    await k.click('main [data-act="workflow"][data-arg="issues"]');
+    ok(!/answering again|working again/.test(await k.main()), 'with Jira down, the workflow page says Jira answers again');
+    await k.go('home');
+    await k.ask('Why did Morning new-ticket check stop?');
+    ok(!/answering again|working again/.test(await page.locator('.thread li.cmsg:last-child').innerText()), 'with Jira down, the Planner’s why answer says Jira answers again');
+    await k.newChat();
+    await k.go('workflows');
     await k.click('main [data-act="retryIssues"]');
     await page.waitForTimeout(4000);
-    ok(!/The retry read Jira/.test(await k.main()), 'with Jira down, Retry the run reports that it read Jira');
+    const after = await k.main();
+    ok(!/The retry read Jira|Done, nothing new today/.test(after), 'with Jira down, Retry the run finishes a run that read Jira');
+    await k.go('workflows');
+    ok(/Morning new-ticket check stopped/.test(await k.main()), 'with Jira down, the stop is gone after Retry');
+    ok(num(await page.locator('main #needs-h .count').innerText()) === before, 'with Jira down, Retry changed the Needs you count');
+    await k.ctl('Jira works again');
+    await k.go('workflows');
+    ok(/It’s answering again/.test(await k.main()), 'once Jira is back, the troubleshooter does not say it answers again');
+    await k.click('main [data-act="retryIssues"]');
+    await k.waitText(/Done, nothing new today/);
+  }));
+
+  /* Review item 9: with no AI model, agent workflows can't run (the built app's NO_MODEL). A retry of an agent
+     workflow must not finish, and what needs the model is Needs setup. */
+  await check(B, 'offline-honest', async (b) => session(b, async (k, page) => {
+    await k.ctl('modelOn', 'off');
+    const home = await k.main();
+    ok(/agent workflows can’t run/.test(home), 'the offline Home does not say agent workflows can’t run');
+    ok(!/keep running/.test(home), 'the offline Home says workflows keep running');
+    ok(/Needs setup[\s\S]*Sum up what I find/.test(home), 'Sum up what I find is not Needs setup with no model');
+    ok((await page.locator('main [data-act="setGo"][data-arg="model"]').count()) === 1, 'Connect a model shows more than once, or not at all');
+    if (await page.$('main [data-act="retryIssues"]')) {
+      await k.click('main [data-act="retryIssues"]');
+      await page.waitForTimeout(4000);
+      const after = await k.main();
+      ok(!/Done, nothing new today|The retry read Jira/.test(after), `with no AI model, Retry the run finished the Morning new-ticket check, an agent workflow: “${(after.match(/The retry read Jira[^\n]*/) || [after.slice(0, 80)])[0]}”`);
+    }
+  }));
+
+  /* Review item 14: the morning check reads tickets created in the last day, and says the read stops at the newest 50. */
+  await check(B, 'morning-check-reads', async (b) => session(b, async (k, page) => {
+    await k.go('workflows'); await k.click('main [data-act="workflow"][data-arg="issues"]');
+    await page.$$eval('main details', (ds) => ds.forEach((d) => { d.open = true; }));
+    const text = await k.main();
+    ok(/tickets created in Jira project MOCK in the last day/.test(text), 'the Morning new-ticket check does not say it reads the tickets created in the last day');
+    ok(/Reads the 50 newest tickets in Jira/.test(text), 'the Morning new-ticket check does not say it reads the 50 newest tickets');
+    ok(!/created more than \d+ days ago/.test(text), 'an older-tickets read is offered');
+  }));
+
+  /* Review item 2: every alternative the Planner offers sets up cleanly, a set-up card with nothing red. Every request
+     gets an answer: the Planner never hangs. */
+  const CANT_ASKS = [
+    EMAIL,
+    'Every Monday, email me the tickets created this week',
+    'Every Friday, post the tickets we closed this week in Teams',
+    'Every Friday, post the tickets we closed this week in Slack',
+    'Every Friday, put the tickets we closed this week on a Confluence page',
+    'Every Friday, update the Confluence page with the closed tickets',
+    'Every Monday, update the wiki page with the open tickets',
+    'Every Monday, post the stale tickets in Teams',
+    'Every Monday, message the owners of open tickets',
+    'Every Friday, list the tickets with no update for 30 days',
+    'Every Monday, list the open bugs',
+    'Every Monday, list the open tickets and who owns them',
+    'Put new tickets in the Platform component',
+    'Every Friday, sum up the stale tickets in the Platform component',
+    'Every Monday, list the tickets created more than 30 days ago',
+    'Every Friday, sum up the closed tickets and email me',
+    'Every Friday, close the tickets that are done',
+    `${WEEKLY_SUMMARY}, approve it automatically`,
+  ];
+  await check(B, 'alternatives-set-up-cleanly', async (b) => {
+    const bad = [];
+    let offered = 0;
+    for (const ask of CANT_ASKS) {
+      await session(b, async (k, page) => {
+        const errs = [];
+        page.on('pageerror', (e) => errs.push(e.message));
+        try { await k.ask(ask); } catch (e) { bad.push(`“${ask}” got no answer${errs.length ? `: ${errs[0]}` : ''}`); return; }
+        if (!(await page.locator('main [data-act="instead"]').count())) return;
+        offered += 1;
+        const label = await page.locator('main [data-act="instead"]').first().innerText();
+        await page.locator('main [data-act="instead"]').first().click(); await k.replied();
+        const last = '.thread li.cmsg:last-child';
+        const card = await page.locator(`${last} [data-act="turnOn"]`).count();
+        const red = await page.locator(`${last} :is(.schip.cant, .snotes li.cant)`).count();
+        if (card !== 1 || red) bad.push(`“${ask}”: ${label} gave ${card ? `a set-up card with ${red} red parts` : `“${(await page.locator('.thread [data-say]').last().innerText()).slice(0, 80)}”`}`);
+      });
+    }
+    console.log(`              ${offered} alternatives offered across ${CANT_ASKS.length} requests`);
+    ok(!bad.length, bad.join(' || '));
+  });
+
+  /* A can't answer that opens "I can make that list" or "I can write that summary" names a part the platform can do.
+     The same request without the system it can't reach must then set up cleanly. */
+  const CLAIMS = [
+    [EMAIL, 'Every Monday, list the open bugs'],
+    ['Every Monday, email me the tickets created this week', 'Every Monday, list the tickets created this week'],
+    ['Every Friday, post the tickets we closed this week in Teams', 'Every Friday, list the tickets we closed this week'],
+    ['Every Friday, post the stale tickets in Slack', 'Every Friday, list the stale tickets'],
+    ['Every Friday, sum up the open bugs and email me', 'Every Friday, sum up the open bugs'],
+  ];
+  await check(B, 'cant-claims-honest', async (b) => {
+    const bad = [];
+    for (const [ask, part] of CLAIMS) {
+      let say = '';
+      await session(b, async (k, page) => { await k.ask(ask); say = await page.locator('.thread [data-say]').last().innerText(); });
+      if (!/^I can (make that list|write that summary)/.test(say)) continue;
+      await session(b, async (k, page) => {
+        await k.ask(part);
+        const setup = await page.locator('.thread li.cmsg:last-child [data-act="turnOn"]').count();
+        const reply = await page.locator('.thread [data-say]').last().innerText();
+        if (!setup) bad.push(`“${ask}”: the Planner says “${say.split(',')[0]}”, but “${part}” gets “${reply.slice(0, 90)}”`);
+      });
+    }
+    ok(!bad.length, bad.join(' || '));
+  });
+
+  /* A set-up card never quietly drops part of a request: the agents can't read a ticket's component, so a request that
+     names one is not shown as a plain set-up. */
+  await check(B, 'no-silent-drop', async (b) => session(b, async (k, page) => {
+    await k.ask('Every Friday, sum up the closed tickets in the Platform component');
+    const last = '.thread li.cmsg:last-child';
+    const setup = await page.locator(`${last} [data-act="turnOn"]`).count();
+    const says = await page.locator(last).innerText();
+    const chips = await page.$$eval(`${last} [data-val^="chip:"]`, (cs) => cs.map((c) => c.textContent.trim()).join(' | '));
+    ok(!setup || /component/i.test(says.replace(/^[\s\S]*?Here’s what I understood/, '')), `a request for the Platform component gets a plain set-up card that never mentions the component; its parts read “${chips}”`);
+  }));
+
+  /* Review item 8 and rule 1: one primary button per screen. On Home that is the first Needs you row, or nothing. The
+     "Check my workflows" card keeps one too. */
+  await check(B, 'home-one-primary', async (b) => {
+    const bad = [];
+    const seen = [];
+    const primaries = (page, sel = 'main') => page.$$eval(`${sel} .btn.primary`, (bs) => bs.filter((x) => x.getClientRects().length).map((x) => x.innerText.trim()));
+    const states = [
+      ['normal week', async () => {}],
+      ['after the retry', async (k) => { await k.click('main [data-act="retryIssues"]'); await k.waitText(/Done, nothing new today/); await k.go('home'); }],
+      ['Jira down', async (k) => k.ctl('Jira stops answering')],
+      ['no AI model', async (k) => k.ctl('modelOn', 'off')],
+      ['day one', async (k) => k.setDay('one')],
+      ['day one with Jira down', async (k) => { await k.setDay('one'); await k.ctl('Jira stops answering'); }],
+      ['Bob', async (k) => k.setUser('bob')],
+      ['Planned shown', async (k) => k.ctl('preview', 'on')],
+    ];
+    for (const [label, prep] of states) {
+      await session(b, async (k, page) => {
+        await prep(k, page);
+        const p = await primaries(page);
+        seen.push(`${label} ${p.length}`);
+        if (p.length > 1) bad.push(`${label}: ${p.length} primary buttons (${p.join(', ')})`);
+      });
+    }
+    await session(b, async (k, page) => {
+      await k.click('main [data-act="example"][data-arg="0"]'); await k.replied();
+      const p = await primaries(page, '.thread li.cmsg:last-child');
+      seen.push(`check my workflows ${p.length}`);
+      if (p.length > 1) bad.push(`“Check my workflows”: ${p.length} primary buttons (${p.join(', ')})`);
+    });
+    console.log(`              primaries: ${seen.join('; ')}`);
+    ok(!bad.length, bad.join(' || '));
+  });
+
+  /* Day one opens with the "I can" list and folds "What can't I do yet?" (review item 8). */
+  await check(B, 'home-day-one', async (b) => session(b, async (k, page) => {
+    await k.setDay('one');
+    const folds = await page.$$eval('main details.abil-not', (ds) => ds.map((d) => ({ open: d.open, summary: d.querySelector('summary').textContent.trim() })));
+    ok(folds.length === 1 && !folds[0].open && folds[0].summary === 'What can’t I do yet?', `day one does not fold “What can’t I do yet?”: ${JSON.stringify(folds)}`);
+    ok((await page.locator('main .abil-not .tag.planned').count()) === 0, 'the Not yet lines carry a Planned tag by default');
+  }));
+
+  /* Review item 4: these are hidden by default, and shown with a Planned tag under Planned features. */
+  await check(B, 'planned-hidden-by-default', async (b) => {
+    const bad = [];
+    for (const preview of [false, true]) {
+      await session(b, async (k, page) => {
+        if (preview) await k.ctl('preview', 'on');
+        const say = (feature, shown, tagged) => {
+          if (!preview && shown) bad.push(`${feature} shows by default`);
+          if (preview && !shown) bad.push(`${feature} is missing with Planned features shown`);
+          if (preview && shown && !tagged) bad.push(`${feature} has no Planned tag`);
+        };
+        await k.click('.hdr [data-act="go"][data-arg="settings"]');
+        const usage = await page.locator('[data-act="setTab"][data-arg="usage"]').count();
+        let usageTag = 0;
+        if (usage) { await k.click('[data-act="setTab"][data-arg="usage"]'); usageTag = await page.locator('main .tag.planned').count(); }
+        say('the Usage tab', usage, usageTag);
+        await k.click('[data-act="setTab"][data-arg="connections"]');
+        const replace = await page.locator('main [data-act="connReplace"]').count();
+        say('Replace the key', replace, replace && (await page.locator('main [data-act="connReplace"] .tag.planned').count()) === replace);
+        if (!preview && !/Ask whoever looks after the platform/.test(await k.main())) bad.push('by default, Connections does not say who to ask for a new key');
+        await k.go('workflows'); await k.click('main [data-act="workflow"][data-arg="issues"]');
+        await page.$$eval('main details', (ds) => ds.forEach((d) => { d.open = true; }));
+        say('the n8n section and its history', /In n8n/.test(await k.main()), await page.locator('main section:has(h3:text-matches("In n8n")) .tag.planned').count());
+        await k.click('main [data-act="editSched"][data-arg="issues"]');
+        say('Every month', await page.locator('#sf-freq option[value="month"]').count(), await page.locator('label[for="sf-freq"] .tag.planned').count());
+        await k.click('main [data-act="menu"]');
+        say('Open in n8n', await page.locator('.menu [data-arg^="n8nAsk"]').count(), await page.locator('.menu [data-arg^="n8nAsk"] .tag.planned').count());
+        await page.keyboard.press('Escape'); await k.settle();
+        await k.go('agents'); await k.click('[data-act="libTab"][data-arg="agents"]');
+        if (!preview && /change (it|them|an agent|agents) in plain English/i.test(await k.main())) bad.push(`by default, the Agents tab says agents can be changed: “${(await k.main()).match(/[^.\n]*change (it|them|an agent|agents) in plain English[^.\n]*/i)[0].trim()}”`);
+        await k.click('main [data-act="agent"][data-arg="writer"]');
+        say('Changing an agent', await page.locator('.dialog [data-act="agentSuggest"]').count(), await page.locator('.dialog .tag.planned').count());
+        if (!preview && !/read only/i.test(await page.innerText('.dialog'))) bad.push('by default, the agent dialog does not say agents are read only');
+        await page.keyboard.press('Escape'); await k.settle();
+        await k.go('workflows'); await k.click('main [data-act="report"]'); await k.click('[data-act="sendReport"]'); await k.click('.dialog [data-act="closeModal"]');
+        await k.click('main [data-act="workflow"][data-arg="nudge"]');
+        const stages = await page.$$eval('main .track4 > li', (ls) => ls.map((l) => ({ t: l.querySelector('b').textContent.replace(/\s*Planned\s*$/, '').trim(), tag: !!l.querySelector('.tag.planned') })));
+        const today = ['Reported', 'Support is looking at it', 'Fixed'];
+        const extra = stages.filter((x) => !today.includes(x.t));
+        if (!preview && JSON.stringify(stages.map((x) => x.t)) !== JSON.stringify(today)) bad.push(`the default support track is ${stages.map((x) => x.t).join(', ')}`);
+        if (preview) {
+          if (!extra.length) bad.push('the coding-agent stages are missing with Planned features shown');
+          extra.filter((x) => !x.tag).forEach((x) => bad.push(`the coding-agent stage “${x.t}” has no Planned tag`));
+        }
+      });
+    }
+    ok(!bad.length, bad.join(' || '));
+  });
+
+  /* I6: a task no saved agent fits drafts a new agent, which is saved to the Agent library when it is turned on. */
+  await check(B, 'i6-new-agent-drafted', async (b) => session(b, async (k, page) => {
+    await k.ask('Every Monday at 9:00, compare last week’s new tickets with the week before in project MOCK');
+    await page.$$eval('main details', (ds) => ds.forEach((d) => { d.open = true; }));
+    ok(/New agent, saved to the Agent library when you turn this on/.test(await k.main()), 'the comparison card does not draft a new agent');
+    await k.click('[data-act="turnOn"]');
+    await k.go('agents'); await k.click('[data-act="libTab"][data-arg="agents"]');
+    const before = 4;
+    const n = num(await page.locator('main h2:has-text("Specialist agents") .count').innerText().catch(() => ''));
+    ok(n === before + 1, `the Agent library lists ${n} specialist agents after turning it on, not ${before + 1}`);
+  }));
+
+  /* I7: no text points to places that no longer exist. */
+  await check(B, 'i7-no-dead-pointers', async (b) => session(b, async (k, page) => {
+    const seen = [];
+    const look = async () => { const t = await page.evaluate(() => document.body.innerText); [/follow it on Home/i, /Check what I understood/i].forEach((re) => { if (re.test(t)) seen.push(String(re)); }); };
+    await k.go('workflows'); await k.click('main [data-act="report"]'); await look(); await k.click('[data-act="sendReport"]'); await look();
+    await k.click('.dialog [data-act="closeModal"]'); await look();
+    await k.go('home'); await k.ask(WEEKLY_SUMMARY); await look();
+    ok(!seen.length, `dead pointers shown: ${seen.join(', ')}`);
+  }));
+
+  /* I8 and review item 6: the Planner's answers about her workflows are re-read on every redraw. */
+  await check(B, 'planner-answers-live', async (b) => session(b, async (k, page) => {
+    await k.ask('What needs me?');
+    ok(/^5 things need you/.test(await page.locator('.thread [data-say]').last().innerText()), 'the what-needs-me answer does not start at 5');
+    await k.click('.thread [data-act="retryIssues"]'); await k.waitText(/Done, nothing new today/);
+    await k.go('home');
+    const says = await page.locator('.thread [data-say]').allInnerTexts();
+    ok(/^4 things need you/.test(says[says.length - 1]), `after the retry, the same answer still says “${says[says.length - 1]}”`);
+  }));
+
+  /* Each Teams message is an article, so a Planned tag on the card covers everything in it. */
+  await check(B, 'teams-messages-are-articles', async (b) => session(b, async (k, page) => {
+    await k.ctl('preview', 'on');
+    await k.click('.hdr [data-act="teams"]');
+    const kids = await page.$$eval('.drawer .msgs > *', (ns) => ns.map((n) => n.tagName.toLowerCase()));
+    ok(kids.length >= 2 && kids.every((t) => t === 'article'), `Teams messages are ${kids.join(', ')}`);
   }));
 
   await check(B, 'one-version-per-fact', async (b) => session(b, async (k, page) => {
@@ -481,11 +862,12 @@ async function main() {
     await reach('C Review and decide', async (k) => k.setUser('bob'), '[data-act="run"][data-arg="sw"]');
     await reach('C Approve', async (k) => { await k.setUser('bob'); await k.click('main [data-act="run"][data-arg="sw"]'); }, '[data-act="approve"][data-arg="sw"]');
     await reach('C-self Do a test run', async (k, page) => { await card(k, page); await k.click('[data-act="turnOn"]'); }, '[data-act="testRun"]');
-    await reach('D Set that up', async (k) => k.ask(EMAIL), '[data-act="instead"]');
+    await reach('D Ask the team', async (k) => k.ask(EMAIL), '.thread [data-act="teamReq"]');
     await reach('E Jira project', async (k) => k.ask('Every Friday at 17:00, sum up the tickets we closed this week in project MOCK'), '#fix-project');
     await reach('F Report to support', async (k) => k.go('workflows'), 'main [data-act="report"]');
     await reach('F Send report', async (k) => { await k.go('workflows'); await k.click('main [data-act="report"]'); }, '[data-act="sendReport"]', { fromTop: false });
     await reach('G Add Kubernetes', async (k) => { await k.ask('Monitor Kubernetes releases'); await k.click('[data-act="repoOk"]'); await k.click('[data-act="verNewest"]'); }, '[data-act="watchAdd"]');
+    await reach('H Pause', async (k) => { await k.go('workflows'); await k.click('main [data-act="workflow"][data-arg="issues"]'); }, 'main [data-act="pause"]');
     await reach('H More actions', async (k) => { await k.go('workflows'); await k.click('main [data-act="workflow"][data-arg="issues"]'); }, 'main [data-act="menu"]');
     await reach('H Delete workflow', async (k) => { await k.go('workflows'); await k.click('main [data-act="workflow"][data-arg="nudge"]'); await k.click('main [data-act="menu"]'); await k.click('[data-act="menuPick"][data-arg="askDelete:nudge"]'); }, '[data-act="confirmDelete"]', { fromTop: false });
     console.log(`              Tab presses: ${rows.join('; ')}`);
@@ -512,6 +894,11 @@ async function main() {
     await k.setUser('bob');
     ok((await page.locator('main [data-ask]').count()) === 1, 'seeded control: Bob has the Planner box');
   }), { expectedFail: true });
+
+  await check(B, 'no-console-errors', async () => {
+    const errs = [...new Set(consoleErrors)];
+    ok(!errs.length, `${errs.length} page or console errors: ${errs.slice(0, 5).join(' | ')}`);
+  });
 
   await browser.close();
   const real = results.filter((r) => r.status !== 'EXPECTED-FAIL');

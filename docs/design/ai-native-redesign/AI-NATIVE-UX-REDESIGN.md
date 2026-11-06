@@ -373,8 +373,8 @@ From top to bottom:
    
    **Add software** takes plain words ("Kubernetes"). It finds the GitHub project and shows where the guess came from. When more than one project matches, she chooses. She never needs to know what a package registry is.
 3. **How it's checked.** "Every Monday at 9:00, Singapore time. One approval covers all the upgrade tickets." Sources:
-   - GitHub releases, Ready;
-   - package registries, security advisories and support end dates, each Planned.
+   - GitHub releases, which works now;
+   - package registries, security advisories and support end dates, each shown as "Not yet" by default, and tagged Planned with Planned features on (section 1).
    
    With Planned features shown, the version 3 security findings and their severity appear, tagged Planned. Severity is shown only when a real source backs it.
 

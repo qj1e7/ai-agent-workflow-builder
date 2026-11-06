@@ -5,8 +5,8 @@
   "summary": {
     "real": {
       "total": 40,
-      "passed": 40,
-      "failed": 0,
+      "passed": 39,
+      "failed": 1,
       "notPossible": 0
     },
     "control": {
@@ -386,7 +386,7 @@
     {
       "id": "D",
       "key": "D@1280",
-      "title": "An Operator asks to email a weekly list, and the limit is explained with an alternative",
+      "title": "An Operator asks to email a weekly list, and the limit is explained with a next step",
       "viewport": 1280,
       "passed": true,
       "failed": null,
@@ -638,17 +638,27 @@
       "key": "H@1280",
       "title": "Pause a workflow, change its schedule, and delete one with its confirmation",
       "viewport": 1280,
-      "passed": true,
-      "failed": null,
-      "failures": [],
+      "passed": false,
+      "failed": {
+        "label": "One Resume button replaces Pause (spec 8: no page offers the same button twice)",
+        "expected": "a condition",
+        "actual": "2"
+      },
+      "failures": [
+        {
+          "label": "One Resume button replaces Pause (spec 8: no page offers the same button twice)",
+          "expected": "a condition",
+          "actual": "2"
+        }
+      ],
       "counts": {
-        "clicks": 11,
+        "clicks": 10,
         "fields": 1,
         "selects": 2,
         "navs": 5,
         "decisions": 5,
         "screens": 3,
-        "interactions": 14
+        "interactions": 13
       },
       "screenList": [
         "home",
@@ -715,21 +725,13 @@
         {
           "n": 8,
           "kind": "click",
-          "label": "More actions",
-          "nav": false,
-          "decision": false,
-          "screen": "workflow"
-        },
-        {
-          "n": 9,
-          "kind": "click",
           "label": "Pause",
           "nav": false,
           "decision": true,
           "screen": "workflow"
         },
         {
-          "n": 10,
+          "n": 9,
           "kind": "click",
           "label": "Back to Workflows",
           "nav": true,
@@ -737,7 +739,7 @@
           "screen": "workflows"
         },
         {
-          "n": 11,
+          "n": 10,
           "kind": "click",
           "label": "Open Weekly closed-ticket summary",
           "nav": true,
@@ -745,7 +747,7 @@
           "screen": "workflow"
         },
         {
-          "n": 12,
+          "n": 11,
           "kind": "click",
           "label": "More actions",
           "nav": false,
@@ -753,7 +755,7 @@
           "screen": "workflow"
         },
         {
-          "n": 13,
+          "n": 12,
           "kind": "click",
           "label": "Delete",
           "nav": false,
@@ -761,7 +763,7 @@
           "screen": "workflow"
         },
         {
-          "n": 14,
+          "n": 13,
           "kind": "click",
           "label": "Delete workflow",
           "nav": true,
@@ -1293,13 +1295,13 @@
       "failed": null,
       "failures": [],
       "counts": {
-        "clicks": 4,
+        "clicks": 3,
         "fields": 0,
         "selects": 0,
         "navs": 2,
         "decisions": 1,
         "screens": 3,
-        "interactions": 4
+        "interactions": 3
       },
       "screenList": [
         "home",
@@ -1325,14 +1327,6 @@
         },
         {
           "n": 3,
-          "kind": "click",
-          "label": "More actions",
-          "nav": false,
-          "decision": false,
-          "screen": "workflow"
-        },
-        {
-          "n": 4,
           "kind": "click",
           "label": "Pause",
           "nav": false,
@@ -1768,12 +1762,12 @@
       "failures": [],
       "counts": {
         "clicks": 2,
-        "fields": 0,
+        "fields": 1,
         "selects": 0,
         "navs": 1,
         "decisions": 1,
         "screens": 2,
-        "interactions": 2
+        "interactions": 3
       },
       "screenList": [
         "home",
@@ -1782,14 +1776,22 @@
       "steps": [
         {
           "n": 1,
-          "kind": "click",
-          "label": "Tap Why did Morning new-ticket check stop?",
+          "kind": "field",
+          "label": "Type: Why did Morning new-ticket check stop?",
           "nav": false,
           "decision": false,
           "screen": "home"
         },
         {
           "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
           "kind": "click",
           "label": "Retry the run",
           "nav": true,
@@ -2319,13 +2321,13 @@
     "failed": {
       "label": "The page says this impossible sentence",
       "expected": "/Zebra pelican 4471 never appears/",
-      "actual": "Good morning! Alice\n\n4 things need you.\n\nDescribe a task for the Planner\nCheck my workflows\nWhy did Morning new-ticket check stop?\nSet up another workflow\nNeeds you\n4\nMorning new-ticket check stopped\nJira didn’t answer at 8:00.\nRetry the run\nWeekly closed-ticket summary stopped\nThis is a problem in the platform, not in your workflow.\nReport to support\n3 upgrade tickets are waiting for your yes\nKee..."
+      "actual": "Good morning! Alice\n\nSome things need you.\n\nDescribe a task for the Planner\nCheck my workflows\nWhy did Weekly closed-ticket summary stop?\nSet up another workflow\nNeeds you\n5\nMorning new-ticket check stopped\nJira didn’t answer at 8:00.\nRetry the run\nWeekly closed-ticket summary stopped\nThis is a problem in the platform, not in your workflow.\nReport to support\n3 upgrade tickets are waiting for your ..."
     },
     "failures": [
       {
         "label": "The page says this impossible sentence",
         "expected": "/Zebra pelican 4471 never appears/",
-        "actual": "Good morning! Alice\n\n4 things need you.\n\nDescribe a task for the Planner\nCheck my workflows\nWhy did Morning new-ticket check stop?\nSet up another workflow\nNeeds you\n4\nMorning new-ticket check stopped\nJira didn’t answer at 8:00.\nRetry the run\nWeekly closed-ticket summary stopped\nThis is a problem in the platform, not in your workflow.\nReport to support\n3 upgrade tickets are waiting for your yes\nKee..."
+        "actual": "Good morning! Alice\n\nSome things need you.\n\nDescribe a task for the Planner\nCheck my workflows\nWhy did Weekly closed-ticket summary stop?\nSet up another workflow\nNeeds you\n5\nMorning new-ticket check stopped\nJira didn’t answer at 8:00.\nRetry the run\nWeekly closed-ticket summary stopped\nThis is a problem in the platform, not in your workflow.\nReport to support\n3 upgrade tickets are waiting for your ..."
       }
     ],
     "counts": {

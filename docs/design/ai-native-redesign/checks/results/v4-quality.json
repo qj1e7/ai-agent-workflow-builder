@@ -364,24 +364,11 @@
       "desktop": {
         "axe": {
           "critical": 0,
-          "serious": 2,
+          "serious": 0,
           "moderate": 0,
           "minor": 0
         },
-        "axeViolations": [
-          {
-            "id": "definition-list",
-            "impact": "serious",
-            "nodes": 1,
-            "help": "<dl> elements must only directly contain properly-ordered <dt> and <dd> groups, <script>, <template> or <div> elements"
-          },
-          {
-            "id": "dlitem",
-            "impact": "serious",
-            "nodes": 4,
-            "help": "<dt> and <dd> elements must be contained by a <dl>"
-          }
-        ],
+        "axeViolations": [],
         "sidewaysScroll": {
           "scrolls": false,
           "scrollWidth": 1280,
@@ -397,24 +384,11 @@
       "phone": {
         "axe": {
           "critical": 0,
-          "serious": 2,
+          "serious": 0,
           "moderate": 0,
           "minor": 0
         },
-        "axeViolations": [
-          {
-            "id": "definition-list",
-            "impact": "serious",
-            "nodes": 1,
-            "help": "<dl> elements must only directly contain properly-ordered <dt> and <dd> groups, <script>, <template> or <div> elements"
-          },
-          {
-            "id": "dlitem",
-            "impact": "serious",
-            "nodes": 4,
-            "help": "<dt> and <dd> elements must be contained by a <dl>"
-          }
-        ],
+        "axeViolations": [],
         "sidewaysScroll": {
           "scrolls": false,
           "scrollWidth": 390,
@@ -677,10 +651,7 @@
           "scrolls": false,
           "scrollWidth": 390,
           "clientWidth": 390,
-          "widest": [
-            "button right=529",
-            "button right=455"
-          ]
+          "widest": []
         },
         "consoleErrors": [],
         "reducedMotion": {
@@ -951,24 +922,11 @@
       "desktop": {
         "axe": {
           "critical": 0,
-          "serious": 2,
+          "serious": 0,
           "moderate": 0,
           "minor": 0
         },
-        "axeViolations": [
-          {
-            "id": "definition-list",
-            "impact": "serious",
-            "nodes": 1,
-            "help": "<dl> elements must only directly contain properly-ordered <dt> and <dd> groups, <script>, <template> or <div> elements"
-          },
-          {
-            "id": "dlitem",
-            "impact": "serious",
-            "nodes": 4,
-            "help": "<dt> and <dd> elements must be contained by a <dl>"
-          }
-        ],
+        "axeViolations": [],
         "sidewaysScroll": {
           "scrolls": false,
           "scrollWidth": 1280,
@@ -984,24 +942,11 @@
       "phone": {
         "axe": {
           "critical": 0,
-          "serious": 2,
+          "serious": 0,
           "moderate": 0,
           "minor": 0
         },
-        "axeViolations": [
-          {
-            "id": "definition-list",
-            "impact": "serious",
-            "nodes": 1,
-            "help": "<dl> elements must only directly contain properly-ordered <dt> and <dd> groups, <script>, <template> or <div> elements"
-          },
-          {
-            "id": "dlitem",
-            "impact": "serious",
-            "nodes": 4,
-            "help": "<dt> and <dd> elements must be contained by a <dl>"
-          }
-        ],
+        "axeViolations": [],
         "sidewaysScroll": {
           "scrolls": false,
           "scrollWidth": 390,
