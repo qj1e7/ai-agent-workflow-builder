@@ -133,7 +133,8 @@ check('i2-samples-use-todays-tools', async (browser) => session(browser, 1280, a
   await t.go('agents'); texts.push(await t.page.evaluate(() => { const m = document.querySelector('main').cloneNode(true); m.querySelectorAll('.cap-not').forEach((e) => e.remove()); return m.textContent; }));
   await t.click('[data-act="libTab"][data-arg="agents"]'); texts.push(await t.text());
   await t.click('[data-act="libTab"][data-arg="tools"]'); texts.push(await t.text());
-  const bad = texts.flatMap((x) => x.match(/GitHub issues|bug reports? on|Entra|GitLab|admin tools|Issue reader|Access checker|Message writer|Post in Teams|langserve/gi) || []);
+  /* LangServe is a real GitHub project on the watchlist. Its moved-address item is in Needs you (fix round A, item 12). */
+  const bad = texts.flatMap((x) => x.match(/GitHub issues|bug reports? on|Entra|GitLab|admin tools|Issue reader|Access checker|Message writer|Post in Teams/gi) || []);
   assert.deepStrictEqual(bad, [], `planned systems in default samples: ${bad.join(', ')}`);
   const wf = texts[0];
   for (const name of ['Morning new-ticket check', 'Weekly closed-ticket summary', 'Keep our software up to date']) assert(wf.includes(name), `Workflows lists ${name}`);
@@ -255,9 +256,11 @@ check('two-approvers-access-review', async (browser) => session(browser, 1280, a
 check('teams-drawer-no-approve', async (browser) => session(browser, 1280, async (t) => {
   await t.ctl('user', 'bob');
   const drawer = await t.teams();
-  assert.strictEqual(await t.page.locator('.drawer button:has-text("Approve")').count(), 0, 'no Approve in Teams');
-  assert.strictEqual(await t.page.locator('.drawer button:has-text("Decline")').count(), 0, 'no Decline in Teams');
-  assert(drawer.includes('Open in AI Workflow Builder'), 'one Open button');
+  /* Whatever a button is called, the only ones in the cards open the Builder; nothing in Teams decides. */
+  const buttons = await t.page.$$eval('.drawer .msg-card button', (els) => els.map((e) => `${e.dataset.act}:${e.textContent.trim()}`));
+  assert(buttons.length >= 1, 'the cards have a button');
+  assert.deepStrictEqual(buttons.filter((b) => !/^(run|toolOpen):Open in AI Workflow Builder$/.test(b)), [], `only Open buttons in the cards: ${buttons.join(' | ')}`);
+  assert.strictEqual(await t.count('.drawer [data-act="approve"], .drawer [data-act="decline"], .drawer [data-act="yesAs"]'), 0, 'no decision action in Teams');
   for (const part of ['Who can decide', 'Changes', 'Found', 'set up by Carol']) assert(drawer.includes(part), `card has ${part}`);
   await t.click('.drawer [data-act="run"][data-arg="sw"]');
   await t.click('[data-act="approve"][data-arg="sw"]');
@@ -369,6 +372,76 @@ check('draft-discard-undo', async (browser) => session(browser, 1280, async (t) 
   await t.click('[data-act="discardDraft"]');
   await t.click('.toast [data-act="undoDiscard"]');
   assert.strictEqual(await t.count('.draft-row'), 1, 'Undo puts the draft back');
+}));
+
+
+/* Fix round A, item 1: the parties of a run (owner, starter, retrier) can never approve it, read from live state. */
+check('owner-after-schedule-save-cannot-approve', async (browser) => session(browser, 1280, async (t) => {
+  assert.strictEqual(await t.count('[data-act="run"][data-arg="sw"]'), 1, 'before: Alice, who is not a party, has Review and decide');
+  await t.go('software');
+  await t.click('[data-act="editSched"][data-arg="sw"]'); await t.click('[data-act="saveSched"][data-arg="sw"]');
+  const how = await t.text();
+  assert(how.includes('Set by Alice. Its checks count as the work of Alice and Carol, who can’t approve them.'), `the watchlist names both parties: ${how.match(/Set by[^\n]*/)}`);
+  assert.strictEqual(await t.count('[data-act="run"][data-arg="sw"]'), 0, 'after: no Review and decide for the new owner');
+  assert(how.includes('Waiting for Bob, Siti or Arun'), 'the watchlist says who it waits for');
+  const drawer = await t.teams();
+  assert(drawer.includes('Who can’t\nAlice, who set this up; Carol, who started this run. Nobody approves their own work.'), `the Teams card names who can’t and why: ${drawer.match(/Who can’t[^\n]*\n[^\n]*/)}`);
+  assert(drawer.includes('Who can decide\nBob, Siti or Arun'), `and who can: ${drawer.match(/Who can decide[^\n]*\n[^\n]*/)}`);
+  await t.click('.drawer [data-act="run"][data-arg="sw"]');
+  assert.strictEqual(await t.count('[data-act="approve"]'), 0, 'no Approve on the run page for the owner');
+  assert((await t.page.innerText('#decision')).includes('You set this up, so another Approver must decide. Nobody approves their own work.'), 'her part says why');
+  await t.go('home');
+  assert(!(await t.text()).includes('3 upgrade tickets are waiting for your yes'), 'Needs you no longer asks her to decide');
+}));
+check('control-owner-keeps-approve', async (browser) => session(browser, 1280, async (t) => {
+  await t.go('software');
+  await t.click('[data-act="editSched"][data-arg="sw"]'); await t.click('[data-act="saveSched"][data-arg="sw"]');
+  assert.strictEqual(await t.count('[data-act="run"][data-arg="sw"]'), 1, 'seeded control: the new owner is still offered Review and decide');
+}), { expectedFail: true });
+
+/* Item 17: the Teams card reads the parties, so a retried run names the retrier. */
+check('teams-card-names-parties', async (browser) => session(browser, 1280, async (t) => {
+  let drawer = await t.teams();
+  assert(drawer.includes('Who can’t\nCarol, who set this up and started this run.'), `the software card: ${drawer.match(/Who can’t[^\n]*\n[^\n]*/)}`);
+  await t.closeTeams();
+  await t.go('workflows'); await t.click('[data-act="workflow"][data-arg="nudge"]'); await t.click('.panel [data-act="watch"][data-arg="nudge"]'); await t.wait(300);
+  await t.click('#decision [data-act="report"]'); await t.click('[data-act="sendReport"]'); await t.page.keyboard.press('Escape'); await t.wait(200);
+  for (let i = 0; i < 3; i += 1) await t.sim('Support moves case');
+  await t.click('#decision [data-act="retryNudge"]'); await t.wait(600);
+  drawer = await t.teams();
+  assert(drawer.includes('Who can’t\nAlice, who set this up and retried this run.'), `the retried summary's card: ${drawer.match(/Who can’t[^\n]*\n[^\n]*/)}`);
+  assert(drawer.includes('Weekly closed-ticket summary, set up by Alice'), 'the owner comes from the workflow, not a fixed string');
+}));
+
+/* Item 16: with Planned features, the access review waits for two Approvers in turn, Bob then Alice. */
+check('two-approvers-in-order', async (browser) => session(browser, 1280, async (t) => {
+  await t.ctl('preview', 'on');
+  await t.go('workflows');
+  assert((await t.page.locator('.wf-row:has-text("Quarterly access review")').innerText()).includes('Waiting for a yes'), 'the access review waits');
+  assert.strictEqual(await t.count('[data-act="run"][data-arg="access"]'), 0, 'Alice, the second Approver, cannot act before Bob');
+  await t.ctl('user', 'bob');
+  await t.go('home');
+  assert((await t.text()).includes('3 people would lose access. Your yes is the first of two'), 'Bob is asked first');
+  await t.click('[data-act="run"][data-arg="access"]'); await t.wait(300);
+  const panel = await t.page.innerText('#decision');
+  assert(panel.includes('3 people will lose access') && panel.includes('Jun Wei'), 'the panel lists the removals');
+  assert(panel.includes('Carol started the review by hand'), 'who asked names the person who started it');
+  assert.strictEqual(await t.count('[data-act="approve"][data-arg="access"]'), 1, 'Bob can decide step 1');
+  await t.ctl('user', 'alice');
+  assert.strictEqual(await t.count('[data-act="approve"][data-arg="access"]'), 0, 'Alice has no Approve before Bob');
+  assert((await t.page.innerText('#decision')).includes('Only Bob or Siti can decide this one.'), 'her part says who can');
+  await t.ctl('user', 'bob');
+  await t.click('[data-act="approve"][data-arg="access"]'); await t.wait(300);
+  assert((await t.page.innerText('.toast')).includes('Alice is asked next, as the second Approver.'), 'the yes moves it to step 2');
+  assert.strictEqual(await t.count('[data-act="approve"][data-arg="access"]'), 0, 'Bob cannot approve step 2');
+  await t.ctl('user', 'alice');
+  assert((await t.page.innerText('#decision')).includes('Bob said yes. Your yes is the second of two.'), 'Alice sees the second step');
+  assert.strictEqual(await t.count('[data-act="approve"][data-arg="access"]'), 1, 'and can decide it');
+  await t.click('[data-act="approve"][data-arg="access"]'); await t.wait(600);
+  assert((await t.text()).includes('3 people lost access'), 'the run finishes');
+  assert((await t.page.innerText('#decision')).includes('Bob, then Alice, approved'), 'both yeses are recorded in order');
+  const drawer = await t.teams();
+  assert(/Approved by Bob at \d+:\d\d today, then Alice at \d+:\d\d today/.test(drawer), `Teams shows both: ${drawer.match(/Approved[^\n]*/)}`);
 }));
 
 (async () => {

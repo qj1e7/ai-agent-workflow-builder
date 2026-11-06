@@ -334,6 +334,23 @@ check('p0-gate-still-passes', () => {
   console.log(`              gates-p0: ${(r.stdout || '').trim().split('\n').pop()}`);
 });
 
+
+/* Fix round A, item 12: the moved project is one item, read by Needs you, the tab count and the watchlist alike. */
+both('wl-langserve-in-needs-you', async (t) => {
+  const badge = async () => +(await t.page.$$eval('.badge[data-val="needs-n"]', (els) => (els[0] ? els[0].textContent.replace(/\D/g, '') : '0')));
+  await t.go('workflows');
+  const before = await badge();
+  const needs = await t.page.innerText('#needs-h >> xpath=..');
+  assert(needs.includes('GitHub can’t find langchain-ai/langserve. It moved to langchain-ai/langchain.'), `Needs you has the moved project: ${needs.slice(0, 200)}`);
+  assert.strictEqual(+needs.match(/Needs you\s*(\d+)/)[1], before, 'the tab count and Needs you agree');
+  await t.page.$eval('#needs-h >> xpath=.. >> [data-act="useNewAddress"]', (b) => b.click()); await t.wait(300);
+  assert.strictEqual(await badge(), before - 1, 'fixing it from Workflows drops the count by one');
+  await t.go('software');
+  assert.strictEqual(await t.count('[data-act="useNewAddress"]'), 0, 'and the watchlist no longer asks');
+  await t.ctl('user', 'bob'); await t.go('home');
+  assert(!(await t.text()).includes('langserve'), 'an Approver who is not an Operator is not asked to fix it');
+});
+
 (async () => {
   const browser = await chromium.launch();
   for (const c of checks) {

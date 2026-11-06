@@ -101,7 +101,8 @@ both('home-needs-you-rows', async (t) => {
   assert(rows[2].startsWith('3 upgrade tickets are waiting for your yes'), `approvals after stops (HM1, Alice sees her waiting yes): ${rows[2]}`);
   for (const r of rows) assert.strictEqual((await t.count('.home .needs .nrow .btn.primary')), 3, 'one primary action per row');
   assert.strictEqual(await t.count('.home .needs .nrow .btn'), 3, 'no second button in a row');
-  assert((await t.text()).includes('See all 4 on Workflows'), 'See all N on Workflows');
+  /* Five for Alice: two stopped runs, the software check's yes, the moved LangServe project (fix round A, item 12) and the key. */
+  assert((await t.text()).includes('See all 5 on Workflows'), 'See all N on Workflows');
   await t.ask('Check my workflows');
   assert.strictEqual(await t.count('.home .needs'), 0, 'hidden while a conversation is on screen');
   assert((await t.count('.hdr .badge, .tabbar .badge')) > 0, 'the tab count still shows');
@@ -115,6 +116,7 @@ both('home-needs-you-gone-when-nothing-needs-her', async (t) => {
   await t.go('home'); await t.newChat();
   await t.ask('Why did Weekly closed-ticket summary stop?'); await t.click('[data-act="report"]'); await t.click('[data-act="sendReport"]'); await t.page.keyboard.press('Escape'); await t.wait(200);
   await t.newChat();
+  await t.click('[data-act="useNewAddress"]');
   const home = await t.text();
   assert(/1 thing needs you\./.test(home), `only the key is left: ${home.split('\n').slice(0, 4).join(' | ')}`);
   assert.strictEqual(await t.count('.home .needs .nrow'), 1, 'one row');
@@ -191,8 +193,8 @@ both('answer-why-it-stopped', async (t) => {
 });
 both('answer-what-needs-me', async (t) => {
   await t.ask('What needs me?');
-  assert.strictEqual(await t.reply(), '4 things need you.');
-  assert.strictEqual(await t.count('.thread .needs .nrow'), 4, 'the same items as Needs you');
+  assert.strictEqual(await t.reply(), '5 things need you.');
+  assert.strictEqual(await t.count('.thread .needs .nrow'), 5, 'the same items as Needs you');
 });
 both('answer-set-up-another', async (t) => {
   await t.ask('Set up another workflow');
@@ -297,7 +299,7 @@ both('a11y-keyboard-and-focus', async (t) => {
   await t.page.focus('[data-ask]');
   const seen = [];
   for (let i = 0; i < 12; i += 1) { await t.page.keyboard.press('Tab'); seen.push(await t.page.evaluate(() => { const a = document.activeElement; return `${a.tagName}:${(a.innerText || a.getAttribute('aria-label') || '').trim().slice(0, 30)}`; })); }
-  for (const want of ['Check my workflows', 'Retry the run', 'See all 4']) assert(seen.some((s) => s.includes(want)), `Tab reaches ${want}: ${seen.join(' > ')}`);
+  for (const want of ['Check my workflows', 'Retry the run', 'See all 5']) assert(seen.some((s) => s.includes(want)), `Tab reaches ${want}: ${seen.join(' > ')}`);
   const ring = await t.page.evaluate(() => { const el = document.querySelector('.examples .chip'); el.focus(); return getComputedStyle(el).outlineStyle !== 'none' || getComputedStyle(el, ':focus-visible').outlineWidth !== '0px'; });
   assert(ring, 'a chip shows a focus ring');
   await t.ask(EX_SUMMARY);
