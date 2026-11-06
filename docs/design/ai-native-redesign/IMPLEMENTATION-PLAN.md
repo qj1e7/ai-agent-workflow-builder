@@ -720,7 +720,7 @@ Every PR merges as one squash commit, so `git revert <sha>` on `main` backs it o
 | N5 | Revert. The runtime ignores the new fields again, and the registry entry goes back to Planned in the same revert. |
 | N3, N6, N17, N20 | Revert. The routes are new and nothing older calls them. Regenerate `contracts/`. |
 | N7 | Revert. The Portal's Home needs it, so revert N10 and N11 first. |
-| N8 | Revert the code. Keep the migration, because an empty step is harmless to the old code, or run its down step only after checking that no draft has an empty step. |
+| N8 | Run the migration's down step first, then revert the code. The down step gives every draft without a step the step 1, which the old Portal opens with its saved words. The old code can't start on a 0006 database, so keeping the migration is not a rollback. |
 | N9 | Revert. Portal only. |
 | N10 | Set the flag (below) to bring back New workflow at once. Revert to bring back the old Home. |
 | N11 | Revert. Home still answers, and a can-do answer falls back to "Set it up in New workflow" while the flag is on. |
