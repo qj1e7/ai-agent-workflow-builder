@@ -350,7 +350,7 @@ The offline answer replaces `STARTERS` and `FALLBACK_WORDS` in `builder/planning
 
 ### 4.3 Connection health (orchestration)
 
-`platform-api/src/platform_api/orchestration/connections.py` **(new)** keeps one row per connection in a new table (`platform-api/src/platform_api/migrations/orchestration/versions/0012_connection_checks.py` **(new)**). Each row has the result, when it was checked, when it last worked, the problem, and the expiry date when one is known.
+`platform-api/src/platform_api/orchestration/connections.py` **(new)** keeps one row per connection in a new table (`platform-api/src/platform_api/migrations/orchestration/versions/0013_connection_checks.py` **(new)**). Each row has the result, when it was checked, when it last worked, the problem, and the expiry date when one is known.
 
 - **Jira.** A light read through the existing adapter (`jira_rest.py`).
 - **GitHub.** The runtime holds the token, so the runtime checks it (`POST /v1/connections/github/check`). It calls GitHub's rate limit endpoint, which does not count against the limit, and reports the token's expiry date when GitHub sends one.
@@ -365,7 +365,7 @@ Checks run on Check now and on the existing schedule tick (`POST /internal/v1/sc
 
 - **What happened.** Today's `explanation`.
 - **What was affected.** How many writes were done before the stop, counted from `WriteActionDone`.
-- **Can it be fixed safely.** From `retryable` and the stage. A `WriteFailed` after the yes carries on without a new yes. Any other retry runs again and waits for a yes.
+- **Can it be fixed safely.** From `retryable` and the stage. A `WriteFailed` after the yes carries on without a new yes. This is safe in the built app, and stays so: the retry reuses the same stored proposal and approval (`test_runs.py`, `test_retry_after_an_act_leg_failure_keeps_the_approval`), the safety checker checks the approved digest again before every write and denies on a mismatch (`write_actions.py`, `DIGEST_MISMATCH`), and each write carries a write key and a Jira label, so a retry finds a ticket an earlier attempt made instead of making a second one (`jira.py`, `_write`). Any change to this needs its own ADR. Any other retry runs again and waits for a yes.
 - **What should you do.** `retry` or `report`.
 
 The text stays a fixed table. It does not claim a cause it can't know, such as "down for maintenance".
@@ -397,7 +397,7 @@ N4 (orchestration) carries the fields through platform-api:
 - `FIELDS` in `jira_rest.py` adds `issuetype` and `assignee`. `_issue` keeps `updated`, the issue type's name and the assignee's display name, instead of dropping them.
 - `JiraIssue` in `platform-api/src/platform_api/orchestration/jira.py` gains `updated_at`, `issue_type` and `assignee`. `IssueSearch` gains `updated_before` and `issue_types`, which `search` turns into `updated <= ...` and `issuetype in (...)` clauses, reading the date in the account's zone as `done_since` already does.
 - The internal read routes in `jira_reads_http.py` return the fields and take the filters (section 3.2).
-- The practice Jira keeps an `updated_at` on each ticket, set when it is created, labelled or marked done, and an `assignee` (`platform-api/src/platform_api/practice_jira/store.py`). It already keeps `issue_type`. Its JQL in `platform-api/src/platform_api/practice_jira/jql.py` learns `updated`, `issuetype` and `assignee`. The table change is `platform-api/src/platform_api/migrations/orchestration/versions/0012_practice_jira_updated_and_assignee.py` **(new)**.
+- The practice Jira keeps an `updated_at` on each ticket, set when it is created, labelled or marked done, and an `assignee` (`platform-api/src/platform_api/practice_jira/store.py`). It already keeps `issue_type`. Its JQL in `platform-api/src/platform_api/practice_jira/jql.py` learns `updated`, `issuetype` and `assignee`. The table change is `platform-api/src/platform_api/migrations/orchestration/versions/0012_practice_jira_updated_and_assignee.py` **(new)**. It is 0012 because N4 comes before N18 in the build order, and N18's `0013_connection_checks.py` follows it. Whichever lands second sets its `down_revision` to the first, and the orchestration chain must keep one head.
 - The `jira.search` description in `TOOL_RULES` (`orchestration/cards.py`) names the new filters.
 
 N5 (agent runtime) lets the agents use them:
@@ -418,7 +418,7 @@ N2 splits it in two:
 - `why_not` marks any part about vulnerabilities as can't do, with the note "I can't check for known vulnerabilities yet. It's planned."
 - In the new answer path, a watchlist redirect whose word is a vulnerability word becomes the can't answer for the Planned "Check package registries and security advisories", with "watch it for new releases" as the alternative.
 
-The old route keeps its redirect until N22 removes it. The `vulnerabilities` case in `agent-runtime/evals/cases/understand.json` changes its expected answer in the same PR.
+The old route keeps its redirect until N22 removes it. Between N2 and N10, the old New workflow still sends a vulnerability request to the watchlist. After N10 that route sits behind a flag, so no Operator meets it from Home. The `vulnerabilities` case in `agent-runtime/evals/cases/understand.json` changes its expected answer in the same PR.
 
 ### 4.11 Other backend dependencies the UX audit found
 
@@ -632,7 +632,7 @@ These guard the rules the redesign must not move. A PR that needs to change one 
 
 ### 7.5 Golden-set cases for the new answers
 
-A new `answer` job in `agent-runtime/evals/answer.py` **(new)** with cases in `agent-runtime/evals/cases/answer.json` **(new)**, registered in `JOBS` in `agent-runtime/evals/runner.py`. Every case is scored on the answer kind, and some on fields:
+A new `answer` job in `agent-runtime/evals/answer.py` **(new)** with cases in `agent-runtime/evals/cases/answer.json` **(new)**, registered in `JOBS` in `agent-runtime/evals/runner.py`. Every case is scored on the answer kind, and some on fields. Before N7 puts these answers on Home, the team agrees the pass rate the golden set must reach on the chosen model. This plan sets no number, because no real model has been scored yet. The set must include requests that mix a supported part with an unsupported one, such as "Send a message in Teams when a release is published" and "Monitor software vulnerabilities in NVD", and each must keep its unsupported part:
 
 | Group | Example requests | Expected |
 |---|---|---|
