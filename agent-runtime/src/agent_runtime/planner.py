@@ -7,7 +7,7 @@ from typing import Final, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from agent_runtime.abilities import RELEASE_ROOTS, why_not
+from agent_runtime.abilities import RELEASE_ROOTS, VULNERABILITY_ROOTS, why_not
 from agent_runtime.card_runner import CardRunner, agent_ref, one_line
 from agent_runtime.contract import (
     AgentAddressee,
@@ -293,6 +293,7 @@ MAX_ROWS: Final = 8
 TEXT_LIMIT: Final = 200
 NOTE_LIMIT: Final = 300
 WORD_LIMIT: Final = 80
+WATCHLIST_ROOTS: Final = RELEASE_ROOTS | VULNERABILITY_ROOTS
 NOT_SAID: Final = "I couldn't tell from your words."
 READ_IN: Final = "I read this into your words. Please check it."
 CANT_YET: Final = "I can't do this yet."
@@ -439,8 +440,8 @@ def _whole_word_of(task: str, said: str | None) -> str | None:
 
 def _task_form_of(task: str, said: str | None) -> str | None:
     wanted = _visible_words(said).strip(QUOTES).casefold()
-    root = RELEASE_ROOTS.get(wanted)
-    forms = [w for w in re.findall(r"\w+", task) if RELEASE_ROOTS.get(w.casefold()) == root]
+    root = WATCHLIST_ROOTS.get(wanted)
+    forms = [w for w in re.findall(r"\w+", task) if WATCHLIST_ROOTS.get(w.casefold()) == root]
     if root is None or not forms:
         return None
     return next((w for w in forms if w.casefold() == wanted), forms[0])
@@ -451,8 +452,8 @@ def understood_of(
 ) -> Understood | BelongsOnWatchlist | None:
     """What the Operator is shown. Every part has a row, a part the model left out is missing,
     and a part that needs a tool we don't have is can't do. None when the answer does not hold
-    together: no rows, or a watchlist word that is not in the task or not one of the words the
-    prompt names. Once the Operator chose a new workflow over the watchlist, a watchlist answer
+    together: no rows, or a watchlist word that is not in the task or not one of the
+    `WATCHLIST_ROOTS`. Once the Operator chose a new workflow over the watchlist, a watchlist answer
     is ignored, so its rows are still held to the tools."""
     if answer.belongs_on_watchlist and not carried_on:
         word = _task_form_of(task, answer.watchlist_word)
