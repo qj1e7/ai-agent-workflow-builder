@@ -482,8 +482,10 @@ DRAFT_LIMIT_BYTES = 32 * 1024
 
 
 class DraftIn(WireIn):
-    step: Annotated[int, Field(ge=1, le=DRAFT_STEPS)] = Field(
-        description="The New workflow step the draft was saved at, from 1 to 4."
+    step: Annotated[int, Field(ge=1, le=DRAFT_STEPS)] | None = Field(
+        default=None,
+        description="The New workflow step the draft was saved at, from 1 to 4. "
+        "A draft saved from a Planner card has no step.",
     )
     content: dict[str, JsonValue] = Field(
         description="The New workflow form as the Portal keeps it, at most 32 KB as JSON. "
@@ -501,7 +503,7 @@ class DraftIn(WireIn):
 
 class DraftView(WireModel):
     draft_id: str
-    step: int
+    step: int | None
     content: dict[str, JsonValue]
     created_at: datetime
     saved_at: datetime

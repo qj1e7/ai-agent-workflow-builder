@@ -184,7 +184,7 @@ export function waitingWords(item: WaitingItem, now: Date): RowWords & { readonl
 }
 
 export function draftWords(draft: DraftItem, now: Date): RowWords {
-  return { name: draft.name ?? 'New workflow', sub: `Step ${draft.step} of ${DRAFT_STEPS}. Last saved ${runWhen(draft.saved_at, now)}.` }
+  return { name: draft.name ?? 'New workflow', sub: `${draft.step === null ? '' : `Step ${draft.step} of ${DRAFT_STEPS}. `}Last saved ${runWhen(draft.saved_at, now)}.` }
 }
 
 export interface Next {

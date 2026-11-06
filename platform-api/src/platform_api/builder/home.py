@@ -86,7 +86,7 @@ class WaitingItem(WireModel):
 class DraftItem(WireModel):
     draft_id: str
     name: str | None = Field(description="The draft's `name`, when the Portal saved one.")
-    step: int
+    step: int | None
     saved_at: datetime
 
 
