@@ -60,8 +60,8 @@ async function session(browser, width, body) {
     },
     turnOn: async (text) => {
       await t.ask(text);
-      if (await page.$('#sched-time')) { await page.fill('#sched-time', '09:00'); await page.click('[data-act="whenDone"]'); await page.waitForTimeout(220); }
       if (await page.$('#fix-project')) { await page.selectOption('#fix-project', 'MOCK'); await page.waitForTimeout(220); }
+      if (await page.$('#sched-time')) { await page.fill('#sched-time', '09:00'); await page.click('[data-act="whenDone"]'); await page.waitForTimeout(220); }
       await page.click('[data-act="turnOn"]');
       await page.waitForTimeout(260);
     },
