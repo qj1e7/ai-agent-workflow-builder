@@ -1,5 +1,5 @@
 /* Gate checks for the P2 slice of the AI-native redesign: the Software watchlist, the Agent library and Settings.
-   Usage: node docs/design/ai-native-redesign/checks/gates-p2.cjs <prototype.html>
+   Usage: node docs/design/ai-native-redesign/checks/gates-p2.cjs <prototype.html>   (ONLY=text runs the checks whose name has that text)
    Runs named checks for spec sections 11, 12, 13 and 15 rule 8, at 1280 px and at 390 px, and re-runs gates-p0.cjs.
    One control check is seeded to fail, to prove the gate can fail; it is reported as an expected failure. */
 const path = require('path');
@@ -53,7 +53,7 @@ async function session(browser, width, body) {
       const r = await page.evaluate(() => axe.run(document.querySelector('main'), { runOnly: ['wcag2a', 'wcag2aa'] }));
       return r.violations.map((v) => `${v.id} (${v.nodes.length})`);
     },
-    small: () => page.evaluate(() => [...document.querySelectorAll('main button, main .btn, main .linkbtn, main input:not([type=hidden]), main select, main summary')].filter((e) => e.offsetParent && !e.closest('.vh') && !e.disabled && !e.classList.contains('rcard-link')).map((e) => { const b = e.getBoundingClientRect(); return { n: (e.textContent || e.name || e.id || e.tagName).trim().slice(0, 30), h: Math.round(b.height), w: Math.round(b.width) }; }).filter((x) => x.h < 44 && !/checkbox|radio/.test(x.n))),
+    small: () => page.evaluate(() => [...document.querySelectorAll('main button, main .btn, main .linkbtn, main input:not([type=hidden]):not([type=radio]):not([type=checkbox]), main select, main summary')].filter((e) => e.offsetParent && !e.closest('.vh') && !e.disabled && !e.classList.contains('rcard-link')).map((e) => { const b = e.getBoundingClientRect(); return { n: (e.textContent || e.name || e.id || e.tagName).trim().slice(0, 30), h: Math.round(b.height), w: Math.round(b.width) }; }).filter((x) => x.h < 44)),
   };
   try { await body(t); } finally { await ctx.close(); }
 }
@@ -327,6 +327,7 @@ check('p0-gate-still-passes', () => {
 (async () => {
   const browser = await chromium.launch();
   for (const c of checks) {
+    if (process.env.ONLY && !c.name.includes(process.env.ONLY)) continue;
     let err = null;
     try { await c.fn(browser); } catch (e) { err = e; }
     record(c.name, err, c.expectedFail);
