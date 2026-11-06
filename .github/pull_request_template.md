@@ -22,6 +22,7 @@ Closes #
 
 ---
 
+- [ ] Changes something a person sees? Checked against `docs/design/ai-native-principles.md`, and Verification says how
 - [ ] Big decision? ADR added in `docs/adr/`
 - [ ] New domain terms added to `GLOSSARY.md`
 - [ ] No secrets in the diff

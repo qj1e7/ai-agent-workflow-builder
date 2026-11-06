@@ -52,6 +52,17 @@ These come from the sponsor and from our October feasibility test. Do not weaken
 - Wait a short delay before a retry.
 - Log every agent action with who approved it.
 
+## Designing screens
+
+The design target is prototype version 4, `docs/design/ai-native-redesign/prototype.html`, with its spec `AI-NATIVE-UX-REDESIGN.md` and build plan `IMPLEMENTATION-PLAN.md` in the same folder. The 6 Nov prototype in `docs/design/portal-routines/` is kept as the record of version 3. `docs/design/prototypes/` is out of date.
+
+Every new or changed screen, component or flow follows `docs/design/ai-native-principles.md`. Read it before any UI work.
+
+- Design a new screen or component in the prototype first, then build it in the Portal.
+- Walk the checklist there before you build. If you break a principle on purpose, say why in the design note or an ADR.
+- In the pull request, say under Verification which principles applied and how you checked each one.
+- Never ship anything on that page's "Never" list. It includes an unbuilt feature shown as working, part of a request dropped silently, and the AI's summary used as the check.
+
 ## How we work with AI: pstack
 
 Everyone uses pstack, at the version locked in `.claude/settings.json`. `CONTRIBUTING.md` explains the setup for each tool.

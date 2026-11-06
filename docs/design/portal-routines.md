@@ -2,7 +2,7 @@
 
 This page proposes a new shape for the Portal. The aim is that a new user knows at once what the Portal is for, what to do next, and what they get at the end. Nothing in the code changes until the team agrees.
 
-**Status:** proposal for team review, 27 Oct 2026. Updated 6 Nov 2026: Home is now the Planner's chat box, and it replaces New workflow ([ADR 0037](../adr/0037-home-is-the-planners-chat-box-and-replaces-new-workflow.md), proposed).
+**Status:** replaced on 7 Nov 2026 by the AI-native redesign, `docs/design/ai-native-redesign/AI-NATIVE-UX-REDESIGN.md`, with prototype version 4 as the design target. This page and its prototype stay as the record of version 3. Earlier status: proposal for team review, 27 Oct 2026. Updated 6 Nov 2026: Home is now the Planner's chat box, and it replaces New workflow ([ADR 0037](../adr/0037-home-is-the-planners-chat-box-and-replaces-new-workflow.md), proposed).
 
 ## Try the prototype
 

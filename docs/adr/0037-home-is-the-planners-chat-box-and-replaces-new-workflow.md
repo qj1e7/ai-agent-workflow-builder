@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Home is the Planner's chat box, and it replaces New workflow
@@ -41,6 +41,18 @@ We decided:
 The [design note](../design/portal-routines.md) and the prototype show the result. [ADR 0028](0028-rebuild-the-portal-from-the-prototype-and-reshape-the-backend-in-place.md) still stands. The Portal is built from the prototype, and this ADR changes what the prototype shows.
 
 Nothing here changes the approval gate or the safety checker. The card's yes turns a workflow on, as Turn it on did. Every write still waits for an Approver's yes in Teams, and nobody approves their own work. Drafted tools would widen what the safety checker allows, so they wait for their own ADR.
+
+## Changes on 7 Nov 2026
+
+The team adopted the AI-native redesign as the design target: prototype version 4, `docs/design/ai-native-redesign/prototype.html`, with its spec `AI-NATIVE-UX-REDESIGN.md` in the same folder. It changes this decision in five ways. Section 18 of that spec gives the reasons.
+
+- **Needs you also shows on Home,** but only when it has items. At most three rows sit under the suggestions, and Home keeps its centred look. This reverses the option rejected below, "The box on Home with Needs you under it". Rows show only when something needs the person, and they hide during a conversation, so the box no longer pushes approvals down. Day one and quiet weeks keep the box alone. Workflows keeps the full list and the tab count.
+- **The Planner gains four answers:** check my workflows, why it stopped, what needs me, and the answer with no AI model.
+- **Suggestions send intents,** so they work without the model.
+- **One capability registry backs every claim.** Each capability is in one state: Ready, Needs setup, Not answering, Planned or Unsupported. Planned features are hidden unless shown with a Planned tag.
+- **The old New workflow stays behind a flag** until the new Home is proven, then goes.
+
+The 6 Nov prototype, version 3, stays in `docs/design/portal-routines/` as the record of this ADR's first form.
 
 ## Considered options
 

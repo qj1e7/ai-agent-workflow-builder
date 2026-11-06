@@ -1,0 +1,2346 @@
+{
+  "prototype": "docs/design/ai-native-redesign/prototype.html",
+  "paths": "docs/design/ai-native-redesign/checks/paths-v4.cjs",
+  "version": "v4",
+  "summary": {
+    "real": {
+      "total": 40,
+      "passed": 40,
+      "failed": 0,
+      "notPossible": 0
+    },
+    "control": {
+      "failed": true
+    }
+  },
+  "scenarios": [
+    {
+      "id": "A",
+      "key": "A@1280",
+      "title": "First-time Operator sets up a weekly Jira summary and turns it on",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 2,
+        "selects": 1,
+        "navs": 0,
+        "decisions": 3,
+        "screens": 1,
+        "interactions": 5,
+        "plannerQuestions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the tickets we closed this week",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "select",
+          "label": "Choose the Jira project",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "field",
+          "label": "Choose the time",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Turn it on",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "A",
+      "key": "A@390",
+      "title": "First-time Operator sets up a weekly Jira summary and turns it on",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 2,
+        "selects": 1,
+        "navs": 0,
+        "decisions": 3,
+        "screens": 1,
+        "interactions": 5,
+        "plannerQuestions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the tickets we closed this week",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "select",
+          "label": "Choose the Jira project",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "field",
+          "label": "Choose the time",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Turn it on",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "B",
+      "key": "B@1280",
+      "title": "Experienced Operator finds what needs attention and fixes the stopped Morning new-ticket check",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 0,
+        "selects": 0,
+        "navs": 2,
+        "decisions": 1,
+        "screens": 3,
+        "interactions": 2
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Retry the run",
+          "nav": true,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "B",
+      "key": "B@390",
+      "title": "Experienced Operator finds what needs attention and fixes the stopped Morning new-ticket check",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 0,
+        "selects": 0,
+        "navs": 2,
+        "decisions": 1,
+        "screens": 3,
+        "interactions": 2
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Retry the run",
+          "nav": true,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "C",
+      "key": "C@1280",
+      "title": "Bob, an Approver only, opens the upgrade request, sees what changes and the evidence, and approves",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 2
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Review and decide",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Approve",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "C",
+      "key": "C@390",
+      "title": "Bob, an Approver only, opens the upgrade request, sees what changes and the evidence, and approves",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 2
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Review and decide",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Approve",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "C-self",
+      "key": "C-self@1280",
+      "title": "Alice turns on a workflow, does a test run, and cannot approve her own test run",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 1,
+        "selects": 1,
+        "navs": 1,
+        "decisions": 3,
+        "screens": 2,
+        "interactions": 6
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Tap Set up another workflow",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Tap the first starting point",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "select",
+          "label": "Choose the Jira project",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "field",
+          "label": "Choose the time",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Turn it on",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Do a test run",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "D",
+      "key": "D@1280",
+      "title": "An Operator asks to email a weekly list, and the limit is explained with a next step",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: email me a list of open bugs every Monday",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "E",
+      "key": "E@1280",
+      "title": "The user corrects the Planner’s guess of project and schedule on the card, without starting again",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 1,
+        "selects": 2,
+        "navs": 0,
+        "decisions": 2,
+        "screens": 1,
+        "interactions": 6
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: a request the Planner reads as MOCK and Friday",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "select",
+          "label": "Correct the Jira project",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Open the schedule",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "select",
+          "label": "Correct the day",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Close the schedule",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "F",
+      "key": "F@1280",
+      "title": "Recover the stop the user can fix, and report the platform bug to support",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 6,
+        "fields": 0,
+        "selects": 0,
+        "navs": 3,
+        "decisions": 2,
+        "screens": 3,
+        "interactions": 6
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Retry the run",
+          "nav": true,
+          "decision": true,
+          "screen": "run"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Back to Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Report to support",
+          "nav": false,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Send report",
+          "nav": false,
+          "decision": true,
+          "screen": "workflows"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Done",
+          "nav": false,
+          "decision": false,
+          "screen": "workflows"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "G",
+      "key": "G@1280",
+      "title": "Monitor Kubernetes releases from Home ends with Kubernetes on the Software watchlist",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 2,
+        "screens": 1,
+        "interactions": 5
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Monitor Kubernetes releases",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Looks right",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Not sure? Start from the newest",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Add Kubernetes",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "H",
+      "key": "H@1280",
+      "title": "Pause a workflow, change its schedule, and delete one with its confirmation",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 10,
+        "fields": 1,
+        "selects": 2,
+        "navs": 5,
+        "decisions": 5,
+        "screens": 3,
+        "interactions": 13
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "workflow"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Open Morning new-ticket check",
+          "nav": true,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Change schedule",
+          "nav": false,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 4,
+          "kind": "select",
+          "label": "How often",
+          "nav": false,
+          "decision": true,
+          "screen": "workflow"
+        },
+        {
+          "n": 5,
+          "kind": "select",
+          "label": "Day",
+          "nav": false,
+          "decision": true,
+          "screen": "workflow"
+        },
+        {
+          "n": 6,
+          "kind": "field",
+          "label": "Time",
+          "nav": false,
+          "decision": true,
+          "screen": "workflow"
+        },
+        {
+          "n": 7,
+          "kind": "click",
+          "label": "Save the schedule",
+          "nav": false,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 8,
+          "kind": "click",
+          "label": "Pause",
+          "nav": false,
+          "decision": true,
+          "screen": "workflow"
+        },
+        {
+          "n": 9,
+          "kind": "click",
+          "label": "Back to Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 10,
+          "kind": "click",
+          "label": "Open Weekly closed-ticket summary",
+          "nav": true,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 11,
+          "kind": "click",
+          "label": "More actions",
+          "nav": false,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 12,
+          "kind": "click",
+          "label": "Delete",
+          "nav": false,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 13,
+          "kind": "click",
+          "label": "Delete workflow",
+          "nav": true,
+          "decision": true,
+          "screen": "workflows"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T1",
+      "key": "T1@1280",
+      "title": "Set up a workflow from example 1: example, time, Jira project, Turn it on",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 1,
+        "selects": 1,
+        "navs": 0,
+        "decisions": 3,
+        "screens": 1,
+        "interactions": 5
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Tap Set up another workflow",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Tap the first starting point",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "select",
+          "label": "Choose the Jira project",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "field",
+          "label": "Choose the time",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Turn it on",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T2",
+      "key": "T2@1280",
+      "title": "Set up a typed workflow with every part stated: type, Enter, Turn it on",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 1,
+        "screens": 1,
+        "interactions": 3
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: a request with every part stated",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Turn it on",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T3",
+      "key": "T3@1280",
+      "title": "Do a test run after turning one on",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 0,
+        "screens": 2,
+        "interactions": 1
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Do a test run",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T4",
+      "key": "T4@1280",
+      "title": "Add software from Home with example 3: example, Looks right, Start from the newest, Add React",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 5,
+        "fields": 0,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 2,
+        "screens": 1,
+        "interactions": 5
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Tap Set up another workflow",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Tap Keep track of the React version",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Looks right",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Not sure? Start from the newest",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Add React",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T5",
+      "key": "T5@1280",
+      "title": "Add software on the Software watchlist page",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 2,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 0,
+        "screens": 2,
+        "interactions": 5
+      },
+      "screenList": [
+        "home",
+        "software"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Software watchlist",
+          "nav": true,
+          "decision": false,
+          "screen": "software"
+        },
+        {
+          "n": 2,
+          "kind": "field",
+          "label": "Name",
+          "nav": false,
+          "decision": false,
+          "screen": "software"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Find it",
+          "nav": false,
+          "decision": false,
+          "screen": "software"
+        },
+        {
+          "n": 4,
+          "kind": "field",
+          "label": "GitHub repository",
+          "nav": false,
+          "decision": false,
+          "screen": "software"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Add Prometheus",
+          "nav": false,
+          "decision": false,
+          "screen": "software"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T6",
+      "key": "T6@1280",
+      "title": "Approve from Workflows: Workflows, Review and decide, Approve 3 tickets",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 0,
+        "selects": 0,
+        "navs": 2,
+        "decisions": 1,
+        "screens": 3,
+        "interactions": 3
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Review and decide",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Approve",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T7",
+      "key": "T7@1280",
+      "title": "Approve from Home as an Approver only: Review and decide, Approve",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 2
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Review and decide",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Approve",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T8",
+      "key": "T8@1280",
+      "title": "Approve from the Teams drawer: Teams, Approve",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 3
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Teams",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Open in AI Workflow Builder",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Approve",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T9",
+      "key": "T9@1280",
+      "title": "Fix a stopped run the user can fix: Workflows, See why and fix it, retry",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 0,
+        "selects": 0,
+        "navs": 2,
+        "decisions": 1,
+        "screens": 3,
+        "interactions": 2
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Retry the run",
+          "nav": true,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T10",
+      "key": "T10@1280",
+      "title": "Report a platform bug: Workflows, Report to support, Send report, Done",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 4
+      },
+      "screenList": [
+        "home",
+        "workflows"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Report to support",
+          "nav": false,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Send report",
+          "nav": false,
+          "decision": true,
+          "screen": "workflows"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Done",
+          "nav": false,
+          "decision": false,
+          "screen": "workflows"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T11",
+      "key": "T11@1280",
+      "title": "Pause a workflow: Workflows, row, Pause",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 0,
+        "selects": 0,
+        "navs": 2,
+        "decisions": 1,
+        "screens": 3,
+        "interactions": 3
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "workflow"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Open Morning new-ticket check",
+          "nav": true,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Pause",
+          "nav": false,
+          "decision": true,
+          "screen": "workflow"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T12",
+      "key": "T12@1280",
+      "title": "Delete a workflow: Workflows, row, Delete, Delete workflow",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 5,
+        "fields": 0,
+        "selects": 0,
+        "navs": 3,
+        "decisions": 1,
+        "screens": 3,
+        "interactions": 5
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "workflow"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Open Weekly closed-ticket summary",
+          "nav": true,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "More actions",
+          "nav": false,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Delete",
+          "nav": false,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Delete workflow",
+          "nav": true,
+          "decision": true,
+          "screen": "workflows"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T13",
+      "key": "T13@1280",
+      "title": "Change who approves: Workflows, row, Change who approves, Save",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 4,
+        "fields": 0,
+        "selects": 2,
+        "navs": 2,
+        "decisions": 2,
+        "screens": 3,
+        "interactions": 6
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "workflow"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Open Morning new-ticket check",
+          "nav": true,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Change who approves",
+          "nav": false,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 4,
+          "kind": "select",
+          "label": "Asked first",
+          "nav": false,
+          "decision": true,
+          "screen": "workflow"
+        },
+        {
+          "n": 5,
+          "kind": "select",
+          "label": "Backup",
+          "nav": false,
+          "decision": true,
+          "screen": "workflow"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Save",
+          "nav": false,
+          "decision": false,
+          "screen": "workflow"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T14",
+      "key": "T14@1280",
+      "title": "Change an agent in plain English: Agent library, Details and changes, chip, Suggest a change, Save",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 6,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 6
+      },
+      "screenList": [
+        "home",
+        "agents"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Agent library",
+          "nav": true,
+          "decision": false,
+          "screen": "agents"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Open the Agents tab",
+          "nav": false,
+          "decision": false,
+          "screen": "agents"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Ticket writer: Details and changes",
+          "nav": false,
+          "decision": false,
+          "screen": "agents"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Pick a suggested change",
+          "nav": false,
+          "decision": false,
+          "screen": "agents"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Suggest a change",
+          "nav": false,
+          "decision": false,
+          "screen": "agents"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Save as version 2",
+          "nav": false,
+          "decision": true,
+          "screen": "agents"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "T15",
+      "key": "T15@1280",
+      "title": "Ask the team for a new system, after a \"can’t\" answer",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 0,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 1,
+        "screens": 1,
+        "interactions": 1
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Ask the team",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "H2",
+      "key": "H2@1280",
+      "title": "Discard a draft set-up card from Workflows",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 2
+      },
+      "screenList": [
+        "home",
+        "workflows"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Discard",
+          "nav": false,
+          "decision": true,
+          "screen": "workflows"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "B-home",
+      "key": "B-home@1280",
+      "title": "Find and act on the stopped workflow from Home’s Needs you",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 1
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Retry the run",
+          "nav": true,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "B-home",
+      "key": "B-home@390",
+      "title": "Find and act on the stopped workflow from Home’s Needs you",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 1
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Retry the run",
+          "nav": true,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ASK-status",
+      "key": "ASK-status@1280",
+      "title": "“Check my workflows” from the suggestions",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 0,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 1
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Tap Check my workflows",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ASK-status",
+      "key": "ASK-status@390",
+      "title": "“Check my workflows” from the suggestions",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 0,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 1
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Tap Check my workflows",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ASK-why",
+      "key": "ASK-why@1280",
+      "title": "“Why did Morning new-ticket check stop?” ending in a retry from the answer",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 2,
+        "fields": 1,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 3
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: Why did Morning new-ticket check stop?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Retry the run",
+          "nav": true,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "ASK-needs",
+      "key": "ASK-needs@1280",
+      "title": "“What needs me?”",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: What needs me?",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "OFFLINE",
+      "key": "OFFLINE@1280",
+      "title": "No AI model: Home says so and offers Connect a model",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 0,
+        "screens": 2,
+        "interactions": 1
+      },
+      "screenList": [
+        "home",
+        "settings"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Connect a model",
+          "nav": true,
+          "decision": false,
+          "screen": "settings"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "OFFLINE",
+      "key": "OFFLINE@390",
+      "title": "No AI model: Home says so and offers Connect a model",
+      "viewport": 390,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 0,
+        "screens": 2,
+        "interactions": 1
+      },
+      "screenList": [
+        "home",
+        "settings"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Connect a model",
+          "nav": true,
+          "decision": false,
+          "screen": "settings"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "DOWN",
+      "key": "DOWN@1280",
+      "title": "Jira stops answering: the Planner says so, then Jira works again",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 1,
+        "fields": 1,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 0,
+        "screens": 1,
+        "interactions": 2
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "field",
+          "label": "Type: every Friday, sum up the tickets we closed this week",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Press Enter to send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "PREVIEW",
+      "key": "PREVIEW@1280",
+      "title": "Planned features shown: each planned item is tagged",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 3,
+        "fields": 0,
+        "selects": 0,
+        "navs": 3,
+        "decisions": 0,
+        "screens": 4,
+        "interactions": 3
+      },
+      "screenList": [
+        "home",
+        "workflows",
+        "workflow",
+        "software"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Open Workflows",
+          "nav": true,
+          "decision": false,
+          "screen": "workflows"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Open Quarterly access review",
+          "nav": true,
+          "decision": false,
+          "screen": "workflow"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Open Software watchlist",
+          "nav": true,
+          "decision": false,
+          "screen": "software"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "KEYS-A",
+      "key": "KEYS-A@1280",
+      "title": "Scenario A with the keyboard only",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 20,
+        "fields": 2,
+        "selects": 0,
+        "navs": 0,
+        "decisions": 3,
+        "screens": 1,
+        "interactions": 22
+      },
+      "screenList": [
+        "home"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Tab to Skip to main content",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Skip to main content",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Tab towards the Planner box",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "field",
+          "label": "Type the request",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Send",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Tab towards the Jira project choice",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 7,
+          "kind": "click",
+          "label": "Tab towards the Jira project choice",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 8,
+          "kind": "click",
+          "label": "Tab towards the Jira project choice",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 9,
+          "kind": "click",
+          "label": "Type M to choose MOCK",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 10,
+          "kind": "click",
+          "label": "Tab towards the time",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 11,
+          "kind": "click",
+          "label": "Tab towards the time",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 12,
+          "kind": "click",
+          "label": "Tab towards the time",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 13,
+          "kind": "click",
+          "label": "Tab towards the time",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 14,
+          "kind": "click",
+          "label": "Tab towards the time",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 15,
+          "kind": "field",
+          "label": "Type the time",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        },
+        {
+          "n": 16,
+          "kind": "click",
+          "label": "Tab towards Turn it on",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 17,
+          "kind": "click",
+          "label": "Tab towards Turn it on",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 18,
+          "kind": "click",
+          "label": "Tab towards Turn it on",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 19,
+          "kind": "click",
+          "label": "Tab towards Turn it on",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 20,
+          "kind": "click",
+          "label": "Tab towards Turn it on",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 21,
+          "kind": "click",
+          "label": "Tab towards Turn it on",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 22,
+          "kind": "click",
+          "label": "Turn it on",
+          "nav": false,
+          "decision": true,
+          "screen": "home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "KEYS-C",
+      "key": "KEYS-C@1280",
+      "title": "Scenario C with the keyboard only",
+      "viewport": 1280,
+      "passed": true,
+      "failed": null,
+      "failures": [],
+      "counts": {
+        "clicks": 12,
+        "fields": 0,
+        "selects": 0,
+        "navs": 1,
+        "decisions": 1,
+        "screens": 2,
+        "interactions": 12
+      },
+      "screenList": [
+        "home",
+        "run"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "kind": "click",
+          "label": "Tab to Skip to main content",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 2,
+          "kind": "click",
+          "label": "Skip to main content",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 3,
+          "kind": "click",
+          "label": "Tab towards Review and decide",
+          "nav": false,
+          "decision": false,
+          "screen": "home"
+        },
+        {
+          "n": 4,
+          "kind": "click",
+          "label": "Review and decide",
+          "nav": true,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 5,
+          "kind": "click",
+          "label": "Tab towards Approve",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 6,
+          "kind": "click",
+          "label": "Tab towards Approve",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 7,
+          "kind": "click",
+          "label": "Tab towards Approve",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 8,
+          "kind": "click",
+          "label": "Tab towards Approve",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 9,
+          "kind": "click",
+          "label": "Tab towards Approve",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 10,
+          "kind": "click",
+          "label": "Tab towards Approve",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 11,
+          "kind": "click",
+          "label": "Tab towards Approve",
+          "nav": false,
+          "decision": false,
+          "screen": "run"
+        },
+        {
+          "n": 12,
+          "kind": "click",
+          "label": "Approve",
+          "nav": false,
+          "decision": true,
+          "screen": "run"
+        }
+      ],
+      "errors": []
+    }
+  ],
+  "control": {
+    "id": "CONTROL-must-fail",
+    "key": "CONTROL-must-fail@1280",
+    "title": "Control: asserts text that does not exist, so it must fail",
+    "viewport": 1280,
+    "passed": false,
+    "failed": {
+      "label": "The page says this impossible sentence",
+      "expected": "/Zebra pelican 4471 never appears/",
+      "actual": "Good morning! Alice\n\nSome things need you.\n\nDescribe a task for the Planner\nCheck my workflows\nWhy did Weekly closed-ticket summary stop?\nSet up another workflow\nNeeds you\n5\nMorning new-ticket check stopped\nJira didn’t answer at 8:00.\nRetry the run\nWeekly closed-ticket summary stopped\nThis is a problem in the platform, not in your workflow.\nReport to support\n3 upgrade tickets are waiting for your ..."
+    },
+    "failures": [
+      {
+        "label": "The page says this impossible sentence",
+        "expected": "/Zebra pelican 4471 never appears/",
+        "actual": "Good morning! Alice\n\nSome things need you.\n\nDescribe a task for the Planner\nCheck my workflows\nWhy did Weekly closed-ticket summary stop?\nSet up another workflow\nNeeds you\n5\nMorning new-ticket check stopped\nJira didn’t answer at 8:00.\nRetry the run\nWeekly closed-ticket summary stopped\nThis is a problem in the platform, not in your workflow.\nReport to support\n3 upgrade tickets are waiting for your ..."
+      }
+    ],
+    "counts": {
+      "clicks": 0,
+      "fields": 0,
+      "selects": 0,
+      "navs": 0,
+      "decisions": 0,
+      "screens": 1,
+      "interactions": 0
+    },
+    "screenList": [
+      "home"
+    ],
+    "steps": [],
+    "errors": []
+  }
+}
