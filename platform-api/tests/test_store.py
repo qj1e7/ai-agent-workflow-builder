@@ -58,6 +58,7 @@ STATES: list[RunState] = [
     Working(RUN, EXEC, 1, 2, NOW, LATER),
     Proposed(RUN, PRP, EXEC, 1, NOW),
     AwaitingApproval(RUN, PRP, APR),
+    AwaitingApproval(RUN, PRP, APR, "LangGraph has a new release: 1.2.16."),
     Acting(RUN, PRP, APR, 1, None, NOW),
     Acting(RUN, PRP, APR, 2, EXEC, NOW),
     Succeeded(
@@ -76,6 +77,12 @@ STATES: list[RunState] = [
 def test_every_state_survives_the_round_trip(state: RunState):
     name, data = dump_state(state)
     assert load_state(name, data) == state
+
+
+def test_a_run_saved_waiting_before_the_summary_was_kept_loads_with_none():
+    name, data = dump_state(AwaitingApproval(RUN, PRP, APR, "dropped"))
+    del data["summary"]
+    assert load_state(name, data) == AwaitingApproval(RUN, PRP, APR, "")
 
 
 PENDING = Pending(RUN, 1, None, NOW)

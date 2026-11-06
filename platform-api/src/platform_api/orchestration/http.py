@@ -190,6 +190,21 @@ class ApprovalView(WireModel):
     steps: list[ApprovalStepView]
     you_can_decide: bool
     why_not: Refusal | None
+    use_case_id: str
+    use_case_name: str
+    owner: UserId = Field(description="Who set the workflow up.")
+    started_by: UserId
+    trigger: Trigger
+    retried_by: list[UserId] = Field(
+        description="Who retried the run, as the approval gate counts them for this request, "
+        "each named once, in the order of their first retry. The gate refuses owner, started_by "
+        "and these people as their own work."
+    )
+    found: str = Field(
+        description="What the agents found, in their own words. It is empty once the request is "
+        "decided, and it can be empty before. The digest covers only the actions, so a decision "
+        "never covers this text."
+    )
 
 
 class DecisionIn(WireIn):
@@ -488,6 +503,7 @@ async def get_approval(
     detail = await orchestrator.get_approval(approval_id, principal)
     if detail is None:
         raise HTTPException(status_code=404, detail="No such approval")
+    run = detail.run
     return ApprovalView(
         approval_id=detail.request.id,
         run_id=detail.request.run_id,
@@ -496,6 +512,13 @@ async def get_approval(
         steps=steps_view(detail.request, detail.decisions),
         you_can_decide=detail.why_not is None,
         why_not=detail.why_not,
+        use_case_id=run.spec.use_case_id,
+        use_case_name=run.spec.use_case_name,
+        owner=run.spec.owner,
+        started_by=run.started_by,
+        trigger=run.spec.trigger,
+        retried_by=[u for u in dict.fromkeys(run.retried_by) if u in detail.request.parties],
+        found=detail.found,
     )
 
 

@@ -77,6 +77,7 @@ class ApprovalNotice:
     digest: str = ""
     steps: tuple[AskedStep, ...] = ()
     not_deciding: tuple[str, ...] = ()
+    owner_name: str = ""
 
 
 @dataclass(frozen=True)

@@ -1,11 +1,17 @@
 import json
 from collections.abc import AsyncIterator
+from dataclasses import replace
+from datetime import timedelta
 
 import httpx
 import pytest
 
 from platform_api.auth import DEV_PEOPLE
 from platform_api.oidc import identity_from_claims
+from platform_api.orchestration.runs import AwaitingApproval
+from platform_api.orchestration.service import Retried
+from platform_api.orchestration.spec import RunSpec
+from platform_api.shared import ApprovalId, N8nExecutionId, Principal, UserId
 from tests.conftest import PostgresUrls
 from tests.oidc_support import (
     ALICE_CLAIMS,
@@ -18,8 +24,14 @@ from tests.oidc_support import (
     oidc_app,
     token,
 )
-from tests.support import MOCK_OIDC_CONFIG
-from tests.test_orchestrator import Harness, open_harness, work_leg_to_approval
+from tests.support import CAROL, MOCK_OIDC_CONFIG, SPEC, SUMMARY
+from tests.test_orchestrator import (
+    ASK_APPROVAL,
+    RUN_AGENTS,
+    Harness,
+    open_harness,
+    work_leg_to_approval,
+)
 
 
 @pytest.fixture
@@ -78,6 +90,83 @@ async def test_a_person_not_on_the_list_cannot_read_or_decide_whatever_the_token
     refused = await decide(client, approval_id, nobody, digest)
     assert refused.status_code == 403
     assert "Ask an Operator" in refused.json()["detail"]
+
+
+async def retried_to_approval(
+    h: Harness, spec: RunSpec, started_by: Principal, retried_by: tuple[Principal, ...]
+) -> ApprovalId:
+    h.agent.mode = "failed"
+    run_id = (await h.orchestrator.start_run(spec, started_by, "key-1")).run_id
+    await h.orchestrator.tick()
+    execution = 41
+    for retrier in retried_by:
+        await h.orchestrator.on_step(run_id, RUN_AGENTS, N8nExecutionId(str(execution)))
+        await h.orchestrator.retry(run_id, retrier)
+        h.advance(timedelta(seconds=3))
+        await h.orchestrator.tick()
+        execution += 1
+    h.agent.mode = "finished"
+    await h.orchestrator.on_step(run_id, RUN_AGENTS, N8nExecutionId(str(execution)))
+    await h.orchestrator.on_step(run_id, ASK_APPROVAL, N8nExecutionId(str(execution)))
+    state = await h.state(run_id)
+    assert isinstance(state, AwaitingApproval)
+    return state.approval_id
+
+
+@pytest.mark.anyio
+async def test_the_approval_page_says_who_asked_and_what_the_agents_found(
+    harness: Harness, client: httpx.AsyncClient
+):
+    _, _, approval_id = await work_leg_to_approval(harness, by=OIDC_ALICE)
+    bob = bearer(token(claims=BOB_CLAIMS))
+    view = (await client.get(f"/api/v1/approvals/{approval_id}", headers=bob)).json()
+    asked = ("use_case_id", "use_case_name", "owner", "started_by", "trigger", "retried_by")
+    assert {key: view[key] for key in asked} == {
+        "use_case_id": SPEC.use_case_id,
+        "use_case_name": SPEC.use_case_name,
+        "owner": "alice",
+        "started_by": "alice",
+        "trigger": "person",
+        "retried_by": [],
+    }
+    assert view["found"] == SUMMARY
+    assert (view["you_can_decide"], view["why_not"]) == (True, None)
+
+
+@pytest.mark.anyio
+async def test_the_parties_the_approval_page_names_are_the_ones_the_gate_refuses(
+    harness: Harness, client: httpx.AsyncClient
+):
+    spec = replace(SPEC, owner=UserId("carol"))
+    approval_id = await retried_to_approval(
+        harness, spec, started_by=CAROL, retried_by=(OIDC_ALICE, OIDC_ALICE)
+    )
+    alice = bearer(token(claims=ALICE_CLAIMS))
+    view = (await client.get(f"/api/v1/approvals/{approval_id}", headers=alice)).json()
+    assert (view["owner"], view["started_by"], view["retried_by"]) == ("carol", "carol", ["alice"])
+    assert (view["you_can_decide"], view["why_not"]) == (False, "own_work")
+    refused = await decide(client, approval_id, alice, view["digest"])
+    assert (refused.status_code, refused.json()["refusal"]) == (403, "own_work")
+    bob = bearer(token(claims=BOB_CLAIMS))
+    approved = await decide(client, approval_id, bob, view["digest"])
+    assert (approved.status_code, approved.json()["decision"]["by"]) == (201, "bob")
+
+
+@pytest.mark.anyio
+async def test_a_retry_after_the_yes_does_not_change_whom_the_approval_names(
+    harness: Harness, client: httpx.AsyncClient
+):
+    run_id, _, approval_id = await work_leg_to_approval(harness, by=OIDC_ALICE)
+    bob = bearer(token(claims=BOB_CLAIMS))
+    digest = (await client.get(f"/api/v1/approvals/{approval_id}", headers=bob)).json()["digest"]
+    assert (await decide(client, approval_id, bob, digest)).status_code == 201
+    await harness.orchestrator.tick()
+    await harness.orchestrator.on_workflow_failure(
+        N8nExecutionId("42"), "run", "Do write action", "timed out"
+    )
+    assert isinstance(await harness.orchestrator.retry(run_id, CAROL), Retried)
+    view = (await client.get(f"/api/v1/approvals/{approval_id}", headers=bob)).json()
+    assert (view["owner"], view["started_by"], view["retried_by"]) == ("alice", "alice", [])
 
 
 def test_the_mock_identity_provider_issues_the_dev_people_and_two_more():

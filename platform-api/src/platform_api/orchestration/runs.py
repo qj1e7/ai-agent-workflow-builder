@@ -290,6 +290,7 @@ class AwaitingApproval:
     run_id: RunId
     proposal_id: ProposalId
     approval_id: ApprovalId
+    summary: str = ""
 
     def approve(self, now: datetime) -> Moved[Acting]:
         state = Acting(
@@ -329,7 +330,7 @@ class Proposed:
             ApprovalRequestedData(approval_id=approval_id, steps=steps, link=link),
         )
         return Moved(
-            AwaitingApproval(self.run_id, self.proposal_id, approval_id),
+            AwaitingApproval(self.run_id, self.proposal_id, approval_id, self.summary),
             (
                 _step_started(StepName.ASK_APPROVAL, self.execution, 1),
                 requested,

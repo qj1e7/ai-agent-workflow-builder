@@ -52,6 +52,7 @@ NOTICE = ApprovalNotice(
     digest="sha256:abc",
     steps=(AskedStep("Approver"),),
     not_deciding=("Alice",),
+    owner_name="Alice",
 )
 APPROVED = ApprovalOutcome("approved", ("Bob",), "Software watchlist", OPEN_URL)
 DECLINED = ApprovalOutcome("declined", ("Bob",), "Software watchlist", OPEN_URL)
@@ -68,6 +69,7 @@ def every_card() -> dict[str, AdaptiveCard]:
         summary=HOSTILE + "x" * 2000,
         steps=(AskedStep("Manager", ("Dana", "Eve")), AskedStep("Security", ("Frank",))),
         not_deciding=("Alice", "Carol"),
+        owner_name=HOSTILE + "y" * 2000,
     )
     old = ApprovalNotice(
         run_id=RunId("run_old"),
@@ -157,6 +159,7 @@ def test_a_notice_queued_before_the_card_lists_its_phrases_and_any_approver():
     runs = texts(wire(every_card()["queued before the card"]), "TextRun", "text")
     assert "• Create a Jira ticket" in runs
     assert "Any Approver who is not part of this run" in runs
+    assert not any(run.startswith("Set up by") for run in runs)
 
 
 def test_text_we_did_not_write_goes_only_in_text_runs_which_show_no_markdown():
@@ -166,6 +169,8 @@ def test_text_we_did_not_write_goes_only_in_text_runs_which_show_no_markdown():
     runs = texts(card, "TextRun", "text")
     assert any(run.startswith("**Approve now** [here] (https[:]//evil[.]example)") for run in runs)
     assert all("\n" not in run for run in runs)
+    owner = card["body"][1]["inlines"][1]["text"]
+    assert owner.startswith("**Approve now** [here] (https[:]//evil[.]example)")
 
 
 INERT = (
@@ -184,6 +189,7 @@ def test_web_addresses_and_markdown_links_in_text_we_did_not_write_are_inert():
         summary=INERT,
         steps=(AskedStep(INERT, (INERT,)), AskedStep("Second", ())),
         not_deciding=(INERT,),
+        owner_name=INERT,
     )
     outcome = ApprovalOutcome("approved", (INERT,), INERT, OPEN_URL)
     for card in (approval_card(notice), with_outcome(approval_card(notice), outcome)):
@@ -214,6 +220,13 @@ def test_the_card_says_what_would_be_written_what_the_agents_found_and_who_decid
     assert "LangGraph has a new release: 1.2.16." in runs
     assert "Any Approver" in runs
     assert "Alice can’t decide, because this run is their own work." in runs
+
+
+def test_the_card_names_the_workflows_owner_under_the_workflow():
+    owner_line = wire(approval_card(NOTICE))["body"][1]
+    assert owner_line["type"] == "RichTextBlock"
+    assert [run["text"] for run in owner_line["inlines"]] == ["Set up by ", "Alice"]
+    assert all(run["type"] == "TextRun" for run in owner_line["inlines"])
 
 
 def test_several_steps_name_who_decides_each_one_in_order():
@@ -268,6 +281,7 @@ def test_no_field_of_the_notice_can_carry_a_secret_into_a_card():
         "digest",
         "steps",
         "not_deciding",
+        "owner_name",
     }
     text = json.dumps([wire(card) for card in every_card().values()]).lower()
     assert not any(word in text for word in ("token", "secret", "sig=", "password", "key="))
@@ -386,6 +400,7 @@ def test_the_one_time_check_card_carries_every_kind_of_markup_made_harmless():
         "https[:]//аррӏе[.]com",
     ):
         assert typed in joined
+    assert "**Alice** [x] (https[:]//example[.]com)" in runs
     assert not any("://" in run or "](" in run for run in runs)
 
 
