@@ -355,7 +355,15 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .send:active:not([disabled]) { transform: scale(0.95); }
 .send[disabled] { background: var(--active); color: var(--muted); cursor: default; }
 .examples { justify-content: center; }
+/* A long placeholder on a phone is cut short, never wrapped out of a one-line box. */
+.composer textarea::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .thread { max-width: none; }
+/* Check my workflows: one row per workflow with its state, next run and one action (spec 6.2). */
+.wfcheck .rows { border-top: 0; }
+.wfcheck .row { padding: 12px 16px; }
+.wfcheck .row:last-child { border-bottom: 0; }
+.wfcheck .row-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 4px; }
+.pcard.why .pcard-h .face { flex: none; }
 .cmsg.me { grid-template-columns: minmax(0, 1fr); justify-items: end; }
 .cmsg.me .cmsg-bubble { max-width: min(560px, 90%); background: var(--sunk); border-radius: var(--r-card) var(--r-card) 4px var(--r-card); overflow-wrap: anywhere; }
 /* What I can do, and what I can't do yet. Built from the tool list, the same rule the Planner is held to. */
@@ -2203,9 +2211,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function needRow(t, i) {
     return `<li class="nrow" data-flip="n:${keyOf(t.title)}" data-stagger style="--i:${i}"><span class="ico ${t.kind}">${t.icon}</span><div class="nrow-text"><b>${t.title}</b><span class="nrow-why">${t.why ? firstSentence(t.why) : t.meta}</span></div>${oneAction(t.actions)}</li>`;
   }
-  function needsStrip(items, max = 3) {
+  function needsStrip(items, max = 3, unbuilt = 'Needs you on Home') {
     const n = items.length;
-    return `<section class="section needs" aria-labelledby="needs-h" data-flip-group="needs" data-unbuilt="Needs you on Home">
+    return `<section class="section needs" aria-labelledby="needs-h" data-flip-group="needs" data-unbuilt="${unbuilt}">
       <h2 id="needs-h">Needs you <span class="count" data-val="needs-count">${n}</span></h2>
       <ul class="queue" data-flip-group="nrows">${items.slice(0, max).map(needRow).join('')}</ul>
       ${n > max ? `<p class="small"><button class="linkbtn" data-act="go" data-arg="workflows">See all ${n} on Workflows</button></p>` : ''}
@@ -2742,6 +2750,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
       /* A known name, or a short name-like reply, answers the question. Anything longer is a new request. */
       if (hit || (t.split(/\s+/).length <= 3 && !/ticket|jira|every|list|sum/i.test(t))) return watchFor(hit, t, word);
     }
+    /* Questions about her workflows (spec 6.2) are answered from platform state. Word rules stand in for the model. */
+    const about = aboutWorkflows(t);
+    if (about) return about;
     if (word || (hit && /keep track|\bwatch\b|\btrack\b|monitor/i.test(t))) {
       if (hit) return watchFor(hit, t, word);
       c.pending = 'software';
@@ -2767,19 +2778,81 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (jiraAsk) return startDraft(t, it);
     return { kind: 'abilities', unknown: !/what can|what do you|help|can you|abilit/i.test(t) };
   }
-  /* The answers (spec 6.2), the one question the Planner asks back when a release check names no software, and the reply
-     when the person backs out of it. The set-up reply carries no count: the card's footer is the only count (I8). */
+  /* ---------- Answers about her workflows (spec 6.2, the three new kinds) ----------
+     Check my workflows, why it stopped and what needs me read the same state as Workflows and Needs you. In the
+     prototype, word rules pick them; in the built app, the model picks the kind and code fills it from platform-api. */
+  const workflowNamed = (t) => routineIds().find((id) => t.toLowerCase().includes(R(id).name.toLowerCase()));
+  const ABOUT = [
+    [/\bwhy\b.*\b(stop|stopped|fail|failed|broke|broken|went wrong)\b|\bwhat (went wrong|happened)\b/i, (t) => ({ kind: 'why', id: workflowNamed(t) || stoppedIds()[0] || null })],
+    [/\bwhat needs me\b|\bneeds? (my|me)\b|\banything (to approve|waiting|for me)\b|\bwaiting for me\b|\bmy (to-?do|approvals?)\b|\bwhat('s| is) waiting\b|\bto approve\b/i, () => ({ kind: 'mine' })],
+    [/\banother workflow\b|\bnew workflow\b|\bwhat else\b|\bstarting points?\b|\bideas?\b/i, () => ({ kind: 'starts' })],
+    [/\b(check|how are|status of|state of|see)\b.*\bworkflows?\b|\b(is|are)\b.*\b(running|working|on)\b\s*\?*$/i, () => ({ kind: 'check' })],
+  ];
+  const aboutWorkflows = (t) => { const hit = ABOUT.find(([re]) => re.test(t)); return hit ? hit[1](t) : null; };
+  /* A workflow's state in the spec's words (15.9), as a pill tone and a word. */
+  const stateOf = (id) => (S.paused[id] ? ['off', 'Paused'] : { bad: ['bad', 'Stopped'], wait: ['wait', 'Waiting for a yes'], off: ['off', 'No answer'] }[status(id).tone] || ['ok', 'Running']);
+  const STATE_ORDER = ['Stopped', 'Waiting for a yes', 'Running', 'Paused', 'No answer'];
+  function checkSay() {
+    const ids = routineIds();
+    if (!ids.length) return 'You have no workflows yet. Tell me a task, and I’ll set it up.';
+    const count = {};
+    ids.forEach((id) => { const w = stateOf(id)[1]; count[w] = (count[w] || 0) + 1; });
+    const said = (w, k) => (w === 'Running' ? `${k} ${k === 1 ? 'is' : 'are'} running` : w === 'Waiting for a yes' ? `${k} ${k === 1 ? 'is' : 'are'} waiting for a yes` : w === 'No answer' ? `${k} got no answer` : `${k} ${w.toLowerCase()}`);
+    return `You have ${ids.length} workflow${ids.length === 1 ? '' : 's'}. ${andList(STATE_ORDER.filter((w) => count[w]).map((w) => said(w, count[w])))}.`;
+  }
+  function checkCard() {
+    return `<div class="pcard wfcheck" data-unbuilt="Planner answers about your workflows"><ul class="rows">${comingUp().map(([id, r]) => {
+      const [tone, label] = stateOf(id);
+      return `<li class="row"><div><button class="linkbtn" data-act="workflow" data-arg="${id}">${esc(r.name)}</button><span class="row-sub">${pill({ tone, label })}${S.paused[id] ? '' : `<span>Next run ${r.next}</span>`}</span></div>${actionFor(id)}</li>`;
+    }).join('')}</ul></div>`;
+  }
+  /* The AI troubleshooter's four answers for each stop in the sample data (spec 10.3). The run page shows the same four. */
+  const TROUBLE = {
+    issues: () => ({ happened: 'Jira didn’t answer at 8:00. It was down for maintenance, and it’s working again now.', affected: 'Today’s check didn’t run. Nothing was written.', safe: 'Yes. A retry reads the tickets again, and its ticket still waits for a yes.', next: 'Retry the run.', act: '<button class="btn primary sm" data-act="retryIssues">Retry the run</button>' }),
+    nudge: () => ({
+      happened: 'The step that reads tickets stopped on MOCK-31. Its description is in a form the platform couldn’t read.', affected: 'Last Friday’s summary wasn’t made. Nothing was written.', safe: 'Not from here. This is a problem in the platform, not in your workflow, so a retry would stop in the same place.',
+      next: S.report === 0 ? 'Report it. Support gets the run and this explanation.' : S.report === 4 ? 'The fix is live. Retry the run.' : `Support has it as case ${S.supportCase.id}. Follow it under Following up on Workflows.`,
+      act: S.report === 0 ? '<button class="btn primary sm" data-act="report" data-unbuilt="Report to support">Report to support</button>' : S.report === 4 ? '<button class="btn primary sm" data-act="retryNudge">Retry the run</button>' : '',
+    }),
+  };
+  const stoppedNow = (id) => !!id && !!TROUBLE[id] && stoppedIds().includes(id);
+  function whySay(a) {
+    if (stoppedNow(a.id)) return `${R(a.id).name} stopped. Here’s what the AI troubleshooter found.`;
+    if (a.id) return `${R(a.id).name} hasn’t stopped. ${S.paused[a.id] ? 'It’s paused.' : `It’s ${stateOf(a.id)[1].toLowerCase()}, and its next run is ${R(a.id).next}.`}`;
+    return 'Nothing has stopped. Here’s how your workflows are doing.';
+  }
+  function whyCard(m) {
+    const id = m.card.id;
+    if (!stoppedNow(id)) return id ? `<div class="btns"><button class="btn sm" data-act="workflow" data-arg="${id}">See the workflow</button></div>` : checkCard();
+    const t = TROUBLE[id]();
+    return `<div class="pcard why" data-pres="why:${m.id}" data-unbuilt="Planner answers about your workflows">
+      <div class="pcard-h">${face('trouble', 32)}<h3>AI troubleshooter</h3></div>
+      <div class="pcard-s"><dl class="qa"><dt>What happened</dt><dd>${t.happened}</dd></dl><dl class="qa"><dt>What was affected</dt><dd>${t.affected}</dd></dl><dl class="qa"><dt>Can it be fixed safely</dt><dd>${t.safe}</dd></dl><dl class="qa"><dt>What to do</dt><dd>${t.next}</dd></dl></div>
+      <div class="pcard-f">${me().op ? t.act : ''}<button class="btn sm" data-act="run" data-arg="${id}">See the run</button></div>
+    </div>`;
+  }
+  const mineSay = () => { const n = needs().length; return n ? `${n === 1 ? '1 thing needs' : `${n} things need`} you.` : 'Nothing needs you right now.'; };
+  const mineCard = () => (needs().length ? needsStrip(needs(), 99, 'Planner answers about your workflows') : '');
+  const startsCard = () => `<div class="chips starts" role="group" aria-label="Starting points" data-unbuilt="Planner answers about your workflows">${starts().map((t) => `<button class="chip" data-act="say" data-arg="${esc(t)}">${esc(t)}</button>`).join('')}</div>`;
+
+  /* The answers (spec 6.2). Each covers what I understood, what I can do, what I need from you, and what happens next
+     (6.1): the sentence carries the first two, the card the other two. The set-up reply carries no count: the card's
+     footer is the only count (I8). */
   const ANSWERS = {
     setup: { say: () => 'Here’s what I understood. I filled in what I could.', card: (m) => setupCard(m) },
-    watch: { say: (a) => `${a.word ? `You mentioned “${esc(a.word)}”, so` : `${esc(a.name)} is software, so`} this belongs on the Software watchlist${a.security ? (shows('registries') ? ', where known vulnerabilities are checked too' : '. Known vulnerabilities aren’t checked yet, but new releases are') : ''}. It checks all your software every Monday, with one approval for all the tickets. I filled in what I could.`, card: (m) => watchCard(m) },
-    listed: { say: (a) => `${esc(a.name)} is already on the Software watchlist, so it’s checked every Monday for new ${shows('registries') ? 'versions and known vulnerabilities' : 'releases'}. There’s nothing to add.`, card: () => '<div class="btns"><button class="btn sm" data-act="go" data-arg="software">Open Software watchlist</button></div>' },
+    watch: { say: (a) => `${a.word ? `You mentioned “${esc(a.word)}”, so this` : `${esc(a.name)} is software, so it`} belongs on the Software watchlist, which checks all your software every Monday.${a.security ? (shows('registries') ? ' Known vulnerabilities are checked too.' : ' Known vulnerabilities aren’t checked yet, but new releases are.') : ''}`, card: (m) => watchCard(m) },
+    listed: { say: (a) => `${esc(a.name)} is already on the Software watchlist.`, card: () => '<div class="btns"><button class="btn sm" data-act="go" data-arg="software">Open it</button></div>' },
     which: { say: (a) => `You mentioned “${esc(a.word)}”, so this belongs on the Software watchlist. Which software should I watch?` },
     back: { say: () => 'No problem. Ask for something else whenever you like.' },
     part: { say: (a) => `I can ${a.can}, but ${a.cant}. ${a.cap === 'jiraComp' ? NEW_TOOL : CAPS[a.cap].why}`, card: (m) => partCard(m), mood: 'sorry' },
     cant: { say: cantSay, card: (m) => cantCard(m), mood: 'sorry' },
     down: { say: () => 'Jira isn’t answering right now, so I can’t check that. I’ll be able to once it’s back.', card: (m) => downCard(m), mood: 'sorry' },
-    refuse: { say: () => 'I can’t set that up. Anything that changes data waits for a yes in Teams, every time. That’s a platform rule, so no workflow can skip it.', card: (m) => refuseCard(m), mood: 'sorry' },
-    abilities: { say: (a) => (a.unknown ? 'I can’t help with that here. I set up tasks your team repeats, using Jira, GitHub and the Software watchlist. Here’s what I can do.' : 'Here’s what I can do today, and what I can’t do yet.'), card: () => abilitiesHTML(), mood: (a) => (a.unknown ? 'sorry' : 'idle') },
+    refuse: { say: () => 'I can’t set that up. Anything that changes data waits for a yes, every time.', card: (m) => refuseCard(m), mood: 'sorry' },
+    abilities: { say: (a) => (a.unknown ? 'I can’t help with that here. I set up tasks your team repeats. Here’s what I can do.' : 'Here’s what I can do today, and what I can’t do yet.'), card: () => abilitiesHTML(), mood: (a) => (a.unknown ? 'sorry' : 'idle') },
+    check: { say: checkSay, card: () => checkCard() },
+    why: { say: whySay, card: (m) => whyCard(m), mood: (a) => (stoppedNow(a.id) ? 'sorry' : 'idle') },
+    mine: { say: mineSay, card: () => mineCard() },
+    starts: { say: () => 'Here are three places to start. Pick one, or tell me something else.', card: () => startsCard() },
   };
   const cardHTML = (m) => (ANSWERS[m.card.kind].card ? ANSWERS[m.card.kind].card(m) : '');
 
@@ -2886,8 +2959,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const k = CANT[c.what];
     return `<div class="pcard" data-pres="cant:${m.id}">
       <div class="pcard-h"><h3>What I can do instead</h3><span class="schip cant">Can’t do this yet</span></div>
-      <div class="alt"><p>${esc(k.instead)}</p><button class="btn sm" data-act="instead" data-mid="${m.id}">Set that up</button></div>
-      <div class="alt"><p class="muted">Want ${c.what === 'tickets' ? 'it' : esc(c.sys)} anyway? The team decides on new systems and tools. You can follow the request on Tools.</p>${askTeam(m, c.sys)}</div>
+      <div class="alt"><p>${esc(k.instead)}</p><button class="btn primary sm" data-act="instead" data-mid="${m.id}">Set that up</button></div>
+      <div class="alt"><p class="muted">Want ${c.what === 'tickets' ? 'it' : esc(c.sys)} anyway? The team decides.</p>${askTeam(m, c.sys)}</div>
     </div>`;
   }
   /* Part I can do (spec 6.2): the nearest real alternative, and Ask the team for the rest. */
@@ -2896,8 +2969,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const sys = c.cap === 'jiraComp' ? `A new Jira tool: ${TOOLS.jiraComp[0]}` : CAPS[c.cap].name;
     return `<div class="pcard" data-pres="part:${m.id}">
       <div class="pcard-h"><h3>The part I can do</h3><span class="schip cant">${c.cap === 'jiraComp' ? 'Needs a new tool' : 'Can’t do all of it yet'}</span></div>
-      <div class="alt"><p>${esc(c.instead)}</p><button class="btn sm" data-act="instead" data-mid="${m.id}">Set up the part I can do</button></div>
-      <div class="alt"><p class="muted">Want the rest? The team decides. You can follow the request on Tools.</p>${askTeam(m, sys)}</div>
+      <div class="alt"><p>${esc(c.instead)}</p><button class="btn primary sm" data-act="instead" data-mid="${m.id}">Set up the part I can do</button></div>
+      <div class="alt"><p class="muted">Want the rest? The team decides.</p>${askTeam(m, sys)}</div>
     </div>`;
   }
   /* Jira isn't answering: the request is kept as a draft, so nothing is lost and nothing is claimed. */
@@ -2911,7 +2984,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function refuseCard(m) {
     return `<div class="pcard" data-pres="refuse:${m.id}">
       <div class="pcard-h"><h3>What I can do instead</h3><span class="schip cant">Not allowed</span></div>
-      <div class="alt"><p>The same workflow, with a yes in Teams before anything is created or changed.</p><button class="btn sm" data-act="instead" data-mid="${m.id}">Set that up</button></div>
+      <div class="alt"><p>The same workflow, with a yes in Teams before anything is created or changed.</p><button class="btn primary sm" data-act="instead" data-mid="${m.id}">Set it up with a yes</button></div>
     </div>`;
   }
 
