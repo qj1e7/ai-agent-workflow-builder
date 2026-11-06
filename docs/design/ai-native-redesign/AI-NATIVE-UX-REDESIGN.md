@@ -110,7 +110,7 @@ Taken from `agent-runtime/src/agent_runtime/tools.py` and `abilities.py` on 6 No
 From top to bottom:
 
 1. **Greeting and a one-line state.**
-   - "Good morning, Alice" when something needs her. The line under it is computed from `needs()` and the workflows, for example "2 things need you. Your other workflows are running."
+   - "Good morning! Alice", the greeting the built app uses since commit 8a2a549. The line under it is computed from `needs()` and the workflows, for example "2 things need you. Your other workflows are running."
    - When nothing needs her, the line says when the next run is.
 2. **The box.** One large text box, with the Visor bot beside it.
    - Placeholder: "What would you like to automate, check or fix?"
