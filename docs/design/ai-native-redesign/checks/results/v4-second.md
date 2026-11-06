@@ -2,7 +2,7 @@
 
 Prototype: `docs/design/ai-native-redesign/prototype.html`. Paths: `docs/design/ai-native-redesign/checks/paths-v4.cjs`.
 
-Real scenarios: 39 passed, 1 failed, 0 not possible. Control (must fail): failed, as it should.
+Real scenarios: 40 passed, 0 failed, 0 not possible. Control (must fail): failed, as it should.
 
 | Id | Width | Task | Passed | Clicks | Fields | Selects | Decisions | Screens | Notes |
 |---|---|---|---|---|---|---|---|---|---|
@@ -17,7 +17,7 @@ Real scenarios: 39 passed, 1 failed, 0 not possible. Control (must fail): failed
 | E | 1280 | The user corrects the Planner’s guess of project and schedule on the card, without starting again | yes | 3 | 1 | 2 | 2 | 1 |  |
 | F | 1280 | Recover the stop the user can fix, and report the platform bug to support | yes | 6 | 0 | 0 | 2 | 3 |  |
 | G | 1280 | Monitor Kubernetes releases from Home ends with Kubernetes on the Software watchlist | yes | 4 | 1 | 0 | 2 | 1 |  |
-| H | 1280 | Pause a workflow, change its schedule, and delete one with its confirmation | NO | 10 | 1 | 2 | 5 | 3 |  |
+| H | 1280 | Pause a workflow, change its schedule, and delete one with its confirmation | yes | 10 | 1 | 2 | 5 | 3 |  |
 | T1 | 1280 | Set up a workflow from example 1: example, time, Jira project, Turn it on | yes | 3 | 1 | 1 | 3 | 1 |  |
 | T2 | 1280 | Set up a typed workflow with every part stated: type, Enter, Turn it on | yes | 2 | 1 | 0 | 1 | 1 |  |
 | T3 | 1280 | Do a test run after turning one on | yes | 1 | 0 | 0 | 0 | 2 |  |

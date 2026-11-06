@@ -514,9 +514,38 @@ Everything in the prototype is simulated. Specifically:
 
 ## 20. How it was checked
 
-- The same harness ran scenarios A to H and the 15 tasks of version 3 on both versions, counting clicks, typed fields, choices and pages (`checks/`).
-- Checks for each of I1 to I9, keyboard reach, focus visibility, axe, phone width and reduced motion are in `checks/` too, with their results.
-- These are automated checks, not user research. A study with real CODESparks support staff should come next. It would measure:
+All results below are for commit 513b95a. Their files are in `checks/results/`. `USER-JOURNEY-COMPARISON.md` compares each scenario.
+
+- **Scenarios.** The same harness (`checks/run.cjs`) ran scenarios A to H and the 15 tasks of version 3 on both versions, counting clicks, typed fields, choices and pages.
+  - Version 3 passed 27 of 27. Removing a draft was not possible in version 3.
+  - Version 4 passed all 40 of its scenarios. These include 12 new ones: acting from Home, the Planner's status answers, no AI model, Jira down, Planned features shown, and scenarios A and C done by keyboard only.
+  - A second run gave identical counts for all 40.
+- **The judge's checks.** An independent judge wrote `checks/paths-v4.cjs` and `checks/validate-v4.cjs`, separate from the builders. `validate-v4.cjs` passed 31 of 31, and its seeded control failed as it should. The checks cover:
+  - counts that agree across Home, Workflows, the tab badge and the Planner;
+  - the set-up card agreeing with itself;
+  - roles and the two Approvers in turn;
+  - no approving in Teams;
+  - refusals;
+  - no Planned or Unsupported capability shown as working;
+  - alternatives that set up cleanly (15 offered across 18 requests);
+  - no long dashes;
+  - zero console errors.
+- **Planted defects.** The judge planted 14 defects, each in its own copy of the prototype. Its checks caught all 14, each with the expected message. Examples:
+  - an Approve button in Teams;
+  - self-approval;
+  - count drift;
+  - a retry that succeeds while Jira is down;
+  - three primary buttons on Home.
+- **The builders' gates.** `gates-p0.cjs` passed 36 checks, `gates-p1a.cjs` 58, `gates-p1b.cjs` 54 and `gates-p2.cjs` 63. Each gate's seeded controls still fail. The gates check I1 to I9 by name.
+- **Quality.** `checks/quality.cjs` checked 26 screens at 1280 and 390 px.
+  - axe found 0 critical and 0 serious problems. It found 12 moderate (heading order, regions) and 2 minor.
+  - Nothing scrolls sideways at 390 px.
+  - No animation runs under reduced motion.
+  - The keyboard reaches the Operator's box in 9 Tab presses and Bob's Review and decide in 8, with visible focus at every stop.
+- **Screenshots.** 32 before and 52 after, all shot by `checks/shots.cjs` at 1280 and 390 px (`screenshots/README.md`).
+- **The build target is untouched.** `git diff main -- docs/design/portal-routines` is empty.
+
+These are automated checks, not user research. A study with real CODESparks support staff should come next. It would measure:
   - task success;
   - time to finish;
   - errors;

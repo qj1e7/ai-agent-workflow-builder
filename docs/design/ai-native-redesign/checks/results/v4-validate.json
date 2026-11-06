@@ -13,8 +13,8 @@
     },
     {
       "name": "card-ticket-set-follows-schedule",
-      "status": "FAIL",
-      "detail": "after choosing “Tickets created this week” on a Friday card, then Every day: the card reads “tickets created this week”, not amber, Turn it on ready, and the choices offer closed@week, created@week, open"
+      "status": "PASS",
+      "detail": ""
     },
     {
       "name": "roles-bob-creates-nothing",
@@ -43,13 +43,13 @@
     },
     {
       "name": "safety-words",
-      "status": "FAIL",
-      "detail": "1 screens could not be reached: [planner confluence] page.waitForFunction: Timeout 20000ms exceeded."
+      "status": "PASS",
+      "detail": ""
     },
     {
       "name": "preview-tags-planned",
-      "status": "FAIL",
-      "detail": "1 planned parts without a Planned tag: [agent writer] access in button.linkbtn: “Quarterly access review”"
+      "status": "PASS",
+      "detail": ""
     },
     {
       "name": "refusals",
@@ -78,8 +78,8 @@
     },
     {
       "name": "offline-honest",
-      "status": "FAIL",
-      "detail": "with no AI model, Retry the run finished the Morning new-ticket check, an agent workflow: “The retry read Jira. No tickets were created in the last day, so there was nothing to write.”"
+      "status": "PASS",
+      "detail": ""
     },
     {
       "name": "morning-check-reads",
@@ -88,18 +88,18 @@
     },
     {
       "name": "alternatives-set-up-cleanly",
-      "status": "FAIL",
-      "detail": "“Every Friday, update the Confluence page with the closed tickets” got no answer: Maximum call stack size exceeded || “Every Monday, update the wiki page with the open tickets” got no answer: Maximum call stack size exceeded"
+      "status": "PASS",
+      "detail": ""
     },
     {
       "name": "cant-claims-honest",
-      "status": "FAIL",
-      "detail": "“email me a list of open bugs every Monday”: the Planner says “I can make that list”, but “Every Monday, list the open bugs” gets “I can find tickets by when they were created or closed, but I can’t tell a ticket’s type y” || “Every Friday, sum up the open bugs and email me”: the Planner says “I can write that summary”, but “Every Friday, sum up the open bugs” gets “I can find tickets by when they were created or closed, but I can’t tell a ticket’s type y”"
+      "status": "PASS",
+      "detail": ""
     },
     {
       "name": "no-silent-drop",
-      "status": "FAIL",
-      "detail": "a request for the Platform component gets a plain set-up card that never mentions the component; its parts read “tickets closed this week | a Jira project | sum them up”"
+      "status": "PASS",
+      "detail": ""
     },
     {
       "name": "home-one-primary",
@@ -113,8 +113,8 @@
     },
     {
       "name": "planned-hidden-by-default",
-      "status": "FAIL",
-      "detail": "by default, the Agents tab says agents can be changed: “Open an agent to see how it works and to change it in plain English” || the coding-agent stage “Fix ready, waiting for the support developer” has no Planned tag"
+      "status": "PASS",
+      "detail": ""
     },
     {
       "name": "i6-new-agent-drafted",
@@ -158,11 +158,9 @@
     },
     {
       "name": "no-console-errors",
-      "status": "FAIL",
-      "detail": "1 page or console errors: pageerror Maximum call stack size exceeded"
+      "status": "PASS",
+      "detail": ""
     }
   ],
-  "consoleErrors": [
-    "pageerror Maximum call stack size exceeded"
-  ]
+  "consoleErrors": []
 }
