@@ -1070,6 +1070,48 @@
         "title": "AgentStepStartedEvent",
         "type": "object"
       },
+      "Answers": {
+        "additionalProperties": false,
+        "properties": {
+          "can_fix": {
+            "title": "Can Fix",
+            "type": "string"
+          },
+          "next": {
+            "enum": [
+              "retry",
+              "report"
+            ],
+            "title": "Next",
+            "type": "string"
+          },
+          "retry": {
+            "$ref": "#/components/schemas/RetryAnswer"
+          },
+          "what_affected": {
+            "title": "What Affected",
+            "type": "string"
+          },
+          "what_happened": {
+            "title": "What Happened",
+            "type": "string"
+          },
+          "written": {
+            "title": "Written",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "what_happened",
+          "what_affected",
+          "can_fix",
+          "written",
+          "retry",
+          "next"
+        ],
+        "title": "Answers",
+        "type": "object"
+      },
       "ApprovalAnnounceFailed": {
         "additionalProperties": false,
         "properties": {
@@ -4676,6 +4718,25 @@
         "title": "RetryAccepted",
         "type": "object"
       },
+      "RetryAnswer": {
+        "additionalProperties": false,
+        "properties": {
+          "asks_again": {
+            "title": "Asks Again",
+            "type": "boolean"
+          },
+          "possible": {
+            "title": "Possible",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "possible",
+          "asks_again"
+        ],
+        "title": "RetryAnswer",
+        "type": "object"
+      },
       "RetryLater": {
         "additionalProperties": false,
         "properties": {
@@ -6377,6 +6438,9 @@
           "advice": {
             "$ref": "#/components/schemas/Advice"
           },
+          "answers": {
+            "$ref": "#/components/schemas/Answers"
+          },
           "failure": {
             "$ref": "#/components/schemas/RunFailedData"
           },
@@ -6388,7 +6452,8 @@
         "required": [
           "run_id",
           "failure",
-          "advice"
+          "advice",
+          "answers"
         ],
         "title": "TroubleshootingOut",
         "type": "object"

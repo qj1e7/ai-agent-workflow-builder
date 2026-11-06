@@ -11,5 +11,16 @@
     "likely_cause": "A service the agent reads from, such as GitHub, was unavailable or answered with an error.",
     "suggested_action": "retry",
     "suggestion": "Retry the run. If it fails again, check whether that service is up."
+  },
+  "answers": {
+    "what_happened": "An agent could not finish its work.",
+    "what_affected": "Nothing was written.",
+    "can_fix": "Yes. A retry runs the work again, and any write still waits for a yes.",
+    "written": 0,
+    "retry": {
+      "possible": true,
+      "asks_again": true
+    },
+    "next": "retry"
   }
 }

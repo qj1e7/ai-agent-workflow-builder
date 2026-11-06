@@ -1,7 +1,7 @@
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Literal
 
-from platform_api.monitoring.events import RunFailedData
+from platform_api.monitoring.events import ActivityEvent, RunFailedData, WriteActionDone
 from platform_api.wire import FailureReason, WireModel
 
 type SuggestedAction = Literal[
@@ -108,3 +108,55 @@ def explain_failure(failure: RunFailedData) -> Advice:
     if failure.reason == "WriteFailed" and not failure.retryable:
         return WRITE_REFUSED
     return ADVICE[failure.reason]
+
+
+class RetryAnswer(WireModel):
+    possible: bool
+    asks_again: bool
+    """True when a retry runs the work again, so any write waits for a new yes. False when
+    it carries on from the approved write."""
+
+
+class Answers(WireModel):
+    what_happened: str
+    what_affected: str
+    can_fix: str
+    written: int
+    retry: RetryAnswer
+    next: Literal["retry", "report"]
+
+
+def _affected(written: int) -> str:
+    if written == 0:
+        return "Nothing was written."
+    if written == 1:
+        return "1 write was done before the stop."
+    return f"{written} writes were done before the stop."
+
+
+def _can_fix(retry: RetryAnswer) -> str:
+    if not retry.possible:
+        return "Not by retrying. A retry would stop in the same place."
+    if retry.asks_again:
+        return "Yes. A retry runs the work again, and any write still waits for a yes."
+    return (
+        "Yes. A retry carries on from the write that was already approved, so nobody has to "
+        "approve again. It checks the approval before it writes, and it finds a ticket an "
+        "earlier try made instead of making a second one."
+    )
+
+
+def answers(events: Sequence[ActivityEvent], failure: RunFailedData) -> Answers:
+    written = sum(isinstance(event, WriteActionDone) for event in events)
+    retry = RetryAnswer(
+        possible=failure.retryable,
+        asks_again=failure.retryable and failure.stage != "acting",
+    )
+    return Answers(
+        what_happened=explain_failure(failure).explanation,
+        what_affected=_affected(written),
+        can_fix=_can_fix(retry),
+        written=written,
+        retry=retry,
+        next="retry" if retry.possible else "report",
+    )

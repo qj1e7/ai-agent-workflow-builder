@@ -23,6 +23,7 @@ from platform_api.monitoring import (
 )
 from platform_api.settings import Settings
 from platform_api.shared import RunId, TaskId, UserId
+from platform_api.wire import FailureReason, FailureStage
 from tests.conftest import PostgresUrls
 from tests.support import FIXTURES, LOCAL_ENV
 
@@ -314,3 +315,66 @@ async def test_troubleshoot_tells_a_refused_agent_apart_from_an_outage(
     assert r.status_code == 200
     assert r.json()["advice"]["suggested_action"] == "ask_maintainer"
     assert r.json()["failure"]["retryable"] is False
+
+
+def failed_at(stage: FailureStage, reason: FailureReason, retryable: bool) -> PendingEvent:
+    return PendingEvent(
+        PLATFORM,
+        "run_failed",
+        "The run failed.",
+        RunFailedData(stage=stage, reason=reason, retryable=retryable, message="m"),
+    )
+
+
+async def test_troubleshoot_answers_the_four_questions_for_a_failed_work_leg(
+    client: httpx.AsyncClient, app: FastAPI
+):
+    await append(app, RUN, failed_at("working", "AgentError", True))
+    r = await client.get(f"/api/v1/runs/{RUN}/troubleshoot", headers=ALICE)
+    assert r.status_code == 200
+    answers = r.json()["answers"]
+    assert answers["what_happened"] == r.json()["advice"]["explanation"]
+    assert answers["written"] == 0
+    assert answers["retry"] == {"possible": True, "asks_again": True}
+    assert answers["next"] == "retry"
+
+
+async def test_troubleshoot_says_a_failed_write_retries_without_a_new_yes(
+    client: httpx.AsyncClient, app: FastAPI
+):
+    await append(app, RUN, failed_at("acting", "WriteFailed", True))
+    answers = (await client.get(f"/api/v1/runs/{RUN}/troubleshoot", headers=ALICE)).json()[
+        "answers"
+    ]
+    assert answers["retry"] == {"possible": True, "asks_again": False}
+
+
+async def test_troubleshoot_sends_a_refused_write_to_support(
+    client: httpx.AsyncClient, app: FastAPI
+):
+    await append(app, RUN, failed_at("acting", "WriteFailed", False))
+    answers = (await client.get(f"/api/v1/runs/{RUN}/troubleshoot", headers=ALICE)).json()[
+        "answers"
+    ]
+    assert answers["retry"] == {"possible": False, "asks_again": False}
+    assert answers["next"] == "report"
+
+
+async def test_troubleshoot_counts_the_writes_done_before_the_stop(
+    client: httpx.AsyncClient, app: FastAPI
+):
+    story = activity_events_adapter.validate_python(
+        json.loads((FIXTURES / "runs" / "success.json").read_text())
+    )
+    run_id = story[0].run_id
+    done = [e for e in story if e.kind == "write_action_done"]
+    await append(
+        app,
+        run_id,
+        *(PendingEvent(e.actor, e.kind, e.summary, e.data, ts=e.ts) for e in story[:-1]),
+        failed_at("acting", "WriteFailed", True),
+    )
+    answers = (await client.get(f"/api/v1/runs/{run_id}/troubleshoot", headers=ALICE)).json()[
+        "answers"
+    ]
+    assert answers["written"] == len(done) >= 1

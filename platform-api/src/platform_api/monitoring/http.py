@@ -12,7 +12,7 @@ from platform_api.monitoring.agent_events import AgentEventPost
 from platform_api.monitoring.callbacks import verify_callback
 from platform_api.monitoring.events import ActivityEvent, RunFailed, RunFailedData, RunRetried
 from platform_api.monitoring.log import ActivityLog
-from platform_api.monitoring.troubleshooter import Advice, explain_failure
+from platform_api.monitoring.troubleshooter import Advice, Answers, answers, explain_failure
 from platform_api.settings import Settings
 from platform_api.shared import RunId, TaskId
 from platform_api.wire import WireModel, error_response
@@ -29,6 +29,7 @@ class TroubleshootingOut(WireModel):
     run_id: RunId
     failure: RunFailedData
     advice: Advice
+    answers: Answers
 
 
 def _activity_log(request: Request) -> ActivityLog:
@@ -168,7 +169,10 @@ async def troubleshoot(run_id: RunId, principal: CurrentPrincipal, log: Log) -> 
     if failure is None:
         raise HTTPException(status_code=409, detail="The run has not failed")
     return TroubleshootingOut(
-        run_id=run_id, failure=failure.data, advice=explain_failure(failure.data)
+        run_id=run_id,
+        failure=failure.data,
+        advice=explain_failure(failure.data),
+        answers=answers(events, failure.data),
     )
 
 
