@@ -45,6 +45,10 @@ _Avoid_: Wizard, form, New workflow (the old 4-step page)
 Something the platform can do for a workflow, such as reading Jira tickets. It is in exactly one state: Ready, Needs setup, Not answering, Planned or Unsupported. Every screen and the Planner read the same state.
 _Avoid_: Ability, feature (in the app)
 
+**Team request**:
+A request someone saves for the team when the platform can't help: Ask the team, for something the Planner can't do, or Report to support, for a platform problem. The platform keeps it, everyone on the team can read and answer it, and the person sees replies under Following up (ADR 0038).
+_Avoid_: Ticket (that is Jira), support email
+
 **Draft**:
 A set-up card that an Operator started and has not turned on, kept so they can come back to it. Only they see it, listed on Workflows. Always write "n8n draft" for an n8n workflow that is not published yet.
 _Avoid_: Proposal (that is a run's write actions)
