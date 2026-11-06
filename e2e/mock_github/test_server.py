@@ -29,12 +29,20 @@ def running() -> Generator[str]:
 
 
 def call(base: str, path: str, body: dict[str, Any] | None = None) -> tuple[int, Any]:
+    status, _, parsed = call_with(base, path, body)
+    return status, parsed
+
+
+def call_with(
+    base: str, path: str, body: dict[str, Any] | None = None, token: str | None = None
+) -> tuple[int, dict[str, str], Any]:
     connection = http.client.HTTPConnection(base.removeprefix("http://"), timeout=5)
     try:
         payload = None if body is None else json.dumps(body)
-        connection.request("GET" if body is None else "POST", path, body=payload)
+        headers = {} if token is None else {"Authorization": f"Bearer {token}"}
+        connection.request("GET" if body is None else "POST", path, body=payload, headers=headers)
         response = connection.getresponse()
-        return response.status, json.loads(response.read())
+        return response.status, dict(response.getheaders()), json.loads(response.read())
     finally:
         connection.close()
 
@@ -66,6 +74,41 @@ class MockGithubTest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual([r["tag_name"] for r in releases], ["2.0.0"])
         self.assertIn("Jira project SECRET", releases[0]["body"])
+
+    def test_the_rate_limit_answers_without_a_token_with_the_anonymous_limit(self) -> None:
+        with running() as base:
+            status, headers, body = call_with(base, "/rate_limit")
+        self.assertEqual(status, 200)
+        self.assertEqual(body["rate"]["limit"], 60)
+        self.assertNotIn(server.EXPIRY_HEADER, {name.lower() for name in headers})
+
+    def test_the_rate_limit_accepts_a_good_token(self) -> None:
+        with running() as base:
+            status, headers, body = call_with(base, "/rate_limit", token=server.GOOD_TOKEN)
+        self.assertEqual(status, 200)
+        self.assertEqual(body["rate"]["limit"], 5000)
+        self.assertNotIn(server.EXPIRY_HEADER, {name.lower() for name in headers})
+
+    def test_the_rate_limit_names_when_an_expiring_token_runs_out(self) -> None:
+        with running() as base:
+            status, headers, _ = call_with(base, "/rate_limit", token=server.EXPIRING_TOKEN)
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            {name.lower(): value for name, value in headers.items()}[server.EXPIRY_HEADER],
+            server.TOKEN_EXPIRES,
+        )
+
+    def test_the_rate_limit_refuses_a_token_it_does_not_know(self) -> None:
+        with running() as base:
+            status, _, body = call_with(base, "/rate_limit", token="ghp_something_else")
+        self.assertEqual(status, 401)
+        self.assertEqual(body, {"message": "Bad credentials"})
+
+    def test_the_rate_limit_follows_the_unavailable_mode(self) -> None:
+        with running() as base:
+            call(base, "/_admin/mode", {"mode": "unavailable"})
+            status, _, _ = call_with(base, "/rate_limit", token=server.GOOD_TOKEN)
+        self.assertEqual(status, 503)
 
     def test_pagination(self) -> None:
         with running() as base:

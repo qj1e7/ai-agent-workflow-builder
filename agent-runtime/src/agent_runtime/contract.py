@@ -427,6 +427,32 @@ class ModelTestPassed(WireModel):
 type ModelTestResult = Annotated[ModelTestPassed | ModelProblem, Field(discriminator="status")]
 
 
+class GitHubWorking(WireModel):
+    status: Literal["working"] = "working"
+    using_token: bool = Field(
+        description="False when no token is set and GitHub is read anonymously, 60 calls an hour."
+    )
+    expires_at: datetime | None = Field(
+        default=None,
+        description="When GitHub says the token stops working. Null for a token with no end "
+        "date and when no token is set.",
+    )
+
+
+type GitHubProblemReason = Literal["token_refused", "unreachable", "unexpected_answer"]
+
+
+class GitHubProblem(WireModel):
+    status: Literal["problem"] = "problem"
+    reason: GitHubProblemReason
+    message: str = Field(
+        description="Plain words for an Operator. Never the token or GitHub's own error text."
+    )
+
+
+type GitHubCheckResult = Annotated[GitHubWorking | GitHubProblem, Field(discriminator="status")]
+
+
 class ToolSpec(WireModel):
     id: ToolId
     kind: ToolKind
@@ -625,6 +651,7 @@ class AgentApiSchema(WireModel):
     model_connect_result: ConnectResult
     model_test_request: ModelAccess
     model_test_result: ModelTestResult
+    github_check_result: GitHubCheckResult
     tool_list: ToolList
     card_draft_request: DraftRequest
     card_draft_result: DraftResult

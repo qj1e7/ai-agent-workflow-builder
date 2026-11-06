@@ -1,0 +1,5 @@
+{
+  "status": "problem",
+  "reason": "token_refused",
+  "message": "GitHub does not accept the token. Ask whoever set it up for a new one."
+}
