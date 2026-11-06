@@ -479,9 +479,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .banner.off { background: var(--sunk); }
 @media (max-width: 600px) { .banner { grid-template-columns: 20px minmax(0, 1fr); } .banner > .btns { grid-column: 2; } }
 .factrows { display: grid; background: var(--surface); border: 1px solid var(--hair); border-radius: var(--r-card); }
-.factrows > div { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 14px 20px; }
+.factrows > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px; align-items: center; padding: 14px 20px; }
 .factrows > div + div { border-top: 1px solid var(--rule); }
-.factrows > div > div { flex: 1 1 260px; min-width: 0; }
+.factrows > div > dt, .factrows > div > dd { grid-column: 1; min-width: 0; }
+.factrows > div > dd.act { grid-column: 2; grid-row: 1 / span 2; margin: 0; }
 .factrows dt { font-size: 0.875rem; font-weight: 600; color: var(--muted); }
 .factrows dd { font-weight: 600; margin-top: 2px; }
 .factrows dd small { display: block; font-weight: 400; font-size: 0.875rem; color: var(--muted); margin-top: 4px; }
@@ -1553,7 +1554,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const parts = a.steps.map((s) => `If ${nm(s.first)} hasn’t answered after ${afterWord(a.after)}, ${hasBackup(s) ? `${nm(s.backup)} is asked too` : `${nm(s.first)} gets a reminder`}.`);
     return `${parts.join(' ')} If nobody says yes ${stopWords(a, sched)}, it stops and nothing changes.`;
   }
-  const whoOr = (ids) => ids.map(nm).join(' or ');
+  const whoOr = (ids) => { const n = ids.map(nm); return n.length < 2 ? n.join('') : `${n.slice(0, -1).join(', ')} or ${n[n.length - 1]}`; };
   const whoAnd = (ids) => ids.map(nm).join(' and ');
   function apprProblems(a) {
     const e = {};
@@ -2013,7 +2014,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
     else t = `${F} has been asked in Teams${role ? `, as ${role}` : ''}.${B && q.backupInTime ? ` If ${F} hasn’t answered by ${at(q.backupAt)}, ${B} is asked too.` : ''}`;
     return `${t} ${stopText(q)}`;
   }
-  const askLineHtml = (q, viewer) => `<p class="askline">${I.clock(16)}<span>${askLine(q, viewer)}</span></p>`;
+  /* Named Approvers, backups and stop times are ADR 0024, so a line that names them carries the Planned tag. */
+  const namedTag = (q) => (q.team ? '' : ` ${PLANNED_TAG}`);
+  const askLineHtml = (q, viewer) => `<p class="askline">${I.clock(16)}<span>${askLine(q, viewer)}${namedTag(q)}</span></p>`;
 
   /* What the approval gate says in the run's feed while it waits. */
   function gateText(q, starter) {
@@ -2025,7 +2028,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const asked = q.escalated
       ? (B ? `Asked ${whom} in Teams. No answer by ${at(q.backupAt)}, so ${B}, the backup, was asked too.` : `Asked ${whom} in Teams, and sent a reminder ${on(q.backupAt)}.`)
       : `Asked ${whom} in Teams.${B && q.backupInTime ? ` If there’s no answer by ${at(q.backupAt)}, ${B}, the backup, is asked too.` : ''}`;
-    return `${said}${asked} ${starter}`;
+    return `${said}${asked} ${starter}${namedTag(q)}`;
   }
 
   /* ---------- Runs: the live activity view ---------- */
@@ -2056,13 +2059,13 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const by = starterOf('sw');
       const stations = [
         { label: 'Started', sub: 'Mon 9:00', who: `p:${by}`, msg: { who: 'portal', text: `${nm(by)}’s schedule started the Monday check.` } },
-        { label: 'Pick agents', who: 'lead', msg: { who: 'lead', text: `14 tools to check. I’m bringing in the Version checker${full ? ', the Vulnerability checker' : ''} and the Ticket writer.` } },
-        { label: `Read ${TRACKED.length - UNREADABLE.length} of ${TRACKED.length}`, who: 'checker', msg: { who: 'checker', text: full ? 'I read each tool’s registry (Maven Central, PyPI, Docker Hub) and cross-checked GitHub. Log4j core, LangGraph and FastAPI have newer versions. For FastAPI, GitHub shows 0.120.2, but it isn’t on PyPI yet, so I used 0.120.1. Grafana couldn’t be read: Docker Hub and GitHub didn’t answer. From endoflife.date: PostgreSQL 14 stops getting fixes on 12 Nov, and Node.js 22 on 30 Apr.' : 'I read each tool’s releases on GitHub. Log4j core, LangGraph and FastAPI have newer versions. Grafana couldn’t be read: GitHub’s hourly limit was reached.' } },
-        ...(full ? [{ label: 'Check vulnerabilities', who: 'vuln', msg: { who: 'vuln', text: 'I matched the versions we run in OSV, read the official records from NVD, checked vendor advisories, and checked CISA’s list of actively exploited vulnerabilities. Log4j core 2.14.1 has 4 known vulnerabilities, found in OSV, NVD and Apache’s own advisory. The worst, CVE-2021-44228 (Log4Shell), is rated critical, 10.0, and CISA lists it as actively exploited. None are listed for the other tools.' } }] : []),
-        { label: 'Draft tickets', who: 'writer', msg: { who: 'writer', text: `I drafted 3 upgrade tickets.${full ? ' The Log4j core one is marked urgent.' : ''} Nothing is in Jira yet.` } },
+        { label: 'Pick agents', who: 'lead', msg: { who: 'lead', text: `14 tools to check. I’m bringing in the Version checker${full ? ', the Vulnerability checker' : ''} and the Ticket writer.${full ? ` ${PLANNED_TAG}` : ''}` } },
+        { label: `Read ${TRACKED.length - UNREADABLE.length} of ${TRACKED.length}`, who: 'checker', msg: { who: 'checker', text: full ? 'I read each tool’s registry (Maven Central, PyPI, Docker Hub) and cross-checked GitHub. Log4j core, LangGraph and FastAPI have newer versions. For FastAPI, GitHub shows 0.120.2, but it isn’t on PyPI yet, so I used 0.120.1. Grafana couldn’t be read: Docker Hub and GitHub didn’t answer. From endoflife.date: PostgreSQL 14 stops getting fixes on 12 Nov, and Node.js 22 on 30 Apr. ' + PLANNED_TAG : 'I read each tool’s releases on GitHub. Log4j core, LangGraph and FastAPI have newer versions. Grafana couldn’t be read: GitHub’s hourly limit was reached.' } },
+        ...(full ? [{ label: `Check vulnerabilities ${PLANNED_TAG}`, who: 'vuln', msg: { who: 'vuln', text: 'I matched the versions we run in OSV, read the official records from NVD, checked vendor advisories, and checked CISA’s list of actively exploited vulnerabilities. Log4j core 2.14.1 has 4 known vulnerabilities, found in OSV, NVD and Apache’s own advisory. The worst, CVE-2021-44228 (Log4Shell), is rated critical, 10.0, and CISA lists it as actively exploited. None are listed for the other tools. ' + PLANNED_TAG } }] : []),
+        { label: 'Draft tickets', who: 'writer', msg: { who: 'writer', text: `I drafted 3 upgrade tickets.${full ? ' The Log4j core one is marked urgent.' : ''} Nothing is in Jira yet.${full ? ` ${PLANNED_TAG}` : ''}` } },
         { label: 'Approval gate', gate: true, msg: gate },
         { label: 'Create in Jira', who: 'platform', skip: st === 'declined', msg: { who: 'platform', text: 'Created MOCK-14, MOCK-15 and MOCK-16. Only the approved tickets were written.' } },
-        { label: 'Done', msg: { who: 'portal', tone: 'ok', text: st === 'declined' ? 'Done. The tickets will be proposed again next Monday.' : `Done. 3 upgrade tickets are in Jira${urgentNote()}.` } },
+        { label: 'Done', msg: { who: 'portal', tone: 'ok', text: st === 'declined' ? 'Done. The tickets will be proposed again next Monday.' : `Done. 3 upgrade tickets are in Jira${urgentNote()}.${full ? ` ${PLANNED_TAG}` : ''}` } },
       ];
       const gi = stations.findIndex((s) => s.gate);
       return {
@@ -2143,9 +2146,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
         { label: 'Started', sub: S.accessRun.sub, who: `p:${by}`, msg: { who: 'portal', text: `${nm(by)} started the review by hand.` } },
         { label: 'Pick agents', who: 'lead', msg: { who: 'lead', text: '48 people to review. I’m bringing in the Access checker and the Ticket writer.' } },
         { label: 'List who has access', who: 'access', msg: { who: 'access', text: 'I listed 48 people with access to Entra ID, the admin tools or GitLab, and the manager of each.' } },
-        { label: 'Draft the questions', who: 'writer', msg: { who: 'writer', text: 'I drafted a Teams message to each of 6 managers, asking them to confirm their people. Nothing is sent yet.' } },
+        { label: 'Draft the questions', who: 'writer', msg: { who: 'writer', text: 'I drafted a question for each of 6 managers, asking them to confirm their people. Nothing is asked yet.' } },
         { label: 'Approval gate', gate: true, msg: { who: 'gate', tone: 'ok', text: 'Bob, then Alice, approved sending the questions.' } },
-        { label: 'Ask the managers', who: 'platform', msg: { who: 'platform', text: 'Sent to 6 managers in Teams. By Fri 23 Oct, 45 people were confirmed. 3 weren’t confirmed by anyone.' } },
+        { label: 'Ask the managers', who: 'platform', msg: { who: 'platform', text: 'Asked 6 managers in Teams. By Fri 23 Oct, 45 people were confirmed. 3 weren’t confirmed by anyone.' } },
         { label: 'Draft the removals', who: 'writer', msg: { who: 'writer', text: 'I drafted the removal of access for the 3 people nobody confirmed. Nothing is removed yet.' } },
         { label: 'Approval gate', gate: true, msg: gate },
         { label: 'Remove access', who: 'platform', skip: st === 'declined', msg: { who: 'platform', text: 'Removed access for 3 people. Only the approved removals were made.' } },
@@ -2332,7 +2335,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const NEED_RANK = { bad: 0, wait: 2, ok: 2, tool: 4 };
   /* What each waiting request asks of the reader, in Needs you. The ask line and the button are added by needs(). */
   const NEED_CARD = {
-    sw: () => ({ rank: urgentNote() ? 1 : 2, title: `3 upgrade tickets are waiting for your yes${urgentNote()}`, meta: 'Keep our software up to date · Software watchlist, Mon 26 Oct, 9:00', body: `<ul class="mini-list"><li>${shows('registries') ? '<b>Log4j core 2.14.1 → 2.25.2, urgent: critical and actively exploited</b>' : 'Log4j core 2.14.1 → 2.25.2'}</li><li>LangGraph 1.2.14 → 1.2.17</li><li>FastAPI 0.118.0 → 0.120.1</li></ul>` }),
+    sw: () => ({ rank: urgentNote() ? 1 : 2, title: `3 upgrade tickets are waiting for your yes${urgentNote()}`, meta: 'Keep our software up to date · Software watchlist, Mon 26 Oct, 9:00', body: `<ul class="mini-list"><li>${shows('registries') ? `<b>Log4j core 2.14.1 → 2.25.2, urgent: critical and actively exploited</b> ${PLANNED_TAG}` : 'Log4j core 2.14.1 → 2.25.2'}</li><li>LangGraph 1.2.14 → 1.2.17</li><li>FastAPI 0.118.0 → 0.120.1</li></ul>` }),
     nudge: () => ({ title: '1 summary ticket is waiting for your yes', meta: 'Weekly closed-ticket summary · retried today after the fix' }),
     conf: () => ({ title: confWrite(S.nr).needTitle, meta: `${esc(S.nr.name)} · test run by ${nm(starterOf('conf'))}` }),
     access: () => ({ title: `3 people would lose access. Your yes is ${req('access').step === 0 ? 'the first of two' : 'the second of two'}`, meta: `Quarterly access review · started by ${nm(starterOf('access'))}, ${S.accessRun.sub}`, body: `<ul class="mini-list">${ACCESS_REMOVALS.map((x) => `<li>${x}</li>`).join('')}</ul>${PLANNED_TAG}` }),
@@ -2655,7 +2658,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const waiting = has('sw') && S.sw === 'waiting';
     const moved = lsProblem();
     const attn = [];
-    if (waiting) attn.push(`<div class="apprbar">${I.shield(20)}<div><b>This week’s check wants to raise 3 upgrade tickets${urgentNote(', 1 of them urgent')}.</b><span>Started by ${nm(starterOf('sw'))}’s schedule, Mon 26 Oct, 9:00. ${askLine(req('sw'), S.user)}</span></div>${canApprove('sw') ? '<button class="btn primary sm" data-act="run" data-arg="sw">Review and decide</button>' : `<span class="note">Waiting for ${whoOr(req('sw').may)}</span>`}</div>`);
+    if (waiting) attn.push(`<div class="apprbar">${I.shield(20)}<div><b>This week’s check wants to raise 3 upgrade tickets${urgentNote(', 1 of them urgent')}.</b><span>Started by ${nm(starterOf('sw'))}’s schedule, Mon 26 Oct, 9:00. ${askLine(req('sw'), S.user)}${namedTag(req('sw'))}</span></div>${canApprove('sw') ? '<button class="btn primary sm" data-act="run" data-arg="sw">Review and decide</button>' : `<span class="note">Waiting for ${whoOr(req('sw').may)}</span>`}</div>`);
     if (moved) attn.push(`<div class="attn" id="attn-ls">${face('trouble', 40)}<div><b>${moved.title}</b><span>${moved.body.replace(/<[^>]+>/g, '')}</span></div>${op ? firstButton(moved.actions).replace('class="btn sm"', 'class="btn primary sm"') : '<span class="note">An Operator can fix this.</span>'}</div>`);
     const findings = full && rows.some((x) => x.key === 'lj') ? `<h3 class="attn-h">Security risks ${PLANNED_TAG}</h3>${riskCard('lj', waiting ? '<span class="pill wait">Ticket waiting for a yes</span>' : S.sw === 'approved' ? ticketBtn('MOCK-16') : '<span class="pill off">Proposed again next Monday</span>')}` : '';
     const ending = full && !day1 ? SUPPORT_ENDING.filter((x) => hit(x.name, '')) : [];
@@ -2736,7 +2739,6 @@ details > .m-close { animation: fold 140ms ease-in both; }
     return `<div class="menuwrap" data-unbuilt="More actions menu (the built page has the actions as buttons)"><button class="btn sm" data-act="menu" data-arg="${id}" aria-haspopup="menu" aria-expanded="${open}" aria-controls="menu-${id}">More actions${I.down(14)}</button>
       ${open ? `<div class="menu" id="menu-${id}" role="menu" aria-label="More actions">
         ${hasRun(id) ? item('runNow', 'Run now') : ''}
-        ${S.paused[id] ? item('resume', 'Resume') : item('pause', 'Pause')}
         ${BASE[id] && BASE[id].fixedSchedule ? '' : item('editSched', 'Change schedule')}
         ${shows('n8n') ? item('n8nAsk', `Open in n8n${I.ext(14)} ${PLANNED_TAG}`, ' data-unbuilt="Open in n8n (ADR 0026, 0027)"') : ''}
         <hr role="separator">
@@ -2767,13 +2769,13 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const history = (S.n8nLog[id] || []).map((e) => `<li><b>${e.when}</b><span>${e.text}</span></li>`);
     if (S.sched[id]) history.unshift(`<li><b>Today</b><span>Schedule changed to ${r.when}.</span></li>`);
     return `<button class="back" data-act="go" data-arg="workflows">${I.left(16)}Workflows</button>
-      <div class="pagehead"><div><div style="margin-bottom:8px">${pills(id)}${BASE[id] && BASE[id].planned ? ` ${PLANNED_TAG}` : ''}</div><h1 tabindex="-1">${esc(r.name)}</h1><p>${r.what}</p></div>${me().op && id !== 'sw' ? moreMenu(id) : ''}</div>
+      <div class="pagehead"><div><div style="margin-bottom:8px">${pills(id)}${BASE[id] && BASE[id].planned ? ` ${PLANNED_TAG}` : ''}</div><h1 tabindex="-1">${esc(r.name)}</h1><p>${r.what}</p></div>${me().op && id !== 'sw' ? `<div class="btns">${S.paused[id] ? `<button class="btn sm" data-act="resume" data-arg="${id}">${I.play(14)}Resume</button>` : `<button class="btn sm" data-act="pause" data-arg="${id}">${I.pause(14)}Pause</button>`}${moreMenu(id)}</div>` : ''}</div>
       <div data-unbuilt="Status banner">${banner(id)}</div>
       ${n8nWarn(id)}
       ${id === 'nudge' && S.report > 0 && S.nudge === 'failed' ? `<div class="panel" style="margin-top:16px" data-unbuilt="Support cases"><h2>Support case</h2>${caseBox()}${reportTrack(true)}</div>` : ''}
       <dl class="factrows" style="margin-top:16px">
-        <div><div><dt>Schedule</dt><dd>${r.when}, Singapore time${S.paused[id] ? '' : `<small>Next run ${r.next}</small>`}</dd></div>${canSched ? `<button class="btn sm" data-act="editSched" data-arg="${id}">${I.edit()}Change<span class="vh"> schedule</span></button>` : ''}</div>
-        <div><div><dt>Approval</dt><dd>${approval}<small>${timingText(named, r.sched)}</small></dd></div>${changeApproversBtn(id, 'editAppr', 'btn sm')}</div>
+        <div><dt>Schedule</dt><dd>${r.when}, Singapore time${S.paused[id] ? '' : `<small>Next run ${r.next}</small>`}</dd>${canSched ? `<dd class="act"><button class="btn sm" data-act="editSched" data-arg="${id}">${I.edit()}Change<span class="vh"> schedule</span></button></dd>` : ''}</div>
+        <div><dt>Approval</dt><dd>${approval}<small>${timingText(named, r.sched)}</small></dd>${changeApproversBtn(id, 'editAppr', 'btn sm') ? `<dd class="act">${changeApproversBtn(id, 'editAppr', 'btn sm')}</dd>` : ''}</div>
       </dl>
       ${S.editing === id ? `<div data-flip="ed:s:${id}" data-enter="reveal">${schedEditor(id)}</div>` : ''}
       ${S.editingAppr === id ? `<div data-flip="ed:a:${id}" data-enter="reveal" data-unbuilt="Named Approvers (ADR 0024)">${apprEditor(id)}</div>` : ''}
@@ -2858,7 +2860,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (g.who === 'portal' || g.who === 'platform') return `<li class="chat-marker ${cls}"><span>${g.text}</span></li>`;
     if (g.who === 'gate') return `<li class="chat-marker gate-said ${cls}" data-gate="1" tabindex="-1"><span>${I.shield(14)}${g.text}</span></li>`;
     const joined = g.who === 'lead' ? R(m.workflow).agents.filter((a) => a !== 'lead') : [];
-    return `<li class="cmsg ${cls}"><span class="cmsg-av">${face(g.who, 40, g.tone === 'bad' ? 'error' : 'idle', { k: `chat:${keyOf(g.text)}` })}</span><div class="cmsg-body"><span class="cmsg-who" style="color:${feedHue(g.who)}">${feedName(g.who)}</span><div class="cmsg-bubble">${g.text}</div></div></li>${joined.length ? `<li class="chat-marker${isNew ? ' in' : ''}"><span>${faces(joined, 22)}${andList(joined.map((a) => AGENTS[a].name))} joined</span></li>` : ''}`;
+    return `<li class="cmsg ${cls}"><span class="cmsg-av">${face(g.who, 40, g.tone === 'bad' ? 'error' : 'idle', { k: `chat:${keyOf(g.text)}` })}</span><div class="cmsg-body"><span class="cmsg-who" style="color:${feedHue(g.who)}">${feedName(g.who)}</span><div class="cmsg-bubble">${g.text}</div></div></li>${joined.length ? `<li class="chat-marker${isNew ? ' in' : ''}"><span>${faces(joined, 22)}${andList(joined.map((a) => AGENTS[a].name))} joined${joined.includes('vuln') ? ` ${PLANNED_TAG}` : ''}</span></li>` : ''}`;
   }
   /* The last word goes to whoever needs the person: the approval gate with the buttons, the AI troubleshooter with the fix, or Workflow Builder when it's done. */
   function chatAct(id, m) {
@@ -2899,7 +2901,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       <dl class="qa"><dt>What will change</dt><dd><b>${sw ? '3 tickets will be created in Jira project MOCK' : w.panelTitle}</b>${body}<p class="note">This is exactly what will be written, and nothing else.</p></dd></dl>
       <dl class="qa" data-unbuilt="Why, in the approval panel"><dt>Why</dt><dd>${found ? `<ul class="found">${found}</ul>` : 'See what each agent did, below.'}</dd></dl>
       <dl class="qa" data-unbuilt="Who asked, in the approval panel"><dt>Who asked</dt><dd>${esc(R(m.workflow).name)}, set up by ${nm(ownerOf(m.workflow))}. ${first.msg ? first.msg.text : ''}${first.sub ? ` (${first.sub})` : ''}</dd></dl>
-      <dl class="qa"><dt>What happens</dt><dd>Nothing is written until you say yes. If you decline, nothing is written. ${askLine(q, S.user)}${sw ? ' You approve or decline the whole check. If you decline, the tickets are proposed again next Monday.' : ''}</dd></dl>
+      <dl class="qa"><dt>What happens</dt><dd><span>Nothing is written until you say yes. If you decline, nothing is written. ${askLine(q, S.user)}${namedTag(q)}${sw ? ' You approve or decline the whole check. If you decline, the tickets are proposed again next Monday.' : ''}</span></dd></dl>
       <dl class="qa" data-unbuilt="Your part, in the approval panel"><dt>Your part</dt><dd>${part}</dd></dl>
       ${ok ? `<div class="btns"><button class="btn good" data-act="approve" data-arg="${id}">${I.check(16)}Approve</button><button class="btn bad" data-act="decline" data-arg="${id}">Decline</button></div>` : ''}
     </div>`;
@@ -4003,8 +4005,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
      workflow, its owner, who can decide and who can't come from the request record and partiesOf. */
   const TEAMS_CARD = {
     sw: () => ({ time: 'Mon 9:41', what: 'Keep our software up to date wants to create 3 Jira tickets',
-      changes: [`Upgrade Log4j core to 2.25.2${shows('registries') ? ' (urgent: critical and actively exploited)' : ''}`, 'Upgrade LangGraph to 1.2.17', 'Upgrade FastAPI to 0.120.1'],
-      found: shows('registries') ? 'Newer versions on the registries and GitHub, and 4 known vulnerabilities in Log4j core 2.14.1.' : 'Newer releases on GitHub for 3 of the 14 projects on the Software watchlist.' }),
+      changes: [`Upgrade Log4j core to 2.25.2${shows('registries') ? ` (urgent: critical and actively exploited) ${PLANNED_TAG}` : ''}`, 'Upgrade LangGraph to 1.2.17', 'Upgrade FastAPI to 0.120.1'],
+      found: shows('registries') ? `Newer versions on the registries and GitHub, and 4 known vulnerabilities in Log4j core 2.14.1. ${PLANNED_TAG}` : 'Newer releases on GitHub for 3 of the 14 projects on the Software watchlist.' }),
     nudge: () => ({ time: `Today ${hm(NOW)}`, what: 'Weekly closed-ticket summary wants to create 1 Jira ticket', changes: ['Create one ticket in MOCK with the summary of the week of 19 Oct'], found: '11 tickets closed in MOCK in the week of 19 Oct.' }),
     conf: () => ({ time: 'Today 9:10', what: `${esc(S.nr.name)} wants to ${confWrite(S.nr).teamsVerb} (test run)`, changes: [`Create one ticket in ${S.nr.project} with the ${thingOf(S.nr)}`], found: confPreview(S.nr).replace(/<p class="note">[\s\S]*$/, '').replace(/<\/?div[^>]*>/g, '') }),
     access: () => ({ time: 'Mon 9:30', what: `Quarterly access review wants to ${ACCESS_WRITE.teamsVerb}`, changes: ACCESS_REMOVALS.map((x) => `Remove ${x.replace(/\. .*$/, '')}`), found: '48 people reviewed. Their managers confirmed 45 in Teams. Nobody confirmed these 3.', planned: true }),
