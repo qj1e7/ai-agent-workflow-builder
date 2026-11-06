@@ -120,3 +120,45 @@ def test_reads_the_name_the_date_and_the_notes_cut_to_400_characters():
         ),
         Release(tag="1.2.15"),
     ]
+
+
+def test_reads_the_address_github_gives_a_repo_now():
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"id": 10270250, "full_name": "react/react"})
+
+    assert source(httpx.MockTransport(handler)).current_name("facebook/react") == "react/react"
+    assert seen[0].url.path == "/repos/facebook/react"
+
+
+def test_an_address_answer_without_a_name_is_unavailable():
+    with pytest.raises(SourceUnavailable):
+        source(answering(200, {"id": 1})).current_name("o/r")
+
+
+def test_an_address_github_does_not_find_is_rejected():
+    with pytest.raises(SourceRejected) as raised:
+        source(answering(404, {"message": "Not Found"})).current_name("gitlab-org/gitlab")
+    assert raised.value.status == 404
+
+
+@pytest.mark.parametrize(
+    ("headers", "body", "limited"),
+    [
+        ({"x-ratelimit-remaining": "0"}, {}, True),
+        ({"retry-after": "60"}, {}, True),
+        ({}, {"message": "You have exceeded a secondary rate limit."}, True),
+        ({"x-ratelimit-remaining": "41"}, {"message": "Resource not accessible"}, False),
+        ({}, {}, False),
+    ],
+)
+def test_a_refusal_says_whether_github_limited_how_often_we_ask(
+    headers: dict[str, str], body: dict[str, str], limited: bool
+):
+    transport = httpx.MockTransport(lambda r: httpx.Response(403, json=body, headers=headers))
+    for ask in (lambda s: s.fetch("o/r"), lambda s: s.current_name("o/r")):
+        with pytest.raises(SourceRejected) as raised:
+            ask(source(transport))
+        assert (raised.value.status, raised.value.limited) == (403, limited)

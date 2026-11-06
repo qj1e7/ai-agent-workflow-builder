@@ -27,7 +27,12 @@ class _GitHubRelease(BaseModel):
     body: str | None = None
 
 
+class _GitHubRepo(BaseModel):
+    full_name: str
+
+
 _RELEASES = TypeAdapter(list[_GitHubRelease])
+_REPO = TypeAdapter(_GitHubRepo)
 
 
 def _headers_for(token: str | None) -> dict[str, str]:
@@ -87,28 +92,11 @@ class GitHubReleaseSource:
         self._client = client or httpx.Client(timeout=TIMEOUT_SECONDS, follow_redirects=True)
         self._headers = _headers_for(token)
 
+    def current_name(self, repo: str) -> str:
+        return self._get(repo, "", _REPO).full_name
+
     def fetch(self, repo: str) -> list[Release]:
-        parts = repo.split("/", 1)
-        if len(parts) != 2 or any(part in {"", ".", ".."} for part in parts):
-            raise SourceRejected(400)
-        owner, name = (quote(part, safe="") for part in parts)
-        try:
-            response = self._client.get(
-                f"{self._base_url}/repos/{owner}/{name}/releases",
-                params={"per_page": PAGE_SIZE},
-                headers=self._headers,
-            )
-        except httpx.TransportError as error:
-            raise SourceUnavailable(None) from error
-        status = response.status_code
-        if status >= 500 or status in RETRY_STATUSES:
-            raise SourceUnavailable(status)
-        if status >= 300:
-            raise SourceRejected(status)
-        try:
-            parsed = _RELEASES.validate_json(response.content)
-        except ValidationError as error:
-            raise SourceUnavailable(None) from error
+        parsed = self._get(repo, "/releases", _RELEASES, {"per_page": PAGE_SIZE})
         return [
             Release(
                 r.tag_name,
@@ -120,3 +108,39 @@ class GitHubReleaseSource:
             )
             for r in parsed
         ]
+
+    def _get[T](
+        self,
+        repo: str,
+        tail: str,
+        shape: TypeAdapter[T],
+        params: dict[str, int] | None = None,
+    ) -> T:
+        parts = repo.split("/", 1)
+        if len(parts) != 2 or any(part in {"", ".", ".."} for part in parts):
+            raise SourceRejected(400)
+        owner, name = (quote(part, safe="") for part in parts)
+        try:
+            response = self._client.get(
+                f"{self._base_url}/repos/{owner}/{name}{tail}",
+                params=params,
+                headers=self._headers,
+            )
+        except httpx.TransportError as error:
+            raise SourceUnavailable(None) from error
+        status = response.status_code
+        if status >= 500 or status in RETRY_STATUSES:
+            raise SourceUnavailable(status)
+        if status >= 300:
+            raise SourceRejected(status, limited=_rate_limited(response))
+        try:
+            return shape.validate_json(response.content)
+        except ValidationError as error:
+            raise SourceUnavailable(None) from error
+
+
+def _rate_limited(response: httpx.Response) -> bool:
+    headers = response.headers
+    if headers.get("x-ratelimit-remaining") == "0" or "retry-after" in headers:
+        return True
+    return "rate limit" in response.text.lower()
