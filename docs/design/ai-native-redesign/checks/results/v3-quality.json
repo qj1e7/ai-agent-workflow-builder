@@ -1,0 +1,802 @@
+{
+  "prototype": "docs/design/portal-routines/prototype.html",
+  "paths": "docs/design/ai-native-redesign/checks/paths-v3.cjs",
+  "screens": [
+    {
+      "name": "day-one-home",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 1,
+          "minor": 0
+        },
+        "axeViolations": [
+          {
+            "id": "heading-order",
+            "impact": "moderate",
+            "nodes": 1,
+            "help": "Heading levels should only increase by one"
+          }
+        ],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 1,
+          "minor": 0
+        },
+        "axeViolations": [
+          {
+            "id": "heading-order",
+            "impact": "moderate",
+            "nodes": 1,
+            "help": "Heading levels should only increase by one"
+          }
+        ],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "home",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "approver-home",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "planner-setup-card",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 1,
+          "minor": 0
+        },
+        "axeViolations": [
+          {
+            "id": "heading-order",
+            "impact": "moderate",
+            "nodes": 1,
+            "help": "Heading levels should only increase by one"
+          }
+        ],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 1,
+          "minor": 0
+        },
+        "axeViolations": [
+          {
+            "id": "heading-order",
+            "impact": "moderate",
+            "nodes": 1,
+            "help": "Heading levels should only increase by one"
+          }
+        ],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "planner-cant-email",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 1,
+          "minor": 0
+        },
+        "axeViolations": [
+          {
+            "id": "heading-order",
+            "impact": "moderate",
+            "nodes": 1,
+            "help": "Heading levels should only increase by one"
+          }
+        ],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 1,
+          "minor": 0
+        },
+        "axeViolations": [
+          {
+            "id": "heading-order",
+            "impact": "moderate",
+            "nodes": 1,
+            "help": "Heading levels should only increase by one"
+          }
+        ],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "planner-watch-kubernetes",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 1,
+          "minor": 0
+        },
+        "axeViolations": [
+          {
+            "id": "heading-order",
+            "impact": "moderate",
+            "nodes": 1,
+            "help": "Heading levels should only increase by one"
+          }
+        ],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 1,
+          "minor": 0
+        },
+        "axeViolations": [
+          {
+            "id": "heading-order",
+            "impact": "moderate",
+            "nodes": 1,
+            "help": "Heading levels should only increase by one"
+          }
+        ],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "workflows",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "workflow-page",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "run-stopped",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "run-approval",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": [
+            "span.vname right=405",
+            "span right=405",
+            "span.pill.bad right=405",
+            "a right=398"
+          ]
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "software",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "agent-library",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "agent-library-tools",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "settings-connections",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 0
+        },
+        "axeViolations": [],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": [
+            "button right=496",
+            "button right=402"
+          ]
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "teams-drawer",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 1
+        },
+        "axeViolations": [
+          {
+            "id": "aria-allowed-role",
+            "impact": "minor",
+            "nodes": 1,
+            "help": "ARIA role should be appropriate for the element"
+          }
+        ],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 0,
+          "minor": 1
+        },
+        "axeViolations": [
+          {
+            "id": "aria-allowed-role",
+            "impact": "minor",
+            "nodes": 1,
+            "help": "ARIA role should be appropriate for the element"
+          }
+        ],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    },
+    {
+      "name": "drafts",
+      "desktop": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 1,
+          "minor": 0
+        },
+        "axeViolations": [
+          {
+            "id": "region",
+            "impact": "moderate",
+            "nodes": 1,
+            "help": "All page content should be contained by landmarks"
+          }
+        ],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 1280,
+          "clientWidth": 1280,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      },
+      "phone": {
+        "axe": {
+          "critical": 0,
+          "serious": 0,
+          "moderate": 1,
+          "minor": 0
+        },
+        "axeViolations": [
+          {
+            "id": "region",
+            "impact": "moderate",
+            "nodes": 1,
+            "help": "All page content should be contained by landmarks"
+          }
+        ],
+        "sidewaysScroll": {
+          "scrolls": false,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "widest": []
+        },
+        "consoleErrors": [],
+        "reducedMotion": {
+          "running": 0,
+          "names": []
+        }
+      }
+    }
+  ],
+  "keyboard": [
+    {
+      "target": "[data-ask]",
+      "who": "operator",
+      "presses": 9,
+      "reached": true,
+      "stopsWithoutVisibleFocus": []
+    },
+    {
+      "target": "[data-act=\"run\"][data-arg=\"sw\"]",
+      "who": "bob",
+      "presses": 8,
+      "reached": true,
+      "stopsWithoutVisibleFocus": []
+    }
+  ]
+}

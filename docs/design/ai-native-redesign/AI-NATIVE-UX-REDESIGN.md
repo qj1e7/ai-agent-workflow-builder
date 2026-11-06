@@ -86,7 +86,8 @@ Taken from `agent-runtime/src/agent_runtime/tools.py` and `abilities.py` on 6 No
 
 | Capability | Kind | Base state | Why |
 |---|---|---|---|
-| Read Jira tickets | read | Ready | `jira.search`, `jira.read_ticket` |
+| Read Jira tickets | read | Ready | `jira.search`, `jira.read_ticket`. An agent sees a ticket's key, project, title, status (To Do or Done), created and done dates, and body (`jira.py`). |
+| Find tickets by when they were last updated, their type or who owns them | read | Planned | Those fields never reach the agents. platform-api reads Jira's update date and drops it (`jira_rest.py`), so this is a small backend change (UX audit X2). |
 | Sum up what I find | none | Ready | Done by the model, no system access |
 | Check software for new releases on GitHub | read | Ready | `github.read_releases` |
 | Create a Jira ticket after a yes | write | Ready | `jira.create_ticket` |
@@ -116,7 +117,7 @@ From top to bottom:
    - Enter sends. The send button is labelled for screen readers.
 3. **Three suggestions,** chosen from her state, never fixed:
    - "Check my workflows"
-   - "Why did Morning bug ticket check stop?" when a workflow is stopped, otherwise "What can I ask for?"
+   - "Why did Morning new-ticket check stop?" when a workflow is stopped, otherwise "What can I ask for?"
    - "Set up another workflow". It answers with three starting points she can pick from.
 4. **Needs you,** shown only when `needs()` has items:
    - Up to three rows, most urgent first. Stopped runs come first, then approvals (urgent ones first), then connection keys that are running out, then confirmations.
@@ -132,7 +133,7 @@ Once she sends something, the page becomes the thread (version 3's behaviour): h
 - Heading: "What does your team do again and again?"
 - One sentence on what the platform does: "Tell me a task in plain English. I'll set it up to run by itself. Anything that changes data waits for a yes from an Approver in Teams."
 - The box, then three concrete starting points:
-  - "Every Friday, list bug tickets with no update for 10 days" (automate)
+  - "Every Friday, sum up the tickets we closed this week" (automate). Version 3's first example asked for tickets with no update for 10 days, which today's Jira tool can't see (UX audit X2).
   - "Keep track of the React version" (monitor)
   - "What can you do?" (learn)
 - "I can" and "Not yet" lists, from the registry.
@@ -213,8 +214,9 @@ It says what is unclear in one line, asks one focused question, and offers the n
 The card is titled with the workflow's name and has Rename beside it. It has three sections, then one collapsed section, then the footer.
 
 **What will happen**
-- One plain sentence that reads as a whole, for example "Every Friday at 9:00, find bug tickets in Jira project MOCK with no update for 10 days, sum them up, and put the summary in one new Jira ticket."
+- One plain sentence that reads as a whole, for example "Every Friday at 16:00, find the tickets closed this week in Jira project MOCK, sum them up, and put the summary in one new Jira ticket."
 - Each part she can change is a chip in the sentence:
+  - A part is marked as hers only when the words came from her request. Version 3 marked parts green as "from your words" when the Planner had dropped or added words (UX audit SC1).
   - Grey chips are "Filled in by me".
   - Amber chips need a choice.
   - A red chip names something the platform can't do, with the nearest alternative.
@@ -342,7 +344,7 @@ Shown when this person can decide. It lists:
 - **Who asked:** the workflow, who owns it, and whether a schedule or a person started this run.
 - **What happens:**
   - "Nothing is written until you say yes. If you decline, nothing is written."
-  - "This request stops waiting at" a time, when that applies.
+  - Under today's rule, a request waits until someone decides. A stop time and a backup appear only with ADR 0024's named Approvers, which are Planned. Version 3 stopped today's-rule requests at the next run, which the built app doesn't do.
 - **Your part:**
   - "You can decide because you didn't set this up."
   - When it's her own run: "You set this up, so another Approver must decide." She sees no buttons.
@@ -463,12 +465,12 @@ Each was found in version 3 (`03b-PROTOTYPE-UI-INVENTORY.md`, section 8).
 
 | ID | Source in version 3 | Correct current behaviour | Version 4 |
 |---|---|---|---|
-| I1 | Teams posting is "Not yet" on Home, but "Stale ticket nudge", the Tools tab, Settings, support updates and AI usage all send Teams messages | Teams carries approval requests only (ADR 0036) | Post messages in Teams is Planned in the registry. "Stale ticket nudge" becomes "Stale ticket list", which lists the tickets and their owners in one Jira ticket. Support updates show under Following up. The AI usage warning shows on Home. Settings describes Teams as approval requests only. |
-| I2 | Samples read GitHub issues, Entra ID, the admin tools and GitLab | Four tools: GitHub releases and Jira | "Morning bug report check" reads Jira bug tickets instead. The quarterly access review is Planned and appears only with Planned features shown, where it still shows two Approvers in turn. |
+| I1 | Teams posting is "Not yet" on Home, but "Stale ticket nudge", the Tools tab, Settings, support updates, AI usage and three more lines the audit found all send Teams messages | Teams carries approval requests only (ADR 0036) | Post messages in Teams is Planned in the registry. "Stale ticket nudge" becomes "Weekly closed-ticket summary". A stale-ticket list isn't possible either, because the agents can't see a ticket's update date or owner. Support updates show under Following up. The AI usage warning shows on Home. Settings describes Teams as approval requests only. Needs you loses its "Open in Teams" button. |
+| I2 | Samples read GitHub issues, Entra ID, the admin tools and GitLab | Four tools: GitHub releases and Jira. Jira gives title, status, created and done dates, and body. | "Morning bug report check" becomes "Morning new-ticket check", which reads tickets created since the last run. The quarterly access review is Planned and appears only with Planned features shown, where it still shows two Approvers in turn. A request that needs the update date, type or owner gets the Part I can do answer. |
 | I3 | A new Jira tool is "the team's decision" on Home, but has a Draft button in the Tools tab and the agent dialog | Tools are built by the team (ADR 0023). Drafting one needs its own ADR (ADR 0037). | One answer everywhere: "I can't add that yet. The team decides on new tools." with Ask the team. The draft flow appears only with Planned features shown. |
 | I4 | The set-up card uses today's rule, but the samples and the watchlist card show named Approvers with a backup | Today's rule. ADR 0024 isn't built. | Today's rule everywhere by default. Named Approvers appear only with Planned features shown. |
 | I5 | Day one has no model, but the Planner works. Day one also shows a key running out. | No model means the Planner can't read new requests | The AI model control drives the offline answer (5.4). Day one starts with a model connected and fresh keys. |
-| I6 | The Agent library says the Planner drafts new agents, but no card ever does | The built Planner drafts an agent card when no saved agent fits (`drafting.py`) | "Sum up the tickets we closed this week" drafts a new agent, shown under How this workflow works and saved when it's turned on |
+| I6 | The Agent library says the Planner drafts new agents, but no card ever does | The built Planner drafts an agent card when no saved agent fits (`drafting.py`) | "Every Monday, compare last week's new tickets with the week before" drafts a new agent, shown under How this workflow works and saved when it's turned on |
 | I7 | "You can also follow it on Home" and "Check what I understood" point to places that no longer exist | Following up is on Workflows. The card section is What will happen. | Both texts corrected |
 | I8 | "I need 2 more answers" is computed once and goes stale | One count, recomputed on each redraw | The chat sentence drops the count. The card footer is the only count. |
 | I9 | Home lists GitHub releases only, but the watchlist shows ADR 0025's sources and vulnerability checks as working | GitHub releases only | Other sources and vulnerability checks are Planned, shown only with Planned features shown and tagged |
