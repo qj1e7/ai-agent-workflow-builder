@@ -239,7 +239,10 @@ Measured by `checks/home-weight.cjs` at 1280 px (`checks/results/home-weight.jso
 
 The extra words and controls on a normal week are Needs you and the suggestions drawn from what is going on. They let B-home take 1 click instead of 3. Home keeps one primary button in every state (`home-one-primary`). Whether the busier Home is easier to scan, or just busier, is a question for real users.
 
-Seven counts rose by one click (C-self, H, T1, T4, T5, T8, T12; T14 also needs Planned features shown). Each is explained above. Four of them buy safety or truth: T8 (no approving in Teams), H and T12 (Delete behind a divider), and T5 (look the project up before adding it). Three are the cost of a lighter normal-week Home (C-self, T1, T4).
+Eight counts rose by one click: C-self, H, T1, T4, T5, T8, T12 and T14. Each is explained above.
+- Four buy safety or truth: T8 (no approving in Teams), H and T12 (Delete behind a divider), and T5 (look the project up before adding it).
+- Three are the cost of a lighter normal-week Home (C-self, T1, T4).
+- One comes from the Agent library opening on "What it can do" (T14). That task also exists only with Planned features shown.
 
 ## 7. What a study with real users should measure
 
