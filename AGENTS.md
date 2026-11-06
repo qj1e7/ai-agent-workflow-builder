@@ -54,9 +54,13 @@ These come from the sponsor and from our October feasibility test. Do not weaken
 
 ## Designing screens
 
-The design target is prototype version 4, `docs/design/ai-native-redesign/prototype.html`, with its spec `AI-NATIVE-UX-REDESIGN.md` and build plan `IMPLEMENTATION-PLAN.md` in the same folder. The 6 Nov prototype in `docs/design/portal-routines/` is kept as the record of version 3. `docs/design/prototypes/` is out of date.
+The design target is prototype version 4, `docs/design/ai-native-redesign/prototype.html`, with its spec `AI-NATIVE-UX-REDESIGN.md` and build plan `IMPLEMENTATION-PLAN.md` in the same folder.
 
-Every new or changed screen, component or flow follows `docs/design/ai-native-principles.md`. Read it before any UI work.
+- It is the source of truth for screens, flows and names. The app is built from it.
+- The 6 Nov prototype in `docs/design/portal-routines/` is kept only as the record of version 3.
+- `docs/design/prototypes/` is out of date. Do not use it.
+
+Every new or changed screen, component or flow follows `docs/design/ai-native-principles.md`. Read it and the spec before any UI work.
 
 - Design a new screen or component in the prototype first, then build it in the Portal.
 - Walk the checklist there before you build. If you break a principle on purpose, say why in the design note or an ADR.
