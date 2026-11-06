@@ -9,7 +9,7 @@ import { Button } from '../../ui/Button'
 import { useFocusWhenReady } from '../../ui/focus'
 import { IconClock } from '../../ui/icons'
 import { useGlide, usePresence } from '../../ui/presence'
-import { comingUpOf, HOME_NEEDS_SHOWN, HOW_IT_WORKS, leadLine, moreWords, needsOf, needsTotal, seeAllWords, type Next } from './home'
+import { comingUpOf, HOME_NEEDS_SHOWN, HOW_IT_WORKS, leadLine, moreWords, needsOf, needsTotal, SEE_ALL_WORDS, type Next } from './home'
 import { FirstWorkflow } from './FirstWorkflow'
 import { DraftRow, WaitingRow } from './HomeItem'
 import { NeedsSection, useArrival, type Arrival } from './NeedsSection'
@@ -132,7 +132,7 @@ function Loaded({ now, home, next }: { now: Date; home: HomeOut; next: Next | nu
   const [showHow, setShowHow] = useState(false)
   const focusHow = useFocusWhenReady(showHow, () => document.getElementById(HOW_ID))
   const left = needs.total - needs.shown.length
-  const more = operator ? (left > 0 ? <Link to="/workflows">{seeAllWords(needs.total)}</Link> : null) : moreWords(needs.more)
+  const more = operator ? (left > 0 ? <Link to="/workflows">{SEE_ALL_WORDS}</Link> : null) : moreWords(needs.more)
 
   return (
     <>

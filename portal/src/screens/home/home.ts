@@ -55,7 +55,7 @@ export function leadLine(total: number, workflows: number): string {
     : 'Nothing needs you right now. Your workflows are running.'
 }
 
-export const seeAllWords = (total: number) => `See all ${total} on Workflows`
+export const SEE_ALL_WORDS = 'See all on Workflows'
 
 export function moreWords({ approvals, others }: LeftOut): string | null {
   const left = approvals + others

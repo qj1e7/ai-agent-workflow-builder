@@ -214,7 +214,7 @@ describe('Home for an Operator with more than three things waiting', () => {
     const keys = [...html.matchAll(/data-home-item="([^"]+)"/g)].map((match) => match[1])
     expect(keys).toEqual(['stopped:run_01JB9', 'approval:apr_4', 'approval:apr_3'])
     expect(text(html)).toContain(`Needs you ${total}`)
-    expect(linksIn(html)).toContainEqual([`See all ${total} on Workflows`, '/workflows'])
+    expect(linksIn(html)).toContainEqual(['See all on Workflows', '/workflows'])
   })
 
   it('shows an Approver who is not an Operator the whole list instead, with no link', () => {
