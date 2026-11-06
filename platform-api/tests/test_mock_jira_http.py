@@ -107,6 +107,26 @@ async def test_the_practice_jira_answers_updated_issuetype_and_assignee_clauses(
     assert await search_keys(kit, f'updated <= "{week_ago}"') == ["MOCK-3"]
 
 
+async def test_the_practice_cloud_search_says_it_is_not_the_last_page_when_it_cut_the_list(
+    db: Database,
+):
+    kit = PracticeKit(db, "cloud")
+    for title in ("One", "Two", "Three"):
+        await kit.store.create("MOCK", title, "", [], "Task")
+
+    async def page(max_results: int) -> tuple[int, bool]:
+        response = await kit.client.get(
+            f"{BASE}/rest/api/3/search/jql",
+            params={"jql": 'project = "MOCK"', "maxResults": max_results},
+            headers={"Authorization": kit.jira.auth_header},
+        )
+        assert response.status_code == 200, response.text
+        return len(response.json()["issues"]), response.json()["isLast"]
+
+    assert await page(2) == (2, False)
+    assert await page(3) == (3, True)
+
+
 async def test_a_ticket_done_moves_its_last_update_and_a_second_press_does_not(db: Database):
     kit = PracticeKit(db)
     old = db.clock() - timedelta(days=3)

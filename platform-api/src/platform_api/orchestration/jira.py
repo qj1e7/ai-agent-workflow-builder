@@ -64,7 +64,7 @@ class IssueSearch:
     done_since: datetime | None = None
     created_since: datetime | None = None
     updated_before: datetime | None = None
-    """Tickets last updated at or before this moment."""
+    """Tickets last updated before this moment."""
     issue_types: tuple[str, ...] = ()
     limit: int = SEARCH_LIMIT
 
@@ -73,7 +73,9 @@ class IssueSearch:
 class SearchResult:
     issues: list[JiraIssue]
     cut_off: bool = False
-    """True when Jira had more matching tickets than the limit, so older ones are missing."""
+    """True when Jira had more matching tickets than the limit, so older ones are missing. When
+    the Jira account has no time zone, the search asks Jira for a day more on each date, so this
+    can be true even when every ticket that matches was returned."""
 
 
 class JiraError(Exception):

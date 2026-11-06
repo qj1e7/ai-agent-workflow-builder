@@ -20,7 +20,7 @@ from platform_api.orchestration.jira import (
     NewIssue,
 )
 from platform_api.orchestration.jira_rest import JiraAuth, JiraRestAdapter
-from tests.practice import PracticeKit
+from tests.practice import BASE, PracticeKit
 from tests.support import FIXTURES
 
 pytestmark = pytest.mark.anyio
@@ -115,21 +115,21 @@ async def test_a_search_sends_the_date_and_type_filters_in_the_accounts_zone():
     answers = {("GET", "/myself"): (200, "myself.json"), ("GET", "/search"): (200, "search.json")}
     dc = jira_answering("datacenter", answers, seen)
     since = datetime(2026, 11, 1, tzinfo=UTC)
-    before = datetime(2026, 11, 5, 15, 59, tzinfo=UTC)
+    before = datetime(2026, 11, 5, 16, 0, tzinfo=UTC)
     found = await dc.search(
         IssueSearch(("OPS",), created_since=since, updated_before=before, issue_types=("Bug",))
     )
     search = next(r for r in seen if r.url.path.endswith("/search"))
     assert search.url.params["jql"] == (
         'project in ("OPS") AND issuetype in ("Bug") AND created >= "2026-11-01 08:00" '
-        'AND updated <= "2026-11-05 23:59" ORDER BY created DESC'
+        'AND updated < "2026-11-06 00:00" ORDER BY created DESC'
     )
     assert search.url.params["maxResults"] == "51"
     assert [i.key for i in found.issues] == ["OPS-7", "OPS-5"] and not found.cut_off
 
 
-def issues_listing(count: int) -> dict[str, Any]:
-    template = fixture("datacenter", "issue.json")
+def issues_listing(count: int, flavor: JiraFlavor = "datacenter") -> dict[str, Any]:
+    template = fixture(flavor, "issue.json")
     issues = []
     for number in range(count):
         issue = json.loads(json.dumps(template))
@@ -161,6 +161,68 @@ async def test_a_search_says_when_jira_had_more_than_the_limit():
     assert len(full.issues) == 3 and full.cut_off
     exact = await jira_listing(3, "Asia/Singapore").search(IssueSearch(("OPS",), limit=3))
     assert len(exact.issues) == 3 and not exact.cut_off
+
+
+def jira_paging(flavor: JiraFlavor, matching: int, page: int) -> JiraRestAdapter:
+    """A Jira where `matching` tickets match and an answer holds at most `page` of them, with its
+    flavor's paging signals: Cloud's isLast and nextPageToken, Data Center's total."""
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        asked = int(request.url.params["maxResults"])
+        shown = min(matching, page, asked)
+        issues = issues_listing(shown, flavor)["issues"]
+        if flavor == "cloud":
+            more = {} if shown == matching else {"nextPageToken": "page-2"}
+            return httpx.Response(200, json={"issues": issues, "isLast": not more, **more})
+        listing = {"startAt": 0, "maxResults": asked, "total": matching, "issues": issues}
+        return httpx.Response(200, json=listing)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(answer))
+    auth = JiraAuth.of(flavor, "token-1", "bot@example.com")
+    return JiraRestAdapter(BASES[flavor], flavor, auth, client)
+
+
+@pytest.mark.parametrize("flavor", ["datacenter", "cloud"])
+async def test_a_search_says_it_was_cut_off_when_jira_sends_a_short_page_and_has_more(
+    flavor: JiraFlavor,
+):
+    short = await jira_paging(flavor, matching=120, page=40).search(IssueSearch(("OPS",)))
+    assert len(short.issues) == 40 and short.cut_off
+    whole = await jira_paging(flavor, matching=40, page=40).search(IssueSearch(("OPS",)))
+    assert len(whole.issues) == 40 and not whole.cut_off
+
+
+def practice_without_zone(kit: PracticeKit) -> JiraRestAdapter:
+    """The practice Jira, read by an adapter that finds no time zone on the account."""
+
+    async def forward(request: httpx.Request) -> httpx.Response:
+        sent = httpx.Request(request.method, request.url, headers=request.headers)
+        answer = await kit.client.send(sent)
+        body = answer.json()
+        if request.url.path.endswith("/myself"):
+            body.pop("timeZone")
+        return httpx.Response(answer.status_code, json=body)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(forward))
+    auth = JiraAuth.of("datacenter", kit.jira.auth_header.split(" ", 1)[1], None)
+    return JiraRestAdapter(BASE, "datacenter", auth, client)
+
+
+async def test_with_no_zone_updated_before_keeps_only_the_tickets_updated_before_it(
+    db: Database,
+):
+    kit = PracticeKit(db)
+    moment = datetime(2026, 10, 20, tzinfo=UTC)
+    for title, at in (
+        ("A day before", moment - timedelta(hours=20)),
+        ("A minute before", moment - timedelta(minutes=1)),
+        ("At the moment", moment),
+        ("Hours after", moment + timedelta(hours=6)),
+    ):
+        await kit.store.create("MOCK", title, "", [], "Bug", created_at=at)
+    jira = practice_without_zone(kit)
+    found = await jira.search(IssueSearch(("MOCK",), updated_before=moment))
+    assert [issue.title for issue in found.issues] == ["A minute before", "A day before"]
 
 
 async def test_a_search_in_an_unknown_zone_widens_the_day_and_still_says_it_was_cut_off():

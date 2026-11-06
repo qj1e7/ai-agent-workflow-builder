@@ -119,7 +119,7 @@ def _inside(issue: JiraIssue, query: IssueSearch) -> bool:
         return False
     if query.created_since is not None and issue.created_at < query.created_since:
         return False
-    return query.updated_before is None or issue.updated_at <= query.updated_before
+    return query.updated_before is None or issue.updated_at < query.updated_before
 
 
 def _one_line(text: str, limit: int) -> str:
@@ -336,7 +336,9 @@ class JiraRestAdapter:
             raise self._failure(response, "read the ticket")
         return self._issue(response.json())
 
-    async def _jql(self, jql: str, limit: int) -> list[JiraIssue]:
+    async def _jql(self, jql: str, limit: int) -> SearchResult:
+        """The first page of a search. Jira may send fewer tickets than the limit and still have
+        more, so `cut_off` is Jira's own word for that: Cloud's isLast, Data Center's total."""
         params: dict[str, str | int] = {"jql": jql, "maxResults": limit, "fields": FIELDS}
         path = "/search/jql" if self.flavor == "cloud" else "/search"
         response = await self._call("GET", path, params=params)
@@ -345,13 +347,17 @@ class JiraRestAdapter:
         body = _body(response)
         if not isinstance(body.get("issues"), list):
             raise JiraUnavailable("Jira gave search results that could not be read.")
-        return [self._issue(raw) for raw in json_list(body.get("issues"))]
+        issues = [self._issue(raw) for raw in json_list(body.get("issues"))]
+        if self.flavor == "cloud":
+            return SearchResult(issues, cut_off=body.get("isLast") is False)
+        total = body.get("total")
+        return SearchResult(issues, cut_off=isinstance(total, int) and total > len(issues))
 
     async def search(self, query: IssueSearch) -> SearchResult:
         """Words match as any of them, because Jira's text ~ "a b" may need every word.
 
-        Jira applies every clause before it cuts the list at the limit. One more ticket than the
-        limit is asked for, so a full answer shows the search was cut off."""
+        Jira applies every clause before it cuts the list at the limit. The search was cut off
+        when Jira says it has more, or when it sends the one ticket more than the limit asked."""
         clauses = [f"project in ({_listed(query.projects)})"]
         if query.words:
             clauses.append("(" + " OR ".join(f"text ~ {_quoted(w)}" for w in query.words) + ")")
@@ -370,18 +376,17 @@ class JiraRestAdapter:
         if query.created_since is not None:
             clauses.append(f"created >= {_moment(query.created_since, zone, -_A_DAY)}")
         if query.updated_before is not None:
-            clauses.append(f"updated <= {_moment(query.updated_before, zone, _A_DAY)}")
-        raw = await self._jql(" AND ".join(clauses) + " ORDER BY created DESC", query.limit + 1)
-        found = raw
-        if zone is None:
-            found = [i for i in found if _inside(i, query)]
-        return SearchResult(found[: query.limit], cut_off=len(raw) > query.limit)
+            clauses.append(f"updated < {_moment(query.updated_before, zone, _A_DAY)}")
+        page = await self._jql(" AND ".join(clauses) + " ORDER BY created DESC", query.limit + 1)
+        found = page.issues if zone else [i for i in page.issues if _inside(i, query)]
+        cut_off = page.cut_off or len(page.issues) > query.limit
+        return SearchResult(found[: query.limit], cut_off=cut_off)
 
     async def find_by_label(self, project: str, label: str) -> JiraIssue | None:
         """The first ticket in the project with this label. The caller decides whether it is
         ours, from its creator and when it was made."""
         jql = f"project = {_quoted(project)} AND labels = {_quoted(label)} ORDER BY created ASC"
-        found = await self._jql(jql, 1)
+        found = (await self._jql(jql, 1)).issues
         return found[0] if found else None
 
     async def done_tickets(self, keys: Collection[str]) -> Mapping[str, datetime]:
@@ -393,7 +398,7 @@ class JiraRestAdapter:
             chunk = wanted[start : start + KEYS_PER_SEARCH]
             jql = f"key in ({_listed(chunk)}) AND statusCategory = Done"
             try:
-                issues = await self._jql(jql, len(chunk))
+                issues = (await self._jql(jql, len(chunk))).issues
             except JiraRefused:
                 issues = [i for key in chunk if (i := await self.get_issue(key)) is not None]
             for issue in issues:

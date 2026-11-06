@@ -9,6 +9,7 @@ from platform_api.migrations import downgrade, upgrade
 from platform_api.orchestration import WatchlistTask
 from platform_api.orchestration.runs import Pending
 from platform_api.orchestration.store import RunRecord, Store
+from platform_api.practice_jira import PracticeJira
 from platform_api.shared import RunId
 from tests.conftest import PostgresUrls
 from tests.support import NOW, SPEC
@@ -437,3 +438,21 @@ async def test_migration_0012_gives_each_practice_ticket_a_last_update_and_goes_
         finally:
             upgrade("orchestration", postgres.owner)
             conn.execute("DELETE FROM orchestration.mock_jira_tickets WHERE project = 'OLD'")
+
+
+async def test_code_from_before_0012_still_makes_a_practice_ticket_after_it(
+    postgres: PostgresUrls, db: Database
+):
+    with psycopg.connect(postgres.contexts.orchestration, autocommit=True) as conn:
+        written = conn.execute("SELECT now()").fetchone()
+        assert written is not None
+        conn.execute(
+            "INSERT INTO orchestration.mock_jira_tickets "
+            "(key, number, project, title, body, created_at, run_id, proposal_id, "
+            "labels, issue_type, creator) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            ("MOCK-1", 1, "MOCK", "Made after a revert", "", NOW, None, None, [], "Task", None),
+        )
+    ticket = await PracticeJira(db, "token", "http://localhost:8080").get("MOCK-1")
+    assert ticket is not None and ticket.assignee is None
+    assert ticket.updated_at >= written[0]

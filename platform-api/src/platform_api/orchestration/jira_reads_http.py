@@ -6,7 +6,7 @@ it for that task alone. The routes are under /internal/, so the Portal's proxy n
 """
 
 import re
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
@@ -55,7 +55,9 @@ class PracticeTicket(PracticeTicketSummary):
 class PracticeTickets(WireModel):
     tickets: list[PracticeTicketSummary]
     cut_off: bool = False
-    """True when more tickets matched than the search returns, so older ones are missing."""
+    """True when more tickets matched than the search returns, so older ones are missing. When the
+    Jira account has no time zone, it can be true even when every ticket that matches was
+    returned."""
 
 
 def _summary(ticket: JiraIssue) -> PracticeTicketSummary:
@@ -72,12 +74,12 @@ def _summary(ticket: JiraIssue) -> PracticeTicketSummary:
     )
 
 
-def _day(name: str, text: str, at: time) -> datetime | None:
+def _midnight(name: str, text: str, days_later: int = 0) -> datetime | None:
     if not text:
         return None
     try:
-        return datetime.combine(date.fromisoformat(text), at, UTC)
-    except ValueError:
+        return datetime.combine(date.fromisoformat(text) + timedelta(days=days_later), time(), UTC)
+    except ValueError, OverflowError:
         raise HTTPException(422, f"{name} is a day, YYYY-MM-DD") from None
 
 
@@ -133,17 +135,21 @@ async def search_tickets(
     issue_type: str = "",
 ) -> PracticeTickets:
     """At most 50 tickets, newest first, and `cut_off` says when more matched. An empty filter is
-    not applied. `created_since` is the start of a day and `updated_before` the end of one. Words
-    of `text` shorter than 3 characters are ignored, and text with no word left matches nothing."""
+    not applied.
+
+    Days are UTC days, written YYYY-MM-DD. `done_since` and `created_since` mean on or after that
+    day, and `updated_before` means last updated on or before that day. `issue_type` is one type
+    or a comma-separated list, such as `Bug,Task`. Words of `text` shorter than 3 characters are
+    ignored, and text with no word left matches nothing."""
     allowed = await _admit(request, run_id, task, token)
     if project and STORED_JIRA_PROJECT_PATTERN.match(project) is None:
         raise HTTPException(422, "project is not a Jira project key")
     wanted: dict[str, TicketStatus | None] = {"": None, "To Do": "To Do", "Done": "Done"}
     if status not in wanted:
         raise HTTPException(422, "status is To Do or Done")
-    since = _day("done_since", done_since, time.min)
-    created = _day("created_since", created_since, time.min)
-    updated = _day("updated_before", updated_before, time(23, 59))
+    since = _midnight("done_since", done_since)
+    created = _midnight("created_since", created_since)
+    updated = _midnight("updated_before", updated_before, days_later=1)
     kinds = tuple(dict.fromkeys(name.strip() for name in issue_type.split(",") if name.strip()))
     if project and project not in allowed:
         raise HTTPException(403, "This run may not read that Jira project")

@@ -395,16 +395,18 @@ The four-model review of the redesign found two more limits that make created-da
 N4 (orchestration) carries the fields through platform-api:
 
 - `FIELDS` in `jira_rest.py` adds `issuetype` and `assignee`. `_issue` keeps `updated`, the issue type's name and the assignee's display name, instead of dropping them.
-- `JiraIssue` in `platform-api/src/platform_api/orchestration/jira.py` gains `updated_at`, `issue_type` and `assignee`. `IssueSearch` gains `updated_before` and `issue_types`, which `search` turns into `updated <= ...` and `issuetype in (...)` clauses, reading the date in the account's zone as `done_since` already does.
+- `JiraIssue` in `platform-api/src/platform_api/orchestration/jira.py` gains `updated_at`, `issue_type` and `assignee`. `IssueSearch` gains `created_since`, `updated_before` and `issue_types`, which `search` turns into `created >= ...`, `updated < ...` and `issuetype in (...)` clauses, reading the date in the account's zone as `done_since` already does. The route sends `updated_before` as the start of the next UTC day, so a ticket updated in the last minute of the day is still in. The result's `cut_off` is true when Jira says it has more tickets (Cloud's `isLast`, Data Center's `total`) or sends more than the limit.
 - The internal read routes in `jira_reads_http.py` return the fields and take the filters (section 3.2).
 - The practice Jira keeps an `updated_at` on each ticket, set when it is created, labelled or marked done, and an `assignee` (`platform-api/src/platform_api/practice_jira/store.py`). It already keeps `issue_type`. Its JQL in `platform-api/src/platform_api/practice_jira/jql.py` learns `updated`, `issuetype` and `assignee`. The table change is `platform-api/src/platform_api/migrations/orchestration/versions/0012_practice_jira_updated_and_assignee.py` **(new)**. It is 0012 because N4 comes before N18 in the build order, and N18's `0013_connection_checks.py` follows it. Whichever lands second sets its `down_revision` to the first, and the orchestration chain must keep one head.
-- The `jira.search` description in `TOOL_RULES` (`orchestration/cards.py`) names the new filters.
+- The `jira.search` description in `TOOL_RULES` (`orchestration/cards.py`) stays as it is. The Agents page's Tools tab shows it, and the agents can't use the new filters until N5.
 
 N5 (agent runtime) lets the agents use them:
 
 - `JiraTicket` in `agent-runtime/src/agent_runtime/jira.py` gains the three fields.
 - `JiraSearchArguments` in `agent-runtime/src/agent_runtime/tools.py` gains `updated_before` (a day, validated like `done_since`) and `issue_type` (short text). The tool's description says what each one does.
 - The search result the model sees in `card_runner.py` keeps `updated_at`, `issue_type` and `assignee`. The system prompt already gives today's date, so the model can turn "no update for 10 days" into a day.
+- The model also sees the search's `cut_off`, so an agent can say when a search was cut at the limit and older tickets are missing.
+- The `jira.search` description in `TOOL_RULES` (`platform-api/src/platform_api/orchestration/cards.py`) names the new filters, in the same PR that lets the agents use them. Regenerate `contracts/`.
 - The registry entry turns Ready in the same PR, and the golden set gains the cases in 7.5.
 
 ### 4.10 Vulnerability words in the abilities check (agent runtime)
@@ -716,7 +718,7 @@ Every PR merges as one squash commit, so `git revert <sha>` on `main` backs it o
 |---|---|
 | N0, N1 | Revert. Docs only. |
 | N2 | Revert. The abilities check passes vulnerability requests again. |
-| N4 | Revert the code. Keep the migration, because the new practice Jira columns have defaults and the old code ignores them. |
+| N4 | Revert the code and keep the migration. `updated_at` defaults to the time a row is written and `assignee` may be empty, so the old code still makes practice tickets. A ticket labelled or marked done while the code is reverted keeps its old `updated_at`. |
 | N5 | Revert. The runtime ignores the new fields again, and the registry entry goes back to Planned in the same revert. |
 | N3, N6, N17, N20 | Revert. The routes are new and nothing older calls them. Regenerate `contracts/`. |
 | N7 | Revert. The Portal's Home needs it, so revert N10 and N11 first. |

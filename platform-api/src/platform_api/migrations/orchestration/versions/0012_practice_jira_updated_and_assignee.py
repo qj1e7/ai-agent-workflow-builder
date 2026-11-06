@@ -2,6 +2,9 @@
 
 Jira shows both on every ticket. Until now the practice copy answered `updated` from the done
 time, so a label change did not move it, and it had no assignee at all.
+
+`updated_at` defaults to the time a row is written, so code from before this migration, which
+does not name the column, can still make tickets after it.
 """
 
 from alembic import op
@@ -16,7 +19,9 @@ def upgrade() -> None:
             ADD COLUMN updated_at timestamptz,
             ADD COLUMN assignee text;
         UPDATE orchestration.mock_jira_tickets SET updated_at = coalesce(done_at, created_at);
-        ALTER TABLE orchestration.mock_jira_tickets ALTER COLUMN updated_at SET NOT NULL;
+        ALTER TABLE orchestration.mock_jira_tickets
+            ALTER COLUMN updated_at SET DEFAULT now(),
+            ALTER COLUMN updated_at SET NOT NULL;
     """)
 
 

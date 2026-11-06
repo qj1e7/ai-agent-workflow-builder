@@ -12425,7 +12425,7 @@
     },
     "/internal/v1/runs/{run_id}/jira/tickets": {
       "get": {
-        "description": "At most 50 tickets, newest first, and `cut_off` says when more matched. An empty filter is\nnot applied. `created_since` is the start of a day and `updated_before` the end of one. Words\nof `text` shorter than 3 characters are ignored, and text with no word left matches nothing.",
+        "description": "At most 50 tickets, newest first, and `cut_off` says when more matched. An empty filter is\nnot applied.\n\nDays are UTC days, written YYYY-MM-DD. `done_since` and `created_since` mean on or after that\nday, and `updated_before` means last updated on or before that day. `issue_type` is one type\nor a comma-separated list, such as `Bug,Task`. Words of `text` shorter than 3 characters are\nignored, and text with no word left matches nothing.",
         "operationId": "search_tickets_internal_v1_runs__run_id__jira_tickets_get",
         "parameters": [
           {

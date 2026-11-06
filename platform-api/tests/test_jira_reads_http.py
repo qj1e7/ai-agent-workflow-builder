@@ -183,6 +183,23 @@ async def test_a_search_can_filter_by_created_day_last_update_and_type(client: h
     assert [t["key"] for t in kinds.json()["tickets"]] == ["MOCK-2", "MOCK-1"]
 
 
+async def test_updated_before_takes_in_the_whole_utc_day_and_not_the_next(
+    client: httpx.AsyncClient, practice: PracticeKit
+):
+    day = datetime(2026, 10, 20, tzinfo=UTC)
+    for title, at in (
+        ("Start of the day", day),
+        ("Last seconds of the day", day + timedelta(hours=23, minutes=59, seconds=30)),
+        ("Start of the next day", day + timedelta(days=1)),
+    ):
+        await practice.store.create("MOCK", title, "", [], "Bug", created_at=at)
+    found = await search(client, updated_before="2026-10-20", issue_type="Bug")
+    assert [t["title"] for t in found.json()["tickets"]] == [
+        "Last seconds of the day",
+        "Start of the day",
+    ]
+
+
 async def test_a_bad_day_in_the_new_filters_is_a_422(client: httpx.AsyncClient):
     created = await search(client, created_since="last week")
     assert (created.status_code, created.json()["detail"]) == (

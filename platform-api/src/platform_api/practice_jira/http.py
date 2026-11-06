@@ -274,7 +274,9 @@ async def search_cloud(request: Request, practice: Practice) -> Response:
     answer = await _search(request, practice, "3", *params)
     if isinstance(answer, JSONResponse):
         return answer
-    return JSONResponse({"issues": answer["issues"], "isLast": True})
+    return JSONResponse(
+        {"issues": answer["issues"], "isLast": answer["total"] <= len(answer["issues"])}
+    )
 
 
 @router.api_route(
