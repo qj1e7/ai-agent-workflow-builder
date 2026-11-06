@@ -239,8 +239,10 @@ both('wp-more-actions-menu', async (t) => {
   const paused = await t.text();
   assert(paused.includes('Paused') && paused.includes('won’t run until you resume it'), 'Pause pauses it, with the banner saying so');
   assert.strictEqual(await t.page.locator('.banner .btn.primary').innerText(), 'Resume', 'Resume is the one action while paused');
-  assert.strictEqual(await t.page.locator('.pagehead [data-act="resume"]').innerText(), 'Resume', 'the button offers Resume while paused');
-  await t.click('.pagehead [data-act="resume"][data-arg="issues"]');
+  /* Fix round C: the page offers Resume once, in the banner, and Pause is hidden while paused (spec 9). */
+  assert.strictEqual(await t.count('main [data-act="resume"]'), 1, 'one Resume while paused');
+  assert.strictEqual(await t.count('.pagehead [data-act="pause"]'), 0, 'Pause is hidden while paused');
+  await t.click('.banner [data-act="resume"][data-arg="issues"]');
   await t.click('[data-act="menu"]'); await t.click('[data-act="menuPick"][data-arg="editSched:issues"]');
   assert.strictEqual(await t.focused(), 'select#sf-freq', 'Change schedule opens the editor and focuses it');
   await t.click('[data-act="cancelSched"]');
@@ -337,7 +339,9 @@ both('run-stopped-four-answers', async (t) => {
 both('run-approval-panel-parts', async (t) => {
   await t.ctl('user', 'bob'); await t.run('sw');
   const panel = await t.page.innerText('#decision');
-  inOrder(panel, ['What will change', '3 tickets will be created in Jira project MOCK', 'Upgrade Log4j core', 'Upgrade LangGraph', 'Upgrade FastAPI', 'Why', 'Version checker:', 'Ticket writer:', 'Who asked', 'set up by Carol', 'Carol’s schedule started', 'What happens', 'Nothing is written until you say yes. If you decline, nothing is written.', 'waits until one of them decides', 'Your part', 'You can decide because you didn’t set this up.']);
+  inOrder(panel, ['What will change', '3 tickets will be created in Jira project MOCK', 'Upgrade Log4j core', 'Upgrade LangGraph', 'Upgrade FastAPI', 'Why', 'Version checker:', 'Ticket writer:', 'Who asked', 'set up by Carol', 'Carol’s schedule started', 'What happens', 'Nothing is written until you say yes.', 'waits until one of them decides', 'If you decline, the tickets are proposed again next Monday.', 'Your part', 'You can decide because you didn’t set this up.']);
+  /* Fix round C: the panel says nothing is written once, not three times. */
+  assert.strictEqual((panel.match(/nothing is written/gi) || []).length, 1, `“nothing is written” is said ${(panel.match(/nothing is written/gi) || []).length} times in the panel`);
   assert(!/stops waiting|by \d+:\d\d|before the next run/.test(panel), 'no stop time under today’s rule');
   assert((await t.count('#decision a[href*="github.com"]')) >= 6, 'links to the evidence');
   const btns = await t.page.$$eval('#decision .btns .btn', (els) => els.map((e) => e.textContent.trim()));
@@ -429,7 +433,7 @@ both('wp-made-workflows-keep-requests', async (t) => {
   await t.page.keyboard.press('Escape'); await t.wait(200);
   await t.click('.pagehead [data-act="pause"][data-arg="made:0"]');
   assert((await t.page.innerText('.banner')).includes('Paused'), 'Pause works on a made workflow');
-  await t.click('.pagehead [data-act="resume"][data-arg="made:0"]');
+  await t.click('.banner [data-act="resume"][data-arg="made:0"]');
   assert((await t.page.innerText('.banner')).startsWith('On.'), 'Resume works');
   await t.click('[data-act="menu"]'); await t.click('[data-act="menuPick"][data-arg="editSched:made:0"]');
   assert.strictEqual(await t.focused(), 'select#sf-freq', 'Change schedule opens the editor');
@@ -464,7 +468,7 @@ both('needs-skips-paused', async (t) => {
   assert.strictEqual(+(await count()), before - 1, `the count drops by one: ${before} then ${await count()}`);
   await t.go('workflows');
   assert(!(await t.text()).includes('Morning new-ticket check stopped'), 'the paused, stopped workflow leaves Needs you');
-  await t.click('[data-act="workflow"][data-arg="issues"]'); await t.click('.pagehead [data-act="resume"][data-arg="issues"]');
+  await t.click('[data-act="workflow"][data-arg="issues"]'); await t.click('.banner [data-act="resume"][data-arg="issues"]');
   assert.strictEqual(+(await count()), before, 'and comes back on Resume');
 });
 

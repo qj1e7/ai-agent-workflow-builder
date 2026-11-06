@@ -88,7 +88,7 @@ Taken from `agent-runtime/src/agent_runtime/tools.py` and `abilities.py` on 6 No
 |---|---|---|---|
 | Read Jira tickets | read | Ready | `jira.search`, `jira.read_ticket`. An agent sees a ticket's key, project, title, status (To Do or Done), created and done dates, and body (`jira.py`). A search returns the 50 newest tickets and filters by words, status and closed date only (`orchestration/jira.py`). |
 | Find older tickets, beyond the newest 50 | read | Planned | Needs a created-date filter and paging in the Jira search. Agents also don't know when the last run was. |
-| Find tickets by when they were last updated, their type or who owns them | read | Planned | Those fields never reach the agents. platform-api reads Jira's update date and drops it (`jira_rest.py`), so this is a small backend change (UX audit X2). |
+| Find tickets by when they were last updated, their type, component or priority, or who owns them | read | Planned | Those fields never reach the agents. platform-api reads Jira's update date and drops it (`jira_rest.py`), so this is a small backend change (UX audit X2). A request that filters by one of them gets a Part I can do answer that names each missing part, never a set-up card that drops the filter. |
 | Sum up what I find | none | Ready | Done by the model, no system access |
 | Check software for new releases on GitHub | read | Ready | `github.read_releases` |
 | Create a Jira ticket after a yes | write | Ready | `jira.create_ticket` |
@@ -291,13 +291,14 @@ Order:
 - **Header.** The name, its status pill, and the plain sentence of what it does.
 - **Status banner.** One sentence and one primary action, for example:
   - "Stopped today at 8:00. Jira didn't answer, and it's working again now." with **Retry the run**;
-  - "Running. Next run Wed 28 Oct, 8:00." with no button.
+  - "Running. Next run Wed 28 Oct, 8:00." with no button;
+  - "Paused. It won't run until you resume it." with **Resume**. Resume shows only here.
+- **Pause,** a button beside More actions while the workflow isn't paused. It is hidden while paused, because the banner holds Resume.
 - **Schedule.** "Every weekday at 8:00, Singapore time" with **Change**.
 - **Approval.** "Each run's ticket waits for a yes from any Approver except you." Named Approvers and Change who approves appear only with Planned features shown.
 - **Recent activity.** The runs, newest first, each opening its run page.
 - **More actions menu,** a button labelled "More actions" with these items:
   - Run now
-  - Pause or Resume
   - Change schedule
   - Open in n8n (Operators, and only when the workflow allows it)
   - Delete, last and in red, after a divider
@@ -349,7 +350,7 @@ Shown when this person can decide. It lists:
 - **Why:** what the agents found, with links to the evidence.
 - **Who asked:** the workflow, who owns it, and whether a schedule or a person started this run.
 - **What happens:**
-  - "Nothing is written until you say yes. If you decline, nothing is written."
+  - "Nothing is written until you say yes." The panel says it once. The rest of the line says who was asked and what a decline means, for example "If you decline, the run stops there."
   - Under today's rule, a request waits until someone decides. A stop time and a backup appear only with ADR 0024's named Approvers, which are Planned. Version 3 stopped today's-rule requests at the next run, which the built app doesn't do.
 - **Your part:**
   - "You can decide because you didn't set this up or start this run."

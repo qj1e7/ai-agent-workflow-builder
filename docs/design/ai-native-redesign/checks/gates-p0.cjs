@@ -29,8 +29,9 @@ const record = (name, err, expectedFail) => {
 
 async function session(browser, width, body) {
   const page = await browser.newPage({ viewport: { width, height: 900 }, reducedMotion: 'reduce', colorScheme: 'light' });
-  page.on('pageerror', (e) => consoleErrors.push(`pageerror @${width}: ${e.message}`));
-  page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(`console @${width}: ${m.text()}`); });
+  const errors = [];
+  page.on('pageerror', (e) => { errors.push(e.message); consoleErrors.push(`pageerror @${width}: ${e.message}`); });
+  page.on('console', (m) => { if (m.type() === 'error') { errors.push(m.text()); consoleErrors.push(`console @${width}: ${m.text()}`); } });
   await page.goto(url);
   await page.waitForTimeout(250);
   const t = {
@@ -47,7 +48,12 @@ async function session(browser, width, body) {
     closeTest: async () => { if (await page.$('.testctl-panel')) { await page.click('.testctl-toggle'); await page.waitForTimeout(120); } },
     ctl: async (act, arg) => { await t.openTest(); await page.click(`.testctl [data-act="${act}"][data-arg="${arg}"]`); await page.waitForTimeout(260); await t.closeTest(); },
     sim: async (label) => { await t.openTest(); await page.$eval(`.testctl button:has-text("${label}")`, (b) => b.click()); await page.waitForTimeout(260); await t.closeTest(); },
-    ask: async (text) => { await page.fill('[data-ask]', text); await page.keyboard.press('Enter'); await page.waitForTimeout(700); },
+    /* Fix round C: a Planner request that throws fails the check that sent it, not only the run's last line. */
+    ask: async (text) => {
+      const before = errors.length;
+      await page.fill('[data-ask]', text); await page.keyboard.press('Enter'); await page.waitForTimeout(700);
+      assert.deepStrictEqual(errors.slice(before), [], `the Planner request “${text}” raised a page or console error`);
+    },
     reply: () => page.locator('.thread [data-say]').last().innerText(),
     card: () => page.locator('.thread .pcard').last().innerText(),
     settings: async (tab) => { await page.click('.hdr [data-act="go"][data-arg="settings"]'); await page.waitForTimeout(220); await page.click(`[data-act="setTab"][data-arg="${tab}"]`); await page.waitForTimeout(220); },
@@ -470,6 +476,8 @@ const ALTERNATIVES = [
   ['owners', 'Every Friday, list open tickets with their owners'],
   ['older', 'Every Monday, list open tickets created more than 30 days ago'],
   ['component', 'Every Monday, put new tickets in the Platform component'],
+  ['confluence page update', 'Every Friday, update the Confluence page with the closed tickets'],
+  ['wiki page update', 'Every Monday, update the wiki page with the open tickets'],
 ];
 check('alternatives-are-real', async (browser) => session(browser, 1280, async (t) => {
   for (const [what, text] of ALTERNATIVES) {
@@ -559,6 +567,32 @@ check('newest-50-and-last-day', async (browser) => session(browser, 1280, async 
   await t.go('agents');
   assert((await t.page.innerText('.cap-not')).includes('Find older tickets, beyond the newest 50'), 'the registry has the Planned line');
   assert(!/created more than \d+ days ago/.test(source), 'the old-ticket starting point and alternative are gone');
+}));
+
+/* Fix round C: one number for what needs her. In a normal week and after one approval, the Needs you count on
+   Workflows, the items listed there, the Workflows tab badge, Home's Needs you count and the Planner's "what needs me"
+   answer, with its rows, all agree. */
+async function needCounts(t) {
+  const num = (s) => { const m = String(s).match(/\d+/); return m ? +m[0] : null; };
+  await t.go('workflows');
+  const c = {};
+  c.workflows = num(await t.page.innerText('main #needs-h .count'));
+  c.workflowsItems = (await t.count('main section[aria-labelledby="needs-h"] article.task')) + (await t.count('main section[aria-labelledby="needs-h"] .queue > li'));
+  c.badge = num(await t.page.innerText(`${t.width > 900 ? '.hdr' : '.tabbar'} .badge[data-val="needs-n"]`).catch(() => ''));
+  await t.go('home');
+  c.home = num(await t.page.innerText('main #needs-h .count'));
+  await t.ask('What needs me?');
+  c.planner = num(await t.reply());
+  c.plannerRows = await t.count('.thread .cmsg:last-child li.nrow');
+  await t.click('[data-act="newChat"]');
+  return c;
+}
+const agreeOn = (label, c) => assert.strictEqual(new Set(Object.values(c)).size, 1, `${label}: the counts differ: ${JSON.stringify(c)}`);
+check('counts-agree', async (browser) => session(browser, 1280, async (t) => {
+  agreeOn('normal week', await needCounts(t));
+  await t.go('workflows'); await t.click('main [data-act="run"][data-arg="sw"]'); await t.click('[data-act="approve"][data-arg="sw"]');
+  await t.page.waitForFunction(() => document.querySelector('main').innerText.includes('approved, and the platform created the tickets'), null, { timeout: 10000 });
+  agreeOn('after one approval', await needCounts(t));
 }));
 
 /* Synthesis 18: one state-word function, and no dead helpers. */
