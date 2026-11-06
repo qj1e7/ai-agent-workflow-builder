@@ -422,7 +422,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .wf-next { font-size: 0.875rem; color: var(--muted); white-space: nowrap; }
 .wf-act { justify-self: end; position: relative; z-index: var(--z-raised); }
 .wf-act:empty { display: none; }
-/* The search button sits at the end of the section heading. */
 .section > h2 .sec-tool { margin-left: auto; }
 .wf-add { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 16px 20px; border: 0; border-radius: 0 0 var(--r-card) var(--r-card); background: none; color: var(--muted); cursor: pointer; transition: background-color var(--dur-press) ease, transform var(--dur-press) var(--ease-out); }
 .wf-add b { color: var(--ink); }
@@ -450,7 +449,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .banner.ok .banner-ic { color: var(--green); }
 .banner.off { background: var(--sunk); }
 @media (max-width: 600px) { .banner { grid-template-columns: 20px minmax(0, 1fr); } .banner > .btns { grid-column: 2; } }
-/* Schedule and Approval: one fact per row, with its Change button at the end. */
 .factrows { display: grid; background: var(--surface); border: 1px solid var(--hair); border-radius: var(--r-card); }
 .factrows > div { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 14px 20px; }
 .factrows > div + div { border-top: 1px solid var(--rule); }
@@ -467,7 +465,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .menu hr { margin: 6px 0; border: 0; border-top: 1px solid var(--rule); }
 @media (pointer: coarse) { .menu [role="menuitem"] { min-height: 44px; } }
 @media (max-width: 600px) { .pagehead .menuwrap { width: 100%; } .menu { right: auto; left: 0; } }
-/* Technical details: the steps, agents, tools, n8n holder and history, one click away. */
 details.tech { padding: 0 20px; background: var(--surface); border: 1px solid var(--hair); border-radius: var(--r-card); }
 details.tech > summary { color: var(--ink); font-weight: 700; padding: 14px 0; }
 details.tech .tech-body { display: grid; gap: 20px; padding: 4px 0 20px; }
@@ -563,11 +560,9 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
   .st-label { order: 3; }
   .runhead h1 { font-size: 1.5rem; }
 }
-/* The agents' conversation and the replay controls, one click away under the decision (spec 10.2). */
 .run-detail { max-width: 800px; margin: 24px auto 0; display: grid; gap: 16px; justify-items: start; }
 .run-detail-body { width: 100%; display: grid; gap: 20px; }
 .run-detail-body .seg { margin-left: auto; }
-/* The approval panel's parts, each a question in the reader's words. */
 .approval .qa dd { display: grid; gap: 10px; }
 .approval .qa dd > b { font-size: 1.05rem; }
 .found { display: grid; gap: 8px; }
