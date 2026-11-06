@@ -23,7 +23,7 @@ Every statement in this spec is about one of these. Version 4 never shows a plan
 |---|---|---|
 | Built app | The deployed React and FastAPI app | Not changed by this work. `IMPLEMENTATION-PLAN.md` says what it would take. |
 | Prototype | The clickable design target | Changed, in a versioned copy |
-| Planned | Proposed ADRs and later items | Hidden by default. A test control shows them, each tagged **Planned**. |
+| Planned | Proposed ADRs, ADRs not yet written, and later items | By default a planned capability is named only as a plain "Not yet" limitation, never as working and never with roadmap words. A planned screen part (one that needs a proposed or unwritten ADR) is hidden. The Planned features test control shows them, each tagged **Planned**. |
 
 ### What does not change
 
@@ -66,7 +66,7 @@ The header keeps Teams, Settings and the signed-in person. The Workflows tab kee
 
 ## 4. The capability registry
 
-One table, `CAPS`, replaces the separate lists in version 3 (`ABILITIES`, `CANT`, `TOOLS` health, `CONNS` descriptions and the watchlist `SOURCES`). Each entry has a plain name in the Operator's words, the system it reaches, whether it reads, writes or only notifies, a base state, and the agents and tools that use it.
+One table, `CAPS`, is the single source of what the platform can do and in which state. It replaced version 3's `ABILITIES` list and the separate health and state flags in `CANT`, `TOOLS`, `CONNS` and `SOURCES`. Those tables still hold their own facts (a connection's key, a tool's inputs, a source's name) and read every state from `CAPS`. Each entry has a plain name in the Operator's words, the system it reaches, whether it reads, writes or only notifies, a base state, and the agents and tools that use it.
 
 ### States
 
@@ -86,7 +86,8 @@ Taken from `agent-runtime/src/agent_runtime/tools.py` and `abilities.py` on 6 No
 
 | Capability | Kind | Base state | Why |
 |---|---|---|---|
-| Read Jira tickets | read | Ready | `jira.search`, `jira.read_ticket`. An agent sees a ticket's key, project, title, status (To Do or Done), created and done dates, and body (`jira.py`). |
+| Read Jira tickets | read | Ready | `jira.search`, `jira.read_ticket`. An agent sees a ticket's key, project, title, status (To Do or Done), created and done dates, and body (`jira.py`). A search returns the 50 newest tickets and filters by words, status and closed date only (`orchestration/jira.py`). |
+| Find older tickets, beyond the newest 50 | read | Planned | Needs a created-date filter and paging in the Jira search. Agents also don't know when the last run was. |
 | Find tickets by when they were last updated, their type or who owns them | read | Planned | Those fields never reach the agents. platform-api reads Jira's update date and drops it (`jira_rest.py`), so this is a small backend change (UX audit X2). |
 | Sum up what I find | none | Ready | Done by the model, no system access |
 | Check software for new releases on GitHub | read | Ready | `github.read_releases` |
@@ -110,19 +111,19 @@ Taken from `agent-runtime/src/agent_runtime/tools.py` and `abilities.py` on 6 No
 From top to bottom:
 
 1. **Greeting and a one-line state.**
-   - "Good morning! Alice", the greeting the built app uses since commit 8a2a549. The line under it is computed from `needs()` and the workflows, for example "2 things need you. Your other workflows are running."
+   - "Good morning! Alice", the greeting the built app uses since commit 8a2a549. The line under it is computed from `needs()` and the workflows. It names what needs her without repeating the count the section heading already shows, for example "Here's what needs you. Your other workflows are on."
    - When nothing needs her, the line says when the next run is.
 2. **The box.** One large text box, with the Visor bot beside it.
    - Placeholder: "What would you like to automate, check or fix?"
    - Enter sends. The send button is labelled for screen readers.
 3. **Three suggestions,** chosen from her state, never fixed:
    - "Check my workflows"
-   - "Why did Morning new-ticket check stop?" when a workflow is stopped, otherwise "What can I ask for?"
+   - "Why did Morning new-ticket check stop?" when a workflow is stopped and that stop isn't already the first Needs you row, otherwise "What can I ask for?"
    - "Set up another workflow". It answers with three starting points she can pick from.
 4. **Needs you,** shown only when `needs()` has items:
    - Up to three rows, most urgent first. Stopped runs come first, then approvals (urgent ones first), then connection keys that are running out, then confirmations.
-   - Each row says what happened, why in one line, and offers one primary action, such as "Retry the run", "Review and decide" or "Replace the key".
-   - "See all 4 on Workflows" appears when there are more than three.
+   - Each row says what happened, why in one line, and offers one action, such as "Retry the run" or "Review and decide". Only the first row's action is primary, so the screen keeps one primary action (rule 1).
+   - "See all on Workflows" appears when there are more than three.
 
 Hidden by default: "What can I ask for?" (the capability lists) and New chat. Needs you is hidden while a conversation is on screen. The tab count still shows it.
 
@@ -136,8 +137,8 @@ Once she sends something, the page becomes the thread (version 3's behaviour): h
   - "Every Friday, sum up the tickets we closed this week" (automate). Version 3's first example asked for tickets with no update for 10 days, which today's Jira tool can't see (UX audit X2).
   - "Keep track of the React version" (monitor)
   - "What can you do?" (learn)
-- "I can" and "Not yet" lists, from the registry.
-- No Needs you and no warning counts. Day one starts with fresh connection keys. Version 3 showed a GitHub key running out in 9 days on a brand-new account (inconsistency I5).
+- The "I can" list, from the registry, with "What can't I do yet?" collapsed under it.
+- No warning counts. Day one starts with fresh connection keys, so Needs you is empty. Version 3 showed a GitHub key running out in 9 days on a brand-new account (inconsistency I5). If something real comes up on day one, such as Jira not answering, it shows in Needs you like any other day, so Home and the tab count never disagree.
 
 ### 5.3 Approver only
 
@@ -152,8 +153,10 @@ Once she sends something, the page becomes the thread (version 3's behaviour): h
 When Settings has no working AI model (a test control can switch this), the Planner can't read new requests, and Home says so instead of pretending:
 
 - An Operator sees the Visor bot in its sorry pose, the line "I can't read new requests until an AI model is connected", and **Connect a model**, which opens Settings, AI model.
+- It says what the built app says: agent workflows can't run and new ones can't be planned until a model is connected. Only the Software watchlist's summary uses a simple template instead.
+- Capabilities that need the model show as Needs setup.
 - The capability lists and Ask the team still work, because they don't need the model.
-- Needs you still shows, because it is read from the platform, not the model.
+- Needs you still shows, because it is read from the platform, not the model. Its "No AI model connected" row is left out while the hero already offers Connect a model.
 
 Version 3 let the Planner work on day one with no model (I5). ADR 0037's Consequences already describe this offline answer.
 
@@ -165,7 +168,7 @@ Version 3 let the Planner work on day one with no model (I5). ADR 0037's Consequ
 | Nothing needs you | The greeting line gives the next run. No Needs you section. |
 | Planner thinking | The Visor bot's thinking pose and three dots in the thread. The box is disabled with "The Planner is answering". |
 | Planner can't reach the model | 5.4 |
-| Error sending | The message stays in the box and an inline line reads "That didn't send. Try again." |
+| Error sending | Design only; the prototype can't fail to send. The message stays in the box and an inline line reads "That didn't send. Try again." |
 
 ## 6. The Planner's answers
 
@@ -194,6 +197,8 @@ The reply sentence carries 1 and 2. The card carries 3 and 4. Technical words st
 | **Why it stopped** (new) | "Why did X stop", or tapping the suggestion | The AI troubleshooter's four answers (10.3) | Retry the run, or Report to support, and See the run |
 | **What needs me** (new) | "What needs me", "anything to approve" | "2 things need you." | The Needs you rows |
 | **Offline** (new) | No AI model | 5.4 | Connect a model |
+
+An alternative is offered only when it is a real near-equivalent that the Planner would set up with every part Ready. Otherwise the only next step is Ask the team. For an Unsupported capability the answer says it isn't on the team's plan, for example "Email isn't on the team's plan. Ask the team if you need it." The reply sentence of the new answers is recomputed on every redraw, like the card under it.
 
 The three new kinds answer from platform state, so code decides them and fills them in. In the prototype, simple word rules pick them. In the built app, the model picks the kind and code fills it from platform-api (`IMPLEMENTATION-PLAN.md`).
 
@@ -224,7 +229,8 @@ The card is titled with the workflow's name and has Rename beside it. It has thr
 - A similar existing workflow gets one line with a link.
 
 **When**
-- "Every Friday at 9:00, Singapore time" and **Change**.
+- "Every Friday at 16:00, Singapore time" and **Change**.
+- The guessed ticket set follows the schedule: a daily run reads tickets created in the last day, a weekly run this week. When it can't follow, it becomes a choice.
 - The time picker opens only after Change, or by itself when the time is the one thing missing.
 - It never guesses a time. "Choose when it runs" stays amber until she picks one.
 
@@ -239,7 +245,7 @@ The card is titled with the workflow's name and has Rename beside it. It has thr
 
 **Footer**
 - **Turn it on** is the one primary button.
-- When disabled, the line beside it names exactly what is missing, for example "1 choice left: the Jira project".
+- When disabled, the line beside it names exactly what is missing, for example "1 choice left: the Jira project". When nothing is missing it reads "Nothing is unclear. Turn it on when you're ready." "A yes" always means an Approver's decision, never the Operator's own click.
 - After turning it on, the card becomes a short confirmation: the first run time, who will be asked for a yes, and **Do a test run**.
 
 ### 7.2 Rules
@@ -346,8 +352,8 @@ Shown when this person can decide. It lists:
   - "Nothing is written until you say yes. If you decline, nothing is written."
   - Under today's rule, a request waits until someone decides. A stop time and a backup appear only with ADR 0024's named Approvers, which are Planned. Version 3 stopped today's-rule requests at the next run, which the built app doesn't do.
 - **Your part:**
-  - "You can decide because you didn't set this up."
-  - When it's her own run: "You set this up, so another Approver must decide." She sees no buttons.
+  - "You can decide because you didn't set this up or start this run."
+  - When she owns it, started this run or retried it, the panel says which, for example "You retried this run, so another Approver must decide." She sees no buttons. One function, `partiesOf(id)`, gives the owner, the starter and the retriers, the same set the built gate refuses (`service.py`).
   - For a two-Approver step: "Bob said yes. Your yes is the second of two."
 - **Approve** and **Decline**.
 
@@ -408,7 +414,7 @@ The Teams drawer shows the card ADR 0036 describes:
 - which workflow and who owns it;
 - each change it would make;
 - what the agents found;
-- who can decide;
+- who can decide, and who can't and why ("Carol can't, because she set it up");
 - one button, **Open in AI Workflow Builder**.
 
 It has no Approve or Decline. After a decision, the drawer shows the request's state read from the platform, for example "Approved by Bob at 9:14". A notification never authorizes anything.
@@ -454,8 +460,8 @@ They stay in the corner panel, apart from the product screens.
 | Show | A normal week, Day one | As in version 3 |
 | Act as | Alice (Operator and Approver), Bob (Approver only) | As in version 3 |
 | AI model | Connected, Not connected | Shows the offline Planner (5.4) |
-| Planned features | Hidden, Shown and tagged | Lets reviewers see the ADR 0024 and 0025 designs and the access review without the product claiming them |
-| Mark what isn't built | Off, On | Outlines every screen part the built Portal doesn't have yet, so a reviewer can tell the prototype from the product |
+| Planned features | Hidden, Shown and tagged | Lets reviewers see planned designs without the product claiming them: named Approvers (ADR 0024), more watchlist sources and security findings (ADR 0025), Open in n8n and its history (ADR 0026, 0027), drafting a tool, changing an agent in plain English, coding agents preparing a fix in a support case, replacing a key in Settings, monthly schedules, AI usage, and the access review with its two Approvers in turn |
+| Mark what isn't built | Off, On | Outlines the screen parts the built Portal doesn't have yet, taken from `IMPLEMENTATION-PLAN.md` section 1, so a reviewer can tell the prototype from the product |
 | Make something happen | As in version 3, plus "Jira stops answering" and "Jira works again" | Shows Temporarily down and its recovery |
 
 "About this prototype" keeps saying the data is sample data and requests are read with simple word rules, not a model.
@@ -467,7 +473,7 @@ Each was found in version 3 (`03b-PROTOTYPE-UI-INVENTORY.md`, section 8).
 | ID | Source in version 3 | Correct current behaviour | Version 4 |
 |---|---|---|---|
 | I1 | Teams posting is "Not yet" on Home, but "Stale ticket nudge", the Tools tab, Settings, support updates, AI usage and three more lines the audit found all send Teams messages | Teams carries approval requests only (ADR 0036) | Post messages in Teams is Planned in the registry. "Stale ticket nudge" becomes "Weekly closed-ticket summary". A stale-ticket list isn't possible either, because the agents can't see a ticket's update date or owner. Support updates show under Following up. The AI usage warning shows on Home. Settings describes Teams as approval requests only. Needs you loses its "Open in Teams" button. |
-| I2 | Samples read GitHub issues, Entra ID, the admin tools and GitLab | Four tools: GitHub releases and Jira. Jira gives title, status, created and done dates, and body. | "Morning bug report check" becomes "Morning new-ticket check", which reads tickets created since the last run. The quarterly access review is Planned and appears only with Planned features shown, where it still shows two Approvers in turn. A request that needs the update date, type or owner gets the Part I can do answer. |
+| I2 | Samples read GitHub issues, Entra ID, the admin tools and GitLab | Four tools: GitHub releases and Jira. Jira gives title, status, created and done dates, and body, for the 50 newest tickets. | "Morning bug report check" becomes "Morning new-ticket check", which reads tickets created in the last day from the 50 newest. The quarterly access review is Planned and appears only with Planned features shown, where it still shows two Approvers in turn. A request that needs the update date, type or owner gets the Part I can do answer. |
 | I3 | A new Jira tool is "the team's decision" on Home, but has a Draft button in the Tools tab and the agent dialog | Tools are built by the team (ADR 0023). Drafting one needs its own ADR (ADR 0037). | One answer everywhere: "I can't add that yet. The team decides on new tools." with Ask the team. The draft flow appears only with Planned features shown. |
 | I4 | The set-up card uses today's rule, but the samples and the watchlist card show named Approvers with a backup | Today's rule. ADR 0024 isn't built. | Today's rule everywhere by default. Named Approvers appear only with Planned features shown. |
 | I5 | Day one has no model, but the Planner works. Day one also shows a key running out. | No model means the Planner can't read new requests | The AI model control drives the offline answer (5.4). Day one starts with a model connected and fresh keys. |
@@ -481,7 +487,7 @@ Each was found in version 3 (`03b-PROTOTYPE-UI-INVENTORY.md`, section 8).
 If the team accepts this spec, these need updating:
 
 1. **ADR 0037.**
-   - Needs you also appears on Home, only when it has items. ADR 0037 kept Home to the box alone, so a first-time user saw one thing. This spec keeps that for day one and empty weeks, and adds the list for experienced users so they don't have to know to open Workflows.
+   - Needs you also appears on Home, only when it has items. This reverses an option ADR 0037 considered and rejected, "The box on Home with Needs you under it", because in a normal week the box pushes approvals down and a long conversation pushes them further. This spec answers that concern in three ways. The list sits right under the box and shows at most three rows, so the most urgent items stay above the fold. The list is hidden while a conversation is on screen, and the tab badge keeps the count visible. An Approver who can't set up workflows still gets approvals as the whole of Home. The gain is that an experienced Operator, or an Operator who is also an Approver, sees what needs her without knowing to open Workflows (UX audit HM1). The built Home already has Needs you, so this also keeps a working part of the built app.
    - The Planner gains three answers (check my workflows, why it stopped, what needs me) and the offline answer.
 2. **The design note.**
    - The placeholder.
