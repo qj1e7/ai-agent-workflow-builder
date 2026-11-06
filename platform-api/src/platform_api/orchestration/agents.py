@@ -374,6 +374,39 @@ type UnderstandResult = Annotated[
 understand_result_adapter: TypeAdapter[UnderstandResult] = TypeAdapter(UnderstandResult)
 
 
+class FindSoftwareRequest(WireModel):
+    name: str = Field(min_length=1, max_length=80)
+
+
+class SoftwareMatch(WireModel):
+    repo: RepoName
+    why: str = Field(max_length=300)
+    releases: Literal["published", "none"]
+    newest: str | None
+
+
+class FoundSoftware(WireModel):
+    status: Literal["found"] = "found"
+    matches: list[SoftwareMatch] = Field(min_length=1, max_length=5)
+
+
+class SoftwareNotKnown(WireModel):
+    status: Literal["not_known"] = "not_known"
+    message: str = Field(max_length=300)
+
+
+class SoftwareNotChecked(WireModel):
+    status: Literal["not_checked"] = "not_checked"
+    message: str = Field(max_length=300)
+
+
+type FindSoftwareResult = Annotated[
+    FoundSoftware | SoftwareNotKnown | SoftwareNotChecked, Field(discriminator="status")
+]
+
+find_software_result_adapter: TypeAdapter[FindSoftwareResult] = TypeAdapter(FindSoftwareResult)
+
+
 class AgentCard(WireModel):
     id: str
     display: str
