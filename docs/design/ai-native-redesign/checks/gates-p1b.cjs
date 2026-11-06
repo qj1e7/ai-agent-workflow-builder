@@ -16,7 +16,7 @@ const source = fs.readFileSync(file, 'utf8');
 
 const EX_SUMMARY = 'Every Friday, sum up the tickets we closed this week';
 const EX_COMPARE = 'Every Monday, compare last week’s new tickets with the week before';
-const STATUS_WORDS = ['Running', 'Waiting for a yes', 'Stopped', 'Paused', 'No answer'];
+const STATUS_WORDS = ['On', 'Waiting for a yes', 'Stopped', 'Paused', 'No answer'];
 
 const results = [];
 const consoleErrors = [];
@@ -125,7 +125,8 @@ both('wf-row-shape', async (t) => {
     assert(r.acts <= 1, `at most one action: ${JSON.stringify(r)}`);
     assert.strictEqual(r.faces, 0, 'no agent faces in the list');
   }
-  assert.strictEqual(await t.count('.wf-list .btn.primary'), 1, 'one main button in the list');
+  assert.strictEqual(await t.count('.wf-list .btn.primary'), 0, 'the list repeats no main button that Needs you already offers');
+  assert.strictEqual(await t.count('main .btn.primary'), 1, 'one main button on the page');
 });
 both('wf-search-behind-button', async (t) => {
   await t.go('workflows');
@@ -165,10 +166,52 @@ both('wp-order-and-banner', async (t) => {
   await t.noSideScroll('workflow page'); await t.targets('workflow page');
   await t.click('[data-act="retryIssues"]'); await t.wait(400);
   await t.workflow('issues');
-  assert(/Running\. Next run Wed 28 Oct, 8:00\./.test(await t.text()), 'after the retry the banner says Running with the next run');
-  assert.strictEqual(await t.count('.banner .btn'), 0, 'a running workflow has no banner button');
+  assert(/On\. Next run Wed 28 Oct, 8:00\./.test(await t.text()), 'after the retry the banner says On with the next run');
+  assert.strictEqual(await t.count('.banner .btn'), 0, 'a workflow that is on has no banner button');
   await t.workflow('nudge');
   assert.strictEqual(await t.page.locator('.banner .btn.primary').innerText(), 'Report to support', 'the platform-bug stop offers Report to support');
+});
+both('int-one-troubleshooter-table', async (t) => {
+  for (const [id, name] of [['issues', 'Morning new-ticket check'], ['nudge', 'Weekly closed-ticket summary']]) {
+    await t.go('home'); if (await t.has('[data-act="newChat"]')) await t.click('[data-act="newChat"]');
+    await t.ask(`Why did ${name} stop?`);
+    const planner = await t.page.$$eval('.thread .pcard.why .qa dd', (els) => els.map((e) => e.textContent.trim()));
+    const plannerAct = await t.page.locator('.thread .pcard.why .btn.primary').innerText();
+    await t.workflow(id); await t.run(id);
+    const run = await t.page.$$eval('#decision .qa dd', (els) => els.map((e) => e.textContent.trim()));
+    const runAct = await t.page.locator('#decision .btn.primary').innerText();
+    assert.deepStrictEqual(run, planner, `${id}: the run page and the Planner give the same four answers`);
+    assert.strictEqual(runAct, plannerAct, `${id}: the same primary action in both places`);
+  }
+});
+both('int-one-action-per-thing-on-workflows', async (t) => {
+  await t.go('workflows');
+  assert.strictEqual(await t.count('[data-act="retryIssues"]'), 1, 'one Retry the run on the page');
+  assert.strictEqual(await t.count('[data-act="report"]'), 1, 'one Report to support on the page');
+  assert.strictEqual(await t.count('.wf-row[data-flip="wf:issues"] .wf-act button'), 0, 'the listed item keeps its pill and drops the repeated action');
+  assert.strictEqual(await t.page.locator('.wf-row[data-flip="wf:issues"] .pill').innerText(), 'Stopped', 'the status pill stays');
+});
+both('int-idle-pill-says-on', async (t) => {
+  await t.go('workflows');
+  await t.click('[data-act="retryIssues"]'); await t.wait(400);
+  await t.go('workflows');
+  const pills = await t.page.$$eval('.wf-row .pill', (els) => els.map((e) => e.textContent.trim()));
+  assert(pills.includes('On'), `a switched-on workflow between runs says On: ${pills.join(', ')}`);
+  assert(!pills.includes('Running'), 'Running is only for a run in progress');
+});
+both('int-menu-arrow-keys', async (t) => {
+  await t.workflow('issues');
+  await t.page.focus('[data-act="menu"]'); await t.page.keyboard.press('Enter'); await t.wait(200);
+  const at = () => t.page.evaluate(() => [...document.querySelectorAll('.menu [role="menuitem"]')].indexOf(document.activeElement));
+  const n = await t.count('.menu [role="menuitem"]');
+  assert.strictEqual(await at(), 0, 'opens on the first item');
+  await t.page.keyboard.press('ArrowDown'); assert.strictEqual(await at(), 1, 'Down moves to the next item');
+  await t.page.keyboard.press('End'); assert.strictEqual(await at(), n - 1, 'End goes to the last item');
+  await t.page.keyboard.press('ArrowDown'); assert.strictEqual(await at(), 0, 'Down from the last wraps to the first');
+  await t.page.keyboard.press('ArrowUp'); assert.strictEqual(await at(), n - 1, 'Up from the first wraps to the last');
+  await t.page.keyboard.press('Home'); assert.strictEqual(await at(), 0, 'Home goes to the first item');
+  await t.page.keyboard.press('Escape'); await t.wait(200);
+  assert.strictEqual(await t.focused(), 'button[menu]', 'Escape still returns focus to the button');
 });
 both('wp-more-actions-menu', async (t) => {
   await t.workflow('issues');

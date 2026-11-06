@@ -277,7 +277,7 @@ check('self-approval-blocked', async (browser) => session(browser, 1280, async (
   assert.strictEqual(await t.count('[data-act="approve"]'), 0, 'Alice has no Approve button on her own test run');
   assert(run.includes('started this run, so another Approver must decide'), 'the run says why');
   await t.go('workflows');
-  const row = await t.page.locator('.wf-row:has-text("Weekly closed ticket summary")').innerText();
+  const row = await t.page.locator('.wf-row:has-text("Friday closed ticket summary")').innerText();
   assert(!row.includes('Review and decide'), `Alice’s own test run offers her nothing to decide: ${row}`);
   assert(row.includes('Waiting for a yes'), 'the test run waits for a yes from someone else');
 }));
@@ -288,8 +288,12 @@ check('second-workflow-kept', async (browser) => session(browser, 1280, async (t
   await t.turnOn(EX_COMPARE);
   await t.go('workflows');
   const text = await t.text();
-  assert(text.includes('Weekly closed ticket summary'), 'first workflow still listed');
-  assert(text.includes('Weekly new ticket comparison'), 'second workflow listed');
+  assert(text.includes('Friday closed ticket summary'), 'first workflow still listed');
+  assert(text.includes('Monday new ticket comparison'), 'second workflow listed');
+  assert(text.includes('Weekly closed-ticket summary'), 'the sample workflow is still listed');
+  const names = await t.page.$$eval('.wf-row h2', (els) => els.map((e) => e.textContent.trim()));
+  assert.strictEqual(new Set(names).size, names.length, `every workflow has its own name: ${names.join(' | ')}`);
+  assert(!names.some((n) => n === 'Weekly closed ticket summary'), 'the day-one example no longer takes the sample’s near-twin name');
 }));
 
 check('refusal-still-works', async (browser) => session(browser, 1280, async (t) => {

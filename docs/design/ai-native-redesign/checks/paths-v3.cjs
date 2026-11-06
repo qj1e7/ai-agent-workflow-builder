@@ -58,7 +58,7 @@ add('A', 'First-time Operator sets up a weekly Jira summary and turns it on', as
   await t.select(S.project, 'MOCK', 'Choose the Jira project', { decision: true });
   await t.expectText('Nothing is unclear before turning on', /Nothing is unclear\. One yes turns it on\./);
   await t.click(S.turnOn, 'Turn it on', { decision: true });
-  await t.expectText('The workflow is on', /Weekly closed ticket summary is on/);
+  await t.expectText('The workflow is on', /(Weekly|Friday) closed ticket summary is on/);
 }, [1280, 390]);
 
 /* B. Experienced Operator, a normal week. */

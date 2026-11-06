@@ -164,9 +164,19 @@ both('answer-check-my-workflows', async (t) => {
   assert.strictEqual(await t.reply(), 'You have 3 workflows. 2 stopped and 1 is waiting for a yes.');
   const rows = await t.texts('.wfcheck .row');
   assert.strictEqual(rows.length, 3, 'a row per workflow');
-  for (const r of rows) assert(/Stopped|Waiting for a yes|Running|Paused/.test(r) && /Next run/.test(r), `status and next run: ${r}`);
+  for (const r of rows) assert(/\b(Stopped|Waiting for a yes|On|Paused)\b/.test(r) && /Next run/.test(r), `status and next run: ${r}`);
   assert.strictEqual(await t.count('.wfcheck .row .btn'), 3, 'one action each');
   await t.noSideways('check');
+});
+both('home-ask-link-not-repeated-and-no-nag-after-report', async (t) => {
+  const asks = () => t.page.$$eval('.home button', (els) => els.filter((e) => e.textContent.trim() === 'What can I ask for?').length);
+  assert.strictEqual(await asks(), 1, 'the chips do not offer it, so the link under them stays');
+  await t.click('.examples .chip >> nth=1'); await t.click('[data-act="retryIssues"]');
+  await t.go('home'); await t.newChat();
+  await t.click('.examples .chip >> nth=1'); await t.click('[data-act="report"]'); await t.click('[data-act="sendReport"]'); await t.page.keyboard.press('Escape'); await t.wait(200);
+  await t.go('home'); await t.newChat();
+  assert.deepStrictEqual(await t.texts('.examples .chip'), ['Check my workflows', 'What can I ask for?', 'Set up another workflow'], 'after the report, the Why suggestion is replaced');
+  assert.strictEqual(await asks(), 1, 'the chip and the link are not both on Home');
 });
 both('answer-why-it-stopped', async (t) => {
   await t.ask('Why did Morning new-ticket check stop?');
@@ -206,7 +216,7 @@ both('reply-announced', async (t) => {
   await t.ask('Check my workflows');
   assert.strictEqual(await t.page.innerText('[aria-live="polite"]'), await t.reply(), 'the live region carries the finished reply');
   await t.newChat(); await t.ask(EX_SUMMARY);
-  assert.strictEqual(await t.page.evaluate(() => document.activeElement && document.activeElement.textContent), 'Weekly closed ticket summary', 'a card answer takes focus at its heading');
+  assert.strictEqual(await t.page.evaluate(() => document.activeElement && document.activeElement.textContent), 'Friday closed ticket summary', 'a card answer takes focus at its heading');
 });
 
 /* 7 The set-up card. */

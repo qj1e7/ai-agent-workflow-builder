@@ -139,6 +139,16 @@ both('wl-add-nothing-found-falls-back-to-a-link', async (t) => {
   await t.page.fill('#sw-repo', 'https://github.com/zebra/tool'); await t.click('.guess button[type=submit]');
   assert((await t.page.innerText('tr[data-flip="sw:add0"]')).includes('zebra/tool'), 'a pasted link is accepted');
 });
+both('int-watchlist-run-count-matches-rows', async (t) => {
+  await t.go('software');
+  const rows = await t.count('tr[data-flip^="sw:"]');
+  const unread = await t.page.$$eval('tr[data-flip^="sw:"]', (els) => els.filter((e) => e.innerText.includes('Can’t check')).length);
+  assert.strictEqual(unread, 2, 'two rows can’t be read');
+  await t.page.click('[data-act="run"][data-arg="sw"]'); await t.wait(400);
+  const x = await t.page.innerText('body');
+  assert(x.includes(`Read ${rows - unread} of ${rows}`), `the run reads ${rows - unread} of ${rows}`);
+  assert(!/Read 14 (projects|sources)/.test(x), 'the old count is gone');
+});
 both('wl-how-its-checked', async (t) => {
   await t.go('software');
   const h = await t.page.innerText('#sw-how-h >> xpath=..');

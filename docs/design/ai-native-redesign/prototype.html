@@ -1672,10 +1672,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const action = e.action || (ACTIONS[it.action] ? it.action : null);
     const project = e.project || it.project || '';
     const sched = w.sched || { freq: it.freq || '', day: it.day || '', time: it.time || '', monthDay: '1' };
-    return { tickets, days, action, project, sched, name: w.name.trim() || nameFor(tickets, action, sched.freq) };
+    return { tickets, days, action, project, sched, name: w.name.trim() || nameFor(tickets, action, sched.freq, sched.day) };
   }
-  function nameFor(tickets, action, freq) {
-    const often = { day: 'Daily', weekday: 'Weekday', week: 'Weekly', month: 'Monthly' }[freq] || 'Weekly';
+  function nameFor(tickets, action, freq, day) {
+    const often = freq === 'week' && DAYS.includes(day) ? day : { day: 'Daily', weekday: 'Weekday', week: 'Weekly', month: 'Monthly' }[freq] || 'Weekly';
     const what = { closed: 'closed ticket ', created: 'new ticket ', open: 'open ticket ', old: 'old ticket ' }[tickets] || '';
     return `${often} ${what}${action === 'list' ? 'list' : action === 'compare' ? 'comparison' : 'summary'}`;
   }
@@ -1749,6 +1749,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   }
 
   /* ---------- Software: one list for every release check ---------- */
+  const UNREADABLE = ['Grafana', 'LangServe'];
   const TRACKED = ['LangGraph', 'FastAPI', 'Grafana', 'Log4j core', 'LangServe', 'n8n', 'PostgreSQL', 'Spring Framework', 'Terraform', 'Keycloak', 'Redis', 'Nginx', 'Node.js', 'Python'];
   const UP_TO_DATE = TRACKED.slice(5);
   /* Where software is published. Each source's state comes from the registry: GitHub releases are read today, the
@@ -1902,10 +1903,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
     return out;
   }
   const pill = (st) => `<span class="pill ${st.tone}">${st.tone === 'ok' ? I.check(12) : st.tone === 'bad' ? I.x(12) : st.tone === 'off' ? I.clock(12) : I.lock(12)}${st.label}</span>`;
-  /* One status in the spec's words (rule 9): Paused, else what the latest run needs, else Running. A test run is marked. */
+  /* One status in the spec's words (rule 9): Paused, else what the latest run needs, else On. Running is for a run in progress, and the sample has none. A test run is marked. */
   const pills = (id) => {
     const st = status(id);
-    const one = S.paused[id] ? `<span class="pill off">${I.pause(12)}Paused</span>` : st.tone === 'ok' ? `<span class="pill on">${I.check(12)}Running</span>` : pill(st);
+    const one = S.paused[id] ? `<span class="pill off">${I.pause(12)}Paused</span>` : st.tone === 'ok' ? `<span class="pill on">${I.check(12)}On</span>` : pill(st);
     return `<span class="btns" style="gap:6px">${one}${id === 'conf' && S.conf !== 'on' ? '<span class="tag">Test run</span>' : ''}</span>`;
   };
 
@@ -2012,7 +2013,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       const stations = [
         { label: 'Started', sub: 'Mon 9:00', who: 'p:carol', msg: { who: 'portal', text: 'Carol’s schedule started the Monday check.' } },
         { label: 'Pick agents', who: 'lead', msg: { who: 'lead', text: `14 tools to check. I’m bringing in the Version checker${full ? ', the Vulnerability checker' : ''} and the Ticket writer.` } },
-        { label: full ? 'Read 14 sources' : 'Read 14 projects', who: 'checker', msg: { who: 'checker', text: full ? 'I read each tool’s registry (Maven Central, PyPI, Docker Hub) and cross-checked GitHub. Log4j core, LangGraph and FastAPI have newer versions. For FastAPI, GitHub shows 0.120.2, but it isn’t on PyPI yet, so I used 0.120.1. Grafana couldn’t be read: Docker Hub and GitHub didn’t answer. From endoflife.date: PostgreSQL 14 stops getting fixes on 12 Nov, and Node.js 22 on 30 Apr.' : 'I read each tool’s releases on GitHub. Log4j core, LangGraph and FastAPI have newer versions. Grafana couldn’t be read: GitHub’s hourly limit was reached.' } },
+        { label: `Read ${TRACKED.length - UNREADABLE.length} of ${TRACKED.length}`, who: 'checker', msg: { who: 'checker', text: full ? 'I read each tool’s registry (Maven Central, PyPI, Docker Hub) and cross-checked GitHub. Log4j core, LangGraph and FastAPI have newer versions. For FastAPI, GitHub shows 0.120.2, but it isn’t on PyPI yet, so I used 0.120.1. Grafana couldn’t be read: Docker Hub and GitHub didn’t answer. From endoflife.date: PostgreSQL 14 stops getting fixes on 12 Nov, and Node.js 22 on 30 Apr.' : 'I read each tool’s releases on GitHub. Log4j core, LangGraph and FastAPI have newer versions. Grafana couldn’t be read: GitHub’s hourly limit was reached.' } },
         ...(full ? [{ label: 'Check vulnerabilities', who: 'vuln', msg: { who: 'vuln', text: 'I matched the versions we run in OSV, read the official records from NVD, checked vendor advisories, and checked CISA’s list of actively exploited vulnerabilities. Log4j core 2.14.1 has 4 known vulnerabilities, found in OSV, NVD and Apache’s own advisory. The worst, CVE-2021-44228 (Log4Shell), is rated critical, 10.0, and CISA lists it as actively exploited. None are listed for the other tools.' } }] : []),
         { label: 'Draft tickets', who: 'writer', msg: { who: 'writer', text: `I drafted 3 upgrade tickets.${full ? ' The Log4j core one is marked urgent.' : ''} Nothing is in Jira yet.` } },
         { label: 'Approval gate', gate: true, msg: gate },
@@ -2231,15 +2232,15 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (op) {
       if (!curModel()) out.push({ kind: 'bad', icon: I.alert(22), title: 'No AI model connected', meta: 'Settings, AI model', body: '<p class="small muted">The Planner can’t read new requests until a model is connected. Workflows that are already on keep running.</p>', actions: '<button class="btn primary" data-act="setGo" data-arg="model">Connect a model</button>' });
       if (jiraDown()) out.push({ kind: 'bad', icon: I.alert(22), title: 'Jira isn’t answering', meta: `Last seen working ${lastOk('jiraRead')}`, body: '<p class="small muted">Workflows that read or write Jira wait until it’s back. Nothing is lost.</p>', actions: '<button class="btn primary" data-act="setGo" data-arg="connections">See Connections</button>' });
-      if (has('issues') && S.issues === 'failed') out.push({ kind: 'bad', icon: I.alert(22), title: 'Morning new-ticket check stopped', meta: 'Today, 8:00', body: '', why: 'Jira didn’t answer at 8:00. It was down for maintenance, and it’s working again now. A retry is safe: it reads the tickets again, and its ticket still waits for a yes.', actions: `<button class="btn primary" data-act="retryIssues">Retry the run</button><button class="btn" data-act="run" data-arg="issues">See the run</button>` });
-      if (has('nudge') && S.nudge === 'failed' && S.report === 0) out.push({ kind: 'bad', icon: I.alert(22), title: 'Weekly closed-ticket summary stopped', meta: 'Fri 23 Oct, 16:00', body: '', why: 'This is a problem in the platform, not in your workflow. You can’t fix it from here. Report it and support gets everything they need.', actions: `<button class="btn primary" data-act="report" data-unbuilt="Report to support">Report to support</button><button class="btn" data-act="run" data-arg="nudge">See the run</button>` });
-      if (has('nudge') && S.nudge === 'failed' && S.report === 4) out.push({ kind: 'ok', icon: I.check(22), title: 'The fix for Weekly closed-ticket summary is live', meta: `Case ${S.supportCase.id} · fixed by Dana`, body: `<p class="small muted">Retry the run to catch up on last week.</p>`, actions: `<button class="btn primary" data-act="retryNudge">Retry the run</button>` });
+      if (has('issues') && S.issues === 'failed') out.push({ wf: 'issues', kind: 'bad', icon: I.alert(22), title: 'Morning new-ticket check stopped', meta: 'Today, 8:00', body: '', why: 'Jira didn’t answer at 8:00. It was down for maintenance, and it’s working again now. A retry is safe: it reads the tickets again, and its ticket still waits for a yes.', actions: `<button class="btn primary" data-act="retryIssues">Retry the run</button><button class="btn" data-act="run" data-arg="issues">See the run</button>` });
+      if (has('nudge') && S.nudge === 'failed' && S.report === 0) out.push({ wf: 'nudge', kind: 'bad', icon: I.alert(22), title: 'Weekly closed-ticket summary stopped', meta: 'Fri 23 Oct, 16:00', body: '', why: 'This is a problem in the platform, not in your workflow. You can’t fix it from here. Report it and support gets everything they need.', actions: `<button class="btn primary" data-act="report" data-unbuilt="Report to support">Report to support</button><button class="btn" data-act="run" data-arg="nudge">See the run</button>` });
+      if (has('nudge') && S.nudge === 'failed' && S.report === 4) out.push({ wf: 'nudge', kind: 'ok', icon: I.check(22), title: 'The fix for Weekly closed-ticket summary is live', meta: `Case ${S.supportCase.id} · fixed by Dana`, body: `<p class="small muted">Retry the run to catch up on last week.</p>`, actions: `<button class="btn primary" data-act="retryNudge">Retry the run</button>` });
     }
-    if (has('sw') && S.sw === 'waiting' && canApprove('sw')) out.push({ kind: 'wait', rank: urgentNote() ? 1 : 2, icon: I.shield(22), title: `3 upgrade tickets are waiting for your yes${urgentNote()}`, meta: 'Keep our software up to date · Software watchlist, Mon 26 Oct, 9:00', body: `<ul class="mini-list"><li>${shows('registries') ? '<b>Log4j core 2.14.1 → 2.25.2, urgent: critical and actively exploited</b>' : 'Log4j core 2.14.1 → 2.25.2'}</li><li>LangGraph 1.2.14 → 1.2.17</li><li>FastAPI 0.118.0 → 0.120.1</li></ul>${askLineHtml(req('sw'), u)}`, actions: `<button class="btn primary" data-act="run" data-arg="sw">Review and decide</button>` });
-    if (has('nudge') && S.nudge === 'waiting' && canApprove('nudge')) out.push({ kind: 'wait', icon: I.shield(22), title: '1 summary ticket is waiting for your yes', meta: 'Weekly closed-ticket summary · retried today after the fix', body: askLineHtml(req('nudge'), u), actions: `<button class="btn primary" data-act="run" data-arg="nudge">Review and decide</button>` });
-    if (has('conf') && S.conf === 'waiting' && canApprove('conf')) out.push({ kind: 'wait', icon: I.shield(22), title: confWrite(S.nr).needTitle, meta: `${esc(S.nr.name)} · test run by Alice`, body: askLineHtml(req('conf'), u), actions: `<button class="btn primary" data-act="run" data-arg="conf">Review and decide</button>` });
+    if (has('sw') && S.sw === 'waiting' && canApprove('sw')) out.push({ wf: 'sw', kind: 'wait', rank: urgentNote() ? 1 : 2, icon: I.shield(22), title: `3 upgrade tickets are waiting for your yes${urgentNote()}`, meta: 'Keep our software up to date · Software watchlist, Mon 26 Oct, 9:00', body: `<ul class="mini-list"><li>${shows('registries') ? '<b>Log4j core 2.14.1 → 2.25.2, urgent: critical and actively exploited</b>' : 'Log4j core 2.14.1 → 2.25.2'}</li><li>LangGraph 1.2.14 → 1.2.17</li><li>FastAPI 0.118.0 → 0.120.1</li></ul>${askLineHtml(req('sw'), u)}`, actions: `<button class="btn primary" data-act="run" data-arg="sw">Review and decide</button>` });
+    if (has('nudge') && S.nudge === 'waiting' && canApprove('nudge')) out.push({ wf: 'nudge', kind: 'wait', icon: I.shield(22), title: '1 summary ticket is waiting for your yes', meta: 'Weekly closed-ticket summary · retried today after the fix', body: askLineHtml(req('nudge'), u), actions: `<button class="btn primary" data-act="run" data-arg="nudge">Review and decide</button>` });
+    if (has('conf') && S.conf === 'waiting' && canApprove('conf')) out.push({ wf: 'conf', kind: 'wait', icon: I.shield(22), title: confWrite(S.nr).needTitle, meta: `${esc(S.nr.name)} · test run by Alice`, body: askLineHtml(req('conf'), u), actions: `<button class="btn primary" data-act="run" data-arg="conf">Review and decide</button>` });
     if (has('conf') && S.conf === 'declined' && u === 'alice') out.push({ kind: 'wait', rank: 4, icon: I.x(22), title: `${nm(S.confBy)} declined your test run`, meta: `${esc(S.nr.name)} · nothing was written`, body: '', actions: '<button class="btn primary" data-act="run" data-arg="conf">See the run</button><button class="btn" data-act="testRun">Do a test run again</button>' });
-    if (has('conf') && S.conf === 'expired' && u === 'alice') out.push({ kind: 'wait', rank: 4, icon: I.clock(22), title: 'Nobody answered on your test run', meta: `${esc(S.nr.name)} · stopped ${at(req('conf').expiresAt)}`, body: `<p class="small muted">${whoAnd(askedOf(req('conf')))} didn’t answer in time, so nothing was written. Run it again${shows('namedApprovers') ? ', or choose other Approvers' : ''}.</p>`, actions: `<button class="btn primary" data-act="testRun">Do a test run again</button>${changeApproversBtn('conf', 'apprFromRun')}` });
+    if (has('conf') && S.conf === 'expired' && u === 'alice') out.push({ wf: 'conf', kind: 'wait', rank: 4, icon: I.clock(22), title: 'Nobody answered on your test run', meta: `${esc(S.nr.name)} · stopped ${at(req('conf').expiresAt)}`, body: `<p class="small muted">${whoAnd(askedOf(req('conf')))} didn’t answer in time, so nothing was written. Run it again${shows('namedApprovers') ? ', or choose other Approvers' : ''}.</p>`, actions: `<button class="btn primary" data-act="testRun">Do a test run again</button>${changeApproversBtn('conf', 'apprFromRun')}` });
     Object.entries(S.roles).filter(([w, r]) => r.pendingAp && PEOPLE[u].ap && u !== r.pendingBy && u !== w).forEach(([w]) => out.push({ kind: 'tool', icon: I.shield(22), title: `Confirm ${nm(w)} as an Approver`, meta: `Asked by ${nm(S.roles[w].pendingBy)}`, body: '<p class="small muted">Approvers say yes or no to the changes a workflow wants to make.</p>', actions: '<button class="btn primary" data-act="setGo" data-arg="people">Review in Settings</button>' }));
     if (op) expiring().forEach((k) => out.push({ kind: 'wait', rank: 3, icon: I.clock(22), title: `The ${CONNS[k].name} key expires in ${S.conns[k].days} days`, meta: `Expires ${S.conns[k].expires}`, body: `<p class="small muted">Replace it before then, or everything that uses ${CONNS[k].name} stops.</p>`, actions: '<button class="btn primary" data-act="setGo" data-arg="connections">Replace it in Settings</button>' }));
     if (op && usagePct() >= 80) out.push({ kind: 'wait', rank: 3, icon: I.alert(22), title: usagePct() >= 100 ? 'The AI usage limit is reached' : `AI usage is at ${usagePct()}% of this month’s limit`, meta: `US$${usage().cost.toFixed(2)} of US$${S.usageLimit}`, body: `<p class="small muted">${usagePct() >= 100 ? 'Agents have stopped asking the AI model until the 1st of next month, or until someone raises the limit.' : 'At 100%, agents stop asking the AI model until the 1st of next month.'}</p>`, actions: '<button class="btn primary" data-act="setGo" data-arg="usage">See usage in Settings</button>' });
@@ -2332,7 +2333,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const stoppedIds = () => routineIds().filter((id) => !S.paused[id] && status(id).tone === 'bad');
   function suggestions() {
     if (!routineIds().length) return DAY_ONE;
-    const stopped = stoppedIds()[0];
+    const stopped = stoppedIds().find((id) => !(S.report > 0 && S.report < 4 && id === 'nudge'));
     return ['Check my workflows', stopped ? `Why did ${R(stopped).name} stop?` : 'What can I ask for?', 'Set up another workflow'];
   }
   /* Starting points for "Set up another workflow": the first three she doesn't already have. */
@@ -2367,7 +2368,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       ${empty ? `<div class="chips examples" role="group" aria-label="${dayOne ? 'Starting points' : 'Suggestions'}"${dayOne ? '' : ' data-unbuilt="Suggestions from your state"'}>${suggestions().map((e, i) => `<button class="chip" data-act="example" data-arg="${i}">${e}</button>`).join('')}</div>` : '<div class="btns"><button class="linkbtn" data-act="newChat">New chat</button></div>'}
       ${empty && items.length ? needsStrip(items) : ''}
       ${empty && (dayOne || c.abil) ? abilitiesHTML() : ''}
-      ${empty && !dayOne ? `<p class="small muted" style="text-align:center"><button class="linkbtn" data-act="abil">${c.abil ? 'Hide what I can do' : 'What can I ask for?'}</button></p>` : ''}
+      ${empty && !dayOne && !suggestions().includes('What can I ask for?') ? `<p class="small muted" style="text-align:center"><button class="linkbtn" data-act="abil">${c.abil ? 'Hide what I can do' : 'What can I ask for?'}</button></p>` : ''}
     </div>`;
   }
   /* Home with no AI model (spec 5.4): the Planner can't read new requests, so it says so. What it can do, and asking the
@@ -2391,9 +2392,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (!me().op) return '';
     if (S.paused[id]) return `<button class="btn primary sm" data-act="resume" data-arg="${id}">Resume</button>`;
     if (id === 'conf' && S.conf === 'expired') return `<button class="btn primary sm" data-act="testRun">Test it again</button>`;
-    if (id === 'issues' && S.issues === 'failed') return `<button class="btn primary sm" data-act="retryIssues">Retry the run</button>`;
-    if (id === 'nudge' && S.nudge === 'failed' && S.report === 0) return `<button class="btn primary sm" data-act="report" data-unbuilt="Report to support">Report to support</button>`;
-    if (id === 'nudge' && S.nudge === 'failed' && S.report === 4) return `<button class="btn primary sm" data-act="retryNudge">Retry the run</button>`;
+    if ((id === 'issues' && S.issues === 'failed') || (id === 'nudge' && S.nudge === 'failed')) return troubleBtn(TROUBLE[id](), true);
     return '';
   }
 
@@ -2437,13 +2436,14 @@ details > .m-close { animation: fold 140ms ease-in both; }
       if (S.filter === 'paused') return !!S.paused[id];
       return true;
     });
+    const inNeeds = new Set(needs().map((x) => x.wf));
     const order = shown.sort((a, b) => (actionFor(b) ? 1 : 0) - (actionFor(a) ? 1 : 0) || R(a).sort - R(b).sort);
     const justOn = S.justOn;
     S.justOn = null;
     let mainUsed = false;
     const rows = order.map((id, i) => {
       const r = R(id);
-      let act = actionFor(id);
+      let act = inNeeds.has(id) ? '' : actionFor(id);
       if (act) { if (mainUsed) act = demote(act); mainUsed = true; }
       return `<li class="wf-row${S.paused[id] ? ' paused' : ''}${justOn === id ? ' m-changed' : ''}" data-flip="wf:${id}" data-stagger style="--i:${i}">
         <div class="wf-main"><h2><button class="rcard-link" data-act="workflow" data-arg="${id}">${esc(r.name)}</button></h2><p>${r.what}</p></div>
@@ -2633,7 +2633,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const text = S.paused[id] ? 'Paused. It won’t run until you resume it.'
       : id === 'issues' && S.issues === 'failed' ? 'Stopped today at 8:00. Jira didn’t answer, and it’s working again now.'
         : id === 'nudge' && S.nudge === 'failed' ? `Stopped on Fri 23 Oct at 16:00, on a ticket the platform couldn’t read.${S.report > 0 && S.report < 4 ? ` Reported to support as ${S.supportCase.id}.` : S.report === 4 ? ' The fix from support is live.' : ''}`
-          : st.tone === 'ok' ? `Running. Next run ${r.next}.` : cap(st.last.replace(/^(Mon 26 Oct|Today, retried after the fix|Test run today): /, ''));
+          : st.tone === 'ok' ? `On. Next run ${r.next}.` : cap(st.last.replace(/^(Mon 26 Oct|Today, retried after the fix|Test run today): /, ''));
     const act = actionFor(id);
     const tone = S.paused[id] ? 'off' : st.tone;
     const icon = tone === 'bad' ? I.alert(20) : tone === 'wait' ? I.lock(20) : tone === 'off' ? I.pause(20) : I.check(20);
@@ -2825,24 +2825,15 @@ details > .m-close { animation: fold 140ms ease-in both; }
         ${live ? (me().op ? `<div class="btns"><button class="btn primary" data-act="n8nUndo" data-arg="${wf}">Undo Carol’s change</button><button class="btn" data-act="n8nAsk" data-arg="${wf}">Fix it in n8n${I.ext(14)}</button></div>` : '<p class="note">An Operator can undo the change.</p>') : ''}
       </div>`;
     }
-    /* The AI troubleshooter's four answers (spec 10.3): what happened, what was affected, whether a fix is safe, what to do. */
-    if (id === 'issues' && S.issues === 'failed') {
+    if ((id === 'issues' && S.issues === 'failed') || (id === 'nudge' && S.nudge === 'failed')) {
+      const t = TROUBLE[id]();
       return `<div class="panel">
-        <dl class="qa"><dt>What happened</dt><dd>Jira didn’t answer at 8:00. It was down for maintenance, and it’s working again now.</dd></dl>
-        <dl class="qa"><dt>What was affected</dt><dd>Today’s check didn’t run. Nothing was written.</dd></dl>
-        <dl class="qa"><dt>Can it be fixed safely</dt><dd>Yes. A retry reads the tickets again, and its ticket still waits for a yes.</dd></dl>
-        <dl class="qa"><dt>What to do</dt><dd>Retry the run. You can do this yourself.</dd></dl>
-        ${me().op ? '<div class="btns"><button class="btn primary" data-act="retryIssues">Retry the run</button></div>' : '<p class="note">An Operator can retry the run.</p>'}
-      </div>`;
-    }
-    if (id === 'nudge' && S.nudge === 'failed') {
-      return `<div class="panel">
-        <dl class="qa"><dt>What happened</dt><dd>The step that reads tickets stopped on <b>MOCK-31</b>. Its description is in a form the platform couldn’t read. The platform should skip a ticket like this, but it crashed.</dd></dl>
-        <dl class="qa"><dt>What was affected</dt><dd>Last Friday’s summary wasn’t made. Nothing was written.</dd></dl>
-        <dl class="qa"><dt>Can it be fixed safely</dt><dd>Not from here. This is a problem in the platform, not in your workflow, so a retry would stop in the same place.</dd></dl>
-        <dl class="qa"><dt>What to do</dt><dd>Report it. Support gets the run and this explanation, and you can follow the case under Following up on Workflows.</dd></dl>
-        ${S.report === 0 ? `<div class="btns">${me().op ? '<button class="btn primary" data-act="report" data-unbuilt="Report to support">Report to support</button>' : '<p class="note">An Operator can report this to support.</p>'}</div>`
-          : `<div data-pres="case:${S.supportCase.id}" data-unbuilt="Support cases"><h3>Reported to support</h3>${caseBox()}${reportTrack(false)}${S.report === 4 && me().op ? '<div class="btns"><button class="btn primary" data-act="retryNudge">Retry the run</button></div>' : ''}</div>`}
+        <dl class="qa"><dt>What happened</dt><dd>${t.happened}</dd></dl>
+        <dl class="qa"><dt>What was affected</dt><dd>${t.affected}</dd></dl>
+        <dl class="qa"><dt>Can it be fixed safely</dt><dd>${t.safe}</dd></dl>
+        <dl class="qa"><dt>What to do</dt><dd>${t.next}</dd></dl>
+        ${t.act ? `<div class="btns">${me().op ? troubleBtn(t) : `<p class="note">${t.deny}</p>`}</div>` : ''}
+        ${id === 'nudge' && S.report > 0 ? `<div data-pres="case:${S.supportCase.id}" data-unbuilt="Support cases"><h3>Reported to support</h3>${caseBox()}${reportTrack(false)}</div>` : ''}
       </div>`;
     }
     if (id === 'conf' && S.conf === 'expired') {
@@ -2987,14 +2978,14 @@ details > .m-close { animation: fold 140ms ease-in both; }
   ];
   const aboutWorkflows = (t) => { const hit = ABOUT.find(([re]) => re.test(t)); return hit ? hit[1](t) : null; };
   /* A workflow's state in the spec's words (15.9), as a pill tone and a word. */
-  const stateOf = (id) => (S.paused[id] ? ['off', 'Paused'] : { bad: ['bad', 'Stopped'], wait: ['wait', 'Waiting for a yes'], off: ['off', 'No answer'] }[status(id).tone] || ['ok', 'Running']);
-  const STATE_ORDER = ['Stopped', 'Waiting for a yes', 'Running', 'Paused', 'No answer'];
+  const stateOf = (id) => (S.paused[id] ? ['off', 'Paused'] : { bad: ['bad', 'Stopped'], wait: ['wait', 'Waiting for a yes'], off: ['off', 'No answer'] }[status(id).tone] || ['ok', 'On']);
+  const STATE_ORDER = ['Stopped', 'Waiting for a yes', 'On', 'Paused', 'No answer'];
   function checkSay() {
     const ids = routineIds();
     if (!ids.length) return 'You have no workflows yet. Tell me a task, and I’ll set it up.';
     const count = {};
     ids.forEach((id) => { const w = stateOf(id)[1]; count[w] = (count[w] || 0) + 1; });
-    const said = (w, k) => (w === 'Running' ? `${k} ${k === 1 ? 'is' : 'are'} running` : w === 'Waiting for a yes' ? `${k} ${k === 1 ? 'is' : 'are'} waiting for a yes` : w === 'No answer' ? `${k} got no answer` : `${k} ${w.toLowerCase()}`);
+    const said = (w, k) => (w === 'On' ? `${k} ${k === 1 ? 'is' : 'are'} on` : w === 'Waiting for a yes' ? `${k} ${k === 1 ? 'is' : 'are'} waiting for a yes` : w === 'No answer' ? `${k} got no answer` : `${k} ${w.toLowerCase()}`);
     return `You have ${ids.length} workflow${ids.length === 1 ? '' : 's'}. ${andList(STATE_ORDER.filter((w) => count[w]).map((w) => said(w, count[w])))}.`;
   }
   function checkCard() {
@@ -3003,15 +2994,18 @@ details > .m-close { animation: fold 140ms ease-in both; }
       return `<li class="row"><div><button class="linkbtn" data-act="workflow" data-arg="${id}">${esc(r.name)}</button><span class="row-sub">${pill({ tone, label })}${S.paused[id] ? '' : `<span>Next run ${r.next}</span>`}</span></div>${actionFor(id)}</li>`;
     }).join('')}</ul></div>`;
   }
-  /* The AI troubleshooter's four answers for each stop in the sample data (spec 10.3). The run page shows the same four. */
+  /* The AI troubleshooter's four answers for each stop in the sample data (spec 10.3). The Planner's answer, the run page
+     and the row actions all read this table. act is the one primary action for the state, or null. */
   const TROUBLE = {
-    issues: () => ({ happened: 'Jira didn’t answer at 8:00. It was down for maintenance, and it’s working again now.', affected: 'Today’s check didn’t run. Nothing was written.', safe: 'Yes. A retry reads the tickets again, and its ticket still waits for a yes.', next: 'Retry the run.', act: '<button class="btn primary sm" data-act="retryIssues">Retry the run</button>' }),
+    issues: () => ({ happened: 'Jira didn’t answer at 8:00. It was down for maintenance, and it’s working again now.', affected: 'Today’s check didn’t run. Nothing was written.', safe: 'Yes. A retry reads the tickets again, and its ticket still waits for a yes.', next: 'Retry the run.', act: { do: 'retryIssues', label: 'Retry the run' }, deny: 'An Operator can retry the run.' }),
     nudge: () => ({
-      happened: 'The step that reads tickets stopped on MOCK-31. Its description is in a form the platform couldn’t read.', affected: 'Last Friday’s summary wasn’t made. Nothing was written.', safe: 'Not from here. This is a problem in the platform, not in your workflow, so a retry would stop in the same place.',
-      next: S.report === 0 ? 'Report it. Support gets the run and this explanation.' : S.report === 4 ? 'The fix is live. Retry the run.' : `Support has it as case ${S.supportCase.id}. Follow it under Following up on Workflows.`,
-      act: S.report === 0 ? '<button class="btn primary sm" data-act="report" data-unbuilt="Report to support">Report to support</button>' : S.report === 4 ? '<button class="btn primary sm" data-act="retryNudge">Retry the run</button>' : '',
+      happened: 'The step that reads tickets stopped on <b>MOCK-31</b>. Its description is in a form the platform couldn’t read. The platform should skip a ticket like this, but it crashed.', affected: 'Last Friday’s summary wasn’t made. Nothing was written.', safe: 'Not from here. This is a problem in the platform, not in your workflow, so a retry would stop in the same place.',
+      next: S.report === 0 ? 'Report it. Support gets the run and this explanation, and you can follow the case under Following up on Workflows.' : S.report === 4 ? 'The fix is live. Retry the run.' : `Support has it as case ${S.supportCase.id}. Follow it under Following up on Workflows.`,
+      act: S.report === 0 ? { do: 'report', label: 'Report to support', unbuilt: 'Report to support' } : S.report === 4 ? { do: 'retryNudge', label: 'Retry the run' } : null,
+      deny: 'An Operator can report this to support.',
     }),
   };
+  const troubleBtn = (t, sm) => (t.act ? `<button class="btn primary${sm ? ' sm' : ''}" data-act="${t.act.do}"${t.act.unbuilt ? ` data-unbuilt="${t.act.unbuilt}"` : ''}>${t.act.label}</button>` : '');
   const stoppedNow = (id) => !!id && !!TROUBLE[id] && stoppedIds().includes(id);
   function whySay(a) {
     if (stoppedNow(a.id)) return `${R(a.id).name} stopped. Here’s what the AI troubleshooter found.`;
@@ -3025,7 +3019,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     return `<div class="pcard why" data-pres="why:${m.id}" data-unbuilt="Planner answers about your workflows">
       <div class="pcard-h">${face('trouble', 32)}<h3>AI troubleshooter</h3></div>
       <div class="pcard-s"><dl class="qa"><dt>What happened</dt><dd>${t.happened}</dd></dl><dl class="qa"><dt>What was affected</dt><dd>${t.affected}</dd></dl><dl class="qa"><dt>Can it be fixed safely</dt><dd>${t.safe}</dd></dl><dl class="qa"><dt>What to do</dt><dd>${t.next}</dd></dl></div>
-      <div class="pcard-f">${me().op ? t.act : ''}<button class="btn sm" data-act="run" data-arg="${id}">See the run</button></div>
+      <div class="pcard-f">${me().op ? troubleBtn(t, true) : ''}<button class="btn sm" data-act="run" data-arg="${id}">See the run</button></div>
     </div>`;
   }
   const mineSay = () => { const n = needs().length; return n ? `${n === 1 ? '1 thing needs' : `${n} things need`} you.` : 'Nothing needs you right now.'; };
@@ -5137,6 +5131,14 @@ details > .m-close { animation: fold 140ms ease-in both; }
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { if (S.modal) closeModal(); else if (S.teams) A.teams(); else if (S.menu) A.menuClose(); else if (S.toast) hideToast(); else if (S.testOpen) A.testToggle(); return; }
+    if (S.menu && ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key) && e.target.closest('.menu')) {
+      e.preventDefault();
+      const items = [...$app.querySelectorAll('.menu [role="menuitem"]')];
+      const at = items.indexOf(e.target);
+      const to = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : (at + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+      items[to].focus();
+      return;
+    }
     /* Enter sends to the Planner; Shift+Enter makes a new line. Enter in a card's text field presses its button. */
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.target.matches('[data-ask]')) { e.preventDefault(); A.ask(); return; }
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.target.matches('[data-askteam]')) { e.preventDefault(); A.askTeamOffline(); return; }
