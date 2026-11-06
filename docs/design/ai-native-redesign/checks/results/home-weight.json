@@ -1,0 +1,34 @@
+[
+  {
+    "version": "v3",
+    "state": "normal week",
+    "words": 61,
+    "controls": 6,
+    "primary": 0,
+    "errors": 0
+  },
+  {
+    "version": "v3",
+    "state": "day one",
+    "words": 122,
+    "controls": 5,
+    "primary": 0,
+    "errors": 0
+  },
+  {
+    "version": "v4",
+    "state": "normal week",
+    "words": 92,
+    "controls": 10,
+    "primary": 1,
+    "errors": 0
+  },
+  {
+    "version": "v4",
+    "state": "day one",
+    "words": 114,
+    "controls": 5,
+    "primary": 0,
+    "errors": 0
+  }
+]

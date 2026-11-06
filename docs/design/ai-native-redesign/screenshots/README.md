@@ -42,7 +42,7 @@ A full-page phone shot shows the fixed tab bar once, where the page was when it 
 
 ## What the judge saw in the after images
 
-Every after image was opened and looked at. None is blank or half-typed, and quality.cjs measured no sideways scroll at 390 px. Since the first pass, the phone placeholder fits, the Settings tabs wrap instead of running off the edge, the check-my-workflows rows stack, and the “Not built” label is no longer cut short.
+At b6cc589, the judge opened every after image. None was blank or half-typed, and quality.cjs measured no sideways scroll at 390 px. Since the first pass, the phone placeholder fits, the Settings tabs wrap instead of running off the edge, the check-my-workflows rows stack, and the “Not built” label is no longer cut short.
 
 The judge saw the problems below at b6cc589. Fix round C (513b95a) fixed each one, and all 52 after images were shot again on 513b95a. The lead opened the six images these problems were in (`planner-cant-email-desktop`, `planner-check-workflows-desktop`, `offline-home-phone`, `software-attention-desktop`, `run-approval-desktop`, `agent-library-desktop`) and saw each one fixed. The Resume problem is not in a shot. Scenario H in `checks/results/v4.json` now passes, and so does every check in `v4-validate.json`.
 

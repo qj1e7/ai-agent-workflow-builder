@@ -64,7 +64,7 @@ The interaction change is clicks plus fields plus selects.
 
 **What the brief asked to measure.**
 
-- **Is the starting action obvious?** On day one, Home in both versions is the Planner's box with "What does your team do again and again?". Version 4 adds a short "I can" list under it, with "What can't I do yet?" folded away (spec 5.2). The keyboard path reaches the box in 3 key presses, using the skip link (`KEYS-A`). Whether a new person sees the box as the place to start can't be measured by a script.
+- **Is the starting action obvious?** On day one, Home in both versions is the Planner's box with "What does your team do again and again?". Version 4 adds a short "I can" list under it, with "What can't I do yet?" folded away (spec 5.2). By keyboard, the box takes 3 key presses using the skip link (`KEYS-A`), or 9 Tab presses without it (`checks/results/v4-quality.json`). Whether a new person sees the box as the place to start can't be measured by a script.
 - **Number of decisions.** 3 in both: the Jira project, the time, and Turn it on.
 - **Unnecessary prompts.** The Planner asks back twice in both versions, for the project and the time. The request names neither, and neither has a safe guess. The card never guesses a time (spec 7.1). So no prompt was unnecessary by this measure.
 - **Does the summary make sense?** Version 4's card reads as one sentence, for example "Every Friday at 16:00, find the tickets closed this week in Jira project MOCK, sum them up, and put the summary in one new Jira ticket." Version 3 marked parts green as "from your words" when the Planner had changed them (UX audit SC1). Version 4 marks a part as hers only when the words came from her request. The check `card-agrees` confirms the sentence, the footer and the disabled reason agree after every edit. Whether people understand the sentence needs real users.
@@ -232,8 +232,10 @@ Version 4 is not lighter everywhere. Home on a normal week carries more.
 |---|---|---|
 | Version 3, normal week | 61 | 6 |
 | Version 4, normal week | 92 | 10 |
-| Version 3, day one | 122 | |
+| Version 3, day one | 122 | 5 |
 | Version 4, day one | 114 | 5 |
+
+Measured by `checks/home-weight.cjs` at 1280 px (`checks/results/home-weight.json`). Words are the words visible on the page. Controls are visible buttons, links, text boxes and drop-downs.
 
 The extra words and controls on a normal week are Needs you and the suggestions drawn from what is going on. They let B-home take 1 click instead of 3. Home keeps one primary button in every state (`home-one-primary`). Whether the busier Home is easier to scan, or just busier, is a question for real users.
 

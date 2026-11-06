@@ -530,12 +530,14 @@ All results below are for commit 513b95a. Their files are in `checks/results/`. 
   - alternatives that set up cleanly (15 offered across 18 requests);
   - no long dashes;
   - zero console errors.
-- **Planted defects.** The judge planted 14 defects, each in its own copy of the prototype. Its checks caught all 14, each with the expected message. Examples:
+- **Planted defects.** The judge planted 14 defects, each in its own copy of the prototype. The judge's checks caught all 14, each with the expected message. Examples:
   - an Approve button in Teams;
   - self-approval;
   - count drift;
   - a retry that succeeds while Jira is down;
   - three primary buttons on Home.
+
+  The builders' gates caught fewer. At b6cc589 they missed the count drift, an alternative offered without checking it sets up, and a Planner crash. Fix round C added gate checks that fail on the crash and on count drift. No builder gate yet catches the unchecked alternative. Only the judge's `alternatives-set-up-cleanly` does.
 - **The builders' gates.** `gates-p0.cjs` passed 36 checks, `gates-p1a.cjs` 58, `gates-p1b.cjs` 54 and `gates-p2.cjs` 63. Each gate's seeded controls still fail. The gates check I1 to I9 by name.
 - **Quality.** `checks/quality.cjs` checked 26 screens at 1280 and 390 px.
   - axe found 0 critical and 0 serious problems. It found 12 moderate (heading order, regions) and 2 minor.

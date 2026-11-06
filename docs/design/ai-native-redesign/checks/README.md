@@ -20,6 +20,8 @@ node docs/design/ai-native-redesign/checks/quality.cjs docs/design/portal-routin
 
 `run.cjs` takes about two minutes. Add `--only=A,T5,B@390` to run some scenarios.
 
+`home-weight.cjs` needs no arguments. It counts the words, visible controls and primary buttons on Home in both versions, on a normal week and on day one, and writes `results/home-weight.json`.
+
 ## What each output means
 
 **run.cjs** writes the JSON and a table next to it (`v3.md`). For every scenario it gives the id, the width, pass or fail, the first failed assertion with the value it found, and these counts:
