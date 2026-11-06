@@ -376,10 +376,12 @@ understand_result_adapter: TypeAdapter[UnderstandResult] = TypeAdapter(Understan
 
 class FindSoftwareRequest(WireModel):
     name: str = Field(min_length=1, max_length=80)
+    tag_pattern: str
 
 
 class SoftwareMatch(WireModel):
     repo: RepoName
+    what: str = Field(min_length=1, max_length=120)
     why: str = Field(max_length=300)
     releases: Literal["published", "none"]
     newest: str | None

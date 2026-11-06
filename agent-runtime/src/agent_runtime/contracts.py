@@ -805,19 +805,26 @@ def belongs_on_watchlist() -> WireModel:
 
 
 def find_software_request() -> FindSoftwareRequest:
-    return FindSoftwareRequest(name="Kubernetes")
+    return FindSoftwareRequest(name="Terraform", tag_pattern=RELEASE_TAG_PATTERN)
 
 
 def found_software() -> FoundSoftware:
     return FoundSoftware(
         matches=[
             SoftwareMatch(
-                repo="kubernetes/kubernetes",
-                why="Our list of known projects says Kubernetes is usually "
-                "kubernetes/kubernetes. GitHub has it just now.",
+                repo="hashicorp/terraform",
+                what="Terraform itself, from HashiCorp",
+                why="From our list of known projects.",
                 releases="published",
-                newest="v1.31.2",
-            )
+                newest="v1.9.8",
+            ),
+            SoftwareMatch(
+                repo="opentofu/opentofu",
+                what="OpenTofu, an open-source fork of Terraform",
+                why="From our list of known projects.",
+                releases="published",
+                newest="v1.8.5",
+            ),
         ]
     )
 

@@ -633,22 +633,30 @@ class FindSoftwareRequest(WireModel):
         max_length=80,
         description="The software as a person wrote it, such as Kubernetes.",
     )
+    tag_pattern: TagPattern
 
 
 class SoftwareMatch(WireModel):
     repo: RepoName = Field(
-        description="A GitHub project that exists, as owner/name. Checked just now."
+        description="A GitHub project that exists, as owner/name, at the address GitHub gives it "
+        "now. Checked just now."
+    )
+    what: str = Field(
+        min_length=1,
+        max_length=120,
+        description="What the project is, in plain words, so the person can tell matches apart.",
     )
     why: str = Field(
         max_length=300,
         description="Where the guess came from, in plain words, for the person to read.",
     )
     releases: Literal["published", "none"] = Field(
-        description="Whether the project has a stable release. With none, a watch would have "
-        "nothing to compare."
+        description="Whether the project has a stable release that the request's tag rule "
+        "counts. With none, a watch would have nothing to compare."
     )
     newest: str | None = Field(
-        description="The tag of the newest stable release. None when there is none."
+        description="The newest stable release tag that the tag rule counts. None when there is "
+        "none."
     )
 
 
@@ -664,14 +672,18 @@ class FoundSoftware(WireModel):
 
 class SoftwareNotKnown(WireModel):
     status: Literal["not_known"] = "not_known"
-    message: str = Field(max_length=300)
+    message: str = Field(
+        max_length=300,
+        description="The list has no such name, or GitHub found none of its projects.",
+    )
 
 
 class SoftwareNotChecked(WireModel):
     status: Literal["not_checked"] = "not_checked"
     message: str = Field(
         max_length=300,
-        description="GitHub did not answer, so no project is offered. Nothing unchecked is shown.",
+        description="What went wrong with GitHub, in plain words. No project is offered, because "
+        "nothing unchecked is shown.",
     )
 
 

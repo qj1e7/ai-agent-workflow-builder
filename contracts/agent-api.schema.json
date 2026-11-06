@@ -1137,10 +1137,14 @@
           "minLength": 1,
           "title": "Name",
           "type": "string"
+        },
+        "tag_pattern": {
+          "$ref": "#/$defs/TagPattern"
         }
       },
       "required": [
-        "name"
+        "name",
+        "tag_pattern"
       ],
       "title": "FindSoftwareRequest",
       "type": "object"
@@ -1673,11 +1677,11 @@
               "type": "null"
             }
           ],
-          "description": "The tag of the newest stable release. None when there is none.",
+          "description": "The newest stable release tag that the tag rule counts. None when there is none.",
           "title": "Newest"
         },
         "releases": {
-          "description": "Whether the project has a stable release. With none, a watch would have nothing to compare.",
+          "description": "Whether the project has a stable release that the request's tag rule counts. With none, a watch would have nothing to compare.",
           "enum": [
             "published",
             "none"
@@ -1687,7 +1691,14 @@
         },
         "repo": {
           "$ref": "#/$defs/RepoName",
-          "description": "A GitHub project that exists, as owner/name. Checked just now."
+          "description": "A GitHub project that exists, as owner/name, at the address GitHub gives it now. Checked just now."
+        },
+        "what": {
+          "description": "What the project is, in plain words, so the person can tell matches apart.",
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "What",
+          "type": "string"
         },
         "why": {
           "description": "Where the guess came from, in plain words, for the person to read.",
@@ -1698,6 +1709,7 @@
       },
       "required": [
         "repo",
+        "what",
         "why",
         "releases",
         "newest"
@@ -1709,7 +1721,7 @@
       "additionalProperties": false,
       "properties": {
         "message": {
-          "description": "GitHub did not answer, so no project is offered. Nothing unchecked is shown.",
+          "description": "What went wrong with GitHub, in plain words. No project is offered, because nothing unchecked is shown.",
           "maxLength": 300,
           "title": "Message",
           "type": "string"
@@ -1731,6 +1743,7 @@
       "additionalProperties": false,
       "properties": {
         "message": {
+          "description": "The list has no such name, or GitHub found none of its projects.",
           "maxLength": 300,
           "title": "Message",
           "type": "string"

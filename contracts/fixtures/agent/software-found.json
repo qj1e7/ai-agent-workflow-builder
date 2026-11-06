@@ -2,10 +2,18 @@
   "status": "found",
   "matches": [
     {
-      "repo": "kubernetes/kubernetes",
-      "why": "Our list of known projects says Kubernetes is usually kubernetes/kubernetes. GitHub has it just now.",
+      "repo": "hashicorp/terraform",
+      "what": "Terraform itself, from HashiCorp",
+      "why": "From our list of known projects.",
       "releases": "published",
-      "newest": "v1.31.2"
+      "newest": "v1.9.8"
+    },
+    {
+      "repo": "opentofu/opentofu",
+      "what": "OpenTofu, an open-source fork of Terraform",
+      "why": "From our list of known projects.",
+      "releases": "published",
+      "newest": "v1.8.5"
     }
   ]
 }

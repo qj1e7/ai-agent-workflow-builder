@@ -423,7 +423,7 @@ def create_app(
     def find_software(body: FindSoftwareRequest) -> FindSoftwareResult:
         if active.finder is None:
             raise HTTPException(status_code=501, detail="this runtime does not find software")
-        return active.finder.find(body.name)
+        return active.finder.find(body.name, body.tag_pattern)
 
     @app.post("/v1/models/connect", dependencies=[Depends(require_key)])
     def connect_model(body: ConnectRequest) -> ConnectResult:
