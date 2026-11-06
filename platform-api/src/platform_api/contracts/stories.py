@@ -757,7 +757,7 @@ def troubleshooting(tl: Timeline) -> TroubleshootingOut:
         run_id=FAILURE.run_id,
         failure=failed.data,
         advice=explain(failed.data.reason),
-        answers=answers(tl.events, failed.data),
+        answers=answers(failed.data),
     )
 
 

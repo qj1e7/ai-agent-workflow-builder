@@ -172,7 +172,7 @@ async def troubleshoot(run_id: RunId, principal: CurrentPrincipal, log: Log) -> 
         run_id=run_id,
         failure=failure.data,
         advice=explain_failure(failure.data),
-        answers=answers(events, failure.data),
+        answers=answers(failure.data),
     )
 
 

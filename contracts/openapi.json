@@ -1095,17 +1095,12 @@
           "what_happened": {
             "title": "What Happened",
             "type": "string"
-          },
-          "written": {
-            "title": "Written",
-            "type": "integer"
           }
         },
         "required": [
           "what_happened",
           "what_affected",
           "can_fix",
-          "written",
           "retry",
           "next"
         ],

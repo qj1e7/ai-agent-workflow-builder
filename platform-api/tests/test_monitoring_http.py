@@ -1,6 +1,6 @@
 import asyncio
 import json
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -21,11 +21,25 @@ from platform_api.monitoring import (
     activity_events_adapter,
     callback_for,
 )
+from platform_api.orchestration.agents import TaskError
+from platform_api.orchestration.approvals import Verdict
+from platform_api.orchestration.runs import DEADLINES, Acting, StepName
+from platform_api.orchestration.service import Orchestrator
+from platform_api.orchestration.write_actions import WriteAction, WriteGateway, WriteKey
 from platform_api.settings import Settings
-from platform_api.shared import RunId, TaskId, UserId
+from platform_api.shared import N8nExecutionId, RunId, TaskId, UserId
 from platform_api.wire import FailureReason, FailureStage
 from tests.conftest import PostgresUrls
-from tests.support import FIXTURES, LOCAL_ENV
+from tests.practice import PracticeKit
+from tests.support import ALICE as ALICE_PRINCIPAL
+from tests.support import BOB, FIXTURES, LOCAL_ENV, SPEC
+from tests.test_orchestrator import (
+    PUBLIC_BASE_URL,
+    Harness,
+    mint,
+    open_harness,
+    work_leg_to_approval,
+)
 
 pytestmark = pytest.mark.anyio
 
@@ -54,10 +68,9 @@ def failed(retryable: bool) -> PendingEvent:
     )
 
 
-@pytest.fixture
-async def app(activity_log: ActivityLog, postgres: PostgresUrls) -> AsyncIterator[FastAPI]:
+def app_for(log: ActivityLog, postgres: PostgresUrls) -> FastAPI:
     application = create_app(LOCAL)
-    application.state.activity_log = activity_log
+    application.state.activity_log = log
     application.state.settings = Settings(
         auth=DevAuth("http://localhost:8000"),
         public_base_url="http://localhost:8000",
@@ -71,7 +84,12 @@ async def app(activity_log: ActivityLog, postgres: PostgresUrls) -> AsyncIterato
         teams_channel="CODESparks Ops",
     )
     application.state.sse_keepalive_seconds = KEEPALIVE
-    yield application
+    return application
+
+
+@pytest.fixture
+async def app(activity_log: ActivityLog, postgres: PostgresUrls) -> AsyncIterator[FastAPI]:
+    yield app_for(activity_log, postgres)
 
 
 @pytest.fixture
@@ -334,19 +352,9 @@ async def test_troubleshoot_answers_the_four_questions_for_a_failed_work_leg(
     assert r.status_code == 200
     answers = r.json()["answers"]
     assert answers["what_happened"] == r.json()["advice"]["explanation"]
-    assert answers["written"] == 0
+    assert answers["what_affected"] == "Nothing was written."
     assert answers["retry"] == {"possible": True, "asks_again": True}
     assert answers["next"] == "retry"
-
-
-async def test_troubleshoot_says_a_failed_write_retries_without_a_new_yes(
-    client: httpx.AsyncClient, app: FastAPI
-):
-    await append(app, RUN, failed_at("acting", "WriteFailed", True))
-    answers = (await client.get(f"/api/v1/runs/{RUN}/troubleshoot", headers=ALICE)).json()[
-        "answers"
-    ]
-    assert answers["retry"] == {"possible": True, "asks_again": False}
 
 
 async def test_troubleshoot_sends_a_refused_write_to_support(
@@ -356,25 +364,163 @@ async def test_troubleshoot_sends_a_refused_write_to_support(
     answers = (await client.get(f"/api/v1/runs/{RUN}/troubleshoot", headers=ALICE)).json()[
         "answers"
     ]
+    assert answers["what_affected"] == "The approved write may or may not have reached Jira."
     assert answers["retry"] == {"possible": False, "asks_again": False}
     assert answers["next"] == "report"
 
 
-async def test_troubleshoot_counts_the_writes_done_before_the_stop(
-    client: httpx.AsyncClient, app: FastAPI
+async def troubleshoot_run(h: Harness, postgres: PostgresUrls, run_id: RunId) -> dict[str, Any]:
+    transport = httpx.ASGITransport(app=app_for(h.log, postgres))
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        r = await c.get(f"/api/v1/runs/{run_id}/troubleshoot", headers=ALICE)
+    assert r.status_code == 200
+    return r.json()
+
+
+async def approved(h: Harness) -> RunId:
+    """Bob says yes, and the act leg waits to be handed to the workflow engine."""
+    run_id, _, approval_id = await work_leg_to_approval(h)
+    detail = await h.orchestrator.get_approval(approval_id, BOB)
+    assert detail is not None
+    await h.orchestrator.decide(approval_id, BOB, 0, Verdict.APPROVE, detail.request.digest)
+    assert isinstance(await h.state(run_id), Acting)
+    return run_id
+
+
+class MadeThenLost:
+    """The practice Jira, behind a write step that loses Jira's answer after the ticket is made,
+    as a dropped connection does."""
+
+    def __init__(self, jira: PracticeKit) -> None:
+        self.jira = jira
+
+    @property
+    def name(self) -> str:
+        return self.jira.name
+
+    @property
+    def operations(self) -> frozenset[str]:
+        return self.jira.operations
+
+    async def execute(self, action: WriteAction, key: WriteKey) -> str:
+        await self.jira.execute(action, key)
+        raise httpx.ReadTimeout("read timed out")
+
+    def link(self, reference: str) -> str:
+        return self.jira.link(reference)
+
+
+async def test_troubleshoot_never_says_nothing_was_written_when_jira_made_the_ticket(
+    postgres: PostgresUrls,
 ):
-    story = activity_events_adapter.validate_python(
-        json.loads((FIXTURES / "runs" / "success.json").read_text())
+    async with open_harness(postgres) as h:
+        run_id = await approved(h)
+        await h.orchestrator.tick()
+        lossy = Orchestrator(
+            h.db,
+            h.log,
+            h.engine,
+            h.teams,
+            h.agent,
+            WriteGateway(h.db, [MadeThenLost(h.jira)], poll=0.05),
+            mint,
+            public_base_url=PUBLIC_BASE_URL,
+        )
+        reply = await lossy.on_step(run_id, StepName.WRITE_ACTION, N8nExecutionId("42"))
+        assert reply.outcome == "failed"
+        assert len(await h.jira.tickets()) == 1
+        got = await troubleshoot_run(h, postgres, run_id)
+    assert (got["failure"]["stage"], got["failure"]["reason"]) == ("acting", "WriteFailed")
+    answers = got["answers"]
+    assert answers["what_affected"] == "The approved write may or may not have reached Jira."
+    assert answers["retry"] == {"possible": True, "asks_again": False}
+    assert answers["next"] == "retry"
+    assert "finds a ticket an earlier try made" in answers["can_fix"]
+
+
+async def engine_timed_out(h: Harness) -> None:
+    await h.orchestrator.tick()
+    h.advance(DEADLINES[Acting] + timedelta(seconds=1))
+    await h.orchestrator.tick()
+
+
+async def engine_failed_at_the_write(h: Harness) -> None:
+    await h.orchestrator.tick()
+    await h.orchestrator.on_workflow_failure(
+        N8nExecutionId("42"), "run", "Do write action", "timed out"
     )
-    run_id = story[0].run_id
-    done = [e for e in story if e.kind == "write_action_done"]
-    await append(
-        app,
-        run_id,
-        *(PendingEvent(e.actor, e.kind, e.summary, e.data, ts=e.ts) for e in story[:-1]),
-        failed_at("acting", "WriteFailed", True),
-    )
-    answers = (await client.get(f"/api/v1/runs/{run_id}/troubleshoot", headers=ALICE)).json()[
-        "answers"
-    ]
-    assert answers["written"] == len(done) >= 1
+
+
+async def engine_down(h: Harness) -> None:
+    h.engine.down = True
+    for _ in range(20):
+        h.advance(timedelta(seconds=10))
+        await h.orchestrator.tick()
+
+
+@pytest.mark.parametrize(
+    ("stop", "reason"),
+    [
+        (engine_timed_out, "TimedOut"),
+        (engine_failed_at_the_write, "WorkflowNodeError"),
+        (engine_down, "DispatchFailed"),
+    ],
+    ids=["timed-out", "workflow-node-error", "dispatch-failed"],
+)
+async def test_troubleshoot_carries_on_after_the_yes_when_the_engine_fails_the_write_step(
+    postgres: PostgresUrls, stop: Callable[[Harness], Awaitable[None]], reason: FailureReason
+):
+    async with open_harness(postgres) as h:
+        run_id = await approved(h)
+        await stop(h)
+        got = await troubleshoot_run(h, postgres, run_id)
+    assert (got["failure"]["stage"], got["failure"]["reason"]) == ("acting", reason)
+    answers = got["answers"]
+    assert answers["retry"] == {"possible": True, "asks_again": False}
+    assert answers["what_affected"] == "The approved write may or may not have reached Jira."
+
+
+@pytest.mark.parametrize(
+    ("error", "said"),
+    [
+        (
+            TaskError(
+                type="ModelNeeded",
+                message="Connect an AI model in Settings to run agents.",
+                retryable=False,
+            ),
+            "No AI model is connected, so the agents couldn't start.",
+        ),
+        (
+            TaskError(
+                type="AgentTooSlow",
+                message="Release reader ran out of time. A task has 50 seconds.",
+                retryable=False,
+            ),
+            "An agent ran out of time before it finished.",
+        ),
+        (
+            TaskError(
+                type="UpstreamRejected", message="GitHub answered 404 Not Found", retryable=False
+            ),
+            "The agents couldn't finish this step.",
+        ),
+    ],
+    ids=["model-needed", "too-slow", "upstream-rejected"],
+)
+async def test_troubleshoot_says_only_what_the_agents_stop_carries(
+    postgres: PostgresUrls, error: TaskError, said: str
+):
+    async with open_harness(postgres) as h:
+        h.agent.mode = "failed"
+        h.agent.error = error
+        started = await h.orchestrator.start_run(SPEC, ALICE_PRINCIPAL, "key-1")
+        await h.orchestrator.tick()
+        await h.orchestrator.on_step(started.run_id, StepName.RUN_AGENTS, N8nExecutionId("41"))
+        got = await troubleshoot_run(h, postgres, started.run_id)
+    assert (got["failure"]["stage"], got["failure"]["retryable"]) == ("working", False)
+    answers = got["answers"]
+    assert answers["what_happened"] == said
+    assert answers["what_affected"] == "Nothing was written."
+    assert answers["retry"] == {"possible": False, "asks_again": False}
+    assert answers["next"] == "report"
