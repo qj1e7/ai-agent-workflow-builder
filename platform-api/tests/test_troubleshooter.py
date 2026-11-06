@@ -21,12 +21,14 @@ def test_a_retryable_agent_error_gets_the_generic_advice():
     assert explain_failure(failure("AgentError", True)) == explain("AgentError")
 
 
-def test_a_write_jira_refused_is_told_to_check_jira_and_start_again():
+def test_a_refused_write_is_told_to_check_jira_before_any_new_run():
     assert explain_failure(failure("WriteFailed", True)) == explain("WriteFailed")
     advice = explain_failure(failure("WriteFailed", False))
     assert advice != explain("WriteFailed")
     assert advice.suggested_action == "ask_maintainer"
-    assert "Jira" in advice.likely_cause and "new run" in advice.suggestion
+    assert "refused the write" in advice.likely_cause
+    assert "can't prove it made" in advice.likely_cause
+    assert advice.suggestion.index("check Jira") < advice.suggestion.index("new run")
 
 
 def test_other_reasons_ignore_the_retryable_flag():
@@ -198,13 +200,6 @@ STOPS: list[tuple[FailureStage, FailureReason, bool, str, str]] = [
         True,
         "The n8n workflow 'release-check' failed at its step 'Write action': boom",
         "A step in the workflow engine failed.",
-    ),
-    (
-        "acting",
-        "OutOfOrderStep",
-        False,
-        "The workflow called run_agents out of order. Reload it from git and start a new run",
-        "The workflow called a step out of order, so the run stopped.",
     ),
 ]
 

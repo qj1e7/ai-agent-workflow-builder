@@ -57,8 +57,9 @@ ADVICE: Mapping[FailureReason, Advice] = {
         likely_cause="The approval no longer matches the proposal, or the action is not "
         "a registered connector operation.",
         suggested_action="ask_maintainer",
-        suggestion="Start a new run. If this happens again, ask a maintainer to check "
-        "the approval records.",
+        suggestion="Check Jira for a ticket carrying this run's label before starting a new "
+        "run, because a new run can make a duplicate. If this happens again, ask a "
+        "maintainer to check the approval records.",
     ),
     "UnboundIntent": Advice(
         explanation="The agents proposed an action this use case cannot carry out.",
@@ -116,11 +117,13 @@ KNOWN_AGENT_STOPS: Mapping[str, Advice] = {
 
 WRITE_REFUSED = Advice(
     explanation="The approved write was refused.",
-    likely_cause="Jira does not accept the ticket as it is: the project, the issue type or a "
-    "required field is not what Jira expects, or the platform's Jira account may not write there.",
+    likely_cause="Either Jira refused the write and made nothing, or the platform found a "
+    "ticket it can't prove it made. The failure text says which one happened.",
     suggested_action="ask_maintainer",
-    suggestion="Read what Jira said in the run's failure, ask a maintainer to fix the Jira "
-    "settings or the project, then start a new run.",
+    suggestion="Read the failure text, then check Jira for a ticket carrying this run's label "
+    "before anyone starts a new run. A new run doesn't share this run's write key and can "
+    "make a duplicate. If Jira refused the write, ask a maintainer to fix the Jira "
+    "settings or the project.",
 )
 
 
