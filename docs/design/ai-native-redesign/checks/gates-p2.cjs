@@ -47,6 +47,8 @@ async function session(browser, width, body) {
     sim: async (label) => { await t.openTest(); await page.$eval(`.testctl button:has-text("${label}")`, (b) => b.click()); await page.waitForTimeout(260); await t.closeTest(); },
     settings: async (tab) => { await page.click('.hdr [data-act="go"][data-arg="settings"]'); await page.waitForTimeout(220); if (tab) { await page.click(`[data-act="setTab"][data-arg="${tab}"]`); await page.waitForTimeout(220); } },
     lib: async (tab) => { await t.go('agents'); await page.click(`[data-act="libTab"][data-arg="${tab}"]`); await page.waitForTimeout(220); },
+    ask: async (text) => { await page.fill('[data-ask]', text); await page.keyboard.press('Enter'); await page.waitForTimeout(700); },
+    card: () => page.locator('.thread .pcard').last().innerText(),
     overflow: () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
     axe: async () => {
       await page.evaluate(axeSource);
@@ -154,7 +156,8 @@ both('wl-how-its-checked', async (t) => {
   const h = await t.page.innerText('#sw-how-h >> xpath=..');
   for (const part of ['Every Monday at 9:00', 'Singapore time', 'One approval covers all the upgrade tickets', 'Who approves: Any Approver except Carol']) assert(h.includes(part), `lacks ${part}: ${h}`);
   assert(/GitHub releases\s+Ready/.test(h), 'GitHub releases are Ready');
-  for (const s of ['Package registries', 'Security advisories', 'Support end dates']) assert(new RegExp(`${s}\\s+Planned`).test(h), `${s} is Planned`);
+  /* Fix round B, synthesis 4: a planned source is a plain Not yet by default; the Planned tag comes with Planned features. */
+  for (const s of ['Package registries', 'Security advisories', 'Support end dates']) assert(new RegExp(`${s}\\s+Not yet`).test(h), `${s} is Not yet`);
   const all = await t.text();
   assert(!/vulnerab|severity|Critical security risk|Security risks|Support ending/i.test(all), 'no findings or severity by default');
   assert.strictEqual(await t.count('.tag.planned'), 0, 'no Planned tag by default');
@@ -229,7 +232,15 @@ both('lib-agents-cards-and-details', async (t) => {
   for (const part of ['How it works', 'Tools it may use', 'Permissions and rules']) assert(open.includes(part), `Details lacks ${part}`);
 });
 both('lib-change-shows-the-exact-difference', async (t) => {
+  /* Fix round B, synthesis 4: changing an agent in plain English is Planned, so the dialog is read only by default. */
   await t.lib('agents'); await t.click('.agent-lg:has-text("Ticket writer") [data-act="agent"].btn');
+  assert.strictEqual(await t.count('#agent-text'), 0, 'read only by default');
+  await t.page.keyboard.press('Escape'); await t.wait(150);
+  await t.ctl('preview', 'on');
+  await t.lib('agents'); await t.click('.agent-lg:has-text("Ticket writer") [data-act="agent"].btn');
+  assert((await t.page.locator('.agent-change .tag.planned').count()) === 1, 'tagged Planned when shown');
+  const chips = await t.page.$$eval('.agent-change .chip', (els) => els.map((e) => e.textContent.trim()));
+  assert(!chips.some((c) => /component/i.test(c)), `suggestions use only Ready capabilities: ${chips.join(' | ')}`);
   await t.page.fill('#agent-text', 'Add the release notes link to every ticket'); await t.click('[data-act="agentSuggest"]');
   const p = await t.page.innerText('#agent-proposal');
   assert(p.includes('exact difference'), 'says it shows the exact difference');
@@ -249,14 +260,20 @@ both('lib-tools-plain-and-healthy', async (t) => {
 both('set-groups-and-connections', async (t) => {
   await t.settings();
   const labels = await t.page.$$eval('.set-tabs button', (b) => b.map((x) => x.textContent.replace(/\(needs attention\)/, '').trim()));
-  assert.deepStrictEqual(labels, ['Connections', 'People and permissions', 'AI model', 'Usage']);
+  /* Fix round B, synthesis 4: Usage is a design only, and replacing a key is ADR 0039, so both show only with Planned features. */
+  assert.deepStrictEqual(labels, ['Connections', 'People and permissions', 'AI model']);
   assert.strictEqual(await t.page.getAttribute('.set-tabs [data-arg="connections"]', 'aria-pressed'), 'true', 'Connections opens first');
   const x = await t.text();
   assert(x.includes('Jira is working. Checked today, 9:00.'), 'plain sentence');
   assert(/Sends approval requests to Approvers/.test(await t.page.innerText('.conn:has-text("Microsoft Teams")')), 'Teams description');
   assert(/What uses it\s+Read Jira tickets; Create a Jira ticket after a yes/.test(await t.page.innerText('.conn:has-text("Jira")')), 'what uses it comes from the registry');
-  assert(x.includes('The GitHub key runs out in 9 days. Replace it before Thu 5 Nov, or the Software watchlist stops.'), 'running-out sentence');
-  assert(await t.has('[data-act="connReplace"][data-arg="github"]'), 'the one fix');
+  assert(x.includes('The GitHub key runs out in 9 days. Ask whoever looks after the platform to replace it before Thu 5 Nov, or the Software watchlist stops.'), 'running-out sentence says who to ask');
+  assert(!(await t.has('[data-act="connReplace"]')), 'no Replace the key by default');
+  assert(await t.has('[data-act="connTest"][data-arg="github"]'), 'Check now stays');
+  assert.strictEqual(await t.page.evaluate(() => { const s = document.querySelector('.set-tabs'); return s.scrollWidth - s.clientWidth; }), 0, 'the Settings tabs do not overflow');
+  await t.ctl('preview', 'on'); await t.settings('connections');
+  assert(await t.has('[data-act="connReplace"][data-arg="github"] .tag.planned'), 'Replace the key shows tagged Planned');
+  assert((await t.text()).includes('Replace it before Thu 5 Nov'), 'the sentence then offers the fix');
   const keys = await t.page.$$eval('.conn dl dd', (d) => d.map((x) => x.textContent).filter((s) => /^Ends in/.test(s)));
   assert(keys.length === 3 && keys.every((k) => /^Ends in [A-Za-z0-9]{2}\b/.test(k)), `keys show two characters: ${keys}`);
 });
@@ -272,8 +289,12 @@ both('set-down-and-refused-states', async (t) => {
   assert(!/isn’t answering/.test(await t.text()), 'back to working');
 });
 both('set-usage-and-replace-key-marked-unbuilt', async (t) => {
+  await t.settings();
+  assert(!(await t.has('[data-act="setTab"][data-arg="usage"]')), 'no Usage tab by default');
+  await t.ctl('preview', 'on');
   await t.settings('usage');
   assert(await t.has('main [data-unbuilt*="usage"]'), 'Usage is marked data-unbuilt');
+  assert(await t.has('main h2 .tag.planned'), 'and tagged Planned');
   await t.settings('connections');
   assert(await t.has('[data-act="connReplace"][data-unbuilt]'), 'Replace the key marked');
   await t.go('software');
@@ -281,6 +302,64 @@ both('set-usage-and-replace-key-marked-unbuilt', async (t) => {
   await t.ctl('markUnbuilt', 'on');
   assert((await t.page.locator('.mark-unbuilt [data-unbuilt]').count()) >= 1, 'outlines show');
 });
+/* Synthesis 4 and 5: what is hidden until Planned features are shown, and the marks that follow the plan's "Prototype only" cells. */
+both('planned-hidden-by-default', async (t) => {
+  await t.go('workflows'); await t.click('[data-act="report"]'); await t.click('[data-act="sendReport"]'); await t.page.keyboard.press('Escape'); await t.wait(200);
+  const track = await t.page.innerText('.track4');
+  assert(!/Agents are writing a fix|Coding agents|support developer/.test(track), `no coding-agent stages by default: ${track}`);
+  assert(/Reported[\s\S]*Support is looking at it[\s\S]*Fixed/.test(track), 'the default track');
+  await t.go('home'); await t.ask('Every month at 9:00, sum up the tickets we closed');
+  assert((await t.card()).includes('I can’t run things monthly yet'), 'monthly is not understood by default');
+  await t.click('[data-act="whenOpen"]');
+  assert(!(await t.page.$$eval('#sched-freq option', (o) => o.map((x) => x.textContent))).includes('Every month'), 'no Every month in the picker');
+  await t.ctl('preview', 'on');
+  await t.go('workflows'); await t.click('[data-act="workflow"][data-arg="nudge"]');
+  const shown = await t.page.innerText('.track4');
+  assert(/Agents are writing a fix/.test(shown) && (await t.page.locator('.track4 .tag.planned').count()) >= 1, 'coding-agent stages show tagged with Planned features');
+  await t.go('home'); await t.click('[data-act="newChat"]'); await t.ask('Every month at 9:00, sum up the tickets we closed');
+  assert((await t.card()).includes('Every month on the 1st at 9:00'), 'monthly is understood with Planned features');
+});
+both('marks-follow-the-plan', async (t) => {
+  assert.strictEqual(await t.count('.home .needs[data-unbuilt]'), 0, 'Needs you on Home is built, so it carries no mark');
+  assert(await t.has('.home [data-act="abil"][data-unbuilt]'), 'What can I ask for is marked');
+  await t.ask('Every Friday, email me the tickets we closed this week');
+  assert(await t.has('.thread [data-act="teamReq"][data-unbuilt]'), 'Ask the team is marked');
+  await t.click('[data-act="instead"]'); await t.wait(600);
+  assert(await t.has('.thread .pcard[data-unbuilt*="set-up card"]'), 'the set-up card is marked');
+  await t.go('workflows');
+  assert(await t.has('[data-act="discardDraft"][data-unbuilt]'), 'Discard is marked');
+  await t.go('agents');
+  assert(await t.has('main [data-unbuilt*="What it can do"]'), 'What it can do is marked');
+  await t.settings('connections');
+  assert(await t.has('main [data-unbuilt*="Connection health"]'), 'connection health is marked');
+  await t.ctl('modelOn', 'off'); await t.go('home');
+  assert(await t.has('.home[data-unbuilt*="offline"]') && await t.has('.team-ask[data-unbuilt]'), 'the offline Home and its Ask the team box are marked');
+});
+/* Validation: the watchlist, the history and the approval panel name the same newest version; tool health is the registry's. */
+both('one-newest-version-and-registry-health', async (t) => {
+  await t.go('software');
+  const row = await t.page.innerText('tr[data-flip="sw:fa"]');
+  assert(row.includes('0.120.1') && !row.includes('0.120.2'), `the FastAPI row agrees with the request: ${row.replace(/\s+/g, ' ')}`);
+  await t.click('[data-act="swHist"][data-arg="fa"]'); await t.wait(200);
+  assert((await t.text()).includes('Found 0.120.1'), 'the history agrees');
+  await t.ctl('user', 'bob'); await t.click('[data-act="run"][data-arg="sw"]'); await t.wait(400);
+  const run = await t.text();
+  assert(run.includes('0.120.1') && !run.includes('0.120.2'), 'the approval panel agrees');
+  await t.ctl('user', 'alice'); await t.lib('tools');
+  const rows = await t.page.$$eval('.tool-row', (els) => els.map((e) => e.innerText.replace(/\s+/g, ' ')));
+  assert(rows.every((r) => /Working/.test(r) && !/Had a problem/.test(r)), `tools are healthy while Jira works: ${rows.join(' | ')}`);
+});
+/* Validation: the phone placeholder fits its box. */
+check('phone-placeholder-fits@390', (b) => session(b, 390, async (t) => {
+  const fits = await t.page.evaluate(() => {
+    const ta = document.querySelector('[data-ask]');
+    const c = document.createElement('canvas').getContext('2d');
+    const cs = getComputedStyle(ta);
+    c.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    return c.measureText(ta.placeholder).width <= ta.clientWidth;
+  });
+  assert(fits, 'the placeholder is not cut off at 390 px');
+}));
 both('set-people-and-model', async (t) => {
   await t.settings('people');
   assert((await t.text()).includes('People and permissions'), 'renamed');
@@ -296,7 +375,9 @@ both('set-people-and-model', async (t) => {
 /* ---------- Spec 15 rule 8: accessible, on every screen touched ---------- */
 both('a11y-no-sideways-scroll-axe-and-targets', async (t, w) => {
   const screens = [['watchlist', async () => { await t.go('software'); }], ['what it can do', async () => { await t.go('agents'); }], ['agents', async () => { await t.lib('agents'); }], ['tools', async () => { await t.lib('tools'); }],
-    ['connections', async () => { await t.settings('connections'); }], ['people', async () => { await t.settings('people'); }], ['model', async () => { await t.settings('model'); }], ['usage', async () => { await t.settings('usage'); }]];
+    ['connections', async () => { await t.settings('connections'); }], ['people', async () => { await t.settings('people'); }], ['model', async () => { await t.settings('model'); }], ['usage', async () => { await t.ctl('preview', 'on'); await t.settings('usage'); }]];
+  /* The Usage screen needs Planned features; the add flow below is checked without them, as the product ships. */
+  const addFlow = async () => { await t.ctl('preview', 'off'); await t.go('software'); };
   const bad = [];
   for (const [name, open] of screens) {
     await open();
@@ -304,7 +385,7 @@ both('a11y-no-sideways-scroll-axe-and-targets', async (t, w) => {
     const v = await t.axe(); if (v.length) bad.push(`${name} axe: ${v.join(', ')}`);
     if (w < 600) { const s = await t.small(); if (s.length) bad.push(`${name} small targets: ${s.slice(0, 3).map((x) => `${x.n}=${x.h}px`).join(', ')}`); }
   }
-  await t.go('software'); await t.page.fill('#sw-name', 'Kubernetes'); await t.page.keyboard.press('Enter'); await t.wait(250);
+  await addFlow(); await t.page.fill('#sw-name', 'Kubernetes'); await t.page.keyboard.press('Enter'); await t.wait(250);
   const v = await t.axe(); if (v.length) bad.push(`add flow axe: ${v.join(', ')}`);
   const o = await t.overflow(); if (o > 0) bad.push(`add flow scrolls sideways by ${o}px`);
   if (w < 600) { const s = await t.small(); if (s.length) bad.push(`add flow small targets: ${s.slice(0, 3).map((x) => `${x.n}=${x.h}px`).join(', ')}`); }
