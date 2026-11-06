@@ -414,19 +414,22 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* Workflows is one list. Fixed columns, so status, name, agents, next run and the action line up row to row. */
 .wf-list { border: 1px solid var(--hair); border-radius: var(--r-card); background: var(--surface); }
 .wf-list > li:not(:first-child) { border-top: 1px solid var(--rule); }
-.wf-row { position: relative; display: grid; grid-template-columns: 196px minmax(0, 1fr) 104px 196px 172px; gap: 16px; align-items: center; padding: 16px 20px; transition: background-color var(--dur-press) ease; }
+.wf-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto 172px 172px; gap: 16px; align-items: center; padding: 16px 20px; transition: background-color var(--dur-press) ease; }
 .wf-row.paused { background: var(--sunk); }
 .wf-main h2 { font-size: 1.05rem; }
 .wf-main p { margin-top: 2px; font-size: 0.9rem; color: var(--muted); }
+.wf-pills { justify-self: start; }
 .wf-next { font-size: 0.875rem; color: var(--muted); white-space: nowrap; }
 .wf-act { justify-self: end; position: relative; z-index: var(--z-raised); }
+.wf-act:empty { display: none; }
+.section > h2 .sec-tool { margin-left: auto; }
 .wf-add { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 16px 20px; border: 0; border-radius: 0 0 var(--r-card) var(--r-card); background: none; color: var(--muted); cursor: pointer; transition: background-color var(--dur-press) ease, transform var(--dur-press) var(--ease-out); }
 .wf-add b { color: var(--ink); }
 .wf-add:active { transform: scale(0.99); }
 @media (max-width: 600px) { .wf-add > span { display: none; } }
 @media (max-width: 960px) {
-  .wf-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "pills faces" "main main" "next act"; gap: 8px 12px; }
-  .wf-pills { grid-area: pills; } .wf-main { grid-area: main; } .wf-row > .faces { grid-area: faces; justify-self: end; } .wf-next { grid-area: next; } .wf-act { grid-area: act; }
+  .wf-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "main main" "pills next" "act act"; gap: 8px 12px; }
+  .wf-pills { grid-area: pills; } .wf-main { grid-area: main; } .wf-next { grid-area: next; justify-self: end; white-space: normal; text-align: right; } .wf-act { grid-area: act; justify-self: start; }
 }
 .rcard-link { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
 .rcard-link::after { content: ""; position: absolute; inset: 0; border-radius: var(--r-card); }
@@ -437,11 +440,37 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .faces .face:first-child { margin-left: 0; }
 
 /* Workflow page */
-.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px 24px; padding: 18px 20px; background: var(--surface); border: 1px solid var(--hair); border-radius: var(--r-card); }
-.facts dt { font-size: 0.875rem; font-weight: 600; color: var(--muted); }
-.facts dd { font-weight: 600; margin-top: 2px; }
-.facts .fact-wide { grid-column: 1 / -1; }
-.facts .agent-chips { margin: 6px 0 0; }
+/* The status banner: one sentence and one primary action, tinted by state, never by colour alone (the pill and icon say it). */
+.banner { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 12px 14px; align-items: center; padding: 16px 20px; border: 1px solid var(--hair); border-radius: var(--r-card); background: var(--surface); }
+.banner p { margin: 0; font-weight: 600; }
+.banner .banner-ic { display: grid; place-items: center; color: var(--muted); }
+.banner.bad { border-color: var(--red-line); background: var(--red-soft); } .banner.bad .banner-ic { color: var(--red); }
+.banner.wait { border-color: var(--amber-line); background: var(--amber-soft); } .banner.wait .banner-ic { color: var(--amber-ink); }
+.banner.ok .banner-ic { color: var(--green); }
+.banner.off { background: var(--sunk); }
+@media (max-width: 600px) { .banner { grid-template-columns: 20px minmax(0, 1fr); } .banner > .btns { grid-column: 2; } }
+.factrows { display: grid; background: var(--surface); border: 1px solid var(--hair); border-radius: var(--r-card); }
+.factrows > div { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 14px 20px; }
+.factrows > div + div { border-top: 1px solid var(--rule); }
+.factrows > div > div { flex: 1 1 260px; min-width: 0; }
+.factrows dt { font-size: 0.875rem; font-weight: 600; color: var(--muted); }
+.factrows dd { font-weight: 600; margin-top: 2px; }
+.factrows dd small { display: block; font-weight: 400; font-size: 0.875rem; color: var(--muted); margin-top: 4px; }
+/* More actions: the menu opens under its button. Delete is last, after a line, in red. */
+.menuwrap { position: relative; flex: none; }
+.menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: var(--z-raised); min-width: 200px; display: grid; padding: 6px; background: var(--surface); border: 1px solid var(--hair); border-radius: var(--r-card); box-shadow: 0 8px 24px rgba(18, 20, 23, 0.12); }
+.menu [role="menuitem"] { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; padding: 0 12px; border: 0; border-radius: var(--r-ctl); background: none; color: var(--ink); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.menu [role="menuitem"]:hover, .menu [role="menuitem"]:focus-visible { background: var(--sunk); }
+.menu [role="menuitem"].danger { color: var(--red-ink); }
+.menu hr { margin: 6px 0; border: 0; border-top: 1px solid var(--rule); }
+@media (pointer: coarse) { .menu [role="menuitem"] { min-height: 44px; } }
+@media (max-width: 600px) { .pagehead .menuwrap { width: 100%; } .menu { right: auto; left: 0; } }
+details.tech { padding: 0 20px; background: var(--surface); border: 1px solid var(--hair); border-radius: var(--r-card); }
+details.tech > summary { color: var(--ink); font-weight: 700; padding: 14px 0; }
+details.tech .tech-body { display: grid; gap: 20px; padding: 4px 0 20px; }
+details.tech h3 { font-size: 0.875rem; font-weight: 600; color: var(--muted); margin: 0 0 8px; }
+.agent-tool-list { display: grid; gap: 8px; }
+.agent-tool-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
 .panel { padding: 20px 24px; background: var(--surface); border: 1px solid var(--hair); border-radius: var(--r-card); display: grid; gap: 14px; min-width: 0; }
 .steps { display: grid; gap: 0; counter-reset: s; }
 .steps li { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; padding: 12px 0; border-top: 1px solid var(--rule); counter-increment: s; }
@@ -530,8 +559,17 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
   .st-label { order: 3; }
   .runhead h1 { font-size: 1.5rem; }
 }
-.runbody { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 24px; align-items: start; }
-@media (max-width: 960px) { .runbody { grid-template-columns: minmax(0, 1fr); } .runbody .act { order: -1; } }
+.run-detail { max-width: 800px; margin: 24px auto 0; display: grid; gap: 16px; justify-items: start; }
+.run-detail-body { width: 100%; display: grid; gap: 20px; }
+.run-detail-body .seg { margin-left: auto; }
+.approval .qa dd { display: grid; gap: 10px; }
+.approval .qa dd > b { font-size: 1.05rem; }
+.found { display: grid; gap: 8px; }
+.found li { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; align-items: start; font-size: 0.95rem; }
+.found .face { width: 24px; height: 24px; }
+/* On a phone the evidence links and the speed control reach 44 px too. The .seg rule above is more specific than the
+   shared coarse-pointer rule, so this one is scoped to the run detail. */
+@media (pointer: coarse) { .approval .links a { display: inline-flex; align-items: center; min-height: 44px; } .run-detail .seg button { min-height: 44px; } }
 /* The run as a group chat: system events are quiet markers, agents speak in bubbles,
    and the approval gate or the AI troubleshooter has the last word, with the buttons in its message. */
 .chat { max-width: 800px; margin: 0 auto; display: grid; gap: 20px; }
@@ -758,6 +796,7 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 .qa dd { overflow-wrap: anywhere; }
 @media (max-width: 480px) { .btn { white-space: normal; } }
 .result-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (pointer: coarse) { .result-chips .pillbtn { min-height: 44px; } }
 
 /* Software */
 .sched, .apprbar { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px 18px; border-radius: var(--r-card); margin-bottom: 24px; }
@@ -930,7 +969,6 @@ button.schip { cursor: pointer; }
 .sched-grid select { width: 100%; }
 .sched-grid input[type="time"] { width: auto; padding: 9px 12px; border: 1px solid var(--edge); border-radius: var(--r-ctl); }
 .note svg { vertical-align: -3px; }
-.rowacts { display: flex; flex-wrap: wrap; gap: 8px; }
 .findbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 20px; }
 .findbox { display: flex; align-items: center; gap: 8px; padding: 0 12px; border: 1px solid var(--edge); border-radius: var(--r-ctl); background: var(--surface); width: min(100%, 320px); color: var(--muted); }
 .findbox input { border: 0; padding: 8px 0; background: transparent; width: 100%; color: var(--ink); }
@@ -938,6 +976,8 @@ button.schip { cursor: pointer; }
 .findbox input:focus-visible { outline: none; }
 .filters { gap: 6px; }
 .filters button { border: 1px solid var(--rail); background: var(--surface); border-radius: 999px; padding: 6px 14px; font-weight: 600; cursor: pointer; min-height: 36px; transition: background-color var(--dur-press) ease, border-color var(--dur-press) ease, color var(--dur-press) ease; }
+/* On a phone the Workflows search box and its filters reach 44 px. Scoped, because .filters button above outranks the shared coarse-pointer rule. */
+@media (pointer: coarse) { .findbar .findbox input, .findbar .filters button { min-height: 44px; } }
 .filters button[aria-pressed="true"] { background: var(--primary); border-color: var(--primary); color: var(--on-ink); }
 .casebox { padding: 14px 16px; border: 1px solid var(--hair); border-radius: var(--r-card); background: var(--sunk); display: grid; gap: 8px; }
 .case-top { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; }
@@ -966,7 +1006,6 @@ button.schip { cursor: pointer; }
 .apstep { border: 0; padding: 0; margin: 0 0 14px; min-width: 0; }
 .apstep legend { font-weight: 700; padding: 0; margin-bottom: 8px; }
 .st.gate.noans .st-dot { background: var(--sunk); border-color: var(--muted); color: var(--ink); outline: 0; }
-.facts dd small { display: block; font-weight: 400; font-size: 0.875rem; color: var(--muted); margin-top: 4px; }
 /* Open in n8n: the workflow as n8n shows it, as boxes in a row. */
 .n8n-canvas { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 6px; margin: 16px 0; padding: 16px; border-radius: var(--r-well); background: var(--sunk); }
 .n8n-canvas li { display: inline-flex; align-items: center; gap: 6px; }
@@ -1791,19 +1830,19 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function status(id) {
     switch (id) {
       case 'sw':
-        if (S.sw === 'waiting') return { tone: 'wait', label: 'Needs a yes', last: `Mon 26 Oct: 3 upgrade tickets are waiting for a yes${urgentNote()}.` };
+        if (S.sw === 'waiting') return { tone: 'wait', label: 'Waiting for a yes', last: `Mon 26 Oct: 3 upgrade tickets are waiting for a yes${urgentNote()}.` };
         if (S.sw === 'approved') return { tone: 'ok', last: `Mon 26 Oct: 3 tickets created, approved by ${nm(S.swBy)}.` };
         return { tone: 'ok', last: `Mon 26 Oct: declined by ${nm(S.swBy)}. Nothing was written.` };
       case 'issues':
         return S.issues === 'failed' ? { tone: 'bad', label: 'Stopped', last: 'Today 8:00: stopped. Jira didn’t answer.' } : { tone: 'ok', last: 'Today: retried. No new tickets since yesterday, so nothing to write.' };
       case 'nudge':
-        if (S.nudge === 'waiting') return { tone: 'wait', label: 'Needs a yes', last: 'Today, retried after the fix: 1 summary ticket is waiting for a yes.' };
+        if (S.nudge === 'waiting') return { tone: 'wait', label: 'Waiting for a yes', last: 'Today, retried after the fix: 1 summary ticket is waiting for a yes.' };
         if (S.nudge === 'approved') return { tone: 'ok', last: `Today, retried after the fix: MOCK-34 created, approved by ${nm(S.nudgeBy)}.` };
         if (S.nudge === 'declined') return { tone: 'ok', last: `Today, retried after the fix: declined by ${nm(S.nudgeBy)}. Nothing was written.` };
         if (S.report > 0) return { tone: 'bad', label: 'Stopped', last: `Fri 23 Oct: stopped. Reported to support as ${S.supportCase.id}.` };
         return { tone: 'bad', label: 'Stopped', last: 'Fri 23 Oct: stopped on a ticket the platform couldn’t read.' };
       case 'conf': {
-        if (S.conf === 'waiting') return { tone: 'wait', label: 'Needs a yes', last: `Test run today: waiting for ${whoOr(req('conf').may)}.` };
+        if (S.conf === 'waiting') return { tone: 'wait', label: 'Waiting for a yes', last: `Test run today: waiting for ${whoOr(req('conf').may)}.` };
         if (S.conf === 'expired') return { tone: 'off', label: 'No answer', last: 'Test run today: nobody answered in time, so nothing was written.' };
         if (S.conf === 'approved') return { tone: 'ok', last: `Test run today: ${confWrite(S.nr).shortDone}, approved by ${confYesText()}.` };
         if (S.conf === 'declined') return { tone: 'ok', last: `Test run today: declined by ${nm(S.confBy)}. Nothing was written.` };
@@ -1829,9 +1868,12 @@ details > .m-close { animation: fold 140ms ease-in both; }
     return out;
   }
   const pill = (st) => `<span class="pill ${st.tone}">${st.tone === 'ok' ? I.check(12) : st.tone === 'bad' ? I.x(12) : st.tone === 'off' ? I.clock(12) : I.lock(12)}${st.label}</span>`;
-  /* Two separate facts: whether the workflow is switched on, and whether its latest run needs someone. */
-  const lifePill = (id) => (S.paused[id] ? `<span class="pill off">${I.pause(12)}Paused</span>` : `<span class="pill on">${I.check(12)}On</span>`);
-  const pills = (id) => { const st = status(id); return `<span class="btns" style="gap:6px">${lifePill(id)}${st.tone === 'ok' ? '' : pill(st)}</span>`; };
+  /* One status in the spec's words (rule 9): Paused, else what the latest run needs, else Running. A test run is marked. */
+  const pills = (id) => {
+    const st = status(id);
+    const one = S.paused[id] ? `<span class="pill off">${I.pause(12)}Paused</span>` : st.tone === 'ok' ? `<span class="pill on">${I.check(12)}Running</span>` : pill(st);
+    return `<span class="btns" style="gap:6px">${one}${id === 'conf' && S.conf !== 'on' ? '<span class="tag">Test run</span>' : ''}</span>`;
+  };
 
   /* ---------- Who can approve ---------- */
   const starterOf = { sw: 'carol', conf: 'alice', nudge: 'alice' };
@@ -2261,11 +2303,13 @@ details > .m-close { animation: fold 140ms ease-in both; }
     </div>`;
   }
 
+  /* The one action a workflow row or page offers (rule 1). */
   function actionFor(id) {
     if (id === 'sw' && S.sw === 'waiting' && canApprove('sw')) return `<button class="btn primary sm" data-act="run" data-arg="sw">Review and decide</button>`;
     if (id === 'conf' && S.conf === 'waiting' && canApprove('conf')) return `<button class="btn primary sm" data-act="run" data-arg="conf">Review and decide</button>`;
     if (id === 'nudge' && S.nudge === 'waiting' && canApprove('nudge')) return `<button class="btn primary sm" data-act="run" data-arg="nudge">Review and decide</button>`;
     if (!me().op) return '';
+    if (S.paused[id]) return `<button class="btn primary sm" data-act="resume" data-arg="${id}">Resume</button>`;
     if (id === 'conf' && S.conf === 'expired') return `<button class="btn primary sm" data-act="testRun">Test it again</button>`;
     if (id === 'issues' && S.issues === 'failed') return `<button class="btn primary sm" data-act="retryIssues">Retry the run</button>`;
     if (id === 'nudge' && S.nudge === 'failed' && S.report === 0) return `<button class="btn primary sm" data-act="report" data-unbuilt="Report to support">Report to support</button>`;
@@ -2273,12 +2317,11 @@ details > .m-close { animation: fold 140ms ease-in both; }
     return '';
   }
 
-  /* Workflows opens with what needs you, what you're waiting on, any report you follow, and what runs next. */
+  /* Workflows opens with what needs you, your drafts, what you're waiting on and any report you follow (spec 8).
+     Each section shows only when it has something. */
   function attention() {
     const items = needs();
     const n = items.length;
-    const coming = comingUp();
-    const firstLive = coming.find(([id]) => !S.paused[id]);
     const waitingOn = [];
     if (S.user === 'alice') {
       if (shows('toolDraft') && S.jiraComp === 'asked' && S.jiraCompAsker === 'alice') waitingOn.push(['An Approver to OK the new tool', `${TOOLS.jiraComp[0]} · for the Ticket writer`, 'toolOpen', 'jiraComp']);
@@ -2292,20 +2335,18 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const following = has('nudge') && S.report > 0 && S.report < 4 && S.user === 'alice' ? `<section class="section" aria-labelledby="fu-h" data-pres="follow" data-stagger style="--i:3" data-unbuilt="Support cases"><h2 id="fu-h">Following up</h2>
           <article class="panel"><div><div class="task-title">Weekly closed-ticket summary: reported to support</div><div class="task-meta">Support has the run and the troubleshooter’s notes. Updates show here.</div></div>${caseBox()}${reportTrack(true)}</article></section>` : '';
     const drafts = me().op ? draftRows() : [];
-    if (!n && !waitingOn.length && !following && !drafts.length) {
-      return `<p class="quiet-line">${!coming.length ? (me().op ? 'Nothing needs you yet. Ask the Planner on Home, and your first workflow shows up here.' : 'Nothing needs you yet. An Operator sets up workflows, and you approve their changes.')
-        : `Nothing needs you right now. Your workflows are running.${firstLive ? ` Next up: ${nextUp(firstLive)}.` : ''}`}</p>`;
-    }
     const rowList = (items) => `<div class="rows">${items.map(([a, b, act, arg]) => `<button class="row-btn" data-act="${act}" data-arg="${arg}"><div><div class="row-name">${a}</div><div class="row-sub">${b}</div></div>${I.right(16)}</button>`).join('')}</div>`;
+    const needLine = (d) => (d.need.length ? `Needs ${andList(d.need)}` : 'Nothing is unclear. One yes turns it on.');
     return `${n ? needsSection(items) : ''}
+      ${drafts.length ? `<section class="section" aria-labelledby="drafts-h" data-unbuilt="Drafts here (the built app lists them on Home)"><h2 id="drafts-h">Drafts <span class="count">${drafts.length}</span></h2>
+        <div class="rows">${drafts.map((d) => `<div class="row draft-row" data-flip="draft:${d.id}"><div><div class="row-name">${esc(d.name)}</div><div class="row-sub">${needLine(d)}</div></div><span class="btns"><button class="btn sm" data-act="openDraft" data-arg="${d.id}">Resume<span class="vh"> ${esc(d.name)}</span></button><button class="btn sm" data-act="discardDraft" data-arg="${d.id}">Discard<span class="vh"> ${esc(d.name)}</span></button></span></div>`).join('')}</div></section>` : ''}
       ${waitingOn.length ? `<section class="section"><h2>Waiting on others</h2>${rowList(waitingOn)}</section>` : ''}
-      ${drafts.length ? `<section class="section" aria-labelledby="drafts-h" data-unbuilt="Drafts here (the built app lists them on Home)"><h2 id="drafts-h">Drafts <span class="count">${drafts.length}</span></h2><p class="small muted sec-sub">Set-up cards you haven’t turned on yet. Resume one to carry on with it on Home.</p>
-        <div class="rows">${drafts.map((d) => `<div class="row draft-row" data-flip="draft:${d.id}"><div><div class="row-name">${esc(d.name)}</div><div class="row-sub">${d.left ? leftWords(d.left) : 'Nothing is unclear. One yes turns it on.'}</div></div><span class="btns"><button class="btn sm" data-act="openDraft" data-arg="${d.id}">Resume<span class="vh"> ${esc(d.name)}</span></button><button class="btn sm" data-act="discardDraft" data-arg="${d.id}">Discard<span class="vh"> ${esc(d.name)}</span></button></span></div>`).join('')}</div></section>` : ''}
-      ${following}
-      ${firstLive ? `<div class="coming">${I.clock(16)}<span><b>Coming up next:</b> ${nextUp(firstLive)}${coming.length > 1 ? `, and ${coming.length - 1} more` : ''}.</span></div>` : ''}`;
+      ${following}`;
   }
 
   const FILTERS = [['all', 'All'], ['stopped', 'Stopped'], ['paused', 'Paused']];
+  /* All workflows: one row each with its name, purpose, status, next run and at most one action. No faces and no
+     step details. Search and the filters stay behind the search button until asked for. */
   function boardView() {
     const ids = routineIds();
     const q = S.find.workflows.trim().toLowerCase();
@@ -2325,27 +2366,28 @@ details > .m-close { animation: fold 140ms ease-in both; }
       let act = actionFor(id);
       if (act) { if (mainUsed) act = demote(act); mainUsed = true; }
       return `<li class="wf-row${S.paused[id] ? ' paused' : ''}${justOn === id ? ' m-changed' : ''}" data-flip="wf:${id}" data-stagger style="--i:${i}">
+        <div class="wf-main"><h2><button class="rcard-link" data-act="workflow" data-arg="${id}">${esc(r.name)}</button></h2><p>${r.what}</p></div>
         <span class="wf-pills">${pills(id)}${BASE[id] && BASE[id].planned ? PLANNED_TAG : ''}</span>
-        <div class="wf-main"><h2><button class="rcard-link" data-act="workflow" data-arg="${id}">${esc(r.name)}</button></h2><p>${status(id).last}</p></div>
-        ${faces(r.agents, 26, agentStates(id), `wf:${id}`)}
-        <span class="wf-next">Next: ${r.next}</span>
+        <span class="wf-next">${S.paused[id] ? '' : `Next run ${r.next}`}</span>
         <span class="wf-act">${act}</span>
       </li>`;
     }).join('');
     const canAdd = me().op && !q && S.filter === 'all';
     const add = canAdd ? `<li data-flip="wf:add"><button class="wf-add" data-act="askPlanner">${I.plus(18)}<b>Ask the Planner for a new one</b><span>Describe it in plain English, on Home</span></button></li>` : '';
+    const finding = S.findOpen || !!q || S.filter !== 'all';
+    const empty = !ids.length ? `<div class="quiet"><b>Nothing here yet</b>${me().op ? 'Ask the Planner on Home, and your first workflow shows up here.' : 'Operators set up workflows, and you approve their changes.'}</div>` : '';
     return `<div class="pagehead"><div><h1 tabindex="-1">Workflows</h1><p>Your team’s repeated tasks. Each one runs by itself and asks before it changes anything.</p></div></div>
       ${attention()}
-      <section class="section" aria-labelledby="all-h"><h2 id="all-h">All workflows <span class="count">${ids.length}</span></h2>
-      ${ids.length ? `<div class="findbar"><span class="findbox">${I.search()}<label class="vh" for="find-workflows">Find a workflow</label><input type="search" id="find-workflows" data-find="workflows" placeholder="Find a workflow" value="${esc(S.find.workflows)}"></span>
+      <section class="section" aria-labelledby="all-h"><h2 id="all-h">All workflows <span class="count">${ids.length}</span>
+        ${ids.length ? `<button class="iconbtn sec-tool" data-act="findOpen" aria-expanded="${finding}" aria-controls="findbar-workflows" aria-label="${finding ? 'Hide search' : 'Search workflows'}" title="${finding ? 'Hide search' : 'Search'}">${I.search()}</button>` : ''}</h2>
+      ${finding ? `<div class="findbar" id="findbar-workflows"><span class="findbox">${I.search()}<label class="vh" for="find-workflows">Find a workflow</label><input type="search" id="find-workflows" data-find="workflows" placeholder="Find a workflow" value="${esc(S.find.workflows)}"></span>
         <div class="filters btns" role="group" aria-label="Show">${FILTERS.map(([k, l]) => `<button data-act="filter" data-arg="${k}" aria-pressed="${S.filter === k}">${l}</button>`).join('')}</div></div>` : ''}
-      ${ids.length === 0 && !me().op ? '<p class="quiet"><b>No workflows yet</b>An Operator sets them up. You approve their changes.</p>' : ''}
+      ${empty}
       ${ids.length && !order.length ? '<div class="quiet"><b>No workflows match</b>Try other words, or see them all.<div class="btns quiet-act"><button class="btn sm" data-act="clearFind" data-arg="workflows">Show all workflows</button></div></div>' : ''}
       ${rows || add ? `<ul class="wf-list" aria-label="Workflows" data-flip-group="wf-list">${rows}${add}</ul>` : ''}
-      ${canAdd ? '<p class="small muted n8n-start" data-unbuilt="Start in n8n (ADR 0026, 0027)">Prefer to build it yourself? <button class="linkbtn" data-act="n8nNew">Start in n8n</button></p>' : ''}
+      ${canAdd && S.preview ? `<p class="small muted n8n-start" data-unbuilt="Start in n8n (ADR 0026, 0027)">Prefer to build it yourself? <button class="linkbtn" data-act="n8nNew">Start in n8n</button> ${PLANNED_TAG}</p>` : ''}
       </section>`;
   }
-
   /* A plan's steps. Each step keeps its place by position, so a step that changes is highlighted, and an added or removed one slides the rest. */
   function stepsList(steps, inline, key = 'steps') {
     const who = (w) => (!w ? '' : w === 'platform' ? `<span class="sysav app" style="width:26px;height:26px">${I.mark()}</span>` : face(w, 26));
@@ -2502,16 +2544,40 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const chg = S.n8nChg[id];
     return chg ? `<article class="task" style="margin-top:16px" data-flip="n8nchg:${id}" data-enter="reveal"><span class="ico wait">${I.alert(22)}</span><div class="task-body"><h2 class="task-title">${nm(chg.by)}’s change in n8n removed Ask for a yes</h2><div class="task-meta">Published ${chg.when}</div><p>The next run will stop before it changes anything, because nothing is written without a yes.</p><div class="btns">${me().op ? `<button class="btn${actionFor(id) ? '' : ' primary'}" data-act="n8nUndo" data-arg="${id}">Undo ${nm(chg.by)}’s change</button>` : ''}</div></div></article>` : '';
   }
-  function n8nPanel(id) {
-    const held = S.n8n[id];
-    return (S.n8nLog[id] || []).length ? `<div class="panel" style="margin-top:16px" data-pres="n8nlog:${id}" data-unbuilt="n8n changes in the Portal (ADR 0026, 0027)"><h2>Changes in n8n</h2><ol class="timeline">${S.n8nLog[id].map((e) => `<li><b>${e.when}</b><span>${e.text}</span></li>`).join('')}</ol>${held && held.by === S.user ? '<div class="btns"><button class="btn sm" data-act="n8nGiveBack" data-arg="' + id + '">Give it back</button></div>' : ''}<p class="note">The Portal keeps every version published in n8n, with who published it.</p></div>` : '';
-  }
 
+  /* The status banner (spec 9): one sentence on the workflow's state and its one primary action, from the same facts as
+     the list row. */
+  function banner(id) {
+    const st = status(id);
+    const r = R(id);
+    const text = S.paused[id] ? 'Paused. It won’t run until you resume it.'
+      : id === 'issues' && S.issues === 'failed' ? 'Stopped today at 8:00. Jira didn’t answer, and it’s working again now.'
+        : id === 'nudge' && S.nudge === 'failed' ? `Stopped on Fri 23 Oct at 16:00, on a ticket the platform couldn’t read.${S.report > 0 && S.report < 4 ? ` Reported to support as ${S.supportCase.id}.` : S.report === 4 ? ' The fix from support is live.' : ''}`
+          : st.tone === 'ok' ? `Running. Next run ${r.next}.` : cap(st.last.replace(/^(Mon 26 Oct|Today, retried after the fix|Test run today): /, ''));
+    const act = actionFor(id);
+    const tone = S.paused[id] ? 'off' : st.tone;
+    const icon = tone === 'bad' ? I.alert(20) : tone === 'wait' ? I.lock(20) : tone === 'off' ? I.pause(20) : I.check(20);
+    return `<div class="banner ${tone}" data-val="banner:${id}"><span class="banner-ic">${icon}</span><p>${text}</p>${act ? `<div class="btns">${act}</div>` : ''}</div>`;
+  }
+  /* More actions: a menu with the quieter actions, Delete last and in red (spec 9). */
+  function moreMenu(id) {
+    const open = S.menu === id;
+    const item = (act, label, extra = '') => `<button role="menuitem" data-act="menuPick" data-arg="${act}:${id}"${extra}>${label}</button>`;
+    return `<div class="menuwrap"><button class="btn sm" data-act="menu" data-arg="${id}" aria-haspopup="menu" aria-expanded="${open}" aria-controls="menu-${id}">More actions${I.down(14)}</button>
+      ${open ? `<div class="menu" id="menu-${id}" role="menu" aria-label="More actions">
+        ${item('runNow', 'Run now', ' data-unbuilt="Run now"')}
+        ${S.paused[id] ? item('resume', 'Resume') : item('pause', 'Pause')}
+        ${BASE[id] && BASE[id].fixedSchedule ? '' : item('editSched', 'Change schedule')}
+        ${item('n8nAsk', `Open in n8n${I.ext(14)}`, ' data-unbuilt="Open in n8n (ADR 0026, 0027)"')}
+        <hr role="separator">
+        ${item('askDelete', `${I.trash()}Delete`, ' class="danger"')}
+      </div>` : ''}</div>`;
+  }
   function routineView(id) {
     const r = R(id);
-    const st = status(id);
     const hasRun = ['sw', 'issues', 'nudge'].includes(id) || (id === 'conf' && S.conf !== 'on');
     const caseId = S.supportCase ? S.supportCase.id : '';
+    const st = status(id);
     const recent = {
       sw: [['Mon 26 Oct, 9:00', cap(st.last.replace(/^Mon 26 Oct: /, '')), true], ['Mon 19 Oct, 9:00', '1 ticket created (MOCK-9)'], ['Mon 12 Oct, 9:00', 'Nothing to write']],
       issues: S.issues === 'fixed'
@@ -2523,38 +2589,38 @@ details > .m-close { animation: fold 140ms ease-in both; }
       access: [['Mon 5 Oct, 9:00', '3 people lost access, approved by Bob, then Alice']],
       conf: S.conf === 'on' ? [] : [['Today, test run', cap(st.last.replace(/^Test run today: /, '')), true]],
     }[id] || [];
-    const manage = me().op && id !== 'sw' ? `<div class="rowacts">
-        ${BASE[id] && BASE[id].fixedSchedule ? '' : `<button class="btn sm" data-act="editSched" data-arg="${id}">${I.edit()}Change schedule</button>`}
-        ${changeApproversBtn(id, 'editAppr', 'btn sm')}
-        <button class="btn sm" id="pause-${id}" data-act="${S.paused[id] ? 'resume' : 'pause'}" data-arg="${id}">${S.paused[id] ? `${I.play()}Resume` : `${I.pause()}Pause`}</button>
-        <button class="btn sm" data-act="n8nAsk" data-arg="${id}" data-unbuilt="Open in n8n (ADR 0026, 0027)">Open in n8n${I.ext(14)}</button>
-        <button class="btn sm bad" data-act="askDelete" data-arg="${id}">${I.trash()}Delete</button></div>` : '';
     const held = S.n8n[id];
-    const chg = S.n8nChg[id];
+    const owner = ownerOf(id);
+    const named = apprOf(id);
+    const approval = named ? `${r.approves} ${PLANNED_TAG}` : owner === S.user ? 'Each run’s ticket waits for a yes from any Approver except you.' : `Each run’s ticket waits for a yes. Any Approver except ${nm(owner)} can say yes.`;
+    const canSched = me().op && id !== 'sw' && !(BASE[id] && BASE[id].fixedSchedule);
+    const tools = (a) => { let keys = []; try { keys = toolKeysOf(a); } catch (e) { keys = []; } return keys.map((k) => TOOLS[k][0]); };
+    const history = (S.n8nLog[id] || []).map((e) => `<li><b>${e.when}</b><span>${e.text}</span></li>`);
+    if (S.sched[id]) history.unshift(`<li><b>Today</b><span>Schedule changed to ${r.when}.</span></li>`);
     return `<button class="back" data-act="go" data-arg="workflows">${I.left(16)}Workflows</button>
-      <div class="pagehead"><div><div style="margin-bottom:8px">${pills(id)}${BASE[id] && BASE[id].planned ? ` ${PLANNED_TAG}` : ''}</div><h1 tabindex="-1">${esc(r.name)}</h1><p>${r.what}</p></div><div class="btns">${actionFor(id)}</div></div>
-      ${manage}
-      <dl class="facts" style="margin-top:16px">
-        <div><dt>When</dt><dd>${r.when}</dd></div>
-        <div><dt>Next run</dt><dd>${r.next}</dd></div>
-        <div><dt>Who approves</dt><dd>${r.approves}${apprOf(id) ? ` ${PLANNED_TAG}` : ''}<small>${timingText(apprOf(id), r.sched)}</small></dd></div>
-        <div class="fact-wide"><dt>Agents</dt><dd><div class="agent-chips">${r.agents.map((a) => { const st = agentStates(id)[a]; return `<button class="agent-chip" data-act="agent" data-arg="${a}">${face(a, 28, st || 'idle', { k: `wfp:${id}:${a}` })}<span>${AGENTS[a].name}${st ? `<span class="vh">, ${STATE_WORD[st]}</span>` : ''}</span></button>`; }).join('')}</div></dd></div>
-        ${held ? `<div><dt>In n8n</dt><dd>${held.by === S.user ? 'You have it' : `${nm(held.by)} has it`}<small>Since ${held.since}</small></dd></div>` : ''}
-      </dl>
+      <div class="pagehead"><div><div style="margin-bottom:8px">${pills(id)}${BASE[id] && BASE[id].planned ? ` ${PLANNED_TAG}` : ''}</div><h1 tabindex="-1">${esc(r.name)}</h1><p>${r.what}</p></div>${me().op && id !== 'sw' ? moreMenu(id) : ''}</div>
+      ${banner(id)}
       ${n8nWarn(id)}
-      ${n8nPanel(id)}
+      ${id === 'nudge' && S.report > 0 && S.nudge === 'failed' ? `<div class="panel" style="margin-top:16px" data-unbuilt="Support cases"><h2>Support case</h2>${caseBox()}${reportTrack(true)}</div>` : ''}
+      <dl class="factrows" style="margin-top:16px">
+        <div><div><dt>Schedule</dt><dd>${r.when}, Singapore time${S.paused[id] ? '' : `<small>Next run ${r.next}</small>`}</dd></div>${canSched ? `<button class="btn sm" data-act="editSched" data-arg="${id}">${I.edit()}Change<span class="vh"> schedule</span></button>` : ''}</div>
+        <div><div><dt>Approval</dt><dd>${approval}<small>${timingText(named, r.sched)}</small></dd></div>${changeApproversBtn(id, 'editAppr', 'btn sm')}</div>
+      </dl>
       ${S.editing === id ? `<div data-flip="ed:s:${id}" data-enter="reveal">${schedEditor(id)}</div>` : ''}
       ${S.editingAppr === id ? `<div data-flip="ed:a:${id}" data-enter="reveal" data-unbuilt="Named Approvers (ADR 0024)">${apprEditor(id)}</div>` : ''}
-      ${id === 'nudge' && S.report > 0 && S.nudge === 'failed' ? `<div class="panel" style="margin-top:16px" data-unbuilt="Support cases"><h2>Support case</h2>${caseBox()}${reportTrack(true)}</div>` : ''}
-      <div class="runbody" style="margin-top:24px">
-        <div class="panel"><h2>What it does</h2>${stepsList(planFor(id), false, `plan:${id}`)}</div>
-        <div class="panel"><h2>Recent runs</h2>${S.editRun && S.editRun.wf === id ? `<div class="rows"><button class="row-btn" data-act="watch" data-arg="edit"><div><div class="row-name">Today, 9:15</div><div class="row-sub">Stopped before changing anything: Carol’s change removed Ask for a yes.</div></div><span class="btns small" style="font-weight:700">Watch ${I.right(16)}</span></button></div>` : ''}${recent.length ? `<div class="rows">${recent.map(([when, what, live]) => live && hasRun
-          ? `<button class="row-btn" data-act="watch" data-arg="${id}"><div><div class="row-name">${when}</div><div class="row-sub">${what}</div></div><span class="btns small" style="font-weight:700">Watch ${I.right(16)}</span></button>`
+      <div class="panel" style="margin-top:16px"><h2>Recent activity</h2>${S.editRun && S.editRun.wf === id ? `<div class="rows"><button class="row-btn" data-act="watch" data-arg="edit"><div><div class="row-name">Today, 9:15</div><div class="row-sub">Stopped before changing anything: Carol’s change removed Ask for a yes.</div></div><span class="btns small" style="font-weight:700">See the run ${I.right(16)}</span></button></div>` : ''}${recent.length ? `<div class="rows">${recent.map(([when, what, live]) => live && hasRun
+          ? `<button class="row-btn" data-act="watch" data-arg="${id}"><div><div class="row-name">${when}</div><div class="row-sub">${what}</div></div><span class="btns small" style="font-weight:700">See the run ${I.right(16)}</span></button>`
           : `<div class="row"><div><div class="row-name">${when}</div><div class="row-sub">${what}</div></div></div>`).join('')}</div>` : `<p class="muted">No runs yet. The first one is ${r.next}.</p>`}</div>
-      </div>`;
+      <details class="tech" style="margin-top:16px"><summary>Technical details</summary><div class="tech-body">
+        <section><h3>Steps</h3>${stepsList(planFor(id), false, `plan:${id}`)}</section>
+        <section><h3>Agents and tools</h3><ul class="agent-tool-list">${r.agents.map((a) => { const s = agentStates(id)[a]; const t = tools(a); return `<li><button class="agent-chip" data-act="agent" data-arg="${a}">${face(a, 28, s || 'idle', { k: `wfp:${id}:${a}` })}<span>${AGENTS[a].name}${s ? `<span class="vh">, ${STATE_WORD[s]}</span>` : ''}</span></button>${t.length ? `<span class="small muted">${t.join(', ')}</span>` : ''}</li>`; }).join('')}</ul></section>
+        <section data-unbuilt="n8n changes in the Portal (ADR 0026, 0027)"><h3>In n8n</h3><p>${held ? `${held.by === S.user ? 'You have' : `${nm(held.by)} has`} it open in n8n since ${held.since}.` : 'Nobody has it open in n8n.'}</p>${held && held.by === S.user ? `<div class="btns"><button class="btn sm" data-act="n8nGiveBack" data-arg="${id}">Give it back</button></div>` : ''}</section>
+        <section><h3>Change history</h3>${history.length ? `<ol class="timeline">${history.join('')}</ol><p class="note">The Portal keeps every version published in n8n, with who published it.</p>` : '<p class="muted">No changes since it was turned on.</p>'}</section>
+      </div></details>`;
   }
-
-  /* The live activity view of one run. */
+  /* The live activity view of one run (spec 10): the headline, the station strip in plain words, then what needs the
+     person. The agents' conversation and the replay controls open on request and stay open for the visit. */
+  const runDetailOpen = () => S.runDetail === S.view;
   function runView(id) {
     const m = runModel(id);
     const r = R(m.workflow);
@@ -2593,19 +2659,26 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const msgs = m.stations.slice(0, Math.min(P.at, m.end) + 1).map((s) => s.msg).filter(Boolean);
     P.feedNext = msgs.length;
     P.latest = msgs.length ? `${feedName(msgs[msgs.length - 1].who)}: ${msgs[msgs.length - 1].text}` : '';
-    const chat = msgs.map((g, i) => chatItem(g, i >= P.feedSeen, m)).join('');
+    const open = runDetailOpen();
+    const chat = open ? msgs.map((g, i) => chatItem(g, i >= P.feedSeen, m)).join('') + (finished ? '' : chatTyping(m)) : '';
     /* While a finished run replays, the heading describes the replay, so it never claims "Done" before the line gets there. */
     const pillTone = !finished ? { tone: 'ok', label: 'Replaying' } : m.state === 'waiting' ? { tone: 'wait', label: 'Waiting for a yes' } : m.state === 'failed' ? { tone: 'bad', label: 'Stopped' } : m.state === 'expired' ? { tone: 'off', label: 'No answer' } : { tone: 'ok', label: 'Done' };
     const headline = finished ? m.headline : 'Replaying the run';
+    const test = m.workflow === 'conf' ? '<span class="tag">Test run</span>' : '';
     return `<button class="back" data-act="workflow" data-arg="${m.workflow}">${I.left(16)}${m.workflow === 'sw' ? 'Software watchlist' : esc(r.name)}</button>
       <div class="runhead">
-        <div class="runhead-top"><div class="runtitle"><h1 tabindex="-1">${headline}</h1>${finished ? pill(pillTone) : `<span class="tag">${I.play(12)}Replaying</span>`}</div>
-          <div class="btns">${finished ? `<button class="btn sm" data-act="replay">${I.play(12)}Replay the run</button>` : ''}<div class="seg" role="group" aria-label="Speed">${['1x', '2x', 'instant'].map((sp) => `<button data-act="speed" data-arg="${sp}" aria-pressed="${P.speed === sp}">${sp === 'instant' ? 'Instant' : sp}</button>`).join('')}</div></div></div>
+        <div class="runhead-top"><div class="runtitle"><h1 tabindex="-1">${headline}</h1>${finished ? pill(pillTone) : `<span class="tag">${I.play(12)}Replaying</span>`}${test}</div></div>
+        <p class="muted">${esc(r.name)}</p>
       </div>
       <div class="stage"><ol class="line" style="--n:${n}" aria-label="Steps of this run"><li class="line-track" aria-hidden="true"></li><li class="line-fill" aria-hidden="true" style="--f:${P.shown / (n - 1)}"></li>${line}</ol></div>
-      <ol class="chat" aria-label="What the agents said">${chat}${finished ? chatAct(id, m) : chatTyping(m)}</ol>`;
+      ${finished ? `<ol class="chat" aria-label="What needs you">${chatAct(id, m)}</ol>` : ''}
+      <div class="run-detail"><button class="btn sm" data-act="runDetail" aria-expanded="${open}" aria-controls="run-detail">${open ? 'Hide what each agent did' : 'Show what each agent did'}</button>
+        ${open ? `<div id="run-detail" class="run-detail-body" data-pres="detail:${id}">
+          <div class="btns">${finished ? `<button class="btn sm" data-act="replay">${I.play(12)}Replay the run</button>` : ''}<div class="seg" role="group" aria-label="Speed">${['1x', '2x', 'instant'].map((sp) => `<button data-act="speed" data-arg="${sp}" aria-pressed="${P.speed === sp}">${sp === 'instant' ? 'Instant' : sp}</button>`).join('')}</div></div>
+          <ol class="chat" aria-label="What the agents said">${chat}</ol>
+        </div>` : ''}
+      </div>`;
   }
-
   const andList = (xs) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
   const chatAvatar = (w, state = 'idle') => (w === 'portal' || w === 'platform' ? `<span class="sysav app">${I.mark()}</span>` : w === 'gate' ? `<span class="sysav gate">${I.shield(20)}</span>` : face(w, 40, state));
   /* The run as a group chat. Events from the platform and the approval gate are quiet markers; agents speak in bubbles.
@@ -2629,30 +2702,38 @@ details > .m-close { animation: fold 140ms ease-in both; }
     return `<li class="cmsg typing" aria-hidden="true"><span class="cmsg-av">${chatAvatar(next.msg.who, next.msg.who === 'lead' ? 'thinking' : 'working')}</span><div class="cmsg-body"><span class="cmsg-who">${feedName(next.msg.who)} is working</span><div class="cmsg-bubble"><span class="dots"><i></i><i></i><i></i></span></div></div></li>`;
   }
 
+  /* The approval panel (spec 10.4): what will change, why, who asked, what happens, and the reader's part. The platform
+     checks the decision again on the server. This summary helps the reader; it is not the check. */
   function approvePanel(id) {
     const ok = canApprove(id);
     const self = starterOf[id] === S.user;
     const sw = id === 'sw';
     const w = sw ? null : id === 'nudge' ? NUDGE_WRITE : confWrite(S.nr);
+    const m = runModel(id);
     const body = id === 'nudge' ? nudgePreview() : sw
       ? releases().map((x) => `<div class="ticket${x.urgent ? ' urgent' : ''}"><b>Upgrade ${x.tool} from ${x.from} to ${x.to}</b>${x.urgent ? `<span class="pill bad">${I.alert(12)}Urgent security fix</span> ${PLANNED_TAG}<div class="risk compact">${riskFacts(x.row, true)}</div>` : ''}
           <span>Newest release ${x.date}. ${x.count} releases since our version, on ${srcName(x.kind || 'github')}.</span>
           ${x.urgent ? '' : `<span>${x.notes}</span>`}
           <span class="links">${ticketLinks(x)}</span></div>`).join('')
       : confPreview(S.nr);
+    const gi = m.stations.findIndex((s) => s.gate);
+    const found = m.stations.slice(0, gi).filter((s) => s.msg && AGENTS[s.msg.who] && s.msg.who !== 'lead').map((s) => `<li>${face(s.msg.who, 24)}<span><b>${AGENTS[s.msg.who].name}:</b> ${s.msg.text}</span></li>`).join('');
+    const first = m.stations[0];
     const q = req(id);
-    const why = self ? `You started this run, so you can’t approve it. Nobody approves their own work. ${askLine(q, null)}`
-      : me().ap ? `Only ${whoOr(q.may)} can decide this one.${apprOf(id) ? ` ${nm(ownerOf(id))} chose who approves this workflow.` : ''}`
-        : 'Only an Approver can decide.';
-    return `<div class="panel"><h2>${sw ? '3 tickets will be created in Jira project MOCK' : w.panelTitle}</h2>
-      ${body}
-      <p class="note">This is exactly what will be written, and nothing else.</p>
-      ${ok ? `${askLineHtml(q, S.user)}<div class="btns"><button class="btn good" data-act="approve" data-arg="${id}">${I.check(16)}${sw ? 'Approve 3 tickets' : w.approveLabel}</button><button class="btn bad" data-act="decline" data-arg="${id}">Decline</button></div>`
-        : `<div class="lock">${I.lock(20)}<div>${why}</div></div>`}
-      ${sw ? '<p class="note">You approve or decline the whole check. If you decline, nothing is written and the tickets are proposed again next Monday. Carol’s schedule started this run, so Carol can’t approve it.</p>' : ''}
+    const part = self ? 'You set this up and started this run, so another Approver must decide. Nobody approves their own work.'
+      : ok && q.step > 0 ? `${confYesText()} said yes. Your yes is the second of two.`
+        : ok ? 'You can decide because you didn’t set this up.'
+          : me().ap ? `Only ${whoOr(q.may)} can decide this one.${apprOf(id) ? ` ${nm(ownerOf(id))} chose who approves this workflow.` : ''}`
+            : 'Only an Approver can decide.';
+    return `<div class="panel approval">
+      <dl class="qa"><dt>What will change</dt><dd><b>${sw ? '3 tickets will be created in Jira project MOCK' : w.panelTitle}</b>${body}<p class="note">This is exactly what will be written, and nothing else.</p></dd></dl>
+      <dl class="qa"><dt>Why</dt><dd>${found ? `<ul class="found">${found}</ul>` : 'See what each agent did, below.'}</dd></dl>
+      <dl class="qa"><dt>Who asked</dt><dd>${esc(R(m.workflow).name)}, set up by ${nm(ownerOf(m.workflow))}. ${first.msg ? first.msg.text : ''}${first.sub ? ` (${first.sub})` : ''}</dd></dl>
+      <dl class="qa"><dt>What happens</dt><dd>Nothing is written until you say yes. If you decline, nothing is written. ${askLine(q, S.user)}${sw ? ' You approve or decline the whole check. If you decline, the tickets are proposed again next Monday.' : ''}</dd></dl>
+      <dl class="qa"><dt>Your part</dt><dd>${part}</dd></dl>
+      ${ok ? `<div class="btns"><button class="btn good" data-act="approve" data-arg="${id}">${I.check(16)}Approve</button><button class="btn bad" data-act="decline" data-arg="${id}">Decline</button></div>` : ''}
     </div>`;
   }
-
   function actPanel(id, m) {
     if (m.state === 'waiting') return approvePanel(id);
     if (id === 'edit') {
@@ -2834,7 +2915,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const draftRow = (wiz = S.wiz) => {
     const keep = S.wiz;
     S.wiz = wiz;
-    const row = { id: (S.draftSeq += 1), wiz, name: wiz.name.trim() || draftNr().name, left: setupLeft().length };
+    const row = { id: (S.draftSeq += 1), wiz, name: wiz.name.trim() || draftNr().name, left: setupLeft().length, need: setupLeft() };
     S.wiz = keep;
     return row;
   };
@@ -2846,7 +2927,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     S.wiz = newWiz();
     return true;
   }
-  const draftRows = () => (liveSetup() ? [{ id: 'live', name: S.wiz.name.trim() || draftNr().name, left: setupLeft().length }] : []).concat(S.drafts.map((d) => ({ id: d.id, name: d.name, left: d.left })));
+  const draftRows = () => (liveSetup() ? [{ id: 'live', name: S.wiz.name.trim() || draftNr().name, left: setupLeft().length, need: setupLeft() }] : []).concat(S.drafts.map((d) => ({ id: d.id, name: d.name, left: d.left, need: d.need || [] })));
   function startDraft(text, it) {
     saveLive();
     S.wiz = { ...newWiz(), text, intent: it, sched: { freq: it.freq || '', day: it.day || '', time: it.time || '', monthDay: '1' } };
@@ -3750,7 +3831,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   }
   function deleteDialog(id) {
     return `<h2 id="dlg-h" style="font-size:1.4rem">Delete ${esc(R(id).name)}?</h2>
-      <p id="dlg-d">It stops running and leaves Workflows. Its past runs stay in the record.</p>
+      <p id="dlg-d">It stops running and leaves Workflows. Its schedule and settings go with it. Its past runs and their records stay. You can undo this from the message that follows.</p>
       <div class="btns" style="justify-content:flex-end"><button class="btn" data-act="closeModal">Cancel</button><button class="btn bad" data-act="confirmDelete" data-arg="${id}">${I.trash()}Delete workflow</button></div>`;
   }
   /* Open in n8n: staff can change a workflow's steps in n8n. One person has it at a time, every published change is kept, and the rules still hold. */
@@ -4294,6 +4375,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     run: (id) => go('run', id),
     watch: (id) => go('run', id, { live: true }),
     replay: () => { if (P.speed === 'instant') P.speed = '1x'; focusHeading = true; playTo(0); render(); },
+    /* Show what each agent did: the detail stays open for this visit to the run, and closes when the page changes. */
+    runDetail: () => { S.runDetail = runDetailOpen() ? null : S.view; render(); const b = $app.querySelector('[data-act="runDetail"]'); if (b) b.focus(); },
     swHist: (k) => { S.swOpen = S.swOpen === k ? null : k; render(); },
     checkNow: () => { toast(S.sw === 'waiting' ? 'This week’s check is still waiting for a yes. Decide on it first, then check again.' : 'Checked just now. Nothing new since Monday.'); render(); },
     swFind: () => {
@@ -4840,6 +4923,21 @@ details > .m-close { animation: fold 140ms ease-in both; }
     n8nNew: () => openModal('n8nNew', null, '.btn.primary'),
     n8nNewOpen: () => { closeModal(); toast('Opened n8n in a new tab, with a new, empty workflow in your space.'); render(); },
     n8nUndo: (id) => { const c = S.n8nChg[id]; if (!c) return; delete S.n8nChg[id]; n8nLog(id, 'Today', `${me().name} undid ${nm(c.by)}’s change. The version before it is live again.`); toast(`Undone. The version before ${nm(c.by)}’s change is live again.`); render(); },
+    /* The More actions menu on a workflow page. Picking an item closes it and hands focus back to the menu button
+       first, so a dialog the item opens returns there when it closes. */
+    menu: (id) => { S.menu = S.menu === id ? null : id; render(); const el = $app.querySelector(S.menu ? '.menu [role="menuitem"]' : `[data-act="menu"][data-arg="${id}"]`); if (el) el.focus(); },
+    menuClose: () => { if (!S.menu) return; const id = S.menu; S.menu = null; render(); const b = $app.querySelector(`[data-act="menu"][data-arg="${id}"]`); if (b) b.focus(); },
+    menuPick: (arg) => { const [act, id] = arg.split(':'); S.menu = null; const b = $app.querySelector(`[data-act="menu"][data-arg="${id}"]`); if (b) b.focus(); A[act](id); },
+    /* Run now does what the prototype can show for this workflow, and says so when it can't. */
+    runNow: (id) => {
+      if (id === 'sw') { A.checkNow(); return; }
+      if (waitingReq(id)) { toast('This run is still waiting for a yes. Decide on it first.'); render(); return; }
+      if (id === 'issues' && S.issues === 'failed') { A.retryIssues(); return; }
+      if (id === 'nudge' && S.nudge === 'failed') { if (S.report === 4) A.retryNudge(); else { toast('It would stop in the same place until support fixes the platform. Report it first.'); render(); } return; }
+      if (id === 'conf') { A.testRun(); return; }
+      toast(`Started. ${esc(R(id).name)} asks for a yes before it writes anything.`);
+      go('run', id, { live: true });
+    },
     pause: (id) => { S.paused[id] = true; toast(`Paused. ${esc(R(id).name)} won’t run until you resume it.`); render(); },
     resume: (id) => { delete S.paused[id]; toast(`Resumed. Next run ${R(id).next}.`); render(); },
     askDelete: (id) => openModal('delete', id, '[data-act="closeModal"].btn'),
@@ -4852,6 +4950,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     },
     undoDelete: (id) => { delete S.deleted[id]; toast('Put back.'); render(); },
     filter: (k) => { S.filter = k; render(); },
+    findOpen: () => { S.findOpen = !S.findOpen; if (!S.findOpen) { S.find.workflows = ''; S.filter = 'all'; } render(); const el = $app.querySelector(S.findOpen ? '#find-workflows' : '[data-act="findOpen"]'); if (el) el.focus(); },
     clearFind: (k) => { S.find[k] = ''; if (k === 'workflows') S.filter = 'all'; render(); const i = $app.querySelector(`#find-${k}`); if (i) i.focus(); },
     focusAdd: () => { const i = $app.querySelector('#sw-name'); if (i) { i.scrollIntoView({ block: 'center' }); i.focus({ preventScroll: true }); } },
     testToggle: () => { S.testOpen = !S.testOpen; testNew = S.testOpen; render(); const t = $app.querySelector('.testctl-toggle'); if (t) t.focus(); },
@@ -4876,7 +4975,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (fn) { e.preventDefault(); fn(t.dataset.arg, t.dataset.mid ? msgById(t.dataset.mid) : undefined); }
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { if (S.modal) closeModal(); else if (S.teams) A.teams(); else if (S.toast) hideToast(); else if (S.testOpen) A.testToggle(); return; }
+    if (e.key === 'Escape') { if (S.modal) closeModal(); else if (S.teams) A.teams(); else if (S.menu) A.menuClose(); else if (S.toast) hideToast(); else if (S.testOpen) A.testToggle(); return; }
     /* Enter sends to the Planner; Shift+Enter makes a new line. Enter in a card's text field presses its button. */
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.target.matches('[data-ask]')) { e.preventDefault(); A.ask(); return; }
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.target.matches('[data-askteam]')) { e.preventDefault(); A.askTeamOffline(); return; }
@@ -4895,6 +4994,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
       }
     }
   });
+  /* A press anywhere outside the More actions menu closes it. */
+  document.addEventListener('pointerdown', (e) => { if (S.menu && !(e.target instanceof Element && e.target.closest('.menuwrap'))) { S.menu = null; render(); } }, true);
   let findTimer = null;
   let findRender = null;
   let cardRender = null;

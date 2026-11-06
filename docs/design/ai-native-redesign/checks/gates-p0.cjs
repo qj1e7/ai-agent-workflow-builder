@@ -163,7 +163,7 @@ check('i4-todays-rule-everywhere', async (browser) => session(browser, 1280, asy
   assert((await t.card()).includes('Any Approver on your team except you'), 'set-up card uses today’s rule');
   await t.go('workflows'); await t.click('[data-act="workflow"][data-arg="issues"]');
   const wf = await t.text();
-  assert(wf.includes('Any Approver except Alice'), `workflow page: ${wf.match(/Who approves[^\n]*\n[^\n]*/)}`);
+  assert(/any Approver except (Alice|you)/i.test(wf), `workflow page: ${wf.match(/Approval[^\n]*\n[^\n]*/)}`);
   assert(!/backup|Change who approves|stops waiting|before the next run/i.test(wf), 'no ADR 0024 wording on the workflow page');
   await t.go('software');
   const sw = await t.text();
@@ -243,6 +243,7 @@ check('preview-on-tags-planned', async (browser) => session(browser, 1280, async
 check('two-approvers-access-review', async (browser) => session(browser, 1280, async (t) => {
   await t.ctl('preview', 'on');
   await t.go('workflows'); await t.click('[data-act="workflow"][data-arg="access"]');
+  await t.click('details.tech summary');
   const text = await t.text();
   assert(/First Bob.*Then Alice/.test(text), `two Approvers in turn: ${text.match(/Who approves[^\n]*\n[^\n]*/)}`);
   assert(text.includes('2 Approvers, one after the other'), 'plan says two Approvers');
@@ -271,11 +272,11 @@ check('self-approval-blocked', async (browser) => session(browser, 1280, async (
   await t.click('[data-act="testRun"]'); await t.wait(400);
   const run = await t.text();
   assert.strictEqual(await t.count('[data-act="approve"]'), 0, 'Alice has no Approve button on her own test run');
-  assert(run.includes('You started this run, so you can’t approve it'), 'the run says why');
+  assert(run.includes('started this run, so another Approver must decide'), 'the run says why');
   await t.go('workflows');
   const row = await t.page.locator('.wf-row:has-text("Weekly closed ticket summary")').innerText();
   assert(!row.includes('Review and decide'), `Alice’s own test run offers her nothing to decide: ${row}`);
-  assert(row.includes('Needs a yes'), 'the test run waits for a yes from someone else');
+  assert(row.includes('Waiting for a yes'), 'the test run waits for a yes from someone else');
 }));
 
 check('second-workflow-kept', async (browser) => session(browser, 1280, async (t) => {
