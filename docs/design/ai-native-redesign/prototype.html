@@ -471,7 +471,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .sw-table tr.hist { border-top: 0; padding-top: 0; }
 }
 details summary { cursor: pointer; font-weight: 600; color: var(--muted); padding: 8px 0; }
-.uptodate { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 6px; }
 
 /* Run page: the live activity view */
 .runhead { display: grid; gap: 10px; margin-bottom: 8px; }
@@ -617,9 +616,6 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 .src.vuln svg { flex: none; margin-top: 2px; }
 .who-checks { display: flex; gap: 14px; align-items: center; }
 .who-checks p { margin: 0; }
-.addgrid select { width: 100%; min-width: 0; }
-.src.suggest { margin-top: 6px; }
-.src.suggest .btns { margin-top: 8px; }
 .agent-role { display: block; color: var(--muted); font-size: 0.875rem; font-weight: 400; }
 .dialog.wide { width: min(760px, calc(100% - 32px)); }
 .agent-dlg { display: grid; gap: 18px; }
@@ -648,6 +644,17 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 .versions summary { font-weight: 700; }
 @media (max-width:600px) { .dialog.wide { padding: 18px 14px; } .agent-change { padding: 12px 10px; } .proposal { padding: 10px; } .plan { padding-left: 20px; } .proposal .plan li.chg { margin-left: -4px; } }
 .lib-tabs { margin: -4px 0 20px; }
+.cap-list { list-style: none; margin: 0; padding: 0; display: grid; border-top: 1px solid var(--rule); }
+.cap-list li { padding: 12px 6px; border-bottom: 1px solid var(--rule); }
+.cap-list li > div { display: grid; gap: 2px; justify-items: start; }
+.cap-ic { display: inline-grid; place-items: center; width: 24px; height: 24px; color: var(--muted); }
+.cap-ready .cap-ic { color: var(--green-ink); }
+.cap-setup .cap-ic, .cap-down .cap-ic { color: var(--amber-ink); }
+.agent-details { padding: 0; }
+.agent-details > summary { color: var(--ink); }
+.agent-details[open] { display: grid; gap: 18px; }
+.agent-details .plan { margin-bottom: 14px; }
+@media (pointer: coarse) { .lib-tabs button, .set-tabs button, #find-software, .model-grid select { min-height: 44px; } }
 /* Settings sections use the same segmented track as the Agent library; on a phone the track scrolls sideways, never the page. */
 .set-tabs { margin: -4px 0 18px; max-width: 100%; overflow-x: auto; }
 .set-tabs button { position: relative; white-space: nowrap; flex: none; }
@@ -682,7 +689,7 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 .umeter.warn + .kpi-sub { color: var(--amber-ink); font-weight: 600; }
 .umeter.bad + .kpi-sub { color: var(--red-ink); font-weight: 600; }
 .ub-head { margin: 0 0 10px; font-size: 1rem; }
-#limit, #np-name { max-width: 320px; }
+#limit, #np-name, #np-email { max-width: 320px; }
 .ubars { display: grid; gap: 10px; margin: 0 0 18px; }
 .ubars li { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr) auto; gap: 12px; align-items: center; font-size: 0.9rem; }
 .ub-track { display: block; height: 10px; }
@@ -705,7 +712,7 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 .sec-sub { margin: -6px 0 10px; }
 .tool-rows { display: grid; gap: 8px; }
 /* A tool row has no icon: the same glyph on every row says nothing. Whether it changes data is the tag's job. */
-.tool-row { position: relative; display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 1.5fr) minmax(0, 0.9fr); align-items: center; gap: 14px; padding: 12px 18px; border: 1px solid var(--hair); border-radius: var(--r-card); background: var(--surface); transition: border-color var(--dur-press) ease; }
+.tool-row { position: relative; display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 1fr); align-items: center; gap: 14px; padding: 12px 18px; border: 1px solid var(--hair); border-radius: var(--r-card); background: var(--surface); transition: border-color var(--dur-press) ease; }
 .tool-row.team { grid-template-columns: minmax(0, 1fr) auto; background: var(--sunk); }
 .tool-name { display: grid; gap: 2px; min-width: 0; }
 .tool-name .rcard-link { font-weight: 700; }
@@ -714,7 +721,6 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 .tool-ic.write { color: var(--amber-ink); }
 .tool-ic.lg { width: 48px; height: 48px; border-radius: var(--r-card); background: var(--sunk); color: var(--ink); }
 .tool-ic.lg.write { background: var(--amber-soft); color: var(--amber-ink); }
-.tool-users { line-height: 1.4; }
 .health { display: inline-flex; align-items: center; gap: 6px; font-size: 0.875rem; font-weight: 600; }
 .health.ok { color: var(--green-ink); }
 .health.warn { color: var(--amber-ink); }
@@ -763,9 +769,33 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 .sw-table tr.hist td { border-top: 0; padding-top: 0; }
 .timeline { display: grid; margin: 0 0 6px; padding: 10px 16px; background: var(--sunk); border-radius: var(--r-well); }
 .timeline li { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px; padding: 6px 0; font-size: 0.9rem; }
-.addgrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr) minmax(0, 1.4fr) minmax(0, 0.9fr); gap: 16px; margin-bottom: 4px; align-items: start; }
-@media (max-width: 1000px) and (min-width: 761px) { .addgrid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
-@media (max-width: 760px) { .addgrid { grid-template-columns: minmax(0, 1fr); } }
+/* Needs attention, the add-by-name flow and the sources list on the watchlist */
+.section > .apprbar { margin-bottom: 0; }
+.attn { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px 18px; border: 1px solid var(--amber-line); border-radius: var(--r-card); background: var(--surface); }
+.attn b { display: block; }
+.attn span { display: block; font-size: 0.875rem; color: var(--muted); }
+.attn .face { width: 40px; height: 40px; }
+@media (max-width: 560px) { .attn { grid-template-columns: 40px minmax(0, 1fr); } .attn > :last-child { grid-column: 2; justify-self: start; } }
+.attn-h { margin: 12px 0 0; font-size: 1rem; }
+.addsw { display: grid; gap: 10px; margin-top: 12px; }
+.addsw h3 { margin: 0; font-size: 1rem; }
+.addname { display: grid; grid-template-columns: minmax(0, 320px) max-content; justify-content: start; gap: 12px; align-items: end; }
+@media (max-width: 560px) { .addname { grid-template-columns: minmax(0, 1fr); } }
+.guess { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--hair); border-radius: var(--r-card); background: var(--sunk); max-width: 640px; }
+.guess h3 { margin: 0; font-size: 1.05rem; }
+.guess h3:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.guess .field input { max-width: 320px; }
+.guess-line { margin: 0; font-size: 1.05rem; }
+.guess-why { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 0.9rem; }
+.guess-why li { display: flex; gap: 8px; align-items: flex-start; }
+.guess-why svg { flex: none; margin-top: 3px; color: var(--muted); }
+.pick { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; }
+.pick legend { font-weight: 600; padding: 0; margin-bottom: 4px; }
+.pickrow { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; min-height: 44px; border: 1px solid var(--hair); border-radius: var(--r-card); background: var(--surface); cursor: pointer; }
+.pickrow input { flex: none; width: 18px; height: 18px; margin: 3px 0 0; accent-color: var(--primary); }
+.pickrow > span { display: grid; gap: 2px; }
+.srcs { list-style: none; margin: 0; padding: 0; display: grid; border-top: 1px solid var(--rule); max-width: 520px; }
+.srcs li { display: flex; flex-wrap: wrap; gap: 4px 12px; justify-content: space-between; align-items: center; padding: 8px 2px; border-bottom: 1px solid var(--rule); }
 
 /* Forms, the tool card and the pieces the set-up card is built from */
 .field { display: grid; gap: 8px; }
@@ -773,7 +803,7 @@ details summary { cursor: pointer; font-weight: 600; color: var(--muted); paddin
 .field .help { font-size: 0.875rem; color: var(--muted); }
 .err { display: flex; gap: 6px; align-items: center; color: var(--red-ink); font-size: 0.875rem; font-weight: 600; }
 [aria-invalid="true"] { border-color: var(--red) !important; }
-textarea, input[type="text"], input[type="password"], input[type="url"], select {
+textarea, input[type="text"], input[type="password"], input[type="url"], input[type="email"], select {
   width: 100%; border: 1px solid var(--edge); border-radius: var(--r-ctl); background: var(--surface); padding: 10px 12px; font-size: 1rem; line-height: 1.5;
   transition: border-color var(--dur-press) ease;
 }
@@ -1345,14 +1375,14 @@ details > .m-close { animation: fold 140ms ease-in both; }
     model: { provider: 'aisg', model: 'claude-sonnet-5-5', keyEnd: '7f', checked: 'today, 9:00', secs: '1.8', address: '' },
     modelForm: { provider: 'aisg', address: '', key: '', show: false, step: 'key', model: '', err: {}, busy: '' },
     modelLog: [['Mon 19 Oct, 14:02', 'Alice connected AI Singapore gateway with claude-sonnet-5-5. Key ending 7f.']], modelPending: null, modelTest: '', simBadKey: false,
-    setTab: 'model', setLog: [], roleErr: {}, newPerson: { name: '', op: true, ap: false, err: '' },
+    setTab: 'connections', setLog: [], roleErr: {}, newPerson: { name: '', email: '', op: true, ap: false, err: {} },
     roles: { alice: { op: true, ap: true }, bob: { op: false, ap: true }, carol: { op: true, ap: false }, siti: { op: false, ap: true }, arun: { op: false, ap: true } },
     conns: connsFor(false),
     connForm: null, connTest: {},
     usageLimit: 50, limitForm: { value: '50', err: '' },
-    libTab: 'agents', toolChecks: {}, toolAsk: { text: '', result: null, err: '' }, teamReqs: [],
+    libTab: 'can', toolChecks: {}, toolAsk: { text: '', result: null, err: '' }, teamReqs: [],
     jiraComp: 'none', jiraCompAsker: null, jiraCompBy: null, jiraCompSeen: false,
-    added: [], removed: [], swOpen: null, swForm: { name: '', repo: '', ours: '' }, swErr: {},
+    added: [], removed: [], swOpen: null, swForm: newSwForm(), swErr: {}, lsFixed: false,
     drafts: [], draftSeq: 0, discarded: null, made: [], paused: {}, deleted: {}, sched: {}, editing: null, schedForm: null, schedErr: {},
     n8n: {}, n8nChg: {}, n8nLog: {}, editRun: null,
     find: { workflows: '', software: '' }, filter: 'all',
@@ -1646,8 +1676,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
   }
 
   /* ---------- Software: one list for every release check ---------- */
-  const TRACKED = ['LangGraph', 'FastAPI', 'Grafana', 'Log4j core', 'n8n', 'PostgreSQL', 'Spring Framework', 'Terraform', 'Keycloak', 'Redis', 'Nginx', 'Node.js', 'Python', 'Playwright'];
-  const UP_TO_DATE = TRACKED.slice(4);
+  const TRACKED = ['LangGraph', 'FastAPI', 'Grafana', 'Log4j core', 'LangServe', 'n8n', 'PostgreSQL', 'Spring Framework', 'Terraform', 'Keycloak', 'Redis', 'Nginx', 'Node.js', 'Python'];
+  const UP_TO_DATE = TRACKED.slice(5);
   /* Where software is published. Each source's state comes from the registry: GitHub releases are read today, the
      registries are ADR 0025 and show only with Planned features. */
   const SOURCES = { github: { name: 'GitHub', cap: 'ghReleases' }, maven: { name: 'Maven Central', cap: 'registries' }, npm: { name: 'npm', cap: 'registries' }, pypi: { name: 'PyPI', cap: 'registries' }, nuget: { name: 'NuGet', cap: 'registries' }, docker: { name: 'Docker Hub', cap: 'registries' } };
@@ -2343,62 +2373,128 @@ details > .m-close { animation: fold 140ms ease-in both; }
       ${id === 'sw' ? `<p class="note">Saving makes you the owner of this schedule. Its checks then count as your work, so you won’t be able to approve them.${apprOf('sw') && apprOf('sw').steps.some((s) => s.first === S.user || s.backup === S.user) ? ' You’re one of its Approvers now, so you’d be taken off and need to choose someone else.' : ''}</p>` : ''}</div>`;
   }
 
+  /* ---------- Software watchlist (spec 11) ---------- */
+  const LS_OLD = 'langchain-ai/langserve';
+  const LS_NEW = 'langchain-ai/langchain';
+  /* What the sample check found for the software that is up to date: the version we run, and its GitHub project. */
+  const UP_NOW = { n8n: ['2.42.6', 'n8n-io/n8n'], PostgreSQL: ['16.4', 'postgres/postgres'], 'Spring Framework': ['6.1.12', 'spring-projects/spring-framework'], Terraform: ['1.9.5', 'hashicorp/terraform'], Keycloak: ['25.0.4', 'keycloak/keycloak'], Redis: ['7.4.0', 'redis/redis'], Nginx: ['1.27.1', 'nginx/nginx'], 'Node.js': ['22.8.0', 'nodejs/node'], Python: ['3.12.6', 'python/cpython'] };
+  /* Adding software by name: one name can match more than one project, and a name the Planner knows may be published
+     elsewhere than GitHub. Only GitHub releases are read today, so the guess is always a GitHub project. */
+  const AMBIGUOUS = { kubernetes: [['kubernetes/kubernetes', 'Kubernetes itself'], ['kubernetes-client/python', 'The Python client library for Kubernetes']] };
+  const GH_OF = { log4j: 'apache/logging-log4j2', spring: 'spring-projects/spring-framework', jackson: 'FasterXML/jackson-databind', express: 'expressjs/express', django: 'django/django', newtonsoft: 'JamesNK/Newtonsoft.Json' };
+  function findProjects(name) {
+    const low = name.toLowerCase();
+    const amb = Object.keys(AMBIGUOUS).find((k) => low.includes(k));
+    if (amb) return AMBIGUOUS[amb].map(([repo, what]) => ({ repo, what, how: 'Found by name on GitHub.' }));
+    const key = Object.keys(KNOWN).find((k) => low.includes(k));
+    if (!key) return [];
+    const [, repo, kind, pkg] = KNOWN[key];
+    const gh = kind && kind !== 'github' ? GH_OF[key] : repo;
+    return gh ? [{ repo: gh, what: '', how: pkg ? `Found by name. Its ${srcName(pkg[0])} page links to this project.` : 'Found by name, in the projects I know.' }] : [];
+  }
+  function newSwForm() { return { name: '', repo: '', ours: '', kind: 'github', step: 'name', matches: [], pick: -1, change: false }; }
+  const ticketNote = (st) => ({ waiting: 'Ticket waiting for a yes', approved: null, declined: 'Proposed again next Monday' }[st]);
+
+  /* Every software on the list, in the order the table shows it: a new version, can't check, not checked yet, up to date. */
+  function watchRows() {
+    if (S.firstDay) return [];
+    const full = shows('registries');
+    const tick = (key) => (S.sw === 'approved' ? ticketBtn(key) : `<div class="src">${ticketNote(S.sw)}</div>`);
+    const newv = (key) => `<span class="pill wait">${I.clock(12)}New version</span>${tick(key)}`;
+    const next = (why) => `<span class="pill off">Not checked yet</span><div class="src">${why || `Next check ${R('sw').next}`}</div>`;
+    const lsFixed = S.lsFixed;
+    const base = [
+      { key: 'lj', name: 'Log4j core', repo: 'org.apache.logging.log4j:log4j-core', gh: 'apache/logging-log4j2', kind: 'maven', ours: '2.14.1', from: 'Given when added', newest: '2.25.2', cross: full ? 'Maven Central and GitHub agree' : '', rank: 0, status: `${newv('MOCK-16')}${full ? `<div class="src vuln">${I.alert(13)}<button class="linkbtn" data-act="toRisk" data-arg="lj">Critical security risk</button> ${PLANNED_TAG}</div>` : ''}` },
+      { key: 'lg', name: 'LangGraph', repo: 'langchain-ai/langgraph', ours: '1.2.14', from: 'From MOCK-6, marked Done', newest: '1.2.17', cross: full ? 'GitHub and PyPI agree' : '', rank: 0, status: newv('MOCK-14') },
+      { key: 'fa', name: 'FastAPI', kind: 'pypi', repo: 'fastapi', gh: 'fastapi/fastapi', ours: '0.118.0', from: 'From MOCK-9, marked Done', newest: full ? '0.120.1' : '0.120.2', cross: full ? 'GitHub shows 0.120.2, not on PyPI yet. You install it from PyPI, so 0.120.1 counts.' : '', rank: 0, status: newv('MOCK-15') },
+      { key: 'gr', name: 'Grafana', kind: 'docker', repo: 'grafana/grafana', gh: 'grafana/grafana', ours: '12.1.0', from: 'Given when added', newest: '?', rank: 1, status: `<span class="pill bad">${I.x(12)}Can’t check</span><div class="src">${full ? 'Docker Hub and GitHub didn’t answer.' : 'GitHub’s hourly limit was reached.'} It tries again next Monday.</div>` },
+      { key: 'ls', name: 'LangServe', repo: lsFixed ? LS_NEW : LS_OLD, ours: '0.3.1', from: 'Given when added', newest: '?', rank: lsFixed ? 2 : 1,
+        status: lsFixed ? next('Now read from the new address.') : `<span class="pill bad">${I.x(12)}Can’t check</span><div class="src">GitHub can’t find this project. It moved.</div>`,
+        hist: [...(lsFixed ? [['Today', `${me().name} used the new address ${LS_NEW}, as the AI troubleshooter suggested.`]] : []), ['Mon 26 Oct', `Couldn’t check: GitHub can’t find ${LS_OLD}. The project moved to ${LS_NEW}.`], ['Thu 1 Oct', `Added by Alice with our version 0.3.1.`]] },
+    ].map((r) => ({ ...r, ...rowSrc(r), rank: r.rank }));
+    const ok = UP_TO_DATE.map((n) => {
+      const [v, gh] = UP_NOW[n];
+      return { key: `ok:${n}`, name: n, repo: gh, kind: 'github', ours: v, from: 'From the first check', newest: v, rank: 3, status: `<span class="pill ok">${I.check(12)}Up to date</span>`, hist: [['Mon 26 Oct', `Up to date at ${v}.`], ['Thu 1 Oct', `Added by Carol with our version ${v}.`]] };
+    });
+    return base.concat(ok);
+  }
+
   function softwareView() {
     const day1 = S.firstDay;
     const q = S.find.software.trim().toLowerCase();
     const hit = (name, repo) => !q || `${name} ${repo}`.toLowerCase().includes(q);
     const full = shows('registries');
-    const vulnNote = full ? `<div class="src vuln">${I.alert(13)}<button class="linkbtn" data-act="toRisk" data-arg="lj">Critical security risk</button> ${PLANNED_TAG}</div>` : '';
-    const st = (key) => (S.sw === 'waiting' ? '<span class="pill wait">Ticket waiting for a yes</span>' : S.sw === 'approved' ? ticketBtn(key) : '<span class="pill off">Proposed again next Monday</span>');
-    const needRows = (day1 ? [] : [
-      { key: 'lj', name: 'Log4j core', kind: 'maven', repo: 'org.apache.logging.log4j:log4j-core', gh: 'apache/logging-log4j2', ours: '2.14.1', from: 'Given when added', newest: '2.25.2', cross: full ? 'Maven Central and GitHub agree' : '', status: `${st('MOCK-16')}${vulnNote}` },
-      { key: 'lg', name: 'LangGraph', repo: 'langchain-ai/langgraph', ours: '1.2.14', from: 'From MOCK-6, marked Done', newest: '1.2.17', cross: full ? 'GitHub and PyPI agree' : '', status: st('MOCK-14') },
-      { key: 'fa', name: 'FastAPI', kind: 'pypi', repo: 'fastapi', gh: 'fastapi/fastapi', ours: '0.118.0', from: 'From MOCK-9, marked Done', newest: full ? '0.120.1' : '0.120.2', cross: full ? 'GitHub shows 0.120.2, not on PyPI yet. You install it from PyPI, so 0.120.1 counts.' : '', status: st('MOCK-15') },
-      { key: 'gr', name: 'Grafana', kind: 'docker', repo: 'grafana/grafana', gh: 'grafana/grafana', ours: '12.1.0', from: 'Given when added', newest: '?', cross: full ? 'Docker Hub and GitHub didn’t answer' : 'GitHub’s hourly limit was reached', status: `<span class="pill bad">${I.x(12)}Can’t check</span>` },
-    ]).map((r) => ({ ...r, ...rowSrc(r) })).filter((r) => !S.removed.includes(r.key) && hit(r.name, r.repo));
-    const newRows = S.added.map((a, i) => ({
-      key: `add${i}`, name: a.name, kind: a.kind, repo: a.repo, ours: a.ours || '?', from: a.ours ? 'Given when added' : 'Taken from the first check', newest: '?',
-      status: a.kind !== 'unknown' ? '<span class="pill off">Checked next Monday</span>'
-        : a.suggest ? `<span class="pill wait">Source to confirm</span><div class="src suggest">The Version checker found it on the project’s official site: ${srcName(a.suggest[2] || 'github')} · ${srcLink(a.suggest[2], a.suggest[1], esc(a.suggest[1]))}.<span class="btns"><button class="btn sm" data-act="confirmSrc" data-arg="${i}">Confirm</button><button class="btn sm" data-act="chooseSrc" data-arg="${i}">Choose another</button></span></div>`
-          : `<span class="pill bad">${I.x(12)}No trusted source found</span><div class="src suggest">The Version checker searched the vendor’s official site, but found no version list it can read.<span class="btns"><button class="btn sm" data-act="chooseSrc" data-arg="${i}">Choose where it’s published</button></span></div>`,
-      hist: [['Today', `Added by ${nm(a.by)}${a.planner ? ` from the Planner. ${nm(a.by)} ${a.planner} ${esc(a.repo)}.` : '.'} ${a.ours ? `Our version ${esc(a.ours)}.` : 'Our version was left empty, so the first check takes the newest.'}`]],
-    })).filter((r) => !S.removed.includes(r.key) && hit(r.name, r.repo));
-    const upToDate = UP_TO_DATE.filter((u) => hit(u, ''));
-    const table = (rows, name) => `<div class="scroll-x"><table class="sw-table" role="table"><thead role="rowgroup"><tr role="row"><th role="columnheader">Software</th><th role="columnheader">Ours</th><th role="columnheader">Newest</th><th role="columnheader">Status</th><th role="columnheader"><span class="vh">Actions</span></th></tr></thead><tbody role="rowgroup" data-flip-group="swt:${name}">${rows.map((r) => {
+    const op = me().op;
+    const addedRows = S.added.map((a, i) => ({
+      key: `add${i}`, name: a.name, kind: a.kind, repo: a.repo, ours: a.ours || '?', from: a.ours ? 'Given when added' : 'Taken from the first check', newest: '?', rank: 2,
+      status: `<span class="pill off">Not checked yet</span><div class="src">Next check ${R('sw').next}</div>`,
+      hist: [['Today', `Added by ${nm(a.by)}${a.planner ? ` from the Planner. ${nm(a.by)} ${a.planner} ${esc(a.repo)}.` : a.how ? `. ${a.how}` : '.'} ${a.ours ? `Our version ${esc(a.ours)}.` : 'Our version was left empty, so the first check takes the newest.'}`]],
+    }));
+    const rows = watchRows().concat(addedRows).filter((r) => !S.removed.includes(r.key) && hit(r.name, r.repo)).sort((a, b) => a.rank - b.rank);
+    const table = `<div class="scroll-x"><table class="sw-table" role="table"><thead role="rowgroup"><tr role="row"><th role="columnheader">Software</th><th role="columnheader">We run</th><th role="columnheader">Newest</th><th role="columnheader">Status</th><th role="columnheader"><span class="vh">Actions</span></th></tr></thead><tbody role="rowgroup" data-flip-group="swt:all">${rows.map((r) => {
       const open = S.swOpen === r.key;
       const hist = r.hist || history(r.key);
-      return `<tr role="row" data-flip="sw:${r.key}"><td role="cell"><b>${esc(r.name)}</b><div class="src">${r.kind === 'unknown' ? 'Source not confirmed yet' : `${srcName(r.kind || 'github')} · ${srcLink(r.kind, r.repo, esc(r.repo))}`}</div></td><td role="cell" data-label="Ours" data-val="swv:${r.key}:ours">${esc(r.ours)}<div class="src">${r.from}</div></td><td role="cell" data-label="Newest" data-val="swv:${r.key}:new">${r.newest}${r.cross ? `<div class="src">${r.cross}</div>` : ''}</td><td role="cell" data-val="swv:${r.key}:st">${r.status}</td>
-        <td role="cell" class="sw-acts"><button class="linkbtn" data-act="swHist" data-arg="${r.key}" aria-expanded="${open}"${open ? ` aria-controls="hist-${r.key}"` : ''}>${open ? 'Hide history' : 'History'}<span class="vh"> of ${esc(r.name)}</span></button>${me().op ? ` <button class="linkbtn" data-act="removeSw" data-arg="${r.key}">Remove<span class="vh"> ${esc(r.name)}</span></button>` : ''}</td></tr>
+      return `<tr role="row" data-flip="sw:${r.key}"><td role="cell"><b>${esc(r.name)}</b><div class="src">${srcName(r.kind || 'github')} · ${srcLink(r.kind, r.repo, esc(r.repo))}</div></td><td role="cell" data-label="We run" data-val="swv:${r.key}:ours">${esc(r.ours)}<div class="src">${r.from}</div></td><td role="cell" data-label="Newest" data-val="swv:${r.key}:new">${r.newest}${r.cross ? `<div class="src">${r.cross}</div>` : ''}</td><td role="cell" data-val="swv:${r.key}:st">${r.status}</td>
+        <td role="cell" class="sw-acts"><button class="linkbtn" data-act="swHist" data-arg="${r.key}" aria-expanded="${open}"${open ? ` aria-controls="hist-${r.key}"` : ''}>${open ? 'Hide history' : 'History'}<span class="vh"> of ${esc(r.name)}</span></button>${op ? ` <button class="linkbtn" data-act="removeSw" data-arg="${r.key}">Remove<span class="vh"> ${esc(r.name)}</span></button>` : ''}</td></tr>
         ${open ? `<tr role="row" class="hist" id="hist-${r.key}" data-flip="swh:${r.key}" data-enter="reveal"><td role="cell" colspan="5"><ol class="timeline">${hist.map(([d, t]) => `<li><b>${d}</b><span>${t}</span></li>`).join('')}</ol></td></tr>` : ''}`;
     }).join('')}</tbody></table></div>`;
-    const appr = has('sw') && S.sw === 'waiting';
     const r = R('sw');
     const owner = nm(S.swOwner);
-    /* Sources, from the registry: GitHub releases today, the ADR 0025 sources as Planned. */
-    const sourceStates = [['GitHub releases', capState('ghReleases')], ['Package registries, security advisories and support end dates', capState('registries')]];
-    const sourcesLine = `<span>Sources: ${sourceStates.map(([n, s]) => `${s === 'planned' && full ? `${PLANNED_TAG} ` : ''}${n} (${s === 'ready' ? 'working' : s === 'down' ? 'not working right now' : s === 'setup' ? 'needs setup' : s})`).join('. ')}.</span>`;
-    return `<div class="pagehead"><div><h1 tabindex="-1">Software watchlist</h1><p>Everything your team runs, in one list. ${full ? 'Each check cross-checks versions, support dates and known vulnerabilities across trusted sources' : 'Each check reads the newest release of each one on GitHub'}, and its upgrade tickets go out in one approval.</p></div>
-        ${day1 ? '' : '<button class="btn" data-act="checkNow">Check now</button>'}</div>
-      <div class="sched">${I.clock(20)}<div>${day1 ? '<b>Checks run every Monday at 9:00 once you add software.</b><span>Each check sends one approval for all its tickets.</span>' : `<b>${esc(r.name)} checks this list ${r.when.charAt(0).toLowerCase()}${r.when.slice(1)}, set by ${owner}.</b> Next check ${r.next}. <span>${TZ}. Scheduled checks count as ${owner}’s work, so ${owner} can’t approve them.</span><span>Who approves: ${r.approves}.${apprOf('sw') ? ` ${PLANNED_TAG}` : ''}</span>`}${sourcesLine}</div>
-        ${day1 || !me().op ? '' : `<div class="btns"><button class="btn sm" data-act="editSched" data-arg="sw">${I.edit()}Change schedule</button>${changeApproversBtn('sw', 'editAppr', 'btn sm')}</div>`}</div>
+
+    /* Needs attention: a yes that waits, software the check couldn't read, and with Planned features the findings. */
+    const waiting = has('sw') && S.sw === 'waiting';
+    const moved = !day1 && !S.lsFixed && !S.removed.includes('ls');
+    const attn = [];
+    if (waiting) attn.push(`<div class="apprbar">${I.shield(20)}<div><b>This week’s check wants to raise 3 upgrade tickets${urgentNote(', 1 of them urgent')}.</b><span>Started by Carol’s schedule, Mon 26 Oct, 9:00. ${askLine(req('sw'), S.user)}</span></div>${canApprove('sw') ? '<button class="btn primary sm" data-act="run" data-arg="sw">Review and decide</button>' : `<span class="note">Waiting for ${whoOr(req('sw').may)}</span>`}</div>`);
+    if (moved) attn.push(`<div class="attn" id="attn-ls">${face('trouble', 40)}<div><b>GitHub can’t find ${LS_OLD}. It moved to ${LS_NEW}.</b><span>LangServe is skipped until this is fixed. The AI troubleshooter suggests reading it from the new address.</span></div>${op ? `<button class="btn primary sm" data-act="useNewAddress" data-unbuilt="Use the new address (no route changes a watched software’s address yet)">Use the new address<span class="vh"> for LangServe</span></button>` : '<span class="note">An Operator can fix this.</span>'}</div>`);
+    const findings = full && rows.some((x) => x.key === 'lj') ? `<h3 class="attn-h">Security risks ${PLANNED_TAG}</h3>${riskCard('lj', waiting ? '<span class="pill wait">Ticket waiting for a yes</span>' : S.sw === 'approved' ? ticketBtn('MOCK-16') : '<span class="pill off">Proposed again next Monday</span>')}` : '';
+    const ending = full && !day1 ? SUPPORT_ENDING.filter((x) => hit(x.name, '')) : [];
+    const endingHtml = ending.length ? `<h3 class="attn-h">Support ending ${PLANNED_TAG}</h3><div class="panel"><p class="note">From endoflife.date, read by the Version checker. After these dates, these versions get no more fixes, including security fixes.</p><div class="rows">${ending.map((x) => `<div class="row"><div><div class="row-name">${x.name}</div><div class="row-sub">Security fixes end ${x.ends}, ${x.left}. ${extLink(`https://endoflife.date/${x.slug}`, 'Dates on endoflife.date', 'endoflife.date')}</div></div><span class="pill wait">${I.clock(12)}Plan an upgrade</span></div>`).join('')}</div></div>` : '';
+    const attnSec = attn.length || findings || endingHtml ? `<section class="section" aria-labelledby="sw-attn-h"><h2 id="sw-attn-h">Needs attention <span class="count">${attn.length + (findings ? 1 : 0) + ending.length}</span></h2>${attn.join('')}${findings}${endingHtml}</section>` : '';
+
+    /* Add software: a name, then a guess that says where it came from and was checked. */
+    const f = S.swForm;
+    const step = f.step || 'name';
+    const ours = `<div class="field"><label for="sw-ours">Version we run <span class="muted">(optional)</span></label><input type="text" id="sw-ours" data-sw="ours" value="${esc(f.ours)}" placeholder="1.2.14"${fieldErr('sw-ours', '', 'Left empty, the first check takes the newest.')}</div>`;
+    const repoField = (help) => { const [label, ph, h] = SRC_FIELD[f.kind || 'github']; return `<div class="field"><label for="sw-repo">${label}</label><input type="text" id="sw-repo" data-sw="repo" value="${esc(f.repo)}" placeholder="${ph}"${fieldErr('sw-repo', S.swErr.repo, help || h)}</div>`; };
+    const kindField = full ? `<div class="field"><label for="sw-kind">Published on ${PLANNED_TAG}</label><select id="sw-kind" data-sw="kind">${sourcesShown().map((v) => opt(v, srcName(v), f.kind || 'github')).join('')}</select></div>` : '';
+    let add = '';
+    if (step === 'name') {
+      add = `<form class="addname" data-submit="swFind" novalidate><div class="field"><label for="sw-name">Software name</label><input type="text" id="sw-name" data-sw="name" value="${esc(f.name)}" placeholder="Kubernetes"${fieldErr('sw-name', S.swErr.name, 'Type the name. I’ll find its GitHub project.')}</div><button type="submit" class="btn">Find it</button></form>`;
+    } else {
+      const m = f.matches;
+      const nameLine = `<h3 id="sw-guess" tabindex="-1">${m.length ? `Adding ${esc(f.name.trim())}` : `I couldn’t find “${esc(f.name.trim())}”`}</h3>`;
+      let body;
+      if (!m.length) body = `<p class="small muted">Paste its GitHub link, or type owner/name.</p>${repoField('For example langchain-ai/langgraph.')}`;
+      else if (f.change) body = `<p class="small muted">You’re choosing the project yourself.</p>${kindField}${repoField()}`;
+      else if (m.length === 1) body = `<p class="guess-line"><b>${srcLink('github', m[0].repo, esc(m[0].repo))}</b></p><ul class="guess-why"><li>${I.info(14)}<span>${m[0].how}</span></li><li>${I.check(14)}<span>Checked just now. The project is on GitHub and publishes releases.</span></li></ul>`;
+      else body = `<fieldset class="pick"><legend>Which one do you mean?</legend>${m.map((x, i) => `<label class="pickrow"><input type="radio" name="sw-pick" data-sw="pick" value="${i}"${f.pick === i ? ' checked' : ''}><span><b>${esc(x.repo)}</b><span class="small muted">${x.what}. ${x.how}</span></span></label>`).join('')}</fieldset>`;
+      const ready = !m.length || f.change || f.pick >= 0;
+      add = `<form class="guess" data-submit="swAdd" novalidate data-flip="swadd" data-enter="reveal">${nameLine}${body}${ours}
+        <div class="btns"><button type="submit" class="btn primary"${ready ? '' : ' disabled'}>${m.length && !f.change && m.length === 1 ? 'Looks right, add it' : `Add ${esc(f.name.trim())}`}</button>${m.length === 1 && !f.change ? '<button type="button" class="btn" data-act="swChange">Change</button>' : ''}${m.length > 1 && !f.change ? '<button type="button" class="btn" data-act="swChange">None of these</button>' : ''}<button type="button" class="linkbtn" data-act="swReset">Start again</button></div>${m.length > 1 && !f.change && f.pick < 0 ? '<p class="small muted">Choose one to add it.</p>' : ''}</form>`;
+    }
+    const watching = `<section class="section" aria-labelledby="sww-h"><h2 id="sww-h" tabindex="-1">Software we watch <span class="count" data-val="sw:n">${rows.length}</span></h2>
+      ${day1 ? '' : `<div class="findbar"><span class="findbox">${I.search()}<label class="vh" for="find-software">Find software</label><input type="search" id="find-software" data-find="software" placeholder="Find software" value="${esc(S.find.software)}"></span></div>`}
+      ${rows.length ? `<div class="panel">${table}</div>` : day1 ? `<div class="quiet"><b>No software yet</b>Add the tools your team runs. Each one is checked every Monday for new releases on GitHub.${op ? '<div class="btns quiet-act"><button class="btn sm primary" data-act="focusAdd">Add your first software</button></div>' : ''}</div>`
+        : '<div class="quiet"><b>Nothing matches</b>Try another name, or add it below.<div class="btns quiet-act"><button class="btn sm" data-act="clearFind" data-arg="software">Clear the search</button></div></div>'}
+      ${op ? `<div class="addsw"><h3>Add software</h3>${add}</div>` : ''}</section>`;
+
+    /* How it's checked: the schedule, who says yes, and the sources, each with the state the registry gives it. */
+    const word = (s) => ({ ready: 'Ready', setup: 'Needs setup', down: 'Not working right now' }[s] || 'Planned');
+    const srcRow = (n, id) => { const s = capState(id); return `<li><span>${n}</span>${s === 'planned' && full ? PLANNED_TAG : `<span class="pill ${s === 'ready' ? 'ok' : s === 'planned' ? 'off' : 'wait'}">${s === 'ready' ? I.check(12) : ''}${word(s)}</span>`}</li>`; };
+    const how = `<section class="section" aria-labelledby="sw-how-h"><h2 id="sw-how-h">How it’s checked</h2><div class="panel">
+      ${day1 ? '<p><b>Every Monday at 9:00, Singapore time</b>, once you add software. One approval covers all the upgrade tickets.</p>'
+        : `<p><b>${cap(r.when)}, ${TZ}.</b> One approval covers all the upgrade tickets. Next check ${r.next}.</p>
+        <p class="small muted">Set by ${owner}. Scheduled checks count as ${owner}’s work, so ${owner} can’t approve them. Who approves: ${r.approves}.${apprOf('sw') ? ` ${PLANNED_TAG}` : ''}</p>`}
+      <ul class="srcs" aria-label="Sources">${srcRow('GitHub releases', 'ghReleases')}${srcRow('Package registries', 'registries')}${srcRow('Security advisories', 'registries')}${srcRow('Support end dates', 'registries')}</ul>
+      ${day1 || !op ? '' : `<div class="btns"><button class="btn sm" data-act="editSched" data-arg="sw">${I.edit()}Change schedule</button>${changeApproversBtn('sw', 'editAppr', 'btn sm')}</div>`}
       ${S.editing === 'sw' ? `<div data-flip="ed:s:sw" data-enter="reveal">${schedEditor('sw')}</div>` : ''}
       ${S.editingAppr === 'sw' ? `<div data-flip="ed:a:sw" data-enter="reveal">${apprEditor('sw')}</div>` : ''}
-      ${appr ? `<div class="apprbar">${I.shield(20)}<div><b>This week’s check wants to raise 3 upgrade tickets${urgentNote(', 1 of them urgent')}.</b><span>Started by Carol’s schedule, Mon 26 Oct, 9:00. ${askLine(req('sw'), S.user)}</span></div>${canApprove('sw') ? '<button class="btn primary sm" data-act="run" data-arg="sw">Review and decide</button>' : `<span class="note">Waiting for ${whoOr(req('sw').may)}</span>`}</div>` : ''}
-      ${day1 ? '' : `<div class="findbar"><span class="findbox">${I.search()}<label class="vh" for="find-software">Find software</label><input type="search" id="find-software" data-find="software" placeholder="Find software" value="${esc(S.find.software)}"></span></div>`}
-      ${full && needRows.some((x) => x.key === 'lj') ? `<section class="section"><h2>Security risks <span class="count">1</span> ${PLANNED_TAG}</h2>${riskCard('lj', st('MOCK-16'))}</section>` : ''}
-      ${needRows.length ? `<section class="section"><h2>Needs a person <span class="count" data-val="sw:need-n">${needRows.length}</span></h2><div class="panel">${table(needRows, 'need')}</div></section>` : ''}
-      ${day1 || !full ? '' : (() => { const ending = SUPPORT_ENDING.filter((x) => hit(x.name, '')); return ending.length ? `<section class="section"><h2>Support ending <span class="count">${ending.length}</span> ${PLANNED_TAG}</h2><div class="panel"><p class="note">From endoflife.date, read by the Version checker. After these dates, these versions get no more fixes, including security fixes.</p><div class="rows">${ending.map((x) => `<div class="row"><div><div class="row-name">${x.name}</div><div class="row-sub">Security fixes end ${x.ends}, ${x.left}. ${extLink(`https://endoflife.date/${x.slug}`, 'Dates on endoflife.date', 'endoflife.date')}</div></div><span class="pill wait">${I.clock(12)}Plan an upgrade</span></div>`).join('')}</div></div></section>` : ''; })()}
-      ${newRows.length ? `<section class="section"><h2>Not checked yet <span class="count" data-val="sw:new-n">${newRows.length}</span></h2><div class="panel">${table(newRows, 'new')}</div></section>` : ''}
-      ${day1 ? (newRows.length ? '' : `<div class="quiet"><b>No software yet</b>Add the tools your team runs. Each one is checked every Monday for new ${full ? 'versions and known vulnerabilities' : 'releases on GitHub'}.${me().op ? '<div class="btns quiet-act"><button class="btn sm primary" data-act="focusAdd">Add your first software</button></div>' : ''}</div>`)
-        : `<section class="section"><h2>Up to date <span class="count">${upToDate.length}</span></h2>${upToDate.length ? `<details${q ? ' open' : ''}><summary>Show all ${upToDate.length}</summary><div class="uptodate">${upToDate.map((u) => `<span class="tag">${u}</span>`).join('')}</div></details>` : '<p class="muted">None match.</p>'}</section>`}
-      ${q && !needRows.length && !newRows.length && !upToDate.length ? '<div class="quiet"><b>Nothing matches</b>Try another name, or add it below.<div class="btns quiet-act"><button class="btn sm" data-act="clearFind" data-arg="software">Clear the search</button></div></div>' : ''}
-      ${me().op ? `<section class="section"><h2>Add software</h2><div class="panel"><div class="addgrid">
-          <div class="field"><label for="sw-name">Name</label><input type="text" id="sw-name" data-sw="name" value="${esc(S.swForm.name)}" placeholder="LangGraph"${fieldErr('sw-name', S.swErr.name)}</div>
-          <div class="field"><label for="sw-kind">Published on</label><select id="sw-kind" data-sw="kind">${sourcesShown().map((v) => opt(v, srcName(v), S.swForm.kind || 'github')).join('')}${full ? opt('unknown', 'Not sure: let the Version checker find it', S.swForm.kind || 'github') : ''}</select></div>
-          ${(() => { const k = S.swForm.kind || 'github'; if (k === 'unknown') return '<div class="field"><span class="lab">Where it’s published</span><span class="help">The Version checker searches the vendor’s official site and suggests a source. You confirm it before any check uses it.</span></div>'; const [label, ph, help] = SRC_FIELD[k]; return `<div class="field"><label for="sw-repo">${label}</label><input type="text" id="sw-repo" data-sw="repo" value="${esc(S.swForm.repo)}" placeholder="${ph}"${fieldErr('sw-repo', S.swErr.repo, help)}</div>`; })()}
-          <div class="field"><label for="sw-ours">Our version <span class="muted">(optional)</span></label><input type="text" id="sw-ours" data-sw="ours" value="${esc(S.swForm.ours)}" placeholder="1.2.14"${fieldErr('sw-ours', '', 'Left empty, the first check takes the newest.')}</div>
-        </div><div class="btns"><button class="btn" data-act="addSoftware">Add</button></div></div></section>` : ''}
-      <p class="note" style="margin-top:24px">Asking the Planner on Home for a release${full ? ' or vulnerability' : ''} check adds the software here instead of making a new workflow.</p>`;
+    </div></section>`;
+    return `<div class="pagehead"><div><h1 tabindex="-1">Software watchlist</h1><p>Everything your team runs, in one list.</p></div>
+        ${day1 ? '' : '<button class="btn" data-act="checkNow">Check now</button>'}</div>
+      ${attnSec}${watching}${how}
+      <p class="note" style="margin-top:24px">Ask the Planner on Home for a release check, and it adds the software here.</p>`;
   }
 
   /* What happened to a workflow in n8n: the warning when a change removed the yes step, and every published change. */
@@ -3002,7 +3098,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const p = PROVIDERS[f.provider];
     const now = cur ? `<div class="model-now"><span class="pill ok">${I.check(12)}Connected</span><div><b>${cur.provider === 'other' ? esc(cur.address.replace(/^https:\/\//, '').replace(/\/.*$/, '')) : PROVIDERS[cur.provider].name} · ${cur.model}</b><span class="small muted">API key ending ${cur.keyEnd}. ${S.modelTest === 'done' ? 'Tested just now: it answered in 1.7 s.' : `Last tested ${cur.checked}: it answered in ${cur.secs} s.`}</span></div>
         <button class="btn sm" data-act="modelTest"${S.modelTest === 'busy' ? ' disabled' : ''}>${S.modelTest === 'busy' ? 'Testing…' : 'Test now'}</button></div>`
-      : '<div class="model-now off"><span class="pill off">Not connected</span><div><b>No AI model connected</b><span class="small muted">Until you connect one, the Planner can’t read new requests, and agents write simple text from templates.</span></div></div>';
+      : '<div class="model-now off"><span class="pill off">Not connected</span><div><b>No AI model connected</b><span class="small muted">Until you connect one, the Planner can’t read new requests, and agents write simple text from templates. Whoever looks after the platform connects it here.</span></div></div>';
     const q = S.modelPending;
     const canConfirm = q && me().ap && q.byId !== S.user;
     const pending = q ? `<div class="apprbar">${I.shield(20)}<div><b>A new address is waiting for an Approver</b><span>${esc(q.address)} · ${q.model}. Entered by ${nm(q.byId)}. Agents send their prompts to this address, so someone else must confirm it. Until then, runs keep using ${cur ? cur.model : 'templates'}.</span></div>
@@ -3037,39 +3133,43 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* Connections: the accounts the platform signs in to. Agents get read keys only; write keys stay with the platform (ADR 0008). */
   /* What each connection is used for comes from the registry (capsOn). These are the account and the test wording. */
   const CONNS = {
-    github: { name: 'GitHub', account: 'codesparks-bot, read only', uses: 'Agents read with a read-only key.', test: 'GitHub answered, with 4,812 of this hour’s 5,000 reads left.' },
-    jira: { name: 'Jira', practice: true, account: 'workflow-builder, project MOCK', uses: 'Agents read tickets with a read-only key. The platform creates tickets after a yes, with a separate key that agents never see.', test: 'Jira answered, and project MOCK was found. Nothing was changed.' },
-    teams: { name: 'Microsoft Teams', practice: true, account: 'the AI Workflow Builder app', uses: 'Sends approval requests to Approvers. Each request has one button, which opens the approval page here. Nothing else is posted in Teams.', test: 'Teams answered, and CODESparks Support was found. Nothing was posted.' },
+    github: { name: 'GitHub', is: 'Reads software releases', stops: 'the Software watchlist', account: 'codesparks-bot, read only', uses: 'Agents read with a read-only key.', test: 'GitHub answered, with 4,812 of this hour’s 5,000 reads left.' },
+    jira: { name: 'Jira', is: 'Reads tickets, and creates them after a yes', stops: 'every workflow that uses Jira', practice: true, account: 'workflow-builder, project MOCK', uses: 'Agents read tickets with a read-only key. The platform creates tickets after a yes, with a separate key that agents never see.', test: 'Jira answered, and project MOCK was found. Nothing was changed.' },
+    teams: { name: 'Microsoft Teams', is: 'Sends approval requests to Approvers', stops: 'approval requests to Approvers', practice: true, account: 'the AI Workflow Builder app', uses: 'Sends approval requests to Approvers. Each request has one button, which opens the approval page here. Nothing else is posted in Teams.', test: 'Teams answered, and CODESparks Support was found. Nothing was posted.' },
   };
   const expiring = () => Object.keys(CONNS).filter((k) => S.conns[k].days <= 14);
   /* A connection's health in plain words (spec 13), from the same state capState() reads. */
   function connHealth(k) {
     const st = S.conns[k];
-    if (st.down) return { cls: 'warn', label: 'Not working right now', text: `${CONNS[k].name} isn’t answering. Last seen working ${st.tested}. Everything that uses it waits until it’s back.` };
-    if (st.days <= 14) return { cls: 'warn', label: 'Key running out', text: `The ${CONNS[k].name} key runs out in ${st.days} days. Replace it before ${st.expires.replace(/ \d{4}$/, '')}, or everything that uses ${CONNS[k].name} stops.` };
-    return { cls: 'ok', label: 'Working', text: `${CONNS[k].name} is working. Checked ${st.tested}.` };
+    const c = CONNS[k];
+    if (st.down) return { cls: 'warn', label: 'Not working right now', text: `${c.name} isn’t answering. Last seen working ${st.tested}. Everything that uses it waits until it’s back.` };
+    if (!st.keyEnd || st.days <= 0) return { cls: 'warn', label: 'Needs attention', text: `${c.name} needs attention. The saved key is no longer accepted, so ${c.stops} stops until it’s replaced.` };
+    if (st.days <= 14) return { cls: 'warn', label: 'Key running out', text: `The ${c.name} key runs out in ${st.days} days. Replace it before ${st.expires.replace(/ \d{4}$/, '')}, or ${c.stops} stops.` };
+    return { cls: 'ok', label: 'Working', text: `${c.name} is working. Checked ${st.tested}.` };
   }
   function connPanel() {
     const card = (k) => {
       const c = CONNS[k];
       const st = S.conns[k];
-      const soon = st.days <= 14;
+      const refused = !st.keyEnd || st.days <= 0;
+      const soon = !refused && st.days <= 14;
       const h = connHealth(k);
       const f = S.connForm && S.connForm.id === k ? S.connForm : null;
       const test = S.connTest[k];
+      const checkNow = `<button class="btn${st.down ? ' primary' : ''} sm" data-act="connTest" data-arg="${k}"${test === 'busy' ? ' aria-disabled="true"' : ''}>${test === 'busy' ? 'Checking…' : 'Check now'}</button>`;
+      const replace = `<button class="btn${soon || refused ? ' primary' : ''} sm" data-act="connReplace" data-arg="${k}" data-unbuilt="Replace the key (needs ADR 0039)">Replace the key<span class="vh"> for ${c.name}</span></button>`;
       const form = f ? `<form class="model-form" data-submit="connSave" novalidate>
           <div class="field"><label for="ck-key">New key for ${c.name}</label><span class="keybox"><input type="${f.show ? 'text' : 'password'}" id="ck-key" data-ck="key" autocomplete="off" spellcheck="false" value="${esc(f.key)}" placeholder="Paste the new key"${fieldAttrs('ck-key', f.err, true)}><button type="button" class="btn sm" data-act="connShow" aria-pressed="${f.show}" aria-controls="ck-key">${f.show ? 'Hide' : 'Show'}</button></span>${fieldNotes('ck-key', f.err, 'It replaces the old key only if a test with it works. Nobody can read it back.')}</div>
           <div class="btns"><button type="submit" class="btn primary"${f.busy ? ' aria-disabled="true"' : ''}>${f.busy ? 'Testing…' : 'Test and save'}</button><button type="button" class="btn" data-act="connCancel">Cancel</button></div></form>`
-        : me().op ? `<div class="btns"><button class="btn${soon ? ' primary' : ''} sm" data-act="connReplace" data-arg="${k}">Replace key</button><button class="btn sm" data-act="connTest" data-arg="${k}"${test === 'busy' ? ' aria-disabled="true"' : ''}>${test === 'busy' ? 'Testing…' : 'Test'}</button></div>`
-          : `<div class="btns"><button class="btn sm" data-act="connTest" data-arg="${k}"${test === 'busy' ? ' aria-disabled="true"' : ''}>${test === 'busy' ? 'Testing…' : 'Test'}</button></div>`;
-      return `<article class="conn${soon || st.down ? ' soon' : ''}">
-        <div class="conn-top"><div><h3>${c.name}</h3><span class="small muted">Signs in as ${c.account}</span></div>${c.practice ? '<span class="tag">Practice copy</span>' : ''}<span class="health ${h.cls}">${h.cls === 'ok' ? I.check(14) : I.alert(14)}${h.label}</span></div>
-        <p class="small">${h.text} ${c.uses}</p>
-        <dl class="kv"><dt>Used for</dt><dd>${capsOn(k).map((id) => CAPS[id].name).join('; ') || 'Nothing yet'}</dd><dt>Key</dt><dd>Ending ${st.keyEnd}</dd><dt>Expires</dt><dd>${st.expires}${soon ? ` <span class="pill wait">${I.clock(12)}in ${st.days} days</span>` : ''}</dd><dt>Last tested</dt><dd>${test === 'done' ? `Just now. ${c.test}` : st.tested}</dd></dl>
+        : me().op ? `<div class="btns">${soon || refused ? `${replace}${checkNow}` : `${checkNow}${replace}`}</div>` : '';
+      return `<article class="conn${soon || refused || st.down ? ' soon' : ''}">
+        <div class="conn-top"><div><h3>${c.name}</h3><span class="small muted">${c.is}</span></div>${c.practice ? '<span class="tag">Practice copy</span>' : ''}<span class="health ${h.cls}">${h.cls === 'ok' ? I.check(14) : I.alert(14)}${h.label}</span></div>
+        <p>${h.text}${test === 'done' ? ` ${st.down ? `Checked just now. ${c.name} still isn’t answering.` : `Checked just now. ${c.test}`}` : ''}</p>
+        <dl class="kv"><dt>What uses it</dt><dd>${capsOn(k).map((id) => CAPS[id].name).join('; ') || 'Nothing yet'}</dd><dt>Signs in as</dt><dd>${c.account}</dd><dt>Key</dt><dd>Ends in ${st.keyEnd}${refused ? '' : `. Runs out ${st.expires}`}</dd></dl>
         ${form}
       </article>`;
     };
-    return `<section class="panel" data-unbuilt="Connections in Settings"><h2>Connections</h2><p class="note">The systems the platform signs in to, and the keys it uses. Practice copies never reach the real systems.</p>
+    return `<section class="panel"><h2>Connections</h2><p class="note">The systems the platform signs in to. Practice copies never reach the real systems.</p>
       <div class="conns">${Object.keys(CONNS).map(card).join('')}</div>
       ${me().op ? '' : onlyOps}
       ${historyBox(setLogOf('conn'), 'The history never holds a key, only its last 2 characters.')}</section>`;
@@ -3096,12 +3196,14 @@ details > .m-close { animation: fold 140ms ease-in both; }
       </li>`;
     };
     const np = S.newPerson;
-    return `<section class="panel"><h2>People and roles</h2><p class="note">Operators set up workflows and change settings. Approvers say yes or no to changes. People sign in with their NCS account.</p>
+    return `<section class="panel"><h2>People and permissions</h2><p class="note">Operators set up workflows and change settings. Approvers say yes or no to changes. People sign in with their NCS account.</p>
       <ul class="people">${Object.keys(S.roles).map(row).join('')}</ul>
       <ul class="checks role-rules"><li>${I.shield(16)}<span>Making someone an Approver needs another Approver to confirm it.</span></li>${shows('namedApprovers') ? `<li>${I.shield(16)}<span>Someone named on a workflow keeps the Approver role until another person is named there. ${PLANNED_TAG}</span></li>` : ''}<li>${I.shield(16)}<span>At least 2 people are Approvers, so nobody has to approve their own work.</span></li></ul>
       ${op ? `<form class="model-form" data-submit="personAdd" novalidate><h3>Add a person</h3>
-        <div class="field"><label for="np-name">Name</label><input type="text" id="np-name" data-np="name" value="${esc(np.name)}" placeholder="Mei Ling"${fieldErr('np-name', np.err, '')}</div>
+        <div class="field"><label for="np-name">Name</label><input type="text" id="np-name" data-np="name" value="${esc(np.name)}" placeholder="Mei Ling"${fieldErr('np-name', np.err.name, '')}</div>
+        <div class="field"><label for="np-email">Work email</label><input type="email" id="np-email" data-np="email" value="${esc(np.email)}" placeholder="name@example.com"${fieldErr('np-email', np.err.email, 'They sign in with the NCS account that uses this email.')}</div>
         <div class="roles"><label class="checkrow"><input type="checkbox" data-np="op"${np.op ? ' checked' : ''}>Operator</label><label class="checkrow"><input type="checkbox" data-np="ap"${np.ap ? ' checked' : ''}>Approver</label></div>
+        ${np.err.role ? `<p class="err">${I.alert(16)}<span>${np.err.role}</span></p>` : ''}
         <div class="btns"><button type="submit" class="btn">Add</button></div></form>` : onlyOps}
       ${historyBox(setLogOf('people'))}</section>`;
   }
@@ -3131,9 +3233,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
       ${historyBox(setLogOf('usage'))}</section>`;
   }
 
-  const SET_TABS = [['model', 'AI model'], ['connections', 'Connections'], ['people', 'People and roles'], ['usage', 'AI usage']];
+  const SET_TABS = [['connections', 'Connections'], ['people', 'People and permissions'], ['model', 'AI model'], ['usage', 'Usage']];
   function settingsView() {
-    const attention = { model: !curModel() || !!S.modelPending, connections: expiring().length > 0, people: Object.values(S.roles).some((r) => r.pendingAp), usage: usagePct() >= 80 };
+    const attention = { model: !curModel() || !!S.modelPending, connections: expiring().length > 0 || Object.values(S.conns).some((x) => x.down), people: Object.values(S.roles).some((r) => r.pendingAp), usage: usagePct() >= 80 };
     const panel = { model: modelPanel, connections: connPanel, people: peoplePanel, usage: usagePanel }[S.setTab]();
     return `<div class="narrow"><div class="pagehead"><div><h1 tabindex="-1">Settings</h1><p>For whoever looks after the platform. Every change here is recorded with who made it.</p></div></div>
       <div class="seg set-tabs" role="group" aria-label="Settings sections">${SET_TABS.map(([k, l]) => `<button data-act="setTab" data-arg="${k}" aria-pressed="${S.setTab === k}">${l}${attention[k] ? '<span class="tab-dot" aria-hidden="true"></span><span class="vh"> (needs attention)</span>' : ''}</button>`).join('')}</div>
@@ -3207,7 +3309,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       rules: ['Only explains. It never changes a run'], last: 'Today, 8:00: explained why Morning new-ticket check stopped.' },
     { id: 'checker', get what() { return shows('registries') ? 'Reads each tool’s newest version from its registry, cross-checks GitHub, reads support dates, and suggests a source when you’re not sure.' : 'Reads each tool’s newest release on GitHub.'; }, get tools() { return shows('registries') ? ['registries', 'ghReleases', 'support', 'suggest'] : ['ghReleases']; },
       get plan() { return shows('registries') ? ['For each tool on the watchlist, read the newest version from the registry the team installs it from', 'Cross-check GitHub. If the two disagree, the registry wins and the difference is reported', 'Read support dates from endoflife.date, and flag versions whose fixes end within a year', 'When asked, search a vendor’s official site and suggest a source for a person to confirm'] : ['For each tool on the watchlist, read its newest release on GitHub', 'Report each tool whose newest release is newer than the version we run']; },
-      get last() { return shows('registries') ? 'Mon 26 Oct, in Keep our software up to date: read 14 tools, found 3 newer versions and 1 disagreement.' : 'Mon 26 Oct, in Keep our software up to date: read 14 projects, found 3 newer releases.'; } },
+      get last() { return shows('registries') ? 'Mon 26 Oct, in Keep our software up to date: read 12 of 14 tools, found 3 newer versions and 1 disagreement. 2 couldn’t be read.' : 'Mon 26 Oct, in Keep our software up to date: read 12 of 14 projects, found 3 newer releases. 2 couldn’t be read.'; } },
     { id: 'vuln', planned: 'registries', what: 'Looks up known vulnerabilities in the versions you run, cross-checked across OSV, NVD, vendor advisories and CISA’s list of actively exploited ones.', tools: ['vulns', 'kev'],
       plan: ['Match the versions we run against OSV', 'Read each match’s official record and severity from NVD, and the vendor’s advisory', 'Check CISA’s list of actively exploited vulnerabilities', 'Mark it urgent if it’s critical (9.0 or higher) or actively exploited'],
       last: 'Mon 26 Oct: found 4 known vulnerabilities in Log4j core 2.14.1, one actively exploited.' },
@@ -3319,30 +3421,51 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const versionText = (id) => { const n = agentNow(id); return n.v > 1 ? `Version ${n.v}, changed by ${n.by} ${n.when.toLowerCase()}` : `Version 1. ${LIB(id).made || 'Ships with the platform'}`; };
 
   const visibleAgents = () => LIBRARY.filter((a) => (!a.planned || shows(a.planned)) && (!a.drafted || savedAgents().includes(a.id)));
+  /* The agents that use one capability: the agents whose tools carry it. Summing up needs no tool, so it is named by hand. */
+  const capUsers = (id) => (id === 'summarise' ? ['summary', 'wow'] : visibleAgents().filter((a) => (agentNow(a.id).tools || a.tools).some((t) => CAPS[id].tools.includes(t))).map((a) => a.id)).filter((a) => visibleAgents().some((v) => v.id === a));
+  /* What it can do (spec 12): the registry in plain words, grouped by state, each line naming the agents that use it. */
+  function capabilitiesTab() {
+    const caps = Object.keys(CAPS).map((id) => ({ id, st: capState(id) }));
+    const groups = [['ready', 'I can', I.check(15)], ['setup', 'Needs setup', I.alert(15)], ['down', 'Not working right now', I.alert(15)], ['not', 'Not yet', I.x(14)]];
+    const line = (c) => {
+      const cp = CAPS[c.id];
+      const users = capUsers(c.id);
+      const who = cp.platform ? 'The platform does this for every workflow.' : users.length ? `Used by ${users.map((u) => AGENTS[u].name).join(', ')}.` : '';
+      const why = c.st === 'down' ? `Last seen working ${lastOk(c.id)}. Whatever uses it waits until it’s back.`
+        : c.st === 'setup' ? `The ${cp.sys} key has run out. <button class="linkbtn" data-act="setGo" data-arg="connections">Replace it in Settings</button>.`
+          : c.st === 'planned' ? `${cp.why}` : c.st === 'unsupported' ? cp.why : '';
+      const mark = c.st === 'planned' ? (shows(c.id) ? ` ${PLANNED_TAG}` : ' <span class="small muted">Planned</span>') : '';
+      const more = [why, who].filter(Boolean).join(' ');
+      return `<li><div><span><b>${cp.name}</b>${mark}</span>${more ? `<span class="small muted">${more}</span>` : ''}</div></li>`;
+    };
+    return groups.map(([g, title, icon]) => { const list = caps.filter((c) => (g === 'not' ? ['planned', 'unsupported'].includes(c.st) : c.st === g)); return list.length ? `<section class="section cap-${g}" aria-labelledby="cap-${g}-h"><h2 id="cap-${g}-h"><span class="cap-ic" aria-hidden="true">${icon}</span>${title} <span class="count">${list.length}</span></h2><ul class="cap-list">${list.map(line).join('')}</ul></section>` : ''; }).join('')
+      + '<p class="note" style="margin-top:24px">Anything that changes data waits for a yes in Teams. Need something that isn’t here? Ask the Planner on Home, and it passes the request to the team.</p>';
+  }
+  const oneLine = (a) => a.what.split(/(?<=\.)\s/)[0];
   function libraryView() {
     const list = visibleAgents();
     const card = (a, i) => {
       const tools = agentTools(a);
       return `<article class="agent-lg" data-stagger style="--i:${i}">
-        <div class="agent-top">${face(a.id, 52)}<div><h3><button class="rcard-link" data-act="agent" data-arg="${a.id}">${AGENTS[a.id].name}</button>${a.planned ? ` ${PLANNED_TAG}` : ''}</h3>${AGENTS[a.id].role ? `<span class="agent-role">${AGENTS[a.id].role}</span>` : ''}</div></div>
-        <p>${a.what}</p>
-        <p class="small">${!tools.length ? '<span class="tag">No access to other systems</span>' : `${tools.some((t) => t[1] === 'write') ? '<span class="tag write">Changes data after a yes</span>' : '<span class="tag read">Reads only</span>'} <span class="muted">${tools.length === 1 ? '1 tool' : `${tools.length} tools`}</span>`}</p>
+        <div class="agent-top">${face(a.id, 52)}<div><h3><button class="rcard-link" data-act="agent" data-arg="${a.id}">${AGENTS[a.id].name}</button>${a.planned ? ` ${PLANNED_TAG}` : ''}</h3></div></div>
+        <p>${oneLine(a)}</p>
+        <p class="small">${!tools.length ? '<span class="tag">No access to other systems</span>' : tools.some((t) => t[1] === 'write') ? '<span class="tag write">Changes data after a yes</span>' : '<span class="tag read">Reads only</span>'}${agentNow(a.id).v > 1 ? ' <span class="tag">Changed</span>' : ''}</p>
         <p class="small muted">${usedByText(a)}</p>
-        ${agentNow(a.id).v > 1 ? `<p class="small"><span class="tag">Changed</span> ${versionText(a.id)}</p>` : ''}
-        <div class="btns"><button class="btn sm" data-act="agent" data-arg="${a.id}">${canChangeAgent(a.id) ? 'Details and changes' : 'Details'}</button></div>
+        <div class="btns"><button class="btn sm" data-act="agent" data-arg="${a.id}">${canChangeAgent(a.id) ? 'Details and changes' : 'Details'}<span class="vh"> of ${AGENTS[a.id].name}</span></button></div>
       </article>`;
     };
     const specialists = list.filter((a) => !a.platform);
     const tab = S.libTab;
-    const head = `<div class="pagehead"><div><h1 tabindex="-1">Agent library</h1><p>${tab === 'tools' ? 'Tools are how agents reach other systems. An agent can use only the tools on its card, and a tool that changes data waits for a yes, every time.' : 'The agents your team can use. For each workflow, the Planner picks the ones it needs. An agent can use only the tools on its card, and anything that changes data waits for a yes.'}</p></div></div>
-      <div class="seg lib-tabs" role="group" aria-label="Show">${[['agents', 'Agents', list.length], ['tools', 'Tools', Object.keys(TOOLS).filter(toolLive).length]].map(([k, l, n]) => `<button data-act="libTab" data-arg="${k}" aria-pressed="${tab === k}">${l} <span class="seg-n">${n}</span></button>`).join('')}</div>`;
+    const lead = { can: 'What the platform can do today, and what it can’t yet. An agent can use only what is listed under I can.', agents: 'The agents your team can use. For each workflow, the Planner picks the ones it needs. Anything that changes data waits for a yes.', tools: 'Tools are how agents reach other systems. A tool that changes data waits for a yes, every time.' }[tab];
+    const head = `<div class="pagehead"><div><h1 tabindex="-1">Agent library</h1><p>${lead}</p></div></div>
+      <div class="seg lib-tabs" role="group" aria-label="Show">${[['can', 'What it can do', 0], ['agents', 'Agents', list.length], ['tools', 'Tools', Object.keys(TOOLS).filter(toolLive).length]].map(([k, l, n]) => `<button data-act="libTab" data-arg="${k}" aria-pressed="${tab === k}">${l}${n ? ` <span class="seg-n">${n}</span>` : ''}</button>`).join('')}</div>`;
     if (tab === 'tools') return head + toolsTab();
+    if (tab === 'can') return head + capabilitiesTab();
     return `${head}
       <section class="section"><h2>Platform agents</h2><div class="agentgrid duo">${list.filter((a) => a.platform).map(card).join('')}</div></section>
       <section class="section"><h2>Specialist agents <span class="count">${specialists.length}</span></h2><div class="agentgrid">${specialists.map(card).join('')}</div></section>
       <p class="note" style="margin-top:24px">Open an agent to see how it works and to change it in plain English. New agents come from the Planner on Home: when you describe a task that none of these fits, it drafts a new agent card for you to check and save.</p>`;
   }
-
   /* ---------- Tools: what each agent can reach, linked both ways with the agents ---------- */
   const toolUsers = (k) => visibleAgents().filter((a) => toolKeysOf(a.id).includes(k));
   const toolWorkflows = (k) => { const ids = toolUsers(k).map((a) => a.id); return routineIds().filter((w) => (R(w).agents || []).some((id) => ids.includes(id))); };
@@ -3369,13 +3492,11 @@ details > .m-close { animation: fold 140ms ease-in both; }
   }
   function toolRow(k) {
     const [n, kind, x] = TOOLS[k];
-    const users = toolUsers(k);
     const st = toolState(k);
     const h = st === 'ok' && !toolPlanned(k) ? toolHealth(k) : null;
     return `<li class="tool-row">
       <div class="tool-name"><button class="rcard-link" data-act="toolOpen" data-arg="${k}">${n}</button><span class="small muted">${TOOL_INFO[k].sys}</span></div>
       <span class="small">${kind === 'write' ? `<span class="tag write">Needs a yes</span> <span class="muted">${x}</span>` : '<span class="tag read">Reads only</span>'}</span>
-      <span class="small tool-users">${users.length ? `<span class="muted">Used by </span>${users.map((a) => AGENTS[a.id].name).join(', ')}` : '<span class="muted">No agent uses it yet</span>'}</span>
       ${toolPlanned(k) ? PLANNED_TAG : h ? `<span class="health ${h.ok ? 'ok' : 'warn'}" data-unbuilt="Tool health">${h.ok ? I.check(14) : I.alert(14)}${h.ok ? 'Working' : 'Had a problem'}</span>` : `<span class="pill wait">${st === 'asked' ? 'Waiting for an OK' : 'Draft, not sent'}</span>`}
     </li>`;
   }
@@ -3499,7 +3620,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     let result = '';
     if (r && r.type === 'change') {
       result = `<div class="proposal" id="agent-proposal" tabindex="-1" data-pres="prop:${id}:${keyOf(d.text)}:${r.type}">
-        ${say(`Here’s how I’d change the ${name}. The changed step is marked.`)}
+        ${say(`Here’s the exact difference for the ${name}. The old step is crossed out and the new one is marked.`)}
         <ol class="plan">${r.plan.map((step, i) => (i !== r.changed ? `<li>${step}</li>` : r.added ? `<li class="chg"><span class="chip-new">New</span> <ins>${step}</ins></li>` : `<li class="chg"><del>${r.from}</del><ins>${step}</ins></li>`)).join('')}</ol>
         <ul class="checks"><li>${I.check(16)}<span>${r.addTool ? `Adds one tool from the tool list: <b>${TOOLS[r.addTool][0]}</b>. It still waits for a yes, every time` : 'Uses only the tools already on its card'}</span></li><li>${I.check(16)}<span>Doesn’t change what needs a yes, or who approves</span></li><li>${I.check(16)}<span>Doesn’t reach anything it couldn’t reach before</span></li></ul>
         ${S.firstDay ? '' : `<p><b>On its last run:</b> ${r.effect}</p>`}
@@ -3533,14 +3654,16 @@ details > .m-close { animation: fold 140ms ease-in both; }
     return `<div class="agent-dlg">${backBtn()}
       <div class="agent-top">${face(id, 56, 'idle', { live: true })}<div><h2 id="dlg-h">${name}${a.planned ? ` ${PLANNED_TAG}` : ''}</h2>${AGENTS[id].role ? `<span class="agent-role">${AGENTS[id].role}</span>` : ''}<span class="small muted">${versionText(id)}</span></div><button class="iconbtn dlg-close" data-act="closeModal" aria-label="Close">${I.x(18)}</button></div>
       <p>${a.what}</p>
-      <section><h3>How it works</h3><ol class="plan" data-flip-group="aplan:${id}">${now.plan.map((step) => `<li data-flip="aplan:${id}:${keyOf(step)}">${step}</li>`).join('')}</ol></section>
-      ${change}
-      <div class="agent-cols">
-        <section><h3>Tools it may use</h3>${toolKeysOf(id).length ? toolsList(toolKeysOf(id)) : `<p class="small muted">${a.none}</p>`}</section>
-        <section><h3>Rules it always follows</h3><ul class="checks">${agentRules(a).map((x) => `<li>${I.shield(16)}<span>${x}</span></li>`).join('')}</ul></section>
-      </div>
       <section><h3>Where it’s used</h3><p class="small">${usedByText(a)}</p><p class="small muted">Last run: ${S.firstDay ? 'Hasn’t run yet.' : a.last}</p></section>
-      <details class="versions"><summary>Version history (${vs.length})</summary><ol class="timeline">${vs.slice().reverse().map((x) => `<li><b>Version ${x.v}</b><span>${x.when ? `${x.when}, ${x.by}: “${esc(x.text)}”` : esc(x.text)}${x.v !== now.v && canChangeAgent(id) ? ` <button class="linkbtn" data-act="agentRestore" data-arg="${id}:${x.v}">Go back to this version</button>` : ''}</span></li>`).join('')}</ol></details>
+      ${change}
+      <details class="tech agent-details"><summary>Details</summary>
+        <section><h3>How it works</h3><ol class="plan" data-flip-group="aplan:${id}">${now.plan.map((step) => `<li data-flip="aplan:${id}:${keyOf(step)}">${step}</li>`).join('')}</ol></section>
+        <div class="agent-cols">
+          <section><h3>Tools it may use</h3>${toolKeysOf(id).length ? toolsList(toolKeysOf(id)) : `<p class="small muted">${a.none}</p>`}</section>
+          <section><h3>Permissions and rules</h3><ul class="checks">${agentRules(a).map((x) => `<li>${I.shield(16)}<span>${x}</span></li>`).join('')}</ul></section>
+        </div>
+        <details class="versions"><summary>Version history (${vs.length})</summary><ol class="timeline">${vs.slice().reverse().map((x) => `<li><b>Version ${x.v}</b><span>${x.when ? `${x.when}, ${x.by}: “${esc(x.text)}”` : esc(x.text)}${x.v !== now.v && canChangeAgent(id) ? ` <button class="linkbtn" data-act="agentRestore" data-arg="${id}:${x.v}">Go back to this version</button>` : ''}</span></li>`).join('')}</ol></details>
+      </details>
     </div>`;
   }
 
@@ -4173,48 +4296,68 @@ details > .m-close { animation: fold 140ms ease-in both; }
     replay: () => { if (P.speed === 'instant') P.speed = '1x'; focusHeading = true; playTo(0); render(); },
     swHist: (k) => { S.swOpen = S.swOpen === k ? null : k; render(); },
     checkNow: () => { toast(S.sw === 'waiting' ? 'This week’s check is still waiting for a yes. Decide on it first, then check again.' : 'Checked just now. Nothing new since Monday.'); render(); },
-    addSoftware: () => {
-      const name = S.swForm.name.trim();
-      const kind = S.swForm.kind || 'github';
-      const repo = kind === 'unknown' ? '' : kind === 'github' ? repoOf(S.swForm.repo) : S.swForm.repo.trim();
-      const ours = S.swForm.ours.trim();
+    swFind: () => {
+      const f = S.swForm;
+      const name = f.name.trim();
       S.swErr = {};
-      if (!name) S.swErr.name = 'Give the software a name.';
+      if (!name) S.swErr.name = 'Type the software’s name.';
       else if (onList(name)) S.swErr.name = `${esc(name)} is already on the list.`;
-      if (kind !== 'unknown') {
+      if (S.swErr.name) { render(); document.getElementById('sw-name').focus(); return; }
+      const matches = findProjects(name);
+      Object.assign(f, { step: 'guess', matches, pick: matches.length === 1 ? 0 : -1, change: false, repo: '' });
+      render();
+      const g = document.getElementById('sw-guess');
+      if (g) g.focus();
+    },
+    swChange: () => {
+      const f = S.swForm;
+      f.change = true;
+      f.repo = f.matches.length === 1 ? f.matches[0].repo : '';
+      f.kind = 'github';
+      render();
+      const i = document.getElementById('sw-repo');
+      if (i) i.focus();
+    },
+    swReset: () => { S.swForm = newSwForm(); S.swErr = {}; render(); const i = document.getElementById('sw-name'); if (i) i.focus(); },
+    swAdd: () => {
+      const f = S.swForm;
+      const name = f.name.trim();
+      S.swErr = {};
+      let repo;
+      let kind = 'github';
+      let how = 'Entered by hand.';
+      if (f.change || !f.matches.length) {
+        kind = f.kind || 'github';
+        repo = kind === 'github' ? repoOf(f.repo) : f.repo.trim();
         const [label, , help, shape, bad] = SRC_FIELD[kind];
-        if (!repo) S.swErr.repo = `Type its ${label.charAt(0).toLowerCase()}${label.slice(1)}. ${help}`;
+        if (!repo) S.swErr.repo = `Type its ${lc(label)}. ${help}`;
         else if (!shape.test(repo)) S.swErr.repo = bad;
+        if (S.swErr.repo) { render(); document.getElementById('sw-repo').focus(); return; }
+      } else {
+        const m = f.matches[f.pick];
+        if (!m) return;
+        repo = m.repo;
+        how = m.how;
       }
-      if (S.swErr.name || S.swErr.repo) {
-        render();
-        document.getElementById(S.swErr.name ? 'sw-name' : 'sw-repo').focus();
-        return;
-      }
-      S.added.push({ name, kind, repo, ours, by: S.user, suggest: kind === 'unknown' ? namedIn(name) : null });
+      S.added.push({ name, kind, repo, ours: f.ours.trim(), by: S.user, how });
       S.swOpen = null;
-      S.swForm = { name: '', repo: '', ours: '', kind: kind === 'unknown' ? 'github' : kind };
-      toast(kind === 'unknown' ? `Added ${esc(name)}. The Version checker looked for where it’s published. Check its suggestion below.` : `Added ${esc(name)}. It’s checked at the next check, ${R('sw').next}.`);
+      S.swForm = newSwForm();
+      toast(`Added ${esc(name)}. It’s checked at the next check, ${R('sw').next}.`);
       render();
+      const i = document.getElementById('sw-name');
+      if (i) i.focus();
     },
-    confirmSrc: (i) => {
-      const a = S.added[+i];
-      a.kind = a.suggest[2] || 'github';
-      a.repo = a.suggest[1];
-      toast(`Confirmed. ${esc(a.name)} is read from ${srcName(a.kind)} from the next check.`);
+    useNewAddress: () => {
+      if (!me().op) return;
+      S.lsFixed = true;
+      toast(`LangServe is now read from ${LS_NEW}. It’s checked at the next check, ${R('sw').next}.`, { label: 'Undo', act: 'undoAddress' });
       render();
+      const h = document.getElementById('sww-h');
+      if (h) h.focus();
     },
-    chooseSrc: (i) => {
-      const a = S.added[+i];
-      S.removed.push(`add${i}`);
-      S.swForm = { name: a.name, repo: '', ours: a.ours, kind: 'github' };
-      toast('Choose where it’s published, then press Add.');
-      render();
-      const f = document.getElementById('sw-kind');
-      if (f) f.focus();
-    },
+    undoAddress: () => { S.lsFixed = false; toast('Put back. LangServe is skipped until the address is fixed.'); render(); },
     removeSw: (key) => {
-      const row = key.startsWith('add') ? S.added[+key.slice(3)].name : { lj: 'Log4j core', lg: 'LangGraph', fa: 'FastAPI', gr: 'Grafana' }[key];
+      const row = key.startsWith('add') ? S.added[+key.slice(3)].name : watchRows().find((x) => x.key === key).name;
       S.removed.push(key);
       toast(`Removed ${esc(row)}. It won’t be checked any more.`, { label: 'Undo', act: 'undoRemove', arg: key });
       render();
@@ -4391,13 +4534,18 @@ details > .m-close { animation: fold 140ms ease-in both; }
     personAdd: () => {
       const np = S.newPerson;
       const name = np.name.trim();
-      np.err = !name ? 'Type the person’s name.' : Object.values(PEOPLE).some((x) => x.name.toLowerCase() === name.toLowerCase()) ? `${esc(name)} is already on the list.` : !np.op && !np.ap ? 'Choose at least one role.' : '';
-      if (np.err) { render(); document.getElementById('np-name').focus(); return; }
+      const email = np.email.trim();
+      np.err = {
+        name: !name ? 'Type the person’s name.' : Object.values(PEOPLE).some((x) => x.name.toLowerCase() === name.toLowerCase()) ? `${esc(name)} is already on the list.` : '',
+        email: !email ? 'Type their work email.' : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? 'That doesn’t look like an email address.' : '',
+        role: !np.op && !np.ap ? 'Choose at least one role.' : '',
+      };
+      if (np.err.name || np.err.email || np.err.role) { render(); document.getElementById(np.err.name ? 'np-name' : np.err.email ? 'np-email' : 'np-name').focus(); return; }
       const id = `p${Object.keys(S.roles).length}${name.toLowerCase().replace(/[^a-z]/g, '').slice(0, 8)}`;
       S.roles[id] = { op: np.op, ap: false, pendingAp: np.ap, pendingBy: np.ap ? S.user : null, added: true, name };
       logSet('people', `${me().name} added ${esc(name)}${np.op ? ' as an Operator' : ''}${np.ap ? `${np.op ? ', and asked for them to be an Approver' : ' and asked for them to be an Approver'}` : ''}.`);
       toast(np.ap ? `Added ${name}. Another Approver must confirm the Approver role.` : `Added ${name}. They can sign in with their NCS account.`);
-      S.newPerson = { name: '', op: true, ap: false, err: '' };
+      S.newPerson = { name: '', email: '', op: true, ap: false, err: {} };
       render();
     },
     limitSave: () => {
@@ -4775,7 +4923,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (d.toolask) { S.toolAsk.text = e.target.value; return; }
     if (d.mf && e.target.tagName !== 'SELECT') { S.modelForm[d.mf] = e.target.value; return; }
     if (d.ck) { S.connForm.key = e.target.value; return; }
-    if (d.np === 'name') { S.newPerson.name = e.target.value; return; }
+    if (d.np === 'name' || d.np === 'email') { S.newPerson[d.np] = e.target.value; return; }
     if (d.limit) { S.limitForm.value = e.target.value; return; }
     if (d.find) {
       S.find[d.find] = e.target.value;
@@ -4805,6 +4953,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     if (d.sched) { S.wiz.sched[d.sched] = e.target.value; S.wiz.whenOpen = true; if (S.wiz.schedErr[d.sched]) delete S.wiz.schedErr[d.sched]; render(); return; }
     if (d.sf) { S.schedForm[d.sf] = e.target.value; if (S.schedErr[d.sf]) delete S.schedErr[d.sf]; render(); return; }
     if (d.sw === 'kind') { S.swForm.kind = e.target.value; delete S.swErr.repo; render(); return; }
+    if (d.sw === 'pick') { S.swForm.pick = +e.target.value; render(); const r = $app.querySelector('input[name="sw-pick"]:checked'); if (r) r.focus(); return; }
     if (d.mf === 'provider') { const key = S.modelForm.key; S.modelForm = { ...freshModelForm(e.target.value), key }; render(); const el = document.getElementById('mf-provider'); if (el) el.focus(); return; }
     if (d.mf === 'model') { S.modelForm.model = e.target.value; return; }
     if (d.role) { A.roleToggle(d.role, e.target.checked); return; }

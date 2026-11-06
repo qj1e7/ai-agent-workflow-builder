@@ -69,7 +69,7 @@ const checks = [];
 const check = (name, fn, opts = {}) => checks.push({ name, fn, ...opts });
 
 /* Every sentence that mentions Teams may only be about the approval request. */
-const TEAMS_ALLOWED = /\b(yes|approv|asked|ask |request|decide|decision|nothing (else )?(is|was) posted|practice copy|open in|reaches the real|teams answered|signed in|carries approval)/i;
+const TEAMS_ALLOWED = /\b(yes|approv|asked|ask |request|decide|decision|nothing (else )?(is|was) posted|practice copy|open in|reaches the real|teams answered|signed in|carries approval|isn’t built|planned)/i;
 const TEAMS_SUSPECT = /\b(post|posts|posted|posting|send|sends|sent|sending|message|messages|notif\w*|remind\w*)\b/i;
 /* The registry's own "Not yet" line names the planned capability; it promises nothing. */
 const NOT_YET_LINES = ['Post messages in Teams'];
@@ -92,6 +92,7 @@ async function sweep(t) {
   await t.go('software'); await grab('watchlist');
   await t.click('[data-act="watch"][data-arg="sw"], [data-act="run"][data-arg="sw"]'); await t.wait(300); await grab('run sw');
   await t.go('agents'); await grab('agents');
+  await t.click('[data-act="libTab"][data-arg="agents"]'); await grab('agent cards');
   await t.click('[data-act="libTab"][data-arg="tools"]'); await grab('tools');
   await t.click('[data-act="toolOpen"][data-arg="jiraCreate"]'); seen.push(['tool dialog', await t.page.innerText('.dialog')]); await t.page.keyboard.press('Escape'); await t.wait(150);
   for (const tab of ['model', 'connections', 'people', 'usage']) { await t.settings(tab); await grab(`settings ${tab}`); }
@@ -127,7 +128,9 @@ check('i2-samples-use-todays-tools', async (browser) => session(browser, 1280, a
   const texts = [];
   await t.go('workflows'); texts.push(await t.text());
   for (const id of ['issues', 'nudge']) { await t.click(`[data-act="workflow"][data-arg="${id}"]`); texts.push(await t.text()); await t.go('workflows'); }
-  await t.go('agents'); texts.push(await t.text());
+  /* The What it can do tab lists the registry's Not yet lines by name, so it is read without that group. */
+  await t.go('agents'); texts.push(await t.page.evaluate(() => { const m = document.querySelector('main').cloneNode(true); m.querySelectorAll('.cap-not').forEach((e) => e.remove()); return m.textContent; }));
+  await t.click('[data-act="libTab"][data-arg="agents"]'); texts.push(await t.text());
   await t.click('[data-act="libTab"][data-arg="tools"]'); texts.push(await t.text());
   const bad = texts.flatMap((x) => x.match(/GitHub issues|bug reports? on|Entra|GitLab|admin tools|Issue reader|Access checker|Message writer|Post in Teams|langserve/gi) || []);
   assert.deepStrictEqual(bad, [], `planned systems in default samples: ${bad.join(', ')}`);
@@ -190,7 +193,7 @@ check('i6-new-agent-drafted', async (browser) => session(browser, 1280, async (t
   await t.page.fill('#sched-time', '09:00'); await t.click('[data-act="whenDone"]');
   await t.page.selectOption('#fix-project', 'MOCK'); await t.wait(200);
   await t.click('[data-act="turnOn"]');
-  await t.go('agents');
+  await t.go('agents'); await t.click('[data-act="libTab"][data-arg="agents"]');
   assert((await t.text()).includes('Week-on-week writer'), 'Agent library lists the new agent after Turn it on');
 }));
 
@@ -208,7 +211,7 @@ check('i9-watchlist-github-only', async (browser) => session(browser, 1280, asyn
   const text = await t.text();
   const bad = text.match(/Maven Central|PyPI|NuGet|Docker Hub|vulnerab|OSV|NVD|CISA|endoflife|Security risk|Support ending/gi) || [];
   assert.deepStrictEqual(bad, [], `ADR 0025 sources shown by default: ${bad.join(', ')}`);
-  assert(text.includes('GitHub releases (working)'), 'source states from the registry');
+  assert(/GitHub releases\s+Ready/.test(text), 'source states from the registry');
   await t.ctl('preview', 'on');
   const on = await t.text();
   assert(on.includes('Security risks'), 'preview shows the security findings');
@@ -232,7 +235,7 @@ check('preview-on-tags-planned', async (browser) => session(browser, 1280, async
   await t.click('[data-act="workflow"][data-arg="issues"]');
   assert((await t.page.locator('[data-act="editAppr"] .tag.planned').count()) === 1, 'Change who approves tagged');
   assert(/with .* as backup/.test(await t.text()), 'named Approvers shown');
-  await t.go('agents'); assert((await t.page.locator('.agent-lg:has-text("Vulnerability checker") .tag.planned').count()) === 1, 'planned agent tagged');
+  await t.go('agents'); await t.click('[data-act="libTab"][data-arg="agents"]'); assert((await t.page.locator('.agent-lg:has-text("Vulnerability checker") .tag.planned').count()) === 1, 'planned agent tagged');
   await t.click('[data-act="libTab"][data-arg="tools"]'); assert((await t.page.locator('.tool-row:has-text("Post in Teams") .tag.planned').count()) === 1, 'planned tool tagged');
   await t.go('software'); assert((await t.page.locator('section:has-text("Security risks") .tag.planned').count()) >= 1, 'security findings tagged');
 }));
