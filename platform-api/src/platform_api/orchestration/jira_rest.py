@@ -24,6 +24,7 @@ from platform_api.orchestration.jira import (
     JiraRefused,
     JiraUnavailable,
     NewIssue,
+    SearchResult,
     TicketStatus,
     jira_summary,
 )
@@ -38,7 +39,7 @@ MAX_WAIT_SECONDS: Final = 5.0
 (CONNECTOR_DEADLINE, 20 seconds), well inside the gateway's 30 second in-flight timeout."""
 FIELDS: Final = (
     "summary,description,status,project,labels,created,updated,resolutiondate,"
-    "statuscategorychangedate,creator"
+    "statuscategorychangedate,creator,issuetype,assignee"
 )
 KEYS_PER_SEARCH: Final = 50
 _RETRY_STATUSES: Final = frozenset({429, 500, 502, 503, 504})
@@ -99,6 +100,26 @@ def _zone(name: object) -> ZoneInfo | None:
         return ZoneInfo(name)
     except ValueError, ZoneInfoNotFoundError:
         return None
+
+
+def _display_name(raw: object) -> str | None:
+    name = json_object(raw).get("displayName")
+    return name if isinstance(name, str) and name else None
+
+
+def _moment(at: datetime, zone: ZoneInfo | None, widen: timedelta) -> str:
+    """A moment as a quoted JQL date. Without the account's zone it is moved by `widen`."""
+    shown = at.astimezone(zone) if zone else at + widen
+    return _quoted(shown.strftime("%Y-%m-%d %H:%M"))
+
+
+def _inside(issue: JiraIssue, query: IssueSearch) -> bool:
+    """Whether a ticket is inside the dates of a search that Jira read in an unknown zone."""
+    if query.done_since is not None and (issue.done_at is None or issue.done_at < query.done_since):
+        return False
+    if query.created_since is not None and issue.created_at < query.created_since:
+        return False
+    return query.updated_before is None or issue.updated_at <= query.updated_before
 
 
 def _one_line(text: str, limit: int) -> str:
@@ -276,10 +297,13 @@ class JiraRestAdapter:
             status=state,
             created_at=created,
             done_at=done_at,
+            updated_at=_when(fields.get("updated")) or created,
             labels=tuple(str(label) for label in json_list(fields.get("labels"))),
             # Only the creator says who made a ticket. Anyone allowed to modify the reporter can
             # name any account there, so the reporter proves nothing.
             creator=self._account(fields.get("creator")),
+            issue_type=str(json_object(fields.get("issuetype")).get("name") or ""),
+            assignee=_display_name(fields.get("assignee")),
         )
 
     async def create_issue(self, issue: NewIssue) -> str:
@@ -323,8 +347,11 @@ class JiraRestAdapter:
             raise JiraUnavailable("Jira gave search results that could not be read.")
         return [self._issue(raw) for raw in json_list(body.get("issues"))]
 
-    async def search(self, query: IssueSearch) -> list[JiraIssue]:
-        """Words match as any of them, because Jira's text ~ "a b" may need every word."""
+    async def search(self, query: IssueSearch) -> SearchResult:
+        """Words match as any of them, because Jira's text ~ "a b" may need every word.
+
+        Jira applies every clause before it cuts the list at the limit. One more ticket than the
+        limit is asked for, so a full answer shows the search was cut off."""
         clauses = [f"project in ({_listed(query.projects)})"]
         if query.words:
             clauses.append("(" + " OR ".join(f"text ~ {_quoted(w)}" for w in query.words) + ")")
@@ -332,16 +359,23 @@ class JiraRestAdapter:
             clauses.append("statusCategory = Done")
         elif query.status == "To Do":
             clauses.append("statusCategory != Done")
-        zone = None if query.done_since is None else await self._time_zone()
+        if query.issue_types:
+            clauses.append(f"issuetype in ({_listed(query.issue_types)})")
+        dated = (query.done_since, query.created_since, query.updated_before)
+        zone = await self._time_zone() if any(at is not None for at in dated) else None
+        # Jira reads a date in the account's zone. With no zone, ask a day wider and keep only the
+        # tickets inside the moment asked for, after Jira has cut the list.
         if query.done_since is not None:
-            # Jira reads the date in the account's zone. With no zone, ask a day wider and keep
-            # only the tickets done since the moment asked for.
-            since = query.done_since.astimezone(zone) if zone else query.done_since - _A_DAY
-            clauses.append(f"resolutiondate >= {_quoted(since.strftime('%Y-%m-%d %H:%M'))}")
-        found = await self._jql(" AND ".join(clauses) + " ORDER BY created DESC", query.limit)
-        if query.done_since is not None and zone is None:
-            found = [i for i in found if i.done_at is not None and i.done_at >= query.done_since]
-        return found
+            clauses.append(f"resolutiondate >= {_moment(query.done_since, zone, -_A_DAY)}")
+        if query.created_since is not None:
+            clauses.append(f"created >= {_moment(query.created_since, zone, -_A_DAY)}")
+        if query.updated_before is not None:
+            clauses.append(f"updated <= {_moment(query.updated_before, zone, _A_DAY)}")
+        raw = await self._jql(" AND ".join(clauses) + " ORDER BY created DESC", query.limit + 1)
+        found = raw
+        if zone is None:
+            found = [i for i in found if _inside(i, query)]
+        return SearchResult(found[: query.limit], cut_off=len(raw) > query.limit)
 
     async def find_by_label(self, project: str, label: str) -> JiraIssue | None:
         """The first ticket in the project with this label. The caller decides whether it is

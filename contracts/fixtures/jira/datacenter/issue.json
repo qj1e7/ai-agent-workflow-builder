@@ -51,6 +51,12 @@
       "name": "svc-wab",
       "displayName": "AI Workflow Builder",
       "active": true
+    },
+    "assignee": {
+      "name": "dana",
+      "key": "dana",
+      "displayName": "Dana Lim",
+      "active": true
     }
   }
 }

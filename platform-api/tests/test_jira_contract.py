@@ -168,10 +168,51 @@ async def test_a_search_matches_any_word_in_the_projects_newest_first(target: Ta
     first, second = marker(), marker()
     older = await made(target, f"Older {first}")
     newer = await made(target, "Newer", f"The body names {second}.")
-    found = await target.jira.search(IssueSearch((target.project,), (first, second)))
+    found = (await target.jira.search(IssueSearch((target.project,), (first, second)))).issues
     assert [issue.key for issue in found] == [newer, older]
-    only = await target.jira.search(IssueSearch((target.project,), (second,)))
+    only = (await target.jira.search(IssueSearch((target.project,), (second,)))).issues
     assert [issue.key for issue in only] == [newer]
+
+
+async def test_a_ticket_reads_back_its_type_last_update_and_no_owner(target: Target):
+    key = await made(target, f"Fields {marker()}")
+    issue = await target.jira.get_issue(key)
+    assert issue is not None
+    assert issue.issue_type == "Task" and issue.assignee is None
+    assert abs(issue.updated_at - datetime.now(UTC)) < timedelta(minutes=5)
+
+
+async def test_a_search_filters_by_created_day_and_last_update_and_type(target: Target):
+    word = marker()
+    key = await made(target, f"Fresh {word}")
+    issue = await target.jira.get_issue(key)
+    assert issue is not None
+    project = (target.project,)
+    after = issue.created_at + timedelta(minutes=2)
+    before = issue.created_at - timedelta(minutes=2)
+    assert (
+        await target.jira.search(IssueSearch(project, (word,), created_since=after))
+    ).issues == []
+    made_since = await target.jira.search(IssueSearch(project, (word,), created_since=before))
+    assert [i.key for i in made_since.issues] == [key]
+    quiet = IssueSearch(project, (word,), updated_before=issue.updated_at - timedelta(minutes=2))
+    assert (await target.jira.search(quiet)).issues == []
+    updated = IssueSearch(project, (word,), updated_before=issue.updated_at + timedelta(minutes=2))
+    assert [i.key for i in (await target.jira.search(updated)).issues] == [key]
+    tasks = IssueSearch(project, (word,), issue_types=("task",))
+    assert [i.key for i in (await target.jira.search(tasks)).issues] == [key]
+    assert (
+        await target.jira.search(IssueSearch(project, (word,), issue_types=("Epic",)))
+    ).issues == []
+
+
+async def test_a_search_says_when_it_was_cut_off_at_the_limit(target: Target):
+    word = marker()
+    keys = [await made(target, f"Cut {index} {word}") for index in range(3)]
+    cut = await target.jira.search(IssueSearch((target.project,), (word,), limit=2))
+    assert [i.key for i in cut.issues] == keys[:0:-1] and cut.cut_off
+    whole = await target.jira.search(IssueSearch((target.project,), (word,), limit=3))
+    assert len(whole.issues) == 3 and not whole.cut_off
 
 
 async def test_moving_a_ticket_to_done_sets_its_status_and_resolution_day(target: Target):
@@ -181,12 +222,16 @@ async def test_moving_a_ticket_to_done_sets_its_status_and_resolution_day(target
     await target.jira.move_to_done(done_key)
     issue = await target.jira.get_issue(done_key)
     assert issue is not None and issue.status == "Done" and issue.done_at is not None
-    done = await target.jira.search(IssueSearch((target.project,), (word,), status="Done"))
+    done = (await target.jira.search(IssueSearch((target.project,), (word,), status="Done"))).issues
     assert [i.key for i in done] == [done_key]
-    to_do = await target.jira.search(IssueSearch((target.project,), (word,), status="To Do"))
+    to_do = (
+        await target.jira.search(IssueSearch((target.project,), (word,), status="To Do"))
+    ).issues
     assert [i.key for i in to_do] == [open_key]
     since = datetime.now(UTC) - timedelta(days=1)
-    recent = await target.jira.search(IssueSearch((target.project,), (word,), done_since=since))
+    recent = (
+        await target.jira.search(IssueSearch((target.project,), (word,), done_since=since))
+    ).issues
     assert [i.key for i in recent] == [done_key]
 
 
@@ -474,6 +519,6 @@ async def test_done_since_means_the_same_moment_in_jiras_own_time_zone(target: T
     later = issue.done_at + timedelta(minutes=2)
     earlier = issue.done_at - timedelta(minutes=2)
     project = (target.project,)
-    assert await target.jira.search(IssueSearch(project, (word,), done_since=later)) == []
-    found = await target.jira.search(IssueSearch(project, (word,), done_since=earlier))
+    assert (await target.jira.search(IssueSearch(project, (word,), done_since=later))).issues == []
+    found = (await target.jira.search(IssueSearch(project, (word,), done_since=earlier))).issues
     assert [i.key for i in found] == [key]

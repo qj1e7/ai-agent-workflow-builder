@@ -6,7 +6,7 @@ it for that task alone. The routes are under /internal/, so the Portal's proxy n
 """
 
 import re
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
@@ -43,6 +43,9 @@ class PracticeTicketSummary(WireModel):
     status: TicketStatus
     created_at: datetime
     done_at: datetime | None
+    updated_at: datetime
+    issue_type: str
+    assignee: str | None
 
 
 class PracticeTicket(PracticeTicketSummary):
@@ -51,6 +54,8 @@ class PracticeTicket(PracticeTicketSummary):
 
 class PracticeTickets(WireModel):
     tickets: list[PracticeTicketSummary]
+    cut_off: bool = False
+    """True when more tickets matched than the search returns, so older ones are missing."""
 
 
 def _summary(ticket: JiraIssue) -> PracticeTicketSummary:
@@ -61,7 +66,19 @@ def _summary(ticket: JiraIssue) -> PracticeTicketSummary:
         status=ticket.status,
         created_at=ticket.created_at,
         done_at=ticket.done_at,
+        updated_at=ticket.updated_at,
+        issue_type=ticket.issue_type,
+        assignee=ticket.assignee,
     )
+
+
+def _day(name: str, text: str, at: time) -> datetime | None:
+    if not text:
+        return None
+    try:
+        return datetime.combine(date.fromisoformat(text), at, UTC)
+    except ValueError:
+        raise HTTPException(422, f"{name} is a day, YYYY-MM-DD") from None
 
 
 def _words(text: str) -> list[str]:
@@ -111,34 +128,45 @@ async def search_tickets(
     text: str = "",
     status: str = "",
     done_since: str = "",
+    created_since: str = "",
+    updated_before: str = "",
+    issue_type: str = "",
 ) -> PracticeTickets:
-    """At most 50 tickets, newest first. An empty filter is not applied. Words of `text` shorter
-    than 3 characters are ignored, and text with no word left matches nothing."""
+    """At most 50 tickets, newest first, and `cut_off` says when more matched. An empty filter is
+    not applied. `created_since` is the start of a day and `updated_before` the end of one. Words
+    of `text` shorter than 3 characters are ignored, and text with no word left matches nothing."""
     allowed = await _admit(request, run_id, task, token)
     if project and STORED_JIRA_PROJECT_PATTERN.match(project) is None:
         raise HTTPException(422, "project is not a Jira project key")
     wanted: dict[str, TicketStatus | None] = {"": None, "To Do": "To Do", "Done": "Done"}
     if status not in wanted:
         raise HTTPException(422, "status is To Do or Done")
-    since: datetime | None = None
-    if done_since:
-        try:
-            since = datetime.combine(date.fromisoformat(done_since), datetime.min.time(), UTC)
-        except ValueError:
-            raise HTTPException(422, "done_since is a day, YYYY-MM-DD") from None
+    since = _day("done_since", done_since, time.min)
+    created = _day("created_since", created_since, time.min)
+    updated = _day("updated_before", updated_before, time(23, 59))
+    kinds = tuple(dict.fromkeys(name.strip() for name in issue_type.split(",") if name.strip()))
     if project and project not in allowed:
         raise HTTPException(403, "This run may not read that Jira project")
     words = _words(text)
     if text.strip() and not words:
         return PracticeTickets(tickets=[])
     query = IssueSearch(
-        tuple([project] if project else sorted(allowed)), tuple(words), wanted[status], since
+        tuple([project] if project else sorted(allowed)),
+        tuple(words),
+        wanted[status],
+        since,
+        created,
+        updated,
+        kinds,
     )
     try:
         found = await jira.search(query)
     except JiraError as error:
         raise HTTPException(status_code=503, detail="Jira could not answer") from error
-    return PracticeTickets(tickets=[_summary(t) for t in found if t.project in allowed])
+    return PracticeTickets(
+        tickets=[_summary(t) for t in found.issues if t.project in allowed],
+        cut_off=found.cut_off,
+    )
 
 
 @router.get(

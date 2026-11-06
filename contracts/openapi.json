@@ -4217,6 +4217,17 @@
       "PracticeTicket": {
         "additionalProperties": false,
         "properties": {
+          "assignee": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee"
+          },
           "body": {
             "title": "Body",
             "type": "string"
@@ -4238,6 +4249,10 @@
             ],
             "title": "Done At"
           },
+          "issue_type": {
+            "title": "Issue Type",
+            "type": "string"
+          },
           "key": {
             "title": "Key",
             "type": "string"
@@ -4252,6 +4267,11 @@
           "title": {
             "title": "Title",
             "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
           }
         },
         "required": [
@@ -4261,6 +4281,9 @@
           "status",
           "created_at",
           "done_at",
+          "updated_at",
+          "issue_type",
+          "assignee",
           "body"
         ],
         "title": "PracticeTicket",
@@ -4269,6 +4292,17 @@
       "PracticeTicketSummary": {
         "additionalProperties": false,
         "properties": {
+          "assignee": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -4286,6 +4320,10 @@
             ],
             "title": "Done At"
           },
+          "issue_type": {
+            "title": "Issue Type",
+            "type": "string"
+          },
           "key": {
             "title": "Key",
             "type": "string"
@@ -4300,6 +4338,11 @@
           "title": {
             "title": "Title",
             "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
           }
         },
         "required": [
@@ -4308,7 +4351,10 @@
           "title",
           "status",
           "created_at",
-          "done_at"
+          "done_at",
+          "updated_at",
+          "issue_type",
+          "assignee"
         ],
         "title": "PracticeTicketSummary",
         "type": "object"
@@ -4316,6 +4362,11 @@
       "PracticeTickets": {
         "additionalProperties": false,
         "properties": {
+          "cut_off": {
+            "default": false,
+            "title": "Cut Off",
+            "type": "boolean"
+          },
           "tickets": {
             "items": {
               "$ref": "#/components/schemas/PracticeTicketSummary"
@@ -12374,7 +12425,7 @@
     },
     "/internal/v1/runs/{run_id}/jira/tickets": {
       "get": {
-        "description": "At most 50 tickets, newest first. An empty filter is not applied. Words of `text` shorter\nthan 3 characters are ignored, and text with no word left matches nothing.",
+        "description": "At most 50 tickets, newest first, and `cut_off` says when more matched. An empty filter is\nnot applied. `created_since` is the start of a day and `updated_before` the end of one. Words\nof `text` shorter than 3 characters are ignored, and text with no word left matches nothing.",
         "operationId": "search_tickets_internal_v1_runs__run_id__jira_tickets_get",
         "parameters": [
           {
@@ -12432,6 +12483,36 @@
             "schema": {
               "default": "",
               "title": "Done Since",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "created_since",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Created Since",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "updated_before",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Updated Before",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "issue_type",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Issue Type",
               "type": "string"
             }
           },

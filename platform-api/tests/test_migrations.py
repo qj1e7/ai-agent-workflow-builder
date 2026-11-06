@@ -405,3 +405,35 @@ async def test_migration_0010_records_each_old_practice_ticket_as_the_write_that
             ("run_old/prp_old/0",),
         ).fetchone()
     assert row is not None and row[0] == "MOCK-7"
+
+
+async def test_migration_0012_gives_each_practice_ticket_a_last_update_and_goes_back(
+    postgres: PostgresUrls,
+):
+    downgrade("orchestration", postgres.owner, "0011")
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO orchestration.mock_jira_tickets (key, number, project, title, body, "
+            "created_at, done_at, status) VALUES "
+            "('OLD-901', 901, 'OLD', 'open', '', '2026-11-01T01:00Z', NULL, 'To Do'), "
+            "('OLD-902', 902, 'OLD', 'done', '', '2026-11-01T01:00Z', '2026-11-03T05:00Z', 'Done')"
+        )
+        upgrade("orchestration", postgres.owner)
+        rows = conn.execute(
+            "SELECT key, updated_at, assignee FROM orchestration.mock_jira_tickets "
+            "WHERE project = 'OLD' ORDER BY key"
+        ).fetchall()
+        assert [(r[0], r[1].isoformat(), r[2]) for r in rows] == [
+            ("OLD-901", "2026-11-01T01:00:00+00:00", None),
+            ("OLD-902", "2026-11-03T05:00:00+00:00", None),
+        ]
+        downgrade("orchestration", postgres.owner, "0011")
+        try:
+            columns = conn.execute(
+                "SELECT column_name FROM information_schema.columns WHERE table_schema = "
+                "'orchestration' AND table_name = 'mock_jira_tickets'"
+            ).fetchall()
+            assert {"updated_at", "assignee"}.isdisjoint(c[0] for c in columns)
+        finally:
+            upgrade("orchestration", postgres.owner)
+            conn.execute("DELETE FROM orchestration.mock_jira_tickets WHERE project = 'OLD'")

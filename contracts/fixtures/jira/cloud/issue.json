@@ -94,6 +94,11 @@
       "accountType": "atlassian",
       "displayName": "AI Workflow Builder",
       "active": true
+    },
+    "assignee": {
+      "accountId": "5b10a2844c20165700ede21g",
+      "displayName": "Dana Lim",
+      "active": true
     }
   }
 }

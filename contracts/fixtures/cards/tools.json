@@ -12,7 +12,7 @@
       "id": "jira.search",
       "kind": "read",
       "name": "Search Jira",
-      "description": "Finds tickets in a Jira project by words, status or the day they were done.",
+      "description": "Finds tickets in a Jira project by words, status, type, or when they were made, last updated or done. Each ticket shows who owns it.",
       "target_input": null,
       "min_approvers": null
     },
