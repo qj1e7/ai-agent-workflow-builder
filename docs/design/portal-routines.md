@@ -23,13 +23,13 @@ Eight things to try:
 1. On **Workflows**, open the upgrade tickets waiting for your yes, at the top under **Needs you**, and approve them. Bob didn't answer in time, so Alice was asked as the backup.
 2. Open "Morning bug report check stopped" and fix it with one click.
 3. On "Stale ticket nudge stopped", press **Report to support**, then follow the report to "Fixed".
-4. On **Home**, tap the example "Every Friday, list bug tickets with no update for 10 days". The Planner fills in the workflow and asks only for what it can't know. Answer it and turn the workflow on.
-5. On **Home**, ask for "a weekly summary of closed tickets in Confluence". The Planner drafts a missing tool. Ask for the OK, let Bob OK it from the test controls, then turn the workflow on.
-6. On **Home**, ask to "keep track of Kubernetes releases". The Planner fills in a **Software watchlist** row instead of making a new workflow.
-7. On **Home**, ask to "email me a list of open bugs every Monday". Email isn't connected, so the Planner offers to post the list in Teams instead, and offers **Ask the team**.
+4. On **Home**, tap the example "Every Friday, list bug tickets with no update for 10 days". The Planner fills in the workflow, puts the list in one Jira ticket, and asks only for what it can't know. Answer it and turn the workflow on.
+5. On **Home**, ask to "keep track of Kubernetes releases". The Planner fills in a **Software watchlist** row instead of making a new workflow, and says where it found the GitHub project.
+6. On **Home**, ask to "email me a list of open bugs every Monday". Email isn't connected, so the Planner offers to put the list in a Jira ticket instead, and offers **Ask the team**.
+7. On **Home**, ask to "put new tickets in the Platform component". That needs a new Jira tool, which is the team's decision for now, so the Planner offers **Ask the team**.
 8. Open "Morning bug report check" on Workflows and press **Open in n8n**. From the test controls, let Carol change it in n8n, then let the next run start. It stops before changing anything, and the AI troubleshooter offers Undo or Fix it in n8n. The [n8n design note](n8n-maintained-workflows.md) explains this.
 
-A workflow you set up on Home can also do a test run with who is asked first and a backup. From the test controls, let 4 working hours pass, then let nobody answer.
+To see named Approvers ([ADR 0024](../adr/0024-each-use-case-names-its-approvers-and-unanswered-requests-go-to-a-backup-then-expire.md), proposed), open a workflow you set up on Home, choose who is asked first and a backup on its page, and do a test run. From the test controls, let 4 working hours pass, then let nobody answer.
 
 ## Why change
 
@@ -98,38 +98,45 @@ flowchart LR
 
 ### 1. First visit
 
-A new Operator lands on Home, and Home is only the Planner. Its face sits above one question, "What does your team do again and again?", and a large box. Under the box are three example requests to tap, and two short lists built from the platform's tools: what the Planner can do, and what it can't do yet. Nothing else is on the page.
+A new Operator lands on Home, and Home is only the Planner. Its face sits above one question, "What does your team do again and again?", and a large box. Under the box are three example requests to tap, each something the platform can do today, and two short lists: what the Planner can do, and what it can't do yet. The lists are the platform's abilities as they are now. Today the Planner can read Jira tickets, sum up what it finds, check software for new releases, and create a Jira ticket after a yes. Teams messages, email and Confluence are under "Not yet". When a tool with its own ADR adds an ability, it moves across by itself. Nothing else is on the page.
 
 ![Home on day one](portal-routines/day-one.png)
 
 ### 2. Every day after that
 
-Home stays the Planner. The question becomes "What else should run by itself?", and the two lists fold into a "What can I ask for?" link. The conversation lasts until you start a new chat. It is never the record, because everything the Planner sets up becomes a workflow or a watchlist row with its own page.
+Home stays the Planner. The question becomes "What else should run by itself?", and the two lists fold into a "What can I ask for?" link. The conversation lasts until you start a new chat. It is never the record, because everything the Planner sets up becomes a workflow or a watchlist row with its own page. A set-up card you haven't turned on is kept as a Draft, listed on Workflows, even after a new chat.
 
-What needs you lives at the top of **Workflows**, and the Workflows tab shows an amber count when something is waiting (see [Keep track](#8-keep-track)). An Approver who can't set up workflows sees their approvals on Home instead of the box.
+What needs you lives at the top of **Workflows**, and the Workflows tab shows an amber count when something is waiting (see [Keep track](#8-keep-track)). A person who is both an Operator and an Approver sees the Planner on Home like any Operator. An Approver who can't set up workflows sees their approvals on Home instead of the box.
 
 ![Home in a normal week](portal-routines/home.png)
 
 ### 3. Ask the Planner
 
-You describe a task in the box, the way you would ask a colleague. The Planner's face listens while you type, thinks, then writes its reply word by word. Every request gets one of five answers.
+You describe a task in the box, the way you would ask a colleague. The Planner's face listens while you type and thinks while it reads. Its answer appears as soon as it is ready, with the card, and its face speaks while the sentence appears. Every request gets one of five answers.
 
 1. **I can do this.** The reply is a **set-up card**: the whole workflow, filled in.
 2. **Another page does this.** A version or release request becomes a filled-in Software watchlist row (see [Software watchlist](#4-software-watchlist-one-list-for-every-release-and-vulnerability-check)).
-3. **This needs a new tool.** If the system is already connected, the Planner drafts a **tool card** in the set-up card, and an Approver who isn't the person asking OKs it once (see [Later](#later-each-needs-its-own-decision)).
-4. **This needs a new system or source,** such as ServiceNow. **Ask the team** sends the request, and it shows under "Asked the team" on Tools.
+3. **This needs a new tool** in a system that is already connected, such as setting a component on Jira tickets. A drafted tool needs its own decision (see [Later](#later-each-needs-its-own-decision)), so for now the Planner says the tool is the team's decision and offers **Ask the team**.
+4. **This needs a new system or source,** such as Teams messages, email or Confluence today. **Ask the team** sends the request, and it shows under "Asked the team" on Tools.
 5. **Never.** A request to skip a yes is refused, with the reason. It's a platform rule.
 
-Each answer that can't do the request also offers the nearest thing the Planner can do, with **Set that up**. What the Planner says it can do comes from the same list of abilities the code holds it to (`agent-runtime/src/agent_runtime/abilities.py`), so it can't promise what the platform would later refuse. Its face looks sorry for a moment when it can't help.
+A request that is none of these, such as an unrelated question, gets the list of what the Planner can do.
+
+Each answer that can't do the request also offers the nearest thing the Planner can do, with **Set that up**, and that suggestion passes the same check. What the Planner says it can do comes from the same list of abilities the code holds it to (`agent-runtime/src/agent_runtime/abilities.py`), so it can't promise what the platform would later refuse. Code decides which answer applies, from the model's read-back and that check, and each answer's sentence is fixed text, so the model's own words never promise anything. Its face looks sorry for a moment when it can't help.
+
+The refusal is a courtesy. It explains the rule early, and it must never catch the product's own words, such as "run it by itself every Monday". The control is the approval gate: a request that slips past the refusal still waits for a yes before anything is written.
 
 The set-up card holds what the old New workflow steps held, in one short card. Each thing shows once, and a form opens only for something you are choosing.
 
 - **Its name.** The card's title is the workflow's name, drafted from the request, with **Rename**.
-- **What I understood.** One sentence: when it runs, which tickets, which Jira project, what it does and where the result goes, including the Teams channel. Each part carries a mark: green for *From your words*, teal for *Changed by you*, amber for *Please choose*, red for *Can't do this yet* and grey for *Filled in by me*. Pressing a part changes it. When it runs has a small picker for how often, the day and the time, which opens under the sentence. It opens by itself while the time is still a question, and folds back into the part once it's answered, never guessed. A short note explains each part that isn't green, so the colours need no key. The card says in one line when a similar workflow already exists.
-- **The plan.** Each step with its agent's face, marked *Reads*, *No system access* or *Changes data, waits for a yes*.
-- **Who says yes.** One line: who is asked first, the backup, when the backup is asked and when it stops waiting, with **Change** (see [Who is asked](#6-who-is-asked-and-what-if-nobody-answers)).
+- **What I understood.** One sentence: when it runs, which tickets, which Jira project, what it does and where the result goes. Each part carries a mark: green for *From your words*, teal for *Changed by you*, amber for *Please choose*, red for *Can't do this yet* and grey for *Filled in by me*. Grey covers every number, name or default the Planner read in or chose, such as 14 days for "stale" or putting the result in a Jira ticket, so a guess never looks like your words. Pressing a part changes it. When it runs has a small picker for how often, the day and the time, which opens under the sentence. It opens by itself while the time is still a question, and folds back into the part once it's answered, never guessed. A short note explains each part that isn't green, so the colours need no key. The card says in one line when a similar workflow already exists.
+- **The plan.** Each step with its agent's face, marked *Reads*, *No system access* or *Changes data, waits for a yes*. If the Planner drafted a new agent, its step says so, and the agent is saved to the Agent library when the workflow is turned on. The prototype's examples all use saved agents.
+- **Who says yes.** One line, "Any Approver on your team except you, in Teams", as today. Named Approvers, a backup and wait times come with ADR 0024, set on the workflow's page (see [Who is asked](#6-who-is-asked-and-what-if-nobody-answers)).
+- **Its promises.** Nothing changes without a yes. You can pause, change or delete it at any time. If it stops, the AI troubleshooter tells you why.
 
-The Planner fills in everything it can and asks only for what it can't know, such as the Jira project. It asks at most two questions, and they are the card's amber parts. **Turn it on** stays off until nothing is unclear, and the card says how many choices are left. One yes turns the workflow on. The Planner's face is pleased, it says when the first run is, and the new workflow glides into Workflows. **Do a test run** is offered there.
+The Planner fills in everything it can and asks only for what it can't know, such as the Jira project. Every part it can't fill is an amber question on the card. The chat itself asks at most one question, such as which software to watch, and you can always say "never mind". **Turn it on** stays off until nothing is unclear, and the card says how many choices are left. One yes turns the workflow on. The Planner's face is pleased, it says when the first run is, and the new workflow glides into Workflows. **Do a test run** is offered there.
+
+The box is for new requests, so after the first reply it says "Ask for something else". Changes to an open card happen in the card.
 
 ![The Planner's set-up card, asking for the one thing it can't know](portal-routines/planner-card.png)
 
@@ -137,7 +144,7 @@ The Planner fills in everything it can and asks only for what it can't know, suc
 
 ![A request the Planner can't do, with what it can do instead and Ask the team](portal-routines/planner-cant.png)
 
-![The Confluence example: a new tool that needs an OK](portal-routines/planner-tool.png)
+![A request that needs a new Jira tool, which is the team's decision for now](portal-routines/planner-tool.png)
 
 ### 4. Software watchlist: one list for every release and vulnerability check
 
@@ -160,7 +167,7 @@ On the page:
 
 ![Software watchlist page with LangGraph's history open](portal-routines/software.png)
 
-When someone asks the Planner for a release check, it fills in a row for this list instead of making a new workflow. The row has the software's name, where it's published, such as the GitHub project facebook/react marked *I guessed this* with **Looks right** and **Change**, and our version, or **Start from the newest**. One button adds it, and the new row glides into the Software watchlist. If the software is already on the list, the Planner says so and links to it. This stops look-alike release-check use cases from piling up again. The Planner says which word made it think so, for example "You mentioned releases". If it guessed wrong, **No, set it up as a new workflow** carries on as a set-up card.
+When someone asks the Planner for a release check, it fills in a row for this list instead of making a new workflow. The row has the software's name, where it's published, such as the GitHub project facebook/react marked *I guessed this* with **Looks right** and **Change**, and our version, or **Start from the newest**. The guess is never a name the model made up. It comes from the package registry's own link to the project, or from a list of known projects. The Planner checks that the project exists and publishes releases, and says where the guess came from, for example "npm's react package points here". The row's history records who confirmed it. One button adds it, and the new row glides into the Software watchlist. If the software is already on the list, the Planner says so and links to it. This stops look-alike release-check use cases from piling up again. The Planner says which word made it think so, for example "You mentioned releases". If it guessed wrong, **No, set it up as a new workflow** carries on as a set-up card.
 
 ![A release check on Home becomes a Software watchlist row](portal-routines/planner-watchlist.png)
 
@@ -198,7 +205,7 @@ The AI troubleshooter's reason shows under Needs you on Workflows. It says which
 
 ### 8. Keep track
 
-Workflows opens with what needs you, counted on the tab. The most urgent item is a full card. Everything else that needs you is a one-line row with one button, and a stopped workflow's row carries the AI troubleshooter's reason. Then come what you are waiting on, any report you are following up, and one line saying what runs next. When nothing needs you, the page says so in one line.
+Workflows opens with what needs you, counted on the tab. The most urgent item is a full card. Everything else that needs you is a one-line row with one button, and a stopped workflow's row carries the AI troubleshooter's reason. Then come what you are waiting on, your Drafts (set-up cards not turned on yet, each opening its card on Home), any report you are following up, and one line saying what runs next. When nothing needs you, the page says so in one line.
 
 Below that, every workflow is one row in a list, with the columns lined up. Rows that need you come first, with the button at the end of the row. The last row, **Ask the Planner for a new one**, goes to Home. Under it, a quiet link offers "Prefer to build it yourself? Start in n8n".
 
@@ -237,7 +244,7 @@ Opening a tool shows:
 - **Agents that use it**, which open the agent, and the workflows they're in. An agent's tools open the tool, and **Back** returns to where you were.
 - **Recent changes, and who said yes,** for tools that change data. For example: "Created MOCK-9 for Keep our software up to date. Alice said yes." This is the log of every agent action with who approved it, shown where people look.
 
-**Need a tool that isn't here?** An Operator says what an agent should be able to do. The Planner checks the tools you already have first. If it's new and the system is already connected, it drafts a tool from that system's published API, and an Approver who isn't the person asking must OK it once, as with the Confluence tool in the Planner's set-up card. A new system, such as ServiceNow, or anything that deletes data, goes to the team as a request, listed under "Asked the team". Requests to skip a yes are refused.
+**Need a tool that isn't here?** An Operator says what an agent should be able to do. The Planner checks the tools you already have first. If it's new and the system is already connected, it drafts a tool from that system's published API, and an Approver who isn't the person asking must OK it once. This is tool cards, which wait for their own ADR (see Later). A new system, such as ServiceNow, or anything that deletes data, goes to the team as a request, listed under "Asked the team". Requests to skip a yes are refused.
 
 The whole path connects: the Ticket writer can't set a component, so the Planner drafts the tool. Alice asks for an OK, and Bob OKs it from Home or Teams. Alice is told, and gives the tool to the Ticket writer as a new version, which shows what it adds.
 
@@ -251,6 +258,7 @@ On 28 Oct 2026, four published design skills reviewed the prototype: UX heuristi
 
 ## Where the built app differs from the prototype
 
+- **Monthly schedules.** The prototype offers every month. The backend's schedules are every day, weekdays or named days of the week, so a monthly schedule needs backend work first.
 - **Practice Jira page.** The prototype only has a read-only ticket dialog, opened from the ticket pills. The app also has a Practice Jira page at `/jira`, and `/jira/KEY` opens one ticket. An Operator can mark a ticket Done there, which the demo needs ("check, approve, ticket created, mark done, up to date"). It is not in the main menu, so the menu does not look like a copy of Jira. A header button labelled "Jira", next to Teams, leads to it.
 - **Why a page.** Its address maps one to one onto a real Jira browse address. Every ticket key in the app links through one function. When the Portal's `/config.json` has a `jira_browse_url` (set from `JIRA_BROWSE_URL`), the keys go to the real Jira instead, and the header button is hidden, so switching to the real Jira needs no Portal change.
 - **The Teams panel has no Approve or Decline.** The prototype's Teams messages have them. The app's practice copy draws the Adaptive Card a real Teams channel gets ([ADR 0036](../adr/0036-the-approval-request-goes-to-teams-as-an-adaptive-card-that-opens-our-approval-page.md)): what would be written, what the agents found, who can decide, and one button, Open in AI Workflow Builder. The Approver decides on the approval page, as they will from real Teams. Once decided, the card says who approved or declined. Buttons inside Teams wait for a Teams bot.
@@ -288,7 +296,7 @@ Each face shows the real state of the work, never a random one. Only the agent w
 | Idle | Still. Where one agent is the focus, it breathes once when it appears, then holds still | Most of the time. Breathing only for the Planner on Home, and an agent in its own dialog |
 | Listening | The Visor bot leans in, its eyes follow the text, and its ear lights pulse on each key | While you type in the Planner's box. Planner only |
 | Thinking | 3 dots. On the Visor bot they replace the mouth, and an Orb's light swirls | The Planner reading your request, or choosing agents in a run |
-| Speaking | A sound-wave mouth on the visor | While the Planner's reply on Home is written word by word. Planner only |
+| Speaking | A sound-wave mouth on the visor | While the Planner's reply sentence appears on Home. The card never waits for it. Planner only |
 | Working | Eyes scan, and an Orb's light circles | The step running now in a run, and the "is working" line in the chat |
 | Waiting | Eyes up, still, with an amber clock badge | The agent whose work waits for a yes, in the run and on Workflows |
 | Success | Happy eyes, one quick lift and a green check, then idle again | The last agent of a run that finished, and the Planner after you turn a workflow on or add software. Not after a decline |
@@ -341,44 +349,46 @@ There is one proposed change to the approval gate: named Approvers, a backup and
 
 | Context | Change |
 |---|---|
-| Use case builder | Home becomes the Planner's box, and its replies are set-up cards that reuse the read-back rows, the plan panel and the card editor. The New workflow screens go. Release-check use cases and the Release checker starter card stop showing to users. The Agent library becomes its own tab, showing each agent card with its tools and the workflows that use it. |
-| Agent runtime | The Planner's answer says which of the five answers it is, and returns the filled-in card. For a release check it proposes the watchlist row, with the GitHub project. It asks at most two questions. The Portal reads what the Planner can do from the abilities list. The release checker becomes the Version checker, and a Vulnerability checker card joins it, with read-only tools for the registries, support dates, source suggestions, vulnerability lookups and CISA's list (ADR 0025). |
-| Orchestration | None for the first slice. Named Approvers and the timer (ADR 0024) come once the team and the sponsor agree. |
+| Use case builder | Home becomes the Planner's box, and its replies are set-up cards that reuse the read-back rows, the plan panel and the card editor. The New workflow screens and their tests go. platform-api gives the Portal the "I can" and "Not yet" lists from the abilities list, matches a request against the watchlist and existing workflows, keeps Ask the team requests, and keeps Drafts without the old step number. Without an AI model, the Planner says it is offline and shows what it can do; the starter fallback goes. Release-check use cases and the Release checker starter card stop showing to users. The Agent library becomes its own tab, showing each agent card with its tools and the workflows that use it. |
+| Agent runtime | The Planner's answer becomes a contract: which of the five answers applies, decided by code from the read-back and the abilities check, and the filled-in card with each part's mark. For a release check it returns the watchlist row, with a checked GitHub project and where the guess came from. Each request is read on its own, and the one chat question is sent back with its answer. The evals' golden set covers the five answers, requests that must and must not be refused, and mixed requests. The release checker becomes the Version checker, and a Vulnerability checker card joins it, with read-only tools for the registries, support dates, source suggestions, vulnerability lookups and CISA's list (ADR 0025). |
+| Orchestration | None. Named Approvers and the timer (ADR 0024) come once the team and the sponsor agree. |
 | Run monitoring | Needs you and the troubleshooter's reason at the top of Workflows, and the run page reached from where you are instead of the menu. The Approvals page folds into Workflows, and into Home for an Approver who can't set up workflows. |
 
 The Software page already exists, and the backend already records where each version came from (`Given`, `FromFirstCheck` and `FromTicketDone` in `platform-api/src/platform_api/orchestration/watch.py`). The history view mostly lists what is already stored.
 
-## First slice, for the presentation (27 Nov to 5 Dec)
+## Build order
 
-1. **The menu.** Home, Workflows, Software watchlist and Agent library. Teams and Jira move to Settings.
-2. **Home is the Planner's box,** with the set-up card, the watchlist row and the five answers.
-3. **Workflows,** with Needs you at the top, failures with the troubleshooter's reason, and Fix it where the platform allows a retry.
-4. **Software watchlist.** History for each tool, and the rows the Planner fills in.
+1. **The menu.** Home, Workflows, Software watchlist and Agent library, with Teams and Jira as header buttons.
+2. **The Planner's answer as a contract,** with the abilities lists and the watchlist and workflow matches in platform-api.
+3. **Home is the Planner's box,** with the set-up card, the watchlist row and the five answers.
+4. **Workflows,** with Needs you and Drafts at the top, failures with the troubleshooter's reason, and Fix it where the platform allows a retry.
+5. **Software watchlist.** History for each tool, and the rows the Planner fills in.
 
-Rough size: 1.5 to 2 sprints, mostly Portal work.
+This is Portal, agent-runtime and platform-api work. [ADR 0037](../adr/0037-home-is-the-planners-chat-box-and-replaces-new-workflow.md) lists it under Consequences. It is more than the 27 Oct estimate of 1.5 to 2 sprints, which covered Portal changes only.
 
 ## Later, each needs its own decision
 
 - **Named Approvers and a stop time.** Proposed in ADR 0024. The rule that checks a decision already allows a list of people for each step, so the decision rules don't change. The sponsor needs to agree the default waits and the working hours.
 - **Report to support.** Filing an issue is small. Having coding agents write the fix, with a developer reviewing and merging, needs NCS's agreement. Agents never merge or deploy.
 - **Settings beyond the AI model.** Connections reuse ADR 0022's pattern for the GitHub, Jira and Teams keys, as that ADR already suggests. Changing roles in the app decides who can approve, so it needs its own ADR, and it has to fit sign-in with NCS accounts (ADR 0018). The usage limit needs the provider's usage numbers, and a decision on what stops when it's reached.
-- **Tool cards.** A tool described as data, which the AI drafts from a system's published API and an Approver OKs once. One runner we build and test runs every tool card, so no code the AI wrote ever runs. This changes ADR 0023 ("tools are code we build"), so it needs a new ADR first. The prototype shows it in two places: the Planner's set-up card (the Confluence tool) and "Need a tool that isn't here?" on Tools.
+- **Tool cards.** A tool described as data, which the AI drafts from a system's published API and an Approver OKs once. One runner we build and test runs every tool card, so no code the AI wrote ever runs. This changes ADR 0023 ("tools are code we build") and widens what the safety checker allows, so it needs a new ADR first. That ADR must say the platform decides whether a tool reads or writes, from the API operation, never from the draft, and that anything unclear counts as a write. The prototype shows tool cards on Tools ("Need a tool that isn't here?"). Until the ADR is accepted, the Planner on Home offers Ask the team instead.
 - **More sources for the Software watchlist.** ADR 0025 proposes a fixed list: the main package registries, GitHub, endoflife.date, OSV, NVD, vendor advisories and CISA's list. Any source beyond that list is another external dependency with its own ADR, as the [watchlist PR/FAQ](software-watchlist-prfaq.md) says.
 
 ## Risks
 
 | Risk | What we do |
 |---|---|
-| It takes time from the weeks before the presentation. | Keep the first slice to Portal changes, and reuse the screens we have. |
+| The front door is more work than the 27 Oct estimate. | ADR 0037's consequences list it, so the team can plan it honestly. |
 | "Workflow" also means n8n workflows and Jira workflows. | In the app it always means the user's task. In code and docs, write "n8n workflow" or "Jira workflow" for the others. The glossary records the rule. |
 | It is our judgement, not tested with users. | Give 2 or 3 people who haven't seen it two tasks each, on today's Portal and on the prototype, and note where they stop. Use "keep track of the React version" and "every Friday, list bug tickets with no update for 10 days". |
-| A chat box invites requests the platform can't do. | The "Not yet" list, the five answers and Ask the team. Every guess is marked, and nothing runs before the card's yes. |
-| The front door depends on the AI model answering well. | The evals' golden set covers the five answers. |
-| Tool cards and coding agents look like they weaken safety. | Neither is in the first slice. Each gets an ADR first. |
+| A chat box invites requests the platform can't do. | The "Not yet" list, the five answers and Ask the team. Every guess is marked, every suggestion passes the abilities check, and nothing runs before the card's yes. |
+| The front door depends on the AI model answering well. | The evals' golden set covers the five answers, refusals and mixed requests. |
+| A guessed GitHub project could point at the wrong source. | The guess comes from the registry's link or a list of known projects, is checked before it shows, and the row records who confirmed it. |
+| Tool cards and coding agents look like they weaken safety. | Neither is built, or offered by the Planner, before its own ADR. |
 
 ## Open questions
 
-1. Is the first slice right for the presentation, or should it be smaller?
+1. Which parts of the build order are ready for the presentation? The team lead decides as the work goes.
 2. Should we show the sponsor the prototype before we build?
 3. After handover, can someone at CODESparks or NCS review a pull request now and then? This decides whether coding agents can help with fixes later.
 4. Are 4 working hours (ask the backup) and 2 working days (stop waiting) the right defaults? Should public holidays count?
@@ -387,4 +397,4 @@ Rough size: 1.5 to 2 sprints, mostly Portal work.
 
 Decided on 27 Oct: users see **workflow** (not "routine" or "use case"), the app is called **AI Workflow Builder**, the software page is **Software watchlist**, and the Room lead is now the **Planner**. If the team agrees with the rest, we open one issue per item in the first slice.
 
-Decided on 6 Nov: Home is the Planner's box every day, and the New workflow tab goes. Needs you moves to the top of Workflows, with a count on its tab. The Planner is the Visor bot, and the other agents are Orbs.
+Decided on 6 Nov: Home is the Planner's box every day, and the New workflow tab goes. Needs you moves to the top of Workflows, with a count on its tab. The Planner is the Visor bot, and the other agents are Orbs. After four AI models reviewed ADR 0037 the same day, the Planner offers only what the platform can do now, drafted tools wait for their own ADR, and who says yes follows today's rule until ADR 0024.

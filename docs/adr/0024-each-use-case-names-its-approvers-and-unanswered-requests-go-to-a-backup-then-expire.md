@@ -26,7 +26,7 @@ The rule that checks a decision already allows a list of people for a step (`One
 
 ## Consequences
 
-- **Use case builder.** A use case saves, for each approval step, its first Approver, its backup and the two waits. Changing any of them makes a new use case version. In the Portal redesign, the Operator sets them in the "When and who" step of New routine, and changes them on the routine's page.
+- **Use case builder.** A use case saves, for each approval step, its first Approver, its backup and the two waits. Changing any of them makes a new use case version. In the Portal redesign, the Operator sets them on the workflow’s page. The "When and who" step of New routine is gone, because the Planner’s set-up card replaced New workflow (ADR 0037).
 - **Orchestration.**
   - An approval request keeps the names and waits it was made with, as it keeps the proposal's digest. Changing the use case changes the next run, never a request that is already waiting.
   - The platform's tick already finds runs past their deadline. It also finds requests that are due to go to the backup or to expire.

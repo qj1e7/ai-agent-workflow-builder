@@ -42,7 +42,7 @@ The Planner's reply on Home when it can do a request: the whole workflow filled 
 _Avoid_: Wizard, form, New workflow (the old 4-step page)
 
 **Draft**:
-A set-up card that an Operator started and has not turned on, kept so they can come back to it. Only they see it. Always write "n8n draft" for an n8n workflow that is not published yet.
+A set-up card that an Operator started and has not turned on, kept so they can come back to it. Only they see it, listed on Workflows. Always write "n8n draft" for an n8n workflow that is not published yet.
 _Avoid_: Proposal (that is a run's write actions)
 
 **Paused**:
