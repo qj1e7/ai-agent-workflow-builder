@@ -96,7 +96,7 @@ async function sweep(t) {
   await t.click('[data-act="libTab"][data-arg="agents"]'); await grab('agent cards');
   await t.click('[data-act="libTab"][data-arg="tools"]'); await grab('tools');
   await t.click('[data-act="toolOpen"][data-arg="jiraCreate"]'); seen.push(['tool dialog', await t.page.innerText('.dialog')]); await t.page.keyboard.press('Escape'); await t.wait(150);
-  for (const tab of ['model', 'connections', 'people', 'usage']) { await t.settings(tab); await grab(`settings ${tab}`); }
+  for (const tab of ['model', 'connections', 'people']) { await t.settings(tab); await grab(`settings ${tab}`); }
   seen.push(['teams drawer', await t.teams()]); await t.closeTeams();
   await t.ctl('user', 'bob'); await grab('bob home'); seen.push(['bob teams drawer', await t.teams()]); await t.closeTeams();
   return seen;
@@ -152,12 +152,11 @@ check('i3-one-answer-new-tool', async (browser) => session(browser, 1280, async 
   assert(tools.includes(NEW_TOOL), `Tools reply: ${tools}`);
   assert(tools.includes('Ask the team'), 'Tools reply offers Ask the team');
   assert(!/draft/i.test(tools), `Tools reply offers no draft: ${tools}`);
+  /* The agent dialog is read only by default (changing an agent in plain English is Planned), so it asks nothing. */
   await t.click('[data-act="libTab"][data-arg="agents"]');
   await t.click('[data-act="agent"][data-arg="writer"]');
-  await t.page.fill('#agent-text', 'Put tickets in the Platform component'); await t.click('[data-act="agentSuggest"]');
-  const agent = await t.page.innerText('#agent-proposal');
-  assert(agent.includes(NEW_TOOL), `Agent reply: ${agent}`);
-  assert(agent.includes('Ask the team'), 'Agent reply offers Ask the team');
+  assert.strictEqual(await t.count('#agent-text'), 0, 'the agent dialog has no change box by default');
+  assert((await t.page.innerText('.dialog')).includes('Agents are read only here'), 'the dialog says it is read only');
 }));
 
 check('i4-todays-rule-everywhere', async (browser) => session(browser, 1280, async (t) => {
@@ -311,7 +310,9 @@ check('part-i-can-do', async (browser) => session(browser, 1280, async (t) => {
   assert(say.includes('I can’t see when a ticket was last updated yet'), `part answer: ${say}`);
   const card = await t.card();
   assert(card.includes('Set up the part I can do') && card.includes('Ask the team'), `part card: ${card}`);
-  assert(card.includes('created more than 10 days ago'), 'nearest real alternative');
+  assert(card.includes('List all open tickets instead'), 'the nearest real alternative: a search can’t filter by age (SEARCH_LIMIT 50)');
+  await t.click('.thread [data-act="instead"]'); await t.wait(600);
+  assert.strictEqual(await t.count('.thread .pcard-f [data-act="turnOn"]'), 1, 'Set up the part I can do makes a set-up card, not another part answer');
 }));
 
 check('offline-planner', async (browser) => session(browser, 1280, async (t) => {
@@ -320,7 +321,12 @@ check('offline-planner', async (browser) => session(browser, 1280, async (t) => 
   assert(home.includes('I can’t read new requests until an AI model is connected'), 'offline line');
   assert(home.includes('Connect a model'), 'Connect a model');
   assert(home.includes('I can') && home.includes('Not yet'), 'capability lists still show');
-  assert(home.includes('No AI model connected'), 'Needs you has the model item');
+  /* The hero is the model item, so the strip leaves its row out and Connect a model appears once. Workflows and the tab still count it. */
+  assert.strictEqual(await t.page.locator('main button:has-text("Connect a model")').count(), 1, 'Connect a model appears once on Home');
+  assert(!home.includes('No AI model connected'), 'the strip has no second model row');
+  await t.go('workflows');
+  assert((await t.text()).includes('No AI model connected'), 'Workflows lists the model item');
+  await t.go('home');
   assert.strictEqual(await t.count('[data-ask]'), 0, 'no Planner box');
   assert(await t.has('[data-askteam]'), 'Ask the team still works');
   await t.settings('model');
@@ -340,6 +346,13 @@ check('jira-down-and-back', async (browser) => session(browser, 1280, async (t) 
   const wf = await t.text();
   assert(wf.includes('Drafts'), 'the request is kept as a draft');
   assert(wf.includes('Jira isn’t answering'), 'Needs you has the connection item');
+  /* Validation: while Jira is down no screen may say it is working again, and a retry must not succeed. */
+  assert(!/working again|answering again/.test(wf), `Workflows does not contradict the connection: ${wf.match(/[^\n]*again[^\n]*/)}`);
+  await t.click('[data-act="workflow"][data-arg="issues"]');
+  assert(!/working again|answering again/.test(await t.text()), 'the workflow page does not contradict the connection');
+  await t.click('[data-act="retryIssues"]'); await t.wait(300);
+  assert(!(await t.text()).includes('Done'), 'the retry does not succeed while Jira is down');
+  await t.go('workflows');
   await t.click('[data-act="abil"]').catch(() => {});
   await t.go('home'); await t.click('[data-act="newChat"]'); await t.click('[data-act="abil"]');
   assert((await t.text()).includes('Not working right now'), 'capability list shows Temporarily down');
@@ -406,7 +419,7 @@ check('teams-card-names-parties', async (browser) => session(browser, 1280, asyn
   await t.closeTeams();
   await t.go('workflows'); await t.click('[data-act="workflow"][data-arg="nudge"]'); await t.click('.panel [data-act="watch"][data-arg="nudge"]'); await t.wait(300);
   await t.click('#decision [data-act="report"]'); await t.click('[data-act="sendReport"]'); await t.page.keyboard.press('Escape'); await t.wait(200);
-  for (let i = 0; i < 3; i += 1) await t.sim('Support moves case');
+  for (let i = 0; i < 4; i += 1) { await t.openTest(); if (!(await t.page.$('.testctl button:has-text("Support moves case")'))) { await t.closeTest(); break; } await t.closeTest(); await t.sim('Support moves case'); }
   await t.click('#decision [data-act="retryNudge"]'); await t.wait(600);
   drawer = await t.teams();
   assert(drawer.includes('Who can’t\nAlice, who set this up and retried this run.'), `the retried summary's card: ${drawer.match(/Who can’t[^\n]*\n[^\n]*/)}`);
@@ -443,6 +456,117 @@ check('two-approvers-in-order', async (browser) => session(browser, 1280, async 
   const drawer = await t.teams();
   assert(/Approved by Bob at \d+:\d\d today, then Alice at \d+:\d\d today/.test(drawer), `Teams shows both: ${drawer.match(/Approved[^\n]*/)}`);
 }));
+
+/* Fix round B, synthesis 2: every alternative the Planner offers is one it can set up. Each request below gets a can't
+   or a part answer; its alternative must open a set-up card with nothing red, and a request with no real alternative
+   must offer only Ask the team. */
+const ALTERNATIVES = [
+  ['email', 'Every Friday, email me the tickets we closed this week'],
+  ['slack', 'Every Friday, post the tickets we closed this week in Slack'],
+  ['teams', 'Every Friday, put the tickets we closed this week in the support channel'],
+  ['confluence', 'Every Friday, put the tickets we closed this week on a Confluence page'],
+  ['nudge', 'Every Monday, remind the owners of open tickets'],
+  ['updated', 'Every Friday, list tickets with no update for 10 days'],
+  ['owners', 'Every Friday, list open tickets with their owners'],
+  ['older', 'Every Monday, list open tickets created more than 30 days ago'],
+  ['component', 'Every Monday, put new tickets in the Platform component'],
+];
+check('alternatives-are-real', async (browser) => session(browser, 1280, async (t) => {
+  for (const [what, text] of ALTERNATIVES) {
+    await t.ask(text);
+    const card = await t.card();
+    assert(/Set that up|Set up the part I can do/.test(card), `${what}: an alternative is offered: ${card}`);
+    await t.click('.thread [data-act="instead"]'); await t.wait(600);
+    assert.strictEqual(await t.count('.thread .pcard-f [data-act="turnOn"]'), 1, `${what}: the alternative opens a set-up card`);
+    assert.strictEqual(await t.count('.thread .cmsg:last-child .schip.cant'), 0, `${what}: nothing red on the card`);
+    assert.strictEqual(await t.count('.thread .cmsg:last-child .snotes .cant'), 0, `${what}: no can’t note on the card`);
+    await t.click('[data-act="newChat"]');
+  }
+  await t.ask('Every Friday, close tickets with no update for 30 days');
+  const card = await t.card();
+  assert(!/Set that up|Set up the part/.test(card) && card.includes('Ask the team'), `no alternative for changing tickets, only Ask the team: ${card}`);
+  assert(!/no update for 30 days|with their owners/.test(card), 'the old impossible offers are gone');
+}));
+
+/* Synthesis 3: Jira down is told as it is. The reason says Jira still isn't answering, and Retry can't run until it is back. */
+check('jira-down-honest', async (browser) => session(browser, 1280, async (t) => {
+  await t.sim('Jira stops answering');
+  await t.ask('Why did Morning new-ticket check stop?');
+  const card = await t.card();
+  assert(card.includes('still isn’t answering'), `reason reads the connection: ${card}`);
+  assert(!/maintenance|working again/.test(card), 'no invented cause and no false recovery');
+  await t.click('.thread [data-act="retryIssues"]');
+  assert((await t.page.innerText('body')).includes('Jira still isn’t answering, so the run can’t start'), 'Retry says it can’t run yet');
+  await t.go('workflows');
+  const wf = await t.text();
+  assert(wf.includes('Morning new-ticket check stopped'), 'the stop is still a stop');
+  assert(!wf.includes('maintenance'), 'Needs you has no invented cause');
+  await t.sim('Jira works again');
+  await t.go('home'); await t.click('[data-act="newChat"]'); await t.ask('Why did Morning new-ticket check stop?');
+  const back = await t.card();
+  assert(back.includes('answering again') && !back.includes('maintenance'), `after recovery, the reason says only what the run knows: ${back}`);
+  await t.click('.thread [data-act="retryIssues"]'); await t.wait(400);
+  assert((await t.text()).includes('Done'), 'the retry runs once Jira is back');
+}));
+
+/* Synthesis 15: approving automatically or approving your own requests is refused, and words like "ideas" or "to approve"
+   inside a real task no longer take it over. */
+check('refusal-and-word-rules', async (browser) => session(browser, 1280, async (t) => {
+  const REFUSE = 'I can’t set that up. Anything that changes data waits for a yes, every time.';
+  for (const text of ['Approve my own requests automatically', 'Approve it automatically', 'Auto-approve my requests', 'Approve my own requests', 'Don’t ask for approval']) {
+    await t.ask(text);
+    assert.strictEqual(await t.reply(), REFUSE, `refused alone: ${text}`);
+    const card = await t.card();
+    assert(card.includes('Nobody approves their own work') && !card.includes('Set it up with a yes'), `nothing to set up with a yes: ${card}`);
+    await t.click('[data-act="newChat"]');
+  }
+  /* The same words inside a task, and after a card is already on screen. */
+  for (const text of ['Every Friday, sum up the tickets we closed this week and approve it automatically', 'Every Monday, list open tickets, auto-approve the ticket', 'Every Friday, sum up closed tickets and don’t ask for approval', 'Every Friday, sum up closed tickets and approve my own requests']) {
+    await t.ask(text);
+    assert.strictEqual(await t.reply(), REFUSE, `refused inside a task: ${text}`);
+    assert((await t.card()).includes('Set it up with a yes'), 'the safe version is offered');
+    await t.click('[data-act="newChat"]');
+  }
+  await t.ask(EX_SUMMARY); await t.ask('Approve it automatically');
+  assert.strictEqual(await t.reply(), REFUSE, 'refused after a card');
+  await t.click('[data-act="newChat"]');
+  await t.ask('Every Friday, list the tickets I need to approve');
+  assert.strictEqual(await t.count('.thread .pcard-f [data-act="turnOn"]'), 1, '"to approve" inside a task still makes a set-up card');
+  await t.click('[data-act="newChat"]');
+  await t.ask('Every Monday, list the new tickets about ideas');
+  assert.strictEqual(await t.count('.thread .pcard-f [data-act="turnOn"]'), 1, '"ideas" inside a task still makes a set-up card');
+  await t.click('[data-act="newChat"]');
+  await t.ask('What needs me?');
+  assert(/things? needs? you/.test(await t.reply()), 'the short question still works');
+}));
+
+/* Synthesis 19 and 20: unsupported email wording, and "on" for workflows between runs. */
+check('email-wording-and-on-not-running', async (browser) => session(browser, 1280, async (t) => {
+  await t.ask('Every Friday, email me the tickets we closed this week');
+  assert((await t.reply()).includes('Email isn’t on the team’s plan. Ask the team if you need it.'), await t.reply());
+  assert(!/are running|keep running/.test(source), 'no workflow is described as running between runs');
+  assert(!/maintenance/.test(source), 'no invented cause in the source');
+}));
+
+/* Synthesis 14: the morning check reads the last day and says it reads the 50 newest tickets; the registry names the limit. */
+check('newest-50-and-last-day', async (browser) => session(browser, 1280, async (t) => {
+  await t.go('workflows'); await t.click('[data-act="workflow"][data-arg="issues"]');
+  const wf = await t.text();
+  assert(wf.includes('in the last day'), `the morning check reads the last day: ${wf.match(/Finds[^\n]*/)}`);
+  await t.click('details.tech summary');
+  assert((await t.text()).includes('Reads the 50 newest tickets'), 'How it works names the 50-ticket limit');
+  assert(!/since the last run/.test(source), 'nothing claims to read since the last run');
+  await t.go('agents');
+  assert((await t.page.innerText('.cap-not')).includes('Find older tickets, beyond the newest 50'), 'the registry has the Planned line');
+  assert(!/created more than \d+ days ago/.test(source), 'the old-ticket starting point and alternative are gone');
+}));
+
+/* Synthesis 18: one state-word function, and no dead helpers. */
+check('one-state-word-source', () => {
+  assert(!/CAP_WORD|isReleaseCheck/.test(source), 'CAP_WORD and isReleaseCheck are gone');
+  assert.strictEqual((source.match(/'Not working right now'/g) || []).length, 1, 'the state words are written once');
+  assert.strictEqual((source.match(/'Needs setup'/g) || []).length, 1, 'Needs setup is written once');
+});
 
 (async () => {
   const browser = await chromium.launch();

@@ -48,6 +48,9 @@ async function session(browser, width, body) {
     openTest: async () => { if (!(await page.$('.testctl-panel'))) { await page.click('.testctl-toggle'); await page.waitForTimeout(120); } },
     closeTest: async () => { if (await page.$('.testctl-panel')) { await page.click('.testctl-toggle'); await page.waitForTimeout(120); } },
     ctl: async (act, arg) => { await t.openTest(); await page.click(`.testctl [data-act="${act}"][data-arg="${arg}"]`); await page.waitForTimeout(260); await t.closeTest(); },
+    sim: async (label) => { await t.openTest(); await page.$eval(`.testctl button:has-text("${label}")`, (b) => b.click()); await page.waitForTimeout(260); await t.closeTest(); },
+    /* Support moves the case on until it is fixed, however many stages the track has. */
+    caseFixed: async () => { await t.openTest(); for (let i = 0; i < 4; i += 1) { const b = await page.$('.testctl button:has-text("Support moves case")'); if (!b) break; await b.click(); await page.waitForTimeout(260); } await t.closeTest(); },
     ask: async (text) => { await page.fill('[data-ask]', text); await page.keyboard.press('Enter'); await page.waitForTimeout(700); },
     reply: () => page.locator('.thread [data-say]').last().innerText(),
     card: () => page.locator('.thread .pcard').last().innerText(),
@@ -78,18 +81,22 @@ both('home-greeting-and-state-line', async (t) => {
   const home = await t.text();
   assert(home.includes('Good morning! Alice'), 'greeting in the built app’s form');
   const n = await t.page.$$eval('.hdr .badge, .tabbar .badge', (els) => els.map((e) => +e.textContent.replace(/\D/g, '')).find(Boolean));
-  assert(home.includes(`${n} things need you.`), `state line counts the same list as the tab (${n})`);
-  assert.strictEqual(await t.page.getAttribute('[data-ask]', 'placeholder'), PLACEHOLDER, 'placeholder');
+  /* Fix round B, synthesis 8: the line under the greeting carries no count; the Needs you heading is the one count, and it matches the tab. */
+  const line = await t.page.innerText('.hello-text .lead');
+  assert(line.startsWith('Some things need you.') && !/\d/.test(line), `state line without a count: ${line}`);
+  assert.strictEqual(await t.page.innerText('[data-val="needs-count"]'), String(n), `Needs you counts the same list as the tab (${n})`);
+  assert.strictEqual(await t.page.getAttribute('[data-ask]', 'placeholder'), t.width > 600 ? PLACEHOLDER : 'Automate, check or fix something', 'placeholder, shorter on a phone so it fits');
   assert(await t.has('.composer button[type="submit"][aria-label]'), 'send button labelled');
 });
 both('home-three-suggestions-from-state', async (t) => {
-  assert.deepStrictEqual(await t.texts('.examples .chip'), ['Check my workflows', 'Why did Morning new-ticket check stop?', 'Set up another workflow'], 'a stopped workflow asks why');
-  await t.click('.examples .chip >> nth=1');
+  /* Synthesis 8: the first Needs you row is the morning check's stop, so no chip repeats it; the next stop gets the chip. */
+  assert.deepStrictEqual(await t.texts('.examples .chip'), ['Check my workflows', 'Why did Weekly closed-ticket summary stop?', 'Set up another workflow'], 'a stopped workflow asks why, unless it is already the first row');
+  await t.ask('Why did Morning new-ticket check stop?');
   await t.click('[data-act="retryIssues"]');
   await t.go('home'); await t.newChat();
-  assert.deepStrictEqual(await t.texts('.examples .chip'), ['Check my workflows', 'Why did Weekly closed-ticket summary stop?', 'Set up another workflow'], 'the next stopped workflow');
-  await t.click('.examples .chip >> nth=1'); await t.click('[data-act="report"]'); await t.click('[data-act="sendReport"]'); await t.page.keyboard.press('Escape'); await t.wait(200);
-  for (let i = 0; i < 3; i += 1) { await t.openTest(); await t.page.$eval('.testctl button:has-text("Support moves case")', (b) => b.click()); await t.wait(260); await t.closeTest(); }
+  assert.deepStrictEqual(await t.texts('.examples .chip'), ['Check my workflows', 'What can I ask for?', 'Set up another workflow'], 'the remaining stop is now the first row, so its chip goes');
+  await t.ask('Why did Weekly closed-ticket summary stop?'); await t.click('[data-act="report"]'); await t.click('[data-act="sendReport"]'); await t.page.keyboard.press('Escape'); await t.wait(200);
+  await t.caseFixed();
   await t.go('home'); await t.newChat(); await t.ask('What needs me?'); await t.click('.thread [data-act="retryNudge"]');
   await t.go('home'); await t.newChat();
   assert.deepStrictEqual(await t.texts('.examples .chip'), ['Check my workflows', 'What can I ask for?', 'Set up another workflow'], 'with nothing stopped, what she can ask for');
@@ -99,10 +106,12 @@ both('home-needs-you-rows', async (t) => {
   assert.strictEqual(rows.length, 3, `up to three rows (${rows.length})`);
   assert(rows[0].startsWith('Morning new-ticket check stopped'), `stopped runs first: ${rows[0]}`);
   assert(rows[2].startsWith('3 upgrade tickets are waiting for your yes'), `approvals after stops (HM1, Alice sees her waiting yes): ${rows[2]}`);
-  for (const r of rows) assert.strictEqual((await t.count('.home .needs .nrow .btn.primary')), 3, 'one primary action per row');
-  assert.strictEqual(await t.count('.home .needs .nrow .btn'), 3, 'no second button in a row');
-  /* Five for Alice: two stopped runs, the software check's yes, the moved LangServe project (fix round A, item 12) and the key. */
-  assert((await t.text()).includes('See all 5 on Workflows'), 'See all N on Workflows');
+  /* Synthesis 8: one action per row, only the first primary; See all carries no number. */
+  assert.strictEqual(await t.count('.home .needs .nrow .btn.primary'), 1, 'only the first row’s action is primary');
+  assert.strictEqual(await t.count('.home .needs .nrow .btn'), 3, 'one button per row');
+  assert.strictEqual(await t.count('.home .btn.primary'), 1, 'one primary button on Home');
+  assert((await t.text()).includes('See all on Workflows'), 'See all on Workflows, with no number');
+  assert.strictEqual((await t.text()).match(/\b5\b/g).length, 1, 'the count 5 shows once on Home (five for Alice, with the moved LangServe project)');
   await t.ask('Check my workflows');
   assert.strictEqual(await t.count('.home .needs'), 0, 'hidden while a conversation is on screen');
   assert((await t.count('.hdr .badge, .tabbar .badge')) > 0, 'the tab count still shows');
@@ -112,13 +121,13 @@ both('home-needs-you-gone-when-nothing-needs-her', async (t) => {
   await t.click('[data-act="run"][data-arg="sw"]'); await t.click('[data-act="approve"][data-arg="sw"]');
   await t.ctl('user', 'alice');
   await t.go('home');
-  await t.click('.examples .chip >> nth=1'); await t.click('[data-act="retryIssues"]');
+  await t.ask('Why did Morning new-ticket check stop?'); await t.click('[data-act="retryIssues"]');
   await t.go('home'); await t.newChat();
   await t.ask('Why did Weekly closed-ticket summary stop?'); await t.click('[data-act="report"]'); await t.click('[data-act="sendReport"]'); await t.page.keyboard.press('Escape'); await t.wait(200);
   await t.newChat();
   await t.click('[data-act="useNewAddress"]');
   const home = await t.text();
-  assert(/1 thing needs you\./.test(home), `only the key is left: ${home.split('\n').slice(0, 4).join(' | ')}`);
+  assert(/Something needs you\./.test(home), `only the key is left: ${home.split('\n').slice(0, 4).join(' | ')}`);
   assert.strictEqual(await t.count('.home .needs .nrow'), 1, 'one row');
 });
 
@@ -129,7 +138,7 @@ both('day-one', async (t) => {
   assert(home.includes('What does your team do again and again?'), 'heading');
   assert(home.includes('Tell me a task in plain English.'), 'one sentence on what it does');
   assert.deepStrictEqual(await t.texts('.examples .chip'), ['Every Friday, sum up the tickets we closed this week', 'Keep track of the React version', 'What can you do?'], 'three starting points');
-  assert(home.includes('I can') && home.includes('Not yet'), 'I can and Not yet lists');
+  assert(home.includes('I can') && home.includes('What can’t I do yet?'), 'the I can list, with the Not yet lines folded');
   assert.strictEqual(await t.count('.needs'), 0, 'no Needs you');
   assert.strictEqual(await t.count('.hdr .badge, .tabbar .badge'), 0, 'no warning counts');
   await t.noSideways('day one');
@@ -168,14 +177,17 @@ both('answer-check-my-workflows', async (t) => {
   assert.strictEqual(rows.length, 3, 'a row per workflow');
   for (const r of rows) assert(/\b(Stopped|Waiting for a yes|On|Paused)\b/.test(r) && /Next run/.test(r), `status and next run: ${r}`);
   assert.strictEqual(await t.count('.wfcheck .row .btn'), 3, 'one action each');
+  assert.strictEqual(await t.count('.wfcheck .btn.primary'), 1, 'one primary button on the card');
+  await t.newChat(); await t.ask('What needs me?');
+  assert.strictEqual(await t.count('.thread .needs .btn.primary'), 1, 'one primary button on the What needs me card');
   await t.noSideways('check');
 });
 both('home-ask-link-not-repeated-and-no-nag-after-report', async (t) => {
   const asks = () => t.page.$$eval('.home button', (els) => els.filter((e) => e.textContent.trim() === 'What can I ask for?').length);
   assert.strictEqual(await asks(), 1, 'the chips do not offer it, so the link under them stays');
-  await t.click('.examples .chip >> nth=1'); await t.click('[data-act="retryIssues"]');
+  await t.ask('Why did Morning new-ticket check stop?'); await t.click('[data-act="retryIssues"]');
   await t.go('home'); await t.newChat();
-  await t.click('.examples .chip >> nth=1'); await t.click('[data-act="report"]'); await t.click('[data-act="sendReport"]'); await t.page.keyboard.press('Escape'); await t.wait(200);
+  await t.ask('Why did Weekly closed-ticket summary stop?'); await t.click('[data-act="report"]'); await t.click('[data-act="sendReport"]'); await t.page.keyboard.press('Escape'); await t.wait(200);
   await t.go('home'); await t.newChat();
   assert.deepStrictEqual(await t.texts('.examples .chip'), ['Check my workflows', 'What can I ask for?', 'Set up another workflow'], 'after the report, the Why suggestion is replaced');
   assert.strictEqual(await asks(), 1, 'the chip and the link are not both on Home');
@@ -233,7 +245,7 @@ both('card-sections-and-footer', async (t) => {
   assert(!card.includes('Week-on-week writer') && !card.includes('Reads Jira'), 'steps and agents hidden until opened');
   await t.click('.thread .pcard details.how summary');
   const open = await t.card();
-  for (const part of ['Reads Jira', 'Changes data, waits for a yes', 'No system access', 'Jira reader', 'Summary writer', 'Tools:']) assert(open.includes(part), `How it works holds ${part}`);
+  for (const part of ['Reads the 50 newest tickets in Jira', 'Changes data, waits for a yes', 'No system access', 'Jira reader', 'Summary writer', 'Tools:']) assert(open.includes(part), `How it works holds ${part}`);
   assert.strictEqual(await t.count('.thread .pcard details.how .face'), 4, 'agents as Orbs on the steps and in the agents line');
   assert.strictEqual(await t.footer(), '2 choices left: when it runs and the Jira project.', 'footer names what is missing');
   assert(await t.has('[data-act="turnOn"][disabled]'), 'Turn it on is off until then');
@@ -299,7 +311,7 @@ both('a11y-keyboard-and-focus', async (t) => {
   await t.page.focus('[data-ask]');
   const seen = [];
   for (let i = 0; i < 12; i += 1) { await t.page.keyboard.press('Tab'); seen.push(await t.page.evaluate(() => { const a = document.activeElement; return `${a.tagName}:${(a.innerText || a.getAttribute('aria-label') || '').trim().slice(0, 30)}`; })); }
-  for (const want of ['Check my workflows', 'Retry the run', 'See all 5']) assert(seen.some((s) => s.includes(want)), `Tab reaches ${want}: ${seen.join(' > ')}`);
+  for (const want of ['Check my workflows', 'Retry the run', 'See all']) assert(seen.some((s) => s.includes(want)), `Tab reaches ${want}: ${seen.join(' > ')}`);
   const ring = await t.page.evaluate(() => { const el = document.querySelector('.examples .chip'); el.focus(); return getComputedStyle(el).outlineStyle !== 'none' || getComputedStyle(el, ':focus-visible').outlineWidth !== '0px'; });
   assert(ring, 'a chip shows a focus ring');
   await t.ask(EX_SUMMARY);
@@ -308,6 +320,93 @@ both('a11y-keyboard-and-focus', async (t) => {
   assert(chips.every((c) => /your words|filled in by me|please choose|chosen by you|can’t do/i.test(c)), `chip state is in words, not colour alone: ${chips.join(' | ')}`);
   if (t.width === 390) await t.tapSize('.examples .chip, .home .needs .btn, .thread .pcard .btn', 'phone');
 });
+/* Fix round B. Synthesis 8: day one shows the I can list with "What can't I do yet?" folded, and no roadmap words. */
+both('day-one-folds-not-yet', async (t) => {
+  await t.ctl('day', 'one');
+  assert(await t.has('.abil .abil-ready'), 'the I can list shows');
+  assert(await t.has('.abil details:not([open]) summary'), 'What can’t I do yet? is collapsed');
+  assert.strictEqual(await t.page.innerText('.abil details summary'), 'What can’t I do yet?', 'the fold’s question');
+  const home = await t.text();
+  assert(!/\bPlanned\b|on the team’s plan|roadmap/i.test(home), `no Planned tag or roadmap words by default: ${home.match(/[^\n]*plan[^\n]*/i)}`);
+  assert.strictEqual(await t.count('.home .tag.planned'), 0, 'no Planned tags');
+  await t.click('.abil details summary');
+  assert((await t.text()).includes('Post messages in Teams'), 'opening the fold lists the Not yet lines');
+  await t.ctl('preview', 'on');
+  assert((await t.count('.abil .tag.planned')) > 0, 'with Planned features shown, the tags appear');
+});
+/* Synthesis 9: offline Home uses the built app's meaning, shows Connect a model once, and capabilities that need the model become Needs setup. */
+both('offline-honest', async (t) => {
+  await t.ctl('modelOn', 'off');
+  const home = await t.text();
+  assert(home.includes('agent workflows can’t run and new ones can’t be planned'), 'the built app’s meaning');
+  assert(home.includes('Software watchlist keeps going'), 'only the watchlist keeps going');
+  assert(!/keep running|are running/.test(home), 'no claim that workflows keep running');
+  assert.strictEqual(await t.page.locator('main button:has-text("Connect a model")').count(), 1, 'Connect a model appears once');
+  const setup = await t.page.innerText('.abil .abil-setup');
+  for (const cap of ['Sum up what I find', 'Read Jira tickets', 'Create a Jira ticket after a yes']) assert(setup.includes(cap), `${cap} needs setup without a model`);
+  assert(setup.includes('Connect an AI model in Settings'), 'the fix names the model');
+  assert((await t.page.innerText('.abil .abil-ready')).includes('Check software for new releases on GitHub'), 'the watchlist’s read stays ready');
+  const n = await t.page.$$eval('.hdr .badge, .tabbar .badge', (els) => els.map((e) => +e.textContent.replace(/\D/g, '')).find(Boolean));
+  assert.strictEqual(await t.page.innerText('[data-val="needs-count"]'), String(n), 'the Needs you count still matches the tab');
+  await t.ctl('modelOn', 'on');
+  assert.strictEqual(await t.count('.abil .abil-setup'), 0, 'back to I can with the model');
+});
+/* Synthesis 10: day one has no special case. Keys are fresh, so Needs you is empty; a real item shows like any other day. */
+both('day-one-shows-real-items', async (t) => {
+  await t.ctl('day', 'one');
+  assert.strictEqual(await t.count('.needs'), 0, 'nothing needs her on day one');
+  await t.sim('Jira stops answering');
+  assert.strictEqual(await t.count('.home .needs .nrow'), 1, 'Jira down shows on day one');
+  const n = await t.page.$$eval('.hdr .badge, .tabbar .badge', (els) => els.map((e) => +e.textContent.replace(/\D/g, '')).find(Boolean));
+  assert.strictEqual(n, 1, 'the tab counts it too');
+  assert.strictEqual(await t.page.innerText('[data-val="needs-count"]'), '1', 'Home and the tab agree');
+  await t.sim('Jira works again');
+  assert.strictEqual(await t.count('.needs'), 0, 'gone when Jira is back');
+});
+/* Synthesis 6: the check, why and mine sentences follow live state. */
+both('answers-follow-live-state', async (t) => {
+  await t.ask('Check my workflows');
+  assert.strictEqual(await t.reply(), 'You have 3 workflows. 2 stopped and 1 is waiting for a yes.');
+  await t.click('.thread .wfcheck [data-act="retryIssues"]'); await t.wait(400);
+  await t.go('home');
+  assert.strictEqual(await t.reply(), 'You have 3 workflows. 1 stopped, 1 is waiting for a yes and 1 is on.', 'the sentence re-reads the state the card shows');
+  await t.newChat(); await t.ask('Why did Weekly closed-ticket summary stop?');
+  await t.click('.thread [data-act="report"]'); await t.click('[data-act="sendReport"]'); await t.page.keyboard.press('Escape'); await t.wait(200);
+  await t.caseFixed();
+  await t.click('.thread [data-act="retryNudge"]'); await t.wait(400); await t.go('home');
+  assert((await t.reply()).includes('hasn’t stopped'), `why follows the retry: ${await t.reply()}`);
+  await t.newChat(); await t.ask('What needs me?');
+  const before = await t.reply();
+  await t.ctl('user', 'bob'); await t.click('[data-act="run"][data-arg="sw"]'); await t.click('[data-act="approve"][data-arg="sw"]'); await t.ctl('user', 'alice'); await t.go('home');
+  assert.notStrictEqual(await t.reply(), before, 'mine re-counts after an approval');
+  assert.strictEqual((await t.reply()).match(/\d+/)[0], String(await t.count('.thread .needs .nrow')), 'the sentence and the rows agree');
+});
+/* Spec 5.5: the box waits while the Planner answers. */
+both('box-waits-while-answering', async (t) => {
+  await t.page.fill('[data-ask]', 'Check my workflows'); await t.page.keyboard.press('Enter'); await t.wait(60);
+  assert(await t.has('[data-ask][disabled]'), 'the box is disabled while the Planner answers');
+  assert.strictEqual(await t.page.getAttribute('[data-ask]', 'placeholder'), 'The Planner is answering', 'and labelled');
+  await t.wait(700);
+  assert(!(await t.has('[data-ask][disabled]')), 're-enabled after the answer');
+  assert.strictEqual(await t.page.getAttribute('[data-ask]', 'placeholder'), 'Ask for something else', 'the placeholder is back');
+});
+/* Synthesis 13: the ticket set follows the schedule, or becomes an amber choice; the footer wording; no "a yes" for her own click. */
+both('ticket-set-follows-schedule', async (t) => {
+  await t.ask('Every weekday at 8:00, sum up the new tickets');
+  assert((await t.card()).includes('tickets created in the last day'), 'a daily run reads the last day');
+  assert(/\bfilled\b/.test(await t.chip('tickets')), 'the period is filled in, not claimed as hers');
+  await t.newChat(); await t.ask(EX_SUMMARY);
+  assert((await t.card()).includes('tickets closed this week'), 'a weekly run reads this week');
+  await t.newChat(); await t.ask('Every weekday at 8:00, sum up the tickets we closed this week');
+  assert(/\bmissing\b/.test(await t.chip('tickets')), 'her week against a daily run is an amber choice');
+  assert((await t.card()).includes('Choose how far back it reads'), 'the note says why');
+  await t.page.selectOption('#fix-tickets', 'closed@day'); await t.wait(220);
+  assert((await t.card()).includes('tickets closed in the last day'), 'her choice sets the period');
+  await t.page.selectOption('#fix-project', 'MOCK'); await t.wait(220);
+  assert.strictEqual(await t.page.locator('.thread .pcard-f .note').innerText(), 'Nothing is unclear. Turn it on when you’re ready.', 'the footer names her click, not a yes');
+  assert(!/One yes turns it on/.test(source), 'no "a yes" for the Operator’s own click');
+});
+
 check('reduced-motion-stops-loops', () => {
   const rm = source.slice(source.indexOf('@media (prefers-reduced-motion: reduce)'));
   assert(/animation: none !important/.test(rm), 'reduced motion stops animations');

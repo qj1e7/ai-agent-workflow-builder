@@ -160,7 +160,7 @@ check('wf-n8n-start-planned-only', async (browser) => session(browser, 1280, asy
 both('wp-order-and-banner', async (t) => {
   await t.workflow('issues');
   const text = await t.text();
-  inOrder(text, ['Stopped', 'Morning new-ticket check', 'Finds the tickets created', 'Stopped today at 8:00. Jira didn’t answer, and it’s working again now.', 'Schedule', 'Every weekday at 8:00, Singapore time', 'Approval', 'any Approver except you', 'Recent activity', 'Technical details']);
+  inOrder(text, ['Stopped', 'Morning new-ticket check', 'Finds the tickets created', 'Stopped today at 8:00. Jira didn’t answer, and it’s answering again now.', 'Schedule', 'Every weekday at 8:00, Singapore time', 'Approval', 'any Approver except you', 'Recent activity', 'Technical details']);
   assert.strictEqual(await t.page.locator('.banner .btn.primary').innerText(), 'Retry the run', 'the banner carries the one primary action');
   assert.strictEqual(await t.count('main .btn.primary'), 1, 'one primary action on the page');
   assert((await t.page.locator('.factrows [data-act="editSched"]').innerText()).includes('Change'), 'Schedule has Change');
@@ -270,10 +270,10 @@ both('wp-technical-details', async (t) => {
   await t.workflow('issues');
   const d = t.page.locator('details.tech');
   assert.strictEqual(await d.getAttribute('open'), null, 'Technical details closed by default');
-  assert(!(await t.text()).includes('Reads Jira'), 'steps hidden until opened');
+  assert(!(await t.text()).includes('Reads the 50 newest tickets in Jira'), 'steps hidden until opened');
   await t.click('details.tech summary');
   const text = await t.page.innerText('details.tech');
-  inOrder(text, ['Steps', 'Reads Jira', 'No system access', 'Changes data, waits for a yes', 'Agents and tools', 'Planner', 'Jira reader', 'Search Jira']);
+  inOrder(text, ['Steps', 'Reads the 50 newest tickets in Jira', 'No system access', 'Changes data, waits for a yes', 'Agents and tools', 'Planner', 'Jira reader', 'Search Jira']);
   await t.noSideScroll('technical details'); await t.targets('technical details');
 });
 both('wp-recent-activity-opens-run', async (t) => {
@@ -322,7 +322,8 @@ both('run-stopped-four-answers', async (t) => {
   assert.strictEqual(await t.page.locator('#decision .btn.primary').innerText(), 'Report to support', 'a platform bug offers Report to support');
   await t.click('#decision [data-act="report"]'); await t.wait(200); await t.click('[data-act="sendReport"]'); await t.wait(200); await t.page.keyboard.press('Escape'); await t.wait(200);
   assert((await t.page.innerText('#decision')).includes('Case SUP-1042'), 'the case shows on the run page');
-  for (let i = 0; i < 3; i += 1) await t.sim('Support moves case');
+  /* Support moves the case on until it is fixed, however many stages the track has (round B hides the coding-agent stages). */
+  for (let i = 0; i < 4; i += 1) { await t.openTest(); if (!(await t.page.$('.testctl button:has-text("Support moves case")'))) { await t.closeTest(); break; } await t.closeTest(); await t.sim('Support moves case'); }
   assert.strictEqual(await t.page.locator('#decision .btn.primary').innerText(), 'Retry the run', 'after the fix, Retry the run');
   await t.click('#decision [data-act="retryNudge"]'); await t.wait(600);
   assert((await t.text()).includes('1 ticket is waiting for a yes'), 'the retried run waits for a yes');
@@ -471,7 +472,7 @@ both('needs-skips-paused', async (t) => {
 both('run-your-part-names-the-reason', async (t) => {
   await t.workflow('nudge'); await t.run('nudge');
   await t.click('#decision [data-act="report"]'); await t.wait(200); await t.click('[data-act="sendReport"]'); await t.wait(200); await t.page.keyboard.press('Escape'); await t.wait(200);
-  for (let i = 0; i < 3; i += 1) await t.sim('Support moves case');
+  for (let i = 0; i < 4; i += 1) { await t.openTest(); if (!(await t.page.$('.testctl button:has-text("Support moves case")'))) { await t.closeTest(); break; } await t.closeTest(); await t.sim('Support moves case'); }
   await t.click('#decision [data-act="retryNudge"]'); await t.wait(600);
   assert((await t.page.innerText('#decision')).includes('You set this up and retried this run, so another Approver must decide.'), 'the retried run says so');
   /* The review's request is waiting, so Bob declines it first. Then Alice starts a new review by hand. */

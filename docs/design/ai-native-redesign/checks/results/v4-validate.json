@@ -3,13 +3,13 @@
   "results": [
     {
       "name": "counts-agree",
-      "status": "PASS",
-      "detail": ""
+      "status": "FAIL",
+      "detail": "normal week: Home says 5, but See all null"
     },
     {
       "name": "card-agrees",
-      "status": "PASS",
-      "detail": ""
+      "status": "FAIL",
+      "detail": "page.selectOption: Timeout 8000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#fix-tickets')\u001b[22m\n\u001b[2m    - locator resolved to <select id=\"fix-tickets\" data-fix=\"tickets\" aria-label=\"Which tickets: Tickets closed this week, your words. Change it\">…</select>\u001b[22m\n\u001b[2m  - attempting select option action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible and enabled\u001b[22m\n\u001b[2m      - did not find some options\u001b[22m\n\u001b[2m    - retrying select option action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible and enabled\u001b[22m\n\u001b[2m      - did not find some options\u001b[22m\n\u001b[2m    - retrying select option action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    16 × waiting for element to be visible and enabled\u001b[22m\n\u001b[2m       - did not find some options\u001b[22m\n\u001b[2m     - retrying select option action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n"
     },
     {
       "name": "roles-bob-creates-nothing",
@@ -34,17 +34,17 @@
     {
       "name": "safety-words",
       "status": "FAIL",
-      "detail": "1 unallowed: [agent writer] jiraComp in button.chip: “Put tickets in the Platform component”"
+      "detail": "locator.click: Timeout 8000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[data-act=\"setTab\"][data-arg=\"usage\"]').first()\u001b[22m\n"
     },
     {
       "name": "preview-tags-planned",
       "status": "FAIL",
-      "detail": "12 planned parts without a Planned tag: [run sw] registries in div.st-label: “Check vulnerabilities” || [run sw] registries in div.cmsg-bubble: “14 tools to check. I’m bringing in the Version checker, the Vulnerability checker and the Ticket writer.” || [run sw] registries in span.: “Version checker, Vulnerability checker and Ticket writer joined” || [run sw] access in div.cmsg-bubble: “I read each tool’s registry (Maven Central, PyPI, Docker Hub) and cross-checked GitHub. Log4j core, LangGraph and FastAPI have newer version” || [run sw] registries in div.cmsg-bubble: “I read each tool’s registry (Maven Central, PyPI, Docker Hub) and cross-checked GitHub. Log4j core, LangGraph and FastAPI have newer version” || [run sw] registries in span.cmsg-who: “Vulnerability checker” || [run sw] registries in div.cmsg-bubble: “I matched the versions we run in OSV, read the official records from NVD, checked vendor advisories, and checked CISA’s list of actively exp” || [run sw] namedApprovers in span.: “Asked Bob in Teams. No answer by Mon 26 Oct, 13:41, so Alice, the backup, was asked too. Carol can’t approve, because Carol’s schedule start” || [teams] registries in li.: “Upgrade Log4j core to 2.25.2 (urgent: critical and actively exploited)” || [teams] registries in dd.: “Newer versions on the registries and GitHub, and 4 known vulnerabilities in Log4j core 2.14.1.” || [bob home] registries in b.: “Log4j core 2.14.1 → 2.25.2, urgent: critical and actively exploited” || [bob home] namedApprovers in span.: “You were asked first on Mon 26 Oct, 9:41. Alice, the backup, was asked too on Mon 26 Oct, 13:41. If nobody says yes by Wed 28 Oct, 9:41, it ”"
+      "detail": "4 planned parts without a Planned tag: [teams] access in dd.: “Quarterly access review, set up by Carol” || [teams] access in li.: “Remove Jun Wei: GitLab” || [teams] access in li.: “Remove Priya: the admin tools” || [teams] access in li.: “Remove Marcus: Entra ID”"
     },
     {
       "name": "refusals",
-      "status": "FAIL",
-      "detail": "“approve it automatically” alone: not refused, the Planner said “I can’t help with that here. I set up tasks your team repeats. Here’s what I can do.” || “approve it automatically” after a card: not refused, the Planner said “I can’t help with that here. I set up tasks your team repeats. Here’s what I can do.” || “approve it automatically” in the request: not refused, the Planner said “Here’s what I understood. I filled in what I could.”"
+      "status": "PASS",
+      "detail": ""
     },
     {
       "name": "tasks-T1-T15",
@@ -63,18 +63,18 @@
     },
     {
       "name": "down-state-honest",
-      "status": "FAIL",
-      "detail": "with Jira down, the AI troubleshooter on Workflows says Jira is “working again now” and calls a retry safe"
+      "status": "PASS",
+      "detail": ""
     },
     {
       "name": "one-version-per-fact",
-      "status": "FAIL",
-      "detail": "FastAPI’s newest version differs by screen: {\"watchlistRow\":\"0.120.2\",\"watchlistHistory\":\"0.120.1\",\"approvalPanel\":\"0.120.1\",\"teamsCard\":\"0.120.1\"}"
+      "status": "PASS",
+      "detail": ""
     },
     {
       "name": "keyboard-primary-actions",
-      "status": "PASS",
-      "detail": ""
+      "status": "FAIL",
+      "detail": "D Set that up NOT REACHED"
     },
     {
       "name": "menu-keys",
