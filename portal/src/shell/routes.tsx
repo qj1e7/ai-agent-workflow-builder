@@ -29,6 +29,7 @@ export interface PageEntry {
   readonly lead: Words
   readonly inMenu: boolean
   readonly forOperators?: boolean
+  readonly operatorOnly?: boolean
 }
 
 export const PAGE_IDS = ['home', 'workflows', 'software', 'agents', 'new', 'jira', 'settings'] as const
@@ -70,6 +71,7 @@ export const PAGES: Readonly<Record<PageId, PageEntry>> = {
     heading: 'Agent library',
     lead: 'The agents your team can use. For each workflow, the Planner picks the ones it needs. An agent can use only the tools on its card, and anything that changes data waits for a yes.',
     inMenu: true,
+    operatorOnly: true,
   },
   new: {
     path: NEW_WORKFLOW_PATH,
@@ -125,8 +127,11 @@ function Lazy({ children }: { children: ReactNode }) {
 export const MENU_PAGE_IDS: readonly PageId[] = PAGE_IDS.filter((id) => PAGES[id].inMenu)
 
 export function menuFor(operator: boolean): readonly PageId[] {
-  return MENU_PAGE_IDS.filter((id) => operator || PAGES[id].forOperators !== true)
+  return MENU_PAGE_IDS.filter((id) => operator || (PAGES[id].operatorOnly !== true && PAGES[id].forOperators !== true))
 }
+
+/** The tab that carries the Needs you count: Workflows holds the list for an Operator, Home for an Approver who is not one. */
+export const needsTab = (operator: boolean): PageId => (operator ? 'workflows' : 'home')
 
 export function wordsOf(words: Words, context: PageContext): string {
   return typeof words === 'function' ? words(context) : words

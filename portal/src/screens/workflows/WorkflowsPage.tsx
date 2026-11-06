@@ -1,10 +1,11 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { Link, NavigationType, useLocation, useNavigate, useNavigationType } from 'react-router'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
+import { useHome } from '../../api/homeQueries'
 import { useDisplayName } from '../../api/people'
 import { useMe, useRuns, useUseCases } from '../../api/queries'
-import type { Me, RunView, UseCaseView } from '../../api/types'
+import type { HomeOut, Me, RunView, UseCaseView } from '../../api/types'
 import { useMoveWorkflow, useRereadWorkflow } from '../../api/workflowQueries'
 import { PageHead } from '../../shell/PageHead'
 import { Button, ButtonLink } from '../../ui/Button'
@@ -12,6 +13,9 @@ import { useFocusWhenReady } from '../../ui/focus'
 import { FROM_LIST } from '../../ui/fromList'
 import { IconSearch } from '../../ui/icons'
 import { Toast, UNDO_ID, type ToastMessage } from '../../ui/Toast'
+import { moreWords, needsOf } from '../home/home'
+import { NeedsSection, useArrival } from '../home/NeedsSection'
+import homeStyles from '../home/Home.module.css'
 import { useArrivalScroll } from './arrival'
 import { Faces, StatusPills } from './Status'
 import { agentsOf, changeProblem, changeWords, FILTERS, lineWhen, meansOutOfDate, nextRunWords, pressChange, REFRESH_MS, rowsOf, runFact, viewerOf, workflowPath, type Filter, type Row, type RunFact } from './workflow'
@@ -228,11 +232,28 @@ function Loaded({ handedOver, now, me, useCases, runs, runsFailed }: LoadedProps
   )
 }
 
+function NeedsYou({ now }: { now: Date }) {
+  const home = useHome()
+  return home.data ? <NeedsYouLoaded home={home.data} now={now} /> : null
+}
+
+function NeedsYouLoaded({ home, now }: { home: HomeOut; now: Date }) {
+  const needs = useMemo(() => needsOf(home), [home])
+  const arrival = useArrival(needs.shown.map((need) => need.key))
+  const more = moreWords(needs.more)
+  return (
+    <div className={styles['needsYou']}>
+      <NeedsSection needs={needs} now={now} arrival={arrival} more={more ? <p className={homeStyles['more']}>{more}</p> : null} whenNone={null} />
+    </div>
+  )
+}
+
 export function WorkflowsPage({ heading, lead, now }: { heading: string; lead: string; now: Date }) {
   const handedOver = useDeletedHandedOverOnce()
   return (
     <>
       <PageHead heading={heading} lead={lead} movesFocus={handedOver !== null} />
+      <NeedsYou now={now} />
       <WorkflowsBody handedOver={handedOver} now={now} />
     </>
   )

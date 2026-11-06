@@ -39,12 +39,15 @@ async function loaded(page: Page): Promise<void> {
   await expect(drawn.first()).toBeVisible()
 }
 
+/** A menu link's name, which carries ", N need you" when something waits for the person. */
+const linkName = (label: string) => new RegExp(`^${label}(, \\d+ need you)?$`)
+
 test('Home greets the signed-in person and the menu reads Home, Workflows, Software watchlist, Agent library, New workflow', async ({ page }, info) => {
   await page.goto('/')
   await expect(heading(page)).toHaveText(GREETING('Alice'))
   await expect(page.getByRole('banner')).toContainText('Alice')
   await expect(page.getByRole('banner')).toContainText('Operator and Approver')
-  await expect(mainMenu(page).getByRole('link')).toHaveText(MENU.map((item) => item.label))
+  await expect(mainMenu(page).getByRole('link')).toHaveText(MENU.map((item) => linkName(item.label)))
   await expect(mainMenu(page).getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page')
   await expect(page).toHaveTitle(/^Good (morning|afternoon|evening)! Alice · AI Workflow Builder$/)
   await shot(page, info, 'p1-01-home')
@@ -54,12 +57,12 @@ test('each menu item changes the URL and opens a page with its own heading', asy
   await slowHome(page)
   await page.goto('/settings')
   for (const item of MENU) {
-    await mainMenu(page).getByRole('link', { name: item.label, exact: true }).click()
+    await mainMenu(page).getByRole('link', { name: linkName(item.label) }).click()
     await expect(page).toHaveURL(new RegExp(`${item.path === '/' ? '/$' : `${item.path}$`}`))
     await expect(heading(page)).toHaveText(item.heading)
     await loaded(page)
     await expect(heading(page), 'a page change puts focus on the new heading, and it is still there once the page has loaded').toBeFocused()
-    await expect(mainMenu(page).getByRole('link', { name: item.label, exact: true })).toHaveAttribute('aria-current', 'page')
+    await expect(mainMenu(page).getByRole('link', { name: linkName(item.label) })).toHaveAttribute('aria-current', 'page')
     if (!item.built) await expect(page.getByRole('main')).toContainText('This page is not built yet.')
     await shot(page, info, `p1-02-menu-${item.label.toLowerCase().replaceAll(' ', '-')}`)
   }

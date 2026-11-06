@@ -5,7 +5,10 @@ import type { ApprovalItem, ConfirmationItem, DraftItem, HomeOut, StoppedItem, W
 import { count, withCurrentNames } from '../run/words'
 import { lineWhen, nextRunAt, runWhen, workflowPath } from '../workflows/workflow'
 
+/** What the list shows in full: the Workflows page, and Home for someone who is not an Operator. */
 export const NEEDS_SHOWN = 10
+/** Home for an Operator shows the most urgent few. Workflows has the rest. */
+export const HOME_NEEDS_SHOWN = 3
 
 export type Need =
   | { readonly kind: 'approval'; readonly key: string; readonly at: string; readonly item: ApprovalItem }
@@ -23,19 +26,19 @@ export interface Needs {
   readonly more: LeftOut
 }
 
-const KIND_ORDER: Record<Need['kind'], number> = { approval: 0, confirmation: 1, stopped: 2 }
+const KIND_ORDER: Record<Need['kind'], number> = { stopped: 0, approval: 1, confirmation: 2 }
 
 const urgentFirst = (a: Need, b: Need) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || b.at.localeCompare(a.at) || a.key.localeCompare(b.key)
 
 export const needsTotal = (home: HomeOut) => home.approvals_total + home.confirmations.length + home.stopped_total
 
-export function needsOf(home: HomeOut): Needs {
+export function needsOf(home: HomeOut, limit: number = NEEDS_SHOWN): Needs {
   const all: Need[] = [
     ...home.approvals.map((item): Need => ({ kind: 'approval', key: `approval:${item.approval_id}`, at: item.started_at, item })),
     ...home.confirmations.map((item): Need => ({ kind: 'confirmation', key: `confirmation:${item.confirmation_id}`, at: item.asked_at, item })),
     ...home.stopped.map((item): Need => ({ kind: 'stopped', key: `stopped:${item.run_id}`, at: item.stopped_at, item })),
   ].sort(urgentFirst)
-  const shown = all.slice(0, NEEDS_SHOWN)
+  const shown = all.slice(0, limit)
   const total = needsTotal(home)
   const approvalsShown = shown.filter((need) => need.kind === 'approval').length
   const approvals = home.approvals_total - approvalsShown
@@ -49,6 +52,8 @@ export function leadLine(total: number, workflows: number): string {
     ? 'Nothing needs you yet. When a workflow wants to change something, it shows up here and in Teams.'
     : 'Nothing needs you right now. Your workflows are running.'
 }
+
+export const seeAllWords = (total: number) => `See all ${total} on Workflows`
 
 export function moreWords({ approvals, others }: LeftOut): string | null {
   const left = approvals + others

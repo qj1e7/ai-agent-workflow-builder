@@ -1,18 +1,18 @@
 import { useMemo, useRef, useState } from 'react'
-import { Link, NavigationType, useNavigationType } from 'react-router'
+import { Link } from 'react-router'
 import { useHome } from '../../api/homeQueries'
 import { isOperator } from '../../api/me'
 import { useMe } from '../../api/queries'
 import type { HomeOut, WaitingItem } from '../../api/types'
 import { PageHead } from '../../shell/PageHead'
 import { Button } from '../../ui/Button'
-import { cx } from '../../ui/cx'
 import { useFocusWhenReady } from '../../ui/focus'
 import { IconClock } from '../../ui/icons'
 import { useGlide, usePresence } from '../../ui/presence'
-import { comingUpOf, HOW_IT_WORKS, leadLine, moreWords, needsOf, needsTotal, type Need, type Next } from './home'
+import { comingUpOf, HOME_NEEDS_SHOWN, HOW_IT_WORKS, leadLine, moreWords, NEEDS_SHOWN, needsOf, needsTotal, seeAllWords, type Next } from './home'
 import { FirstWorkflow } from './FirstWorkflow'
-import { DraftRow, NeedItem, WaitingRow } from './HomeItem'
+import { DraftRow, WaitingRow } from './HomeItem'
+import { NeedsSection, useArrival, type Arrival } from './NeedsSection'
 import styles from './Home.module.css'
 
 const HOW_ID = 'how-it-works'
@@ -54,16 +54,6 @@ export function HomePage({ heading, today, now }: HomePageProps) {
   )
 }
 
-function Count({ value }: { value: number }) {
-  const [first] = useState(value)
-  const changed = value !== first
-  return (
-    <span key={changed ? value : 'first'} className={cx(styles['count'], changed && styles['bump'])}>
-      {value}
-    </span>
-  )
-}
-
 function ComingNext({ next }: { next: Next }) {
   return (
     <div className={styles['coming']}>
@@ -89,41 +79,6 @@ function AllQuiet({ next }: { next: Next | null }) {
         'Nothing is scheduled yet.'
       )}
     </div>
-  )
-}
-
-interface Arrival {
-  readonly page: boolean
-  readonly arrive: (key: string) => boolean
-  readonly stagger: (key: string) => number
-}
-
-function useArrival(firstKeys: readonly string[]): Arrival {
-  const firstLoadOrBack = useNavigationType() === NavigationType.Pop
-  const [first] = useState(() => new Map(firstKeys.map((key, index) => [key, index])))
-  return {
-    page: !firstLoadOrBack,
-    arrive: (key) => !firstLoadOrBack || !first.has(key),
-    stagger: (key) => first.get(key) ?? 0,
-  }
-}
-
-function NeedsList({ needs, now, arrival }: { needs: readonly Need[]; now: Date; arrival: Arrival }) {
-  const list = useRef<HTMLUListElement>(null)
-  const shown = usePresence(needs, (need) => need.key)
-  useGlide(list)
-  return (
-    <ul ref={list} className={styles['needs']} aria-label="Needs you">
-      {shown.map(({ key, item, leaving, onAnimationEnd }, index) => (
-        <NeedItem
-          key={key}
-          need={item}
-          card={index === 0}
-          now={now}
-          motion={{ glide: key, arrive: arrival.arrive(key), stagger: arrival.stagger(key) + 1, leaving, onAnimationEnd }}
-        />
-      ))}
-    </ul>
   )
 }
 
@@ -165,8 +120,8 @@ function HowItWorks() {
 }
 
 function Loaded({ now, home, next }: { now: Date; home: HomeOut; next: Next | null }) {
-  const needs = useMemo(() => needsOf(home), [home])
   const operator = isOperator(useMe().data)
+  const needs = useMemo(() => needsOf(home, operator ? HOME_NEEDS_SHOWN : NEEDS_SHOWN), [home, operator])
   const dayOne = home.workflows === 0
   const firstWorkflow = dayOne && operator
   const arrival = useArrival([
@@ -176,19 +131,20 @@ function Loaded({ now, home, next }: { now: Date; home: HomeOut; next: Next | nu
   ])
   const [showHow, setShowHow] = useState(false)
   const focusHow = useFocusWhenReady(showHow, () => document.getElementById(HOW_ID))
-  const more = moreWords(needs.more)
+  const left = needs.total - needs.shown.length
+  const more = operator ? (left > 0 ? <Link to="/workflows">{seeAllWords(needs.total)}</Link> : null) : moreWords(needs.more)
 
   return (
     <>
       {firstWorkflow ? <FirstWorkflow /> : null}
       {firstWorkflow && needs.total === 0 ? null : (
-        <section className={cx(styles['section'], arrival.page && styles['arrive'])} aria-labelledby="needs-h">
-          <h2 id="needs-h">
-            Needs you <Count value={needs.total} />
-          </h2>
-          {needs.shown.length > 0 ? <NeedsList needs={needs.shown} now={now} arrival={arrival} /> : <AllQuiet next={next} />}
-          {more ? <p className={styles['more']}>{more}</p> : null}
-        </section>
+        <NeedsSection
+          needs={needs}
+          now={now}
+          arrival={arrival}
+          more={more ? <p className={styles['more']}>{more}</p> : null}
+          whenNone={<AllQuiet next={next} />}
+        />
       )}
       {home.waiting_on_others.length > 0 ? <WaitingList items={home.waiting_on_others} total={home.waiting_on_others_total} now={now} arrival={arrival} /> : null}
       {home.drafts.length > 0 ? (

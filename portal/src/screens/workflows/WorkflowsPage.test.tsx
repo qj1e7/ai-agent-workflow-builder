@@ -11,7 +11,9 @@ import { App } from '../../App'
 import { ApiError } from '../../api/client'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
-import type { Me, RunView, UseCaseView } from '../../api/types'
+import aliceHome from '../../../../contracts/fixtures/builder/home.alice.json'
+import type { HomeOut, Me, RunView, UseCaseView } from '../../api/types'
+import { needsTotal } from '../home/home'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
 const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
@@ -33,19 +35,21 @@ interface Setup {
   readonly useCases?: UseCaseView[] | Error | 'loading'
   readonly runs?: RunView[]
   readonly state?: unknown
+  readonly home?: HomeOut
 }
 
 /** The platform answers for the person asking. In these tests only Bob may decide the waiting run. */
 const asSeenBy = (me: Me, runs: RunView[]): RunView[] =>
   runs.map((run) => (run.state === 'awaiting_approval' ? { ...run, you_can_decide: me.id === 'bob' } : run))
 
-function render({ me = ALICE, useCases = [BUGS, WATCHLIST, LANGGRAPH], runs = RUNS, state }: Setup = {}): string {
+function render({ me = ALICE, useCases = [BUGS, WATCHLIST, LANGGRAPH], runs = RUNS, state, home }: Setup = {}): string {
   const session = createDevSession(null)
   const scope = session.cacheScope()
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   queryClient.setQueryData(['me', scope], me)
   queryClient.setQueryData(['dev-users'], [ALICE, BOB, CAROL])
   queryClient.setQueryData(['runs', scope], asSeenBy(me, runs))
+  if (home) queryClient.setQueryData(['home', scope], home)
   if (useCases instanceof Error) queryClient.getQueryCache().build(queryClient, { queryKey: ['use-cases', scope] }).setState({ status: 'error', error: useCases, fetchStatus: 'idle' })
   else if (useCases !== 'loading') queryClient.setQueryData(['use-cases', scope], useCases)
   return renderToStaticMarkup(
@@ -190,5 +194,25 @@ describe('after a delete', () => {
 
   it('shows no message on an ordinary visit', () => {
     expect(render()).not.toContain('toast-undo')
+  })
+})
+
+describe('Needs you at the top of Workflows', () => {
+  const HOME = aliceHome as HomeOut
+
+  it('lists what needs the person in full, with the same total as the tab', () => {
+    const html = render({ home: HOME })
+    const total = needsTotal(HOME)
+    const section = /<section[^>]*aria-labelledby="needs-h"[\s\S]*?<\/section>/.exec(html)?.[0] ?? ''
+    expect(text(section)).toContain(`Needs you ${total}`)
+    expect(section).toContain('data-home-item="stopped:run_01JB9"')
+    expect(html).toContain(`<span class="visually-hidden">, </span>${total}<span class="visually-hidden"> need you</span>`)
+    expect(html.indexOf('aria-labelledby="needs-h"')).toBeLessThan(html.indexOf('aria-label="Workflows"'))
+  })
+
+  it('shows no section when nothing needs the person', () => {
+    const quiet: HomeOut = { ...HOME, approvals: [], approvals_total: 0, confirmations: [], stopped: [], stopped_total: 0 }
+    expect(render({ home: quiet })).not.toContain('needs-h')
+    expect(render()).not.toContain('needs-h')
   })
 })

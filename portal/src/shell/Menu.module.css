@@ -112,3 +112,28 @@
 .new[aria-current='page']::after {
   display: none;
 }
+
+.count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--amber);
+  color: #1d1400;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  .tab {
+    position: relative;
+  }
+
+  .tab .count {
+    position: absolute;
+    top: 4px;
+    left: calc(50% + 6px);
+  }
+}
