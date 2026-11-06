@@ -6,7 +6,7 @@ Every new or changed screen, component or flow in the AI Workflow Builder follow
 
 ## How to use this
 
-1. **Design a new screen or component in the prototype first.** Today the prototype is `docs/design/portal-routines/prototype.html`, the build target `CLAUDE.md` names. It becomes `docs/design/ai-native-redesign/prototype.html` if the team adopts version 4. A change to an existing screen can go straight to the Portal.
+1. **Design a new screen or component in the prototype first.** The prototype is `docs/design/ai-native-redesign/prototype.html`, version 4, the build target since 7 Nov 2026. A change to an existing screen can go straight to the Portal.
 2. **Before you build, walk the checklist below.** Write down any principle you break on purpose, and why, in the design note or an ADR.
 3. **In the pull request,** say under Verification which principles applied and how each was checked. The PR template has the box.
 

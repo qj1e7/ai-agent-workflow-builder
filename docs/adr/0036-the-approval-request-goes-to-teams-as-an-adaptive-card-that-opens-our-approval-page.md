@@ -11,6 +11,7 @@ So the platform builds one Adaptive Card for each approval request, and both the
 ## The card
 
 - One function, `approval_card(notice)` in `platform-api/src/platform_api/orchestration/teams.py`, builds it. It shows the workflow's name, each write as the approval page lists it (at most 10, then "And 5 more"), what the agents found, who can decide each step, and who can't because the run is their own work.
+- The card names the workflow's owner, so an Approver can see at a glance whose work it is. Added 7 Nov 2026 with the AI-native redesign.
 - The button's address is absolute, built from `PUBLIC_BASE_URL`, because Teams opens it outside the Portal.
 - **Version 1.4.** Microsoft says Teams renders Adaptive Cards up to 1.6 for a bot. Reports on the Workflows webhook say 1.4 renders well and some 1.5 parts do not. The card uses nothing newer than 1.2, and a test checks each part against the version it needs.
 - **Text we did not write goes only in a `TextRun`.** That covers the agents' summary, the ticket titles, the workflow's name and people's names. The Adaptive Card schema says a `TextRun` has no markdown, so `**Approve now**` shows as typed and cannot pose as our own words. Our fixed headings are in a `TextBlock`, which Teams reads as markdown. The card has no `FactSet`, because a fact's value is markdown too. Each line is one line, cut to 300 characters.

@@ -38,8 +38,12 @@ What Operators see a use case called in the app. Always write "n8n workflow" for
 _Avoid_: Routine
 
 **Set-up card**:
-The Planner's reply on Home when it can do a request: the whole workflow filled in from the request, with every guess marked and what it can't know asked for. One yes turns it on.
+The Planner's reply on Home when it can do a request: the whole workflow filled in from the request, with every guess marked and what it can't know asked for. The Operator turns it on. Each write it makes still waits for an Approver's yes.
 _Avoid_: Wizard, form, New workflow (the old 4-step page)
+
+**Capability**:
+Something the platform can do for a workflow, such as reading Jira tickets. It is in exactly one state: Ready, Needs setup, Not answering, Planned or Unsupported. Every screen and the Planner read the same state.
+_Avoid_: Ability, feature (in the app)
 
 **Draft**:
 A set-up card that an Operator started and has not turned on, kept so they can come back to it. Only they see it, listed on Workflows. Always write "n8n draft" for an n8n workflow that is not published yet.
