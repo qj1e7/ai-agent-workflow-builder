@@ -37,8 +37,12 @@ _Avoid_: Job, recipe, routine
 What Operators see a use case called in the app. Always write "n8n workflow" for n8n's own workflows, and "Jira workflow" for a ticket's statuses.
 _Avoid_: Routine
 
+**Set-up card**:
+The Planner's reply on Home when it can do a request: the whole workflow filled in from the request, with every guess marked and what it can't know asked for. One yes turns it on.
+_Avoid_: Wizard, form, New workflow (the old 4-step page)
+
 **Draft**:
-A New workflow that an Operator started and has not finished, kept so they can come back to it. Only they see it. Always write "n8n draft" for an n8n workflow that is not published yet.
+A set-up card that an Operator started and has not turned on, kept so they can come back to it. Only they see it. Always write "n8n draft" for an n8n workflow that is not published yet.
 _Avoid_: Proposal (that is a run's write actions)
 
 **Paused**:
@@ -138,7 +142,7 @@ Any action that changes data in an external system, such as Jira, Confluence or 
 
 **Proposal**:
 The set of write actions that agents propose for one run. One approval request covers exactly one proposal, and the Approver approves it as a whole.
-_Avoid_: Plan, draft (a Draft is an unfinished New workflow)
+_Avoid_: Plan, draft (a Draft is a set-up card not yet turned on)
 
 **Approval gate**:
 The step that pauses a run before a write action until an Approver approves it in Teams.

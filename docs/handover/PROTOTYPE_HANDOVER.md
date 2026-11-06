@@ -152,7 +152,7 @@ https://claude.ai/artifact/KDxZZkF6BjHmW92YPa2XzU
 - **If the link asks you to sign in or doesn't load,** use the file copy below.
 
 **File copy (the same prototype):**
-- Path in the team's repository: `docs/design/portal-routines/prototype.html`. It is one self-contained file.
+- Path in the team's repository: `docs/design/portal-routines/v2/prototype.html`. It is one self-contained file.
 - **Open it directly:** double-click the file, or open it with `file://` in a browser.
 - **Or serve it locally:** from the folder that holds the file, run `python3 -m http.server 8765`, then open `http://127.0.0.1:8765/prototype.html`.
 - **Or host it:** the team can put it on any static host (for example GitHub Pages) to give you an http address.
@@ -699,7 +699,7 @@ The confirmed issues below describe version 2. They come from the developer's kn
 
 ### 7.1 Screenshots
 
-**Target A, version 2** (1280 px wide, light theme, test controls hidden), in `docs/design/portal-routines/`:
+**Target A, version 2** (1280 px wide, light theme, test controls hidden), in `docs/design/portal-routines/v2/`:
 
 | File | Screen |
 |---|---|

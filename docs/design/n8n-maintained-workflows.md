@@ -148,13 +148,13 @@ The [Portal prototype](portal-routines/prototype.html) shows this:
 ![The next run stopped before changing anything, and the AI troubleshooter offers Undo or Fix it in n8n](portal-routines/n8n-run-stopped.png)
 
 **Starting in n8n.**
-- Step 1 of New workflow has a quiet link: "Prefer to build it yourself? Start in n8n". It opens a new, empty n8n workflow in the person's own space.
+- The end of the Workflows list has a quiet link: "Prefer to build it yourself? Start in n8n". It opens a new, empty n8n workflow in the person's own space. Until 6 Nov it sat in step 1 of New workflow, which the Planner's box on Home replaced ([ADR 0037](../adr/0037-home-is-the-planners-chat-box-and-replaces-new-workflow.md)).
 - The Planner doesn't draft it.
 - When it is published, it appears on Workflows, marked Made in n8n. Any Approver on the team answers its requests until an Operator names Approvers.
-- The team chose this on 28 Oct 2026. The builder stays the main way in, and n8n is a choice.
-- The "Your workflow is on" screen also links to Open in n8n, for fine-tuning.
+- The team chose this on 28 Oct 2026. The Planner stays the main way in, and n8n is a choice.
+- The Planner's reply after Turn it on also links to Open in n8n, for fine-tuning.
 
-![Start a workflow in n8n, from step 1 of New workflow](portal-routines/new-in-n8n.png)
+![Start a workflow in n8n, from the end of the Workflows list](portal-routines/new-in-n8n.png)
 
 **Undo:**
 

@@ -1,6 +1,6 @@
 # Design skill audits of the prototype, 28 Oct 2026
 
-Four published design skills reviewed the clickable prototype, [`docs/design/portal-routines/prototype.html`](../../design/portal-routines/prototype.html). Each review read the code and drove the page in Chrome at desktop and phone widths. The fixes then went in one skill at a time, in this order.
+Four published design skills reviewed the clickable prototype, [`docs/design/portal-routines/v2/prototype.html`](../../design/portal-routines/v2/prototype.html). Each review read the code and drove the page in Chrome at desktop and phone widths. The fixes then went in one skill at a time, in this order.
 
 | Skill | Source | What it found | What changed |
 |---|---|---|---|
