@@ -34,13 +34,25 @@ The design note lists this as a later feature that needs NCS's agreement: "Havin
    A fix there must be written by a person. This keeps an agent from weakening the controls that check it.
 4. **A review agent checks every fix, and a person approves it.**
    - **The review agent.** It comes from a different model family from the coding agent, so they are less likely to share a blind spot. It reviews every agent pull request and posts its findings. Its check must pass, but it never counts as an approval.
+   - **Its review summary, in plain words.** The review agent writes one summary per pull request, in a fixed shape:
+     - what was wrong, with the run and the failing test as evidence;
+     - what the fix changes: which files, how many lines, and which parts of the app a person would notice;
+     - a risk level, Low, Medium or High, with the reason. A change near Jira writes is never Low;
+     - the checks: the new test failing before and passing after, then lint, unit tests, SAST, DAST and the AI evals;
+     - what the reviewer should look at closely, each point linked to its lines;
+     - what it could not check, for example how the fix behaves against the real Jira;
+     - its advice: looks safe to merge, or needs changes.
+   - **Where the summary goes.**
+     - On the pull request, for the person who reviews and merges the code. Every point it raises must be resolved before the merge, through the code host's "resolve every conversation" rule.
+     - Into the support case in the app, for the Operator who reported the problem and for the person who approves the production deploy. For example: "A fix is ready. The review agent rates it Low risk and found nothing to change. Waiting for review by the platform developers."
+     - The summary is help for the reader, not the check, the same rule as the approval panel (redesign spec section 10.4). Only the code reviewer can test it against the code, so only their review counts as the check on the code. Someone who can't read code may use the summary to understand a fix and decide when it goes live. They don't approve the code itself.
    - **Branch protection.** No one pushes straight to main. A pull request merges only with:
      - one approving review from a person listed in `CODEOWNERS`, the platform's code reviewers;
      - green CI: lint, unit tests, SAST, DAST, and the AI evals;
      - the review agent's check.
 
      Bot accounts get no merge rights.
-5. **Deploying keeps today's human step.** A merge builds the container images and deploys them to the test environment, where smoke tests run. Production needs an approval from a named person, through the deploy environment's reviewers (today's `deploy.yml` is already started by hand). Rollback means redeploying the previous pinned image.
+5. **Deploying keeps today's human step.** A merge builds the container images and deploys them to the test environment, where smoke tests run. Production needs an approval from a named person, through the deploy environment's reviewers (today's `deploy.yml` is already started by hand). That person sees the review agent's summary and the developer's review together, and decides when the fix goes live. Rollback means redeploying the previous pinned image.
 6. **The app shows the case and keeps two roles.** The support case in the app reads its status from the code host:
    - Reported;
    - Agents are writing a fix;
