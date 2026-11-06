@@ -316,6 +316,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .qrow-why { flex-basis: 100%; font-size: 0.875rem; color: var(--muted); }
 .qrow-why b { color: var(--ink); font-weight: 600; }
 @media (max-width: 600px) { .qrow { grid-template-columns: 20px minmax(0, 1fr); } .qrow > .btn { grid-column: 2; justify-self: start; } }
+/* Needs you on Home: what happened, why in one line, and one primary action (spec 5.1). */
+.nrow { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 20px; }
+.nrow + .nrow { border-top: 1px solid var(--rule); }
+.nrow .ico { width: 20px; height: 24px; display: grid; place-items: center; align-self: start; }
+.nrow .ico svg { width: 20px; height: 20px; }
+.nrow-text { display: grid; gap: 2px; min-width: 0; }
+.nrow-why { font-size: 0.875rem; color: var(--muted); }
+@media (max-width: 600px) { .nrow { grid-template-columns: 20px minmax(0, 1fr); } .nrow > .btn { grid-column: 2; justify-self: start; } }
 .rows { display: grid; border-top: 1px solid var(--rule); }
 /* Plain rows share the 6px inset of clickable rows, so their text lines up in a mixed list. */
 .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 6px; border-bottom: 1px solid var(--rule); }
@@ -328,18 +336,17 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .quiet-act { justify-content: center; margin-top: 14px; }
 .quiet-line { color: var(--muted); margin-bottom: 8px; }
 
-/* Home: the Planner, every day. Its face above one question and the box, then the conversation. */
+/* Home: the Planner, every day. The Visor bot sits beside the greeting and its one-line state, then the box (spec 5.1). */
 .planner { display: grid; gap: 24px; }
-.welcome { display: grid; justify-items: center; text-align: center; gap: 10px; padding-top: 16px; }
-.welcome h1 { font-size: 2rem; max-width: 22ch; }
-.welcome .lead { color: var(--muted); font-size: 1.05rem; max-width: 52ch; }
-.welcome .face { width: 128px; height: 128px; }
+.welcome { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 20px; padding-top: 8px; }
+.welcome h1 { font-size: 1.75rem; }
+.welcome .lead { color: var(--muted); font-size: 1.05rem; max-width: 52ch; margin-top: 4px; }
+.welcome .face { width: 96px; height: 96px; }
 /* Once the conversation starts, the welcome folds to one line, so the thread has the page. */
-.welcome.compact { justify-items: start; text-align: left; padding-top: 0; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 12px; }
-.welcome.compact h1 { font-size: 1.25rem; max-width: none; }
-.welcome.compact .lead { display: none; }
+.welcome.compact { column-gap: 12px; padding-top: 0; }
+.welcome.compact h1 { font-size: 1.25rem; }
 .welcome.compact .face { width: 52px; height: 52px; }
-@media (max-width: 600px) { .welcome .face { width: 96px; height: 96px; } .welcome h1 { font-size: 1.5rem; } }
+@media (max-width: 600px) { .welcome { column-gap: 14px; } .welcome .face { width: 72px; height: 72px; } .welcome h1 { font-size: 1.375rem; } }
 .composer { display: flex; align-items: flex-end; gap: 8px; padding: 10px 10px 10px 16px; border: 1px solid var(--edge); border-radius: 12px; background: var(--surface); }
 .composer:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 .composer textarea { flex: 1; min-width: 0; min-height: 0; border: 0; resize: none; background: none; padding: 7px 0; line-height: 1.45; max-height: 160px; font-size: 1.0625rem; }
@@ -363,6 +370,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .abil .cap-note { display: block; font-size: 0.8rem; color: var(--muted); font-weight: 400; }
 /* No AI model: the Planner's sorry pose and one way forward (spec 5.4). */
 .welcome.offline h1 { font-size: 1.5rem; max-width: 30ch; }
+.welcome.offline .btns { margin-top: 12px; }
 .composer.team-ask { margin-top: 16px; }
 .draft-row .btns { gap: 6px; }
 .tcard { margin-top: 8px; }
@@ -2129,20 +2137,22 @@ details > .m-close { animation: fold 140ms ease-in both; }
       if (has('nudge') && S.nudge === 'failed' && S.report === 0) out.push({ kind: 'bad', icon: I.alert(22), title: 'Weekly closed-ticket summary stopped', meta: 'Fri 23 Oct, 16:00', body: '', why: 'This is a problem in the platform, not in your workflow. You can’t fix it from here. Report it and support gets everything they need.', actions: `<button class="btn primary" data-act="report" data-unbuilt="Report to support">Report to support</button><button class="btn" data-act="run" data-arg="nudge">See the run</button>` });
       if (has('nudge') && S.nudge === 'failed' && S.report === 4) out.push({ kind: 'ok', icon: I.check(22), title: 'The fix for Weekly closed-ticket summary is live', meta: `Case ${S.supportCase.id} · fixed by Dana`, body: `<p class="small muted">Retry the run to catch up on last week.</p>`, actions: `<button class="btn primary" data-act="retryNudge">Retry the run</button>` });
     }
-    if (has('sw') && S.sw === 'waiting' && canApprove('sw')) out.push({ kind: 'wait', icon: I.shield(22), title: `3 upgrade tickets are waiting for your yes${urgentNote()}`, meta: 'Keep our software up to date · Software watchlist, Mon 26 Oct, 9:00', body: `<ul class="mini-list"><li>${shows('registries') ? '<b>Log4j core 2.14.1 → 2.25.2, urgent: critical and actively exploited</b>' : 'Log4j core 2.14.1 → 2.25.2'}</li><li>LangGraph 1.2.14 → 1.2.17</li><li>FastAPI 0.118.0 → 0.120.1</li></ul>${askLineHtml(req('sw'), u)}`, actions: `<button class="btn primary" data-act="run" data-arg="sw">Review and decide</button>` });
+    if (has('sw') && S.sw === 'waiting' && canApprove('sw')) out.push({ kind: 'wait', rank: urgentNote() ? 1 : 2, icon: I.shield(22), title: `3 upgrade tickets are waiting for your yes${urgentNote()}`, meta: 'Keep our software up to date · Software watchlist, Mon 26 Oct, 9:00', body: `<ul class="mini-list"><li>${shows('registries') ? '<b>Log4j core 2.14.1 → 2.25.2, urgent: critical and actively exploited</b>' : 'Log4j core 2.14.1 → 2.25.2'}</li><li>LangGraph 1.2.14 → 1.2.17</li><li>FastAPI 0.118.0 → 0.120.1</li></ul>${askLineHtml(req('sw'), u)}`, actions: `<button class="btn primary" data-act="run" data-arg="sw">Review and decide</button>` });
     if (has('nudge') && S.nudge === 'waiting' && canApprove('nudge')) out.push({ kind: 'wait', icon: I.shield(22), title: '1 summary ticket is waiting for your yes', meta: 'Weekly closed-ticket summary · retried today after the fix', body: askLineHtml(req('nudge'), u), actions: `<button class="btn primary" data-act="run" data-arg="nudge">Review and decide</button>` });
     if (has('conf') && S.conf === 'waiting' && canApprove('conf')) out.push({ kind: 'wait', icon: I.shield(22), title: confWrite(S.nr).needTitle, meta: `${esc(S.nr.name)} · test run by Alice`, body: askLineHtml(req('conf'), u), actions: `<button class="btn primary" data-act="run" data-arg="conf">Review and decide</button>` });
-    if (has('conf') && S.conf === 'declined' && u === 'alice') out.push({ kind: 'wait', icon: I.x(22), title: `${nm(S.confBy)} declined your test run`, meta: `${esc(S.nr.name)} · nothing was written`, body: '', actions: '<button class="btn primary" data-act="run" data-arg="conf">See the run</button><button class="btn" data-act="testRun">Do a test run again</button>' });
-    if (has('conf') && S.conf === 'expired' && u === 'alice') out.push({ kind: 'wait', icon: I.clock(22), title: 'Nobody answered on your test run', meta: `${esc(S.nr.name)} · stopped ${at(req('conf').expiresAt)}`, body: `<p class="small muted">${whoAnd(askedOf(req('conf')))} didn’t answer in time, so nothing was written. Run it again${shows('namedApprovers') ? ', or choose other Approvers' : ''}.</p>`, actions: `<button class="btn primary" data-act="testRun">Do a test run again</button>${changeApproversBtn('conf', 'apprFromRun')}` });
+    if (has('conf') && S.conf === 'declined' && u === 'alice') out.push({ kind: 'wait', rank: 4, icon: I.x(22), title: `${nm(S.confBy)} declined your test run`, meta: `${esc(S.nr.name)} · nothing was written`, body: '', actions: '<button class="btn primary" data-act="run" data-arg="conf">See the run</button><button class="btn" data-act="testRun">Do a test run again</button>' });
+    if (has('conf') && S.conf === 'expired' && u === 'alice') out.push({ kind: 'wait', rank: 4, icon: I.clock(22), title: 'Nobody answered on your test run', meta: `${esc(S.nr.name)} · stopped ${at(req('conf').expiresAt)}`, body: `<p class="small muted">${whoAnd(askedOf(req('conf')))} didn’t answer in time, so nothing was written. Run it again${shows('namedApprovers') ? ', or choose other Approvers' : ''}.</p>`, actions: `<button class="btn primary" data-act="testRun">Do a test run again</button>${changeApproversBtn('conf', 'apprFromRun')}` });
     Object.entries(S.roles).filter(([w, r]) => r.pendingAp && PEOPLE[u].ap && u !== r.pendingBy && u !== w).forEach(([w]) => out.push({ kind: 'tool', icon: I.shield(22), title: `Confirm ${nm(w)} as an Approver`, meta: `Asked by ${nm(S.roles[w].pendingBy)}`, body: '<p class="small muted">Approvers say yes or no to the changes a workflow wants to make.</p>', actions: '<button class="btn primary" data-act="setGo" data-arg="people">Review in Settings</button>' }));
-    if (op) expiring().forEach((k) => out.push({ kind: 'wait', icon: I.clock(22), title: `The ${CONNS[k].name} key expires in ${S.conns[k].days} days`, meta: `Expires ${S.conns[k].expires}`, body: `<p class="small muted">Replace it before then, or everything that uses ${CONNS[k].name} stops.</p>`, actions: '<button class="btn primary" data-act="setGo" data-arg="connections">Replace it in Settings</button>' }));
-    if (op && usagePct() >= 80) out.push({ kind: 'wait', icon: I.alert(22), title: usagePct() >= 100 ? 'The AI usage limit is reached' : `AI usage is at ${usagePct()}% of this month’s limit`, meta: `US$${usage().cost.toFixed(2)} of US$${S.usageLimit}`, body: `<p class="small muted">${usagePct() >= 100 ? 'Agents have stopped asking the AI model until the 1st of next month, or until someone raises the limit.' : 'At 100%, agents stop asking the AI model until the 1st of next month.'}</p>`, actions: '<button class="btn primary" data-act="setGo" data-arg="usage">See usage in Settings</button>' });
+    if (op) expiring().forEach((k) => out.push({ kind: 'wait', rank: 3, icon: I.clock(22), title: `The ${CONNS[k].name} key expires in ${S.conns[k].days} days`, meta: `Expires ${S.conns[k].expires}`, body: `<p class="small muted">Replace it before then, or everything that uses ${CONNS[k].name} stops.</p>`, actions: '<button class="btn primary" data-act="setGo" data-arg="connections">Replace it in Settings</button>' }));
+    if (op && usagePct() >= 80) out.push({ kind: 'wait', rank: 3, icon: I.alert(22), title: usagePct() >= 100 ? 'The AI usage limit is reached' : `AI usage is at ${usagePct()}% of this month’s limit`, meta: `US$${usage().cost.toFixed(2)} of US$${S.usageLimit}`, body: `<p class="small muted">${usagePct() >= 100 ? 'Agents have stopped asking the AI model until the 1st of next month, or until someone raises the limit.' : 'At 100%, agents stop asking the AI model until the 1st of next month.'}</p>`, actions: '<button class="btn primary" data-act="setGo" data-arg="usage">See usage in Settings</button>' });
     if (S.modelPending && PEOPLE[u].ap && u !== S.modelPending.byId) out.push({ kind: 'tool', icon: I.shield(22), title: 'Confirm a new AI model address', meta: `${esc(S.modelPending.address)} · entered by ${nm(S.modelPending.byId)}`, body: '<p class="small muted">Agents would send their prompts to this address. Until you confirm it, runs keep using the current model.</p>', actions: '<button class="btn primary" data-act="go" data-arg="settings">Review in Settings</button>' });
     if (shows('toolDraft') && S.jiraComp === 'asked' && canOkTool() && u !== S.jiraCompAsker) out.push({ kind: 'tool', icon: I.tool(22), title: `OK a new tool: ${TOOLS.jiraComp[0]}`, meta: `Asked by ${nm(S.jiraCompAsker)} for the Ticket writer`, body: `<p class="small muted">It changes data, so an Approver must OK it once before any agent can use it.</p>${PLANNED_TAG}`, actions: '<button class="btn primary" data-act="toolOpen" data-arg="jiraComp">Review the tool</button>' });
     if (shows('toolDraft') && S.jiraComp === 'ok' && u === S.jiraCompAsker && !S.jiraCompSeen) out.push({ kind: 'ok', icon: I.check(22), title: `${nm(S.jiraCompBy)} OK’d the new tool. You can give it to the Ticket writer.`, meta: TOOLS.jiraComp[0], body: PLANNED_TAG, actions: '<button class="btn primary" data-act="toolAddTo" data-arg="writer">Give it to the Ticket writer</button>' });
     if (op) Object.entries(S.n8nChg).forEach(([id, c]) => out.push({ kind: 'wait', icon: I.alert(22), title: `${nm(c.by)}’s change in n8n removed Ask for a yes`, meta: `${esc(R(id).name)} · published ${c.when}`, body: '<p class="small muted">The next run will stop before it changes anything. Undo the change, or put the step back in n8n.</p>', actions: `<button class="btn primary" data-act="n8nUndo" data-arg="${id}">Undo ${nm(c.by)}’s change</button><button class="btn" data-act="workflow" data-arg="${id}">See the workflow</button>` }));
-    return out;
+    /* Most urgent first (spec 5.1): stopped runs, then approvals (urgent ones first), then keys and usage, then confirmations. */
+    return out.sort((a, b) => (a.rank ?? NEED_RANK[a.kind]) - (b.rank ?? NEED_RANK[b.kind]));
   }
+  const NEED_RANK = { bad: 0, wait: 2, ok: 2, tool: 4 };
   /* Change who approves exists only with named Approvers (ADR 0024), so it is tagged Planned wherever it shows. */
   const changeApproversBtn = (id, act = 'editAppr', cls = 'btn') => (shows('namedApprovers') ? `<button class="${cls}" data-act="${act}" data-arg="${id}" data-unbuilt="Named Approvers (ADR 0024)">${cls.includes('sm') ? I.edit() : ''}Change who approves ${PLANNED_TAG}</button>` : '');
   function says(text) { return `<div class="says">${face('trouble', 32)}<div><b>AI troubleshooter</b>${text}</div></div>`; }
@@ -2186,34 +2196,78 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const comingUp = () => routineIds().map((id) => [id, R(id)]).sort((a, b) => (S.paused[a[0]] ? 1 : 0) - (S.paused[b[0]] ? 1 : 0) || a[1].sort - b[1].sort);
   const nextUp = (first) => `<button class="linkbtn" data-act="workflow" data-arg="${first[0]}">${esc(first[1].name)}</button>, ${first[1].next}`;
 
-  /* Home for an Approver who can't set up workflows: what waits for their yes, with no box. */
+  /* Needs you on Home (spec 5.1): one line each, most urgent first, with one primary action. The "what" is the item's
+     title; the "why" is the troubleshooter's first sentence, or where it came from. Also the Planner's "what needs me". */
+  const firstSentence = (s) => s.replace(/<[^>]+>/g, '').split(/(?<=\.)\s/)[0];
+  const oneAction = (html) => firstButton(html).replace('class="btn sm"', 'class="btn primary sm"');
+  function needRow(t, i) {
+    return `<li class="nrow" data-flip="n:${keyOf(t.title)}" data-stagger style="--i:${i}"><span class="ico ${t.kind}">${t.icon}</span><div class="nrow-text"><b>${t.title}</b><span class="nrow-why">${t.why ? firstSentence(t.why) : t.meta}</span></div>${oneAction(t.actions)}</li>`;
+  }
+  function needsStrip(items, max = 3) {
+    const n = items.length;
+    return `<section class="section needs" aria-labelledby="needs-h" data-flip-group="needs" data-unbuilt="Needs you on Home">
+      <h2 id="needs-h">Needs you <span class="count" data-val="needs-count">${n}</span></h2>
+      <ul class="queue" data-flip-group="nrows">${items.slice(0, max).map(needRow).join('')}</ul>
+      ${n > max ? `<p class="small"><button class="linkbtn" data-act="go" data-arg="workflows">See all ${n} on Workflows</button></p>` : ''}
+    </section>`;
+  }
+
+  /* Home for an Approver who can't set up workflows (spec 5.3): what waits for their yes, with no box. */
   function approverHome() {
     const items = needs();
     const n = items.length;
+    const waits = items.filter((t) => t.kind === 'wait').length;
     const coming = comingUp();
     const firstLive = coming.find(([id]) => !S.paused[id]);
     const line = !coming.length ? 'Nothing needs you yet. When a workflow wants to change something, it shows up here and in Teams.'
-      : n === 0 ? 'Nothing needs you right now. Your team’s workflows are running.' : `${n === 1 ? '1 thing needs' : `${n} things need`} you.`;
+      : n === 0 ? 'Nothing needs you right now.' : n === waits ? `${n === 1 ? '1 request is' : `${n} requests are`} waiting for your yes.` : `${n === 1 ? '1 thing needs' : `${n} things need`} you.`;
     return `<div class="home">
-      <div class="hello"><h1 tabindex="-1">Good morning, ${me().name}</h1><p>Tuesday 27 October. ${line}</p></div>
+      <div class="hello"><h1 tabindex="-1">Good morning! ${me().name}</h1><p>${line}</p></div>
       ${n ? needsSection(items) : `<div class="quiet"><b>All quiet</b>${firstLive ? `Next up: ${nextUp(firstLive)}.` : 'Nothing is scheduled yet.'}</div>`}
       <p class="note" style="margin-top:28px">You’re an Approver, so you decide on requests. Operators set up workflows.</p>
     </div>`;
   }
 
-  /* Home for an Operator is only the Planner: its face, one question, the box, and what it can do. */
-  const EXAMPLES = ['Every Friday, sum up the tickets we closed this week', 'Every Monday, compare last week’s new tickets with the week before', 'Keep track of the React version'];
+  /* Home for an Operator (spec 5): a greeting with the state in one line, the Planner's box, three suggestions from that
+     state, and Needs you while something needs her. Day one has three starting points and the capability lists instead. */
+  const DAY_ONE = ['Every Friday, sum up the tickets we closed this week', 'Keep track of the React version', 'What can you do?'];
+  const stoppedIds = () => routineIds().filter((id) => !S.paused[id] && status(id).tone === 'bad');
+  function suggestions() {
+    if (!routineIds().length) return DAY_ONE;
+    const stopped = stoppedIds()[0];
+    return ['Check my workflows', stopped ? `Why did ${R(stopped).name} stop?` : 'What can I ask for?', 'Set up another workflow'];
+  }
+  /* Starting points for "Set up another workflow": the first three she doesn't already have. */
+  const STARTS = [
+    ['Every Friday, sum up the tickets we closed this week', /closed/i],
+    ['Every weekday at 8:00, sum up the new tickets', /new.ticket/i],
+    ['Every Monday, compare last week’s new tickets with the week before', /comparison/i],
+    ['Every Monday, list open tickets created more than 30 days ago', /old.ticket/i],
+    ['Keep track of the React version', () => onList('React')],
+  ];
+  const starts = () => STARTS.filter(([, had]) => !(typeof had === 'function' ? had() : routineIds().some((id) => had.test(R(id).name)))).map(([t]) => t).slice(0, 3);
+  function stateLine(items) {
+    const n = items.length;
+    const first = comingUp().find(([id]) => !S.paused[id]);
+    if (!n) return `Nothing needs you. ${first ? `Next up: ${nextUp(first)}.` : 'Nothing is scheduled yet.'}`;
+    const fine = routineIds().some((id) => !S.paused[id] && status(id).tone === 'ok');
+    return `${n === 1 ? '1 thing needs' : `${n} things need`} you.${fine ? ' Your other workflows are running.' : ''}`;
+  }
   function plannerHome() {
     const c = S.chat;
     const empty = !c.msgs.length;
     const dayOne = !routineIds().length;
     if (!curModel()) return offlineHome();
-    const title = empty ? (dayOne ? 'What does your team do again and again?' : 'What else should run by itself?') : 'Planner';
+    const items = dayOne ? [] : needs();
+    const hello = !empty ? '<h1 tabindex="-1">Planner</h1>'
+      : dayOne ? '<h1 tabindex="-1">What does your team do again and again?</h1><p class="lead">Tell me a task in plain English. I’ll set it up to run by itself. Anything that changes data waits for a yes from an Approver in Teams.</p>'
+        : `<h1 tabindex="-1">Good morning! ${me().name}</h1><p class="lead">${stateLine(items)}</p>`;
     return `<div class="home planner" data-unbuilt="The Planner’s box on Home (ADR 0037)">
-      <div class="welcome${empty ? '' : ' compact'}">${face('lead', empty ? 128 : 52, c.hero, { live: empty && c.hero === 'idle', id: 'hero' })}<h1 tabindex="-1">${title}</h1><p class="lead">Tell me in plain English. I’ll set it up to run by itself, and nothing changes without a yes.</p></div>
+      <div class="welcome${empty ? '' : ' compact'}">${face('lead', empty ? 96 : 52, c.hero, { live: empty && c.hero === 'idle', id: 'hero' })}<div class="hello-text">${hello}</div></div>
       ${empty ? '' : threadHTML()}
-      <form class="composer" data-submit="ask"><label class="vh" for="ask">Describe a task for the Planner</label><textarea id="ask" data-ask rows="1" placeholder="${empty ? 'Describe a task in plain English' : 'Ask for something else'}" enterkeyhint="send">${esc(c.text)}</textarea><button class="send" type="submit" aria-label="Send to the Planner"${c.text.trim() ? '' : ' disabled'}>${I.send(20)}</button></form>
-      ${empty ? `<div class="chips examples" aria-label="Examples">${EXAMPLES.map((e, i) => `<button class="chip" data-act="example" data-arg="${i}">${e}</button>`).join('')}</div>` : '<div class="btns"><button class="linkbtn" data-act="newChat">New chat</button></div>'}
+      <form class="composer" data-submit="ask"><label class="vh" for="ask">Describe a task for the Planner</label><textarea id="ask" data-ask rows="1" placeholder="${empty ? 'What would you like to automate, check or fix?' : 'Ask for something else'}" enterkeyhint="send">${esc(c.text)}</textarea><button class="send" type="submit" aria-label="Send to the Planner"${c.text.trim() ? '' : ' disabled'}>${I.send(20)}</button></form>
+      ${empty ? `<div class="chips examples" role="group" aria-label="${dayOne ? 'Starting points' : 'Suggestions'}"${dayOne ? '' : ' data-unbuilt="Suggestions from your state"'}>${suggestions().map((e, i) => `<button class="chip" data-act="example" data-arg="${i}">${e}</button>`).join('')}</div>` : '<div class="btns"><button class="linkbtn" data-act="newChat">New chat</button></div>'}
+      ${empty && items.length ? needsStrip(items) : ''}
       ${empty && (dayOne || c.abil) ? abilitiesHTML() : ''}
       ${empty && !dayOne ? `<p class="small muted" style="text-align:center"><button class="linkbtn" data-act="abil">${c.abil ? 'Hide what I can do' : 'What can I ask for?'}</button></p>` : ''}
     </div>`;
@@ -2223,9 +2277,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
   function offlineHome() {
     const items = needs();
     return `<div class="home planner">
-      <div class="welcome offline">${face('lead', 128, 'sorry', { id: 'hero' })}<h1 tabindex="-1">I can’t read new requests until an AI model is connected</h1><p class="lead">Your workflows that are already on keep running, and Approvers can still decide.</p>
-        <div class="btns"><button class="btn primary" data-act="setGo" data-arg="model">Connect a model</button></div></div>
-      ${items.length ? needsSection(items) : ''}
+      <div class="welcome offline">${face('lead', 96, 'sorry', { id: 'hero' })}<div class="hello-text"><h1 tabindex="-1">I can’t read new requests until an AI model is connected</h1><p class="lead">Your workflows that are already on keep running, and Approvers can still decide.</p>
+        <div class="btns"><button class="btn primary" data-act="setGo" data-arg="model">Connect a model</button></div></div></div>
+      ${items.length ? needsStrip(items) : ''}
       ${abilitiesHTML()}
       <form class="composer team-ask" data-submit="askTeamOffline"><label class="vh" for="ask-team">Ask the team for something that isn’t here</label><textarea id="ask-team" data-askteam rows="1" placeholder="Ask the team for something that isn’t here" enterkeyhint="send">${esc(S.teamAskText)}</textarea><button class="send" type="submit" aria-label="Ask the team">${I.send(20)}</button></form>
     </div>`;
@@ -4532,7 +4586,8 @@ details > .m-close { animation: fold 140ms ease-in both; }
     askPlanner: () => { go('home'); focusComposer(); },
     abil: () => { S.chat.abil = !S.chat.abil; render(); const b = $app.querySelector('[data-act="abil"]'); if (b) b.focus(); },
     ask: () => { const ta = $app.querySelector('[data-ask]'); if (ta) ask(ta.value); },
-    example: (i) => ask(EXAMPLES[+i]),
+    example: (i) => ask(suggestions()[+i]),
+    say: (t) => ask(t),
     /* A new chat clears the thread. An unfinished set-up card is kept as a Draft on Workflows. */
     newChat: () => {
       const kept = saveLive();
