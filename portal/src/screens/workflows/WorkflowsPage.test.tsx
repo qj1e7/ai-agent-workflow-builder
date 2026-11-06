@@ -12,6 +12,7 @@ import { ApiError } from '../../api/client'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
 import aliceHome from '../../../../contracts/fixtures/builder/home.alice.json'
+import bobHome from '../../../../contracts/fixtures/builder/home.bob.json'
 import type { HomeOut, Me, RunView, UseCaseView } from '../../api/types'
 import { needsTotal } from '../home/home'
 
@@ -197,22 +198,49 @@ describe('after a delete', () => {
   })
 })
 
+const navNames = (html: string) =>
+  [...html.matchAll(/<nav\b[^>]*aria-label="Main"[^>]*>([\s\S]*?)<\/nav>/g)].flatMap((nav) => [...(nav[1] ?? '').matchAll(/<a\b([^>]*)>/g)].map((a) => /aria-label="([^"]*)"/.exec(a[1] ?? '')?.[1] ?? ''))
+const primaries = (html: string) => (html.match(/<(?:a|button)\b[^>]*class="[^"]*_primary_[^"]*"[^>]*>/g) ?? []).length
+const labelsOf = (html: string, ...label: string[]) => label.flatMap((words) => [...html.matchAll(new RegExp(`>${words}<`, 'g'))])
+
+describe('one action per workflow on Workflows', () => {
+  it('keeps one primary button when Needs you lists the Operator’s stopped run, and offers no row button for it', () => {
+    const html = render({ home: aliceHome as HomeOut, runs: [{ ...(failed as RunView), use_case_id: 'uc_01JB7', run_id: 'run_01JB9' }] })
+    expect(primaries(mainOf(html))).toBe(1)
+    expect(rowOf(html, 'uc_01JB7')).not.toMatch(/See why it stopped|Review and decide/)
+  })
+
+  it('keeps one primary button when Needs you lists the Approver’s approval, and no second Review and decide', () => {
+    const html = render({ me: BOB, home: bobHome as HomeOut })
+    expect(primaries(mainOf(html))).toBe(1)
+    expect(labelsOf(html, 'Review and decide')).toHaveLength(1)
+    expect(rowOf(html, 'uc_01JB7')).not.toContain('Review and decide')
+  })
+
+  it('still offers a row its button when Needs you does not list that workflow', () => {
+    const quiet: HomeOut = { ...(bobHome as HomeOut), approvals: [], approvals_total: 0, confirmations: [], stopped: [], stopped_total: 0 }
+    const html = render({ me: BOB, home: quiet })
+    expect(primaries(mainOf(html))).toBe(1)
+    expect(rowOf(html, 'uc_01JB7')).toContain('Review and decide')
+  })
+})
+
 describe('Needs you at the top of Workflows', () => {
   const HOME = aliceHome as HomeOut
 
   it('lists what needs the person in full, with the same total as the tab', () => {
     const html = render({ home: HOME })
     const total = needsTotal(HOME)
-    const section = /<section[^>]*aria-labelledby="needs-h"[\s\S]*?<\/section>/.exec(html)?.[0] ?? ''
+    const section = /<section[^>]*aria-labelledby="[^"]*"[\s\S]*?<\/section>/.exec(html)?.[0] ?? ''
     expect(text(section)).toContain(`Needs you ${total}`)
     expect(section).toContain('data-home-item="stopped:run_01JB9"')
-    expect(html).toContain(`<span class="visually-hidden">, </span>${total}<span class="visually-hidden"> need you</span>`)
-    expect(html.indexOf('aria-labelledby="needs-h"')).toBeLessThan(html.indexOf('aria-label="Workflows"'))
+    expect(navNames(html).filter((name) => name.startsWith('Workflows'))).toEqual([`Workflows, ${total} need you`, `Workflows, ${total} need you`])
+    expect(html.indexOf('aria-label="Needs you"')).toBeLessThan(html.indexOf('aria-label="Workflows"'))
   })
 
   it('shows no section when nothing needs the person', () => {
     const quiet: HomeOut = { ...HOME, approvals: [], approvals_total: 0, confirmations: [], stopped: [], stopped_total: 0 }
-    expect(render({ home: quiet })).not.toContain('needs-h')
-    expect(render()).not.toContain('needs-h')
+    expect(render({ home: quiet })).not.toContain('aria-label="Needs you"')
+    expect(render()).not.toContain('aria-label="Needs you"')
   })
 })

@@ -16,19 +16,13 @@ function useNeedsCount(onList: boolean): number {
   return home.data ? needsTotal(home.data) : 0
 }
 
-function Count({ total }: { total: number }) {
-  return (
-    <span className={styles['count']}>
-      <span className="visually-hidden">, </span>
-      {total}
-      <span className="visually-hidden"> need you</span>
-    </span>
-  )
+/** The count is for the eye. The link's own label carries it for a screen reader, starting with the visible name. */
+function countFor(id: PageId, operator: boolean, total: number) {
+  return total > 0 && id === needsTab(operator) ? <span className={styles['count']} aria-hidden="true">{total}</span> : null
 }
 
-function countFor(id: PageId, operator: boolean, total: number) {
-  return total > 0 && id === needsTab(operator) ? <Count total={total} /> : null
-}
+const nameWithCount = (id: PageId, operator: boolean, total: number, name: string) =>
+  total > 0 && id === needsTab(operator) ? `${name}, ${total} need you` : undefined
 
 export function Menu({ operator, onList }: MenuProps) {
   const total = useNeedsCount(onList)
@@ -37,7 +31,7 @@ export function Menu({ operator, onList }: MenuProps) {
       {menuFor(operator).map((id) => {
         const { path, menuLabel, icon: Icon, forOperators } = PAGES[id]
         return (
-          <NavLink key={id} to={path} end={id === 'home'} className={cx(styles['link'], forOperators && styles['new'])}>
+          <NavLink key={id} to={path} end={id === 'home'} className={cx(styles['link'], forOperators && styles['new'])} aria-label={nameWithCount(id, operator, total, menuLabel)}>
             {forOperators ? <Icon size={16} /> : null}
             {menuLabel}
             {countFor(id, operator, total)}
@@ -55,7 +49,7 @@ export function TabBar({ operator, onList }: MenuProps) {
       {menuFor(operator).map((id) => {
         const { path, tabLabel, icon: Icon } = PAGES[id]
         return (
-          <NavLink key={id} to={path} end={id === 'home'} className={cx(styles['tab'])}>
+          <NavLink key={id} to={path} end={id === 'home'} className={cx(styles['tab'])} aria-label={nameWithCount(id, operator, total, tabLabel)}>
             <Icon size={22} />
             <span>{tabLabel}</span>
             {countFor(id, operator, total)}

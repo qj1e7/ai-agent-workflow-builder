@@ -32,6 +32,10 @@ const urgentFirst = (a: Need, b: Need) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind
 
 export const needsTotal = (home: HomeOut) => home.approvals_total + home.confirmations.length + home.stopped_total
 
+/** The workflows Needs you already has a request for, so a list of workflows need not offer the same action again. */
+export const workflowsInNeeds = (home: HomeOut): ReadonlySet<string> =>
+  new Set([...home.approvals.map((item) => item.use_case_id), ...home.stopped.map((item) => item.use_case_id)])
+
 export function needsOf(home: HomeOut, limit: number = NEEDS_SHOWN): Needs {
   const all: Need[] = [
     ...home.approvals.map((item): Need => ({ kind: 'approval', key: `approval:${item.approval_id}`, at: item.started_at, item })),

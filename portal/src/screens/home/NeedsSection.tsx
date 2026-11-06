@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useId, useRef, useState, type ReactNode } from 'react'
 import { NavigationType, useNavigationType } from 'react-router'
 import { cx } from '../../ui/cx'
 import { useGlide, usePresence } from '../../ui/presence'
@@ -61,10 +61,11 @@ interface NeedsSectionProps {
 
 /** Needs you, drawn the same on Home and on Workflows. `whenNone` is what shows with nothing in it, or null to show nothing. */
 export function NeedsSection({ needs, now, arrival, more, whenNone }: NeedsSectionProps) {
+  const headingId = useId()
   if (needs.shown.length === 0 && whenNone === null) return null
   return (
-    <section className={cx(styles['section'], arrival.page && styles['arrive'])} aria-labelledby="needs-h">
-      <h2 id="needs-h">
+    <section className={cx(styles['section'], arrival.page && styles['arrive'])} aria-labelledby={headingId}>
+      <h2 id={headingId}>
         Needs you <Count value={needs.total} />
       </h2>
       {needs.shown.length > 0 ? <NeedsList needs={needs.shown} now={now} arrival={arrival} /> : whenNone}

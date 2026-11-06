@@ -13,7 +13,7 @@ import { useFocusWhenReady } from '../../ui/focus'
 import { FROM_LIST } from '../../ui/fromList'
 import { IconSearch } from '../../ui/icons'
 import { Toast, UNDO_ID, type ToastMessage } from '../../ui/Toast'
-import { moreWords, needsOf } from '../home/home'
+import { moreWords, needsOf, workflowsInNeeds } from '../home/home'
 import { NeedsSection, useArrival } from '../home/NeedsSection'
 import homeStyles from '../home/Home.module.css'
 import { useArrivalScroll } from './arrival'
@@ -164,8 +164,11 @@ function Loaded({ handedOver, now, me, useCases, runs, runsFailed }: LoadedProps
     if (handedOver) document.getElementById(UNDO_ID)?.focus()
   }, [handedOver])
 
-  const rows = rowsOf(useCases, runs, viewer, filter, query)
-  const firstAction = rows.findIndex((row) => row.action !== null)
+  const home = useHome().data
+  const inNeeds = useMemo(() => (home ? workflowsInNeeds(home) : undefined), [home])
+  const needsCard = home !== undefined && home.approvals.length + home.confirmations.length + home.stopped.length > 0
+  const rows = rowsOf(useCases, runs, viewer, filter, query, inNeeds)
+  const firstAction = needsCard ? -1 : rows.findIndex((row) => row.action !== null)
 
   function undo(row: Deleted) {
     pressChange(changes, (outcome) => move.mutate({ move: 'restore', useCaseId: row.id }, outcome), {

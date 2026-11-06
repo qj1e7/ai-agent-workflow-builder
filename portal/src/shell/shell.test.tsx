@@ -135,7 +135,9 @@ const ALICE_HOME = aliceHome as HomeOut
 const BOB_HOME = bobHome as HomeOut
 const plain = (html: string) => html.replace(/<[^>]*>/g, '')
 const linkNames = (html: string) =>
-  [...html.matchAll(/<nav\b[^>]*aria-label="Main"[^>]*>([\s\S]*?)<\/nav>/g)].flatMap((nav) => [...(nav[1] ?? '').matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/g)].map((match) => plain(match[1] ?? '')))
+  [...html.matchAll(/<nav\b[^>]*aria-label="Main"[^>]*>([\s\S]*?)<\/nav>/g)].flatMap((nav) =>
+    [...(nav[1] ?? '').matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g)].map((match) => /aria-label="([^"]*)"/.exec(match[1] ?? '')?.[1] ?? plain(match[2] ?? '')),
+  )
 
 describe('the count of what needs you', () => {
   it('shows needsTotal on Workflows for an Operator, in the link’s name, on the header and the tab bar', () => {
@@ -151,6 +153,13 @@ describe('the count of what needs you', () => {
     const html = render({ me: BOB, home: BOB_HOME })
     expect(linkNames(html).filter((name) => name.includes('need you'))).toEqual([`Home, ${total} need you`, `Home, ${total} need you`])
     expect(linkNames(html)).toContain('Workflows')
+  })
+
+  it('starts the link’s name with its visible label, and shows the number once', () => {
+    const html = render({ home: ALICE_HOME })
+    const total = needsTotal(ALICE_HOME)
+    expect(html.match(new RegExp(`<a\\b[^>]*aria-label="Workflows, ${total} need you"`, 'g'))).toHaveLength(2)
+    expect(plain(html.match(/<nav\b[^>]*aria-label="Main"[\s\S]*?<\/nav>/)?.[0] ?? '')).toContain(`Workflows${total}`)
   })
 
   it('shows no count when nothing needs the person, or before Home has loaded', () => {
