@@ -56,6 +56,8 @@ The menu doesn't change from version 3.
 
 The header keeps Teams, Settings and the signed-in person. The Workflows tab keeps its amber count, and it counts the same list as Needs you everywhere else.
 
+**Addresses.** A typed or shared address opens its screen: `#home`, `#workflows`, `#watchlist` and `#agents`, plus `#software`, which the watchlist writes. The menu's role rule applies, so `#agents` opens Home for an Approver who can't set up workflows. Any other address opens Home. `#settings` belongs to the artifact host, so the prototype doesn't read it.
+
 **Single sources.** Three functions feed every place that shows the same fact, so no two places can disagree:
 
 | Fact | One source | Shown on |
@@ -86,7 +88,7 @@ Taken from `agent-runtime/src/agent_runtime/tools.py` and `abilities.py` on 6 No
 
 | Capability | Kind | Base state | Why |
 |---|---|---|---|
-| Read Jira tickets | read | Ready | `jira.search`, `jira.read_ticket`. An agent sees a ticket's key, project, title, status (To Do or Done), created and done dates, and body (`jira.py`). A search returns the 50 newest tickets and filters by words, status and closed date only (`orchestration/jira.py`). |
+| Read Jira tickets | read | Ready | `jira.search`, `jira.read_ticket`. An agent sees a ticket's key, project, title, status (To Do or Done), created and done dates, and body (`jira.py`). A search filters by words, status and closed date, then returns up to 50 matching tickets, newest first (`orchestration/jira.py`, `jira_rest.py`). A busier week is cut short, and nothing tells the run yet (`IMPLEMENTATION-PLAN.md`, N4). Every workflow that reads Jira says this under How this workflow works, and no text promises "all" tickets. |
 | Find older tickets, beyond the newest 50 | read | Planned | Needs a created-date filter and paging in the Jira search. Agents also don't know when the last run was. |
 | Find tickets by when they were last updated, their type, component or priority, or who owns them | read | Planned | Those fields never reach the agents. platform-api reads Jira's update date and drops it (`jira_rest.py`), so this is a small backend change (UX audit X2). A request that filters by one of them gets a Part I can do answer that names each missing part, never a set-up card that drops the filter. |
 | Sum up what I find | none | Ready | Done by the model, no system access |
@@ -159,6 +161,7 @@ When Settings has no working AI model (a test control can switch this), the Plan
 - Capabilities that need the model show as Needs setup.
 - The capability lists and Ask the team still work, because they don't need the model.
 - Needs you still shows, because it is read from the platform, not the model. Its "No AI model connected" row is left out while the hero already offers Connect a model.
+- A row whose action needs the model says so instead of offering it, for example "Morning new-ticket check stopped. Can run again once an AI model is connected." with See the run. Actions that work without the model, such as Review and decide and Report to support, stay. The rule is the one every Retry and Run reads (`cantRunWhy`), and it also holds a run back while a key needs replacing. A system that is down may answer at any moment, so its Retry stays and says why if it still can't start.
 
 Version 3 let the Planner work on day one with no model (I5). ADR 0037's Consequences already describe this offline answer.
 
@@ -188,7 +191,8 @@ The reply sentence carries 1 and 2. The card carries 3 and 4. Technical words st
 | Kind | When | Reply, shortened | Next |
 |---|---|---|---|
 | Set-up card | A repeated task the registry can do | "Here's what I understood. I filled in what I could." | The card (7) |
-| Watchlist card | A release check | "Kubernetes is software, so it belongs on the Software watchlist, which checks all your software every Monday." | Add to the watchlist |
+| Watchlist card | A release check whose every part the platform can do | "Kubernetes is software, so it belongs on the Software watchlist, which checks all your software every Monday." | Add to the watchlist |
+| Can't, release request | A release check with a part the platform can't do, such as a destination other than one Jira ticket, or a security check | "I can watch software for new releases on the Software watchlist, but I can't post messages in Teams yet." A vulnerability, CVE, NVD or advisory check is the Planned "Check package registries and security advisories" (ADR 0025), so its answer is "I can't check registries or security advisories yet." | Watching for new releases (primary), or Open the Software watchlist when it's already there, and Ask the team. A security check offers the watch only when the software is named. |
 | Which software | A release word with no name | "Which software should I watch?" | Never mind |
 | Already listed | It's on the watchlist | "React is already on the Software watchlist." | Open it |
 | Can't, with an alternative | A Planned or Unsupported capability | "I can make that list, but I can't send email. Email isn't connected to the platform." | Set up the alternative (primary), Ask the team |
@@ -227,6 +231,7 @@ The card is titled with the workflow's name and has Rename beside it. It has thr
   - Grey chips are "Filled in by me".
   - Amber chips need a choice.
   - A red chip names something the platform can't do, with the nearest alternative.
+- The destination is a grey chip, "one new Jira ticket", whose note says it is written after a yes. It is the only place built today, so its editor says other places, such as Teams or email, aren't built yet, and offers Ask the team. It adds no step and no choice.
 - Tapping a chip opens its small editor in place.
 - A similar existing workflow gets one line with a link.
 
@@ -330,7 +335,16 @@ Order:
 - errors;
 - the replay controls.
 
-It stays open for the rest of the visit.
+What shows first follows the run's state:
+
+| State | First | The agents' conversation |
+|---|---|---|
+| Running | The progress list | Open, as the live activity view |
+| Waiting for a yes | The approval panel (10.4) | Folded |
+| Stopped | The AI troubleshooter's four answers (10.3) | Folded |
+| Done | The outcome | Folded |
+
+**Show what each agent did** (or **Hide what each agent did**) is always there. Once she opens or folds it, her choice holds for the rest of the visit.
 
 ### 10.3 When a run stops: the AI troubleshooter's four answers
 
@@ -369,7 +383,7 @@ From top to bottom:
 1. **Needs attention.** The weekly upgrade request waiting for a yes, with Review and decide. Also any software the check couldn't read, with the AI troubleshooter's fix. Example: "GitHub can't find langchain-ai/langserve. It moved to langchain-ai/langchain." with **Use the new address**.
 2. **Software we watch.** A row each with:
    - the name;
-   - the version we run;
+   - the version we run. When nobody gave it, it says "Not known", and nothing is compared with it. "Not sure? Start from the newest" means watching for releases newer than today's. It never records the newest release as the version the team runs, which could hide an out-of-date install;
    - the newest version;
    - the status (Up to date, New version, Can't check). A Can't check with no fix the person can make, such as a rate limit that clears by itself, stays in the table with its reason instead of becoming a Needs attention card;
    - the source.
@@ -385,7 +399,7 @@ From top to bottom:
 
 An advanced area.
 
-- **What it can do.** The opening tab. The registry in plain words, grouped as I can, Needs setup, Not working right now, and Not yet. Each line names the agents that use it.
+- **What it can do.** The opening tab. The registry in plain words, grouped as I can, Needs setup and Not working right now. The Not yet lines sit behind "What can't I do yet?", the same question day-one Home asks. Each line names the agents that use it.
 - **Agents.** The agent cards, each with a plain one-line job. Steps, tools and permissions are inside Details.
   - Changing an agent in plain English shows the exact difference before saving.
   - It is marked as not built in the Portal under the test control.
@@ -508,7 +522,7 @@ If the team accepts this spec, these need updating:
 Everything in the prototype is simulated. Specifically:
 - Requests are classified with word rules, not a model.
 - The four new answer kinds read sample state.
-- Runs are scripted replays.
+- Runs are scripted replays. A workflow made on Home has no simulated runs, so its page has no Run now or test run. A test note on the page says so.
 - Connections, keys and Teams are sample data.
 - Time stands still at Tuesday 27 October, 9:10.
 

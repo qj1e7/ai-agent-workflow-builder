@@ -619,7 +619,9 @@ async function main() {
     await page.$$eval('main details', (ds) => ds.forEach((d) => { d.open = true; }));
     const text = await k.main();
     ok(/tickets created in Jira project MOCK in the last day/.test(text), 'the Morning new-ticket check does not say it reads the tickets created in the last day');
-    ok(/Reads the 50 newest tickets in Jira/.test(text), 'the Morning new-ticket check does not say it reads the 50 newest tickets');
+    /* changed (fix round D, F-04): the built search filters before its cap of 50, so the step reads up to 50 matching
+       tickets, newest first, and a busier day is cut short. Was /Reads the 50 newest tickets in Jira/. */
+    ok(/Reads up to 50 matching tickets in Jira, newest first/.test(text), 'the Morning new-ticket check does not say it reads up to 50 matching tickets, newest first');
     ok(!/created more than \d+ days ago/.test(text), 'an older-tickets read is offered');
   }));
 

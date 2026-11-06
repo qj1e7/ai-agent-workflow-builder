@@ -204,12 +204,14 @@ both('lib-opens-on-what-it-can-do', async (t) => {
   const labels = await t.page.$$eval('.lib-tabs button', (b) => b.map((x) => x.textContent.replace(/\s+\d+$/, '').trim()));
   assert.deepStrictEqual(labels, ['What it can do', 'Agents', 'Tools']);
   const heads = await t.page.$$eval('main h2', (h) => h.map((x) => x.textContent.replace(/\s+/g, ' ').trim().replace(/ \d+$/, '')));
-  assert.deepStrictEqual(heads, ['I can', 'Not yet'], heads.join(' | '));
+  assert.deepStrictEqual(heads, ['I can'], heads.join(' | '));
+  assert.strictEqual(await t.page.innerText('main details.cap-fold:not([open]) > summary'), 'What can’t I do yet?', 'Not yet is folded behind the day-one question');
   const can = await t.page.innerText('.cap-ready');
   assert(/Read Jira tickets\s+Used by Jira reader/.test(can), `agents named: ${can}`);
   assert(/Check software for new releases on GitHub\s+Used by Version checker/.test(can), 'GitHub line names its agent');
   assert(/Create a Jira ticket after a yes\s+Used by Ticket writer/.test(can), 'create line names its agent');
   assert(/Ask Approvers for a yes in Teams\s+The platform does this/.test(can), 'platform line');
+  await t.click('.cap-fold summary');
   assert((await t.page.innerText('.cap-not')).includes('Post messages in Teams'), 'Not yet lists the planned lines');
 });
 both('lib-down-and-setup-groups', async (t) => {
@@ -400,6 +402,34 @@ both('a11y-menus-and-sections-announce-state', async (t) => {
   assert.strictEqual(await t.count('.lib-tabs [aria-pressed]'), 3, 'tabs say which is chosen');
   assert.strictEqual(await t.count('main [role=status], main .vh'), await t.count('main [role=status], main .vh'), 'sanity');
 });
+
+/* Fix round D, F-05: "Start from the newest" watches for releases from now. The version the team runs stays not known,
+   and no row shows the newest release as that version. */
+both('newest-is-not-our-version', async (t) => {
+  await t.ask('Keep track of the React version');
+  await t.click('[data-act="repoOk"]'); await t.click('[data-act="verNewest"]');
+  const card = await t.card();
+  assert(/Not known/.test(card) && /releases newer than today’s/.test(card), `the card says what Start from the newest does: ${card}`);
+  assert(!/newest version as yours|first check records/.test(card), 'the card records the newest release as the team’s version');
+  await t.click('[data-act="watchAdd"]');
+  await t.go('software');
+  const ours = (await t.page.innerText('[data-val="swv:add0:ours"]')).trim();
+  assert(/^Not known/.test(ours) && !/first check/i.test(ours), `React’s We run cell: ${ours}`);
+});
+/* Fix round D, F-17: an address opens its screen with the menu's role rule, on load and when it changes. */
+check('deep-link-agents-by-role', (b) => session(b, 1280, async (t) => {
+  const h1 = () => t.page.innerText('main h1');
+  const hash = async (h) => { await t.page.evaluate((x) => { window.location.hash = x; }, h); await t.wait(300); };
+  await hash('#agents');
+  assert.strictEqual(await h1(), 'Agent library', '#agents opens the Agent library for Alice');
+  await hash('#nowhere');
+  assert(/^Good morning/.test(await h1()), 'an unknown address opens Home');
+  await t.ctl('user', 'bob');
+  await hash('#agents');
+  assert.strictEqual(await h1(), 'Good morning! Bob', '#agents opens Home for Bob, who has no Agent library');
+  await t.page.goto('about:blank'); await t.page.goto(`${url}#watchlist`); await t.wait(300);
+  assert.strictEqual(await h1(), 'Software watchlist', '#watchlist opens the watchlist on load');
+}));
 
 /* ---------- Seeded control ---------- */
 check('control-approver-sees-fix-button', (b) => session(b, 1280, async (t) => {

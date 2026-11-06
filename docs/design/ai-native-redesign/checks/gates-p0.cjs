@@ -316,7 +316,7 @@ check('part-i-can-do', async (browser) => session(browser, 1280, async (t) => {
   assert(say.includes('I can’t see when a ticket was last updated yet'), `part answer: ${say}`);
   const card = await t.card();
   assert(card.includes('Set up the part I can do') && card.includes('Ask the team'), `part card: ${card}`);
-  assert(card.includes('List all open tickets instead'), 'the nearest real alternative: a search can’t filter by age (SEARCH_LIMIT 50)');
+  assert(card.includes('List the open tickets instead'), 'the nearest real alternative: a search can’t filter by age (SEARCH_LIMIT 50)');
   await t.click('.thread [data-act="instead"]'); await t.wait(600);
   assert.strictEqual(await t.count('.thread .pcard-f [data-act="turnOn"]'), 1, 'Set up the part I can do makes a set-up card, not another part answer');
 }));
@@ -562,9 +562,10 @@ check('newest-50-and-last-day', async (browser) => session(browser, 1280, async 
   const wf = await t.text();
   assert(wf.includes('in the last day'), `the morning check reads the last day: ${wf.match(/Finds[^\n]*/)}`);
   await t.click('details.tech summary');
-  assert((await t.text()).includes('Reads the 50 newest tickets'), 'How it works names the 50-ticket limit');
+  assert((await t.text()).includes('Reads up to 50 matching tickets in Jira, newest first'), 'How it works names the 50-ticket limit');
+  assert((await t.text()).includes('a busier day is cut short'), 'How it works says a busier day is cut short');
   assert(!/since the last run/.test(source), 'nothing claims to read since the last run');
-  await t.go('agents');
+  await t.go('agents'); await t.click('.cap-fold summary');
   assert((await t.page.innerText('.cap-not')).includes('Find older tickets, beyond the newest 50'), 'the registry has the Planned line');
   assert(!/created more than \d+ days ago/.test(source), 'the old-ticket starting point and alternative are gone');
 }));

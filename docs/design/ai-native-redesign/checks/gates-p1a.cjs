@@ -5,6 +5,7 @@
    gates-p0.cjs, which must pass too. */
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const assert = require('assert');
 const { execFileSync, spawnSync } = require('child_process');
 
@@ -245,7 +246,7 @@ both('card-sections-and-footer', async (t) => {
   assert(!card.includes('Week-on-week writer') && !card.includes('Reads Jira'), 'steps and agents hidden until opened');
   await t.click('.thread .pcard details.how summary');
   const open = await t.card();
-  for (const part of ['Reads the 50 newest tickets in Jira', 'Changes data, waits for a yes', 'No system access', 'Jira reader', 'Summary writer', 'Tools:']) assert(open.includes(part), `How it works holds ${part}`);
+  for (const part of ['Reads up to 50 matching tickets in Jira, newest first', 'Changes data, waits for a yes', 'No system access', 'Jira reader', 'Summary writer', 'Tools:']) assert(open.includes(part), `How it works holds ${part}`);
   assert.strictEqual(await t.count('.thread .pcard details.how .face'), 4, 'agents as Orbs on the steps and in the agents line');
   assert.strictEqual(await t.footer(), '2 choices left: when it runs and the Jira project.', 'footer names what is missing');
   assert(await t.has('[data-act="turnOn"][disabled]'), 'Turn it on is off until then');
@@ -257,7 +258,7 @@ both('card-own-words-only', async (t) => {
   assert(/\bok\b/.test(await t.chip('tickets')), 'tickets closed this week: her words');
   assert(/\bok\b/.test(await t.chip('action')), 'sum them up: her words');
   assert(/\bmissing\b/.test(await t.chip('project')), 'the Jira project must be chosen');
-  assert.strictEqual(await t.page.locator('.thread .pcard .schip.filled').last().innerText(), 'put the summary in one new Jira ticket', 'the destination is filled in by me');
+  assert.strictEqual(await t.page.locator('.thread .pcard .schip.filled').last().innerText(), 'one new Jira ticket', 'the destination is filled in by me');
   assert.strictEqual(await t.count('.thread .pcard .schip.ok'), 2, 'nothing else is marked as hers');
   await t.newChat(); await t.ask(EX_COMPARE);
   assert(/\bfilled\b/.test(await t.chip('tickets')), '“tickets created this week” is not her words when she said last week’s new tickets');
@@ -405,6 +406,75 @@ both('ticket-set-follows-schedule', async (t) => {
   await t.page.selectOption('#fix-project', 'MOCK'); await t.wait(220);
   assert.strictEqual(await t.page.locator('.thread .pcard-f .note').innerText(), 'Nothing is unclear. Turn it on when you’re ready.', 'the footer names her click, not a yes');
   assert(!/One yes turns it on/.test(source), 'no "a yes" for the Operator’s own click');
+});
+
+/* Fix round D, F-02 and F-10: every part of a release request is checked before the watchlist route. A destination the
+   platform can't use, or a security check, gets an honest can't with Ask the team. Watching for new releases is the
+   alternative: always for a destination, and for a security check only when the software is named. */
+both('release-request-parts-checked-first', async (t) => {
+  const cases = [
+    ['Send a message in Teams when a release is published', /^I can watch software for new releases on the Software watchlist, but I can’t post messages in Teams yet\./, true],
+    ['Post in our Teams channel when Kubernetes has a new release', /^I can watch Kubernetes for new releases on the Software watchlist, but I can’t post messages in Teams yet\./, true],
+    ['Monitor software vulnerabilities in NVD', /^I can’t check registries or security advisories yet\./, false],
+    ['Check our packages for security advisories', /^I can’t check registries or security advisories yet\./, false],
+    ['Watch Kubernetes for CVEs', /^I can watch Kubernetes for new releases on the Software watchlist, but I can’t check registries or security advisories yet\./, true],
+  ];
+  for (const [ask, say, alt] of cases) {
+    if (await t.has('[data-act="newChat"]')) await t.newChat();
+    await t.ask(ask);
+    const reply = await t.reply();
+    assert(say.test(reply), `“${ask}” answers: ${reply}`);
+    assert(!/belongs on the Software watchlist/.test(reply), `“${ask}” goes to the watchlist as if it worked: ${reply}`);
+    assert.strictEqual(await t.count('.thread > li:last-child [data-act="teamReq"]'), 1, `“${ask}” offers Ask the team`);
+    assert.strictEqual(await t.count('.thread > li:last-child [data-act="instead"]'), alt ? 1 : 0, `“${ask}” ${alt ? 'does not offer' : 'offers'} watching for new releases`);
+  }
+  await t.click('.thread > li:last-child [data-act="instead"]'); await t.wait(400);
+  assert(await t.has('.thread > li:last-child [data-act="watchAdd"]'), 'Set that up opens the watchlist card for Kubernetes');
+  for (const plain of ['Monitor Kubernetes releases', 'Keep track of the React version']) {
+    await t.newChat(); await t.ask(plain);
+    assert(await t.has('.thread > li:last-child [data-act="watchAdd"]'), `a plain release request still gets the watchlist card: ${plain}`);
+  }
+});
+/* Fix round D, F-03 (the user's choice, 7 Nov): the destination is a grey chip, "one new Jira ticket", whose note says it
+   is written after a yes. Its editor opens in place and offers Ask the team for other places. It adds no choice. */
+both('card-destination-chip', async (t) => {
+  await t.ask(EX_SUMMARY);
+  const chip = t.page.locator('.thread .pcard button.schip[data-act="destOpen"]');
+  assert.strictEqual(await chip.count(), 1, 'the destination is a chip in the sentence');
+  assert.strictEqual((await chip.innerText()).trim(), 'one new Jira ticket', 'the chip names the destination');
+  assert(/\bfilled\b/.test(await chip.getAttribute('class')), 'the chip is filled in by me');
+  assert(/after a yes/.test(await chip.getAttribute('title')) && /after a yes/.test(await chip.getAttribute('aria-label')), 'its note says it is written after a yes');
+  assert(/and put the summary in\s+one new Jira ticket\s*\./.test(await t.page.innerText('.thread .pcard .sentence-line')), 'the sentence still reads as a whole');
+  const foot = await t.footer();
+  await t.click('.thread .pcard [data-act="destOpen"]');
+  assert.strictEqual(await chip.getAttribute('aria-expanded'), 'true', 'the chip says its editor is open');
+  const ed = await t.page.innerText('#destpick');
+  assert(/Teams/.test(ed) && /email/.test(ed) && /aren’t built yet/.test(ed), `the editor says other places aren’t built yet: ${ed}`);
+  assert(await t.has('#destpick [data-act="teamReq"]'), 'the editor offers Ask the team');
+  assert.strictEqual(await t.footer(), foot, 'the chip adds nothing to what is left');
+  await t.click('#destpick [data-act="destDone"]');
+  assert.strictEqual(await t.count('#destpick'), 0, 'Done closes the editor');
+});
+/* Fix round D, F-03: the chip adds no click and no decision to scenarios A and T1 (counts from the 2e9046a run). */
+check('scenario-a-counts-unchanged', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-a-'));
+  const out = path.join(dir, 'a.json');
+  spawnSync(process.execPath, [path.join(__dirname, 'run.cjs'), file, path.join(__dirname, 'paths-v4.cjs'), out, '--only=A,T1'], { cwd: here, encoding: 'utf8' });
+  const got = Object.fromEntries((JSON.parse(fs.readFileSync(out, 'utf8')).scenarios || []).map((r) => [r.key, { passed: r.passed, clicks: r.counts.clicks, fields: r.counts.fields, selects: r.counts.selects, decisions: r.counts.decisions }]));
+  const a = { passed: true, clicks: 2, fields: 2, selects: 1, decisions: 3 };
+  assert.deepStrictEqual(got, { 'A@1280': a, 'A@390': a, 'T1@1280': { passed: true, clicks: 3, fields: 1, selects: 1, decisions: 3 } }, `A and T1 changed: ${JSON.stringify(got)}`);
+});
+/* Fix round D, F-11: with no AI model, no Needs you row on Home offers a run that can't start. The row says what it
+   waits for, actions that work without a model stay, and Connect a model is the one way forward. */
+both('offline-home-no-dead-retry', async (t) => {
+  await t.ctl('modelOn', 'off');
+  assert.strictEqual(await t.count('main [data-act="retryIssues"], main [data-act="retryNudge"], main [data-act="testRun"]'), 0, 'the offline Home offers a run that can’t start');
+  const row = await t.page.innerText('.home .needs .nrow:has-text("Morning new-ticket check stopped")');
+  assert(/Can run again once an AI model is connected/.test(row), `the stopped row says what it waits for: ${row}`);
+  assert(await t.has('.home .needs [data-act="report"]') && await t.has('.home .needs [data-act="run"][data-arg="sw"]'), 'Report to support and Review and decide still work');
+  assert.strictEqual(await t.page.locator('main button:has-text("Connect a model")').count(), 1, 'Connect a model stays the one way forward');
+  await t.ctl('modelOn', 'on');
+  assert(await t.has('.home .needs [data-act="retryIssues"]'), 'with a model, Retry the run is back');
 });
 
 check('reduced-motion-stops-loops', () => {

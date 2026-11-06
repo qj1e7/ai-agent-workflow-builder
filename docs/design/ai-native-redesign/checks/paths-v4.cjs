@@ -329,8 +329,8 @@ T(14, 'Change an agent in plain English: Agent library, Details and changes, chi
 T(15, 'Ask the team for a new system, after a "can’t" answer', async (t) => {
   await t.setup((k) => k.ask(EMAIL));
   await t.click('[data-act="teamReq"]:has-text("Ask the team")', 'Ask the team', { decision: true });
-  await t.expectText('The request is sent to the team', /Sent to the team\. You can follow it on Tools, in the Agent library\./, S.toast);
-});
+  await t.expectText('The request is saved for the team', /Saved as a request for the team\. You can follow it on Tools, in the Agent library\./, S.toast);
+}, { changed: 'Fix round D, F-01: nobody is named yet as the reader of team requests (ADR 0038, proposed), so the confirmation no longer says it was sent to anyone. Was /Sent to the team\. You can follow it on Tools, in the Agent library\./.' });
 
 add('H2', 'Discard a draft set-up card from Workflows', async (t) => {
   await t.setup(async (k) => { await k.ask(WEEKLY_SUMMARY); await k.page.click('[data-act="newChat"]'); await k.settle(); });

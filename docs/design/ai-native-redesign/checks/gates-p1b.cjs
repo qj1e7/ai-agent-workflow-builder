@@ -272,10 +272,10 @@ both('wp-technical-details', async (t) => {
   await t.workflow('issues');
   const d = t.page.locator('details.tech');
   assert.strictEqual(await d.getAttribute('open'), null, 'Technical details closed by default');
-  assert(!(await t.text()).includes('Reads the 50 newest tickets in Jira'), 'steps hidden until opened');
+  assert(!(await t.text()).includes('Reads up to 50 matching tickets in Jira, newest first'), 'steps hidden until opened');
   await t.click('details.tech summary');
   const text = await t.page.innerText('details.tech');
-  inOrder(text, ['Steps', 'Reads the 50 newest tickets in Jira', 'No system access', 'Changes data, waits for a yes', 'Agents and tools', 'Planner', 'Jira reader', 'Search Jira']);
+  inOrder(text, ['Steps', 'Reads up to 50 matching tickets in Jira, newest first', 'No system access', 'Changes data, waits for a yes', 'Agents and tools', 'Planner', 'Jira reader', 'Search Jira']);
   await t.noSideScroll('technical details'); await t.targets('technical details');
 });
 both('wp-recent-activity-opens-run', async (t) => {
@@ -487,6 +487,40 @@ both('run-your-part-names-the-reason', async (t) => {
   assert(panel.includes('Alice started the review by hand'), `the run names its starter: ${panel.match(/Who asked[^\n]*\n[^\n]*/)}`);
   assert(panel.includes('You started this run, so another Approver must decide.'), 'a starter who is not the owner is still a party');
   assert.strictEqual(await t.count('[data-act="approve"]'), 0, 'and gets no Approve');
+});
+
+/* Fix round D, F-15 (the user's choice, 7 Nov): the run page's default view follows the run. While it goes, the agents'
+   conversation is open. Waiting for a yes, stopped and done fold it under the decision, the AI troubleshooter or the
+   outcome. Runs only move with motion allowed, so this check opens its own page without reduced motion. */
+check('run-default-view-follows-state', async (browser) => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, colorScheme: 'light' });
+  page.on('pageerror', (e) => consoleErrors.push(`pageerror @run-default-view: ${e.message}`));
+  page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(`console @run-default-view: ${m.text()}`); });
+  const view = () => page.evaluate(() => {
+    const b = document.querySelector('[data-act="runDetail"]');
+    const d = document.querySelector('#decision');
+    const det = document.querySelector('.run-detail');
+    return { open: b && b.getAttribute('aria-expanded'), chat: !!document.querySelector('#run-detail .chat'), first: !!d && !!det && !!(d.compareDocumentPosition(det) & Node.DOCUMENT_POSITION_FOLLOWING) };
+  });
+  const folded = { open: 'false', chat: false, first: true };
+  const click = async (sel) => { await page.click(sel); await page.waitForTimeout(300); };
+  try {
+    await page.goto(url); await page.waitForTimeout(250);
+    await click('.nav-a[data-arg="workflows"]');
+    await click('main [data-act="retryIssues"]');
+    assert.deepStrictEqual(await view(), { open: 'true', chat: true, first: false }, 'running: the agents’ conversation is open');
+    await page.waitForFunction(() => /Done, nothing new today/.test(document.querySelector('main').innerText), null, { timeout: 20000 });
+    assert.deepStrictEqual(await view(), folded, 'done: the outcome first, the conversation folded');
+    await click('[data-act="runDetail"]');
+    assert.strictEqual((await view()).open, 'true', 'Show what each agent did opens it');
+    await click('.nav-a[data-arg="workflows"]'); await click('main [data-act="run"][data-arg="nudge"]');
+    assert.deepStrictEqual(await view(), folded, 'stopped: the troubleshooter first, the conversation folded');
+    assert(await page.$('#decision .qa'), 'stopped: the troubleshooter’s answers lead');
+    await click('.testctl-toggle'); await click('.testctl [data-act="user"][data-arg="bob"]'); await click('.testctl-toggle');
+    await click('.nav-a[data-arg="home"]'); await click('main [data-act="run"][data-arg="sw"]');
+    assert.deepStrictEqual(await view(), folded, 'waiting: the decision first, the conversation folded');
+    assert(await page.$('#decision [data-act="approve"]'), 'waiting: Approve is in the decision');
+  } finally { await page.close(); }
 });
 
 /* Item 4: the marks come from the plan's "Prototype only" cells. */
