@@ -53,11 +53,12 @@ async function session(browser, width, body) {
     settings: async (tab) => { await page.click('.hdr [data-act="go"][data-arg="settings"]'); await page.waitForTimeout(220); await page.click(`[data-act="setTab"][data-arg="${tab}"]`); await page.waitForTimeout(220); },
     teams: async () => { await page.click('.hdr [data-act="teams"]'); await page.waitForTimeout(260); return page.innerText('.drawer'); },
     closeTeams: async () => { await page.keyboard.press('Escape'); await page.waitForTimeout(200); },
-    /* Ask the Planner for a workflow, fill the card's one time and project, and turn it on. */
+    /* Ask the Planner for a workflow, fill the card's one project and time, and turn it on. The project goes first:
+       the time picker opens by itself only once the schedule is the one thing left (P1a, spec 7.1). */
     turnOn: async (text) => {
       await t.ask(text);
-      if (await page.$('#sched-time')) { await page.fill('#sched-time', '09:00'); await page.click('[data-act="whenDone"]'); await page.waitForTimeout(220); }
       if (await page.$('#fix-project')) { await page.selectOption('#fix-project', 'MOCK'); await page.waitForTimeout(220); }
+      if (await page.$('#sched-time')) { await page.fill('#sched-time', '09:00'); await page.click('[data-act="whenDone"]'); await page.waitForTimeout(220); }
       await page.click('[data-act="turnOn"]');
       await page.waitForTimeout(260);
     },
@@ -184,11 +185,13 @@ check('i5-day-one-model-and-keys', async (browser) => session(browser, 1280, asy
 
 check('i6-new-agent-drafted', async (browser) => session(browser, 1280, async (t) => {
   await t.ask(EX_COMPARE);
+  /* The agents sit under How this workflow works, collapsed (P1a, spec 7.1). */
+  await t.click('.thread .pcard details.how summary');
   const card = await t.card();
   assert(card.includes('Week-on-week writer'), `card names the new agent: ${card}`);
   assert(card.includes('New agent, saved to the Agent library when you turn this on'), 'card marks the new agent');
-  await t.page.fill('#sched-time', '09:00'); await t.click('[data-act="whenDone"]');
   await t.page.selectOption('#fix-project', 'MOCK'); await t.wait(200);
+  await t.page.fill('#sched-time', '09:00'); await t.click('[data-act="whenDone"]');
   await t.click('[data-act="turnOn"]');
   await t.go('agents');
   assert((await t.text()).includes('Week-on-week writer'), 'Agent library lists the new agent after Turn it on');

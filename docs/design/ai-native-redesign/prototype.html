@@ -403,6 +403,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .pcard details.how { border-top: 1px solid var(--rule); padding: 0 16px; }
 .pcard details.how > summary { padding: 12px 0; font-size: 0.9375rem; }
 .pcard details.how .more-body { display: grid; gap: 10px; padding: 0 0 14px; }
+.pcard details.how .tag { white-space: normal; }
 .agents-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0; font-size: 0.9375rem; }
 .agents-line .face { flex: none; }
 .agents-line > span { margin-right: 8px; }
@@ -901,7 +902,6 @@ a svg { vertical-align: -2px; margin-left: 3px; }
 .schip:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 .schip.ok { color: var(--green-ink); background: var(--green-soft); border-color: var(--green-line); }
 .schip.changed { color: var(--accent-ink); background: var(--accent-soft); border-color: #b9d9e0; }
-.schip.later { color: var(--amber-ink); background: var(--amber-soft); border-color: var(--amber-line); }
 .schip.missing { color: var(--amber-ink); background: var(--amber-soft); border-style: dashed; border-color: var(--amber); }
 .schip.cant { color: var(--red-ink); background: var(--red-soft); border-color: var(--red-line); }
 .schip.filled { color: var(--muted); background: var(--sunk); border-color: var(--hair); }
@@ -915,7 +915,7 @@ button.schip { cursor: pointer; }
 .snotes li { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; font-size: 0.9rem; color: var(--muted); }
 .snotes svg { margin-top: 3px; }
 .snotes .cant { color: var(--red-ink); }
-.snotes .missing, .snotes .later { color: var(--amber-ink); }
+.snotes .missing { color: var(--amber-ink); }
 .notice { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; padding: 14px 16px; border-radius: var(--r-card); background: var(--info-bg); color: var(--info-ink); }
 .notice .btns { margin-top: 10px; }
 .checklist { display: grid; gap: 8px; }
@@ -1543,7 +1543,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* Which of her words make a part hers (UX audit SC1). A part is hers only when every pattern is in her request;
      anything mapped, widened or added is "Filled in by me". The patterns are the ones parseIntent reads. */
   const OWN = {
-    tickets: { closed: [/\b(closed|resolved|completed|finished|done)\b/i, /\bweek\b/i], created: [/\b(new|created|opened|raised)\b/i, /\bweek\b/i], open: [/\bopen\b|\bunresolved\b/i], old: [/\b\d+\s*days?\b/i] },
+    tickets: { closed: [/\b(closed|resolved|completed|finished|done)\b/i, /\bthis week\b/i], created: [/\b(new|created|opened|raised)\b/i, /\bthis week\b/i], open: [/\bopen\b|\bunresolved\b/i], old: [/\b\d+\s*days?\b/i] },
     action: { summary: [/summar|sum up|\breport\b|\bdigest\b|\boverview\b/i], list: [/\blist\b|\bshow me\b/i], compare: [/\bcompare\b|\bweek[- ]on[- ]week\b|\bagainst the week before\b|\bversus\b|\bvs\b/i] },
   };
   const hers = (key, value, text) => !!value && (OWN[key] ? (OWN[key][value] || []).every((re) => re.test(text)) : true);
@@ -1625,11 +1625,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const f = draftNr();
     const rows = [];
     if (it.badSource) rows.push({ key: 'source', label: 'Reads', value: it.badSource, state: 'cant', note: `I can only read ${andList(canRead())} so far. Go back and describe a task about Jira tickets, or ask the team to add ${it.badSource}.`, block: 'the task uses a system I can read' });
-    /* The when chip follows the schedule fields, so a choice made there turns it green or teal. */
+    /* The sentence says the schedule in words; the When section holds its control and its missing state. */
     const s = S.wiz.sched || { freq: it.freq || '', day: it.day || '', time: it.time || '' };
-    const gaps = [!s.freq ? 'how often' : '', s.freq === 'week' && !s.day ? 'which day' : '', !s.time ? 'what time' : ''].filter(Boolean);
-    const same = it.freq === s.freq && (s.freq !== 'week' || it.day === s.day) && it.time === s.time;
-    rows.push({ key: 'when', label: 'When', value: gaps.length ? whenAsked(it) : schedText(s), state: gaps.length ? 'later' : same ? 'ok' : 'changed', note: gaps.length ? `You didn’t say ${gaps.join(' or ')}. Choose it above. I won’t guess.` : same ? `${TZ}.` : `You chose this. ${TZ}.` });
+    rows.push({ key: 'when', label: 'When', value: Object.keys(schedProblems(s)).length ? whenAsked(it) : schedText(s), state: 'ok', note: '' });
     const tickets = fieldRow('tickets', 'Which tickets', f.tickets ? ticketLabel(f.tickets, f.days) : '', it.tickets ? it.tickets.kind : null, it.tickets ? ticketLabel(it.tickets.kind, f.days) : '', e.tickets,
       [['closed', ticketLabel('closed')], ['created', ticketLabel('created')], ['open', ticketLabel('open')], ['old', ticketLabel('old', f.days)]], 'you choose which tickets');
     rows.push(tickets);
@@ -2694,10 +2692,9 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const lc = (s) => s.charAt(0).toLowerCase() + s.slice(1);
   /* The schedule picker opens after Change, or by itself when the schedule is the one thing left (spec 7.1). */
   const whenShown = () => !!S.wiz.sched && (S.wiz.whenOpen || (Object.keys(schedProblems(S.wiz.sched)).length > 0 && setupLeft().length === 1));
-  const CHIP_HINT = { ok: 'your words', changed: 'chosen by you', missing: 'please choose', cant: 'can’t do this yet', later: 'please choose when it runs', filled: 'filled in by me' };
+  const CHIP_HINT = { ok: 'your words', changed: 'chosen by you', missing: 'please choose', cant: 'can’t do this yet', filled: 'filled in by me' };
   function sentenceChip(r, text) {
     const hint = CHIP_HINT[r.state];
-    if (r.key === 'when') return `<button type="button" class="schip ${r.state}" title="${cap(hint)}" data-act="whenOpen" aria-expanded="${whenShown()}" aria-label="${r.label}: ${text}, ${hint}. Change it">${text}${I.down(14)}</button>`;
     if (!r.options) return `<span class="schip ${r.state}" title="${cap(hint)}">${text}</span>`;
     const inOpts = r.options.some(([v]) => v === r.selected);
     return `<span class="schip ${r.state}" title="${cap(hint)}"><span data-val="chip:${r.key}">${text}</span>${I.down(14)}<select id="fix-${r.key}" data-fix="${r.key}" aria-label="${r.label}: ${r.value ? esc(r.value) : 'not sure'}, ${hint}. Change it">${opt('', r.value ? 'Change…' : 'Choose…', inOpts ? null : '')}${r.options.map(([v, l]) => opt(v, l, inOpts ? r.selected : null)).join('')}</select></span>`;
@@ -2944,7 +2941,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
         ${similar ? `<p class="similar">${I.info(16)}<span>You already have a similar workflow, <i>Weekly closed-ticket summary</i>. <button class="linkbtn" data-act="workflow" data-arg="nudge">Open it</button></span></p>` : ''}
       </section>
       <section class="pcard-s"><h4>When</h4>
-        <p class="when-line">${I.clock(16)}<span data-val="when">${timeOk ? `${schedText(w.sched)}, Singapore time` : '<span class="schip missing">Choose when it runs</span>'}</span>${picker ? '' : '<button class="btn sm" data-act="whenOpen" aria-expanded="false" aria-controls="whenpick">Change</button>'}</p>
+        <p class="when-line">${I.clock(16)}<span data-val="when">${timeOk ? `${schedText(w.sched)}, Singapore time` : '<span class="schip missing" title="Please choose">Choose when it runs</span>'}</span>${picker ? '' : '<button class="btn sm" data-act="whenOpen" aria-expanded="false" aria-controls="whenpick">Change</button>'}</p>
         ${picker}
       </section>
       <section class="pcard-s"><h4>What needs a yes</h4><p class="apsum">${I.shield(16)}<span>Creating the Jira ticket changes data, so each run waits for a yes in Teams. Any Approver on your team except you can say yes.${shows('namedApprovers') ? ` Named Approvers, with a backup and a stop time, come later. ${PLANNED_TAG}` : ''}</span></p></section>
