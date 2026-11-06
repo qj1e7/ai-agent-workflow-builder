@@ -136,14 +136,13 @@ describe('the Workflows list', () => {
     expect(rowOf(html, 'uc_01JB7')).toContain('data-state="waiting"')
   })
 
-  it('has a search box and the four filters, with All pressed', () => {
+  it('has a search box and the three filters, with All pressed', () => {
     const main = mainOf(render())
     expect(main).toMatch(/<label[^>]*for="find-workflows"[^>]*>Find a workflow<\/label>/)
     expect(main).toMatch(/<input[^>]*type="search"[^>]*id="find-workflows"|<input[^>]*id="find-workflows"[^>]*type="search"/)
     const pressed = [...main.matchAll(/<button[^>]*aria-pressed="(true|false)"[^>]*>([^<]*)<\/button>/g)].map((m) => [m[2], m[1]])
     expect(pressed).toEqual([
       ['All', 'true'],
-      ['Needs you', 'false'],
       ['Stopped', 'false'],
       ['Paused', 'false'],
     ])

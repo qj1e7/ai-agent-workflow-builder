@@ -213,11 +213,10 @@ export function rowAction(latest: RunView | null, viewer: Viewer): RowAction | n
   return null
 }
 
-export type Filter = 'all' | 'needs' | 'stopped' | 'paused'
+export type Filter = 'all' | 'stopped' | 'paused'
 
 export const FILTERS: readonly (readonly [Filter, string])[] = [
   ['all', 'All'],
-  ['needs', 'Needs you'],
   ['stopped', 'Stopped'],
   ['paused', 'Paused'],
 ]
@@ -233,8 +232,6 @@ function kept(row: Row, filter: Filter, words: string): boolean {
   switch (filter) {
     case 'all':
       return true
-    case 'needs':
-      return row.action !== null
     case 'stopped':
       return row.latest?.state === 'failed'
     case 'paused':
