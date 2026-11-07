@@ -56,6 +56,8 @@ def row(
     approval_id: ApprovalId | None = None,
     added_at: datetime = ADDED_AT,
     newest_read_at: datetime | None = None,
+    moved_to: str | None = None,
+    not_found: bool = False,
 ) -> WatchedSoftwareView:
     first_check = our_version_source is not None and our_version_source.kind == "first_check"
     return WatchedSoftwareView.model_validate(
@@ -73,6 +75,8 @@ def row(
             "problem": problem,
             "open_ticket": open_ticket,
             "approval_id": approval_id,
+            "moved_to": moved_to,
+            "not_found": not_found,
             "added_by": ALICE,
             "added_at": added_at,
         }
@@ -178,6 +182,44 @@ STATUSES = WatchlistView(
     schedule=SCHEDULE,
 )
 
+# GitHub renamed tiangolo/fastapi, so the saved name still works through a redirect, and the row
+# offers the new address. langchain-ai/langserve answers 404 and names no new home, so its row
+# offers nothing. A healthy row beside them shows what an ordinary row looks like.
+MOVED = STATUSES.model_copy(
+    update={
+        "version": 9,
+        "software": attention_first(
+            [
+                ROWS[1],
+                row(
+                    7,
+                    "FastAPI",
+                    "tiangolo/fastapi",
+                    "0.115.0",
+                    given(),
+                    "0.115.2",
+                    CHECKED_AT,
+                    "behind",
+                    moved_to="fastapi/fastapi",
+                ),
+                row(
+                    8,
+                    "LangServe",
+                    "langchain-ai/langserve",
+                    "0.3.1",
+                    given(),
+                    "0.3.1",
+                    CHECKED_AT,
+                    "cant_check",
+                    problem="GitHub answered 404 Not Found.",
+                    newest_read_at=FIRST_CHECK_AT,
+                    not_found=True,
+                ),
+            ]
+        ),
+    }
+)
+
 EMPTY = WatchlistView(
     use_case_id=USE_CASE_ID,
     version=8,
@@ -225,6 +267,7 @@ def watchlist_fixtures() -> dict[str, WireModel | list[WireModel]]:
         "watchlist/none.json": WatchlistOut(watchlist=None),
         "watchlist/empty.json": EMPTY,
         "watchlist/statuses.json": STATUSES,
+        "watchlist/moved.json": MOVED,
         "watchlist/add-software.json": ADD_SOFTWARE,
         "watchlist/schedule.in.json": SCHEDULE_IN,
         "watchlist/schedule.saved.json": SCHEDULE_SAVED_VIEW,

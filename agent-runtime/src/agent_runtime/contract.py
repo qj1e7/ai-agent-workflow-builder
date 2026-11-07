@@ -361,6 +361,17 @@ class Finding(WireModel):
         "behind or already_raised."
     )
     detail: str = Field(description="One plain sentence for people about this software.")
+    full_name: RepoName | None = Field(
+        default=None,
+        description="The owner/name GitHub answered for the saved repository at this check. It "
+        "differs from the saved one when GitHub renamed or moved the repository and redirects "
+        "the old name. None when GitHub was not asked or did not answer.",
+    )
+    not_found: bool = Field(
+        default=False,
+        description="True when GitHub answered that the saved repository does not exist (404). "
+        "Nothing says where it went.",
+    )
 
 
 class TaskOutput(WireModel):

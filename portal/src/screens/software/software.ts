@@ -20,6 +20,47 @@ export function cantCheckWords(problem: string | null, checking: Checking): stri
   return `${problem ?? 'Can’t check right now.'} ${checkedAgain(checking)}`
 }
 
+/** GitHub told the check the saved repository has no home: the row says so, with no way to fix it by button. */
+export function notFoundWords(row: Pick<WatchedSoftwareView, 'name' | 'source'>, { operator, scheduled, paused }: Checking & { readonly operator: boolean }): string {
+  const skipped = `GitHub can’t find ${row.source.ref}. It may have moved to another repository. ${row.name} is skipped until this is fixed.`
+  if (!operator) return `${skipped} An Operator can fix this.`
+  return `${skipped} Remove it and add it again at its new address. ${checkedAgain({ scheduled, paused })}`
+}
+
+/** GitHub renamed the saved repository and passes the old name on to the new one. */
+export function movedWords(row: Pick<WatchedSoftwareView, 'source' | 'moved_to'>): string {
+  return `GitHub now calls this project ${row.moved_to}. We saved ${row.source.ref}, and checks still reach it through GitHub’s redirect.`
+}
+
+export function askNewAddressWords(row: Pick<WatchedSoftwareView, 'name' | 'moved_to'>): string {
+  return `Read ${row.name} from ${row.moved_to} from now on? Only our list changes. Nothing is written to GitHub or Jira.`
+}
+
+export const NEW_ADDRESS_ASK = 'Use the new address'
+
+export function movedHeadline(row: Pick<WatchedSoftwareView, 'name' | 'source' | 'moved_to'>): string {
+  return `GitHub moved ${row.name} from ${row.source.ref} to ${row.moved_to}.`
+}
+
+export function notFoundHeadline(row: Pick<WatchedSoftwareView, 'name' | 'source'>): string {
+  return `GitHub can’t find ${row.source.ref}, the address saved for ${row.name}.`
+}
+
+export interface Attention {
+  readonly id: string
+  readonly name: string
+  readonly words: string
+}
+
+/** The rows whose address needs a person, in the order of the list. A moved row and a not-found row never overlap. */
+export function addressAttentionOf(rows: readonly WatchedSoftwareView[]): Attention[] {
+  return rows.flatMap((row) => {
+    if (row.moved_to) return [{ id: row.id, name: row.name, words: movedHeadline(row) }]
+    if (row.not_found) return [{ id: row.id, name: row.name, words: notFoundHeadline(row) }]
+    return []
+  })
+}
+
 export const PAUSED_WORDS = 'Paused. No check runs until an Operator resumes it.'
 
 /** True when the schedule starts checks: it is set, and not held because its owner can no longer run it. */

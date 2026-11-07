@@ -47,6 +47,8 @@ class SourceRejected(Exception):
 class ReleaseSource(Protocol):
     def fetch(self, repo: str) -> list[Release]: ...
 
+    def current_name(self, repo: str) -> str: ...
+
 
 @dataclass(frozen=True)
 class RetryPolicy:

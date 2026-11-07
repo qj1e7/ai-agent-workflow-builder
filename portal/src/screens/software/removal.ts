@@ -1,5 +1,6 @@
 import { ApiError } from '../../api/client'
 import type { Latch } from '../../api/latch'
+import { rowDomId } from './software'
 
 export interface Named {
   readonly id: string
@@ -8,6 +9,8 @@ export interface Named {
 
 type Notice =
   | { readonly kind: 'added'; readonly name: string }
+  | { readonly kind: 'switched'; readonly row: Named; readonly from: string; readonly to: string }
+  | { readonly kind: 'switchedBack'; readonly row: Named; readonly to: string }
   | { readonly kind: 'removed'; readonly row: Named }
   | { readonly kind: 'restored'; readonly row: Named }
   | { readonly kind: 'gone'; readonly name: string }
@@ -16,13 +19,16 @@ type Notice =
 export interface ChangeFeedback {
   readonly notice: Notice | null
   readonly problem: string | null
-  readonly busy: { readonly id: string; readonly act: 'remove' | 'restore' } | null
+  readonly busy: { readonly id: string; readonly act: 'remove' | 'restore' | 'switch' | 'switchBack' } | null
   readonly focusTargetId: string | null
 }
 
 export type FeedbackEvent =
   | { readonly type: 'added'; readonly name: string }
   | { readonly type: 'removing' | 'removed' | 'gone' | 'restoring' | 'restored'; readonly row: Named }
+  | { readonly type: 'switching' | 'switchingBack'; readonly row: Named }
+  | { readonly type: 'switched'; readonly row: Named; readonly from: string; readonly to: string }
+  | { readonly type: 'switchedBack'; readonly row: Named; readonly to: string }
   | { readonly type: 'failed' | 'refused'; readonly words: string }
   | { readonly type: 'resumed' | 'dismissed' }
 
@@ -51,6 +57,14 @@ export function changeFeedback(state: ChangeFeedback, event: FeedbackEvent): Cha
       return { ...state, problem: null, busy: { id: event.row.id, act: 'restore' }, focusTargetId: null }
     case 'restored':
       return { notice: { kind: 'restored', row: event.row }, problem: null, busy: null, focusTargetId: removeButtonId(event.row.id) }
+    case 'switching':
+      return { notice: null, problem: null, busy: { id: event.row.id, act: 'switch' }, focusTargetId: null }
+    case 'switched':
+      return { notice: { kind: 'switched', row: event.row, from: event.from, to: event.to }, problem: null, busy: null, focusTargetId: UNDO_ID }
+    case 'switchingBack':
+      return { ...state, problem: null, busy: { id: event.row.id, act: 'switchBack' }, focusTargetId: null }
+    case 'switchedBack':
+      return { notice: { kind: 'switchedBack', row: event.row, to: event.to }, problem: null, busy: null, focusTargetId: rowDomId(event.row.id) }
     case 'failed':
       return { ...state, problem: event.words, busy: null, focusTargetId: null }
     case 'refused':
@@ -67,6 +81,11 @@ interface Checking {
   readonly paused: boolean
 }
 
+function nextCheckWords({ scheduled, paused }: Checking): string {
+  if (paused) return 'It is checked at the next check once an Operator resumes the watchlist.'
+  return scheduled ? 'It is checked at the next check.' : 'Press Check now to check it.'
+}
+
 function addedWords(name: string, { scheduled, paused }: Checking): string {
   if (paused) return scheduled ? `Added ${name}. It is checked at the next check once an Operator resumes the watchlist.` : `Added ${name}. It can be checked once an Operator resumes the watchlist.`
   return scheduled ? `Added ${name}. It is checked at the next check.` : `Added ${name}. Press Check now to check it.`
@@ -76,6 +95,10 @@ export function noticeWords(notice: Notice, checking: Checking): string {
   switch (notice.kind) {
     case 'added':
       return addedWords(notice.name, checking)
+    case 'switched':
+      return `${notice.row.name} is now read from ${notice.to}. ${nextCheckWords(checking)}`
+    case 'switchedBack':
+      return `Put back. ${notice.row.name} is read from ${notice.to} again.`
     case 'removed':
       return `Removed ${notice.row.name}. It won’t be checked any more.`
     case 'restored':
@@ -88,7 +111,7 @@ export function noticeWords(notice: Notice, checking: Checking): string {
 }
 
 export function noticeButtons(notice: Notice): readonly ('Undo' | 'Dismiss')[] {
-  return notice.kind === 'removed' ? ['Undo', 'Dismiss'] : ['Dismiss']
+  return notice.kind === 'removed' || notice.kind === 'switched' ? ['Undo', 'Dismiss'] : ['Dismiss']
 }
 
 interface EscapeKey {
@@ -130,6 +153,64 @@ function restoreProblem(name: string, error: unknown, words: Words): string {
   if (answered(error, 410)) return `${start} It was removed more than a day ago. Add it again to keep checking it.`
   if (answered(error, 422)) return `${start} The list is full. Remove software you no longer run, then try again.`
   return `${start} ${words(error)}`
+}
+
+function switchProblem(name: string, error: unknown, words: Words): string {
+  const start = `Could not use the new address for ${name}.`
+  if (answered(error, 409)) return `${start} GitHub has not reported that address at the latest check, or the list already watches it. The list shows what GitHub reported.`
+  if (answered(error, 404)) return `${start} The platform has no record of it.`
+  return `${start} ${words(error)}`
+}
+
+function switchBackProblem(name: string, error: unknown, words: Words): string {
+  const start = `Could not put the old address back for ${name}.`
+  if (answered(error, 410)) return `${start} It was changed more than a day ago.`
+  if (answered(error, 409)) return `${start} The list already watches that address, or ${name} never had it.`
+  if (answered(error, 404)) return `${start} The platform has no record of it.`
+  return `${start} ${words(error)}`
+}
+
+type SendAddress = (body: { softwareId: string; repo: string }, outcome: MutateCallbacks) => void
+
+export interface Moved extends Named {
+  /** The address saved now. */
+  readonly ref: string
+  /** The address GitHub reported. */
+  readonly movedTo: string
+}
+
+export function pressUseNewAddress(latch: Latch, send: SendAddress, row: Moved, dispatch: (event: FeedbackEvent) => void, words: Words, onDone: () => void): void {
+  latch.run((settled) => {
+    dispatch({ type: 'switching', row })
+    send(
+      { softwareId: row.id, repo: row.movedTo },
+      {
+        onSuccess: () => {
+          onDone()
+          dispatch({ type: 'switched', row, from: row.ref, to: row.movedTo })
+        },
+        onError: (error) => {
+          onDone()
+          dispatch({ type: refusal(error) ? 'refused' : 'failed', words: switchProblem(row.name, error, words) })
+        },
+        onSettled: settled,
+      },
+    )
+  })
+}
+
+export function pressUndoAddress(latch: Latch, send: SendAddress, notice: { readonly row: Named; readonly from: string }, dispatch: (event: FeedbackEvent) => void, words: Words): void {
+  latch.run((settled) => {
+    dispatch({ type: 'switchingBack', row: notice.row })
+    send(
+      { softwareId: notice.row.id, repo: notice.from },
+      {
+        onSuccess: () => dispatch({ type: 'switchedBack', row: notice.row, to: notice.from }),
+        onError: (error) => dispatch({ type: refusal(error) ? 'refused' : 'failed', words: switchBackProblem(notice.row.name, error, words) }),
+        onSettled: settled,
+      },
+    )
+  })
 }
 
 export function pressRemove(latch: Latch, send: Send, row: Named, dispatch: (event: FeedbackEvent) => void, words: Words): void {

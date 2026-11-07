@@ -7,7 +7,7 @@ the WatchlistFacts port, and the two are composed into the view the Portal shows
 
 import logging
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any, Protocol
 
@@ -52,6 +52,7 @@ from platform_api.orchestration import (
     FromTicketDone,
     Given,
     LastCheck,
+    LatestCheck,
     RuntimeDown,
     SavedSchedule,
     Schedule,
@@ -133,10 +134,31 @@ class WatchlistFull:
     limit: int
 
 
+@dataclass(frozen=True)
+class NoMoveReported:
+    """GitHub has not told the latest check that this software moved to that address."""
+
+    software_id: SoftwareId
+
+
+@dataclass(frozen=True)
+class NeverAtThatAddress:
+    ref: str
+
+
 def source_view(source: SoftwareSource) -> SourceView:
     return SourceView(
         kind=source.kind, ref=source.ref, url=f"https://github.com/{source.ref}/releases"
     )
+
+
+def moved_to(listed: ListedSoftware, check: LatestCheck | None) -> str | None:
+    """The repository GitHub answered for the saved one, when it is another one. A change of
+    case is the same repository."""
+    named = None if check is None else check.github_name
+    if named is None or named.casefold() == listed.source.ref.casefold():
+        return None
+    return named
 
 
 def software_view(listed: ListedSoftware, standing: Standing) -> WatchedSoftwareView:
@@ -155,6 +177,7 @@ def software_view(listed: ListedSoftware, standing: Standing) -> WatchedSoftware
         case FromTicketDone(version, at, ticket):
             ours = version
             our_source = VersionSourceView(kind="ticket_done", at=at, ticket=ticket)
+    moved = moved_to(listed, facts.latest_check)
     match facts.latest_check:
         case None:
             newest, read_at, checked_at, problem = None, None, None, None
@@ -178,6 +201,8 @@ def software_view(listed: ListedSoftware, standing: Standing) -> WatchedSoftware
         problem=problem,
         open_ticket=None if facts.open_ticket is None else facts.open_ticket.key,
         approval_id=None if facts.pending is None else facts.pending.approval_id,
+        moved_to=moved,
+        not_found=isinstance(facts.latest_check, CouldNotCheck) and facts.latest_check.not_found,
         added_by=listed.added_by,
         added_at=listed.added_at,
     )
@@ -311,6 +336,57 @@ async def _last_removal(
     if row is None or row["removed_at"] is None:
         return None
     return Removal(_listed(row), row["removed_at"])
+
+
+def _listed_in(record: WatchlistRecord, software_id: SoftwareId) -> ListedSoftware | None:
+    return next((s for s in record.software if s.id == software_id), None)
+
+
+def _watched_elsewhere(record: WatchlistRecord, software_id: SoftwareId, ref: str) -> bool:
+    wanted = ref.casefold()
+    return any(s.id != software_id and s.source.ref.casefold() == wanted for s in record.software)
+
+
+def _with_ref(
+    record: WatchlistRecord, software_id: SoftwareId, source: SoftwareSource
+) -> tuple[ListedSoftware, ...]:
+    return tuple(replace(s, source=source) if s.id == software_id else s for s in record.software)
+
+
+@dataclass(frozen=True)
+class AddressSwitch:
+    at: datetime
+    before: tuple[str, ...]
+
+
+async def _last_switch(
+    conn: Connection, use_case_id: UseCaseId, software_id: SoftwareId
+) -> AddressSwitch | None:
+    """When the software's saved repository last changed, and the repositories it had before,
+    newest first. None when it has only ever had one."""
+    rows = await (
+        await conn.execute(
+            "SELECT s.version, s.source_ref, v.created_at FROM builder.watched_software s "
+            "JOIN builder.use_case_versions v "
+            "ON v.use_case_id = s.use_case_id AND v.version = s.version "
+            "WHERE s.use_case_id = %s AND s.software_id = %s ORDER BY s.version DESC",
+            (use_case_id, software_id),
+        )
+    ).fetchall()
+    if not rows:
+        return None
+    current = str(rows[0]["source_ref"]).casefold()
+    since = rows[0]["created_at"]
+    index = 0
+    while index < len(rows) and str(rows[index]["source_ref"]).casefold() == current:
+        since = rows[index]["created_at"]
+        index += 1
+    before: list[str] = []
+    for row in rows[index:]:
+        ref = str(row["source_ref"])
+        if ref.casefold() != current and ref not in before:
+            before.append(ref)
+    return AddressSwitch(since, tuple(before)) if before else None
 
 
 async def _current(conn: Connection, lock: bool) -> WatchlistRecord | None:
@@ -506,6 +582,77 @@ class Watchlist:
                 if len(record.software) >= WATCHLIST_LIMIT:
                     return WatchlistFull(WATCHLIST_LIMIT)
                 record = await self._next_version(uow, record, (*record.software, removed))
+        return await self._view_of(record)
+
+    async def use_new_address(
+        self, principal: Principal, software_id: SoftwareId, repo: str
+    ) -> WatchlistView | NoSuchSoftware | NoMoveReported | RepoAlreadyWatched:
+        """Replaces the saved repository of one software with the one GitHub reported at the
+        latest check, in a new version of the list. Only our own watchlist changes: nothing is
+        written to GitHub or Jira. The caller names the address it saw, so a report that has
+        changed since is refused instead of applied."""
+        async with self._db.transaction("builder") as uow:
+            await uow.conn.execute("SELECT pg_advisory_xact_lock(hashtext('builder.watchlist'))")
+            record = await _current(uow.conn, lock=True)
+            listed = None if record is None else _listed_in(record, software_id)
+            if record is None or listed is None:
+                return NoSuchSoftware(software_id)
+            if listed.source.ref.casefold() == repo.casefold():
+                return await self._view_of(record)
+            standing = await self._facts.standings(record.use_case_id, given_versions(record))
+            reported = moved_to(listed, standing.software[software_id].facts.latest_check)
+            if reported is None or reported.casefold() != repo.casefold():
+                return NoMoveReported(software_id)
+            if _watched_elsewhere(record, software_id, reported):
+                return RepoAlreadyWatched(reported)
+            record = await self._next_version(
+                uow, record, _with_ref(record, software_id, SoftwareSource(reported))
+            )
+        log.info(
+            "%s switched %s from %s to %s, version %d",
+            principal.user_id,
+            software_id,
+            listed.source.ref,
+            reported,
+            record.version,
+        )
+        return await self._view_of(record)
+
+    async def put_address_back(
+        self, principal: Principal, software_id: SoftwareId, repo: str
+    ) -> WatchlistView | NoSuchSoftware | NeverAtThatAddress | TooLate | RepoAlreadyWatched:
+        """Undo of use_new_address: the software goes back to an address it had before, within a
+        day of the switch, as a restore does. Asking for the address it has changes nothing."""
+        async with self._db.transaction("builder") as uow:
+            await uow.conn.execute("SELECT pg_advisory_xact_lock(hashtext('builder.watchlist'))")
+            record = await _current(uow.conn, lock=True)
+            listed = None if record is None else _listed_in(record, software_id)
+            if record is None or listed is None:
+                return NoSuchSoftware(software_id)
+            if listed.source.ref.casefold() == repo.casefold():
+                return await self._view_of(record)
+            switch = await _last_switch(uow.conn, record.use_case_id, software_id)
+            old = None
+            if switch is not None:
+                old = next((b for b in switch.before if b.casefold() == repo.casefold()), None)
+            if switch is None or old is None:
+                return NeverAtThatAddress(repo)
+            until = switch.at + RESTORE_WINDOW
+            if uow.now > until:
+                return TooLate(until)
+            if _watched_elsewhere(record, software_id, old):
+                return RepoAlreadyWatched(old)
+            record = await self._next_version(
+                uow, record, _with_ref(record, software_id, SoftwareSource(old))
+            )
+        log.info(
+            "%s put %s back from %s to %s, version %d",
+            principal.user_id,
+            software_id,
+            listed.source.ref,
+            old,
+            record.version,
+        )
         return await self._view_of(record)
 
     async def task_for(self, use_case_id: UseCaseId, version: int) -> WatchlistTask | None:

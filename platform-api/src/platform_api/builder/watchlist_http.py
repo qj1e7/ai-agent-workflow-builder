@@ -6,6 +6,7 @@ from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
 from platform_api.builder.http import Operator
 from platform_api.builder.lifecycle import TooLate
 from platform_api.builder.models import (
+    AddressIn,
     AddSoftware,
     FindIn,
     FindOut,
@@ -14,6 +15,8 @@ from platform_api.builder.models import (
     WatchlistView,
 )
 from platform_api.builder.watchlist import (
+    NeverAtThatAddress,
+    NoMoveReported,
     NoSuchSoftware,
     NoWatchlist,
     RepoAddedAgainSinceRemoval,
@@ -134,6 +137,71 @@ async def restore_software(
             )
         case WatchlistFull(limit):
             raise _full(limit)
+
+
+@router.post(
+    "/watchlist/software/{software_id}/address",
+    description=(
+        "Replaces the saved repository of one software with the one GitHub reported at the "
+        "latest check (moved_to on the row), after the person confirmed it. The body names the "
+        "address the person saw. A new version of the list is saved, so every later check reads "
+        "the new address. Only the watchlist changes: nothing is written to GitHub or Jira. "
+        "Asking again for the address already saved changes nothing."
+    ),
+    responses={
+        **OPERATORS_ONLY,
+        404: error_response("No such watched software"),
+        409: error_response(
+            "GitHub has not reported that address for this software, or the list already watches it"
+        ),
+    },
+)
+async def use_new_address(
+    software_id: str, body: AddressIn, principal: Operator, watchlist: CurrentWatchlist
+) -> WatchlistView:
+    match await watchlist.use_new_address(principal, SoftwareId(software_id), body.repo):
+        case WatchlistView() as switched:
+            return switched
+        case NoSuchSoftware():
+            raise HTTPException(404, "No such watched software")
+        case NoMoveReported():
+            raise HTTPException(
+                409, "GitHub has not reported that address for this software at the latest check"
+            )
+        case RepoAlreadyWatched(ref):
+            raise HTTPException(409, f"{ref} is already watched")
+
+
+@router.post(
+    "/watchlist/software/{software_id}/address/undo",
+    description=(
+        "Puts back the address a software had before the new one was used, within a day of the "
+        "switch, as the restore of a removal does. The body names the address to put back. "
+        "Asking for the address already saved changes nothing."
+    ),
+    responses={
+        **OPERATORS_ONLY,
+        404: error_response("No such watched software"),
+        409: error_response("The software never had that address, or the list now watches it"),
+        410: error_response("The address was switched more than a day ago"),
+    },
+)
+async def put_address_back(
+    software_id: str, body: AddressIn, principal: Operator, watchlist: CurrentWatchlist
+) -> WatchlistView:
+    match await watchlist.put_address_back(principal, SoftwareId(software_id), body.repo):
+        case WatchlistView() as back:
+            return back
+        case NoSuchSoftware():
+            raise HTTPException(404, "No such watched software")
+        case NeverAtThatAddress(ref):
+            raise HTTPException(409, f"This software was never at {ref}")
+        case RepoAlreadyWatched(ref):
+            raise HTTPException(409, f"{ref} is already watched")
+        case TooLate():
+            raise HTTPException(
+                410, "The address was changed more than a day ago, so it can't be put back."
+            )
 
 
 @router.put(

@@ -2452,7 +2452,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* The watchlist's moved project, as one item for Needs you and the watchlist's Needs attention. */
   function lsProblem() {
     if (S.firstDay || S.lsFixed || S.removed.includes('ls')) return null;
-    return { title: `GitHub can’t find ${LS_OLD}. It moved to ${LS_NEW}.`, meta: 'Software watchlist · LangServe', body: '<p class="small muted">LangServe is skipped until this is fixed. The AI troubleshooter suggests reading it from the new address.</p>', actions: `<button class="btn primary" data-act="useNewAddress" data-unbuilt="Use the new address (no route changes a watched software’s address yet)">Use the new address<span class="vh"> for LangServe</span></button><button class="btn" data-act="go" data-arg="software">See the watchlist</button>` };
+    return { title: `GitHub can’t find ${LS_OLD}. It moved to ${LS_NEW}.`, meta: 'Software watchlist · LangServe', body: '<p class="small muted">LangServe is skipped until this is fixed. The AI troubleshooter suggests reading it from the new address.</p>', actions: `<button class="btn primary" data-act="useNewAddress">Use the new address<span class="vh"> for LangServe</span></button><button class="btn" data-act="go" data-arg="software">See the watchlist</button>` };
   }
   /* Change who approves exists only with named Approvers (ADR 0024), so it is tagged Planned wherever it shows. */
   const changeApproversBtn = (id, act = 'editAppr', cls = 'btn') => (shows('namedApprovers') ? `<button class="${cls}" data-act="${act}" data-arg="${id}" data-unbuilt="Named Approvers (ADR 0024)">${cls.includes('sm') ? I.edit() : ''}Change who approves ${PLANNED_TAG}</button>` : '');

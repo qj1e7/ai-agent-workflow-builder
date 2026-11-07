@@ -158,6 +158,45 @@ def test_a_ticket_for_a_baseline_the_first_check_read_does_not_call_it_our_versi
     assert "our version" not in ticket.reason
 
 
+def test_each_finding_carries_the_name_github_answers_for_the_repository():
+    source = RepoSource(TAGS, renamed={"tiangolo/fastapi": FASTAPI})
+    old = software(FASTAPI_ID, "FastAPI", "tiangolo/fastapi", "0.115.0")
+    result = finished(Room(source).run(request_for(langgraph("1.2.14"), old)))
+    assert finding(result, LANGGRAPH_ID).full_name == LANGGRAPH
+    assert finding(result, FASTAPI_ID).full_name == FASTAPI
+    assert not finding(result, FASTAPI_ID).not_found
+
+
+def test_a_ticket_for_a_renamed_repository_names_the_saved_address_and_the_new_one():
+    source = RepoSource(TAGS, renamed={"tiangolo/fastapi": FASTAPI})
+    old = software(FASTAPI_ID, "FastAPI", "tiangolo/fastapi", "0.114.0")
+    [ticket] = finished(Room(source).run(request_for(old))).output.proposed
+    assert ticket.fields["body"].startswith(
+        "FastAPI has 1 new release on GitHub (tiangolo/fastapi, which GitHub now calls "
+        "fastapi/fastapi) newer than our version 0.114.0:"
+    )
+
+
+def test_a_repository_github_cannot_find_is_flagged_not_found_and_has_no_name():
+    source = RepoSource(TAGS, refused={FASTAPI: 404})
+    result = finished(Room(source).run(request_for(langgraph("1.2.14"), fastapi("0.115.0"))))
+    lost = finding(result, FASTAPI_ID)
+    assert (lost.state, lost.not_found, lost.full_name) == ("cant_check", True, None)
+
+
+def test_a_refusal_other_than_not_found_is_not_flagged_not_found():
+    source = RepoSource(TAGS, refused={FASTAPI: 403})
+    result = finished(Room(source).run(request_for(langgraph("1.2.14"), fastapi("0.115.0"))))
+    assert not finding(result, FASTAPI_ID).not_found
+
+
+def test_a_name_github_would_not_give_is_unknown_and_the_check_still_reads_the_releases():
+    source = RepoSource(TAGS, name_down={LANGGRAPH})
+    result = finished(Room(source).run(request_for(langgraph("1.2.14"))))
+    found = finding(result, LANGGRAPH_ID)
+    assert (found.state, found.full_name, found.not_found) == ("behind", None, False)
+
+
 def test_releases_of_another_tag_family_never_count():
     source = RepoSource({**TAGS, LANGGRAPH: ["cli==0.9.0", "sdk==1.0.0", *langgraph_tags()]})
     behind = finished(Room(source).run(request_for(langgraph("1.2.15"))))

@@ -1193,6 +1193,18 @@
           "title": "Detail",
           "type": "string"
         },
+        "full_name": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RepoName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The owner/name GitHub answered for the saved repository at this check. It differs from the saved one when GitHub renamed or moved the repository and redirects the old name. None when GitHub was not asked or did not answer."
+        },
         "new_versions": {
           "description": "Releases newer than our version, newest first. Empty unless the state is behind or already_raised.",
           "items": {
@@ -1212,6 +1224,12 @@
           ],
           "description": "The newest release at the source that matches the tag pattern. None when the source could not be read or has no such release.",
           "title": "Newest"
+        },
+        "not_found": {
+          "default": false,
+          "description": "True when GitHub answered that the saved repository does not exist (404). Nothing says where it went.",
+          "title": "Not Found",
+          "type": "boolean"
         },
         "software_id": {
           "title": "Software Id",

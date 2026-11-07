@@ -663,3 +663,46 @@ async def test_migration_0014_keeps_each_posts_channel_and_a_webhook_post_from_b
         assert rows == [("apr_practice", "practice"), ("apr_webhook", "teams_workflows")]
     finally:
         upgrade("orchestration", postgres.owner)
+
+
+async def test_migration_0015_keeps_what_github_said_about_the_address_and_back(
+    postgres: PostgresUrls, db: Database
+):
+    async with db.transaction("orchestration") as uow:
+        pending = Pending(RunId("run_addr"), 1, None, NOW)
+        record = RunRecord(RunId("run_addr"), SPEC, SPEC.owner, NOW, NOW, 1, pending, (), None)
+        await Store().insert_run(uow, record, "key-addr")
+    insert = (
+        "INSERT INTO orchestration.software_checks (use_case_id, software_id, run_id, "
+        "checked_at, newest_version, newest_at, problem, full_name, not_found) "
+        "VALUES ('uc_1', %s, 'run_addr', %s, %s, %s, %s, %s, %s)"
+    )
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        downgrade("orchestration", postgres.owner, "0014")
+        conn.execute(
+            "INSERT INTO orchestration.software_checks (use_case_id, software_id, run_id, "
+            "checked_at, newest_version, newest_at) VALUES ('uc_1', 'sw_old', 'run_addr', %s, "
+            "'1.0.0', %s)",
+            (NOW, NOW),
+        )
+        upgrade("orchestration", postgres.owner)
+        before = conn.execute(
+            "SELECT full_name, not_found FROM orchestration.software_checks "
+            "WHERE software_id = 'sw_old'"
+        ).fetchone()
+        assert before == (None, False), "a row from before says nothing about the address"
+        conn.execute(insert, ("sw_moved", NOW, "2.0.0", NOW, None, "fastapi/fastapi", False))
+        conn.execute(insert, ("sw_lost", NOW, None, None, "GitHub answered 404.", None, True))
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute(insert, ("sw_bad", NOW, "2.0.0", NOW, None, None, True))
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute(insert, ("sw_bad2", NOW, None, None, "404", "a/b", True))
+        downgrade("orchestration", postgres.owner, "0014")
+        try:
+            columns = conn.execute(
+                "SELECT column_name FROM information_schema.columns WHERE "
+                "table_schema = 'orchestration' AND table_name = 'software_checks'"
+            ).fetchall()
+            assert ("full_name",) not in columns and ("not_found",) not in columns
+        finally:
+            upgrade("orchestration", postgres.owner)

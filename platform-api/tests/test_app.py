@@ -55,6 +55,8 @@ ROUTES = {
     ("POST", "/api/v1/team-requests/{request_id}/seen"),
     ("DELETE", "/api/v1/watchlist/software/{software_id}"),
     ("POST", "/api/v1/watchlist/software/{software_id}/restore"),
+    ("POST", "/api/v1/watchlist/software/{software_id}/address"),
+    ("POST", "/api/v1/watchlist/software/{software_id}/address/undo"),
     ("GET", "/api/v1/runs"),
     ("GET", "/api/v1/runs/{run_id}"),
     ("POST", "/api/v1/runs/{run_id}/retry"),

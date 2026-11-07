@@ -1,0 +1,104 @@
+{
+  "use_case_id": "uc_01JBW",
+  "version": 9,
+  "ticket_project": "MOCK",
+  "state": "on",
+  "software": [
+    {
+      "id": "sw_01JBW00000000000000000008",
+      "name": "LangServe",
+      "source": {
+        "kind": "github",
+        "ref": "langchain-ai/langserve",
+        "url": "https://github.com/langchain-ai/langserve/releases"
+      },
+      "our_version": "0.3.1",
+      "our_version_source": {
+        "kind": "given",
+        "at": "2026-11-02T10:00:00Z",
+        "ticket": null
+      },
+      "compared_from": null,
+      "newest_version": "0.3.1",
+      "newest_read_at": "2026-11-09T01:00:00Z",
+      "checked_at": "2026-11-16T01:00:12Z",
+      "status": "cant_check",
+      "problem": "GitHub answered 404 Not Found.",
+      "open_ticket": null,
+      "approval_id": null,
+      "moved_to": null,
+      "not_found": true,
+      "added_by": "alice",
+      "added_at": "2026-11-02T10:00:00Z"
+    },
+    {
+      "id": "sw_01JBW00000000000000000007",
+      "name": "FastAPI",
+      "source": {
+        "kind": "github",
+        "ref": "tiangolo/fastapi",
+        "url": "https://github.com/tiangolo/fastapi/releases"
+      },
+      "our_version": "0.115.0",
+      "our_version_source": {
+        "kind": "given",
+        "at": "2026-11-02T10:00:00Z",
+        "ticket": null
+      },
+      "compared_from": null,
+      "newest_version": "0.115.2",
+      "newest_read_at": "2026-11-16T01:00:12Z",
+      "checked_at": "2026-11-16T01:00:12Z",
+      "status": "behind",
+      "problem": null,
+      "open_ticket": null,
+      "approval_id": null,
+      "moved_to": "fastapi/fastapi",
+      "not_found": false,
+      "added_by": "alice",
+      "added_at": "2026-11-02T10:00:00Z"
+    },
+    {
+      "id": "sw_01JBW00000000000000000002",
+      "name": "LangGraph",
+      "source": {
+        "kind": "github",
+        "ref": "langchain-ai/langgraph",
+        "url": "https://github.com/langchain-ai/langgraph/releases"
+      },
+      "our_version": "1.2.14",
+      "our_version_source": {
+        "kind": "given",
+        "at": "2026-11-02T10:00:00Z",
+        "ticket": null
+      },
+      "compared_from": null,
+      "newest_version": "1.2.16",
+      "newest_read_at": "2026-11-16T01:00:12Z",
+      "checked_at": "2026-11-16T01:00:12Z",
+      "status": "behind",
+      "problem": null,
+      "open_ticket": null,
+      "approval_id": null,
+      "moved_to": null,
+      "not_found": false,
+      "added_by": "alice",
+      "added_at": "2026-11-02T10:00:00Z"
+    }
+  ],
+  "last_check": {
+    "run_id": "run_01JBB",
+    "state": "awaiting_approval",
+    "started_at": "2026-11-16T01:00:12Z"
+  },
+  "schedule": {
+    "day": "monday",
+    "at": "09:00",
+    "time_zone": "Asia/Singapore",
+    "owner": "alice",
+    "owner_name": "Alice",
+    "saved_at": "2026-11-02T10:00:00Z",
+    "next_at": "2026-11-23T09:00:00+08:00",
+    "held": null
+  }
+}

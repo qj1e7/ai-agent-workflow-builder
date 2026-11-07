@@ -115,8 +115,11 @@ RELEASES_BY_REPO: dict[str, list[dict[str, Any]]] = {
 }
 """The repositories the mock knows. Any other repository answers 404, as GitHub does."""
 RELEASES = RELEASES_BY_REPO[REPO]
+RENAMED = {"tiangolo/fastapi": FASTAPI}
+"""Old names GitHub redirects to the repository's new name, as it does after a rename."""
 RELEASES_PATH = re.compile(r"^/repos/([^/]+)/([^/]+)/releases/?$")
 REPO_PATH = re.compile(r"^/repos/([^/]+)/([^/]+)/?$")
+BY_ID_PATH = re.compile(r"^/repositories/(\d+)(/releases)?/?$")
 
 
 def repo_body(repo: str) -> dict[str, Any]:
@@ -131,6 +134,17 @@ def repo_body(repo: str) -> dict[str, Any]:
         "html_url": f"https://github.com/{repo}",
         "default_branch": "main",
     }
+
+
+def renamed_to(repo: str) -> str | None:
+    return RENAMED.get(repo)
+
+
+def current_repo_of(repo_id: int) -> str | None:
+    for target in RENAMED.values():
+        if repo_body(target)["id"] == repo_id:
+            return target
+    return None
 
 
 class State:
@@ -183,6 +197,15 @@ def make_handler(state: State) -> type[BaseHTTPRequestHandler]:
             self.end_headers()
             self.wfile.write(payload)
 
+        def redirect(self, target: str, tail: str, query: str) -> None:
+            """GitHub answers a renamed repository with a 301 to its id, not to its new name."""
+            host = self.headers.get("Host", "localhost")
+            where = f"http://{host}/repositories/{repo_body(target)['id']}{tail}"
+            self.send_response(301)
+            self.send_header("Location", where + (f"?{query}" if query else ""))
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
         def send_rate_limit(self) -> None:
             """No token is anonymous. A token the mock does not know is refused, as GitHub does."""
             if state.mode == "unavailable":
@@ -212,11 +235,22 @@ def make_handler(state: State) -> type[BaseHTTPRequestHandler]:
                     self.send_json(200, {"mode": state.mode_of(repo), "repo": repo})
                 else:
                     self.send_json(400, {"message": "repo must be owner/name"})
+            elif (match := BY_ID_PATH.match(url.path)) is not None:
+                repo = current_repo_of(int(match.group(1)))
+                if repo is None:
+                    self.send_json(404, {"message": "Not Found"})
+                elif match.group(2) is None:
+                    self.send_json(200, repo_body(repo))
+                else:
+                    self.send_json(200, page_of(RELEASES_BY_REPO[repo], parse_qs(url.query)))
             elif (match := RELEASES_PATH.match(url.path)) is not None:
                 repo = f"{match.group(1)}/{match.group(2)}"
                 mode = state.mode_of(repo)
                 if mode == "unavailable":
                     self.send_json(503, {"message": "Service Unavailable"})
+                    return
+                if mode != "not_found" and (target := renamed_to(repo)) is not None:
+                    self.redirect(target, "/releases", url.query)
                     return
                 releases = None if mode == "not_found" else RELEASES_BY_REPO.get(repo)
                 if releases is None:
@@ -233,6 +267,9 @@ def make_handler(state: State) -> type[BaseHTTPRequestHandler]:
                 mode = state.mode_of(repo)
                 if mode == "unavailable":
                     self.send_json(503, {"message": "Service Unavailable"})
+                    return
+                if mode != "not_found" and (target := renamed_to(repo)) is not None:
+                    self.redirect(target, "", url.query)
                     return
                 if mode == "not_found" or repo not in RELEASES_BY_REPO:
                     self.send_json(404, {"message": "Not Found"})

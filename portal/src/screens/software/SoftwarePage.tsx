@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { useDisplayName } from '../../api/people'
-import { useApproval, useMe, useRemoveSoftware, useRestoreSoftware, useRun, useStartRun, useWatchlist } from '../../api/queries'
+import { useApproval, useMe, usePutAddressBack, useRemoveSoftware, useRestoreSoftware, useRun, useStartRun, useUseNewAddress, useWatchlist } from '../../api/queries'
 import type { LastCheckView, WatchedSoftwareView, WatchlistView } from '../../api/types'
 import { Button, ButtonLink } from '../../ui/Button'
 import { IconExternal } from '../../ui/icons'
@@ -12,6 +12,7 @@ import { TicketKeys, TicketLink } from '../jira/TicketKeys'
 import { AddSoftware } from './AddSoftware'
 import { pressCheckNow } from './checkNow'
 import { FindSoftware } from './FindSoftware'
+import { askButtonId, MovedNote, NotFoundNote } from './NewAddress'
 import { Schedule } from './Schedule'
 import {
   changeFeedback,
@@ -22,14 +23,17 @@ import {
   noticeWords,
   pressRemove,
   pressUndo,
+  pressUndoAddress,
+  pressUseNewAddress,
   PROBLEM_ID,
   removeButtonId,
   UNDO_ID,
   type ChangeFeedback,
-  type Named,
+  type Moved,
 } from './removal'
 import { SoftwareHistory } from './SoftwareHistory'
 import {
+  addressAttentionOf,
   cantCheckWords,
   decisionsOf,
   decisionTitle,
@@ -71,12 +75,17 @@ interface RowProps {
   readonly paused: boolean
   readonly open: boolean
   readonly removing: boolean
+  readonly confirming: boolean
+  readonly switching: boolean
   readonly nameOf: (id: string) => string
   readonly onToggle: () => void
   readonly onRemove: () => void
+  readonly onAskAddress: () => void
+  readonly onConfirmAddress: () => void
+  readonly onCancelAddress: () => void
 }
 
-function Row({ row, operator, scheduled, paused, open, removing, nameOf, onToggle, onRemove }: RowProps) {
+function Row({ row, operator, scheduled, paused, open, removing, confirming, switching, nameOf, onToggle, onRemove, onAskAddress, onConfirmAddress, onCancelAddress }: RowProps) {
   const historyId = `history-${row.id}`
   const newest = newestOf(row)
   const ours = oursOf(row)
@@ -113,7 +122,9 @@ function Row({ row, operator, scheduled, paused, open, removing, nameOf, onToggl
         <span className={styles['pill']} data-tone={statusTone[row.status]}>
           {statusWords(row)}
         </span>
-        {row.status === 'cant_check' ? <span className={styles['src']}>{cantCheckWords(row.problem, { scheduled, paused })}</span> : null}
+        {row.status === 'cant_check' && !row.not_found ? <span className={styles['src']}>{cantCheckWords(row.problem, { scheduled, paused })}</span> : null}
+        <NotFoundNote row={row} operator={operator} scheduled={scheduled} paused={paused} />
+        <MovedNote row={row} operator={operator} confirming={confirming} busy={switching} onAsk={onAskAddress} onConfirm={onConfirmAddress} onCancel={onCancelAddress} />
         {row.status === 'ticket_open' && row.open_ticket ? (
           <span className={styles['src']}>
             <TicketLink ticketKey={row.open_ticket} />
@@ -143,9 +154,14 @@ interface RowsProps {
   readonly paused: boolean
   readonly opened: string | null
   readonly removing: string | null
+  readonly confirming: string | null
+  readonly switching: string | null
   readonly nameOf: (id: string) => string
   readonly onToggle: (id: string) => void
   readonly onRemove: (row: WatchedSoftwareView) => void
+  readonly onAskAddress: (row: WatchedSoftwareView) => void
+  readonly onConfirmAddress: (row: WatchedSoftwareView) => void
+  readonly onCancelAddress: (row: WatchedSoftwareView) => void
 }
 
 function Rows({ rows, ...rest }: RowsProps) {
@@ -161,9 +177,14 @@ function Rows({ rows, ...rest }: RowsProps) {
           paused={rest.paused}
           open={rest.opened === row.id}
           removing={rest.removing === row.id}
+          confirming={rest.confirming === row.id}
+          switching={rest.switching === row.id}
           nameOf={rest.nameOf}
           onToggle={() => rest.onToggle(row.id)}
           onRemove={() => rest.onRemove(row)}
+          onAskAddress={() => rest.onAskAddress(row)}
+          onConfirmAddress={() => rest.onConfirmAddress(row)}
+          onCancelAddress={() => rest.onCancelAddress(row)}
         />
       ))}
     </ul>
@@ -229,7 +250,7 @@ interface NoticeProps {
   readonly feedback: ChangeFeedback
   readonly scheduled: boolean
   readonly paused: boolean
-  readonly onUndo: (row: Named) => void
+  readonly onUndo: (notice: NonNullable<ChangeFeedback['notice']>) => void
   readonly onDismiss: () => void
 }
 
@@ -243,8 +264,8 @@ function Notice({ box, feedback, scheduled, paused, onUndo, onDismiss }: NoticeP
         {notice ? (
           <div className={styles['actions']}>
             {noticeButtons(notice).map((label) =>
-              label === 'Undo' && notice.kind === 'removed' ? (
-                <Button key={label} id={UNDO_ID} loading={feedback.busy?.act === 'restore'} onClick={() => onUndo(notice.row)}>
+              label === 'Undo' && (notice.kind === 'removed' || notice.kind === 'switched') ? (
+                <Button key={label} id={UNDO_ID} loading={feedback.busy?.act === 'restore' || feedback.busy?.act === 'switchBack'} onClick={() => onUndo(notice)}>
                   Undo
                 </Button>
               ) : (
@@ -273,6 +294,9 @@ function Loaded({ view, operator, answeredAt }: { view: WatchlistView | null; op
   const words = useErrorWords()
   const removal = useRemoveSoftware()
   const restore = useRestoreSoftware()
+  const useAddress = useUseNewAddress()
+  const putBack = usePutAddressBack()
+  const [confirming, setConfirming] = useState<string | null>(null)
   const changes = useLatch()
   const noticeBox = useRef<HTMLDivElement>(null)
   useFocusOnceRendered(feedback)
@@ -300,6 +324,7 @@ function Loaded({ view, operator, answeredAt }: { view: WatchlistView | null; op
   const rows = rowsMatching(software, query)
   const shown = rows.length
   const decisions = decisionsOf(software)
+  const addresses = addressAttentionOf(software)
   const searching = query.trim() !== ''
 
   const rowProps = {
@@ -308,7 +333,19 @@ function Loaded({ view, operator, answeredAt }: { view: WatchlistView | null; op
     paused,
     opened,
     removing: feedback.busy?.act === 'remove' ? feedback.busy.id : null,
+    confirming,
+    switching: feedback.busy?.act === 'switch' ? feedback.busy.id : null,
     nameOf,
+    onAskAddress: (row: WatchedSoftwareView) => setConfirming(row.id),
+    onCancelAddress: (row: WatchedSoftwareView) => {
+      setConfirming(null)
+      requestAnimationFrame(() => document.getElementById(askButtonId(row.id))?.focus())
+    },
+    onConfirmAddress: (row: WatchedSoftwareView) => {
+      if (!row.moved_to) return
+      const moved: Moved = { id: row.id, name: row.name, ref: row.source.ref, movedTo: row.moved_to }
+      pressUseNewAddress(changes, useAddress.mutate, moved, dispatch, words, () => setConfirming(null))
+    },
     onToggle: (id: string) => setOpened((current) => (current === id ? null : id)),
     onRemove: (row: WatchedSoftwareView) => pressRemove(changes, removal.mutate, row, dispatch, words),
   }
@@ -327,14 +364,31 @@ function Loaded({ view, operator, answeredAt }: { view: WatchlistView | null; op
     <>
       {operator && view && !paused && software.length > 0 ? <CheckNow useCaseId={view.use_case_id} /> : null}
       {view?.last_check?.state === 'failed' ? <LastCheckStopped last={view.last_check} /> : null}
-      <Notice box={noticeBox} feedback={feedback} scheduled={scheduled} paused={paused} onUndo={(row) => pressUndo(changes, restore.mutate, row, dispatch, words)} onDismiss={dismiss} />
-      {decisions.length > 0 ? (
+      <Notice
+        box={noticeBox}
+        feedback={feedback}
+        scheduled={scheduled}
+        paused={paused}
+        onUndo={(notice) => (notice.kind === 'switched' ? pressUndoAddress(changes, putBack.mutate, notice, dispatch, words) : notice.kind === 'removed' ? pressUndo(changes, restore.mutate, notice.row, dispatch, words) : undefined)}
+        onDismiss={dismiss}
+      />
+      {decisions.length > 0 || addresses.length > 0 ? (
         <section className={styles['section']} aria-labelledby="needs-attention-heading">
           <h2 id="needs-attention-heading">
-            Needs attention <span className={styles['count']}>{decisions.length}</span>
+            Needs attention <span className={styles['count']}>{decisions.length + addresses.length}</span>
           </h2>
           {decisions.map((decision) => (
             <DecisionBar key={decision.approvalId} decision={decision} />
+          ))}
+          {addresses.map((item) => (
+            <div key={item.id} className={styles['addressBar']}>
+              <div>
+                <b>{item.words}</b>
+              </div>
+              <Button onClick={() => showRow(item.id)}>
+                Show it<span className="visually-hidden"> on the list: {item.name}</span>
+              </Button>
+            </div>
           ))}
         </section>
       ) : null}

@@ -186,3 +186,165 @@ test('an Approver who is not an Operator sees the list but no way to add', async
   await expect(page.getByRole('button', { name: 'Find it' })).toHaveCount(0)
   await context.close()
 })
+
+const FASTAPI_OLD = { name: 'FastAPI', repo: 'tiangolo/fastapi', our_version: '0.115.0' }
+const MOVED_WORDS = 'GitHub now calls this project fastapi/fastapi. We saved tiangolo/fastapi, and checks still reach it through GitHub’s redirect.'
+
+for (const phone of [false, true]) {
+  const width = phone ? '390' : '1440'
+
+  test(`GitHub renamed a watched repository: the row, the ticket and the approval name it, an Operator switches by keyboard with Undo, and the next check uses the new address (${width})`, async ({ browser, backend }, info) => {
+    await backend.freshWatchlist('alice', [FASTAPI_OLD])
+    const alice = await devContext(browser, 'alice', { phone })
+    const page = await alice.newPage()
+    const watch = watchPage(page)
+    await page.goto('/software')
+    const row = page.locator('li[data-status]').filter({ hasText: 'FastAPI' })
+    await expect(row).not.toContainText('GitHub now calls')
+    await expect(page.getByRole('button', { name: /^Use the new address/ })).toHaveCount(0)
+
+    await page.getByRole('button', { name: 'Check now' }).click()
+    await expect(page).toHaveURL(/\/runs\/[^/]+$/)
+    const runId = page.url().split('/').at(-1) ?? ''
+    await backend.waitForState(runId, ['awaiting_approval'])
+    const approvalId = await backend.approvalIdOf(runId)
+
+    await page.goto('/software')
+    await expect(row).toContainText(MOVED_WORDS)
+    await expect(row).toContainText('tiangolo/fastapi')
+    const attention = page.getByRole('region', { name: /^Needs attention/ })
+    await expect(attention).toContainText('GitHub moved FastAPI from tiangolo/fastapi to fastapi/fastapi.')
+    await expect(page.getByRole('button', { name: /^Use the new address/ })).toHaveCount(1)
+    await expectAccessible(page, path.join(OUT, 'axe'), `n21b-moved-${width}`)
+    await shot(page, info, `n21b-04-moved-${width}`)
+    if (phone) expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'no sideways scroll at 390 px').toBe(true)
+
+    const forBob = await backend.get<{ actions: { fields: { title: string; body: string } }[] }>('bob', `/api/v1/approvals/${approvalId}`)
+    const ticketBody = forBob.actions[0]?.fields.body ?? ''
+    expect(ticketBody).toContain('(tiangolo/fastapi, which GitHub now calls fastapi/fastapi)')
+
+    // The keyboard: Enter asks, Escape cancels and gives focus back, Enter asks again, Tab reaches Yes.
+    const versionBefore = (await backend.get<{ watchlist: { version: number } }>('alice', '/api/v1/watchlist')).watchlist.version
+    const ask = page.getByRole('button', { name: 'Use the new address for FastAPI' })
+    await ask.focus()
+    await page.keyboard.press('Enter')
+    const question = page.locator('[id^="new-address-question-"]')
+    await expect(question).toBeFocused()
+    await expect(question).toHaveText('Read FastAPI from fastapi/fastapi from now on? Only our list changes. Nothing is written to GitHub or Jira.')
+    await shot(page, info, `n21b-04-confirm-${width}`)
+    await page.keyboard.press('Escape')
+    await expect(ask).toBeFocused()
+    await expect(row).toContainText('tiangolo/fastapi')
+    expect((await backend.get<{ watchlist: { version: number } }>('alice', '/api/v1/watchlist')).watchlist.version, 'cancelling saved nothing').toBe(versionBefore)
+    await page.keyboard.press('Enter')
+    await expect(question).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(page.getByRole('button', { name: 'Yes, use fastapi/fastapi' })).toBeFocused()
+    await page.keyboard.press('Enter')
+
+    const notice = page.locator('#change-notice')
+    await expect(notice).toContainText('FastAPI is now read from fastapi/fastapi. Press Check now to check it.')
+    await expect(page.getByRole('button', { name: 'Undo' })).toBeFocused()
+    await expect(row).toContainText('fastapi/fastapi')
+    await expect(row).not.toContainText('GitHub now calls')
+    await expect(row).not.toContainText('tiangolo/fastapi')
+    await expect(attention).toHaveCount(1)
+    await expect(attention).not.toContainText('GitHub moved')
+    await shot(page, info, `n21b-04-switched-${width}`)
+
+    await page.keyboard.press('Enter')
+    await expect(notice).toContainText('Put back. FastAPI is read from tiangolo/fastapi again.')
+    await expect(row).toBeFocused()
+    await expect(row).toContainText(MOVED_WORDS)
+    await ask.focus()
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('Tab')
+    await page.keyboard.press('Enter')
+    await expect(notice).toContainText('FastAPI is now read from fastapi/fastapi.')
+    const saved = await backend.get<{ watchlist: { software: { source: { ref: string } }[] } }>('alice', '/api/v1/watchlist')
+    expect(saved.watchlist.software.map((item) => item.source.ref)).toEqual(['fastapi/fastapi'])
+
+    // Nothing was written outside our list: the only ticket is still waiting for a yes.
+    expect((await backend.tickets()).filter((ticket) => ticket.run_id === runId)).toEqual([])
+
+    const bob = await devContext(browser, 'bob', { phone })
+    const bobPage = await bob.newPage()
+    await bobPage.goto(`/approvals/${approvalId}`)
+    await expect(bobPage.getByRole('main')).toContainText('tiangolo/fastapi, which GitHub now calls fastapi/fastapi')
+    await bobPage.getByRole('button', { name: 'Decline' }).click()
+    await expect(bobPage.getByRole('heading', { level: 1 })).toHaveText('Declined, nothing was written', { timeout: 60_000 })
+    await bob.close()
+
+    await page.getByRole('button', { name: 'Check now' }).click()
+    await expect(page).toHaveURL(/\/runs\/[^/]+$/)
+    const next = page.url().split('/').at(-1) ?? ''
+    expect(next).not.toBe(runId)
+    await backend.waitForState(next, ['awaiting_approval'])
+    const later = await backend.get<{ actions: { fields: { body: string } }[] }>('bob', `/api/v1/approvals/${await backend.approvalIdOf(next)}`)
+    const laterBody = later.actions[0]?.fields.body ?? ''
+    expect(laterBody, 'the next check read the new address').toContain('on GitHub (fastapi/fastapi) newer than our version 0.115.0')
+    expect(laterBody).not.toContain('tiangolo')
+    await page.goto('/software')
+    await expect(row).toContainText('fastapi/fastapi')
+    await expect(row).not.toContainText('GitHub now calls')
+    await shot(page, info, `n21b-04-next-check-${width}`)
+    assertClean(watch)
+    await alice.close()
+  })
+
+  test(`a repository GitHub cannot find says so, offers no new address and keeps Remove; an Approver sees the words and no buttons (${width})`, async ({ browser, backend }, info) => {
+    await backend.freshWatchlist('alice', [
+      { name: 'LangGraph', repo: 'langchain-ai/langgraph', our_version: '1.2.16' },
+      { name: 'LangServe', repo: 'langchain-ai/langserve', our_version: '0.3.1' },
+    ])
+    const alice = await devContext(browser, 'alice', { phone })
+    const page = await alice.newPage()
+    const watch = watchPage(page)
+    await page.goto('/software')
+    await page.getByRole('button', { name: 'Check now' }).click()
+    await expect(page).toHaveURL(/\/runs\/[^/]+$/)
+    const runId = page.url().split('/').at(-1) ?? ''
+    await backend.waitForState(runId, ['succeeded'])
+    await page.goto('/software')
+    const row = page.locator('li[data-status]').filter({ hasText: 'LangServe' })
+    await expect(row).toContainText('Can’t check')
+    await expect(row).toContainText('GitHub can’t find langchain-ai/langserve. It may have moved to another repository. LangServe is skipped until this is fixed. Remove it and add it again at its new address.')
+    await expect(row).not.toContainText('GitHub answered 404')
+    await expect(page.getByRole('button', { name: /^Use the new address/ })).toHaveCount(0)
+    await expect(row.getByRole('button', { name: 'Remove LangServe' })).toBeVisible()
+    const attention = page.getByRole('region', { name: /^Needs attention/ })
+    await expect(attention).toContainText('GitHub can’t find langchain-ai/langserve, the address saved for LangServe.')
+    await expectAccessible(page, path.join(OUT, 'axe'), `n21b-not-found-${width}`)
+    await shot(page, info, `n21b-04-not-found-${width}`)
+    if (phone) expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'no sideways scroll at 390 px').toBe(true)
+
+    await attention.getByRole('button', { name: /^Show it/ }).focus()
+    await page.keyboard.press('Enter')
+    await expect(row).toBeFocused()
+
+    const bob = await devContext(browser, 'bob', { phone })
+    const bobPage = await bob.newPage()
+    await bobPage.goto('/software')
+    const bobRow = bobPage.locator('li[data-status]').filter({ hasText: 'LangServe' })
+    await expect(bobRow).toContainText('An Operator can fix this.')
+    await expect(bobPage.getByRole('button', { name: /^(Use the new address|Remove)/ })).toHaveCount(0)
+    await bob.close()
+    assertClean(watch)
+    await alice.close()
+  })
+}
+
+test('an Approver sees that GitHub renamed a repository and that an Operator can switch it, with no button', async ({ browser, backend }) => {
+  await backend.freshWatchlist('alice', [FASTAPI_OLD])
+  await backend.checkNow('alice', (await backend.get<{ watchlist: { use_case_id: string } }>('alice', '/api/v1/watchlist')).watchlist.use_case_id).then((runId) => backend.waitForState(runId, ['awaiting_approval']))
+  const bob = await devContext(browser, 'bob')
+  const page = await bob.newPage()
+  await page.goto('/software')
+  const row = page.locator('li[data-status]').filter({ hasText: 'FastAPI' })
+  await expect(row).toContainText(MOVED_WORDS)
+  await expect(row).toContainText('An Operator can switch it to the new address.')
+  await expect(page.getByRole('button', { name: /^Use the new address/ })).toHaveCount(0)
+  const answer = await backend.send('POST', 'bob', `/api/v1/watchlist/software/${(await backend.get<{ watchlist: { software: { id: string }[] } }>('alice', '/api/v1/watchlist')).watchlist.software[0]?.id}/address`, { repo: 'fastapi/fastapi' })
+  expect(answer.status, 'an Approver who is not an Operator is refused by the platform too').toBe(403)
+  await bob.close()
+})

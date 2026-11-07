@@ -254,8 +254,28 @@ class WatchedSoftwareView(WireModel):
     problem: str | None
     open_ticket: str | None
     approval_id: ApprovalId | None
+    moved_to: RepoName | None = Field(
+        default=None,
+        description="The repository GitHub answered for the saved one at the latest check, when "
+        "it is a different one: GitHub renamed the repository and redirects the old name. Null "
+        "when the names agree, or when no check has read it. The Operator may switch the saved "
+        "repository to it with POST /watchlist/software/{software_id}/address.",
+    )
+    not_found: bool = Field(
+        default=False,
+        description="True when the latest check was told by GitHub that the saved repository "
+        "does not exist. GitHub does not say where it went, so nothing is offered: remove the "
+        "software and add it again at its new address.",
+    )
     added_by: UserId
     added_at: datetime
+
+
+class AddressIn(WireIn):
+    repo: RepoName = Field(
+        description="The owner/name the person confirmed. For use, it must be the one GitHub "
+        "reported for the software. For undo, it must be an address the software had before."
+    )
 
 
 class LastCheckView(WireModel):

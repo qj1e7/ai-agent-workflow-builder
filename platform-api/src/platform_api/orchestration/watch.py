@@ -46,6 +46,7 @@ class Checked:
     run_id: RunId
     at: datetime
     newest: str
+    github_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -60,6 +61,8 @@ class CouldNotCheck:
     at: datetime
     problem: str
     last_read: KnownNewest | None = None
+    github_name: str | None = None
+    not_found: bool = False
 
 
 type LatestCheck = Checked | CouldNotCheck
@@ -160,12 +163,15 @@ class ReadNewest:
     software_id: SoftwareId
     newest: str
     starting_point: bool
+    github_name: str | None = None
 
 
 @dataclass(frozen=True)
 class CouldNotRead:
     software_id: SoftwareId
     problem: str
+    github_name: str | None = None
+    not_found: bool = False
 
 
 type Learned = ReadNewest | CouldNotRead
@@ -214,8 +220,14 @@ def review(
             return Unusable(f"The agents reported twice on {software.name}")
         if any(tag.fullmatch(version) is None for version in finding.new_versions):
             return Unusable(f"The agents named a version for {software.name} that is not a tag")
+        if finding.not_found and finding.full_name is not None:
+            return Unusable(
+                f"The agents said GitHub both has and has not got the repository of {software.name}"
+            )
         if finding.state == "cant_check":
-            learned.append(CouldNotRead(software_id, finding.detail))
+            learned.append(
+                CouldNotRead(software_id, finding.detail, finding.full_name, finding.not_found)
+            )
             continue
         if finding.newest is None:
             return Unusable(
@@ -231,7 +243,7 @@ def review(
                 else f"The agents did not take a starting point for {software.name}"
             )
         read[software_id] = finding
-        learned.append(ReadNewest(software_id, finding.newest, starting_point))
+        learned.append(ReadNewest(software_id, finding.newest, starting_point, finding.full_name))
     for software in task.software:
         if not any(entry.software_id == software.id for entry in learned):
             return Unusable(f"The agents did not report on {software.name}")
@@ -283,6 +295,13 @@ def review(
 NOTHING_READABLE_TYPES = frozenset({"UpstreamUnavailable", "UpstreamRejected"})
 
 
+def _could_not_read(software_id: SoftwareId, own: Finding | None, shared: str) -> CouldNotRead:
+    if own is None:
+        return CouldNotRead(software_id, shared)
+    kept = None if own.not_found else own.full_name
+    return CouldNotRead(software_id, own.detail.strip(), kept, own.not_found)
+
+
 def all_could_not_read(
     task: WatchlistTask, error: TaskError, findings: Sequence[Finding]
 ) -> Reviewed | None:
@@ -290,13 +309,13 @@ def all_could_not_read(
         return None
     shared = error.message if error.message.endswith(".") else f"{error.message}."
     own = {
-        SoftwareId(f.software_id): f.detail.strip()
+        SoftwareId(f.software_id): f
         for f in findings
         if f.state == "cant_check" and f.detail.strip()
     }
     return Reviewed(
         tuple(
-            CouldNotRead(software.id, own.get(software.id, shared)) for software in task.software
+            _could_not_read(software.id, own.get(software.id), shared) for software in task.software
         ),
         (),
     )

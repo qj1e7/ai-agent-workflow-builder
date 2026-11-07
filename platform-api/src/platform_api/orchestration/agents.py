@@ -125,6 +125,8 @@ class Finding(WireModel):
     newest: str | None
     new_versions: list[str]
     detail: str
+    full_name: RepoName | None = None
+    not_found: bool = False
 
 
 class TaskOutput(WireModel):

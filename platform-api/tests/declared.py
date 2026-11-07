@@ -1,4 +1,5 @@
 from collections.abc import Mapping
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 
@@ -6,10 +7,14 @@ import httpx
 from fastapi import FastAPI
 
 from platform_api.app import create_app
+from platform_api.builder.lifecycle import TooLate
 from platform_api.builder.watchlist import (
+    NeverAtThatAddress,
+    NoMoveReported,
     NoSuchSoftware,
     NoWatchlist,
     RepoAddedAgainSinceRemoval,
+    RepoAlreadyWatched,
     WatchlistFull,
 )
 from platform_api.shared import SoftwareId
@@ -79,6 +84,20 @@ class FakeWatchlist:
             return RepoAddedAgainSinceRemoval("langchain-ai/langgraph")
         if software_id == "sw_full":
             return WatchlistFull(100)
+        return NoSuchSoftware(SoftwareId(software_id))
+
+    async def use_new_address(self, principal: object, software_id: str, repo: str) -> object:
+        if software_id == "sw_taken":
+            return RepoAlreadyWatched(repo)
+        if software_id == "sw_still":
+            return NoMoveReported(SoftwareId(software_id))
+        return NoSuchSoftware(SoftwareId(software_id))
+
+    async def put_address_back(self, principal: object, software_id: str, repo: str) -> object:
+        if software_id == "sw_never":
+            return NeverAtThatAddress(repo)
+        if software_id == "sw_late":
+            return TooLate(datetime(2026, 11, 3, tzinfo=UTC))
         return NoSuchSoftware(SoftwareId(software_id))
 
     async def save_schedule(self, principal: object, body: object) -> object:

@@ -390,6 +390,34 @@ export function useRestoreSoftware() {
   })
 }
 
+function useSwitchAddress(tail: 'address' | 'address/undo') {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  return useMutation({
+    mutationFn: async ({ softwareId, repo }: { softwareId: string; repo: string }) =>
+      unwrap(
+        tail === 'address'
+          ? await client.POST('/api/v1/watchlist/software/{software_id}/address', { params: { path: { software_id: softwareId } }, body: { repo } })
+          : await client.POST('/api/v1/watchlist/software/{software_id}/address/undo', { params: { path: { software_id: softwareId } }, body: { repo } }),
+      ),
+    onSuccess: (view) => {
+      queryClient.setQueryData(keys.watchlist(user), view)
+      return queryClient.invalidateQueries({ queryKey: ['use-cases'] })
+    },
+    onError: () => queryClient.invalidateQueries({ queryKey: keys.watchlist(user) }),
+  })
+}
+
+/** Replaces the saved repository with the one GitHub reported. */
+export function useUseNewAddress() {
+  return useSwitchAddress('address')
+}
+
+export function usePutAddressBack() {
+  return useSwitchAddress('address/undo')
+}
+
 export function useSaveSchedule() {
   const client = useApiClient()
   const queryClient = useQueryClient()

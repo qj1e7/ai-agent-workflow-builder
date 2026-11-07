@@ -19,6 +19,9 @@ REPEATED = FakeBuilder(started=RunStarted(RunId("run_1"), created=False))
 SCHEDULE = {"day": "monday", "at": "09:00"}
 SOFTWARE = {"name": "LangGraph", "repo": "langchain-ai/langgraph", "our_version": "1.2.14"}
 RESTORE = "/api/v1/watchlist/software/{}/restore"
+ADDRESS = "/api/v1/watchlist/software/{}/address"
+UNDO = "/api/v1/watchlist/software/{}/address/undo"
+NEW = {"repo": "fastapi/fastapi"}
 
 CASES = [
     pytest.param("GET", "/api/v1/templates", {}, None, None, 401, id="templates-401"),
@@ -97,6 +100,19 @@ CASES = [
     pytest.param("POST", RESTORE.format("sw_x"), ALICE, None, None, 404, id="restore-404"),
     pytest.param("POST", RESTORE.format("sw_again"), ALICE, None, None, 409, id="restore-409"),
     pytest.param("POST", RESTORE.format("sw_full"), ALICE, None, None, 422, id="restore-422"),
+    pytest.param("POST", ADDRESS.format("sw_x"), {}, NEW, None, 401, id="address-401"),
+    pytest.param("POST", ADDRESS.format("sw_x"), BOB, NEW, None, 403, id="address-403"),
+    pytest.param("POST", ADDRESS.format("sw_x"), ALICE, NEW, None, 404, id="address-404"),
+    pytest.param("POST", ADDRESS.format("sw_still"), ALICE, NEW, None, 409, id="address-409-none"),
+    pytest.param("POST", ADDRESS.format("sw_taken"), ALICE, NEW, None, 409, id="address-409-held"),
+    pytest.param(
+        "POST", ADDRESS.format("sw_x"), ALICE, {"repo": "owner/.."}, None, 422, id="address-422"
+    ),
+    pytest.param("POST", UNDO.format("sw_x"), {}, NEW, None, 401, id="undo-address-401"),
+    pytest.param("POST", UNDO.format("sw_x"), BOB, NEW, None, 403, id="undo-address-403"),
+    pytest.param("POST", UNDO.format("sw_x"), ALICE, NEW, None, 404, id="undo-address-404"),
+    pytest.param("POST", UNDO.format("sw_never"), ALICE, NEW, None, 409, id="undo-address-409"),
+    pytest.param("POST", UNDO.format("sw_late"), ALICE, NEW, None, 410, id="undo-address-410"),
     pytest.param("PUT", "/api/v1/watchlist/schedule", {}, SCHEDULE, None, 401, id="schedule-401"),
     pytest.param("PUT", "/api/v1/watchlist/schedule", BOB, SCHEDULE, None, 403, id="schedule-403"),
     pytest.param(

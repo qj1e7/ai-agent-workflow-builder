@@ -32,6 +32,7 @@ class FakeSource:
     def __init__(self, tags: list[str], failures: Sequence[int | None] = ()) -> None:
         self.releases = [Release(tag=tag) for tag in tags]
         self.failures = list(failures)
+        self.outage = bool(failures)
         self.calls: list[str] = []
 
     def fetch(self, repo: str) -> list[Release]:
@@ -39,6 +40,11 @@ class FakeSource:
         if self.failures:
             raise SourceUnavailable(self.failures.pop(0))
         return self.releases
+
+    def current_name(self, repo: str) -> str:
+        if self.outage:
+            raise SourceUnavailable(503)
+        return repo
 
 
 class RepoSource:
@@ -49,10 +55,14 @@ class RepoSource:
         tags: dict[str, list[str]],
         refused: dict[str, int] | None = None,
         down: dict[str, int | None] | None = None,
+        renamed: dict[str, str] | None = None,
+        name_down: set[str] | None = None,
     ) -> None:
         self.tags = tags
         self.refused = refused or {}
         self.down = down or {}
+        self.renamed = renamed or {}
+        self.name_down = name_down or set()
         self.calls: list[str] = []
 
     def fetch(self, repo: str) -> list[Release]:
@@ -61,7 +71,14 @@ class RepoSource:
             raise SourceRejected(self.refused[repo])
         if repo in self.down:
             raise SourceUnavailable(self.down[repo])
-        return [Release(tag=tag) for tag in self.tags[repo]]
+        return [Release(tag=tag) for tag in self.tags[self.renamed.get(repo, repo)]]
+
+    def current_name(self, repo: str) -> str:
+        if repo in self.refused:
+            raise SourceRejected(self.refused[repo])
+        if repo in self.name_down:
+            raise SourceUnavailable(503)
+        return self.renamed.get(repo, repo)
 
 
 def langgraph_tags() -> list[str]:

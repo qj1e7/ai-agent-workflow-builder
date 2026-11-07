@@ -10,6 +10,8 @@ from platform_api.builder.lifecycle import RESTORE_WINDOW, TooLate
 from platform_api.builder.models import AddSoftware, WatchlistView
 from platform_api.builder.service import NothingToCheck
 from platform_api.builder.watchlist import (
+    NeverAtThatAddress,
+    NoMoveReported,
     NoSuchSoftware,
     RepoAddedAgainSinceRemoval,
     RepoAlreadyWatched,
@@ -97,12 +99,19 @@ def clock() -> MovingClock:
 
 
 @pytest.fixture
-async def timed(postgres: PostgresUrls, clock: MovingClock) -> AsyncIterator[Watchlist]:
+def timed_facts() -> FakeFacts:
+    return FakeFacts()
+
+
+@pytest.fixture
+async def timed(
+    postgres: PostgresUrls, clock: MovingClock, timed_facts: FakeFacts
+) -> AsyncIterator[Watchlist]:
     truncate_all(postgres.owner)
     database = Database(postgres.contexts, clock=clock)
     await database.open()
     try:
-        yield Watchlist(database, FakeFacts(), ScheduleBook(database))
+        yield Watchlist(database, timed_facts, ScheduleBook(database))
     finally:
         await database.close()
 
@@ -577,3 +586,195 @@ async def test_moving_the_watchlist_to_the_settings_project_says_so_in_the_log(
         "watchlist moved from MOCK to OPS by the deploy setting WATCHLIST_JIRA_PROJECT, version 2"
         in caplog.messages
     )
+
+
+OLD_FASTAPI = software("FastAPI", "tiangolo/fastapi", "0.114.0")
+FASTAPI_NOW = "fastapi/fastapi"
+
+
+def renamed_facts(facts: FakeFacts, software_id: SoftwareId, name: str = FASTAPI_NOW) -> None:
+    facts.known[software_id] = SoftwareFacts(
+        Given("0.114.0", NOW), Checked(RUN, LATER, "0.115.1", github_name=name), None, None
+    )
+
+
+def row_of(view: WatchlistView, software_id: SoftwareId):
+    return next(row for row in view.software if row.id == software_id)
+
+
+async def test_a_row_says_where_github_moved_the_repository_only_when_the_names_differ(
+    watchlist: Watchlist, facts: FakeFacts
+):
+    both = await added(watchlist, OLD_FASTAPI)
+    fastapi = ids(both)["FastAPI"]
+    await added(watchlist, LANGGRAPH)
+    assert row_of((await watchlist.view()) or both, fastapi).moved_to is None, "nothing read yet"
+
+    renamed_facts(facts, fastapi)
+    view = await watchlist.view()
+    assert view is not None
+    row = row_of(view, fastapi)
+    assert (row.source.ref, row.moved_to, row.not_found) == ("tiangolo/fastapi", FASTAPI_NOW, False)
+
+    renamed_facts(facts, fastapi, "Tiangolo/FastAPI")
+    view = await watchlist.view()
+    assert view is not None
+    assert row_of(view, fastapi).moved_to is None, "a change of case is the same repository"
+
+
+async def test_a_repository_github_cannot_find_is_flagged_and_offers_no_new_address(
+    watchlist: Watchlist, facts: FakeFacts
+):
+    fastapi = ids(await added(watchlist, OLD_FASTAPI))["FastAPI"]
+    facts.known[fastapi] = SoftwareFacts(
+        Given("0.114.0", NOW),
+        CouldNotCheck(RUN, LATER, "GitHub answered 404 Not Found.", None, None, True),
+        None,
+        None,
+    )
+    view = await watchlist.view()
+    assert view is not None
+    row = row_of(view, fastapi)
+    assert (row.not_found, row.moved_to, row.status) == (True, None, "cant_check")
+    result = await watchlist.use_new_address(ALICE, fastapi, FASTAPI_NOW)
+    assert result == NoMoveReported(fastapi)
+
+
+async def test_using_the_new_address_replaces_the_saved_repository_in_a_new_version(
+    watchlist: Watchlist, facts: FakeFacts
+):
+    both = await added(watchlist, OLD_FASTAPI)
+    redis = await added(watchlist, REDIS)
+    fastapi = ids(both)["FastAPI"]
+    renamed_facts(facts, fastapi)
+    before = await watchlist.view()
+    assert before is not None and before.version == redis.version == 2
+
+    after = await watchlist.use_new_address(ALICE, fastapi, FASTAPI_NOW)
+    assert isinstance(after, WatchlistView)
+    assert after.version == 3
+    row = row_of(after, fastapi)
+    assert (row.id, row.name, row.source.ref) == (fastapi, "FastAPI", FASTAPI_NOW)
+    assert row.source.url == "https://github.com/fastapi/fastapi/releases"
+    assert (row.our_version, row.added_by) == ("0.114.0", "alice"), "only the address changes"
+    assert row.moved_to is None, "GitHub's name is now the saved one"
+    assert [r.name for r in after.software].count("Redis") == 1
+
+    task = await watchlist.task_for(UseCaseId(after.use_case_id), after.version)
+    assert task is not None
+    assert {s.name: s.source.ref for s in task.software}["FastAPI"] == FASTAPI_NOW
+    old = await watchlist.task_for(UseCaseId(after.use_case_id), before.version)
+    assert old is not None
+    assert {s.name: s.source.ref for s in old.software}["FastAPI"] == "tiangolo/fastapi"
+
+
+async def test_a_later_check_starts_with_the_new_address(
+    db: Database, watchlist: Watchlist, facts: FakeFacts
+):
+    fastapi = ids(await added(watchlist, OLD_FASTAPI))["FastAPI"]
+    renamed_facts(facts, fastapi)
+    await watchlist.use_new_address(ALICE, fastapi, FASTAPI_NOW)
+    builder = Builder(db, FakeRuns(), watchlist, "http://localhost:8080")
+    view = await watchlist.view()
+    assert view is not None
+    spec = await builder.run_spec_for(UseCaseId(view.use_case_id))
+    assert spec is not None and not isinstance(spec, NothingToCheck)
+    assert isinstance(spec.task, WatchlistTask)
+    assert [s.source.ref for s in spec.task.software] == [FASTAPI_NOW]
+
+
+async def test_the_new_address_is_taken_only_as_github_reported_it(
+    watchlist: Watchlist, facts: FakeFacts
+):
+    fastapi = ids(await added(watchlist, OLD_FASTAPI))["FastAPI"]
+    renamed_facts(facts, fastapi)
+    assert await watchlist.use_new_address(ALICE, fastapi, "someone/else") == NoMoveReported(
+        fastapi
+    )
+    nope = SoftwareId("sw_nope")
+    assert await watchlist.use_new_address(ALICE, nope, FASTAPI_NOW) == NoSuchSoftware(nope)
+    view = await watchlist.view()
+    assert view is not None and view.version == 1
+
+
+async def test_using_the_new_address_twice_changes_nothing_the_second_time(
+    watchlist: Watchlist, facts: FakeFacts
+):
+    fastapi = ids(await added(watchlist, OLD_FASTAPI))["FastAPI"]
+    renamed_facts(facts, fastapi)
+    first = await watchlist.use_new_address(ALICE, fastapi, FASTAPI_NOW)
+    assert isinstance(first, WatchlistView)
+    again = await watchlist.use_new_address(ALICE, fastapi, FASTAPI_NOW)
+    assert again == first
+    assert first.version == 2
+
+
+async def test_the_new_address_is_refused_when_the_list_already_watches_it(
+    watchlist: Watchlist, facts: FakeFacts
+):
+    both = await added(watchlist, OLD_FASTAPI)
+    fastapi = ids(both)["FastAPI"]
+    await added(watchlist, software("FastAPI too", "FastAPI/FastAPI"))
+    renamed_facts(facts, fastapi)
+    result = await watchlist.use_new_address(ALICE, fastapi, FASTAPI_NOW)
+    assert result == RepoAlreadyWatched(FASTAPI_NOW)
+    view = await watchlist.view()
+    assert view is not None and view.version == 2
+
+
+async def test_putting_the_address_back_restores_the_old_repository(
+    watchlist: Watchlist, facts: FakeFacts
+):
+    fastapi = ids(await added(watchlist, OLD_FASTAPI))["FastAPI"]
+    renamed_facts(facts, fastapi)
+    await watchlist.use_new_address(ALICE, fastapi, FASTAPI_NOW)
+    back = await watchlist.put_address_back(ALICE, fastapi, "tiangolo/fastapi")
+    assert isinstance(back, WatchlistView)
+    row = row_of(back, fastapi)
+    assert (row.source.ref, row.our_version) == ("tiangolo/fastapi", "0.114.0")
+    assert row.moved_to == FASTAPI_NOW, "GitHub still redirects the old name, so the row says so"
+    assert back.version == 3
+    assert await watchlist.put_address_back(ALICE, fastapi, "tiangolo/fastapi") == back
+
+
+async def test_an_address_the_software_never_had_cannot_be_put_back(
+    watchlist: Watchlist, facts: FakeFacts
+):
+    fastapi = ids(await added(watchlist, OLD_FASTAPI))["FastAPI"]
+    renamed_facts(facts, fastapi)
+    await watchlist.use_new_address(ALICE, fastapi, FASTAPI_NOW)
+    assert await watchlist.put_address_back(ALICE, fastapi, "evil/repo") == NeverAtThatAddress(
+        "evil/repo"
+    )
+    nope = SoftwareId("sw_nope")
+    assert await watchlist.put_address_back(ALICE, nope, "tiangolo/fastapi") == NoSuchSoftware(nope)
+
+
+async def test_putting_the_address_back_is_refused_when_the_old_one_is_watched_again(
+    watchlist: Watchlist, facts: FakeFacts
+):
+    fastapi = ids(await added(watchlist, OLD_FASTAPI))["FastAPI"]
+    renamed_facts(facts, fastapi)
+    await watchlist.use_new_address(ALICE, fastapi, FASTAPI_NOW)
+    await added(watchlist, software("Old FastAPI", "tiangolo/fastapi"))
+    result = await watchlist.put_address_back(ALICE, fastapi, "tiangolo/fastapi")
+    assert result == RepoAlreadyWatched("tiangolo/fastapi")
+
+
+async def test_the_address_can_be_put_back_for_a_day_and_not_after(
+    timed: Watchlist, timed_facts: FakeFacts, clock: MovingClock
+):
+    fastapi = ids(await added(timed, OLD_FASTAPI))["FastAPI"]
+    renamed_facts(timed_facts, fastapi)
+    changed_at = NOW + timedelta(hours=3)
+    clock.now = changed_at
+    await timed.use_new_address(ALICE, fastapi, FASTAPI_NOW)
+    clock.now = changed_at + RESTORE_WINDOW
+    inside = await timed.put_address_back(ALICE, fastapi, "tiangolo/fastapi")
+    assert isinstance(inside, WatchlistView)
+    clock.now = changed_at + RESTORE_WINDOW + timedelta(hours=1)
+    again = await timed.use_new_address(ALICE, fastapi, FASTAPI_NOW)
+    assert isinstance(again, WatchlistView)
+    clock.now = changed_at + 2 * RESTORE_WINDOW + timedelta(hours=2)
+    late = await timed.put_address_back(ALICE, fastapi, "tiangolo/fastapi")
+    assert late == TooLate(changed_at + RESTORE_WINDOW + timedelta(hours=1) + RESTORE_WINDOW)
