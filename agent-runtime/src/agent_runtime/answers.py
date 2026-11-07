@@ -417,6 +417,9 @@ def _about(read: TaskRead, request: str) -> PlannerAnswer:
 
 
 def answer_of(read: TaskRead, request: str) -> PlannerAnswer | None:
+    """The answer code decides from the model's reading: refused, the watchlist, a question about
+    the person's workflows, then the rows. "abilities" is the catch-all, so rows the model also
+    gave win over it: a planted "close all tickets" is a can't, not the abilities list."""
     text = visible_words(request)
     refused = _refusal(text)
     if refused is not None:
@@ -427,7 +430,7 @@ def answer_of(read: TaskRead, request: str) -> PlannerAnswer | None:
             return answer
         if not read.rows:
             return None
-    if read.asks_about != "none":
+    if read.asks_about != "none" and not (read.asks_about == "abilities" and read.rows):
         return _about(read, text)
     return _from_rows(read, text)
 
