@@ -933,6 +933,27 @@ type AnswerResult = Annotated[Answered | ModelProblem, Field(discriminator="stat
 answer_result_adapter: TypeAdapter[AnswerResult] = TypeAdapter(AnswerResult)
 
 
+class CheckPartRequest(WireModel):
+    kind: RowKind
+    text: str = Field(min_length=1, max_length=200)
+
+
+class PartFits(WireModel):
+    state: Literal["fits"] = "fits"
+
+
+class PartCantDo(WireModel):
+    state: Literal["cant_do"] = "cant_do"
+    note: str = Field(max_length=300, description="Why it can't do it, in plain words.")
+    needs: CantNeed
+    system: str | None = Field(default=None, max_length=40)
+
+
+type CheckPartResult = Annotated[PartFits | PartCantDo, Field(discriminator="state")]
+
+check_part_result_adapter: TypeAdapter[CheckPartResult] = TypeAdapter(CheckPartResult)
+
+
 class AgentCard(WireModel):
     id: str
     display: str
@@ -970,3 +991,5 @@ class AgentApiSchema(WireModel):
     software_find_result: FindSoftwareResult
     planner_answer_request: AnswerRequest
     planner_answer_result: AnswerResult
+    planner_check_part_request: CheckPartRequest
+    planner_check_part_result: CheckPartResult

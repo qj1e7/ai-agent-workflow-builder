@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from agent_runtime.abilities import CAPABILITY_LIST
-from agent_runtime.answers import SkipRead, TaskRead, answer_of
+from agent_runtime.answers import SkipRead, TaskRead, answer_of, check_one_part
 from agent_runtime.api import AGENT_CARDS
 from agent_runtime.contract import (
     RELEASE_TAG_PATTERN,
@@ -34,6 +34,7 @@ from agent_runtime.contract import (
     CardSpec,
     CardToRun,
     CarryForward,
+    CheckPartRequest,
     Choice,
     ChooseRequest,
     Chosen,
@@ -953,6 +954,13 @@ def fixtures() -> dict[str, WireModel]:
         "planner-answered-cant.json": answered_cant(),
         "planner-answered-watchlist.json": answered_watchlist(),
         "planner-answered-refused.json": answered_refused(),
+        "planner-check-part-request.json": CheckPartRequest(kind="do", text="Email the list"),
+        "planner-check-part-cant.json": check_one_part(
+            CheckPartRequest(kind="do", text="Email the list")
+        ),
+        "planner-check-part-fits.json": check_one_part(
+            CheckPartRequest(kind="where", text="In the MOCK project")
+        ),
     }
 
 

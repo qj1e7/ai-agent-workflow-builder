@@ -38,10 +38,14 @@ from agent_runtime.contract import (
     AnswerResult,
     CantAnswer,
     CantRow,
+    CheckPartRequest,
+    CheckPartResult,
     CheckWorkflowsAnswer,
     ModelProblem,
     NeedsMeAnswer,
     PartAnswer,
+    PartCantDo,
+    PartFits,
     PlannerAnswer,
     RefusedAnswer,
     RowKind,
@@ -54,6 +58,7 @@ from agent_runtime.contract import (
 from agent_runtime.drafting import ask_model
 from agent_runtime.planner import (
     CANT_YET,
+    NOTE_LIMIT,
     TEXT_LIMIT,
     UNDERSTAND_TIMEOUT_SECONDS,
     arrange,
@@ -82,7 +87,14 @@ from agent_runtime.reading import (
 from agent_runtime.summary import ChatFor
 from agent_runtime.tools import tools_text
 
-__all__ = ["SkipRead", "TaskRead", "answer_of", "answer_task", "word_rule_refusal"]
+__all__ = [
+    "SkipRead",
+    "TaskRead",
+    "answer_of",
+    "answer_task",
+    "check_one_part",
+    "word_rule_refusal",
+]
 
 log = logging.getLogger(__name__)
 
@@ -331,7 +343,13 @@ def _left_out(span: Span, searching: bool) -> CantRow:
     need = need_of(kind, text)
     if need == Need("new_system", None) and span.kind == "look_for" and searching:
         need = Need("new_tool", "Jira")
-    return CantRow(kind=kind, text=text, note=note, needs=need.needs, system=need.system)
+    return CantRow(
+        kind=kind,
+        text=text,
+        note=plain(note, NOTE_LIMIT),
+        needs=need.needs,
+        system=need.system,
+    )
 
 
 def _only_fields(cant: list[CantRow]) -> bool:
@@ -515,3 +533,14 @@ def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
     if isinstance(read, ModelProblem):
         return read
     return Answered(answer=answer_of(read, request.task))
+
+
+def check_one_part(request: CheckPartRequest) -> CheckPartResult:
+    """One part the person changed, checked by code alone: no model, nothing guessed. A part the
+    platform can't do comes back with the words of the registry and what a fix would need."""
+    text = plain(request.text, TEXT_LIMIT)
+    note = why_not(request.kind, text)
+    if note is None:
+        return PartFits()
+    need = need_of(request.kind, text)
+    return PartCantDo(note=plain(note, NOTE_LIMIT), needs=need.needs, system=need.system)

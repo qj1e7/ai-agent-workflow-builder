@@ -592,7 +592,7 @@ def test_a_part_carried_on_past_the_watchlist_is_held_to_the_tools_though_the_mo
     assert isinstance(result, Understood), result
     row = next(row for row in result.rows if row.kind == kind)
     assert (row.state, row.note) == ("cant_do", why_no_tool(kind, text))
-    assert row.note is not None and row.note.startswith(f"I can't {what} yet.")
+    assert row.note is not None and row.note.startswith(f"I can't {what}")
 
 
 def test_a_release_part_carried_on_stays_as_the_model_said_since_the_platform_checks_github():

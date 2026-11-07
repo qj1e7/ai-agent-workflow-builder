@@ -328,7 +328,7 @@ def test_the_do_row_names_what_the_ticket_holds_and_the_details_the_search_sees(
         (
             "and email me a copy",
             "email me a copy",
-            "I can't email me a copy yet.",
+            "I can't email me a copy.",
             "new_system",
             "email",
         ),
@@ -499,7 +499,7 @@ def test_a_change_to_tickets_is_a_cant_not_a_part_and_offers_the_search():
     )
     assert isinstance(answer, CantAnswer)
     assert cant_of(answer) == ["delete every closed ticket"]
-    assert answer.cant[0].note.startswith("I can't delete every closed ticket yet.")
+    assert answer.cant[0].note.startswith("I can't delete every closed ticket.")
     assert rows_of(answer)[1] == ("look_for", "Done tickets", "understood")
 
 
@@ -1326,3 +1326,38 @@ def test_the_route_answers_in_the_contract():
     result = answer_result_adapter.validate_python(response.json())
     assert isinstance(result, Answered) and isinstance(result.answer, CantAnswer)
     assert result.answer.cant[0].system == "email"
+
+
+def check_body(kind: str, text: str) -> dict[str, str]:
+    return {"kind": kind, "text": text}
+
+
+def test_check_part_needs_the_key():
+    client: TestClient = make_app(None)
+    client.headers.pop("X-Agent-Key")
+    assert client.post("/v1/planner/check-part", json=check_body("do", "x")).status_code == 401
+
+
+def test_check_part_needs_no_model_and_says_what_a_part_that_does_not_fit_needs():
+    client = make_app(None)
+    cant = client.post("/v1/planner/check-part", json=check_body("do", "Email the list")).json()
+    assert cant["state"] == "cant_do"
+    assert cant["note"].startswith("I can't email the list")
+    assert (cant["needs"], cant["system"]) == ("new_system", "email")
+    fits = client.post(
+        "/v1/planner/check-part", json=check_body("where", "In the MOCK project")
+    ).json()
+    assert fits == {"state": "fits"}
+
+
+def test_check_part_refuses_vulnerabilities_with_the_planned_words():
+    client = make_app(None)
+    cant = client.post(
+        "/v1/planner/check-part", json=check_body("do", "Check for known vulnerabilities")
+    ).json()
+    assert cant["note"] == VULNERABILITIES_PLANNED
+
+
+def test_check_part_refuses_a_blank_text():
+    client = make_app(None)
+    assert client.post("/v1/planner/check-part", json=check_body("do", "")).status_code == 422

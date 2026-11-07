@@ -12,6 +12,7 @@ from agent_runtime.contract import (
     AgentEventPost,
     AnswerRequest,
     CapabilityList,
+    CheckPartRequest,
     ChooseRequest,
     ChooseResult,
     ConnectRequest,
@@ -28,6 +29,7 @@ from agent_runtime.contract import (
     UnderstandRequest,
     UnderstandResult,
     answer_result_adapter,
+    check_part_result_adapter,
     task_result_adapter,
 )
 
@@ -71,6 +73,9 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "planner-answered-cant.json": answer_result_adapter,
     "planner-answered-watchlist.json": answer_result_adapter,
     "planner-answered-refused.json": answer_result_adapter,
+    "planner-check-part-request.json": TypeAdapter(CheckPartRequest),
+    "planner-check-part-cant.json": check_part_result_adapter,
+    "planner-check-part-fits.json": check_part_result_adapter,
 }
 
 

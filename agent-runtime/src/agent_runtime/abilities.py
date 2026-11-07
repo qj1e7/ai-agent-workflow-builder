@@ -222,7 +222,7 @@ CAPABILITIES: Final = (
         "Teams",
         "teams",
         "post messages in Teams",
-        "Teams carries approval requests only.",
+        "Teams carries approval requests, run outcomes and requests for the team. Nothing else.",
     ),
     _not_yet(
         "confluence.change",
@@ -290,6 +290,12 @@ CAPABILITIES: Final = (
         state="unsupported",
     ),
 )
+
+
+def _lower_first(text: str) -> str:
+    return text[:1].lower() + text[1:]
+
+
 EXAMPLES: Final = (
     ExampleSpec(
         text="Every Friday, sum up the tickets we closed this week",
@@ -546,6 +552,10 @@ class _Reader:
 
     def can(self) -> str:
         plain = list(dict.fromkeys(ability.plain for ability in self.abilities))
+        if self.abilities is ABILITIES:
+            plain += [
+                _lower_first(c.plain) for c in CAPABILITIES if c.state == "ready" and c.platform
+            ]
         listed = plain[0] if len(plain) == 1 else f"{', '.join(plain[:-1])}, and {plain[-1]}"
         return f"I can only {listed}."
 
@@ -1114,6 +1124,54 @@ def _cant_act(kind: RowKind, row: Clause, reader: _Reader) -> str | None:
             return _where_row(row, reader)
 
 
+UNSUPPORTED_WORDS: Final = {
+    "email.send": (words("email e-mail mail slack sms"), False),
+    "jira.change_tickets": (
+        words(
+            "close resolve cancel reopen delete remove edit move transition rename assign "
+            "reassign update change modify"
+        ),
+        True,
+    ),
+}
+"""For each Unsupported entry of the registry, the words that name it and whether only the
+part's first word counts (an action word, as "close"). A part named by them is something the
+platform won't do, so the refusal does not say "yet"."""
+
+
+def _is_unsupported(what: str) -> bool:
+    row = _tokens(what)
+    for id, (named, first_only) in UNSUPPORTED_WORDS.items():
+        if next(c for c in CAPABILITIES if c.id == id).state != "unsupported":
+            continue
+        if any(
+            w.low.removesuffix("'s").removesuffix("’s") in named
+            for w in (row[:1] if first_only else row)
+        ):
+            return True
+    return False
+
+
+PAST_THE_NEWEST: Final = re.compile(
+    r"\b(?:beyond|past)\s+(?:the\s+)?(?:newest|latest|first|last|most recent)\b"
+    r"|\b(?:older|earlier|previous)\s+tickets\b",
+    re.IGNORECASE,
+)
+
+
+def _past_the_newest(text: str) -> str | None:
+    """The registry's words for a search that reaches past the newest 50 tickets, which a search
+    can't, when the part asks for it ("older than 10 days" is a filter and is not this)."""
+    if PAST_THE_NEWEST.search(text) is None:
+        return None
+    return next(c.cant for c in CAPABILITIES if c.id == "jira.find_older")
+
+
+def _cant_sentence(what: str, reader: _Reader) -> str:
+    yet = "" if _is_unsupported(what) else " yet"
+    return f"I can't {what}{yet}. {reader.can()}"
+
+
 def why_not(kind: RowKind, text: str, abilities: tuple[Ability, ...] = ABILITIES) -> str | None:
     """Why the platform can't do this part, in plain words, or None when every action in it fits
     one of the abilities and no field it reads is one the agents can't see."""
@@ -1121,9 +1179,11 @@ def why_not(kind: RowKind, text: str, abilities: tuple[Ability, ...] = ABILITIES
     row = _tokens(text)
     if _asks_for_vulnerabilities(row, reader):
         return VULNERABILITIES_PLANNED
-    what = _cant_act(kind, row, reader)
+    what = _cant_act(kind, row, reader) or (
+        _past_the_newest(text) if kind in ("look_for", "do") else None
+    )
     if what is not None:
-        return f"I can't {what} yet. {reader.can()}"
+        return _cant_sentence(what, reader)
     field = unread_field_in(text) if kind in ("look_for", "do") else None
     return None if field is None else why_not_the_field(kind, text, field)
 

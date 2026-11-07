@@ -1109,6 +1109,43 @@
       "title": "CarryForward",
       "type": "object"
     },
+    "CheckPartRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/RowKind"
+        },
+        "text": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "text"
+      ],
+      "title": "CheckPartRequest",
+      "type": "object"
+    },
+    "CheckPartResult": {
+      "discriminator": {
+        "mapping": {
+          "cant_do": "#/$defs/PartCantDo",
+          "fits": "#/$defs/PartFits"
+        },
+        "propertyName": "state"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/PartFits"
+        },
+        {
+          "$ref": "#/$defs/PartCantDo"
+        }
+      ]
+    },
     "CheckWorkflowsAnswer": {
       "additionalProperties": false,
       "properties": {
@@ -2054,6 +2091,58 @@
         "cant"
       ],
       "title": "PartAnswer",
+      "type": "object"
+    },
+    "PartCantDo": {
+      "additionalProperties": false,
+      "properties": {
+        "needs": {
+          "$ref": "#/$defs/CantNeed"
+        },
+        "note": {
+          "description": "Why it can't do it, in plain words.",
+          "maxLength": 300,
+          "title": "Note",
+          "type": "string"
+        },
+        "state": {
+          "const": "cant_do",
+          "default": "cant_do",
+          "title": "State",
+          "type": "string"
+        },
+        "system": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "System"
+        }
+      },
+      "required": [
+        "note",
+        "needs"
+      ],
+      "title": "PartCantDo",
+      "type": "object"
+    },
+    "PartFits": {
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "const": "fits",
+          "default": "fits",
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "title": "PartFits",
       "type": "object"
     },
     "PlannerAnswer": {
@@ -3013,6 +3102,12 @@
     "planner_answer_result": {
       "$ref": "#/$defs/AnswerResult"
     },
+    "planner_check_part_request": {
+      "$ref": "#/$defs/CheckPartRequest"
+    },
+    "planner_check_part_result": {
+      "$ref": "#/$defs/CheckPartResult"
+    },
     "planner_choose_request": {
       "$ref": "#/$defs/ChooseRequest"
     },
@@ -3062,7 +3157,9 @@
     "software_find_request",
     "software_find_result",
     "planner_answer_request",
-    "planner_answer_result"
+    "planner_answer_result",
+    "planner_check_part_request",
+    "planner_check_part_result"
   ],
   "title": "AgentApiSchema",
   "type": "object"

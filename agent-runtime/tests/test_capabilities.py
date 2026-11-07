@@ -10,6 +10,7 @@ from agent_runtime.abilities import (
     ABILITY_OF,
     CAPABILITIES,
     EXAMPLES,
+    UNSUPPORTED_WORDS,
     VULNERABILITIES_PLANNED,
     why_not,
 )
@@ -143,22 +144,38 @@ def test_the_route_serves_the_registry_and_the_examples():
     assert served.examples == list(EXAMPLES)
 
 
-# The Planner's refusal still builds its "I can only ..." sentence from ABILITIES, and says "yet"
-# about what the registry marks Unsupported. Making it read CAPABILITIES is N7. These words get
-# no refusal today, so each xfail turns into a failure the moment N7 closes the gap.
-NOT_REFUSED_YET = {"jira.find_older", "github.issues"}
-
-
-@pytest.mark.parametrize(
-    "entry",
-    [
-        pytest.param(
-            c,
-            id=c.id,
-            marks=pytest.mark.xfail(strict=True, reason="N7") if c.id in NOT_REFUSED_YET else (),
-        )
-        for c in NOT_READY
-    ],
-)
+@pytest.mark.parametrize("entry", NOT_READY, ids=lambda c: c.id)
 def test_every_entry_that_is_not_ready_is_refused_when_its_own_words_are_asked_for(entry):
-    assert why_not("do", entry.plain) is not None
+    assert any(why_not(kind, entry.plain) for kind in ("look_for", "do")), entry.id
+
+
+def test_a_search_older_than_some_days_is_a_filter_and_past_the_newest_is_not():
+    assert why_not("look_for", "Bug tickets older than 10 days") is None
+    refused = why_not("look_for", "Tickets beyond the newest 50")
+    assert refused is not None and refused.startswith(
+        f"I can't {BY_ID['jira.find_older'].cant} yet."
+    )
+
+
+def test_a_refusal_ends_with_what_every_ready_entry_with_an_ability_line_or_a_duty_says():
+    refused = why_not("do", "Delete them") or ""
+    for line in {a.plain for a in ABILITIES}:
+        assert line in refused
+    for duty in (c for c in READY if c.platform):
+        assert duty.plain[0].lower() + duty.plain[1:] in refused
+
+
+def test_a_refusal_says_yet_for_what_is_planned_and_not_for_what_the_registry_will_not_do():
+    assert (why_not("do", "Post a message in Teams") or "").startswith(
+        "I can't post a message in Teams yet."
+    )
+    for wont in ("Email the list to the team", "Delete every closed ticket"):
+        said = why_not("do", wont) or ""
+        assert said.startswith("I can't") and " yet." not in said.split(". I can only")[0]
+    assert {c.id for c in CAPABILITIES if c.state == "unsupported"} == set(UNSUPPORTED_WORDS)
+
+
+def test_teams_also_gets_outcomes_and_requests_for_the_team_so_post_is_not_approval_only():
+    why = BY_ID["teams.post"].why or ""
+    assert "approval requests only" not in why
+    assert "outcome" in why and "team" in why
