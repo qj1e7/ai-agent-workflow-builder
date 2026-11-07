@@ -35,10 +35,16 @@ export function followingWords(item: FollowingUpItem, now: Date, meId: string | 
   return { name: oneLine(item.note), sub: `${requestKindWords(item.kind)} · ${lineWhen(item.asked_at, now)} · ${stand}` }
 }
 
-/** What a reply did. The asker's own note leaves the status alone, so it never reads as an answer. */
-export function replyWords(reply: ReplyView, askedBy: string): string {
-  if (reply.status === 'done') return 'Marked Done'
-  return reply.replied_by === askedBy ? 'Added to the request' : 'Answered'
+/** What a reply did. The platform says so in the reply's status. */
+export function replyWords(reply: ReplyView): string {
+  switch (reply.status) {
+    case 'done':
+      return 'Marked Done'
+    case 'added':
+      return 'Added to the request'
+    case 'answered':
+      return 'Answered'
+  }
 }
 
 /** The newest reply from someone other than the asker, which is the one the asker marks as read. */

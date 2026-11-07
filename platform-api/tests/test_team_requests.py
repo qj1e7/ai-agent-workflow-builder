@@ -341,6 +341,14 @@ async def test_the_asker_adding_a_note_keeps_the_status_unless_she_picks_done(la
     assert done["status"] == "done"
     after = (await lab.client.post(url, json={"text": "Sorry."}, headers=ALICE)).json()
     assert after["status"] == "done"
+    assert [(r["replied_by"], r["status"]) for r in after["replies"]] == [
+        ("alice", "added"),
+        ("alice", "added"),
+        ("bob", "answered"),
+        ("alice", "added"),
+        ("alice", "done"),
+        ("alice", "added"),
+    ]
     listed = (await lab.client.get("/api/v1/team-requests", headers=BOB)).json()["requests"]
     assert [r["request_id"] for r in listed] == [made["request_id"]]
 

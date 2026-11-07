@@ -97,6 +97,12 @@ describe('Home for an Approver with a run waiting for his yes', () => {
 describe('Home for the Operator who started that run', () => {
   const html = mainOf(render(ALICE, ALICE_HOME))
 
+  it('offers Check again on a connection that does not work, and no link to a Settings tab that has none', () => {
+    const item = itemOf(html, 'connection:jira')
+    expect(buttonsIn(item)).toEqual(['Check again'])
+    expect(linksIn(item)).toEqual([])
+  })
+
   it('shows her stopped run with the AI troubleshooter’s reason, a retry, and the run', () => {
     const card = itemOf(html, 'stopped:run_01JB9')
     expect(text(card)).toContain('Software watchlist stopped')

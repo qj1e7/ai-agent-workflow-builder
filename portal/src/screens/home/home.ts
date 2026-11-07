@@ -175,14 +175,18 @@ export function wordsOf(need: Need, now: Date): ItemWords {
   }
 }
 
-export type Action = { readonly kind: 'open'; readonly label: string; readonly to: string } | { readonly kind: 'retry'; readonly label: string; readonly runId: string }
+export type Action =
+  | { readonly kind: 'open'; readonly label: string; readonly to: string }
+  | { readonly kind: 'retry'; readonly label: string; readonly runId: string }
+  | { readonly kind: 'check'; readonly label: string; readonly connectionId: string }
 
 export function actionsOf(need: Need): readonly Action[] {
   switch (need.kind) {
     case 'approval':
       return [{ kind: 'open', label: 'Review and decide', to: `/runs/${need.item.run_id}` }]
     case 'connection':
-      return [{ kind: 'open', label: 'Open Settings', to: '/settings' }]
+      // Settings has no Connections tab yet (plan item N19). Until it does, the item checks in place.
+      return [{ kind: 'check', label: 'Check again', connectionId: need.item.id }]
     case 'confirmation':
       return [{ kind: 'open', label: 'Review in Settings', to: need.item.kind === 'approver' ? '/settings?tab=people' : '/settings' }]
     case 'stopped':
@@ -200,6 +204,11 @@ export function stoppedActions(runId: string, retryable: boolean): readonly Acti
         { kind: 'open', label: 'See the run', to: `/runs/${runId}` },
       ]
     : [{ kind: 'open', label: 'See why it stopped', to: `/runs/${runId}` }]
+}
+
+/** What a check found, in words that stay true when the item is still there. */
+export function checkWords(state: string): string {
+  return state === 'working' ? 'Checked just now. It works.' : 'Checked just now. It still does not work.'
 }
 
 const noLongerStopped = (error: unknown) => error instanceof ApiError && error.status === 409

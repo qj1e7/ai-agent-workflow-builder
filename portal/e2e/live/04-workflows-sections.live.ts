@@ -156,6 +156,35 @@ test('alice sees the run she started under Waiting on others on Workflows, and n
   await context.close()
 })
 
+test('a connection that does not answer is checked again in place, and clears everywhere once it works', async ({ browser, backend }) => {
+  const answering = (on: boolean) => backend.post('alice', '/api/v1/dev/practice-jira/answering', { answering: on })
+  await answering(false)
+  await backend.post('alice', '/api/v1/settings/connections/jira/check')
+  const context = await devContext(browser, 'alice')
+  const page = await context.newPage()
+  try {
+    await page.goto('/workflows')
+    const item = page.locator('li[data-home-item="connection:jira"]')
+    await expect(item).toBeVisible()
+    await expect(item.getByRole('link')).toHaveCount(0)
+    const before = await countInHeading(page)
+    await item.getByRole('button', { name: 'Check again' }).click()
+    await expect(item.getByRole('status')).toHaveText('Checked just now. It still does not work.')
+    await expect(item).toBeVisible()
+    expect(await countInHeading(page)).toBe(before)
+
+    await answering(true)
+    await item.getByRole('button', { name: 'Check again' }).click()
+    await expect(item).toHaveCount(0)
+    await expect.poll(() => countInHeading(page)).toBe(before - 1)
+    await expect.poll(() => countOnTab(page)).toBe(before - 1)
+  } finally {
+    await answering(true)
+    await backend.post('alice', '/api/v1/settings/connections/jira/check')
+    await context.close()
+  }
+})
+
 test('alice discards a draft by keyboard, after a question that says what is lost, and Undo puts it back', async ({ browser, backend }, info) => {
   const draft = await draftFor(backend, 'keys')
   const context = await devContext(browser, 'alice')

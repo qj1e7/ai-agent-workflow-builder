@@ -5312,10 +5312,11 @@
             "type": "string"
           },
           "status": {
-            "description": "What the reply asked for. For a reply by the person who asked, `answered` means a note that left the request's status alone.",
+            "description": "What the reply did. `answered` is the team's reply. `done` closed the request. `added` is a note from the person who asked that left the request's status alone.",
             "enum": [
               "answered",
-              "done"
+              "done",
+              "added"
             ],
             "title": "Status",
             "type": "string"

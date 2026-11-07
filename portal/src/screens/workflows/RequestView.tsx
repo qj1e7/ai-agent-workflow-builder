@@ -100,7 +100,7 @@ function Replies({ request, now }: { request: TeamRequestView; now: Date }) {
         <li key={`${reply.replied_by}:${reply.replied_at}`}>
           <b>{reply.replied_by_name}</b>
           <span className={styles['replyWhen']}>
-            {lineWhen(reply.replied_at, now)} · {replyWords(reply, request.asked_by)}
+            {lineWhen(reply.replied_at, now)} · {replyWords(reply)}
           </span>
           <p>{reply.text}</p>
         </li>

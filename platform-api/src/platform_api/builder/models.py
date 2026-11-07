@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import Field, JsonValue, StringConstraints, field_validator
+from pydantic import AwareDatetime, Field, JsonValue, StringConstraints, field_validator
 
 from platform_api.builder.templates import VERSION_PATTERN
 from platform_api.orchestration import (
@@ -538,8 +538,8 @@ DRAFT_LIMIT_BYTES = 32 * 1024
 
 
 class DraftTimes(WireIn):
-    created_at: datetime
-    saved_at: datetime
+    created_at: AwareDatetime
+    saved_at: AwareDatetime
 
 
 class DraftIn(WireIn):

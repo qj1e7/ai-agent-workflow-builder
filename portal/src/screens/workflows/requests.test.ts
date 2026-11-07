@@ -68,9 +68,9 @@ describe('a request that cannot be shown', () => {
 })
 
 describe('what a reply did', () => {
-  it('reads the asker’s own note as an addition, someone else’s as an answer, and Done as Done', () => {
-    expect(replyWords(reply('alice', '2026-11-04T04:00:00Z'), 'alice')).toBe('Added to the request')
-    expect(replyWords(reply('bob', '2026-11-04T04:00:00Z'), 'alice')).toBe('Answered')
-    expect(replyWords({ ...reply('alice', '2026-11-04T04:00:00Z'), status: 'done' }, 'alice')).toBe('Marked Done')
+  it('reads each status in its own words', () => {
+    expect(replyWords({ ...reply('alice', '2026-11-04T04:00:00Z'), status: 'added' })).toBe('Added to the request')
+    expect(replyWords(reply('bob', '2026-11-04T04:00:00Z'))).toBe('Answered')
+    expect(replyWords({ ...reply('alice', '2026-11-04T04:00:00Z'), status: 'done' })).toBe('Marked Done')
   })
 })

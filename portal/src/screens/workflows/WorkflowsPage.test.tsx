@@ -357,7 +357,7 @@ describe('a request opened by its link', () => {
   })
 
   it('labels the asker’s own note as an addition, never as an answer', () => {
-    const noted: TeamRequestView = { ...REQUEST, status: 'open', replies: [{ ...REQUEST.replies[0]!, replied_by: 'alice', replied_by_name: 'Alice', status: 'answered' }] }
+    const noted: TeamRequestView = { ...REQUEST, status: 'open', replies: [{ ...REQUEST.replies[0]!, replied_by: 'alice', replied_by_name: 'Alice', status: 'added' }] }
     const html = open({ me: BOB, request: { id: 'trq_01JD5RP', data: noted } })
     expect(text(html)).toContain('Added to the request')
     expect(text(html)).not.toMatch(/· Answered/)

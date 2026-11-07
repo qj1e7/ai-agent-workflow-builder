@@ -51,7 +51,7 @@ class Drafts:
                 return TooManyDrafts(MAX_DRAFTS_PER_AUTHOR)
             first = draft.put_back
             created = min(first.created_at, uow.now) if first else uow.now
-            saved = min(first.saved_at, uow.now) if first else uow.now
+            saved = max(created, min(first.saved_at, uow.now)) if first else uow.now
             row = await (
                 await uow.conn.execute(
                     "INSERT INTO builder.drafts (author, draft_id, step, content, created_at,"

@@ -343,12 +343,29 @@ def test_migration_0008_adds_the_asker_seen_mark_and_a_downgrade_removes_it(
             " replied_by_name, replied_at, text, status) VALUES ('trr_old', 'trq_old', 'bob',"
             " 'Bob', now(), 'Done.', 'answered')"
         )
+        conn.execute(
+            "INSERT INTO builder.team_request_replies (reply_id, request_id, replied_by,"
+            " replied_by_name, replied_at, text, status) VALUES ('trr_mine', 'trq_old', 'alice',"
+            " 'Alice', now(), 'Thanks.', 'answered')"
+        )
         upgrade("builder", postgres.owner)
         assert column_present(conn)
         [seen] = conn.execute(
             "SELECT asker_seen_at IS NOT NULL FROM builder.team_requests"
         ).fetchone() or [None]
         assert seen is True
+        stored = conn.execute(
+            "SELECT reply_id, status FROM builder.team_request_replies ORDER BY reply_id"
+        ).fetchall()
+        assert stored == [("trr_mine", "added"), ("trr_old", "answered")]
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute("UPDATE builder.team_request_replies SET status = 'bogus'")
+        downgrade("builder", postgres.owner, "0007")
+        back = conn.execute(
+            "SELECT status FROM builder.team_request_replies ORDER BY reply_id"
+        ).fetchall()
+        assert back == [("answered",), ("answered",)]
+        upgrade("builder", postgres.owner)
         conn.execute("DELETE FROM builder.team_request_replies")
         conn.execute("DELETE FROM builder.team_requests")
     with psycopg.connect(postgres.contexts.builder) as builder:

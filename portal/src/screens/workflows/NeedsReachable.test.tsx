@@ -202,7 +202,7 @@ function unreachable(seen: Seen): string[] {
     ...home.approvals.filter((item) => !reaches(seen, item.run_id)).map((item) => `approval ${item.approval_id} (run ${item.run_id}, ${item.use_case_id}${newerOnSameWorkflow(item.run_id, item.use_case_id)}): no button acts on its run`),
     ...home.stopped.filter((item) => !reaches(seen, item.run_id)).map((item) => `stopped run ${item.run_id} (${item.use_case_id}): no button acts on it`),
     ...home.confirmations.filter((item) => !controls.some((control) => control.item === `confirmation:${item.confirmation_id}`)).map((item) => `confirmation ${item.confirmation_id}: no button`),
-    ...home.connections.filter((item) => !controls.some((control) => control.item === `connection:${item.id}` && control.href === '/settings')).map((item) => `connection ${item.id}: no button opens Settings`),
+    ...home.connections.filter((item) => !controls.some((control) => control.item === `connection:${item.id}` && control.href === null && control.text === 'Check again')).map((item) => `connection ${item.id}: no Check again button`),
     ...home.replied.filter((item) => !controls.some((control) => control.item === `reply:${item.request_id}` && control.href === `/workflows?request=${item.request_id}`)).map((item) => `reply to request ${item.request_id}: no button opens it`),
   ]
 }

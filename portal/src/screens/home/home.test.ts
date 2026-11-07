@@ -4,7 +4,7 @@ import bobHome from '../../../../contracts/fixtures/builder/home.bob.json'
 import dayOne from '../../../../contracts/fixtures/builder/home.day-one.json'
 import type { ApprovalItem, ConnectionItem, FollowingUpItem, HomeOut, ReplyView, StoppedItem, WaitingItem } from '../../api/types'
 import { ApiError } from '../../api/client'
-import { actionsOf, comingUpOf, draftWords, HOME_NEEDS_SHOWN, leadLine, moreWords, needsOf, needsTotal, retryProblem, waitingWords, wordsOf, type Need } from './home'
+import { actionsOf, checkWords, comingUpOf, draftWords, HOME_NEEDS_SHOWN, leadLine, moreWords, needsOf, needsTotal, retryProblem, waitingWords, wordsOf, type Need } from './home'
 
 const BOB = bobHome as HomeOut
 const ALICE = aliceHome as HomeOut
@@ -31,14 +31,14 @@ describe('the order of what needs you', () => {
     expect(needsOf(home).shown.map((need) => need.kind)).toEqual(['stopped', 'approval', 'confirmation', 'confirmation'])
   })
 
-  it('puts a connection that needs attention after approvals and before confirmations, counts it, and opens Settings', () => {
+  it('puts a connection that needs attention after approvals and before confirmations, counts it, and checks it again in place', () => {
     const connection = (ALICE.connections as [ConnectionItem])[0]
     const home: HomeOut = { ...BOB, connections: [connection], stopped: [STOP], stopped_total: 1, replied: [(ALICE.replied as [FollowingUpItem])[0]] }
     const needs = needsOf(home)
     expect(needs.shown.map((need) => need.kind)).toEqual(['stopped', 'approval', 'connection', 'confirmation', 'confirmation', 'reply'])
     expect(needs.total).toBe(needsTotal(home))
     const need = needs.shown.find((item) => item.kind === 'connection') as Need
-    expect(actionsOf(need)).toEqual([{ kind: 'open', label: 'Open Settings', to: '/settings' }])
+    expect(actionsOf(need)).toEqual([{ kind: 'check', label: 'Check again', connectionId: 'jira' }])
     expect(wordsOf(need, NOW).title).toBe('Jira is not answering.')
   })
 
@@ -265,5 +265,12 @@ describe('what you wait on, your drafts and what runs next', () => {
     expect(at('Europe/London')).toBe('Today, 9:00 London time')
     expect(at('Asia/Singapore')).toBe('Today, 17:00')
     expect(at('Factory'), 'a zone the browser cannot read').toBe('Today, 17:00 Singapore time')
+  })
+})
+
+describe('what a check of a connection says', () => {
+  it('says it works only when the state is working', () => {
+    expect(checkWords('working')).toBe('Checked just now. It works.')
+    expect(checkWords('not_answering')).toBe('Checked just now. It still does not work.')
   })
 })

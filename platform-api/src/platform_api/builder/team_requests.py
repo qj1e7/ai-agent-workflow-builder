@@ -92,9 +92,10 @@ class ReplyView(WireModel):
     replied_by_name: str
     replied_at: datetime
     text: str
-    status: Literal["answered", "done"] = Field(
-        description="What the reply asked for. For a reply by the person who asked, `answered` "
-        "means a note that left the request's status alone."
+    status: Literal["answered", "done", "added"] = Field(
+        description="What the reply did. `answered` is the team's reply. `done` closed the "
+        "request. `added` is a note from the person who asked that left the request's status "
+        "alone."
     )
 
 
@@ -485,7 +486,7 @@ class TeamRequests:
                     replier.display,
                     uow.now,
                     body.text,
-                    body.status,
+                    "added" if by_the_asker and body.status != "done" else body.status,
                 ),
             )
             replies = await _replies_of(uow, [request_id])
