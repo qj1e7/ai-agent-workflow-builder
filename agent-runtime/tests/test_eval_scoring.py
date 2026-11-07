@@ -4,18 +4,30 @@ from typing import Any
 
 import httpx
 import pytest
+from evals.answer import ANSWER, AnswerCase, _cant_checks, _card_checks
 from evals.checks import Check, jargon, mentions, write_claims
 from evals.choose import CHOOSE, ChooseCase
 from evals.draft import DRAFT, DraftCase
 from evals.explain import EXPLAIN, ExplainCase, Explanation
-from evals.jobs import Answer, marked
+from evals.jobs import Answer, _structured_answer, marked
 from evals.providers import Target, plan
-from evals.runner import JOBS, Outcome, main, model_for, redact, run_case, summarise_job
+from evals.runner import (
+    JOBS,
+    Outcome,
+    jobs_chosen,
+    main,
+    model_for,
+    redact,
+    run_case,
+    summarise_job,
+)
 from evals.summarise import SUMMARISE, SummariseCase, checked
 from evals.understand import UNDERSTAND, UnderstandCase
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 
+from agent_runtime.answers import TaskRead, answer_of
+from agent_runtime.contract import CantRow, PartAnswer, SetupCardAnswer, UnderstoodRow
 from agent_runtime.summary import SUMMARY_TIMEOUT_SECONDS, ModelSummarizer, template_check_summary
 
 
@@ -154,6 +166,18 @@ def test_an_unparsed_answer_fails_as_not_answered() -> None:
     assert failed(EXPLAIN.score(explain_case("declined"), text("{not json"))) == {"answered"}
 
 
+def test_a_reading_that_did_not_parse_is_kept_from_the_models_tool_call() -> None:
+    """The run file shows what the model gave, so the next check can read why it failed."""
+    raw = AIMessage(
+        content="", tool_calls=[{"name": "TaskRead", "args": {"rows": [], "x": 1}, "id": "c1"}]
+    )
+    answer = _structured_answer({"raw": raw, "parsed": None, "parsing_error": ValueError()})
+    assert answer.value is None
+    assert json.loads(answer.text) == {"rows": [], "x": 1}
+    plain = AIMessage(content="not a call")
+    assert _structured_answer({"raw": plain, "parsed": None}).text == "not a call"
+
+
 @pytest.mark.parametrize(
     "sentence",
     [
@@ -255,7 +279,14 @@ def test_a_cloud_provider_with_a_key_runs_its_default_models() -> None:
 
 
 def test_every_job_is_registered_once() -> None:
-    assert [job.name for job in JOBS] == ["summarise", "explain", "draft", "choose", "understand"]
+    assert [job.name for job in JOBS] == [
+        "summarise",
+        "explain",
+        "draft",
+        "choose",
+        "understand",
+        "answer",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -584,3 +615,154 @@ def test_the_explain_logs_are_watchlist_runs() -> None:
 def test_the_recorded_explain_cases_replay_their_recorded_run(case_id: str, story: str) -> None:
     recorded = [e["summary"] for e in json.loads((RUNS / f"{story}.json").read_text())]
     assert explain_case(case_id).events == recorded[:-1]
+
+
+def answer_case(name: str) -> AnswerCase:
+    return next(c for c in ANSWER.cases() if c.id == name)
+
+
+def read_answer(**fields: Any) -> Answer:
+    read = TaskRead.model_validate({"skips_the_yes": {"whose": "nobody"}, **fields})
+    return Answer(read, read.model_dump_json(), None)
+
+
+EMAIL_READ = {
+    "name": "Stale ticket list",
+    "schedule": "weekly",
+    "search": {"updated": {"how": "before", "days": 14}, "said": "stale tickets"},
+}
+
+
+def test_every_answer_case_names_a_kind_or_a_kind_to_avoid():
+    cases = ANSWER.cases()
+    assert len(cases) >= 40
+    assert all(c.kind or c.not_kind for c in cases)
+
+
+def test_the_answer_job_scores_the_decided_answer_not_the_reading():
+    case = answer_case("email-stale-list")
+    assert failed(ANSWER.score(case, read_answer(**EMAIL_READ))) == set()
+    claimed = {**EMAIL_READ, "ticket": {"creates": False, "says": "list", "said": "list"}}
+    assert failed(ANSWER.score(case, read_answer(**claimed))) == set()
+    bare = {"name": "Stale ticket list"}
+    checks = ANSWER.score(case, read_answer(**bare))
+    assert failed(checks) == {"offers_alternative", "reads_the_parts"}
+
+
+def test_a_guessed_time_and_an_invented_key_fail_the_card():
+    read = {
+        "name": "Weekly summary",
+        "schedule": "Every Friday at 5pm",
+        "search": {"status": "done", "done": {"how": "within", "days": 7}, "said": "closed"},
+        "ticket": {"creates": True, "says": "summary", "said": "sum up"},
+        "place": {"project": "SUP", "said": "SUP"},
+    }
+    case = answer_case("day-one-weekly-summary")
+    checks = ANSWER.score(case, read_answer(**read))
+    assert failed(checks) == {"reads_the_parts", "schedule_state"}
+    shown = answer_of(
+        TaskRead.model_validate({"skips_the_yes": {"whose": "nobody"}, **read}), case.task
+    )
+    assert isinstance(shown, SetupCardAnswer) and shown.rows[0].state == "missing"
+    assert shown.rows[0].note == 'Your words said "Every Friday" but not a time. Please choose one.'
+    assert shown.rows[3].state == "missing"
+    guessed = shown.model_copy(
+        update={
+            "rows": [
+                shown.rows[0].model_copy(
+                    update={"text": "Every Monday at 5pm", "state": "changed"}
+                ),
+                shown.rows[1],
+                shown.rows[2],
+                shown.rows[3].model_copy(
+                    update={"text": "Jira project SUP", "state": "understood"}
+                ),
+            ]
+        }
+    )
+    checks = _card_checks(case, guessed)
+    assert next(c.detail for c in checks if c.name == "no_guessed_time") == "5"
+    assert next(c.detail for c in checks if c.name == "no_invented_keys") == "SUP"
+
+
+@pytest.mark.parametrize(
+    ("case_id", "offered"),
+    [
+        ("filter-by-component", "Bug tickets in MOCK from every components"),
+        ("filter-by-priority", "Tickets in MOCK of all priorities"),
+    ],
+)
+def test_a_card_that_offers_the_field_in_any_word_form_fails_keeps_out(case_id: str, offered: str):
+    case = answer_case(case_id)
+    cant = [
+        CantRow(kind="look_for", text=case.task, note="Can't.", needs="new_tool", system="Jira")
+    ]
+    rows = [
+        UnderstoodRow(kind="schedule", text="", state="missing", note="Not said."),
+        UnderstoodRow(kind="look_for", text=offered, state="changed", note="Suggested."),
+        UnderstoodRow(kind="do", text="List them", state="understood"),
+        UnderstoodRow(kind="where", text="", state="missing", note="Not said."),
+    ]
+    shown = PartAnswer(name="Bug list", rows=rows, cant=cant)
+    assert failed(_cant_checks(case, shown)) == {"keeps_out"}
+    clean = shown.model_copy(
+        update={
+            "rows": [rows[0], rows[1].model_copy(update={"text": "Bug tickets in MOCK"}), *rows[2:]]
+        }
+    )
+    assert failed(_cant_checks(case, clean)) == set()
+
+
+def test_a_refusal_and_a_question_are_scored_on_their_kind_and_words():
+    checks = ANSWER.score(answer_case("without-approval"), read_answer())
+    assert failed(checks) == set()
+    checks = ANSWER.score(answer_case("by-itself"), read_answer(asks_about="abilities"))
+    assert failed(checks) == set()
+    said = read_answer(asks_about="why_stopped", workflow_words="Morning new-ticket check")
+    assert failed(ANSWER.score(answer_case("why-did-it-stop"), said)) == set()
+    wrong = read_answer(asks_about="why_stopped", workflow_words="Weekly summary")
+    assert failed(ANSWER.score(answer_case("why-did-it-stop"), wrong)) == {"names_the_workflow"}
+
+
+def test_a_mixed_request_is_scored_on_the_watchlist_and_the_rest():
+    read = {
+        "belongs_on_watchlist": True,
+        "watchlist_word": "releases",
+        "software": "React",
+        "name": "Stale bug list",
+        "schedule": "Every Friday",
+        "search": {
+            "issue_types": ["bug"],
+            "updated": {"how": "before", "days": 14},
+            "said": "stale bug tickets",
+        },
+        "ticket": {"creates": False, "says": "list", "said": "list"},
+    }
+    assert failed(ANSWER.score(answer_case("mixed-watch-and-list"), read_answer(**read))) == set()
+    alone = read_answer(belongs_on_watchlist=True, watchlist_word="releases", software="React")
+    assert failed(ANSWER.score(answer_case("mixed-watch-and-list"), alone)) == {
+        "carries_the_rest",
+        "reads_the_parts",
+    }
+
+
+def test_only_the_jobs_named_in_eval_jobs_run():
+    assert [j.name for j in jobs_chosen({"EVAL_JOBS": "answer"})] == ["answer"]
+    assert [j.name for j in jobs_chosen({"EVAL_JOBS": " understand, answer "})] == [
+        "understand",
+        "answer",
+    ]
+    assert jobs_chosen({}) == JOBS
+    with pytest.raises(ValueError, match="no job: nope"):
+        jobs_chosen({"EVAL_JOBS": "nope"})
+
+
+def test_a_word_rule_refusal_scores_as_the_product_answers_even_when_the_reading_did_not_parse():
+    """The product refuses before the model is asked, so a reading that does not parse never
+    reaches the person on such a case; the scorer scores the refusal, not the parse."""
+    case = answer_case("no-need-to-sign-off")
+    checks = ANSWER.score(case, Answer(None, "<not json", None))
+    assert failed(checks) == set()
+    case = answer_case("find-bugs-in-mock")
+    checks = ANSWER.score(case, Answer(None, "<not json", None))
+    assert failed(checks) == {"answered"}

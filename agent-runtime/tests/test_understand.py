@@ -288,7 +288,7 @@ def test_a_part_the_platform_cannot_do_is_cant_do_even_when_the_model_accepts_it
     [
         ("look_for", "Tickets with no update for 10 days"),
         ("look_for", "Tickets without an update this week"),
-        ("look_for", "Tickets with the label urgent"),
+        ("look_for", "Tickets with the word urgent in the title"),
         ("look_for", "Tickets raised by the support teams"),
         ("look_for", "Closed tickets"),
         ("look_for", "Bug tickets assigned to Mark"),
@@ -433,6 +433,22 @@ def test_the_software_is_a_whole_word_of_the_task(software: str, task: str, show
         belongs_on_watchlist=True, watchlist_word="release", software=software
     )
     assert understood_of(answer, task) == BelongsOnWatchlist(word="release", software=shown)
+
+
+@pytest.mark.parametrize(
+    ("said", "task", "word"),
+    [
+        ("newer version", "Is there a newer version of FastAPI", "version"),
+        ("new release", "Tell me when LangGraph has a new release", "release"),
+        ("security patches", "Tell me about Log4j security patches", "security patches"),
+        ("version or release", "Tell me about each new release of Redis", "release"),
+    ],
+)
+def test_a_watchlist_word_said_in_more_than_one_word_is_the_tasks_own_word(
+    said: str, task: str, word: str
+):
+    answer = UnderstandAnswer(belongs_on_watchlist=True, watchlist_word=said)
+    assert understood_of(answer, task) == BelongsOnWatchlist(word=word)
 
 
 @pytest.mark.parametrize(

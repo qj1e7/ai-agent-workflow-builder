@@ -774,6 +774,165 @@ type FindSoftwareResult = Annotated[
 ]
 
 
+class AnswerRequest(WireModel):
+    task: str = Field(min_length=1, max_length=2000)
+    model: ModelAccess
+
+
+type CantNeed = Literal["new_tool", "new_system"]
+
+
+class CantRow(WireModel):
+    kind: RowKind
+    text: str = Field(max_length=200, description="The part the platform can't do, in plain words.")
+    note: str = Field(max_length=300, description="Why it can't do it yet.")
+    needs: CantNeed = Field(
+        description="new_tool when the part is in a system the platform already reaches, such "
+        "as Jira or GitHub, so a tool would have to be built and the team decides. new_system "
+        "when it names a system or source the platform doesn't reach, or names none."
+    )
+    system: str | None = Field(
+        default=None,
+        max_length=40,
+        description="The system the part names, in plain words, such as Jira or email. None "
+        "when it names none.",
+    )
+
+
+class SetupCardAnswer(WireModel):
+    kind: Literal["setup_card"] = "setup_card"
+    name: str = Field(
+        min_length=1,
+        max_length=60,
+        description="The Planner's guess at a name. The Portal shows it as filled in by the "
+        "Planner, with Rename.",
+    )
+    rows: list[UnderstoodRow] = Field(
+        min_length=4,
+        max_length=8,
+        description="One schedule row, then at least one row for what to look for, what to do "
+        "and where, in that order. None is cant_do. A time the task doesn't say is missing, "
+        "never guessed.",
+    )
+
+
+class PartAnswer(WireModel):
+    kind: Literal["part"] = "part"
+    name: str = Field(min_length=1, max_length=60)
+    rows: list[UnderstoodRow] = Field(
+        min_length=4,
+        max_length=8,
+        description="The part the platform can do, as a card: the request with each part it "
+        "can't do swapped for the nearest thing it can, or left for the person to choose.",
+    )
+    cant: list[CantRow] = Field(
+        min_length=1, description="Each part it can't do. Every one needs a new tool."
+    )
+
+
+type Alternative = Annotated[SetupCardAnswer | WatchlistAnswer, Field(discriminator="kind")]
+
+
+class CantAnswer(WireModel):
+    kind: Literal["cant"] = "cant"
+    cant: list[CantRow] = Field(min_length=1, description="Each part the platform can't do.")
+    alternative: Alternative | None = Field(
+        default=None,
+        description="The nearest thing the Planner can set up, with every part checked. None "
+        "when nothing comes close, so the only next step is Ask the team.",
+    )
+
+
+class WatchlistAnswer(WireModel):
+    kind: Literal["watchlist"] = "watchlist"
+    word: str = Field(
+        min_length=1,
+        max_length=80,
+        description="The word that made the Planner think so, as the task wrote it.",
+    )
+    software: str | None = Field(
+        default=None, max_length=80, description="The software the task names, as it wrote it."
+    )
+    also: (
+        Annotated[SetupCardAnswer | PartAnswer | CantAnswer, Field(discriminator="kind")] | None
+    ) = Field(
+        default=None,
+        description="The rest of a request that also asks for a workflow, such as a weekly "
+        "ticket list, offered next. None when the request is only about the software.",
+    )
+
+
+CantAnswer.model_rebuild()
+
+
+class WhichSoftwareAnswer(WireModel):
+    kind: Literal["which_software"] = "which_software"
+    word: str = Field(min_length=1, max_length=80)
+
+
+class RefusedAnswer(WireModel):
+    kind: Literal["refused"] = "refused"
+    reason: Literal["skip_approval"] = "skip_approval"
+    said: str = Field(
+        max_length=200,
+        description="The words that asked to skip a yes, as the request wrote them, so the "
+        "refusal names the part. Empty only when the model said so without quoting them.",
+    )
+    rest: str = Field(
+        max_length=2000,
+        description="The request without the words that asked to skip a yes, so it can be set "
+        "up with one. Empty when nothing is left.",
+    )
+
+
+class CheckWorkflowsAnswer(WireModel):
+    kind: Literal["check_workflows"] = "check_workflows"
+    workflow_words: str | None = Field(
+        default=None,
+        max_length=80,
+        description="The words of the task that name one workflow, as it wrote them. The "
+        "platform matches them to a workflow. None when the question is about all of them.",
+    )
+
+
+class WhyStoppedAnswer(WireModel):
+    kind: Literal["why_stopped"] = "why_stopped"
+    workflow_words: str | None = Field(default=None, max_length=80)
+
+
+class NeedsMeAnswer(WireModel):
+    kind: Literal["needs_me"] = "needs_me"
+
+
+class AbilitiesAnswer(WireModel):
+    kind: Literal["abilities"] = "abilities"
+
+
+type PlannerAnswer = Annotated[
+    SetupCardAnswer
+    | PartAnswer
+    | CantAnswer
+    | WatchlistAnswer
+    | WhichSoftwareAnswer
+    | RefusedAnswer
+    | CheckWorkflowsAnswer
+    | WhyStoppedAnswer
+    | NeedsMeAnswer
+    | AbilitiesAnswer,
+    Field(discriminator="kind"),
+]
+
+
+class Answered(WireModel):
+    status: Literal["answered"] = "answered"
+    answer: PlannerAnswer
+
+
+type AnswerResult = Annotated[Answered | ModelProblem, Field(discriminator="status")]
+
+answer_result_adapter: TypeAdapter[AnswerResult] = TypeAdapter(AnswerResult)
+
+
 class AgentCard(WireModel):
     id: str
     display: str
@@ -809,3 +968,5 @@ class AgentApiSchema(WireModel):
     planner_understand_result: UnderstandResult
     software_find_request: FindSoftwareRequest
     software_find_result: FindSoftwareResult
+    planner_answer_request: AnswerRequest
+    planner_answer_result: AnswerResult

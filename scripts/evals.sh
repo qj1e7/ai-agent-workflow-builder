@@ -4,6 +4,7 @@
 #
 # A provider runs only when its settings are set in this shell. The script passes them by name, so
 # their values never appear on the command line or in the output. See docs/evidence/model-bakeoff/.
+# EVAL_JOBS=answer runs one job. EVAL_MARKER sets the run's marker, else one is made up.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -20,7 +21,8 @@ settings=(
   AZURE_OPENAI_API_KEY AZURE_OPENAI_ENDPOINT AZURE_OPENAI_API_VERSION AZURE_OPENAI_DEPLOYMENTS
   ANTHROPIC_API_KEY ANTHROPIC_MODELS
   GOOGLE_API_KEY GOOGLE_MODELS
-  EVAL_TEMPERATURE EVAL_JUDGE
+  AGENT_MODEL_BASE_URL AGENT_MODEL_API_KEY GATEWAY_MODELS
+  EVAL_TEMPERATURE EVAL_JUDGE EVAL_JOBS EVAL_MARKER
 )
 env_args=()
 for name in "${settings[@]}"; do

@@ -1,5 +1,18 @@
 {
   "$defs": {
+    "AbilitiesAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "abilities",
+          "default": "abilities",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "title": "AbilitiesAnswer",
+      "type": "object"
+    },
     "Addressee": {
       "discriminator": {
         "mapping": {
@@ -467,6 +480,79 @@
       "title": "AgentStepStartedEvent",
       "type": "object"
     },
+    "Alternative": {
+      "discriminator": {
+        "mapping": {
+          "setup_card": "#/$defs/SetupCardAnswer",
+          "watchlist": "#/$defs/WatchlistAnswer"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/SetupCardAnswer"
+        },
+        {
+          "$ref": "#/$defs/WatchlistAnswer"
+        }
+      ]
+    },
+    "AnswerRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "$ref": "#/$defs/ModelAccess"
+        },
+        "task": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Task",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task",
+        "model"
+      ],
+      "title": "AnswerRequest",
+      "type": "object"
+    },
+    "AnswerResult": {
+      "discriminator": {
+        "mapping": {
+          "answered": "#/$defs/Answered",
+          "problem": "#/$defs/ModelProblem"
+        },
+        "propertyName": "status"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Answered"
+        },
+        {
+          "$ref": "#/$defs/ModelProblem"
+        }
+      ]
+    },
+    "Answered": {
+      "additionalProperties": false,
+      "properties": {
+        "answer": {
+          "$ref": "#/$defs/PlannerAnswer"
+        },
+        "status": {
+          "const": "answered",
+          "default": "answered",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "answer"
+      ],
+      "title": "Answered",
+      "type": "object"
+    },
     "BelongsOnWatchlist": {
       "additionalProperties": false,
       "properties": {
@@ -523,6 +609,96 @@
         "token"
       ],
       "title": "Callback",
+      "type": "object"
+    },
+    "CantAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "alternative": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Alternative"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The nearest thing the Planner can set up, with every part checked. None when nothing comes close, so the only next step is Ask the team."
+        },
+        "cant": {
+          "description": "Each part the platform can't do.",
+          "items": {
+            "$ref": "#/$defs/CantRow"
+          },
+          "minItems": 1,
+          "title": "Cant",
+          "type": "array"
+        },
+        "kind": {
+          "const": "cant",
+          "default": "cant",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cant"
+      ],
+      "title": "CantAnswer",
+      "type": "object"
+    },
+    "CantNeed": {
+      "enum": [
+        "new_tool",
+        "new_system"
+      ],
+      "type": "string"
+    },
+    "CantRow": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/RowKind"
+        },
+        "needs": {
+          "$ref": "#/$defs/CantNeed",
+          "description": "new_tool when the part is in a system the platform already reaches, such as Jira or GitHub, so a tool would have to be built and the team decides. new_system when it names a system or source the platform doesn't reach, or names none."
+        },
+        "note": {
+          "description": "Why it can't do it yet.",
+          "maxLength": 300,
+          "title": "Note",
+          "type": "string"
+        },
+        "system": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The system the part names, in plain words, such as Jira or email. None when it names none.",
+          "title": "System"
+        },
+        "text": {
+          "description": "The part the platform can't do, in plain words.",
+          "maxLength": 200,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "text",
+        "note",
+        "needs"
+      ],
+      "title": "CantRow",
       "type": "object"
     },
     "CapabilityKind": {
@@ -931,6 +1107,33 @@
         }
       },
       "title": "CarryForward",
+      "type": "object"
+    },
+    "CheckWorkflowsAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "check_workflows",
+          "default": "check_workflows",
+          "title": "Kind",
+          "type": "string"
+        },
+        "workflow_words": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The words of the task that name one workflow, as it wrote them. The platform matches them to a workflow. None when the question is about all of them.",
+          "title": "Workflow Words"
+        }
+      },
+      "title": "CheckWorkflowsAnswer",
       "type": "object"
     },
     "CheckedCardToRun": {
@@ -1797,6 +2000,111 @@
         }
       ]
     },
+    "NeedsMeAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "needs_me",
+          "default": "needs_me",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "title": "NeedsMeAnswer",
+      "type": "object"
+    },
+    "PartAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "cant": {
+          "description": "Each part it can't do. Every one needs a new tool.",
+          "items": {
+            "$ref": "#/$defs/CantRow"
+          },
+          "minItems": 1,
+          "title": "Cant",
+          "type": "array"
+        },
+        "kind": {
+          "const": "part",
+          "default": "part",
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 60,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "rows": {
+          "description": "The part the platform can do, as a card: the request with each part it can't do swapped for the nearest thing it can, or left for the person to choose.",
+          "items": {
+            "$ref": "#/$defs/UnderstoodRow"
+          },
+          "maxItems": 8,
+          "minItems": 4,
+          "title": "Rows",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "rows",
+        "cant"
+      ],
+      "title": "PartAnswer",
+      "type": "object"
+    },
+    "PlannerAnswer": {
+      "discriminator": {
+        "mapping": {
+          "abilities": "#/$defs/AbilitiesAnswer",
+          "cant": "#/$defs/CantAnswer",
+          "check_workflows": "#/$defs/CheckWorkflowsAnswer",
+          "needs_me": "#/$defs/NeedsMeAnswer",
+          "part": "#/$defs/PartAnswer",
+          "refused": "#/$defs/RefusedAnswer",
+          "setup_card": "#/$defs/SetupCardAnswer",
+          "watchlist": "#/$defs/WatchlistAnswer",
+          "which_software": "#/$defs/WhichSoftwareAnswer",
+          "why_stopped": "#/$defs/WhyStoppedAnswer"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/SetupCardAnswer"
+        },
+        {
+          "$ref": "#/$defs/PartAnswer"
+        },
+        {
+          "$ref": "#/$defs/CantAnswer"
+        },
+        {
+          "$ref": "#/$defs/WatchlistAnswer"
+        },
+        {
+          "$ref": "#/$defs/WhichSoftwareAnswer"
+        },
+        {
+          "$ref": "#/$defs/RefusedAnswer"
+        },
+        {
+          "$ref": "#/$defs/CheckWorkflowsAnswer"
+        },
+        {
+          "$ref": "#/$defs/WhyStoppedAnswer"
+        },
+        {
+          "$ref": "#/$defs/NeedsMeAnswer"
+        },
+        {
+          "$ref": "#/$defs/AbilitiesAnswer"
+        }
+      ]
+    },
     "ProblemReason": {
       "enum": [
         "address_not_allowed",
@@ -1849,6 +2157,41 @@
       "title": "ProposedIntent",
       "type": "object"
     },
+    "RefusedAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "refused",
+          "default": "refused",
+          "title": "Kind",
+          "type": "string"
+        },
+        "reason": {
+          "const": "skip_approval",
+          "default": "skip_approval",
+          "title": "Reason",
+          "type": "string"
+        },
+        "rest": {
+          "description": "The request without the words that asked to skip a yes, so it can be set up with one. Empty when nothing is left.",
+          "maxLength": 2000,
+          "title": "Rest",
+          "type": "string"
+        },
+        "said": {
+          "description": "The words that asked to skip a yes, as the request wrote them, so the refusal names the part. Empty only when the model said so without quoting them.",
+          "maxLength": 200,
+          "title": "Said",
+          "type": "string"
+        }
+      },
+      "required": [
+        "said",
+        "rest"
+      ],
+      "title": "RefusedAnswer",
+      "type": "object"
+    },
     "RepoName": {
       "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$",
       "type": "string"
@@ -1883,6 +2226,40 @@
         "cant_do"
       ],
       "type": "string"
+    },
+    "SetupCardAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "setup_card",
+          "default": "setup_card",
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "description": "The Planner's guess at a name. The Portal shows it as filled in by the Planner, with Rename.",
+          "maxLength": 60,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "rows": {
+          "description": "One schedule row, then at least one row for what to look for, what to do and where, in that order. None is cant_do. A time the task doesn't say is missing, never guessed.",
+          "items": {
+            "$ref": "#/$defs/UnderstoodRow"
+          },
+          "maxItems": 8,
+          "minItems": 4,
+          "title": "Rows",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "rows"
+      ],
+      "title": "SetupCardAnswer",
+      "type": "object"
     },
     "SoftwareMatch": {
       "additionalProperties": false,
@@ -2452,6 +2829,74 @@
       "title": "UnderstoodRow",
       "type": "object"
     },
+    "WatchlistAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "also": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "cant": "#/$defs/CantAnswer",
+                  "part": "#/$defs/PartAnswer",
+                  "setup_card": "#/$defs/SetupCardAnswer"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SetupCardAnswer"
+                },
+                {
+                  "$ref": "#/$defs/PartAnswer"
+                },
+                {
+                  "$ref": "#/$defs/CantAnswer"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The rest of a request that also asks for a workflow, such as a weekly ticket list, offered next. None when the request is only about the software.",
+          "title": "Also"
+        },
+        "kind": {
+          "const": "watchlist",
+          "default": "watchlist",
+          "title": "Kind",
+          "type": "string"
+        },
+        "software": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The software the task names, as it wrote it.",
+          "title": "Software"
+        },
+        "word": {
+          "description": "The word that made the Planner think so, as the task wrote it.",
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Word",
+          "type": "string"
+        }
+      },
+      "required": [
+        "word"
+      ],
+      "title": "WatchlistAnswer",
+      "type": "object"
+    },
     "WatchlistInputs": {
       "additionalProperties": false,
       "properties": {
@@ -2479,6 +2924,54 @@
         "software"
       ],
       "title": "WatchlistInputs",
+      "type": "object"
+    },
+    "WhichSoftwareAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "which_software",
+          "default": "which_software",
+          "title": "Kind",
+          "type": "string"
+        },
+        "word": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Word",
+          "type": "string"
+        }
+      },
+      "required": [
+        "word"
+      ],
+      "title": "WhichSoftwareAnswer",
+      "type": "object"
+    },
+    "WhyStoppedAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "why_stopped",
+          "default": "why_stopped",
+          "title": "Kind",
+          "type": "string"
+        },
+        "workflow_words": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workflow Words"
+        }
+      },
+      "title": "WhyStoppedAnswer",
       "type": "object"
     }
   },
@@ -2513,6 +3006,12 @@
     },
     "model_test_result": {
       "$ref": "#/$defs/ModelTestResult"
+    },
+    "planner_answer_request": {
+      "$ref": "#/$defs/AnswerRequest"
+    },
+    "planner_answer_result": {
+      "$ref": "#/$defs/AnswerResult"
     },
     "planner_choose_request": {
       "$ref": "#/$defs/ChooseRequest"
@@ -2561,7 +3060,9 @@
     "planner_understand_request",
     "planner_understand_result",
     "software_find_request",
-    "software_find_result"
+    "software_find_result",
+    "planner_answer_request",
+    "planner_answer_result"
   ],
   "title": "AgentApiSchema",
   "type": "object"

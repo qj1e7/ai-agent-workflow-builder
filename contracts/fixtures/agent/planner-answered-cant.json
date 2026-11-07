@@ -1,0 +1,45 @@
+{
+  "status": "answered",
+  "answer": {
+    "kind": "cant",
+    "cant": [
+      {
+        "kind": "do",
+        "text": "email me the list of stale tickets in MOCK",
+        "note": "I can't email me the list of stale tickets in MOCK yet. I can only read Jira tickets, sum up what I find, check software for new releases, and create a Jira ticket after a yes.",
+        "needs": "new_system",
+        "system": "email"
+      }
+    ],
+    "alternative": {
+      "kind": "setup_card",
+      "name": "Stale ticket list",
+      "rows": [
+        {
+          "kind": "schedule",
+          "text": "Every Friday",
+          "state": "understood",
+          "note": null
+        },
+        {
+          "kind": "look_for",
+          "text": "Tickets in MOCK, with no update for 14 days",
+          "state": "changed",
+          "note": "I filled some of this in from your words \"stale tickets in MOCK\". Please check it."
+        },
+        {
+          "kind": "do",
+          "text": "",
+          "state": "missing",
+          "note": "I couldn't tell from your words."
+        },
+        {
+          "kind": "where",
+          "text": "",
+          "state": "missing",
+          "note": "I couldn't tell from your words."
+        }
+      ]
+    }
+  }
+}

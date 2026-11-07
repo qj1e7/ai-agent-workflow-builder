@@ -130,6 +130,15 @@ def mentions(text: str, term: str) -> bool:
     return re.search(rf"(?<!\w){word}{end}", text, re.IGNORECASE) is not None
 
 
+def mentions_a_form(text: str, term: str) -> bool:
+    """`mentions`, and the term's plural forms too, so "component" also finds "components" and
+    "priority" finds "priorities". A stem is left to `mentions`."""
+    if term.endswith("*"):
+        return mentions(text, term)
+    plurals = [term + "s", term + "es", term[:-1] + "ies" if term.endswith("y") else term]
+    return any(mentions(text, form) for form in (term, *plurals))
+
+
 def versions_in(text: str) -> set[str]:
     return set(_VERSION.findall(text))
 

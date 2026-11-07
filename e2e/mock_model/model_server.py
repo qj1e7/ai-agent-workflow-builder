@@ -4,10 +4,17 @@ It answers by what a request asks for, so the real runtime, with its real prompt
 can be tested without a real model:
 
 - GET /v1/models lists one model.
-- A request that forces a tool is a draft, a choice or the Planner reading a task back. The canned
-  answer follows the task's words. A task that names a GitHub repository picks the Version
-  checker, any other gets a drafted agent (a follow-up one for a follow-up ticket task, else a
-  summary one), and a release task belongs on the Software watchlist unless it also asks for
+- A request that forces a tool is a draft, a choice, the Planner reading a task back, or the
+  Planner reading a request typed on Home (TaskRead). The canned answer follows the task's words.
+  A TaskRead fills the structures the real model is asked for: the ticket search (project, kinds
+  of ticket, open or done, the days since an update), what happens with what was found (one new
+  ticket that lists, counts or sums them up), the project it goes in, the schedule, and the skip
+  question for a few plain phrasings, such as "no human in the loop". A detail the search can't
+  filter by (a priority such as P1, a component, a reporter) is left out of the structures, as
+  the real model is told to leave it, and so is an email. A task that names a GitHub repository
+  picks the Version checker, any other gets a drafted agent (a follow-up one for a follow-up
+  ticket task, else a summary one), and a release task belongs on the Software watchlist unless
+  it also asks for
   known vulnerabilities. One named part, such as "Where it goes: Jira project MOCK", is read as
   that part alone, the others missing. When the Planner says before the task that the staff
   member already chose a new workflow, a release task is read back in parts like any other, as
@@ -52,9 +59,23 @@ BROKEN: dict[str, Any] = {
     "rows": '[{"kind": "schedule", "text": "Every',
 }
 RELEASE_WORDS = re.compile(r"\b(?:releases?|versions?|upgrades?|patch(?:es)?)\b", re.IGNORECASE)
-VULNERABILITY_WORDS = re.compile(r"\b(?:vulnerab\w*|cves?|nvd|advisor(?:y|ies))\b", re.IGNORECASE)
+VULNERABILITY_WORDS = re.compile(
+    r"\b(?:vulnerab\w*|cves?|nvd|advisor(?:y|ies)"
+    r"|security (?:fix(?:es)?|patch(?:es)?|alerts?|bulletins?))\b",
+    re.IGNORECASE,
+)
+EMAIL_WORDS = re.compile(r"\be-?mail\b", re.IGNORECASE)
 TICKET_WORDS = re.compile(r"\b(?:tickets?|jira)\b", re.IGNORECASE)
-SOFTWARE = ("LangGraph", "Redis", "FastAPI", "PostgreSQL", "Terraform", "Log4j", "Kubernetes")
+SOFTWARE = (
+    "LangGraph",
+    "Redis",
+    "FastAPI",
+    "PostgreSQL",
+    "Terraform",
+    "Log4j",
+    "Kubernetes",
+    "React",
+)
 SCHEDULE = re.compile(
     r"\b(?:every|each)\s+(?:week ?day|day|morning|monday|tuesday|wednesday|thursday|friday|"
     r"saturday|sunday|week|month)s?(?:\s+at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)?"
@@ -74,6 +95,66 @@ FOOLING_ORDER = re.compile(
 ONE_PART = re.compile(r"^(When|Looks for|Does|Where it goes): (.+)$", re.DOTALL)
 CARRIED_ON = re.compile(r"\bset belongs_on_watchlist to false\b")
 TASK_MARK = "The task:\n"
+REQUEST_MARK = "The request:\n"
+ABOUT = (
+    (
+        re.compile(
+            r"\bwhy\b.*\b(?:stop|stopped|fail|failed|broke|broken|went wrong)\b"
+            r"|^what (?:went wrong|happened)\b",
+            re.IGNORECASE,
+        ),
+        "why_stopped",
+    ),
+    (
+        re.compile(
+            r"^(?:what needs me|what do i need to do|what(?:'s| is) (?:waiting|for me)"
+            r"|(?:is )?(?:there )?anything (?:to approve|waiting|for me)"
+            r"|my (?:to-?do|approvals?))\b",
+            re.IGNORECASE,
+        ),
+        "needs_me",
+    ),
+    (
+        re.compile(
+            r"^(?:check|how are|show(?: me)?|see) (?:my |the |our |all )?workflows?\b"
+            r"|^(?:is|are) .*\b(?:running|working|on|stopped|paused)\s*\?*$",
+            re.IGNORECASE,
+        ),
+        "my_workflows",
+    ),
+    (
+        re.compile(r"^what can you do|^what do you do|^help\b|\bweather\b|\bjoke\b", re.IGNORECASE),
+        "abilities",
+    ),
+)
+WORKFLOW_NAMED = re.compile(
+    r"(?:why did|is|are)\s+(?:the\s+)?(.+?)\s+"
+    r"(?:stop|stopped|fail|failed|running|working|on|paused)\b",
+    re.IGNORECASE,
+)
+CLAUSE = re.compile(r"\s+and\s+|,\s*(?:then\s+)?")
+SKIP_WORDS = re.compile(
+    r"\b(?:no human in the loop|pre-approved|approvals? (?:turned )?off|approve it as me"
+    r"|no need to ask me or anyone|don't ask me or \w+)\b",
+    re.IGNORECASE,
+)
+ONLY_ME_WORDS = re.compile(
+    r"\b(?:without asking me(?: each time)?|don't ping me|leave me out of it)\b", re.IGNORECASE
+)
+TYPE_WORDS = re.compile(
+    r"\b(bugs?|tasks?|stor(?:y|ies)|epics?|sub-?tasks?|incidents?)\b", re.IGNORECASE
+)
+STATUS_WORDS = {"open": "open", "unresolved": "open", "closed": "done", "done": "done"}
+NO_UPDATE = re.compile(r"\bno update for (\d+) days?\b", re.IGNORECASE)
+CREATES = re.compile(
+    r"\b(?:create|make|raise|file|open|propose|put)\b[^,;.]*?\b(?:ticket|tickets|one)\b",
+    re.IGNORECASE,
+)
+SAYS = (
+    (re.compile(r"\bcount\b", re.IGNORECASE), "count"),
+    (re.compile(r"\bsum(?:mar\w*)?\b", re.IGNORECASE), "summary"),
+)
+OWNERS = re.compile(r"\b(?:owners?|assignees?|who owns)\b", re.IGNORECASE)
 PART_KINDS = {"When": "schedule", "Looks for": "look_for", "Does": "do", "Where it goes": "where"}
 mode = "ok"
 
@@ -184,7 +265,9 @@ def user_text(body: dict[str, Any]) -> str:
 def task_text(body: dict[str, Any]) -> str:
     """Only the staff member's task. The Planner's request also lists the saved agents, whose
     purposes must not steer the mock's choice."""
-    return user_text(body).rpartition(TASK_MARK)[2]
+    text = user_text(body)
+    mark = REQUEST_MARK if REQUEST_MARK in text and TASK_MARK not in text else TASK_MARK
+    return text.rpartition(mark)[2]
 
 
 def says_carried_on(body: dict[str, Any]) -> bool:
@@ -341,6 +424,137 @@ def stale_search(system: str, project: str) -> dict[str, Any]:
     return arguments
 
 
+def name_of(task: str) -> str:
+    first = re.split(r"(?<=[.!?])\s+", task.strip())[0].rstrip(".!?")
+    words = SCHEDULE.sub("", first).strip(" ,").split()
+    return first_up(" ".join(words[:5]))[:60] or "New workflow"
+
+
+def search_of(look: str | None, task: str) -> dict[str, Any] | None:
+    """The ticket search the real model is asked to fill in, from the words that say what to
+    look for: the project, the kinds of ticket, open or done, and the days since an update."""
+    if look is None or TICKET_WORDS.search(task) is None and TYPE_WORDS.search(task) is None:
+        return None
+    project = IN_PROJECT.search(task)
+    status = next((v for w, v in STATUS_WORDS.items() if re.search(rf"\b{w}\b", look, re.I)), None)
+    days = NO_UPDATE.search(look)
+    stale = "stale" in look.lower() and days is None
+    return {
+        "project": project.group(1) if project else None,
+        "issue_types": sorted({m.group(1).lower() for m in TYPE_WORDS.finditer(look)}),
+        "status": status,
+        "assignee": None,
+        "created": None,
+        "updated": {"how": "before", "days": int(days.group(1))}
+        if days
+        else ({"how": "before", "days": 14} if stale else None),
+        "done": None,
+        "words": None,
+        "said": look,
+    }
+
+
+def ticket_of(act: str | None, task: str) -> dict[str, Any] | None:
+    """What happens with what was found, as the real model is asked to fill it in: a new ticket
+    that lists, counts or sums up the tickets found. An email, a Teams post or a change to the
+    tickets is no ticket, so it is left out and the platform shows it as a part it can't do."""
+    if act is None or EMAIL_WORDS.search(act) or SUMMARY_TO.search(act):
+        return None
+    creates = CREATES.search(act) is not None
+    says = next((name for pattern, name in SAYS if pattern.search(act)), "list")
+    if not creates and FIND.match(act) is None and says == "list" and "list" not in act.lower():
+        return None
+    return {
+        "creates": creates,
+        "says": says,
+        "shows": ["owner"] if OWNERS.search(task) else [],
+        "said": act,
+    }
+
+
+def skip_read(task: str) -> dict[str, Any]:
+    """Whose yes or attention the task asks to skip, as the real model is asked: an Approver's
+    or anyone else's for a few plain phrasings, only the staff member's own for a few more."""
+    found = SKIP_WORDS.search(task)
+    if found is not None:
+        return {"whose": "an_approver_or_anyone_else", "said": found.group(0)}
+    found = ONLY_ME_WORDS.search(task)
+    if found is not None:
+        return {"whose": "only_me", "said": found.group(0)}
+    return {"whose": "nobody", "said": None}
+
+
+def structures(task: str) -> dict[str, Any]:
+    """The task read into the structures the real model fills: schedule, search, ticket, place."""
+    first = re.split(r"(?<=[.!?])\s+", task.strip())[0].rstrip(".!?") if task.strip() else ""
+    when = SCHEDULE.search(first)
+    words = (SCHEDULE.sub("", first) if when else first).strip(" ,")
+    found = FIND.match(words)
+    look, act = (found.group(1), found.group(2)) if found else (None, words or None)
+    if look is None and act is not None and (of := FOUND.search(act)) is not None:
+        look = of.group(1)
+    if (
+        look is None
+        and act is not None
+        and TICKET_WORDS.search(act)
+        and CREATES.search(act) is None
+    ):
+        look, act = act, None
+    project = IN_PROJECT.search(task)
+    return {
+        "schedule": first_up(when.group(0)) if when else None,
+        "search": search_of(look, task),
+        "ticket": ticket_of(act, task),
+        "place": {"project": project.group(1), "said": project.group(0)} if project else None,
+    }
+
+
+def reading(task: str) -> dict[str, Any]:
+    about = next((kind for pattern, kind in ABOUT if pattern.search(task.strip())), "none")
+    if about != "none":
+        named = WORKFLOW_NAMED.search(task) if about in ("why_stopped", "my_workflows") else None
+        words = (
+            named.group(1)
+            if named and named.group(1).lower() not in ("my", "my workflow")
+            else None
+        )
+        return {
+            "asks_about": about,
+            "workflow_words": words,
+            "belongs_on_watchlist": False,
+            "skips_the_yes": skip_read(task),
+            "schedule": None,
+            "search": None,
+            "ticket": None,
+            "place": None,
+        }
+    read: dict[str, Any] = {
+        "asks_about": "none",
+        "workflow_words": None,
+        "skips_the_yes": skip_read(task),
+        "schedule": None,
+        "search": None,
+        "ticket": None,
+        "place": None,
+    }
+    understood = understanding(task)
+    read["belongs_on_watchlist"] = understood["belongs_on_watchlist"]
+    if read["belongs_on_watchlist"]:
+        read["watchlist_word"] = understood["watchlist_word"]
+        read["software"] = understood["software"]
+        rest = " and ".join(c for c in CLAUSE.split(task) if not RELEASE_WORDS.search(c))
+        if TICKET_WORDS.search(rest):
+            read.update(structures(rest))
+            read["name"] = name_of(rest)
+        return read
+    if VULNERABILITY_WORDS.search(task) and TICKET_WORDS.search(task) is None:
+        read["name"] = name_of(task)
+        return read
+    read["name"] = name_of(task)
+    read.update(structures(task))
+    return read
+
+
 def forced(body: dict[str, Any], name: str) -> dict[str, Any]:
     lowered = name.lower()
     if mode == "broken":
@@ -353,6 +567,8 @@ def forced(body: dict[str, Any], name: str) -> dict[str, Any]:
         )
     if "choice" in lowered:
         return call(name, choice(task_text(body)), 0)
+    if "taskread" in lowered:
+        return call(name, reading(task_text(body)), 0)
     if "understand" in lowered:
         return call(name, understanding(task_text(body), says_carried_on(body)), 0)
     return say(SENTENCE)

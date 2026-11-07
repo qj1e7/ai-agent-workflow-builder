@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from agent_runtime.abilities import CAPABILITY_LIST
+from agent_runtime.answers import SkipRead, TaskRead, answer_of
 from agent_runtime.api import AGENT_CARDS
 from agent_runtime.contract import (
     RELEASE_TAG_PATTERN,
@@ -23,6 +24,8 @@ from agent_runtime.contract import (
     AgentStepFinishedEvent,
     AgentStepStartedData,
     AgentStepStartedEvent,
+    Answered,
+    AnswerRequest,
     Callback,
     CardBlock,
     CardDraft,
@@ -72,6 +75,7 @@ from agent_runtime.contract import (
 from agent_runtime.github import TOKEN_REFUSED
 from agent_runtime.model_access import KEY_REFUSED
 from agent_runtime.planner import RowAnswer, UnderstandAnswer, understood_of
+from agent_runtime.reading import DaysRead, PlaceRead, SearchRead, TicketRead
 from agent_runtime.tools import tool_list
 
 PLANNER = AgentRef(id="planner", display="Planner")
@@ -838,6 +842,68 @@ def found_software() -> FoundSoftware:
     )
 
 
+EMAIL_TASK = "Every Friday, email me the list of stale tickets in MOCK"
+SKIP_TASK = "Create the ticket without waiting for approval"
+NO_SKIP = SkipRead(whose="nobody")
+
+
+def answer_request(task: str = FOLLOW_UP_TASK) -> AnswerRequest:
+    return AnswerRequest(task=task, model=draft_request().model)
+
+
+def _answered(read: TaskRead, task: str) -> Answered:
+    answer = answer_of(read, task)
+    assert answer is not None
+    return Answered(answer=answer)
+
+
+def answered_card() -> Answered:
+    read = TaskRead(
+        name="Stale bug follow-up",
+        schedule="Every weekday at 3pm",
+        search=SearchRead(
+            project="MOCK",
+            issue_types=["bug"],
+            updated=DaysRead(how="before", days=10),
+            said="bug tickets in MOCK with no update for 10 days",
+        ),
+        ticket=TicketRead(
+            creates=True, says="list", said="create one follow-up ticket that lists them"
+        ),
+        place=PlaceRead(project="MOCK", said="in MOCK"),
+        skips_the_yes=NO_SKIP,
+    )
+    return _answered(read, FOLLOW_UP_TASK)
+
+
+def answered_cant() -> Answered:
+    read = TaskRead(
+        name="Stale ticket list",
+        schedule="Every Friday",
+        search=SearchRead(
+            project="MOCK",
+            updated=DaysRead(how="before", days=14),
+            said="stale tickets in MOCK",
+        ),
+        skips_the_yes=NO_SKIP,
+    )
+    return _answered(read, EMAIL_TASK)
+
+
+def answered_watchlist() -> Answered:
+    read = TaskRead(
+        belongs_on_watchlist=True,
+        watchlist_word="release",
+        software="LangGraph",
+        skips_the_yes=NO_SKIP,
+    )
+    return _answered(read, RELEASE_TASK)
+
+
+def answered_refused() -> Answered:
+    return _answered(TaskRead(skips_the_yes=NO_SKIP), SKIP_TASK)
+
+
 def fixtures() -> dict[str, WireModel]:
     finished = finished_task()
     return {
@@ -882,6 +948,11 @@ def fixtures() -> dict[str, WireModel]:
         "planner-watchlist.json": belongs_on_watchlist(),
         "software-find-request.json": find_software_request(),
         "software-found.json": found_software(),
+        "planner-answer-request.json": answer_request(),
+        "planner-answered-card.json": answered_card(),
+        "planner-answered-cant.json": answered_cant(),
+        "planner-answered-watchlist.json": answered_watchlist(),
+        "planner-answered-refused.json": answered_refused(),
     }
 
 

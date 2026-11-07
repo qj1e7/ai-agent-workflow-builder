@@ -41,6 +41,10 @@ _Avoid_: Routine
 The Planner's reply on Home when it can do a request: the whole workflow filled in from the request, with every guess marked and what it can't know asked for. The Operator turns it on. Each write it makes still waits for an Approver's yes.
 _Avoid_: Wizard, form, New workflow (the old 4-step page)
 
+**Planner answer**:
+What the Planner replies to one request typed on Home: a set-up card, a watchlist row, a question about which software, the part it can do, a can't with the nearest alternative, a refusal to skip a yes, an answer about the person's workflows (check my workflows, why it stopped, what needs me), the list of what it can do, or offline. Code decides which one from the model's reading, and the reply sentences are fixed text (ADR 0037).
+_Avoid_: Reply, response, intent (in the app)
+
 **Capability**:
 Something the platform can do for a workflow, such as reading Jira tickets. It is in exactly one state: Ready, Needs setup, Not answering, Planned or Unsupported. Every screen and the Planner read the same state.
 _Avoid_: Ability, feature (in the app)

@@ -7,7 +7,12 @@ from typing import Final, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from agent_runtime.abilities import RELEASE_ROOTS, VULNERABILITY_ROOTS, why_not
+from agent_runtime.abilities import (
+    RELEASE_ROOTS,
+    VULNERABILITY_ROOTS,
+    vulnerability_phrase,
+    why_not,
+)
 from agent_runtime.card_runner import CardRunner, agent_ref, one_line
 from agent_runtime.contract import (
     AgentAddressee,
@@ -380,7 +385,7 @@ class UnderstandAnswer(BaseModel):
     )
 
 
-def _visible_words(text: str | None) -> str:
+def visible_words(text: str | None) -> str:
     hidden = (CONTROL, FORMAT, SURROGATE)
     kept = (
         c
@@ -390,65 +395,80 @@ def _visible_words(text: str | None) -> str:
     return " ".join("".join(kept).split())
 
 
-def _plain(text: str | None, limit: int) -> str:
-    flat = _visible_words(text)
+def plain(text: str | None, limit: int) -> str:
+    flat = visible_words(text)
     return flat if len(flat) <= limit else flat[: limit - 1].rstrip() + "…"
 
 
-def _missing(kind: RowKind, note: str = NOT_SAID) -> UnderstoodRow:
+def missing_row(kind: RowKind, note: str = NOT_SAID) -> UnderstoodRow:
     return UnderstoodRow(kind=kind, text="", state="missing", note=note)
 
 
 def why_no_tool(kind: RowKind, text: str) -> str | None:
     """Why the platform can't do this part, or None when it can. Hidden characters do not count."""
-    return why_not(kind, _visible_words(text))
+    return why_not(kind, visible_words(text))
 
 
-def _held_to_the_tools(row: UnderstoodRow) -> UnderstoodRow:
+def held_to_the_tools(row: UnderstoodRow) -> UnderstoodRow:
     why = why_no_tool(row.kind, row.text) if row.state in ("understood", "changed") else None
     return row if why is None else row.model_copy(update={"state": "cant_do", "note": why})
 
 
-def _row(answer: RowAnswer) -> UnderstoodRow:
-    text = _plain(answer.text, TEXT_LIMIT)
-    note = _plain(answer.note, NOTE_LIMIT) or None
+def row_of(answer: RowAnswer) -> UnderstoodRow:
+    text = plain(answer.text, TEXT_LIMIT)
+    note = plain(answer.note, NOTE_LIMIT) or None
     state: RowState = answer.state
     if state == "cant_do":
         return UnderstoodRow(kind=answer.kind, text=text, state=state, note=note or CANT_YET)
     if state == "missing" or not text:
-        return _missing(answer.kind, note if state == "missing" and note else NOT_SAID)
+        return missing_row(answer.kind, note if state == "missing" and note else NOT_SAID)
     if state == "changed":
         note = note or READ_IN
-    return _held_to_the_tools(UnderstoodRow(kind=answer.kind, text=text, state=state, note=note))
+    return held_to_the_tools(UnderstoodRow(kind=answer.kind, text=text, state=state, note=note))
 
 
-def _rows(answers: list[RowAnswer]) -> list[UnderstoodRow]:
-    rows = [_row(answer) for answer in answers]
-    groups = [[row for row in rows if row.kind == kind] or [_missing(kind)] for kind in ORDER]
+def _cant_do_first(row: UnderstoodRow) -> bool:
+    return row.state != "cant_do"
+
+
+def rows_of(answers: list[RowAnswer]) -> list[UnderstoodRow]:
+    return arrange([row_of(answer) for answer in answers])
+
+
+def arrange(rows: list[UnderstoodRow]) -> list[UnderstoodRow]:
+    groups = [[row for row in rows if row.kind == kind] or [missing_row(kind)] for kind in ORDER]
     groups[0] = groups[0][:1]
     firsts = [group[0] for group in groups]
-    extras = sorted(
-        (row for group in groups for row in group[1:]), key=lambda r: r.state != "cant_do"
-    )
+    extras = sorted((row for group in groups for row in group[1:]), key=_cant_do_first)
     kept = firsts + extras[: MAX_ROWS - len(firsts)]
     return sorted(kept, key=lambda row: ORDER.index(row.kind))
 
 
-def _whole_word_of(task: str, said: str | None) -> str | None:
-    wanted = _visible_words(said).strip(QUOTES)
+def said_in(word: str, text: str) -> bool:
+    """Whole words, with a number allowed inside a token such as "3pm"."""
+    edge = r"\d" if word.isdigit() else r"\w"
+    return re.search(rf"(?<!{edge}){re.escape(word)}(?!{edge})", text, re.IGNORECASE) is not None
+
+
+def whole_word_of(task: str, said: str | None) -> str | None:
+    wanted = visible_words(said).strip(QUOTES)
     if not wanted or len(wanted) > WORD_LIMIT:
         return None
     found = re.search(rf"(?<!\w){re.escape(wanted)}(?!\w)", task, re.IGNORECASE)
     return None if found is None else found.group(0)
 
 
-def _task_form_of(task: str, said: str | None) -> str | None:
-    wanted = _visible_words(said).strip(QUOTES).casefold()
-    root = WATCHLIST_ROOTS.get(wanted)
-    forms = [w for w in re.findall(r"\w+", task) if WATCHLIST_ROOTS.get(w.casefold()) == root]
-    if root is None or not forms:
-        return None
-    return next((w for w in forms if w.casefold() == wanted), forms[0])
+def task_form_of(task: str, said: str | None) -> str | None:
+    wanted = visible_words(said).strip(QUOTES).casefold()
+    if vulnerability_phrase(wanted) is not None:
+        return vulnerability_phrase(task)
+    task_words = re.findall(r"\w+", task)
+    for said_word in re.findall(r"\w+", wanted):
+        root = WATCHLIST_ROOTS.get(said_word)
+        forms = [w for w in task_words if WATCHLIST_ROOTS.get(w.casefold()) == root]
+        if root is not None and forms:
+            return next((w for w in forms if w.casefold() == said_word), forms[0])
+    return None
 
 
 def understood_of(
@@ -460,13 +480,13 @@ def understood_of(
     `WATCHLIST_ROOTS`. Once the Operator chose a new workflow over the watchlist, a watchlist answer
     is ignored, so its rows are still held to the tools."""
     if answer.belongs_on_watchlist and not carried_on:
-        word = _task_form_of(task, answer.watchlist_word)
+        word = task_form_of(task, answer.watchlist_word)
         if word is None:
             return None
-        return BelongsOnWatchlist(word=word, software=_whole_word_of(task, answer.software))
+        return BelongsOnWatchlist(word=word, software=whole_word_of(task, answer.software))
     if not answer.rows:
         return None
-    return Understood(rows=_rows(answer.rows))
+    return Understood(rows=rows_of(answer.rows))
 
 
 def understand_task(request: UnderstandRequest, chat_for: ChatFor) -> UnderstandResult:

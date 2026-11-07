@@ -16,12 +16,15 @@ from fastapi.security import APIKeyHeader
 
 from agent_runtime.abilities import CAPABILITY_LIST
 from agent_runtime.addresses import AddressPolicy
+from agent_runtime.answers import answer_task
 from agent_runtime.card_runner import CardRunner
 from agent_runtime.contract import (
     AgentCard,
     AgentCards,
     AgentEvent,
     AgentEventPost,
+    AnswerRequest,
+    AnswerResult,
     CapabilityList,
     CardsInputs,
     ChooseRequest,
@@ -429,6 +432,11 @@ def create_app(
     def understand(body: UnderstandRequest) -> UnderstandResult:
         chat = active.chat_source(body.model)
         return understand_task(body, chat) if chat else NO_MODEL
+
+    @app.post("/v1/planner/answer", dependencies=[Depends(require_key)])
+    def answer(body: AnswerRequest) -> AnswerResult:
+        chat = active.chat_source(body.model)
+        return answer_task(body, chat) if chat else NO_MODEL
 
     @app.post("/v1/connections/github/check", dependencies=[Depends(require_key)])
     def check_github() -> GitHubCheckResult:
