@@ -1,7 +1,8 @@
 """A run of agent cards through the orchestrator: the request, the review, and the binding."""
 
 from collections.abc import AsyncIterator
-from datetime import timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -200,6 +201,18 @@ async def test_a_second_run_carries_the_day_the_first_finished_run_started(h: Ha
     first, second = h.agent.requests
     assert first.carry_forward.last_run_on is None
     assert second.carry_forward.last_run_on == first_day
+
+
+@pytest.mark.parametrize(("hour", "minute"), [(0, 30), (23, 30)])
+async def test_the_last_run_date_is_the_singapore_day_the_run_started(
+    h: Harness, hour: int, minute: int
+):
+    h.agent.output = output()
+    h.clock["now"] = datetime(2026, 10, 17, hour, minute, tzinfo=ZoneInfo("Asia/Singapore"))
+    await run_work(h, spec("AAA"), "first")
+    h.advance(timedelta(days=3))
+    await run_work(h, spec("AAA"), "second", "42")
+    assert h.agent.requests[-1].carry_forward.last_run_on == date(2026, 10, 17)
 
 
 async def test_a_run_that_did_not_finish_is_not_the_last_run(h: Harness):

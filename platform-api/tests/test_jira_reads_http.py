@@ -3,6 +3,7 @@ the practice Jira through the one adapter, over HTTP, as it would read a real Ji
 
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
@@ -198,6 +199,64 @@ async def test_updated_before_takes_in_the_whole_utc_day_and_not_the_next(
         "Last seconds of the day",
         "Start of the day",
     ]
+
+
+SINGAPORE = ZoneInfo("Asia/Singapore")
+
+
+def singapore(day: int, hour: int, minute: int) -> datetime:
+    return datetime(2026, 10, day, hour, minute, tzinfo=SINGAPORE)
+
+
+async def bugs_made_at(db: Database, practice: PracticeKit, *moments: datetime, done: bool) -> None:
+    """One bug made, last updated and, when `done`, finished at each moment."""
+    for at in moments:
+        made = await practice.store.create(
+            "MOCK", f"{at:%d %b %H:%M}", "", [], "Bug", created_at=at
+        )
+        if done:
+            async with db.transaction("orchestration") as uow:
+                await uow.conn.execute(
+                    "UPDATE orchestration.mock_jira_tickets SET status = 'Done', done_at = %s "
+                    "WHERE key = %s",
+                    (at, made.key),
+                )
+
+
+@pytest.mark.parametrize(
+    ("name", "moments", "found"),
+    [
+        (
+            "created_since",
+            (singapore(17, 23, 30), singapore(18, 0, 30), singapore(18, 23, 30)),
+            ["18 Oct 23:30", "18 Oct 00:30"],
+        ),
+        (
+            "done_since",
+            (singapore(17, 23, 30), singapore(18, 0, 30), singapore(18, 23, 30)),
+            ["18 Oct 23:30", "18 Oct 00:30"],
+        ),
+        (
+            "updated_before",
+            (singapore(18, 0, 30), singapore(18, 23, 30), singapore(19, 0, 30)),
+            ["18 Oct 23:30", "18 Oct 00:30"],
+        ),
+    ],
+)
+async def test_a_day_filter_takes_the_whole_singapore_day_from_00_00_to_23_59(
+    client: httpx.AsyncClient,
+    db: Database,
+    practice: PracticeKit,
+    name: str,
+    moments: tuple[datetime, ...],
+    found: list[str],
+):
+    await bugs_made_at(db, practice, *moments, done=name == "done_since")
+    query = {"task": TASK, "issue_type": "Bug", name: "2026-10-18"}
+    answer = await client.get(
+        f"/internal/v1/runs/{CARD_RUN}/jira/tickets", params=query, headers=header()
+    )
+    assert [t["title"] for t in answer.json()["tickets"]] == found
 
 
 async def test_a_bad_day_in_the_new_filters_is_a_422(client: httpx.AsyncClient):
