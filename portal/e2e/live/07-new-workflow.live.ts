@@ -148,7 +148,7 @@ test('a part the Planner could do, once changed or filled in, goes back to the P
   await context.close()
 })
 
-test('a saved draft shows on Workflows and opens at the step it was saved at', async ({ browser }) => {
+test('a draft saved by the old four steps shows on Workflows and Resume reopens it as the Planner’s card on Home', async ({ browser, backend }) => {
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()
   await page.goto('/new')
@@ -157,12 +157,18 @@ test('a saved draft shows on Workflows and opens at the step it was saved at', a
   await fixRow(page, 'Does', `Create one follow-up ticket that lists them for ${name}`)
   await page.getByRole('button', { name: 'Save draft and close' }).click()
   await expect(page).toHaveURL(/\/$/)
+  const saved = (await backend.get<{ drafts: { draft_id: string; content: { form?: { rows: { text: string }[] } } }[] }>('alice', '/api/v1/drafts')).drafts.find((draft) =>
+    draft.content.form?.rows.some((row) => row.text.includes(name)),
+  )
+  expect(saved, 'the old editor saved the draft').toBeDefined()
   await page.goto('/workflows')
-  const row = page.locator('li[data-draft]').filter({ hasText: 'Step 2 of 4' }).first()
+  const row = page.locator(`li[data-draft="${saved?.draft_id ?? ''}"]`)
   await expect(row).toBeVisible()
+  await expect(row, 'the row says what the card still lacks, not a step number').not.toContainText('Step ')
   await row.getByRole('link', { name: /^Resume/ }).click()
-  await expect(heading(page)).toHaveText(stepHeading(2, 'Check what I understood'))
-  await expect(rowOf(page, 'Does')).toContainText(name)
+  await expect(page).toHaveURL(/\/\?draft=/)
+  await expect(page.locator('section[data-card]')).toContainText(name)
+  await backend.delete('alice', `/api/v1/drafts/${saved?.draft_id ?? ''}`)
   await context.close()
 })
 

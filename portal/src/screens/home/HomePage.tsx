@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { useHome } from '../../api/homeQueries'
+import { useDrafts } from '../../api/newQueries'
 import { isOperator } from '../../api/me'
 import { useCapabilities, usePlannerAnswer } from '../../api/plannerQueries'
 import { useMe, useModelSettings } from '../../api/queries'
@@ -10,6 +11,7 @@ import { Button, ButtonLink } from '../../ui/Button'
 import { IconClock } from '../../ui/icons'
 import { PlannerBot, type BotState } from '../../ui/PlannerBot'
 import { AskTheTeam } from './AskTheTeam'
+import { restoreDraft } from './card'
 import type { Page } from './AnswerCards'
 import { CapabilityLists } from './CapabilityLists'
 import { approverLine, comingUpOf, HOME_NEEDS_SHOWN, moreWords, needsOf, needsTotal, SEE_ALL_WORDS, stateLine, suggestionsOf, type Needs, type Next } from './home'
@@ -126,6 +128,7 @@ function usePhone(): boolean {
 }
 
 const SEND_FAILED = 'That didn’t send. Try again.'
+const DRAFT_GONE = 'That draft is gone. Ask for it again below.'
 const DAY_ONE_HEADING = 'What does your team do again and again?'
 const DAY_ONE_LEAD =
   'Tell me a task in plain English. I’ll set it up to run by itself. Anything that changes data waits for a yes from an Approver in Teams.'
@@ -151,6 +154,10 @@ function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; 
   const boxRef = useRef<HTMLTextAreaElement>(null)
   const focusAnswer = useRef(false)
   const phone = usePhone()
+  const [params, setParams] = useSearchParams()
+  const wanted = params.get('draft')
+  const drafts = useDrafts(wanted !== null)
+  const reopened = useRef<string | null>(null)
   const offline = model.data !== undefined && model.data.active === null
   const dayOne = home.workflows === 0
   const empty = thread.messages.length === 0
@@ -158,6 +165,25 @@ function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; 
   const needs = useMemo(() => needsHere(home, offline), [home, offline])
   const arrival = useArrival(needs.shown.map((need) => need.key))
   const suggestions = useMemo(() => suggestionsOf(home, capabilities.data), [home, capabilities.data])
+
+  // Resume on Workflows lands here with the draft's id in the address, and the draft opens as the card it was.
+  useEffect(() => {
+    if (wanted === null || reopened.current === wanted || thread.messages.length > 0) return
+    if (!drafts.data || (drafts.isStale && !drafts.isFetchedAfterMount)) return
+    reopened.current = wanted
+    const found = drafts.data.find((saved) => saved.draft_id === wanted)
+    const { form, plan } = found ? restoreDraft(found) : { form: null, plan: null }
+    if (form !== null && form.rows.length > 0) {
+      dispatch({ type: 'resumed', start: { form, plan, draftId: wanted, similar: null, ...(found ? { resumed: found } : {}) } })
+      return
+    }
+    setParams({}, { replace: true })
+    setTimeout(() => {
+      if (form === null) setProblem(DRAFT_GONE)
+      else setText(form.text)
+      boxRef.current?.focus()
+    }, 0)
+  }, [wanted, drafts.data, drafts.isStale, drafts.isFetchedAfterMount, thread.messages.length, setParams])
 
   // A chip leaves the page when pressed, so focus would fall to the page. It goes to the answer once that arrives.
   useEffect(() => {
@@ -286,6 +312,7 @@ function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; 
               dispatch({ type: 'new_chat' })
               setText('')
               setProblem(null)
+              if (wanted !== null) setParams({}, { replace: true })
             }}
           >
             New chat

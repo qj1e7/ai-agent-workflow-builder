@@ -1,9 +1,11 @@
 import type { PlannerReply } from '../../api/types'
+import type { CardStart } from './SetupCard'
 
 export type Message =
   | { readonly kind: 'me'; readonly id: number; readonly text: string }
   | { readonly kind: 'thinking'; readonly id: number }
   | { readonly kind: 'reply'; readonly id: number; readonly reply: PlannerReply; /** What the person typed, or the chip’s words. */ readonly typed: string }
+  | { readonly kind: 'card'; readonly id: number; readonly start: CardStart }
 
 export interface Thread {
   readonly messages: readonly Message[]
@@ -16,6 +18,7 @@ export type ThreadAction =
   | { readonly type: 'sent'; readonly text: string }
   | { readonly type: 'answered'; readonly reply: PlannerReply; readonly typed: string }
   | { readonly type: 'failed' }
+  | { readonly type: 'resumed'; readonly start: CardStart }
   | { readonly type: 'new_chat' }
 
 /** The thread lives only on the page. It is never saved: the chat is not the record. */
@@ -29,6 +32,8 @@ export function threadReducer(state: Thread, action: ThreadAction): Thread {
       return { ...state, messages: state.messages.map((m) => (m.kind === 'thinking' ? { kind: 'reply', id: m.id, reply: action.reply, typed: action.typed } : m)) }
     case 'failed':
       return { ...state, messages: state.messages.slice(0, -2) }
+    case 'resumed':
+      return { messages: [{ kind: 'card', id: state.last + 1, start: action.start }], last: state.last + 1 }
     case 'new_chat':
       return EMPTY
   }

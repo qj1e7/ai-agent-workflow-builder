@@ -37,7 +37,7 @@ import {
   type Row,
   type Step,
   type WhenField,
-} from './draft'
+} from '../home/card'
 import { StepCheck } from './StepCheck'
 import { StepDescribe } from './StepDescribe'
 import { StepReview } from './StepReview'

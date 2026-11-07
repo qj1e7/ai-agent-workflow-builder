@@ -1,6 +1,7 @@
 export const NEW_WORKFLOW_PATH = '/new'
 
-export const draftPath = (draftId: string) => `${NEW_WORKFLOW_PATH}?draft=${encodeURIComponent(draftId)}`
+/** Resume reopens the card on Home, where the draft's id sits in the address. */
+export const draftPath = (draftId: string) => `/?draft=${encodeURIComponent(draftId)}`
 
 export const FOLLOW_UP_TASK =
   'Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days and create one follow-up ticket that lists them'

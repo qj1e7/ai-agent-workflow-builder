@@ -17,7 +17,6 @@ import {
   needsSay,
   refusalNext,
   sayOf,
-  setupTask,
   startingPoints,
   stateWords,
   TAG_CANT,
@@ -112,18 +111,9 @@ describe('what a refusal hands back', () => {
   })
 })
 
-describe('what the old New workflow is handed', () => {
-  it('is the typed words for a card, and the rows for a part or one half of a mixed request', () => {
-    expect(setupTask(CARD, 'Every Friday, sum up the closed tickets')).toBe('Every Friday, sum up the closed tickets')
-    const ofPart = setupTask(PART, 'sum up and email')
-    expect(ofPart).toBe('Every Friday. Tickets closed this week in MOCK. Sum them up in one new ticket. In the MOCK project')
-    expect(ofPart).not.toMatch(/email/i)
-    expect(setupTask(CARD, 'Watch React releases and sum up', true)).not.toMatch(/React/)
-  })
-
-  it('is the alternative’s own words for a can’t, so it never reads the part it can’t do again', () => {
-    expect(setupTask(CANT, 'email me the weekly list')).toBe('Every Friday. Tickets closed this week in MOCK. Sum them up in one new ticket. In the MOCK project')
-    expect(setupTask({ ...CANT, alternative: null }, 'email me the list')).toBe('email me the list')
+describe('the chat sentence for a set-up card (inconsistency I8)', () => {
+  it('carries no count, because the card’s footer, from setupLeft, is the only count', () => {
+    for (const reply of [CARD, PART] as PlannerReply[]) expect(sayOf(reply)).not.toMatch(/\d|choice|left/i)
   })
 })
 

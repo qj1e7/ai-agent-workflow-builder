@@ -46,6 +46,9 @@ async function loaded(page: Page): Promise<void> {
   await expect(drawn.first()).toBeVisible()
 }
 
+/** A menu link's text. The Needs you count sits beside the name, so a reused stack with something waiting reads “Workflows2”. */
+const linkText = (label: string) => new RegExp(`^${label}\\d*$`)
+
 /** A menu link's name, which carries ", N need you" when something waits for the person. */
 const linkName = (label: string) => new RegExp(`^${label}(\\s*, \\d+ need you)?$`)
 
@@ -54,7 +57,7 @@ test('Home greets the signed-in person and the menu reads Home, Workflows, Softw
   await expect(heading(page)).toHaveText(HOME_ALICE)
   await expect(page.getByRole('banner')).toContainText('Alice')
   await expect(page.getByRole('banner')).toContainText('Operator and Approver')
-  await expect(mainMenu(page).getByRole('link')).toHaveText(MENU.map((item) => linkName(item.label)))
+  await expect(mainMenu(page).getByRole('link')).toHaveText(MENU.map((item) => linkText(item.label)))
   await expect(mainMenu(page).getByRole('link', { name: 'New workflow' }), 'New workflow has no entry in the menu').toHaveCount(0)
   await expect(mainMenu(page).getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page')
   await expect(page).toHaveTitle(/^(Good (morning|afternoon|evening)! Alice|What does your team do again and again\?) · AI Workflow Builder$/)
@@ -214,7 +217,7 @@ test('at 390 px wide the page does not scroll sideways, and every tab bar item c
   await page.goto('/')
   await expect(heading(page)).toBeVisible()
   const bar = mainMenu(page)
-  await expect(bar.getByRole('link')).toHaveText(['Home', 'Workflows', 'Watchlist', 'Agents'])
+  await expect(bar.getByRole('link')).toHaveText([linkText('Home'), linkText('Workflows'), linkText('Watchlist'), linkText('Agents')])
   for (const [label, to, words] of [
     ['Workflows', /\/workflows$/, 'Workflows'],
     ['Watchlist', /\/software$/, 'Software watchlist'],

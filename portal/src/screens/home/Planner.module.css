@@ -472,3 +472,7 @@
   display: grid;
   gap: var(--space-4);
 }
+
+.altHeading {
+  font-size: 1.05rem;
+}

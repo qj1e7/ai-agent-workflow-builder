@@ -1,4 +1,4 @@
-import type { CantReply, CantRowView, CapabilitiesView, CapabilityView, PartReply, PlannerReply, RowKind, SetupCardReply, UnderstoodRowView } from '../../api/types'
+import type { CantRowView, CapabilitiesView, CapabilityView, PlannerReply, RowKind, UnderstoodRowView } from '../../api/types'
 import { count } from '../run/words'
 import { isRunning, type Row } from '../workflows/workflow'
 
@@ -63,23 +63,6 @@ export function cantLine(row: Pick<CantRowView, 'text' | 'note'>): CantLine {
 }
 
 export const cantLines = (rows: readonly CantRowView[]): CantLine[] => rows.map(cantLine)
-
-/**
- * What the old New workflow is handed: only what the card offers, which is its rows. A part's can't rows and the other half
- * of a mixed request never go with it. A plain card keeps the typed words, which it read whole.
- */
-export function setupTask(reply: SetupCardReply | PartReply | CantReply, typed: string, ownRows = false): string {
-  if (reply.answer === 'cant') return reply.alternative?.answer === 'setup_card' ? joinedRows(reply.alternative.rows) : typed
-  if (reply.answer === 'part' || ownRows) return joinedRows(reply.rows)
-  return typed
-}
-
-function joinedRows(rows: readonly UnderstoodRowView[]): string {
-  return rows
-    .filter((row) => row.state !== 'cant_do' && row.text.trim() !== '')
-    .map((row) => row.text.replace(/[.!?]+$/, ''))
-    .join('. ')
-}
 
 export const SAY = {
   setup_card: 'Here’s what I understood. I filled in what I could.',

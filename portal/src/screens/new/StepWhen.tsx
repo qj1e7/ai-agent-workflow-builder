@@ -1,6 +1,6 @@
 import { Button } from '../../ui/Button'
 import { IconInfo } from '../../ui/icons'
-import { readWhen, type Often, type Weekday, type When, type WhenField } from './draft'
+import { readWhen, type Often, type Weekday, type When, type WhenField } from '../home/card'
 import styles from './NewWorkflow.module.css'
 
 const OFTEN: readonly (readonly [Exclude<Often, ''>, string])[] = [

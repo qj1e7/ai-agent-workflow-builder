@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import type { DraftItem, DraftView, FollowingUpItem, WaitingItem } from '../../api/types'
 import { Button, ButtonLink } from '../../ui/Button'
 import { IconChevronRight, IconTrash } from '../../ui/icons'
+import { savedLeft } from '../home/card'
 import { draftWords, waitingWords } from '../home/home'
 import { draftPath } from '../new/starters'
 import homeStyles from '../home/Home.module.css'
@@ -42,7 +43,7 @@ export function DraftsSection({ drafts, now, onDiscard }: DraftsProps) {
     <Section id="drafts" title="Drafts" count={drafts.length}>
       <ul className={homeStyles['rows']}>
         {drafts.map((draft) => {
-          const words = draftWords(draftItem(draft), now)
+          const words = draftWords(draftItem(draft), now, savedLeft(draft))
           return (
             <li key={draft.draft_id} className={styles['draftRow']} data-draft={draft.draft_id}>
               <span className={styles['draftText']}>

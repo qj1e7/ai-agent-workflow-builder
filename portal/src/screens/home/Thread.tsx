@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import { PlannerBot, type BotState } from '../../ui/PlannerBot'
 import { Answer, type Page } from './AnswerCards'
-import { NewestAnswer } from './primary'
+import { CardLive, NewestAnswer } from './primary'
+import { SetupCard } from './SetupCard'
 import { sayOf } from './answers'
 import { CheckWorkflowsAnswer, NeedsMeAnswer, useSaidOnce, WhyStoppedAnswer, type Say } from './StateAnswers'
 import type { Message, Thread as ThreadState } from './threadState'
 import styles from './Planner.module.css'
 
 const SORRY = new Set(['cant', 'refused', 'offline'])
+const RESUMED = 'Here’s your draft. Pick up where you left off.'
 
 interface ThreadProps {
   readonly thread: ThreadState
@@ -55,13 +57,20 @@ export function Thread({ thread, now, page }: ThreadProps) {
               </li>
             )
           }
-          const state: BotState = message.kind === 'thinking' ? 'thinking' : SORRY.has(message.reply.answer) ? 'sorry' : 'idle'
+          const state: BotState = message.kind === 'thinking' ? 'thinking' : message.kind === 'reply' && SORRY.has(message.reply.answer) ? 'sorry' : 'idle'
           return (
             <li key={message.id} className={styles['said']} tabIndex={-1} data-answer={message.kind === 'reply' || undefined}>
               <PlannerBot state={state} size={40} />
               <div className={styles['reply']}>
                 <span className={styles['who']}>Planner</span>
-                {message.kind === 'thinking' ? (
+                {message.kind === 'card' ? (
+                  <CardLive.Provider value={message.id === newest}>
+                    <>
+                      <p>{RESUMED}</p>
+                      <SetupCard start={message.start} />
+                    </>
+                  </CardLive.Provider>
+                ) : message.kind === 'thinking' ? (
                   <span className={styles['dots']} aria-hidden="true">
                     <i />
                     <i />
@@ -69,7 +78,9 @@ export function Thread({ thread, now, page }: ThreadProps) {
                   </span>
                 ) : (
                   <NewestAnswer.Provider value={message.id === newest}>
-                    <ReplyBody message={message} now={now} page={page} say={message.id === newest ? sayFor(message.id) : () => undefined} />
+                    <CardLive.Provider value={message.id === newest}>
+                      <ReplyBody message={message} now={now} page={page} say={message.id === newest ? sayFor(message.id) : () => undefined} />
+                    </CardLive.Provider>
                   </NewestAnswer.Provider>
                 )}
               </div>

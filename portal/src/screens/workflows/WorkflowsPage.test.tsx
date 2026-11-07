@@ -13,8 +13,10 @@ import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
 import aliceHome from '../../../../contracts/fixtures/builder/home.alice.json'
 import bobHome from '../../../../contracts/fixtures/builder/home.bob.json'
+import setupCardFixture from '../../../../contracts/fixtures/planner/answer.setup_card.json'
+import { cardFrom, draftContent } from '../home/card'
 import draftsFixture from '../../../../contracts/fixtures/builder/drafts.json'
-import type { DraftView, HomeOut, Me, ReplyView, RunView, TeamRequestView, UseCaseView } from '../../api/types'
+import type { DraftView, HomeOut, Me, ReplyView, RunView, TeamRequestView, UnderstoodRowView, UseCaseView } from '../../api/types'
 import { needsTotal } from '../home/home'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
@@ -271,12 +273,20 @@ describe('the sections under Needs you', () => {
     expect(at).toEqual([...at].sort((a, b) => a - b))
   })
 
-  it('lists a draft with its step, Resume and Discard, each named for the draft', () => {
+  it('lists a draft with why it can’t be turned on yet, Resume to Home and Discard, each named for the draft', () => {
     const drafts = sectionOf(mainOf(render({ home: HOME, drafts: DRAFTS })), 'drafts')
     expect(text(drafts)).toContain('Drafts 1')
-    expect(text(drafts)).toContain('Nudge stale tickets Step 2 of 4. Last saved Today, 14:24.')
-    expect(drafts).toMatch(/<a[^>]*href="\/new\?draft=drf-7f3a2c"[^>]*>Resume<span[^>]*> Nudge stale tickets<\/span><\/a>/)
+    expect(text(drafts)).toContain('Nudge stale tickets Only your words are saved. Last saved Today, 14:24.')
+    expect(drafts).toMatch(/<a[^>]*href="\/\?draft=drf-7f3a2c"[^>]*>Resume<span[^>]*> Nudge stale tickets<\/span><\/a>/)
     expect(drafts).toMatch(/<button[^>]*>Discard<span[^>]*> Nudge stale tickets<\/span><\/button>/)
+  })
+
+  it('gives a saved card’s draft the reason setupLeft gives, the same words as the card’s footer', () => {
+    const card = cardFrom('Weekly summary', setupCardFixture.rows as UnderstoodRowView[], 'Every Friday, sum up the closed tickets')
+    const saved: DraftView = { ...(DRAFTS[0] as DraftView), step: null, content: draftContent(card, null) }
+    const drafts = sectionOf(mainOf(render({ home: HOME, drafts: [saved] })), 'drafts')
+    expect(text(drafts)).toContain('Needs when it runs and the Planner to choose the agents. Last saved')
+    expect(text(drafts)).not.toContain('Step ')
   })
 
   it('shows no Drafts section without drafts, and none to an Approver who is not an Operator', () => {

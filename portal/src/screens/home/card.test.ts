@@ -6,10 +6,20 @@ import useOne from '../../../../contracts/fixtures/cards/plan.use-one.json'
 import rowsAnswer from '../../../../contracts/fixtures/builder/understand.rows.json'
 import starters from '../../../../contracts/fixtures/builder/understand.starters.json'
 import watchlist from '../../../../contracts/fixtures/builder/understand.watchlist.json'
+import setupCardAnswer from '../../../../contracts/fixtures/planner/answer.setup_card.json'
+import partAnswer from '../../../../contracts/fixtures/planner/answer.part.json'
+import checkCant from '../../../../contracts/fixtures/planner/check-part.cant.json'
 import { ApiError } from '../../api/client'
-import type { CardView, DraftView, PlanOut, RowKind, RowState, ToolId, UnderstandOut } from '../../api/types'
+import type { CardView, DraftView, PartReply, PlanOut, RowKind, RowState, SetupCardReply, ToolId, UnderstandOut } from '../../api/types'
 import {
   afterChecking,
+  afterPartCheck,
+  andList,
+  cardFrom,
+  leftWords,
+  savedLeft,
+  setupLeft,
+  whenSaid,
   afterReading,
   carryOn,
   changeRow,
@@ -39,8 +49,9 @@ import {
   whenWords,
   type Form,
   type PlanAgent,
+  type Row,
   type TurnOnCalls,
-} from './draft'
+} from './card'
 
 const FOLLOW_UP = 'Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days and create one follow-up ticket that lists them'
 const ROWS = rowsAnswer as UnderstandOut
@@ -554,5 +565,94 @@ describe('a draft', () => {
       plan: null,
     })
     expect(restoreDraft(saved(3, { form: { step: 'x' } }))?.form).toEqual(EMPTY_FORM)
+  })
+})
+
+
+describe('the Planner’s set-up card', () => {
+  const REPLY = setupCardAnswer as SetupCardReply
+  const PART = partAnswer as PartReply
+  const saved = (step: number, content: Record<string, unknown>): DraftView => ({ draft_id: 'd1', step, content, created_at: '2026-11-03T07:00:00Z', saved_at: '2026-11-03T07:00:00Z' })
+  const fresh = () => cardFrom(REPLY.name, REPLY.rows, 'Every Friday, sum up the tickets we closed this week')
+  const AGENTS = (inputs: readonly { name: string; kind: 'jira_project' }[]) =>
+    planView(
+      {
+        decision: 'use_one',
+        agents: [
+          {
+            card: { card_id: 'c1', name: 'Closed-ticket summary', inputs: inputs.map((input) => ({ ...input, what: 'Where to look' })), blocks: [] },
+            values: {},
+          },
+        ],
+      } as unknown as PlanOut,
+      [],
+    )
+
+  it('starts from the Planner’s rows with a schedule read only from its words, so no time is guessed', () => {
+    const form = fresh()
+    expect(form.name).toBe('Weekly summary of closed tickets')
+    expect(form.rows.map((row) => row.kind)).toEqual(['schedule', 'look_for', 'do', 'where'])
+    expect(form.when).toMatchObject({ often: 'week', day: 'friday', at: '' })
+    expect(whenSaid(form.when)).toBeNull()
+  })
+
+  it('never carries a part the platform can’t do, so the card of a partly-possible request holds only what runs', () => {
+    const form = cardFrom(PART.name, PART.rows, 'sum up and email')
+    expect(JSON.stringify(form.rows)).not.toMatch(/email/i)
+    const withCant = cardFrom('x', [...PART.rows, { kind: 'do', text: 'Email the list', state: 'cant_do', note: 'No email.' }], '')
+    expect(withCant.rows.some((row) => row.text.includes('Email'))).toBe(false)
+  })
+
+  describe('setupLeft', () => {
+    it('lets the When section answer for the schedule: a schedule row with nothing in it is not asked for twice', () => {
+      const form = cardFrom('x', [{ kind: 'schedule', text: '', state: 'missing', note: null }, { kind: 'do', text: 'List them', state: 'understood', note: null }], '')
+      expect(setupLeft(form, null)).toEqual(['when it runs', 'the Planner to choose the agents'])
+      const timed = { ...form, when: { often: 'every_day' as const, day: '' as const, at: '09:00', filledFrom: '' } }
+      expect(setupLeft(timed, null)).toEqual(['the Planner to choose the agents'])
+    })
+
+    it('lists no time as what is left, and nothing else, once the parts are clear and the plan is in', () => {
+      const plan = AGENTS([])
+      expect(setupLeft(fresh(), plan)).toEqual(['when it runs'])
+      const timed = { ...fresh(), when: { often: 'week' as const, day: 'friday' as const, at: '16:00', filledFrom: 'Every Friday' } }
+      expect(setupLeft(timed, plan)).toEqual([])
+    })
+
+    it('adds the plan’s empty inputs, such as the Jira project, to the same list', () => {
+      const plan = AGENTS([{ name: 'Jira project', kind: 'jira_project' }])
+      expect(setupLeft(fresh(), plan)).toEqual(['when it runs', 'the Jira project'])
+      const form = { ...fresh(), typed: { '0:Jira project': 'mock' } }
+      expect(setupLeft(form, plan)).toEqual(['when it runs'])
+    })
+
+    it('says the Planner is still choosing the agents until the plan arrives, and counts a part it can’t do or is still checking', () => {
+      const timed = { ...fresh(), when: { often: 'week' as const, day: 'friday' as const, at: '16:00', filledFrom: 'x' } }
+      expect(setupLeft(timed, null)).toEqual(['the Planner to choose the agents'])
+      const edited = changeRow(timed, 2, 'Email the list to the team')
+      expect(setupLeft(edited, null)).toEqual(['my check of your new words'])
+      expect(setupLeft(afterPartCheck(edited, edited.rows[2] as Row, checkCant as never), null)).toEqual(['a part I can’t do yet'])
+    })
+
+    it('is the one source of the footer line, with a count that follows the list', () => {
+      expect(leftWords([])).toBe('Nothing is unclear. Turn it on when you’re ready.')
+      expect(leftWords(['when it runs'])).toBe('1 choice left: when it runs.')
+      expect(leftWords(['when it runs', 'the Jira project'])).toBe('2 choices left: when it runs and the Jira project.')
+      expect(andList(['a', 'b', 'c'])).toBe('a, b and c')
+    })
+  })
+
+  it('checks a changed part again: a part that fits becomes yours, and one that does not, or gets no answer, stays one I can’t do', () => {
+    const edited = changeRow(fresh(), 2, 'Sum them up in two tickets')
+    const part = edited.rows[2] as Row
+    expect(afterPartCheck(edited, part, { state: 'fits' }).rows[2]).toMatchObject({ state: 'edited', note: null })
+    expect(afterPartCheck(edited, part, checkCant as never).rows[2]).toMatchObject({ state: 'cant_do' })
+    expect(afterPartCheck(edited, part, null).rows[2]).toMatchObject({ state: 'cant_do', note: NOT_CHECKED })
+  })
+
+  it('gives a saved card’s draft the same list setupLeft gives the open card, and none for a draft with only words', () => {
+    const card = { ...fresh(), name: 'Mine' }
+    const draft = saved(2, JSON.parse(JSON.stringify(draftContent(card, null))) as Record<string, unknown>)
+    expect(savedLeft(draft)).toEqual(setupLeft(card, null))
+    expect(savedLeft(saved(2, { intent: 'Every Wednesday, find tickets' }))).toBeNull()
   })
 })
