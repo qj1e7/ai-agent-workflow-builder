@@ -158,6 +158,10 @@ The part of a run that n8n carries in one execution. A run has a work leg up to 
 **Write action**:
 Any action that changes data in an external system, such as Jira, Confluence or GitLab.
 
+**Jira site**:
+The Jira that tickets live in: the practice Jira, or one Jira address. Each Jira write action names the site it was approved for, and the safety checker refuses it in any other (ADR 0041). A ticket key means a ticket only together with its site. Changing the token keeps the site.
+_Avoid_: Jira instance, Jira server
+
 **Proposal**:
 The set of write actions that agents propose for one run. One approval request covers exactly one proposal, and the Approver approves it as a whole.
 _Avoid_: Plan, draft (a Draft is a set-up card not yet turned on)
