@@ -22,6 +22,10 @@ STALE_TASK = (
     "Every Friday, list bug tickets with no update for 10 days and create one follow-up "
     "ticket that lists them. Where it goes: Jira project MOCK."
 )
+FOLLOW_UP_TASK = (
+    "Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days and create one "
+    "follow-up ticket that lists them"
+)
 PLANTED = {"GitHub repository": "acme/planted", "Jira project": "MOCK"}
 LANGGRAPH = {"GitHub repository": "langchain-ai/langgraph", "Jira project": "MOCK"}
 COULD_NOT_CHECK = (
@@ -112,8 +116,10 @@ def test_a_typed_request_is_answered_by_the_model_and_saves_nothing(
     api: Api, mock_model: None
 ) -> None:
     before = api.get("alice", "/api/v1/use-cases")["use_cases"]
-    answer = api.post("alice", "/api/v1/planner/answer", {"text": STALE_TASK}, expect=(200,)).json()
-    assert answer["answer"] in ("setup_card", "part")
+    answer = api.post(
+        "alice", "/api/v1/planner/answer", {"text": FOLLOW_UP_TASK}, expect=(200,)
+    ).json()
+    assert answer["answer"] == "setup_card"
     assert [r["kind"] for r in answer["rows"]] == ["schedule", "look_for", "do", "where"]
     asked = api.post(
         "alice", "/api/v1/planner/answer", {"text": "What can you do?"}, expect=(200,)
