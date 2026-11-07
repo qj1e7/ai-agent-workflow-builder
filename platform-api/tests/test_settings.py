@@ -58,6 +58,15 @@ def test_a_teams_webhook_that_is_not_https_refuses_to_start(hook: str):
         settings_from_env({**LOCAL_ENV, "TEAMS_WEBHOOK_URL": hook})
 
 
+def test_a_second_webhook_for_team_requests_is_optional_and_must_be_https():
+    assert settings_from_env(LOCAL_ENV).teams_requests_webhook_url is None
+    hook = "https://prod.example.logic.azure.com/workflows/abc/triggers/manual/run?sig=y"
+    settings = settings_from_env({**LOCAL_ENV, "TEAMS_REQUESTS_WEBHOOK_URL": hook})
+    assert (settings.teams_webhook_url, settings.teams_requests_webhook_url) == (None, hook)
+    with pytest.raises(ConfigError, match="TEAMS_REQUESTS_WEBHOOK_URL must be the https://"):
+        settings_from_env({**LOCAL_ENV, "TEAMS_REQUESTS_WEBHOOK_URL": "http://hook.example/run"})
+
+
 def test_practice_systems_are_on_and_the_watchlist_writes_to_mock_by_default():
     settings = settings_from_env(LOCAL_ENV)
     assert settings.practice_systems is True

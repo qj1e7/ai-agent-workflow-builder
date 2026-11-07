@@ -6,6 +6,7 @@ from pydantic import Field
 
 from platform_api.builder.models import DraftView, UseCaseView
 from platform_api.builder.service import Builder
+from platform_api.builder.team_requests import FollowingUpItem, TeamRequests
 from platform_api.monitoring import Advice, RunFailedData, explain_failure
 from platform_api.orchestration import (
     Ask,
@@ -120,6 +121,12 @@ class HomeOut(WireModel):
     )
     waiting_on_others_total: int
     drafts: list[DraftItem] = Field(description="An Operator's own drafts, the last saved first.")
+    following_up: list[FollowingUpItem] = Field(
+        description="This person's own requests to the team, Ask the team and Report to "
+        "support, the newest first, with the status and the latest reply. At most 10. A request "
+        "marked Done leaves after 30 days."
+    )
+    following_up_total: int
     coming_up: ComingUp | None = Field(description="The workflow that runs next, if any.")
     workflows: int = Field(description="How many workflows the team has.")
 
@@ -228,10 +235,17 @@ def _coming_up(use_cases: Sequence[UseCaseView]) -> ComingUp | None:
 
 
 class Home:
-    def __init__(self, builder: Builder, runs: RunsForPerson, people: PeopleForHome) -> None:
+    def __init__(
+        self,
+        builder: Builder,
+        runs: RunsForPerson,
+        people: PeopleForHome,
+        requests: TeamRequests,
+    ) -> None:
         self._builder = builder
         self._runs = runs
         self._people = people
+        self._requests = requests
 
     async def for_person(self, viewer: Principal) -> HomeOut:
         runs = await self._runs.runs_for(viewer)
@@ -249,6 +263,7 @@ class Home:
             if Role.OPERATOR in viewer.roles
             else []
         )
+        following_up, following_up_total = await self._requests.following_up(viewer)
         return HomeOut(
             approvals=[_approval(a, names) for a in runs.asks[:SHOWN]],
             approvals_total=len(runs.asks),
@@ -258,6 +273,8 @@ class Home:
             waiting_on_others=[_waiting(w) for w in runs.waiting[:SHOWN]],
             waiting_on_others_total=len(runs.waiting),
             drafts=[_draft(d) for d in drafts],
+            following_up=following_up,
+            following_up_total=following_up_total,
             coming_up=_coming_up(use_cases),
             workflows=len(use_cases),
         )

@@ -69,6 +69,12 @@ from platform_api.orchestration.spec import (
     WatchedSoftware,
     WatchlistTask,
 )
+from platform_api.orchestration.team_request_card import (
+    RequestKind,
+    RequestNotice,
+    TeamsPost,
+    TeamsRequestChannel,
+)
 from platform_api.orchestration.watch import (
     ATTENTION_ORDER,
     Checked,
@@ -129,6 +135,8 @@ __all__ = [
     "ModelProblem",
     "NoModel",
     "PersonRuns",
+    "RequestKind",
+    "RequestNotice",
     "RowKind",
     "RowState",
     "NotOn",
@@ -172,6 +180,8 @@ __all__ = [
     "Standing",
     "Status",
     "Task",
+    "TeamsPost",
+    "TeamsRequestChannel",
     "WatchFacts",
     "WatchedSoftware",
     "WatchlistFacts",

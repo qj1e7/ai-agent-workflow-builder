@@ -1,6 +1,41 @@
 {
   "components": {
     "schemas": {
+      "About": {
+        "additionalProperties": false,
+        "properties": {
+          "capability": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For Ask the team: what the person wants, such as `email.send`.",
+            "title": "Capability"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For Report to support: the run that stopped.",
+            "title": "Run Id"
+          }
+        },
+        "title": "About",
+        "type": "object"
+      },
       "AboutPersonOut": {
         "additionalProperties": false,
         "properties": {
@@ -2654,6 +2689,28 @@
         "title": "CreateAgentUseCase",
         "type": "object"
       },
+      "CreateTeamRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "about": {
+            "$ref": "#/components/schemas/About"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/RequestKind"
+          },
+          "note": {
+            "$ref": "#/components/schemas/Note",
+            "description": "Plain text. The box says not to paste passwords or keys. A request is never sent to the AI model."
+          }
+        },
+        "required": [
+          "kind",
+          "about",
+          "note"
+        ],
+        "title": "CreateTeamRequest",
+        "type": "object"
+      },
       "CreateUseCase": {
         "additionalProperties": false,
         "properties": {
@@ -3139,6 +3196,58 @@
         ],
         "type": "string"
       },
+      "FollowingUpItem": {
+        "additionalProperties": false,
+        "properties": {
+          "about": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "About",
+            "type": "object"
+          },
+          "asked_at": {
+            "format": "date-time",
+            "title": "Asked At",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/RequestKind"
+          },
+          "latest_reply": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReplyView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RequestStatus"
+          }
+        },
+        "required": [
+          "request_id",
+          "kind",
+          "about",
+          "note",
+          "asked_at",
+          "status",
+          "latest_reply"
+        ],
+        "title": "FollowingUpItem",
+        "type": "object"
+      },
       "FoundModel": {
         "additionalProperties": false,
         "properties": {
@@ -3231,6 +3340,18 @@
             "title": "Drafts",
             "type": "array"
           },
+          "following_up": {
+            "description": "This person's own requests to the team, Ask the team and Report to support, the newest first, with the status and the latest reply. At most 10. A request marked Done leaves after 30 days.",
+            "items": {
+              "$ref": "#/components/schemas/FollowingUpItem"
+            },
+            "title": "Following Up",
+            "type": "array"
+          },
+          "following_up_total": {
+            "title": "Following Up Total",
+            "type": "integer"
+          },
           "stopped": {
             "description": "Stopped runs an Operator started, owns or retried, while each is the newest run of its workflow. The newest first. At most 10.",
             "items": {
@@ -3270,6 +3391,8 @@
           "waiting_on_others",
           "waiting_on_others_total",
           "drafts",
+          "following_up",
+          "following_up_total",
           "coming_up",
           "workflows"
         ],
@@ -3824,6 +3947,11 @@
         ],
         "title": "NewAgent",
         "type": "object"
+      },
+      "Note": {
+        "maxLength": 1000,
+        "minLength": 1,
+        "type": "string"
       },
       "OpenUrl": {
         "additionalProperties": false,
@@ -4691,8 +4819,85 @@
         "title": "RejectedView",
         "type": "object"
       },
+      "ReplyIn": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "default": "answered",
+            "description": "Answered when the team has replied. Done when nothing more will happen, including when the team says it won't be done, and why in the text.",
+            "enum": [
+              "answered",
+              "done"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "text": {
+            "$ref": "#/components/schemas/Note"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "ReplyIn",
+        "type": "object"
+      },
+      "ReplyView": {
+        "additionalProperties": false,
+        "properties": {
+          "replied_at": {
+            "format": "date-time",
+            "title": "Replied At",
+            "type": "string"
+          },
+          "replied_by": {
+            "title": "Replied By",
+            "type": "string"
+          },
+          "replied_by_name": {
+            "title": "Replied By Name",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "answered",
+              "done"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "replied_by",
+          "replied_by_name",
+          "replied_at",
+          "text",
+          "status"
+        ],
+        "title": "ReplyView",
+        "type": "object"
+      },
       "RepoName": {
         "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$",
+        "type": "string"
+      },
+      "RequestKind": {
+        "enum": [
+          "ask_the_team",
+          "support"
+        ],
+        "type": "string"
+      },
+      "RequestStatus": {
+        "enum": [
+          "open",
+          "answered",
+          "done"
+        ],
         "type": "string"
       },
       "RetryAccepted": {
@@ -6091,6 +6296,112 @@
           "ask_maintainer"
         ],
         "type": "string"
+      },
+      "TeamRequestList": {
+        "additionalProperties": false,
+        "properties": {
+          "requests": {
+            "description": "Every request, the newest first, at most 200. A request marked Done leaves the list after 30 days.",
+            "items": {
+              "$ref": "#/components/schemas/TeamRequestView"
+            },
+            "title": "Requests",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "requests",
+          "total"
+        ],
+        "title": "TeamRequestList",
+        "type": "object"
+      },
+      "TeamRequestView": {
+        "additionalProperties": false,
+        "properties": {
+          "about": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "About",
+            "type": "object"
+          },
+          "asked_at": {
+            "format": "date-time",
+            "title": "Asked At",
+            "type": "string"
+          },
+          "asked_by": {
+            "title": "Asked By",
+            "type": "string"
+          },
+          "asked_by_name": {
+            "title": "Asked By Name",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/RequestKind"
+          },
+          "not_posted_because": {
+            "anyOf": [
+              {
+                "enum": [
+                  "no_channel",
+                  "failed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`no_channel` when no Teams channel is set up. `failed` when Teams refused or did not answer. Null when it was posted.",
+            "title": "Not Posted Because"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "posted_to_teams": {
+            "description": "Whether a card went to the team's Teams channel. When false, the request is still kept and listed, and the team sees it only in the app.",
+            "title": "Posted To Teams",
+            "type": "boolean"
+          },
+          "replies": {
+            "description": "Oldest first.",
+            "items": {
+              "$ref": "#/components/schemas/ReplyView"
+            },
+            "title": "Replies",
+            "type": "array"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RequestStatus"
+          }
+        },
+        "required": [
+          "request_id",
+          "kind",
+          "about",
+          "note",
+          "asked_by",
+          "asked_by_name",
+          "asked_at",
+          "status",
+          "replies",
+          "posted_to_teams",
+          "not_posted_because"
+        ],
+        "title": "TeamRequestView",
+        "type": "object"
       },
       "TeamsStubMessage": {
         "additionalProperties": false,
@@ -10752,6 +11063,268 @@
         "summary": "Connect Model",
         "tags": [
           "settings"
+        ]
+      }
+    },
+    "/api/v1/team-requests": {
+      "get": {
+        "description": "Every request for the team, the newest first. Any Operator or Approver can read them. A request marked Done leaves the list after 30 days.",
+        "operationId": "list_team_requests_api_v1_team_requests_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamRequestList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Signed in, but not on the People list. Ask an Operator to add you"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "List Team Requests",
+        "tags": [
+          "builder"
+        ]
+      },
+      "post": {
+        "description": "Keeps a request for the team: Ask the team, or Report to support. Any Operator or Approver can send one. It is kept in our own database and posts a card to the team's Teams channel when one is set up. It writes nothing to Jira or any outside system. `posted_to_teams` says whether the card went.",
+        "operationId": "create_team_request_api_v1_team_requests_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTeamRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamRequestView"
+                }
+              }
+            },
+            "description": "This Idempotency-Key made the request"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamRequestView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Signed in, but not on the People list. Ask an Operator to add you"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The request is not valid, or the run it is about does not exist"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Create Team Request",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/team-requests/{request_id}/replies": {
+      "post": {
+        "description": "Replies to a request and sets its status. Any Operator or Approver can reply. A reply changes no workflow, writes nothing outside the app and approves nothing.",
+        "operationId": "reply_to_team_request_api_v1_team_requests__request_id__replies_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplyIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamRequestView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Signed in, but not on the People list. Ask an Operator to add you"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such request"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Reply To Team Request",
+        "tags": [
+          "builder"
         ]
       }
     },

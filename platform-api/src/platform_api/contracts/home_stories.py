@@ -13,6 +13,7 @@ from platform_api.builder.home import (
     StoppedItem,
     WaitingItem,
 )
+from platform_api.builder.team_requests import FollowingUpItem, ReplyView
 from platform_api.builder.templates import SOFTWARE_WATCHLIST
 from platform_api.contracts.stories import (
     ALICE,
@@ -84,6 +85,8 @@ def home_for_bob() -> HomeOut:
         waiting_on_others=[],
         waiting_on_others_total=0,
         drafts=[],
+        following_up=[],
+        following_up_total=0,
         coming_up=COMING_UP,
         workflows=1,
     )
@@ -130,6 +133,24 @@ def home_for_alice(failure: Timeline) -> HomeOut:
                 saved_at=datetime(2026, 11, 4, 6, 24, tzinfo=UTC),
             )
         ],
+        following_up=[
+            FollowingUpItem(
+                request_id="trq_01JD5RP",
+                kind="support",
+                about={"run_id": FAILURE.run_id},
+                note="It stopped again.",
+                asked_at=datetime(2026, 11, 4, 7, 2, tzinfo=UTC),
+                status="answered",
+                latest_reply=ReplyView(
+                    replied_by="bob",
+                    replied_by_name="Bob",
+                    replied_at=datetime(2026, 11, 4, 8, 30, tzinfo=UTC),
+                    text="Looking into it.",
+                    status="answered",
+                ),
+            )
+        ],
+        following_up_total=1,
         coming_up=COMING_UP,
         workflows=1,
     )
@@ -144,6 +165,8 @@ DAY_ONE = HomeOut(
     waiting_on_others=[],
     waiting_on_others_total=0,
     drafts=[],
+    following_up=[],
+    following_up_total=0,
     coming_up=None,
     workflows=0,
 )

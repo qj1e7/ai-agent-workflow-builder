@@ -7,7 +7,7 @@ import httpx
 from fastapi import FastAPI
 
 from platform_api.auth import DEV_PEOPLE, DevAuth, OidcAuth
-from platform_api.builder import Builder, Home, Watchlist
+from platform_api.builder import Builder, Home, TeamRequests, Watchlist
 from platform_api.db import Database
 from platform_api.monitoring import ActivityLog, Copier, CosmosEvents, callback_for
 from platform_api.orchestration.agents import HttpAgentRuntime
@@ -20,6 +20,7 @@ from platform_api.orchestration.planning import CardPlanning
 from platform_api.orchestration.runs import Leg
 from platform_api.orchestration.schedule_store import ScheduleBook, ScheduleTicker
 from platform_api.orchestration.service import Orchestrator
+from platform_api.orchestration.team_request_card import TeamsRequestChannel
 from platform_api.orchestration.teams import TeamsStub, TeamsWorkflowsWebhook
 from platform_api.orchestration.watch_store import WatchFacts
 from platform_api.orchestration.workflows import load_all
@@ -38,6 +39,8 @@ class Services:
     builder: Builder
     home: Home
     watchlist: Watchlist
+    team_requests: TeamRequests
+    request_channel: TeamsRequestChannel
     schedule_ticker: ScheduleTicker
     teams_stub: TeamsStub
     jira: JiraRestAdapter
@@ -85,6 +88,7 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.builder = services.builder
     app.state.home = services.home
     app.state.watchlist = services.watchlist
+    app.state.team_requests = services.team_requests
     app.state.schedule_ticker = services.schedule_ticker
     app.state.teams_stub = services.teams_stub
     app.state.teams_webhook = services.teams_webhook
@@ -94,6 +98,23 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.people = services.people
 
 
+def quiet_http_logs() -> None:
+    """httpx and httpcore log every request's full address at INFO, and a webhook's address
+    carries its own signature. So with a webhook set, they log only warnings, for every client
+    in this process, n8n's and the agent runtime's too. Their warnings and errors still show."""
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+
+
+def request_channel_for(settings: Settings) -> TeamsRequestChannel:
+    """Where new team requests are announced (ADR 0038): TEAMS_REQUESTS_WEBHOOK_URL, else the
+    approvals channel's webhook, else nowhere. The request is kept either way."""
+    url = settings.teams_requests_webhook_url or settings.teams_webhook_url
+    if url is not None:
+        quiet_http_logs()
+    return TeamsRequestChannel(url)
+
+
 def approval_channel(
     settings: Settings, practice: TeamsStub, client: httpx.AsyncClient | None = None
 ) -> tuple[ApprovalChannel, TeamsWorkflowsWebhook | None]:
@@ -101,11 +122,7 @@ def approval_channel(
     TEAMS_WEBHOOK_URL is set. Returns the channel, and the webhook adapter to close on shutdown."""
     if settings.teams_webhook_url is None:
         return practice, None
-    # httpx and httpcore log every request's full address at INFO, and the webhook's address
-    # carries its own signature. So with a webhook set, they log only warnings, for every client
-    # in this process, n8n's and the agent runtime's too. Their warnings and errors still show.
-    for name in ("httpx", "httpcore"):
-        logging.getLogger(name).setLevel(logging.WARNING)
+    quiet_http_logs()
     webhook = TeamsWorkflowsWebhook(settings.teams_webhook_url, settings.teams_channel, client)
     return webhook, webhook
 
@@ -174,14 +191,18 @@ async def build(settings: Settings) -> Services:
         CardPlanning(db, model_settings, agents),
         schedules,
     )
+    request_channel = request_channel_for(settings)
+    team_requests = TeamRequests(db, request_channel, orchestrator, settings.public_base_url)
     return Services(
         settings=settings,
         db=db,
         activity_log=activity,
         orchestrator=orchestrator,
         builder=builder,
-        home=Home(builder, orchestrator, people),
+        home=Home(builder, orchestrator, people, team_requests),
         watchlist=watchlist,
+        team_requests=team_requests,
+        request_channel=request_channel,
         schedule_ticker=ScheduleTicker(db, schedules, builder, orchestrator),
         teams_stub=teams,
         jira=jira,
@@ -211,6 +232,7 @@ class Runner:
             await self._task
         if self._services.teams_webhook is not None:
             await self._services.teams_webhook.close()
+        await self._services.request_channel.close()
         if self._services.copier is not None:
             await self._services.copier.stop()
         await self._services.activity_log.stop()

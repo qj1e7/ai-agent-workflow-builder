@@ -155,6 +155,9 @@ services:
       # that real channel through a Teams Workflows webhook; unset keeps the practice copy (ADR 0036).
       TEAMS_CHANNEL: ${TEAMS_CHANNEL:-CODESparks Ops}
       TEAMS_WEBHOOK_URL: ${TEAMS_WEBHOOK_URL:-}
+      # Optional: sends new team request cards to a different channel. Unset, they go to the
+      # approvals channel above, and with neither set nothing is posted (ADR 0038).
+      TEAMS_REQUESTS_WEBHOOK_URL: ${TEAMS_REQUESTS_WEBHOOK_URL:-}
       # The first deploy's people (ADR 0030). Read only while the People list is empty, and only
       # with real sign-in; dev mode seeds alice, bob and carol instead.
       FIRST_OPERATOR: ${FIRST_OPERATOR:-}
