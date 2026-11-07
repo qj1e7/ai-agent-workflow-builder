@@ -19,6 +19,8 @@ interface ReportProps {
   readonly meName: string
   readonly reports: RunModel['reports']
   readonly nameOf: NameOf
+  /** The page already has its main button. */
+  readonly quiet?: boolean
 }
 
 /**
@@ -26,7 +28,7 @@ interface ReportProps {
  * it, and says where the card went only as the platform reported it. The activity events tell the same story on a
  * later visit, so a report made earlier shows here with no button.
  */
-export function ReportToSupport({ runId, found, me, meName, reports, nameOf }: ReportProps) {
+export function ReportToSupport({ runId, found, me, meName, reports, nameOf, quiet = false }: ReportProps) {
   const noteId = useId()
   const helpId = useId()
   const [extra, setExtra] = useState('')
@@ -75,7 +77,7 @@ export function ReportToSupport({ runId, found, me, meName, reports, nameOf }: R
         Support sees what the AI troubleshooter found and your note. Don’t paste passwords or keys.
       </span>
       <div className={styles['buttons']}>
-        <Button variant="primary" loading={report.isPending} onClick={press}>
+        <Button variant={quiet ? 'secondary' : 'primary'} loading={report.isPending} onClick={press}>
           Report to support
         </Button>
       </div>

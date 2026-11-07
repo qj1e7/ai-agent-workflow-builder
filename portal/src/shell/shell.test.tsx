@@ -109,6 +109,11 @@ describe('the menu', () => {
     }
   })
 
+  it('keeps a saved draft’s Resume reaching the editor with the flag off, and sends a bare /new to Home', () => {
+    expect(text(mainOf(render({ path: '/new?draft=drf-1' }))), 'a draft').toBe('Loading')
+    expect(text(mainOf(render({ path: '/new' })))).not.toBe('Loading')
+  })
+
   it('has the menu’s items on the phone tab bar too', () => {
     const html = render()
     const bars = [...html.matchAll(/<nav\b[^>]*aria-label="Main"[^>]*>([\s\S]*?)<\/nav>/g)].map((match) =>

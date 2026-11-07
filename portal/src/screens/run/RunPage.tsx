@@ -4,7 +4,7 @@ import { ApiError } from '../../api/client'
 import { useSession } from '../../api/context'
 import { displayName, usePeople } from '../../api/people'
 import { isOperator } from '../../api/me'
-import { useApproval, useMe, useRun, useTroubleshoot, useUseCase } from '../../api/queries'
+import { useApproval, useMe, useModelOff, useRun, useTroubleshoot, useUseCase } from '../../api/queries'
 import type { ApprovalView, Me, RunView, UseCaseView, Verdict } from '../../api/types'
 import { PageHead } from '../../shell/PageHead'
 import { PRODUCT } from '../../shell/product'
@@ -302,6 +302,7 @@ interface LastWordForProps {
 }
 
 function LastWordFor({ model, approval, found, decision, troubleshoot, nameOf, me, runId }: LastWordForProps) {
+  const modelOff = useModelOff()
   const { phase } = model
   switch (phase.state) {
     case 'awaiting_approval':
@@ -333,6 +334,7 @@ function LastWordFor({ model, approval, found, decision, troubleshoot, nameOf, m
             me={me ? { id: me.id, name: me.display, operator: isOperator(me) } : undefined}
             reports={model.reports}
             nameOf={nameOf}
+            modelOff={modelOff}
           />
         </LastWord>
       )

@@ -23,7 +23,7 @@ function ReplyBody({ message, now, page, say }: { message: Extract<Message, { ki
     <div className={styles['reply']}>
       {sentence !== null ? <p>{sentence}</p> : null}
       {reply.answer === 'check_workflows' ? <CheckWorkflowsAnswer useCaseId={reply.use_case_id} now={now} say={say} /> : null}
-      {reply.answer === 'why_stopped' ? <WhyStoppedAnswer useCaseId={reply.use_case_id} now={now} say={say} /> : null}
+      {reply.answer === 'why_stopped' ? <WhyStoppedAnswer useCaseId={reply.use_case_id} say={say} /> : null}
       {reply.answer === 'needs_me' ? <NeedsMeAnswer now={now} say={say} /> : null}
       <Answer reply={reply} typed={message.typed} page={page} />
     </div>
@@ -57,7 +57,7 @@ export function Thread({ thread, now, page }: ThreadProps) {
           }
           const state: BotState = message.kind === 'thinking' ? 'thinking' : SORRY.has(message.reply.answer) ? 'sorry' : 'idle'
           return (
-            <li key={message.id} className={styles['said']}>
+            <li key={message.id} className={styles['said']} tabIndex={-1} data-answer={message.kind === 'reply' || undefined}>
               <PlannerBot state={state} size={40} />
               <div className={styles['reply']}>
                 <span className={styles['who']}>Planner</span>

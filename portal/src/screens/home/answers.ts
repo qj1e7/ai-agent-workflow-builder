@@ -1,6 +1,6 @@
 import type { CantReply, CantRowView, CapabilitiesView, CapabilityView, PartReply, PlannerReply, RowKind, SetupCardReply, UnderstoodRowView } from '../../api/types'
 import { count } from '../run/words'
-import type { Row } from '../workflows/workflow'
+import { isRunning, type Row } from '../workflows/workflow'
 
 /** The words for each part of a request. They match the old New workflow's, so a person sees the same names in both. */
 export const ROW_LABEL: Readonly<Record<RowKind, string>> = {
@@ -64,9 +64,13 @@ export function cantLine(row: Pick<CantRowView, 'text' | 'note'>): CantLine {
 
 export const cantLines = (rows: readonly CantRowView[]): CantLine[] => rows.map(cantLine)
 
-/** What the old New workflow is handed: the typed words for a request it can read whole, the card’s own words for an alternative. */
-export function setupTask(reply: SetupCardReply | PartReply | CantReply, typed: string): string {
+/**
+ * What the old New workflow is handed: only what the card offers, which is its rows. A part's can't rows and the other half
+ * of a mixed request never go with it. A plain card keeps the typed words, which it read whole.
+ */
+export function setupTask(reply: SetupCardReply | PartReply | CantReply, typed: string, ownRows = false): string {
   if (reply.answer === 'cant') return reply.alternative?.answer === 'setup_card' ? joinedRows(reply.alternative.rows) : typed
+  if (reply.answer === 'part' || ownRows) return joinedRows(reply.rows)
   return typed
 }
 
@@ -144,14 +148,15 @@ export function workflowsSay(rows: readonly Row[]): string {
   const stopped = rows.filter((row) => row.latest?.state === 'failed').length
   const waiting = rows.filter((row) => row.latest?.state === 'awaiting_approval').length
   const paused = rows.filter((row) => row.useCase.state === 'paused').length
+  // Counted from the same fact the row's Running pill reads, so the sentence never says more than the rows show.
+  const running = rows.filter((row) => isRunning(row.latest)).length
   const parts = [
     stopped > 0 ? `${stopped} stopped` : null,
     waiting > 0 ? `${waiting} ${waiting === 1 ? 'is' : 'are'} waiting for a yes` : null,
     paused > 0 ? `${paused} ${paused === 1 ? 'is' : 'are'} paused` : null,
+    running > 0 ? `${running} ${running === 1 ? 'is' : 'are'} running` : null,
   ].filter((part) => part !== null)
-  const running = rows.length - stopped - waiting - paused
-  if (running > 0) parts.push(`${running} ${running === 1 ? 'is' : 'are'} running`)
-  return `You have ${count(rows.length, 'workflow')}. ${parts.join(', ')}.`
+  return `You have ${count(rows.length, 'workflow')}. ${parts.length > 0 ? `${parts.join(', ')}.` : 'None needs you.'}`
 }
 
 export interface CapabilityGroups {

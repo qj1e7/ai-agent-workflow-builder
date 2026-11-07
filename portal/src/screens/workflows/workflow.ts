@@ -42,6 +42,11 @@ function doneWords(run: Extract<RunView, { state: 'succeeded' }>, nameOf: NameOf
   return approvers.length > 0 ? `Done. ${what}, approved by ${andList(approvers)}.` : `Done. ${what}.`
 }
 
+const IN_PROGRESS: ReadonlySet<RunView['state']> = new Set(['pending', 'working', 'proposed', 'acting'])
+
+/** The runs a row calls Running. Anything counting running workflows asks this, so a count never outruns the rows. */
+export const isRunning = (run: RunView | null): boolean => run !== null && IN_PROGRESS.has(run.state)
+
 export function runFact(run: RunView, nameOf: NameOf): RunFact {
   switch (run.state) {
     case 'awaiting_approval':

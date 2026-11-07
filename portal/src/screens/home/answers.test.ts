@@ -6,9 +6,11 @@ import part from '../../../../contracts/fixtures/planner/answer.part.json'
 import refused from '../../../../contracts/fixtures/planner/answer.refused.json'
 import setupCard from '../../../../contracts/fixtures/planner/answer.setup_card.json'
 import watchlist from '../../../../contracts/fixtures/planner/answer.watchlist.json'
+import type { Row } from '../workflows/workflow'
 import type { CantReply, CapabilitiesView, PartReply, PlannerReply, SetupCardReply, WatchlistReply } from '../../api/types'
 import {
   capabilityGroups,
+  workflowsSay,
   cantLine,
   cardLines,
   lineText,
@@ -111,9 +113,12 @@ describe('what a refusal hands back', () => {
 })
 
 describe('what the old New workflow is handed', () => {
-  it('is the typed words for a card or a part', () => {
+  it('is the typed words for a card, and the rows for a part or one half of a mixed request', () => {
     expect(setupTask(CARD, 'Every Friday, sum up the closed tickets')).toBe('Every Friday, sum up the closed tickets')
-    expect(setupTask(PART, 'sum up and email')).toBe('sum up and email')
+    const ofPart = setupTask(PART, 'sum up and email')
+    expect(ofPart).toBe('Every Friday. Tickets closed this week in MOCK. Sum them up in one new ticket. In the MOCK project')
+    expect(ofPart).not.toMatch(/email/i)
+    expect(setupTask(CARD, 'Watch React releases and sum up', true)).not.toMatch(/React/)
   })
 
   it('is the alternative’s own words for a can’t, so it never reads the part it can’t do again', () => {
@@ -140,5 +145,17 @@ describe('the I can and Not yet lists', () => {
 
   it('offers only examples that set something up, which the platform vouches for', () => {
     expect(startingPoints(CAPS)).toEqual(['Every Friday, sum up the tickets we closed this week', 'Keep track of the React version'])
+  })
+})
+
+describe('Check my workflows counts what its rows show', () => {
+  const caseOf = (id: string, state: 'on' | 'paused' = 'on') => ({ use_case_id: id, state }) as unknown as Row['useCase']
+  const row = (id: string, latest: string | null, state: 'on' | 'paused' = 'on'): Row =>
+    ({ useCase: caseOf(id, state), latest: latest === null ? null : ({ state: latest, reason: 'agent_error' } as unknown as Row['latest']), action: null })
+
+  it('says running only for a run in progress, never for a workflow that is simply idle', () => {
+    const rows = [row('a', 'failed'), row('b', 'awaiting_approval'), row('c', null), row('d', 'succeeded'), row('e', 'working')]
+    expect(workflowsSay(rows)).toBe('You have 5 workflows. 1 stopped, 1 is waiting for a yes, 1 is running.')
+    expect(workflowsSay([row('c', null), row('d', 'succeeded')])).toBe('You have 2 workflows. None needs you.')
   })
 })

@@ -5,7 +5,7 @@ import { useErrorWords } from '../../api/context'
 import { newIdempotencyKey } from '../../api/idempotency'
 import { useLatch } from '../../api/latch'
 import { useDisplayName } from '../../api/people'
-import { useMe, useRuns, useStartRun, useUseCase } from '../../api/queries'
+import { useMe, useModelOff, useRuns, useStartRun, useUseCase } from '../../api/queries'
 import type { Me, UseCaseView } from '../../api/types'
 import { useDeleteWorkflow, useMoveWorkflow, useRereadWorkflow, useSaveWorkflowSchedule } from '../../api/workflowQueries'
 import { stoppedActions } from '../home/home'
@@ -179,6 +179,7 @@ interface ButtonProps {
 }
 
 function BannerButton({ action, resuming, onResume, describedBy }: ButtonProps) {
+  const modelOff = useModelOff()
   switch (action.kind) {
     case 'resume':
       return (
@@ -193,7 +194,7 @@ function BannerButton({ action, resuming, onResume, describedBy }: ButtonProps) 
         </ButtonLink>
       )
     case 'stopped': {
-      const [first] = stoppedActions(action.runId, action.retryable)
+      const [first] = stoppedActions(action.runId, action.retryable, modelOff)
       if (first?.kind === 'retry') return <RetryButton runId={first.runId} label={first.label} primary describedBy={describedBy} />
       return (
         <ButtonLink to={`/runs/${action.runId}`} variant="primary">

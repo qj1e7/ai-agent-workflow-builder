@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ReactNode } from 'react'
-import { Navigate, Route, Routes } from 'react-router'
+import { Navigate, Route, Routes, useSearchParams } from 'react-router'
 import { useNewWorkflowSteps } from '../api/flags'
 import { AgentsPage } from '../screens/agents/AgentsPage'
 import { HomePage } from '../screens/home/HomePage'
@@ -138,12 +138,21 @@ export function wordsOf(words: Words, context: PageContext): string {
   return typeof words === 'function' ? words(context) : words
 }
 
-/** The old four-step screen, kept at its address while the flag is on. Off, its address leads to Home, where a request now starts. */
-function oldNewWorkflowRoutes(context: PageContext) {
+/**
+ * The old four-step screen, kept at its address while the flag is on. Off, its address leads to Home, where a request now
+ * starts, except with a saved draft: Resume must still reach the editor with that draft until the Planner's card can edit it.
+ */
+function oldNewWorkflowRoutes(context: PageContext, whole: boolean) {
+  const editor = <Lazy><NewWorkflowRoute heading={wordsOf(PAGES.new.heading, context)} lead={wordsOf(PAGES.new.lead, context)} /></Lazy>
   return [
-    <Route key="new" path={PAGES.new.path} element={<Lazy><NewWorkflowRoute heading={wordsOf(PAGES.new.heading, context)} lead={wordsOf(PAGES.new.lead, context)} /></Lazy>} />,
-    <Route key="done" path={`${PAGES.new.path}/done/:useCaseId`} element={<Lazy><DoneRoute now={context.now} /></Lazy>} />,
+    <Route key="new" path={PAGES.new.path} element={whole ? editor : <DraftOnly>{editor}</DraftOnly>} />,
+    ...(whole ? [<Route key="done" path={`${PAGES.new.path}/done/:useCaseId`} element={<Lazy><DoneRoute now={context.now} /></Lazy>} />] : []),
   ]
+}
+
+function DraftOnly({ children }: { children: ReactNode }) {
+  const [search] = useSearchParams()
+  return search.get('draft') ? children : <Navigate to={PAGES.home.path} replace />
 }
 
 export function AppRoutes({ context }: { context: PageContext }) {
@@ -183,11 +192,8 @@ export function AppRoutes({ context }: { context: PageContext }) {
         }
       />
       <Route path={PAGES.settings.path} element={<SettingsPage heading={wordsOf(PAGES.settings.heading, context)} lead={wordsOf(PAGES.settings.lead, context)} />} />
-      {oldNewWorkflow ? (
-        oldNewWorkflowRoutes(context)
-      ) : (
-        <Route path={`${PAGES.new.path}/*`} element={<Navigate to={PAGES.home.path} replace />} />
-      )}
+      {oldNewWorkflowRoutes(context, oldNewWorkflow)}
+      {oldNewWorkflow ? null : <Route path={`${PAGES.new.path}/*`} element={<Navigate to={PAGES.home.path} replace />} />}
       <Route path="/runs/:runId" element={<Lazy><RunRoute /></Lazy>} />
       <Route path="/approvals/:approvalId" element={<Lazy><ApprovalRoute /></Lazy>} />
       <Route path="*" element={<NotFoundPage />} />

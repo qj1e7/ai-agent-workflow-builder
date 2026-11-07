@@ -2,14 +2,15 @@ import { useEffect, useMemo } from 'react'
 import { Link } from 'react-router'
 import { useHome } from '../../api/homeQueries'
 import { useDisplayName } from '../../api/people'
-import { useMe, useRuns, useUseCases } from '../../api/queries'
+import { isOperator } from '../../api/me'
+import { useMe, useModelOff, useRuns, useTroubleshoot, useUseCases } from '../../api/queries'
 import { ButtonLink } from '../../ui/Button'
 import { WorkflowRow } from '../workflows/WorkflowsPage'
 import { REFRESH_MS, rowsOf, viewerOf } from '../workflows/workflow'
 import wfStyles from '../workflows/Workflows.module.css'
 import { needsSay, workflowsSay } from './answers'
-import { HOME_NEEDS_SHOWN, needsOf, needsTotal, SEE_ALL_WORDS, stoppedActions, wordsOf } from './home'
-import { RetryButton } from './HomeItem'
+import { Troubleshooting } from '../run/Outcome'
+import { HOME_NEEDS_SHOWN, needsOf, needsTotal, SEE_ALL_WORDS } from './home'
 import { NeedsSection, useArrival } from './NeedsSection'
 import { useMainButton } from './primary'
 import styles from './Planner.module.css'
@@ -100,11 +101,18 @@ export function NeedsMeAnswer({ now, say }: { now: Date; say: Say }) {
   )
 }
 
-/** Why it stopped: read from the stopped list Needs you is made from, so the answer and the row can't disagree. */
-export function WhyStoppedAnswer({ useCaseId, now, say }: { useCaseId: string | null; now: Date; say: Say }) {
+/**
+ * Why it stopped: the stopped list Needs you is made from, so the answer and the row can't disagree, then the AI
+ * troubleshooter's four answers and its last one, Retry or Report to support, from the run page's own pieces.
+ */
+export function WhyStoppedAnswer({ useCaseId, say }: { useCaseId: string | null; say: Say }) {
   const home = useHome()
+  const me = useMe().data
+  const nameOf = useDisplayName()
+  const modelOff = useModelOff()
   const main = useMainButton()
   const stopped = home.data?.stopped.find((item) => useCaseId === null || item.use_case_id === useCaseId)
+  const troubleshoot = useTroubleshoot(stopped?.run_id ?? '', stopped !== undefined, 0)
   const sentence = !home.data ? null : stopped ? `${stopped.use_case_name} stopped.` : 'Nothing has stopped right now.'
   useSaidOnce(sentence, say)
   if (!home.data) {
@@ -122,33 +130,28 @@ export function WhyStoppedAnswer({ useCaseId, now, say }: { useCaseId: string | 
       </>
     )
   }
-  const need = needsOf(home.data).shown.find((item) => item.kind === 'stopped' && item.item.run_id === stopped.run_id)
-  const why = need ? wordsOf(need, now).why : null
-  const actions = stoppedActions(stopped.run_id, stopped.retryable)
   const titleId = `why-${stopped.run_id}`
+  const failure = { state: 'failed', stage: 'working', reason: stopped.reason, retryable: stopped.retryable, message: '' } as const
   return (
     <section className={styles['pcard']} aria-labelledby={titleId}>
       <div className={styles['pcardHead']}>
         <h3 id={titleId}>{stopped.use_case_name} stopped</h3>
       </div>
-      {why ? (
-        <div className={styles['pcardPart']}>
-          <p>
-            <b>AI troubleshooter</b>
-          </p>
-          <p>{why}</p>
-        </div>
-      ) : null}
+      <Troubleshooting
+        runId={stopped.run_id}
+        failure={failure}
+        advice={troubleshoot.data}
+        loading={troubleshoot.isPending}
+        me={me ? { id: me.id, name: me.display, operator: isOperator(me) } : undefined}
+        reports={[]}
+        nameOf={nameOf}
+        modelOff={modelOff}
+        quiet={main !== 'primary'}
+      />
       <div className={styles['footer']}>
-        {actions.map((action, index) =>
-          action.kind === 'retry' ? (
-            <RetryButton key={action.label} runId={action.runId} label={action.label} primary={index === 0 && main === 'primary'} describedBy={titleId} />
-          ) : action.kind === 'open' ? (
-            <ButtonLink key={action.label} to={action.to} variant={index === 0 ? main : 'secondary'}>
-              {action.label}
-            </ButtonLink>
-          ) : null,
-        )}
+        <ButtonLink to={`/runs/${stopped.run_id}`} variant="secondary">
+          See the run
+        </ButtonLink>
       </div>
     </section>
   )

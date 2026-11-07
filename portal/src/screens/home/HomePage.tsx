@@ -149,6 +149,7 @@ function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; 
   const [keys, setKeys] = useState(0)
   const [lists, setLists] = useState(false)
   const boxRef = useRef<HTMLTextAreaElement>(null)
+  const focusAnswer = useRef(false)
   const phone = usePhone()
   const offline = model.data !== undefined && model.data.active === null
   const dayOne = home.workflows === 0
@@ -157,6 +158,13 @@ function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; 
   const needs = useMemo(() => needsHere(home, offline), [home, offline])
   const arrival = useArrival(needs.shown.map((need) => need.key))
   const suggestions = useMemo(() => suggestionsOf(home, capabilities.data), [home, capabilities.data])
+
+  // A chip leaves the page when pressed, so focus would fall to the page. It goes to the answer once that arrives.
+  useEffect(() => {
+    if (!focusAnswer.current || thread.messages.at(-1)?.kind !== 'reply') return
+    focusAnswer.current = false
+    document.querySelector<HTMLElement>('#thread-h + ol > li:last-child')?.focus({ preventScroll: true })
+  }, [thread.messages])
 
   useEffect(() => {
     if (thread.messages.length > 0) document.querySelector('#thread-h + ol > li:last-child')?.scrollIntoView({ block: 'nearest' })
@@ -260,7 +268,9 @@ function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; 
               className={styles['chip']}
               aria-disabled={busy || undefined}
               onClick={() => {
-                if (!busy) send(suggestion.ask, suggestion.label, null)
+                if (busy) return
+                focusAnswer.current = true
+                send(suggestion.ask, suggestion.label, null)
               }}
             >
               {suggestion.label}

@@ -183,13 +183,13 @@ function addressWords(item: AddressItem): ItemWords {
   }
 }
 
-function stoppedWords(item: StoppedItem, now: Date): ItemWords {
+function stoppedWords(item: StoppedItem, now: Date, modelOff: boolean): ItemWords {
   return {
     tone: 'bad',
     title: `${item.use_case_name} stopped`,
     meta: runWhen(item.stopped_at, now),
     lines: [],
-    note: null,
+    note: item.retryable && modelOff ? CAN_RUN_AGAIN : null,
     why: withCurrentNames(`${item.advice.explanation} ${item.advice.suggestion}`),
   }
 }
@@ -209,7 +209,7 @@ function replyWords(item: FollowingUpItem, now: Date): ItemWords {
   }
 }
 
-export function wordsOf(need: Need, now: Date): ItemWords {
+export function wordsOf(need: Need, now: Date, modelOff = false): ItemWords {
   switch (need.kind) {
     case 'approval':
       return approvalWords(need.item, now)
@@ -220,7 +220,7 @@ export function wordsOf(need: Need, now: Date): ItemWords {
     case 'confirmation':
       return confirmationWords(need.item, now)
     case 'stopped':
-      return stoppedWords(need.item, now)
+      return stoppedWords(need.item, now, modelOff)
     case 'reply':
       return replyWords(need.item, now)
   }
@@ -231,7 +231,7 @@ export type Action =
   | { readonly kind: 'retry'; readonly label: string; readonly runId: string }
   | { readonly kind: 'check'; readonly label: string; readonly connectionId: string }
 
-export function actionsOf(need: Need): readonly Action[] {
+export function actionsOf(need: Need, modelOff = false): readonly Action[] {
   switch (need.kind) {
     case 'approval':
       return [{ kind: 'open', label: 'Review and decide', to: `/runs/${need.item.run_id}` }]
@@ -243,14 +243,20 @@ export function actionsOf(need: Need): readonly Action[] {
     case 'confirmation':
       return [{ kind: 'open', label: 'Review in Settings', to: need.item.kind === 'approver' ? '/settings?tab=people' : '/settings' }]
     case 'stopped':
-      return stoppedActions(need.item.run_id, need.item.retryable)
+      return stoppedActions(need.item.run_id, need.item.retryable, modelOff)
     case 'reply':
       return [{ kind: 'open', label: 'Read the reply', to: requestPath(need.item.request_id) }]
   }
 }
 
-/** A stopped run offers Retry when the platform says it can be retried, and always a way to read why it stopped. */
-export function stoppedActions(runId: string, retryable: boolean): readonly Action[] {
+export const CAN_RUN_AGAIN = 'Can run again once an AI model is connected.'
+
+/**
+ * A stopped run offers Retry when the platform says it can be retried, and always a way to read why it stopped.
+ * With no AI model a retry would fail again, so the run waits and only the reading stays (spec 5.4).
+ */
+export function stoppedActions(runId: string, retryable: boolean, modelOff = false): readonly Action[] {
+  if (retryable && modelOff) return [{ kind: 'open', label: 'See the run', to: `/runs/${runId}` }]
   return retryable
     ? [
         { kind: 'retry', label: 'Retry the run', runId },

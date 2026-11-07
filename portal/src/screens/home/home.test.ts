@@ -224,6 +224,15 @@ describe('what each item lets you do', () => {
     const final = { ...stopped, item: { ...STOP, retryable: false } } as Need
     expect(actionsOf(final)).toEqual([{ kind: 'open', label: 'See why it stopped', to: '/runs/run_01JB9' }])
   })
+
+  it('waits for the model instead of offering a retry that would fail again, and says so', () => {
+    expect(actionsOf(stopped, true)).toEqual([{ kind: 'open', label: 'See the run', to: '/runs/run_01JB9' }])
+    expect(wordsOf(stopped, NOW, true).note).toBe('Can run again once an AI model is connected.')
+    expect(wordsOf(stopped, NOW).note).toBeNull()
+    const final = { ...stopped, item: { ...STOP, retryable: false } } as Need
+    expect(actionsOf(final, true)).toEqual(actionsOf(final))
+    expect(wordsOf(final, NOW, true).note).toBeNull()
+  })
 })
 
 describe('a retry the platform refused', () => {

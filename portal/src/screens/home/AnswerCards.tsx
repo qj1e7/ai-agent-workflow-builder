@@ -8,7 +8,7 @@ import { NEW_WORKFLOW_PATH } from '../new/starters'
 import { AskTheTeam } from './AskTheTeam'
 import { cantLines, cardLines, refusalNext, SAY_ANOTHER_WAY, setupTask, startingPoints, TAG_CANT, TAG_CHOICE, TAG_FILLED } from './answers'
 import { CapabilityLists } from './CapabilityLists'
-import { useMainButton } from './primary'
+import { NewestAnswer, useMainButton } from './primary'
 import { AddToWatchlist, WhichSoftware } from './WatchlistCard'
 import styles from './Planner.module.css'
 
@@ -26,7 +26,7 @@ const OLD_NEW_WORKFLOW = 'Set it up in New workflow'
  * The step that turns an answer into a workflow. Setting up from the card comes with the next change. Until then the
  * old New workflow is the way, while its flag is on. With the flag off, the card says plainly that it can't set up yet.
  */
-function SetUp({ task, label = OLD_NEW_WORKFLOW }: { task: string; label?: string }) {
+function SetUp({ task, label = OLD_NEW_WORKFLOW, ask = 'here' }: { task: string; label?: string; ask?: 'here' | 'below' | 'above' }) {
   const oldNewWorkflow = useNewWorkflowSteps()
   const main = useMainButton()
   if (oldNewWorkflow) {
@@ -36,7 +36,12 @@ function SetUp({ task, label = OLD_NEW_WORKFLOW }: { task: string; label?: strin
       </ButtonLink>
     )
   }
-  return <p>Turning this on from Home isn’t built yet, so nothing was saved. Ask the team below if you need it soon.</p>
+  return (
+    <>
+      <p>Turning this on from Home isn’t built yet, so nothing was saved. Ask the team {ask === 'above' ? 'above' : 'below'} if you need it soon.</p>
+      {ask === 'here' ? <AskTheTeam capability="setting up a workflow from Home" starter={`I asked the Planner for: ${task}\n\nIt was understood, but turning it on from Home is not built yet.`} /> : null}
+    </>
+  )
 }
 
 function tagClass(tag: string): string {
@@ -73,7 +78,7 @@ function Card({ title, tag, children }: { title: string; tag?: string; children:
   )
 }
 
-export function SetupCardAnswer({ reply, typed }: { reply: SetupCardReply | PartReply; typed: string }) {
+export function SetupCardAnswer({ reply, typed, ownRows = false }: { reply: SetupCardReply | PartReply; typed: string; ownRows?: boolean }) {
   const left = reply.answer === 'part' ? cantLines(reply.cant) : []
   return (
     <Card title={reply.name} tag={TAG_FILLED}>
@@ -99,7 +104,7 @@ export function SetupCardAnswer({ reply, typed }: { reply: SetupCardReply | Part
         </div>
       ) : null}
       <div className={styles['footer']}>
-        <SetUp task={typed} label={reply.answer === 'part' ? 'Set up the part I can do in New workflow' : OLD_NEW_WORKFLOW} />
+        <SetUp task={setupTask(reply, typed, ownRows)} label={reply.answer === 'part' ? 'Set up the part I can do in New workflow' : OLD_NEW_WORKFLOW} ask={reply.answer === 'part' ? 'below' : 'here'} />
         {reply.answer === 'part' ? <AskTheTeam capability={reply.cant[0]?.system ?? left[0]?.text ?? 'part of a request'} starter={`I asked the Planner for: ${typed}\n\nWhat it can't do yet: ${left.map((line) => line.text).join('; ')}`} /> : null}
       </div>
     </Card>
@@ -132,7 +137,7 @@ export function CantAnswer({ reply, typed }: { reply: CantReply; typed: string }
         <Card title="What I can do instead">
           <Lines rows={alternative.rows} />
           <div className={styles['footer']}>
-            <SetUp task={setupTask(reply, typed)} label="Set up the alternative in New workflow" />
+            <SetUp task={setupTask(reply, typed)} label="Set up the alternative in New workflow" ask="above" />
           </div>
         </Card>
       ) : null}
@@ -171,7 +176,9 @@ export function WatchlistAnswer({ reply, typed }: { reply: WatchlistReply; typed
       {reply.also ? (
         <>
           <p>The rest of your request:</p>
-          <Answer reply={reply.also} typed={typed} page={NO_PAGE} />
+          <NewestAnswer.Provider value={false}>
+            <Answer reply={reply.also} typed={typed} page={NO_PAGE} ownRows />
+          </NewestAnswer.Provider>
         </>
       ) : null}
     </>
@@ -286,14 +293,16 @@ interface AnswerProps {
   readonly reply: PlannerReply
   readonly typed: string
   readonly page: Page
+  /** The answer is one half of a mixed request, so it hands on only its own rows. */
+  readonly ownRows?: boolean
 }
 
 /** The body of one Planner answer, past its sentence. The three state answers are in StateAnswers. */
-export function Answer({ reply, typed, page }: AnswerProps) {
+export function Answer({ reply, typed, page, ownRows = false }: AnswerProps) {
   switch (reply.answer) {
     case 'setup_card':
     case 'part':
-      return <SetupCardAnswer reply={reply} typed={typed} />
+      return <SetupCardAnswer reply={reply} typed={typed} ownRows={ownRows} />
     case 'cant':
       return <CantAnswer reply={reply} typed={typed} />
     case 'watchlist':
