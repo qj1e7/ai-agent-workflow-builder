@@ -68,3 +68,9 @@ def test_the_askers_own_note_keeps_the_status_and_only_others_answer(api: Api) -
         "answered",
         "done",
     ]
+    api.post(
+        "alice",
+        f"{base}/seen",
+        {"through": closed["replies"][-1]["replied_at"]},
+        expect=(200,),
+    )
