@@ -5,7 +5,6 @@ from typing import Any
 
 import model_server as server
 
-LISTS = server.LISTS_THEM
 
 SYSTEM = (
     "Agent card: Version checker\nInputs for this run:\n"
@@ -415,35 +414,49 @@ def reading(task: str) -> dict[str, Any]:
 
 
 class ReadTest(unittest.TestCase):
-    def test_a_task_is_read_back_with_a_name_and_no_question(self) -> None:
+    def test_a_task_is_read_into_the_structures_with_a_name_and_no_question(self) -> None:
         read = reading(FOLLOW_UP)
         self.assertEqual((read["asks_about"], read["workflow_words"]), ("none", None))
         self.assertEqual(read["name"], "Find bug tickets in MOCK")
+        self.assertEqual(read["schedule"], "Every weekday at 3pm")
         self.assertEqual(
-            [(r["kind"], r["state"]) for r in read["rows"]],
-            [
-                ("schedule", "understood"),
-                ("look_for", "understood"),
-                ("do", "understood"),
-                ("where", "understood"),
-            ],
+            read["search"],
+            {
+                "project": "MOCK",
+                "issue_types": ["bug"],
+                "status": None,
+                "assignee": None,
+                "created": None,
+                "updated": {"how": "before", "days": 10},
+                "done": None,
+                "words": None,
+                "said": "bug tickets in MOCK with no update for 10 days",
+            },
         )
+        self.assertEqual(
+            read["ticket"],
+            {
+                "creates": True,
+                "says": "list",
+                "shows": [],
+                "said": "create one follow-up ticket that lists them",
+            },
+        )
+        self.assertEqual(read["place"], {"project": "MOCK", "said": "in MOCK"})
 
-    def test_a_task_names_the_fields_it_filters_by_and_answers_the_skip_question(self) -> None:
+    def test_a_detail_the_search_cannot_filter_by_is_left_out_of_the_structures(self) -> None:
         read = server.reading(
             "Every Monday, find P1 bugs in MOCK reported by Bob and create one ticket that "
             "lists them"
         )
         self.assertEqual(read["skips_the_yes"], {"whose": "nobody", "said": None})
-        look = next(r for r in read["rows"] if r["kind"] == "look_for")
-        self.assertEqual(
-            look["fields"],
-            [
-                {"field": "priority", "said": "P1", "value": None},
-                {"field": "reporter", "said": "reported by Bob", "value": None},
-            ],
-        )
-        self.assertEqual(next(r for r in read["rows"] if r["kind"] == "where").get("fields"), None)
+        self.assertEqual(read["search"]["issue_types"], ["bugs"])
+        self.assertEqual(read["search"]["words"], None)
+        self.assertEqual(read["search"]["said"], "P1 bugs in MOCK reported by Bob")
+        shown = {k: v for k, v in read.items() if k not in ("search", "name")}
+        self.assertNotIn("P1", json.dumps(shown))
+
+    def test_the_skip_question_is_answered_for_a_few_plain_phrasings(self) -> None:
         skipped = server.reading(
             "Every Monday, find bug tickets in MOCK and create one ticket, no human in the loop"
         )
@@ -461,31 +474,23 @@ class ReadTest(unittest.TestCase):
         self.assertEqual(mine["skips_the_yes"], {"whose": "only_me", "said": "don't ping me"})
         self.assertEqual(server.reading("Check my workflows")["skips_the_yes"]["whose"], "nobody")
 
-    def test_a_status_carries_the_value_the_search_filters_by_or_other(self) -> None:
-        def status_of(task: str) -> dict[str, Any]:
-            read = server.reading(task)
-            look = next(r for r in read["rows"] if r["kind"] == "look_for")
-            return next(f for f in look["fields"] if f["field"] == "status")
+    def test_a_status_is_open_or_done_or_left_out(self) -> None:
+        def status_of(task: str) -> str | None:
+            return server.reading(task)["search"]["status"]
 
         self.assertEqual(
-            status_of("Every Monday, find open bugs in MOCK and create one ticket")["value"], "open"
+            status_of("Every Monday, find open bugs in MOCK and create one ticket"), "open"
         )
         self.assertEqual(
-            status_of("Every Monday, find closed bugs in MOCK and create one ticket")["value"],
-            "done",
+            status_of("Every Monday, find closed bugs in MOCK and create one ticket"), "done"
         )
         self.assertEqual(
-            status_of("Every Monday, find in progress bugs in MOCK and create one ticket")["value"],
-            "other",
+            status_of("Every Monday, find in progress bugs in MOCK and create one ticket"), None
         )
 
     def test_the_request_mark_and_the_task_mark_both_find_the_request(self) -> None:
-        self.assertEqual(reading(FOLLOW_UP)["rows"], server.reading(FOLLOW_UP)["rows"])
-        without_fields = [
-            {key: value for key, value in r.items() if key != "fields"}
-            for r in server.reading(FOLLOW_UP)["rows"]
-        ]
-        self.assertEqual(server.understanding(FOLLOW_UP)["rows"], without_fields)
+        self.assertEqual(reading(FOLLOW_UP)["search"], server.reading(FOLLOW_UP)["search"])
+        self.assertEqual(reading(FOLLOW_UP)["ticket"], server.reading(FOLLOW_UP)["ticket"])
 
     def test_a_question_about_the_persons_workflows_is_answered_by_its_kind(self) -> None:
         for task, about, words in (
@@ -504,34 +509,26 @@ class ReadTest(unittest.TestCase):
             with self.subTest(task=task):
                 read = server.reading(task)
                 self.assertEqual((read["asks_about"], read["workflow_words"]), (about, words))
-                self.assertEqual(read["rows"], [])
+                self.assertEqual((read["search"], read["ticket"]), (None, None))
 
-    def test_a_vulnerability_check_offers_to_watch_the_named_software_instead(self) -> None:
+    def test_a_vulnerability_check_fills_no_search(self) -> None:
         read = server.reading("Warn me about any known vulnerabilities in Log4j")
-        [cant] = [r for r in read["rows"] if r["state"] == "cant_do"]
-        self.assertEqual(cant["alternative"], "New releases of Log4j")
-        unnamed = server.reading("Check our packages for security advisories")
-        refused = [r for r in unnamed["rows"] if r["state"] == "cant_do"]
-        self.assertTrue(refused)
-        self.assertEqual({r["alternative"] for r in refused}, {None})
-
-    def test_a_security_patch_is_a_vulnerability_word(self) -> None:
-        read = server.reading("Tell me about Log4j security patches")
         self.assertFalse(read["belongs_on_watchlist"])
-        self.assertIn("cant_do", {r["state"] for r in read["rows"]})
+        self.assertEqual((read["search"], read["ticket"]), (None, None))
+        patch = server.reading("Tell me about Log4j security patches")
+        self.assertFalse(patch["belongs_on_watchlist"])
+        self.assertEqual(patch["search"], None)
 
-    def test_an_email_part_is_cant_do_with_a_ticket_instead(self) -> None:
+    def test_an_email_part_fills_no_ticket(self) -> None:
         read = server.reading("Every Friday, email me the list of stale tickets in MOCK")
-        cant = [r for r in read["rows"] if r["state"] == "cant_do"]
-        self.assertTrue(cant)
-        self.assertEqual(cant[0]["alternative"], LISTS)
+        self.assertEqual(read["ticket"], None)
+        self.assertEqual(read["search"]["updated"], {"how": "before", "days": 14})
 
-    def test_a_mixed_request_is_the_watchlist_with_the_rest_in_rows(self) -> None:
+    def test_a_mixed_request_is_the_watchlist_with_the_rest_in_the_structures(self) -> None:
         read = server.reading("Watch React releases and list stale bug tickets every Friday")
         self.assertEqual((read["belongs_on_watchlist"], read["software"]), (True, "React"))
-        self.assertEqual(
-            read["rows"][0], {"kind": "schedule", "text": "Every Friday", "state": "understood"}
-        )
+        self.assertEqual(read["schedule"], "Every Friday")
+        self.assertEqual(read["search"]["issue_types"], ["bug"])
         self.assertEqual(read["name"], "List stale bug tickets")
         plain = server.reading("Tell me when LangGraph has a new release")
-        self.assertEqual(plain["rows"], [])
+        self.assertEqual((plain["schedule"], plain["search"]), (None, None))

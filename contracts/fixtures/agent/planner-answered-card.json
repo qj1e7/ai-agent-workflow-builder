@@ -12,21 +12,21 @@
       },
       {
         "kind": "look_for",
-        "text": "Bug tickets in MOCK with no update for 10 days",
+        "text": "Bug tickets in MOCK, with no update for 10 days",
         "state": "understood",
-        "note": null
+        "note": "Read from your words \"bug tickets in MOCK with no update for 10 days\"."
       },
       {
         "kind": "do",
-        "text": "Create one follow-up ticket that lists them",
+        "text": "Create one ticket that lists them",
         "state": "understood",
-        "note": null
+        "note": "Read from your words \"create one follow-up ticket that lists them\"."
       },
       {
         "kind": "where",
         "text": "Jira project MOCK",
         "state": "understood",
-        "note": null
+        "note": "Read from your words \"in MOCK\"."
       }
     ]
   }

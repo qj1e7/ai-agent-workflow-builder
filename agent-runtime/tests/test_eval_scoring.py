@@ -628,18 +628,8 @@ def read_answer(**fields: Any) -> Answer:
 
 EMAIL_READ = {
     "name": "Stale ticket list",
-    "rows": [
-        {"kind": "schedule", "text": "Every week", "state": "changed", "note": "Weekly."},
-        {"kind": "look_for", "text": "Stale tickets", "state": "changed", "note": "14 days."},
-        {
-            "kind": "do",
-            "text": "Email them to you",
-            "state": "cant_do",
-            "note": "No tool sends email.",
-            "alternative": "Create one ticket that lists them",
-        },
-        {"kind": "where", "text": "Your email", "state": "cant_do", "note": "No tool sends email."},
-    ],
+    "schedule": "weekly",
+    "search": {"updated": {"how": "before", "days": 14}, "said": "stale tickets"},
 }
 
 
@@ -652,43 +642,47 @@ def test_every_answer_case_names_a_kind_or_a_kind_to_avoid():
 def test_the_answer_job_scores_the_decided_answer_not_the_reading():
     case = answer_case("email-stale-list")
     assert failed(ANSWER.score(case, read_answer(**EMAIL_READ))) == set()
-    fooled = [{**r, "state": "understood", "note": None} for r in EMAIL_READ["rows"]]
-    assert failed(ANSWER.score(case, read_answer(**{**EMAIL_READ, "rows": fooled}))) == set()
-    bare = [{**r, "alternative": None} for r in EMAIL_READ["rows"]]
-    checks = ANSWER.score(case, read_answer(**{**EMAIL_READ, "rows": bare}))
+    claimed = {**EMAIL_READ, "ticket": {"creates": False, "says": "list", "said": "list"}}
+    assert failed(ANSWER.score(case, read_answer(**claimed))) == set()
+    bare = {"name": "Stale ticket list"}
+    checks = ANSWER.score(case, read_answer(**bare))
     assert failed(checks) == {"offers_alternative", "reads_the_parts"}
 
 
 def test_a_guessed_time_and_an_invented_key_fail_the_card():
     read = {
         "name": "Weekly summary",
-        "rows": [
-            {"kind": "schedule", "text": "Every Friday at 5pm", "state": "understood"},
-            {"kind": "look_for", "text": "Tickets closed this week", "state": "understood"},
-            {"kind": "do", "text": "Create one ticket that sums them up", "state": "understood"},
-            {"kind": "where", "text": "Jira project SUP", "state": "understood"},
-        ],
+        "schedule": "Every Friday at 5pm",
+        "search": {"status": "done", "done": {"how": "within", "days": 7}, "said": "closed"},
+        "ticket": {"creates": True, "says": "summary", "said": "sum up"},
+        "place": {"project": "SUP", "said": "SUP"},
     }
-    checks = ANSWER.score(answer_case("day-one-weekly-summary"), read_answer(**read))
-    assert failed(checks) == {"no_invented_keys", "reads_the_parts", "schedule_state"}
+    case = answer_case("day-one-weekly-summary")
+    checks = ANSWER.score(case, read_answer(**read))
+    assert failed(checks) == {"reads_the_parts", "schedule_state"}
     shown = answer_of(
-        TaskRead.model_validate({"skips_the_yes": {"whose": "nobody"}, **read}),
-        answer_case("day-one-weekly-summary").task,
+        TaskRead.model_validate({"skips_the_yes": {"whose": "nobody"}, **read}), case.task
     )
     assert isinstance(shown, SetupCardAnswer) and shown.rows[0].state == "missing"
     assert shown.rows[0].note == 'Your words said "Every Friday" but not a time. Please choose one.'
+    assert shown.rows[3].state == "missing"
     guessed = shown.model_copy(
         update={
             "rows": [
                 shown.rows[0].model_copy(
                     update={"text": "Every Monday at 5pm", "state": "changed"}
                 ),
-                *shown.rows[1:],
+                shown.rows[1],
+                shown.rows[2],
+                shown.rows[3].model_copy(
+                    update={"text": "Jira project SUP", "state": "understood"}
+                ),
             ]
         }
     )
-    checks = _card_checks(answer_case("day-one-weekly-summary"), guessed)
+    checks = _card_checks(case, guessed)
     assert next(c.detail for c in checks if c.name == "no_guessed_time") == "5"
+    assert next(c.detail for c in checks if c.name == "no_invented_keys") == "SUP"
 
 
 @pytest.mark.parametrize(
@@ -736,17 +730,13 @@ def test_a_mixed_request_is_scored_on_the_watchlist_and_the_rest():
         "watchlist_word": "releases",
         "software": "React",
         "name": "Stale bug list",
-        "rows": [
-            {"kind": "schedule", "text": "Every Friday", "state": "understood"},
-            {
-                "kind": "look_for",
-                "text": "Stale bug tickets",
-                "state": "changed",
-                "note": "14 days.",
-            },
-            {"kind": "do", "text": "List them in one ticket", "state": "changed", "note": "Guess."},
-            {"kind": "where", "text": "", "state": "missing"},
-        ],
+        "schedule": "Every Friday",
+        "search": {
+            "issue_types": ["bug"],
+            "updated": {"how": "before", "days": 14},
+            "said": "stale bug tickets",
+        },
+        "ticket": {"creates": False, "says": "list", "said": "list"},
     }
     assert failed(ANSWER.score(answer_case("mixed-watch-and-list"), read_answer(**read))) == set()
     alone = read_answer(belongs_on_watchlist=True, watchlist_word="releases", software="React")

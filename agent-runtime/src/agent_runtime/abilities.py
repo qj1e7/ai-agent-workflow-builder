@@ -1114,16 +1114,6 @@ def _cant_act(kind: RowKind, row: Clause, reader: _Reader) -> str | None:
             return _where_row(row, reader)
 
 
-def unread_field_of(kind: RowKind, text: str) -> TicketField | None:
-    """The ticket field no tool gives the agents, when that is the only thing the platform
-    can't do in this part: a read that filters by a component, not a change to one."""
-    reader = _reader(ABILITIES)
-    row = _tokens(text)
-    if kind not in ("look_for", "do") or _cant_act(kind, row, reader) is not None:
-        return None
-    return unread_field_in(text)
-
-
 def why_not(kind: RowKind, text: str, abilities: tuple[Ability, ...] = ABILITIES) -> str | None:
     """Why the platform can't do this part, in plain words, or None when every action in it fits
     one of the abilities and no field it reads is one the agents can't see."""
@@ -1203,12 +1193,6 @@ field a request filters by, in whatever words; this table decides whether the ag
 it. N6's registry entry `jira.find_by_detail` should derive from the same table."""
 
 
-type StatusValue = Literal["open", "done", "other"]
-"""The closed set of status values the model names on a status field: the two the Jira search
-can filter by (`JiraSearchArguments.status`, To Do for anything not done and Done), and other
-for a status it can't single out, such as in progress or pending approval."""
-
-
 @dataclass(frozen=True)
 class TicketField:
     """A field of a Jira ticket that a request can name. `read_as` is the `JiraTicket` attribute
@@ -1224,13 +1208,6 @@ class TicketField:
     words: frozenset[str]
     read_as: str | None = None
     values: frozenset[str] = frozenset()
-
-    def reads(self, value: str | None) -> bool:
-        """Whether the agents can filter by this field with this value: the field is read, and
-        either any value is, or the value is one of the closed set."""
-        if self.read_as is None:
-            return False
-        return not self.values or value in self.values
 
 
 TICKET_FIELDS: Final = (
@@ -1271,9 +1248,8 @@ HELD_FIELD_PLAIN: Final = tuple(
 )
 """The plain names a hold's own note can use: the fields the agents can't read, and the ones
 they read only some values of."""
-READ_FIELD_WORDS: Final = frozenset(
-    word for field in TICKET_FIELDS if field.read_as is not None for word in field.words
-)
+
+
 SETTABLE_TOO: Final = words("assignee assignees field fields")
 """Fields a new tool could set, besides the ones the agents can't read."""
 EPIC_LEADS: Final = words("in under of by per with within for their its")
@@ -1331,163 +1307,16 @@ def unread_field_in(text: str) -> TicketField | None:
     return next((f for at in range(len(row)) if (f := _field_at(row, at)) is not None), None)
 
 
-def names_only_a_place(said: str, keys: frozenset[str]) -> bool:
-    """Whether the words name only a Jira place the task's where part names, and the tickets in
-    it, as "MOCK", "in MOCK" or "MOCK tickets": the where of a task, which the model now and
-    then tags as a field. A value that looks like a key, as P0, is not in `keys`."""
-    row = [w for w in _tokens(said) if not w.mark]
-    return (
-        bool(row)
-        and any(w.raw in keys for w in row)
-        and all(w.raw in keys or w.low in TICKETS | PREPS | DETERMINERS | JIRA_ANCHORS for w in row)
-    )
-
-
 def names_a_ticket_field(text: str) -> bool:
     """Whether the text names a field of a ticket, read or set, that a new Jira tool could give:
     by one of its words, or by the plain name the hold's own note uses."""
     row = _tokens(text)
     low = text.casefold()
+    if "fix version" in low:
+        return True
     return any(plain in low for plain in HELD_FIELD_PLAIN) or any(
         _field_at(row, at) is not None or row[at].low in SETTABLE_TOO for at in range(len(row))
     )
-
-
-def _joined(clause: Clause) -> str:
-    shown = ""
-    for word in clause:
-        glued = not shown or word.raw in ",;:.!?)" or shown.endswith("(")
-        shown += word.raw if glued else f" {word.raw}"
-    return shown.strip(" ,;:.!?")
-
-
-def _bounds(row: Clause, reader: _Reader) -> list[int]:
-    """Where a phrase starts: a preposition, a conjunction, a mark, a relative word before a
-    copula, a field or a verb ("whose priority", "that are", "that lists"), and a verb's past or
-    -ing form after a noun ("closed this week", "labelled urgent", "listing them"). A cut never
-    takes a verb and its object with it, so "that lists each one's component" is left to the
-    model's alternative; a verb that ends the span, as in "no component filter", is a noun."""
-    found: list[int] = []
-    for at, word in enumerate(row):
-        after = row[at + 1] if at + 1 < len(row) else None
-        verb = reader.verb(word)
-        if word.mark or word.low in PHRASE_ENDS:
-            found.append(at)
-        elif word.low in RELATIVES and after is not None:
-            later = row[at + 2] if at + 2 < len(row) else None
-            if (
-                after.low in COPULAS
-                or reader.acts(after)
-                or _field_at(row, at + 1)
-                or (after.low in DETERMINERS and later is not None and _field_at(row, at + 2))
-            ):
-                found.append(at)
-        elif (
-            verb is not None
-            and verb[1] in ("ed", "ing")
-            and at
-            and not word.proper
-            and row[at - 1].low not in DETERMINERS
-        ):
-            found.append(at)
-    return found
-
-
-def _a_value(phrase: Clause, reader: _Reader) -> bool:
-    """Whether a phrase after "and", "or" or a comma is more of a field's values, as in "High,
-    Highest or Critical", rather than a part of its own."""
-    return bool(phrase) and not any(
-        w.key
-        or w.raw.isdigit()
-        or w.low in VALUE_NOUNS | READ_FIELD_WORDS | DETERMINERS | PRONOUNS
-        or reader.acts(w)
-        for w in phrase
-    )
-
-
-def _cut_field(row: Clause, at: int, reader: _Reader) -> Clause | None:
-    """The row without the phrase around the field word at `at`: "in the Backend component",
-    "and their components", "with priority High", "labelled urgent", or a leading "high
-    priority" before what is looked for. A phrase that shared its preposition with the next
-    one, as in "with priority High and status Done", leaves it to that one. Values that
-    followed the field, as in "components Backend or Frontend", go with it."""
-    bounds = _bounds(row, reader)
-    after = row[at + 1] if at + 1 < len(row) else None
-    if after is not None and after.low in VALUE_NOUNS and at not in bounds:
-        lead = row[at - 1] if at else None
-        adjective = (
-            lead is not None
-            and not lead.mark
-            and lead.low not in DETERMINERS | PHRASE_ENDS | VALUE_NOUNS | OUTPUTS
-            and reader.verb(lead) is None
-        )
-        first = at - 1 if adjective else at
-        return row[:first] + row[at + 1 :]
-    start = at if at in bounds else next((i for i in reversed(bounds) if i < at), None)
-    end = next((i for i in bounds if i > at), len(row))
-    if start is None:
-        return None
-    while start and start - 1 in bounds and (found := reader.verb(row[start - 1])) is not None:
-        if found[1] not in ("ed", "ing"):
-            break
-        start -= 1
-    if row[start].raw == "(" and end < len(row) and row[end].raw == ")":
-        return row[:start] + row[end + 1 :]
-    inside = row[start + 1 : end]
-    if any(
-        reader.acts(w)
-        and not _noun_place(inside[i - 1] if i else row[start])
-        and i + 1 < len(inside)
-        for i, w in enumerate(inside)
-    ):
-        return None
-    while end < len(row) and row[end].low in ("and", "or", ","):
-        after_end = next((i for i in bounds if i > end), len(row))
-        following = row[end + 1 : after_end]
-        continues = after_end < len(row) and row[after_end].low in PREPS
-        if _a_value(following, reader) and not continues:
-            end = after_end
-            continue
-        if not following or reader.acts(following[0]) or row[end].low == ",":
-            return row[:start] + row[end:]
-        if row[start].low in PREPS:
-            return row[: start + 1] + row[end + 1 :]
-        return row[:start] + row[end + 1 :]
-    return row[:start] + row[end:]
-
-
-def _reads_well(kept: Clause, row: Clause, reader: _Reader) -> bool:
-    """Whether what is left after a cut still names what the row named, keeps a subject after
-    "where" or "whose" and a noun after "the" (not "where approved his own request" or "the is
-    Bob"), and ends on a whole phrase rather than on "their", "by", "one's" or "grouped". An
-    ending the row itself had, as in "List the bugs found", is whole."""
-    while kept and kept[-1].mark:
-        kept = kept[:-1]
-    if not kept or kept[0].mark or kept[0].low in PHRASE_ENDS:
-        return False
-    named = {w.low for w in row if w.low in TICKETS | OUTPUTS}
-    if named and not any(w.low in named for w in kept):
-        return False
-    for a, b in zip(kept, kept[1:], strict=False):
-        verb = b.low in COPULAS or b.low.endswith("ed") or reader.verb(b) is not None
-        if a.low in ("where", "whose") and verb:
-            return False
-        if a.low in DETERMINERS and b.low in COPULAS:
-            return False
-    last = kept[-1]
-    if row and last.raw == row[-1].raw:
-        return True
-    found = reader.verb(last)
-    return not (
-        last.mark
-        or last.low in DETERMINERS | PREPS | PHRASE_ENDS | RELATIVES | COPULAS
-        or last.low.endswith("'s")
-        or (found is not None and found[1] in ("ed", "ing"))
-    )
-
-
-def _capitalised(text: str) -> str:
-    return text[:1].upper() + text[1:] if text[:1].islower() else text
 
 
 def _phrase_pattern(phrase: str) -> str | None:
@@ -1506,74 +1335,64 @@ def phrase_in(text: str, phrase: str) -> str | None:
     return None if found is None else found.group(0)
 
 
-COMPARISONS: Final = words("over under above below more less than least most greater fewer")
-_VALUE: Final = rf"(?:{'|'.join(sorted(COMPARISONS))}|\d+(?:\.\d+)*)"
-_VALUE_TAIL: Final = re.compile(rf"^\s*(?:{_VALUE}\b\s*)+", re.IGNORECASE)
-_VALUE_LEAD: Final = re.compile(rf"(?:\s*\b{_VALUE})+\s*$", re.IGNORECASE)
-
-
 def _without(text: str, phrase: str) -> str | None:
-    """The text with the phrase cut, and with a value left dangling beside it, as in "over 5"
-    after "story points" or "more than 3" before "watchers", cut too."""
+    """The text with the phrase cut, or None when the text lacks it."""
     pattern = _phrase_pattern(phrase)
     if pattern is None:
         return None
     found = re.search(rf"(?<!\w){pattern}(?!\w)", text, re.IGNORECASE)
     if found is None:
         return None
-    tail = _VALUE_TAIL.match(text[found.end() :])
-    end = found.end() + (tail.end() if tail else 0)
-    lead = _VALUE_LEAD.search(text[: found.start()])
-    start = lead.start() if lead else found.start()
-    return f"{text[:start]} {text[end:]}"
+    return f"{text[: found.start()]} {text[found.end() :]}"
 
 
-def without_the_words(text: str, said: list[str]) -> str | None:
-    """The text with each of the person's phrases in `said` cut out, as in "Tickets in MOCK" for
-    "Tickets in MOCK reported by Bob" with "reported by Bob" said. The words come from the
-    model's reading, so the cut is at the phrase it named, not at a word a list knows. None when
-    a phrase is not in the text, or when what is left no longer names what the text named."""
+WRITE_VERBS: Final = WRITES | ABILITIES[-1].verbs
+"""The verbs that ask for a change: a write, or the creation of a ticket."""
+
+
+def change_verbs_in(text: str) -> list[str]:
+    """The verbs in the text that ask for a change, in base, -s or -ing form. A past form
+    describes tickets ("tickets closed"), and "open" is also the state of a ticket, so neither
+    counts."""
     reader = _reader(ABILITIES)
-    kept: str | None = text
-    for phrase in said:
-        kept = _without(kept, phrase) if kept is not None else None
-    if kept is None:
-        return None
-    row = list(_tokens(kept))
-    while row and (row[-1].mark or row[-1].low in PHRASE_ENDS | RELATIVES | COPULAS):
-        row.pop()
-    while row and (row[0].mark or row[0].low in ("and", "or", "plus")):
-        row.pop(0)
-    while True:
-        doubled = next(
-            (
-                i
-                for i in range(len(row) - 1)
-                if row[i].low in PHRASE_ENDS and row[i + 1].low in PHRASE_ENDS
-            ),
-            None,
-        )
-        if doubled is None:
-            break
-        del row[doubled + 1 if row[doubled + 1].low in ("and", "or", "plus") else doubled]
-    if not _reads_well(tuple(row), _tokens(text), reader):
-        return None
-    return _capitalised(_joined(tuple(row)))
+    found: list[str] = []
+    for word in _tokens(text):
+        verb = reader.verb(word)
+        if verb is None or word.proper or verb[1] == "ed" or verb[0] == "open":
+            continue
+        if verb[0] in WRITE_VERBS:
+            found.append(verb[0])
+    return found
 
 
-def without_the_field(text: str) -> str | None:
-    """The text with every phrase that names a field the agents can't read cut out, as in "Bug
-    tickets in MOCK" for "Bug tickets in MOCK in the Backend component". The text itself when it
-    names none. None when the cut would leave something that misleads or reads badly."""
+def starts_with_a_verb(text: str) -> bool:
+    """Whether the first content word is a verb in its base form, as "flag the new ticket"."""
     reader = _reader(ABILITIES)
-    row = _tokens(re.sub(r"\(s\)", "s", text))
-    original, cut = row, False
-    while (at := next((i for i in range(len(row)) if _field_at(row, i)), None)) is not None:
-        kept = _cut_field(row, at, reader)
-        if kept is None or not _reads_well(kept, original, reader):
-            return None
-        row, cut = kept, True
-    return _capitalised(_joined(row)) or None if cut else text
+    row = _tokens(text)
+    at = _action_at(row)
+    if at is None:
+        return False
+    verb = reader.verb(row[at])
+    return verb is not None and verb[1] == "base" and not row[at].proper
+
+
+def commands_a_change(text: str) -> bool:
+    """Whether a clause of the text starts with a verb that asks for a change to tickets, as
+    "Create the ticket" or "please file one", and not "don't close it" or "tell me"."""
+    reader = _reader(ABILITIES)
+    row = _tokens(text)
+    for at, word in enumerate(row):
+        if not (word.starts or (at and row[at - 1].low in FILLER | DETERMINERS)):
+            continue
+        before = row[at - 1].low if at else ""
+        if before in ("don't", "do", "never", "not", "no", "without"):
+            continue
+        verb = reader.verb(word)
+        if verb is None or word.proper or verb[1] != "base" or verb[0] == "open":
+            continue
+        if verb[0] in WRITE_VERBS - NOTIFIES and (word.starts or not reader.acts(row[at - 1])):
+            return True
+    return False
 
 
 _A_YES: Final = (
@@ -1585,12 +1404,6 @@ _PEOPLE: Final = (
     r"(?:a|my|the)\s+managers?|the\s+boss|(?-i:[A-Z][a-z]+))"
 )
 _SOMEONE_ELSE: Final = rf"(?:{_PEOPLE}|the\s+team)"
-_SOMEONE_ELSE_UNNAMED: Final = (
-    r"\b(?:anyone|anybody|someone|somebody|nobody|no\s+one|no-one|everyone|everybody|a\s+human|"
-    r"a\s+person|people|(?:an?|the)\s+approvers?|(?:a|my|the)\s+managers?|the\s+boss|"
-    r"the\s+team)\b"
-)
-NAMES_SOMEONE_ELSE: Final = re.compile(_SOMEONE_ELSE_UNNAMED, re.IGNORECASE)
 _THEIR_YES: Final = rf"(?:'s\s+{_A_YES})?"
 _NOT_FROM_ME: Final = r"(?!\s+(?:from|of)\s+(?:me|us)\b)"
 _SAYS_YES: Final = r"(?:sign[- ]?off|approve|say\s+yes|ok|okay|check|confirm|agree)"
@@ -1728,15 +1541,6 @@ def skip_of_a_yes(text: str) -> str | None:
     return found[0].group(0) if found else None
 
 
-def names_someone_else(said: str) -> bool:
-    """Whether the quoted words name a person other than the staff member: an approver, the
-    team, anyone or nobody, or a name, which is a capitalised word after the first, as "Bob"
-    in "don't wait on Bob" but not "Run" in "Run it by itself"."""
-    if NAMES_SOMEONE_ELSE.search(said) is not None:
-        return True
-    return any(re.fullmatch(r"[A-Z][a-z]+", w) for w in re.findall(r"\w+", said)[1:])
-
-
 def _tidied(rest: str) -> str:
     rest = re.sub(r"\s+([,;:.!?])", r"\1", " ".join(rest.split()))
     rest = re.sub(r"\s*,(?:\s*,)+", ",", rest).strip(" ,;.")
@@ -1816,14 +1620,6 @@ def software_name(said: str | None) -> str | None:
 
 def release_word_in(text: str) -> str | None:
     return next((w for w in re.findall(r"\w+", text) if w.casefold() in RELEASE_ROOTS), None)
-
-
-def guessable_words(text: str) -> list[str]:
-    found = re.findall(r"\d+", text)
-    for word in _tokens(text):
-        if word.key or (word.system is not None and word.system not in REACHED):
-            found.append(word.raw)
-    return found
 
 
 def other_systems(text: str) -> list[str]:

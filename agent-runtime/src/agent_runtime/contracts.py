@@ -7,6 +7,7 @@ from pathlib import Path
 from agent_runtime.abilities import CAPABILITY_LIST
 from agent_runtime.answers import AnswerRow, TaskRead, answer_of
 from agent_runtime.answers import AnswerRow, SkipRead, TaskRead, answer_of
+from agent_runtime.answers import SkipRead, TaskRead, answer_of
 from agent_runtime.api import AGENT_CARDS
 from agent_runtime.contract import (
     RELEASE_TAG_PATTERN,
@@ -76,6 +77,7 @@ from agent_runtime.contract import (
 from agent_runtime.github import TOKEN_REFUSED
 from agent_runtime.model_access import KEY_REFUSED
 from agent_runtime.planner import RowAnswer, UnderstandAnswer, understood_of
+from agent_runtime.reading import DaysRead, PlaceRead, SearchRead, TicketRead
 from agent_runtime.tools import tool_list
 
 PLANNER = AgentRef(id="planner", display="Planner")
@@ -858,46 +860,36 @@ def _answered(read: TaskRead, task: str) -> Answered:
 
 
 def answered_card() -> Answered:
-    rows = [
-        AnswerRow(kind="schedule", text="Every weekday at 3pm", state="understood"),
-        AnswerRow(
-            kind="look_for",
-            text="Bug tickets in MOCK with no update for 10 days",
-            state="understood",
+    read = TaskRead(
+        name="Stale bug follow-up",
+        schedule="Every weekday at 3pm",
+        search=SearchRead(
+            project="MOCK",
+            issue_types=["bug"],
+            updated=DaysRead(how="before", days=10),
+            said="bug tickets in MOCK with no update for 10 days",
         ),
-        AnswerRow(
-            kind="do", text="Create one follow-up ticket that lists them", state="understood"
+        ticket=TicketRead(
+            creates=True, says="list", said="create one follow-up ticket that lists them"
         ),
-        AnswerRow(kind="where", text="Jira project MOCK", state="understood"),
-    ]
-    return _answered(
-        TaskRead(name="Stale bug follow-up", rows=rows, skips_the_yes=NO_SKIP), FOLLOW_UP_TASK
+        place=PlaceRead(project="MOCK", said="in MOCK"),
+        skips_the_yes=NO_SKIP,
     )
+    return _answered(read, FOLLOW_UP_TASK)
 
 
 def answered_cant() -> Answered:
-    rows = [
-        AnswerRow(kind="schedule", text="Every Friday", state="understood"),
-        AnswerRow(
-            kind="look_for",
-            text="Stale tickets in MOCK, read as no update for 14 days",
-            state="changed",
-            note='You said "stale", so I used 14 days without an update.',
+    read = TaskRead(
+        name="Stale ticket list",
+        schedule="Every Friday",
+        search=SearchRead(
+            project="MOCK",
+            updated=DaysRead(how="before", days=14),
+            said="stale tickets in MOCK",
         ),
-        AnswerRow(
-            kind="do",
-            text="Email them to you",
-            state="cant_do",
-            note="No tool sends email yet.",
-            alternative="Create one ticket that lists them",
-        ),
-        AnswerRow(
-            kind="where", text="Your email", state="cant_do", note="No tool sends email yet."
-        ),
-    ]
-    return _answered(
-        TaskRead(name="Stale ticket list", rows=rows, skips_the_yes=NO_SKIP), EMAIL_TASK
+        skips_the_yes=NO_SKIP,
     )
+    return _answered(read, EMAIL_TASK)
 
 
 def answered_watchlist() -> Answered:
