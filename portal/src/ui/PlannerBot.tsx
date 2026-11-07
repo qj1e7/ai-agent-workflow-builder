@@ -46,13 +46,15 @@ interface PlannerBotProps {
   readonly keys?: number
   /** How far the eyes lean toward the caret, from -1 to 1. */
   readonly look?: number
+  /** Where the Planner is one face among many, it holds still at rest instead of breathing when it appears. */
+  readonly still?: boolean
 }
 
 /**
  * The Planner as the Visor bot: a white egg with a dark visor, glowing eyes and two ear lights. The face is for the
  * eye only. The words beside it say the same thing, so it is hidden from screen readers.
  */
-export function PlannerBot({ state = 'idle', size = 128, keys = 0, look = 0 }: PlannerBotProps) {
+export function PlannerBot({ state = 'idle', size = 128, keys = 0, look = 0, still = false }: PlannerBotProps) {
   const id = useId()
   const body = `${id}b`
   const visor = `${id}v`
@@ -61,6 +63,7 @@ export function PlannerBot({ state = 'idle', size = 128, keys = 0, look = 0 }: P
     <svg
       className={styles['bot']}
       data-state={state}
+      data-still={still || undefined}
       viewBox="0 0 48 48"
       width={size}
       height={size}
