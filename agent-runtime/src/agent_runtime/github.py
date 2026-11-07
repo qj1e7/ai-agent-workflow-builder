@@ -5,7 +5,7 @@ import httpx
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from agent_runtime.contract import GitHubCheckResult, GitHubProblem, GitHubWorking
-from agent_runtime.release_source import Release, SourceRejected, SourceUnavailable
+from agent_runtime.release_source import Fetched, Release, SourceRejected, SourceUnavailable
 
 PAGE_SIZE = 30
 NOTES_LENGTH = 400
@@ -97,11 +97,14 @@ class GitHubReleaseSource:
         self._headers = _headers_for(token)
 
     def current_name(self, repo: str) -> str:
-        return self._get(repo, "", _REPO).full_name
+        return self._get(repo, "", _REPO)[0].full_name
 
     def fetch(self, repo: str) -> list[Release]:
-        parsed = self._get(repo, "/releases", _RELEASES, {"per_page": PAGE_SIZE})
-        return [
+        return self.fetch_noting_move(repo).releases
+
+    def fetch_noting_move(self, repo: str) -> Fetched:
+        parsed, redirected = self._get(repo, "/releases", _RELEASES, {"per_page": PAGE_SIZE})
+        releases = [
             Release(
                 r.tag_name,
                 prerelease=r.prerelease,
@@ -112,6 +115,7 @@ class GitHubReleaseSource:
             )
             for r in parsed
         ]
+        return Fetched(releases, redirected)
 
     def _get[T](
         self,
@@ -119,7 +123,7 @@ class GitHubReleaseSource:
         tail: str,
         shape: TypeAdapter[T],
         params: dict[str, int] | None = None,
-    ) -> T:
+    ) -> tuple[T, bool]:
         parts = repo.split("/", 1)
         if len(parts) != 2 or any(part in {"", ".", ".."} for part in parts):
             raise SourceRejected(400)
@@ -138,7 +142,7 @@ class GitHubReleaseSource:
         if status >= 300:
             raise SourceRejected(status, limited=_rate_limited(response))
         try:
-            return shape.validate_json(response.content)
+            return shape.validate_json(response.content), bool(response.history)
         except ValidationError as error:
             raise SourceUnavailable(None) from error
 

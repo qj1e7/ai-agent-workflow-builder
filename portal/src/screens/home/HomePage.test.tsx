@@ -118,7 +118,7 @@ describe('Home for the Operator who started that run', () => {
   })
 
   it('counts the team’s unread reply in Needs you', () => {
-    const quiet: HomeOut = { ...ALICE_HOME, stopped: [], stopped_total: 0, approvals: [], approvals_total: 0, confirmations: [], connections: [] }
+    const quiet: HomeOut = { ...ALICE_HOME, stopped: [], stopped_total: 0, approvals: [], approvals_total: 0, confirmations: [], connections: [], addresses: [] }
     const reply = mainOf(render(ALICE, quiet))
     expect(text(reply)).toContain('Needs you 1')
     expect(text(itemOf(reply, 'reply:trq_01JD5RP'))).toContain('Bob replied to your report')
@@ -221,7 +221,7 @@ describe('Home when a refresh fails', () => {
 describe('Home for an Operator with more than three things waiting', () => {
   const approvals = Array.from({ length: 5 }, (_, n): ApprovalItem => ({ ...(BOB_HOME.approvals[0] as ApprovalItem), run_id: `run_${n}`, approval_id: `apr_${n}`, started_at: `2026-11-03T01:0${n}:00Z` }))
   const busy: HomeOut = { ...ALICE_HOME, approvals, approvals_total: 5 }
-  const total = 5 + ALICE_HOME.confirmations.length + ALICE_HOME.stopped_total + ALICE_HOME.replied.length + ALICE_HOME.connections.length
+  const total = 5 + ALICE_HOME.confirmations.length + ALICE_HOME.stopped_total + ALICE_HOME.replied.length + ALICE_HOME.connections.length + ALICE_HOME.addresses.length
 
   it('shows the three most urgent, stopped runs first, and links to the rest on Workflows', () => {
     const html = mainOf(render(ALICE, busy))

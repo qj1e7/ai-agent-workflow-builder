@@ -12,6 +12,7 @@ from platform_api.app import create_app
 from platform_api.auth import DEV_PEOPLE
 from platform_api.builder import Builder, Home, TeamRequests, Watchlist
 from platform_api.builder.cards import VERSION_CHECKER_ID
+from platform_api.builder.models import WatchedSoftwareView
 from platform_api.orchestration import (
     AnyApprover,
     ApprovalPolicy,
@@ -67,8 +68,36 @@ EMPTY = {
     "replied": [],
     "coming_up": None,
     "workflows": 0,
+    "addresses": [],
     "connections": [],
 }
+
+
+def watched(
+    name: str, ref: str, moved_to: str | None = None, not_found: bool = False
+) -> WatchedSoftwareView:
+    return WatchedSoftwareView.model_validate(
+        {
+            "id": f"sw_{name}",
+            "name": name,
+            "source": {"kind": "github", "ref": ref, "url": f"https://github.com/{ref}/releases"},
+            "our_version": None,
+            "our_version_source": None,
+            "compared_from": None,
+            "newest_version": None,
+            "newest_read_at": None,
+            "checked_at": None,
+            "status": "cant_check",
+            "problem": None,
+            "open_ticket": None,
+            "approval_id": None,
+            "moved_to": moved_to,
+            "not_found": not_found,
+            "address_changes": [],
+            "added_by": "alice",
+            "added_at": "2026-11-01T00:00:00Z",
+        }
+    )
 
 
 class NoTeams:
@@ -118,7 +147,7 @@ async def lab(postgres: PostgresUrls) -> AsyncIterator[Lab]:
         app.state.people = people
         requests = TeamRequests(h.db, NoTeams(), h.orchestrator, h.log, "http://localhost:8000")
         app.state.team_requests = requests
-        app.state.home = Home(builder, h.orchestrator, people, requests, connections)
+        app.state.home = Home(builder, h.orchestrator, people, requests, connections, watchlist)
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
             yield Lab(h, app, client, people, rig)
@@ -602,3 +631,24 @@ async def test_a_reply_is_in_the_askers_needs_you_list_until_they_open_it(lab: L
     after = await lab.home("alice")
     assert after["replied"] == []
     assert [i["request_id"] for i in after["following_up"]] == [made["request_id"]]
+
+
+class StubAddresses:
+    def __init__(self, rows: list[WatchedSoftwareView]) -> None:
+        self.rows = rows
+
+    async def needing_attention(self) -> list[WatchedSoftwareView]:
+        return self.rows
+
+
+async def test_home_lists_the_moved_and_missing_software_for_an_operator_only(lab: Lab):
+    lost = watched("LangServe", "langchain-ai/langserve", not_found=True)
+    moved = watched("FastAPI", "tiangolo/fastapi", moved_to="fastapi/fastapi")
+    home: Home = lab.app.state.home
+    home._addresses = StubAddresses([moved, lost])  # pyright: ignore[reportPrivateUsage]
+    assert (await lab.home("bob"))["addresses"] == []
+    items = (await lab.home("alice"))["addresses"]
+    assert [(i["name"], i["repo"], i["moved_to"], i["not_found"]) for i in items] == [
+        ("FastAPI", "tiangolo/fastapi", "fastapi/fastapi", False),
+        ("LangServe", "langchain-ai/langserve", None, True),
+    ]

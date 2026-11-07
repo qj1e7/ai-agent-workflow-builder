@@ -396,6 +396,44 @@
         "title": "AddSoftware",
         "type": "object"
       },
+      "AddressChangeView": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "by": {
+            "title": "By",
+            "type": "string"
+          },
+          "from_repo": {
+            "$ref": "#/components/schemas/RepoName"
+          },
+          "kind": {
+            "description": "use: the saved repository was switched to the one GitHub reported. undo: it was put back.",
+            "enum": [
+              "use",
+              "undo"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "to_repo": {
+            "$ref": "#/components/schemas/RepoName"
+          }
+        },
+        "required": [
+          "kind",
+          "from_repo",
+          "to_repo",
+          "by",
+          "at"
+        ],
+        "title": "AddressChangeView",
+        "type": "object"
+      },
       "AddressDecisionIn": {
         "additionalProperties": false,
         "properties": {
@@ -432,6 +470,61 @@
           "repo"
         ],
         "title": "AddressIn",
+        "type": "object"
+      },
+      "AddressItem": {
+        "additionalProperties": false,
+        "properties": {
+          "checked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
+          },
+          "moved_to": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RepoName"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The repository GitHub now calls it, when it was renamed. The Operator may switch the list to it."
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "not_found": {
+            "description": "GitHub said the saved repository does not exist and named no new home.",
+            "title": "Not Found",
+            "type": "boolean"
+          },
+          "repo": {
+            "$ref": "#/components/schemas/RepoName",
+            "description": "The repository saved for it."
+          },
+          "software_id": {
+            "title": "Software Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "software_id",
+          "name",
+          "repo",
+          "moved_to",
+          "not_found",
+          "checked_at"
+        ],
+        "title": "AddressItem",
         "type": "object"
       },
       "Addressee": {
@@ -3715,6 +3808,14 @@
       "HomeOut": {
         "additionalProperties": false,
         "properties": {
+          "addresses": {
+            "description": "For an Operator, the watched software whose repository GitHub moved or cannot find, as the latest check left it, in the order of the Software page. The same rows the Software page lists under Needs attention.",
+            "items": {
+              "$ref": "#/components/schemas/AddressItem"
+            },
+            "title": "Addresses",
+            "type": "array"
+          },
           "approvals": {
             "description": "Runs waiting for a yes this person may give, the newest first. At most 10.",
             "items": {
@@ -3826,6 +3927,7 @@
           "replied",
           "coming_up",
           "workflows",
+          "addresses",
           "connections"
         ],
         "title": "HomeOut",
@@ -7921,6 +8023,14 @@
             "title": "Added By",
             "type": "string"
           },
+          "address_changes": {
+            "description": "Each time the saved repository was switched or put back, the newest first, with who did it. At most 10.",
+            "items": {
+              "$ref": "#/components/schemas/AddressChangeView"
+            },
+            "title": "Address Changes",
+            "type": "array"
+          },
           "approval_id": {
             "anyOf": [
               {
@@ -8071,6 +8181,7 @@
           "problem",
           "open_ticket",
           "approval_id",
+          "address_changes",
           "added_by",
           "added_at"
         ],

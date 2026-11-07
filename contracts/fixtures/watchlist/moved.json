@@ -28,6 +28,7 @@
       "approval_id": null,
       "moved_to": null,
       "not_found": true,
+      "address_changes": [],
       "added_by": "alice",
       "added_at": "2026-11-02T10:00:00Z"
     },
@@ -55,6 +56,22 @@
       "approval_id": null,
       "moved_to": "fastapi/fastapi",
       "not_found": false,
+      "address_changes": [
+        {
+          "kind": "undo",
+          "from_repo": "fastapi/fastapi",
+          "to_repo": "tiangolo/fastapi",
+          "by": "alice",
+          "at": "2026-11-15T23:00:12Z"
+        },
+        {
+          "kind": "use",
+          "from_repo": "tiangolo/fastapi",
+          "to_repo": "fastapi/fastapi",
+          "by": "alice",
+          "at": "2026-11-15T22:00:12Z"
+        }
+      ],
       "added_by": "alice",
       "added_at": "2026-11-02T10:00:00Z"
     },
@@ -82,6 +99,7 @@
       "approval_id": null,
       "moved_to": null,
       "not_found": false,
+      "address_changes": [],
       "added_by": "alice",
       "added_at": "2026-11-02T10:00:00Z"
     }

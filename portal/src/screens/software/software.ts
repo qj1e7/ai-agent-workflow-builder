@@ -22,7 +22,7 @@ export function cantCheckWords(problem: string | null, checking: Checking): stri
 
 /** GitHub told the check the saved repository has no home: the row says so, with no way to fix it by button. */
 export function notFoundWords(row: Pick<WatchedSoftwareView, 'name' | 'source'>, { operator, scheduled, paused }: Checking & { readonly operator: boolean }): string {
-  const skipped = `GitHub can’t find ${row.source.ref}. It may have moved to another repository. ${row.name} is skipped until this is fixed.`
+  const skipped = `GitHub can’t find ${row.source.ref}. It may have moved to another repository. ${row.name} stays Can’t check until GitHub finds that address.`
   if (!operator) return `${skipped} An Operator can fix this.`
   return `${skipped} Remove it and add it again at its new address. ${checkedAgain({ scheduled, paused })}`
 }
@@ -38,12 +38,12 @@ export function askNewAddressWords(row: Pick<WatchedSoftwareView, 'name' | 'move
 
 export const NEW_ADDRESS_ASK = 'Use the new address'
 
-export function movedHeadline(row: Pick<WatchedSoftwareView, 'name' | 'source' | 'moved_to'>): string {
-  return `GitHub moved ${row.name} from ${row.source.ref} to ${row.moved_to}.`
+export function movedHeadline(name: string, saved: string, movedTo: string): string {
+  return `GitHub moved ${name} from ${saved} to ${movedTo}.`
 }
 
-export function notFoundHeadline(row: Pick<WatchedSoftwareView, 'name' | 'source'>): string {
-  return `GitHub can’t find ${row.source.ref}, the address saved for ${row.name}.`
+export function notFoundHeadline(name: string, saved: string): string {
+  return `GitHub can’t find ${saved}, the address saved for ${name}.`
 }
 
 export interface Attention {
@@ -55,8 +55,8 @@ export interface Attention {
 /** The rows whose address needs a person, in the order of the list. A moved row and a not-found row never overlap. */
 export function addressAttentionOf(rows: readonly WatchedSoftwareView[]): Attention[] {
   return rows.flatMap((row) => {
-    if (row.moved_to) return [{ id: row.id, name: row.name, words: movedHeadline(row) }]
-    if (row.not_found) return [{ id: row.id, name: row.name, words: notFoundHeadline(row) }]
+    if (row.moved_to) return [{ id: row.id, name: row.name, words: movedHeadline(row.name, row.source.ref, row.moved_to) }]
+    if (row.not_found) return [{ id: row.id, name: row.name, words: notFoundHeadline(row.name, row.source.ref) }]
     return []
   })
 }
@@ -378,6 +378,10 @@ export function historyOf(row: WatchedSoftwareView, nameOf: (id: string) => stri
   if (source && row.our_version) {
     const words = source.kind === 'ticket_done' ? `Our version moved to ${row.our_version}. It came from ${source.ticket ?? 'a ticket'}, marked Done.` : `Our version is ${row.our_version}. ${versionSourceWords(source)}.`
     dated.push({ at: source.at, words })
+  }
+  for (const change of row.address_changes) {
+    const who = nameOf(change.by)
+    dated.push({ at: change.at, words: change.kind === 'use' ? `${who} used the new address ${change.to_repo}. It was ${change.from_repo}.` : `${who} put the address back to ${change.to_repo}. It was ${change.from_repo}.` })
   }
   dated.push({ at: row.added_at, words: `Added by ${nameOf(row.added_by)}.` })
   const newestFirst = [...dated].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))

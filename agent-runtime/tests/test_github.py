@@ -162,3 +162,16 @@ def test_a_refusal_says_whether_github_limited_how_often_we_ask(
         with pytest.raises(SourceRejected) as raised:
             ask(source(transport))
         assert (raised.value.status, raised.value.limited) == (403, limited)
+
+
+def test_a_releases_read_says_whether_github_sent_it_to_another_address():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.startswith("/repos/"):
+            return httpx.Response(301, headers={"Location": f"{BASE}/repositories/7/releases"})
+        return httpx.Response(200, json=[{"tag_name": "1.0.0"}])
+
+    moved = GitHubReleaseSource(
+        BASE, client=httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=True)
+    )
+    assert moved.fetch_noting_move("old/name").redirected
+    assert not source(answering(200, [{"tag_name": "1.0.0"}])).fetch_noting_move("o/r").redirected

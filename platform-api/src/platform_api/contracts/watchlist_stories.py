@@ -5,6 +5,7 @@ tick, a scheduled run and the practice Jira ticket after Mark Done."""
 from datetime import UTC, datetime, timedelta, timezone
 
 from platform_api.builder.models import (
+    AddressChangeView,
     AddSoftware,
     LastCheckView,
     ScheduleIn,
@@ -58,6 +59,7 @@ def row(
     newest_read_at: datetime | None = None,
     moved_to: str | None = None,
     not_found: bool = False,
+    address_changes: list[AddressChangeView] | None = None,
 ) -> WatchedSoftwareView:
     first_check = our_version_source is not None and our_version_source.kind == "first_check"
     return WatchedSoftwareView.model_validate(
@@ -77,6 +79,7 @@ def row(
             "approval_id": approval_id,
             "moved_to": moved_to,
             "not_found": not_found,
+            "address_changes": address_changes or [],
             "added_by": ALICE,
             "added_at": added_at,
         }
@@ -201,6 +204,22 @@ MOVED = STATUSES.model_copy(
                     CHECKED_AT,
                     "behind",
                     moved_to="fastapi/fastapi",
+                    address_changes=[
+                        AddressChangeView(
+                            kind="undo",
+                            from_repo="fastapi/fastapi",
+                            to_repo="tiangolo/fastapi",
+                            by=ALICE,
+                            at=CHECKED_AT - timedelta(hours=2),
+                        ),
+                        AddressChangeView(
+                            kind="use",
+                            from_repo="tiangolo/fastapi",
+                            to_repo="fastapi/fastapi",
+                            by=ALICE,
+                            at=CHECKED_AT - timedelta(hours=3),
+                        ),
+                    ],
                 ),
                 row(
                     8,

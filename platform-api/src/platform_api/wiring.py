@@ -285,7 +285,7 @@ async def build(settings: Settings) -> Services:
         activity_log=activity,
         orchestrator=orchestrator,
         builder=builder,
-        home=Home(builder, orchestrator, people, team_requests, connections),
+        home=Home(builder, orchestrator, people, team_requests, connections, watchlist),
         watchlist=watchlist,
         team_requests=team_requests,
         request_channel=request_channel,

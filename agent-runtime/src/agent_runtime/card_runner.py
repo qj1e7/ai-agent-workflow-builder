@@ -39,7 +39,7 @@ from agent_runtime.jira import JiraReader, JiraReaderFor, JiraTicket, JiraUnavai
 from agent_runtime.model_access import problem_for
 from agent_runtime.release_source import (
     DEFAULT_RETRY,
-    ReleaseSource,
+    MovableSource,
     RetryPolicy,
     read_releases,
 )
@@ -188,7 +188,7 @@ class CardRunner:
 
     def __init__(
         self,
-        releases: ReleaseSource,
+        releases: MovableSource,
         jira_for: JiraReaderFor,
         sleep: Callable[[float], None],
         retry: RetryPolicy = DEFAULT_RETRY,
@@ -204,7 +204,7 @@ class CardRunner:
         return CardTask(self, request, chat_for, today, Budget(TASK_BUDGET_SECONDS, self._now))
 
     @property
-    def releases(self) -> ReleaseSource:
+    def releases(self) -> MovableSource:
         return self._releases
 
     @property

@@ -228,6 +228,17 @@ class VersionSourceView(WireModel):
     ticket: str | None
 
 
+class AddressChangeView(WireModel):
+    kind: Literal["use", "undo"] = Field(
+        description="use: the saved repository was switched to the one GitHub reported. undo: it "
+        "was put back."
+    )
+    from_repo: RepoName
+    to_repo: RepoName
+    by: UserId
+    at: datetime
+
+
 class WatchedSoftwareView(WireModel):
     id: SoftwareId
     name: str
@@ -266,6 +277,10 @@ class WatchedSoftwareView(WireModel):
         description="True when the latest check was told by GitHub that the saved repository "
         "does not exist. GitHub does not say where it went, so nothing is offered: remove the "
         "software and add it again at its new address.",
+    )
+    address_changes: list[AddressChangeView] = Field(
+        description="Each time the saved repository was switched or put back, the newest first, "
+        "with who did it. At most 10.",
     )
     added_by: UserId
     added_at: datetime

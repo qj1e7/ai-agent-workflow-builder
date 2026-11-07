@@ -9,7 +9,7 @@ from langchain_core.runnables import Runnable, RunnableLambda
 from pydantic import BaseModel, Field
 
 from agent_runtime.jira import JiraFound, JiraTicket, JiraUnavailable
-from agent_runtime.release_source import Release, SourceRejected, SourceUnavailable
+from agent_runtime.release_source import Fetched, Release, SourceRejected, SourceUnavailable
 
 
 class FakeClock:
@@ -41,6 +41,9 @@ class FakeSource:
             raise SourceUnavailable(self.failures.pop(0))
         return self.releases
 
+    def fetch_noting_move(self, repo: str) -> Fetched:
+        return Fetched(self.fetch(repo))
+
     def current_name(self, repo: str) -> str:
         if self.outage:
             raise SourceUnavailable(503)
@@ -64,6 +67,7 @@ class RepoSource:
         self.renamed = renamed or {}
         self.name_down = name_down or set()
         self.calls: list[str] = []
+        self.name_calls: list[str] = []
 
     def fetch(self, repo: str) -> list[Release]:
         self.calls.append(repo)
@@ -73,7 +77,11 @@ class RepoSource:
             raise SourceUnavailable(self.down[repo])
         return [Release(tag=tag) for tag in self.tags[self.renamed.get(repo, repo)]]
 
+    def fetch_noting_move(self, repo: str) -> Fetched:
+        return Fetched(self.fetch(repo), redirected=repo in self.renamed)
+
     def current_name(self, repo: str) -> str:
+        self.name_calls.append(repo)
         if repo in self.refused:
             raise SourceRejected(self.refused[repo])
         if repo in self.name_down:

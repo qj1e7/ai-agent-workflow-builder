@@ -778,3 +778,43 @@ async def test_the_address_can_be_put_back_for_a_day_and_not_after(
     clock.now = changed_at + 2 * RESTORE_WINDOW + timedelta(hours=2)
     late = await timed.put_address_back(ALICE, fastapi, "tiangolo/fastapi")
     assert late == TooLate(changed_at + RESTORE_WINDOW + timedelta(hours=1) + RESTORE_WINDOW)
+
+
+async def test_the_switch_and_its_undo_are_kept_with_who_from_and_to(
+    watchlist: Watchlist, facts: FakeFacts
+):
+    fastapi = ids(await added(watchlist, OLD_FASTAPI))["FastAPI"]
+    renamed_facts(facts, fastapi)
+    switched = await watchlist.use_new_address(CAROL, fastapi, FASTAPI_NOW)
+    assert isinstance(switched, WatchlistView)
+    [use] = row_of(switched, fastapi).address_changes
+    assert (use.kind, use.by, use.from_repo, use.to_repo) == (
+        "use",
+        CAROL.user_id,
+        "tiangolo/fastapi",
+        FASTAPI_NOW,
+    )
+    back = await watchlist.put_address_back(ALICE, fastapi, "tiangolo/fastapi")
+    assert isinstance(back, WatchlistView)
+    changes = row_of(back, fastapi).address_changes
+    assert [(c.kind, c.by, c.from_repo, c.to_repo) for c in changes] == [
+        ("undo", ALICE.user_id, FASTAPI_NOW, "tiangolo/fastapi"),
+        ("use", CAROL.user_id, "tiangolo/fastapi", FASTAPI_NOW),
+    ]
+
+
+async def test_the_rows_needing_attention_are_the_moved_and_the_missing_ones_only(
+    watchlist: Watchlist, facts: FakeFacts
+):
+    assert await watchlist.needing_attention() == []
+    both = await added(watchlist, OLD_FASTAPI)
+    fastapi = ids(both)["FastAPI"]
+    await added(watchlist, LANGGRAPH)
+    assert await watchlist.needing_attention() == []
+    renamed_facts(facts, fastapi)
+    assert [row.id for row in await watchlist.needing_attention()] == [fastapi]
+    lost = ids(await added(watchlist, REDIS))["Redis"]
+    facts.known[lost] = SoftwareFacts(
+        Given("8.2.0", NOW), CouldNotCheck(RUN, LATER, "404", None, None, True), None, None
+    )
+    assert {row.id for row in await watchlist.needing_attention()} == {fastapi, lost}

@@ -163,7 +163,7 @@ describe('the count of what needs you', () => {
   })
 
   it('shows no count when nothing needs the person, or before Home has loaded', () => {
-    const quiet: HomeOut = { ...ALICE_HOME, approvals: [], approvals_total: 0, confirmations: [], stopped: [], stopped_total: 0, replied: [], connections: [] }
+    const quiet: HomeOut = { ...ALICE_HOME, approvals: [], approvals_total: 0, confirmations: [], stopped: [], stopped_total: 0, replied: [], connections: [], addresses: [] }
     expect(linkNames(render({ home: quiet })).some((name) => name.includes('need you'))).toBe(false)
     expect(linkNames(render()).some((name) => name.includes('need you'))).toBe(false)
   })

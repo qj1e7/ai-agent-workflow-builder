@@ -1,9 +1,10 @@
 import { ApiError } from '../../api/client'
 import { DRAFT_STEPS } from '../../api/drafts'
 import { connectorLabel, starterName } from '../../api/labels'
-import type { ApprovalItem, ConfirmationItem, ConnectionItem, DraftItem, FollowingUpItem, HomeOut, StoppedItem, WaitingItem } from '../../api/types'
+import type { AddressItem, ApprovalItem, ConfirmationItem, ConnectionItem, DraftItem, FollowingUpItem, HomeOut, StoppedItem, WaitingItem } from '../../api/types'
 import { count, withCurrentNames } from '../run/words'
 import { requestKindWords, requestPath } from '../workflows/requests'
+import { movedHeadline, notFoundHeadline } from '../software/software'
 import { lineWhen, nextRunAt, runWhen, workflowPath } from '../workflows/workflow'
 
 /** Home for an Operator shows the most urgent few. Workflows, and Home for someone who is not an Operator, show everything the platform returned. */
@@ -12,6 +13,7 @@ export const HOME_NEEDS_SHOWN = 3
 export type Need =
   | { readonly kind: 'approval'; readonly key: string; readonly at: string; readonly item: ApprovalItem }
   | { readonly kind: 'connection'; readonly key: string; readonly at: string; readonly item: ConnectionItem }
+  | { readonly kind: 'address'; readonly key: string; readonly at: string; readonly item: AddressItem }
   | { readonly kind: 'confirmation'; readonly key: string; readonly at: string; readonly item: ConfirmationItem }
   | { readonly kind: 'stopped'; readonly key: string; readonly at: string; readonly item: StoppedItem }
   | { readonly kind: 'reply'; readonly key: string; readonly at: string; readonly item: FollowingUpItem }
@@ -27,11 +29,11 @@ export interface Needs {
   readonly more: LeftOut
 }
 
-const KIND_ORDER: Record<Need['kind'], number> = { stopped: 0, approval: 1, connection: 2, confirmation: 3, reply: 4 }
+const KIND_ORDER: Record<Need['kind'], number> = { stopped: 0, approval: 1, connection: 2, address: 3, confirmation: 4, reply: 5 }
 
 const urgentFirst = (a: Need, b: Need) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || b.at.localeCompare(a.at) || a.key.localeCompare(b.key)
 
-export const needsTotal = (home: HomeOut) => home.approvals_total + home.confirmations.length + home.stopped_total + home.connections.length + home.replied.length
+export const needsTotal = (home: HomeOut) => home.approvals_total + home.confirmations.length + home.stopped_total + home.connections.length + home.addresses.length + home.replied.length
 
 /** The runs Needs you on Workflows offers an action on, so the list of workflows under it need not offer the same run again. */
 export const runsInNeeds = (home: HomeOut): ReadonlySet<string> =>
@@ -41,6 +43,7 @@ export function needsOf(home: HomeOut, limit = Infinity): Needs {
   const all: Need[] = [
     ...home.approvals.map((item): Need => ({ kind: 'approval', key: `approval:${item.approval_id}`, at: item.started_at, item })),
     ...home.connections.map((item): Need => ({ kind: 'connection', key: `connection:${item.id}`, at: item.checked_at ?? '', item })),
+    ...home.addresses.map((item): Need => ({ kind: 'address', key: `address:${item.software_id}`, at: item.checked_at ?? '', item })),
     ...home.confirmations.map((item): Need => ({ kind: 'confirmation', key: `confirmation:${item.confirmation_id}`, at: item.asked_at, item })),
     ...home.stopped.map((item): Need => ({ kind: 'stopped', key: `stopped:${item.run_id}`, at: item.stopped_at, item })),
     ...home.replied.map((item): Need => ({ kind: 'reply', key: `reply:${item.request_id}`, at: item.latest_reply?.replied_at ?? item.asked_at, item })),
@@ -134,6 +137,17 @@ function connectionWords(item: ConnectionItem, now: Date): ItemWords {
   }
 }
 
+function addressWords(item: AddressItem): ItemWords {
+  return {
+    tone: 'bad',
+    title: item.moved_to ? movedHeadline(item.name, item.repo, item.moved_to) : notFoundHeadline(item.name, item.repo),
+    meta: `Software watchlist · ${item.name}`,
+    lines: [],
+    note: item.moved_to ? 'Only our list changes if you use the new address.' : 'It may have moved to another repository. Remove it and add it again at its new address.',
+    why: null,
+  }
+}
+
 function stoppedWords(item: StoppedItem, now: Date): ItemWords {
   return {
     tone: 'bad',
@@ -166,6 +180,8 @@ export function wordsOf(need: Need, now: Date): ItemWords {
       return approvalWords(need.item, now)
     case 'connection':
       return connectionWords(need.item, now)
+    case 'address':
+      return addressWords(need.item)
     case 'confirmation':
       return confirmationWords(need.item, now)
     case 'stopped':
@@ -187,6 +203,8 @@ export function actionsOf(need: Need): readonly Action[] {
     case 'connection':
       // Settings has no Connections tab yet (plan item N19). Until it does, the item checks in place.
       return [{ kind: 'check', label: 'Check again', connectionId: need.item.id }]
+    case 'address':
+      return [{ kind: 'open', label: 'Show it on the watchlist', to: `/software?row=${encodeURIComponent(need.item.software_id)}` }]
     case 'confirmation':
       return [{ kind: 'open', label: 'Review in Settings', to: need.item.kind === 'approver' ? '/settings?tab=people' : '/settings' }]
     case 'stopped':

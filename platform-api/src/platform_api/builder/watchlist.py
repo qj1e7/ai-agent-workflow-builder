@@ -20,6 +20,7 @@ from platform_api.builder.lifecycle import (
     lifecycle_of,
 )
 from platform_api.builder.models import (
+    AddressChangeView,
     AddSoftware,
     FindOut,
     FoundProjects,
@@ -161,7 +162,11 @@ def moved_to(listed: ListedSoftware, check: LatestCheck | None) -> str | None:
     return named
 
 
-def software_view(listed: ListedSoftware, standing: Standing) -> WatchedSoftwareView:
+def software_view(
+    listed: ListedSoftware,
+    standing: Standing,
+    changes: Sequence[AddressChangeView] = (),
+) -> WatchedSoftwareView:
     facts = standing.facts
     ours: str | None = None
     compared_from: str | None = None
@@ -203,6 +208,7 @@ def software_view(listed: ListedSoftware, standing: Standing) -> WatchedSoftware
         approval_id=None if facts.pending is None else facts.pending.approval_id,
         moved_to=moved,
         not_found=isinstance(facts.latest_check, CouldNotCheck) and facts.latest_check.not_found,
+        address_changes=list(changes[:ADDRESS_CHANGES_SHOWN]),
         added_by=listed.added_by,
         added_at=listed.added_at,
     )
@@ -239,7 +245,10 @@ def schedule_view(saved: SavedSchedule | None, now: datetime, on: bool) -> Sched
 
 
 def view(
-    record: WatchlistRecord, standing: WatchlistStanding, schedule: ScheduleView | None = None
+    record: WatchlistRecord,
+    standing: WatchlistStanding,
+    schedule: ScheduleView | None = None,
+    changes: Mapping[SoftwareId, Sequence[AddressChangeView]] | None = None,
 ) -> WatchlistView:
     return WatchlistView(
         use_case_id=record.use_case_id,
@@ -247,7 +256,12 @@ def view(
         ticket_project=record.ticket_project,
         state="on" if is_on(record.lifecycle) else "paused",
         software=attention_first(
-            [software_view(listed, standing.software[listed.id]) for listed in record.software]
+            [
+                software_view(
+                    listed, standing.software[listed.id], (changes or {}).get(listed.id, ())
+                )
+                for listed in record.software
+            ]
         ),
         last_check=last_check_view(standing.last_check),
         schedule=schedule,
@@ -351,6 +365,49 @@ def _with_ref(
     record: WatchlistRecord, software_id: SoftwareId, source: SoftwareSource
 ) -> tuple[ListedSoftware, ...]:
     return tuple(replace(s, source=source) if s.id == software_id else s for s in record.software)
+
+
+ADDRESS_CHANGES_SHOWN = 10
+
+
+async def _address_changes(
+    conn: Connection, use_case_id: UseCaseId
+) -> dict[SoftwareId, list[AddressChangeView]]:
+    rows = await (
+        await conn.execute(
+            "SELECT software_id, kind, from_ref, to_ref, changed_by, changed_at "
+            "FROM builder.software_address_changes WHERE use_case_id = %s ORDER BY change_id DESC",
+            (use_case_id,),
+        )
+    ).fetchall()
+    found: dict[SoftwareId, list[AddressChangeView]] = {}
+    for row in rows:
+        found.setdefault(SoftwareId(row["software_id"]), []).append(
+            AddressChangeView(
+                kind=row["kind"],
+                from_repo=row["from_ref"],
+                to_repo=row["to_ref"],
+                by=UserId(row["changed_by"]),
+                at=row["changed_at"],
+            )
+        )
+    return found
+
+
+async def _record_address_change(
+    uow: UnitOfWork,
+    use_case_id: UseCaseId,
+    software_id: SoftwareId,
+    kind: str,
+    old: str,
+    new: str,
+    by: UserId,
+) -> None:
+    await uow.conn.execute(
+        "INSERT INTO builder.software_address_changes (use_case_id, software_id, kind, "
+        "from_ref, to_ref, changed_by, changed_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+        (use_case_id, software_id, kind, old, new, by, uow.now),
+    )
 
 
 @dataclass(frozen=True)
@@ -503,6 +560,13 @@ class Watchlist:
             record = await _current(conn, lock=False)
         return None if record is None else await self._view_of(record)
 
+    async def needing_attention(self) -> list[WatchedSoftwareView]:
+        """The rows whose repository GitHub moved or cannot find, in the Software page's order."""
+        watchlist = await self.view()
+        if watchlist is None:
+            return []
+        return [row for row in watchlist.software if row.moved_to is not None or row.not_found]
+
     async def add(
         self, principal: Principal, body: AddSoftware
     ) -> WatchlistView | RepoAlreadyWatched | WatchlistFull:
@@ -608,6 +672,15 @@ class Watchlist:
             record = await self._next_version(
                 uow, record, _with_ref(record, software_id, SoftwareSource(reported))
             )
+            await _record_address_change(
+                uow,
+                record.use_case_id,
+                software_id,
+                "use",
+                listed.source.ref,
+                reported,
+                principal.user_id,
+            )
         log.info(
             "%s switched %s from %s to %s, version %d",
             principal.user_id,
@@ -644,6 +717,15 @@ class Watchlist:
                 return RepoAlreadyWatched(old)
             record = await self._next_version(
                 uow, record, _with_ref(record, software_id, SoftwareSource(old))
+            )
+            await _record_address_change(
+                uow,
+                record.use_case_id,
+                software_id,
+                "undo",
+                listed.source.ref,
+                old,
+                principal.user_id,
             )
         log.info(
             "%s put %s back from %s to %s, version %d",
@@ -686,7 +768,9 @@ class Watchlist:
         standing = await self._facts.standings(record.use_case_id, given_versions(record))
         saved = await self._schedules.get(record.use_case_id)
         on = is_on(record.lifecycle)
-        return view(record, standing, schedule_view(saved, self._db.clock(), on))
+        async with self._db.connection("builder") as conn:
+            changes = await _address_changes(conn, record.use_case_id)
+        return view(record, standing, schedule_view(saved, self._db.clock(), on), changes)
 
     async def _create(
         self, uow: UnitOfWork, principal: Principal, first: ListedSoftware

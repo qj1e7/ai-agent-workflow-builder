@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState, type RefObject } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { useDisplayName } from '../../api/people'
@@ -359,6 +359,15 @@ function Loaded({ view, operator, answeredAt }: { view: WatchlistView | null; op
       row?.scrollIntoView?.({ block: 'center' })
     })
   }
+
+  const landOn = useSearchParams()[0].get('row')
+  const landOnListed = landOn !== null && software.some((row) => row.id === landOn)
+  const landed = useRef(false)
+  useEffect(() => {
+    if (landed.current || landOn === null || !landOnListed) return
+    landed.current = true
+    showRow(landOn)
+  }, [landOn, landOnListed])
 
   return (
     <>

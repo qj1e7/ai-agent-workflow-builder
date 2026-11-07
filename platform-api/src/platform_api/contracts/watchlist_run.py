@@ -243,6 +243,7 @@ def _row_before(w: Watched) -> WatchedSoftwareView:
             "problem": w.problem,
             "open_ticket": None,
             "approval_id": None,
+            "address_changes": [],
             "added_by": w.added_by,
             "added_at": w.added_at,
         }

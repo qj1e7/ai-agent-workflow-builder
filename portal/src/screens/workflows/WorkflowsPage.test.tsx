@@ -237,7 +237,7 @@ describe('Needs you at the top of Workflows', () => {
   })
 
   it('shows no section when nothing needs the person', () => {
-    const quiet: HomeOut = { ...HOME, approvals: [], approvals_total: 0, confirmations: [], stopped: [], stopped_total: 0, replied: [], connections: [] }
+    const quiet: HomeOut = { ...HOME, approvals: [], approvals_total: 0, confirmations: [], stopped: [], stopped_total: 0, replied: [], connections: [], addresses: [] }
     expect(render({ home: quiet })).not.toContain('aria-label="Needs you"')
     expect(render()).not.toContain('aria-label="Needs you"')
   })

@@ -44,8 +44,19 @@ class SourceRejected(Exception):
         self.limited = limited
 
 
+@dataclass(frozen=True)
+class Fetched:
+    releases: list[Release]
+    # GitHub sent the request to another address, as it does for a renamed repository.
+    redirected: bool = False
+
+
 class ReleaseSource(Protocol):
     def fetch(self, repo: str) -> list[Release]: ...
+
+
+class MovableSource(ReleaseSource, Protocol):
+    def fetch_noting_move(self, repo: str) -> Fetched: ...
 
     def current_name(self, repo: str) -> str: ...
 

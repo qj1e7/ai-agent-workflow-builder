@@ -89,6 +89,24 @@
     "more": 0
   },
   "workflows": 1,
+  "addresses": [
+    {
+      "software_id": "sw_01JC2A3B4C5D6E7F8G9H0J1K2M",
+      "name": "FastAPI",
+      "repo": "tiangolo/fastapi",
+      "moved_to": "fastapi/fastapi",
+      "not_found": false,
+      "checked_at": "2026-11-09T01:00:00Z"
+    },
+    {
+      "software_id": "sw_01JC2A3B4C5D6E7F8G9H0J1K2N",
+      "name": "LangServe",
+      "repo": "langchain-ai/langserve",
+      "moved_to": null,
+      "not_found": true,
+      "checked_at": "2026-11-09T01:00:00Z"
+    }
+  ],
   "connections": [
     {
       "id": "jira",

@@ -4,6 +4,11 @@ import { expect, test } from './support/test'
 import { devContext, OUT, shot } from './support/ui'
 import path from 'node:path'
 
+// A moved or missing repository stays in Operators' Needs you on Home and Workflows, so these tests leave no software behind for the lanes after them.
+test.afterEach(async ({ backend }) => {
+  await backend.freshWatchlist('alice', [])
+})
+
 test('alice adds software by its name: Find it, a checked guess with where it came from, and the row starts at Not known', async ({ browser, backend }, info) => {
   await backend.freshWatchlist('alice', [])
   const context = await devContext(browser, 'alice')
@@ -219,6 +224,17 @@ for (const phone of [false, true]) {
     await shot(page, info, `n21b-04-moved-${width}`)
     if (phone) expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'no sideways scroll at 390 px').toBe(true)
 
+    const fastapiId = (await backend.get<{ watchlist: { software: { id: string }[] } }>('alice', '/api/v1/watchlist')).watchlist.software[0]?.id ?? ''
+    await page.goto('/')
+    const onHome = page.locator(`[data-home-item="address:${fastapiId}"]`)
+    await expect(onHome).toContainText('GitHub moved FastAPI from tiangolo/fastapi to fastapi/fastapi.')
+    await onHome.getByRole('link', { name: 'Show it on the watchlist' }).click()
+    await expect(page).toHaveURL(new RegExp(`/software\\?row=${fastapiId}`))
+    await expect(row).toBeFocused()
+    await page.goto('/workflows')
+    await expect(page.locator(`[data-home-item="address:${fastapiId}"]`)).toHaveCount(1)
+    await page.goto('/software')
+
     const forBob = await backend.get<{ actions: { fields: { title: string; body: string } }[] }>('bob', `/api/v1/approvals/${approvalId}`)
     const ticketBody = forBob.actions[0]?.fields.body ?? ''
     expect(ticketBody).toContain('(tiangolo/fastapi, which GitHub now calls fastapi/fastapi)')
@@ -261,6 +277,10 @@ for (const phone of [false, true]) {
     await page.keyboard.press('Tab')
     await page.keyboard.press('Enter')
     await expect(notice).toContainText('FastAPI is now read from fastapi/fastapi.')
+    await row.getByRole('button', { name: /^History/ }).click()
+    const history = row.getByRole('list', { name: 'History of FastAPI' })
+    await expect(history).toContainText('Alice used the new address fastapi/fastapi. It was tiangolo/fastapi.')
+    await expect(history).toContainText('Alice put the address back to tiangolo/fastapi. It was fastapi/fastapi.')
     const saved = await backend.get<{ watchlist: { software: { source: { ref: string } }[] } }>('alice', '/api/v1/watchlist')
     expect(saved.watchlist.software.map((item) => item.source.ref)).toEqual(['fastapi/fastapi'])
 
@@ -308,7 +328,7 @@ for (const phone of [false, true]) {
     await page.goto('/software')
     const row = page.locator('li[data-status]').filter({ hasText: 'LangServe' })
     await expect(row).toContainText('Can’t check')
-    await expect(row).toContainText('GitHub can’t find langchain-ai/langserve. It may have moved to another repository. LangServe is skipped until this is fixed. Remove it and add it again at its new address.')
+    await expect(row).toContainText('GitHub can’t find langchain-ai/langserve. It may have moved to another repository. LangServe stays Can’t check until GitHub finds that address. Remove it and add it again at its new address.')
     await expect(row).not.toContainText('GitHub answered 404')
     await expect(page.getByRole('button', { name: /^Use the new address/ })).toHaveCount(0)
     await expect(row.getByRole('button', { name: 'Remove LangServe' })).toBeVisible()

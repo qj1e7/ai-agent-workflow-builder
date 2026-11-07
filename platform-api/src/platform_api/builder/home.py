@@ -4,7 +4,7 @@ from typing import Protocol
 
 from pydantic import Field
 
-from platform_api.builder.models import DraftView, UseCaseView
+from platform_api.builder.models import DraftView, UseCaseView, WatchedSoftwareView
 from platform_api.builder.service import Builder
 from platform_api.builder.team_requests import FollowingUpItem, TeamRequests
 from platform_api.monitoring import Advice, RunFailedData, explain_failure
@@ -23,7 +23,7 @@ from platform_api.orchestration import (
     confirmation_summary,
 )
 from platform_api.shared import ApprovalId, Principal, Role, RunId, UserId
-from platform_api.wire import FailureReason, Trigger, WireModel
+from platform_api.wire import FailureReason, RepoName, Trigger, WireModel
 
 SHOWN = 10
 LISTED = 50
@@ -126,6 +126,20 @@ class ConnectionItem(WireModel):
     )
 
 
+class AddressItem(WireModel):
+    software_id: str
+    name: str
+    repo: RepoName = Field(description="The repository saved for it.")
+    moved_to: RepoName | None = Field(
+        description="The repository GitHub now calls it, when it was renamed. The Operator may "
+        "switch the list to it."
+    )
+    not_found: bool = Field(
+        description="GitHub said the saved repository does not exist and named no new home."
+    )
+    checked_at: datetime | None
+
+
 class HomeOut(WireModel):
     approvals: list[ApprovalItem] = Field(
         description="Runs waiting for a yes this person may give, the newest first. At most 10."
@@ -158,6 +172,11 @@ class HomeOut(WireModel):
     )
     coming_up: ComingUp | None = Field(description="The workflow that runs next, if any.")
     workflows: int = Field(description="How many workflows the team has.")
+    addresses: list[AddressItem] = Field(
+        description="For an Operator, the watched software whose repository GitHub moved or "
+        "cannot find, as the latest check left it, in the order of the Software page. The same "
+        "rows the Software page lists under Needs attention."
+    )
     connections: list[ConnectionItem] = Field(
         description="For an Operator, the connections that do not work and the keys that run "
         "out soon, as the last check left them. Home never starts a check."
@@ -170,6 +189,10 @@ class RunsForPerson(Protocol):
 
 class ConnectionsForHome(Protocol):
     async def needing_attention(self) -> list[ConnectionCheck]: ...
+
+
+class AddressesForHome(Protocol):
+    async def needing_attention(self) -> list[WatchedSoftwareView]: ...
 
 
 class PeopleForHome(Protocol):
@@ -188,6 +211,17 @@ def _connection(check: ConnectionCheck) -> ConnectionItem:
         checked_at=check.checked_at,
         last_ok_at=check.last_ok_at,
         expires_at=check.expires_at,
+    )
+
+
+def _address(row: WatchedSoftwareView) -> AddressItem:
+    return AddressItem(
+        software_id=row.id,
+        name=row.name,
+        repo=row.source.ref,
+        moved_to=row.moved_to,
+        not_found=row.not_found,
+        checked_at=row.checked_at,
     )
 
 
@@ -292,12 +326,14 @@ class Home:
         people: PeopleForHome,
         requests: TeamRequests,
         connections: ConnectionsForHome,
+        addresses: AddressesForHome,
     ) -> None:
         self._builder = builder
         self._runs = runs
         self._people = people
         self._requests = requests
         self._connections = connections
+        self._addresses = addresses
 
     async def for_person(self, viewer: Principal) -> HomeOut:
         runs = await self._runs.runs_for(viewer)
@@ -318,6 +354,7 @@ class Home:
         following_up, following_up_total = await self._requests.following_up(viewer)
         operator = Role.OPERATOR in viewer.roles
         connections = await self._connections.needing_attention() if operator else []
+        addresses = await self._addresses.needing_attention() if operator else []
         replied = await self._requests.replied(viewer)
         return HomeOut(
             approvals=[_approval(a, names) for a in runs.asks[:SHOWN]],
@@ -333,5 +370,6 @@ class Home:
             replied=replied,
             coming_up=_coming_up(use_cases),
             workflows=len(use_cases),
+            addresses=[_address(a) for a in addresses],
             connections=[_connection(c) for c in connections],
         )

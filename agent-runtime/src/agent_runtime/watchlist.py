@@ -21,7 +21,8 @@ from agent_runtime.contract import (
 from agent_runtime.events import Draft
 from agent_runtime.release_source import (
     DEFAULT_RETRY,
-    ReleaseSource,
+    MovableSource,
+    Release,
     RetryPolicy,
     SourceRejected,
     SourceUnavailable,
@@ -97,14 +98,38 @@ class Address:
     not_found: bool = False
 
 
-def ask_address(source: ReleaseSource, repo: str) -> Address:
-    try:
-        name = source.current_name(repo)
+class Watching:
+    """Reads one repository's releases and notes what GitHub said on the way: a rename shows as a
+    redirect, and a 404 on the releases says the repository is gone. This is why a check needs no
+    second call to learn the repository's address, except after a redirect."""
+
+    def __init__(self, source: MovableSource) -> None:
+        self._source = source
+        self.read = False
+        self.redirected = False
+        self.not_found = False
+
+    def fetch(self, repo: str) -> list[Release]:
+        try:
+            got = self._source.fetch_noting_move(repo)
+        except SourceRejected as refused:
+            self.not_found = refused.status in NOT_FOUND_STATUSES
+            raise
+        self.read, self.redirected = True, got.redirected
+        return got.releases
+
+    def address(self, repo: str) -> Address:
+        if self.not_found:
+            return Address(not_found=True)
+        if not self.read:
+            return Address()
+        if not self.redirected:
+            return Address(full_name=repo)
+        try:
+            name = self._source.current_name(repo)
+        except SourceRejected, SourceUnavailable:
+            return Address()
         return Address(full_name=name if re.fullmatch(REPO_PATTERN, name) else None)
-    except SourceRejected as refused:
-        return Address(not_found=refused.status in NOT_FOUND_STATUSES)
-    except SourceUnavailable:
-        return Address()
 
 
 def with_address(finding: Finding, address: Address) -> Finding:
@@ -163,7 +188,7 @@ type Update = dict[str, object]
 class WatchlistChecker:
     def __init__(
         self,
-        source: ReleaseSource,
+        source: MovableSource,
         summarizer: Summarizer,
         sleep: Callable[[float], None],
         retry: RetryPolicy = DEFAULT_RETRY,
@@ -208,8 +233,9 @@ class WatchlistChecker:
         last = len(inputs.software) - 1
         for position, item in enumerate(inputs.software):
             write(started("read_source", f"reading the releases of {item.name}."))
-            address = ask_address(self._source, item.source.ref)
-            releases = read_releases(self._source, item.source.ref, self._retry, self._sleep, write)
+            watching = Watching(self._source)
+            releases = read_releases(watching, item.source.ref, self._retry, self._sleep, write)
+            address = watching.address(item.source.ref)
             if isinstance(releases, TaskError):
                 read: Read = releases
                 read_errors.append(releases)

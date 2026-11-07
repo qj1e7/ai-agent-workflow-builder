@@ -33,7 +33,7 @@ from agent_runtime.contracts import (
 )
 from agent_runtime.events import EventLog
 from agent_runtime.planner import FixedPlanner, run_task
-from agent_runtime.release_source import Release, ReleaseSource
+from agent_runtime.release_source import MovableSource, Release
 from agent_runtime.summary import ModelSummarizer, Summarizer, TemplateSummarizer
 from agent_runtime.version_checker import VersionChecker
 from tests.fakes import FakeClock, FakeSource, RepoSource, langgraph_tags
@@ -48,7 +48,7 @@ PLAIN_PATTERN = r"^\d+\.\d+\.\d+$"
 
 
 class Room:
-    def __init__(self, source: ReleaseSource, summarizer: Summarizer | None = None) -> None:
+    def __init__(self, source: MovableSource, summarizer: Summarizer | None = None) -> None:
         self.clock = FakeClock()
         self.log = EventLog(self.clock, lambda event: None)
         self.checker = VersionChecker(
@@ -191,10 +191,18 @@ def test_a_refusal_other_than_not_found_is_not_flagged_not_found():
 
 
 def test_a_name_github_would_not_give_is_unknown_and_the_check_still_reads_the_releases():
-    source = RepoSource(TAGS, name_down={LANGGRAPH})
-    result = finished(Room(source).run(request_for(langgraph("1.2.14"))))
-    found = finding(result, LANGGRAPH_ID)
+    source = RepoSource(TAGS, renamed={"tiangolo/fastapi": FASTAPI}, name_down={"tiangolo/fastapi"})
+    old = software(FASTAPI_ID, "FastAPI", "tiangolo/fastapi", "0.114.0")
+    found = finding(finished(Room(source).run(request_for(old))), FASTAPI_ID)
     assert (found.state, found.full_name, found.not_found) == ("behind", None, False)
+
+
+def test_a_check_asks_for_the_name_only_after_a_redirect_so_fourteen_software_take_fourteen_calls():
+    source = RepoSource(TAGS, renamed={"tiangolo/fastapi": FASTAPI}, refused={REDIS: 404})
+    old = software(FASTAPI_ID, "FastAPI", "tiangolo/fastapi", "0.114.0")
+    finished(Room(source).run(request_for(langgraph("1.2.14"), old, redis("8.2.0"))))
+    assert source.calls == [LANGGRAPH, "tiangolo/fastapi", REDIS]
+    assert source.name_calls == ["tiangolo/fastapi"]
 
 
 def test_releases_of_another_tag_family_never_count():
