@@ -27,6 +27,8 @@ from agent_runtime.contract import (
     ConnectResult,
     DraftRequest,
     DraftResult,
+    FindSoftwareRequest,
+    FindSoftwareResult,
     GitHubCheckResult,
     Health,
     InputKind,
@@ -43,6 +45,7 @@ from agent_runtime.contract import (
 )
 from agent_runtime.drafting import choose_agents, draft_card
 from agent_runtime.events import Clock, EventLog, EventSink
+from agent_runtime.find_software import SoftwareFinder
 from agent_runtime.github import GitHubConnection, GitHubReleaseSource
 from agent_runtime.guarded import GuardedModels
 from agent_runtime.jira import JiraReaderFor, PlatformJiraFor, no_jira
@@ -241,6 +244,7 @@ class Runtime:
     cards: CardRunner | None = None
     chat_source: ChatSource = field(default=_chat_under_default_policy)
     github: GitHubCheck = field(default_factory=_anonymous_github)
+    finder: SoftwareFinder | None = None
 
 
 def build_summarizer(settings: Settings) -> Summarizer:
@@ -285,6 +289,7 @@ def build_runtime(settings: Settings) -> Runtime:
         cards=CardRunner(source, jira_for, sleep=time.sleep),
         chat_source=chat_source,
         github=GitHubConnection(settings.github_api_base, token=settings.github_token),
+        finder=SoftwareFinder(source),
     )
 
 
@@ -413,6 +418,12 @@ def create_app(
     @app.post("/v1/connections/github/check", dependencies=[Depends(require_key)])
     def check_github() -> GitHubCheckResult:
         return active.github.check()
+
+    @app.post("/v1/software/find", dependencies=[Depends(require_key)])
+    def find_software(body: FindSoftwareRequest) -> FindSoftwareResult:
+        if active.finder is None:
+            raise HTTPException(status_code=501, detail="this runtime does not find software")
+        return active.finder.find(body.name, body.tag_pattern)
 
     @app.post("/v1/models/connect", dependencies=[Depends(require_key)])
     def connect_model(body: ConnectRequest) -> ConnectResult:

@@ -37,9 +37,11 @@ class SourceUnavailable(Exception):
 
 
 class SourceRejected(Exception):
-    def __init__(self, status: int) -> None:
+    def __init__(self, status: int, limited: bool = False) -> None:
         super().__init__(status)
         self.status = status
+        # GitHub refuses with a 403 when asked too often. Only its headers or message say so.
+        self.limited = limited
 
 
 class ReleaseSource(Protocol):

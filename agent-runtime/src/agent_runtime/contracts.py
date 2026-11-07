@@ -42,7 +42,9 @@ from agent_runtime.contract import (
     DraftInput,
     DraftRequest,
     Finding,
+    FindSoftwareRequest,
     FoundModel,
+    FoundSoftware,
     GitHubProblem,
     GithubSource,
     GitHubWorking,
@@ -54,6 +56,7 @@ from agent_runtime.contract import (
     ModelTestPassed,
     ProposedIntent,
     RoomAddressee,
+    SoftwareMatch,
     SoftwareToCheck,
     TaskError,
     TaskFailed,
@@ -801,6 +804,31 @@ def belongs_on_watchlist() -> WireModel:
     return result
 
 
+def find_software_request() -> FindSoftwareRequest:
+    return FindSoftwareRequest(name="Terraform", tag_pattern=RELEASE_TAG_PATTERN)
+
+
+def found_software() -> FoundSoftware:
+    return FoundSoftware(
+        matches=[
+            SoftwareMatch(
+                repo="hashicorp/terraform",
+                what="Terraform itself, from HashiCorp",
+                why="From our list of known projects.",
+                releases="published",
+                newest="v1.9.8",
+            ),
+            SoftwareMatch(
+                repo="opentofu/opentofu",
+                what="OpenTofu, an open-source fork of Terraform",
+                why="From our list of known projects.",
+                releases="published",
+                newest="v1.8.5",
+            ),
+        ]
+    )
+
+
 def fixtures() -> dict[str, WireModel]:
     finished = finished_task()
     return {
@@ -842,6 +870,8 @@ def fixtures() -> dict[str, WireModel]:
         "planner-understand-request.json": understand_request(),
         "planner-understood.json": understood(),
         "planner-watchlist.json": belongs_on_watchlist(),
+        "software-find-request.json": find_software_request(),
+        "software-found.json": found_software(),
     }
 
 

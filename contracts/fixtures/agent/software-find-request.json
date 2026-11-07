@@ -1,0 +1,4 @@
+{
+  "name": "Terraform",
+  "tag_pattern": "^[vV]?\\d+\\.\\d+\\.\\d+$"
+}

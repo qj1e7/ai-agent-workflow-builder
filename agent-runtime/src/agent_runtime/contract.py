@@ -627,6 +627,71 @@ type UnderstandResult = Annotated[
 ]
 
 
+class FindSoftwareRequest(WireModel):
+    name: str = Field(
+        min_length=1,
+        max_length=80,
+        description="The software as a person wrote it, such as Kubernetes.",
+    )
+    tag_pattern: TagPattern
+
+
+class SoftwareMatch(WireModel):
+    repo: RepoName = Field(
+        description="A GitHub project that exists, as owner/name, at the address GitHub gives it "
+        "now. Checked just now."
+    )
+    what: str = Field(
+        min_length=1,
+        max_length=120,
+        description="What the project is, in plain words, so the person can tell matches apart.",
+    )
+    why: str = Field(
+        max_length=300,
+        description="Where the guess came from, in plain words, for the person to read.",
+    )
+    releases: Literal["published", "none"] = Field(
+        description="Whether the project has a stable release that the request's tag rule "
+        "counts. With none, a watch would have nothing to compare."
+    )
+    newest: str | None = Field(
+        description="The newest stable release tag that the tag rule counts. None when there is "
+        "none."
+    )
+
+
+class FoundSoftware(WireModel):
+    status: Literal["found"] = "found"
+    matches: list[SoftwareMatch] = Field(
+        min_length=1,
+        max_length=5,
+        description="Every project the name could mean. More than one means the person chooses. "
+        "A match is a guess from a reviewed list, never a certainty.",
+    )
+
+
+class SoftwareNotKnown(WireModel):
+    status: Literal["not_known"] = "not_known"
+    message: str = Field(
+        max_length=300,
+        description="The list has no such name, or GitHub found none of its projects.",
+    )
+
+
+class SoftwareNotChecked(WireModel):
+    status: Literal["not_checked"] = "not_checked"
+    message: str = Field(
+        max_length=300,
+        description="What went wrong with GitHub, in plain words. No project is offered, because "
+        "nothing unchecked is shown.",
+    )
+
+
+type FindSoftwareResult = Annotated[
+    FoundSoftware | SoftwareNotKnown | SoftwareNotChecked, Field(discriminator="status")
+]
+
+
 class AgentCard(WireModel):
     id: str
     display: str
@@ -659,3 +724,5 @@ class AgentApiSchema(WireModel):
     planner_choose_result: ChooseResult
     planner_understand_request: UnderstandRequest
     planner_understand_result: UnderstandResult
+    software_find_request: FindSoftwareRequest
+    software_find_result: FindSoftwareResult
