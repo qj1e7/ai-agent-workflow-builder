@@ -14,6 +14,9 @@ from platform_api.orchestration.agents import HttpAgentRuntime
 from platform_api.orchestration.connections import (
     Connections,
     Entry,
+    GitHubChecker,
+    JiraChecker,
+    ModelView,
     github_probe,
     jira_probe,
     model_probe,
@@ -144,6 +147,41 @@ def approval_channel(
     return webhook, webhook
 
 
+def connections_for(
+    settings: Settings,
+    db: Database,
+    jira: JiraChecker,
+    channel: ApprovalChannel,
+    agents: GitHubChecker,
+    models: ModelView,
+) -> tuple[Connections, ApprovalChannel]:
+    """The connection checks, and the approval channel the outbox posts through."""
+    connections = Connections(
+        db,
+        [
+            Entry(
+                "jira",
+                "Jira",
+                settings.jira.practice,
+                jira_probe(jira, "Jira", key_hint(settings.jira.token)),
+                source_of("jira", settings.jira.base_url),
+            ),
+            Entry("github", "GitHub", False, github_probe(agents), "github"),
+            Entry(
+                "teams",
+                "Teams",
+                settings.teams_webhook_url is None,
+                teams_probe(
+                    db, practice=settings.teams_webhook_url is None, adapter=channel.adapter
+                ),
+                source_of(channel.adapter, settings.teams_webhook_url),
+            ),
+            Entry("model", "AI model", False, model_probe(models), "model", live=True),
+        ],
+    )
+    return connections, channel
+
+
 async def build(settings: Settings) -> Services:
     db = Database(settings.database)
     await db.open()
@@ -185,6 +223,7 @@ async def build(settings: Settings) -> Services:
     agents = HttpAgentRuntime(settings.agent_runtime_url, settings.agent_api_key)
     secret = settings.settings_encryption_key
     model_settings = ModelSettings(db, agents, KeyBox(secret) if secret else None, people=people)
+    connections, channel = connections_for(settings, db, jira, channel, agents, model_settings)
     orchestrator = Orchestrator(
         db,
         activity,
@@ -197,8 +236,6 @@ async def build(settings: Settings) -> Services:
         people=people,
         public_base_url=settings.public_base_url,
     )
-    jira_is_practice = settings.jira.practice
-    jira_key_hint = key_hint(settings.jira.token)
     schedules = ScheduleBook(db)
     watchlist = Watchlist(
         db,
@@ -208,27 +245,6 @@ async def build(settings: Settings) -> Services:
         ProjectFinding(agents),
     )
     await watchlist.adopt_ticket_project()
-    connections = Connections(
-        db,
-        [
-            Entry(
-                "jira",
-                "Jira",
-                jira_is_practice,
-                jira_probe(jira, "Jira", jira_key_hint),
-                source_of("jira", settings.jira.base_url),
-            ),
-            Entry("github", "GitHub", False, github_probe(agents), "github"),
-            Entry(
-                "teams",
-                "Teams",
-                webhook is None,
-                teams_probe(db, practice=webhook is None, adapter=channel.adapter),
-                source_of(channel.adapter, settings.teams_webhook_url),
-            ),
-            Entry("model", "AI model", False, model_probe(model_settings), "model", live=True),
-        ],
-    )
     builder = Builder(
         db,
         orchestrator,
