@@ -2,7 +2,7 @@ from collections.abc import Mapping
 from typing import Literal
 
 from platform_api.monitoring.events import RunFailedData
-from platform_api.shared import WRITE_STOP_ADVICE
+from platform_api.shared import JIRA_SITE_CHANGED, WRITE_STOP_ADVICE
 from platform_api.wire import FailureReason, WireModel
 
 type SuggestedAction = Literal[
@@ -125,6 +125,16 @@ WRITE_REFUSED = Advice(
 )
 
 
+SITE_CHANGED = Advice(
+    explanation=JIRA_SITE_CHANGED,
+    likely_cause="The platform now uses another Jira than the one the Approvers said yes to, so "
+    "the safety checker stopped the write.",
+    suggested_action="ask_maintainer",
+    suggestion=f"{WRITE_STOP_ADVICE} Ask a maintainer to check Jira's settings, so a new run "
+    "proposes the ticket for the Jira the team means to use.",
+)
+
+
 def explain(reason: FailureReason) -> Advice:
     return ADVICE[reason]
 
@@ -135,6 +145,8 @@ def explain_failure(failure: RunFailedData) -> Advice:
         return KNOWN_AGENT_STOPS.get(failure.message.partition(": ")[0], AGENTS_STOPPED)
     if failure.reason == "WriteFailed" and not failure.retryable:
         return WRITE_REFUSED
+    if failure.reason == "SafetyDenied" and failure.message == JIRA_SITE_CHANGED:
+        return SITE_CHANGED
     return ADVICE[failure.reason]
 
 

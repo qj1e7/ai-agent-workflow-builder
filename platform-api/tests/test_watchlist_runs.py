@@ -1,6 +1,6 @@
-from collections.abc import AsyncIterator, Mapping
-from dataclasses import replace
-from datetime import timedelta
+from collections.abc import AsyncIterator, Collection, Mapping
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -15,6 +15,7 @@ from platform_api.orchestration.agents import (
     WatchlistInputs,
 )
 from platform_api.orchestration.approvals import Verdict
+from platform_api.orchestration.dispatch import identity_of
 from platform_api.orchestration.runs import (
     Acting,
     AwaitingApproval,
@@ -121,7 +122,7 @@ async def h(postgres: PostgresUrls) -> AsyncIterator[Harness]:
 
 
 def facts_of(h: Harness) -> WatchFacts:
-    return WatchFacts(h.db, h.jira)
+    return WatchFacts(h.db, h.jira, h.jira.site.identity)
 
 
 async def standings(h: Harness) -> WatchlistStanding:
@@ -278,6 +279,51 @@ async def test_approving_writes_the_tickets_and_marking_one_done_moves_our_versi
         "up_to_date",
     )
     assert (await standings(h)).software[LANGGRAPH] == moved, "a second refresh changes nothing"
+
+
+@dataclass
+class JiraB:
+    """A second Jira site, with its own MOCK-1 that someone closed long ago."""
+
+    asked: list[list[str]] = field(default_factory=list[list[str]])
+
+    async def done_tickets(self, keys: Collection[str]) -> Mapping[str, datetime]:
+        self.asked.append(list(keys))
+        return {key: NOW - timedelta(days=300) for key in keys if key == "MOCK-1"}
+
+
+async def a_written_ticket(h: Harness) -> None:
+    run_id = await work_leg(h)
+    await bob_decides(h, run_id, Verdict.APPROVE)
+    await h.orchestrator.on_step(run_id, StepName.WRITE_ACTION, ACT)
+    assert [t.key for t in await h.jira.tickets()] == ["MOCK-1"]
+
+
+async def test_the_done_check_asks_another_jira_nothing_about_a_ticket_written_on_this_one(
+    h: Harness,
+):
+    await a_written_ticket(h)
+    b = JiraB()
+    on_b = WatchFacts(h.db, b, identity_of("jira", "https://jira-b.example"))
+    found = (await on_b.standings(USE_CASE, GIVEN)).software[LANGGRAPH]
+    assert b.asked == [], "Jira B's own MOCK-1 is another ticket"
+    assert found.status == "ticket_open"
+    assert found.facts.our_version == Given("1.2.14", NOW)
+
+    await h.jira.mark_done("MOCK-1")
+    back = (await standings(h)).software[LANGGRAPH]
+    assert back.status == "up_to_date", "the practice Jira is still asked about its own ticket"
+    assert isinstance(back.facts.our_version, FromTicketDone)
+
+
+async def test_a_ticket_written_before_sites_were_kept_is_never_asked_about(h: Harness):
+    await a_written_ticket(h)
+    async with h.db.transaction("orchestration") as uow:
+        await uow.conn.execute("UPDATE orchestration.proposed_tickets SET site = NULL")
+    await h.jira.mark_done("MOCK-1")
+    found = (await standings(h)).software[LANGGRAPH]
+    assert found.status == "ticket_open", "a ticket with no site is not taken as the practice's"
+    assert found.facts.our_version == Given("1.2.14", NOW)
 
 
 async def test_marking_a_ticket_done_twice_keeps_the_first_done_time(h: Harness):

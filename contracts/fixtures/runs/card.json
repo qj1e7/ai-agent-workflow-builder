@@ -262,7 +262,7 @@
     "kind": "write_action_proposed",
     "data": {
       "proposal_id": "prp_01JD1",
-      "digest": "sha256:b53b3327eb5db3cbdf1c7559ad4310d809633322c018fc4894a1c65c8af4164b",
+      "digest": "sha256:70e8715977ceadf0aa1cec79cd577e6b35652a09ca9d9c850b97bde06b81570e",
       "actions": [
         {
           "connector": "jira",
@@ -385,7 +385,7 @@
       "step": 0,
       "verdict": "approve",
       "by": "bob",
-      "digest": "sha256:b53b3327eb5db3cbdf1c7559ad4310d809633322c018fc4894a1c65c8af4164b"
+      "digest": "sha256:70e8715977ceadf0aa1cec79cd577e6b35652a09ca9d9c850b97bde06b81570e"
     }
   },
   {

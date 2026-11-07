@@ -187,7 +187,7 @@
     "kind": "write_action_proposed",
     "data": {
       "proposal_id": "prp_01JB8",
-      "digest": "sha256:4e2d624727277e914cdb7b2402d88bfacb4d26c12287fcd8cc3f7f8e4173e7c9",
+      "digest": "sha256:4643d9dfc8577a7b21a6bf16196fde88777715a2e4fb44e786046f80fa921a38",
       "actions": [
         {
           "connector": "jira",
@@ -310,7 +310,7 @@
       "step": 0,
       "verdict": "approve",
       "by": "bob",
-      "digest": "sha256:4e2d624727277e914cdb7b2402d88bfacb4d26c12287fcd8cc3f7f8e4173e7c9"
+      "digest": "sha256:4643d9dfc8577a7b21a6bf16196fde88777715a2e4fb44e786046f80fa921a38"
     }
   },
   {

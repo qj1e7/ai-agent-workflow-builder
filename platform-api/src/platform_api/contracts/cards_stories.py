@@ -79,6 +79,7 @@ from platform_api.monitoring.events import (
     WriteActionProposed,
     WriteActionProposedData,
 )
+from platform_api.orchestration.jira import PRACTICE_SITE
 from platform_api.orchestration.write_actions import WriteAction, describe, digest
 from platform_api.shared import RunId, UserId
 from platform_api.wire import WireModel
@@ -105,7 +106,7 @@ TO_CARD = AgentAddressee(id=CARD.id, display=CARD.display)
 ACTION = WriteAction(
     connector="jira",
     operation="create_ticket",
-    target={"project": "MOCK"},
+    target={"project": "MOCK", "site": PRACTICE_SITE.identity},
     fields={"title": TITLE, "body": BODY},
 )
 DIGEST = digest([ACTION])

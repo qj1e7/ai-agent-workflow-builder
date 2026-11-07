@@ -27,6 +27,7 @@ from platform_api.db import Database
 from platform_api.orchestration.jira import (
     CLAIM_LEASE,
     CONNECTOR_DEADLINE,
+    PRACTICE_SITE,
     IssueSearch,
     JiraFlavor,
     JiraIssue,
@@ -34,11 +35,13 @@ from platform_api.orchestration.jira import (
     JiraUnavailable,
     JiraWriteConnector,
     NewIssue,
+    jira_site,
     write_label,
 )
 from platform_api.orchestration.jira_rest import JiraAuth, JiraRestAdapter
 from platform_api.orchestration.write_actions import (
     CONNECTOR_TIMEOUT,
+    Site,
     WriteAction,
     WriteKey,
     WriteRefused,
@@ -79,6 +82,10 @@ class Target:
 
     def adapter(self, auth: JiraAuth) -> JiraRestAdapter:
         return JiraRestAdapter(self.base_url, self.flavor, auth, self.client, sleep=self.waits)
+
+    @property
+    def site(self) -> Site:
+        return PRACTICE_SITE if self.practice is not None else jira_site(self.base_url)
 
     def needs_practice(self) -> PracticeJira:
         if self.practice is None:
@@ -319,7 +326,7 @@ async def test_a_retry_after_a_made_ticket_uses_our_record_and_never_searches(
     target: Target, db: Database
 ):
     practice = target.needs_practice()
-    connector = JiraWriteConnector(target.jira, db)
+    connector = JiraWriteConnector(target.jira, db, target.site)
     first = await connector.execute(ACTION, WRITE)
     practice.calls.clear()
     assert await connector.execute(ACTION, WRITE) == first
@@ -335,7 +342,7 @@ async def test_a_crash_after_jiras_201_finds_our_own_ticket_and_makes_no_second(
     target: Target, db: Database
 ):
     practice = target.needs_practice()
-    connector = JiraWriteConnector(target.jira, db)
+    connector = JiraWriteConnector(target.jira, db, target.site)
     # As if the platform stopped after Jira made the ticket and before it noted the key.
     await crashed(connector, WRITE)
     made = await target.jira.create_issue(
@@ -352,7 +359,7 @@ async def test_a_ticket_someone_else_planted_with_our_label_is_never_taken_as_ou
     planted = await practice.create(
         "MOCK", "Looks like ours", "", [write_label(WRITE)], "Task", creator="mallory"
     )
-    connector = JiraWriteConnector(target.jira, db)
+    connector = JiraWriteConnector(target.jira, db, target.site)
     # With no record of our own, the platform does not search: it makes its own ticket.
     ours = await connector.execute(ACTION, WRITE)
     assert ours != planted.key
@@ -368,7 +375,7 @@ async def test_a_create_jira_refused_or_was_too_busy_for_is_tried_fresh_next_tim
     target: Target, db: Database
 ):
     practice = target.needs_practice()
-    connector = JiraWriteConnector(target.jira, db)
+    connector = JiraWriteConnector(target.jira, db, target.site)
     practice.fail_next(429, times=3, retry_after=1)
     with pytest.raises(JiraUnavailable):
         await connector.execute(ACTION, WRITE)
@@ -382,7 +389,7 @@ async def test_the_connector_turns_a_refusal_into_a_write_that_is_not_retried(
     target: Target, db: Database
 ):
     target.needs_practice()
-    connector = JiraWriteConnector(target.jira, db)
+    connector = JiraWriteConnector(target.jira, db, target.site)
     action = WriteAction("jira", "create_ticket", {"project": "MOCK"}, {"title": "", "body": ""})
     with pytest.raises(WriteRefused):
         await connector.execute(action, WriteKey(RunId("run_1"), ProposalId("prp_1"), 0))
@@ -400,7 +407,7 @@ async def ours(target: Target, title: str, labels: list[str]) -> str:
 
 async def test_a_found_ticket_with_no_creator_is_refused(target: Target, db: Database):
     practice = target.needs_practice()
-    connector = JiraWriteConnector(target.jira, db)
+    connector = JiraWriteConnector(target.jira, db, target.site)
     await practice.create("MOCK", "Upgrade", "", [write_label(WRITE)], "Task", creator=None)
     await crashed(connector, WRITE)
     with pytest.raises(WriteRefused, match="did not make it") as refused:
@@ -413,7 +420,7 @@ async def test_a_found_ticket_already_recorded_for_another_write_is_refused(
     target: Target, db: Database
 ):
     target.needs_practice()
-    connector = JiraWriteConnector(target.jira, db)
+    connector = JiraWriteConnector(target.jira, db, target.site)
     other = WriteKey(WRITE.run_id, WRITE.proposal_id, 5)
     theirs = await connector.execute(ACTION, other)
     # A person gave that ticket this write's label and took the other one off.
@@ -425,7 +432,7 @@ async def test_a_found_ticket_already_recorded_for_another_write_is_refused(
 
 async def test_a_found_ticket_with_another_writes_label_is_refused(target: Target, db: Database):
     target.needs_practice()
-    connector = JiraWriteConnector(target.jira, db)
+    connector = JiraWriteConnector(target.jira, db, target.site)
     other = WriteKey(WRITE.run_id, WRITE.proposal_id, 6)
     await ours(target, "Upgrade", [write_label(other), write_label(WRITE)])
     await crashed(connector, WRITE)
@@ -435,7 +442,7 @@ async def test_a_found_ticket_with_another_writes_label_is_refused(target: Targe
 
 async def test_a_found_ticket_with_another_title_is_refused(target: Target, db: Database):
     target.needs_practice()
-    connector = JiraWriteConnector(target.jira, db)
+    connector = JiraWriteConnector(target.jira, db, target.site)
     await ours(target, "Rotate the keys", [write_label(WRITE)])
     await crashed(connector, WRITE)
     with pytest.raises(WriteRefused, match="title"):
@@ -444,7 +451,7 @@ async def test_a_found_ticket_with_another_title_is_refused(target: Target, db: 
 
 async def test_two_tries_of_one_write_at_once_make_one_ticket(target: Target, db: Database):
     practice = target.needs_practice()
-    connector = JiraWriteConnector(target.jira, db)
+    connector = JiraWriteConnector(target.jira, db, target.site)
     results = await asyncio.wait_for(
         asyncio.gather(
             connector.execute(ACTION, WRITE),
@@ -483,7 +490,12 @@ def test_a_try_ends_before_its_claim_and_the_claim_before_the_gateway_calls_it_l
 
 
 async def test_a_jira_that_never_answers_fails_the_try_in_time_and_frees_the_write(db: Database):
-    connector = JiraWriteConnector(HangingJira(), db, deadline=timedelta(seconds=0.2))  # type: ignore[arg-type]
+    connector = JiraWriteConnector(
+        HangingJira(),  # type: ignore[arg-type]
+        db,
+        PRACTICE_SITE,
+        deadline=timedelta(seconds=0.2),
+    )
     started = asyncio.get_running_loop().time()
     with pytest.raises(JiraUnavailable) as failed:
         # Its own limit, so a deadline that stops working fails here in seconds.
@@ -496,7 +508,7 @@ async def test_a_jira_that_never_answers_fails_the_try_in_time_and_frees_the_wri
 
 async def test_a_found_ticket_made_before_the_write_began_is_refused(target: Target, db: Database):
     practice = target.needs_practice()
-    connector = JiraWriteConnector(target.jira, db)
+    connector = JiraWriteConnector(target.jira, db, target.site)
     earlier = practice.now() - timedelta(minutes=10)
     await practice.create("MOCK", "Upgrade", "", [write_label(WRITE)], "Task", created_at=earlier)
     await crashed(connector, WRITE)

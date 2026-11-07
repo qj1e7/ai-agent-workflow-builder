@@ -8,7 +8,7 @@ import httpx
 from fastapi import FastAPI
 
 from platform_api.db import Database
-from platform_api.orchestration.jira import JiraFlavor, JiraWriteConnector
+from platform_api.orchestration.jira import PRACTICE_SITE, JiraFlavor, JiraWriteConnector
 from platform_api.orchestration.jira_rest import JiraAuth, JiraRestAdapter
 from platform_api.orchestration.write_actions import WriteAction, WriteKey
 from platform_api.practice_jira import PRACTICE_EMAIL, PracticeJira, PracticeTicket, practice_token
@@ -27,6 +27,7 @@ class PracticeKit:
 
     name = "jira"
     operations = JiraWriteConnector.operations
+    site = PRACTICE_SITE
 
     def __init__(self, db: Database, flavor: JiraFlavor = "datacenter") -> None:
         token = practice_token(SIGNING_KEY)
@@ -39,7 +40,7 @@ class PracticeKit:
         self.jira = JiraRestAdapter(
             BASE, flavor, auth, self.client, browse_url="/jira/{key}", sleep=no_wait
         )
-        self.connector = JiraWriteConnector(self.jira, db)
+        self.connector = JiraWriteConnector(self.jira, db, PRACTICE_SITE)
 
     async def execute(self, action: WriteAction, key: WriteKey) -> str:
         return await self.connector.execute(action, key)

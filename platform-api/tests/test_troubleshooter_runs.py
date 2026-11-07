@@ -7,7 +7,12 @@ import httpx
 import pytest
 
 from platform_api.orchestration.approvals import Verdict
-from platform_api.orchestration.jira import JiraPort, JiraUnavailable, JiraWriteConnector
+from platform_api.orchestration.jira import (
+    PRACTICE_SITE,
+    JiraPort,
+    JiraUnavailable,
+    JiraWriteConnector,
+)
 from platform_api.orchestration.runs import Acting, Failed, StepName
 from platform_api.orchestration.service import Orchestrator, Retried
 from platform_api.orchestration.write_actions import WriteGateway
@@ -61,7 +66,9 @@ async def lost_write(h: Harness) -> RunId:
     assert detail is not None
     await h.orchestrator.decide(approval_id, BOB, 0, Verdict.APPROVE, detail.request.digest)
     await h.orchestrator.tick()
-    lossy = gateway_for(h, [JiraWriteConnector(cast(JiraPort, LossyPort(h.jira.jira)), h.db)])
+    lossy = gateway_for(
+        h, [JiraWriteConnector(cast(JiraPort, LossyPort(h.jira.jira)), h.db, PRACTICE_SITE)]
+    )
     reply = await lossy.on_step(run_id, StepName.WRITE_ACTION, N8nExecutionId("42"))
     assert reply.outcome == "failed"
     assert [t.key for t in await h.jira.tickets()] == ["MOCK-1"]

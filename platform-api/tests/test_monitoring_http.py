@@ -25,7 +25,7 @@ from platform_api.orchestration.agents import TaskError
 from platform_api.orchestration.approvals import Verdict
 from platform_api.orchestration.runs import DEADLINES, Acting, StepName
 from platform_api.orchestration.service import Orchestrator
-from platform_api.orchestration.write_actions import WriteAction, WriteGateway, WriteKey
+from platform_api.orchestration.write_actions import Site, WriteAction, WriteGateway, WriteKey
 from platform_api.settings import Settings
 from platform_api.shared import N8nExecutionId, RunId, TaskId, UserId
 from platform_api.wire import FailureReason, FailureStage
@@ -401,6 +401,10 @@ class MadeThenLost:
     @property
     def operations(self) -> frozenset[str]:
         return self.jira.operations
+
+    @property
+    def site(self) -> Site:
+        return self.jira.site
 
     async def execute(self, action: WriteAction, key: WriteKey) -> str:
         await self.jira.execute(action, key)

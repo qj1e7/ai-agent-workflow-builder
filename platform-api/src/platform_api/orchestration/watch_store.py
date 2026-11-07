@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Protocol
 
 from platform_api.db import Database, UnitOfWork
+from platform_api.orchestration.dispatch import Identity
 from platform_api.orchestration.jira import JiraError
 from platform_api.orchestration.runs import (
     STATE_NAMES,
@@ -34,6 +35,7 @@ from platform_api.orchestration.watch import (
     Standing,
     standing,
 )
+from platform_api.orchestration.write_actions import Proposal
 from platform_api.shared import ApprovalId, ProposalId, RunId, SoftwareId, UseCaseId
 from platform_api.wire import RunState as RunStateName
 
@@ -107,9 +109,10 @@ class WatchStore:
         uow: UnitOfWork,
         record: RunRecord,
         reviewed: Reviewed,
-        proposal_id: ProposalId | None,
+        proposal: Proposal | None,
     ) -> None:
-        """Keeps what one check learned. The same review again changes nothing."""
+        """Keeps what one check learned. The same review again changes nothing. Each ticket keeps
+        the Jira site its action targets, the only site it can be written in (ADR 0041)."""
         use_case_id = record.spec.use_case_id
         for entry in reviewed.learned:
             if isinstance(entry, ReadNewest):
@@ -123,21 +126,23 @@ class WatchStore:
                     "ON CONFLICT (use_case_id, software_id) DO NOTHING",
                     (use_case_id, entry.software_id, entry.newest, uow.now),
                 )
-        if proposal_id is None:
+        if proposal is None:
             return
         for ticket in reviewed.tickets:
+            site = proposal.actions[ticket.action_index].target.get("site")
             await uow.conn.execute(
                 "INSERT INTO orchestration.proposed_tickets (proposal_id, action_index, run_id, "
-                "use_case_id, software_id, version, status) "
-                "VALUES (%s, %s, %s, %s, %s, %s, 'proposed') "
+                "use_case_id, software_id, version, status, site) "
+                "VALUES (%s, %s, %s, %s, %s, %s, 'proposed', %s) "
                 "ON CONFLICT (proposal_id, action_index) DO NOTHING",
                 (
-                    proposal_id,
+                    proposal.id,
                     ticket.action_index,
                     record.run_id,
                     use_case_id,
                     ticket.software_id,
                     ticket.version,
+                    site if isinstance(site, str) else None,
                 ),
             )
 
@@ -166,13 +171,17 @@ class WatchStore:
             case _:
                 pass
 
-    async def written_tickets(self, uow: UnitOfWork, use_case_id: UseCaseId) -> list[WrittenTicket]:
+    async def written_tickets(
+        self, uow: UnitOfWork, use_case_id: UseCaseId, site: Identity
+    ) -> list[WrittenTicket]:
+        """The tickets written in this Jira site. A key names a ticket only within its site, and a
+        ticket from before sites were kept has none, so it is never in the list."""
         rows = await (
             await uow.conn.execute(
                 "SELECT proposal_id, action_index, software_id, version, ticket_key "
                 "FROM orchestration.proposed_tickets WHERE use_case_id = %s AND status = 'written' "
-                "ORDER BY proposal_id, action_index",
-                (use_case_id,),
+                "AND site = %s ORDER BY proposal_id, action_index",
+                (use_case_id, site),
             )
         ).fetchall()
         return [
@@ -309,9 +318,11 @@ class WatchlistFacts(Protocol):
 
 
 class WatchFacts:
-    def __init__(self, db: Database, tickets: TicketStatusPort) -> None:
+    def __init__(self, db: Database, tickets: TicketStatusPort, site: Identity) -> None:
         self._db = db
         self._tickets = tickets
+        self._site = site
+        """The Jira site the TicketStatusPort reads. Wiring builds both from one Jira address."""
         self._store = WatchStore()
 
     async def standings(
@@ -337,7 +348,7 @@ class WatchFacts:
 
     async def _refresh(self, use_case_id: UseCaseId) -> None:
         async with self._db.transaction("orchestration") as uow:
-            written = await self._store.written_tickets(uow, use_case_id)
+            written = await self._store.written_tickets(uow, use_case_id, self._site)
         if not written:
             return
         try:

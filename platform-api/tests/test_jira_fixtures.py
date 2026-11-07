@@ -14,6 +14,7 @@ import pytest
 
 from platform_api.db import Database
 from platform_api.orchestration.jira import (
+    PRACTICE_SITE,
     IssueSearch,
     JiraFlavor,
     JiraRefused,
@@ -431,6 +432,6 @@ async def test_a_browse_address_puts_the_key_in_made_safe(db: Database):
     plain = JiraRestAdapter(BASES["datacenter"], "datacenter", JiraAuth.bearer("t"), client)
     assert plain.browse_url("OPS-7") == "https://jira.example.com/browse/OPS-7"
     assert (
-        JiraWriteConnector(jira, db).link("A B/1")
+        JiraWriteConnector(jira, db, PRACTICE_SITE).link("A B/1")
         == "https://jira.example.com/jira/browse/A%20B%2F1?from=wab"
     )

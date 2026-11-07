@@ -178,7 +178,10 @@ def _what_next(stage: Stage, failure: Failure) -> str:
 
 
 def cannot_retry(stage: Stage, failure: Failure) -> str:
-    return f"{failure.reason.value} cannot be retried. {stop_advice(stage is Stage.ACTING)}"
+    return (
+        f"{failure.reason.value} cannot be retried: {sentence(failure.message)} "
+        f"{stop_advice(stage is Stage.ACTING)}"
+    )
 
 
 def run_failed(stage: Stage, failure: Failure) -> PendingEvent:
