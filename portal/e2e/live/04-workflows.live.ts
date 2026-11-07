@@ -1,12 +1,22 @@
 import { randomUUID } from 'node:crypto'
 import type { APIRequestContext, Page } from '@playwright/test'
+import path from 'node:path'
+import { expectAccessible } from '../support/axe'
 import { MOCK_MODEL, MOCK_MODEL_URL, SettingsApi } from './support/settings'
 import { expect, test } from './support/test'
-import { devContext, shot } from './support/ui'
+import { devContext, OUT, shot } from './support/ui'
 
 const heading = (page: Page) => page.getByRole('heading', { level: 1 })
 const rowOf = (page: Page, useCaseId: string) => page.locator(`li[data-workflow-id="${useCaseId}"]`)
-const nextRun = (page: Page) => page.locator('dt', { hasText: 'Next run' }).locator('xpath=following-sibling::dd[1]')
+const nextRun = (page: Page) => page.locator('dd small', { hasText: 'Next run:' })
+const moreActions = (page: Page) => page.getByRole('button', { name: 'More actions' })
+const menuItem = (page: Page, name: string) => page.getByRole('menuitem', { name })
+
+/** Opens More actions with the mouse and picks one item. */
+async function pickFromMenu(page: Page, name: string): Promise<void> {
+  await moreActions(page).click()
+  await menuItem(page, name).click()
+}
 const VERSION_CHECKER = { card_id: 'crd_version_checker', values: { 'GitHub repository': 'langchain-ai/langgraph', 'Jira project': 'MOCK' } }
 
 async function connectMockModel(baseURL: string): Promise<void> {
@@ -46,7 +56,8 @@ test('alice opens a workflow from Workflows, presses Run now, and lands on the n
   await expect(heading(page)).toHaveText(workflow.name)
   await shot(page, info, 'p9-04-workflow-page')
 
-  await page.getByRole('button', { name: 'Run now' }).click()
+  await expect(page.getByRole('button', { name: 'Run now' }), 'Run now lives in More actions').toHaveCount(0)
+  await pickFromMenu(page, 'Run now')
   await expect(page).toHaveURL(/\/runs\/run_[A-Za-z0-9]+$/)
   const runId = new URL(page.url()).pathname.split('/').at(-1) ?? ''
   const run = await backend.run(runId)
@@ -64,15 +75,21 @@ test('alice pauses a workflow, its next run reads Paused and Run now goes, and r
   const page = await context.newPage()
   await page.goto(`/workflows/${workflow.id}`)
   await expect(heading(page)).toHaveText(workflow.name)
-  await expect(nextRun(page)).toHaveText('Not scheduled')
+  await expect(nextRun(page)).toHaveText('Next run: Not scheduled')
 
   await page.getByRole('button', { name: 'Pause' }).click()
-  await expect(nextRun(page)).toHaveText('Paused')
+  await expect(nextRun(page)).toHaveText('Next run: Paused')
+  await expect(page.getByRole('main')).toContainText('Paused. It won’t run until you resume it.')
   await expect(page.getByRole('button', { name: 'Resume' })).toBeFocused()
-  await expect(page.getByRole('button', { name: 'Run now' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Pause' })).toHaveCount(0)
+  await moreActions(page).click()
+  await expect(menuItem(page, 'Run now')).toHaveCount(0)
+  await page.keyboard.press('Escape')
   await page.getByRole('button', { name: 'Resume' }).click()
-  await expect(nextRun(page)).toHaveText('Not scheduled')
-  await expect(page.getByRole('button', { name: 'Run now' })).toBeVisible()
+  await expect(nextRun(page)).toHaveText('Next run: Not scheduled')
+  await expect(page.getByRole('button', { name: 'Pause' })).toBeFocused()
+  await moreActions(page).click()
+  await expect(menuItem(page, 'Run now')).toBeVisible()
   await context.close()
 })
 
@@ -82,10 +99,17 @@ test('alice deletes a workflow, it leaves the list, and Undo puts it back', asyn
   const page = await context.newPage()
   await page.goto(`/workflows/${useCaseId}`)
   await expect(heading(page)).toHaveText(name)
-  await page.getByRole('button', { name: 'Delete' }).click()
+  await pickFromMenu(page, 'Delete')
   const dialog = page.getByRole('alertdialog', { name: `Delete ${name}?` })
   await expect(dialog).toBeVisible()
+  await expect(dialog).toContainText('its schedule stops')
+  await expect(dialog).toContainText('Undo stays in the message that follows.')
   await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused()
+  await dialog.getByRole('button', { name: 'Cancel' }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect(moreActions(page), 'Cancel hands focus back to More actions').toBeFocused()
+  await expect(heading(page)).toHaveText(name)
+  await pickFromMenu(page, 'Delete')
   await dialog.getByRole('button', { name: 'Delete workflow' }).click()
 
   await expect(page).toHaveURL(/\/workflows$/)
@@ -110,8 +134,8 @@ test('bob sees who may approve and the recent runs, with no Run now, Pause or De
   await page.goto(`/workflows/${workflow.id}`)
   await expect(heading(page)).toHaveText(workflow.name)
   await expect(page.getByRole('main')).toContainText('Any Approver except the people who start or own it')
-  await expect(page.getByRole('region', { name: 'Recent runs' }).getByRole('link').first()).toBeVisible()
-  for (const name of ['Run now', 'Pause', 'Resume', 'Delete']) await expect(page.getByRole('button', { name })).toHaveCount(0)
+  await expect(page.getByRole('region', { name: 'Recent activity' }).getByRole('link').first()).toBeVisible()
+  for (const name of ['Run now', 'Pause', 'Resume', 'Delete', 'More actions', 'Change schedule', 'Set schedule']) await expect(page.getByRole('button', { name })).toHaveCount(0)
   await shot(page, info, 'p9-04-approver')
   await context.close()
 })
@@ -131,3 +155,106 @@ test('the Software watchlist opens on the Software page, from its row and from i
   await expect(heading(page)).toHaveText('Software watchlist')
   await context.close()
 })
+
+test('scenario H: alice changes the schedule, pauses and deletes through the page, every menu step by keyboard', async ({ browser, request }, info) => {
+  const workflow = await agentWorkflow(request, 'scenario h')
+  const context = await devContext(browser, 'alice')
+  const page = await context.newPage()
+  await page.goto(`/workflows/${workflow.id}`)
+  await expect(heading(page)).toHaveText(workflow.name)
+
+  const order = await page.evaluate(() => {
+    const at = (needle: string) => document.body.innerText.indexOf(needle)
+    return ['On. It has no schedule', 'Approval', 'Recent activity', 'Technical details'].map(at)
+  })
+  expect(order.every((place) => place >= 0), 'every section is on the page').toBe(true)
+  expect(order, 'banner, approval, recent activity, then technical details').toEqual([...order].sort((a, b) => a - b))
+
+  await moreActions(page).focus()
+  await expect(moreActions(page)).toHaveAttribute('aria-haspopup', 'menu')
+  await expect(moreActions(page)).toHaveAttribute('aria-expanded', 'false')
+  await page.keyboard.press('Enter')
+  await expect(moreActions(page)).toHaveAttribute('aria-expanded', 'true')
+  await expect(menuItem(page, 'Run now')).toBeFocused()
+  await page.keyboard.press('ArrowDown')
+  await expect(menuItem(page, 'Set a schedule')).toBeFocused()
+  await page.keyboard.press('ArrowDown')
+  await expect(menuItem(page, 'Delete')).toBeFocused()
+  await page.keyboard.press('ArrowDown')
+  await expect(menuItem(page, 'Run now'), 'the arrow keys wrap').toBeFocused()
+  await page.keyboard.press('End')
+  await expect(menuItem(page, 'Delete')).toBeFocused()
+  await page.keyboard.press('Home')
+  await expect(menuItem(page, 'Run now')).toBeFocused()
+  await expectAccessible(page, path.join(OUT, 'axe'), 'workflow-page-menu-open')
+  await shot(page, info, 'n16-menu-open')
+  await page.keyboard.press('Escape')
+  await expect(moreActions(page)).toHaveAttribute('aria-expanded', 'false')
+  await expect(moreActions(page), 'Escape returns focus to the button').toBeFocused()
+
+  await page.keyboard.press('Space')
+  await expect(moreActions(page)).toHaveAttribute('aria-expanded', 'true')
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('heading', { name: 'Change schedule' })).toBeVisible()
+  await page.getByLabel('Day').selectOption('monday')
+  await page.getByLabel('Time, Singapore').fill('09:00')
+  await page.getByRole('button', { name: 'Save schedule' }).click()
+  await expect(page.getByRole('heading', { name: 'Change schedule' })).toHaveCount(0)
+  await expect(page.getByRole('main')).toContainText('Every Monday at 9:00')
+  await expect(page.getByRole('main')).toContainText('Set by Alice.')
+  await expect(page.getByRole('button', { name: 'Change schedule' }), 'focus returns to the control that opened the form').toBeFocused()
+
+  await page.getByRole('button', { name: 'Pause' }).focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('main')).toContainText('Paused. It won’t run until you resume it.')
+  await expect(page.getByRole('button', { name: 'Resume' })).toBeFocused()
+  await shot(page, info, 'n16-paused')
+
+  await moreActions(page).focus()
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('End')
+  await expect(menuItem(page, 'Delete')).toBeFocused()
+  await page.keyboard.press('Enter')
+  const dialog = page.getByRole('alertdialog', { name: `Delete ${workflow.name}?` })
+  await expect(dialog).toContainText('its schedule stops')
+  await expect(dialog.getByRole('button', { name: 'Cancel' }), 'the safe choice has focus').toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  await expect(moreActions(page)).toBeFocused()
+  const kept = await request.get(`/api/v1/use-cases/${workflow.id}`, { headers: { 'X-Dev-User': 'alice' } })
+  expect(kept.status(), 'cancelling deleted nothing').toBe(200)
+
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('End')
+  await page.keyboard.press('Enter')
+  await dialog.getByRole('button', { name: 'Delete workflow' }).click()
+  await expect(page).toHaveURL(/\/workflows$/)
+  await expect(page.getByRole('button', { name: 'Undo' })).toBeFocused()
+  await context.close()
+})
+
+for (const phone of [false, true]) {
+  test(`the workflow page passes WCAG 2.2 AA, keeps reduced motion calm and does not scroll sideways at ${phone ? '390' : '1440'} px`, async ({ browser, request }, info) => {
+    const workflow = await agentWorkflow(request, phone ? 'phone' : 'desktop')
+    const context = await devContext(browser, 'alice', { phone, reducedMotion: true })
+    const page = await context.newPage()
+    await page.goto(`/workflows/${workflow.id}`)
+    await expect(heading(page)).toHaveText(workflow.name)
+    await page.waitForFunction(() => document.getAnimations().length === 0)
+    await expectAccessible(page, path.join(OUT, 'axe'), `workflow-page-${phone ? 'phone' : 'desktop'}`)
+    await moreActions(page).click()
+    await expect(menuItem(page, 'Delete')).toBeVisible()
+    const animating = await page.evaluate(() => document.getAnimations().filter((a) => a.effect?.getTiming().iterations === Infinity).length)
+    expect(animating, 'no infinite animation runs under reduced motion').toBe(0)
+    await expectAccessible(page, path.join(OUT, 'axe'), `workflow-page-menu-${phone ? 'phone' : 'desktop'}`)
+    for (const name of ['Pause', 'More actions', 'Run now', 'Set a schedule', 'Delete']) {
+      const box = await page.getByRole(name === 'Run now' || name === 'Set a schedule' || name === 'Delete' ? 'menuitem' : 'button', { name }).first().boundingBox()
+      expect(box?.height ?? 0, `${name} is at least 44 px tall`).toBeGreaterThanOrEqual(44)
+    }
+    const widths = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth])
+    expect(widths[0], 'the page does not scroll sideways').toBeLessThanOrEqual(widths[1] ?? 0)
+    await shot(page, info, `n16-workflow-${phone ? 'phone' : 'desktop'}`)
+    await context.close()
+  })
+}
