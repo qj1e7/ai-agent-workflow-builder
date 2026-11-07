@@ -119,10 +119,9 @@ def test_a_saved_agent_is_picked_and_a_planted_order_in_a_release_changes_nothin
     assert all(t["project"] != "SECRET" for t in api.tickets())
 
 
-def test_a_version_checker_that_cannot_read_github_proposes_nothing_and_a_retry_can(
+def test_a_github_outage_stops_the_version_checker_before_its_model_can_ask_for_a_ticket(
     api: Api, github: MockGithub, mock_model: None
 ) -> None:
-    """The mock model asks for a ticket whatever GitHub answered, as a careless model might."""
     github.set_mode("unavailable")
     run_id = run_agents(api, "crd_version_checker", LANGGRAPH, "e2e outage")
     stopped = api.wait_for_state("alice", run_id, {"failed", "awaiting_approval"})

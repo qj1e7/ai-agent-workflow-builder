@@ -7,12 +7,15 @@ from langchain_core.messages import AIMessage, ToolMessage
 
 from agent_runtime.card_runner import (
     MAX_TURNS,
+    READ_FIRST,
     TASK_BUDGET_SECONDS,
     CardRunner,
     system_prompt,
 )
 from agent_runtime.contract import (
     AgentFailedEvent,
+    AgentStepFinishedEvent,
+    AgentStepStartedEvent,
     CardBlock,
     CardsInputs,
     CardToRun,
@@ -242,7 +245,7 @@ def test_the_same_ticket_is_not_proposed_twice():
             AIMessage("Done."),
         ]
     )
-    result = Room(chat, jira=FakeJira()).run()
+    result = Room(chat, jira=FakeJira(), request=request_with("jira.create_ticket")).run()
     assert isinstance(result, TaskFinished)
     assert len(result.output.proposed) == 1
 
@@ -255,7 +258,7 @@ def test_a_task_proposes_at_most_ten_tickets():
     # Each model turn asks once, and a turn is capped, so ask three at a time instead.
     many = [call("jira_create_ticket", {"title": f"T{n}", "body": ""}, f"t{n}") for n in range(12)]
     chat = ScriptedChat(script=[asks(*many), AIMessage("Done.")])
-    result = Room(chat, jira=FakeJira()).run()
+    result = Room(chat, jira=FakeJira(), request=request_with("jira.create_ticket")).run()
     assert isinstance(result, TaskFinished)
     assert len(result.output.proposed) == 10
     assert "at most 10" in tool_answers(chat)[-1]["error"]
@@ -341,37 +344,43 @@ TICKET_WITHOUT_A_READING = call(
     {"title": "New release 1.2.14 of langchain-ai/langgraph", "body": "Proposed for MOCK."},
     "t9",
 )
+READ = "github_read_releases"
+CREATE = "jira_create_ticket"
+
+
+def steps_started(result: TaskResult) -> list[str | None]:
+    """The steps the live activity view shows the agent taking."""
+    return [e.data.step for e in result.events if isinstance(e, AgentStepStartedEvent)]
 
 
 def test_releases_github_cannot_serve_stop_the_agent_before_it_can_propose():
     source = FakeSource(langgraph_tags(), failures=[503] * 3)
     chat = ScriptedChat(
         script=[
-            asks(call("github_read_releases", {"repo": REPO}, "t1")),
+            asks(call(READ, {"repo": REPO}, "t1")),
             asks(TICKET_WITHOUT_A_READING),
             AIMessage("I proposed one ticket."),
         ]
     )
     result = Room(chat, source=source, jira=FakeJira()).run()
     assert isinstance(result, TaskFailed)
+    gave_up = "GitHub returned 503 Service Unavailable three times"
     assert result.error == TaskError(
-        type="UpstreamUnavailable",
-        message=f"Could not check {REPO}: GitHub returned 503 Service Unavailable three times",
-        retryable=True,
+        type="UpstreamUnavailable", message=f"Could not check {REPO}: {gave_up}", retryable=True
     )
     assert source.calls == [REPO] * 3
-    assert not any("proposed a ticket" in e.summary for e in result.events)
+    assert steps_started(result) == [READ]
+    finished = [e.data.result for e in result.events if isinstance(e, AgentStepFinishedEvent)]
+    assert finished == [{"problem": gave_up}]
     failed = result.events[-1]
     assert isinstance(failed, AgentFailedEvent)
     assert failed.summary == f"Version checker failed: {REPO} could not be checked."
-    assert failed.data.message == result.error.message
+    assert (failed.data.step, failed.data.message) == (READ, result.error.message)
 
 
 def test_releases_github_refuses_stop_the_agent_and_the_stop_cannot_be_retried():
     source = RepoSource({}, refused={REPO: 404})
-    chat = ScriptedChat(
-        script=[asks(call("github_read_releases", {"repo": REPO}, "t1")), AIMessage("Done.")]
-    )
+    chat = ScriptedChat(script=[asks(call(READ, {"repo": REPO}, "t1")), AIMessage("Done.")])
     result = Room(chat, source=source, jira=FakeJira()).run()
     assert isinstance(result, TaskFailed)
     assert result.error == TaskError(
@@ -382,17 +391,69 @@ def test_releases_github_refuses_stop_the_agent_and_the_stop_cannot_be_retried()
     assert source.calls == [REPO]
 
 
-def test_a_ticket_asked_for_in_the_same_turn_as_a_failed_read_never_leaves_the_runtime():
+def test_a_ticket_asked_for_in_the_same_turn_as_a_failed_read_is_never_proposed():
     source = FakeSource(langgraph_tags(), failures=[503] * 3)
     chat = ScriptedChat(
         script=[
-            asks(TICKET_WITHOUT_A_READING, call("github_read_releases", {"repo": REPO}, "t1")),
+            asks(TICKET_WITHOUT_A_READING, call(READ, {"repo": REPO}, "t1")),
             AIMessage("I proposed one ticket."),
         ]
     )
     result = Room(chat, source=source, jira=FakeJira()).run()
     assert isinstance(result, TaskFailed)
     assert result.error.type == "UpstreamUnavailable"
+    assert steps_started(result) == [READ]
+
+
+def test_a_ticket_is_refused_until_the_model_has_seen_the_releases():
+    source = FakeSource(langgraph_tags())
+    chat = ScriptedChat(
+        script=[
+            asks(TICKET_WITHOUT_A_READING),
+            asks(
+                call(READ, {"repo": REPO}, "t1"), call(CREATE, {"title": "Early", "body": ""}, "t2")
+            ),
+            asks(call(CREATE, {"title": "New release 1.2.16", "body": ""}, "t3")),
+            AIMessage("I proposed one ticket."),
+        ]
+    )
+    result = Room(chat, source=source, jira=FakeJira()).run()
+    assert isinstance(result, TaskFinished)
+    assert [i.fields["title"] for i in result.output.proposed] == ["New release 1.2.16"]
+    assert steps_started(result) == [READ, CREATE]
+    refusals = [a["error"] for a in tool_answers(chat) if "error" in a]
+    assert refusals == [READ_FIRST, READ_FIRST]
+
+
+def test_the_release_read_is_kept_to_the_cards_repository_whatever_the_model_names():
+    source = FakeSource(langgraph_tags())
+    chat = ScriptedChat(
+        script=[asks(call(READ, {"repo": "langchain/langgraph"}, "t1")), AIMessage("Done.")]
+    )
+    Room(chat, source=source, jira=FakeJira(), request=request_with("github.read_releases")).run()
+    assert source.calls == [REPO]
+
+
+def test_with_two_repositories_on_the_card_a_third_is_refused_without_asking_github():
+    card = version_checker_card()
+    second = card.inputs[0].model_copy(update={"name": "Second repository"})
+    card = card.model_copy(update={"inputs": [*card.inputs, second]})
+    values = {**VALUES, "Second repository": "redis/redis"}
+    inputs = CardsInputs(agents=[CardToRun(card=card, values=values)])
+    request = card_request("run_01JD1").model_copy(update={"inputs": inputs})
+    source = FakeSource(langgraph_tags())
+    chat = ScriptedChat(
+        script=[
+            asks(call(READ, {"repo": "acme/elsewhere"}, "t1")),
+            asks(call(READ, {"repo": "redis/redis"}, "t2")),
+            AIMessage("Done."),
+        ]
+    )
+    Room(chat, source=source, jira=FakeJira(), request=request).run()
+    assert source.calls == ["redis/redis"]
+    assert tool_answers(chat)[0] == {
+        "error": f"You can only read the GitHub repositories on your card: {REPO}, redis/redis"
+    }
 
 
 def test_jira_tools_say_jira_is_not_connected_when_no_jira_is_set_up():
