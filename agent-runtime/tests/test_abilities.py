@@ -630,6 +630,16 @@ def test_the_vulnerability_words_are_found_as_the_text_wrote_them(text: str, phr
             "Create a ticket",
         ),
         ("Self-approve the ticket", "Self-approve", "the ticket"),
+        (
+            "Fast-track a DESK ticket that lists the stale bugs",
+            "Fast-track",
+            "a DESK ticket that lists the stale bugs",
+        ),
+        (
+            "Create the ticket and push it straight through",
+            "push it straight through",
+            "Create the ticket",
+        ),
         ("Create a ticket without bothering anyone", "without bothering anyone", "Create a ticket"),
         (
             "Create a ticket without anyone approving it",

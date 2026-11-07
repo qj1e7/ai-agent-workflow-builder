@@ -1431,6 +1431,8 @@ SKIPS_A_YES: Final = re.compile(
       | \bno\s+(?:[\w']+\s+)?{_A_YES}(?:\s+from\s+[\w']+)?\s+(?:{_NOT_NEEDED}|first|at\s+all)\b
       | (?:^|[,;:(\-]\s*)no\s+{_A_YES}\s*(?:[,;.!)]|$)
       | \bno\s+questions\s+asked\b
+      | \bfast-?track(?:s|ed|ing)?\b
+      | \b(?:push|rush|wave|force)\s+{_IT}\s+(?:straight\s+)?through\b
       | \bno\s+human\s+in\s+the\s+loop\b
       | \bon\s+my\s+(?:authority|say-so)\b
       | \b{_A_YES}\s+can\s+wait\b
