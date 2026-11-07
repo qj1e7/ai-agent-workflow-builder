@@ -15,7 +15,10 @@ const countOnTab = async (page: Page): Promise<number> => {
   const name = (await menu(page).getByRole('link', { name: /^Workflows(, \d+ need you)?$/ }).getAttribute('aria-label')) ?? 'Workflows'
   return Number(/(\d+) need you/.exec(name)?.[1] ?? 0)
 }
-const countInHeading = async (page: Page): Promise<number> => Number((await page.getByRole('main').getByRole('heading', { level: 2, name: /^Needs you/ }).innerText()).replace(/\D/g, ''))
+const countInHeading = async (page: Page): Promise<number> => {
+  const heading = page.getByRole('main').getByRole('heading', { level: 2, name: /^Needs you/ })
+  return (await heading.count()) === 0 ? 0 : Number((await heading.innerText()).replace(/\D/g, ''))
+}
 
 interface Made {
   readonly requestId: string
@@ -66,8 +69,8 @@ test('a reply is in the asker’s Needs you until they open it, then it stays un
   await expect(page).toHaveURL(/\/workflows$/)
   await expect(followingRow(page, requestId)).toBeVisible()
   await expect(replyItem(page, requestId)).toHaveCount(0)
-  await expect.poll(() => countInHeading(page).catch(() => 0), { message: 'Needs you went down by one' }).toBeLessThanOrEqual(before - 1)
-  expect(await countOnTab(page)).toBe(await countInHeading(page).catch(() => 0))
+  await expect.poll(() => countInHeading(page), { message: 'Needs you went down by one' }).toBeLessThanOrEqual(before - 1)
+  expect(await countOnTab(page), 'the tab and Needs you still agree').toBe(await countInHeading(page))
   await page.goto('/')
   await expect(replyItem(page, requestId), 'Home agrees').toHaveCount(0)
   assertClean(watch)
@@ -165,7 +168,7 @@ test('alice discards a draft by keyboard, after a question that says what is los
   await context.close()
 })
 
-test('the search and the filters stay hidden until the search button is pressed', async ({ browser, backend }) => {
+test('the search and the filters stay hidden until the search button is pressed', async ({ browser, backend }, info) => {
   await backend.waitingRun('alice')
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()
@@ -174,10 +177,13 @@ test('the search and the filters stay hidden until the search button is pressed'
   await expect(page.getByRole('searchbox', { name: 'Find a workflow' })).toHaveCount(0)
   await expect(page.getByRole('group', { name: 'Show' })).toHaveCount(0)
   await expect(page.getByRole('main').locator('li[data-workflow-id] [data-state]')).toHaveCount(0)
+  await search.scrollIntoViewIfNeeded()
+  await shot(page, info, 'n9b-search-hidden')
   await search.focus()
   await page.keyboard.press('Enter')
   await expect(page.getByRole('searchbox', { name: 'Find a workflow' })).toBeFocused()
   await expect(page.getByRole('button', { name: 'Stopped', exact: true })).toBeVisible()
+  await shot(page, info, 'n9b-search-open')
   await page.getByRole('button', { name: 'Hide search' }).click()
   await expect(page.getByRole('searchbox', { name: 'Find a workflow' })).toHaveCount(0)
   await context.close()
