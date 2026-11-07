@@ -1348,6 +1348,9 @@ def _without(text: str, phrase: str) -> str | None:
 
 WRITE_VERBS: Final = WRITES | ABILITIES[-1].verbs
 """The verbs that ask for a change: a write, or the creation of a ticket."""
+OPENS_A_TICKET_BEFORE: Final = words("a an one single new another the")
+""""open" asks for a change only before a ticket to open, as "open one ticket"; "open bugs" is
+the state of the tickets looked for."""
 
 
 def change_verbs_in(text: str) -> list[str]:
@@ -1355,10 +1358,14 @@ def change_verbs_in(text: str) -> list[str]:
     describes tickets ("tickets closed"), and "open" is also the state of a ticket, so neither
     counts."""
     reader = _reader(ABILITIES)
+    row = _tokens(text)
     found: list[str] = []
-    for word in _tokens(text):
+    for at, word in enumerate(row):
         verb = reader.verb(word)
-        if verb is None or word.proper or verb[1] == "ed" or verb[0] == "open":
+        if verb is None or word.proper or verb[1] == "ed":
+            continue
+        after = row[at + 1].low if at + 1 < len(row) else ""
+        if verb[0] == "open" and after not in OPENS_A_TICKET_BEFORE:
             continue
         if verb[0] in WRITE_VERBS:
             found.append(verb[0])
@@ -1388,7 +1395,10 @@ def commands_a_change(text: str) -> bool:
         if before in ("don't", "do", "never", "not", "no", "without"):
             continue
         verb = reader.verb(word)
-        if verb is None or word.proper or verb[1] != "base" or verb[0] == "open":
+        after = row[at + 1].low if at + 1 < len(row) else ""
+        if verb is None or word.proper or verb[1] != "base":
+            continue
+        if verb[0] == "open" and after not in OPENS_A_TICKET_BEFORE:
             continue
         if verb[0] in WRITE_VERBS - NOTIFIES and (word.starts or not reader.acts(row[at - 1])):
             return True

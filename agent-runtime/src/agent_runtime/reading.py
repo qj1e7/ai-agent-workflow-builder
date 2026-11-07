@@ -734,6 +734,11 @@ def _kind_of(text: str, start: int, end: int, said: Said) -> RowKind:
     return "look_for"
 
 
+def negated(text: str) -> bool:
+    """Whether the words say no to something, as "don't ping me" or "run it without me"."""
+    return NEGATED.search(text) is not None
+
+
 def names_a_yes(text: str) -> bool:
     """Whether the words name a yes, or a person left out of one."""
     text = FROM_ME.sub(" ", text)

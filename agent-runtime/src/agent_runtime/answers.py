@@ -15,6 +15,7 @@ from typing import Final
 from agent_runtime.abilities import (
     VULNERABILITIES_PLANNED,
     Need,
+    change_verbs_in,
     commands_a_change,
     names_a_ticket_field,
     need_of,
@@ -68,6 +69,7 @@ from agent_runtime.reading import (
     TaskRead,
     leftovers,
     names_a_yes,
+    negated,
     render_place,
     render_schedule,
     render_search,
@@ -235,12 +237,16 @@ def _skip_verdict(skip: SkipRead, text: str) -> _Skip:
         return _Skip(refused=_refused(text, quote) if quote is not None else _refused(text, text))
     if quote is None:
         return _Skip()
-    if speaks_only_of_self(quote):
-        at = text.casefold().find(quote.casefold())
-        return _Skip(covered=(at, at + len(quote)))
     if names_a_yes(quote) or any(re.fullmatch(r"[A-Z][a-z]+", w) for w in quote.split()[1:]):
         return _Skip(refused=_refused(text, quote))
-    return _Skip(unverified=quote)
+    if not speaks_only_of_self(quote):
+        return _Skip(unverified=quote)
+    if (change_verbs_in(quote) or other_systems(quote)) and not negated(quote):
+        # "Email me" names the staff member and a change too: nothing is covered, so the
+        # change comes back through the coverage check. "Don't ping me" asks for none.
+        return _Skip()
+    at = text.casefold().find(quote.casefold())
+    return _Skip(covered=(at, at + len(quote)))
 
 
 def _theirs(text: str, said: str | None) -> str | None:
@@ -277,7 +283,13 @@ def _watch_clauses(read: TaskRead, text: str) -> list[tuple[int, int]]:
 
 
 def _writes(read: TaskRead, text: str) -> bool:
-    return (read.ticket is not None and read.ticket.creates) or commands_a_change(text)
+    """Whether the request asks for a change, in its own words: a clause that commands one, or
+    the model read a new ticket and the request has a verb that asks for one. The model's
+    reading alone is not enough, so a read with "without approval" is never refused on a
+    ticket the model guessed."""
+    commands = commands_a_change(text)
+    read_a_ticket = read.ticket is not None and read.ticket.creates and bool(change_verbs_in(text))
+    return commands or read_a_ticket
 
 
 def _left_out(span: Span, searching: bool) -> CantRow:

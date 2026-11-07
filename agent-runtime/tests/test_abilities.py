@@ -765,7 +765,8 @@ def test_a_field_named_as_a_topic_or_one_the_agents_read_is_not_held(text: str):
         ("A ticket should be created in SUP", [], False),
         ("List tickets in MOCK that were closed without approval", [], False),
         ("Every Monday, list the open bugs and file one ticket that lists them", ["file"], True),
-        ("Open a ticket for each one", [], False),
+        ("Open a ticket for each one", ["open"], True),
+        ("List the open bugs in SUP", [], False),
         ("please raise one ticket", ["raise"], True),
     ],
 )

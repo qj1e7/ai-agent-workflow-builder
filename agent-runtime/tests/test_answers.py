@@ -620,6 +620,36 @@ def test_only_the_staff_members_own_attention_with_their_words_quoted_is_set_up(
     assert isinstance(answer, SetupCardAnswer), answer
 
 
+def test_an_only_me_quote_that_asks_for_a_delivery_covers_nothing():
+    """ "Email me" names the staff member, and a delivery the platform can't make: the quote
+    hides nothing, so the email comes back as a can't, never a card."""
+    answer = answer_of(
+        read(
+            skips_the_yes=SkipRead(whose="only_me", said="Email me"),
+            schedule="weekly",
+            search=search(updated=DaysRead(how="before", days=14), said="stale tickets"),
+            ticket=TicketRead(creates=False, says="list", said="Email me the weekly list"),
+        ),
+        "Email me the weekly list of stale tickets",
+    )
+    assert isinstance(answer, CantAnswer)
+    assert cant_of(answer) == ["Email me the weekly list of stale tickets"]
+    assert answer.cant[0].system == "email"
+
+
+def test_a_read_is_never_refused_on_a_ticket_the_model_guessed():
+    task = "Every Monday, list tickets in MOCK that were closed without approval"
+    answer = answer_of(
+        read(
+            schedule="Every Monday",
+            search=search(project="MOCK", status="done", said="tickets in MOCK that were closed"),
+            ticket=TicketRead(creates=True, says="list", said=task),
+        ),
+        task,
+    )
+    assert isinstance(answer, CantAnswer) and cant_of(answer) == ["without approval"]
+
+
 def test_an_only_me_quote_that_names_nobody_is_refused_as_an_approvers_when_nothing_else_does():
     task = "Create one ticket in SUP that lists the stale bugs, hands off"
     answer = answer_of(
