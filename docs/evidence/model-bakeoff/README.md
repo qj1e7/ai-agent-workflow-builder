@@ -82,6 +82,7 @@ Each run also records median and p95 latency, mean input and output tokens, and 
 ### Claude Haiku 5.5 through the AI Singapore gateway
 
 - [ ] Waiting for the operator's gateway key. Score Claude Haiku 5.5 on all five golden sets, `understand` included, with a marker for each run, and put the printed table here.
+- [x] The `answer` job (the Planner's answers on Home, plan item N3) ran three times on 7 November 2026: 43/43, 42/43 and 43/43. The bar, the per-case table and the run files are in [answer-baseline.md](answer-baseline.md).
 
 The key is not on the machine that built P12, so this has not run. With the key in the shell (see "A gateway" under "Add a cloud provider and rerun"), run `scripts/checks/p12.sh evals-gateway .` from the repo root. It prints the table and writes `results-haiku.json` under `$EVID/evals` (by default `/tmp/swarm-p12/evals`). The gateway's own price is not in `pricing.json`, so the cost column says "unknown".
 
