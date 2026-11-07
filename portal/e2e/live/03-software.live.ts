@@ -95,7 +95,7 @@ test('a name the list lacks says so plainly and falls back to the GitHub address
   await page.getByRole('button', { name: 'Add Zorblax' }).click()
   const row = page.locator('li[data-status]').filter({ hasText: 'Zorblax' })
   await expect(row).toContainText('fastapi/fastapi')
-  await expect(row).toContainText('Ours 0.115.0')
+  await expect(row).toContainText(/Ours\s*0.115.0/)
   assertClean(watch)
   await context.close()
 })
