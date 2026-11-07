@@ -414,6 +414,12 @@ def _held_row(answer: AnswerRow, request: str, held: list[FieldUse]) -> Understo
     return UnderstoodRow(kind=row.kind, text=text, state="cant_do", note=note)
 
 
+def word_rule_refusal(request: str) -> RefusedAnswer | None:
+    """The refusal the word rule gives before any model call, or None. The product answers it
+    whatever the model then says, so the eval scores it the same way."""
+    return _refusal(visible_words(request))
+
+
 def _refusal(text: str, rest: str | None = None) -> RefusedAnswer | None:
     found = skip_of_a_yes(text)
     if found is None:
@@ -726,7 +732,7 @@ def answer_of(read: TaskRead, request: str) -> PlannerAnswer | None:
 
 
 def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
-    refused = _refusal(visible_words(request.task))
+    refused = word_rule_refusal(request.task)
     if refused is not None:
         return Answered(answer=refused)
     read = ask_model(

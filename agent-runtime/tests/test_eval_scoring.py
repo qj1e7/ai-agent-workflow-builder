@@ -765,3 +765,14 @@ def test_only_the_jobs_named_in_eval_jobs_run():
     assert jobs_chosen({}) == JOBS
     with pytest.raises(ValueError, match="no job: nope"):
         jobs_chosen({"EVAL_JOBS": "nope"})
+
+
+def test_a_word_rule_refusal_scores_as_the_product_answers_even_when_the_reading_did_not_parse():
+    """The product refuses before the model is asked, so a reading that does not parse never
+    reaches the person on such a case; the scorer scores the refusal, not the parse."""
+    case = answer_case("no-need-to-sign-off")
+    checks = ANSWER.score(case, Answer(None, "<not json", None))
+    assert failed(checks) == set()
+    case = answer_case("find-bugs-in-mock")
+    checks = ANSWER.score(case, Answer(None, "<not json", None))
+    assert failed(checks) == {"answered"}

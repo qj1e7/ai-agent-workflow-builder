@@ -3,7 +3,13 @@ from typing import cast
 
 from pydantic import BaseModel
 
-from agent_runtime.answers import ANSWER_SYSTEM, ANSWER_TIMEOUT_SECONDS, TaskRead, answer_of
+from agent_runtime.answers import (
+    ANSWER_SYSTEM,
+    ANSWER_TIMEOUT_SECONDS,
+    TaskRead,
+    answer_of,
+    word_rule_refusal,
+)
 from agent_runtime.contract import (
     CantAnswer,
     CantRow,
@@ -212,9 +218,13 @@ def _card_checks(case: AnswerCase, shown: PlannerAnswer) -> list[Check]:
 
 def score(case: AnswerCase, answer: Answer) -> list[Check]:
     value = answer.value
-    if not isinstance(value, TaskRead):
+    refused = word_rule_refusal(case.task)
+    if refused is not None:
+        shown: PlannerAnswer | None = refused
+    elif not isinstance(value, TaskRead):
         return [check("answered", ["no structured answer"])]
-    shown = answer_of(value, case.task)
+    else:
+        shown = answer_of(value, case.task)
     if shown is None:
         return [check("answered", []), check("right_kind", ["the reading does not hold together"])]
     text = " ".join(_texts(shown))
