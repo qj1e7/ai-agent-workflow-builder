@@ -1554,6 +1554,7 @@ def skip_of_a_yes(text: str) -> str | None:
 def _tidied(rest: str) -> str:
     rest = re.sub(r"\s+([,;:.!?])", r"\1", " ".join(rest.split()))
     rest = re.sub(r"\s*,(?:\s*,)+", ",", rest).strip(" ,;.")
+    rest = re.sub(r"([;:.!?])\s*,", r"\1", rest)
     rest = re.sub(rf"^{_CONNECTOR}\b[\s,]*", "", rest, flags=re.IGNORECASE)
     rest = re.sub(rf"[\s,]*\b{_CONNECTOR}$", "", rest, flags=re.IGNORECASE)
     return rest.strip(" ,;.")

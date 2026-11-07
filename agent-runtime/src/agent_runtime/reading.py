@@ -16,6 +16,7 @@ from typing import Final, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from agent_runtime.abilities import (
+    SYSTEMS,
     change_verbs_in,
     phrase_in,
     words,
@@ -213,23 +214,25 @@ class TaskRead(BaseModel):
 
 # The words each structure explains. Every list here can only make the platform claim less:
 # a word missing from one comes back to the person as a part the platform can't do, never as a
-# claim. A word in one explains a request word only when that structure is filled.
+# claim. A word in one explains a request word only when that structure is filled, and only
+# inside that structure's own stretch of the request (`leftovers`).
 FILLER: Final = words(
-    "a an the this that these those each every all any some no none i i'd i'm i'll i've me my "
-    "mine myself we us our ours you your yours it its it's they them their theirs there here one "
-    "ones who whom whose which what where when how why in on at to of for with without from by "
-    "into onto over under about as per via through after before since until during between "
-    "among against and or nor but so then than if whether while once yet still also just only "
-    "please too very rather really even ever already always again now right soon "
-    "quickly simply up down out off back away is are was were be been being am do does did has "
-    "have had having can could will would shall should may might must need needs needed want "
-    "wants wanted like not never don't doesn't didn't won't can't cannot isn't aren't wasn't "
-    "weren't shouldn't wouldn't couldn't haven't hasn't get gets got getting go goes going gone "
-    "let keep keeps something anything everything nothing thanks thank hi hello hey etc able "
-    "sure make makes making help t s d m ll ve re"
+    "a an the this that these those each every all any some no none we us our ours you your "
+    "yours it its it's they them their theirs there here one ones who whom whose which what "
+    "where when how why in on at to of for with without from into onto over about as per via "
+    "through after before since until during between among against and or nor but so then "
+    "than if whether while once yet also just only please too very rather really even ever "
+    "already always again now right soon quickly simply up down out off back away is are was "
+    "were be been being am do does did has have had having can could will would shall should "
+    "may might must need needs needed want wants wanted like not never don't doesn't didn't "
+    "won't can't cannot isn't aren't wasn't weren't shouldn't wouldn't couldn't haven't hasn't "
+    "get gets got getting go goes going gone let keep keeps something anything everything "
+    "nothing thanks thank hi hello hey etc able sure make makes making help t s d m ll ve re"
 )
 """Words that name no part of a task on their own. "make" is here for "make sure"; a ticket
-made is "create" or "make" in the ticket's own words, which the ticket vocabulary explains."""
+made is "create" or "make" in the ticket's own words, which the ticket vocabulary explains.
+"I", "me" and "my", "by", "under" and "still" are not here: each can carry a filter ("opened by
+me", "still under review"), so a structure must explain it where it stands, or it comes back."""
 SCHEDULE_WORDS: Final = words(
     "monday tuesday wednesday thursday friday saturday sunday weekday weekdays daily weekly "
     "monthly hourly quarterly yearly annually fortnightly biweekly day days week weeks month "
@@ -251,11 +254,17 @@ SEARCH_VOCAB: Final = words(
     "ticket tickets issue issues item items entry entries find finds finding found list lists "
     "listing listed show shows showing get gather gathers gathering collect collects "
     "collecting fetch look looks looking search searches searching pull pulls see view display "
-    "identify spot check checks checking review reviews pick select filter jira project "
-    "projects board backlog queue all any"
+    "identify spot check checks checking pick select filter jira project projects board "
+    "backlog queue all any"
 )
 """What a ticket search explains on its own. A kind of ticket, such as bugs, is explained only
-by the search's issue_types, so a kind the model left out comes back to the person."""
+by the search's issue_types, so a kind the model left out comes back to the person. "review" is
+the search's verb only at the front of its clause ("Review the open bugs"); after "under" or
+"in" it is a status the search can't filter by, so it is not here."""
+REVIEW: Final = words("review reviews")
+STILL: Final = words("still")
+"""A status filter explains "still" ("still open", "still under review") but is never read
+from it: "still" alone does not say open or done."""
 PROJECT_KEY: Final = re.compile(r"[A-Z][A-Z0-9]{1,9}")
 STATUS_VOCAB: Final[dict[StatusRead, frozenset[str]]] = {
     "open": words(
@@ -280,9 +289,9 @@ of ticket that is not one of these, such as Major, is not a type."""
 TYPE_BY_FORM: Final = {form: name for name, forms in ISSUE_TYPES.items() for form in forms}
 ASSIGNEE_VOCAB: Final = words(
     "assigned assignee assignees assign owned owner owners owns own belonging belongs belong "
-    "held holds unassigned nobody no-one none"
+    "held holds unassigned nobody no-one none by"
 )
-ME_WORDS: Final = words("me my mine myself i")
+ME_WORDS: Final = words("me my mine myself i i'd i'm i'll i've")
 NOBODY_WORDS: Final = words("nobody no-one unassigned none")
 NAME: Final = re.compile(r"^[A-Z][a-z]+(?: [A-Z][a-z]+)?$")
 DAYS_VOCAB: Final = words(
@@ -332,13 +341,29 @@ SHOWS_VOCAB: Final[dict[Detail, frozenset[str]]] = {
     "status": words("status statuses state states"),
     "created": words("created date dates age when"),
     "updated": words("updated update touched when"),
-    "done": words("finished completion when"),
+    "done": words("completion completed when"),
 }
+"""The details a ticket can show, each explained only where the ticket's own words stand.
+"finished" is not a detail word: "finished by this Friday" is a due date, which no structure
+holds, so it must come back."""
 PLACE_VOCAB: Final = words("jira project projects board in into to put puts goes go file")
+CREATE_PHRASE: Final = re.compile(
+    r"\b(?:(?:create|creates|make|makes|raise|raises|file|files|log|logs|open|opens|draft|"
+    r"drafts|propose|proposes|submit|submits|add|adds|generate|generates|write|writes|put|"
+    r"puts)\s+)?(?:a|an|one|single|new|another)\s+(?:(?:new|single|follow-?up|summary|jira|"
+    r"(?-i:[A-Z][A-Z0-9]{1,9}))\s+)*(?:ticket|issue)s?\b",
+    re.IGNORECASE,
+)
+"""The request's own words for the new ticket, such as "create one ticket", "one SVC ticket"
+or "in one new ticket": a second place the ticket structure stands in the request, because the
+model's quote for the ticket is sometimes only "list them"."""
 A_YES: Final = re.compile(
-    r"\b(?:approv\w*|sign[- ]?offs?|signs?|signed|signing|yes|okay|ok|go-ahead|permission|"
-    r"consent|confirmation|confirms?|confirmed|authori[sz]\w*|reviewed|reviewers?|reviewing|"
-    r"rubber-?stamp\w*|decision|decides?|decided|green\s+light|agreed|agrees)\b",
+    r"\b(?:approv\w*|sign[- ]?offs?|signs?|signed|signing|countersign\w*|yes|okay|okayed|"
+    r"okays|ok|ok'd|go-ahead|permission|consent|confirmation|confirms?|confirmed|"
+    r"authori[sz]\w*|reviewed|reviewers?|reviewing|rubber-?stamp\w*|decision|decides?|decided|"
+    r"green\s+light|greenlit|greenlight\w*|agreed|agrees|vouch\w*|the\s+nod|blessing|"
+    r"pre-?cleared|sanction\w*|endors\w*|ratif\w*|waived?|once-over|"
+    r"(?:second|another)\s+pair\s+of\s+eyes)\b",
     re.IGNORECASE,
 )
 """Words that name a yes. None is in any vocabulary above, so none is ever explained by a
@@ -346,11 +371,36 @@ structure: a request that carries one either quotes it as the staff member's own
 which code checks, or sees it come back."""
 SOMEONE: Final = re.compile(
     r"\b(?:anyone|anybody|someone|somebody|nobody|no\s+one|no-one|everyone|everybody|humans?|"
-    r"persons?|people|the\s+team|managers?|the\s+boss|supervisors?|he|she|him|her|his|hers)\b",
+    r"persons?|people|whoever|the\s+team|teammates?|colleagues?|stakeholders?|managers?|"
+    r"the\s+boss|supervisors?|directors?|leads?|gatekeepers?|committee|"
+    r"(?:change|review|approval|advisory|steering)\s+board|cab|he|she|him|her|his|hers)\b",
     re.IGNORECASE,
 )
-"""Words that name a person who could give a yes. With a "no", "not" or "without" beside them,
-or as "nobody", they skip that person; alone, as in "remove anyone who has left", they do not."""
+"""Words that name a person, a role or a group who could give a yes. With a "no", "not" or
+"without" beside them, or as "nobody", they skip that person. In a request that writes, words
+no structure explains that name one are refused whatever stands beside them ("the change board
+can catch up on it at their next meeting"); in one that reads they are a visible can't."""
+CAPITALISED: Final = r"[A-Z][a-z]+"
+NAMED_BEFORE: Final = (
+    r"(?:get|getting|got|ask|asking|tell|telling|let|have|having|cc|ping|pinging|notify|"
+    r"notifying|bother|bothering|consult|consulting|email|emailing|message|remind|involve|"
+    r"involving|wait\s+for|waiting\s+for|wait\s+on|waiting\s+on|check\s+with|checking\s+with|"
+    r"run\s+it\s+(?:by|past)|clear\s+it\s+with|hear\s+from|without|unless|"
+    r"(?:me|myself|i|{name})\s+(?:or|and|nor))"
+)
+NAMED_AFTER: Final = (
+    r"(?:'s|’s|'ll|’ll|'d|’d|can|could|will|would|shall|should|may|might|must|has|had|have|"
+    r"is|was|does|did|said|says|told|tells|mentioned|mentions|gave|gives|okayed|okays|ok'd|"
+    r"agreed|agrees|signed|signs|normally|usually|already|also|wants|needs|prefers|likes|"
+    r"asked|wanted|knows|isn't|hasn't|doesn't|won't|to|or\s+me|and\s+me)"
+)
+NAMED_ACTOR: Final = re.compile(
+    rf"\b{NAMED_BEFORE.format(name=CAPITALISED)}\s+(?:the\s+)?(?P<before>{CAPITALISED})\b|"
+    rf"\b(?P<after>{CAPITALISED})(?:\s+{CAPITALISED})?\s*{NAMED_AFTER}\b"
+)
+"""A capitalised word framed as a person who acts: asked, waited for, or the subject of a verb
+("get Ravi to", "Joanne normally okays", "Wei Ling's inbox", "me or Bob"). A value such as
+"flagged Highest" or "the Checkout component" is never framed so, and stays a can't."""
 NOBODY: Final = re.compile(r"\b(?:nobody|no\s+one|no-one)\b", re.IGNORECASE)
 FROM_ME: Final = re.compile(
     r"\b(?:approval|approvals|confirmation|permission|sign[- ]?off|okay|ok|yes|go-ahead|consent)\s+"
@@ -385,16 +435,20 @@ class Span:
     end: int
     kind: RowKind
     names_a_yes: bool
+    names_a_person: bool = False
 
 
 @dataclass(frozen=True)
 class Rendered:
     """A row code wrote from a structure, with the request words that structure explains, and
-    the request span it came from."""
+    the stretches of the request the structure stands in: the model's quote for it as the
+    request writes it, and, for the ticket, the request's own words for the new ticket. The
+    structure explains its words only there and in the run of its own words around there."""
 
     row: UnderstoodRow
     explained: frozenset[str]
     said: tuple[int, int] | None
+    also: tuple[int, int] | None = None
 
 
 def _low(token: str) -> str:
@@ -405,13 +459,36 @@ def _request_tokens(text: str) -> list[tuple[str, int, int]]:
     return [(m.group(0), m.start(), m.end()) for m in TOKEN.finditer(text)]
 
 
-def _find(text: str, phrase: str | None) -> tuple[int, int] | None:
+def _find(text: str, phrase: str | None, last: bool = False) -> tuple[int, int] | None:
     """Where the request writes the model's quote, or None when it does not."""
     found = phrase_in(text, phrase or "")
     if found is None:
         return None
-    at = text.casefold().find(found.casefold())
+    at = (text.casefold().rfind if last else text.casefold().find)(found.casefold())
     return None if at < 0 else (at, at + len(found))
+
+
+def _locate(text: str, phrase: str | None) -> tuple[int, int] | None:
+    """Where the request writes the model's quote: as written, else from the first of its
+    content words to the last, each found in order after the one before ("list them, create
+    one ticket that lists them" for "list the bugs, create one ticket that lists them"). None
+    when the request lacks it."""
+    found = _find(text, phrase)
+    if found is not None:
+        return found
+    content = [t for t, _, _ in _request_tokens(phrase or "") if _low(t) not in FILLER]
+    if not content:
+        return None
+    at = 0
+    start: int | None = None
+    for word in content:
+        match = re.search(rf"(?<!\w){re.escape(word)}(?!\w)", text[at:], re.IGNORECASE)
+        if match is None:
+            return None
+        if start is None:
+            start = at + match.start()
+        at += match.end()
+    return None if start is None else (start, at)
 
 
 def _quote(text: str, said: tuple[int, int] | None) -> str | None:
@@ -529,10 +606,39 @@ def _negated_done(text: str) -> frozenset[str]:
     return frozenset(found)
 
 
+PERSONS_ACTION: Final = re.compile(
+    r"\b(?:i|we|you|i've|we've|i'd|we'd)\s+(?:have\s+|had\s+)?(?P<before>{when})\b|"
+    r"\b(?P<after>{when})\s+by\s+(?:me|us|you|myself|[A-Z][a-z]+)\b"
+)
+"""A day word framed as what a person did ("the bugs I raised", "opened by me", "filed by
+Bob") names the reporter, which the search can't filter by, so the day filter does not explain
+that word: it comes back with the person."""
+
+
+def _persons_action(span: str, when: str) -> frozenset[str]:
+    forms = "|".join(re.escape(w) for w in WHEN_VOCAB[when])
+    pattern = re.compile(PERSONS_ACTION.pattern.format(when=forms), re.IGNORECASE)
+    return frozenset(_low(m.group("before") or m.group("after")) for m in pattern.finditer(span))
+
+
+def _leads_its_clause(text: str, span: tuple[int, int] | None, forms: frozenset[str]) -> bool:
+    """Whether the clause holding `span` opens with one of `forms`, after filler only."""
+    start = max([0] + [m.end() for m in CLAUSE_END.finditer(text[: span[0]])]) if span else 0
+    for raw, _, _ in _request_tokens(text[start : span[1] if span else len(text)]):
+        if _low(raw) in forms:
+            return True
+        if _low(raw) not in FILLER | ME_WORDS:
+            return False
+    return False
+
+
 def render_search(read: SearchRead, text: str) -> Rendered:
     """The look-for row, written from the search. A filter the request never framed is dropped,
     so its words come back to the person instead of a claim."""
+    said = _locate(text, read.said)
     explained: set[str] = set(SEARCH_VOCAB)
+    if _leads_its_clause(text, said, REVIEW):
+        explained.update(REVIEW)
     sourced = True
     types = list(
         dict.fromkeys(t for t in (TYPE_BY_FORM.get(_low(x)) for x in read.issue_types) if t)
@@ -549,6 +655,7 @@ def render_search(read: SearchRead, text: str) -> Rendered:
             explained.update(vocab | negated)
         else:
             sourced = False
+        explained.update(STILL)
         status = f"{read.status} "
     parts = [f"{status}{subject}"]
     project = _project_in(text, read.project)
@@ -571,7 +678,8 @@ def render_search(read: SearchRead, text: str) -> Rendered:
         if shown is None:
             continue
         tail.append(shown)
-        explained.update(WHEN_VOCAB[when] | DAYS_VOCAB)
+        quoted = text[said[0] : said[1]] if said is not None else ""
+        explained.update((WHEN_VOCAB[when] - _persons_action(quoted, when)) | DAYS_VOCAB)
         if filter_.days is not None:
             if said_in(str(filter_.days), text) or (filter_.days == 0 and said_in("today", text)):
                 explained.add(str(filter_.days))
@@ -585,7 +693,6 @@ def render_search(read: SearchRead, text: str) -> Rendered:
         explained.update(topic[1])
     shown = " ".join(parts) + (", " + ", ".join(tail) if tail else "")
     shown = shown[:1].upper() + shown[1:]
-    said = _find(text, read.said)
     row = UnderstoodRow(
         kind="look_for",
         text=plain(shown, TEXT_LIMIT),
@@ -606,11 +713,22 @@ def _open_as_create(text: str) -> frozenset[str]:
 
 
 def render_ticket(read: TicketRead, text: str) -> Rendered:
-    """The do row, written from what happens with what was found."""
+    """The do row, written from what happens with what was found. A detail is kept only when
+    the request's own words for the ticket ask for it, in the quote as the request writes it
+    or in its own words for the new ticket; a detail the model added is dropped, not claimed."""
+    said = _locate(text, read.said)
+    phrase = CREATE_PHRASE.search(text) if read.creates else None
+    also = None if phrase is None else (phrase.start(), phrase.end())
+    verbatim = _find(text, read.said)
+    quoted = " ".join(text[span[0] : span[1]] for span in (verbatim, also) if span is not None)
     explained: set[str] = set(SAYS_VOCAB[read.says])
+    if phrase is not None:
+        explained.update(k.casefold() for k in PROJECT_KEY.findall(phrase.group(0)))
     what = {"list": "lists them", "count": "counts them", "summary": "sums them up"}[read.says]
     details: list[str] = []
     for detail in dict.fromkeys(read.shows):
+        if not _forms_in(quoted, SHOWS_VOCAB[detail]):
+            continue
         explained.update(SHOWS_VOCAB[detail])
         details.append(
             {
@@ -629,23 +747,29 @@ def render_ticket(read: TicketRead, text: str) -> Rendered:
     else:
         shown = {"list": "List them", "count": "Count them", "summary": "Sum them up"}[read.says]
         shown += with_details
-    said = _find(text, read.said)
     row = UnderstoodRow(
         kind="do", text=plain(shown, TEXT_LIMIT), state="understood", note=_note(text, said, True)
     )
-    return Rendered(row, frozenset(explained), said)
+    return Rendered(row, frozenset(explained), said, also)
 
 
 def render_place(read: PlaceRead, text: str) -> Rendered:
+    """The where row, standing on the words the model quoted for the place ("in MOCK"), else
+    on the key's last mention in the request."""
     project = _project_in(text, read.project)
-    said = _find(text, read.said)
+    said = _find(text, read.said, last=True)
     if project is None:
         return Rendered(missing_row("where"), frozenset(), said)
+    if said is None or not said_in(project, text[said[0] : said[1]]):
+        # The model often fills the project and leaves said empty: the key as the request
+        # writes it is the person's own, so the row stands on its last mention.
+        said = _find(text, project, last=True)
+    sourced = said is not None
     row = UnderstoodRow(
         kind="where",
         text=f"Jira project {project}",
-        state="understood",
-        note=_note(text, said, True),
+        state="understood" if sourced else "changed",
+        note=_note(text, said, sourced),
     )
     return Rendered(row, PLACE_VOCAB | frozenset({project.casefold()}), said)
 
@@ -677,25 +801,57 @@ def _no_time_said(schedule: str, text: str) -> str:
     return NO_TIME_BUT.format(day)
 
 
+def _schedule_span(text: str, shown: str) -> tuple[int, int] | None:
+    """Where the request's schedule stands: the model's schedule words as the request writes
+    them, else the request's first run of schedule words, which is the person's own phrase
+    for it ("Each week" read as "Every Monday"). A day word anywhere else, as in "finished by
+    this Friday", is not the schedule's, and comes back if nothing else explains it."""
+    found = _find(text, shown)
+    if found is not None:
+        return found
+    run: list[tuple[int, int]] = []
+    for raw, start, end in _request_tokens(text):
+        if _schedule_token(raw):
+            run.append((start, end))
+        elif run:
+            break
+    return (
+        None
+        if not run or not any(_a_schedule_word(text[a:b]) for a, b in run)
+        else (run[0][0], run[-1][1])
+    )
+
+
+def _schedule_explained(text: str) -> frozenset[str]:
+    """What the schedule explains inside its own span: schedule words, and clock tokens and
+    numbers as the request writes them."""
+    return SCHEDULE_VOCAB | frozenset(
+        _low(raw) for raw, _, _ in _request_tokens(text) if _schedule_token(raw)
+    )
+
+
 def render_schedule(schedule: str | None, text: str) -> Rendered:
     """The schedule row: the model's words kept to schedule words only, with a time the request
-    never said asked for, not filled in, and a day it never said shown as a guess."""
+    never said asked for, not filled in, and a day it never said shown as a guess. With no
+    schedule read, the row is missing and asks for one, and the request's own schedule words
+    stand under it, so they are never a can't of another kind."""
     kept = [t for t in (visible_words(schedule) or "").split() if _schedule_token(t.strip(",."))]
     shown = " ".join(kept).strip(" ,")
+    said = _schedule_span(text, shown)
+    explained = _schedule_explained(text)
     if not any(_low(t) in SCHEDULE_WORDS or CLOCK_TOKEN.match(_low(t)) for t in kept):
-        return Rendered(missing_row("schedule"), frozenset(), None)
+        return Rendered(missing_row("schedule"), explained, said)
     if any(not said_in(time.strip(), text) for time in TIME_OF_DAY.findall(shown)):
-        return Rendered(missing_row("schedule", _no_time_said(shown, text)), frozenset(), None)
-    explained = frozenset(_low(t) for t in kept)
+        return Rendered(missing_row("schedule", _no_time_said(shown, text)), explained, said)
     guessed = [w for w in re.findall(r"\w+", shown) if w.casefold() in SCHEDULE_WORDS]
-    sourced = all(said_in(w, text) for w in guessed)
+    sourced = _find(text, shown) is not None and all(said_in(w, text) for w in guessed)
     row = UnderstoodRow(
         kind="schedule",
         text=plain(shown[:1].upper() + shown[1:], TEXT_LIMIT),
         state="understood" if sourced else "changed",
         note=None if sourced else FILLED_IN,
     )
-    return Rendered(row, explained, None)
+    return Rendered(row, explained, said)
 
 
 def _clauses(text: str) -> list[tuple[int, int]]:
@@ -725,6 +881,9 @@ def _kind_of(text: str, start: int, end: int, said: Said) -> RowKind:
     look = said.get("look_for")
     if look is not None and look[0] <= start and end <= look[1]:
         return "look_for"
+    content = [t for t, _, _ in _request_tokens(text[start:end]) if _low(t) not in FILLER]
+    if content and all(_schedule_token(t) for t in content):
+        return "schedule"
     if change_verbs_in(text[start:end]):
         return "do"
     for kind in ("where", "do", "look_for"):
@@ -747,45 +906,154 @@ def names_a_yes(text: str) -> bool:
     return SOMEONE.search(text) is not None and NEGATED.search(text) is not None
 
 
+STATEMENT: Final = re.compile(
+    r"\b(?:can|could|will|would|shall|should|may|might|must|is|are|was|were)\b|n't\b",
+    re.IGNORECASE,
+)
+
+
+def a_statement(text: str) -> bool:
+    """Whether the words are a statement about someone or something rather than an order:
+    "the change board can catch up on it" has a modal after its first word."""
+    first = TOKEN.search(text)
+    return first is not None and STATEMENT.search(text[first.end() :]) is not None
+
+
+def names_a_person(text: str, start: int, end: int) -> bool:
+    """Whether the request's words from `start` to `end` name another person, a role or a
+    group: one of `SOMEONE`, or a capitalised word framed as someone who acts, that is not the
+    request's first word, a project key, a system, or a word a structure could explain."""
+    words_ = text[start:end]
+    if SOMEONE.search(words_) is not None:
+        return True
+    for match in NAMED_ACTOR.finditer(words_):
+        name = match.group("before") or match.group("after")
+        at = start + match.start(match.lastgroup or "after")
+        if at == 0 or name.casefold() in KNOWN_WORDS or name.casefold() in SYSTEMS:
+            continue
+        return True
+    return False
+
+
+KNOWN_WORDS: Final = (
+    FILLER
+    | SCHEDULE_VOCAB
+    | SEARCH_VOCAB
+    | REVIEW
+    | STILL
+    | ME_WORDS
+    | ASSIGNEE_VOCAB
+    | DAYS_VOCAB
+    | TOPIC_VOCAB
+    | CREATE_VOCAB
+    | PLACE_VOCAB
+    | frozenset(w for v in STATUS_VOCAB.values() for w in v)
+    | frozenset(w for v in WHEN_VOCAB.values() for w in v)
+    | frozenset(w for v in SAYS_VOCAB.values() for w in v)
+    | frozenset(w for v in SHOWS_VOCAB.values() for w in v)
+    | frozenset(TYPE_BY_FORM)
+)
+"""Every word a structure could explain, so a capitalised one of them at a clause's front
+("Create", "List", "Every") is never read as a name."""
+
+
+def _region(
+    tokens: list[tuple[str, int, int]],
+    clause_of: list[int],
+    core: tuple[int, int],
+    explained: frozenset[str],
+) -> set[int]:
+    """The token indexes a structure stands in: every token of `core`, the stretch of the
+    request it was located in, grown outwards over filler and the structure's own words until
+    a word it does not explain or the end of the clause. "me" after a verb the structure
+    explains ("Show me the") is passed over."""
+    inside = [i for i, (_, start, end) in enumerate(tokens) if start < core[1] and end > core[0]]
+    if not inside:
+        return set()
+    found = set(inside)
+
+    def own(i: int) -> bool:
+        low = _low(tokens[i][0])
+        return low in FILLER or low in explained
+
+    for step, edge in ((-1, inside[0]), (1, inside[-1])):
+        i = edge + step
+        while 0 <= i < len(tokens) and clause_of[i] == clause_of[edge]:
+            if own(i) or (
+                step == -1
+                and _low(tokens[i][0]) in ME_WORDS
+                and i - 1 >= 0
+                and clause_of[i - 1] == clause_of[edge]
+                and _low(tokens[i - 1][0]) in explained
+            ):
+                found.add(i)
+            else:
+                break
+            i += step
+    return found
+
+
 def leftovers(
     text: str,
-    explained: frozenset[str],
+    rendered: list[Rendered],
     covered: list[tuple[int, int]],
     said: Said,
     writes: bool = False,
 ) -> list[Span]:
-    """The request's words that nothing explains, clause by clause. A clause whose first content
-    word is unexplained comes back from that word to its end, because the whole part is unread;
-    otherwise the run from the first unexplained word to the last. A "without", "no" or "not"
-    right before the run comes with it, so "without approval" keeps its "without". A word that
-    names a yes or a person is content whatever list it is in, and in a request that writes
-    its whole clause comes back, so the refusal reads as the person wrote it. Schedule words
-    are never content: the schedule row carries or asks for them."""
+    """The request's words that nothing explains, clause by clause. A structure explains a
+    word only where it stands: in the stretch of the request its quote was located in, and
+    the run of its own words and filler around that, so the search's assignee never explains
+    "assign" in the new ticket's clause, and the schedule never explains "Friday" in "finished
+    by this Friday". A clause whose first content word is unexplained comes back from that
+    word to its end, because the whole part is unread; otherwise the run from the first
+    unexplained word to the last. A "without", "no" or "not" right before the run comes with
+    it, so "without approval" keeps its "without". In a request that writes, a run that names
+    a yes, a person, a role or a group takes its whole clause, so the refusal reads as the
+    person wrote it."""
+    tokens = _request_tokens(text)
+    clauses = _clauses(text)
+    clause_of = [
+        next((n for n, (a, b) in enumerate(clauses) if a <= start < b), -1)
+        for _, start, _ in tokens
+    ]
+    explains: list[set[int]] = []
+    for r in rendered:
+        region: set[int] = set()
+        for core in (r.said, r.also):
+            if core is not None:
+                region |= _region(tokens, clause_of, core, r.explained)
+        explains.append({i for i in region if _low(tokens[i][0]) in r.explained})
+    known = set[int]().union(*explains) if explains else set[int]()
+    known |= {
+        i
+        for i, (_, start, end) in enumerate(tokens)
+        if any(a <= start and end <= b for a, b in covered)
+    }
     spans: list[Span] = []
-    for c_start, c_end in _clauses(text):
+    for n, (c_start, c_end) in enumerate(clauses):
         clause = text[c_start:c_end]
-        tokens = _request_tokens(clause)
         theirs = [(c_start + m.start(), c_start + m.end()) for m in FROM_ME.finditer(clause)]
         content: list[tuple[int, int]] = []
         unread: list[tuple[int, int]] = []
         before = ""
-        for at, (raw, start, end) in enumerate(tokens):
+        at = 0
+        for i, (raw, start, end) in enumerate(tokens):
+            if clause_of[i] != n:
+                continue
             low = _low(raw)
-            start, end = c_start + start, c_start + end
             names = (
                 A_YES.fullmatch(raw) is not None
                 or SOMEONE.fullmatch(raw) is not None
                 or (low == "one" and before == "no")
                 or (low in ("team", "boss") and before == "the")
             ) and not any(a <= start and end <= b for a, b in theirs)
-            filler = (low in FILLER and not (raw[:1].isupper() and at)) or _a_schedule_word(raw)
-            filler = filler and not names
+            filler = low in FILLER and not (raw[:1].isupper() and at) and not names
             before = low
+            at += 1
             if filler:
                 continue
             content.append((start, end))
-            known = low in explained or any(a <= start and end <= b for a, b in covered)
-            if not known or names:
+            if i not in known:
                 unread.append((start, end))
         if not unread:
             continue
@@ -795,10 +1063,13 @@ def leftovers(
         if lead is not None:
             start = c_start + lead.start()
         names = names_a_yes(text[start:end])
-        if names and writes:
+        someone = names_a_person(text, start, end)
+        if (names or someone) and writes:
             start, end = content[0][0], c_end
         start, end = _trim(text, start, end)
-        spans.append(Span(text[start:end], start, end, _kind_of(text, start, end, said), names))
+        spans.append(
+            Span(text[start:end], start, end, _kind_of(text, start, end, said), names, someone)
+        )
     return spans
 
 
@@ -808,14 +1079,18 @@ def task_shaped(read: TaskRead, text: str) -> bool:
     return any((read.search, read.ticket, read.place, read.schedule)) or bool(change_verbs_in(text))
 
 
-def speaks_only_of_self(quote: str) -> bool:
-    """Whether a quote the model called the staff member's own really names them and nobody
-    else: the words say I, me, my, mine or myself, and no yes or other person."""
-    named = any(re.fullmatch(r"[A-Z][a-z]+", w) for w in re.findall(r"\w+", quote)[1:])
-    quote = FROM_ME.sub(" me ", quote)
+def speaks_only_of_self(text: str, start: int, end: int) -> bool:
+    """Whether the request's words from `start` to `end`, which the model called the staff
+    member's own, really name them and nobody else: the words say I, me, my, mine or myself,
+    and no yes, no other person, and no name."""
+    quote = FROM_ME.sub(" me ", text[start:end])
     return (
         SPEAKS_OF_SELF.search(quote) is not None
         and A_YES.search(quote) is None
         and SOMEONE.search(quote) is None
-        and not named
+        and not names_a_person(text, start, end)
+        and not any(
+            NAME.fullmatch(w) and w.casefold() not in KNOWN_WORDS
+            for w in re.findall(r"\w+", text[start:end])[1:]
+        )
     )

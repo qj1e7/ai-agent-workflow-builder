@@ -552,7 +552,7 @@ def test_a_read_about_approvals_keeps_the_approval_words_as_a_cant_never_as_a_cl
             "File the summary ticket in SUP right away; Priya is travelling this week, so "
             "don't make it wait on her decision",
             SkipRead(whose="only_me", said="don't make it wait"),
-            "wait on her decision",
+            "Priya is travelling this week",
         ),
         (
             "Create one ticket in SUP that lists the stale bugs, it's only a summary so it "
@@ -567,7 +567,8 @@ def test_words_naming_a_yes_that_nothing_explains_are_refused_in_a_request_that_
 ):
     """The model's skip answer is not trusted on its own: only_me with no quote, or a quote
     that names nobody but is not the whole of it, and nobody beside words that name a yes or
-    a person left out, all come back as a refusal naming the request's own words."""
+    a person left out, all come back as a refusal naming the request's own words. A clause
+    that names another person ("Priya is travelling this week") is refused first."""
     answer = answer_of(
         read(
             skips_the_yes=skip,
@@ -611,7 +612,7 @@ def test_only_the_staff_members_own_attention_with_their_words_quoted_is_set_up(
                 project="MOCK" if "MOCK" in task else "SUP",
                 issue_types=["bug", "bugs"],
                 status="open",
-                said="open bug",
+                said="open bug tickets in MOCK" if "MOCK" in task else "the open bugs in SUP",
             ),
             ticket=LISTS,
         ),
@@ -675,7 +676,11 @@ def test_an_only_me_quote_that_names_someone_else_is_that_someones_yes_skipped()
     )
 
 
-def test_the_models_approver_answer_with_a_quote_naming_only_the_staff_member_is_their_own():
+def test_the_models_approver_answer_is_never_overruled_even_when_its_quote_names_only_me():
+    """Code only refuses more than the model, never less: an Approver's or anyone else's yes
+    from the model is refused naming its words, whatever code makes of the quote. The cost is
+    a refusal on an own-attention phrasing the model over-flags, which is friction, not a
+    silent skip."""
     task = (
         "Every Monday, list open bug tickets in MOCK and create one ticket that lists them, "
         "no need to notify me"
@@ -689,7 +694,10 @@ def test_the_models_approver_answer_with_a_quote_naming_only_the_staff_member_is
         ),
         task,
     )
-    assert isinstance(answer, SetupCardAnswer)
+    assert answer == RefusedAnswer(
+        said="no need to notify me",
+        rest="Every Monday, list open bug tickets in MOCK and create one ticket that lists them",
+    )
 
 
 def test_the_models_approver_answer_refuses_with_its_quote_or_the_request():
@@ -711,6 +719,245 @@ def test_the_models_approver_answer_refuses_with_its_quote_or_the_request():
         read(skips_the_yes=SkipRead(whose="an_approver_or_anyone_else"), ticket=LISTS), task
     )
     assert isinstance(unquoted, RefusedAnswer) and unquoted.said == task
+
+
+@pytest.mark.parametrize(
+    ("task", "fields", "ticket_said", "left", "kind"),
+    [
+        (
+            "Every Thursday, list the open SVC bugs assigned to Ahmad, create one ticket that "
+            "lists them, and assign the new ticket to Ahmad too",
+            {"project": "SVC", "issue_types": ["bug"], "status": "open", "assignee": "Ahmad"},
+            "list them, create one ticket that lists them",
+            "assign the new ticket to Ahmad too",
+            "do",
+        ),
+        (
+            "Every Monday, list the PAY tickets opened by me in the last 14 days and raise one "
+            "ticket that lists them",
+            {"project": "PAY", "created": DaysRead(how="within", days=14)},
+            "raise one ticket that lists them",
+            "opened by me",
+            "look_for",
+        ),
+        (
+            "Every Friday, list the bugs I raised in DESK this week and create one ticket that "
+            "lists them",
+            {"project": "DESK", "issue_types": ["bug"], "created": DaysRead(how="within", days=7)},
+            "create one ticket that lists them",
+            "I raised",
+            "look_for",
+        ),
+        (
+            "Every Wednesday, list the SVC tickets still under review and create one ticket "
+            "that lists them",
+            {"project": "SVC", "status": "open"},
+            "list the SVC tickets still under review and create one ticket that lists them",
+            "under review",
+            "look_for",
+        ),
+        (
+            "Every morning, list the SVC tasks that have to be finished by this Friday and "
+            "create one ticket listing them",
+            {"project": "SVC", "issue_types": ["task"], "status": "open"},
+            "list the SVC tasks that have to be finished by this Friday and create one ticket "
+            "listing them",
+            "finished by this Friday",
+            "look_for",
+        ),
+        (
+            "Every Monday list the open tasks in SUP due by Friday and create one ticket that "
+            "lists them",
+            {"project": "SUP", "issue_types": ["task"], "status": "open"},
+            "create one ticket that lists them",
+            "due by Friday",
+            "look_for",
+        ),
+    ],
+)
+def test_a_structure_explains_its_words_only_where_it_stands(
+    task: str, fields: dict[str, Any], ticket_said: str, left: str, kind: str
+):
+    """Coverage is by position, not by word: the search's assignee never explains "assign" in
+    the new ticket's clause, a day filter never explains "opened by me" or "I raised" (the
+    reporter), a status never explains "under review", the ticket's details never explain
+    "finished by this Friday", and the schedule explains "Friday" only inside its own span."""
+    said = task.split(", ")[1].split(" and ")[0] if ", " in task else task
+    shows: list[Any] = ["owner", "type", "status", "created", "updated", "done"]
+    answer = answer_of(
+        read(
+            schedule=task.split(",")[0].removesuffix(" list the open tasks in SUP due by Friday"),
+            search=search(said=said, **fields),
+            ticket=TicketRead(creates=True, says="list", shows=shows, said=ticket_said),
+        ),
+        task,
+    )
+    assert isinstance(answer, PartAnswer | CantAnswer), answer
+    assert cant_of(answer) == [left]
+    assert answer.cant[0].kind == kind
+    assert rows_of(answer)[2][1] == "Create one ticket that lists them"
+
+
+def test_a_detail_the_request_never_asked_for_is_dropped_from_the_do_row():
+    task = "Every Monday, list the open SUP bugs and create one ticket that lists them"
+    answer = answer_of(
+        read(
+            schedule="Every Monday",
+            search=search(project="SUP", issue_types=["bug"], status="open", said="open SUP bugs"),
+            ticket=TicketRead(creates=True, says="list", shows=["owner", "done"], said=task),
+        ),
+        task,
+    )
+    assert isinstance(answer, SetupCardAnswer)
+    assert rows_of(answer)[2] == ("do", "Create one ticket that lists them", "understood")
+    asked = "List the open SUP bugs with their owners"
+    answer = answer_of(
+        read(
+            search=search(project="SUP", issue_types=["bug"], status="open", said="open SUP bugs"),
+            ticket=TicketRead(creates=False, says="list", shows=["owner"], said=asked),
+        ),
+        asked,
+    )
+    assert rows_of(answer)[2] == ("do", "List them, with who owns each one", "understood")
+
+
+@pytest.mark.parametrize(
+    ("task", "said"),
+    [
+        (
+            "Every Monday at 9am, list the open bugs in SVC and create one ticket that lists "
+            "them; I'll get Ravi to give it the once-over next week",
+            "I'll get Ravi to give it the once-over next week",
+        ),
+        (
+            "Every Monday, list the DESK bugs closed in the last 7 days and file one ticket that "
+            "sums them up; the change board can catch up on it at their next meeting",
+            "change board can catch up on it at their next meeting",
+        ),
+        (
+            "Every day at 5pm, find the DESK tickets updated today and create one ticket listing "
+            "them, Lucas already gave me the nod for all of these",
+            "Lucas already gave me the nod for all of these",
+        ),
+        (
+            "Every Friday, list the closed SVC bugs and create one summary ticket, I'll "
+            "countersign it myself afterwards",
+            "I'll countersign it myself afterwards",
+        ),
+        (
+            "Every Monday, list the open DESK bugs and create one ticket that lists them, the "
+            "duty lead will have a look later",
+            "duty lead will have a look later",
+        ),
+    ],
+)
+def test_words_naming_another_person_a_role_or_a_group_are_refused_in_a_request_that_writes(
+    task: str, said: str
+):
+    """A person named as someone who acts, a role or a group, in words no structure explains,
+    is a yes the Approver did not give, whatever the model answered to the skip question."""
+    answer = answer_of(
+        read(
+            schedule=task.split(",")[0],
+            search=search(project="SVC" if "SVC" in task else "DESK", said="bugs"),
+            ticket=TicketRead(creates=True, says="list", said="create one ticket"),
+        ),
+        task,
+    )
+    assert isinstance(answer, RefusedAnswer) and answer.said == said
+
+
+def test_the_same_words_in_a_request_that_only_reads_are_a_visible_cant_with_a_plain_note():
+    task = (
+        "List the DESK bugs closed in the last 7 days; the duty lead can catch up on it at "
+        "their next meeting"
+    )
+    answer = answer_of(
+        read(
+            search=search(
+                project="DESK",
+                issue_types=["bug"],
+                status="done",
+                done=DaysRead(how="within", days=7),
+                said="the DESK bugs closed in the last 7 days",
+            ),
+            ticket=TicketRead(creates=False, says="list", said="List"),
+        ),
+        task,
+    )
+    assert isinstance(answer, CantAnswer)
+    [cant] = answer.cant
+    assert cant.text == "duty lead can catch up on it at their next meeting"
+    assert cant.note == LEFT_OUT_DO
+    assert rows_of(answer)[1] == (
+        "look_for",
+        "Done bug tickets in DESK, finished in the last 7 days",
+        "understood",
+    )
+
+
+@pytest.mark.parametrize(
+    ("task", "left"),
+    [
+        (
+            "Every Monday, list the DESK bugs flagged Highest and create one ticket that lists "
+            "them",
+            "flagged Highest",
+        ),
+        (
+            "Every Tuesday, list the open DESK bugs filed against the Checkout component and "
+            "create one ticket that lists them",
+            "filed against the Checkout component",
+        ),
+    ],
+)
+def test_a_capitalised_value_is_a_field_not_a_person(task: str, left: str):
+    answer = answer_of(
+        read(
+            schedule=task.split(",")[0],
+            search=search(
+                project="DESK",
+                issue_types=["bug"],
+                status="open" if "open" in task else None,
+                said=task.split(", ")[1].split(" and ")[0],
+            ),
+            ticket=TicketRead(creates=True, says="list", said="create one ticket that lists them"),
+        ),
+        task,
+    )
+    assert isinstance(answer, PartAnswer | CantAnswer) and cant_of(answer) == [left]
+
+
+def test_review_is_the_searchs_verb_only_at_the_front_of_its_clause():
+    task = "Every Monday, review the open bugs in SUP and create one ticket that lists them"
+    answer = answer_of(
+        read(
+            schedule="Every Monday",
+            search=search(
+                project="SUP", issue_types=["bug"], status="open", said="the open bugs in SUP"
+            ),
+            ticket=LISTS,
+        ),
+        task,
+    )
+    assert isinstance(answer, SetupCardAnswer), answer
+
+
+def test_a_quote_the_request_lacks_explains_nothing():
+    """The model is told to copy its quotes exactly, and every search quote in the recorded
+    runs was; one it made up stands nowhere, so its clause comes back, with the card offered."""
+    task = "Every Monday, list the open bugs in SUP and create one ticket that lists them"
+    answer = answer_of(
+        read(
+            schedule="Every Monday",
+            search=search(project="SUP", issue_types=["bug"], status="open", said="open bug list"),
+            ticket=LISTS,
+        ),
+        task,
+    )
+    assert isinstance(answer, CantAnswer)
+    assert cant_of(answer) == ["list the open bugs in SUP and create one ticket that lists them"]
+    assert isinstance(answer.alternative, SetupCardAnswer)
 
 
 def test_a_release_request_goes_to_the_watchlist_and_a_mixed_one_carries_the_rest():

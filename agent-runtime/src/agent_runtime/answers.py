@@ -67,7 +67,9 @@ from agent_runtime.reading import (
     SkipRead,
     Span,
     TaskRead,
+    a_statement,
     leftovers,
+    names_a_person,
     names_a_yes,
     negated,
     render_place,
@@ -224,30 +226,31 @@ class _Skip:
 
 
 def _skip_verdict(skip: SkipRead, text: str) -> _Skip:
-    """An Approver's or anyone else's yes is refused, naming the request's own words when the
-    model quoted them, else the request. The staff member's own attention is theirs to skip only
-    when the quote is in the request and names them and nobody else: then its words are covered,
-    whichever answer the model gave, because the Operator is never the Approver and the quote
-    has no yes and no other person in it ("no need to notify me"). A quote that names someone
-    else is that someone's yes skipped. A quote that names nobody, or none in the request,
-    covers nothing and is refused unless the coverage check finds the words it meant."""
+    """Code only ever refuses more than the model, never less. An Approver's or anyone else's
+    yes is refused, naming the request's own words when the model quoted them, else the
+    request, whatever code makes of the quote. The staff member's own attention is theirs to
+    skip only when the quote is in the request and names them and nobody else: then its words
+    are covered, because the Operator is never the Approver. A quote that names a yes, someone
+    else or a name is that someone's yes skipped. A quote that names nobody, or none in the
+    request, covers nothing and is refused unless the coverage check finds the words it meant."""
     if skip.whose == "nobody":
         return _Skip()
     quote = _theirs(text, skip.said)
-    if skip.whose != "only_me" and not (quote is not None and speaks_only_of_self(quote)):
+    if skip.whose == "an_approver_or_anyone_else":
         return _Skip(refused=_refused(text, quote) if quote is not None else _refused(text, text))
     if quote is None:
         return _Skip()
-    if names_a_yes(quote) or any(re.fullmatch(r"[A-Z][a-z]+", w) for w in quote.split()[1:]):
+    at = text.casefold().find(quote.casefold())
+    end = at + len(quote)
+    if names_a_yes(quote) or names_a_person(text, at, end):
         return _Skip(refused=_refused(text, quote))
-    if not speaks_only_of_self(quote):
+    if not speaks_only_of_self(text, at, end):
         return _Skip(unverified=quote)
     if (change_verbs_in(quote) or other_systems(quote)) and not negated(quote):
         # "Email me" names the staff member and a change too: nothing is covered, so the
         # change comes back through the coverage check. "Don't ping me" asks for none.
         return _Skip()
-    at = text.casefold().find(quote.casefold())
-    return _Skip(covered=(at, at + len(quote)))
+    return _Skip(covered=(at, end))
 
 
 def _theirs(text: str, said: str | None) -> str | None:
@@ -307,10 +310,16 @@ def _left_out(span: Span, searching: bool) -> CantRow:
                 note = LEFT_OUT_YES
             elif field is not None:
                 note = why_not_the_field("look_for", text, field)
+            elif span.names_a_person:
+                note = LEFT_OUT_DO
             else:
                 note = LEFT_OUT_SEARCH
         case "do":
-            note = (why_not("do", text) if starts_with_a_verb(text) else None) or LEFT_OUT_DO
+            # "the change board can catch up on it" opens with a verb but is a statement
+            # about someone, not an order: naming it as "I can't change board can..." reads
+            # wrong, so a statement gets the plain note.
+            imperative = starts_with_a_verb(text) and not a_statement(text)
+            note = (why_not("do", text) if imperative else None) or LEFT_OUT_DO
         case "where":
             note = why_not("where", text) or LEFT_OUT_WHERE
         case "schedule":
@@ -364,16 +373,15 @@ def _read_task(read: TaskRead, text: str, covered: list[tuple[int, int]], writes
         rendered.append(render_ticket(read.ticket, text))
     if read.place is not None:
         rendered.append(render_place(read.place, text))
-    explained = frozenset[str]().union(*(r.explained for r in rendered))
     said: dict[RowKind, tuple[int, int] | None] = {r.row.kind: r.said for r in rendered}
-    spans = leftovers(text, explained, covered, said, writes)
+    spans = leftovers(text, rendered, covered, said, writes)
     return _Task(arrange([r.row for r in rendered]), spans, read.search is not None)
 
 
 def _refused_span(task: _Task, text: str) -> RefusedAnswer | None:
-    """A refusal for words no structure explains that name a yes or a person: a skip of an
-    Approver's yes the model did not flag."""
-    span = next((s for s in task.spans if s.names_a_yes), None)
+    """A refusal for words no structure explains that name a yes, a person, a role or a group,
+    in a request that writes: a skip of an Approver's yes the model did not flag."""
+    span = next((s for s in task.spans if s.names_a_yes or s.names_a_person), None)
     return None if span is None else _refused(text, span.text)
 
 
