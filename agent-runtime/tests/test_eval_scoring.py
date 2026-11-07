@@ -4,7 +4,7 @@ from typing import Any
 
 import httpx
 import pytest
-from evals.answer import ANSWER, AnswerCase
+from evals.answer import ANSWER, AnswerCase, _cant_checks, _card_checks
 from evals.checks import Check, jargon, mentions, write_claims
 from evals.choose import CHOOSE, ChooseCase
 from evals.draft import DRAFT, DraftCase
@@ -26,7 +26,8 @@ from evals.understand import UNDERSTAND, UnderstandCase
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 
-from agent_runtime.answers import TaskRead
+from agent_runtime.answers import TaskRead, answer_of
+from agent_runtime.contract import CantRow, PartAnswer, SetupCardAnswer, UnderstoodRow
 from agent_runtime.summary import SUMMARY_TIMEOUT_SECONDS, ModelSummarizer, template_check_summary
 
 
@@ -657,7 +658,50 @@ def test_a_guessed_time_and_an_invented_key_fail_the_card():
         ],
     }
     checks = ANSWER.score(answer_case("day-one-weekly-summary"), read_answer(**read))
-    assert {"no_guessed_time", "no_invented_keys"} <= failed(checks)
+    assert failed(checks) == {"no_invented_keys", "reads_the_parts", "schedule_state"}
+    shown = answer_of(TaskRead.model_validate(read), answer_case("day-one-weekly-summary").task)
+    assert isinstance(shown, SetupCardAnswer) and shown.rows[0].state == "missing"
+    assert shown.rows[0].note == 'Your words said "Every Friday" but not a time. Please choose one.'
+    guessed = shown.model_copy(
+        update={
+            "rows": [
+                shown.rows[0].model_copy(
+                    update={"text": "Every Monday at 5pm", "state": "changed"}
+                ),
+                *shown.rows[1:],
+            ]
+        }
+    )
+    checks = _card_checks(answer_case("day-one-weekly-summary"), guessed)
+    assert next(c.detail for c in checks if c.name == "no_guessed_time") == "5"
+
+
+@pytest.mark.parametrize(
+    ("case_id", "offered"),
+    [
+        ("filter-by-component", "Bug tickets in MOCK from every components"),
+        ("filter-by-priority", "Tickets in MOCK of all priorities"),
+    ],
+)
+def test_a_card_that_offers_the_field_in_any_word_form_fails_keeps_out(case_id: str, offered: str):
+    case = answer_case(case_id)
+    cant = [
+        CantRow(kind="look_for", text=case.task, note="Can't.", needs="new_tool", system="Jira")
+    ]
+    rows = [
+        UnderstoodRow(kind="schedule", text="", state="missing", note="Not said."),
+        UnderstoodRow(kind="look_for", text=offered, state="changed", note="Suggested."),
+        UnderstoodRow(kind="do", text="List them", state="understood"),
+        UnderstoodRow(kind="where", text="", state="missing", note="Not said."),
+    ]
+    shown = PartAnswer(name="Bug list", rows=rows, cant=cant)
+    assert failed(_cant_checks(case, shown)) == {"keeps_out"}
+    clean = shown.model_copy(
+        update={
+            "rows": [rows[0], rows[1].model_copy(update={"text": "Bug tickets in MOCK"}), *rows[2:]]
+        }
+    )
+    assert failed(_cant_checks(case, clean)) == set()
 
 
 def test_a_refusal_and_a_question_are_scored_on_their_kind_and_words():

@@ -15,14 +15,23 @@ from agent_runtime.contract import (
     WatchlistAnswer,
 )
 from agent_runtime.planner import said_in
-from evals.checks import Check, check, mentions, no_jargon, no_themed_names, ticket_keys
+from evals.checks import (
+    Check,
+    check,
+    mentions,
+    mentions_a_form,
+    no_jargon,
+    no_themed_names,
+    ticket_keys,
+)
 from evals.jobs import Answer, Case, Job
 
 ACCEPTED = ("understood", "changed")
 _PROJECT_KEY = re.compile(r"\b(?:[Pp]roject|[Ii]n)\s+([A-Z][A-Z0-9]{1,9})\b")
-_TIME_WORDS = re.compile(
-    r"\d+|\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|weekday|weekdays|"
-    r"daily|weekly|monthly|hourly|morning|evening|noon|midnight|am|pm)\b",
+_CLOCK_WORDS = re.compile(r"\d+|\b(?:morning|evening|noon|midnight|am|pm)\b", re.IGNORECASE)
+_DAY_WORDS = re.compile(
+    r"\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|weekday|weekdays|daily|"
+    r"weekly|monthly|hourly)\b",
     re.IGNORECASE,
 )
 
@@ -145,8 +154,11 @@ def _cant_checks(case: AnswerCase, shown: PlannerAnswer) -> list[Check]:
     refused = [f"{c.text} {c.note}" for c in cant]
     accepted = " ".join(r.text for r in card if r.state in ACCEPTED)
     found = [
-        check("marks_cant_do", [w for w in case.cant if not any(mentions(t, w) for t in refused)]),
-        check("keeps_out", [f"{w} offered" for w in case.cant if mentions(accepted, w)]),
+        check(
+            "marks_cant_do",
+            [w for w in case.cant if not any(mentions_a_form(t, w) for t in refused)],
+        ),
+        check("keeps_out", [f"{w} offered" for w in case.cant if mentions_a_form(accepted, w)]),
     ]
     if case.needs is not None:
         found.append(
@@ -162,15 +174,22 @@ def _cant_checks(case: AnswerCase, shown: PlannerAnswer) -> list[Check]:
     return found
 
 
+def _guessed_time(schedule: UnderstoodRow, task: str) -> list[str]:
+    """The words of a schedule the request never said: a time of day on any accepted row, and a
+    day too on one the Planner called the person's own. A day shown as filled in is allowed."""
+    if schedule.state not in ACCEPTED:
+        return []
+    patterns = [_CLOCK_WORDS] + ([_DAY_WORDS] if schedule.state == "understood" else [])
+    return [w for p in patterns for w in p.findall(schedule.text) if not said_in(w, task)]
+
+
 def _card_checks(case: AnswerCase, shown: PlannerAnswer) -> list[Check]:
     card = card_of(shown)
     if card is None:
         return [check("reads_the_parts", case.understood)] if case.understood else []
     explained = " ".join(f"{r.text} {r.note or ''}" for r in card if r.state in ACCEPTED)
     schedule = next(r for r in card if r.kind == "schedule")
-    guessed: list[str] = []
-    if schedule.state in ACCEPTED:
-        guessed = [w for w in _TIME_WORDS.findall(schedule.text) if not said_in(w, case.task)]
+    guessed = _guessed_time(schedule, case.task)
     words = [w for r in card for w in (r.text, r.note or "")]
     task_keys = set(_PROJECT_KEY.findall(case.task)) | ticket_keys(case.task)
     shown_keys = {k for text in words for k in _PROJECT_KEY.findall(text)}
