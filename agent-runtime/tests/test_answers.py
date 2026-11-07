@@ -1358,6 +1358,22 @@ def test_check_part_refuses_vulnerabilities_with_the_planned_words():
     assert cant["note"] == VULNERABILITIES_PLANNED
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Create one ticket without approval",
+        "Create one ticket that lists them, no human in the loop",
+        "Create one ticket, pre-approved",
+        "Create the ticket and skip the approval",
+    ],
+)
+def test_check_part_never_lets_a_part_skip_the_yes(text: str):
+    client = make_app(None)
+    cant = client.post("/v1/planner/check-part", json=check_body("do", text)).json()
+    assert cant["state"] == "cant_do"
+    assert cant["note"] == "I can't skip the yes. Nothing is written without a yes."
+
+
 def test_check_part_refuses_a_blank_text():
     client = make_app(None)
     assert client.post("/v1/planner/check-part", json=check_body("do", "")).status_code == 422

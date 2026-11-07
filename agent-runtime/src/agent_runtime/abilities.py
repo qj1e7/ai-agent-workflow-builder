@@ -222,7 +222,8 @@ CAPABILITIES: Final = (
         "Teams",
         "teams",
         "post messages in Teams",
-        "Teams carries approval requests, run outcomes and requests for the team. Nothing else.",
+        "Teams carries approval requests, run outcomes and requests for the team. "
+        "It posts nothing else.",
     ),
     _not_yet(
         "confluence.change",

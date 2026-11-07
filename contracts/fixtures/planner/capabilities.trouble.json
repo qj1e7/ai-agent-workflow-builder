@@ -152,7 +152,7 @@
       "system": "Teams",
       "state": "planned",
       "cant": "post messages in Teams",
-      "why": "Teams carries approval requests, run outcomes and requests for the team. Nothing else.",
+      "why": "Teams carries approval requests, run outcomes and requests for the team. It posts nothing else.",
       "fix": null,
       "connection": "teams",
       "last_ok_at": null,

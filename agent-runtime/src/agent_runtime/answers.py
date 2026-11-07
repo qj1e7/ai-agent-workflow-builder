@@ -210,6 +210,9 @@ ANSWER_SYSTEM: Final = (
 )
 
 
+SKIP_PART_NOTE = "I can't skip the yes. Nothing is written without a yes."
+
+
 def word_rule_refusal(request: str) -> RefusedAnswer | None:
     """The refusal the word rule gives before any model call, or None. The product answers it
     whatever the model then says, so the eval scores it the same way."""
@@ -539,7 +542,7 @@ def check_one_part(request: CheckPartRequest) -> CheckPartResult:
     """One part the person changed, checked by code alone: no model, nothing guessed. A part the
     platform can't do comes back with the words of the registry and what a fix would need."""
     text = plain(request.text, TEXT_LIMIT)
-    note = why_not(request.kind, text)
+    note = SKIP_PART_NOTE if word_rule_refusal(text) else why_not(request.kind, text)
     if note is None:
         return PartFits()
     need = need_of(request.kind, text)
