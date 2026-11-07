@@ -368,12 +368,6 @@ type ChooseResult = Annotated[Chosen | ModelProblem, Field(discriminator="status
 choose_result_adapter: TypeAdapter[ChooseResult] = TypeAdapter(ChooseResult)
 
 
-class UnderstandRequest(WireModel):
-    task: str
-    model: ModelAccess
-    carried_on: bool = False
-
-
 type RowKind = Literal["schedule", "look_for", "do", "where"]
 type RowState = Literal["understood", "changed", "missing", "cant_do"]
 
@@ -383,24 +377,6 @@ class UnderstoodRow(WireModel):
     text: str = Field(max_length=200)
     state: RowState
     note: str | None = Field(default=None, max_length=300)
-
-
-class Understood(WireModel):
-    status: Literal["understood"] = "understood"
-    rows: list[UnderstoodRow] = Field(min_length=4, max_length=8)
-
-
-class BelongsOnWatchlist(WireModel):
-    status: Literal["watchlist"] = "watchlist"
-    word: str = Field(min_length=1, max_length=80)
-    software: str | None = Field(default=None, max_length=80)
-
-
-type UnderstandResult = Annotated[
-    Understood | BelongsOnWatchlist | ModelProblem, Field(discriminator="status")
-]
-
-understand_result_adapter: TypeAdapter[UnderstandResult] = TypeAdapter(UnderstandResult)
 
 
 class FindSoftwareRequest(WireModel):
@@ -641,11 +617,6 @@ class HttpAgentRuntime:
 
     async def draft(self, request: DraftRequest) -> DraftResult | AgentUnavailable | AgentRejected:
         return await self._model_call("/v1/cards/draft", request, draft_result_adapter)
-
-    async def understand(
-        self, request: UnderstandRequest
-    ) -> UnderstandResult | AgentUnavailable | AgentRejected:
-        return await self._model_call("/v1/planner/understand", request, understand_result_adapter)
 
     async def find_software(
         self, request: FindSoftwareRequest

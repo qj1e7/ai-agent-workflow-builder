@@ -3,16 +3,12 @@ import newAgent from '../../../../contracts/fixtures/cards/plan.new-agent.json'
 import cardList from '../../../../contracts/fixtures/cards/list.json'
 import cannotDo from '../../../../contracts/fixtures/cards/plan.cannot-do.json'
 import useOne from '../../../../contracts/fixtures/cards/plan.use-one.json'
-import rowsAnswer from '../../../../contracts/fixtures/builder/understand.rows.json'
-import starters from '../../../../contracts/fixtures/builder/understand.starters.json'
-import watchlist from '../../../../contracts/fixtures/builder/understand.watchlist.json'
 import setupCardAnswer from '../../../../contracts/fixtures/planner/answer.setup_card.json'
 import partAnswer from '../../../../contracts/fixtures/planner/answer.part.json'
 import checkCant from '../../../../contracts/fixtures/planner/check-part.cant.json'
 import { ApiError } from '../../api/client'
-import type { CardView, DraftView, PartReply, PlanOut, RowKind, RowState, SetupCardReply, ToolId, UnderstandOut } from '../../api/types'
+import type { CardView, DraftView, PartReply, PlanOut, RowKind, RowState, SetupCardReply, ToolId } from '../../api/types'
 import {
-  afterChecking,
   afterPartCheck,
   andList,
   cardFrom,
@@ -20,19 +16,16 @@ import {
   savedLeft,
   setupLeft,
   whenSaid,
-  afterReading,
-  carryOn,
   changeRow,
   checkedRows,
-  checkOf,
   createBody,
   defaultName,
   draftContent,
   dropRow,
   EMPTY_FORM,
+  ROW_LABEL,
   enterWhen,
   nextBlockers,
-  partWords,
   taskWithoutSchedule,
   planView,
   readWhen,
@@ -41,25 +34,34 @@ import {
   rowBlockers,
   savedCopyOf,
   scheduleOf,
-  textProblem,
   turnOn,
   valueOf,
   valueProblem,
   whenProblems,
   whenWords,
   type Form,
+  type PartResult,
   type PlanAgent,
   type Row,
   type TurnOnCalls,
 } from './card'
 
 const FOLLOW_UP = 'Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days and create one follow-up ticket that lists them'
-const ROWS = rowsAnswer as UnderstandOut
+interface Answered {
+  readonly rows: readonly { readonly kind: RowKind; readonly text: string; readonly state: RowState; readonly note: string | null }[]
+}
+const ROWS: Answered = {
+  rows: [
+    { kind: 'schedule', text: 'Every weekday at 3pm', state: 'understood', note: null },
+    { kind: 'look_for', text: 'Bug tickets in MOCK with no update for 10 days', state: 'understood', note: null },
+    { kind: 'do', text: 'Create one follow-up ticket that lists them', state: 'understood', note: null },
+    { kind: 'where', text: 'Jira project MOCK', state: 'understood', note: null },
+  ],
+}
 const NEW_AGENT = newAgent as PlanOut
 const USE_ONE = useOne as PlanOut
 const CANNOT = cannotDo as PlanOut
-const TEAMS: UnderstandOut = {
-  answer: 'rows',
+const TEAMS: Answered = {
   rows: [
     { kind: 'schedule', text: '', state: 'missing', note: 'You didn’t say when it runs.' },
     { kind: 'look_for', text: 'Tickets with no update for 14 days', state: 'changed', note: 'You said “stale”, so I used 14 days without an update.' },
@@ -87,18 +89,16 @@ const CLEAN_DRAFT: PlanOut = {
   questions: [],
 }
 
-const read = (answer: UnderstandOut, text = FOLLOW_UP): Form => afterReading({ ...EMPTY_FORM, text }, answer)
+const read = (answer: Answered, text = FOLLOW_UP): Form => ({ ...EMPTY_FORM, text, step: 2, rows: answer.rows.map((row) => ({ ...row, planner: null })) })
+const partWords = (part: Pick<Row, 'kind' | 'text'>) => `${ROW_LABEL[part.kind]}: ${part.text}`
 const readTeams = (): Form => read(TEAMS, 'Post a summary of stale tickets in Teams')
-const KINDS: readonly RowKind[] = ['schedule', 'look_for', 'do', 'where']
-const partRead = (kind: RowKind, text: string, state: RowState, note: string | null = null): UnderstandOut => ({
-  answer: 'rows',
-  rows: KINDS.map((each) => (each === kind ? { kind, text, state, note } : { kind: each, text: '', state: 'missing', note: 'I couldn’t tell from your words.' })),
-})
+const partRead = (_kind: RowKind, _text: string, state: RowState, note: string | null = null): PartResult =>
+  state === 'understood' ? { state: 'fits' } : { state: 'cant_do', ...(note === null ? {} : { note }) }
 const NOT_CHECKED = 'I couldn’t check your new words just now. Change them to try again.'
 const CAN = 'I can only read Jira tickets, sum up what I find, check software for new releases, create a Jira ticket after a yes, and ask Approvers for a yes in Teams.'
 const fixed = (form: Form, index: number, text: string): Form => {
   const kind = form.rows[index]?.kind ?? 'where'
-  return afterChecking(changeRow(form, index, text), { kind, text }, partRead(kind, text, 'understood'))
+  return afterPartCheck(changeRow(form, index, text), { kind, text }, partRead(kind, text, 'understood'))
 }
 const agentOf = (answer: PlanOut, form: Form): PlanAgent => {
   const view = planView(answer, form.rows)
@@ -107,40 +107,6 @@ const agentOf = (answer: PlanOut, form: Form): PlanAgent => {
   if (!first) throw new Error('no agent')
   return first
 }
-
-describe('step 1, describe it', () => {
-  it('asks for some words, and at most 2,000 characters', () => {
-    expect(textProblem('   ')).toBe('Write what should happen first.')
-    expect(textProblem('x'.repeat(2001))).toBe('Keep it to 2,000 characters.')
-    expect(textProblem(FOLLOW_UP)).toBeNull()
-  })
-
-  it('opens step 2 with the Planner’s rows', () => {
-    const form = read(ROWS)
-    expect(form.step).toBe(2)
-    expect(form.rows.map((row) => [row.kind, row.text, row.state])).toEqual([
-      ['schedule', 'Every weekday at 3pm', 'understood'],
-      ['look_for', 'Bug tickets in MOCK with no update for 10 days', 'understood'],
-      ['do', 'Create one follow-up ticket that lists them', 'understood'],
-      ['where', 'Jira project MOCK', 'understood'],
-    ])
-    expect(form.redirect).toBeNull()
-  })
-
-  it('opens step 2 at the Software watchlist for a release task, with the word that made the Planner think so', () => {
-    const form = read(watchlist as UnderstandOut, 'Tell me when LangGraph has a new release')
-    expect(form.step).toBe(2)
-    expect(form.rows).toEqual([])
-    expect(form.redirect).toMatchObject({ word: 'release', software: 'LangGraph' })
-  })
-
-  it('stays on step 1 when the Planner could not read the task, and says why', () => {
-    const form = read(starters as UnderstandOut)
-    expect(form.step).toBe(1)
-    expect(form.plannerSaid).toBe((starters as { message: string }).message)
-    expect(form.text).toBe(FOLLOW_UP)
-  })
-})
 
 describe('step 2, check what I understood', () => {
   it('lets four understood rows through', () => {
@@ -178,11 +144,11 @@ describe('step 2, check what I understood', () => {
   })
 
   it('clears a changed can’t-do part only when the Planner reads the new words as something it can do', () => {
-    const cleared = afterChecking(changeRow(readTeams(), 3, 'Jira project MOCK'), { kind: 'where', text: 'Jira project MOCK' }, partRead('where', 'Jira project MOCK', 'understood'))
+    const cleared = afterPartCheck(changeRow(readTeams(), 3, 'Jira project MOCK'), { kind: 'where', text: 'Jira project MOCK' }, partRead('where', 'Jira project MOCK', 'understood'))
     expect(cleared.rows[3]).toMatchObject({ text: 'Jira project MOCK', state: 'edited', note: null })
     expect(cleared.rows[3]?.planner?.text).toBe('Post it in Teams')
     const words = 'Post it in the team’s Teams channel'
-    const still = afterChecking(changeRow(readTeams(), 3, words), { kind: 'where', text: words }, partRead('where', words, 'cant_do', 'I can’t post it in the team’s Teams channel yet.'))
+    const still = afterPartCheck(changeRow(readTeams(), 3, words), { kind: 'where', text: words }, partRead('where', words, 'cant_do', 'I can’t post it in the team’s Teams channel yet.'))
     expect(still.rows[3]).toMatchObject({ text: words, state: 'cant_do', note: 'I can’t post it in the team’s Teams channel yet.' })
     expect(rowBlockers(still.rows)).toContainEqual({ index: 3, words: 'you change what I can’t do' })
   })
@@ -190,11 +156,9 @@ describe('step 2, check what I understood', () => {
   it('keeps the part red when the Planner could not check the new words, and drops an answer for words changed since', () => {
     const checking = changeRow(readTeams(), 3, 'Jira project MOCK')
     const part = { kind: 'where', text: 'Jira project MOCK' } as const
-    expect(afterChecking(checking, part, null).rows[3]).toMatchObject({ state: 'cant_do', note: NOT_CHECKED })
-    expect(afterChecking(checking, part, starters as UnderstandOut).rows[3]).toMatchObject({ state: 'cant_do', note: NOT_CHECKED })
-    expect(afterChecking(checking, part, watchlist as UnderstandOut).rows[3]).toMatchObject({ state: 'cant_do', note: (watchlist as { note: string }).note })
+    expect(afterPartCheck(checking, part, null).rows[3]).toMatchObject({ state: 'cant_do', note: NOT_CHECKED })
     const changedAgain = changeRow(checking, 3, 'Jira project ABC')
-    expect(afterChecking(changedAgain, part, partRead('where', 'Jira project MOCK', 'understood'))).toEqual(changedAgain)
+    expect(afterPartCheck(changedAgain, part, partRead('where', 'Jira project MOCK', 'understood'))).toEqual(changedAgain)
   })
 
   it('sends “Where it goes” changed to a Teams channel post back to the Planner, and keeps it red when the tools can’t do it', () => {
@@ -204,7 +168,7 @@ describe('step 2, check what I understood', () => {
     expect(form.rows[3]).toMatchObject({ text: words, state: 'checking', note: null })
     expect(form.rows.filter((row) => row.state === 'checking').map(partWords)).toEqual([`Where it goes: ${words}`])
     expect(nextBlockers(form, null).words).toBe('Next opens when I’ve checked your new words.')
-    const checked = afterChecking(form, { kind: 'where', text: words }, partRead('where', words, 'cant_do', note))
+    const checked = afterPartCheck(form, { kind: 'where', text: words }, partRead('where', words, 'cant_do', note))
     expect(checked.rows[3]).toMatchObject({ text: words, state: 'cant_do', note })
     expect(nextBlockers(checked, null).words).toBe('Next opens when you change what I can’t do.')
     expect(checkedRows({ ...enterWhen(checked), step: 4 }).map((row) => row.words)).not.toContain(`Where it goes: ${words}. You changed this.`)
@@ -213,14 +177,14 @@ describe('step 2, check what I understood', () => {
   it('sends an empty “Does” filled in with a Teams summary back to the Planner, and keeps it red when the tools can’t do it', () => {
     const words = 'Post a summary of them in the Teams channel'
     const note = `I can't post a summary of them in the Teams channel yet. ${CAN}`
-    const noDoes = read({ answer: 'rows', rows: (ROWS.answer === 'rows' ? ROWS.rows : []).map((row) => (row.kind === 'do' ? { ...row, text: '', state: 'missing', note: 'I couldn’t tell from your words.' } : row)) })
+    const noDoes = read({ rows: ROWS.rows.map((row) => (row.kind === 'do' ? { ...row, text: '', state: 'missing', note: 'I couldn’t tell from your words.' } : row)) })
     expect(noDoes.rows[2]).toMatchObject({ kind: 'do', state: 'missing' })
     const form = changeRow(noDoes, 2, words)
     expect(form.rows[2]).toMatchObject({ text: words, state: 'checking' })
     expect(form.rows.filter((row) => row.state === 'checking').map(partWords)).toEqual([`Does: ${words}`])
     expect(taskWithoutSchedule(form.rows)).toContain(words)
     expect(nextBlockers(form, null).words).toBe('Next opens when I’ve checked your new words.')
-    const checked = afterChecking(form, { kind: 'do', text: words }, partRead('do', words, 'cant_do', note))
+    const checked = afterPartCheck(form, { kind: 'do', text: words }, partRead('do', words, 'cant_do', note))
     expect(checked.rows[2]).toMatchObject({ state: 'cant_do', note })
     expect(rowBlockers(checked.rows)).toEqual([{ index: 2, words: 'you change what I can’t do' }])
   })
@@ -228,35 +192,11 @@ describe('step 2, check what I understood', () => {
   it('checks a part that was understood too, and shows it as changed by you once the Planner can do it', () => {
     const form = changeRow(read(ROWS), 3, 'Jira project ABC')
     expect(form.rows[3]).toMatchObject({ text: 'Jira project ABC', state: 'checking' })
-    expect(afterChecking(form, { kind: 'where', text: 'Jira project ABC' }, partRead('where', 'Jira project ABC', 'understood')).rows[3]).toMatchObject({ state: 'edited', note: null })
-  })
-
-  const carried = (): Form => carryOn(read(watchlist as UnderstandOut, 'Tell me when LangGraph has a new release'))
-
-  it('checks each part filled in after carrying on, telling the Planner the Operator chose a new workflow, and takes a release part it can do', () => {
-    const words = 'New releases of langchain-ai/langgraph on GitHub'
-    const form = changeRow(carried(), 1, words)
-    expect(form.rows[1]).toMatchObject({ text: words, state: 'checking' })
-    expect(checkOf(form, { kind: 'look_for', text: words })).toEqual({ text: `Looks for: ${words}`, carriedOn: true })
-    expect(afterChecking(form, { kind: 'look_for', text: words }, partRead('look_for', words, 'understood')).rows[1]).toMatchObject({ state: 'edited', note: null })
-    expect(checkOf(changeRow(read(ROWS), 3, 'Jira project ABC'), { kind: 'where', text: 'Jira project ABC' })).toEqual({ text: 'Where it goes: Jira project ABC', carriedOn: false })
-  })
-
-  it.each([
-    [3, 'where', 'Post the release notes in the team’s Teams channel', 'post the release notes in the team’s Teams channel'],
-    [2, 'do', 'Email the upgrade list to the team', 'email the upgrade list to the team'],
-  ] as const)('keeps a part filled in after carrying on red when the tools can’t do it: %s, “%s”', (index, kind, words, what) => {
-    const form = changeRow(carried(), index, words)
-    const part = { kind, text: words }
-    expect(checkOf(form, part)).toMatchObject({ carriedOn: true })
-    const note = `I can't ${what} yet. ${CAN}`
-    expect(afterChecking(form, part, partRead(kind, words, 'cant_do', note)).rows[index]).toMatchObject({ state: 'cant_do', note })
-    expect(afterChecking(form, part, watchlist as UnderstandOut).rows[index]).toMatchObject({ state: 'cant_do' })
+    expect(afterPartCheck(form, { kind: 'where', text: 'Jira project ABC' }, partRead('where', 'Jira project ABC', 'understood')).rows[3]).toMatchObject({ state: 'edited', note: null })
   })
 
   it('leaves out a part only when another of its kind stays', () => {
-    const split: UnderstandOut = {
-      answer: 'rows',
+    const split: Answered = {
       rows: [
         { kind: 'schedule', text: 'Every Monday at 9am', state: 'understood', note: null },
         { kind: 'look_for', text: 'Bug tickets in MOCK', state: 'understood', note: null },
@@ -268,19 +208,6 @@ describe('step 2, check what I understood', () => {
     const form = read(split)
     expect(dropRow(form, 3).rows.map((row) => row.text)).not.toContain('Close the old ones')
     expect(dropRow(form, 1).rows).toHaveLength(5)
-  })
-
-  it('carries a release task on as a new workflow with the task kept and the four parts to fill in', () => {
-    const form = carryOn(read(watchlist as UnderstandOut, 'Tell me when LangGraph has a new release'))
-    expect(form.step).toBe(2)
-    expect(form.text).toBe('Tell me when LangGraph has a new release')
-    expect(form.redirect).toBeNull()
-    expect(form.rows.map((row) => [row.kind, row.state])).toEqual([
-      ['schedule', 'missing'],
-      ['look_for', 'missing'],
-      ['do', 'missing'],
-      ['where', 'missing'],
-    ])
   })
 
   it('asks the Planner for a plan with the rows, not the schedule', () => {
@@ -542,7 +469,7 @@ describe('a draft', () => {
   })
 
   it('keeps that the Operator carried on past the watchlist when the draft reopens', () => {
-    const content = JSON.parse(JSON.stringify(draftContent(carryOn(read(watchlist as UnderstandOut, 'Tell me when LangGraph has a new release')), null))) as Record<string, unknown>
+    const content = JSON.parse(JSON.stringify(draftContent({ ...read(ROWS), carriedOn: true }, null))) as Record<string, unknown>
     expect(restoreDraft(saved(2, content)).form.carriedOn).toBe(true)
   })
 

@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test'
 import path from 'node:path'
 import { expectAccessible } from '../support/axe'
 import { outOfVisualOrder, walkTabs, withoutVisibleFocus } from '../support/keyboard'
-import { connectMockModel } from './support/newWorkflow'
+import { connectMockModel } from './support/settings'
 import { expect, test } from './support/test'
 import { openContext, OUT, shot } from './support/ui'
 

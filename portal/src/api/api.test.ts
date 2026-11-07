@@ -4,7 +4,7 @@ import { loadConfig, parseConfig, PortalConfigError } from './config'
 import { fetchEventPage, refusalOf } from './queries'
 import { authorizedFetch, createDevSession } from './session'
 
-const LIVE_DEV = { mode: 'live', signIn: { kind: 'dev' }, jiraBrowseUrl: null, newWorkflowSteps: false }
+const LIVE_DEV = { mode: 'live', signIn: { kind: 'dev' }, jiraBrowseUrl: null }
 const AUTH = { authority: 'https://login.example.test/tenant/v2.0', client_id: 'portal', scope: 'openid profile offline_access' }
 
 describe('parseConfig', () => {
@@ -19,7 +19,6 @@ describe('parseConfig', () => {
     expect(parseConfig({ mode: 'live', auth: AUTH })).toEqual({
       mode: 'live',
       jiraBrowseUrl: null,
-      newWorkflowSteps: false,
       signIn: { kind: 'oidc', authority: AUTH.authority, clientId: 'portal', scope: AUTH.scope },
     })
     expect(parseConfig({ mode: 'live', auth: { ...AUTH, authority: 'http://mock-oidc:8080/default' } })).toMatchObject({
@@ -42,15 +41,9 @@ describe('parseConfig', () => {
 
 })
 
-describe('parseConfig and the old New workflow', () => {
-  it('is off unless the config turns it on', () => {
-    expect(parseConfig({ mode: 'live' })).toMatchObject({ newWorkflowSteps: false })
-    expect(parseConfig({ mode: 'live', new_workflow_steps: false })).toMatchObject({ newWorkflowSteps: false })
-    expect(parseConfig({ mode: 'live', new_workflow_steps: true })).toMatchObject({ newWorkflowSteps: true })
-  })
-
-  it('refuses a value that is not true or false, so a typing slip never turns the screen on or off by guess', () => {
-    for (const value of ['on', 1, null, []]) expect(() => parseConfig({ mode: 'live', new_workflow_steps: value })).toThrow(PortalConfigError)
+describe('parseConfig and the removed New workflow setting', () => {
+  it('ignores a leftover new_workflow_steps in /config.json, so a Portal started before the setting went still loads', () => {
+    for (const value of [true, false, 'on', null]) expect(parseConfig({ mode: 'live', new_workflow_steps: value })).toEqual(LIVE_DEV)
   })
 })
 

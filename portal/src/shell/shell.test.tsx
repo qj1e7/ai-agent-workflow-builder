@@ -7,7 +7,6 @@ import bobHome from '../../../contracts/fixtures/builder/home.bob.json'
 import { App } from '../App'
 import { ApiError } from '../api/client'
 import { ApiProvider } from '../api/context'
-import { FlagsProvider } from '../api/flags'
 import { TicketLinksProvider } from '../api/ticketLinks'
 import { createDevSession, SIGNED_IN, type Session } from '../api/session'
 import type { HomeOut, Me } from '../api/types'
@@ -41,10 +40,9 @@ interface Setup {
   readonly oidc?: boolean
   readonly browseUrl?: string | null
   readonly home?: HomeOut
-  readonly oldNewWorkflow?: boolean
 }
 
-function render({ path = '/', me = ALICE, meError, oidc = false, browseUrl = null, home, oldNewWorkflow = false }: Setup = {}): string {
+function render({ path = '/', me = ALICE, meError, oidc = false, browseUrl = null, home }: Setup = {}): string {
   const session = oidc ? oidcSession : createDevSession(null)
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   const key = ['me', session.cacheScope()]
@@ -56,11 +54,9 @@ function render({ path = '/', me = ALICE, meError, oidc = false, browseUrl = nul
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={session} platformFetch={fetch} origin={ORIGIN}>
         <TicketLinksProvider config={{ jiraBrowseUrl: browseUrl }}>
-          <FlagsProvider config={{ newWorkflowSteps: oldNewWorkflow }}>
-            <MemoryRouter initialEntries={[path]}>
-              <App now={() => MORNING} />
-            </MemoryRouter>
-          </FlagsProvider>
+          <MemoryRouter initialEntries={[path]}>
+            <App now={() => MORNING} />
+          </MemoryRouter>
         </TicketLinksProvider>
       </ApiProvider>
     </QueryClientProvider>,
@@ -84,15 +80,11 @@ function menuLabels(html: string): string[] {
   return [...nav.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/g)].map((match) => text(match[1] ?? ''))
 }
 
-const DRAWN_AT_ONCE = MENU_PAGE_IDS.filter((id) => id !== 'new')
+const DRAWN_AT_ONCE = MENU_PAGE_IDS
 
 describe('the menu', () => {
   it('reads Home, Workflows, Software watchlist, Agent library for an Operator, with no New workflow', () => {
     expect(menuLabels(render())).toEqual(['Home', 'Workflows', 'Software watchlist', 'Agent library'])
-  })
-
-  it('keeps New workflow out of the menu even while the flag keeps its address alive', () => {
-    expect(menuLabels(render({ oldNewWorkflow: true }))).toEqual(['Home', 'Workflows', 'Software watchlist', 'Agent library'])
   })
 
   it('has no New workflow for an Approver who is not an Operator, on the header or the tab bar', () => {
@@ -102,17 +94,12 @@ describe('the menu', () => {
     expect(html).not.toContain('href="/agents"')
   })
 
-  it('loads New workflow at /new and on its done page only while the flag is on', () => {
-    for (const path of ['/new', '/new/done/uc_1']) {
-      expect(text(mainOf(render({ path, oldNewWorkflow: true }))), path).toBe('Loading')
-      expect(text(mainOf(render({ path }))), `${path} with the flag off leads to Home`).not.toBe('Loading')
+  it('sends an old /new address, a saved draft’s old link and the old done page to Home, never to a blank page', () => {
+    for (const path of ['/new', '/new?draft=drf-1', '/new/done/uc_1']) {
+      const html = render({ path })
+      expect(html, path).toContain('<main')
+      expect(text(mainOf(html)), path).not.toContain('Page not found')
     }
-  })
-
-  it('sends a saved draft’s old address to Home with its id, and a bare /new to Home', () => {
-    expect(render({ path: '/new?draft=drf-1' })).toContain('<main')
-    expect(text(mainOf(render({ path: '/new?draft=drf-1' }))), 'a draft').not.toBe('Loading')
-    expect(text(mainOf(render({ path: '/new' })))).not.toBe('Loading')
   })
 
   it('has the menu’s items on the phone tab bar too', () => {

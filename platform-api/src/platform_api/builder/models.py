@@ -506,15 +506,6 @@ class CreateAgentUseCase(WireIn):
     )
 
 
-class UnderstandIn(WireIn):
-    text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
-    carried_on: bool = Field(
-        default=False,
-        description="True when the Operator chose a new workflow over the Software watchlist. "
-        "Then the Planner reads the text back in parts, and never answers the watchlist.",
-    )
-
-
 class UnderstoodRowView(WireModel):
     kind: RowKind = Field(
         description="schedule: when it runs. look_for: what to look for. do: what to do with "
@@ -532,41 +523,17 @@ class UnderstoodRowView(WireModel):
     note: str | None
 
 
-class UnderstoodRows(WireModel):
-    answer: Literal["rows"] = "rows"
-    rows: list[UnderstoodRowView] = Field(
-        description="One schedule row, then at least one row for what to look for, what to do "
-        "and where, in that order. At most 8."
-    )
-
-
-class WatchlistRedirect(WireModel):
-    answer: Literal["watchlist"] = "watchlist"
-    word: str = Field(description="The word in the task that made the Planner think so.")
-    software: str | None = Field(description="The software the task names, as it wrote it.")
-    note: str = Field(description="What the Planner says, in plain words.")
-
-
 class StarterView(WireModel):
     name: str
     what: str
     task: str | None = Field(
-        description="The task to start New workflow with. Null when the starter opens a page."
+        description="The task this starter stands for. Null when the starter opens a page."
     )
     opens: Literal["software_watchlist"] | None = Field(
         description="The page this starter opens instead of a task."
     )
 
 
-class Starters(WireModel):
-    answer: Literal["starters"] = "starters"
-    message: str = Field(description="Why the Planner could not read the task, in plain words.")
-    starters: list[StarterView]
-
-
-type UnderstandOut = Annotated[
-    UnderstoodRows | WatchlistRedirect | Starters, Field(discriminator="answer")
-]
 DRAFT_ID_PATTERN = r"^[A-Za-z0-9_-]{1,64}$"
 DRAFT_STEPS = 4
 DRAFT_LIMIT_BYTES = 32 * 1024
@@ -580,11 +547,11 @@ class DraftTimes(WireIn):
 class DraftIn(WireIn):
     step: Annotated[int, Field(ge=1, le=DRAFT_STEPS)] | None = Field(
         default=None,
-        description="The New workflow step the draft was saved at, from 1 to 4. "
+        description="The step of the old four-step screen the draft was saved at, from 1 to 4. "
         "A draft saved from a Planner card has no step.",
     )
     content: dict[str, JsonValue] = Field(
-        description="The New workflow form as the Portal keeps it, at most 32 KB as JSON. "
+        description="The set-up card's form as the Portal keeps it, at most 32 KB as JSON. "
         "The platform stores it as it is. It reads only a top-level `name`, which Home shows."
     )
     put_back: DraftTimes | None = Field(

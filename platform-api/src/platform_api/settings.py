@@ -46,7 +46,7 @@ class FirstPeople:
 
 MAX_BODY_BYTES_DEFAULT = 2 * 1024 * 1024
 """The largest request body the API reads, unless MAX_BODY_BYTES says otherwise. The largest
-real body is a New workflow draft. Its content may be 32 KB (DRAFT_LIMIT_BYTES), which is about
+real body is a set-up card draft. Its content may be 32 KB (DRAFT_LIMIT_BYTES), which is about
 100 KB as JSON even with every character escaped, so 2 MiB leaves about 20 times that."""
 
 

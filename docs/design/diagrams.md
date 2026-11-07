@@ -17,7 +17,7 @@ To check every diagram, run `scripts/render-diagrams.sh`. It renders each Mermai
 
 ## Use case diagram
 
-Two roles use the app, and one person may hold both. The Operator sets up workflows, looks after the Software watchlist and Settings, and retries a stopped workflow. The Approver says yes or no to a run's proposal, on the run page or from its message in the practice Teams panel, and confirms the risky setup changes. Each use case sits on the page that does it. The pages are the Portal's menu (Home, Workflows, Software watchlist, Agent library and New workflow), the run page, Settings (the gear) and the practice Teams panel (the Teams button). Everyone signs in with Entra ID, and the People list gives them their roles.
+Two roles use the app, and one person may hold both. The Operator sets up workflows, looks after the Software watchlist and Settings, and retries a stopped workflow. The Approver says yes or no to a run's proposal, on the run page or from its message in the practice Teams panel, and confirms the risky setup changes. Each use case sits on the page that does it. The pages are the Portal's menu (Home, Workflows, Software watchlist and Agent library), the run page, Settings (the gear) and the practice Teams panel (the Teams button). Everyone signs in with Entra ID, and the People list gives them their roles.
 
 ```mermaid
 flowchart LR
@@ -35,7 +35,7 @@ flowchart LR
             w2(["Run a workflow now"])
             w3(["Pause, resume, delete<br/>or restore a workflow"])
         end
-        subgraph newwf["New workflow"]
+        subgraph newwf["Home, the Planner's box"]
             n1(["Describe a task and check<br/>what the Planner understood"])
             n2(["Check the plan and its agents"])
             n3(["Choose when it runs"])
@@ -121,10 +121,10 @@ Each use case maps to a page that exists and to the routes it calls:
 | See every workflow | Workflows, `/workflows` and `/workflows/{use_case_id}` | Both | `GET /api/v1/use-cases`, `GET /api/v1/use-cases/{use_case_id}`, `GET /api/v1/runs` |
 | Run a workflow now | Workflows | Operator | `POST /api/v1/use-cases/{use_case_id}/runs`, with an `Idempotency-Key` |
 | Pause, resume, delete or restore | Workflows | Operator | `POST /api/v1/use-cases/{use_case_id}/pause`, `.../resume`, `DELETE /api/v1/use-cases/{use_case_id}`, `.../restore` |
-| Describe a task and check what the Planner understood | New workflow, `/new` | Operator | `POST /api/v1/builder/understand` |
-| Check the plan and its agents | New workflow | Operator | `POST /api/v1/builder/plan`, and `POST /api/v1/agent-cards` when the Planner drafted a new agent |
-| Choose when it runs, and turn it on | New workflow, then `/new/done/{use_case_id}` | Operator | `POST /api/v1/agent-use-cases`, with its schedule |
-| Save a draft | New workflow | Operator | `PUT /api/v1/drafts/{draft_id}`, `GET /api/v1/drafts`, `DELETE /api/v1/drafts/{draft_id}` |
+| Describe a task and check what the Planner understood | Home, `/` | Operator | `POST /api/v1/planner/answer`, and `POST /api/v1/planner/check-part` for a part the person changed |
+| Check the plan and its agents | Home, on the set-up card | Operator | `POST /api/v1/builder/plan`, and `POST /api/v1/agent-cards` when the Planner drafted a new agent |
+| Choose when it runs, and turn it on | Home, on the set-up card, then `/workflows/{use_case_id}` | Operator | `POST /api/v1/agent-use-cases`, with its schedule |
+| Save a draft | Home, on the set-up card | Operator | `PUT /api/v1/drafts/{draft_id}`, `GET /api/v1/drafts`, `DELETE /api/v1/drafts/{draft_id}` |
 | Add, remove or restore watched software | Software watchlist, `/software` | Operator | `POST /api/v1/watchlist/software`, `DELETE /api/v1/watchlist/software/{software_id}`, `.../restore` |
 | Set the check's schedule, or check now | Software watchlist | Operator | `PUT /api/v1/watchlist/schedule`, `DELETE /api/v1/watchlist/schedule`, `POST /api/v1/use-cases/{use_case_id}/runs` |
 | Read the agents and their tools | Agent library, `/agents` | Both | `GET /api/v1/agent-cards`, `GET /api/v1/tools` |
@@ -157,14 +157,14 @@ flowchart TB
 
     subgraph api["platform-api container"]
         direction TB
-        builder["<b>Use case builder</b><br/>Owns: use cases and their versions, agent cards and their versions,<br/>the agents on each use case, watched software, drafts<br/>Schema: builder, role wab_builder<br/>Exposes: Builder, Home, /api/v1/use-cases, /api/v1/agent-cards,<br/>/api/v1/builder/understand, /api/v1/watchlist, /api/v1/drafts, /api/v1/home"]
+        builder["<b>Use case builder</b><br/>Owns: use cases and their versions, agent cards and their versions,<br/>the agents on each use case, watched software, drafts<br/>Schema: builder, role wab_builder<br/>Exposes: Builder, Home, /api/v1/use-cases, /api/v1/agent-cards,<br/>/api/v1/watchlist, /api/v1/drafts, /api/v1/home"]
         orch["<b>Orchestration</b><br/>Owns: runs, leg attempts, proposals, approval requests and decisions,<br/>write executions, outbox, schedules, the watchlist's checks,<br/>people, confirmations, the AI model setting, the settings history,<br/>the practice Jira and the practice Teams<br/>Schema: orchestration, role wab_orchestration<br/>Exposes: Orchestrator, RunStarter, CardPlanning, /api/v1/runs,<br/>/api/v1/approvals/{approval_id}, /api/v1/people, /api/v1/settings/model,<br/>/internal/v1/runs/{run_id}/steps/{step}<br/>Safety checker: check(). Write gateway: WriteGateway"]
         mon["<b>Run monitoring</b><br/>Owns: the activity log, its copy in Cosmos DB and the copied marks<br/>Schema: monitoring, role wab_monitoring<br/>Exposes: ActivityLog, Copier, the event stream,<br/>/internal/v1/runs/{run_id}/agent-events, the AI troubleshooter"]
         shared["Shared kernel<br/>shared.py, wire.py, auth.py, oidc.py, db.py<br/>Authenticator port: DevAuth or OidcAuthenticator. PeopleDirectory port"]
     end
 
     subgraph rt["agent-runtime container"]
-        runtime["<b>Agent runtime</b><br/>Owns: the Planner, the Version checker and each agent card's run,<br/>in memory per task. No database. No write keys<br/>Exposes: Agent API /v1/tasks, /v1/planner/understand, /v1/planner/choose,<br/>/v1/cards/draft, /v1/models/connect, /v1/models/test, /v1/tools, /v1/agents"]
+        runtime["<b>Agent runtime</b><br/>Owns: the Planner, the Version checker and each agent card's run,<br/>in memory per task. No database. No write keys<br/>Exposes: Agent API /v1/tasks, /v1/planner/choose,<br/>/v1/cards/draft, /v1/models/connect, /v1/models/test, /v1/tools, /v1/agents"]
     end
 
     builder -- "imports RunStarter, RunSpec, ScheduleBook,<br/>the Planner's answer types" --> orch
@@ -197,7 +197,7 @@ Each context reaches the outside world through ports that it owns. The adapters 
 | Context | Port | Adapter now | Later |
 |---|---|---|---|
 | Use case builder | `RunStarter` (owned by orchestration) | `Orchestrator` | none needed |
-| Use case builder | `Planning` (owned by orchestration) | `CardPlanning`, which sends the connected AI model's settings to the agent runtime. Without a model, New workflow answers with the starter workflows | none needed |
+| Use case builder | `Planning` (owned by orchestration) | `CardPlanning`, which sends the connected AI model's settings to the agent runtime. Without a model, the Planner's box answers with the starter workflows | none needed |
 | Orchestration | `WorkflowEngine` | `N8nWebhooks` | the node pack (ADRs 0026 and 0027) |
 | Orchestration | `AgentRuntime` | `HttpAgentRuntime` | none needed |
 | Orchestration | `ApprovalChannel` | `TeamsStub`, the practice Teams | a Teams message with a link, then Approve buttons in Teams |
@@ -207,7 +207,7 @@ Each context reaches the outside world through ports that it owns. The adapters 
 | Run monitoring | `EventCopy` | `CosmosEvents`, filled by the `Copier` | none needed |
 | Shared kernel | `Authenticator` | `DevAuth`, which reads `X-Dev-User` on localhost only, or `OidcAuthenticator` for Entra ID | none needed |
 | Shared kernel | `PeopleDirectory` | `People`, the People list in PostgreSQL (ADR 0029) | none needed |
-| Agent runtime | `Planner` | `FixedPlanner`, which brings in the Version checker for a watchlist check and each saved agent for a workflow. Reading a task in New workflow asks the AI model | a model for every run |
+| Agent runtime | `Planner` | `FixedPlanner`, which brings in the Version checker for a watchlist check and each saved agent for a workflow. Reading a task on Home asks the AI model | a model for every run |
 | Agent runtime | `ReleaseSource` | `GitHubReleaseSource`, or a fake GitHub in tests | the package registries (ADR 0025) |
 | Agent runtime | `Summarizer` | `TemplateSummarizer`, or `ModelSummarizer` when a model is set | the model the eval picks (ADR 0032) |
 
@@ -1153,13 +1153,13 @@ The private repository is billed per job, rounded up to a whole minute, so the s
 
 ## Sequence: set up a workflow
 
-An Operator uses New workflow's four steps: describe it, check what the Planner understood, choose when it runs, and turn it on. The Planner reads the task through the AI model connected in Settings. Nothing is saved until Turn it on, except a draft the Operator chooses to keep.
+An Operator says what to automate in the Planner's box on Home. The Planner answers with a set-up card, and the Operator checks what it understood, picks when it runs and turns it on. The Planner reads the task through the AI model connected in Settings. Nothing is saved until Turn it on, except a draft the Operator chooses to keep.
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Op as Operator
-    participant P as Portal, New workflow
+    participant P as Portal, Home
     box platform-api
         participant B as Use case builder
         participant O as Orchestration
@@ -1167,29 +1167,29 @@ sequenceDiagram
     participant AR as Agent runtime, Planner
     participant AI as AI model gateway
 
-    Note over Op,P: Step 1. Describe it
-    Op->>P: types the task in plain English, presses Next
-    P->>B: POST /api/v1/builder/understand {text}
-    B->>O: CardPlanning.understand(task)
+    Note over Op,P: Say it
+    Op->>P: types the task in plain English in the Planner's box
+    P->>B: POST /api/v1/planner/answer {text}
+    B->>O: PlannerAnswers.answer(task)
     O->>O: read the connected model and decrypt its key
     alt a model is connected
-        O->>AR: POST /v1/planner/understand {task, model}, X-Agent-Key
+        O->>AR: POST /v1/planner/answer {task, model}, X-Agent-Key
         AR->>AI: one request: read the task back in parts
-        AI-->>AR: the parts, each understood, missing or can't do
-        AR-->>O: the parts, held to the tools that exist
-        O-->>B: the parts
-    else no model, or no answer in 10 seconds
+        AI-->>AR: the parts
+        AR-->>O: the parts, each understood, missing or can't do, held to the tools that exist
+        O-->>B: the answer
+    else no model, or no answer in time
         O-->>B: NoModel or RuntimeDown
-        Note over B: falls back to the starter workflows
+        Note over B: falls back to the offline answer with the starter workflows
     end
-    B-->>P: 200 the parts, or "belongs on the Software watchlist", or the starters
+    B-->>P: 200 a set-up card, or the Software watchlist, or can't do, or the offline answer
 
-    Note over Op,P: Step 2. Check what I understood
-    P-->>Op: one sentence of coloured parts, Next stays off while a part is unclear
+    Note over Op,P: Check what I understood
+    P-->>Op: one sentence of coloured parts, Turn it on stays off while a part is unclear
     opt the Operator changes a part
         Op->>P: edits the part
-        P->>B: POST /api/v1/builder/understand {text: that part}
-        B-->>P: 200 the part, checked again
+        P->>B: POST /api/v1/planner/check-part {kind, text}
+        B-->>P: 200 fits, or can't do with the reason
     end
     P->>B: POST /api/v1/builder/plan {task}
     B->>O: CardPlanning.choose(task, the agent library)
@@ -1207,11 +1207,8 @@ sequenceDiagram
     end
     B-->>P: 200 the plan, each step marked reads, no system access, or changes data and waits for a yes
 
-    Note over Op,P: Step 3. When it runs
-    Op->>P: picks the day and the time, Singapore time
-
-    Note over Op,P: Step 4. Turn it on
-    Op->>P: names it, presses Turn it on
+    Note over Op,P: When it runs, and turn it on
+    Op->>P: picks the day and the time, Singapore time, names it, presses Turn it on
     opt the Planner drafted a new agent
         P->>B: POST /api/v1/agent-cards {the card}
         B-->>P: 201 card_id
@@ -1223,14 +1220,14 @@ sequenceDiagram
     opt it was a draft
         P->>B: DELETE /api/v1/drafts/{draft_id}
     end
-    P-->>Op: /new/done/{use_case_id}: "Your workflow is on", with the next run
+    P-->>Op: the workflow is on, with the next run, on Workflows
 
-    Note over Op,P: Save and close, at any step
+    Note over Op,P: Save and close, at any point
     Op-)P: Save and close
     P-)B: PUT /api/v1/drafts/{draft_id} {step, content}
 ```
 
-When the Planner reads a watchlist check in step 1, it answers "belongs on the Software watchlist", and the page offers to open the Software watchlist instead of making a look-alike workflow (design note, section 4).
+When the Planner reads a watchlist check, it answers with the Software watchlist, and the card offers to add the software there instead of making a look-alike workflow (design note, section 4).
 
 ## Sequence: a watchlist check runs to the approval gate in Teams
 

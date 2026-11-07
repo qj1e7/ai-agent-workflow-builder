@@ -8,7 +8,7 @@ import { AgentFace } from '../../ui/AgentFace'
 import { Button, ButtonLink } from '../../ui/Button'
 import { cx } from '../../ui/cx'
 import { IconAlert, IconChevronRight, IconInfo, IconShield, type Icon } from '../../ui/icons'
-import { draftPath } from '../new/starters'
+import { draftPath } from './card'
 import { actionsOf, draftWords, retryProblem, waitingWords, wordsOf, type Action, type Need, type Tone } from './home'
 import styles from './Home.module.css'
 

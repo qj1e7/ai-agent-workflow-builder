@@ -143,7 +143,7 @@ The agent that reads a task, says what it understood, and decides which saved ag
 _Avoid_: Room lead (the old name), orchestrator
 
 **Planner's box**:
-The text box on Home where an Operator says what to automate, check or fix. The Planner answers under it with a Planner answer, and its face, the Visor bot, shows whether it is listening, thinking or sorry. The old four-step New workflow is behind a setting (`PORTAL_NEW_WORKFLOW_STEPS`) until the box is proven.
+The text box on Home where an Operator says what to automate, check or fix. The Planner answers under it with a Planner answer, and its face, the Visor bot, shows whether it is listening, thinking or sorry. The old four-step New workflow screen is gone. Its old address leads to Home.
 
 **Specialist agent**:
 An agent, defined by an agent card, that the Planner brings in to do one part of a run.

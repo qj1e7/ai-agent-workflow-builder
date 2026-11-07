@@ -4,8 +4,8 @@ It answers by what a request asks for, so the real runtime, with its real prompt
 can be tested without a real model:
 
 - GET /v1/models lists one model.
-- A request that forces a tool is a draft, a choice, the Planner reading a task back, or the
-  Planner reading a request typed on Home (TaskRead). The canned answer follows the task's words.
+- A request that forces a tool is a draft, a choice, or the Planner reading a request typed on
+  Home (TaskRead). The canned answer follows the task's words.
   A TaskRead fills the structures the real model is asked for: the ticket search (project, kinds
   of ticket, open or done, the days since an update), what happens with what was found (one new
   ticket that lists, counts or sums them up), the project it goes in, the schedule, and the skip
@@ -16,9 +16,7 @@ can be tested without a real model:
   ticket task, else a summary one), and a release task belongs on the Software watchlist unless
   it also asks for
   known vulnerabilities. One named part, such as "Where it goes: Jira project MOCK", is read as
-  that part alone, the others missing. When the Planner says before the task that the staff
-  member already chose a new workflow, a release task is read back in parts like any other, as
-  the real model does.
+  that part alone, the others missing.
 - A request with tools and no forced tool is a card run. The mock calls github_read_releases,
   then jira_search, then jira_create_ticket, then writes a report, by what the conversation holds.
   The ticket's title follows the card: a release, a follow-up or a summary. The follow-up card
@@ -93,7 +91,6 @@ FOOLING_ORDER = re.compile(
     r"\bignore (?:your|all|the|previous) (?:rules|instructions)\b", re.IGNORECASE
 )
 ONE_PART = re.compile(r"^(When|Looks for|Does|Where it goes): (.+)$", re.DOTALL)
-CARRIED_ON = re.compile(r"\bset belongs_on_watchlist to false\b")
 TASK_MARK = "The task:\n"
 REQUEST_MARK = "The request:\n"
 ABOUT = (
@@ -270,13 +267,6 @@ def task_text(body: dict[str, Any]) -> str:
     return text.rpartition(mark)[2]
 
 
-def says_carried_on(body: dict[str, Any]) -> bool:
-    """Whether the Planner's note before the task says the staff member already chose a new
-    workflow over the Software watchlist. Only the words before the first "The task:" line
-    count, so a task that carries its own such line cannot set it."""
-    return CARRIED_ON.search(user_text(body).partition(TASK_MARK)[0]) is not None
-
-
 def choice(task: str) -> dict[str, Any]:
     words = task.lower()
     if "book" in words and "room" in words:
@@ -385,9 +375,9 @@ def no_vulnerability_tool(row: dict[str, Any]) -> dict[str, Any]:
     return {**row, "state": "cant_do", "note": "No tool checks for known vulnerabilities yet."}
 
 
-def understanding(task: str, carried_on: bool = False) -> dict[str, Any]:
+def understanding(task: str) -> dict[str, Any]:
     word = RELEASE_WORDS.search(task)
-    if not carried_on and word is not None and VULNERABILITY_WORDS.search(task) is None:
+    if word is not None and VULNERABILITY_WORDS.search(task) is None:
         named = next((name for name in SOFTWARE if name.lower() in task.lower()), None)
         return {
             "belongs_on_watchlist": True,
@@ -569,8 +559,6 @@ def forced(body: dict[str, Any], name: str) -> dict[str, Any]:
         return call(name, choice(task_text(body)), 0)
     if "taskread" in lowered:
         return call(name, reading(task_text(body)), 0)
-    if "understand" in lowered:
-        return call(name, understanding(task_text(body), says_carried_on(body)), 0)
     return say(SENTENCE)
 
 

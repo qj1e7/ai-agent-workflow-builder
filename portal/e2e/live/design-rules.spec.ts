@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import { connectMockModel } from './support/newWorkflow'
+import { connectMockModel } from './support/settings'
 import { SettingsApi } from './support/settings'
 import type { Backend } from './support/stack'
 import { expect, test } from './support/test'

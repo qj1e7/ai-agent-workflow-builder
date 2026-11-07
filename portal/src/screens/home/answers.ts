@@ -2,7 +2,7 @@ import type { CantRowView, CapabilitiesView, CapabilityView, PlannerReply, RowKi
 import { count } from '../run/words'
 import { isRunning, type Row } from '../workflows/workflow'
 
-/** The words for each part of a request. They match the old New workflow's, so a person sees the same names in both. */
+/** The words for each part of a request. They match the names the removed New workflow screen used. */
 export const ROW_LABEL: Readonly<Record<RowKind, string>> = {
   schedule: 'When',
   look_for: 'Looks for',

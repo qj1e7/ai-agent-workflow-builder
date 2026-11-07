@@ -3716,7 +3716,7 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/JsonValue"
             },
-            "description": "The New workflow form as the Portal keeps it, at most 32 KB as JSON. The platform stores it as it is. It reads only a top-level `name`, which Home shows.",
+            "description": "The set-up card's form as the Portal keeps it, at most 32 KB as JSON. The platform stores it as it is. It reads only a top-level `name`, which Home shows.",
             "title": "Content",
             "type": "object"
           },
@@ -3742,7 +3742,7 @@
                 "type": "null"
               }
             ],
-            "description": "The New workflow step the draft was saved at, from 1 to 4. A draft saved from a Planner card has no step.",
+            "description": "The step of the old four-step screen the draft was saved at, from 1 to 4. A draft saved from a Planner card has no step.",
             "title": "Step"
           }
         },
@@ -7227,7 +7227,7 @@
                 "type": "null"
               }
             ],
-            "description": "The task to start New workflow with. Null when the starter opens a page.",
+            "description": "The task this starter stands for. Null when the starter opens a page.",
             "title": "Task"
           },
           "what": {
@@ -7242,35 +7242,6 @@
           "opens"
         ],
         "title": "StarterView",
-        "type": "object"
-      },
-      "Starters": {
-        "additionalProperties": false,
-        "properties": {
-          "answer": {
-            "const": "starters",
-            "default": "starters",
-            "title": "Answer",
-            "type": "string"
-          },
-          "message": {
-            "description": "Why the Planner could not read the task, in plain words.",
-            "title": "Message",
-            "type": "string"
-          },
-          "starters": {
-            "items": {
-              "$ref": "#/components/schemas/StarterView"
-            },
-            "title": "Starters",
-            "type": "array"
-          }
-        },
-        "required": [
-          "message",
-          "starters"
-        ],
-        "title": "Starters",
         "type": "object"
       },
       "Status": {
@@ -8252,49 +8223,6 @@
         "title": "TroubleshootingOut",
         "type": "object"
       },
-      "UnderstandIn": {
-        "additionalProperties": false,
-        "properties": {
-          "carried_on": {
-            "default": false,
-            "description": "True when the Operator chose a new workflow over the Software watchlist. Then the Planner reads the text back in parts, and never answers the watchlist.",
-            "title": "Carried On",
-            "type": "boolean"
-          },
-          "text": {
-            "maxLength": 2000,
-            "minLength": 1,
-            "title": "Text",
-            "type": "string"
-          }
-        },
-        "required": [
-          "text"
-        ],
-        "title": "UnderstandIn",
-        "type": "object"
-      },
-      "UnderstandOut": {
-        "discriminator": {
-          "mapping": {
-            "rows": "#/components/schemas/UnderstoodRows",
-            "starters": "#/components/schemas/Starters",
-            "watchlist": "#/components/schemas/WatchlistRedirect"
-          },
-          "propertyName": "answer"
-        },
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/UnderstoodRows"
-          },
-          {
-            "$ref": "#/components/schemas/WatchlistRedirect"
-          },
-          {
-            "$ref": "#/components/schemas/Starters"
-          }
-        ]
-      },
       "UnderstoodRowView": {
         "additionalProperties": false,
         "properties": {
@@ -8330,30 +8258,6 @@
           "note"
         ],
         "title": "UnderstoodRowView",
-        "type": "object"
-      },
-      "UnderstoodRows": {
-        "additionalProperties": false,
-        "properties": {
-          "answer": {
-            "const": "rows",
-            "default": "rows",
-            "title": "Answer",
-            "type": "string"
-          },
-          "rows": {
-            "description": "One schedule row, then at least one row for what to look for, what to do and where, in that order. At most 8.",
-            "items": {
-              "$ref": "#/components/schemas/UnderstoodRowView"
-            },
-            "title": "Rows",
-            "type": "array"
-          }
-        },
-        "required": [
-          "rows"
-        ],
-        "title": "UnderstoodRows",
         "type": "object"
       },
       "UseCaseAgentView": {
@@ -8974,46 +8878,6 @@
           "watchlist"
         ],
         "title": "WatchlistOut",
-        "type": "object"
-      },
-      "WatchlistRedirect": {
-        "additionalProperties": false,
-        "properties": {
-          "answer": {
-            "const": "watchlist",
-            "default": "watchlist",
-            "title": "Answer",
-            "type": "string"
-          },
-          "note": {
-            "description": "What the Planner says, in plain words.",
-            "title": "Note",
-            "type": "string"
-          },
-          "software": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "The software the task names, as it wrote it.",
-            "title": "Software"
-          },
-          "word": {
-            "description": "The word in the task that made the Planner think so.",
-            "title": "Word",
-            "type": "string"
-          }
-        },
-        "required": [
-          "word",
-          "software",
-          "note"
-        ],
-        "title": "WatchlistRedirect",
         "type": "object"
       },
       "WatchlistReply": {
@@ -10432,86 +10296,6 @@
         ]
       }
     },
-    "/api/v1/builder/understand": {
-      "post": {
-        "description": "The Planner reads the task back in parts, each understood, changed, missing or can't do, or says it belongs on the Software watchlist. Without an AI model, or after 10 seconds, it answers the starter workflows. Nothing is saved or written.",
-        "operationId": "understand_task_api_v1_builder_understand_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UnderstandIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnderstandOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            },
-            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            },
-            "description": "Only an Operator can do this, or the person is not on the People list"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            },
-            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
-          }
-        },
-        "security": [
-          {
-            "DevUser": []
-          },
-          {
-            "OidcBearer": []
-          }
-        ],
-        "summary": "Understand Task",
-        "tags": [
-          "builder"
-        ]
-      }
-    },
     "/api/v1/capabilities": {
       "get": {
         "description": "What the platform can do, from the agent runtime's registry. Each capability has a state that code works out from the registry and the connections it uses, so no screen decides it for itself, and the agents that use it. The last good registry is served while the runtime is waking up.",
@@ -10917,7 +10701,7 @@
         ]
       },
       "put": {
-        "description": "Saves a New workflow draft for the signed-in Operator. Saving again replaces it.",
+        "description": "Saves a set-up card draft for the signed-in Operator. Saving again replaces it.",
         "operationId": "save_draft_api_v1_drafts__draft_id__put",
         "parameters": [
           {

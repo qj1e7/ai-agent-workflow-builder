@@ -1,13 +1,11 @@
 import { lazy, Suspense, type ReactNode } from 'react'
-import { Navigate, Route, Routes, useParams, useSearchParams } from 'react-router'
-import { useNewWorkflowSteps } from '../api/flags'
+import { Navigate, Route, Routes, useSearchParams } from 'react-router'
 import { AgentsPage } from '../screens/agents/AgentsPage'
 import { HomePage } from '../screens/home/HomePage'
 import { SettingsPage } from '../screens/settings/SettingsPage'
-import { IconPlus, type Icon } from '../ui/icons'
+import type { Icon } from '../ui/icons'
 import { WorkflowRoute } from '../screens/workflows/WorkflowPage'
 import { WorkflowsPage } from '../screens/workflows/WorkflowsPage'
-import { NEW_WORKFLOW_PATH } from '../screens/new/starters'
 import { JIRA_PATH } from '../screens/jira/tickets'
 import { BotIcon, BoxIcon, GridIcon, HomeIcon, SettingsIcon, TicketIcon } from './icons'
 import { NotFoundPage } from './NotFoundPage'
@@ -29,11 +27,10 @@ export interface PageEntry {
   readonly heading: Words
   readonly lead: Words
   readonly inMenu: boolean
-  readonly forOperators?: boolean
   readonly operatorOnly?: boolean
 }
 
-export const PAGE_IDS = ['home', 'workflows', 'software', 'agents', 'new', 'jira', 'settings'] as const
+export const PAGE_IDS = ['home', 'workflows', 'software', 'agents', 'jira', 'settings'] as const
 export type PageId = (typeof PAGE_IDS)[number]
 
 export const PAGES: Readonly<Record<PageId, PageEntry>> = {
@@ -74,16 +71,6 @@ export const PAGES: Readonly<Record<PageId, PageEntry>> = {
     inMenu: true,
     operatorOnly: true,
   },
-  new: {
-    path: NEW_WORKFLOW_PATH,
-    menuLabel: 'New workflow',
-    tabLabel: 'New workflow',
-    icon: IconPlus,
-    heading: 'New workflow',
-    lead: 'Describe a repeated task. Agents do it, and nothing changes without a yes.',
-    inMenu: false,
-    forOperators: true,
-  },
   jira: {
     path: JIRA_PATH,
     menuLabel: 'Practice Jira',
@@ -108,8 +95,6 @@ const RunRoute = lazy(() => import('../screens/run/RunPage').then((module) => ({
 const JiraRoute = lazy(() => import('../screens/jira/JiraPage').then((module) => ({ default: module.JiraRoute })))
 const SoftwareRoute = lazy(() => import('../screens/software/SoftwarePage').then((module) => ({ default: module.SoftwareRoute })))
 const ApprovalRoute = lazy(() => import('../screens/run/RunPage').then((module) => ({ default: module.ApprovalRoute })))
-const NewWorkflowRoute = lazy(() => import('../screens/new/NewWorkflow').then((module) => ({ default: module.NewWorkflowRoute })))
-const DoneRoute = lazy(() => import('../screens/new/DonePage').then((module) => ({ default: module.DoneRoute })))
 
 function Lazy({ children }: { children: ReactNode }) {
   return (
@@ -128,7 +113,7 @@ function Lazy({ children }: { children: ReactNode }) {
 export const MENU_PAGE_IDS: readonly PageId[] = PAGE_IDS.filter((id) => PAGES[id].inMenu)
 
 export function menuFor(operator: boolean): readonly PageId[] {
-  return MENU_PAGE_IDS.filter((id) => operator || (PAGES[id].operatorOnly !== true && PAGES[id].forOperators !== true))
+  return MENU_PAGE_IDS.filter((id) => operator || (PAGES[id].operatorOnly !== true))
 }
 
 /** The tab that carries the Needs you count: Workflows holds the list for an Operator, Home for an Approver who is not one. */
@@ -138,36 +123,16 @@ export function wordsOf(words: Words, context: PageContext): string {
   return typeof words === 'function' ? words(context) : words
 }
 
-/**
- * The old four-step screen, kept at its address while the flag is on. Off, its address leads to Home, where a request now
- * starts. A saved draft's address carries its id to Home, which reopens it as the Planner's card, and the page the old
- * screen ended on leads to the workflow it just turned on.
- */
-function oldNewWorkflowRoutes(context: PageContext, whole: boolean) {
-  const editor = <Lazy><NewWorkflowRoute heading={wordsOf(PAGES.new.heading, context)} lead={wordsOf(PAGES.new.lead, context)} /></Lazy>
-  return [
-    <Route key="new" path={PAGES.new.path} element={whole ? editor : <DraftOnHome />} />,
-    <Route
-      key="done"
-      path={`${PAGES.new.path}/done/:useCaseId`}
-      element={whole ? <Lazy><DoneRoute now={context.now} /></Lazy> : <WorkflowOnceOn />}
-    />,
-  ]
-}
+const OLD_NEW_PATH = '/new'
 
-function DraftOnHome() {
+/** The old New workflow address, and a saved draft's old link: both lead to Home, which reopens the draft as the Planner's card. */
+function OldNewAddress() {
   const [search] = useSearchParams()
   const draft = search.get('draft')
   return <Navigate to={draft ? `${PAGES.home.path}?draft=${encodeURIComponent(draft)}` : PAGES.home.path} replace />
 }
 
-function WorkflowOnceOn() {
-  const { useCaseId = '' } = useParams()
-  return <Navigate to={`${PAGES.workflows.path}/${encodeURIComponent(useCaseId)}`} replace />
-}
-
 export function AppRoutes({ context }: { context: PageContext }) {
-  const oldNewWorkflow = useNewWorkflowSteps()
   return (
     <Routes>
       <Route
@@ -203,8 +168,7 @@ export function AppRoutes({ context }: { context: PageContext }) {
         }
       />
       <Route path={PAGES.settings.path} element={<SettingsPage heading={wordsOf(PAGES.settings.heading, context)} lead={wordsOf(PAGES.settings.lead, context)} now={context.now} />} />
-      {oldNewWorkflowRoutes(context, oldNewWorkflow)}
-      {oldNewWorkflow ? null : <Route path={`${PAGES.new.path}/*`} element={<Navigate to={PAGES.home.path} replace />} />}
+      <Route path={`${OLD_NEW_PATH}/*`} element={<OldNewAddress />} />
       <Route path="/runs/:runId" element={<Lazy><RunRoute /></Lazy>} />
       <Route path="/approvals/:approvalId" element={<Lazy><ApprovalRoute /></Lazy>} />
       <Route path="*" element={<NotFoundPage />} />

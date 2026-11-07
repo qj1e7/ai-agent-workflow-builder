@@ -29,10 +29,9 @@ export function Menu({ operator, onList }: MenuProps) {
   return (
     <nav className={styles['nav']} aria-label="Main">
       {menuFor(operator).map((id) => {
-        const { path, menuLabel, icon: Icon, forOperators } = PAGES[id]
+        const { path, menuLabel } = PAGES[id]
         return (
-          <NavLink key={id} to={path} end={id === 'home'} className={cx(styles['link'], forOperators && styles['new'])} aria-label={nameWithCount(id, operator, total, menuLabel)}>
-            {forOperators ? <Icon size={16} /> : null}
+          <NavLink key={id} to={path} end={id === 'home'} className={cx(styles['link'])} aria-label={nameWithCount(id, operator, total, menuLabel)}>
             {menuLabel}
             {countFor(id, operator, total)}
           </NavLink>

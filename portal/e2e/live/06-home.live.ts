@@ -3,7 +3,7 @@ import type { Page } from '@playwright/test'
 import { expectAccessible } from '../support/axe'
 import { assertClean, watchPage } from '../support/test'
 import { expect, test } from './support/test'
-import { connectMockModel } from './support/newWorkflow'
+import { connectMockModel } from './support/settings'
 import { devContext, OUT, shot } from './support/ui'
 
 test.beforeAll(async ({ baseURL }) => {

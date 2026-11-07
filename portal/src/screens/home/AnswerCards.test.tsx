@@ -8,23 +8,20 @@ import part from '../../../../contracts/fixtures/planner/answer.part.json'
 import refused from '../../../../contracts/fixtures/planner/answer.refused.json'
 import setupCard from '../../../../contracts/fixtures/planner/answer.setup_card.json'
 import { ApiProvider } from '../../api/context'
-import { FlagsProvider } from '../../api/flags'
 import { createDevSession } from '../../api/session'
 import type { CantReply, OfflineReply, PartReply, PlannerReply, SetupCardReply } from '../../api/types'
 import { Answer, type Page } from './AnswerCards'
 
 const PAGE: Page = { ask: () => undefined, edit: () => undefined }
 
-function draw(reply: PlannerReply, { oldNewWorkflow = false, typed = 'Every Friday, sum up the tickets we closed this week' } = {}): string {
+function draw(reply: PlannerReply, { typed = 'Every Friday, sum up the tickets we closed this week' } = {}): string {
   const queryClient = new QueryClient()
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={createDevSession(null)} platformFetch={fetch} origin="http://portal.test">
-        <FlagsProvider config={{ newWorkflowSteps: oldNewWorkflow }}>
-          <MemoryRouter>
-            <Answer reply={reply} typed={typed} page={PAGE} />
-          </MemoryRouter>
-        </FlagsProvider>
+        <MemoryRouter>
+          <Answer reply={reply} typed={typed} page={PAGE} />
+        </MemoryRouter>
       </ApiProvider>
     </QueryClientProvider>,
   )
@@ -36,14 +33,11 @@ const buttons = (html: string) => [...html.matchAll(/<(?:button|a)\b[^>]*>([\s\S
 const cardOf = (html: string) => /<section\b[^>]*data-card=[\s\S]*?<\/section>/.exec(html)?.[0] ?? ''
 
 describe('a set-up card', () => {
-  it('is the card itself, with Turn it on and the footer line, and no hand-off to the old New workflow, flag on or off', () => {
-    for (const oldNewWorkflow of [true, false]) {
-      const html = draw(setupCard as SetupCardReply, { oldNewWorkflow })
-      expect(buttons(html)).toContain('Turn it on')
-      expect(buttons(html)).not.toContain('Set it up in New workflow')
-      expect(html).not.toContain('href="/new"')
-      expect(text(html)).not.toContain('isn’t built yet')
-    }
+  it('is the card itself, with Turn it on and the footer line, and no hand-off to another screen', () => {
+    const html = draw(setupCard as SetupCardReply)
+    expect(buttons(html)).toContain('Turn it on')
+    expect(html).not.toContain('href="/new"')
+    expect(text(html)).not.toContain('isn’t built yet')
   })
 
   it('tags the Planner’s guess, its name included, and reads the parts as one sentence', () => {
@@ -100,16 +94,12 @@ describe('a refusal', () => {
   })
 
   it('never links straight to a set-up, because the rest can hold more than the person meant', () => {
-    expect(draw(refused as PlannerReply, { oldNewWorkflow: true })).not.toContain('href="/new"')
+    expect(draw(refused as PlannerReply)).not.toContain('href="/new"')
   })
 })
 
 describe('the offline answer', () => {
-  it('offers Connect a model and the watchlist, and the old New workflow for the other starters only while it is on', () => {
-    const reply = offline as OfflineReply
-    const off = draw(reply)
-    expect(buttons(off)).toEqual(['Open the Software watchlist', 'Connect a model'])
-    const on = draw(reply, { oldNewWorkflow: true })
-    expect(buttons(on).filter((name) => name === 'Set it up in New workflow')).toHaveLength(2)
+  it('offers Connect a model and the watchlist, and nothing else to click', () => {
+    expect(buttons(draw(offline as OfflineReply))).toEqual(['Open the Software watchlist', 'Connect a model'])
   })
 })
