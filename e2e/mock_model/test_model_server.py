@@ -190,6 +190,8 @@ FOLLOW_UP = (
     "Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days and create one "
     "follow-up ticket that lists them"
 )
+
+
 def read_back(task: str) -> list[tuple[str, str, str]]:
     answer = server.understanding(task)
     assert answer["belongs_on_watchlist"] is False
