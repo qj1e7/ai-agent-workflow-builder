@@ -49,6 +49,7 @@ from platform_api.orchestration.agents import (
     task_result_adapter,
     understand_result_adapter,
 )
+from platform_api.orchestration.agents import CapabilityList as AgentCapabilityList
 from platform_api.orchestration.agents import ToolList as AgentToolList
 from platform_api.orchestration.approvals import Refusal, Verdict
 from platform_api.orchestration.confirmations import DecideRefusal
@@ -106,6 +107,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "cards/plan.cannot-do.json": TypeAdapter(PlanOut),
     "cards/use-case.json": TypeAdapter(UseCaseView),
     "agent/tools.json": TypeAdapter(AgentToolList),
+    "agent/capabilities.json": TypeAdapter(AgentCapabilityList),
     "agent/card-task-request.json": TypeAdapter(TaskRequest),
     "agent/card-task-finished.json": task_result_adapter,
     "agent/card-draft-request.json": TypeAdapter(DraftRequest),

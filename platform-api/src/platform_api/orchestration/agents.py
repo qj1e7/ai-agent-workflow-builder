@@ -245,6 +245,31 @@ class ToolList(WireModel):
     tools: list[ToolSpec]
 
 
+class CapabilitySpec(WireModel):
+    id: str
+    plain: str
+    kind: Literal["read", "write", "notify", "none"]
+    system: str | None
+    state: Literal["ready", "planned", "unsupported"]
+    cant: str | None
+    why: str | None
+    connection: Literal["jira", "github", "teams"] | None
+    needs_model: bool
+    platform: bool
+    tools: list[ToolId]
+
+
+class ExampleSpec(WireModel):
+    text: str
+    kind: Literal["automate", "monitor", "learn"]
+    needs: list[str]
+
+
+class CapabilityList(WireModel):
+    capabilities: list[CapabilitySpec]
+    examples: list[ExampleSpec]
+
+
 class DraftRequest(WireModel):
     task: str
     model: ModelAccess

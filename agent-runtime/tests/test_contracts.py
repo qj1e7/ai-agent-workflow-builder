@@ -10,6 +10,7 @@ from agent_runtime.api import Settings, create_app
 from agent_runtime.contract import (
     AgentCards,
     AgentEventPost,
+    CapabilityList,
     ChooseRequest,
     ChooseResult,
     ConnectRequest,
@@ -51,6 +52,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "github-check-expiring.json": TypeAdapter(GitHubCheckResult),
     "github-check-refused.json": TypeAdapter(GitHubCheckResult),
     "tools.json": TypeAdapter(ToolList),
+    "capabilities.json": TypeAdapter(CapabilityList),
     "card-task-request.json": TypeAdapter(TaskRequest),
     "card-task-finished.json": task_result_adapter,
     "card-draft-request.json": TypeAdapter(DraftRequest),
@@ -84,7 +86,7 @@ def test_callback_token_travels_in_a_header_not_the_url():
     assert "token" not in request.callback.url and "sig" not in request.callback.url
 
 
-def client_tools() -> object:
+def client_get(path: str) -> object:
     client = TestClient(
         create_app(
             Settings.from_env(
@@ -96,7 +98,7 @@ def client_tools() -> object:
         ),
         headers={"X-Agent-Key": "test-agent-key-not-a-secret"},
     )
-    return client.get("/v1/tools").json()
+    return client.get(path).json()
 
 
 def test_app_serves_the_cards_and_health():
@@ -115,7 +117,11 @@ def test_app_serves_the_cards_and_health():
 
 
 def test_the_tool_fixture_is_the_runtimes_tool_list():
-    assert client_tools() == load("tools.json")
+    assert client_get("/v1/tools") == load("tools.json")
+
+
+def test_the_capabilities_fixture_is_the_runtimes_registry():
+    assert client_get("/v1/capabilities") == load("capabilities.json")
 
 
 def test_the_card_task_request_runs_a_card_with_its_values():
