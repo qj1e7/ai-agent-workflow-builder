@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import type { Locator, Page } from '@playwright/test'
 import { expectAccessible } from '../support/axe'
@@ -457,7 +458,7 @@ test.describe('with the AI model on', () => {
     await context.close()
   })
 
-  test('the old New workflow address leads to Home, with a saved draft’s id kept, and never to a blank page', async ({ browser }) => {
+  test('the old New workflow address leads to Home and never to a blank page', async ({ browser }) => {
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
     await page.goto('/')
@@ -467,8 +468,49 @@ test.describe('with the AI model on', () => {
       await expect(page).toHaveURL(/\/$/)
       await expect(page.getByLabel('Describe a task for the Planner')).toBeVisible()
     }
-    await page.goto('/new?draft=drf-1')
-    await expect(page).toHaveURL(/\/\?draft=drf-1$/)
+    await context.close()
+  })
+
+  test('the old address of a saved draft reopens that draft as a card on Home', async ({ browser, backend }) => {
+    const id = randomUUID()
+    const text = `Every Monday, list the tickets closed last week ${id.slice(0, 6)}`
+    const content = {
+      name: `Old address draft ${id.slice(0, 6)}`,
+      form: {
+        step: 2,
+        text,
+        name: '',
+        rows: [
+          { kind: 'schedule', text: 'Every Monday', state: 'understood', note: null },
+          { kind: 'look_for', text: 'tickets closed last week in MOCK', state: 'understood', note: null },
+          { kind: 'do', text: 'Create one ticket that lists them', state: 'understood', note: null },
+          { kind: 'where', text: 'Jira project MOCK', state: 'understood', note: null },
+        ],
+        typed: {},
+        when: { often: '', at: '' },
+      },
+      plan: null,
+    }
+    const saved = await backend.send('PUT', 'alice', `/api/v1/drafts/${id}`, { step: 2, content })
+    expect(saved.status, `alice saves a draft: ${JSON.stringify(saved.body)}`).toBe(200)
+    const context = await devContext(browser, 'alice')
+    try {
+      const page = await context.newPage()
+      await page.goto(`/new?draft=${id}`)
+      await expect(thread(page).locator('section[data-card]')).toContainText('tickets closed last week')
+      await expect(page).toHaveURL(new RegExp(`/\\?draft=${id}$`))
+    } finally {
+      await context.close()
+      await backend.send('DELETE', 'alice', `/api/v1/drafts/${id}`)
+    }
+  })
+
+  test('the old address of a draft that is gone says so, and Home stays usable', async ({ browser }) => {
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.goto(`/new?draft=${randomUUID()}`)
+    await expect(main(page)).toContainText('That draft is gone. Ask for it again below.')
+    await expect(box(page)).toBeVisible()
     await context.close()
   })
 })

@@ -84,11 +84,11 @@ Each run also records median and p95 latency, mean input and output tokens, and 
 - [ ] Waiting for the operator's gateway key. Score Claude Haiku 5.5 on all five golden sets, `understand` included, with a marker for each run, and put the printed table here.
 - [x] The `answer` job (the Planner's answers on Home, plan item N3) ran three times on 7 November 2026 at round 6's code: 215/218, 212/218 and 216/218, with every safety-critical case passing in each run. Round 7's fixes ran once: 215/218, every safety-critical case passing. The bar, the per-case table, the live probes before and after, and the run files are in [answer-baseline.md](answer-baseline.md).
 
-The key is not on the machine that built P12, so this has not run. With the key in the shell (see "A gateway" under "Add a cloud provider and rerun"), run `scripts/checks/p12.sh evals-gateway .` from the repo root. It prints the table and writes `results-haiku.json` under `$EVID/evals` (by default `/tmp/swarm-p12/evals`). The gateway's own price is not in `pricing.json`, so the cost column says "unknown".
+The key is not on the machine that built P12, so this has not run. With the key in the shell (see "A gateway" under "Add a cloud provider and rerun"), run `scripts/evals.sh` from the repo root. It prints the table and writes `agent-runtime/evals/out/results.json`. The gateway's own price is not in `pricing.json`, so the cost column says "unknown".
 
 ### Dry run against the mock model, 30 October 2026
 
-To prove the harness, the gateway provider and the marker run end to end, we pointed the gateway provider at the mock model from `e2e/mock_model/` (`scripts/checks/p12.sh evals`, marker `be2c5d9491fc`). The mock is a stand-in that answers by word rules, so its scores say nothing about a real model.
+To prove the harness, the gateway provider and the marker run end to end, we pointed the gateway provider at the mock model from `e2e/mock_model/` (the P12 check script, since removed, marker `be2c5d9491fc`). The mock is a stand-in that answers by word rules, so its scores say nothing about a real model.
 
 | Model | Job | Pass |
 |---|---|---|
@@ -228,7 +228,7 @@ You need Docker and the provider's key. Nothing else. The script passes each set
    export AGENT_MODEL_BASE_URL=https://llm-gateway.aisg.sg
    ```
 
-   `scripts/evals.sh` does not pass these two names to the container yet, so run the gateway with `scripts/checks/p12.sh evals-gateway .` from the repo root instead. It builds the same eval image and passes them by name.
+   `scripts/evals.sh` passes these two names to the container by name.
 
 2. Run the bake-off from the repo root:
 

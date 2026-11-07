@@ -157,14 +157,14 @@ flowchart TB
 
     subgraph api["platform-api container"]
         direction TB
-        builder["<b>Use case builder</b><br/>Owns: use cases and their versions, agent cards and their versions,<br/>the agents on each use case, watched software, drafts<br/>Schema: builder, role wab_builder<br/>Exposes: Builder, Home, /api/v1/use-cases, /api/v1/agent-cards,<br/>/api/v1/builder/understand, /api/v1/watchlist, /api/v1/drafts, /api/v1/home"]
+        builder["<b>Use case builder</b><br/>Owns: use cases and their versions, agent cards and their versions,<br/>the agents on each use case, watched software, drafts<br/>Schema: builder, role wab_builder<br/>Exposes: Builder, Home, /api/v1/use-cases, /api/v1/agent-cards,<br/>/api/v1/watchlist, /api/v1/drafts, /api/v1/home"]
         orch["<b>Orchestration</b><br/>Owns: runs, leg attempts, proposals, approval requests and decisions,<br/>write executions, outbox, schedules, the watchlist's checks,<br/>people, confirmations, the AI model setting, the settings history,<br/>the practice Jira and the practice Teams<br/>Schema: orchestration, role wab_orchestration<br/>Exposes: Orchestrator, RunStarter, CardPlanning, /api/v1/runs,<br/>/api/v1/approvals/{approval_id}, /api/v1/people, /api/v1/settings/model,<br/>/internal/v1/runs/{run_id}/steps/{step}<br/>Safety checker: check(). Write gateway: WriteGateway"]
         mon["<b>Run monitoring</b><br/>Owns: the activity log, its copy in Cosmos DB and the copied marks<br/>Schema: monitoring, role wab_monitoring<br/>Exposes: ActivityLog, Copier, the event stream,<br/>/internal/v1/runs/{run_id}/agent-events, the AI troubleshooter"]
         shared["Shared kernel<br/>shared.py, wire.py, auth.py, oidc.py, db.py<br/>Authenticator port: DevAuth or OidcAuthenticator. PeopleDirectory port"]
     end
 
     subgraph rt["agent-runtime container"]
-        runtime["<b>Agent runtime</b><br/>Owns: the Planner, the Version checker and each agent card's run,<br/>in memory per task. No database. No write keys<br/>Exposes: Agent API /v1/tasks, /v1/planner/understand, /v1/planner/choose,<br/>/v1/cards/draft, /v1/models/connect, /v1/models/test, /v1/tools, /v1/agents"]
+        runtime["<b>Agent runtime</b><br/>Owns: the Planner, the Version checker and each agent card's run,<br/>in memory per task. No database. No write keys<br/>Exposes: Agent API /v1/tasks, /v1/planner/choose,<br/>/v1/cards/draft, /v1/models/connect, /v1/models/test, /v1/tools, /v1/agents"]
     end
 
     builder -- "imports RunStarter, RunSpec, ScheduleBook,<br/>the Planner's answer types" --> orch
