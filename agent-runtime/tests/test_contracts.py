@@ -10,8 +10,8 @@ from agent_runtime.api import Settings, create_app
 from agent_runtime.contract import (
     AgentCards,
     AgentEventPost,
-    CapabilityList,
     AnswerRequest,
+    CapabilityList,
     ChooseRequest,
     ChooseResult,
     ConnectRequest,

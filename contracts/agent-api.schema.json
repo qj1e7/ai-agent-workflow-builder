@@ -701,6 +701,149 @@
       "title": "CantRow",
       "type": "object"
     },
+    "CapabilityKind": {
+      "enum": [
+        "read",
+        "write",
+        "notify",
+        "none"
+      ],
+      "type": "string"
+    },
+    "CapabilityList": {
+      "additionalProperties": false,
+      "properties": {
+        "capabilities": {
+          "items": {
+            "$ref": "#/$defs/CapabilitySpec"
+          },
+          "title": "Capabilities",
+          "type": "array"
+        },
+        "examples": {
+          "items": {
+            "$ref": "#/$defs/ExampleSpec"
+          },
+          "title": "Examples",
+          "type": "array"
+        }
+      },
+      "required": [
+        "capabilities",
+        "examples"
+      ],
+      "title": "CapabilityList",
+      "type": "object"
+    },
+    "CapabilitySpec": {
+      "additionalProperties": false,
+      "properties": {
+        "cant": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The verb phrase a refusal uses after I can't, or None when it is ready.",
+          "title": "Cant"
+        },
+        "connection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConnectionId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "pattern": "^[a-z]+(\\.[a-z_]+)?$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/CapabilityKind"
+        },
+        "needs_model": {
+          "description": "True when the agents do it with the AI model, so it needs one connected.",
+          "title": "Needs Model",
+          "type": "boolean"
+        },
+        "plain": {
+          "description": "The capability in an Operator's words.",
+          "title": "Plain",
+          "type": "string"
+        },
+        "platform": {
+          "description": "True for what the platform does by itself, which Home leaves out of its lists.",
+          "title": "Platform",
+          "type": "boolean"
+        },
+        "state": {
+          "$ref": "#/$defs/CapabilityState",
+          "description": "The base state. A missing key or a system that is not answering is worked out from the connection, not here."
+        },
+        "system": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The system it reaches, in an Operator's words.",
+          "title": "System"
+        },
+        "tools": {
+          "description": "The tools that do it. Empty unless it is ready.",
+          "items": {
+            "$ref": "#/$defs/ToolId"
+          },
+          "title": "Tools",
+          "type": "array"
+        },
+        "why": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Why it can't be done, in plain words, or None when it is ready.",
+          "title": "Why"
+        }
+      },
+      "required": [
+        "id",
+        "plain",
+        "kind",
+        "system",
+        "state",
+        "cant",
+        "why",
+        "connection",
+        "needs_model",
+        "platform",
+        "tools"
+      ],
+      "title": "CapabilitySpec",
+      "type": "object"
+    },
+    "CapabilityState": {
+      "enum": [
+        "ready",
+        "planned",
+        "unsupported"
+      ],
+      "type": "string"
+    },
     "CardBlock": {
       "additionalProperties": false,
       "properties": {
@@ -959,7 +1102,7 @@
             }
           ],
           "default": null,
-          "description": "The day the workflow's last finished run started, as a UTC day. None when it has no finished run yet. The platform sets it on a task. It is empty in a task's output.",
+          "description": "The day the workflow's last finished run started, in the task's time_zone, so it is the day the run list shows. None when it has no finished run yet. The platform sets it on a task. It is empty in a task's output.",
           "title": "Last Run On"
         }
       },
@@ -1211,6 +1354,14 @@
       "title": "Connected",
       "type": "object"
     },
+    "ConnectionId": {
+      "enum": [
+        "jira",
+        "github",
+        "teams"
+      ],
+      "type": "string"
+    },
     "DraftApproval": {
       "additionalProperties": false,
       "properties": {
@@ -1346,6 +1497,41 @@
       "title": "Drafted",
       "type": "object"
     },
+    "ExampleKind": {
+      "enum": [
+        "automate",
+        "monitor",
+        "learn"
+      ],
+      "type": "string"
+    },
+    "ExampleSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/ExampleKind"
+        },
+        "needs": {
+          "description": "The ids of the capabilities the example uses.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Needs",
+          "type": "array"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "kind",
+        "needs"
+      ],
+      "title": "ExampleSpec",
+      "type": "object"
+    },
     "FindSoftwareRequest": {
       "additionalProperties": false,
       "properties": {
@@ -1396,6 +1582,18 @@
           "title": "Detail",
           "type": "string"
         },
+        "full_name": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RepoName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The owner/name GitHub answered for the saved repository at this check. It differs from the saved one when GitHub renamed or moved the repository and redirects the old name. None when GitHub was not asked or did not answer."
+        },
         "new_versions": {
           "description": "Releases newer than our version, newest first. Empty unless the state is behind or already_raised.",
           "items": {
@@ -1415,6 +1613,12 @@
           ],
           "description": "The newest release at the source that matches the tag pattern. None when the source could not be read or has no such release.",
           "title": "Newest"
+        },
+        "not_found": {
+          "default": false,
+          "description": "True when GitHub answered that the saved repository does not exist (404). Nothing says where it went.",
+          "title": "Not Found",
+          "type": "boolean"
         },
         "software_id": {
           "title": "Software Id",
@@ -2411,6 +2615,11 @@
         "task_id": {
           "title": "Task Id",
           "type": "string"
+        },
+        "time_zone": {
+          "description": "The zone the team works in, such as Asia/Singapore. The agents' today and every plain day they read or send, last_run_on included, are days in it.",
+          "title": "Time Zone",
+          "type": "string"
         }
       },
       "required": [
@@ -2419,6 +2628,7 @@
         "instruction",
         "inputs",
         "carry_forward",
+        "time_zone",
         "callback"
       ],
       "title": "TaskRequest",
@@ -2773,6 +2983,9 @@
     "callback": {
       "$ref": "#/$defs/AgentEventPost"
     },
+    "capability_list": {
+      "$ref": "#/$defs/CapabilityList"
+    },
     "card_draft_request": {
       "$ref": "#/$defs/DraftRequest"
     },
@@ -2839,6 +3052,7 @@
     "model_test_result",
     "github_check_result",
     "tool_list",
+    "capability_list",
     "card_draft_request",
     "card_draft_result",
     "planner_choose_request",

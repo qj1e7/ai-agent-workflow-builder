@@ -146,7 +146,7 @@ def test_the_route_serves_the_registry_and_the_examples():
 # The Planner's refusal still builds its "I can only ..." sentence from ABILITIES, and says "yet"
 # about what the registry marks Unsupported. Making it read CAPABILITIES is N7. These words get
 # no refusal today, so each xfail turns into a failure the moment N7 closes the gap.
-NOT_REFUSED_YET = {"jira.find_older", "jira.find_by_detail", "github.issues"}
+NOT_REFUSED_YET = {"jira.find_older", "github.issues"}
 
 
 @pytest.mark.parametrize(
