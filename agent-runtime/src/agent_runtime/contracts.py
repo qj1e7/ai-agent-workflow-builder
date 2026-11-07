@@ -4,6 +4,7 @@ import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from agent_runtime.abilities import CAPABILITY_LIST
 from agent_runtime.api import AGENT_CARDS
 from agent_runtime.contract import (
     RELEASE_TAG_PATTERN,
@@ -869,6 +870,7 @@ def fixtures() -> dict[str, WireModel]:
         ),
         "github-check-refused.json": GitHubProblem(reason="token_refused", message=TOKEN_REFUSED),
         "tools.json": tool_list(),
+        "capabilities.json": CAPABILITY_LIST,
         "card-task-request.json": card_request("run_01JD1"),
         "card-task-finished.json": card_finished(),
         "card-draft-request.json": draft_request(),

@@ -509,6 +509,45 @@ class ToolList(WireModel):
     tools: list[ToolSpec]
 
 
+type CapabilityKind = Literal["read", "write", "notify", "none"]
+type CapabilityState = Literal["ready", "planned", "unsupported"]
+type ConnectionId = Literal["jira", "github", "teams"]
+type ExampleKind = Literal["automate", "monitor", "learn"]
+
+
+class CapabilitySpec(WireModel):
+    id: str = Field(pattern=r"^[a-z]+(\.[a-z_]+)?$")
+    plain: str = Field(description="The capability in an Operator's words.")
+    kind: CapabilityKind
+    system: str | None = Field(description="The system it reaches, in an Operator's words.")
+    state: CapabilityState = Field(
+        description="The base state. A missing key or a system that is not answering is worked "
+        "out from the connection, not here."
+    )
+    cant: str | None = Field(
+        description="The verb phrase a refusal uses after I can't, or None when it is ready."
+    )
+    why: str | None = Field(
+        description="Why it can't be done, in plain words, or None when it is ready."
+    )
+    connection: ConnectionId | None
+    needs_model: bool = Field(
+        description="True when the agents do it with the AI model, so it needs one connected."
+    )
+    tools: list[ToolId] = Field(description="The tools that do it. Empty unless it is ready.")
+
+
+class ExampleSpec(WireModel):
+    text: str
+    kind: ExampleKind
+    needs: list[str] = Field(description="The ids of the capabilities the example uses.")
+
+
+class CapabilityList(WireModel):
+    capabilities: list[CapabilitySpec]
+    examples: list[ExampleSpec]
+
+
 class DraftRequest(WireModel):
     task: str = Field(min_length=1, max_length=2000)
     model: ModelAccess
@@ -758,6 +797,7 @@ class AgentApiSchema(WireModel):
     model_test_result: ModelTestResult
     github_check_result: GitHubCheckResult
     tool_list: ToolList
+    capability_list: CapabilityList
     card_draft_request: DraftRequest
     card_draft_result: DraftResult
     planner_choose_request: ChooseRequest

@@ -525,6 +525,143 @@
       "title": "Callback",
       "type": "object"
     },
+    "CapabilityKind": {
+      "enum": [
+        "read",
+        "write",
+        "notify",
+        "none"
+      ],
+      "type": "string"
+    },
+    "CapabilityList": {
+      "additionalProperties": false,
+      "properties": {
+        "capabilities": {
+          "items": {
+            "$ref": "#/$defs/CapabilitySpec"
+          },
+          "title": "Capabilities",
+          "type": "array"
+        },
+        "examples": {
+          "items": {
+            "$ref": "#/$defs/ExampleSpec"
+          },
+          "title": "Examples",
+          "type": "array"
+        }
+      },
+      "required": [
+        "capabilities",
+        "examples"
+      ],
+      "title": "CapabilityList",
+      "type": "object"
+    },
+    "CapabilitySpec": {
+      "additionalProperties": false,
+      "properties": {
+        "cant": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The verb phrase a refusal uses after I can't, or None when it is ready.",
+          "title": "Cant"
+        },
+        "connection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConnectionId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "pattern": "^[a-z]+(\\.[a-z_]+)?$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/CapabilityKind"
+        },
+        "needs_model": {
+          "description": "True when the agents do it with the AI model, so it needs one connected.",
+          "title": "Needs Model",
+          "type": "boolean"
+        },
+        "plain": {
+          "description": "The capability in an Operator's words.",
+          "title": "Plain",
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/CapabilityState",
+          "description": "The base state. A missing key or a system that is not answering is worked out from the connection, not here."
+        },
+        "system": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The system it reaches, in an Operator's words.",
+          "title": "System"
+        },
+        "tools": {
+          "description": "The tools that do it. Empty unless it is ready.",
+          "items": {
+            "$ref": "#/$defs/ToolId"
+          },
+          "title": "Tools",
+          "type": "array"
+        },
+        "why": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Why it can't be done, in plain words, or None when it is ready.",
+          "title": "Why"
+        }
+      },
+      "required": [
+        "id",
+        "plain",
+        "kind",
+        "system",
+        "state",
+        "cant",
+        "why",
+        "connection",
+        "needs_model",
+        "tools"
+      ],
+      "title": "CapabilitySpec",
+      "type": "object"
+    },
+    "CapabilityState": {
+      "enum": [
+        "ready",
+        "planned",
+        "unsupported"
+      ],
+      "type": "string"
+    },
     "CardBlock": {
       "additionalProperties": false,
       "properties": {
@@ -1008,6 +1145,14 @@
       "title": "Connected",
       "type": "object"
     },
+    "ConnectionId": {
+      "enum": [
+        "jira",
+        "github",
+        "teams"
+      ],
+      "type": "string"
+    },
     "DraftApproval": {
       "additionalProperties": false,
       "properties": {
@@ -1141,6 +1286,41 @@
         "draft"
       ],
       "title": "Drafted",
+      "type": "object"
+    },
+    "ExampleKind": {
+      "enum": [
+        "automate",
+        "monitor",
+        "learn"
+      ],
+      "type": "string"
+    },
+    "ExampleSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/ExampleKind"
+        },
+        "needs": {
+          "description": "The ids of the capabilities the example uses.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Needs",
+          "type": "array"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "kind",
+        "needs"
+      ],
+      "title": "ExampleSpec",
       "type": "object"
     },
     "FindSoftwareRequest": {
@@ -2304,6 +2484,9 @@
     "callback": {
       "$ref": "#/$defs/AgentEventPost"
     },
+    "capability_list": {
+      "$ref": "#/$defs/CapabilityList"
+    },
     "card_draft_request": {
       "$ref": "#/$defs/DraftRequest"
     },
@@ -2364,6 +2547,7 @@
     "model_test_result",
     "github_check_result",
     "tool_list",
+    "capability_list",
     "card_draft_request",
     "card_draft_result",
     "planner_choose_request",

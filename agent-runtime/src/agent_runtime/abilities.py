@@ -12,7 +12,16 @@ from dataclasses import dataclass
 from functools import cache
 from typing import Final, Literal, NamedTuple
 
-from agent_runtime.contract import RowKind
+from agent_runtime.contract import (
+    CapabilityKind,
+    CapabilityList,
+    CapabilitySpec,
+    CapabilityState,
+    ConnectionId,
+    ExampleSpec,
+    RowKind,
+    ToolId,
+)
 
 type Form = Literal["base", "s", "ing", "ed"]
 
@@ -81,6 +90,194 @@ ABILITIES: Final = (
         makes=TICKETS,
     ),
 )
+
+ABILITY_OF: Final = {
+    "jira.read": "read Jira tickets",
+    "jira.find_by_update": "read Jira tickets",
+    "summarise": "sum up what I find",
+    "github.releases": "check software for new releases",
+    "jira.create": "create a Jira ticket after a yes",
+}
+
+
+def _ready(
+    id: str,
+    plain: str,
+    kind: CapabilityKind,
+    system: str | None,
+    connection: ConnectionId | None,
+    tools: list[ToolId],
+    needs_model: bool = False,
+) -> CapabilitySpec:
+    return CapabilitySpec(
+        id=id,
+        plain=plain,
+        kind=kind,
+        system=system,
+        state="ready",
+        cant=None,
+        why=None,
+        connection=connection,
+        needs_model=needs_model,
+        tools=tools,
+    )
+
+
+def _not_yet(
+    id: str,
+    plain: str,
+    kind: CapabilityKind,
+    system: str | None,
+    connection: ConnectionId | None,
+    cant: str,
+    why: str,
+    state: CapabilityState = "planned",
+) -> CapabilitySpec:
+    return CapabilitySpec(
+        id=id,
+        plain=plain,
+        kind=kind,
+        system=system,
+        state=state,
+        cant=cant,
+        why=why,
+        connection=connection,
+        needs_model=False,
+        tools=[],
+    )
+
+
+CAPABILITIES: Final = (
+    _ready(
+        "jira.read",
+        "Read Jira tickets",
+        "read",
+        "Jira",
+        "jira",
+        ["jira.search", "jira.read_ticket"],
+        needs_model=True,
+    ),
+    _ready(
+        "jira.find_by_update",
+        "Find tickets by when they were last updated, their type or who owns them",
+        "read",
+        "Jira",
+        "jira",
+        ["jira.search"],
+    ),
+    _not_yet(
+        "jira.find_older",
+        "Find older tickets, beyond the newest 50",
+        "read",
+        "Jira",
+        "jira",
+        "look past the 50 newest tickets",
+        "A search stops there.",
+    ),
+    _ready("summarise", "Sum up what I find", "none", None, None, [], needs_model=True),
+    _ready(
+        "github.releases",
+        "Check software for new releases on GitHub",
+        "read",
+        "GitHub",
+        "github",
+        ["github.read_releases"],
+    ),
+    _ready(
+        "jira.create",
+        "Create a Jira ticket after a yes",
+        "write",
+        "Jira",
+        "jira",
+        ["jira.create_ticket"],
+        needs_model=True,
+    ),
+    _ready("teams.ask", "Ask Approvers for a yes in Teams", "notify", "Teams", "teams", []),
+    _not_yet(
+        "teams.post",
+        "Post messages in Teams",
+        "write",
+        "Teams",
+        "teams",
+        "post messages in Teams",
+        "Teams carries approval requests only.",
+    ),
+    _not_yet(
+        "confluence.change",
+        "Change Confluence pages",
+        "write",
+        "Confluence",
+        None,
+        "change Confluence pages",
+        "Confluence isn't connected to the platform.",
+    ),
+    _not_yet(
+        "github.issues",
+        "Read GitHub issues",
+        "read",
+        "GitHub",
+        "github",
+        "read GitHub issues",
+        "There's no tool for that yet.",
+    ),
+    _not_yet(
+        "access.check",
+        "Check who has access in Entra ID, the admin tools and GitLab",
+        "read",
+        None,
+        None,
+        "check who has access",
+        "Those systems aren't connected to the platform.",
+    ),
+    _not_yet(
+        "registries.check",
+        "Check package registries and security advisories",
+        "read",
+        None,
+        None,
+        "check registries or security advisories",
+        "Only GitHub releases are checked today.",
+    ),
+    _not_yet(
+        "jira.set_field",
+        "Set a field such as a component on new Jira tickets",
+        "write",
+        "Jira",
+        "jira",
+        "set a component",
+        "That needs a new tool. The team decides on new tools.",
+    ),
+    _not_yet(
+        "email.send",
+        "Send email or Slack messages",
+        "write",
+        None,
+        None,
+        "send email or Slack messages",
+        "Email and Slack aren't on the team's plan. Ask the team if you need them.",
+        state="unsupported",
+    ),
+    _not_yet(
+        "jira.change_tickets",
+        "Close, edit, move or delete tickets",
+        "write",
+        "Jira",
+        "jira",
+        "close, edit, move or delete tickets",
+        "Only people do that here.",
+        state="unsupported",
+    ),
+)
+EXAMPLES: Final = (
+    ExampleSpec(
+        text="Every Friday, sum up the tickets we closed this week",
+        kind="automate",
+        needs=["jira.read", "summarise"],
+    ),
+    ExampleSpec(text="Keep track of the React version", kind="monitor", needs=["github.releases"]),
+    ExampleSpec(text="What can you do?", kind="learn", needs=[]),
+)
+CAPABILITY_LIST: Final = CapabilityList(capabilities=list(CAPABILITIES), examples=list(EXAMPLES))
 
 WRITES: Final = words(
     "close resolve cancel reopen delete remove purge erase wipe destroy trash discard drop archive "

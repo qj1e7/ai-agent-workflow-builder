@@ -14,6 +14,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.security import APIKeyHeader
 
+from agent_runtime.abilities import CAPABILITY_LIST
 from agent_runtime.addresses import AddressPolicy
 from agent_runtime.card_runner import CardRunner
 from agent_runtime.contract import (
@@ -21,6 +22,7 @@ from agent_runtime.contract import (
     AgentCards,
     AgentEvent,
     AgentEventPost,
+    CapabilityList,
     CardsInputs,
     ChooseRequest,
     ChooseResult,
@@ -408,6 +410,10 @@ def create_app(
     @app.get("/v1/tools", dependencies=[Depends(require_key)])
     def list_tools() -> ToolList:
         return tool_list()
+
+    @app.get("/v1/capabilities", dependencies=[Depends(require_key)])
+    def list_capabilities() -> CapabilityList:
+        return CAPABILITY_LIST
 
     @app.post("/v1/cards/draft", dependencies=[Depends(require_key)])
     def draft(body: DraftRequest) -> DraftResult:
