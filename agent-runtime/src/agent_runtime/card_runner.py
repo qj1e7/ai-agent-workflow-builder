@@ -1,6 +1,7 @@
 # pyright: reportMissingTypeStubs=false, reportUnknownMemberType=false
 """Runs one agent card. The agent is a model that may call only the tools on its card. Reads run.
-Writes only become proposals: nothing is written until an Approver approves it (ADR 0008)."""
+Writes only become proposals: nothing is written until an Approver approves it (ADR 0008).
+A release read that fails stops the agent, so no proposal can rest on releases nobody read."""
 
 import json
 import logging
@@ -324,7 +325,7 @@ class _AgentRun:
         graph.add_node("act", self._act)
         graph.add_edge(START, "think")
         graph.add_conditional_edges("think", _after_think, ["act", END])
-        graph.add_edge("act", "think")
+        graph.add_conditional_edges("act", _after_act, ["think", END])
         return graph.compile()
 
     # The model's turn.
@@ -375,6 +376,8 @@ class _AgentRun:
         answers: list[BaseMessage] = []
         for call in reply.tool_calls:
             content = self._call(call["name"], call["args"], write)
+            if isinstance(content, TaskError):
+                return {"error": content}
             answers.append(ToolMessage(content, tool_call_id=call["id"] or "", name=call["name"]))
         for broken in reply.invalid_tool_calls:
             content = _error("The arguments were not valid JSON.")
@@ -383,7 +386,7 @@ class _AgentRun:
             )
         return {"messages": [*state.messages, *answers]}
 
-    def _call(self, name: str, raw: object, write: Emit) -> str:
+    def _call(self, name: str, raw: object, write: Emit) -> str | TaskError:
         tool = self._offered.get(name)
         if tool is None:
             # Nothing runs and nothing is recorded, so the name is neither echoed nor evented.
@@ -405,16 +408,22 @@ class _AgentRun:
             case _:
                 return _error("That tool cannot be used.")
 
-    def _read_releases(self, tool: Tool, args: ReadReleasesArguments, write: Emit) -> str:
+    def _read_releases(
+        self, tool: Tool, args: ReadReleasesArguments, write: Emit
+    ) -> str | TaskError:
         runner = self._task.runner
         write(self._started(tool, f"reads the releases of {args.repo}."))
         found = read_releases(
             runner.releases, args.repo, runner.retry, runner.sleep, write, self._ref
         )
         if isinstance(found, TaskError):
-            return self._read_failed(
-                tool, f"could not read the releases of {args.repo}.", found, write
+            what = f"could not read the releases of {args.repo}."
+            write(self._finished(tool, what, {"problem": GITHUB_FAILED}))
+            error = found.model_copy(
+                update={"message": f"Could not check {args.repo}: {found.message}"}
             )
+            write(self._failed(error, f"{args.repo} could not be checked."))
+            return error
         shown = [r for r in found if not r.draft][:RELEASES_SHOWN]
         tags = [r.tag for r in shown]
         newest = f" The newest is {tags[0]}." if tags else ""
@@ -552,8 +561,7 @@ class _AgentRun:
         )
         return _result("Proposed. Nothing is written until an Approver approves it.")
 
-    def _read_failed(self, tool: Tool, what: str, why: TaskError | str, write: Emit) -> str:
-        problem = GITHUB_FAILED if isinstance(why, TaskError) else why
+    def _read_failed(self, tool: Tool, what: str, problem: str, write: Emit) -> str:
         write(self._finished(tool, what, {"problem": problem}))
         return _error(problem)
 
@@ -596,6 +604,10 @@ def _after_think(state: AgentState) -> str:
     if state.error is not None or state.report is not None:
         return END
     return "act"
+
+
+def _after_act(state: AgentState) -> str:
+    return END if state.error is not None else "think"
 
 
 def _wants_tools(reply: AIMessage) -> bool:
