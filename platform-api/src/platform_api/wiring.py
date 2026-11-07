@@ -67,6 +67,10 @@ KEY_HINT_MIN_LENGTH = 8
 """A token shorter than this shows no last two characters, as they would give too much away."""
 
 
+def key_hint(token: str | None) -> str | None:
+    return token[-2:] if token and len(token) >= KEY_HINT_MIN_LENGTH else None
+
+
 def jira_for(
     settings: Settings, db: Database, client: httpx.AsyncClient
 ) -> tuple[JiraRestAdapter, PracticeJira | None]:
@@ -193,8 +197,7 @@ async def build(settings: Settings) -> Services:
         public_base_url=settings.public_base_url,
     )
     jira_is_practice = settings.jira.practice
-    token = settings.jira.token
-    jira_key_hint = token[-2:] if token and len(token) >= KEY_HINT_MIN_LENGTH else None
+    jira_key_hint = key_hint(settings.jira.token)
     schedules = ScheduleBook(db)
     watchlist = Watchlist(
         db,
@@ -213,9 +216,9 @@ async def build(settings: Settings) -> Services:
                 "teams",
                 "Teams",
                 webhook is None,
-                teams_probe(db, practice=webhook is None),
+                teams_probe(db, practice=webhook is None, adapter=channel.adapter),
             ),
-            Entry("model", "AI model", False, model_probe(model_settings)),
+            Entry("model", "AI model", False, model_probe(model_settings), live=True),
         ],
     )
     builder = Builder(

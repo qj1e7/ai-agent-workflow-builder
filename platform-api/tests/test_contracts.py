@@ -171,6 +171,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "settings/model.pending.bob.json": TypeAdapter(ModelSettingsView),
     "settings/connections.json": TypeAdapter(ConnectionsView),
     "settings/connection.checked.json": TypeAdapter(ConnectionOut),
+    "settings/connection.not_checked.json": TypeAdapter(ConnectionOut),
     "settings/connect.connected.json": connect_result_adapter,
     "settings/connect.problem.json": connect_result_adapter,
     "settings/save.saved.json": TypeAdapter(SaveOut),

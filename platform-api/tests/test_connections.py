@@ -12,6 +12,12 @@ from platform_api.orchestration.agents import (
     GitHubProblem,
     GitHubWorking,
 )
+from platform_api.orchestration.approvals import (
+    AnyApprover,
+    ApprovalPolicy,
+    ApprovalRequest,
+    ApprovalStep,
+)
 from platform_api.orchestration.connections import (
     RECHECK_AFTER,
     ConnectionId,
@@ -26,11 +32,14 @@ from platform_api.orchestration.connections import (
     settle,
     teams_probe,
 )
+from platform_api.orchestration.dispatch import MessageRef
 from platform_api.orchestration.jira_rest import JiraAuth, JiraReach, JiraRestAdapter
 from platform_api.orchestration.model_settings import SettingsState
 from platform_api.orchestration.runs import Pending
 from platform_api.orchestration.store import ANNOUNCE, SHOW_OUTCOME, START_LEG, RunRecord, Store
-from platform_api.shared import RunId
+from platform_api.orchestration.write_actions import Proposal, WriteAction, digest
+from platform_api.shared import ApprovalId, ProposalId, RunId
+from platform_api.wiring import KEY_HINT_MIN_LENGTH, key_hint
 from tests.practice import BASE, PracticeKit, no_wait
 from tests.support import ALICE, NOW, SPEC
 from tests.test_settings_http import ACTIVE
@@ -63,7 +72,7 @@ def test_one_different_reading_from_a_tick_waits_for_a_second_to_agree():
     first = settle(shown(), DOWN, later, at_once=False)
     assert first.state == "working"
     assert first.unconfirmed_state == "not_answering"
-    assert first.checked_at == later
+    assert first.checked_at == T0
     assert first.last_ok_at == T0
     second = settle(first, DOWN, later + timedelta(minutes=5), at_once=False)
     assert second.state == "not_answering"
@@ -94,7 +103,9 @@ def test_check_now_shows_what_it_found_at_once():
 def test_working_again_sets_the_last_time_it_worked():
     later = T0 + timedelta(hours=3)
     down = shown("not_answering", problem="x", last_ok_at=T0)
-    assert settle(down, WORKING, later, at_once=True).last_ok_at == later
+    healed = settle(down, WORKING, later, at_once=True)
+    assert healed.last_ok_at == later
+    assert healed.last_ok_at is not None and healed.last_ok_at > T0
 
 
 def test_a_tick_checks_what_was_never_checked_what_waits_for_a_second_reading_and_the_hourly():
@@ -133,7 +144,10 @@ class Rig:
             "model": "AI model",
         }
         self.probes = {id: Scripted() for id in names}
-        entries = [Entry(id, name, False, self.probes[id]) for id, name in names.items()]
+        entries = [
+            Entry(id, name, False, self.probes[id], live=id == "model")
+            for id, name in names.items()
+        ]
         self.connections = Connections(self.db, entries)
 
 
@@ -147,8 +161,8 @@ async def test_the_first_view_checks_each_connection_once_and_keeps_the_result(r
     again = await rig.connections.view()
     assert [c.id for c in first] == ["jira", "github", "teams", "model"]
     assert all(c.state == "working" for c in first)
-    assert [p.calls for p in rig.probes.values()] == [1, 1, 1, 1]
-    assert again == first
+    assert [p.calls for p in rig.probes.values()] == [1, 1, 1, 2]
+    assert again[:3] == first[:3]
 
 
 async def test_check_now_runs_one_check_and_shows_a_problem_at_once(rig: Rig):
@@ -189,7 +203,7 @@ async def test_a_tick_checks_only_what_is_due_and_needs_two_readings_to_raise_a_
     await rig.connections.check_due()
     jira = next(c for c in await rig.connections.view() if c.id == "jira")
     assert jira.state == "not_answering"
-    assert [p.calls for p in rig.probes.values()] == [3, 1, 1, 1]
+    assert [p.calls for p in rig.probes.values()] == [3, 1, 1, 3]
 
 
 async def _age(db: Database, connection: str, by: timedelta) -> None:
@@ -299,31 +313,119 @@ async def test_the_practice_teams_always_takes_a_message(db: Database):
     assert await teams_probe(db, practice=True)() == Reading("working")
 
 
-async def test_a_real_teams_channel_is_judged_by_the_last_message_the_outbox_tried(db: Database):
-    probe = teams_probe(db, practice=False)
-    assert await probe() == Reading("working")
-    store = Store()
+REAL = "teams_workflows"
+
+
+async def _post(db: Database, store: Store, kind: str, n: int, adapter: str | None) -> int:
+    """An outbox row for approval n, with a posted message when adapter is given. Returns its id."""
+    approval = ApprovalId(f"apr_t{n}")
+    action = WriteAction("jira", "create_ticket", {"project": "MOCK"}, {"title": "t"})
+    proposal = Proposal(ProposalId(f"prp_t{n}"), RUN, (action,), digest((action,)))
+    request = ApprovalRequest(
+        approval,
+        RUN,
+        proposal.id,
+        proposal.digest,
+        ApprovalPolicy((ApprovalStep("Team approver", AnyApprover()),)),
+        frozenset({ALICE.user_id}),
+    )
+    async with db.transaction("orchestration") as uow:
+        await store.insert_proposal(uow, proposal)
+        await store.insert_approval(uow, request)
+        if adapter is not None:
+            await store.save_message_ref(uow, approval, MessageRef("channel", f"m{n}", adapter))
+        await store.enqueue(uow, RUN, kind, {"approval_id": approval}, NOW)
+        row = await (
+            await uow.conn.execute(
+                "SELECT max(id) AS id FROM orchestration.outbox WHERE kind = %s", (kind,)
+            )
+        ).fetchone()
+    assert row is not None
+    return int(row["id"])
+
+
+async def _insert_run(db: Database, store: Store) -> None:
     async with db.transaction("orchestration") as uow:
         pending = Pending(RUN, 1, None, NOW)
         record = RunRecord(RUN, SPEC, ALICE.user_id, NOW, NOW, 1, pending, (), None)
         await store.insert_run(uow, record, "k")
-        await store.enqueue(uow, RUN, ANNOUNCE, {}, NOW)
-        await store.enqueue(uow, RUN, START_LEG, {}, NOW)
+
+
+async def test_a_real_teams_channel_with_no_history_is_not_checked_yet(db: Database):
+    result = await teams_probe(db, practice=False)()
+    assert result == Reading(
+        "not_checked", "Not checked yet. Teams is tried when the first approval request is sent."
+    )
+    connections = Connections(db, [Entry("teams", "Teams", False, teams_probe(db, practice=False))])
+    (teams,) = await connections.view()
+    assert (teams.state, teams.checked_at, teams.last_ok_at, teams.fix) == (
+        "not_checked",
+        None,
+        None,
+        None,
+    )
+    assert teams.problem == result.problem
+    assert await connections.needing_attention() == []
+
+
+async def test_the_first_outbox_result_turns_not_checked_into_a_state_at_once(db: Database):
+    store = Store()
+    await _insert_run(db, store)
+    connections = Connections(db, [Entry("teams", "Teams", False, teams_probe(db, practice=False))])
+    await connections.view()
+    first = await _post(db, store, ANNOUNCE, 1, REAL)
+    async with db.transaction("orchestration") as uow:
+        await store.outbox_sent(uow, first)
+    await connections.check_due()
+    (teams,) = await connections.view()
+    assert (teams.state, teams.problem) == ("working", None)
+    assert teams.checked_at is not None and teams.last_ok_at is not None
+
+
+async def test_a_first_failure_shows_not_answering_at_once(db: Database):
+    store = Store()
+    await _insert_run(db, store)
+    connections = Connections(db, [Entry("teams", "Teams", False, teams_probe(db, practice=False))])
+    await connections.view()
+    failing = await _post(db, store, ANNOUNCE, 1, None)
+    async with db.transaction("orchestration") as uow:
+        await store.outbox_retry(uow, failing, NOW, "Teams answered 500 at https://secret")
+    await connections.check_due()
+    (teams,) = await connections.view()
+    assert (teams.state, teams.last_ok_at) == ("not_answering", None)
+    assert "secret" not in repr(teams)
+
+
+async def test_messages_the_practice_copy_took_say_nothing_about_a_real_channel(db: Database):
+    store = Store()
+    await _insert_run(db, store)
+    probe = teams_probe(db, practice=False)
+    sent = await _post(db, store, ANNOUNCE, 1, "practice")
+    async with db.transaction("orchestration") as uow:
+        await store.outbox_sent(uow, sent)
+    assert (await probe()).state == "not_checked"
+
+    outcome = await _post(db, store, SHOW_OUTCOME, 2, "practice")
+    async with db.transaction("orchestration") as uow:
+        await store.outbox_give_up(uow, outcome, "gone")
+    assert (await probe()).state == "not_checked"
+
+    real = await _post(db, store, ANNOUNCE, 3, REAL)
+    async with db.transaction("orchestration") as uow:
+        await store.outbox_sent(uow, real)
     assert await probe() == Reading("working")
 
-    async def newest(kind: str) -> int:
-        async with db.transaction("orchestration") as uow:
-            row = await (
-                await uow.conn.execute(
-                    "SELECT max(id) AS id FROM orchestration.outbox WHERE kind = %s", (kind,)
-                )
-            ).fetchone()
-        assert row is not None
-        return int(row["id"])
 
-    announce = await newest(ANNOUNCE)
+async def test_a_real_teams_channel_is_judged_by_the_last_message_the_outbox_tried(db: Database):
+    store = Store()
+    await _insert_run(db, store)
+    probe = teams_probe(db, practice=False)
+    pending = await _post(db, store, ANNOUNCE, 1, None)
+    leg = await _post(db, store, START_LEG, 2, None)
+    assert (await probe()).state == "not_checked"
+
     async with db.transaction("orchestration") as uow:
-        await store.outbox_retry(uow, announce, NOW, "Teams answered 500 at https://secret")
+        await store.outbox_retry(uow, pending, NOW, "Teams answered 500 at https://secret")
     failing = await probe()
     assert (failing.state, failing.problem) == (
         "not_answering",
@@ -332,23 +434,56 @@ async def test_a_real_teams_channel_is_judged_by_the_last_message_the_outbox_tri
     assert "secret" not in repr(failing)
 
     async with db.transaction("orchestration") as uow:
-        await store.outbox_sent(uow, announce)
+        await store.outbox_sent(uow, pending)
+        await store.save_message_ref(uow, ApprovalId("apr_t1"), MessageRef("channel", "m1", REAL))
     assert await probe() == Reading("working")
 
-    async with db.transaction("orchestration") as uow:
-        await store.enqueue(uow, RUN, SHOW_OUTCOME, {}, NOW)
-    outcome = await newest(SHOW_OUTCOME)
+    outcome = await _post(db, store, SHOW_OUTCOME, 3, REAL)
     async with db.transaction("orchestration") as uow:
         await store.outbox_give_up(uow, outcome, "gone")
     assert (await probe()).state == "not_answering"
 
-    async with db.transaction("orchestration") as uow:
-        await store.enqueue(uow, RUN, ANNOUNCE, {}, NOW)
-    again = await newest(ANNOUNCE)
+    again = await _post(db, store, ANNOUNCE, 4, REAL)
     async with db.transaction("orchestration") as uow:
         await store.outbox_sent(uow, again)
-        await store.outbox_retry(uow, await newest(START_LEG), NOW, "n8n is down")
+        await store.outbox_retry(uow, leg, NOW, "n8n is down")
     assert await probe() == Reading("working")
+
+
+async def test_the_model_row_is_read_fresh_on_every_view_and_never_kept(db: Database):
+    state = SettingsState(True, ACTIVE, None, [])
+    models = FakeModels(state)
+    connections = Connections(
+        db, [Entry("model", "AI model", False, model_probe(models), live=True)]
+    )
+    (working,) = await connections.view()
+    assert (working.state, working.key_ends_in) == ("working", "x7")
+
+    models.state = SettingsState(True, None, None, [])
+    (gone,) = await connections.view()
+    assert (gone.state, gone.key_ends_in, gone.last_ok_at) == ("not_set_up", None, None)
+
+    models.state = SettingsState(True, ACTIVE, None, [])
+    (back,) = await connections.view()
+    assert (back.state, back.key_ends_in) == ("working", "x7")
+    checked = await connections.check_now("model")
+    assert checked is not None and checked.state == "working"
+
+    await connections.check_due()
+    assert await connections.needing_attention() == []
+    async with db.transaction("orchestration") as uow:
+        row = await (
+            await uow.conn.execute("SELECT count(*) AS n FROM orchestration.connection_checks")
+        ).fetchone()
+    assert row is not None and row["n"] == 0
+
+
+def test_a_jira_token_shows_its_last_two_characters_only_when_it_is_long_enough():
+    assert key_hint(None) is None
+    assert key_hint("") is None
+    assert key_hint("a" * (KEY_HINT_MIN_LENGTH - 1)) is None
+    assert key_hint("a" * (KEY_HINT_MIN_LENGTH - 2) + "q4") == "q4"
+    assert key_hint("a" * (KEY_HINT_MIN_LENGTH - 3) + "q4") is None
 
 
 async def test_the_jira_check_reads_once_and_never_writes(db: Database):

@@ -2735,9 +2735,17 @@
         "additionalProperties": false,
         "properties": {
           "checked_at": {
-            "format": "date-time",
-            "title": "Checked At",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When it was last checked. Null while nothing has been tried.",
+            "title": "Checked At"
           },
           "expires_at": {
             "anyOf": [
@@ -2836,7 +2844,8 @@
           "working",
           "needs_attention",
           "not_answering",
-          "not_set_up"
+          "not_set_up",
+          "not_checked"
         ],
         "type": "string"
       },

@@ -128,6 +128,18 @@ def settings_fixtures() -> dict[str, WireModel]:
         "settings/model.pending.bob.json": view_of(PENDING_STATE, BOB),
         "settings/connections.json": connections_view(),
         "settings/connection.checked.json": connections_view().connections[0],
+        "settings/connection.not_checked.json": ConnectionOut(
+            id="teams",
+            name="Teams",
+            practice=False,
+            state="not_checked",
+            checked_at=None,
+            last_ok_at=None,
+            problem="Not checked yet. Teams is tried when the first approval request is sent.",
+            key_ends_in=None,
+            expires_at=None,
+            fix=None,
+        ),
         "settings/connect.connected.json": Connected(
             style="anthropic",
             base_url="https://llm-gateway.aisg.sg",

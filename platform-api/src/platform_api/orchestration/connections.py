@@ -27,7 +27,9 @@ from platform_api.orchestration.store import ANNOUNCE, SHOW_OUTCOME
 log = logging.getLogger(__name__)
 
 type ConnectionId = Literal["jira", "github", "teams", "model"]
-type ConnectionState = Literal["working", "needs_attention", "not_answering", "not_set_up"]
+type ConnectionState = Literal[
+    "working", "needs_attention", "not_answering", "not_set_up", "not_checked"
+]
 
 CONNECTION_IDS: Final[tuple[ConnectionId, ...]] = ("jira", "github", "teams", "model")
 RECHECK_AFTER: Final = timedelta(hours=1)
@@ -37,6 +39,9 @@ EXPIRY_WARNING: Final = timedelta(days=14)
 """A key that runs out within this long is raised on Home."""
 CHECK_DEADLINE_SECONDS: Final = 15.0
 
+TEAMS_NOT_CHECKED: Final = (
+    "Not checked yet. Teams is tried when the first approval request is sent."
+)
 NOT_ANSWERING: Final = "{name} is not answering."
 TOKEN_REFUSED: Final = "{name} does not accept the key."
 CHECK_FAILED: Final = "The check of {name} did not finish."
@@ -62,6 +67,9 @@ class Entry:
     name: str
     practice: bool
     probe: Probe
+    live: bool = False
+    """A live connection is read fresh on every view and never stored, because another screen
+    owns the fact and a stored copy could disagree with it."""
 
 
 @dataclass(frozen=True)
@@ -81,7 +89,8 @@ def settle(shown: Shown | None, reading: Reading, now: datetime, *, at_once: boo
     """The new result after one reading. Check now shows what it found. A scheduled check
     changes the state only when two readings in a row agree, so one failed call raises no alarm."""
     last_ok = reading_ok_at(shown, reading, now)
-    if shown is None or at_once or reading.state == shown.state:
+    first_result = shown is not None and shown.state == "not_checked"
+    if shown is None or at_once or first_result or reading.state == shown.state:
         return Shown(
             reading.state, reading.problem, now, last_ok, reading.expires_at, reading.key_ends_in
         )
@@ -89,7 +98,7 @@ def settle(shown: Shown | None, reading: Reading, now: datetime, *, at_once: boo
         return Shown(
             reading.state, reading.problem, now, last_ok, reading.expires_at, reading.key_ends_in
         )
-    return replace(shown, checked_at=now, unconfirmed_state=reading.state)
+    return replace(shown, unconfirmed_state=reading.state)
 
 
 def reading_ok_at(shown: Shown | None, reading: Reading, now: datetime) -> datetime | None:
@@ -99,9 +108,9 @@ def reading_ok_at(shown: Shown | None, reading: Reading, now: datetime) -> datet
 
 
 def due(shown: Shown | None, now: datetime) -> bool:
-    """A tick checks a connection that was never checked, one waiting for a second reading, and
-    any other after an hour."""
-    if shown is None or shown.unconfirmed_state is not None:
+    """A tick checks a connection that was never checked, one waiting for a second reading or for
+    its first result, and any other after an hour."""
+    if shown is None or shown.unconfirmed_state is not None or shown.state == "not_checked":
         return True
     return now - shown.checked_at >= RECHECK_AFTER
 
@@ -112,7 +121,8 @@ class ConnectionCheck:
     name: str
     practice: bool
     state: ConnectionState
-    checked_at: datetime
+    checked_at: datetime | None
+    """None while nothing has been tried, so no time implies a test happened."""
     last_ok_at: datetime | None
     problem: str | None
     key_ends_in: str | None
@@ -145,6 +155,8 @@ def fix_for(entry: Entry, state: ConnectionState, *, expiring: bool) -> str | No
             return "Nothing to change yet. Check again in a few minutes."
         case _, "not_set_up":
             return f"Ask whoever set up the platform to connect {entry.name}."
+        case _, "not_checked":
+            return None
 
 
 class ConnectionStore:
@@ -213,7 +225,9 @@ class Connections:
         async with self._db.transaction("orchestration") as uow:
             stored = await self._store.load_all(uow)
         for id, entry in self._entries.items():
-            if id not in stored:
+            if entry.live:
+                stored[id] = await self._live(entry)
+            elif id not in stored:
                 stored[id] = await self._check(entry, at_once=True)
         now = self._db.clock()
         return [self._present(self._entries[id], stored[id], now) for id in self._entries]
@@ -223,7 +237,7 @@ class Connections:
         entry = next((e for e in self._entries.values() if e.id == id), None)
         if entry is None:
             return None
-        shown = await self._check(entry, at_once=True)
+        shown = await (self._live(entry) if entry.live else self._check(entry, at_once=True))
         return self._present(entry, shown, self._db.clock())
 
     async def check_due(self) -> None:
@@ -231,7 +245,7 @@ class Connections:
         async with self._db.transaction("orchestration") as uow:
             stored = await self._store.load_all(uow)
         now = self._db.clock()
-        waiting = [e for e in self._entries.values() if due(stored.get(e.id), now)]
+        waiting = [e for e in self._entries.values() if not e.live and due(stored.get(e.id), now)]
         await asyncio.gather(*(self._check(e, at_once=False) for e in waiting))
 
     async def needing_attention(self) -> list[ConnectionCheck]:
@@ -243,7 +257,7 @@ class Connections:
         found = [
             self._present(self._entries[id], shown, now)
             for id, shown in stored.items()
-            if id in self._entries
+            if id in self._entries and not self._entries[id].live
         ]
         trouble = [c for c in found if c.state in ("needs_attention", "not_answering")]
         ending = sorted(
@@ -260,6 +274,18 @@ class Connections:
             await self._store.save(uow, entry.id, shown)
         return shown
 
+    async def _live(self, entry: Entry) -> Shown:
+        reading = await self._read(entry)
+        now = self._db.clock()
+        return Shown(
+            reading.state,
+            reading.problem,
+            now,
+            now if reading.state == "working" else None,
+            reading.expires_at,
+            reading.key_ends_in,
+        )
+
     async def _read(self, entry: Entry) -> Reading:
         try:
             async with asyncio.timeout(CHECK_DEADLINE_SECONDS):
@@ -275,7 +301,7 @@ class Connections:
             name=entry.name,
             practice=entry.practice,
             state=shown.state,
-            checked_at=shown.checked_at,
+            checked_at=None if shown.state == "not_checked" else shown.checked_at,
             last_ok_at=shown.last_ok_at,
             problem=shown.problem,
             key_ends_in=shown.key_ends_in,
@@ -352,9 +378,11 @@ def model_probe(models: ModelView) -> Probe:
     return probe
 
 
-def teams_probe(db: Database, *, practice: bool) -> Probe:
+def teams_probe(db: Database, *, practice: bool, adapter: str = "teams_workflows") -> Probe:
     """The practice copy always takes a message. A real channel is judged by how the last
-    message the outbox tried to send to it went, because a check must not post to a channel."""
+    message the outbox tried to send through it went, because a check must not post to a channel.
+    Messages the practice copy took say nothing about the real channel, so only a message posted
+    through `adapter` counts, and a failed announcement, which was never posted, counts as one."""
 
     async def probe() -> Reading:
         if practice:
@@ -362,14 +390,21 @@ def teams_probe(db: Database, *, practice: bool) -> Probe:
         async with db.transaction("orchestration") as uow:
             row = await (
                 await uow.conn.execute(
-                    "SELECT status FROM orchestration.outbox WHERE kind IN (%s, %s) "
-                    "AND (status IN ('sent', 'given_up') OR "
-                    "(status = 'pending' AND last_error IS NOT NULL)) "
-                    "ORDER BY id DESC LIMIT 1",
-                    (ANNOUNCE, SHOW_OUTCOME),
+                    "SELECT o.status FROM orchestration.outbox o "
+                    "LEFT JOIN orchestration.approval_messages m "
+                    "ON m.approval_id = o.payload->>'approval_id' "
+                    "WHERE o.kind IN (%s, %s) "
+                    "AND (o.status IN ('sent', 'given_up') OR "
+                    "(o.status = 'pending' AND o.last_error IS NOT NULL)) "
+                    "AND (m.adapter = %s OR "
+                    "(m.adapter IS NULL AND o.kind = %s AND o.status <> 'sent')) "
+                    "ORDER BY o.id DESC LIMIT 1",
+                    (ANNOUNCE, SHOW_OUTCOME, adapter, ANNOUNCE),
                 )
             ).fetchone()
-        if row is not None and row["status"] != "sent":
+        if row is None:
+            return Reading("not_checked", TEAMS_NOT_CHECKED)
+        if row["status"] != "sent":
             return Reading("not_answering", "Teams did not take the last message.")
         return Reading("working")
 
