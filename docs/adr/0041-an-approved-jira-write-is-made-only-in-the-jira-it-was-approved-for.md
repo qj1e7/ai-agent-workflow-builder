@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # An approved Jira write is made only in the Jira it was approved for
@@ -60,7 +60,11 @@ The last three sentences are the agreed write-step advice (`WRITE_STOP_ADVICE`, 
 - **The switch to a real Jira fails the runs approved but not yet written,** with the plain message above. Operators start new runs. `infra/README.md`'s "A real Jira" steps gain a line that says to wait until no run is between a yes and its write, or to expect those runs to stop.
 - **During a revision switch on Azure,** two revisions can run at once, one with each Jira. Each write is checked by the revision that makes it, so a write approved for the old Jira is refused by the new revision, whichever replica picks it up.
 - **ADR 0039 must keep this rule.** Replacing the Jira key in Settings keeps the site. A new address is a new site, and its confirmation should say that runs waiting between a yes and their write will stop.
-- **Proposals and written tickets saved before this change have no site.** Deny by default treats them as another site, as #163 did for Teams posts. A waiting approved write stops with the message above, and the watchlist stops checking those tickets for Done. The `azure-dev` environment has no `JIRA_BASE_URL` set, so every proposal and ticket on the Azure deploy so far is the practice Jira's. If the team confirms that no local stack in use has a real Jira, the migration may fill in `practice` for them instead. That is the team's call.
+- **Proposals and written tickets saved before this change have no site.** Deny by default treats them as another site, as #163 did for Teams posts. A waiting approved write stops with the message above, and the watchlist stops checking those tickets for Done. The `azure-dev` environment has no `JIRA_BASE_URL` set, so every proposal and ticket on the Azure deploy so far is the practice Jira's. The team lead decided on 8 Nov 2026 to keep deny by default: rows saved before this change are not filled in as `practice`.
 - **Tests.** The safety checker's tests gain a changed site and a missing site. A test like #163's `test_outcome_channel.py` approves on one Jira and writes after a switch to another. The live repro in issue #166 becomes a check that the second Jira gets no call.
-- **Not decided here.** Whether the approval page and the Teams card name the Jira, such as "the practice Jira" or the site's host, so the Approver can see where the ticket goes. The issue type (`JIRA_ISSUE_TYPE`) can also change after the yes. The Approver does not see it today, so it stays outside what they approve.
+- **The approval page and the Teams card name the Jira** each ticket goes to, "the practice Jira" or the site's host, so the Approver sees where the ticket goes before saying yes (decided 8 Nov 2026). The issue type (`JIRA_ISSUE_TYPE`) can also change after the yes. The Approver does not see it today, so it stays outside what they approve.
 - **The glossary** gains "Jira site", the Jira that tickets live in and that an approved write is checked against.
+
+## Decision record
+
+Accepted by the team lead on 8 Nov 2026, with the three recommendations in PR #167: the approach above (the site is part of what the Approver approves, and the safety checker refuses a write whose site no longer matches); proposals and tickets saved before the change are denied by default rather than filled in as `practice`; and the approval page and the Teams card name the Jira.
