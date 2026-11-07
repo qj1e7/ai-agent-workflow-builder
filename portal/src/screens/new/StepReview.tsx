@@ -1,7 +1,7 @@
 import type { RowKind } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { IconCheck, IconPencil } from '../../ui/icons'
-import { checkedRows, lowerFirst, NAME_LIMIT, textsOf, whenWords, type Form, type PlanView } from './draft'
+import { checkedRows, lowerFirst, NAME_LIMIT, textsOf, whenWords, type Form, type PlanView } from '../home/card'
 import styles from './NewWorkflow.module.css'
 
 const PROMISES = [

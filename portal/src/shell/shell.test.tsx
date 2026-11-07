@@ -109,8 +109,9 @@ describe('the menu', () => {
     }
   })
 
-  it('keeps a saved draft’s Resume reaching the editor with the flag off, and sends a bare /new to Home', () => {
-    expect(text(mainOf(render({ path: '/new?draft=drf-1' }))), 'a draft').toBe('Loading')
+  it('sends a saved draft’s old address to Home with its id, and a bare /new to Home', () => {
+    expect(render({ path: '/new?draft=drf-1' })).toContain('<main')
+    expect(text(mainOf(render({ path: '/new?draft=drf-1' }))), 'a draft').not.toBe('Loading')
     expect(text(mainOf(render({ path: '/new' })))).not.toBe('Loading')
   })
 

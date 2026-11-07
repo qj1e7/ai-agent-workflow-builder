@@ -1,12 +1,13 @@
 import { useId, useState, type ReactNode } from 'react'
-import { Link } from 'react-router'
 import { useNewWorkflowSteps } from '../../api/flags'
 import type { CantReply, OfflineReply, PartReply, PlannerReply, SetupCardReply, WatchlistReply } from '../../api/types'
 import { useCapabilities } from '../../api/plannerQueries'
 import { Button, ButtonLink } from '../../ui/Button'
 import { NEW_WORKFLOW_PATH } from '../new/starters'
 import { AskTheTeam } from './AskTheTeam'
-import { cantLines, cardLines, refusalNext, SAY_ANOTHER_WAY, setupTask, startingPoints, TAG_CANT, TAG_CHOICE, TAG_FILLED } from './answers'
+import { cantLines, refusalNext, SAY_ANOTHER_WAY, startingPoints, TAG_CANT, TAG_CHOICE } from './answers'
+import { cardFrom } from './card'
+import { SetupCard, type CardStart } from './SetupCard'
 import { CapabilityLists } from './CapabilityLists'
 import { NewestAnswer, useMainButton } from './primary'
 import { AddToWatchlist, WhichSoftware } from './WatchlistCard'
@@ -22,47 +23,13 @@ export interface Page {
 
 const OLD_NEW_WORKFLOW = 'Set it up in New workflow'
 
-/**
- * The step that turns an answer into a workflow. Setting up from the card comes with the next change. Until then the
- * old New workflow is the way, while its flag is on. With the flag off, the card says plainly that it can't set up yet.
- */
-function SetUp({ task, label = OLD_NEW_WORKFLOW, ask = 'here' }: { task: string; label?: string; ask?: 'here' | 'below' | 'above' }) {
-  const oldNewWorkflow = useNewWorkflowSteps()
-  const main = useMainButton()
-  if (oldNewWorkflow) {
-    return (
-      <ButtonLink variant={main} to={NEW_WORKFLOW_PATH} state={{ task }}>
-        {label}
-      </ButtonLink>
-    )
-  }
-  return (
-    <>
-      <p>Turning this on from Home isn’t built yet, so nothing was saved. Ask the team {ask === 'above' ? 'above' : 'below'} if you need it soon.</p>
-      {ask === 'here' ? <AskTheTeam capability="setting up a workflow from Home" starter={`I asked the Planner for: ${task}\n\nIt was understood, but turning it on from Home is not built yet.`} /> : null}
-    </>
-  )
+/** A set-up card from the Planner’s rows. The person’s own words go with it, so a saved draft keeps them. */
+function startOf(reply: SetupCardReply | PartReply, typed: string): CardStart {
+  return { form: cardFrom(reply.name, reply.rows, typed), plan: null, draftId: null, similar: reply.similar }
 }
 
 function tagClass(tag: string): string {
   return [styles['tag'], tag === TAG_CHOICE ? styles['tagChoice'] : undefined, tag === TAG_CANT ? styles['tagCant'] : undefined].filter(Boolean).join(' ')
-}
-
-function Lines({ rows }: { rows: SetupCardReply['rows'] }) {
-  return (
-    <ul className={styles['lines']}>
-      {cardLines(rows).map((line) => (
-        <li key={line.kind} className={styles['line']}>
-          <span className={styles['label']}>{line.label}</span>
-          <span>
-            {line.text}
-            {line.tag ? <span className={tagClass(line.tag)}>{line.tag}</span> : null}
-            {line.note ? <span className={styles['note']}>{line.note}</span> : null}
-          </span>
-        </li>
-      ))}
-    </ul>
-  )
 }
 
 function Card({ title, tag, children }: { title: string; tag?: string; children: ReactNode }) {
@@ -78,36 +45,31 @@ function Card({ title, tag, children }: { title: string; tag?: string; children:
   )
 }
 
-export function SetupCardAnswer({ reply, typed, ownRows = false }: { reply: SetupCardReply | PartReply; typed: string; ownRows?: boolean }) {
+export function SetupCardAnswer({ reply, typed }: { reply: SetupCardReply | PartReply; typed: string }) {
   const left = reply.answer === 'part' ? cantLines(reply.cant) : []
   return (
-    <Card title={reply.name} tag={TAG_FILLED}>
-      <Lines rows={reply.rows} />
-      {reply.similar ? (
-        <p className={styles['alt']}>
-          You already have a workflow with this name. <Link to={`/workflows/${encodeURIComponent(reply.similar.use_case_id)}`}>Open {reply.similar.name}</Link>
-        </p>
-      ) : null}
+    <>
+      <SetupCard start={startOf(reply, typed)} />
       {left.length > 0 ? (
-        <div className={styles['pcardPart']}>
-          <p>
-            <b>What I can’t do yet</b>
-          </p>
-          <ul className={styles['lines']}>
-            {left.map((line) => (
-              <li key={line.text}>
-                {line.text}
-                {line.note ? <span className={styles['note']}>{line.note}</span> : null}
-              </li>
-            ))}
-          </ul>
-        </div>
+        <Card title="What I can’t do yet">
+          <div className={styles['pcardPart']}>
+            <ul className={styles['lines']}>
+              {left.map((line) => (
+                <li key={line.text}>
+                  {line.text}
+                  {line.note ? <span className={styles['note']}>{line.note}</span> : null}
+                </li>
+              ))}
+            </ul>
+            {reply.answer === 'part' ? (
+              <div className={styles['buttons']}>
+                <AskTheTeam capability={reply.cant[0]?.system ?? left[0]?.text ?? 'part of a request'} starter={`I asked the Planner for: ${typed}\n\nWhat it can't do yet: ${left.map((line) => line.text).join('; ')}`} />
+              </div>
+            ) : null}
+          </div>
+        </Card>
       ) : null}
-      <div className={styles['footer']}>
-        <SetUp task={setupTask(reply, typed, ownRows)} label={reply.answer === 'part' ? 'Set up the part I can do in New workflow' : OLD_NEW_WORKFLOW} ask={reply.answer === 'part' ? 'below' : 'here'} />
-        {reply.answer === 'part' ? <AskTheTeam capability={reply.cant[0]?.system ?? left[0]?.text ?? 'part of a request'} starter={`I asked the Planner for: ${typed}\n\nWhat it can't do yet: ${left.map((line) => line.text).join('; ')}`} /> : null}
-      </div>
-    </Card>
+    </>
   )
 }
 
@@ -134,12 +96,10 @@ export function CantAnswer({ reply, typed }: { reply: CantReply; typed: string }
         </div>
       </Card>
       {alternative?.answer === 'setup_card' ? (
-        <Card title="What I can do instead">
-          <Lines rows={alternative.rows} />
-          <div className={styles['footer']}>
-            <SetUp task={setupTask(reply, typed)} label="Set up the alternative in New workflow" ask="above" />
-          </div>
-        </Card>
+        <>
+          <h3 className={styles['altHeading']}>What I can do instead</h3>
+          <SetupCard start={startOf(alternative, typed)} />
+        </>
       ) : null}
       {alternative?.answer === 'watchlist' ? <WatchlistAnswer reply={alternative} typed={typed} /> : null}
     </>
@@ -177,7 +137,7 @@ export function WatchlistAnswer({ reply, typed }: { reply: WatchlistReply; typed
         <>
           <p>The rest of your request:</p>
           <NewestAnswer.Provider value={false}>
-            <Answer reply={reply.also} typed={typed} page={NO_PAGE} ownRows />
+            <Answer reply={reply.also} typed={typed} page={NO_PAGE} />
           </NewestAnswer.Provider>
         </>
       ) : null}
@@ -293,16 +253,14 @@ interface AnswerProps {
   readonly reply: PlannerReply
   readonly typed: string
   readonly page: Page
-  /** The answer is one half of a mixed request, so it hands on only its own rows. */
-  readonly ownRows?: boolean
 }
 
 /** The body of one Planner answer, past its sentence. The three state answers are in StateAnswers. */
-export function Answer({ reply, typed, page, ownRows = false }: AnswerProps) {
+export function Answer({ reply, typed, page }: AnswerProps) {
   switch (reply.answer) {
     case 'setup_card':
     case 'part':
-      return <SetupCardAnswer reply={reply} typed={typed} ownRows={ownRows} />
+      return <SetupCardAnswer reply={reply} typed={typed} />
     case 'cant':
       return <CantAnswer reply={reply} typed={typed} />
     case 'watchlist':

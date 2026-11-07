@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ReactNode } from 'react'
-import { Navigate, Route, Routes, useSearchParams } from 'react-router'
+import { Navigate, Route, Routes, useParams, useSearchParams } from 'react-router'
 import { useNewWorkflowSteps } from '../api/flags'
 import { AgentsPage } from '../screens/agents/AgentsPage'
 import { HomePage } from '../screens/home/HomePage'
@@ -140,19 +140,30 @@ export function wordsOf(words: Words, context: PageContext): string {
 
 /**
  * The old four-step screen, kept at its address while the flag is on. Off, its address leads to Home, where a request now
- * starts, except with a saved draft: Resume must still reach the editor with that draft until the Planner's card can edit it.
+ * starts. A saved draft's address carries its id to Home, which reopens it as the Planner's card, and the page the old
+ * screen ended on leads to the workflow it just turned on.
  */
 function oldNewWorkflowRoutes(context: PageContext, whole: boolean) {
   const editor = <Lazy><NewWorkflowRoute heading={wordsOf(PAGES.new.heading, context)} lead={wordsOf(PAGES.new.lead, context)} /></Lazy>
   return [
-    <Route key="new" path={PAGES.new.path} element={whole ? editor : <DraftOnly>{editor}</DraftOnly>} />,
-    ...(whole ? [<Route key="done" path={`${PAGES.new.path}/done/:useCaseId`} element={<Lazy><DoneRoute now={context.now} /></Lazy>} />] : []),
+    <Route key="new" path={PAGES.new.path} element={whole ? editor : <DraftOnHome />} />,
+    <Route
+      key="done"
+      path={`${PAGES.new.path}/done/:useCaseId`}
+      element={whole ? <Lazy><DoneRoute now={context.now} /></Lazy> : <WorkflowOnceOn />}
+    />,
   ]
 }
 
-function DraftOnly({ children }: { children: ReactNode }) {
+function DraftOnHome() {
   const [search] = useSearchParams()
-  return search.get('draft') ? children : <Navigate to={PAGES.home.path} replace />
+  const draft = search.get('draft')
+  return <Navigate to={draft ? `${PAGES.home.path}?draft=${encodeURIComponent(draft)}` : PAGES.home.path} replace />
+}
+
+function WorkflowOnceOn() {
+  const { useCaseId = '' } = useParams()
+  return <Navigate to={`${PAGES.workflows.path}/${encodeURIComponent(useCaseId)}`} replace />
 }
 
 export function AppRoutes({ context }: { context: PageContext }) {

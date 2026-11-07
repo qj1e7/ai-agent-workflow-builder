@@ -530,10 +530,104 @@ function checkedAgain(form: Form): Form {
   return { ...form, rows, step: form.step > 2 ? 2 : form.step }
 }
 
-export function restoreDraft(draft: DraftView): { readonly form: Form; readonly plan: Planned | null } {
+/** What still stops a saved card, from the draft as it was saved. Null when the draft holds no card. */
+export function savedLeft(draft: DraftView): string[] | null {
+  const { form, plan } = restoreDraft(draft, false)
+  if (form.rows.length === 0) return null
+  return setupLeft(form, plan ? planView(plan.answer, form.rows) : null)
+}
+
+export function restoreDraft(draft: DraftView, recheck = true): { readonly form: Form; readonly plan: Planned | null } {
   const { form, plan, text, intent } = draft.content as Record<string, unknown>
   const carriedOn = isRecord(form) && form['carriedOn'] === true
-  if (isForm(form)) return { form: checkedAgain({ ...form, carriedOn }), plan: isPlanned(plan) ? plan : null }
+  if (isForm(form)) return { form: recheck ? checkedAgain({ ...form, carriedOn }) : { ...form, carriedOn }, plan: isPlanned(plan) ? plan : null }
   const task = isString(text) ? text : isString(intent) ? intent : ''
   return { form: { ...EMPTY_FORM, text: task }, plan: null }
 }
+
+const LEFT_NAME: Record<RowKind, string> = {
+  schedule: 'when it runs',
+  look_for: 'what to look for',
+  do: 'what it does',
+  where: 'where it goes',
+}
+const LEFT_CANT = 'a part I can’t do yet'
+const LEFT_CHECKING = 'my check of your new words'
+const LEFT_WHEN = 'when it runs'
+const LEFT_PLAN = 'the Planner to choose the agents'
+
+function leftOfRow(row: Row): string | null {
+  if (row.state === 'missing') return LEFT_NAME[row.kind]
+  if (row.state === 'cant_do') return LEFT_CANT
+  return row.state === 'checking' ? LEFT_CHECKING : null
+}
+
+/** What stops the plan from being asked for. The schedule is not one of them: the When section holds it, and the plan does not depend on it. */
+export const cardBlockers = (rows: readonly Row[]): Blocker[] => rowBlockers(rows.filter((row) => row.kind !== 'schedule'))
+
+/**
+ * What still stops Turn it on, in plain words. The card’s footer, the reason Turn it on is disabled and a draft’s reason on
+ * Workflows all read this one list, so no two places count differently. A time is never guessed: no time is something left.
+ */
+export function setupLeft(form: Form, plan: PlanView | null): string[] {
+  const left: string[] = []
+  const add = (words: string | null) => {
+    if (words !== null && !left.includes(words)) left.push(words)
+  }
+  for (const row of form.rows) if (row.kind !== 'schedule') add(leftOfRow(row))
+  if (Object.keys(whenProblems(form.when)).length > 0) add(LEFT_WHEN)
+  if (cardBlockers(form.rows).length > 0) return left
+  if (plan === null) add(LEFT_PLAN)
+  else if (plan.kind === 'cannot') add('a request I can do')
+  else if (plan.kind === 'trouble') add('the Planner to answer')
+  else {
+    if (plan.problems.length > 0) add('a fix for the new agent’s problems')
+    if (plan.notIncluded.length > 0) add('nothing left out for want of a tool')
+    for (const agent of plan.agents)
+      for (const input of agent.inputs) if (valueProblem(input.kind, valueOf(form, agent, input.name)) !== null) add(`the ${lowerFirst(input.name)}`)
+  }
+  return left
+}
+
+export const andList = (items: readonly string[]): string =>
+  items.length <= 2 ? items.join(' and ') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1] ?? ''}`
+
+export const leftWords = (left: readonly string[]): string =>
+  left.length === 0 ? 'Nothing is unclear. Turn it on when you’re ready.' : `${left.length === 1 ? '1 choice left' : `${left.length} choices left`}: ${andList(left)}.`
+
+export const CARD_STEP: Step = 2
+
+/** A set-up card’s starting state from the Planner’s rows. The schedule is read from its words only, so a time is never guessed. */
+export function cardFrom(name: string, rows: readonly { readonly kind: RowKind; readonly text: string; readonly state: RowState; readonly note: string | null }[], typed: string): Form {
+  const kept = rows.filter((row) => row.state !== 'cant_do')
+  const said = kept.find((row) => row.kind === 'schedule')?.text ?? ''
+  return {
+    ...EMPTY_FORM,
+    step: CARD_STEP,
+    text: typed,
+    name: name.trim(),
+    rows: kept.map((row) => ({ kind: row.kind, text: row.text, state: row.state, note: row.note, planner: null })),
+    when: readWhen(said),
+  }
+}
+
+export interface PartResult {
+  readonly state: 'fits' | 'cant_do'
+  readonly note?: string
+}
+
+/** The Planner’s check of one changed part. Anything but a clear “fits”, including no answer, leaves the part as one I can’t do. */
+export function afterPartCheck(form: Form, part: Part, result: PartResult | null): Form {
+  const why = result === null ? NOT_CHECKED : result.state === 'fits' ? null : (result.note ?? CANT_YET)
+  const rows = form.rows.map((row): Row =>
+    row.state === 'checking' && row.kind === part.kind && row.text === part.text ? { ...row, state: why === null ? 'edited' : 'cant_do', note: why } : row,
+  )
+  return { ...form, rows }
+}
+
+/** The person’s own words for a time, shown in the sentence and in When. Empty until the three fields hold a real time. */
+export function whenSaid(when: When): string | null {
+  return Object.keys(whenProblems(when)).length === 0 ? whenWords(when) : null
+}
+
+export const DEST_WORDS = 'one new Jira ticket'

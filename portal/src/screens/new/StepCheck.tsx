@@ -4,7 +4,7 @@ import type { ToolId, ToolView } from '../../api/types'
 import { Button, ButtonLink, buttonClassName } from '../../ui/Button'
 import { IconAlert, IconInfo, IconPencil } from '../../ui/icons'
 import { systemOf } from '../agents/agents'
-import { canDrop, nextBlockers, ROW_LABEL, valueKey, valueOf, valueProblem, type ChipState, type Form, type PlanAgent, type PlanView, type Redirect, type Row } from './draft'
+import { canDrop, nextBlockers, ROW_LABEL, valueKey, valueOf, valueProblem, type ChipState, type Form, type PlanAgent, type PlanView, type Redirect, type Row } from '../home/card'
 import { PlannerSays } from './StepDescribe'
 import styles from './NewWorkflow.module.css'
 

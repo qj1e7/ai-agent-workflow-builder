@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { unwrap } from './client'
 import { useApiClient, useCacheScope } from './context'
-import type { PlannerAnswerIn } from './types'
+import type { CheckPartIn, PlannerAnswerIn } from './types'
 
 export const CAPABILITIES_STALE_MS = 60_000
 
@@ -24,5 +24,13 @@ export function usePlannerAnswer() {
   const client = useApiClient()
   return useMutation({
     mutationFn: async (body: PlannerAnswerIn) => unwrap(await client.POST('/api/v1/planner/answer', { body })),
+  })
+}
+
+/** The Planner’s check of one part the person changed, so a change can’t bring in something the platform can’t do. */
+export function useCheckPart() {
+  const client = useApiClient()
+  return useMutation({
+    mutationFn: async (body: CheckPartIn) => unwrap(await client.POST('/api/v1/planner/check-part', { body })),
   })
 }
