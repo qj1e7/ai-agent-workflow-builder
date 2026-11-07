@@ -7,6 +7,7 @@ from platform_api.contracts.cards_stories import card_fixtures
 from platform_api.contracts.home_stories import home_fixtures
 from platform_api.contracts.lifecycle_stories import lifecycle_fixtures
 from platform_api.contracts.people_stories import people_fixtures
+from platform_api.contracts.planner_stories import planner_fixtures
 from platform_api.contracts.settings_stories import settings_fixtures
 from platform_api.contracts.stories import fixtures
 from platform_api.contracts.watchlist_run import watchlist_run_fixtures
@@ -39,6 +40,7 @@ OWNED_FIXTURE_DIRS = (
     "watchlist",
     "cards",
     "people",
+    "planner",
 )
 
 
@@ -73,6 +75,7 @@ def write_all(root: Path) -> list[Path]:
         **lifecycle_fixtures(),
         **people_fixtures(),
         **home_fixtures(),
+        **planner_fixtures(root),
     }.items():
         path = fixture_root / relative
         _write_json(path, _dump(value))

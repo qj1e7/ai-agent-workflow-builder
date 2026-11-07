@@ -1,6 +1,19 @@
 {
   "components": {
     "schemas": {
+      "AbilitiesReply": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "const": "abilities",
+            "default": "abilities",
+            "title": "Answer",
+            "type": "string"
+          }
+        },
+        "title": "AbilitiesReply",
+        "type": "object"
+      },
       "About": {
         "additionalProperties": false,
         "properties": {
@@ -1220,6 +1233,51 @@
         "title": "AgentStepStartedEvent",
         "type": "object"
       },
+      "AnswerIn": {
+        "additionalProperties": false,
+        "properties": {
+          "intent": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Intent"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A chip the person tapped. It never asks the model. Send this or text."
+          },
+          "text": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the person typed. The model reads it. Send this or an intent.",
+            "title": "Text"
+          },
+          "use_case_id": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "With the why_stopped intent, the workflow the person asks about.",
+            "title": "Use Case Id"
+          }
+        },
+        "title": "AnswerIn",
+        "type": "object"
+      },
       "Answers": {
         "additionalProperties": false,
         "properties": {
@@ -2058,6 +2116,275 @@
         "title": "CannotDo",
         "type": "object"
       },
+      "CantReply": {
+        "additionalProperties": false,
+        "properties": {
+          "alternative": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "setup_card": "#/components/schemas/SetupCardReply",
+                    "watchlist": "#/components/schemas/WatchlistReply"
+                  },
+                  "propertyName": "answer"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/SetupCardReply"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WatchlistReply"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alternative"
+          },
+          "answer": {
+            "const": "cant",
+            "default": "cant",
+            "title": "Answer",
+            "type": "string"
+          },
+          "cant": {
+            "items": {
+              "$ref": "#/components/schemas/CantRowView"
+            },
+            "title": "Cant",
+            "type": "array"
+          }
+        },
+        "required": [
+          "cant",
+          "alternative"
+        ],
+        "title": "CantReply",
+        "type": "object"
+      },
+      "CantRowView": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/RowKind"
+          },
+          "needs": {
+            "description": "new_tool: the platform already reaches the system, so the team decides on a tool. new_system: it names a system or source the platform doesn't reach, or none.",
+            "enum": [
+              "new_tool",
+              "new_system"
+            ],
+            "title": "Needs",
+            "type": "string"
+          },
+          "note": {
+            "description": "Why the platform can't do it, in plain words.",
+            "title": "Note",
+            "type": "string"
+          },
+          "system": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "System"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "text",
+          "note",
+          "needs",
+          "system"
+        ],
+        "title": "CantRowView",
+        "type": "object"
+      },
+      "CapabilitiesView": {
+        "additionalProperties": false,
+        "properties": {
+          "capabilities": {
+            "items": {
+              "$ref": "#/components/schemas/CapabilityView"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "examples": {
+            "items": {
+              "$ref": "#/components/schemas/ExampleView"
+            },
+            "title": "Examples",
+            "type": "array"
+          }
+        },
+        "required": [
+          "capabilities",
+          "examples"
+        ],
+        "title": "CapabilitiesView",
+        "type": "object"
+      },
+      "CapabilityState": {
+        "enum": [
+          "ready",
+          "needs_setup",
+          "down",
+          "planned",
+          "unsupported"
+        ],
+        "type": "string"
+      },
+      "CapabilityView": {
+        "additionalProperties": false,
+        "properties": {
+          "agents": {
+            "description": "The ids of the agent cards that use its tools.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Agents",
+            "type": "array"
+          },
+          "cant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the platform can't do, when it is not ready.",
+            "title": "Cant"
+          },
+          "connection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConnectionId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What to do about a connection that needs setup or is down.",
+            "title": "Fix"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "read",
+              "write",
+              "notify",
+              "none"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "last_ok_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When its connection last worked.",
+            "title": "Last Ok At"
+          },
+          "needs_model": {
+            "title": "Needs Model",
+            "type": "boolean"
+          },
+          "plain": {
+            "title": "Plain",
+            "type": "string"
+          },
+          "platform": {
+            "description": "A duty of the platform itself, with no tool.",
+            "title": "Platform",
+            "type": "boolean"
+          },
+          "state": {
+            "$ref": "#/components/schemas/CapabilityState",
+            "description": "ready: it works now. needs_setup: a connection it uses is not set up. down: a connection it uses is not working right now. planned: not built yet. unsupported: the team has decided against it."
+          },
+          "system": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "System"
+          },
+          "tools": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tools",
+            "type": "array"
+          },
+          "why": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it is not ready: the registry's words for a planned or unsupported entry, the connection's problem for needs_setup and down. Null when ready.",
+            "title": "Why"
+          }
+        },
+        "required": [
+          "id",
+          "plain",
+          "kind",
+          "system",
+          "state",
+          "cant",
+          "why",
+          "fix",
+          "connection",
+          "last_ok_at",
+          "needs_model",
+          "platform",
+          "tools",
+          "agents"
+        ],
+        "title": "CapabilityView",
+        "type": "object"
+      },
       "CardApprovalView": {
         "additionalProperties": false,
         "properties": {
@@ -2459,6 +2786,54 @@
           "title"
         ],
         "title": "ChangeLine",
+        "type": "object"
+      },
+      "CheckPartIn": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/RowKind"
+          },
+          "text": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "text"
+        ],
+        "title": "CheckPartIn",
+        "type": "object"
+      },
+      "CheckWorkflowsReply": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "const": "check_workflows",
+            "default": "check_workflows",
+            "title": "Answer",
+            "type": "string"
+          },
+          "use_case_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The workflow the request names, when one name matches. Null for all.",
+            "title": "Use Case Id"
+          }
+        },
+        "required": [
+          "use_case_id"
+        ],
+        "title": "CheckWorkflowsReply",
         "type": "object"
       },
       "ClockTime": {
@@ -3538,6 +3913,38 @@
         "title": "EventPage",
         "type": "object"
       },
+      "ExampleView": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "automate",
+              "monitor",
+              "learn"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "needs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Needs",
+            "type": "array"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "kind",
+          "needs"
+        ],
+        "title": "ExampleView",
+        "type": "object"
+      },
       "FailedView": {
         "additionalProperties": false,
         "properties": {
@@ -3641,6 +4048,14 @@
           "working",
           "proposed",
           "acting"
+        ],
+        "type": "string"
+      },
+      "FallbackWhy": {
+        "enum": [
+          "no_model",
+          "too_slow",
+          "trouble"
         ],
         "type": "string"
       },
@@ -3933,11 +4348,34 @@
         "title": "HomeOut",
         "type": "object"
       },
+      "IdeasReply": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "const": "ideas",
+            "default": "ideas",
+            "title": "Answer",
+            "type": "string"
+          }
+        },
+        "title": "IdeasReply",
+        "type": "object"
+      },
       "InputKind": {
         "enum": [
           "github_repo",
           "jira_project",
           "text"
+        ],
+        "type": "string"
+      },
+      "Intent": {
+        "enum": [
+          "check_workflows",
+          "needs_me",
+          "abilities",
+          "setup_ideas",
+          "why_stopped"
         ],
         "type": "string"
       },
@@ -4066,6 +4504,25 @@
           "attempt"
         ],
         "title": "LegDispatchedData",
+        "type": "object"
+      },
+      "ListedSoftware": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "software_id": {
+            "title": "Software Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "software_id",
+          "name"
+        ],
+        "title": "ListedSoftware",
         "type": "object"
       },
       "Me": {
@@ -4426,6 +4883,19 @@
         "title": "ModelTrouble",
         "type": "object"
       },
+      "NeedsMeReply": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "const": "needs_me",
+            "default": "needs_me",
+            "title": "Answer",
+            "type": "string"
+          }
+        },
+        "title": "NeedsMeReply",
+        "type": "object"
+      },
       "NewAgent": {
         "additionalProperties": false,
         "properties": {
@@ -4528,6 +4998,39 @@
         "minLength": 1,
         "type": "string"
       },
+      "OfflineReply": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "const": "offline",
+            "default": "offline",
+            "title": "Answer",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "starters": {
+            "items": {
+              "$ref": "#/components/schemas/StarterView"
+            },
+            "title": "Starters",
+            "type": "array"
+          },
+          "why": {
+            "$ref": "#/components/schemas/FallbackWhy",
+            "description": "no_model: none is connected. too_slow: it took too long. trouble: it failed or gave an answer the platform could not use."
+          }
+        },
+        "required": [
+          "why",
+          "message",
+          "starters"
+        ],
+        "title": "OfflineReply",
+        "type": "object"
+      },
       "OpenUrl": {
         "additionalProperties": false,
         "properties": {
@@ -4589,6 +5092,124 @@
           "example"
         ],
         "title": "ParamSpec",
+        "type": "object"
+      },
+      "PartCheckCantDo": {
+        "additionalProperties": false,
+        "properties": {
+          "needs": {
+            "enum": [
+              "new_tool",
+              "new_system"
+            ],
+            "title": "Needs",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "state": {
+            "const": "cant_do",
+            "default": "cant_do",
+            "title": "State",
+            "type": "string"
+          },
+          "system": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "System"
+          }
+        },
+        "required": [
+          "note",
+          "needs",
+          "system"
+        ],
+        "title": "PartCheckCantDo",
+        "type": "object"
+      },
+      "PartCheckFits": {
+        "additionalProperties": false,
+        "properties": {
+          "state": {
+            "const": "fits",
+            "default": "fits",
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "title": "PartCheckFits",
+        "type": "object"
+      },
+      "PartChecked": {
+        "discriminator": {
+          "mapping": {
+            "cant_do": "#/components/schemas/PartCheckCantDo",
+            "fits": "#/components/schemas/PartCheckFits"
+          },
+          "propertyName": "state"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/PartCheckFits"
+          },
+          {
+            "$ref": "#/components/schemas/PartCheckCantDo"
+          }
+        ]
+      },
+      "PartReply": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "const": "part",
+            "default": "part",
+            "title": "Answer",
+            "type": "string"
+          },
+          "cant": {
+            "items": {
+              "$ref": "#/components/schemas/CantRowView"
+            },
+            "title": "Cant",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/UnderstoodRowView"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "similar": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimilarWorkflow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "rows",
+          "cant",
+          "similar"
+        ],
+        "title": "PartReply",
         "type": "object"
       },
       "PendingApproverOut": {
@@ -4953,6 +5574,63 @@
         ],
         "title": "PlannedAgent",
         "type": "object"
+      },
+      "PlannerReply": {
+        "discriminator": {
+          "mapping": {
+            "abilities": "#/components/schemas/AbilitiesReply",
+            "cant": "#/components/schemas/CantReply",
+            "check_workflows": "#/components/schemas/CheckWorkflowsReply",
+            "ideas": "#/components/schemas/IdeasReply",
+            "needs_me": "#/components/schemas/NeedsMeReply",
+            "offline": "#/components/schemas/OfflineReply",
+            "part": "#/components/schemas/PartReply",
+            "refused": "#/components/schemas/RefusedReply",
+            "setup_card": "#/components/schemas/SetupCardReply",
+            "watchlist": "#/components/schemas/WatchlistReply",
+            "which_software": "#/components/schemas/WhichSoftwareReply",
+            "why_stopped": "#/components/schemas/WhyStoppedReply"
+          },
+          "propertyName": "answer"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/SetupCardReply"
+          },
+          {
+            "$ref": "#/components/schemas/PartReply"
+          },
+          {
+            "$ref": "#/components/schemas/CantReply"
+          },
+          {
+            "$ref": "#/components/schemas/WatchlistReply"
+          },
+          {
+            "$ref": "#/components/schemas/WhichSoftwareReply"
+          },
+          {
+            "$ref": "#/components/schemas/RefusedReply"
+          },
+          {
+            "$ref": "#/components/schemas/AbilitiesReply"
+          },
+          {
+            "$ref": "#/components/schemas/IdeasReply"
+          },
+          {
+            "$ref": "#/components/schemas/CheckWorkflowsReply"
+          },
+          {
+            "$ref": "#/components/schemas/WhyStoppedReply"
+          },
+          {
+            "$ref": "#/components/schemas/NeedsMeReply"
+          },
+          {
+            "$ref": "#/components/schemas/OfflineReply"
+          }
+        ]
       },
       "PracticeTicket": {
         "additionalProperties": false,
@@ -5370,6 +6048,37 @@
           "message"
         ],
         "title": "RefusalOut",
+        "type": "object"
+      },
+      "RefusedReply": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "const": "refused",
+            "default": "refused",
+            "title": "Answer",
+            "type": "string"
+          },
+          "reason": {
+            "const": "skip_approval",
+            "title": "Reason",
+            "type": "string"
+          },
+          "rest": {
+            "title": "Rest",
+            "type": "string"
+          },
+          "said": {
+            "title": "Said",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "said",
+          "rest"
+        ],
+        "title": "RefusedReply",
         "type": "object"
       },
       "RejectedView": {
@@ -6398,6 +7107,65 @@
           "changes"
         ],
         "title": "SettingsHistoryOut",
+        "type": "object"
+      },
+      "SetupCardReply": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "const": "setup_card",
+            "default": "setup_card",
+            "title": "Answer",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/UnderstoodRowView"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "similar": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimilarWorkflow"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A workflow of the team's with the same name, when there is one."
+          }
+        },
+        "required": [
+          "name",
+          "rows",
+          "similar"
+        ],
+        "title": "SetupCardReply",
+        "type": "object"
+      },
+      "SimilarWorkflow": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "use_case_id",
+          "name"
+        ],
+        "title": "SimilarWorkflow",
         "type": "object"
       },
       "SoftwareName": {
@@ -8248,6 +9016,69 @@
         "title": "WatchlistRedirect",
         "type": "object"
       },
+      "WatchlistReply": {
+        "additionalProperties": false,
+        "properties": {
+          "already_listed": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ListedSoftware"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The software on the Software watchlist that has this name, when it is already there."
+          },
+          "also": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SetupCardReply"
+              },
+              {
+                "$ref": "#/components/schemas/PartReply"
+              },
+              {
+                "$ref": "#/components/schemas/CantReply"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The rest of a request that also asks for a workflow.",
+            "title": "Also"
+          },
+          "answer": {
+            "const": "watchlist",
+            "default": "watchlist",
+            "title": "Answer",
+            "type": "string"
+          },
+          "software": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Software"
+          },
+          "word": {
+            "title": "Word",
+            "type": "string"
+          }
+        },
+        "required": [
+          "word",
+          "software",
+          "already_listed",
+          "also"
+        ],
+        "title": "WatchlistReply",
+        "type": "object"
+      },
       "WatchlistView": {
         "additionalProperties": false,
         "properties": {
@@ -8315,6 +9146,53 @@
           "bolder"
         ],
         "type": "string"
+      },
+      "WhichSoftwareReply": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "const": "which_software",
+            "default": "which_software",
+            "title": "Answer",
+            "type": "string"
+          },
+          "word": {
+            "title": "Word",
+            "type": "string"
+          }
+        },
+        "required": [
+          "word"
+        ],
+        "title": "WhichSoftwareReply",
+        "type": "object"
+      },
+      "WhyStoppedReply": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "const": "why_stopped",
+            "default": "why_stopped",
+            "title": "Answer",
+            "type": "string"
+          },
+          "use_case_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Use Case Id"
+          }
+        },
+        "required": [
+          "use_case_id"
+        ],
+        "title": "WhyStoppedReply",
+        "type": "object"
       },
       "WireVerdict": {
         "enum": [
@@ -9634,6 +10512,66 @@
         ]
       }
     },
+    "/api/v1/capabilities": {
+      "get": {
+        "description": "What the platform can do, from the agent runtime's registry. Each capability has a state that code works out from the registry and the connections it uses, so no screen decides it for itself, and the agents that use it. The last good registry is served while the runtime is waking up.",
+        "operationId": "capabilities_api_v1_capabilities_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilitiesView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Signed in, but not on the People list. Ask an Operator to add you"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The agent runtime did not answer. Try again in a minute."
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Capabilities",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
     "/api/v1/confirmations": {
       "get": {
         "description": "The setup changes waiting for a second person, and whether you may decide each.",
@@ -10886,6 +11824,176 @@
         "summary": "Set Operator",
         "tags": [
           "people"
+        ]
+      }
+    },
+    "/api/v1/planner/answer": {
+      "post": {
+        "description": "The Planner's one answer to what an Operator types or taps on Home. A typed request is read by the AI model and answered as a set-up card, a part, a can't, a watchlist row, a question about software, a refusal, or one of the question kinds the Portal fills from its own routes. An intent chip never asks the model. Without a model, or after 10 seconds, or when the answer cannot be used, it answers `offline` with the starter workflows. Nothing is saved or written.",
+        "operationId": "answer_api_v1_planner_answer_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlannerReply"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such workflow"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Answer",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/planner/check-part": {
+      "post": {
+        "description": "Checks one part the person changed, by code only, through the agent runtime's abilities check. No AI model is asked.",
+        "operationId": "check_part_api_v1_planner_check_part_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckPartIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartChecked"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The agent runtime did not answer. Try again in a minute."
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Check Part",
+        "tags": [
+          "builder"
         ]
       }
     },

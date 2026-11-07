@@ -69,6 +69,59 @@ def test_without_a_model_nothing_plans_or_runs(api: Api) -> None:
     assert stopped.json()["detail"] == "Connect an AI model in Settings to run agents."
 
 
+def test_without_a_model_the_planner_answers_offline_and_the_chips_still_work(api: Api) -> None:
+    api.turn_model_off()
+    offline = api.post(
+        "alice", "/api/v1/planner/answer", {"text": SUMMARY_TASK}, expect=(200,)
+    ).json()
+    assert (offline["answer"], offline["why"]) == ("offline", "no_model")
+    assert len(offline["starters"]) == 3
+    for intent in ("abilities", "needs_me", "setup_ideas"):
+        chip = api.post("alice", "/api/v1/planner/answer", {"intent": intent}, expect=(200,))
+        assert chip.json()["answer"] in ("abilities", "needs_me", "ideas")
+    api.post("bob", "/api/v1/planner/answer", {"intent": "abilities"}, expect=(403,))
+
+
+def test_one_changed_part_is_checked_by_code_and_the_capabilities_list_what_works(
+    api: Api,
+) -> None:
+    api.turn_model_off()
+    cant = api.post(
+        "alice",
+        "/api/v1/planner/check-part",
+        {"kind": "do", "text": "Email the list to the team"},
+        expect=(200,),
+    ).json()
+    assert (cant["state"], cant["needs"], cant["system"]) == ("cant_do", "new_system", "email")
+    fits = api.post(
+        "alice",
+        "/api/v1/planner/check-part",
+        {"kind": "where", "text": "In the MOCK project"},
+        expect=(200,),
+    ).json()
+    assert fits == {"state": "fits"}
+    listed = {c["id"]: c for c in api.get("bob", "/api/v1/capabilities")["capabilities"]}
+    assert listed["jira.create"]["state"] in ("ready", "needs_setup")
+    assert listed["teams.post"]["state"] == "planned"
+    assert "approval requests only" not in listed["teams.post"]["why"]
+    assert listed["email.send"]["state"] == "unsupported"
+    assert "crd_version_checker" in listed["github.releases"]["agents"]
+
+
+def test_a_typed_request_is_answered_by_the_model_and_saves_nothing(
+    api: Api, mock_model: None
+) -> None:
+    before = api.get("alice", "/api/v1/use-cases")["use_cases"]
+    answer = api.post("alice", "/api/v1/planner/answer", {"text": STALE_TASK}, expect=(200,)).json()
+    assert answer["answer"] in ("setup_card", "part")
+    assert [r["kind"] for r in answer["rows"]] == ["schedule", "look_for", "do", "where"]
+    asked = api.post(
+        "alice", "/api/v1/planner/answer", {"text": "What can you do?"}, expect=(200,)
+    ).json()
+    assert asked["answer"] == "abilities"
+    assert api.get("alice", "/api/v1/use-cases")["use_cases"] == before
+
+
 def test_a_drafted_agent_is_saved_then_run_approved_and_written(api: Api, mock_model: None) -> None:
     plan = api.post("alice", "/api/v1/builder/plan", {"task": SUMMARY_TASK}, expect=(200,)).json()
     assert plan["decision"] == "new_agent"

@@ -7,7 +7,7 @@ import httpx
 from fastapi import FastAPI
 
 from platform_api.auth import DEV_PEOPLE, DevAuth, OidcAuth
-from platform_api.builder import Builder, Home, TeamRequests, Watchlist
+from platform_api.builder import Builder, Home, PlannerFront, TeamRequests, Watchlist
 from platform_api.db import Database
 from platform_api.monitoring import ActivityLog, Copier, CosmosEvents, callback_for
 from platform_api.orchestration.agents import HttpAgentRuntime
@@ -38,7 +38,12 @@ from platform_api.orchestration.jira import JiraWriteConnector
 from platform_api.orchestration.jira_rest import JiraAuth, JiraRestAdapter
 from platform_api.orchestration.model_settings import KeyBox, ModelSettings
 from platform_api.orchestration.people_store import People
-from platform_api.orchestration.planning import CardPlanning, ProjectFinding
+from platform_api.orchestration.planning import (
+    CapabilityRegistry,
+    CardPlanning,
+    PlannerAnswers,
+    ProjectFinding,
+)
 from platform_api.orchestration.runs import Leg
 from platform_api.orchestration.schedule_store import ScheduleBook, ScheduleTicker
 from platform_api.orchestration.service import Orchestrator
@@ -59,6 +64,7 @@ class Services:
     activity_log: ActivityLog
     orchestrator: Orchestrator
     builder: Builder
+    planner_front: PlannerFront
     home: Home
     watchlist: Watchlist
     team_requests: TeamRequests
@@ -115,6 +121,7 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.copier = services.copier
     app.state.orchestrator = services.orchestrator
     app.state.builder = services.builder
+    app.state.planner_front = services.planner_front
     app.state.home = services.home
     app.state.watchlist = services.watchlist
     app.state.team_requests = services.team_requests
@@ -285,6 +292,13 @@ async def build(settings: Settings) -> Services:
         activity_log=activity,
         orchestrator=orchestrator,
         builder=builder,
+        planner_front=PlannerFront(
+            PlannerAnswers(db, model_settings, agents),
+            builder,
+            watchlist,
+            CapabilityRegistry(agents),
+            connections,
+        ),
         home=Home(builder, orchestrator, people, team_requests, connections, watchlist),
         watchlist=watchlist,
         team_requests=team_requests,

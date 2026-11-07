@@ -11,7 +11,13 @@ from fastapi.responses import JSONResponse
 
 from platform_api import auth, wiring
 from platform_api.body_guard import RefuseDeepJson, refuse_invalid_request
-from platform_api.builder import drafts_http, lifecycle_http, team_requests_http, watchlist_http
+from platform_api.builder import (
+    drafts_http,
+    lifecycle_http,
+    planner_http,
+    team_requests_http,
+    watchlist_http,
+)
 from platform_api.builder import http as builder_http
 from platform_api.db import Database
 from platform_api.monitoring import Copier
@@ -95,6 +101,7 @@ def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
     app.include_router(builder_http.router)
     app.include_router(lifecycle_http.router)
     app.include_router(drafts_http.router)
+    app.include_router(planner_http.router)
     app.include_router(watchlist_http.router)
     app.include_router(team_requests_http.router)
     app.include_router(orchestration_http.router)

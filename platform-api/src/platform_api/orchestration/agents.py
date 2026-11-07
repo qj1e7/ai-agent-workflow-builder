@@ -543,6 +543,27 @@ type AnswerResult = Annotated[Answered | ModelProblem, Field(discriminator="stat
 answer_result_adapter: TypeAdapter[AnswerResult] = TypeAdapter(AnswerResult)
 
 
+class CheckPartRequest(WireModel):
+    kind: RowKind
+    text: str = Field(min_length=1, max_length=200)
+
+
+class PartFits(WireModel):
+    state: Literal["fits"] = "fits"
+
+
+class PartCantDo(WireModel):
+    state: Literal["cant_do"] = "cant_do"
+    note: str = Field(max_length=300)
+    needs: CantNeed
+    system: str | None = Field(default=None, max_length=40)
+
+
+type CheckPartResult = Annotated[PartFits | PartCantDo, Field(discriminator="state")]
+
+check_part_result_adapter: TypeAdapter[CheckPartResult] = TypeAdapter(CheckPartResult)
+
+
 class AgentCard(WireModel):
     id: str
     display: str
@@ -630,6 +651,34 @@ class HttpAgentRuntime:
         self, request: FindSoftwareRequest
     ) -> FindSoftwareResult | AgentUnavailable | AgentRejected:
         return await self._model_call("/v1/software/find", request, find_software_result_adapter)
+
+    async def answer(
+        self, request: AnswerRequest
+    ) -> AnswerResult | AgentUnavailable | AgentRejected:
+        return await self._model_call("/v1/planner/answer", request, answer_result_adapter)
+
+    async def check_part(
+        self, request: CheckPartRequest
+    ) -> CheckPartResult | AgentUnavailable | AgentRejected:
+        return await self._model_call("/v1/planner/check-part", request, check_part_result_adapter)
+
+    async def capabilities(self) -> CapabilityList | AgentUnavailable | AgentRejected:
+        try:
+            response = await self._client.get(
+                f"{self._base_url}/v1/capabilities",
+                headers={AGENT_KEY_HEADER: self._api_key},
+                timeout=AGENT_TIMEOUT_SECONDS,
+            )
+        except httpx.HTTPError as error:
+            return AgentUnavailable(f"The agent runtime did not answer: {type(error).__name__}")
+        if response.status_code >= 500:
+            return AgentUnavailable(f"The agent runtime answered {response.status_code}")
+        if response.status_code >= 400:
+            return AgentRejected(f"The agent runtime refused the request ({response.status_code})")
+        try:
+            return CapabilityList.model_validate_json(response.content)
+        except ValueError:
+            return AgentRejected("The agent runtime's answer did not parse")
 
     async def check_github(self) -> GitHubCheckResult | AgentUnavailable | AgentRejected:
         return await self._model_call(
