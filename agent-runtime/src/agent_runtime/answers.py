@@ -226,14 +226,15 @@ class _Skip:
 def _skip_verdict(skip: SkipRead, text: str) -> _Skip:
     """An Approver's or anyone else's yes is refused, naming the request's own words when the
     model quoted them, else the request. The staff member's own attention is theirs to skip only
-    when the quote is in the request and names them and nobody else: then its words are
-    covered. A quote that names someone else is that someone's yes skipped. A quote that names
-    nobody, or none in the request, covers nothing and is refused unless the coverage check
-    finds the words it meant."""
+    when the quote is in the request and names them and nobody else: then its words are covered,
+    whichever answer the model gave, because the Operator is never the Approver and the quote
+    has no yes and no other person in it ("no need to notify me"). A quote that names someone
+    else is that someone's yes skipped. A quote that names nobody, or none in the request,
+    covers nothing and is refused unless the coverage check finds the words it meant."""
     if skip.whose == "nobody":
         return _Skip()
     quote = _theirs(text, skip.said)
-    if skip.whose != "only_me":
+    if skip.whose != "only_me" and not (quote is not None and speaks_only_of_self(quote)):
         return _Skip(refused=_refused(text, quote) if quote is not None else _refused(text, text))
     if quote is None:
         return _Skip()

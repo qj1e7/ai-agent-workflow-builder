@@ -675,6 +675,23 @@ def test_an_only_me_quote_that_names_someone_else_is_that_someones_yes_skipped()
     )
 
 
+def test_the_models_approver_answer_with_a_quote_naming_only_the_staff_member_is_their_own():
+    task = (
+        "Every Monday, list open bug tickets in MOCK and create one ticket that lists them, "
+        "no need to notify me"
+    )
+    answer = answer_of(
+        read(
+            skips_the_yes=SkipRead(whose="an_approver_or_anyone_else", said="no need to notify me"),
+            schedule="Every Monday",
+            search=search(project="MOCK", issue_types=["bug"], status="open", said="open bug"),
+            ticket=LISTS,
+        ),
+        task,
+    )
+    assert isinstance(answer, SetupCardAnswer)
+
+
 def test_the_models_approver_answer_refuses_with_its_quote_or_the_request():
     task = (
         "Every Monday, list open bug tickets in MOCK and create one ticket that lists them, "
