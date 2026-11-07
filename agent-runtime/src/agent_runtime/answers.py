@@ -1,10 +1,4 @@
-"""The Planner's one answer for each request typed on Home (ADR 0037).
-
-The model reads the request once, as a `TaskRead`. Code then decides which answer applies, in
-this order: refused, watchlist, a question about the person's workflows, a set-up card or a part
-or a can't from the rows, abilities. Every row the model accepted is held to the tools, every
-key word it read is checked against the request, and every alternative it proposes is checked
-the same way. The reply sentences are fixed text in the Portal, filled in from the answer."""
+"""The Planner's one answer for each request typed on Home (ADR 0037)."""
 
 import logging
 import re
@@ -14,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from agent_runtime.abilities import (
     VULNERABILITIES_PLANNED,
-    key_words,
+    guessable_words,
     need_of,
     other_systems,
     release_word_in,
@@ -55,6 +49,7 @@ from agent_runtime.planner import (
     missing_row,
     plain,
     row_of,
+    said_in,
     task_form_of,
     visible_words,
     whole_word_of,
@@ -76,7 +71,6 @@ NOT_SOFTWARE: Final = words(
     "system systems service services component components version versions release releases "
     "code"
 )
-"""Common words the model names as software, which no watch can be made for."""
 
 type AsksAbout = Literal["none", "my_workflows", "why_stopped", "needs_me", "abilities"]
 
@@ -192,18 +186,11 @@ class TaskRead(BaseModel):
     )
 
 
-def _in_request(word: str, request: str) -> bool:
-    edge = r"\d" if word.isdigit() else r"\w"
-    return re.search(rf"(?<!{edge}){re.escape(word)}(?!{edge})", request, re.IGNORECASE) is not None
-
-
-def _checked(answer: AnswerRow, request: str) -> UnderstoodRow:
-    """The row as the Operator sees it. A part the model called understood whose key words
-    (numbers, keys, other systems) are not in the request is a guess, so it is changed."""
+def _with_guess_marked(answer: AnswerRow, request: str) -> UnderstoodRow:
     row = row_of(answer)
     if row.state != "understood":
         return row
-    if all(_in_request(word, request) for word in key_words(row.text)):
+    if all(said_in(word, request) for word in guessable_words(row.text)):
         return row
     return row.model_copy(update={"state": "changed", "note": FILLED_IN})
 
@@ -220,25 +207,13 @@ def _name_of(said: str | None, request: str) -> str:
 
 
 def _offered(answers: list[AnswerRow], request: str) -> list[UnderstoodRow] | None:
-    """The card the Planner can offer: the request with each part it can't do swapped for the
-    model's alternative, held to the tools. A place or a time it can't do is left for the person
-    to choose. None when a part to look for or do has no alternative, an alternative fails the
-    check too, or nothing is left to look for or do."""
     rows: list[UnderstoodRow] = []
     for answer in answers:
-        row = _checked(answer, request)
-        if row.state != "cant_do":
-            rows.append(row)
-            continue
-        instead = plain(answer.alternative, TEXT_LIMIT)
-        if not instead and answer.kind in ("look_for", "do"):
+        row = _with_guess_marked(answer, request)
+        instead = row if row.state != "cant_do" else _instead_of(answer, row)
+        if instead is None:
             return None
-        if not instead:
-            rows.append(missing_row(answer.kind, CHOOSE_INSTEAD))
-            continue
-        note = plain(SUGGESTED.format(row.text or answer.kind.replace("_", " ")), 300)
-        suggested = UnderstoodRow(kind=answer.kind, text=instead, state="changed", note=note)
-        rows.append(held_to_the_tools(suggested))
+        rows.append(instead)
     arranged = arrange(rows)
     if any(row.state == "cant_do" for row in arranged):
         return None
@@ -247,14 +222,26 @@ def _offered(answers: list[AnswerRow], request: str) -> list[UnderstoodRow] | No
     return arranged
 
 
+def _instead_of(answer: AnswerRow, row: UnderstoodRow) -> UnderstoodRow | None:
+    """The model's alternative for a part it can't do, held to the tools. A place or a time with
+    no alternative is left for the person to choose. A part to look for or do with none means
+    there is no card to offer."""
+    instead = plain(answer.alternative, TEXT_LIMIT)
+    if not instead and answer.kind in ("look_for", "do"):
+        return None
+    if not instead:
+        return missing_row(answer.kind, CHOOSE_INSTEAD)
+    note = plain(SUGGESTED.format(row.text or answer.kind.replace("_", " ")), 300)
+    return held_to_the_tools(
+        UnderstoodRow(kind=answer.kind, text=instead, state="changed", note=note)
+    )
+
+
 def _said(row: UnderstoodRow) -> str:
-    """The words that say what the part is: its text, or its note when the model left the text
-    empty, as it does for a part it can't do at all."""
     return row.text or row.note or ""
 
 
 def _source_of(cant_rows: list[UnderstoodRow]) -> str | None:
-    """The system a part to look for reads from, when the platform can't read it."""
     for row in cant_rows:
         if row.kind == "look_for":
             need = need_of(row.kind, _said(row))
@@ -274,15 +261,12 @@ def _asks_for_vulnerabilities(cant: list[CantRow]) -> bool:
 
 
 def _is_part(rows: list[UnderstoodRow], cant: list[CantRow]) -> bool:
-    """A part answer: the platform can find what they asked for, and each part it can't do is
-    a field on Jira tickets, which a new tool could set. Any other can't do part is a can't."""
     finds = any(r.kind == "look_for" and r.state in ACCEPTED for r in rows)
     fields = all(c.needs == "new_tool" and sets_a_ticket_field(c.text or c.note) for c in cant)
     return finds and fields
 
 
 def _software_of(read: TaskRead, request: str) -> str | None:
-    """The software the model named, as the request wrote it, unless it is a common word."""
     software = whole_word_of(request, read.software)
     if software is None or software.casefold() in NOT_SOFTWARE:
         return None
@@ -290,8 +274,6 @@ def _software_of(read: TaskRead, request: str) -> str | None:
 
 
 def _watch_instead(cant: list[CantRow], read: TaskRead, request: str) -> WatchlistAnswer | None:
-    """Watching software for new releases instead: for a vulnerability check, only when the
-    software is named; for any other release request, even when it isn't."""
     software = _software_of(read, request)
     if _asks_for_vulnerabilities(cant):
         asked = " ".join(f"{c.text} {c.note}" for c in cant)
@@ -306,7 +288,7 @@ def _watch_instead(cant: list[CantRow], read: TaskRead, request: str) -> Watchli
 def _from_rows(read: TaskRead, request: str) -> PlannerAnswer:
     if not read.rows:
         return AbilitiesAnswer()
-    rows = arrange([_checked(answer, request) for answer in read.rows])
+    rows = arrange([_with_guess_marked(answer, request) for answer in read.rows])
     if all(row.state == "missing" for row in rows):
         return AbilitiesAnswer()
     cant_rows = [row for row in rows if row.state == "cant_do"]
@@ -337,10 +319,6 @@ def _also(read: TaskRead, request: str) -> SetupCardAnswer | PartAnswer | CantAn
 
 
 def _watchlist(read: TaskRead, request: str) -> PlannerAnswer | None:
-    """The answer for a request the model sent to the watchlist. The word is the request's own:
-    the one the model named, or the request's release or vulnerability word when the model
-    named something else, such as the verb. None when the request holds no such word, so the
-    rows decide instead."""
     word = (
         task_form_of(request, read.watchlist_word)
         or vulnerability_phrase(request)
@@ -385,8 +363,6 @@ def _about(read: TaskRead, request: str) -> PlannerAnswer:
 
 
 def answer_of(read: TaskRead, request: str) -> PlannerAnswer | None:
-    """Which answer applies, decided by code from the model's reading. None when the reading
-    does not hold together: a watchlist word the request lacks and no rows."""
     text = visible_words(request)
     refused = _refusal(text)
     if refused is not None:
@@ -403,8 +379,6 @@ def answer_of(read: TaskRead, request: str) -> PlannerAnswer | None:
 
 
 def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
-    """The Planner answers one request. A request to skip a yes is refused before any model
-    call. Nothing is saved or written."""
     refused = _refusal(visible_words(request.task))
     if refused is not None:
         return Answered(answer=refused)

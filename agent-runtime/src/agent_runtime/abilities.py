@@ -50,8 +50,7 @@ VULNERABILITY_ROOTS: Final = dict.fromkeys(
     ("vulnerability", "vulnerabilities", "vulnerable"), "vulnerability"
 )
 VULNERABILITIES: Final = frozenset(VULNERABILITY_ROOTS) | words("cve cves nvd advisory advisories")
-SECURITY_NEXT: Final = words("fix fixes patch patches alert alerts bulletin bulletins")
-"""After "security", these make a vulnerability check too, as in "security patches"."""
+SECURITY_PHRASE_ENDS: Final = words("fix fixes patch patches alert alerts bulletin bulletins")
 CVE_ID: Final = re.compile(r"cve-\d{4}-\d+")
 VULNERABILITIES_PLANNED: Final = "I can't check for known vulnerabilities yet. It's planned."
 
@@ -1037,22 +1036,23 @@ def _where_row(row: Clause, reader: _Reader) -> str | None:
     return None
 
 
+def _is_ticket_search(clause: Clause) -> bool:
+    return any(w.low in TICKETS or w.system == JIRA for w in clause)
+
+
 def _vulnerability_phrase(clause: Clause) -> str | None:
-    """The words of a clause that ask for a vulnerability check, as written, or None."""
     for word, after in zip(clause, (*clause[1:], None), strict=False):
         if word.low in VULNERABILITIES or CVE_ID.fullmatch(word.low):
             return word.raw
-        if word.low == "security" and after is not None and after.low in SECURITY_NEXT:
+        if word.low == "security" and after is not None and after.low in SECURITY_PHRASE_ENDS:
             return f"{word.raw} {after.raw}"
     return None
 
 
 def vulnerability_phrase(text: str) -> str | None:
-    """The words of a text that ask for a vulnerability check, as written, or None. A search of
-    Jira tickets about one is a ticket search, not a check."""
     reader = _reader(ABILITIES)
     for clause in _clauses(_tokens(text), reader, True):
-        if any(w.low in TICKETS or w.system == JIRA for w in clause):
+        if _is_ticket_search(clause):
             continue
         phrase = _vulnerability_phrase(clause)
         if phrase is not None:
@@ -1062,8 +1062,7 @@ def vulnerability_phrase(text: str) -> str | None:
 
 def _asks_for_vulnerabilities(row: Clause, reader: _Reader) -> bool:
     return any(
-        _vulnerability_phrase(clause) is not None
-        and not any(w.low in TICKETS or w.system == JIRA for w in clause)
+        _vulnerability_phrase(clause) is not None and not _is_ticket_search(clause)
         for clause in _clauses(row, reader, True)
     )
 
@@ -1097,7 +1096,7 @@ TICKET_FIELDS: Final = words(
     "sprints field fields"
 )
 _A_YES: Final = r"(?:approval|approvals|approver|approvers|yes|sign-?off|permission|confirmation)"
-_SOMEONE: Final = (
+_SOMEONE_ELSE: Final = (
     r"(?:anyone|anybody|someone|somebody|the\s+team|a\s+human|a\s+person|people|"
     r"(?:an?|the)\s+approvers?|(?:a|my|the)\s+manager|the\s+boss)"
 )
@@ -1105,14 +1104,14 @@ SKIPS_A_YES: Final = re.compile(
     rf"""
     \bwithout\s+(?:an?\s+|any\s+|the\s+)?{_A_YES}\b
   | \bwithout\s+(?:asking|waiting\s+for|checking\s+with|telling|consulting)\s+(?:for\s+)?
-        (?:an?\s+|any\s+|the\s+)?(?:{_A_YES}|{_SOMEONE})\b
+        (?:an?\s+|any\s+|the\s+)?(?:{_A_YES}|{_SOMEONE_ELSE})\b
   | \bwith\s+no\s+{_A_YES}\b
   | \bno\s+{_A_YES}\s+(?:needed|required|necessary|first)\b
   | \bno\s+need\s+(?:for|to\s+(?:get|ask\s+for|wait\s+for))\s+(?:an?\s+|any\s+)?{_A_YES}\b
   | \bskip(?:s|ped|ping)?\s+(?:the\s+|an?\s+|any\s+|all\s+)?{_A_YES}\b
   | \bbypass(?:es|ed|ing)?\s+(?:the\s+|an?\s+)?(?:{_A_YES}|gate|check)\b
   | \b(?:don'?t|do\s+not|never)\s+(?:ask(?:ing)?|wait(?:ing)?)\s+(?:for\s+)?
-        (?:an?\s+|any\s+|the\s+)?(?:{_A_YES}|{_SOMEONE})\b
+        (?:an?\s+|any\s+|the\s+)?(?:{_A_YES}|{_SOMEONE_ELSE})\b
   | \bauto-?approv\w*
   | \bapprov\w*\s+(?:(?:it|them|this|that|everything|each|every|all|the|a|an|my|our)\s+)?
         (?:(?:of\s+)?\w+\s+)?(?:automatically|by\s+itself|itself|on\s+its\s+own)\b
@@ -1121,8 +1120,6 @@ SKIPS_A_YES: Final = re.compile(
 """,
     re.IGNORECASE | re.VERBOSE,
 )
-"""Words that ask to skip an Approver's yes. "Without asking me" is not one: the Operator is
-not the Approver. Nor is "run it by itself", the product's own words for a schedule."""
 _CONNECTOR: Final = r"(?:and|but|then|so|just|please)"
 
 
@@ -1132,24 +1129,18 @@ class Need(NamedTuple):
 
 
 def skip_of_a_yes(text: str) -> str | None:
-    """The words that ask to skip a yes, or None."""
     found = SKIPS_A_YES.search(text)
     return None if found is None else found.group(0)
 
 
 def without_the_skip(text: str) -> str:
-    """The text without the words that ask to skip a yes, tidied."""
     rest = " ".join(SKIPS_A_YES.sub(" ", text).split()).strip(" ,;.")
     rest = re.sub(rf"^{_CONNECTOR}\b[\s,]*", "", rest, flags=re.IGNORECASE)
     rest = re.sub(rf"[\s,]*\b{_CONNECTOR}$", "", rest, flags=re.IGNORECASE)
     return rest.strip(" ,;.")
 
 
-def need_of(kind: RowKind, text: str, found_in: str | None = None) -> Need:
-    """What a part the platform can't do would need: a new tool, when it is in a system the
-    platform already reaches, or a new system or source. With the system it names. A part that
-    names none acts on what was found, so it is in `found_in` when that is a system the
-    platform can't read, else in Jira."""
+def need_of(kind: RowKind, text: str, unreached_source: str | None = None) -> Need:
     reader = _reader(ABILITIES)
     row = _tokens(text)
     named = [w.system for w in row if w.system is not None]
@@ -1165,8 +1156,8 @@ def need_of(kind: RowKind, text: str, found_in: str | None = None) -> Need:
         return Need("new_tool", SYSTEMS[JIRA])
     if kind in ("look_for", "where"):
         return Need("new_system", None)
-    if found_in is not None:
-        return Need("new_system", found_in)
+    if unreached_source is not None:
+        return Need("new_system", unreached_source)
     at = _action_at(row)
     verb = reader.verb(row[at]) if at is not None else None
     if verb is not None and verb[0] in NOTIFIES:
@@ -1175,19 +1166,14 @@ def need_of(kind: RowKind, text: str, found_in: str | None = None) -> Need:
 
 
 def sets_a_ticket_field(text: str) -> bool:
-    """Whether a part is about a field on Jira tickets, such as a component or a label. Setting
-    one is a new tool the team can decide on. Any other change to tickets is for people only."""
     return any(w.low in TICKET_FIELDS for w in _tokens(text))
 
 
 def release_word_in(text: str) -> str | None:
-    """The first word of a text about versions, releases, upgrades or patches, as written."""
     return next((w for w in re.findall(r"\w+", text) if w.casefold() in RELEASE_ROOTS), None)
 
 
-def key_words(text: str) -> list[str]:
-    """The words of a part that must come from the person: numbers, project and ticket keys,
-    and the systems the platform doesn't reach. Jira and GitHub are implied by the tools."""
+def guessable_words(text: str) -> list[str]:
     found = re.findall(r"\d+", text)
     for word in _tokens(text):
         if word.key or (word.system is not None and word.system not in REACHED):
@@ -1196,6 +1182,5 @@ def key_words(text: str) -> list[str]:
 
 
 def other_systems(text: str) -> list[str]:
-    """The systems a text names that the platform doesn't reach, in plain words, in order."""
     found = [w.system for w in _tokens(text) if w.system is not None and w.system not in REACHED]
     return list(dict.fromkeys(SYSTEMS[name] for name in found))

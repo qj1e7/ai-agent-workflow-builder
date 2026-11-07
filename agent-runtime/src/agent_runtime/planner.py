@@ -427,21 +427,27 @@ def row_of(answer: RowAnswer) -> UnderstoodRow:
     return held_to_the_tools(UnderstoodRow(kind=answer.kind, text=text, state=state, note=note))
 
 
+def _cant_do_first(row: UnderstoodRow) -> bool:
+    return row.state != "cant_do"
+
+
 def rows_of(answers: list[RowAnswer]) -> list[UnderstoodRow]:
     return arrange([row_of(answer) for answer in answers])
 
 
 def arrange(rows: list[UnderstoodRow]) -> list[UnderstoodRow]:
-    """One schedule row, then every part in order, a missing row for any part left out, and at
-    most MAX_ROWS rows, keeping the can't do ones."""
     groups = [[row for row in rows if row.kind == kind] or [missing_row(kind)] for kind in ORDER]
     groups[0] = groups[0][:1]
     firsts = [group[0] for group in groups]
-    extras = sorted(
-        (row for group in groups for row in group[1:]), key=lambda r: r.state != "cant_do"
-    )
+    extras = sorted((row for group in groups for row in group[1:]), key=_cant_do_first)
     kept = firsts + extras[: MAX_ROWS - len(firsts)]
     return sorted(kept, key=lambda row: ORDER.index(row.kind))
+
+
+def said_in(word: str, text: str) -> bool:
+    """Whole words, with a number allowed inside a token such as "3pm"."""
+    edge = r"\d" if word.isdigit() else r"\w"
+    return re.search(rf"(?<!{edge}){re.escape(word)}(?!{edge})", text, re.IGNORECASE) is not None
 
 
 def whole_word_of(task: str, said: str | None) -> str | None:
@@ -453,10 +459,6 @@ def whole_word_of(task: str, said: str | None) -> str | None:
 
 
 def task_form_of(task: str, said: str | None) -> str | None:
-    """The task's own form of the watchlist word the model said, or None when the task has no
-    such word. The model may say more than one word, as in "newer version": the first of them
-    the task holds a form of counts. A security phrase, as in "security patches", is a
-    vulnerability word, not a patch."""
     wanted = visible_words(said).strip(QUOTES).casefold()
     if vulnerability_phrase(wanted) is not None:
         return vulnerability_phrase(task)

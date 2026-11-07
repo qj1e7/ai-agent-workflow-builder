@@ -14,6 +14,7 @@ from agent_runtime.contract import (
     UnderstoodRow,
     WatchlistAnswer,
 )
+from agent_runtime.planner import said_in
 from evals.checks import Check, check, mentions, no_jargon, no_themed_names, ticket_keys
 from evals.jobs import Answer, Case, Job
 
@@ -24,12 +25,6 @@ _TIME_WORDS = re.compile(
     r"daily|weekly|monthly|hourly|morning|evening|noon|midnight|am|pm)\b",
     re.IGNORECASE,
 )
-
-
-def _said_in(word: str, task: str) -> bool:
-    """Whole words, with a number allowed to sit inside a token such as "3pm"."""
-    edge = r"\d" if word.isdigit() else r"\w"
-    return re.search(rf"(?<!{edge}){re.escape(word)}(?!{edge})", task, re.IGNORECASE) is not None
 
 
 class AnswerCase(Case):
@@ -57,7 +52,6 @@ def schema() -> type[BaseModel]:
 
 
 def card_of(shown: PlannerAnswer) -> list[UnderstoodRow] | None:
-    """The rows the person would see as a card, whichever answer carries them."""
     match shown:
         case SetupCardAnswer() | PartAnswer():
             return shown.rows
@@ -95,8 +89,6 @@ MACHINE_FIELDS = frozenset({"kind", "state", "status", "needs", "reason"})
 
 
 def _texts(shown: PlannerAnswer) -> list[str]:
-    """The words a person would read: every text field, but not the fields code reads."""
-
     def strings(value: object) -> list[str]:
         if isinstance(value, str):
             return [value]
@@ -178,7 +170,7 @@ def _card_checks(case: AnswerCase, shown: PlannerAnswer) -> list[Check]:
     schedule = next(r for r in card if r.kind == "schedule")
     guessed: list[str] = []
     if schedule.state in ACCEPTED:
-        guessed = [w for w in _TIME_WORDS.findall(schedule.text) if not _said_in(w, case.task)]
+        guessed = [w for w in _TIME_WORDS.findall(schedule.text) if not said_in(w, case.task)]
     words = [w for r in card for w in (r.text, r.note or "")]
     task_keys = set(_PROJECT_KEY.findall(case.task)) | ticket_keys(case.task)
     shown_keys = {k for text in words for k in _PROJECT_KEY.findall(text)}

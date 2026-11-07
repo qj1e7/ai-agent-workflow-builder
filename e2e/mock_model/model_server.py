@@ -13,11 +13,6 @@ can be tested without a real model:
   part alone, the others missing. When the Planner says before the task that the staff member
   already chose a new workflow, a release task is read back in parts like any other, as the
   real model does.
-- For a request typed on Home, word rules also pick a question about the person's workflows
-  (asks_about, with the words that name one), name a task, and offer an alternative for each part
-  it says it can't do. A request that watches software and also asks for a ticket list is the
-  watchlist with the rest read back in rows. The vulnerability words include "security patch",
-  "security fix", "security alert" and "security bulletin", as the prototype's do.
 - A request with tools and no forced tool is a card run. The mock calls github_read_releases,
   then jira_search, then jira_create_ticket, then writes a report, by what the conversation holds.
   The ticket's title follows the card: a release, a follow-up or a summary. The follow-up card
@@ -408,12 +403,14 @@ def name_of(task: str) -> str:
     return first_up(" ".join(words[:5]))[:60] or "New workflow"
 
 
+def no_email_tool(row: dict[str, Any]) -> dict[str, Any]:
+    if EMAIL_WORDS.search(row.get("text", "")) is None or row["state"] == "cant_do":
+        return row
+    return {**row, "state": "cant_do", "note": "No tool sends email yet."}
+
+
 def with_alternative(row: dict[str, Any], task: str) -> dict[str, Any]:
-    """A part the mock says it can't do, with the nearest thing it can do instead: watching the
-    named software for a vulnerability check, a ticket that lists them for anything else."""
     text = row.get("text", "")
-    if EMAIL_WORDS.search(text) and row["state"] != "cant_do":
-        row = {**row, "state": "cant_do", "note": "No tool sends email yet."}
     if row["state"] != "cant_do":
         return row
     if VULNERABILITY_WORDS.search(text):
@@ -423,8 +420,6 @@ def with_alternative(row: dict[str, Any], task: str) -> dict[str, Any]:
 
 
 def reading(task: str) -> dict[str, Any]:
-    """The Planner's reading of a request typed on Home: what the old read-back says, plus what
-    the request asks about, a name, and an alternative for each part it can't do."""
     about = next((kind for pattern, kind in ABOUT if pattern.search(task.strip())), "none")
     if about != "none":
         named = WORKFLOW_NAMED.search(task) if about in ("why_stopped", "my_workflows") else None
@@ -443,11 +438,11 @@ def reading(task: str) -> dict[str, Any]:
     if read["belongs_on_watchlist"]:
         rest = " and ".join(c for c in CLAUSE.split(task) if not RELEASE_WORDS.search(c))
         if TICKET_WORDS.search(rest):
-            read["rows"] = [with_alternative(r, task) for r in parts(rest)]
+            read["rows"] = [with_alternative(no_email_tool(r), task) for r in parts(rest)]
             read["name"] = name_of(rest)
         return read
     read["name"] = name_of(task)
-    read["rows"] = [with_alternative(r, task) for r in read["rows"]]
+    read["rows"] = [with_alternative(no_email_tool(r), task) for r in read["rows"]]
     return read
 
 

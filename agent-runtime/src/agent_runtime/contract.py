@@ -831,7 +831,6 @@ class PartAnswer(WireModel):
 
 
 type Alternative = Annotated[SetupCardAnswer | WatchlistAnswer, Field(discriminator="kind")]
-"""The nearest thing the Planner can set up instead: a card, or a watchlist row."""
 
 
 class CantAnswer(WireModel):

@@ -260,7 +260,6 @@ def model_for(job: Job[Any], target: Target, shared: BaseChatModel) -> BaseChatM
 
 
 def jobs_chosen(env: Env) -> tuple[Job[Any], ...]:
-    """The jobs to run: every one, or those named in EVAL_JOBS, comma separated."""
     wanted = [name.strip() for name in env.get("EVAL_JOBS", "").split(",") if name.strip()]
     if not wanted:
         return JOBS
