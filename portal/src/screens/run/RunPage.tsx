@@ -206,7 +206,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   const saidByMe = me ? shown.chat.findLast((item) => item.kind === 'decided' && item.by === me.id) : undefined
   const open = detailOpen(detail.choice, shown)
   const decision = useDecision(approval.data, party)
-  const answered = decision.recorded !== null && !waiting
+  const answered = decision.recorded !== null && !waiting && !WORKING.has(shown.phase.state)
   const focused = useRef(false)
   useEffect(() => {
     if (!answered || focused.current) return
