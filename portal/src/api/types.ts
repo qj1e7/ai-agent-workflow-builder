@@ -23,6 +23,7 @@ export type Leg = Schemas['Leg']
 export type StepName = Schemas['StepName']
 
 export type ApprovalView = Schemas['ApprovalView']
+export type ApprovalActionView = Schemas['ApprovalActionView']
 export type ApprovalRef = Schemas['ApprovalRef']
 export type ApprovalStepView = Schemas['ApprovalStepView']
 export type ApprovalStepStatus = Schemas['ApprovalStepStatus']

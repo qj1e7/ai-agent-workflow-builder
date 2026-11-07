@@ -1844,10 +1844,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* The one write a workflow made on Home can do: one Jira ticket with the list or summary in it. */
   function confWrite(f) {
     const thing = thingOf(f);
-    return { panelTitle: `1 ticket will be created in Jira project ${f.project}`, stationWrite: 'Create the ticket', did: `Created ${f.project}-33 with the approved ${thing}.`, approveLabel: 'Approve the ticket', needTitle: '1 Jira ticket is waiting for your yes', result: `${f.project}-33 created`, waitHead: '1 ticket is waiting for a yes', doneHead: 'Ticket created', shortDone: 'ticket created', teamsVerb: `create 1 ticket in Jira project ${f.project}`, doneText: `created ${f.project}-33 with the ${thing}` };
+    return { panelTitle: `1 ticket will be created in Jira project ${f.project} on the practice Jira`, stationWrite: 'Create the ticket', did: `Created ${f.project}-33 with the approved ${thing}.`, approveLabel: 'Approve the ticket', needTitle: '1 Jira ticket is waiting for your yes', result: `${f.project}-33 created`, waitHead: '1 ticket is waiting for a yes', doneHead: 'Ticket created', shortDone: 'ticket created', teamsVerb: `create 1 ticket in Jira project ${f.project}`, doneText: `created ${f.project}-33 with the ${thing}` };
   }
   /* The one write of the Friday summary's retried run, with the summary an Approver sees. */
-  const NUDGE_WRITE = { panelTitle: '1 ticket will be created in Jira project MOCK', approveLabel: 'Approve the ticket', teamsVerb: 'create 1 ticket in Jira project MOCK' };
+  const NUDGE_WRITE = { panelTitle: '1 ticket will be created in Jira project MOCK on the practice Jira', approveLabel: 'Approve the ticket', teamsVerb: 'create 1 ticket in Jira project MOCK' };
   const nudgePreview = () => `<div class="preview"><b>Week of 19 Oct: 11 tickets closed</b><ul class="mini-list"><li>5 access requests</li><li>3 licence renewals</li><li>2 software upgrades</li><li>1 other, MOCK-31</li></ul></div><p class="note">To be created as one ticket in MOCK, titled “Weekly closed-ticket summary, week of 19 Oct”.</p>`;
   function confPreview(f) {
     const day = f.period === 'day';
@@ -3069,7 +3069,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
           : me().ap ? `Only ${whoOr(q.may)} can decide this one.${apprOf(id) ? ` ${nm(ownerOf(id))} chose who approves this workflow.` : ''}`
             : 'Only an Approver can decide.';
     return `<div class="panel approval">
-      <dl class="qa"><dt>What will change</dt><dd><b>${sw ? '3 tickets will be created in Jira project MOCK' : w.panelTitle}</b>${body}<p class="note">This is exactly what will be written, and nothing else.</p></dd></dl>
+      <dl class="qa"><dt>What will change</dt><dd><b>${sw ? '3 tickets will be created in Jira project MOCK on the practice Jira' : w.panelTitle}</b>${body}<p class="note">This is exactly what will be written, and nothing else.</p></dd></dl>
       <dl class="qa" data-unbuilt="Why, in the approval panel"><dt>Why</dt><dd>${found ? `<ul class="found">${found}</ul>` : 'See what each agent did, below.'}</dd></dl>
       <dl class="qa" data-unbuilt="Who asked, in the approval panel"><dt>Who asked</dt><dd>${esc(R(m.workflow).name)}, set up by ${nm(ownerOf(m.workflow))}. ${first.msg ? first.msg.text : ''}${first.sub ? ` (${first.sub})` : ''}</dd></dl>
       <dl class="qa"><dt>What happens</dt><dd><span>Nothing is written until you say yes. ${askLine(q, S.user, true)}${namedTag(q)} ${sw ? 'You approve or decline the whole check. If you decline, the tickets are proposed again next Monday.' : 'If you decline, the run stops there.'}</span></dd></dl>
@@ -4287,11 +4287,11 @@ details > .m-close { animation: fold 140ms ease-in both; }
   /* What each request's card says: when it was posted, what it wants, each change and what the agents found. The
      workflow, its owner, who can decide and who can't come from the request record and partiesOf. */
   const TEAMS_CARD = {
-    sw: () => ({ time: 'Mon 9:41', what: 'Keep our software up to date wants to create 3 Jira tickets',
+    sw: () => ({ time: 'Mon 9:41', what: 'Keep our software up to date wants to create 3 Jira tickets on the practice Jira',
       changes: [`Upgrade Log4j core to 2.25.2${shows('registries') ? ` (urgent: critical and actively exploited) ${PLANNED_TAG}` : ''}`, 'Upgrade LangGraph to 1.2.17', 'Upgrade FastAPI to 0.120.1'],
       found: shows('registries') ? `Newer versions on the registries and GitHub, and 4 known vulnerabilities in Log4j core 2.14.1. ${PLANNED_TAG}` : 'Newer releases on GitHub for 3 of the 14 projects on the Software watchlist.' }),
-    nudge: () => ({ time: `Today ${hm(NOW)}`, what: 'Weekly closed-ticket summary wants to create 1 Jira ticket', changes: ['Create one ticket in MOCK with the summary of the week of 19 Oct'], found: '11 tickets closed in MOCK in the week of 19 Oct.' }),
-    conf: () => ({ time: 'Today 9:10', what: `${esc(S.nr.name)} wants to ${confWrite(S.nr).teamsVerb} (test run)`, changes: [`Create one ticket in ${S.nr.project} with the ${thingOf(S.nr)}`], found: confPreview(S.nr).replace(/<p class="note">[\s\S]*$/, '').replace(/<\/?div[^>]*>/g, '') }),
+    nudge: () => ({ time: `Today ${hm(NOW)}`, what: 'Weekly closed-ticket summary wants to create 1 Jira ticket on the practice Jira', changes: ['Create one ticket in MOCK with the summary of the week of 19 Oct'], found: '11 tickets closed in MOCK in the week of 19 Oct.' }),
+    conf: () => ({ time: 'Today 9:10', what: `${esc(S.nr.name)} wants to ${confWrite(S.nr).teamsVerb} on the practice Jira (test run)`, changes: [`Create one ticket in ${S.nr.project} with the ${thingOf(S.nr)}`], found: confPreview(S.nr).replace(/<p class="note">[\s\S]*$/, '').replace(/<\/?div[^>]*>/g, '') }),
     access: () => ({ time: 'Mon 9:30', what: `Quarterly access review wants to ${ACCESS_WRITE.teamsVerb}`, changes: ACCESS_REMOVALS.map((x) => `Remove ${x.replace(/\. .*$/, '')}`), found: '48 people reviewed. Their managers confirmed 45 in Teams. Nobody confirmed these 3.', planned: true }),
   };
   function teamsCard(id) {

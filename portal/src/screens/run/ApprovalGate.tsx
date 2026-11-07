@@ -5,7 +5,7 @@ import { Button } from '../../ui/Button'
 import { IconCheck, IconLock } from '../../ui/icons'
 import { TicketKeys } from '../jira/TicketKeys'
 import { happensWords, openStep, type Decision } from './decision'
-import { approveLabel, bodyOf, proposalTitle, ticketKeysIn, titleOf } from './words'
+import { approvalTitle, approveLabel, bodyOf, ticketKeysIn, titleOf } from './words'
 import styles from './panels.module.css'
 
 export const EXACT_WORDS = 'This is exactly what will be written, and nothing else.'
@@ -53,7 +53,7 @@ export function ApprovalGate({ approval, found, part, askedBy, decision }: Appro
   return (
     <div className={styles['panel']}>
       <Row name="What will change">
-        <b className={styles['changeTitle']}>{proposalTitle(approval.actions)}</b>
+        <b className={styles['changeTitle']}>{approvalTitle(approval.actions)}</b>
         {approval.actions.map((action, index) => (
           <Change key={index} action={action} />
         ))}

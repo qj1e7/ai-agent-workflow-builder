@@ -1,7 +1,7 @@
 import { OPEN_RUN_AGAIN_WORDS } from '../../api/errors'
 import { connectorLabel, refusalLabel, starterName } from '../../api/labels'
 import type { SessionKind } from '../../api/session'
-import type { Refusal, Trigger, WriteActionView } from '../../api/types'
+import type { ApprovalActionView, Refusal, Trigger, WriteActionView } from '../../api/types'
 import { PRODUCT } from '../../shell/product'
 import type { LiveRun } from './liveRun'
 import type { AgentRef, ChatItem, RunModel, Station } from './runModel'
@@ -191,6 +191,13 @@ export function proposalTitle(actions: readonly WriteActionView[]): string {
   if (project) return `${count(actions.length, 'ticket')} will be created in Jira project ${project}`
   const where = new Set(actions.map((action) => connectorLabel(action.connector)))
   return `${count(actions.length, 'change')} will be written${where.size === 1 ? ` in ${[...where].join('')}` : ''}`
+}
+
+/** The approval panel's heading, naming the Jira the tickets go to, so the Approver sees where before saying yes (ADR 0041). */
+export function approvalTitle(actions: readonly ApprovalActionView[]): string {
+  const sites = new Set(actions.map((action) => action.site_name))
+  const [only] = sites
+  return sites.size === 1 && only ? `${proposalTitle(actions)} on ${only}` : proposalTitle(actions)
 }
 
 export function approveLabel(actions: readonly WriteActionView[]): string {
