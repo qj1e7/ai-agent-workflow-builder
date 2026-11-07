@@ -943,21 +943,36 @@ def test_review_is_the_searchs_verb_only_at_the_front_of_its_clause():
     assert isinstance(answer, SetupCardAnswer), answer
 
 
-def test_a_quote_the_request_lacks_explains_nothing():
-    """The model is told to copy its quotes exactly, and every search quote in the recorded
-    runs was; one it made up stands nowhere, so its clause comes back, with the card offered."""
+def test_a_search_with_no_quote_stands_on_the_longest_run_of_its_own_words():
+    """The model sometimes fills the search and leaves its quote empty, or quotes words the
+    request lacks. The search then stands on the longest run of the request's words it
+    explains ("the open bugs in SUP"), never anywhere else: a filter in another clause is
+    still outside it."""
     task = "Every Monday, list the open bugs in SUP and create one ticket that lists them"
+    for said in ("", "open bug list"):
+        answer = answer_of(
+            read(
+                schedule="Every Monday",
+                search=search(project="SUP", issue_types=["bug"], status="open", said=said),
+                ticket=LISTS,
+            ),
+            task,
+        )
+        assert isinstance(answer, SetupCardAnswer), (said, answer)
+    apart = (
+        "Every Thursday, list the open SVC bugs assigned to Ahmad, create one ticket that "
+        "lists them, and assign the new ticket to Ahmad too"
+    )
     answer = answer_of(
         read(
-            schedule="Every Monday",
-            search=search(project="SUP", issue_types=["bug"], status="open", said="open bug list"),
-            ticket=LISTS,
+            schedule="Every Thursday",
+            search=search(project="SVC", issue_types=["bug"], status="open", assignee="Ahmad"),
+            ticket=TicketRead(creates=True, says="list", said="create one ticket that lists them"),
         ),
-        task,
+        apart,
     )
-    assert isinstance(answer, CantAnswer)
-    assert cant_of(answer) == ["list the open bugs in SUP and create one ticket that lists them"]
-    assert isinstance(answer.alternative, SetupCardAnswer)
+    assert isinstance(answer, PartAnswer | CantAnswer)
+    assert cant_of(answer) == ["assign the new ticket to Ahmad too"]
 
 
 def test_a_release_request_goes_to_the_watchlist_and_a_mixed_one_carries_the_rest():

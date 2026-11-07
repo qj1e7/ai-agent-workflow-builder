@@ -632,9 +632,34 @@ def _leads_its_clause(text: str, span: tuple[int, int] | None, forms: frozenset[
     return False
 
 
+def _own_run(text: str, explained: frozenset[str]) -> tuple[int, int] | None:
+    """The longest run of the request's words a structure explains, with filler between, when
+    it holds at least two such words: where the structure stands when the model quoted
+    nothing for it ("the open DESK bugs"). None when no run is that long."""
+    best: tuple[int, int] | None = None
+    best_count = 0
+    run: list[tuple[int, int]] = []
+    count = 0
+    for raw, start, end in _request_tokens(text) + [("", len(text), len(text))]:
+        low = _low(raw)
+        if raw and low in explained:
+            run.append((start, end))
+            count += 1
+        elif raw and low in FILLER and run:
+            run.append((start, end))
+        else:
+            if count >= 2 and count > best_count:
+                first = next(a for a, b in run if _low(text[a:b]) in explained)
+                last = next(b for a, b in reversed(run) if _low(text[a:b]) in explained)
+                best, best_count = (first, last), count
+            run, count = [], 0
+    return best
+
+
 def render_search(read: SearchRead, text: str) -> Rendered:
     """The look-for row, written from the search. A filter the request never framed is dropped,
-    so its words come back to the person instead of a claim."""
+    so its words come back to the person instead of a claim. With no quote from the model, the
+    search stands on the longest run of its own words in the request."""
     said = _locate(text, read.said)
     explained: set[str] = set(SEARCH_VOCAB)
     if _leads_its_clause(text, said, REVIEW):
@@ -699,7 +724,8 @@ def render_search(read: SearchRead, text: str) -> Rendered:
         state="understood" if sourced else "changed",
         note=_note(text, said, sourced),
     )
-    return Rendered(row, frozenset(explained), said)
+    stands = said if said is not None else _own_run(text, frozenset(explained))
+    return Rendered(row, frozenset(explained), stands)
 
 
 def _open_as_create(text: str) -> frozenset[str]:
