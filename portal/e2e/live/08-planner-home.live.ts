@@ -249,7 +249,7 @@ test.describe('with the AI model on', () => {
     await card(page).getByRole('button', { name: 'Rename' }).click()
     await page.getByLabel('Workflow name').fill('Stale bug chaser')
     await page.getByRole('button', { name: 'Done' }).click()
-    await expect(card(page).getByText('Filled in by me', { exact: true }), 'the tag goes once the person renames').toHaveCount(0)
+    await expect(card(page).getByRole('heading', { name: 'Stale bug chaser' }).locator('..').getByText('Filled in by me'), 'the tag goes once the person renames').toHaveCount(0)
     await card(page).getByRole('button', { name: 'Never mind' }).click()
     const sure = page.getByRole('alertdialog')
     await expect(sure, 'Never mind on a resumed draft asks first').toBeVisible()
