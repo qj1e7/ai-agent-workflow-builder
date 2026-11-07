@@ -84,7 +84,6 @@ export type JiraTicketStatus = Schemas['TicketStatus']
 export type TroubleshootingOut = Schemas['TroubleshootingOut']
 export type Advice = Schemas['Advice']
 
-export type TeamRequestView = Schemas['TeamRequestView']
 export type ModelSettingsView = Schemas['ModelSettingsView']
 export type ModelOut = Schemas['ModelOut']
 export type PendingModelOut = Schemas['PendingModelOut']
