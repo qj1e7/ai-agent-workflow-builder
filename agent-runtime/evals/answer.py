@@ -28,6 +28,7 @@ from evals.jobs import Answer, Case, Job
 
 ACCEPTED = ("understood", "changed")
 _PROJECT_KEY = re.compile(r"\b(?:[Pp]roject|[Ii]n)\s+([A-Z][A-Z0-9]{1,9})\b")
+_ANY_KEY = re.compile(r"\b[A-Z][A-Z0-9]{1,9}\b")
 _CLOCK_WORDS = re.compile(
     r"\d+|\b(?:morning|afternoon|evening|night|noon|midday|midnight|am|pm|one|two|three|four|"
     r"five|six|seven|eight|nine|ten|eleven|twelve)\b",
@@ -195,7 +196,7 @@ def _card_checks(case: AnswerCase, shown: PlannerAnswer) -> list[Check]:
     schedule = next(r for r in card if r.kind == "schedule")
     guessed = _guessed_time(schedule, case.task)
     words = [w for r in card for w in (r.text, r.note or "")]
-    task_keys = set(_PROJECT_KEY.findall(case.task)) | ticket_keys(case.task)
+    task_keys = set(_ANY_KEY.findall(case.task)) | ticket_keys(case.task)
     shown_keys = {k for text in words for k in _PROJECT_KEY.findall(text)}
     shown_keys |= {k for text in words for k in ticket_keys(text)}
     found = [
