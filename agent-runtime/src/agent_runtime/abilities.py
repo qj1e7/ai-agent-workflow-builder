@@ -1114,8 +1114,8 @@ SKIPS_A_YES: Final = re.compile(
   | \b(?:don'?t|do\s+not|never)\s+(?:ask(?:ing)?|wait(?:ing)?)\s+(?:for\s+)?
         (?:an?\s+|any\s+|the\s+)?(?:{_A_YES}|{_SOMEONE})\b
   | \bauto-?approv\w*
-  | \bapprov\w*\s+(?:it|them|this|that|everything|all\s+of\s+them)?\s*
-        (?:automatically|by\s+itself|itself|on\s+its\s+own)\b
+  | \bapprov\w*\s+(?:(?:it|them|this|that|everything|each|every|all|the|a|an|my|our)\s+)?
+        (?:(?:of\s+)?\w+\s+)?(?:automatically|by\s+itself|itself|on\s+its\s+own)\b
   | \bautomatic(?:ally)?\s+approv\w*
   | \bapprov\w*\s+(?:its\s+own|their\s+own|my\s+own|our\s+own)\b
 """,
@@ -1178,6 +1178,11 @@ def sets_a_ticket_field(text: str) -> bool:
     """Whether a part is about a field on Jira tickets, such as a component or a label. Setting
     one is a new tool the team can decide on. Any other change to tickets is for people only."""
     return any(w.low in TICKET_FIELDS for w in _tokens(text))
+
+
+def release_word_in(text: str) -> str | None:
+    """The first word of a text about versions, releases, upgrades or patches, as written."""
+    return next((w for w in re.findall(r"\w+", text) if w.casefold() in RELEASE_ROOTS), None)
 
 
 def key_words(text: str) -> list[str]:

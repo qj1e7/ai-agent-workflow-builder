@@ -467,3 +467,66 @@ def test_the_route_answers_in_the_contract():
     result = answer_result_adapter.validate_python(response.json())
     assert isinstance(result, Answered) and isinstance(result.answer, CantAnswer)
     assert result.answer.cant[0].system == "email"
+
+
+def test_a_cant_do_row_with_no_text_is_read_from_its_note():
+    task = "Every quarter, list who has admin access in GitLab and remove anyone who has left"
+    rows = (
+        row("schedule", "Every quarter"),
+        row("look_for", "", "cant_do", "The tools cannot read GitLab admin access lists.", None),
+        row("do", "", "cant_do", "The tools cannot remove anyone's access in GitLab.", None),
+        row("where", "", "missing"),
+    )
+    answer = answer_of(read(*rows), task)
+    assert isinstance(answer, CantAnswer)
+    assert [(c.kind, c.needs, c.system) for c in answer.cant] == [
+        ("look_for", "new_system", "GitLab"),
+        ("do", "new_system", "GitLab"),
+    ]
+
+
+def test_a_release_request_read_as_rows_offers_the_watch_as_its_alternative():
+    task = "Send a message in Teams when a release is published"
+    rows = (
+        row("schedule", "", "missing"),
+        row("look_for", "A release is published"),
+        row("do", "", "cant_do", "The tools cannot post messages in Teams.", "Propose a ticket"),
+        row("where", "", "cant_do", "The tools cannot post in Teams.", None),
+    )
+    answer = answer_of(read(*rows), task)
+    assert isinstance(answer, CantAnswer)
+    assert {c.system for c in answer.cant} == {"Teams"}
+    assert answer.alternative == WatchlistAnswer(word="release", software=None)
+
+
+def test_a_vulnerability_row_the_model_marked_itself_still_offers_the_watch():
+    task = "Warn me about any known vulnerabilities in Log4j"
+    rows = (
+        row("schedule", "", "missing"),
+        row(
+            "look_for",
+            "Known vulnerabilities in Log4j",
+            "cant_do",
+            "No tool checks CVEs.",
+            "Read the newest Log4j releases",
+        ),
+        row(
+            "do",
+            "Warn me about them",
+            "cant_do",
+            "No tool can send a warning.",
+            "Create one ticket",
+        ),
+        row("where", "", "missing"),
+    )
+    answer = answer_of(read(*rows, software="Log4j"), task)
+    assert isinstance(answer, CantAnswer)
+    assert answer.alternative == WatchlistAnswer(word="vulnerabilities", software="Log4j")
+
+
+def test_a_leading_article_in_the_workflow_words_is_dropped():
+    answer = answer_of(
+        read(asks_about="my_workflows", workflow_words="the morning new-ticket check"),
+        "Is the morning new-ticket check running?",
+    )
+    assert answer == CheckWorkflowsAnswer(workflow_words="morning new-ticket check")

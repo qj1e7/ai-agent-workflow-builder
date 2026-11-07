@@ -589,6 +589,11 @@ def test_the_vulnerability_words_are_found_as_the_text_wrote_them(text: str, phr
         ("Create it and never ask anyone", "never ask anyone", "Create it"),
         ("Let it approve its own requests", "approve its own", "Let it requests"),
         ("Bypass the approval gate", "Bypass the approval", "gate"),
+        (
+            "Every Monday, list the open tickets and approve the ticket automatically",
+            "approve the ticket automatically",
+            "Every Monday, list the open tickets",
+        ),
     ],
 )
 def test_words_that_skip_a_yes_are_found_and_removed(text: str, skip: str, rest: str):
@@ -605,6 +610,7 @@ def test_words_that_skip_a_yes_are_found_and_removed(text: str, skip: str, rest:
         "Automatically list the open tickets every morning",
         "Create one ticket after the approval",
         "List who approved each ticket",
+        "Automatically list the tickets and ask an Approver to approve them",
     ],
 )
 def test_the_products_own_words_do_not_skip_a_yes(text: str):

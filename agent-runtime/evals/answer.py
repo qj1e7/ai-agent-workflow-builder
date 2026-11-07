@@ -26,6 +26,12 @@ _TIME_WORDS = re.compile(
 )
 
 
+def _said_in(word: str, task: str) -> bool:
+    """Whole words, with a number allowed to sit inside a token such as "3pm"."""
+    edge = r"\d" if word.isdigit() else r"\w"
+    return re.search(rf"(?<!{edge}){re.escape(word)}(?!{edge})", task, re.IGNORECASE) is not None
+
+
 class AnswerCase(Case):
     task: str
     kind: list[str] = []
@@ -172,7 +178,7 @@ def _card_checks(case: AnswerCase, shown: PlannerAnswer) -> list[Check]:
     schedule = next(r for r in card if r.kind == "schedule")
     guessed: list[str] = []
     if schedule.state in ACCEPTED:
-        guessed = [w for w in _TIME_WORDS.findall(schedule.text) if not mentions(case.task, w)]
+        guessed = [w for w in _TIME_WORDS.findall(schedule.text) if not _said_in(w, case.task)]
     words = [w for r in card for w in (r.text, r.note or "")]
     task_keys = set(_PROJECT_KEY.findall(case.task)) | ticket_keys(case.task)
     shown_keys = {k for text in words for k in _PROJECT_KEY.findall(text)}

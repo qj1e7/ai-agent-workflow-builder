@@ -17,6 +17,7 @@ from agent_runtime.abilities import (
     key_words,
     need_of,
     other_systems,
+    release_word_in,
     sets_a_ticket_field,
     skip_of_a_yes,
     vulnerability_phrase,
@@ -68,6 +69,7 @@ ACCEPTED: Final = ("understood", "changed")
 CHOOSE_INSTEAD: Final = "Please choose something I can do instead."
 FILLED_IN: Final = "I filled this in. Your words didn't say it, so please check it."
 SUGGESTED: Final = 'Suggested instead of "{}".'
+ARTICLES: Final = re.compile(r"^(?:the|my|our|a|an)\s+", re.IGNORECASE)
 
 type AsksAbout = Literal["none", "my_workflows", "why_stopped", "needs_me", "abilities"]
 
@@ -121,7 +123,8 @@ ANSWER_SYSTEM: Final = (
     f"{tools_text()}\n\n"
     "So the only change they can make is a new Jira ticket, and only after an Approver says "
     "yes. They cannot post in Teams, send email, change Confluence, or close, edit, move or "
-    "delete tickets.\n\n"
+    "delete tickets. Summing up, listing, counting or comparing what they found needs no tool: "
+    "the agent writes that itself, and the result goes into one new Jira ticket after a yes.\n\n"
     "Rules:\n"
     "- For a task, give exactly one schedule row, then at least one row for each other part. "
     "When only some of a part can be done, split it into two rows and mark the part that "
@@ -235,20 +238,30 @@ def _offered(answers: list[AnswerRow], request: str) -> list[UnderstoodRow] | No
     return arranged
 
 
+def _said(row: UnderstoodRow) -> str:
+    """The words that say what the part is: its text, or its note when the model left the text
+    empty, as it does for a part it can't do at all."""
+    return row.text or row.note or ""
+
+
 def _source_of(cant_rows: list[UnderstoodRow]) -> str | None:
     """The system a part to look for reads from, when the platform can't read it."""
     for row in cant_rows:
         if row.kind == "look_for":
-            need = need_of(row.kind, row.text)
+            need = need_of(row.kind, _said(row))
             if need.needs == "new_system" and need.system is not None:
                 return need.system
     return None
 
 
 def _cant_row(row: UnderstoodRow, source: str | None) -> CantRow:
-    need = need_of(row.kind, row.text, source)
+    need = need_of(row.kind, _said(row), source)
     note = row.note or CANT_YET
     return CantRow(kind=row.kind, text=row.text, note=note, needs=need.needs, system=need.system)
+
+
+def _asks_for_vulnerabilities(cant: list[CantRow]) -> bool:
+    return any(vulnerability_phrase(f"{c.text} {c.note}") is not None for c in cant)
 
 
 def _is_part(rows: list[UnderstoodRow], cant: list[CantRow]) -> bool:
@@ -259,12 +272,16 @@ def _is_part(rows: list[UnderstoodRow], cant: list[CantRow]) -> bool:
 
 
 def _watch_instead(cant: list[CantRow], read: TaskRead, request: str) -> WatchlistAnswer | None:
-    """For a vulnerability check: watching the named software for new releases instead."""
+    """Watching software for new releases instead: for a vulnerability check, only when the
+    software is named; for any other release request, even when it isn't."""
     software = whole_word_of(request, read.software)
-    if software is None:
-        return None
-    asked = next((c.text for c in cant if c.note == VULNERABILITIES_PLANNED), "")
-    word = vulnerability_phrase(request) or vulnerability_phrase(asked)
+    if _asks_for_vulnerabilities(cant):
+        asked = " ".join(f"{c.text} {c.note}" for c in cant)
+        word = vulnerability_phrase(request) or vulnerability_phrase(asked)
+        if software is None or word is None:
+            return None
+        return WatchlistAnswer(word=word, software=software)
+    word = release_word_in(request)
     return None if word is None else WatchlistAnswer(word=word, software=software)
 
 
@@ -286,8 +303,9 @@ def _from_rows(read: TaskRead, request: str) -> PlannerAnswer:
     offered = _offered(read.rows, request)
     if offered is not None and _is_part(rows, cant):
         return PartAnswer(name=name, rows=offered, cant=cant)
-    if any(c.note == VULNERABILITIES_PLANNED for c in cant):
-        return CantAnswer(cant=cant, alternative=_watch_instead(cant, read, request))
+    watch = _watch_instead(cant, read, request)
+    if watch is not None or _asks_for_vulnerabilities(cant):
+        return CantAnswer(cant=cant, alternative=watch)
     alternative = None if offered is None else SetupCardAnswer(name=name, rows=offered)
     return CantAnswer(cant=cant, alternative=alternative)
 
@@ -328,7 +346,8 @@ def _watchlist(read: TaskRead, request: str) -> PlannerAnswer | None:
 
 
 def _about(read: TaskRead, request: str) -> PlannerAnswer:
-    words = whole_word_of(request, read.workflow_words)
+    said = ARTICLES.sub("", visible_words(read.workflow_words))
+    words = whole_word_of(request, said)
     match read.asks_about:
         case "my_workflows":
             return CheckWorkflowsAnswer(workflow_words=words)

@@ -402,15 +402,14 @@
   },
   {
     "id": "nvd-vulnerabilities",
-    "note": "A mixed request from plan 7.5: NVD is kept as the unsupported part.",
+    "note": "A mixed request from plan 7.5: NVD is kept as the unsupported part. Whether a watch is offered is not scored: NVD is not software, and the watch's project is checked later (ADR 0037).",
     "task": "Monitor software vulnerabilities in NVD",
     "kind": [
       "cant"
     ],
     "cant": [
       "vulnerab*"
-    ],
-    "alternative": "none"
+    ]
   },
   {
     "id": "security-patches",
