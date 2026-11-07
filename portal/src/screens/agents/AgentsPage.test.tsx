@@ -239,6 +239,8 @@ describe('the Tools tab', () => {
     const html = render({ path: '/agents?tab=tools' })
     expect(mainOf(html)).toContain(NEW_TOOL_WORDS)
     expect(mainOf(html)).not.toMatch(/Draft/)
+    expect(mainOf(html)).toContain('I can’t add that yet. The team decides on new tools.')
+    expect(mainOf(html)).toContain('Ask the team')
   })
 
   it('leaves out a health line while the registry is not there', () => {

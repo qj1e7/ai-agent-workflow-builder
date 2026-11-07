@@ -4,7 +4,7 @@ import { useLatch } from '../../api/latch'
 import type { CapabilityView, ConnectionOut } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { AlertMark, CheckMark } from './marks'
-import { cardsOf, CHECK_DOWN_WORDS, checkResultWords, connectionWords, GITHUB_KEY_NOTE, keyWords, usedBy } from './connections'
+import { cardsOf, CHECK_DOWN_WORDS, checkResultWords, connectionWords, GITHUB_KEY_NOTE, keyWords, TEAMS_DOES_WORDS, usedBy } from './connections'
 import { ONLY_OPERATORS_WORDS } from './settings'
 import styles from './Settings.module.css'
 
@@ -65,6 +65,12 @@ function ConnectionCard({ connection, capabilities, canCheck, now }: CardProps) 
       </p>
       {connection.id === 'github' && says.checked ? <p className={styles['small']}>{GITHUB_KEY_NOTE}</p> : null}
       <dl className={styles['facts']}>
+        {connection.id === 'teams' ? (
+          <>
+            <dt>What it does</dt>
+            <dd>{TEAMS_DOES_WORDS}</dd>
+          </>
+        ) : null}
         <dt>What uses it</dt>
         <dd>{used === null ? 'Not available right now' : used.length > 0 ? used.join('; ') : 'Nothing yet'}</dd>
         {key ? (

@@ -1,4 +1,5 @@
 import type { CapabilityView, CardView, ToolView } from '../../api/types'
+import { AskTheTeam } from '../home/AskTheTeam'
 import { approvalWords, kindLabel, systemOf } from './agents'
 import { NEW_TOOL_WORDS, toolHealth } from './capabilities'
 import styles from './AgentsPage.module.css'
@@ -61,6 +62,7 @@ export function ToolsTab({ tools, ...shared }: { tools: readonly ToolView[] } & 
       <Group title="Tools that change data" sub="Each one waits for a yes, every time." tools={tools.filter((tool) => tool.kind === 'write')} {...shared} />
       <Group title="Tools that only read" sub="They never change anything, so they do not need a yes." tools={tools.filter((tool) => tool.kind === 'read')} {...shared} />
       <p className={styles['small'] + ' muted'}>{NEW_TOOL_WORDS}</p>
+      <AskTheTeam capability="a new tool" starter="I would like a tool that: " />
     </>
   )
 }

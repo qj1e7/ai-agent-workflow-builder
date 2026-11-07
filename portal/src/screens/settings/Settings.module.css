@@ -3,8 +3,8 @@
   max-width: 100%;
   margin: -4px 0 18px;
   padding: 3px;
+  flex-wrap: wrap;
   gap: 2px;
-  overflow-x: auto;
   border-radius: calc(var(--r-ctl) + 3px);
   background: var(--sunk);
 }

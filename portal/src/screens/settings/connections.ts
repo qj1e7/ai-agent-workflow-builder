@@ -49,6 +49,9 @@ export function checkResultWords(found: ConnectionOut): string {
   return `Checked just now. ${dot(found.problem ?? `${found.name} is not working.`)}`
 }
 
+/** What the platform does with a connection, where that is not obvious. Teams only carries approval requests (inconsistency I1). */
+export const TEAMS_DOES_WORDS = 'Sends approval requests to Approvers'
+
 export const GITHUB_KEY_NOTE = 'If the key was changed, this result is from before. It is read again at the next check.'
 
 export function keyWords(connection: ConnectionOut): string | null {

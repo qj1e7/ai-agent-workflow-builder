@@ -1,4 +1,4 @@
-import type { CapabilityState, CapabilityView, CardView, ToolView } from '../../api/types'
+import type { CapabilityState, CapabilityView, CardView, ConnectionOut, ToolView } from '../../api/types'
 import { runWhen } from '../workflows/times'
 
 export type Group = 'ready' | 'needs_setup' | 'down' | 'not_yet'
@@ -18,7 +18,7 @@ export function groupOf(state: CapabilityState): Group {
 
 export const CAPABILITIES_UNAVAILABLE_WORDS = 'What the platform can do is not available right now.'
 export const PLATFORM_DOES_WORDS = 'The platform does this for every workflow.'
-export const CAPABILITIES_FOOT = 'Anything that changes data waits for a yes in Teams. Need something that isn’t here? Tell whoever looks after the platform. The team decides on new tools.'
+export const CAPABILITIES_FOOT = 'Anything that changes data waits for an Approver’s yes. Need something that isn’t here? Ask the team. The team decides on new tools.'
 
 /** What a ticket carries to the agents (agent-runtime jira.py). Stated once, for the line that reads tickets. */
 export const JIRA_READ_FIELDS = ['key', 'project', 'title', 'status', 'created date', 'done date', 'last updated date', 'type', 'assignee', 'body'] as const
@@ -61,8 +61,19 @@ export function fieldsNote(capability: CapabilityView): string | null {
   return capability.id === 'jira.read' ? `A ticket reaches the agents with these fields only: ${JIRA_READ_FIELDS.join(', ')}.` : null
 }
 
-export function settingsPathFor(capability: CapabilityView): string {
-  return capability.connection === null && capability.needs_model ? '/settings?tab=model' : '/settings?tab=connections'
+const BROKEN: readonly ConnectionOut['state'][] = ['needs_attention', 'not_answering', 'not_set_up']
+
+/**
+ * The Settings tab that holds a line's fix. The registry blames the line's own connection first and the AI model second,
+ * so the model tab is right only when the line's own connection is fine. With no connections to go on, a line that uses
+ * a connection goes to Connections.
+ */
+export function settingsPathFor(capability: CapabilityView, connections?: readonly ConnectionOut[]): string {
+  if (!capability.needs_model) return '/settings?tab=connections'
+  if (capability.connection === null) return '/settings?tab=model'
+  const own = connections?.find((c) => c.id === capability.connection)
+  const model = connections?.find((c) => c.id === 'model')
+  return own && !BROKEN.includes(own.state) && model && BROKEN.includes(model.state) ? '/settings?tab=model' : '/settings?tab=connections'
 }
 
 const RANK: Record<CapabilityState, number> = { down: 3, needs_setup: 2, ready: 1, planned: 0, unsupported: 0 }
@@ -83,4 +94,5 @@ export function toolHealth(tool: Pick<ToolView, 'id'>, capabilities: readonly Ca
   return { ok: true, label: 'Ready', text: worst.last_ok_at ? `Last seen working ${when(worst.last_ok_at, now)}.` : '' }
 }
 
-export const NEW_TOOL_WORDS = 'Tools are built by the team. If a workflow needs one that isn’t here, tell whoever looks after the platform, because the team decides on new tools.'
+/** The Planner says the same on Home (inconsistency I3). */
+export const NEW_TOOL_WORDS = 'I can’t add that yet. The team decides on new tools.'

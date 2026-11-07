@@ -378,3 +378,12 @@ describe('the People and roles tab', () => {
     }
   })
 })
+
+describe('the Teams card', () => {
+  it('says Teams sends approval requests to Approvers, and nothing about messages', () => {
+    const teams = text(cardOf(render({ tab: 'connections' }), 'teams'))
+    expect(teams).toContain('What it does Sends approval requests to Approvers')
+    expect(teams).not.toMatch(/post|message/i)
+    expect(text(cardOf(render({ tab: 'connections' }), 'jira'))).not.toContain('What it does')
+  })
+})

@@ -1,12 +1,12 @@
 import { Link } from 'react-router'
-import { useCapabilities } from '../../api/capabilityQueries'
-import type { CapabilityView, CardView } from '../../api/types'
+import { useCapabilities, useConnections } from '../../api/capabilityQueries'
+import type { CapabilityView, CardView, ConnectionOut } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { AlertMark, CheckMark } from '../settings/marks'
 import { CAPABILITIES_FOOT, CAPABILITIES_UNAVAILABLE_WORDS, capabilityNote, fieldsNote, GROUPS, groupOf, NOT_YET_QUESTION, settingsPathFor, type Group } from './capabilities'
 import styles from './AgentsPage.module.css'
 
-function Line({ capability, cards, now }: { capability: CapabilityView; cards: readonly CardView[] | undefined; now: Date }) {
+function Line({ capability, cards, connections, now }: { capability: CapabilityView; cards: readonly CardView[] | undefined; connections: readonly ConnectionOut[] | undefined; now: Date }) {
   const note = capabilityNote(capability, cards, now)
   const fields = fieldsNote(capability)
   return (
@@ -15,7 +15,7 @@ function Line({ capability, cards, now }: { capability: CapabilityView; cards: r
       {note ? <span className={styles['small'] + ' muted'}>{note}</span> : null}
       {fields ? <span className={styles['small'] + ' muted'}>{fields}</span> : null}
       {capability.state === 'needs_setup' || capability.state === 'down' ? (
-        <Link className={styles['small']} to={settingsPathFor(capability)}>
+        <Link className={styles['small']} to={settingsPathFor(capability, connections)}>
           Open Settings<span className="visually-hidden"> for {capability.plain}</span>
         </Link>
       ) : null}
@@ -29,6 +29,7 @@ function Mark({ group }: { group: Group }) {
 
 export function CapabilitiesTab({ cards, now }: { cards: readonly CardView[] | undefined; now: Date }) {
   const capabilities = useCapabilities()
+  const connections = useConnections().data?.connections
   if (capabilities.isPending) {
     return (
       <p className="muted" role="status">
@@ -52,7 +53,7 @@ export function CapabilitiesTab({ cards, now }: { cards: readonly CardView[] | u
         const lines = (
           <ul className={styles['capList']}>
             {list.map((capability) => (
-              <Line key={capability.id} capability={capability} cards={cards} now={now} />
+              <Line key={capability.id} capability={capability} cards={cards} connections={connections} now={now} />
             ))}
           </ul>
         )
