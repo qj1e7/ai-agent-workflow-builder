@@ -396,6 +396,44 @@
         "title": "AddSoftware",
         "type": "object"
       },
+      "AddressChangeView": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "by": {
+            "title": "By",
+            "type": "string"
+          },
+          "from_repo": {
+            "$ref": "#/components/schemas/RepoName"
+          },
+          "kind": {
+            "description": "use: the saved repository was switched to the one GitHub reported. undo: it was put back.",
+            "enum": [
+              "use",
+              "undo"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "to_repo": {
+            "$ref": "#/components/schemas/RepoName"
+          }
+        },
+        "required": [
+          "kind",
+          "from_repo",
+          "to_repo",
+          "by",
+          "at"
+        ],
+        "title": "AddressChangeView",
+        "type": "object"
+      },
       "AddressDecisionIn": {
         "additionalProperties": false,
         "properties": {
@@ -418,6 +456,75 @@
           "digest"
         ],
         "title": "AddressDecisionIn",
+        "type": "object"
+      },
+      "AddressIn": {
+        "additionalProperties": false,
+        "properties": {
+          "repo": {
+            "$ref": "#/components/schemas/RepoName",
+            "description": "The owner/name the person confirmed. For use, it must be the one GitHub reported for the software. For undo, it must be an address the software had before."
+          }
+        },
+        "required": [
+          "repo"
+        ],
+        "title": "AddressIn",
+        "type": "object"
+      },
+      "AddressItem": {
+        "additionalProperties": false,
+        "properties": {
+          "checked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
+          },
+          "moved_to": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RepoName"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The repository GitHub now calls it, when it was renamed. The Operator may switch the list to it."
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "not_found": {
+            "description": "GitHub said the saved repository does not exist and named no new home.",
+            "title": "Not Found",
+            "type": "boolean"
+          },
+          "repo": {
+            "$ref": "#/components/schemas/RepoName",
+            "description": "The repository saved for it."
+          },
+          "software_id": {
+            "title": "Software Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "software_id",
+          "name",
+          "repo",
+          "moved_to",
+          "not_found",
+          "checked_at"
+        ],
+        "title": "AddressItem",
         "type": "object"
       },
       "Addressee": {
@@ -3701,6 +3808,14 @@
       "HomeOut": {
         "additionalProperties": false,
         "properties": {
+          "addresses": {
+            "description": "For an Operator, the watched software whose repository GitHub moved or cannot find, as the latest check left it, in the order of the Software page. The same rows the Software page lists under Needs attention.",
+            "items": {
+              "$ref": "#/components/schemas/AddressItem"
+            },
+            "title": "Addresses",
+            "type": "array"
+          },
           "approvals": {
             "description": "Runs waiting for a yes this person may give, the newest first. At most 10.",
             "items": {
@@ -3812,6 +3927,7 @@
           "replied",
           "coming_up",
           "workflows",
+          "addresses",
           "connections"
         ],
         "title": "HomeOut",
@@ -7907,6 +8023,14 @@
             "title": "Added By",
             "type": "string"
           },
+          "address_changes": {
+            "description": "Each time the saved repository was switched or put back, the newest first, with who did it. At most 10.",
+            "items": {
+              "$ref": "#/components/schemas/AddressChangeView"
+            },
+            "title": "Address Changes",
+            "type": "array"
+          },
           "approval_id": {
             "anyOf": [
               {
@@ -7946,6 +8070,17 @@
             "title": "Id",
             "type": "string"
           },
+          "moved_to": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RepoName"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The repository GitHub answered for the saved one at the latest check, when it is a different one: GitHub renamed the repository and redirects the old name. Null when the names agree, or when no check has read it. The Operator may switch the saved repository to it with POST /watchlist/software/{software_id}/address."
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -7974,6 +8109,12 @@
             ],
             "description": "The newest release read from the source. A check that cannot read the source keeps the version an earlier check read.",
             "title": "Newest Version"
+          },
+          "not_found": {
+            "default": false,
+            "description": "True when the latest check was told by GitHub that the saved repository does not exist. GitHub does not say where it went, so nothing is offered: remove the software and add it again at its new address.",
+            "title": "Not Found",
+            "type": "boolean"
           },
           "open_ticket": {
             "anyOf": [
@@ -8040,6 +8181,7 @@
           "problem",
           "open_ticket",
           "approval_id",
+          "address_changes",
           "added_by",
           "added_at"
         ],
@@ -13855,6 +13997,238 @@
           }
         ],
         "summary": "Remove Software",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/watchlist/software/{software_id}/address": {
+      "post": {
+        "description": "Replaces the saved repository of one software with the one GitHub reported at the latest check (moved_to on the row), after the person confirmed it. The body names the address the person saw. A new version of the list is saved, so every later check reads the new address. Only the watchlist changes: nothing is written to GitHub or Jira. Asking again for the address already saved changes nothing.",
+        "operationId": "use_new_address_api_v1_watchlist_software__software_id__address_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "software_id",
+            "required": true,
+            "schema": {
+              "title": "Software Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddressIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchlistView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such watched software"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "GitHub has not reported that address for this software, or the list already watches it"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Use New Address",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/watchlist/software/{software_id}/address/undo": {
+      "post": {
+        "description": "Puts back the address a software had before the new one was used, within a day of the switch, as the restore of a removal does. The body names the address to put back. Asking for the address already saved changes nothing.",
+        "operationId": "put_address_back_api_v1_watchlist_software__software_id__address_undo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "software_id",
+            "required": true,
+            "schema": {
+              "title": "Software Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddressIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchlistView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such watched software"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The software never had that address, or the list now watches it"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The address was switched more than a day ago"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Put Address Back",
         "tags": [
           "builder"
         ]

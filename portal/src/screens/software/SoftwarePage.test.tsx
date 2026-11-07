@@ -1,6 +1,7 @@
 import failedRun from '@contracts/fixtures/views/failure.final.json'
 import empty from '@contracts/fixtures/watchlist/empty.json'
 import paused from '@contracts/fixtures/watchlist/paused.json'
+import moved from '@contracts/fixtures/watchlist/moved.json'
 import held from '@contracts/fixtures/watchlist/schedule.held.json'
 import statuses from '@contracts/fixtures/watchlist/statuses.json'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -15,6 +16,7 @@ import type { FindOut, Me, ProjectGuess, ScheduleHold, WatchedSoftwareView, Watc
 import { AddSoftwareForm } from './AddSoftware'
 import { addReducer, readyToAdd, START, type AddAction, type AddState } from './addByName'
 import { FindSoftware } from './FindSoftware'
+import { MovedNote } from './NewAddress'
 import { SoftwareRoute } from './SoftwarePage'
 import { SoftwareHistory } from './SoftwareHistory'
 import { ScheduleEditor, ScheduleNote } from './Schedule'
@@ -564,5 +566,87 @@ describe('ticket keys on the Software watchlist', () => {
     ))
     expect(html).toMatch(/<a\b[^>]*href="https:\/\/jira.example.test\/browse\/OPS-143"[^>]*target="_blank"[^>]*rel="noopener noreferrer"[^>]*>OPS-143/)
     expect(html).not.toContain('href="/jira/OPS-143"')
+  })
+})
+
+
+describe('a repository GitHub moved', () => {
+  const rows = (moved as WatchlistView).software
+  const fastapi = rows.find((row) => row.name === 'FastAPI')!
+  const note = (changes: { confirming?: boolean; busy?: boolean; operator?: boolean } = {}) =>
+    renderToStaticMarkup(<MovedNote row={fastapi} operator={changes.operator ?? true} confirming={changes.confirming ?? false} busy={changes.busy ?? false} onAsk={() => undefined} onConfirm={() => undefined} onCancel={() => undefined} />)
+  const attention = (html: string) => html.slice(html.indexOf('needs-attention-heading'), html.indexOf('software-we-watch-heading'))
+  const rowOf = (html: string, name: string) => html.split('<li id="software-').find((part) => part.includes(`<b>${name}</b>`)) ?? ''
+
+  it('says on the row that GitHub renamed the project, still reaches it, and offers the new address to an Operator', () => {
+    const html = render(moved, ALICE)
+    const row = text(rowOf(html, 'FastAPI'))
+    expect(row).toContain('GitHub · tiangolo/fastapi')
+    expect(row).toContain('GitHub now calls this project fastapi/fastapi. We saved tiangolo/fastapi, and checks still reach it through GitHub’s redirect.')
+    expect(buttons(rowOf(html, 'FastAPI'))).toContain('Use the new address for FastAPI')
+    expect(row).toContain('New version')
+  })
+
+  it('lists the moved and the missing repository in Needs attention, each with a way to find its row', () => {
+    const words = text(attention(render(moved, ALICE)))
+    expect(words).toContain('Needs attention 2')
+    expect(words).toContain('GitHub moved FastAPI from tiangolo/fastapi to fastapi/fastapi.')
+    expect(words).toContain('GitHub can’t find langchain-ai/langserve, the address saved for LangServe.')
+    expect(buttons(attention(render(moved, ALICE))).filter((label) => label.startsWith('Show it'))).toHaveLength(2)
+    expect(words).not.toContain('Use the new address')
+  })
+
+  it('offers the new address once, on the row that was renamed and nowhere else', () => {
+    const html = render(moved, ALICE)
+    expect(buttons(html).filter((label) => label.startsWith('Use the new address'))).toEqual(['Use the new address for FastAPI'])
+  })
+
+  it('gives a repository GitHub cannot find its own words, no new address, and no promise it moved somewhere known', () => {
+    const html = render(moved, ALICE)
+    const row = text(rowOf(html, 'LangServe'))
+    expect(row).toContain('Can’t check')
+    expect(row).toContain('GitHub can’t find langchain-ai/langserve. It may have moved to another repository. LangServe stays Can’t check until GitHub finds that address. Remove it and add it again at its new address.')
+    expect(row).not.toContain('Use the new address')
+    expect(row).not.toContain('GitHub answered 404')
+    expect(row).toContain('Remove LangServe')
+  })
+
+  it('tells an Approver, who cannot change the list, what an Operator can do', () => {
+    const html = render(moved, BOB)
+    const words = text(html)
+    expect(words).toContain('An Operator can switch it to the new address.')
+    expect(words).toContain('An Operator can fix this.')
+    expect(buttons(html).some((label) => label.startsWith('Use the new address'))).toBe(false)
+    expect(buttons(html).some((label) => label.startsWith('Remove'))).toBe(false)
+  })
+
+  it('asks once before it changes the list, says nothing is written outside, and offers Cancel', () => {
+    const html = note({ confirming: true })
+    expect(text(html)).toContain('Read FastAPI from fastapi/fastapi from now on? Only our list changes. Nothing is written to GitHub or Jira.')
+    expect(buttons(html)).toEqual(['Yes, use fastapi/fastapi', 'Cancel'])
+    expect(html).toContain('aria-labelledby="new-address-question-')
+    expect(html).toContain('tabindex="-1"')
+    expect(note()).not.toContain('Cancel')
+  })
+
+  it('holds a second press while the switch is sent, without moving focus off the button', () => {
+    const html = note({ confirming: true, busy: true })
+    expect(html).toMatch(/aria-busy="true"[^>]*>[\s\S]*Yes, use fastapi\/fastapi/)
+    expect(html).toContain('aria-disabled="true"')
+  })
+
+  it('shows nothing where GitHub reported no move', () => {
+    const plain = (statuses as WatchlistView).software[0]!
+    expect(renderToStaticMarkup(<MovedNote row={plain} operator confirming={false} busy={false} onAsk={() => undefined} onConfirm={() => undefined} onCancel={() => undefined} />)).toBe('')
+    expect(text(render(statuses, ALICE))).not.toContain('Use the new address')
+  })
+
+  it('leaves a row as it was before this fact existed when the platform sends neither field', () => {
+    const older: Record<string, unknown> = { ...fastapi }
+    delete older['moved_to']
+    delete older['not_found']
+    const html = render({ ...(statuses as WatchlistView), software: [older] }, ALICE)
+    expect(text(html)).not.toContain('GitHub now calls')
+    expect(text(html)).not.toContain('GitHub can’t find')
   })
 })

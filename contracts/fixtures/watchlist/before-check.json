@@ -26,6 +26,9 @@
       "problem": "GitHub answered 404 Not Found.",
       "open_ticket": null,
       "approval_id": null,
+      "moved_to": null,
+      "not_found": false,
+      "address_changes": [],
       "added_by": "alice",
       "added_at": "2026-11-02T10:00:00+08:00"
     },
@@ -51,6 +54,9 @@
       "problem": null,
       "open_ticket": null,
       "approval_id": null,
+      "moved_to": null,
+      "not_found": false,
+      "address_changes": [],
       "added_by": "alice",
       "added_at": "2026-11-02T10:00:00+08:00"
     },
@@ -72,6 +78,9 @@
       "problem": null,
       "open_ticket": null,
       "approval_id": null,
+      "moved_to": null,
+      "not_found": false,
+      "address_changes": [],
       "added_by": "carol",
       "added_at": "2026-11-19T11:20:00+08:00"
     },
@@ -97,6 +106,9 @@
       "problem": null,
       "open_ticket": null,
       "approval_id": null,
+      "moved_to": null,
+      "not_found": false,
+      "address_changes": [],
       "added_by": "alice",
       "added_at": "2026-11-02T10:00:00+08:00"
     },
@@ -122,6 +134,9 @@
       "problem": null,
       "open_ticket": null,
       "approval_id": null,
+      "moved_to": null,
+      "not_found": false,
+      "address_changes": [],
       "added_by": "alice",
       "added_at": "2026-11-02T10:00:00+08:00"
     },
@@ -147,6 +162,9 @@
       "problem": null,
       "open_ticket": null,
       "approval_id": null,
+      "moved_to": null,
+      "not_found": false,
+      "address_changes": [],
       "added_by": "alice",
       "added_at": "2026-11-02T10:00:00+08:00"
     }

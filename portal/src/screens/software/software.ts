@@ -20,6 +20,47 @@ export function cantCheckWords(problem: string | null, checking: Checking): stri
   return `${problem ?? 'Can’t check right now.'} ${checkedAgain(checking)}`
 }
 
+/** GitHub told the check the saved repository has no home: the row says so, with no way to fix it by button. */
+export function notFoundWords(row: Pick<WatchedSoftwareView, 'name' | 'source'>, { operator, scheduled, paused }: Checking & { readonly operator: boolean }): string {
+  const skipped = `GitHub can’t find ${row.source.ref}. It may have moved to another repository. ${row.name} stays Can’t check until GitHub finds that address.`
+  if (!operator) return `${skipped} An Operator can fix this.`
+  return `${skipped} Remove it and add it again at its new address. ${checkedAgain({ scheduled, paused })}`
+}
+
+/** GitHub renamed the saved repository and passes the old name on to the new one. */
+export function movedWords(row: Pick<WatchedSoftwareView, 'source' | 'moved_to'>): string {
+  return `GitHub now calls this project ${row.moved_to}. We saved ${row.source.ref}, and checks still reach it through GitHub’s redirect.`
+}
+
+export function askNewAddressWords(row: Pick<WatchedSoftwareView, 'name' | 'moved_to'>): string {
+  return `Read ${row.name} from ${row.moved_to} from now on? Only our list changes. Nothing is written to GitHub or Jira.`
+}
+
+export const NEW_ADDRESS_ASK = 'Use the new address'
+
+export function movedHeadline(name: string, saved: string, movedTo: string): string {
+  return `GitHub moved ${name} from ${saved} to ${movedTo}.`
+}
+
+export function notFoundHeadline(name: string, saved: string): string {
+  return `GitHub can’t find ${saved}, the address saved for ${name}.`
+}
+
+export interface Attention {
+  readonly id: string
+  readonly name: string
+  readonly words: string
+}
+
+/** The rows whose address needs a person, in the order of the list. A moved row and a not-found row never overlap. */
+export function addressAttentionOf(rows: readonly WatchedSoftwareView[]): Attention[] {
+  return rows.flatMap((row) => {
+    if (row.moved_to) return [{ id: row.id, name: row.name, words: movedHeadline(row.name, row.source.ref, row.moved_to) }]
+    if (row.not_found) return [{ id: row.id, name: row.name, words: notFoundHeadline(row.name, row.source.ref) }]
+    return []
+  })
+}
+
 export const PAUSED_WORDS = 'Paused. No check runs until an Operator resumes it.'
 
 /** True when the schedule starts checks: it is set, and not held because its owner can no longer run it. */
@@ -337,6 +378,10 @@ export function historyOf(row: WatchedSoftwareView, nameOf: (id: string) => stri
   if (source && row.our_version) {
     const words = source.kind === 'ticket_done' ? `Our version moved to ${row.our_version}. It came from ${source.ticket ?? 'a ticket'}, marked Done.` : `Our version is ${row.our_version}. ${versionSourceWords(source)}.`
     dated.push({ at: source.at, words })
+  }
+  for (const change of row.address_changes) {
+    const who = nameOf(change.by)
+    dated.push({ at: change.at, words: change.kind === 'use' ? `${who} used the new address ${change.to_repo}. It was ${change.from_repo}.` : `${who} put the address back to ${change.to_repo}. It was ${change.from_repo}.` })
   }
   dated.push({ at: row.added_at, words: `Added by ${nameOf(row.added_by)}.` })
   const newestFirst = [...dated].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))

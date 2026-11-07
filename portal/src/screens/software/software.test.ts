@@ -275,6 +275,20 @@ describe('the schedule', () => {
 })
 
 describe('a row’s history', () => {
+  it('says who used the new address and who put it back, from and to, newest first', () => {
+    const row: WatchedSoftwareView = {
+      ...(ROWS.find((r) => r.name === 'FastAPI') as WatchedSoftwareView),
+      address_changes: [
+        { kind: 'undo', from_repo: 'fastapi/fastapi', to_repo: 'tiangolo/fastapi', by: 'alice', at: '2026-11-10T03:00:00Z' },
+        { kind: 'use', from_repo: 'tiangolo/fastapi', to_repo: 'fastapi/fastapi', by: 'alice', at: '2026-11-10T02:00:00Z' },
+      ],
+    }
+    const words = historyOf(row, nameOf).map((line) => line.words)
+    expect(words).toContain('Alice put the address back to tiangolo/fastapi. It was fastapi/fastapi.')
+    expect(words).toContain('Alice used the new address fastapi/fastapi. It was tiangolo/fastapi.')
+    expect(words.indexOf('Alice put the address back to tiangolo/fastapi. It was fastapi/fastapi.')).toBeLessThan(words.indexOf('Alice used the new address fastapi/fastapi. It was tiangolo/fastapi.'))
+  })
+
   it('says our version came from the ticket once it is marked Done', () => {
     const row: WatchedSoftwareView = {
       ...(ROWS.find((r) => r.name === 'LangGraph') as WatchedSoftwareView),

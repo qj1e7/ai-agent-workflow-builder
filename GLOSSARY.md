@@ -86,6 +86,9 @@ _Avoid_: Live version, active version
 The list of software a team runs and keeps up to date. It is checked on a schedule, and one approval request covers each check. In the app it is the **Software watchlist**.
 _Avoid_: Inventory, software list
 
+**Use the new address**:
+An Operator's button on the Software watchlist. When GitHub renamed a watched repository and now answers with the new name, it replaces the saved repository with that name, after one confirmation, and Undo puts the old one back for a day. It changes only our own list. A repository GitHub cannot find at all has no new address to use.
+
 **Watched software**:
 One piece of software on the watchlist, with its source and our version.
 _Avoid_: Item, package, repo

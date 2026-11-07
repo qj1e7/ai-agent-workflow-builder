@@ -154,6 +154,30 @@ class MockGithubTest(unittest.TestCase):
         self.assertEqual(body["full_name"], "langchain-ai/langgraph")
         self.assertEqual(other["full_name"], "redis/redis")
 
+    def test_a_renamed_repository_redirects_to_the_one_github_has_now(self) -> None:
+        with running() as base:
+            old = http.client.HTTPConnection(base.removeprefix("http://"), timeout=5)
+            try:
+                old.request("GET", "/repos/tiangolo/fastapi")
+                response = old.getresponse()
+                response.read()
+                where = response.getheader("Location")
+                self.assertEqual(response.status, 301)
+            finally:
+                old.close()
+            assert where is not None
+            self.assertTrue(where.startswith(f"{base}/repositories/"))
+            status, body = call(base, where.removeprefix(base))
+            self.assertEqual((status, body["full_name"]), (200, "fastapi/fastapi"))
+            status, releases = call(base, where.removeprefix(base) + "/releases")
+            self.assertEqual((status, releases[0]["tag_name"]), (200, "0.115.6"))
+
+    def test_a_renamed_repository_still_follows_its_mode(self) -> None:
+        with running() as base:
+            call(base, "/_admin/mode", {"mode": "not_found", "repo": "tiangolo/fastapi"})
+            status, _ = call(base, "/repos/tiangolo/fastapi")
+            self.assertEqual(status, 404)
+
     def test_cpython_exists_and_publishes_no_releases(self) -> None:
         with running() as base:
             _, repo = call(base, "/repos/python/cpython")

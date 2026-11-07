@@ -11,7 +11,7 @@ import done from '../../../../contracts/fixtures/views/success.final.json'
 import { App } from '../../App'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
-import type { ApprovalItem, ConfirmationItem, ConnectionItem, FollowingUpItem, HomeOut, Me, ReplyView, RunView, StoppedItem, UseCaseView } from '../../api/types'
+import type { AddressItem, ApprovalItem, ConfirmationItem, ConnectionItem, FollowingUpItem, HomeOut, Me, ReplyView, RunView, StoppedItem, UseCaseView } from '../../api/types'
 
 const PEOPLE: Record<'alice' | 'bob' | 'carol', Me> = {
   alice: { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] },
@@ -40,6 +40,7 @@ interface Situation {
   readonly confirmations: readonly ConfirmationItem['kind'][]
   readonly replies?: number
   readonly connections?: number
+  readonly addresses?: number
 }
 
 const operator = (me: Me) => me.roles.includes('operator')
@@ -91,6 +92,7 @@ function platformHome(situation: Situation, runs: readonly Run[]): HomeOut {
   const confirmationShape = (bobHome as HomeOut).confirmations[0] as ConfirmationItem
   const replyShape = base.replied[0] as FollowingUpItem
   const connectionShape = base.connections[0] as ConnectionItem
+  const addressShape = base.addresses[0] as AddressItem
   return {
     ...base,
     approvals: asks.slice(0, API_SHOWN).map(({ view }) => ({ ...approvalShape, run_id: view.run_id, approval_id: `apr_${view.run_id}`, use_case_id: view.use_case_id, use_case_name: view.use_case_name, started_by: 'carol', started_by_name: 'Carol', started_at: view.started_at })),
@@ -103,6 +105,7 @@ function platformHome(situation: Situation, runs: readonly Run[]): HomeOut {
     waiting_on_others: [],
     waiting_on_others_total: 0,
     connections: operator(situation.me) ? Array.from({ length: situation.connections ?? 0 }, (_, n) => ({ ...connectionShape, id: n === 0 ? 'jira' : 'github', name: n === 0 ? 'Jira' : 'GitHub' })) : [],
+    addresses: operator(situation.me) ? Array.from({ length: situation.addresses ?? 0 }, (_, n) => ({ ...addressShape, software_id: `sw_${n}`, name: `Software ${n}`, moved_to: n % 2 === 0 ? 'owner/new-name' : null, not_found: n % 2 === 1 })) : [],
     replied: Array.from({ length: situation.replies ?? 0 }, (_, n) => ({ ...replyShape, request_id: `trq_${n}`, asked_at: iso(n), latest_reply: { ...(replyShape.latest_reply as ReplyView), replied_at: iso(n + 5) } })),
   }
 }
@@ -187,7 +190,7 @@ function see(situation: Situation): Seen {
 const reaches = (seen: Seen, run: string) => seen.actions.includes(`open ${run}`) || seen.actions.includes(`retry ${run}`)
 
 function describeSituation({ situation, home }: Seen): string {
-  const shape = `${situation.me.id}, ${situation.workflows} workflows, API returned ${home.approvals.length} of ${home.approvals_total} approvals, ${home.stopped.length} of ${home.stopped_total} stopped, ${home.confirmations.length} confirmations, ${home.replied.length} replies, ${home.connections.length} connections`
+  const shape = `${situation.me.id}, ${situation.workflows} workflows, API returned ${home.approvals.length} of ${home.approvals_total} approvals, ${home.stopped.length} of ${home.stopped_total} stopped, ${home.confirmations.length} confirmations, ${home.replied.length} replies, ${home.connections.length} connections, ${home.addresses.length} addresses`
   return `${situation.name} (${shape})`
 }
 
@@ -203,6 +206,7 @@ function unreachable(seen: Seen): string[] {
     ...home.stopped.filter((item) => !reaches(seen, item.run_id)).map((item) => `stopped run ${item.run_id} (${item.use_case_id}): no button acts on it`),
     ...home.confirmations.filter((item) => !controls.some((control) => control.item === `confirmation:${item.confirmation_id}`)).map((item) => `confirmation ${item.confirmation_id}: no button`),
     ...home.connections.filter((item) => !controls.some((control) => control.item === `connection:${item.id}` && control.href === null && control.text === 'Check again')).map((item) => `connection ${item.id}: no Check again button`),
+    ...home.addresses.filter((item) => !controls.some((control) => control.item === `address:${item.software_id}` && control.href === `/software?row=${item.software_id}`)).map((item) => `address ${item.software_id}: no button lands on its row`),
     ...home.replied.filter((item) => !controls.some((control) => control.item === `reply:${item.request_id}` && control.href === `/workflows?request=${item.request_id}`)).map((item) => `reply to request ${item.request_id}: no button opens it`),
   ]
 }
@@ -221,7 +225,7 @@ function twice({ actions }: Seen): string[] {
 
 function primaryProblem({ controls, actions, home }: Seen): string[] {
   const primaries = controls.filter((control) => control.primary).map((control) => control.text)
-  const somethingToDo = actions.length > 0 || home.confirmations.length > 0 || home.replied.length > 0 || home.connections.length > 0
+  const somethingToDo = actions.length > 0 || home.confirmations.length > 0 || home.replied.length > 0 || home.connections.length > 0 || home.addresses.length > 0
   const expected = somethingToDo ? 1 : 0
   return primaries.length === expected ? [] : [`${primaries.length} primary buttons (${primaries.join(', ')}), expected ${expected}`]
 }
@@ -260,7 +264,7 @@ function generated(count: number): Situation[] {
       ...Array.from({ length: upTo(4) }, (): Made => ({ workflow: anyWorkflow(), kind: 'done', minute: upTo(999) })),
     ]
     const confirmations = Array.from({ length: upTo(2) }, (): ConfirmationItem['kind'] => (next() < 0.5 ? 'approver' : 'model_address'))
-    return { name: `generated #${n}`, me: who[upTo(who.length - 1)] ?? PEOPLE.alice, workflows, runs, confirmations, replies: n % 5 === 0 ? 1 : n % 7 === 0 ? 2 : 0, connections: n % 3 === 0 ? 1 : n % 11 === 0 ? 2 : 0 }
+    return { name: `generated #${n}`, me: who[upTo(who.length - 1)] ?? PEOPLE.alice, workflows, runs, confirmations, replies: n % 5 === 0 ? 1 : n % 7 === 0 ? 2 : 0, connections: n % 3 === 0 ? 1 : n % 11 === 0 ? 2 : 0, addresses: n % 13 === 0 ? 1 : 0 }
   })
 }
 
@@ -296,6 +300,7 @@ const NAMED: Situation[] = [
   { name: 'nothing needs anyone', me: PEOPLE.alice, workflows: 3, runs: own(0, 3, 'done', (i) => i), confirmations: [] },
   { name: 'only a reply from the team', me: PEOPLE.bob, workflows: 3, runs: own(0, 3, 'done', (i) => i), confirmations: [], replies: 1 },
   { name: 'a connection that does not answer, and a key running out', me: PEOPLE.alice, workflows: 2, runs: own(0, 1, 'done', (i) => i), confirmations: [], connections: 2 },
+  { name: 'a repository that moved and one GitHub cannot find', me: PEOPLE.alice, workflows: 2, runs: own(0, 1, 'done', (i) => i), confirmations: [], addresses: 2 },
   { name: 'two replies, an approval and a stop', me: PEOPLE.alice, workflows: 4, runs: [...own(0, 1, 'decide', () => 5), ...own(1, 1, 'stopped', () => 9)], confirmations: ['approver'], replies: 2 },
 ]
 
@@ -316,12 +321,13 @@ describe(`Needs you on Workflows, in ${SITUATIONS.length} situations the platfor
       severalRequestsOnOneWorkflow: count(({ home }) => new Set(home.approvals.map((item) => item.use_case_id)).size < home.approvals.length),
       approvalsCutByThePlatform: count(({ home }) => home.approvals_total > home.approvals.length),
       stoppedCutByThePlatform: count(({ home }) => home.stopped_total > home.stopped.length),
-      nothingInNeedsYouButARowToAct: count(({ home, runs, situation }) => home.approvals_total + home.stopped_total + home.confirmations.length + home.connections.length === 0 && [...latestOf(runs).values()].some((run) => youDecide(run) || (run.view.state === 'failed' && operator(situation.me)))),
+      nothingInNeedsYouButARowToAct: count(({ home, runs, situation }) => home.approvals_total + home.stopped_total + home.confirmations.length + home.connections.length + home.addresses.length === 0 && [...latestOf(runs).values()].some((run) => youDecide(run) || (run.view.state === 'failed' && operator(situation.me)))),
       approverOnly: count(({ situation }) => !operator(situation.me)),
       replies: count(({ home }) => home.replied.length > 0),
       connections: count(({ home }) => home.connections.length > 0),
+      addresses: count(({ home }) => home.addresses.length > 0),
       confirmations: count(({ home }) => home.confirmations.length > 0),
-      nothingToDo: count(({ actions, home }) => actions.length === 0 && home.confirmations.length === 0 && home.replied.length === 0 && home.connections.length === 0),
+      nothingToDo: count(({ actions, home }) => actions.length === 0 && home.confirmations.length === 0 && home.replied.length === 0 && home.connections.length === 0 && home.addresses.length === 0),
     }
     for (const [shape, n] of Object.entries(shapes)) expect(n, shape).toBeGreaterThanOrEqual(1)
     expect(shapes.moreThanTenReturned).toBeGreaterThanOrEqual(30)

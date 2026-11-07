@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from dataclasses import replace
 from datetime import timedelta
 
@@ -537,3 +537,83 @@ async def test_recording_the_same_review_twice_changes_nothing(h: Harness):
     assert once == twice
     assert once.learned == {REDIS: FromFirstCheck("8.2.1", NOW)}
     assert once.checks[LANGGRAPH] == Checked(run_id, NOW, "1.2.16")
+
+
+def with_address(output: TaskOutput, **named: Mapping[str, object]) -> TaskOutput:
+    """The output with `full_name` and `not_found` set on the findings of the named software."""
+    return output.model_copy(
+        update={
+            "findings": [f.model_copy(update=named.get(f.software_id, {})) for f in output.findings]
+        }
+    )
+
+
+async def test_each_check_keeps_the_name_github_answered_and_a_later_check_replaces_it(h: Harness):
+    h.agent.output = with_address(
+        NOTHING_BEHIND, **{FASTAPI: {"full_name": "tiangolo/fastapi-new"}}
+    )
+    first = await start_check(h)
+    await h.orchestrator.on_step(first, StepName.RUN_AGENTS, WORK)
+    found = await standings(h)
+    assert found.software[FASTAPI].facts.latest_check == Checked(
+        first, NOW, "0.115.0", github_name="tiangolo/fastapi-new"
+    )
+    assert found.software[POSTGRES].facts.latest_check == Checked(first, NOW, "17.2.0")
+
+    h.advance(timedelta(hours=1))
+    h.agent.output = with_address(NOTHING_BEHIND, **{FASTAPI: {"full_name": "fastapi/fastapi"}})
+    second = await start_check(h, key="check-2")
+    await h.orchestrator.on_step(second, StepName.RUN_AGENTS, N8nExecutionId("42"))
+    latest = (await standings(h)).software[FASTAPI].facts.latest_check
+    assert latest == Checked(
+        second, NOW + timedelta(hours=1), "0.115.0", github_name="fastapi/fastapi"
+    )
+
+
+async def test_a_404_is_kept_as_not_found_with_no_name_and_a_later_read_clears_it(h: Harness):
+    h.agent.output = with_address(
+        NOTHING_BEHIND.model_copy(
+            update={
+                "findings": [
+                    finding(LANGGRAPH, "up_to_date", "1.2.14"),
+                    finding(REDIS, "starting_point", "8.2.1"),
+                    finding(FASTAPI, "cant_check", None, NOT_FOUND),
+                    finding(POSTGRES, "up_to_date", "17.2.0"),
+                ]
+            }
+        ),
+        **{FASTAPI: {"not_found": True}},
+    )
+    first = await start_check(h)
+    await h.orchestrator.on_step(first, StepName.RUN_AGENTS, WORK)
+    lost = (await standings(h)).software[FASTAPI].facts.latest_check
+    assert lost == CouldNotCheck(first, NOW, NOT_FOUND, None, None, True)
+
+    h.advance(timedelta(hours=1))
+    h.agent.output = NOTHING_BEHIND
+    second = await start_check(h, key="check-2")
+    await h.orchestrator.on_step(second, StepName.RUN_AGENTS, N8nExecutionId("42"))
+    again = (await standings(h)).software[FASTAPI].facts.latest_check
+    assert again == Checked(second, NOW + timedelta(hours=1), "0.115.0")
+
+
+async def test_a_check_that_could_not_ask_for_the_name_keeps_the_last_one_it_got(h: Harness):
+    h.agent.output = with_address(NOTHING_BEHIND, **{FASTAPI: {"full_name": "fastapi/fastapi"}})
+    first = await start_check(h)
+    await h.orchestrator.on_step(first, StepName.RUN_AGENTS, WORK)
+    h.advance(timedelta(hours=1))
+    h.agent.output = NOTHING_BEHIND.model_copy(
+        update={
+            "findings": [
+                finding(LANGGRAPH, "up_to_date", "1.2.14"),
+                finding(REDIS, "starting_point", "8.2.1"),
+                finding(FASTAPI, "cant_check", None, "GitHub answered 503 Service Unavailable."),
+                finding(POSTGRES, "up_to_date", "17.2.0"),
+            ]
+        }
+    )
+    second = await start_check(h, key="check-2")
+    await h.orchestrator.on_step(second, StepName.RUN_AGENTS, N8nExecutionId("42"))
+    latest = (await standings(h)).software[FASTAPI].facts.latest_check
+    assert isinstance(latest, CouldNotCheck)
+    assert (latest.github_name, latest.not_found) == ("fastapi/fastapi", False)

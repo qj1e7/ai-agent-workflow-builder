@@ -183,6 +183,53 @@ def test_tickets_may_be_absent_but_every_software_needs_its_finding():
     assert review(TASK, [], []) == Unusable("The agents did not report on LangGraph")
 
 
+def addressed(base: Finding, full_name: str | None = None, not_found: bool = False) -> Finding:
+    return base.model_copy(update={"full_name": full_name, "not_found": not_found})
+
+
+def test_the_name_github_answered_and_a_not_found_are_kept_with_what_was_learned():
+    findings = [
+        addressed(FINDINGS[0], "langchain-ai/langgraph"),
+        addressed(FINDINGS[1], "Redis/redis"),
+        addressed(FINDINGS[2], None, not_found=True),
+        FINDINGS[3],
+    ]
+    reviewed = review(TASK, findings, [ticket(LANGGRAPH)])
+    assert isinstance(reviewed, Reviewed)
+    assert reviewed.learned == (
+        ReadNewest(LANGGRAPH, "1.2.16", False, "langchain-ai/langgraph"),
+        ReadNewest(REDIS, "8.2.1", True, "Redis/redis"),
+        CouldNotRead(FASTAPI, "GitHub answered 404 Not Found.", None, True),
+        ReadNewest(POSTGRES, "17.2.0", False, None),
+    )
+
+
+def test_a_finding_that_says_github_found_the_repository_and_did_not_is_unusable():
+    findings = [FINDINGS[0], FINDINGS[1], addressed(FINDINGS[2], "a/b", True), FINDINGS[3]]
+    result = review(TASK, findings, [ticket(LANGGRAPH)])
+    assert isinstance(result, Unusable)
+    assert "FastAPI" in result.detail
+
+
+def test_a_name_that_is_not_an_owner_and_a_repository_is_refused_when_the_answer_is_read():
+    with pytest.raises(ValueError, match="full_name"):
+        Finding.model_validate({**FINDINGS[0].model_dump(), "full_name": "../../etc"})
+
+
+def test_a_failed_check_keeps_each_findings_address_beside_its_reason():
+    error = TaskError(type="UpstreamRejected", message="None could be checked", retryable=False)
+    findings = [
+        addressed(finding(LANGGRAPH, "cant_check", None, "GitHub answered 404."), None, True),
+        addressed(finding(REDIS, "cant_check", None, "No plain version."), "redis/redis"),
+    ]
+    reviewed = all_could_not_read(TASK, error, findings)
+    assert reviewed is not None
+    by_id = {entry.software_id: entry for entry in reviewed.learned}
+    assert by_id[LANGGRAPH] == CouldNotRead(LANGGRAPH, "GitHub answered 404.", None, True)
+    assert by_id[REDIS] == CouldNotRead(REDIS, "No plain version.", "redis/redis", False)
+    assert by_id[FASTAPI] == CouldNotRead(FASTAPI, "None could be checked.", None, False)
+
+
 PYDANTIC = SoftwareId("sw_01JC2A3B4C5D6E7F8G9H0J1K2Q")
 V_TAGS = replace(
     TASK,

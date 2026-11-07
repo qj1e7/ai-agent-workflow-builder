@@ -228,6 +228,17 @@ class VersionSourceView(WireModel):
     ticket: str | None
 
 
+class AddressChangeView(WireModel):
+    kind: Literal["use", "undo"] = Field(
+        description="use: the saved repository was switched to the one GitHub reported. undo: it "
+        "was put back."
+    )
+    from_repo: RepoName
+    to_repo: RepoName
+    by: UserId
+    at: datetime
+
+
 class WatchedSoftwareView(WireModel):
     id: SoftwareId
     name: str
@@ -254,8 +265,32 @@ class WatchedSoftwareView(WireModel):
     problem: str | None
     open_ticket: str | None
     approval_id: ApprovalId | None
+    moved_to: RepoName | None = Field(
+        default=None,
+        description="The repository GitHub answered for the saved one at the latest check, when "
+        "it is a different one: GitHub renamed the repository and redirects the old name. Null "
+        "when the names agree, or when no check has read it. The Operator may switch the saved "
+        "repository to it with POST /watchlist/software/{software_id}/address.",
+    )
+    not_found: bool = Field(
+        default=False,
+        description="True when the latest check was told by GitHub that the saved repository "
+        "does not exist. GitHub does not say where it went, so nothing is offered: remove the "
+        "software and add it again at its new address.",
+    )
+    address_changes: list[AddressChangeView] = Field(
+        description="Each time the saved repository was switched or put back, the newest first, "
+        "with who did it. At most 10.",
+    )
     added_by: UserId
     added_at: datetime
+
+
+class AddressIn(WireIn):
+    repo: RepoName = Field(
+        description="The owner/name the person confirmed. For use, it must be the one GitHub "
+        "reported for the software. For undo, it must be an address the software had before."
+    )
 
 
 class LastCheckView(WireModel):

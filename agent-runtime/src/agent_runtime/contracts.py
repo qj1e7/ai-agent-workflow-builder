@@ -263,6 +263,7 @@ def finished_task() -> TaskFinished:
                     newest=NEWEST,
                     new_versions=NEW_TAGS,
                     detail="2 releases newer than 1.2.14.",
+                    full_name="langchain-ai/langgraph",
                 )
             ],
         ),
@@ -394,6 +395,7 @@ def watchlist_finished() -> TaskFinished:
                     newest="1.2.16",
                     new_versions=NEW_TAGS,
                     detail="2 releases newer than 1.2.14.",
+                    full_name="langchain-ai/langgraph",
                 ),
                 Finding(
                     software_id=REDIS_ID,
@@ -401,6 +403,7 @@ def watchlist_finished() -> TaskFinished:
                     newest="8.2.1",
                     new_versions=[],
                     detail="Nothing is newer than 8.2.1.",
+                    full_name="redis/redis",
                 ),
                 Finding(
                     software_id=FASTAPI_ID,
@@ -408,6 +411,7 @@ def watchlist_finished() -> TaskFinished:
                     newest=None,
                     new_versions=[],
                     detail="GitHub answered 404 Not Found.",
+                    not_found=True,
                 ),
             ],
         ),

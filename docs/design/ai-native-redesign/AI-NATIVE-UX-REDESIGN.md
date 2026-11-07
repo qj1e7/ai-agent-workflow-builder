@@ -380,7 +380,7 @@ The platform checks the decision again on the server. The panel's summary is hel
 
 From top to bottom:
 
-1. **Needs attention.** The weekly upgrade request waiting for a yes, with Review and decide. Also any software the check couldn't read, with the AI troubleshooter's fix. Example: "GitHub can't find langchain-ai/langserve. It moved to langchain-ai/langchain." with **Use the new address**.
+1. **Needs attention.** The weekly upgrade request waiting for a yes, with Review and decide. Also any software the check couldn't read, with the AI troubleshooter's fix. Example: "GitHub can't find langchain-ai/langserve. It moved to langchain-ai/langchain." with **Use the new address**. Built today: only a GitHub rename, where GitHub redirects the old name to the new one and the platform can read the new name. This LangServe example is a 404, which names no new home, so the platform refuses the switch (409) and the button stays tagged as not built in the prototype.
 2. **Software we watch.** A row each with:
    - the name;
    - the version we run. When nobody gave it, it says "Not known", and nothing is compared with it. "Not sure? Start from the newest" means watching for releases newer than today's. It never records the newest release as the version the team runs, which could hide an out-of-date install;

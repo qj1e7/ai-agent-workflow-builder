@@ -69,11 +69,13 @@ async def _save_newest(
 ) -> None:
     await uow.conn.execute(
         "INSERT INTO orchestration.software_checks (use_case_id, software_id, run_id, "
-        "checked_at, newest_version, newest_at, problem) VALUES (%s, %s, %s, %s, %s, %s, NULL) "
+        "checked_at, newest_version, newest_at, problem, full_name, not_found) "
+        "VALUES (%s, %s, %s, %s, %s, %s, NULL, %s, false) "
         "ON CONFLICT (use_case_id, software_id) DO UPDATE SET run_id = EXCLUDED.run_id, "
         "checked_at = EXCLUDED.checked_at, newest_version = EXCLUDED.newest_version, "
-        "newest_at = EXCLUDED.newest_at, problem = NULL",
-        (use_case_id, read.software_id, run_id, uow.now, read.newest, uow.now),
+        "newest_at = EXCLUDED.newest_at, problem = NULL, not_found = false, "
+        "full_name = COALESCE(EXCLUDED.full_name, orchestration.software_checks.full_name)",
+        (use_case_id, read.software_id, run_id, uow.now, read.newest, uow.now, read.github_name),
     )
 
 
@@ -82,10 +84,20 @@ async def _save_problem_keeping_last_read(
 ) -> None:
     await uow.conn.execute(
         "INSERT INTO orchestration.software_checks (use_case_id, software_id, run_id, "
-        "checked_at, problem) VALUES (%s, %s, %s, %s, %s) "
+        "checked_at, problem, full_name, not_found) VALUES (%s, %s, %s, %s, %s, %s, %s) "
         "ON CONFLICT (use_case_id, software_id) DO UPDATE SET run_id = EXCLUDED.run_id, "
-        "checked_at = EXCLUDED.checked_at, problem = EXCLUDED.problem",
-        (use_case_id, unread.software_id, run_id, uow.now, unread.problem),
+        "checked_at = EXCLUDED.checked_at, problem = EXCLUDED.problem, "
+        "not_found = EXCLUDED.not_found, full_name = CASE WHEN EXCLUDED.not_found THEN NULL "
+        "ELSE COALESCE(EXCLUDED.full_name, orchestration.software_checks.full_name) END",
+        (
+            use_case_id,
+            unread.software_id,
+            run_id,
+            uow.now,
+            unread.problem,
+            unread.github_name,
+            unread.not_found,
+        ),
     )
 
 
@@ -211,8 +223,8 @@ class WatchStore:
         checks: dict[SoftwareId, LatestCheck] = {}
         for row in await (
             await uow.conn.execute(
-                "SELECT software_id, run_id, checked_at, newest_version, newest_at, problem "
-                "FROM orchestration.software_checks WHERE use_case_id = %s",
+                "SELECT software_id, run_id, checked_at, newest_version, newest_at, problem, "
+                "full_name, not_found FROM orchestration.software_checks WHERE use_case_id = %s",
                 (use_case_id,),
             )
         ).fetchall():
@@ -225,10 +237,17 @@ class WatchStore:
                     else KnownNewest(str(row["newest_version"]), row["newest_at"])
                 )
                 checks[software_id] = CouldNotCheck(
-                    run_id, row["checked_at"], str(row["problem"]), last_read
+                    run_id,
+                    row["checked_at"],
+                    str(row["problem"]),
+                    last_read,
+                    row["full_name"],
+                    bool(row["not_found"]),
                 )
             else:
-                checks[software_id] = Checked(run_id, row["checked_at"], str(row["newest_version"]))
+                checks[software_id] = Checked(
+                    run_id, row["checked_at"], str(row["newest_version"]), row["full_name"]
+                )
         pending: dict[SoftwareId, PendingTicket] = {}
         open_tickets: dict[SoftwareId, OpenTicket] = {}
         for row in await (

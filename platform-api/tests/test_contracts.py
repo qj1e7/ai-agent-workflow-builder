@@ -180,6 +180,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "watchlist/none.json": TypeAdapter(WatchlistOut),
     "watchlist/empty.json": TypeAdapter(WatchlistView),
     "watchlist/statuses.json": TypeAdapter(WatchlistView),
+    "watchlist/moved.json": TypeAdapter(WatchlistView),
     "watchlist/add-software.json": TypeAdapter(AddSoftware),
     "watchlist/schedule.in.json": TypeAdapter(ScheduleIn),
     "watchlist/schedule.saved.json": TypeAdapter(WatchlistView),
@@ -281,6 +282,16 @@ def test_stories_end_as_their_names_say():
     rejected = activity_events_adapter.validate_python(load("runs/rejected.json"))[-1]
     assert rejected.kind == "run_rejected"
     assert rejected.data.by == "bob"
+
+
+def test_the_watchlist_fixtures_show_a_moved_and_a_not_found_repository():
+    moved = WatchlistView.model_validate(load("watchlist/moved.json"))
+    [lost] = [row for row in moved.software if row.not_found]
+    assert (lost.status, lost.moved_to) == ("cant_check", None)
+    [row] = [row for row in moved.software if row.moved_to]
+    assert row.source.ref == "tiangolo/fastapi"
+    assert row.moved_to == "fastapi/fastapi"
+    assert not row.not_found
 
 
 def test_the_watchlist_fixture_shows_every_status_attention_first():

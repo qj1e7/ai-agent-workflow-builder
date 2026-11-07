@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import aliceHome from '../../../../contracts/fixtures/builder/home.alice.json'
 import bobHome from '../../../../contracts/fixtures/builder/home.bob.json'
 import dayOne from '../../../../contracts/fixtures/builder/home.day-one.json'
-import type { ApprovalItem, ConnectionItem, FollowingUpItem, HomeOut, ReplyView, StoppedItem, WaitingItem } from '../../api/types'
+import type { AddressItem, ApprovalItem, ConnectionItem, FollowingUpItem, HomeOut, ReplyView, StoppedItem, WaitingItem } from '../../api/types'
 import { ApiError } from '../../api/client'
 import { actionsOf, checkWords, comingUpOf, draftWords, HOME_NEEDS_SHOWN, leadLine, moreWords, needsOf, needsTotal, retryProblem, waitingWords, wordsOf, type Need } from './home'
 
@@ -40,6 +40,18 @@ describe('the order of what needs you', () => {
     const need = needs.shown.find((item) => item.kind === 'connection') as Need
     expect(actionsOf(need)).toEqual([{ kind: 'check', label: 'Check again', connectionId: 'jira' }])
     expect(wordsOf(need, NOW).title).toBe('Jira is not answering.')
+  })
+
+  it('puts a moved or missing repository after the connections, counts it, and lands on its row', () => {
+    const [moved, lost] = ALICE.addresses as [AddressItem, AddressItem]
+    const home: HomeOut = { ...BOB, connections: [(ALICE.connections as [ConnectionItem])[0]], addresses: [moved, lost], stopped: [STOP], stopped_total: 1 }
+    const needs = needsOf(home)
+    expect(needs.shown.map((need) => need.kind)).toEqual(['stopped', 'approval', 'connection', 'address', 'address', 'confirmation', 'confirmation'])
+    expect(needs.total).toBe(needsTotal(home))
+    const [first, second] = needs.shown.filter((need) => need.kind === 'address') as [Need, Need]
+    expect(actionsOf(first)).toEqual([{ kind: 'open', label: 'Show it on the watchlist', to: `/software?row=${moved.software_id}` }])
+    expect(wordsOf(first, NOW).title).toBe('GitHub moved FastAPI from tiangolo/fastapi to fastapi/fastapi.')
+    expect(wordsOf(second, NOW).title).toBe('GitHub can’t find langchain-ai/langserve, the address saved for LangServe.')
   })
 
   it('puts a reply from the team last, after confirmations, and counts it', () => {

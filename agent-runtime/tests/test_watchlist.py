@@ -33,7 +33,7 @@ from agent_runtime.contracts import (
 )
 from agent_runtime.events import EventLog
 from agent_runtime.planner import FixedPlanner, run_task
-from agent_runtime.release_source import Release, ReleaseSource
+from agent_runtime.release_source import MovableSource, Release
 from agent_runtime.summary import ModelSummarizer, Summarizer, TemplateSummarizer
 from agent_runtime.version_checker import VersionChecker
 from tests.fakes import FakeClock, FakeSource, RepoSource, langgraph_tags
@@ -48,7 +48,7 @@ PLAIN_PATTERN = r"^\d+\.\d+\.\d+$"
 
 
 class Room:
-    def __init__(self, source: ReleaseSource, summarizer: Summarizer | None = None) -> None:
+    def __init__(self, source: MovableSource, summarizer: Summarizer | None = None) -> None:
         self.clock = FakeClock()
         self.log = EventLog(self.clock, lambda event: None)
         self.checker = VersionChecker(
@@ -156,6 +156,53 @@ def test_a_ticket_for_a_baseline_the_first_check_read_does_not_call_it_our_versi
         "Proposed by the AI workflow builder."
     )
     assert "our version" not in ticket.reason
+
+
+def test_each_finding_carries_the_name_github_answers_for_the_repository():
+    source = RepoSource(TAGS, renamed={"tiangolo/fastapi": FASTAPI})
+    old = software(FASTAPI_ID, "FastAPI", "tiangolo/fastapi", "0.115.0")
+    result = finished(Room(source).run(request_for(langgraph("1.2.14"), old)))
+    assert finding(result, LANGGRAPH_ID).full_name == LANGGRAPH
+    assert finding(result, FASTAPI_ID).full_name == FASTAPI
+    assert not finding(result, FASTAPI_ID).not_found
+
+
+def test_a_ticket_for_a_renamed_repository_names_the_saved_address_and_the_new_one():
+    source = RepoSource(TAGS, renamed={"tiangolo/fastapi": FASTAPI})
+    old = software(FASTAPI_ID, "FastAPI", "tiangolo/fastapi", "0.114.0")
+    [ticket] = finished(Room(source).run(request_for(old))).output.proposed
+    assert ticket.fields["body"].startswith(
+        "FastAPI has 1 new release on GitHub (tiangolo/fastapi, which GitHub now calls "
+        "fastapi/fastapi) newer than our version 0.114.0:"
+    )
+
+
+def test_a_repository_github_cannot_find_is_flagged_not_found_and_has_no_name():
+    source = RepoSource(TAGS, refused={FASTAPI: 404})
+    result = finished(Room(source).run(request_for(langgraph("1.2.14"), fastapi("0.115.0"))))
+    lost = finding(result, FASTAPI_ID)
+    assert (lost.state, lost.not_found, lost.full_name) == ("cant_check", True, None)
+
+
+def test_a_refusal_other_than_not_found_is_not_flagged_not_found():
+    source = RepoSource(TAGS, refused={FASTAPI: 403})
+    result = finished(Room(source).run(request_for(langgraph("1.2.14"), fastapi("0.115.0"))))
+    assert not finding(result, FASTAPI_ID).not_found
+
+
+def test_a_name_github_would_not_give_is_unknown_and_the_check_still_reads_the_releases():
+    source = RepoSource(TAGS, renamed={"tiangolo/fastapi": FASTAPI}, name_down={"tiangolo/fastapi"})
+    old = software(FASTAPI_ID, "FastAPI", "tiangolo/fastapi", "0.114.0")
+    found = finding(finished(Room(source).run(request_for(old))), FASTAPI_ID)
+    assert (found.state, found.full_name, found.not_found) == ("behind", None, False)
+
+
+def test_a_check_asks_for_the_name_only_after_a_redirect_so_fourteen_software_take_fourteen_calls():
+    source = RepoSource(TAGS, renamed={"tiangolo/fastapi": FASTAPI}, refused={REDIS: 404})
+    old = software(FASTAPI_ID, "FastAPI", "tiangolo/fastapi", "0.114.0")
+    finished(Room(source).run(request_for(langgraph("1.2.14"), old, redis("8.2.0"))))
+    assert source.calls == [LANGGRAPH, "tiangolo/fastapi", REDIS]
+    assert source.name_calls == ["tiangolo/fastapi"]
 
 
 def test_releases_of_another_tag_family_never_count():

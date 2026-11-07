@@ -2,7 +2,7 @@ from collections.abc import Callable
 
 from agent_runtime.contract import TaskOutput, WatchlistInputs
 from agent_runtime.events import Draft
-from agent_runtime.release_source import CHECKER, DEFAULT_RETRY, ReleaseSource, RetryPolicy
+from agent_runtime.release_source import CHECKER, DEFAULT_RETRY, MovableSource, RetryPolicy
 from agent_runtime.summary import Summarizer
 from agent_runtime.watchlist import NothingChecked, WatchlistChecker
 
@@ -12,7 +12,7 @@ __all__ = ["CHECKER", "VersionChecker"]
 class VersionChecker:
     def __init__(
         self,
-        source: ReleaseSource,
+        source: MovableSource,
         summarizer: Summarizer,
         sleep: Callable[[float], None],
         retry: RetryPolicy = DEFAULT_RETRY,

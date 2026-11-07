@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 import { TicketLink } from '../screens/jira/TicketKeys'
 import { parseConfig } from './config'
-import { invalidateAfterMarkDone } from './queries'
+import { invalidateAfterMarkDone, refreshAfterWatchlistChange } from './queries'
 import { TicketLinksProvider } from './ticketLinks'
 
 function linkFor(raw: unknown): string {
@@ -37,5 +37,14 @@ describe('marking a ticket Done', () => {
     const spy = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue()
     await invalidateAfterMarkDone(queryClient)
     expect(spy.mock.calls.map(([filter]) => filter?.queryKey)).toEqual([['jira-tickets'], ['watchlist']])
+  })
+})
+
+describe('changing the Software watchlist', () => {
+  it('reads Home again, so a moved or missing repository leaves Needs you and the tab count at once', async () => {
+    const queryClient = new QueryClient()
+    const spy = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue()
+    await refreshAfterWatchlistChange(queryClient)
+    expect(spy.mock.calls.map(([filter]) => filter?.queryKey)).toEqual([['use-cases'], ['home']])
   })
 })

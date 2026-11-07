@@ -180,7 +180,9 @@
       "state": "cant_check",
       "newest": null,
       "new_versions": [],
-      "detail": "GitHub returned 503 Service Unavailable three times."
+      "detail": "GitHub returned 503 Service Unavailable three times.",
+      "full_name": null,
+      "not_found": false
     }
   ]
 }

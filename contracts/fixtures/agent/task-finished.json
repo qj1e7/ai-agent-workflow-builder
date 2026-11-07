@@ -27,7 +27,9 @@
           "1.2.16",
           "1.2.15"
         ],
-        "detail": "2 releases newer than 1.2.14."
+        "detail": "2 releases newer than 1.2.14.",
+        "full_name": "langchain-ai/langgraph",
+        "not_found": false
       }
     ]
   },

@@ -4,6 +4,7 @@ other run stopped, and to someone on a team with no workflows yet."""
 from datetime import UTC, datetime
 
 from platform_api.builder.home import (
+    AddressItem,
     ApprovalItem,
     ChangeLine,
     ComingUp,
@@ -91,6 +92,7 @@ def home_for_bob() -> HomeOut:
         replied=[],
         coming_up=COMING_UP,
         workflows=1,
+        addresses=[],
         connections=[],
     )
 
@@ -158,6 +160,24 @@ def home_for_alice(failure: Timeline) -> HomeOut:
         replied=[SUPPORT_REPORT],
         coming_up=COMING_UP,
         workflows=1,
+        addresses=[
+            AddressItem(
+                software_id="sw_01JC2A3B4C5D6E7F8G9H0J1K2M",
+                name="FastAPI",
+                repo="tiangolo/fastapi",
+                moved_to="fastapi/fastapi",
+                not_found=False,
+                checked_at=datetime(2026, 11, 9, 1, 0, tzinfo=UTC),
+            ),
+            AddressItem(
+                software_id="sw_01JC2A3B4C5D6E7F8G9H0J1K2N",
+                name="LangServe",
+                repo="langchain-ai/langserve",
+                moved_to=None,
+                not_found=True,
+                checked_at=datetime(2026, 11, 9, 1, 0, tzinfo=UTC),
+            ),
+        ],
         connections=[
             ConnectionItem(
                 id="jira",
@@ -197,6 +217,7 @@ DAY_ONE = HomeOut(
     replied=[],
     coming_up=None,
     workflows=0,
+    addresses=[],
     connections=[],
 )
 

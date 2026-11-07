@@ -10,6 +10,8 @@ from platform_api.builder import Watchlist
 from platform_api.builder.lifecycle import RESTORE_WINDOW
 from platform_api.db import Database
 from platform_api.orchestration import (
+    Checked,
+    CouldNotCheck,
     Given,
     ScheduleBook,
     SoftwareFacts,
@@ -20,7 +22,7 @@ from platform_api.orchestration.people_store import People
 from platform_api.shared import RunId, SoftwareId, UseCaseId
 from tests.conftest import PostgresUrls, truncate_all
 from tests.declared import FakeConnections
-from tests.support import LOCAL_ENV, MovingClock
+from tests.support import LOCAL_ENV, NOW, MovingClock
 
 pytestmark = pytest.mark.anyio
 
@@ -53,6 +55,34 @@ async def people_in(db: Database) -> People:
     return people
 
 
+class Renamed:
+    """The latest check read each software, and GitHub answered with another name for FastAPI."""
+
+    def __init__(self, name: str | None = "fastapi/fastapi", not_found: bool = False) -> None:
+        self.name = name
+        self.not_found = not_found
+
+    async def standings(
+        self, use_case_id: UseCaseId, given: Mapping[SoftwareId, Given | None]
+    ) -> WatchlistStanding:
+        run = RunId("run_1")
+        check = (
+            CouldNotCheck(run, NOW, "GitHub answered 404 Not Found.", None, None, True)
+            if self.not_found
+            else Checked(run, NOW, "0.115.1", self.name)
+        )
+        return WatchlistStanding(
+            {
+                software_id: Standing(
+                    SoftwareFacts(typed, check, None, None),
+                    "cant_check" if self.not_found else "behind",
+                )
+                for software_id, typed in given.items()
+            },
+            None,
+        )
+
+
 class FakeTicker:
     async def tick(self) -> list[RunId]:
         return [RunId("run_01A"), RunId("run_01B")]
@@ -68,6 +98,28 @@ async def client(db: Database) -> AsyncIterator[httpx.AsyncClient]:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
+
+
+OLD_FASTAPI = {"name": "FastAPI", "repo": "tiangolo/fastapi", "our_version": "0.114.0"}
+
+
+@pytest.fixture
+async def renamed_client(
+    postgres: PostgresUrls, clock: MovingClock
+) -> AsyncIterator[tuple[httpx.AsyncClient, Renamed]]:
+    truncate_all(postgres.owner)
+    database = Database(postgres.contexts, clock=clock)
+    await database.open()
+    app = create_app(LOCAL_ENV)
+    app.state.people = await people_in(database)
+    facts = Renamed()
+    app.state.watchlist = Watchlist(database, facts, ScheduleBook(database))
+    transport = httpx.ASGITransport(app=app)
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+            yield c, facts
+    finally:
+        await database.close()
 
 
 @pytest.fixture
@@ -388,3 +440,84 @@ async def test_the_tick_checks_the_step_key_and_answers_the_runs_it_started(
     assert (await client.post("/internal/v1/schedules/tick", headers=ALICE)).status_code == 422
     ticked = await client.post("/internal/v1/schedules/tick", headers=STEP_KEY)
     assert (ticked.status_code, ticked.json()) == (200, {"started": ["run_01A", "run_01B"]})
+
+
+async def test_the_row_carries_the_name_github_gave_and_the_new_address_replaces_the_saved_one(
+    renamed_client: tuple[httpx.AsyncClient, Renamed],
+):
+    client, _ = renamed_client
+    added = await client.post("/api/v1/watchlist/software", json=OLD_FASTAPI, headers=ALICE)
+    row = added.json()["software"][0]
+    assert (row["source"]["ref"], row["moved_to"], row["not_found"]) == (
+        "tiangolo/fastapi",
+        "fastapi/fastapi",
+        False,
+    )
+    url = f"/api/v1/watchlist/software/{row['id']}/address"
+    asked = {"repo": "fastapi/fastapi"}
+    wrong = await client.post(url, json={"repo": "evil/repo"}, headers=ALICE)
+    assert wrong.status_code == 409
+
+    done = await client.post(url, json=asked, headers=CAROL)
+    assert done.status_code == 200
+    view = done.json()
+    assert view["version"] == 2
+    [switched] = view["software"]
+    assert (switched["id"], switched["source"]["ref"], switched["moved_to"]) == (
+        row["id"],
+        "fastapi/fastapi",
+        None,
+    )
+    assert switched["our_version"] == "0.114.0"
+    assert (await client.post(url, json=asked, headers=ALICE)).json() == view
+
+    back = await client.post(url + "/undo", json={"repo": "tiangolo/fastapi"}, headers=CAROL)
+    assert back.status_code == 200
+    [undone] = back.json()["software"]
+    assert (undone["source"]["ref"], undone["moved_to"]) == ("tiangolo/fastapi", "fastapi/fastapi")
+
+
+async def test_only_an_operator_may_use_the_new_address_or_put_it_back(
+    renamed_client: tuple[httpx.AsyncClient, Renamed],
+):
+    client, _ = renamed_client
+    row = (await client.post("/api/v1/watchlist/software", json=OLD_FASTAPI, headers=ALICE)).json()[
+        "software"
+    ][0]
+    url = f"/api/v1/watchlist/software/{row['id']}/address"
+    body = {"repo": "fastapi/fastapi"}
+    assert (await client.post(url, json=body)).status_code == 401
+    assert (await client.post(url, json=body, headers=BOB)).status_code == 403
+    assert (await client.post(url + "/undo", json=body, headers=BOB)).status_code == 403
+    view = (await client.get("/api/v1/watchlist", headers=BOB)).json()["watchlist"]
+    assert view["version"] == 1 and view["software"][0]["source"]["ref"] == "tiangolo/fastapi"
+
+
+async def test_a_repository_github_cannot_find_offers_no_new_address(
+    renamed_client: tuple[httpx.AsyncClient, Renamed],
+):
+    client, facts = renamed_client
+    facts.not_found = True
+    row = (await client.post("/api/v1/watchlist/software", json=OLD_FASTAPI, headers=ALICE)).json()[
+        "software"
+    ][0]
+    assert (row["not_found"], row["moved_to"], row["status"]) == (True, None, "cant_check")
+    url = f"/api/v1/watchlist/software/{row['id']}/address"
+    refused = await client.post(url, json={"repo": "fastapi/fastapi"}, headers=ALICE)
+    assert refused.status_code == 409
+
+
+async def test_putting_back_an_address_more_than_a_day_after_the_switch_is_a_410(
+    renamed_client: tuple[httpx.AsyncClient, Renamed], clock: MovingClock
+):
+    client, _ = renamed_client
+    row = (await client.post("/api/v1/watchlist/software", json=OLD_FASTAPI, headers=ALICE)).json()[
+        "software"
+    ][0]
+    url = f"/api/v1/watchlist/software/{row['id']}/address"
+    await client.post(url, json={"repo": "fastapi/fastapi"}, headers=ALICE)
+    clock.now += RESTORE_WINDOW + timedelta(seconds=1)
+    late = await client.post(url + "/undo", json={"repo": "tiangolo/fastapi"}, headers=ALICE)
+    assert late.status_code == 410
+    never = await client.post(url + "/undo", json={"repo": "evil/repo"}, headers=ALICE)
+    assert never.status_code == 409

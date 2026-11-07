@@ -1,4 +1,5 @@
 # pyright: reportMissingTypeStubs=false, reportUnknownMemberType=false
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import cast
@@ -7,6 +8,7 @@ from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 
 from agent_runtime.contract import (
+    REPO_PATTERN,
     CarryForward,
     Finding,
     FindingState,
@@ -19,8 +21,11 @@ from agent_runtime.contract import (
 from agent_runtime.events import Draft
 from agent_runtime.release_source import (
     DEFAULT_RETRY,
-    ReleaseSource,
+    MovableSource,
+    Release,
     RetryPolicy,
+    SourceRejected,
+    SourceUnavailable,
     candidates,
     failed,
     finished,
@@ -34,6 +39,7 @@ from agent_runtime.summary import Checked, Summarizer
 from agent_runtime.tags import family_of, highest, newer_than
 
 NO_PLAIN_VERSION = "No release has a plain version number."
+NOT_FOUND_STATUSES = {404, 410}
 
 # What reading one source gave: the releases that match the tag pattern, or why it failed.
 type Read = list[str] | TaskError
@@ -84,9 +90,59 @@ def _finding(
     )
 
 
+@dataclass(frozen=True)
+class Address:
+    """What GitHub says about the saved repository: the name it answers for, or that it has none."""
+
+    full_name: str | None = None
+    not_found: bool = False
+
+
+class Watching:
+    """Reads one repository's releases and notes what GitHub said on the way: a rename shows as a
+    redirect, and a 404 on the releases says the repository is gone. This is why a check needs no
+    second call to learn the repository's address, except after a redirect."""
+
+    def __init__(self, source: MovableSource) -> None:
+        self._source = source
+        self.read = False
+        self.redirected = False
+        self.not_found = False
+
+    def fetch(self, repo: str) -> list[Release]:
+        try:
+            got = self._source.fetch_noting_move(repo)
+        except SourceRejected as refused:
+            self.not_found = refused.status in NOT_FOUND_STATUSES
+            raise
+        self.read, self.redirected = True, got.redirected
+        return got.releases
+
+    def address(self, repo: str) -> Address:
+        if self.not_found:
+            return Address(not_found=True)
+        if not self.read:
+            return Address()
+        if not self.redirected:
+            return Address(full_name=repo)
+        try:
+            name = self._source.current_name(repo)
+        except SourceRejected, SourceUnavailable:
+            return Address()
+        return Address(full_name=name if re.fullmatch(REPO_PATTERN, name) else None)
+
+
+def with_address(finding: Finding, address: Address) -> Finding:
+    return finding.model_copy(
+        update={"full_name": address.full_name, "not_found": address.not_found}
+    )
+
+
 def ticket_for(item: SoftwareToCheck, finding: Finding) -> ProposedIntent:
     assert item.our_version and finding.newest, "only a software that is behind gets a ticket"
     name, ref, our = item.name, item.source.ref, item.our_version
+    if finding.full_name is not None and finding.full_name.casefold() != ref.casefold():
+        ref = f"{ref}, which GitHub now calls {finding.full_name}"
     count = plural(len(finding.new_versions), "new release")
     bullets = "\n".join(f"- {tag}" for tag in finding.new_versions)
     if item.from_first_check:
@@ -132,7 +188,7 @@ type Update = dict[str, object]
 class WatchlistChecker:
     def __init__(
         self,
-        source: ReleaseSource,
+        source: MovableSource,
         summarizer: Summarizer,
         sleep: Callable[[float], None],
         retry: RetryPolicy = DEFAULT_RETRY,
@@ -177,13 +233,15 @@ class WatchlistChecker:
         last = len(inputs.software) - 1
         for position, item in enumerate(inputs.software):
             write(started("read_source", f"reading the releases of {item.name}."))
-            releases = read_releases(self._source, item.source.ref, self._retry, self._sleep, write)
+            watching = Watching(self._source)
+            releases = read_releases(watching, item.source.ref, self._retry, self._sleep, write)
+            address = watching.address(item.source.ref)
             if isinstance(releases, TaskError):
                 read: Read = releases
                 read_errors.append(releases)
             else:
                 read = candidates(releases, inputs.tag_pattern)
-            finding = decide(item, read)
+            finding = with_address(decide(item, read), address)
             findings.append(finding)
             write(_read_finished(item, finding))
             if finding.state == "cant_check":

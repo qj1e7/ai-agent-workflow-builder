@@ -3,7 +3,7 @@ import { ApiError } from '../../api/client'
 import { errorWords } from '../../api/errors'
 import { createLatch } from '../../api/latch'
 import { menuTakesEscape } from '../../shell/PersonChip'
-import { changeFeedback, escapeDismisses, NO_FEEDBACK, NOTICE_ID, noticeButtons, noticeWords, pressRemove, pressUndo, PROBLEM_ID, UNDO_ID, type ChangeFeedback, type FeedbackEvent, type MutateCallbacks } from './removal'
+import { changeFeedback, escapeDismisses, NO_FEEDBACK, NOTICE_ID, noticeButtons, noticeWords, pressRemove, pressUndo, pressUndoAddress, pressUseNewAddress, PROBLEM_ID, UNDO_ID, type ChangeFeedback, type FeedbackEvent, type MutateCallbacks } from './removal'
 
 const LANGGRAPH = { id: 'sw_lang', name: 'LangGraph' }
 const REDIS = { id: 'sw_redis', name: 'Redis' }
@@ -214,5 +214,102 @@ describe('resuming the watchlist', () => {
     expect(noticeWords(notice, { scheduled: false, paused: false })).toBe('Resumed. Press Check now to check by hand.')
     expect(noticeButtons(notice)).toEqual(['Dismiss'])
     expect(h.state().focusTargetId).toBeNull()
+  })
+})
+
+
+describe('using the new address', () => {
+  const FASTAPI = { id: 'sw_fast', name: 'FastAPI', ref: 'tiangolo/fastapi', movedTo: 'fastapi/fastapi' }
+
+  function addressHarness(start: ChangeFeedback = NO_FEEDBACK) {
+    const sent: { softwareId: string; repo: string }[] = []
+    const answers: MutateCallbacks[] = []
+    let state = start
+    let closed = 0
+    return {
+      latch: createLatch(),
+      sent,
+      send: (body: { softwareId: string; repo: string }, outcome: MutateCallbacks) => {
+        sent.push(body)
+        answers.push(outcome)
+      },
+      dispatch: (event: FeedbackEvent) => {
+        state = changeFeedback(state, event)
+      },
+      closed: () => closed,
+      onDone: () => {
+        closed += 1
+      },
+      answer: (settle: (outcome: MutateCallbacks) => void) => {
+        const outcome = answers.at(-1)
+        if (!outcome) throw new Error('nothing was sent')
+        settle(outcome)
+        outcome.onSettled?.()
+      },
+      state: () => state,
+    }
+  }
+
+  it('sends the address the person saw, holds a second press, and puts focus on Undo once it is done', () => {
+    const h = addressHarness()
+    pressUseNewAddress(h.latch, h.send, FASTAPI, h.dispatch, words, h.onDone)
+    pressUseNewAddress(h.latch, h.send, FASTAPI, h.dispatch, words, h.onDone)
+    expect(h.sent).toEqual([{ softwareId: 'sw_fast', repo: 'fastapi/fastapi' }])
+    expect(h.state().busy).toEqual({ id: 'sw_fast', act: 'switch' })
+
+    h.answer((outcome) => outcome.onSuccess?.(undefined))
+    expect(h.closed()).toBe(1)
+    expect(h.state()).toEqual({
+      notice: { kind: 'switched', row: { id: 'sw_fast', name: 'FastAPI', ref: 'tiangolo/fastapi', movedTo: 'fastapi/fastapi' }, from: 'tiangolo/fastapi', to: 'fastapi/fastapi' },
+      problem: null,
+      busy: null,
+      focusTargetId: UNDO_ID,
+    })
+  })
+
+  it('says what changed and when it is read next, and offers Undo and Dismiss', () => {
+    const notice = { kind: 'switched', row: FASTAPI, from: 'tiangolo/fastapi', to: 'fastapi/fastapi' } as const
+    expect(noticeWords(notice, { scheduled: true, paused: false })).toBe('FastAPI is now read from fastapi/fastapi. It is checked at the next check.')
+    expect(noticeWords(notice, { scheduled: false, paused: false })).toBe('FastAPI is now read from fastapi/fastapi. Press Check now to check it.')
+    expect(noticeWords(notice, { scheduled: true, paused: true })).toContain('once an Operator resumes the watchlist')
+    expect(noticeButtons(notice)).toEqual(['Undo', 'Dismiss'])
+  })
+
+  it('names the platform’s refusal in plain words and moves focus to it, when GitHub’s report changed meanwhile', () => {
+    const h = addressHarness()
+    pressUseNewAddress(h.latch, h.send, FASTAPI, h.dispatch, words, h.onDone)
+    h.answer((outcome) => outcome.onError?.(new ApiError(409, { detail: 'GitHub has not reported that address' })))
+    expect(h.closed()).toBe(1)
+    expect(h.state().notice).toBeNull()
+    expect(h.state().problem).toContain('Could not use the new address for FastAPI.')
+    expect(h.state().problem).toContain('GitHub has not reported that address at the latest check')
+    expect(h.state().focusTargetId).toBe(PROBLEM_ID)
+  })
+
+  it('puts the old address back with Undo, then moves focus to the row', () => {
+    const h = addressHarness()
+    pressUseNewAddress(h.latch, h.send, FASTAPI, h.dispatch, words, h.onDone)
+    h.answer((outcome) => outcome.onSuccess?.(undefined))
+    const switched = h.state().notice
+    if (switched?.kind !== 'switched') throw new Error('expected a switched notice')
+    pressUndoAddress(h.latch, h.send, switched, h.dispatch, words)
+    expect(h.sent.at(-1)).toEqual({ softwareId: 'sw_fast', repo: 'tiangolo/fastapi' })
+    expect(h.state().busy).toEqual({ id: 'sw_fast', act: 'switchBack' })
+    h.answer((outcome) => outcome.onSuccess?.(undefined))
+    expect(h.state().notice).toEqual({ kind: 'switchedBack', row: switched.row, to: 'tiangolo/fastapi' })
+    expect(h.state().focusTargetId).toBe('software-sw_fast')
+    expect(noticeWords({ kind: 'switchedBack', row: FASTAPI, to: 'tiangolo/fastapi' }, { scheduled: true, paused: false })).toBe('Put back. FastAPI is read from tiangolo/fastapi again.')
+  })
+
+  it('says why Undo failed, a day later or when the list holds the old address already', () => {
+    const switched = { kind: 'switched', row: FASTAPI, from: 'tiangolo/fastapi', to: 'fastapi/fastapi' } as const
+    const late = addressHarness()
+    pressUndoAddress(late.latch, late.send, switched, late.dispatch, words)
+    late.answer((outcome) => outcome.onError?.(new ApiError(410, { detail: 'late' })))
+    expect(late.state().problem).toBe('Could not put the old address back for FastAPI. It was changed more than a day ago.')
+    const held = addressHarness()
+    pressUndoAddress(held.latch, held.send, switched, held.dispatch, words)
+    held.answer((outcome) => outcome.onError?.(new ApiError(409, { detail: 'held' })))
+    expect(held.state().problem).toContain('The list already watches that address')
   })
 })
