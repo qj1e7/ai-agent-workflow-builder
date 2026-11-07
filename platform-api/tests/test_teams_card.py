@@ -14,6 +14,7 @@ from platform_api.orchestration.dispatch import (
     AskedStep,
     DispatchFailure,
     MessageRef,
+    identity_of,
 )
 from platform_api.orchestration.teams import (
     CARD_VERSION,
@@ -303,7 +304,7 @@ async def test_the_webhook_posts_the_card_as_one_adaptive_card_attachment():
     teams = TeamsWorkflowsWebhook(WEBHOOK, "CODESparks Ops", recording(202, seen))
     ref = await teams.announce(NOTICE)
     await teams.update(ref, APPROVED)
-    assert ref == MessageRef("CODESparks Ops", "apr_1", "teams_workflows")
+    assert ref == MessageRef("CODESparks Ops", "apr_1", identity_of("teams_workflows", WEBHOOK))
     assert teams.name == "CODESparks Ops"
     posted = [json.loads(r.content) for r in seen]
     assert [str(r.url) for r in seen] == [WEBHOOK, WEBHOOK]
@@ -319,6 +320,17 @@ async def test_the_webhook_posts_the_card_as_one_adaptive_card_attachment():
     }
     assert posted[1]["attachments"][0]["content"] == wire(outcome_card(APPROVED))
     assert "s3cr3t" not in json.dumps(posted)
+
+
+async def test_each_webhook_address_is_its_own_channel_and_its_identity_never_shows_it():
+    one = TeamsWorkflowsWebhook(WEBHOOK, "CODESparks Ops", recording(202, []))
+    renamed = TeamsWorkflowsWebhook(WEBHOOK, "Support desk", recording(202, []))
+    elsewhere = TeamsWorkflowsWebhook(WEBHOOK.replace("abc", "xyz"), "CODESparks Ops")
+    assert one.identity == renamed.identity != elsewhere.identity
+    assert (await one.announce(NOTICE)).identity == one.identity
+    for part in ("s3cr3t", "logic.azure.com", "triggers"):
+        assert part not in one.identity
+    await elsewhere.close()
 
 
 @pytest.mark.parametrize("status", [400, 429, 500])

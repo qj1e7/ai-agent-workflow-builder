@@ -676,6 +676,70 @@
       "title": "ApprovalDecidedData",
       "type": "object"
     },
+    "ApprovalOutcomeNotPosted": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/ApprovalOutcomeNotPostedData"
+        },
+        "kind": {
+          "const": "approval_outcome_not_posted",
+          "default": "approval_outcome_not_posted",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "ApprovalOutcomeNotPosted",
+      "type": "object"
+    },
+    "ApprovalOutcomeNotPostedData": {
+      "additionalProperties": false,
+      "properties": {
+        "approval_id": {
+          "title": "Approval Id",
+          "type": "string"
+        },
+        "channel": {
+          "title": "Channel",
+          "type": "string"
+        }
+      },
+      "required": [
+        "approval_id",
+        "channel"
+      ],
+      "title": "ApprovalOutcomeNotPostedData",
+      "type": "object"
+    },
     "ApprovalRequested": {
       "additionalProperties": false,
       "properties": {
@@ -1805,6 +1869,7 @@
       "approval_announce_failed": "#/$defs/ApprovalAnnounceFailed",
       "approval_announced": "#/$defs/ApprovalAnnounced",
       "approval_decided": "#/$defs/ApprovalDecided",
+      "approval_outcome_not_posted": "#/$defs/ApprovalOutcomeNotPosted",
       "approval_requested": "#/$defs/ApprovalRequested",
       "leg_dispatched": "#/$defs/LegDispatched",
       "run_created": "#/$defs/RunCreated",
@@ -1867,6 +1932,9 @@
     },
     {
       "$ref": "#/$defs/ApprovalDecided"
+    },
+    {
+      "$ref": "#/$defs/ApprovalOutcomeNotPosted"
     },
     {
       "$ref": "#/$defs/WriteActionDenied"

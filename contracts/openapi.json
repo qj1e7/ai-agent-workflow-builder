@@ -169,6 +169,7 @@
             "approval_announce_failed": "#/components/schemas/ApprovalAnnounceFailed",
             "approval_announced": "#/components/schemas/ApprovalAnnounced",
             "approval_decided": "#/components/schemas/ApprovalDecided",
+            "approval_outcome_not_posted": "#/components/schemas/ApprovalOutcomeNotPosted",
             "approval_requested": "#/components/schemas/ApprovalRequested",
             "leg_dispatched": "#/components/schemas/LegDispatched",
             "run_created": "#/components/schemas/RunCreated",
@@ -231,6 +232,9 @@
           },
           {
             "$ref": "#/components/schemas/ApprovalDecided"
+          },
+          {
+            "$ref": "#/components/schemas/ApprovalOutcomeNotPosted"
           },
           {
             "$ref": "#/components/schemas/WriteActionDenied"
@@ -1454,6 +1458,70 @@
           "first_changes"
         ],
         "title": "ApprovalItem",
+        "type": "object"
+      },
+      "ApprovalOutcomeNotPosted": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ApprovalOutcomeNotPostedData"
+          },
+          "kind": {
+            "const": "approval_outcome_not_posted",
+            "default": "approval_outcome_not_posted",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "ApprovalOutcomeNotPosted",
+        "type": "object"
+      },
+      "ApprovalOutcomeNotPostedData": {
+        "additionalProperties": false,
+        "properties": {
+          "approval_id": {
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "channel": {
+            "title": "Channel",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approval_id",
+          "channel"
+        ],
+        "title": "ApprovalOutcomeNotPostedData",
         "type": "object"
       },
       "ApprovalRef": {

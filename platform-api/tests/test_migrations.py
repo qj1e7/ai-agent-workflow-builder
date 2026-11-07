@@ -7,10 +7,19 @@ from platform_api.bootstrap import OLD_RUN_WORKFLOW
 from platform_api.db import Database
 from platform_api.migrations import downgrade, upgrade
 from platform_api.orchestration import WatchlistTask
+from platform_api.orchestration.approvals import (
+    AnyApprover,
+    ApprovalPolicy,
+    ApprovalRequest,
+    ApprovalStep,
+)
+from platform_api.orchestration.dispatch import PRACTICE, MessageRef
 from platform_api.orchestration.runs import Pending
 from platform_api.orchestration.store import RunRecord, Store
+from platform_api.orchestration.teams import TeamsWorkflowsWebhook
+from platform_api.orchestration.write_actions import Proposal, WriteAction, digest
 from platform_api.practice_jira import PracticeJira
-from platform_api.shared import RunId
+from platform_api.shared import ApprovalId, ProposalId, RunId
 from tests.conftest import PostgresUrls
 from tests.support import NOW, SPEC
 
@@ -596,3 +605,61 @@ def test_migration_0013_adds_the_connection_checks_and_a_downgrade_drops_them(
         pytest.raises(psycopg.errors.InsufficientPrivilege),
     ):
         builder.execute("SELECT * FROM orchestration.connection_checks")
+
+
+async def test_migration_0014_keeps_each_posts_channel_and_a_webhook_post_from_before_matches_none(
+    postgres: PostgresUrls, db: Database
+):
+    store = Store()
+    sent = {ApprovalId("apr_practice"): "practice", ApprovalId("apr_webhook"): "teams_workflows"}
+    async with db.transaction("orchestration") as uow:
+        pending = Pending(RunId("run_old"), 1, None, NOW)
+        record = RunRecord(RunId("run_old"), SPEC, SPEC.owner, NOW, NOW, 1, pending, (), None)
+        await store.insert_run(uow, record, "key-old")
+        for approval_id in sent:
+            action = WriteAction("jira", "create_ticket", {"project": "MOCK"}, {"title": "t"})
+            proposal = Proposal(
+                ProposalId(f"prp_{approval_id}"), RunId("run_old"), (action,), digest((action,))
+            )
+            await store.insert_proposal(uow, proposal)
+            await store.insert_approval(
+                uow,
+                ApprovalRequest(
+                    approval_id,
+                    RunId("run_old"),
+                    proposal.id,
+                    proposal.digest,
+                    ApprovalPolicy((ApprovalStep("Team approver", AnyApprover()),)),
+                    frozenset({SPEC.owner}),
+                ),
+            )
+    downgrade("orchestration", postgres.owner, "0013")
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        for approval_id, adapter in sent.items():
+            conn.execute(
+                "INSERT INTO orchestration.approval_messages "
+                "(approval_id, channel, message_id, adapter, posted_at) "
+                "VALUES (%s, 'CODESparks Ops', %s, %s, %s)",
+                (approval_id, f"m-{approval_id}", adapter, NOW),
+            )
+    upgrade("orchestration", postgres.owner)
+    webhook = TeamsWorkflowsWebhook("https://teams.example/hook?sig=s", "CODESparks Ops")
+    async with db.transaction("orchestration") as uow:
+        practice = await store.message_ref(uow, ApprovalId("apr_practice"))
+        posted = await store.message_ref(uow, ApprovalId("apr_webhook"))
+        await store.save_message_ref(
+            uow, ApprovalId("apr_webhook"), MessageRef("CODESparks Ops", "m-new", webhook.identity)
+        )
+    await webhook.close()
+    assert practice is not None and practice.identity == PRACTICE
+    assert posted is not None and posted.identity not in (PRACTICE, webhook.identity)
+
+    downgrade("orchestration", postgres.owner, "0013")
+    try:
+        with psycopg.connect(postgres.owner) as conn:
+            rows = conn.execute(
+                "SELECT approval_id, adapter FROM orchestration.approval_messages ORDER BY 1"
+            ).fetchall()
+        assert rows == [("apr_practice", "practice"), ("apr_webhook", "teams_workflows")]
+    finally:
+        upgrade("orchestration", postgres.owner)

@@ -17,6 +17,7 @@ from platform_api.monitoring import (
     ApprovalAnnouncedData,
     ApprovalAnnounceFailedData,
     ApprovalDecidedData,
+    ApprovalOutcomeNotPostedData,
     DeniedReason,
     PendingEvent,
     WireVerdict,
@@ -1099,18 +1100,26 @@ class Orchestrator:
                 return
         if ref is None:
             raise DispatchFailure("the approval request is not in Teams yet")
-        if ref.adapter != self._channel.adapter:
-            # The platform moved between the practice copy and real Teams since the post. The
-            # adapter in use cannot show the outcome on a message it did not post.
-            log.info(
-                "not showing the outcome of %s in Teams: it was posted by %s, and the platform "
-                "now posts through %s",
-                approval_id,
-                ref.adapter,
-                self._channel.adapter,
-            )
+        if ref.identity != self._channel.identity:
             async with self._db.transaction("orchestration") as uow:
                 await self._store.outbox_sent(uow, row.id)
+                await self._activity.append(
+                    uow,
+                    row.run_id,
+                    [
+                        PendingEvent(
+                            PLATFORM,
+                            "approval_outcome_not_posted",
+                            "The outcome card could not go to the Teams channel that had the "
+                            "approval card, because the channel set up now does not match it. It "
+                            "was not posted to any other channel.",
+                            ApprovalOutcomeNotPostedData(
+                                approval_id=approval_id, channel=ref.channel
+                            ),
+                            dedupe_key=f"outcome_not_posted:{approval_id}",
+                        )
+                    ],
+                )
             return
         outcome = ApprovalOutcome(
             verdict=row.payload["verdict"],

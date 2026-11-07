@@ -19,7 +19,6 @@ from platform_api.orchestration.connections import (
     ConnectionId,
     Connections,
     Entry,
-    Identity,
     Observed,
     ReadFresh,
     Reading,
@@ -27,7 +26,6 @@ from platform_api.orchestration.connections import (
     WatchedChannel,
     due,
     github_probe,
-    identity_of,
     jira_probe,
     model_probe,
     practice_teams,
@@ -37,7 +35,9 @@ from platform_api.orchestration.dispatch import (
     ApprovalNotice,
     ApprovalOutcome,
     DispatchFailure,
+    Identity,
     MessageRef,
+    identity_of,
 )
 from platform_api.orchestration.jira_rest import JiraAuth, JiraReach, JiraRestAdapter
 from platform_api.orchestration.model_settings import SettingsState
@@ -362,11 +362,11 @@ class Channel:
     refusing: int = 0
     posts: int = 0
     name: str = "Ops"
-    adapter: str = "teams_workflows"
+    identity: Identity = REAL_TEAMS
 
     async def announce(self, notice: ApprovalNotice) -> MessageRef:
         await self._post()
-        return MessageRef(self.name, notice.approval_id, self.adapter)
+        return MessageRef(self.name, notice.approval_id, self.identity)
 
     async def update(self, ref: MessageRef, outcome: ApprovalOutcome) -> None:
         await self._post()
@@ -382,7 +382,7 @@ def real_teams(db: Database, channel: Channel) -> tuple[Connections, WatchedChan
     connections = Connections(
         db, [Entry("teams", "Teams", REAL_TEAMS, Observed(TEAMS_NOT_CHECKED))]
     )
-    return connections, WatchedChannel(channel, REAL_TEAMS, connections)
+    return connections, WatchedChannel(channel, connections)
 
 
 async def test_a_real_teams_channel_with_no_post_yet_is_not_checked_and_never_tried(db: Database):
@@ -405,7 +405,7 @@ async def test_a_real_teams_channel_with_no_post_yet_is_not_checked_and_never_tr
 
 async def test_the_first_post_is_the_result_at_once(db: Database):
     connections, watched = real_teams(db, Channel())
-    assert await watched.announce(NOTICE) == MessageRef("Ops", "apr_t1", "teams_workflows")
+    assert await watched.announce(NOTICE) == MessageRef("Ops", "apr_t1", REAL_TEAMS)
     (teams,) = await connections.view()
     assert (teams.state, teams.problem) == ("working", None)
     assert teams.checked_at is not None and teams.last_ok_at == teams.checked_at
@@ -432,7 +432,7 @@ async def test_one_refused_post_after_working_waits_for_a_second_to_agree(db: Da
     await watched.announce(NOTICE)
     channel.refusing = 2
     with pytest.raises(DispatchFailure):
-        await watched.update(MessageRef("Ops", "apr_t1", "teams_workflows"), OUTCOME)
+        await watched.update(MessageRef("Ops", "apr_t1", REAL_TEAMS), OUTCOME)
     (teams,) = await connections.view()
     assert teams.state == "working"
     with pytest.raises(DispatchFailure):
@@ -454,7 +454,7 @@ async def test_a_result_that_cannot_be_kept_never_fails_the_post(db: Database):
         raise RuntimeError("the database went away")
 
     connections.observe = broken  # type: ignore[method-assign]
-    assert await watched.announce(NOTICE) == MessageRef("Ops", "apr_t1", "teams_workflows")
+    assert await watched.announce(NOTICE) == MessageRef("Ops", "apr_t1", REAL_TEAMS)
     channel.refusing = 1
     with pytest.raises(DispatchFailure):
         await watched.announce(NOTICE)
@@ -599,11 +599,13 @@ async def test_the_identity_kept_is_a_fingerprint_never_the_address_or_the_key(d
         "JIRA_API_TOKEN": "jira-token-secret-q4",
     }
     settings = settings_from_env(env)
+    teams = httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(202)))
+    channel, _ = approval_channel(settings, TeamsStub(db, "Ops"), teams)
     connections, watched = connections_for(
         settings,
         db,
         FakeJira("token_refused"),
-        Channel(),
+        channel,
         FakeRuntime(GitHubWorking(using_token=False)),
         FakeModels(SettingsState(True, ACTIVE, None, [])),
     )

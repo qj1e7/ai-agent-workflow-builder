@@ -21,11 +21,14 @@ from pydantic import Field, SerializerFunctionWrapHandler, model_serializer
 
 from platform_api.db import Database, json
 from platform_api.orchestration.dispatch import (
+    PRACTICE,
     ApprovalNotice,
     ApprovalOutcome,
     AskedStep,
     DispatchFailure,
+    Identity,
     MessageRef,
+    identity_of,
 )
 from platform_api.orchestration.runs import sentence
 from platform_api.orchestration.write_actions import listed, one_line
@@ -367,8 +370,8 @@ class TeamsStub:
         return self._channel
 
     @property
-    def adapter(self) -> str:
-        return "practice"
+    def identity(self) -> Identity:
+        return PRACTICE
 
     async def announce(self, notice: ApprovalNotice) -> MessageRef:
         card = approval_card(notice).as_json()
@@ -396,7 +399,7 @@ class TeamsStub:
                 )
             ).fetchone()
         assert row is not None
-        return MessageRef(channel=row["channel"], id=row["id"], adapter=self.adapter)
+        return MessageRef(channel=row["channel"], id=row["id"], identity=self.identity)
 
     async def update(self, ref: MessageRef, outcome: ApprovalOutcome) -> None:
         async with self._db.transaction("orchestration") as uow:
@@ -456,6 +459,7 @@ class TeamsWorkflowsWebhook:
         # wiring quiets httpx when it builds this adapter (approval_channel in wiring.py).
         self._url = url
         self._channel = channel
+        self._identity = identity_of("teams_workflows", url)
         self._client = client or httpx.AsyncClient(timeout=10.0)
 
     @property
@@ -463,8 +467,8 @@ class TeamsWorkflowsWebhook:
         return self._channel
 
     @property
-    def adapter(self) -> str:
-        return "teams_workflows"
+    def identity(self) -> Identity:
+        return self._identity
 
     @property
     def closed(self) -> bool:
@@ -472,7 +476,7 @@ class TeamsWorkflowsWebhook:
 
     async def announce(self, notice: ApprovalNotice) -> MessageRef:
         await self._post(approval_card(notice))
-        return MessageRef(channel=self._channel, id=notice.approval_id, adapter=self.adapter)
+        return MessageRef(channel=self._channel, id=notice.approval_id, identity=self._identity)
 
     async def update(self, ref: MessageRef, outcome: ApprovalOutcome) -> None:
         await self._post(outcome_card(outcome))
