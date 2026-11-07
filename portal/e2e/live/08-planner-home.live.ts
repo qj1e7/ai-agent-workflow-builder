@@ -107,6 +107,46 @@ test.describe('with the AI model on', () => {
     await connectMockModel(String(baseURL))
   })
 
+  const SUMMARY = 'Find bug tickets in MOCK with no update for 10 days and create one follow-up ticket that lists them'
+  const card = (page: Page) => thread(page).locator('section[data-card]')
+  const left = (page: Page) => card(page).locator('[id$="-left"]')
+  const turnOn = (page: Page) => card(page).getByRole('button', { name: 'Turn it on', exact: true })
+
+  /** The card asks for what it lacks, and the plan may ask for the Jira project. Everything is filled from the keyboard. */
+  async function fillTheRest(page: Page, project: string): Promise<void> {
+    const field = card(page).getByLabel(/^Jira project/)
+    if (await field.count()) {
+      await field.focus()
+      await page.keyboard.type(project)
+    }
+  }
+
+  test('inconsistency I6: a new agent is saved to the library only when the workflow is turned on', async ({ browser, backend }, info) => {
+    const owner = 'alice'
+    const cards = async () => (await backend.get<{ cards: { name: string; owner: string }[] }>(owner, '/api/v1/agent-cards')).cards
+    const context = await devContext(browser, owner)
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    await page.goto('/')
+    await ask(page, 'Every Friday at 4pm, summarise what we finished this week in MOCK in one new ticket')
+    await expect(card(page)).toBeVisible()
+    await card(page).getByRole('button', { name: /what it does|^Create/i }).first().click()
+    await card(page).getByRole('group', { name: /^Change/ }).getByRole('textbox').fill('Summarise them in one new ticket')
+    await page.keyboard.press('Enter')
+    await card(page).locator('summary').click()
+    await expect(card(page).locator('details')).toContainText('New agent, saved to the Agent library when you turn this on', { timeout: 30_000 })
+    const before = await cards()
+    await fillTheRest(page, 'MOCK')
+    await expect(left(page)).toHaveText('Nothing is unclear. Turn it on when you’re ready.', { timeout: 30_000 })
+    expect((await cards()).length, 'nothing is saved to the library before Turn it on').toBe(before.length)
+    await turnOn(page).click()
+    await expect(thread(page).getByRole('status')).toContainText('is saved in the Agent library', { timeout: 30_000 })
+    expect((await cards()).length, 'the new agent is in the library after Turn it on').toBe(before.length + 1)
+    await shot(page, info, 'n11-i6')
+    assertClean(watch)
+    await context.close()
+  })
+
   test('scenario D: asking to email a weekly list gets the can’t answer, the Jira ticket alternative and Ask the team', async ({ browser }, info) => {
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
@@ -140,20 +180,6 @@ test.describe('with the AI model on', () => {
     assertClean(watch)
     await context.close()
   })
-
-  const SUMMARY = 'Find bug tickets in MOCK with no update for 10 days and create one follow-up ticket that lists them'
-  const card = (page: Page) => thread(page).locator('section[data-card]')
-  const left = (page: Page) => card(page).locator('[id$="-left"]')
-  const turnOn = (page: Page) => card(page).getByRole('button', { name: 'Turn it on', exact: true })
-
-  /** The card asks for what it lacks, and the plan may ask for the Jira project. Everything is filled from the keyboard. */
-  async function fillTheRest(page: Page, project: string): Promise<void> {
-    const field = card(page).getByLabel(/^Jira project/)
-    if (await field.count()) {
-      await field.focus()
-      await page.keyboard.type(project)
-    }
-  }
 
   for (const phone of [false, true]) {
     test(`scenario A: a first-time Operator asks for the weekly follow-up, picks the time the card asks for, turns it on and finds it on Workflows (${phone ? '390' : '1440'} px)`, async ({ browser, backend }, info) => {
@@ -266,32 +292,6 @@ test.describe('with the AI model on', () => {
     await card(page).getByRole('button', { name: 'Never mind' }).click()
     await page.getByRole('alertdialog').getByRole('button', { name: 'Discard draft' }).click()
     await expect.poll(async () => (await drafts()).some((draft) => draft.draft_id === id), { timeout: 15_000 }).toBe(false)
-    assertClean(watch)
-    await context.close()
-  })
-
-  test('inconsistency I6: a new agent is saved to the library only when the workflow is turned on', async ({ browser, backend }, info) => {
-    const owner = 'alice'
-    const cards = async () => (await backend.get<{ cards: { name: string; owner: string }[] }>(owner, '/api/v1/agent-cards')).cards
-    const context = await devContext(browser, owner)
-    const page = await context.newPage()
-    const watch = watchPage(page)
-    await page.goto('/')
-    await ask(page, 'Every Friday at 4pm, summarise what we finished this week in MOCK in one new ticket')
-    await expect(card(page)).toBeVisible()
-    await card(page).getByRole('button', { name: /what it does|^Create/i }).first().click()
-    await card(page).getByRole('group', { name: /^Change/ }).getByRole('textbox').fill('Summarise them in one new ticket')
-    await page.keyboard.press('Enter')
-    await card(page).locator('summary').click()
-    await expect(card(page).locator('details')).toContainText('New agent, saved to the Agent library when you turn this on', { timeout: 30_000 })
-    const before = await cards()
-    await fillTheRest(page, 'MOCK')
-    await expect(left(page)).toHaveText('Nothing is unclear. Turn it on when you’re ready.', { timeout: 30_000 })
-    expect((await cards()).length, 'nothing is saved to the library before Turn it on').toBe(before.length)
-    await turnOn(page).click()
-    await expect(thread(page).getByRole('status')).toContainText('is saved in the Agent library', { timeout: 30_000 })
-    expect((await cards()).length, 'the new agent is in the library after Turn it on').toBe(before.length + 1)
-    await shot(page, info, 'n11-i6')
     assertClean(watch)
     await context.close()
   })
