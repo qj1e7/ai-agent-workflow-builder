@@ -16,7 +16,7 @@ from fastapi.security import APIKeyHeader
 
 from agent_runtime.abilities import CAPABILITY_LIST
 from agent_runtime.addresses import AddressPolicy
-from agent_runtime.answers import answer_task
+from agent_runtime.answers import answer_task, check_one_part
 from agent_runtime.card_runner import CardRunner
 from agent_runtime.contract import (
     AgentCard,
@@ -27,6 +27,8 @@ from agent_runtime.contract import (
     AnswerResult,
     CapabilityList,
     CardsInputs,
+    CheckPartRequest,
+    CheckPartResult,
     ChooseRequest,
     ChooseResult,
     ConnectRequest,
@@ -437,6 +439,10 @@ def create_app(
     def answer(body: AnswerRequest) -> AnswerResult:
         chat = active.chat_source(body.model)
         return answer_task(body, chat) if chat else NO_MODEL
+
+    @app.post("/v1/planner/check-part", dependencies=[Depends(require_key)])
+    def check_part(body: CheckPartRequest) -> CheckPartResult:
+        return check_one_part(body)
 
     @app.post("/v1/connections/github/check", dependencies=[Depends(require_key)])
     def check_github() -> GitHubCheckResult:

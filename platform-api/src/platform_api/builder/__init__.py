@@ -1,4 +1,5 @@
 from platform_api.builder.home import Home
+from platform_api.builder.planner import PlannerFront
 from platform_api.builder.service import Builder
 from platform_api.builder.team_requests import TeamRequests
 from platform_api.builder.templates import TAG_PATTERN, TEMPLATES
@@ -11,6 +12,7 @@ __all__ = [
     "TEMPLATES",
     "Builder",
     "Home",
+    "PlannerFront",
     "RepoName",
     "TeamRequests",
     "Watchlist",

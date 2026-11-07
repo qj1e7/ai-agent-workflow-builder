@@ -159,15 +159,33 @@ class FakeLog:
         return self._events
 
 
+class FakePlannerFront:
+    def __init__(self, answer: object = None, checked: object = None, view: object = None):
+        self._answer = answer
+        self._checked = checked
+        self._view = view
+
+    async def answer(self, body: object) -> object:
+        return self._answer
+
+    async def check_part(self, body: object) -> object:
+        return self._checked
+
+    async def capabilities(self) -> object:
+        return self._view
+
+
 def app_with(
     orchestrator: object = None,
     builder: object = None,
+    planner_front: object = None,
     log: object = None,
     env: Mapping[str, str] | None = None,
 ) -> FastAPI:
     app = create_app({**LOCAL_ENV, **(env or {})})
     app.state.orchestrator = orchestrator or FakeOrchestrator()
     app.state.builder = builder or FakeBuilder()
+    app.state.planner_front = planner_front or FakePlannerFront()
     app.state.activity_log = log or FakeLog()
     app.state.practice_jira = FakeMockJira()
     app.state.watchlist = FakeWatchlist()

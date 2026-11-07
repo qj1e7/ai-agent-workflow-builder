@@ -1500,7 +1500,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
     ghReleases: { name: 'Check software for new releases on GitHub', kind: 'read', base: 'ready', conn: 'github', sys: 'GitHub', tools: ['ghReleases'] },
     jiraCreate: { name: 'Create a Jira ticket after a yes', kind: 'write', base: 'ready', conn: 'jira', sys: 'Jira', model: true, tools: ['jiraCreate'] },
     teamsAsk: { name: 'Ask Approvers for a yes in Teams', kind: 'notify', base: 'ready', conn: 'teams', sys: 'Teams', tools: [], platform: true },
-    teamsPost: { name: 'Post messages in Teams', kind: 'write', base: 'planned', conn: 'teams', sys: 'Teams', tools: ['teamsPost'], cant: 'post messages in Teams', why: 'Teams carries approval requests only.' },
+    teamsPost: { name: 'Post messages in Teams', kind: 'write', base: 'planned', conn: 'teams', sys: 'Teams', tools: ['teamsPost'], cant: 'post messages in Teams', why: 'Teams carries approval requests, run outcomes and requests for the team. It posts nothing else.' },
     confluence: { name: 'Change Confluence pages', kind: 'write', base: 'planned', tools: [], cant: 'change Confluence pages', why: 'Confluence isn’t connected to the platform.' },
     ghIssues: { name: 'Read GitHub issues', kind: 'read', base: 'planned', conn: 'github', sys: 'GitHub', tools: ['ghIssues'], cant: 'read GitHub issues', why: 'There’s no tool for that yet.' },
     access: { name: 'Check who has access in Entra ID, the admin tools and GitLab', kind: 'read', base: 'planned', tools: ['access'], cant: 'check who has access', why: 'Those systems aren’t connected to the platform.' },

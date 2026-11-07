@@ -1,0 +1,37 @@
+{
+  "answer": "watchlist",
+  "word": "releases",
+  "software": "Kubernetes",
+  "already_listed": null,
+  "also": {
+    "answer": "setup_card",
+    "name": "Weekly summary of closed tickets",
+    "rows": [
+      {
+        "kind": "schedule",
+        "text": "Every Friday",
+        "state": "understood",
+        "note": null
+      },
+      {
+        "kind": "look_for",
+        "text": "Tickets closed this week in MOCK",
+        "state": "changed",
+        "note": "You said \u201cthe tickets we closed\u201d. I read that as MOCK, the project on your list."
+      },
+      {
+        "kind": "do",
+        "text": "Sum them up in one new ticket",
+        "state": "understood",
+        "note": null
+      },
+      {
+        "kind": "where",
+        "text": "In the MOCK project",
+        "state": "understood",
+        "note": null
+      }
+    ],
+    "similar": null
+  }
+}

@@ -11,6 +11,11 @@ from platform_api.db import Database
 from platform_api.orchestration.agents import (
     AgentRejected,
     AgentUnavailable,
+    AnswerRequest,
+    AnswerResult,
+    CapabilityList,
+    CheckPartRequest,
+    CheckPartResult,
     ChooseRequest,
     ChooseResult,
     DraftRequest,
@@ -19,6 +24,7 @@ from platform_api.orchestration.agents import (
     FindSoftwareResult,
     HttpAgentRuntime,
     LibraryCard,
+    RowKind,
     UnderstandRequest,
     UnderstandResult,
 )
@@ -83,6 +89,47 @@ class CardPlanning:
         )
         if isinstance(reply, AgentUnavailable | AgentRejected):
             return RuntimeDown(reply.detail)
+        return reply
+
+
+class PlannerAnswers:
+    """The Planner's answer to a request typed on Home, and its by-code check of one part."""
+
+    def __init__(self, db: Database, models: ActiveModel, agents: HttpAgentRuntime) -> None:
+        self._db = db
+        self._models = models
+        self._agents = agents
+
+    async def answer(self, task: str) -> AnswerResult | NoModel | RuntimeDown:
+        async with self._db.transaction("orchestration") as uow:
+            model = await self._models.access(uow)
+        if model is None:
+            return NoModel()
+        reply = await self._agents.answer(AnswerRequest(task=task, model=model))
+        if isinstance(reply, AgentUnavailable | AgentRejected):
+            return RuntimeDown(reply.detail)
+        return reply
+
+    async def check_part(self, kind: RowKind, text: str) -> CheckPartResult | RuntimeDown:
+        reply = await self._agents.check_part(CheckPartRequest(kind=kind, text=text))
+        if isinstance(reply, AgentUnavailable | AgentRejected):
+            return RuntimeDown(reply.detail)
+        return reply
+
+
+class CapabilityRegistry:
+    """The runtime's capability registry. The runtime can scale to zero, so the last good answer
+    is kept and served while the runtime is waking up."""
+
+    def __init__(self, agents: HttpAgentRuntime) -> None:
+        self._agents = agents
+        self._last_good: CapabilityList | None = None
+
+    async def get(self) -> CapabilityList | RuntimeDown:
+        reply = await self._agents.capabilities()
+        if isinstance(reply, AgentUnavailable | AgentRejected):
+            return self._last_good or RuntimeDown(reply.detail)
+        self._last_good = reply
         return reply
 
 

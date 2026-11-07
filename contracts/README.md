@@ -11,7 +11,7 @@ Every shape that crosses a process boundary, plus recorded example runs. The Por
 | `agent-api.schema.json` | agent-runtime | `agent_runtime.contracts` |
 | `fixtures/runs/*.json` | platform-api, run monitoring context | `platform_api.contracts` |
 | `fixtures/views/*.json`, `fixtures/approvals/*.json`, `fixtures/internal/*.json`, `fixtures/stubs/*.json` | platform-api, orchestration context | `platform_api.contracts` |
-| `fixtures/builder/*.json`, `fixtures/watchlist/*.json` | platform-api, use case builder context | `platform_api.contracts` |
+| `fixtures/builder/*.json`, `fixtures/watchlist/*.json`, `fixtures/planner/*.json` | platform-api, use case builder context | `platform_api.contracts` |
 | `fixtures/troubleshooting/*.json` | platform-api, run monitoring context | `platform_api.contracts` |
 | `fixtures/agent/*.json` | agent-runtime | `agent_runtime.contracts` |
 
@@ -25,6 +25,8 @@ From the repository root:
 (cd platform-api && uv run python -m platform_api.contracts ../contracts)
 (cd agent-runtime && uv run python -m agent_runtime.contracts ../contracts)
 ```
+
+`fixtures/planner/capabilities*.json` are made from the runtime's `fixtures/agent/capabilities.json`, so after a change to the registry run the runtime's generator first.
 
 Each generator deletes and rewrites the fixture folders it owns, so a removed fixture disappears from disk too. CI runs both commands and fails on any diff, then runs `tests/test_contracts.py` in each project, which parses every fixture with that project's models.
 
@@ -151,3 +153,11 @@ The task request gives the agent `callback {url, token}`. The agent posts each e
 `fixtures/jira/datacenter/` and `fixtures/jira/cloud/` hold Jira's answers to the calls the one Jira adapter makes (ADR 0035): an issue, a search, a create, the transitions and two errors. They follow Atlassian's REST reference for Data Center v2 and Cloud v3, with made-up values and `example.com` hosts. `platform-api/tests/test_jira_fixtures.py` checks that the adapter reads them and that the practice Jira answers in the same shape. When a sandbox is reachable, replace them with real answers, with every name, address and id changed, and keep the shape.
 
 `platform-api/tests/test_jira_contract.py` runs the adapter against the practice Jira in both flavors in CI. Set `JIRA_CONTRACT_URL`, `JIRA_CONTRACT_FLAVOR`, `JIRA_CONTRACT_TOKEN`, `JIRA_CONTRACT_EMAIL` (Cloud) and `JIRA_CONTRACT_PROJECT`, and the same tests run against that Jira. Each test makes tickets with a fresh marker in their title and labels, so use a sandbox project.
+
+### The Planner on Home
+
+`POST /api/v1/planner/answer` is the Planner's one answer to what an Operator types or taps on Home (`planner/`). The body is `{"text": ...}` (`answer.text.json`) or `{"intent": ...}` (`answer.intent.json`), never both. The builder asks the runtime for a typed request, then adds what only it knows: `similar`, a workflow of the team's with the same name; `already_listed`, the software already on the Software watchlist; and `use_case_id`, the workflow a name in a question means (null when none or several match). The answers are `setup_card`, `part`, `cant`, `watchlist`, `which_software`, `refused`, `abilities`, `ideas`, `check_workflows`, `why_stopped`, `needs_me` and `offline`, one fixture each (`answer.<kind>.json`). An intent never asks the model: `abilities`, `setup_ideas`, `needs_me`, `check_workflows` and `why_stopped` work with no model connected. The state answers carry only an id, and the Portal fills them from its own routes. With no model connected, after 10 seconds, or when the runtime fails or gives an answer it cannot use, the answer is `offline`: why (`no_model`, `too_slow` or `trouble`), a plain message and the three starter workflows (`answer.offline.json`, `answer.offline.too_slow.json`). It is never a guess. Only an Operator is answered (403 for an Approver), and a `why_stopped` for a workflow that does not exist is a 404.
+
+`POST /api/v1/planner/check-part` checks one part the person changed (`check-part.in.json`), by code alone through the runtime's `POST /v1/planner/check-part`: no model. It answers `fits` or `cant_do` with the plain note, what a fix needs and the system (`check-part.fits.json`, `check-part.cant.json`), and 503 when the runtime does not answer.
+
+`GET /api/v1/capabilities` is the runtime's registry with a `state` that code works out, so no screen decides it. A capability that is `planned` or `unsupported` in the registry stays so. A ready one is `needs_setup` when a connection it uses is not set up (its own, or the AI model when it needs one) and `down` when that connection is not answering or needs attention, with the connection's problem as `why` and its `fix`. `agents` lists the agent cards that use its tools. The last good registry is served while the runtime is waking up, and a runtime that never answered is a 503 (`capabilities.json`, and `capabilities.trouble.json` with Jira down and no AI model).

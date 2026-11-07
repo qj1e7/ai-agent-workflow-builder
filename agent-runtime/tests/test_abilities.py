@@ -1,3 +1,4 @@
+import re
 from typing import get_args
 
 import pytest
@@ -27,13 +28,21 @@ from agent_runtime.jira import JiraTicket
 from agent_runtime.planner import why_no_tool
 
 CAN = (
-    "I can only read Jira tickets, sum up what I find, check software for new releases, and "
-    "create a Jira ticket after a yes."
+    "I can only read Jira tickets, sum up what I find, check software for new releases, create "
+    "a Jira ticket after a yes, and ask Approvers for a yes in Teams."
 )
+WONT = ("close", "delete", "edit", "move", "update", "change", "reassign", "assign")
 
 
 def cant(what: str) -> str:
-    return f"I can't {what} yet. {CAN}"
+    """The refusal: "yet" for what is planned, none for what the registry marks Unsupported
+    (changing tickets, email and Slack)."""
+    words_of = what.lower().split()
+    wont = words_of[0] in WONT or bool(
+        {"email", "slack", "mail", "sms"} & set(re.findall(r"\w+", what.lower()))
+    )
+    yet = "" if wont else " yet"
+    return f"I can't {what}{yet}. {CAN}"
 
 
 @pytest.mark.parametrize(
@@ -557,7 +566,7 @@ def test_a_new_tool_is_one_more_line_in_the_table():
     assert why_not("do", "Post a summary in Teams", more) is None
     assert why_not("where", "Teams", more) is None
     assert why_not("do", "Delete them", more) == (
-        "I can't delete them yet. I can only read Jira tickets, sum up what I find, check "
+        "I can't delete them. I can only read Jira tickets, sum up what I find, check "
         "software for new releases, create a Jira ticket after a yes, and post a message in "
         "Teams."
     )
