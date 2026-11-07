@@ -6,6 +6,7 @@ import pytest
 from harness import (
     Api,
     Json,
+    MockGithub,
     SeededTicket,
     approval_requested,
     assert_gapless,
@@ -22,6 +23,10 @@ STALE_TASK = (
     "ticket that lists them. Where it goes: Jira project MOCK."
 )
 PLANTED = {"GitHub repository": "acme/planted", "Jira project": "MOCK"}
+LANGGRAPH = {"GitHub repository": "langchain-ai/langgraph", "Jira project": "MOCK"}
+COULD_NOT_CHECK = (
+    "Could not check langchain-ai/langgraph: GitHub returned 503 Service Unavailable three times"
+)
 
 
 def run_agents(api: Api, card_id: str, values: dict[str, str], name: str) -> str:
@@ -112,6 +117,35 @@ def test_a_saved_agent_is_picked_and_a_planted_order_in_a_release_changes_nothin
     created = tickets_for(api, run_id)
     assert [t["project"] for t in created] == ["MOCK"]
     assert all(t["project"] != "SECRET" for t in api.tickets())
+
+
+def test_a_github_outage_stops_the_version_checker_before_its_model_can_ask_for_a_ticket(
+    api: Api, github: MockGithub, mock_model: None
+) -> None:
+    github.set_mode("unavailable")
+    run_id = run_agents(api, "crd_version_checker", LANGGRAPH, "e2e outage")
+    stopped = api.wait_for_state("alice", run_id, {"failed", "awaiting_approval"})
+    assert stopped["state"] == "failed", "a check that read nothing must not ask for a yes"
+    assert (stopped["reason"], stopped["retryable"]) == ("AgentError", True)
+    assert stopped["message"] == f"UpstreamUnavailable: {COULD_NOT_CHECK}"
+    events = api.events_after("alice", run_id)
+    kinds = [e["kind"] for e in events]
+    assert "write_action_proposed" not in kinds and "approval_requested" not in kinds
+    assert tickets_for(api, run_id) == []
+
+    github.set_mode("ok")
+    api.post("alice", f"/api/v1/runs/{run_id}/retry", expect=(202,))
+    retried = api.stream_until(
+        "alice", run_id, {"approval_requested"}, last_event_id=events[-1]["seq"]
+    )
+    approval_id = approval_requested(retried)["approval_id"]
+    view = api.get("bob", f"/api/v1/approvals/{approval_id}")
+    assert [a["fields"]["title"] for a in view["actions"]] == [
+        "New release 1.2.16 of langchain-ai/langgraph"
+    ], "the retry proposes the release it read"
+    bob_decides(api, approval_id, "decline", view["digest"])
+    api.wait_for_state("alice", run_id, {"rejected"})
+    assert tickets_for(api, run_id) == []
 
 
 def test_the_plan_for_a_task_the_platform_cannot_do_says_so(api: Api, mock_model: None) -> None:

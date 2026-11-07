@@ -27,6 +27,7 @@ from agent_runtime.release_source import (
     SourceRejected,
     SourceUnavailable,
     candidates,
+    could_not_check,
     failed,
     finished,
     plural,
@@ -282,7 +283,7 @@ def _nothing_readable(
 ) -> TaskError:
     retryable = any(e.retryable for e in read_errors)
     if len(items) == 1:
-        message = f"Could not check {items[0].name}: {findings[0].detail.removesuffix('.')}"
+        message = could_not_check(items[0].name, findings[0].detail.removesuffix("."))
     else:
         cause = read_errors[0].message if read_errors else NO_PLAIN_VERSION.removesuffix(".")
         message = f"None of the {len(items)} watched software could be checked. {cause}"

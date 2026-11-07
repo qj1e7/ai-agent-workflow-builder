@@ -41,6 +41,7 @@ from agent_runtime.release_source import (
     DEFAULT_RETRY,
     MovableSource,
     RetryPolicy,
+    could_not_check,
     read_releases,
 )
 from agent_runtime.summary import ChatFor
@@ -66,7 +67,10 @@ RESULT_LENGTH: Final = 8000
 RELEASES_SHOWN: Final = 10
 SAYING_LENGTH: Final = 80
 
-GITHUB_FAILED = "GitHub could not be read."
+READ_FIRST = (
+    "Read the releases first, and wait for what comes back. A ticket can only name releases "
+    "you have read."
+)
 JIRA_OFF = "Jira is not connected."
 CUT_OFF_NOTE = (
     "More tickets matched than came back, so older ones are missing. Do not say this list is "
@@ -287,10 +291,19 @@ class _AgentRun:
         self._ref = agent_ref(agent)
         self._tools = tools_of(agent)
         self._offered = {tool.model_name: tool for tool in self._tools}
-        # Jira reads stay inside the projects the staff member gave this agent.
+        # Reads stay inside the Jira projects and GitHub repositories the staff member gave this
+        # agent.
         self._projects = [
             agent.values[item.name] for item in agent.card.inputs if item.kind == "jira_project"
         ]
+        self._repos = [
+            agent.values[item.name] for item in agent.card.inputs if item.kind == "github_repo"
+        ]
+        # A model can ask for a ticket before a read comes back, or without reading at all. So
+        # an agent that reads releases may propose only once its model has seen a reading.
+        self._needs_reading = any(tool.id == "github.read_releases" for tool in self._tools)
+        self._read = False
+        self._seen_reading = False
         self._graph = self._build()
 
     def go(self) -> AgentReport | TaskError:
@@ -324,7 +337,7 @@ class _AgentRun:
         graph.add_node("act", self._act)
         graph.add_edge(START, "think")
         graph.add_conditional_edges("think", _after_think, ["act", END])
-        graph.add_edge("act", "think")
+        graph.add_conditional_edges("act", _after_act, ["think", END])
         return graph.compile()
 
     # The model's turn.
@@ -375,15 +388,18 @@ class _AgentRun:
         answers: list[BaseMessage] = []
         for call in reply.tool_calls:
             content = self._call(call["name"], call["args"], write)
+            if isinstance(content, TaskError):
+                return {"error": content}
             answers.append(ToolMessage(content, tool_call_id=call["id"] or "", name=call["name"]))
         for broken in reply.invalid_tool_calls:
             content = _error("The arguments were not valid JSON.")
             answers.append(
                 ToolMessage(content, tool_call_id=broken["id"] or "", name=broken["name"] or "")
             )
+        self._seen_reading = self._read
         return {"messages": [*state.messages, *answers]}
 
-    def _call(self, name: str, raw: object, write: Emit) -> str:
+    def _call(self, name: str, raw: object, write: Emit) -> str | TaskError:
         tool = self._offered.get(name)
         if tool is None:
             # Nothing runs and nothing is recorded, so the name is neither echoed nor evented.
@@ -405,16 +421,26 @@ class _AgentRun:
             case _:
                 return _error("That tool cannot be used.")
 
-    def _read_releases(self, tool: Tool, args: ReadReleasesArguments, write: Emit) -> str:
+    def _read_releases(
+        self, tool: Tool, args: ReadReleasesArguments, write: Emit
+    ) -> str | TaskError:
+        if len(self._repos) == 1:
+            args = args.model_copy(update={"repo": self._repos[0]})
+        elif self._repos and args.repo not in self._repos:
+            listed = ", ".join(self._repos)
+            return _error(f"You can only read the GitHub repositories on your card: {listed}")
         runner = self._task.runner
         write(self._started(tool, f"reads the releases of {args.repo}."))
         found = read_releases(
             runner.releases, args.repo, runner.retry, runner.sleep, write, self._ref
         )
         if isinstance(found, TaskError):
-            return self._read_failed(
-                tool, f"could not read the releases of {args.repo}.", found, write
-            )
+            what = f"could not read the releases of {args.repo}."
+            write(self._finished(tool, what, {"problem": found.message}))
+            error = found.model_copy(update={"message": could_not_check(args.repo, found.message)})
+            write(self._failed(error, f"{args.repo} could not be checked.", tool.model_name))
+            return error
+        self._read = True
         shown = [r for r in found if not r.draft][:RELEASES_SHOWN]
         tags = [r.tag for r in shown]
         newest = f" The newest is {tags[0]}." if tags else ""
@@ -451,7 +477,7 @@ class _AgentRun:
             return _error(refused)
         write(self._started(tool, _searching(args, self._task.today, self._task.last_run)))
         if jira is None:
-            return self._read_failed(tool, "could not search Jira.", JIRA_OFF, write)
+            return self._jira_failed(tool, "could not search Jira.", JIRA_OFF, write)
         try:
             found = jira.search(
                 args.project,
@@ -463,7 +489,7 @@ class _AgentRun:
                 args.created_since,
             )
         except JiraUnavailable as unavailable:
-            return self._read_failed(tool, "could not search Jira.", str(unavailable), write)
+            return self._jira_failed(tool, "could not search Jira.", str(unavailable), write)
         tickets = found.tickets
         count = len(tickets)
         what = "found no tickets" if count == 0 else f"found {_tickets(count)}"
@@ -500,11 +526,11 @@ class _AgentRun:
             return _error(_only_projects(self._projects))
         write(self._started(tool, f"reads ticket {args.key}."))
         if jira is None:
-            return self._read_failed(tool, f"could not read ticket {args.key}.", JIRA_OFF, write)
+            return self._jira_failed(tool, f"could not read ticket {args.key}.", JIRA_OFF, write)
         try:
             ticket = jira.read(args.key)
         except JiraUnavailable as unavailable:
-            return self._read_failed(
+            return self._jira_failed(
                 tool, f"could not read ticket {args.key}.", str(unavailable), write
             )
         write(self._finished(tool, f"read ticket {ticket.key}.", {"tickets": [_headline(ticket)]}))
@@ -523,6 +549,8 @@ class _AgentRun:
         )
 
     def _propose(self, tool: Tool, args: JiraCreateArguments, write: Emit) -> str:
+        if self._needs_reading and not self._seen_reading:
+            return _error(READ_FIRST)
         title = cut(" ".join(args.title.split()), SAYING_LENGTH)
         write(self._started(tool, f"drafts a Jira ticket for approval: {title}"))
         fields = args.model_dump()
@@ -552,8 +580,7 @@ class _AgentRun:
         )
         return _result("Proposed. Nothing is written until an Approver approves it.")
 
-    def _read_failed(self, tool: Tool, what: str, why: TaskError | str, write: Emit) -> str:
-        problem = GITHUB_FAILED if isinstance(why, TaskError) else why
+    def _jira_failed(self, tool: Tool, what: str, problem: str, write: Emit) -> str:
         write(self._finished(tool, what, {"problem": problem}))
         return _error(problem)
 
@@ -571,12 +598,12 @@ class _AgentRun:
             data=AgentStepFinishedData(step=tool.model_name, result=result),
         )
 
-    def _failed(self, error: TaskError, reason: str) -> Draft:
+    def _failed(self, error: TaskError, reason: str, step: str | None = None) -> Draft:
         return Draft(
             agent=self._ref,
             summary=f"{self._ref.display} failed: {reason}",
             data=AgentFailedData(
-                step=None,
+                step=step,
                 error_type=error.type,
                 message=error.message,
                 retryable=error.retryable,
@@ -596,6 +623,10 @@ def _after_think(state: AgentState) -> str:
     if state.error is not None or state.report is not None:
         return END
     return "act"
+
+
+def _after_act(state: AgentState) -> str:
+    return END if state.error is not None else "think"
 
 
 def _wants_tools(reply: AIMessage) -> bool:

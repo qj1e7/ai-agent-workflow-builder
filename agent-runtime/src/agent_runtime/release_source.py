@@ -124,6 +124,10 @@ def phrase(status: int) -> str:
     return f"{status} {HTTPStatus(status).phrase}"
 
 
+def could_not_check(name: str, detail: str) -> str:
+    return f"Could not check {name}: {detail}"
+
+
 def gave_up_message(error: SourceUnavailable) -> str:
     if error.status:
         return f"{SOURCE_NAME} returned {phrase(error.status)}"
