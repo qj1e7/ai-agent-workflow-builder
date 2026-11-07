@@ -16,6 +16,7 @@ from agent_runtime.contract import (
     CardBlock,
     CardsInputs,
     CardToRun,
+    TaskError,
     TaskFailed,
     TaskFinished,
     TaskRequest,
@@ -32,11 +33,12 @@ from agent_runtime.contracts import (
 from agent_runtime.events import EventLog
 from agent_runtime.jira import JiraReader, JiraTicket
 from agent_runtime.planner import FixedPlanner, run_cards
-from agent_runtime.release_source import Release
+from agent_runtime.release_source import MovableSource, Release
 from tests.fakes import (
     FakeClock,
     FakeJira,
     FakeSource,
+    RepoSource,
     ScriptedChat,
     asks,
     call,
@@ -52,7 +54,7 @@ class Room:
     def __init__(
         self,
         chat: ScriptedChat,
-        source: FakeSource | None = None,
+        source: MovableSource | None = None,
         jira: JiraReader | None = None,
         request: TaskRequest | None = None,
     ) -> None:
@@ -334,25 +336,63 @@ def test_a_model_error_fails_the_task_and_never_repeats_the_providers_words():
     assert isinstance(result.events[-1], AgentFailedEvent)
 
 
-def test_a_read_that_fails_goes_back_to_the_model_and_the_agent_carries_on():
+TICKET_WITHOUT_A_READING = call(
+    "jira_create_ticket",
+    {"title": "New release 1.2.14 of langchain-ai/langgraph", "body": "Proposed for MOCK."},
+    "t9",
+)
+
+
+def test_releases_github_cannot_serve_stop_the_agent_before_it_can_propose():
     source = FakeSource(langgraph_tags(), failures=[503] * 3)
     chat = ScriptedChat(
         script=[
             asks(call("github_read_releases", {"repo": REPO}, "t1")),
-            asks(call("jira_search", {"project": "MOCK"}, "t2")),
-            AIMessage("GitHub was down, so I stopped."),
+            asks(TICKET_WITHOUT_A_READING),
+            AIMessage("I proposed one ticket."),
         ]
     )
     result = Room(chat, source=source, jira=FakeJira()).run()
-    assert isinstance(result, TaskFinished)
-    assert "GitHub could not be read" in json.dumps(tool_answers(chat)[0])
+    assert isinstance(result, TaskFailed)
+    assert result.error == TaskError(
+        type="UpstreamUnavailable",
+        message=f"Could not check {REPO}: GitHub returned 503 Service Unavailable three times",
+        retryable=True,
+    )
     assert source.calls == [REPO] * 3
-    problems = [
-        e.data.result
-        for e in result.events
-        if e.kind == "agent_step_finished" and "problem" in e.data.result
-    ]
-    assert problems == [{"problem": "GitHub could not be read."}]
+    assert not any("proposed a ticket" in e.summary for e in result.events)
+    failed = result.events[-1]
+    assert isinstance(failed, AgentFailedEvent)
+    assert failed.summary == f"Version checker failed: {REPO} could not be checked."
+    assert failed.data.message == result.error.message
+
+
+def test_releases_github_refuses_stop_the_agent_and_the_stop_cannot_be_retried():
+    source = RepoSource({}, refused={REPO: 404})
+    chat = ScriptedChat(
+        script=[asks(call("github_read_releases", {"repo": REPO}, "t1")), AIMessage("Done.")]
+    )
+    result = Room(chat, source=source, jira=FakeJira()).run()
+    assert isinstance(result, TaskFailed)
+    assert result.error == TaskError(
+        type="UpstreamRejected",
+        message=f"Could not check {REPO}: GitHub answered 404 Not Found",
+        retryable=False,
+    )
+    assert source.calls == [REPO]
+
+
+def test_a_ticket_asked_for_in_the_same_turn_as_a_failed_read_never_leaves_the_runtime():
+    source = FakeSource(langgraph_tags(), failures=[503] * 3)
+    chat = ScriptedChat(
+        script=[
+            asks(TICKET_WITHOUT_A_READING, call("github_read_releases", {"repo": REPO}, "t1")),
+            AIMessage("I proposed one ticket."),
+        ]
+    )
+    result = Room(chat, source=source, jira=FakeJira()).run()
+    assert isinstance(result, TaskFailed)
+    assert result.error.type == "UpstreamUnavailable"
 
 
 def test_jira_tools_say_jira_is_not_connected_when_no_jira_is_set_up():
