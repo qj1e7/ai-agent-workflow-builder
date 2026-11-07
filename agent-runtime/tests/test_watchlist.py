@@ -73,6 +73,7 @@ def software(
     our_version: str | None,
     open_ticket: str | None = None,
     awaiting_approval: bool = False,
+    from_first_check: bool = False,
 ) -> SoftwareToCheck:
     return SoftwareToCheck(
         id=software_id,
@@ -81,6 +82,7 @@ def software(
         our_version=our_version,
         open_ticket=open_ticket,
         awaiting_approval=awaiting_approval,
+        from_first_check=from_first_check,
     )
 
 
@@ -140,6 +142,20 @@ def test_a_software_behind_gets_one_ticket_naming_it():
     )
     assert ticket.reason == "LangGraph 1.2.16 is out, and we run 1.2.14"
     assert result.output.new_tags == []
+
+
+def test_a_ticket_for_a_baseline_the_first_check_read_does_not_call_it_our_version():
+    result = finished(
+        Room(RepoSource(TAGS)).run(request_for(langgraph("1.2.14", from_first_check=True)))
+    )
+    [ticket] = result.output.proposed
+    assert ticket.fields["title"] == "Upgrade LangGraph to 1.2.16"
+    assert ticket.fields["body"] == (
+        "LangGraph has 2 new releases on GitHub (langchain-ai/langgraph) newer than 1.2.14, "
+        "the newest the first check read:\n- 1.2.16\n- 1.2.15\n\n"
+        "Proposed by the AI workflow builder."
+    )
+    assert "our version" not in ticket.reason
 
 
 def test_releases_of_another_tag_family_never_count():

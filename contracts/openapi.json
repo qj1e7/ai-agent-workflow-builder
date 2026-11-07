@@ -379,7 +379,7 @@
                 "type": "null"
               }
             ],
-            "description": "The version the team runs now, such as 1.2.14. Leave it out to take the newest release at the first check as ours."
+            "description": "The version the team runs now, such as 1.2.14. Leave it out when nobody knows it: the list then says Not known, and the check tells about releases newer than the newest one it first reads."
           },
           "repo": {
             "$ref": "#/components/schemas/RepoName"
@@ -3200,6 +3200,40 @@
         ],
         "type": "string"
       },
+      "FindIn": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "$ref": "#/components/schemas/SoftwareName"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "FindIn",
+        "type": "object"
+      },
+      "FindOut": {
+        "discriminator": {
+          "mapping": {
+            "found": "#/components/schemas/FoundProjects",
+            "not_checked": "#/components/schemas/NoProjectChecked",
+            "not_known": "#/components/schemas/NoProjectKnown"
+          },
+          "propertyName": "status"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/FoundProjects"
+          },
+          {
+            "$ref": "#/components/schemas/NoProjectKnown"
+          },
+          {
+            "$ref": "#/components/schemas/NoProjectChecked"
+          }
+        ]
+      },
       "FollowingUpItem": {
         "additionalProperties": false,
         "properties": {
@@ -3274,6 +3308,31 @@
           "suggested"
         ],
         "title": "FoundModel",
+        "type": "object"
+      },
+      "FoundProjects": {
+        "additionalProperties": false,
+        "properties": {
+          "matches": {
+            "description": "Every project the name could mean. More than one means the person chooses. Each is a guess from a reviewed list, never a certainty.",
+            "items": {
+              "$ref": "#/components/schemas/ProjectGuess"
+            },
+            "minItems": 1,
+            "title": "Matches",
+            "type": "array"
+          },
+          "status": {
+            "const": "found",
+            "default": "found",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "matches"
+        ],
+        "title": "FoundProjects",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -3952,6 +4011,47 @@
         "title": "NewAgent",
         "type": "object"
       },
+      "NoProjectChecked": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "description": "What went wrong, in plain words. No project is offered, because nothing unchecked is shown.",
+            "title": "Message",
+            "type": "string"
+          },
+          "status": {
+            "const": "not_checked",
+            "default": "not_checked",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "NoProjectChecked",
+        "type": "object"
+      },
+      "NoProjectKnown": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "status": {
+            "const": "not_known",
+            "default": "not_known",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "NoProjectKnown",
+        "type": "object"
+      },
       "Note": {
         "maxLength": 1000,
         "minLength": 1,
@@ -4563,6 +4663,68 @@
           "failed"
         ],
         "type": "string"
+      },
+      "ProjectGuess": {
+        "additionalProperties": false,
+        "properties": {
+          "already_listed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The name this project already has on the watchlist, or null.",
+            "title": "Already Listed"
+          },
+          "newest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The newest release the watchlist counts, if any.",
+            "title": "Newest"
+          },
+          "releases": {
+            "description": "none when the project has no release the watchlist counts, so a watch would have nothing to compare.",
+            "enum": [
+              "published",
+              "none"
+            ],
+            "title": "Releases",
+            "type": "string"
+          },
+          "repo": {
+            "$ref": "#/components/schemas/RepoName",
+            "description": "A GitHub project that exists, as owner/name, at the address GitHub gives it now. Checked just now."
+          },
+          "what": {
+            "description": "What the project is, so the person can tell matches apart.",
+            "title": "What",
+            "type": "string"
+          },
+          "why": {
+            "description": "Where the guess came from, in plain words.",
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "repo",
+          "what",
+          "why",
+          "releases",
+          "newest",
+          "already_listed"
+        ],
+        "title": "ProjectGuess",
+        "type": "object"
       },
       "ProposalView": {
         "additionalProperties": false,
@@ -7395,6 +7557,18 @@
             ],
             "title": "Checked At"
           },
+          "compared_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "With no version known, the newest release the first check read. Later checks tell about releases newer than this. It is not the version the team runs.",
+            "title": "Compared From"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -7448,6 +7622,7 @@
                 "type": "null"
               }
             ],
+            "description": "The version the team runs, when somebody said so or a ticket marked Done moved it. Null means Not known. It is never filled from the newest release.",
             "title": "Our Version"
           },
           "our_version_source": {
@@ -7484,6 +7659,7 @@
           "source",
           "our_version",
           "our_version_source",
+          "compared_from",
           "newest_version",
           "newest_read_at",
           "checked_at",
@@ -12546,6 +12722,86 @@
           }
         ],
         "summary": "Get Watchlist",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/watchlist/find": {
+      "post": {
+        "description": "Finds the GitHub projects a software's plain name could mean. The agent runtime looks the name up in a reviewed list, never through a model, and asks GitHub about each match with the watchlist's own tag rule before offering it. Nothing is saved: the person picks a match, then adds it with POST /watchlist/software. A match that is already watched says so.",
+        "operationId": "find_software_api_v1_watchlist_find_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FindIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FindOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Find Software",
         "tags": [
           "builder"
         ]

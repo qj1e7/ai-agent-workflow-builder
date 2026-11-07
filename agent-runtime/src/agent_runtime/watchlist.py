@@ -89,14 +89,24 @@ def ticket_for(item: SoftwareToCheck, finding: Finding) -> ProposedIntent:
     name, ref, our = item.name, item.source.ref, item.our_version
     count = plural(len(finding.new_versions), "new release")
     bullets = "\n".join(f"- {tag}" for tag in finding.new_versions)
+    if item.from_first_check:
+        title = f"Upgrade {name} to {finding.newest}"
+        newer = f"newer than {our}, the newest the first check read"
+        reason = (
+            f"{name} {finding.newest} is out, newer than {our}, the newest the first check read"
+        )
+    else:
+        title = f"Upgrade {name} from {our} to {finding.newest}"
+        newer = f"newer than our version {our}"
+        reason = f"{name} {finding.newest} is out, and we run {our}"
     return ProposedIntent(
         kind="create_ticket",
         fields={
-            "title": f"Upgrade {name} from {our} to {finding.newest}",
-            "body": f"{name} has {count} on GitHub ({ref}) newer than our version {our}:\n"
+            "title": title,
+            "body": f"{name} has {count} on GitHub ({ref}) {newer}:\n"
             f"{bullets}\n\nProposed by the AI workflow builder.",
         },
-        reason=f"{name} {finding.newest} is out, and we run {our}",
+        reason=reason,
         subject=item.id,
     )
 

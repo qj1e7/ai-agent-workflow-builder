@@ -21,6 +21,7 @@ class SoftwareToCheck(WireModel):
     our_version: str | None
     open_ticket: str | None = None
     awaiting_approval: bool = False
+    from_first_check: bool = False
 
 
 class WatchlistInputs(WireModel):

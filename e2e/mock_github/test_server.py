@@ -154,6 +154,13 @@ class MockGithubTest(unittest.TestCase):
         self.assertEqual(body["full_name"], "langchain-ai/langgraph")
         self.assertEqual(other["full_name"], "redis/redis")
 
+    def test_cpython_exists_and_publishes_no_releases(self) -> None:
+        with running() as base:
+            _, repo = call(base, "/repos/python/cpython")
+            status, releases = call(base, "/repos/python/cpython/releases")
+        self.assertEqual(repo["full_name"], "python/cpython")
+        self.assertEqual((status, releases), (200, []))
+
     def test_an_unknown_repository_has_no_address_and_follows_its_mode(self) -> None:
         with running() as base:
             self.assertEqual(call(base, "/repos/someone/else")[0], 404)

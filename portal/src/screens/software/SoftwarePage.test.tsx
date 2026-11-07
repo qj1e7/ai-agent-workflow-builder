@@ -46,8 +46,8 @@ describe('the Software watchlist page', () => {
     const html = render(statuses, ALICE)
     const words = text(html)
     for (const row of (statuses as WatchlistView).software) expect(words).toContain(row.name)
-    expect(words).toContain('Needs attention 2')
-    expect(words).toContain('Software we watch 4')
+    expect(words).toContain('Needs attention 1')
+    expect(words).toContain('Software we watch 6')
     expect(words).toContain('1.2.14')
     expect(words).toContain('1.2.16')
     expect(words).toContain('Ticket waiting for a yes')
@@ -229,13 +229,33 @@ describe('the order of the page', () => {
     expect(headings(render(calm, ALICE))).toEqual(['Software we watch', 'How it’s checked'])
   })
 
-  it('puts the row that waits for a yes in Needs attention with its way to decide', () => {
+  it('puts one decision for the whole check in Needs attention, and no row', () => {
     const html = render(statuses, ALICE)
     const attention = html.slice(html.indexOf('needs-attention-heading'), html.indexOf('software-we-watch-heading'))
-    expect(text(attention)).toContain('Ticket waiting for a yes')
+    expect(text(attention)).toContain('The latest check wants to raise 1 upgrade ticket.')
+    expect(text(attention)).toContain('Nothing is written until an Approver says yes.')
     expect(text(attention)).toContain('Review and decide')
-    expect(text(attention)).toContain('Can’t check')
-    expect(text(attention)).not.toContain('Up to date')
+    expect(attention).not.toContain('<li')
+    expect(text(attention)).not.toContain('Can’t check')
+    expect(attention.match(/Review and decide/g)).toHaveLength(1)
+  })
+
+  it('keeps every row in Software we watch, with the real count, the waiting row and the one that can’t be checked included', () => {
+    const view = statuses as WatchlistView
+    const html = render(statuses, ALICE)
+    const watching = html.slice(html.indexOf('software-we-watch-heading'), html.indexOf('how-checked-heading'))
+    expect(text(watching.slice(0, 120))).toContain(`Software we watch ${view.software.length}`)
+    expect(watching.match(/<li id="software-/g)).toHaveLength(view.software.length)
+    expect(text(watching)).toContain('Ticket waiting for a yes')
+    expect(text(watching)).toContain('Can’t check')
+  })
+
+  it('gives the primary action only to the decision when one waits, not to Check now', () => {
+    const html = render(statuses, ALICE)
+    const checkNow = /<button[^>]*>\s*Check now/.exec(html)?.[0] ?? ''
+    expect(checkNow).not.toBe('')
+    expect(html.match(/<button[^>]*class="[^"]*primary[^"]*"[^>]*>\s*Find it/)).toBeNull()
+    expect(/<button[^>]*primary[^>]*>\s*Check now/.test(html)).toBe(false)
   })
 
   it('says how it is checked with the schedule and the one source that works', () => {
@@ -271,10 +291,10 @@ describe('what the team runs', () => {
 })
 
 describe('add software by name', () => {
-  it('starts with the name and one way forward, plus a way to type the address instead', () => {
+  it('starts with the name and one way forward', () => {
     const html = form(START)
     expect(text(html)).toContain('Software name')
-    expect(buttons(html)).toEqual(['Find it', 'I have the GitHub address'])
+    expect(buttons(html)).toEqual(['Find it'])
     expect(html).not.toContain('id="sw-repo"')
   })
 
@@ -332,22 +352,49 @@ describe('add software by name', () => {
     expect(html).toContain('id="sw-repo"')
   })
 
-  it('warns when a match has no release the check can compare', () => {
-    const none: ProjectGuess = { ...GUESS, releases: 'none', newest: null }
-    expect(text(form(run('LangGraph', { type: 'answered', answer: found(none) })))).toContain('it has no release this check can compare yet')
+  it('says a project with no releases can’t be watched, and offers only Change and Start again', () => {
+    const none: ProjectGuess = { ...GUESS, repo: 'python/cpython', releases: 'none', newest: null }
+    const state = run('Python', { type: 'answered', answer: found(none) })
+    const html = form(state)
+    expect(text(html)).toContain('python/cpython doesn’t publish releases on GitHub, which is the only place this check reads. It can’t be watched here.')
+    expect(buttons(html)).toEqual(['Change', 'Start again'])
+    expect(html).not.toContain('id="sw-version"')
+    expect(readyToAdd(state, [], [])).toEqual({ ok: false, errors: { form: 'python/cpython doesn’t publish releases on GitHub, which is the only place this check reads. It can’t be watched here.' } })
   })
 
-  it('says a match is already on the list, and offers no way to add it twice', () => {
+  it('leaves a match with no releases out of the choice, and says why beside it', () => {
+    const none: ProjectGuess = { ...OPENTOFU, releases: 'none', newest: null }
+    const state = run('Terraform', { type: 'answered', answer: found(TERRAFORM, none) })
+    const html = form(state)
+    expect(html.match(/type="radio"/g)).toHaveLength(2)
+    expect(html.match(/disabled=""/g)).toHaveLength(1)
+    expect(text(html)).toContain('opentofu/opentofu doesn’t publish releases on GitHub')
+    expect(buttons(html)).toEqual(['Add Terraform', 'None of these', 'Start again'])
+  })
+
+  it('offers no add when every match is unavailable', () => {
+    const none = (match: ProjectGuess): ProjectGuess => ({ ...match, releases: 'none', newest: null })
+    const html = form(run('Terraform', { type: 'answered', answer: found(none(TERRAFORM), none(OPENTOFU)) }))
+    expect(buttons(html)).toEqual(['None of these', 'Start again'])
+    expect(html).not.toContain('id="sw-version"')
+  })
+
+  it('says a match is already on the list, links to its row, and keeps no way to add it', () => {
     const listed: ProjectGuess = { ...GUESS, already_listed: 'LangGraph' }
     const state = run('LangGraph again', { type: 'answered', answer: found(listed) })
-    expect(text(form(state))).toContain('langchain-ai/langgraph is already on the list as LangGraph.')
+    const html = renderToStaticMarkup(<AddSoftwareForm state={state} busy={false} rowIdOf={() => 'sw_1'} onShowRow={() => undefined} />)
+    expect(text(html)).toContain('langchain-ai/langgraph is already on the list as LangGraph.')
+    expect(html).toContain('href="#software-sw_1"')
+    expect(text(html)).toContain('Show it on the list')
+    expect(buttons(html)).toEqual(['Change', 'Start again'])
     expect(readyToAdd(state, [], [])).toEqual({ ok: false, errors: { form: 'langchain-ai/langgraph is already on the list as LangGraph.' } })
   })
 
-  it('shows the repository field straight away when the person types the address instead', () => {
-    const html = form(run('', { type: 'typeAddress' }))
-    expect(html).toContain('id="sw-repo"')
-    expect(text(html)).toContain('You’re choosing the project yourself.')
+  it('does not offer a listed match in a choice', () => {
+    const listed: ProjectGuess = { ...TERRAFORM, already_listed: 'Terraform' }
+    const html = form(run('Terraform', { type: 'answered', answer: found(listed, OPENTOFU) }))
+    expect(html.match(/disabled=""/g)).toHaveLength(1)
+    expect(text(html)).toContain('hashicorp/terraform is already on the list as Terraform.')
   })
 
   it('has a version field that says what an empty one means, and does not fill it from the newest release', () => {

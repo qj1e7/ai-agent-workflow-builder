@@ -1861,7 +1861,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   }
 
   /* ---------- Software: one list for every release check ---------- */
-  const UNREADABLE = ['Grafana', 'LangServe'];
+  const UNREADABLE = ['Grafana', 'LangServe', 'PostgreSQL', 'Python'];
   const TRACKED = ['LangGraph', 'FastAPI', 'Grafana', 'Log4j core', 'LangServe', 'n8n', 'PostgreSQL', 'Spring Framework', 'Terraform', 'Keycloak', 'Redis', 'Nginx', 'Node.js', 'Python'];
   const UP_TO_DATE = TRACKED.slice(5);
   /* Where software is published. Each source's state comes from the registry: GitHub releases are read today, the
@@ -2730,6 +2730,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
   const LS_OLD = 'langchain-ai/langserve';
   const LS_NEW = 'langchain-ai/langchain';
   /* What the sample check found for the software that is up to date: the version we run, and its GitHub project. */
+  const FIRST_CHECK = ['Redis', 'Nginx', 'Node.js'];
   const UP_NOW = { n8n: ['2.42.6', 'n8n-io/n8n'], PostgreSQL: ['16.4', 'postgres/postgres'], 'Spring Framework': ['6.1.12', 'spring-projects/spring-framework'], Terraform: ['1.9.5', 'hashicorp/terraform'], Keycloak: ['25.0.4', 'keycloak/keycloak'], Redis: ['7.4.0', 'redis/redis'], Nginx: ['1.27.1', 'nginx/nginx'], 'Node.js': ['22.8.0', 'nodejs/node'], Python: ['3.12.6', 'python/cpython'] };
   /* Adding software by name: one name can match more than one project, and a name the Planner knows may be published
      elsewhere than GitHub. Only GitHub releases are read today, so the guess is always a GitHub project. */
@@ -2745,6 +2746,10 @@ details > .m-close { animation: fold 140ms ease-in both; }
     const gh = kind && kind !== 'github' ? GH_OF[key] : repo;
     return gh ? [{ repo: gh, what: '', how: pkg ? `Found by name. Its ${srcName(pkg[0])} page links to this project.` : 'Found by name, in the projects I know.' }] : [];
   }
+  /* GitHub projects that publish no releases, only tags. The check reads releases, so it can't watch them (spec 11). */
+  const NO_RELEASES = ['python/cpython', 'postgres/postgres'];
+  /* The row a GitHub project already has on the list, by the repository it reads. */
+  const rowOfRepo = (repo) => watchRows().concat(S.added.map((a, i) => ({ key: `add${i}`, name: a.name, repo: a.repo }))).filter((r) => !S.removed.includes(r.key)).find((r) => r.repo.toLowerCase() === repo.toLowerCase());
   function newSwForm() { return { name: '', repo: '', ours: '', kind: 'github', step: 'name', matches: [], pick: -1, change: false }; }
   const ticketNote = (st) => ({ waiting: 'Ticket waiting for a yes', approved: null, declined: 'Proposed again next Monday' }[st]);
 
@@ -2765,9 +2770,14 @@ details > .m-close { animation: fold 140ms ease-in both; }
         status: lsFixed ? next('Now read from the new address.') : `<span class="pill bad">${I.x(12)}Can’t check</span><div class="src">GitHub can’t find this project. It moved.</div>`,
         hist: [...(lsFixed ? [['Today', `${me().name} used the new address ${LS_NEW}, as the AI troubleshooter suggested.`]] : []), ['Mon 26 Oct', `Couldn’t check: GitHub can’t find ${LS_OLD}. The project moved to ${LS_NEW}.`], ['Thu 1 Oct', `Added by Alice with our version 0.3.1.`]] },
     ].map((r) => ({ ...r, ...rowSrc(r), rank: r.rank }));
+    /* Redis, Nginx and Node.js were added with no version. The first check read their newest release, and the page says
+       so: We run stays Not known, and nothing is recorded as the version the team runs (spec 11). */
     const ok = UP_TO_DATE.map((n) => {
       const [v, gh] = UP_NOW[n];
-      return { key: `ok:${n}`, name: n, repo: gh, kind: 'github', ours: v, from: 'From the first check', newest: v, rank: 3, status: `<span class="pill ok">${I.check(12)}Up to date</span>`, hist: [['Mon 26 Oct', `Up to date at ${v}.`], ['Thu 1 Oct', `Added by Carol with our version ${v}.`]] };
+      const row = { key: `ok:${n}`, name: n, repo: gh, kind: 'github', ours: v, from: 'Given when added', newest: v, rank: 3, status: `<span class="pill ok">${I.check(12)}Up to date</span>`, hist: [['Mon 26 Oct', `Up to date at ${v}.`], ['Thu 1 Oct', `Added by Carol with our version ${v}.`]] };
+      if (NO_RELEASES.includes(gh)) return { ...row, ours: 'Not known', from: 'Not given when added', newest: '?', rank: 1, status: `<span class="pill bad">${I.x(12)}Can’t check</span><div class="src">No release has a plain version number. It tries again next Monday.</div>`, hist: [['Mon 26 Oct', 'Couldn’t check: no release has a plain version number.'], ['Thu 1 Oct', 'Added by Carol. Our version wasn’t given.']] };
+      if (FIRST_CHECK.includes(n)) return { ...row, ours: 'Not known', from: `Telling you about releases newer than ${v}, the newest the first check read`, status: `<span class="pill ok">${I.check(12)}Nothing newer yet</span>`, hist: [['Mon 26 Oct', `Checked. Nothing is newer than ${v}.`], ['Thu 1 Oct', `Added by Carol. Our version wasn’t given, so the check tells us about releases newer than ${v}, the newest the first check read.`]] };
+      return row;
     });
     return base.concat(ok);
   }
@@ -2822,11 +2832,19 @@ details > .m-close { animation: fold 140ms ease-in both; }
       let body;
       if (!m.length) body = `<p class="small muted">Paste its GitHub link, or type owner/name.</p>${repoField('For example langchain-ai/langgraph.')}`;
       else if (f.change) body = `<p class="small muted">You’re choosing the project yourself.</p>${kindField}${repoField()}`;
-      else if (m.length === 1) body = `<p class="guess-line"><b>${srcLink('github', m[0].repo, esc(m[0].repo))}</b></p><ul class="guess-why"><li>${I.info(14)}<span>${m[0].how}</span></li><li>${I.check(14)}<span>Checked just now. The project is on GitHub and publishes releases.</span></li></ul>`;
+      else if (m.length === 1) {
+        const listed = rowOfRepo(m[0].repo);
+        const verdict = NO_RELEASES.includes(m[0].repo) ? `<li>${I.alert(14)}<span>${esc(m[0].repo)} doesn’t publish releases on GitHub, which is the only place this check reads. It can’t be watched here.</span></li>`
+          : listed ? `<li>${I.info(14)}<span>${esc(m[0].repo)} is already on the list as ${esc(listed.name)}. <button type="button" class="linkbtn" data-act="swShowRow" data-arg="${esc(m[0].repo)}">Show it on the list</button></span></li>`
+            : `<li>${I.check(14)}<span>Checked just now. The project is on GitHub and publishes releases.</span></li>`;
+        body = `<p class="guess-line"><b>${srcLink('github', m[0].repo, esc(m[0].repo))}</b></p><ul class="guess-why"><li>${I.info(14)}<span>${m[0].how}</span></li>${verdict}</ul>`;
+      }
       else body = `<fieldset class="pick"><legend>Which one do you mean?</legend>${m.map((x, i) => `<label class="pickrow"><input type="radio" name="sw-pick" data-sw="pick" value="${i}"${f.pick === i ? ' checked' : ''}><span><b>${esc(x.repo)}</b><span class="small muted">${x.what}. ${x.how}</span></span></label>`).join('')}</fieldset>`;
       const ready = !m.length || f.change || f.pick >= 0;
-      add = `<form class="guess" data-submit="swAdd" novalidate data-flip="swadd" data-enter="reveal">${nameLine}${body}${ours}
-        <div class="btns"><button type="submit" class="btn primary"${ready ? '' : ' disabled'}>${m.length && !f.change && m.length === 1 ? 'Looks right, add it' : `Add ${esc(f.name.trim())}`}</button>${m.length === 1 && !f.change ? '<button type="button" class="btn" data-act="swChange">Change</button>' : ''}${m.length > 1 && !f.change ? '<button type="button" class="btn" data-act="swChange">None of these</button>' : ''}<button type="button" class="linkbtn" data-act="swReset">Start again</button></div>${m.length > 1 && !f.change && f.pick < 0 ? '<p class="small muted">Choose one to add it.</p>' : ''}</form>`;
+      /* A project with no releases, or one already on the list, has nothing to confirm: only Change and Start again. */
+      const blocked = m.length === 1 && !f.change && (NO_RELEASES.includes(m[0].repo) || rowOfRepo(m[0].repo));
+      add = `<form class="guess" data-submit="swAdd" novalidate data-flip="swadd" data-enter="reveal">${nameLine}${body}${blocked ? '' : ours}
+        <div class="btns">${blocked ? '' : `<button type="submit" class="btn primary"${ready ? '' : ' disabled'}>${m.length && !f.change && m.length === 1 ? 'Looks right, add it' : `Add ${esc(f.name.trim())}`}</button>`}${m.length === 1 && !f.change ? '<button type="button" class="btn" data-act="swChange">Change</button>' : ''}${m.length > 1 && !f.change ? '<button type="button" class="btn" data-act="swChange">None of these</button>' : ''}<button type="button" class="linkbtn" data-act="swReset">Start again</button></div>${m.length > 1 && !f.change && f.pick < 0 ? '<p class="small muted">Choose one to add it.</p>' : ''}</form>`;
     }
     const watching = `<section class="section" aria-labelledby="sww-h"><h2 id="sww-h" tabindex="-1">Software we watch <span class="count" data-val="sw:n">${rows.length}</span></h2>
       ${day1 ? '' : `<div class="findbar"><span class="findbox">${I.search()}<label class="vh" for="find-software">Find software</label><input type="search" id="find-software" data-find="software" placeholder="Find software" value="${esc(S.find.software)}"></span></div>`}
@@ -3895,7 +3913,7 @@ details > .m-close { animation: fold 140ms ease-in both; }
       rules: ['Only explains. It never changes a run'], last: 'Today, 8:00: explained why Morning new-ticket check stopped.' },
     { id: 'checker', get what() { return shows('registries') ? 'Reads each tool’s newest version from its registry, cross-checks GitHub, reads support dates, and suggests a source when you’re not sure.' : 'Reads each tool’s newest release on GitHub.'; }, get tools() { return shows('registries') ? ['registries', 'ghReleases', 'support', 'suggest'] : ['ghReleases']; },
       get plan() { return shows('registries') ? ['For each tool on the watchlist, read the newest version from the registry the team installs it from', 'Cross-check GitHub. If the two disagree, the registry wins and the difference is reported', 'Read support dates from endoflife.date, and flag versions whose fixes end within a year', 'When asked, search a vendor’s official site and suggest a source for a person to confirm'] : ['For each tool on the watchlist, read its newest release on GitHub', 'Report each tool whose newest release is newer than the version we run']; },
-      get last() { return shows('registries') ? 'Mon 26 Oct, in Keep our software up to date: read 12 of 14 tools, found 3 newer versions and 1 disagreement. 2 couldn’t be read.' : 'Mon 26 Oct, in Keep our software up to date: read 12 of 14 projects, found 3 newer releases. 2 couldn’t be read.'; } },
+      get last() { return shows('registries') ? 'Mon 26 Oct, in Keep our software up to date: read 10 of 14 tools, found 3 newer versions and 1 disagreement. 4 couldn’t be read.' : 'Mon 26 Oct, in Keep our software up to date: read 10 of 14 projects, found 3 newer releases. 4 couldn’t be read.'; } },
     { id: 'vuln', planned: 'registries', what: 'Looks up known vulnerabilities in the versions you run, cross-checked across OSV, NVD, vendor advisories and CISA’s list of actively exploited ones.', tools: ['vulns', 'kev'],
       plan: ['Match the versions we run against OSV', 'Read each match’s official record and severity from NVD, and the vendor’s advisory', 'Check CISA’s list of actively exploited vulnerabilities', 'Mark it urgent if it’s critical (9.0 or higher) or actively exploited'],
       last: 'Mon 26 Oct: found 4 known vulnerabilities in Log4j core 2.14.1, one actively exploited.' },
@@ -4923,11 +4941,17 @@ details > .m-close { animation: fold 140ms ease-in both; }
     swChange: () => {
       const f = S.swForm;
       f.change = true;
-      f.repo = f.matches.length === 1 ? f.matches[0].repo : '';
+      f.repo = f.matches.length === 1 && !NO_RELEASES.includes(f.matches[0].repo) && !rowOfRepo(f.matches[0].repo) ? f.matches[0].repo : '';
       f.kind = 'github';
       render();
       const i = document.getElementById('sw-repo');
       if (i) i.focus();
+    },
+    swShowRow: (repo) => {
+      S.find.software = '';
+      render();
+      const row = [...document.querySelectorAll('.sw-table tbody tr[data-flip^="sw:"]')].find((tr) => tr.textContent.toLowerCase().includes(repo.toLowerCase()));
+      if (row) { row.setAttribute('tabindex', '-1'); row.focus(); row.scrollIntoView({ block: 'center', behavior: motionQuery.matches ? 'auto' : 'smooth' }); }
     },
     swReset: () => { S.swForm = newSwForm(); S.swErr = {}; render(); const i = document.getElementById('sw-name'); if (i) i.focus(); },
     swAdd: () => {

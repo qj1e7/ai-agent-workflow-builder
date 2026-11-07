@@ -162,6 +162,12 @@ class SoftwareToCheck(WireModel):
         description="The version the team runs now. None means the newest release becomes the "
         "starting point."
     )
+    from_first_check: bool = Field(
+        default=False,
+        description="True when our_version is only the newest release an earlier first check "
+        "read, not a version anyone gave. A ticket then says so instead of calling it the "
+        "version the team runs.",
+    )
     open_ticket: str | None = Field(
         default=None,
         description="The ticket already raised for this software and not yet done, such as "

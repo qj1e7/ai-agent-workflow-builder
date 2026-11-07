@@ -635,6 +635,7 @@ class Orchestrator:
                             our_version=s.our_version,
                             open_ticket=s.open_ticket,
                             awaiting_approval=s.awaiting_approval,
+                            from_first_check=s.from_first_check,
                         )
                         for s in software
                     ],

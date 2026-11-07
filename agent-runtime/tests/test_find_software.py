@@ -127,6 +127,14 @@ def test_the_newest_release_is_the_newest_tag_the_watch_would_count():
     assert (match.releases, match.newest) == ("published", "1.2.20")
 
 
+def test_the_newest_release_is_the_highest_even_when_an_older_line_was_published_last():
+    source = FakeProjectSource(
+        {"n8n-io/n8n": [Release("n8n@1.123.92"), Release("n8n@2.46.6"), Release("n8n@1.123.91")]}
+    )
+    (match,) = found(find(source, "n8n")).matches
+    assert match.newest == "n8n@2.46.6"
+
+
 def test_a_project_whose_tags_the_watch_ignores_has_no_release_to_compare():
     source = FakeProjectSource({"n8n-io/n8n": [Release("stable"), Release("n8n-nightly@2.46.6")]})
     (match,) = found(find(source, "n8n")).matches

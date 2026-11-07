@@ -223,6 +223,27 @@ HELD_FINDINGS = [finding(LANGGRAPH, "behind", "1.2.16"), finding(REDIS, "behind"
 OLDER = [finding(LANGGRAPH, "behind", "1.2.13"), *FINDINGS[1:]]
 
 
+FIRST_CHECK = replace(
+    TASK,
+    software=(
+        watched(LANGGRAPH, "LangGraph", "langchain-ai/langgraph", "1.2.14"),
+        *TASK.software[1:],
+    ),
+)
+FIRST_CHECK = replace(
+    FIRST_CHECK,
+    software=(replace(FIRST_CHECK.software[0], from_first_check=True), *FIRST_CHECK.software[1:]),
+)
+
+
+def test_a_baseline_from_the_first_check_is_titled_without_calling_it_our_version():
+    right = ticket(LANGGRAPH, title="Upgrade LangGraph to 1.2.16")
+    assert isinstance(review(FIRST_CHECK, FINDINGS, [right]), Reviewed)
+    old_words = review(FIRST_CHECK, FINDINGS, [ticket(LANGGRAPH)])
+    assert isinstance(old_words, Unusable)
+    assert 'differently from "Upgrade LangGraph to 1.2.16"' in old_words.detail
+
+
 @pytest.mark.parametrize(
     ("task", "findings", "proposed", "words"),
     [

@@ -1,6 +1,6 @@
 import { ApiError } from '../../api/client'
 import { failureReasonLabel } from '../../api/labels'
-import type { Day, FailureReason, ScheduleHold, ScheduleView, SoftwareStatus, VersionSourceView, WatchedSoftwareView } from '../../api/types'
+import type { Day, FailureReason, Refusal, ScheduleHold, ScheduleView, SoftwareStatus, VersionSourceView, WatchedSoftwareView } from '../../api/types'
 import { dateAndClock, scheduleZoneName, timesZone } from '../workflows/times'
 
 export const SOURCES_NOTE =
@@ -63,7 +63,7 @@ export function emptyWords({ operator, scheduled, paused }: { readonly operator:
 
 export const statusLabel: Record<SoftwareStatus, string> = {
   cant_check: 'Can’t check',
-  behind: 'Behind',
+  behind: 'New version',
   awaiting_approval: 'Ticket waiting for a yes',
   ticket_open: 'Ticket open',
   up_to_date: 'Up to date',
@@ -196,26 +196,51 @@ export function matches(count: number): string {
   return count === 1 ? '1 match' : `${count} matches`
 }
 
-interface Groups {
-  /** A yes that waits, or a check that could not read the source. */
-  readonly attention: readonly WatchedSoftwareView[]
-  /** Everything else, in the order the platform gives: behind first, up to date last. */
-  readonly watched: readonly WatchedSoftwareView[]
-}
-
 function matchesQuery(row: WatchedSoftwareView, query: string): boolean {
   const q = query.trim().toLowerCase()
   return q === '' || `${row.name} ${row.source.ref}`.toLowerCase().includes(q)
 }
 
-export function groupsOf(rows: readonly WatchedSoftwareView[], query: string): Groups {
-  const shown = rows.filter((row) => matchesQuery(row, query))
-  const needsAttention = (row: WatchedSoftwareView) => row.status === 'awaiting_approval' || row.status === 'cant_check'
-  return { attention: shown.filter(needsAttention), watched: shown.filter((row) => !needsAttention(row)) }
+/** Every row stays in Software we watch, so its count is the real number. Only the search narrows it. */
+export function rowsMatching(rows: readonly WatchedSoftwareView[], query: string): WatchedSoftwareView[] {
+  return rows.filter((row) => matchesQuery(row, query))
 }
 
-export function countIn(groups: Groups): number {
-  return groups.attention.length + groups.watched.length
+export interface Decision {
+  readonly approvalId: string
+  /** How many watched software this one yes covers. */
+  readonly software: number
+}
+
+/** One decision for the whole check: the tickets of one run wait on one approval, however many rows they came from. */
+export function decisionsOf(rows: readonly WatchedSoftwareView[]): Decision[] {
+  const counts = new Map<string, number>()
+  for (const row of rows) {
+    if (row.status === 'awaiting_approval' && row.approval_id) counts.set(row.approval_id, (counts.get(row.approval_id) ?? 0) + 1)
+  }
+  return [...counts].map(([approvalId, software]) => ({ approvalId, software }))
+}
+
+export function decisionTitle(tickets: number): string {
+  return `The latest check wants to raise ${tickets} upgrade ${tickets === 1 ? 'ticket' : 'tickets'}.`
+}
+
+export const DECISION_NOTE = 'Nothing is written until an Approver says yes.'
+
+/** What the bar says to someone who can't decide it. The platform says why. */
+export function waitingWords(whyNot: Refusal | null): string {
+  switch (whyNot) {
+    case 'own_work':
+      return 'Waiting for another Approver. This check is your own work.'
+    case 'decided_earlier_step':
+      return 'Waiting for another Approver. You decided an earlier step.'
+    default:
+      return 'Waiting for an Approver.'
+  }
+}
+
+export function rowDomId(softwareId: string): string {
+  return `software-${softwareId}`
 }
 
 export function versionSourceWords(source: VersionSourceView | null): string {

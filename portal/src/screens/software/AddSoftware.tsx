@@ -1,12 +1,13 @@
 import { useEffect, useReducer, useRef, type FormEvent, type ReactNode, type RefObject } from 'react'
 import { ApiError } from '../../api/client'
+import type { WatchedSoftwareView } from '../../api/types'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { useAddSoftware, useFindSoftware } from '../../api/queries'
 import { Button } from '../../ui/Button'
 import { IconExternal } from '../../ui/icons'
-import { addReducer, alreadyWords, matchesOf, modeOf, readyToAdd, releaseWords, START, type AddAction, type AddState } from './addByName'
-import { addProblems, checkName, REPO_HELP, VERSION_HELP } from './software'
+import { addReducer, alreadyWords, canAdd, matchesOf, modeOf, readyToAdd, releaseWords, START, verdictOf, type AddAction, type AddState } from './addByName'
+import { addProblems, checkName, REPO_HELP, rowDomId, VERSION_HELP } from './software'
 import styles from './Software.module.css'
 
 function Field({ id, label, optional, help, error, children }: { id: string; label: string; optional?: boolean; help: string; error: string | undefined; children: ReactNode }) {
@@ -36,7 +37,8 @@ interface FormProps {
   readonly refs?: { readonly name?: RefObject<HTMLInputElement | null>; readonly repo?: RefObject<HTMLInputElement | null>; readonly version?: RefObject<HTMLInputElement | null> } | undefined
   readonly dispatch?: ((action: AddAction) => void) | undefined
   readonly onSubmit?: ((event: FormEvent<HTMLFormElement>) => void) | undefined
-  readonly onTypeAddress?: (() => void) | undefined
+  readonly rowIdOf?: ((repo: string) => string | undefined) | undefined
+  readonly onShowRow?: ((id: string) => void) | undefined
 }
 
 const describedBy = (id: string, error: string | undefined) => (error ? `${id}-error` : `${id}-help`)
@@ -62,7 +64,7 @@ function VersionField({ state, refs, dispatch }: Pick<FormProps, 'state' | 'refs
   )
 }
 
-function NameStep({ state, busy, refs, dispatch, onTypeAddress }: FormProps) {
+function NameStep({ state, busy, refs, dispatch }: FormProps) {
   const error = state.errors.name
   return (
     <>
@@ -87,22 +89,38 @@ function NameStep({ state, busy, refs, dispatch, onTypeAddress }: FormProps) {
         </p>
       ) : null}
       <div className={styles['formActions']}>
-        <Button type="submit" variant="primary" loading={busy}>
+        <Button type="submit" loading={busy}>
           Find it
         </Button>
-        <Button onClick={onTypeAddress}>I have the GitHub address</Button>
       </div>
     </>
   )
 }
 
-function Guess({ state, dispatch }: Pick<FormProps, 'state' | 'dispatch'>) {
+function ShowRow({ repo, rowIdOf, onShowRow }: { repo: string } & Pick<FormProps, 'rowIdOf' | 'onShowRow'>) {
+  const id = rowIdOf?.(repo)
+  if (!id) return null
+  return (
+    <a
+      href={`#${rowDomId(id)}`}
+      onClick={(event) => {
+        event.preventDefault()
+        onShowRow?.(id)
+      }}
+    >
+      Show it on the list
+    </a>
+  )
+}
+
+function Guess({ state, dispatch, rowIdOf, onShowRow }: Pick<FormProps, 'state' | 'dispatch' | 'rowIdOf' | 'onShowRow'>) {
   const matches = matchesOf(state)
   const mode = modeOf(state)
   const answer = state.answer
   if (mode === 'single') {
     const match = matches[0]
     if (!match) return null
+    const verdict = verdictOf(match)
     return (
       <>
         <p className={styles['guess']}>
@@ -117,8 +135,13 @@ function Guess({ state, dispatch }: Pick<FormProps, 'state' | 'dispatch'>) {
         </p>
         <ul className={styles['why']}>
           <li>{match.why}</li>
-          <li>{releaseWords(match)}</li>
-          {match.already_listed ? <li role="status">{alreadyWords(match.repo, match.already_listed)}</li> : null}
+          {verdict.kind === 'listed' ? (
+            <li role="status">
+              {alreadyWords(match.repo, verdict.name)} <ShowRow repo={match.repo} rowIdOf={rowIdOf} onShowRow={onShowRow} />
+            </li>
+          ) : (
+            <li role={verdict.kind === 'none' ? 'status' : undefined}>{releaseWords(match)}</li>
+          )}
         </ul>
       </>
     )
@@ -127,19 +150,30 @@ function Guess({ state, dispatch }: Pick<FormProps, 'state' | 'dispatch'>) {
     return (
       <fieldset className={styles['pick']} aria-describedby={state.errors.form ? 'sw-form-error' : undefined}>
         <legend>Which one do you mean?</legend>
-        {matches.map((match, index) => (
-          <div key={match.repo} className={styles['pickRow']}>
-            <input id={`sw-pick-${index}`} type="radio" name="sw-pick" value={index} checked={state.pick === index} onChange={() => dispatch?.({ type: 'picked', index })} />
-            <label htmlFor={`sw-pick-${index}`}>
-              <b>{match.repo}</b>
-              <span className="muted">
-                {' '}
-                {match.what}. {match.why} {releaseWords(match)}
-                {match.already_listed ? ` ${alreadyWords(match.repo, match.already_listed)}` : ''}
-              </span>
-            </label>
-          </div>
-        ))}
+        {matches.map((match, index) => {
+          const verdict = verdictOf(match)
+          return (
+            <div key={match.repo} className={styles['pickRow']}>
+              <input
+                id={`sw-pick-${index}`}
+                type="radio"
+                name="sw-pick"
+                value={index}
+                checked={state.pick === index}
+                disabled={verdict.kind !== 'add'}
+                onChange={() => dispatch?.({ type: 'picked', index })}
+              />
+              <label htmlFor={`sw-pick-${index}`}>
+                <b>{match.repo}</b>
+                <span className="muted">
+                  {' '}
+                  {match.what}. {match.why} {verdict.kind === 'listed' ? alreadyWords(match.repo, verdict.name) : releaseWords(match)}
+                </span>
+              </label>
+              {verdict.kind === 'listed' ? <ShowRow repo={match.repo} rowIdOf={rowIdOf} onShowRow={onShowRow} /> : null}
+            </div>
+          )
+        })}
       </fieldset>
     )
   }
@@ -156,19 +190,20 @@ function Guess({ state, dispatch }: Pick<FormProps, 'state' | 'dispatch'>) {
   ) : null
 }
 
-function GuessStep({ state, busy, refs, dispatch }: FormProps) {
+function GuessStep({ state, busy, refs, dispatch, rowIdOf, onShowRow }: FormProps) {
   const mode = modeOf(state)
   const typed = state.name.trim()
   const unmatched = mode === 'address' && !state.change && state.answer !== null
   const heading = unmatched ? `I couldn’t find “${typed}”` : `Adding ${typed}`
   const repoError = state.errors.repo
+  const addable = canAdd(state)
   const addLabel = mode === 'single' ? 'Looks right, add it' : `Add ${typed}`
   return (
     <>
       <h3 id="sw-guess" tabIndex={-1}>
         {heading}
       </h3>
-      <Guess state={state} dispatch={dispatch} />
+      <Guess state={state} dispatch={dispatch} rowIdOf={rowIdOf} onShowRow={onShowRow} />
       {mode === 'address' ? (
         <Field id="sw-repo" label="GitHub repository" help={REPO_HELP} error={repoError}>
           <input
@@ -186,16 +221,18 @@ function GuessStep({ state, busy, refs, dispatch }: FormProps) {
           />
         </Field>
       ) : null}
-      <VersionField state={state} refs={refs} dispatch={dispatch} />
+      {addable ? <VersionField state={state} refs={refs} dispatch={dispatch} /> : null}
       {state.errors.form ? (
         <p className={styles['error']} id="sw-form-error" role="alert">
           {state.errors.form}
         </p>
       ) : null}
       <div className={styles['formActions']}>
-        <Button type="submit" variant="primary" loading={busy}>
-          {addLabel}
-        </Button>
+        {addable ? (
+          <Button type="submit" variant="primary" loading={busy}>
+            {addLabel}
+          </Button>
+        ) : null}
         {mode === 'single' ? <Button onClick={() => dispatch?.({ type: 'change' })}>Change</Button> : null}
         {mode === 'choose' ? <Button onClick={() => dispatch?.({ type: 'change' })}>None of these</Button> : null}
         <Button onClick={() => dispatch?.({ type: 'reset' })}>Start again</Button>
@@ -220,7 +257,16 @@ function focusTarget(state: AddState): string | null {
   return null
 }
 
-export function AddSoftware({ names, repos, onAdded }: { names: readonly string[]; repos: readonly string[]; onAdded: (name: string) => void }) {
+interface AddSoftwareProps {
+  readonly software: readonly Pick<WatchedSoftwareView, 'id' | 'name' | 'source'>[]
+  readonly onShowRow: (id: string) => void
+  readonly onAdded: (name: string) => void
+}
+
+export function AddSoftware({ software, onShowRow, onAdded }: AddSoftwareProps) {
+  const names = software.map((row) => row.name)
+  const repos = software.map((row) => row.source.ref)
+  const rowIdOf = (repo: string) => software.find((row) => row.source.ref.toLowerCase() === repo.toLowerCase())?.id
   const [state, dispatch] = useReducer(addReducer, START)
   const find = useFindSoftware()
   const add = useAddSoftware()
@@ -235,7 +281,7 @@ export function AddSoftware({ names, repos, onAdded }: { names: readonly string[
     if (target) {
       document.getElementById(target)?.focus()
     } else if (moved.current !== state.step) {
-      document.getElementById(state.step === 'guess' ? (state.change && state.answer === null ? 'sw-repo' : 'sw-guess') : 'sw-name')?.focus()
+      document.getElementById(state.step === 'guess' ? 'sw-guess' : 'sw-name')?.focus()
     }
     moved.current = state.step
   }, [state])
@@ -273,10 +319,5 @@ export function AddSoftware({ names, repos, onAdded }: { names: readonly string[
     )
   }
 
-  function typeAddress() {
-    const name = checkName(state.name, names)
-    dispatch(name.ok ? { type: 'typeAddress' } : { type: 'refused', errors: { name: name.words } })
-  }
-
-  return <AddSoftwareForm state={state} busy={find.isPending || add.isPending} refs={refs} dispatch={dispatch} onSubmit={submit} onTypeAddress={typeAddress} />
+  return <AddSoftwareForm state={state} busy={find.isPending || add.isPending} refs={refs} dispatch={dispatch} onSubmit={submit} rowIdOf={rowIdOf} onShowRow={onShowRow} />
 }

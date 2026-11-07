@@ -507,6 +507,21 @@ async def test_a_check_carries_our_version_the_open_ticket_and_the_waiting_appro
     assert isinstance(await builder.start_run(UseCaseId(view.use_case_id), ALICE, "k"), RunStarted)
 
 
+async def test_the_task_says_when_our_version_is_only_what_the_first_check_read(
+    watchlist: Watchlist, builder: Builder, facts: FakeFacts
+):
+    view = await added(watchlist, LANGGRAPH)
+    (row,) = view.software
+    facts.known = {
+        row.id: SoftwareFacts(
+            FromFirstCheck("1.2.16", LATER), Checked(RUN, LATER, "1.2.16"), None, None
+        )
+    }
+    spec = await builder.run_spec_for(UseCaseId(view.use_case_id))
+    assert isinstance(spec, RunSpec) and isinstance(spec.task, WatchlistTask)
+    assert [(s.our_version, s.from_first_check) for s in spec.task.software] == [("1.2.16", True)]
+
+
 async def test_an_emptied_watchlist_has_nothing_to_check(watchlist: Watchlist, builder: Builder):
     view = await added(watchlist, LANGGRAPH)
     await watchlist.remove(view.software[0].id)

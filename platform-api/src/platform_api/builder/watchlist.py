@@ -243,6 +243,7 @@ def task(record: WatchlistRecord, standing: WatchlistStanding) -> WatchlistTask:
                 our_version=None if facts.our_version is None else facts.our_version.version,
                 open_ticket=None if facts.open_ticket is None else facts.open_ticket.key,
                 awaiting_approval=facts.pending is not None,
+                from_first_check=isinstance(facts.our_version, FromFirstCheck),
             )
         )
     return WatchlistTask(tag_pattern=SOFTWARE_WATCHLIST.tag_pattern, software=tuple(software))

@@ -267,7 +267,11 @@ def review(
                 f"The agents proposed a ticket for {software.name}, but {finding.newest} is not "
                 f"newer than our version {software.our_version}"
             )
-        expected = f"Upgrade {software.name} from {software.our_version} to {finding.newest}"
+        expected = (
+            f"Upgrade {software.name} to {finding.newest}"
+            if software.from_first_check
+            else f"Upgrade {software.name} from {software.our_version} to {finding.newest}"
+        )
         if intent.fields.get("title") != expected:
             return Unusable(
                 f'The agents titled the ticket for {software.name} differently from "{expected}"'

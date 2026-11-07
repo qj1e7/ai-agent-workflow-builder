@@ -17,6 +17,7 @@ from agent_runtime.release_source import (
     phrase,
     tag_list,
 )
+from agent_runtime.tags import highest
 
 NOT_FOUND_STATUSES = {404, 410}
 
@@ -108,6 +109,7 @@ def known_for(name: str) -> list[KnownProject]:
 def check_project(source: ProjectSource, project: KnownProject, tag_pattern: str) -> SoftwareMatch:
     current = source.current_name(project.repo)
     counted = candidates(source.fetch(current), tag_pattern)
+    newest = highest(counted)
     why = "From our list of known projects."
     if current != project.repo:
         why = f"From our list of known projects, as {project.repo}. GitHub now has it at {current}."
@@ -115,8 +117,8 @@ def check_project(source: ProjectSource, project: KnownProject, tag_pattern: str
         repo=current,
         what=project.what,
         why=why,
-        releases="published" if counted else "none",
-        newest=counted[0] if counted else None,
+        releases="none" if newest is None else "published",
+        newest=newest,
     )
 
 

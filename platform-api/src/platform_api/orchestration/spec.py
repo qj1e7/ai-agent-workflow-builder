@@ -27,6 +27,8 @@ class WatchedSoftware:
     our_version: str | None
     open_ticket: str | None
     awaiting_approval: bool
+    from_first_check: bool = False
+    """True when our_version is the newest release the first check read, not one anyone gave."""
 
 
 @dataclass(frozen=True)

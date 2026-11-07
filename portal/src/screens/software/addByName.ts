@@ -19,13 +19,20 @@ export const START: AddState = { step: 'name', name: '', repo: '', version: '', 
 export type AddAction =
   | { readonly type: 'typed'; readonly field: 'name' | 'repo' | 'version'; readonly value: string }
   | { readonly type: 'answered'; readonly answer: FindOut }
-  | { readonly type: 'typeAddress' }
   | { readonly type: 'change' }
   | { readonly type: 'picked'; readonly index: number }
   | { readonly type: 'refused'; readonly errors: FormErrors }
   | { readonly type: 'reset' }
 
 export type Mode = 'single' | 'choose' | 'address'
+
+/** What the person can do with one match: add it, see where it already is, or nothing, because the check can't read its releases. */
+export type Verdict = { readonly kind: 'add' } | { readonly kind: 'listed'; readonly name: string } | { readonly kind: 'none' }
+
+export function verdictOf(match: ProjectGuess): Verdict {
+  if (match.already_listed) return { kind: 'listed', name: match.already_listed }
+  return match.releases === 'published' ? { kind: 'add' } : { kind: 'none' }
+}
 
 export function matchesOf(state: AddState): readonly ProjectGuess[] {
   return state.answer?.status === 'found' ? state.answer.matches : []
@@ -48,13 +55,11 @@ export function addReducer(state: AddState, action: AddAction): AddState {
       return { ...state, [action.field]: action.value, errors: without(state.errors, action.field) }
     case 'answered': {
       const only = action.answer.status === 'found' && action.answer.matches.length === 1 ? action.answer.matches[0] : undefined
-      return { ...state, step: 'guess', answer: action.answer, pick: only && !only.already_listed ? 0 : -1, change: false, repo: '', errors: {} }
+      return { ...state, step: 'guess', answer: action.answer, pick: only && verdictOf(only).kind === 'add' ? 0 : -1, change: false, repo: '', errors: {} }
     }
-    case 'typeAddress':
-      return { ...state, step: 'guess', answer: null, pick: -1, change: true, errors: {} }
     case 'change': {
-      const matches = matchesOf(state)
-      return { ...state, change: true, repo: matches.length === 1 ? (matches[0]?.repo ?? '') : '', errors: {} }
+      const [only, ...others] = matchesOf(state)
+      return { ...state, change: true, repo: only && others.length === 0 && verdictOf(only).kind === 'add' ? only.repo : '', errors: {} }
     }
     case 'picked':
       return { ...state, pick: action.index, errors: {} }
@@ -69,6 +74,16 @@ export const PICK_ONE = 'Choose one project first, or press None of these.'
 
 export function alreadyWords(repo: string, name: string): string {
   return `${repo} is already on the list as ${name}.`
+}
+
+/** Why a project with no releases the check counts is not added. GitHub releases are the only place the check reads. */
+export function noReleaseWords(repo: string): string {
+  return `${repo} doesn’t publish releases on GitHub, which is the only place this check reads. It can’t be watched here.`
+}
+
+/** True when there is something to confirm: a typed address, or a match that can be added. */
+export function canAdd(state: AddState): boolean {
+  return modeOf(state) === 'address' || matchesOf(state).some((match) => verdictOf(match).kind === 'add')
 }
 
 type Ready = { readonly ok: true; readonly body: AddSoftware } | { readonly ok: false; readonly errors: FormErrors }
@@ -89,17 +104,18 @@ export function readyToAdd(state: AddState, names: readonly string[], repos: rea
     else errors.repo = typed.words
   } else {
     const chosen = matches[mode === 'single' ? 0 : state.pick]
-    if (!chosen) errors.form = PICK_ONE
-    else if (chosen.already_listed) errors.form = alreadyWords(chosen.repo, chosen.already_listed)
+    const verdict = chosen ? verdictOf(chosen) : null
+    if (!chosen || verdict === null) errors.form = PICK_ONE
+    else if (verdict.kind === 'listed') errors.form = alreadyWords(chosen.repo, verdict.name)
+    else if (verdict.kind === 'none') errors.form = noReleaseWords(chosen.repo)
     else repo = chosen.repo
   }
   if (!name.ok || !version.ok || repo === null) return { ok: false, errors }
   return { ok: true, body: { name: name.value, repo, ...(version.value === null ? {} : { our_version: version.value }) } }
 }
 
-/** Where the guess came from, in the words the form shows under the repository. */
+/** Where the guess came from, in the words the form shows under the repository. A project the check can't read says why instead. */
 export function releaseWords(match: ProjectGuess): string {
-  return match.releases === 'published'
-    ? `Checked just now. The project is on GitHub and its newest release is ${match.newest ?? 'known'}.`
-    : 'Checked just now. The project is on GitHub, but it has no release this check can compare yet, so a watch would find nothing to tell you.'
+  if (match.releases === 'none') return noReleaseWords(match.repo)
+  return `Checked just now. The project is on GitHub and its newest release is ${match.newest ?? 'known'}.`
 }

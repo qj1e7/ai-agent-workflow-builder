@@ -1785,6 +1785,12 @@
           "title": "Awaiting Approval",
           "type": "boolean"
         },
+        "from_first_check": {
+          "default": false,
+          "description": "True when our_version is only the newest release an earlier first check read, not a version anyone gave. A ticket then says so instead of calling it the version the team runs.",
+          "title": "From First Check",
+          "type": "boolean"
+        },
         "id": {
           "pattern": "^sw_[0-9A-Z]{26}$",
           "title": "Id",

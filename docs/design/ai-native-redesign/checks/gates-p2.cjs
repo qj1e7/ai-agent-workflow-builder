@@ -145,7 +145,7 @@ both('int-watchlist-run-count-matches-rows', async (t) => {
   await t.go('software');
   const rows = await t.count('tr[data-flip^="sw:"]');
   const unread = await t.page.$$eval('tr[data-flip^="sw:"]', (els) => els.filter((e) => e.innerText.includes('Can’t check')).length);
-  assert.strictEqual(unread, 2, 'two rows can’t be read');
+  assert.strictEqual(unread, 4, 'four rows can’t be read');
   await t.page.click('[data-act="run"][data-arg="sw"]'); await t.wait(400);
   const x = await t.page.innerText('body');
   assert(x.includes(`Read ${rows - unread} of ${rows}`), `the run reads ${rows - unread} of ${rows}`);

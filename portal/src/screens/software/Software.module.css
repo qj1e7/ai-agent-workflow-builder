@@ -369,3 +369,39 @@ a.src {
 .pickRow input {
   margin-top: 4px;
 }
+
+.decision {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--amber-line);
+  border-radius: var(--r-card);
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+}
+
+.decision > div {
+  display: grid;
+  gap: 4px;
+}
+
+.decision span {
+  font-size: var(--text-14);
+}
+
+.waitingFor {
+  max-width: 260px;
+}
+
+@media (max-width: 640px) {
+  .decision {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+
+  .decision > :last-child {
+    grid-column: 1 / -1;
+    max-width: none;
+  }
+}

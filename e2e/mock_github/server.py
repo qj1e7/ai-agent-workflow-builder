@@ -12,6 +12,7 @@ FASTAPI = "fastapi/fastapi"
 N8N = "n8n-io/n8n"
 TERRAFORM = "hashicorp/terraform"
 OPENTOFU = "opentofu/opentofu"
+CPYTHON = "python/cpython"
 MODES = ("ok", "unavailable", "not_found")
 REPO_NAME = re.compile(r"^[^/\s]+/[^/\s]+$")
 DEFAULT_PER_PAGE = 30
@@ -109,6 +110,7 @@ RELEASES_BY_REPO: dict[str, list[dict[str, Any]]] = {
     N8N: build_releases(N8N, N8N_TAGS, LATEST_PUBLISHED - timedelta(days=3)),
     TERRAFORM: build_releases(TERRAFORM, TERRAFORM_TAGS, LATEST_PUBLISHED - timedelta(days=4)),
     OPENTOFU: build_releases(OPENTOFU, OPENTOFU_TAGS, LATEST_PUBLISHED - timedelta(days=5)),
+    CPYTHON: [],
     PLANTED: planted_releases(),
 }
 """The repositories the mock knows. Any other repository answers 404, as GitHub does."""

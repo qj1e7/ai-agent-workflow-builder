@@ -114,8 +114,10 @@ test('a project the watchlist already holds is named, and a prefixed tag such as
   await page.getByLabel('Software name').fill('LangGraph')
   await page.getByRole('button', { name: 'Find it' }).click()
   await expect(page.getByText('langchain-ai/langgraph is already on the list as Our agents.').first()).toBeVisible()
-  await page.getByRole('button', { name: 'Looks right, add it' }).click()
-  await expect(page.getByRole('alert').filter({ hasText: 'already on the list as Our agents' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Looks right, add it' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^Add / })).toHaveCount(0)
+  await page.getByRole('link', { name: 'Show it on the list' }).click()
+  await expect(page.locator('li[data-status]').filter({ hasText: 'Our agents' })).toBeFocused()
   await page.getByRole('button', { name: 'Start again' }).click()
 
   await page.getByLabel('Software name').fill('n8n')
@@ -123,6 +125,55 @@ test('a project the watchlist already holds is named, and a prefixed tag such as
   await expect(page.getByText('its newest release is n8n@2.4.2')).toBeVisible()
   assertClean(watch)
   await context.close()
+})
+
+test('a project that publishes no releases is not added: it says why and offers only Change and Start again', async ({ browser, backend }, info) => {
+  await backend.freshWatchlist('alice', [])
+  const context = await devContext(browser, 'alice')
+  const page = await context.newPage()
+  const watch = watchPage(page)
+  await page.goto('/software')
+  await page.getByLabel('Software name').fill('Python')
+  await page.getByRole('button', { name: 'Find it' }).click()
+  const form = page.locator('form[aria-labelledby="sw-guess"]')
+  await expect(form).toContainText('python/cpython doesn’t publish releases on GitHub, which is the only place this check reads. It can’t be watched here.')
+  await expect(form.getByRole('button')).toHaveText(['Change', 'Start again'])
+  await expect(form.getByLabel(/^Version we run/)).toHaveCount(0)
+  await shot(page, info, 'n21-03-no-releases')
+  await form.getByRole('button', { name: 'Change' }).click()
+  await expect(form.getByLabel('GitHub repository')).toHaveValue('')
+  await expect(page.locator('li[data-status]')).toHaveCount(0)
+  assertClean(watch)
+  await context.close()
+})
+
+test('while a yes waits, one bar decides the check, every row stays in the list and the count is the real number', async ({ browser, backend }, info) => {
+  await backend.waitingRun('alice', [
+    { name: 'LangGraph', repo: 'langchain-ai/langgraph', our_version: '1.2.14' },
+    { name: 'Redis', repo: 'redis/redis', our_version: '8.0.0' },
+  ])
+  const alice = await devContext(browser, 'alice')
+  const page = await alice.newPage()
+  const watch = watchPage(page)
+  await page.goto('/software')
+  const attention = page.getByRole('region', { name: /^Needs attention/ })
+  await expect(attention).toContainText('The latest check wants to raise 2 upgrade tickets.')
+  await expect(attention).toContainText('Waiting for another Approver. This check is your own work.')
+  await expect(attention.getByRole('link', { name: 'Review and decide' })).toHaveCount(0)
+  await expect(page.getByRole('heading', { level: 2, name: /^Software we watch/ })).toContainText('2')
+  await expect(page.locator('li[data-status="awaiting_approval"]')).toHaveCount(2)
+  await expect(page.getByRole('button', { name: 'Check now' })).not.toHaveClass(/primary/)
+  await shot(page, info, 'n21-03-waiting-alice')
+  assertClean(watch)
+  await alice.close()
+
+  const bob = await devContext(browser, 'bob')
+  const bobPage = await bob.newPage()
+  await bobPage.goto('/software')
+  await expect(bobPage.getByRole('region', { name: /^Needs attention/ }).getByRole('link', { name: 'Review and decide' })).toHaveCount(1)
+  await expect(bobPage.getByRole('heading', { level: 2, name: /^Software we watch/ })).toContainText('2')
+  await shot(bobPage, info, 'n21-03-waiting-bob')
+  await bob.close()
 })
 
 test('an Approver who is not an Operator sees the list but no way to add', async ({ browser, backend }) => {
