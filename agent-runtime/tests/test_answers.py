@@ -28,6 +28,7 @@ from agent_runtime.contract import (
     PartAnswer,
     RefusedAnswer,
     SetupCardAnswer,
+    UnderstoodRow,
     WatchlistAnswer,
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
@@ -1584,3 +1585,41 @@ def test_approvals_after_a_date_in_a_read_are_not_refused():
         row("where", "", "missing"),
     )
     assert not isinstance(answer_of(read(*rows), "Count the approvals after Monday"), RefusedAnswer)
+
+
+@pytest.mark.parametrize(
+    ("text", "field", "said"),
+    [
+        ("Tickets in MOCK where Bob approved his own request", "reporter", "Bob"),
+        ("Tickets where the approver is Bob", "other", "approver"),
+        ("Tickets in MOCK whose deadline is this Friday", "due_date", "deadline"),
+    ],
+)
+def test_a_cut_that_leaves_no_subject_after_where_or_the_offers_nothing(
+    text: str, field: str, said: str
+):
+    """Round 4: a cut by the model's words alone left "where approved his own request", which
+    offered the approval filter, and "the is Bob". Such a cut offers nothing instead."""
+    rows = (
+        row("schedule", "Every day"),
+        with_fields("look_for", text, (field, said)),
+        row("do", "Create one ticket that lists them"),
+        row("where", "Jira project MOCK"),
+    )
+    answer = answer_of(read(*rows), f"Every day, list {text[0].lower()}{text[1:]}")
+    offered = [
+        r.text
+        for r in (card_rows(answer) or [])
+        if r.kind == "look_for" and r.state in ("understood", "changed")
+    ]
+    assert offered in ([], ["Tickets in MOCK"]), offered
+    for bad in ("where approved", "the is", "whose is"):
+        assert not any(bad in text for text in offered), offered
+
+
+def card_rows(answer: object) -> list[UnderstoodRow] | None:
+    if isinstance(answer, SetupCardAnswer | PartAnswer):
+        return answer.rows
+    if isinstance(answer, CantAnswer) and isinstance(answer.alternative, SetupCardAnswer):
+        return answer.alternative.rows
+    return None

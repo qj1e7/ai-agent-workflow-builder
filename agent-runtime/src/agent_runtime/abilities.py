@@ -1457,9 +1457,10 @@ def _cut_field(row: Clause, at: int, reader: _Reader) -> Clause | None:
 
 
 def _reads_well(kept: Clause, row: Clause, reader: _Reader) -> bool:
-    """Whether what is left after a cut still names what the row named, and ends on a whole
-    phrase rather than on "their", "by", "one's" or "grouped". An ending the row itself had, as
-    in "List the bugs found", is whole."""
+    """Whether what is left after a cut still names what the row named, keeps a subject after
+    "where" or "whose" and a noun after "the" (not "where approved his own request" or "the is
+    Bob"), and ends on a whole phrase rather than on "their", "by", "one's" or "grouped". An
+    ending the row itself had, as in "List the bugs found", is whole."""
     while kept and kept[-1].mark:
         kept = kept[:-1]
     if not kept or kept[0].mark or kept[0].low in PHRASE_ENDS:
@@ -1467,6 +1468,12 @@ def _reads_well(kept: Clause, row: Clause, reader: _Reader) -> bool:
     named = {w.low for w in row if w.low in TICKETS | OUTPUTS}
     if named and not any(w.low in named for w in kept):
         return False
+    for a, b in zip(kept, kept[1:], strict=False):
+        verb = b.low in COPULAS or b.low.endswith("ed") or reader.verb(b) is not None
+        if a.low in ("where", "whose") and verb:
+            return False
+        if a.low in DETERMINERS and b.low in COPULAS:
+            return False
     last = kept[-1]
     if row and last.raw == row[-1].raw:
         return True
