@@ -11,9 +11,10 @@ can be tested without a real model:
   ticket that lists, counts or sums them up), the project it goes in, the schedule, and the skip
   question for a few plain phrasings, such as "no human in the loop". A detail the search can't
   filter by (a priority such as P1, a component, a reporter) is left out of the structures, as
-  the real model is told to leave it, and so is an email. A task that names a GitHub repository picks the Version
-  checker, any other gets a drafted agent (a follow-up one for a follow-up ticket task, else a
-  summary one), and a release task belongs on the Software watchlist unless it also asks for
+  the real model is told to leave it, and so is an email. A task that names a GitHub repository
+  picks the Version checker, any other gets a drafted agent (a follow-up one for a follow-up
+  ticket task, else a summary one), and a release task belongs on the Software watchlist unless
+  it also asks for
   known vulnerabilities. One named part, such as "Where it goes: Jira project MOCK", is read as
   that part alone, the others missing. When the Planner says before the task that the staff
   member already chose a new workflow, a release task is read back in parts like any other, as
