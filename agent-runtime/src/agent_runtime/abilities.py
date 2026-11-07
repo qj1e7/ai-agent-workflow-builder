@@ -1578,6 +1578,12 @@ _PEOPLE: Final = (
     r"(?:a|my|the)\s+managers?|the\s+boss|(?-i:[A-Z][a-z]+))"
 )
 _SOMEONE_ELSE: Final = rf"(?:{_PEOPLE}|the\s+team)"
+_SOMEONE_ELSE_UNNAMED: Final = (
+    r"\b(?:anyone|anybody|someone|somebody|nobody|no\s+one|no-one|everyone|everybody|a\s+human|"
+    r"a\s+person|people|(?:an?|the)\s+approvers?|(?:a|my|the)\s+managers?|the\s+boss|"
+    r"the\s+team)\b"
+)
+NAMES_SOMEONE_ELSE: Final = re.compile(_SOMEONE_ELSE_UNNAMED, re.IGNORECASE)
 _THEIR_YES: Final = rf"(?:'s\s+{_A_YES})?"
 _NOT_FROM_ME: Final = r"(?!\s+(?:from|of)\s+(?:me|us)\b)"
 _SAYS_YES: Final = r"(?:sign[- ]?off|approve|say\s+yes|ok|okay|check|confirm|agree)"
@@ -1712,6 +1718,15 @@ def _skips(text: str) -> list[re.Match[str]]:
 def skip_of_a_yes(text: str) -> str | None:
     found = _skips(text)
     return found[0].group(0) if found else None
+
+
+def names_someone_else(said: str) -> bool:
+    """Whether the quoted words name a person other than the staff member: an approver, the
+    team, anyone or nobody, or a name, which is a capitalised word after the first, as "Bob"
+    in "don't wait on Bob" but not "Run" in "Run it by itself"."""
+    if NAMES_SOMEONE_ELSE.search(said) is not None:
+        return True
+    return any(re.fullmatch(r"[A-Z][a-z]+", w) for w in re.findall(r"\w+", said)[1:])
 
 
 def _tidied(rest: str) -> str:

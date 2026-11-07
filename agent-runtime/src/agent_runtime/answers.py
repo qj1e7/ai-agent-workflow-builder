@@ -16,6 +16,7 @@ from agent_runtime.abilities import (
     guessable_words,
     names_a_ticket_field,
     names_only_a_place,
+    names_someone_else,
     need_of,
     other_systems,
     phrase_in,
@@ -154,7 +155,8 @@ ANSWER_SYSTEM: Final = (
     "On each look_for and do row, list in fields every ticket field the part filters by, groups "
     "by or sets, each with the request's own words for it, copied exactly and with the value "
     'they give, such as "story points over 5" or "reported by Bob". A value stands for '
-    "its field: P1, P2, critical, blocker, urgent, high, highest, low or lowest are priority; "
+    "its field: P1, P2, critical, blocker, urgent, high, highest, low or lowest, and any other "
+    "word for how important a ticket is, such as show-stopper or must-fix, are priority; "
     "overdue, due, a deadline or a due day are due_date; reported by, raised by, opened by or "
     "reporter are reporter; fix version is fix_version; story points or points are "
     "story_points; severity is severity; assigned to, owned by or owner are assignee; bug, task "
@@ -416,11 +418,15 @@ def _refusal(text: str, rest: str | None = None) -> RefusedAnswer | None:
 
 def _model_refusal(read: TaskRead, text: str) -> RefusedAnswer | None:
     """The refusal the model's own answer to the skip question gives, after the word rule: only
-    a skip of an Approver's yes or of anyone else's, never the staff member's own attention. The
-    part is named by the request's own words when the model's quote is in them, else by the
-    model's quote, and the rest is the request without those words."""
+    a skip of an Approver's yes or of anyone else's, never the staff member's own attention. A
+    quote the model called the staff member's own that names someone else, as "don't wait on
+    Bob", skips that someone. The part is named by the request's own words when the
+    model's quote is in them, else by the model's quote, and the rest is the request without
+    those words."""
     skip = read.skips_the_yes
-    if skip.whose != "an_approver_or_anyone_else":
+    if skip.whose == "nobody" or (
+        skip.whose == "only_me" and not names_someone_else(skip.said or "")
+    ):
         return None
     theirs = phrase_in(text, skip.said or "")
     if theirs is None:

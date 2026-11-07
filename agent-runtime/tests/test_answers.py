@@ -1524,3 +1524,25 @@ def test_ticking_the_approval_box_is_refused_by_the_word_rule():
         read(*FOLLOW_UP_ROWS), "Create the ticket in MOCK and tick the approval box for me"
     )
     assert isinstance(answer, RefusedAnswer) and answer.said == "tick the approval box"
+
+
+@pytest.mark.parametrize(
+    "said", ["don't wait on Bob", "leave the approvers out of it", "nobody needs to look"]
+)
+def test_an_only_me_quote_that_names_someone_else_is_a_skip_of_that_someone(said: str):
+    """Round 4: the model once called "don't wait on Bob" the staff member's own attention. A
+    quote that names another person, the approvers or anyone cannot be theirs alone, so it is
+    refused. "Run it by itself" names no one, so it stays theirs."""
+    task = (
+        f"Every Monday, list open bug tickets in MOCK and create one ticket that lists them, {said}"
+    )
+    answer = answer_of(
+        read(*FOLLOW_UP_ROWS, skips_the_yes=SkipRead(whose="only_me", said=said)), task
+    )
+    assert isinstance(answer, RefusedAnswer) and answer.said == said
+
+
+def test_an_only_me_answer_with_no_quote_is_not_refused():
+    task = "Every Monday, list open bug tickets in MOCK and create one ticket, set and forget"
+    answer = answer_of(read(*FOLLOW_UP_ROWS, skips_the_yes=SkipRead(whose="only_me")), task)
+    assert isinstance(answer, SetupCardAnswer)
