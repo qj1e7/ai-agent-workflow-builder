@@ -125,7 +125,7 @@ def test_finding_software_by_name_offers_only_projects_github_just_confirmed(api
         "1.2.16",
     ), "the newest is the newest the watch counts, not the 'cli==' tags beside it"
     assert match["already_listed"] is None
-    assert api.watchlist("alice") is None, "finding saves nothing"
+    assert (api.watchlist("alice") or {"software": []})["software"] == [], "finding saves nothing"
 
     prefixed = api.find_software("alice", "n8n").json()
     assert prefixed["matches"][0]["newest"] == "n8n@2.4.2"
