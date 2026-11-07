@@ -15,10 +15,10 @@ const BOT_STATE: Record<FaceState, BotState> = {
   idle: 'idle',
   thinking: 'thinking',
   working: 'thinking',
-  waiting: 'idle',
-  success: 'idle',
-  error: 'sorry',
-  stopped: 'idle',
+  waiting: 'waiting',
+  success: 'success',
+  error: 'error',
+  stopped: 'stopped',
 }
 
 const GLYPH: Record<Job, ReactNode> = {

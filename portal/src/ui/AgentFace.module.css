@@ -244,10 +244,37 @@
   animation: ok-badge var(--dur-success) var(--ease-out) both;
 }
 
-/* With motion off the green check holds instead of flashing, because it is the only sign of success on the face. */
+/* The Planner's happy eyes and plain eyes swap while it cheers, as the Orb's do. */
+.planner [data-part='happy'] {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.planner[data-react][data-state='success'] [data-part='happy'] {
+  animation: shown var(--dur-success) ease-out both;
+}
+
+.planner[data-react][data-state='success'] [data-part='eyes'] {
+  animation: hidden var(--dur-success) ease-out both;
+}
+
+@keyframes ok-fade {
+  0%,
+  100% {
+    opacity: 0;
+  }
+
+  20%,
+  75% {
+    opacity: 1;
+  }
+}
+
+/* With motion off the green check still shows, because it is the only sign of success on the face, but it fades out as in the prototype. */
 @media (prefers-reduced-motion: reduce) {
   .face[data-react][data-state='success'] .ok,
   .planner[data-react][data-state='success'] .ok {
-    opacity: 1;
+    animation: ok-fade var(--dur-success) ease-out both !important;
   }
 }

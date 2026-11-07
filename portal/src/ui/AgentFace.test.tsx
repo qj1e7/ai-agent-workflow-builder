@@ -75,4 +75,17 @@ describe('the Planner', () => {
     for (const state of ['waiting', 'error', 'success'] as const) expect(circles(draw(state, 'planner'))).toBe(plain + 2)
     expect(circles(draw('stopped', 'planner'))).toBe(plain)
   })
+
+  it('gives every state its own eyes, and none looks like Home\'s "I can\'t do that" face', () => {
+    const eyes = (state: FaceState) => draw(state, 'planner').match(/<g [^>]*data-part="eyes"[^>]*>.*?<\/g>/)?.[0] ?? ''
+    const bot = (state: FaceState) => draw(state, 'planner').replace(/data-state="\w+"/g, '').replace(/<\/?span[^>]*>/g, '')
+    const four = (['waiting', 'success', 'error', 'stopped'] as const).map(bot)
+    expect(new Set([...four, bot('idle')]).size).toBe(5)
+    expect(eyes('error')).not.toContain('<path')
+    expect(eyes('waiting')).not.toBe('')
+    expect(draw('error', 'planner')).toContain('M13.5 17l4.5-2')
+    expect(draw('success', 'planner')).toContain('data-part="happy"')
+    expect(eyes('stopped')).toContain('height="1.8"')
+    expect(eyes('waiting')).toContain('height="5.6"')
+  })
 })

@@ -1,20 +1,46 @@
 import { useId, type CSSProperties } from 'react'
 import styles from './PlannerBot.module.css'
 
-export type BotState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'sorry'
+/**
+ * 'sorry' is Home's "I can't do that". The run states are the same faces as the Orbs: 'waiting' looks up, 'error' frowns
+ * with brows, 'success' smiles with closed happy eyes, 'stopped' has its eyes shut.
+ */
+export type BotState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'sorry' | 'waiting' | 'error' | 'success' | 'stopped'
 
 const GLOW = 'color-mix(in srgb, var(--lead) 45%, #ffffff)'
 
 function Features({ state }: { state: BotState }) {
+  const eye = (x: number, y: number, height: number) => (
+    <rect x={x - 2.1} y={y - height / 2} width="4.2" height={height} rx={Math.min(2.1, height / 2)} fill={GLOW} />
+  )
+  const [left, right, line] = [17, 31, 22.5]
   const eyes =
     state === 'sorry' ? (
       <path d="M17 24.5L22 22.9M31 22.9L26 24.5" stroke={GLOW} strokeWidth="2.9" strokeLinecap="round" fill="none" />
+    ) : state === 'stopped' ? (
+      <>
+        {eye(left, line + 1.5, 1.8)}
+        {eye(right, line + 1.5, 1.8)}
+      </>
+    ) : state === 'waiting' ? (
+      <>
+        {eye(left, line - 2, 5.6)}
+        {eye(right, line - 2, 5.6)}
+      </>
     ) : (
       <>
-        <rect x="14.9" y="19.2" width="4.2" height="6.6" rx="2.1" fill={GLOW} />
-        <rect x="28.9" y="19.2" width="4.2" height="6.6" rx="2.1" fill={GLOW} />
+        {eye(left, line, 6.6)}
+        {eye(right, line, 6.6)}
       </>
     )
+  const brows =
+    state === 'error' ? (
+      <path d="M13.5 17l4.5-2M34.5 17l-4.5-2" stroke={GLOW} strokeWidth="1.8" strokeLinecap="round" fill="none" />
+    ) : null
+  const happy =
+    state === 'success' ? (
+      <path data-part="happy" d="M14.9 23.5q2.1-3.4 4.2 0M28.9 23.5q2.1-3.4 4.2 0" stroke={GLOW} strokeWidth="2.2" strokeLinecap="round" fill="none" />
+    ) : null
   const mouth =
     state === 'speaking' ? (
       <g className={styles['wave']}>
@@ -33,7 +59,11 @@ function Features({ state }: { state: BotState }) {
     ) : null
   return (
     <>
-      <g className={styles['eyes']}>{eyes}</g>
+      {brows}
+      <g className={styles['eyes']} data-part="eyes">
+        {eyes}
+      </g>
+      {happy}
       {mouth}
     </>
   )
