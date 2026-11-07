@@ -27,6 +27,7 @@ from agent_runtime.contract import (
     ConnectResult,
     DraftRequest,
     DraftResult,
+    GitHubCheckResult,
     Health,
     InputKind,
     ModelAccess,
@@ -42,7 +43,7 @@ from agent_runtime.contract import (
 )
 from agent_runtime.drafting import choose_agents, draft_card
 from agent_runtime.events import Clock, EventLog, EventSink
-from agent_runtime.github import GitHubReleaseSource
+from agent_runtime.github import GitHubConnection, GitHubReleaseSource
 from agent_runtime.guarded import GuardedModels
 from agent_runtime.jira import JiraReaderFor, PlatformJiraFor, no_jira
 from agent_runtime.model_access import ModelProbe, chat_for, summarizer_for
@@ -222,6 +223,14 @@ def _chat_under_default_policy(access: ModelAccess | None) -> ChatFor | None:
     return chat_for(access, policy, GuardedModels(policy))
 
 
+class GitHubCheck(Protocol):
+    def check(self) -> GitHubCheckResult: ...
+
+
+def _anonymous_github() -> GitHubCheck:
+    return GitHubConnection(DEFAULT_GITHUB_API_BASE)
+
+
 @dataclass(frozen=True)
 class Runtime:
     checker: VersionChecker
@@ -231,6 +240,7 @@ class Runtime:
     summarizer_for: SummarizerFor = field(default=_summarizer_under_default_policy)
     cards: CardRunner | None = None
     chat_source: ChatSource = field(default=_chat_under_default_policy)
+    github: GitHubCheck = field(default_factory=_anonymous_github)
 
 
 def build_summarizer(settings: Settings) -> Summarizer:
@@ -274,6 +284,7 @@ def build_runtime(settings: Settings) -> Runtime:
         summarizer_for=summarizer_under_policy,
         cards=CardRunner(source, jira_for, sleep=time.sleep),
         chat_source=chat_source,
+        github=GitHubConnection(settings.github_api_base, token=settings.github_token),
     )
 
 
@@ -398,6 +409,10 @@ def create_app(
     def understand(body: UnderstandRequest) -> UnderstandResult:
         chat = active.chat_source(body.model)
         return understand_task(body, chat) if chat else NO_MODEL
+
+    @app.post("/v1/connections/github/check", dependencies=[Depends(require_key)])
+    def check_github() -> GitHubCheckResult:
+        return active.github.check()
 
     @app.post("/v1/models/connect", dependencies=[Depends(require_key)])
     def connect_model(body: ConnectRequest) -> ConnectResult:

@@ -107,13 +107,14 @@ uv run pytest
 
 The platform-api tests need a PostgreSQL to migrate. On the host they start a throwaway `postgres:17` container by themselves. Set `PLATFORM_TEST_DATABASE_URL` to a superuser URL of an empty cluster to use one you run yourself. CI does that with a service container. The tests skip when neither is there, so a green run with skips is not a pass.
 
-CI runs the tests inside the Docker image. To do the same, and to build the image that ships, run these from the repo root. The image holds no `contracts/` folder, so mount it and name it:
+CI runs the tests inside the Docker image. To do the same, and to build the image that ships, run these from the repo root. The image holds no `contracts/` folder and no mock GitHub (the agent-runtime tests run against it), so mount them and name them:
 
 ```sh
 docker build --target test --tag platform-api:test platform-api
 docker run --rm --network host \
   --env PLATFORM_TEST_DATABASE_URL=postgresql://postgres:test@127.0.0.1:5432/postgres \
   --env CONTRACT_FIXTURES=/contracts/fixtures --volume "$PWD/contracts:/contracts:ro" \
+  --env MOCK_GITHUB_DIR=/mock-github --volume "$PWD/e2e/mock_github:/mock-github:ro" \
   platform-api:test
 docker build --target runtime --tag platform-api:runtime platform-api
 ```

@@ -35,6 +35,12 @@ FASTAPI_TAGS = [
 ]  # fmt: skip
 LATEST_PUBLISHED = datetime(2026, 10, 28, 9, 0, tzinfo=UTC)
 
+GOOD_TOKEN = "ghp_mock_good_token"
+EXPIRING_TOKEN = "ghp_mock_expiring_token"
+TOKEN_EXPIRES = "2026-11-14 09:00:00 UTC"
+"""GitHub sends the expiry of a token that has one in this header, in this format."""
+EXPIRY_HEADER = "github-authentication-token-expiration"
+
 
 def release_order() -> list[str]:
     plain = iter(PLAIN_TAGS)
@@ -141,18 +147,37 @@ def page_of(releases: list[dict[str, Any]], query: dict[str, list[str]]) -> list
 
 def make_handler(state: State) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
-        def send_json(self, status: int, body: Any) -> None:
+        def send_json(self, status: int, body: Any, headers: dict[str, str] | None = None) -> None:
             payload = json.dumps(body).encode()
             self.send_response(status)
             self.send_header("Content-Type", "application/json; charset=utf-8")
+            for name, value in (headers or {}).items():
+                self.send_header(name, value)
             self.send_header("Content-Length", str(len(payload)))
             self.end_headers()
             self.wfile.write(payload)
+
+        def send_rate_limit(self) -> None:
+            """No token is anonymous. A token the mock does not know is refused, as GitHub does."""
+            if state.mode == "unavailable":
+                self.send_json(503, {"message": "Service Unavailable"})
+                return
+            auth = self.headers.get("Authorization")
+            token = None if auth is None else auth.removeprefix("Bearer ")
+            if token not in (None, GOOD_TOKEN, EXPIRING_TOKEN):
+                self.send_json(401, {"message": "Bad credentials"})
+                return
+            limit = 60 if token is None else 5000
+            window = {"limit": limit, "used": 0, "remaining": limit, "reset": 1_793_000_000}
+            headers = {EXPIRY_HEADER: TOKEN_EXPIRES} if token == EXPIRING_TOKEN else None
+            self.send_json(200, {"resources": {"core": window}, "rate": window}, headers)
 
         def do_GET(self) -> None:
             url = urlparse(self.path)
             if url.path == "/healthz":
                 self.send_json(200, {"status": "ok"})
+            elif url.path == "/rate_limit":
+                self.send_rate_limit()
             elif url.path == "/_admin/mode":
                 repo = parse_qs(url.query).get("repo", [None])[0]
                 if repo is None:

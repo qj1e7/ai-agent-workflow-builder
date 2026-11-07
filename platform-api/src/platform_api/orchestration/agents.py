@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Annotated, Any, Literal, Protocol
 
 import httpx
@@ -209,6 +210,23 @@ class ModelTestPassed(WireModel):
 type ModelTestResult = Annotated[ModelTestPassed | ModelProblem, Field(discriminator="status")]
 
 model_test_result_adapter: TypeAdapter[ModelTestResult] = TypeAdapter(ModelTestResult)
+
+
+class GitHubWorking(WireModel):
+    status: Literal["working"] = "working"
+    using_token: bool
+    expires_at: datetime | None = None
+
+
+class GitHubProblem(WireModel):
+    status: Literal["problem"] = "problem"
+    reason: Literal["token_refused", "unreachable", "unexpected_answer"]
+    message: str
+
+
+type GitHubCheckResult = Annotated[GitHubWorking | GitHubProblem, Field(discriminator="status")]
+
+github_check_result_adapter: TypeAdapter[GitHubCheckResult] = TypeAdapter(GitHubCheckResult)
 
 
 class ToolSpec(WireModel):

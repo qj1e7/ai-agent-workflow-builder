@@ -1209,6 +1209,91 @@
       "title": "FoundModel",
       "type": "object"
     },
+    "GitHubCheckResult": {
+      "discriminator": {
+        "mapping": {
+          "problem": "#/$defs/GitHubProblem",
+          "working": "#/$defs/GitHubWorking"
+        },
+        "propertyName": "status"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/GitHubWorking"
+        },
+        {
+          "$ref": "#/$defs/GitHubProblem"
+        }
+      ]
+    },
+    "GitHubProblem": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "description": "Plain words for an Operator. Never the token or GitHub's own error text.",
+          "title": "Message",
+          "type": "string"
+        },
+        "reason": {
+          "$ref": "#/$defs/GitHubProblemReason"
+        },
+        "status": {
+          "const": "problem",
+          "default": "problem",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reason",
+        "message"
+      ],
+      "title": "GitHubProblem",
+      "type": "object"
+    },
+    "GitHubProblemReason": {
+      "enum": [
+        "token_refused",
+        "unreachable",
+        "unexpected_answer"
+      ],
+      "type": "string"
+    },
+    "GitHubWorking": {
+      "additionalProperties": false,
+      "properties": {
+        "expires_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "When GitHub says the token stops working. Null for a token with no end date and when no token is set.",
+          "title": "Expires At"
+        },
+        "status": {
+          "const": "working",
+          "default": "working",
+          "title": "Status",
+          "type": "string"
+        },
+        "using_token": {
+          "description": "False when no token is set and GitHub is read anonymously, 60 calls an hour.",
+          "title": "Using Token",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "using_token"
+      ],
+      "title": "GitHubWorking",
+      "type": "object"
+    },
     "GithubSource": {
       "additionalProperties": false,
       "properties": {
@@ -2016,6 +2101,9 @@
     "card_draft_result": {
       "$ref": "#/$defs/DraftResult"
     },
+    "github_check_result": {
+      "$ref": "#/$defs/GitHubCheckResult"
+    },
     "model_connect_request": {
       "$ref": "#/$defs/ConnectRequest"
     },
@@ -2059,6 +2147,7 @@
     "model_connect_result",
     "model_test_request",
     "model_test_result",
+    "github_check_result",
     "tool_list",
     "card_draft_request",
     "card_draft_result",

@@ -73,6 +73,10 @@ An agent card is data: a name, a purpose, inputs and numbered blocks, each block
 - Jira reads call the platform at `PLATFORM_JIRA_URL`, `/internal/v1/runs/{run_id}/jira/tickets`, with the task's callback token. The platform answers from the practice Jira or a real one (ADR 0035), so the agent never holds a Jira key. `PLATFORM_JIRA_URL` must be one of `CALLBACK_ALLOWED_ORIGINS`. A search or a read can only reach the Jira project on the card.
 - A task has 50 seconds and each agent 8 model turns.
 
+## The GitHub connection check
+
+The agent runtime serves `POST /v1/connections/github/check` (behind the agent key). It asks GitHub's rate limit endpoint, which does not count against the limit, and answers `status: "working"` with `using_token` and, when GitHub sends a token end date, `expires_at` (`agent/github-check-working.json`, `agent/github-check-expiring.json`), or `status: "problem"` with `reason` (`token_refused`, `unreachable`, `unexpected_answer`) and a plain `message` that never holds the token (`agent/github-check-refused.json`). With no token the check reads GitHub anonymously and passes. platform-api keeps each result (plan item N18).
+
 ## What the Planner understood
 
 Before a workflow is set up, the Planner reads the Operator's task back in four parts: `schedule` (when it runs), `look_for` (what to look for), `do` (what to do with it) and `where` (where the result goes). Each row is `understood`, `changed` (the Planner read something into the words, and the note says what the task said), `missing` (the task does not say, so `text` is empty) or `cant_do` (no tool does it, and the note says why, even when `text` is empty). There is one schedule row first, then at least one row of each other kind, at most 8 rows.

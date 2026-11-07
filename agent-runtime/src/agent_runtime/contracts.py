@@ -43,7 +43,9 @@ from agent_runtime.contract import (
     DraftRequest,
     Finding,
     FoundModel,
+    GitHubProblem,
     GithubSource,
+    GitHubWorking,
     LibraryCard,
     LibraryInput,
     MissingTool,
@@ -63,6 +65,7 @@ from agent_runtime.contract import (
     WireModel,
     agent_event_adapter,
 )
+from agent_runtime.github import TOKEN_REFUSED
 from agent_runtime.model_access import KEY_REFUSED
 from agent_runtime.planner import RowAnswer, UnderstandAnswer, understood_of
 from agent_runtime.tools import tool_list
@@ -824,6 +827,11 @@ def fixtures() -> dict[str, WireModel]:
             seconds=1.4, text="Two new LangGraph releases came out after 1.2.14: 1.2.16 and 1.2.15."
         ),
         "model-problem.json": ModelProblem(reason="key_refused", message=KEY_REFUSED),
+        "github-check-working.json": GitHubWorking(using_token=True),
+        "github-check-expiring.json": GitHubWorking(
+            using_token=True, expires_at=datetime(2026, 11, 14, 9, 0, tzinfo=UTC)
+        ),
+        "github-check-refused.json": GitHubProblem(reason="token_refused", message=TOKEN_REFUSED),
         "tools.json": tool_list(),
         "card-task-request.json": card_request("run_01JD1"),
         "card-task-finished.json": card_finished(),

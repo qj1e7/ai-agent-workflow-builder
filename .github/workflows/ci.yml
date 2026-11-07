@@ -108,6 +108,8 @@ jobs:
             --volume "$PWD/contracts:/contracts:ro" \
             --env MOCK_OIDC_CONFIG=/mock-oidc/config.json \
             --volume "$PWD/deploy/mock-oidc:/mock-oidc:ro" \
+            --env MOCK_GITHUB_DIR=/mock-github \
+            --volume "$PWD/e2e/mock_github:/mock-github:ro" \
             ${{ matrix.project }}:test
 
       - name: The emulator kept the pinned image's packages
