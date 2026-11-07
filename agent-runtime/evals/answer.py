@@ -28,7 +28,11 @@ from evals.jobs import Answer, Case, Job
 
 ACCEPTED = ("understood", "changed")
 _PROJECT_KEY = re.compile(r"\b(?:[Pp]roject|[Ii]n)\s+([A-Z][A-Z0-9]{1,9})\b")
-_CLOCK_WORDS = re.compile(r"\d+|\b(?:morning|evening|noon|midnight|am|pm)\b", re.IGNORECASE)
+_CLOCK_WORDS = re.compile(
+    r"\d+|\b(?:morning|afternoon|evening|night|noon|midday|midnight|am|pm|one|two|three|four|"
+    r"five|six|seven|eight|nine|ten|eleven|twelve)\b",
+    re.IGNORECASE,
+)
 _DAY_WORDS = re.compile(
     r"\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|weekday|weekdays|daily|"
     r"weekly|monthly|hourly)\b",

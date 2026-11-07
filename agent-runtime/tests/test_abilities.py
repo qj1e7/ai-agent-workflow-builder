@@ -7,9 +7,9 @@ from agent_runtime.abilities import (
     Ability,
     Need,
     names_a_ticket_field,
-    names_software,
     need_of,
     skip_of_a_yes,
+    software_name,
     unread_field_of,
     vulnerability_phrase,
     why_not,
@@ -606,6 +606,39 @@ def test_the_vulnerability_words_are_found_as_the_text_wrote_them(text: str, phr
         ("Create the ticket and approve it for me", "approve it for me", "Create the ticket"),
         ("Get it approved automatically", "approved automatically", "Get it"),
         ("Don't wait for Bob, just create the ticket", "Don't wait for Bob", "create the ticket"),
+        ("Create a ticket, approval isn't needed", "approval isn't needed", "Create a ticket"),
+        (
+            "Create a ticket, no Teams approval needed",
+            "no Teams approval needed",
+            "Create a ticket",
+        ),
+        ("Create a ticket (no approval)", "(no approval)", "Create a ticket"),
+        (
+            "Create a ticket, no need to wait for anyone",
+            "no need to wait for anyone",
+            "Create a ticket",
+        ),
+        ("Create a ticket, I'll be the approver", "I'll be the approver", "Create a ticket"),
+        (
+            "Create a ticket and approve it on my behalf",
+            "approve it on my behalf",
+            "Create a ticket",
+        ),
+        ("Self-approve the ticket", "Self-approve", "the ticket"),
+        ("Create a ticket without bothering anyone", "without bothering anyone", "Create a ticket"),
+        (
+            "Create a ticket without anyone approving it",
+            "without anyone approving",
+            "Create a ticket it",
+        ),
+        ("Don't wait for Bob's yes, create it", "Don't wait for Bob's yes", "create it"),
+        ("Create a ticket and mark it approved", "mark it approved", "Create a ticket"),
+        ("Create a ticket and skip Teams", "skip Teams", "Create a ticket"),
+        (
+            "Create one ticket every Monday, no approval needed, listing stale bugs",
+            "no approval needed",
+            "Create one ticket every Monday, listing stale bugs",
+        ),
         (
             "Approve it automatically and close the tickets",
             "Approve it automatically",
@@ -645,6 +678,19 @@ def test_words_that_skip_a_yes_are_found_and_removed(text: str, skip: str, rest:
         "Every Monday, list open tickets without asking for confirmation from me",
         "Tickets with no approver, every Monday",
         "Keep track of tickets without an approver",
+        "Find tickets closed without approval",
+        "Summarise the changes made without approval",
+        "Find the access changes without approval",
+        "Create one ticket listing changes without an approver",
+        "Create a ticket that lists the requests with no approval",
+        "Find tickets in MOCK and list the ones without an approver",
+        "Weekly digest of requests without approval",
+        "Every Monday: requests with no approver, summed up in one ticket",
+        "Tell me the tickets without an approver",
+        "Find tickets that bypass the approval gate",
+        "Find changes that skipped approval",
+        "Find requests where people approve their own work",
+        "Find tickets without asking for confirmation",
     ],
 )
 def test_the_products_own_words_and_a_filter_on_tickets_do_not_skip_a_yes(text: str):
@@ -677,6 +723,10 @@ def test_the_ticket_field_table_matches_what_the_agents_read():
         ("look_for", "List epics in MOCK", None),
         ("look_for", "Open tickets with their owners", None),
         ("look_for", "Bug tickets with no update for 10 days", None),
+        ("look_for", "Tickets in MOCK about the login component", None),
+        ("look_for", "Tickets mentioning the sprint review", None),
+        ("look_for", "Tickets in the Payments epic", "a ticket's epic"),
+        ("look_for", "Tickets in MOCK tagged urgent", "a ticket's labels"),
         ("do", "Set their priority to high", None),
         ("do", "Change their component", None),
         ("where", "The Backend component", None),
@@ -710,6 +760,24 @@ def test_a_read_of_a_field_the_agents_cant_see_is_held_and_a_change_to_one_is_no
         ("Group them by priority and list them", "Group them and list them"),
         ("Tickets in the epic MOCK-100", "Tickets"),
         ("Bug tickets in MOCK", "Bug tickets in MOCK"),
+        ("List the high priority tickets in MOCK", "List the tickets in MOCK"),
+        ("Tickets in MOCK labelled urgent", "Tickets in MOCK"),
+        ("Bugs in MOCK in the Backend component closed this week", "Bugs in MOCK closed this week"),
+        ("Bugs in MOCK whose priority is High", "Bugs in MOCK"),
+        ("Tickets in MOCK (priority High)", "Tickets in MOCK"),
+        ("Tickets in MOCK with components Backend or Frontend", "Tickets in MOCK"),
+        ("Tickets in MOCK with priority High, Highest or Critical", "Tickets in MOCK"),
+        (
+            "Tickets in MOCK that are high priority and older than 10 days",
+            "Tickets in MOCK older than 10 days",
+        ),
+        ("Bugs in MOCK, grouped by component", "Bugs in MOCK"),
+        (
+            "Create one ticket with component Backend that lists them",
+            "Create one ticket that lists them",
+        ),
+        ("Create one ticket that lists each one's component and priority", None),
+        ("List their components", None),
         ("Components of open tickets", None),
         ("Change their component", None),
     ],
@@ -718,20 +786,38 @@ def test_the_part_without_the_field_keeps_the_rest_of_the_words(text: str, left:
     assert without_the_field(text) == left
 
 
+def test_a_field_put_on_the_new_ticket_is_set_and_one_read_from_the_found_tickets_is_told():
+    assert why_not("do", "Create one ticket with component Backend that lists them") == cant(
+        "set a ticket's component"
+    )
+    assert why_not("do", "Create one ticket that lists them and their components") == cant(
+        "tell a ticket's component"
+    )
+
+
 @pytest.mark.parametrize(
-    ("name", "software"),
+    ("said", "software"),
     [
-        ("React", True),
-        ("Log4j", True),
-        ("NVD", False),
-        ("CVE-2021-44228", False),
-        ("GitHub", False),
-        ("Jira", False),
-        ("packages", False),
+        ("React", "React"),
+        ("Log4j", "Log4j"),
+        ("Kubernetes releases", "Kubernetes"),
+        ("the LangGraph version", "LangGraph"),
+        ("GitLab", "GitLab"),
+        ("NVD", None),
+        ("the NVD", None),
+        ("CVE-2021-44228", None),
+        ("security patches", None),
+        ("GitHub", None),
+        ("Jira", None),
+        ("Teams", None),
+        ("packages", None),
+        (None, None),
     ],
 )
-def test_a_vulnerability_word_a_system_or_a_common_word_is_not_software(name: str, software: bool):
-    assert names_software(name) is software
+def test_a_vulnerability_word_a_system_the_platform_uses_or_a_common_word_is_not_software(
+    said: str | None, software: str | None
+):
+    assert software_name(said) == software
 
 
 @pytest.mark.parametrize(

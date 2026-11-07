@@ -9,7 +9,6 @@ from agent_runtime.answers import (
     ANSWER_SYSTEM,
     CHOOSE_INSTEAD,
     FILLED_IN,
-    NO_TIME_BUT,
     NO_TIME_SAID,
     AnswerRow,
     TaskRead,
@@ -125,21 +124,84 @@ def test_a_part_marked_understood_whose_key_words_are_not_in_the_request_is_a_gu
     assert (guessed.state, guessed.note) == ("changed", FILLED_IN)
 
 
+SAID_FRIDAY = 'Your words said "Every Friday" but not a time. Please choose one.'
+SAID_DAY = 'Your words said "Every day" but not a time. Please choose one.'
+
+
 @pytest.mark.parametrize(
-    ("text", "state", "task", "expected"),
+    ("text", "state", "task", "expected", "note"),
     [
-        ("Every Friday at 4pm", "understood", "Every Friday, sum up the closed tickets", "missing"),
-        ("Every Friday at 16:00", "changed", "Every Friday, sum up the closed tickets", "missing"),
-        ("Every day at 9am", "understood", "Every morning, list the open tickets", "missing"),
+        (
+            "Every Friday at 4pm",
+            "understood",
+            "Every Friday, sum up the tickets",
+            "missing",
+            SAID_FRIDAY,
+        ),
+        (
+            "Every Friday at 16:00",
+            "changed",
+            "Every Friday, sum up the tickets",
+            "missing",
+            SAID_FRIDAY,
+        ),
+        (
+            "Every day at 9am",
+            "understood",
+            "Every morning, list the tickets",
+            "missing",
+            NO_TIME_SAID,
+        ),
         (
             "Every Friday at 4pm",
             "understood",
             "Every Friday at 4pm, sum up the tickets",
             "understood",
+            None,
         ),
-        ("Every Friday", "understood", "Every week, sum up the closed tickets", "changed"),
-        ("Every weekday", "understood", "Monday to Friday, list the open tickets", "changed"),
-        ("Every Friday", "understood", "Every Friday, sum up the closed tickets", "understood"),
+        (
+            "Every Friday",
+            "understood",
+            "Every week, sum up the closed tickets",
+            "changed",
+            FILLED_IN,
+        ),
+        (
+            "Every weekday",
+            "understood",
+            "Monday to Friday, list the open tickets",
+            "changed",
+            FILLED_IN,
+        ),
+        (
+            "Every Friday",
+            "understood",
+            "Every Friday, sum up the closed tickets",
+            "understood",
+            None,
+        ),
+        (
+            "Every weekday at 9am",
+            "understood",
+            "Every day at 5pm, list the tickets",
+            "missing",
+            NO_TIME_SAID,
+        ),
+        (
+            "Every day at nine",
+            "understood",
+            "Every day, list the open tickets",
+            "missing",
+            SAID_DAY,
+        ),
+        (
+            "Every day in the morning",
+            "understood",
+            "Every day, list the open tickets",
+            "missing",
+            SAID_DAY,
+        ),
+        ("Every Friday at 9am", "changed", "Every week, find stale bugs", "missing", NO_TIME_SAID),
     ],
     ids=[
         "a-time",
@@ -149,25 +211,44 @@ def test_a_part_marked_understood_whose_key_words_are_not_in_the_request_is_a_gu
         "a-day",
         "weekday",
         "said-day",
+        "a-different-time",
+        "nine",
+        "in-the-morning",
+        "a-guessed-day-is-never-quoted",
     ],
 )
 def test_a_time_the_request_never_said_is_asked_for_and_a_day_is_shown_as_a_guess(
-    text: str, state: str, task: str, expected: str
+    text: str, state: str, task: str, expected: str, note: str | None
 ):
+    guessed = None if state == "understood" else "A guess."
     rows = [
-        row("schedule", text, state, "A guess."),
+        row("schedule", text, state, guessed),
         row("look_for", "Tickets"),
         row("do", "List them"),
     ]
     answer = answer_of(read(*rows), task)
     assert isinstance(answer, SetupCardAnswer)
     schedule = answer.rows[0]
-    assert schedule.state == expected
-    if expected == "missing":
-        day = text.split(" at ")[0]
-        assert (schedule.text, schedule.note) == ("", NO_TIME_BUT.format(day))
-    if expected == "changed":
-        assert (schedule.text, schedule.note) == (text, FILLED_IN)
+    assert (schedule.state, schedule.note) == (expected, note)
+    assert schedule.text == ("" if expected == "missing" else text)
+
+
+def test_a_system_that_is_also_software_keeps_its_watch_and_a_name_with_a_common_word_is_trimmed():
+    answer = answer_of(
+        read(belongs_on_watchlist=True, watchlist_word="releases", software="GitLab"),
+        "Check for new GitLab releases every Monday",
+    )
+    assert answer == WatchlistAnswer(word="releases", software="GitLab")
+    answer = answer_of(
+        read(belongs_on_watchlist=True, watchlist_word="releases", software="Kubernetes releases"),
+        "Tell me about new Kubernetes releases",
+    )
+    assert answer == WatchlistAnswer(word="releases", software="Kubernetes")
+    answer = answer_of(
+        read(belongs_on_watchlist=True, watchlist_word="patches", software="security patches"),
+        "Check security patches for Log4j weekly",
+    )
+    assert isinstance(answer, CantAnswer) and answer.alternative is None
 
 
 def test_a_schedule_that_is_only_a_guessed_time_is_asked_for_with_the_plain_note():

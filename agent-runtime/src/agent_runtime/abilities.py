@@ -1102,8 +1102,25 @@ def why_not(kind: RowKind, text: str, abilities: tuple[Ability, ...] = ABILITIES
         return f"I can't {what} yet. {reader.can()}"
     field = unread_field_in(text) if kind in ("look_for", "do") else None
     if field is not None:
-        return f"I can't tell {field.plain} yet. {reader.can()}"
+        verb = "set" if kind == "do" and _sets_on_a_new_ticket(row, reader) else "tell"
+        return f"I can't {verb} {field.plain} yet. {reader.can()}"
     return None
+
+
+def _sets_on_a_new_ticket(row: Clause, reader: _Reader) -> bool:
+    """Whether a part puts the field on the ticket it creates, as in "Create one ticket with
+    component Backend", rather than reading it from the tickets found, as in "Create one ticket
+    that lists them and their components"."""
+    at = _action_at(row)
+    found = reader.verb(row[at]) if at is not None else None
+    if found is None or found[0] not in ABILITIES[-1].verbs:
+        return False
+    for i in range(2, len(row)):
+        if _field_at(row, i) and row[i - 1].low == "with" and row[i - 2].low in TICKETS:
+            return True
+        if _field_at(row, i) and row[i - 2].low == "with" and row[i - 3].low in TICKETS:
+            return True
+    return False
 
 
 REACHED: Final = frozenset(place for ability in ABILITIES for place in ability.reaches)
@@ -1123,7 +1140,8 @@ every name against a real project."""
 @dataclass(frozen=True)
 class TicketField:
     """A field of a Jira ticket that a request can name. `read_as` is the `JiraTicket` attribute
-    the agents see, or None while no tool gives it."""
+    the agents see, or None while no tool gives it. `words` are consulted only for a field the
+    agents can't read; for the others they record how a request names it."""
 
     plain: str
     words: frozenset[str]
@@ -1139,33 +1157,62 @@ TICKET_FIELDS: Final = (
     TicketField("when a ticket was done", words("done closed"), "done_at"),
     TicketField("a ticket's component", words("component components")),
     TicketField("a ticket's priority", words("priority priorities")),
-    TicketField("a ticket's labels", words("label labels labelled labeled")),
+    TicketField("a ticket's labels", words("label labels labelled labeled tagged")),
     TicketField("a ticket's epic", words("epic epics")),
     TicketField("a ticket's sprint", words("sprint sprints")),
 )
 UNREAD_FIELDS: Final = tuple(field for field in TICKET_FIELDS if field.read_as is None)
+READ_FIELD_WORDS: Final = frozenset(
+    word for field in TICKET_FIELDS if field.read_as is not None for word in field.words
+)
 SETTABLE_TOO: Final = words("assignee assignees field fields")
 """Fields a new tool could set, besides the ones the agents can't read."""
 EPIC_LEADS: Final = words("in under of by per with within for their its")
 """The words that make "epic" a field of the tickets looked for, as in "in the epic", rather
 than the tickets themselves, as in "list epics"."""
+TOPIC_LEADS: Final = words(
+    "about mentioning mention mentions mentioned titled called named regarding"
+)
+"""A field word after these is what tickets are about, as in "about the login component"."""
 PHRASE_ENDS: Final = PREPS | words("and or plus")
+RELATIVES: Final = words("that which who whose where")
+COPULAS: Final = words("is are was were be been being has have had")
+VALUE_NOUNS: Final = TICKETS | PRONOUNS | words("ones items requests request changes change")
+
+
+def _led(row: Clause, at: int, leads: frozenset[str], through: int = 3) -> bool:
+    """Whether one of `leads` comes before `at`, with only determiners and names between."""
+    for back in range(at - 1, max(at - through, 0) - 1, -1):
+        word = row[back]
+        if word.low in leads:
+            return True
+        if word.low not in DETERMINERS and not word.capital:
+            return False
+    return False
+
+
+def _a_topic(row: Clause, at: int) -> bool:
+    """Whether the field word at `at` is what tickets are about, as in "about the login
+    component", rather than a filter on them: a topic lead comes before it in its phrase."""
+    for back in range(at - 1, max(at - 5, 0) - 1, -1):
+        word = row[back]
+        if word.low in TOPIC_LEADS:
+            return True
+        if word.mark or word.low in PHRASE_ENDS:
+            return False
+    return False
 
 
 def _field_at(row: Clause, at: int) -> TicketField | None:
     word = row[at]
     parts = word.low.split("-")
     field = next((f for f in UNREAD_FIELDS if any(part in f.words for part in parts)), None)
-    if field is None or "epic" not in field.words:
+    if field is None or _a_topic(row, at):
+        return None
+    if "epic" not in field.words:
         return field
-    before = row[at - 1] if at else None
-    earlier = row[at - 2] if at > 1 else None
     after = row[at + 1] if at + 1 < len(row) else None
-    led = before is not None and (
-        before.low in EPIC_LEADS
-        or (before.low in DETERMINERS and earlier is not None and earlier.low in EPIC_LEADS)
-    )
-    return field if led or (after is not None and after.key) else None
+    return field if _led(row, at, EPIC_LEADS) or (after is not None and after.key) else None
 
 
 def unread_field_in(text: str) -> TicketField | None:
@@ -1190,45 +1237,123 @@ def _joined(clause: Clause) -> str:
     return shown.strip(" ,;:.!?")
 
 
-def _cut_field(row: Clause, at: int) -> Clause | None:
+def _bounds(row: Clause, reader: _Reader) -> list[int]:
+    """Where a phrase starts: a preposition, a conjunction, a mark, a relative word before a
+    copula, a field or a verb ("whose priority", "that are", "that lists"), and a verb's past or
+    -ing form after a noun ("closed this week", "labelled urgent", "listing them")."""
+    found: list[int] = []
+    for at, word in enumerate(row):
+        after = row[at + 1] if at + 1 < len(row) else None
+        verb = reader.verb(word)
+        if word.mark or word.low in PHRASE_ENDS:
+            found.append(at)
+        elif word.low in RELATIVES and after is not None:
+            later = row[at + 2] if at + 2 < len(row) else None
+            if (
+                after.low in COPULAS
+                or reader.acts(after)
+                or _field_at(row, at + 1)
+                or (after.low in DETERMINERS and later is not None and _field_at(row, at + 2))
+            ):
+                found.append(at)
+        elif (
+            verb is not None
+            and verb[1] in ("ed", "ing")
+            and at
+            and not word.proper
+            and row[at - 1].low not in DETERMINERS
+        ):
+            found.append(at)
+    return found
+
+
+def _a_value(phrase: Clause, reader: _Reader) -> bool:
+    """Whether a phrase after "and", "or" or a comma is more of a field's values, as in "High,
+    Highest or Critical", rather than a part of its own."""
+    return bool(phrase) and not any(
+        w.key
+        or w.raw.isdigit()
+        or w.low in VALUE_NOUNS | READ_FIELD_WORDS | DETERMINERS | PRONOUNS
+        or reader.acts(w)
+        for w in phrase
+    )
+
+
+def _cut_field(row: Clause, at: int, reader: _Reader) -> Clause | None:
     """The row without the phrase around the field word at `at`: "in the Backend component",
-    "and their components", "with priority High", or a leading "High priority". A phrase that
-    shared its preposition with the next one, as in "with priority High and status Done", leaves
-    it to that one. None when what is left starts with a connecting word."""
-    bounds = [i for i, w in enumerate(row) if w.mark or w.low in PHRASE_ENDS]
-    start = next((i for i in reversed(bounds) if i < at), None)
+    "and their components", "with priority High", "labelled urgent", or a leading "high
+    priority" before what is looked for. A phrase that shared its preposition with the next
+    one, as in "with priority High and status Done", leaves it to that one. Values that
+    followed the field, as in "components Backend or Frontend", go with it."""
+    bounds = _bounds(row, reader)
+    after = row[at + 1] if at + 1 < len(row) else None
+    if after is not None and after.low in VALUE_NOUNS and at not in bounds:
+        lead = row[at - 1] if at else None
+        adjective = (
+            lead is not None
+            and not lead.mark
+            and lead.low not in DETERMINERS | PHRASE_ENDS | VALUE_NOUNS | OUTPUTS
+            and reader.verb(lead) is None
+        )
+        first = at - 1 if adjective else at
+        return row[:first] + row[at + 1 :]
+    start = at if at in bounds else next((i for i in reversed(bounds) if i < at), None)
     end = next((i for i in bounds if i > at), len(row))
     if start is None:
-        if any(w.low in TICKETS | OUTPUTS for w in row[:at]):
-            kept = row[:at] + row[end:]
-        else:
-            first = next((i for i in range(at) if row[i].low not in DETERMINERS), at)
-            kept = row[:first] + row[at + 1 :]
-    else:
-        following = row[end + 1] if end + 1 < len(row) else None
-        shares = (
-            following is not None
-            and row[end].low in ("and", "or")
-            and row[start].low in PREPS
-            and not following.mark
-            and following.low not in PREPS
-            and not _reader(ABILITIES).acts(following)
-        )
-        kept = row[: start + 1] + row[end + 1 :] if shares else row[:start] + row[end:]
-    if not kept or kept[0].mark or kept[0].low in PHRASE_ENDS:
         return None
-    return kept
+    while start and start - 1 in bounds and (found := reader.verb(row[start - 1])) is not None:
+        if found[1] not in ("ed", "ing"):
+            break
+        start -= 1
+    if row[start].raw == "(" and end < len(row) and row[end].raw == ")":
+        return row[:start] + row[end + 1 :]
+    if any(reader.acts(w) for w in row[start + 1 : end]):
+        return None
+    while end < len(row) and row[end].low in ("and", "or", ","):
+        after_end = next((i for i in bounds if i > end), len(row))
+        following = row[end + 1 : after_end]
+        continues = after_end < len(row) and row[after_end].low in PREPS
+        if _a_value(following, reader) and not continues:
+            end = after_end
+            continue
+        if not following or reader.acts(following[0]) or row[end].low == ",":
+            return row[:start] + row[end:]
+        if row[start].low in PREPS:
+            return row[: start + 1] + row[end + 1 :]
+        return row[:start] + row[end + 1 :]
+    return row[:start] + row[end:]
+
+
+def _reads_well(kept: Clause, row: Clause, reader: _Reader) -> bool:
+    """Whether what is left after a cut still names what the row named, and ends on a whole
+    phrase rather than on "their", "by", "one's" or "grouped"."""
+    while kept and kept[-1].mark:
+        kept = kept[:-1]
+    if not kept or kept[0].mark or kept[0].low in PHRASE_ENDS:
+        return False
+    named = {w.low for w in row if w.low in TICKETS | OUTPUTS}
+    if named and not any(w.low in named for w in kept):
+        return False
+    last = kept[-1]
+    found = reader.verb(last)
+    return not (
+        last.mark
+        or last.low in DETERMINERS | PREPS | PHRASE_ENDS | RELATIVES | COPULAS
+        or last.low.endswith("'s")
+        or (found is not None and found[1] in ("ed", "ing"))
+    )
 
 
 def without_the_field(text: str) -> str | None:
     """The text with every phrase that names a field the agents can't read cut out, as in "Bug
     tickets in MOCK" for "Bug tickets in MOCK in the Backend component". The text itself when it
-    names none. None when nothing to look for is left."""
+    names none. None when the cut would leave something that misleads or reads badly."""
+    reader = _reader(ABILITIES)
     row = _tokens(re.sub(r"\(s\)", "s", text))
-    cut = False
+    original, cut = row, False
     while (at := next((i for i in range(len(row)) if _field_at(row, i)), None)) is not None:
-        kept = _cut_field(row, at)
-        if kept is None:
+        kept = _cut_field(row, at, reader)
+        if kept is None or not _reads_well(kept, original, reader):
             return None
         row, cut = kept, True
     return _joined(row) or None if cut else text
@@ -1243,55 +1368,66 @@ _PEOPLE: Final = (
     r"(?:a|my|the)\s+managers?|the\s+boss|(?-i:[A-Z][a-z]+))"
 )
 _SOMEONE_ELSE: Final = rf"(?:{_PEOPLE}|the\s+team)"
+_THEIR_YES: Final = rf"(?:'s\s+{_A_YES})?"
 _NOT_FROM_ME: Final = r"(?!\s+(?:from|of)\s+(?:me|us)\b)"
 _SAYS_YES: Final = r"(?:sign[- ]?off|approve|say\s+yes|ok|okay|check|confirm|agree)"
+_NOT_NEEDED: Final = r"(?:needed|required|necessary)"
+_IT: Final = r"(?:it|them|this|that|everything|each|every|all|(?:the|my|our|a|an)\s+(?:own\s+)?\w+)"
 SKIPS_A_YES: Final = re.compile(
     rf"""
     (?P<command>
-        \bwithout\s+(?:asking|waiting(?:\s+for)?|checking\s+with|telling|consulting|
-            running\s+it\s+(?:by|past)|clearing\s+it\s+with)\s+
-            (?:for\s+)?(?:an?\s+|any\s+|the\s+|my\s+)?(?:{_A_YES}|{_SOMEONE_ELSE})\b{_NOT_FROM_ME}
+        \bwithout\s+{_SOMEONE_ELSE}\s+(?:approving|signing\s+off|checking|saying\s+yes)\b
       | \bno\s+need\s+(?:for\s+{_SOMEONE_ELSE}\s+to\s+{_SAYS_YES}
             |for\s+(?:an?\s+|any\s+)?{_A_YES}
-            |to\s+(?:get|ask\s+for|wait\s+for|have)\s+(?:an?\s+|any\s+)?{_A_YES})\b
+            |to\s+(?:get|ask\s+for|wait\s+for|have)\s+(?:an?\s+|any\s+)?{_A_YES}
+            |to\s+(?:wait\s+for|ask|check\s+with|bother)\s+{_SOMEONE_ELSE})\b
       | \b(?:nobody|no\s+one)\s+(?:needs?|has)\s+to\s+{_SAYS_YES}\b
-      | \bno\s+{_A_YES}\s+(?:needed|required|necessary|first|at\s+all)\b
-      | \b{_A_YES}\s+(?:is\s+|are\s+)?not\s+(?:needed|required|necessary)\b
-      | (?:^|[,;:]\s*)no\s+{_A_YES}\s*(?:[,;.!]|$)
-      | \bskip(?:s|ped|ping)?\s+(?:the\s+|an?\s+|any\s+|all\s+|my\s+)?{_A_YES}\b
+      | \bno\s+(?:[\w']+\s+)?{_A_YES}(?:\s+from\s+[\w']+)?\s+(?:{_NOT_NEEDED}|first|at\s+all)\b
+      | \b{_A_YES}\s+(?:isn'?t|aren'?t|is\s+not|are\s+not|not)\s+{_NOT_NEEDED}\b
+      | (?:^|[,;:(\-]\s*)no\s+{_A_YES}\s*(?:[,;.!)]|$)
+      | \bno\s+questions\s+asked\b
+      | \bskip(?:s|ped|ping)?\s+(?:the\s+|an?\s+|any\s+|all\s+|my\s+)?(?:{_A_YES}|teams)\b
       | \bbypass(?:es|ed|ing)?\s+(?:the\s+|an?\s+)?(?:{_A_YES}|gate|check|teams)\b
-      | \b(?:don'?t|do\s+not|never)\s+(?:ask(?:ing)?|wait(?:ing)?)\s+(?:for\s+)?
-            (?:an?\s+|any\s+|the\s+)?(?:{_A_YES}|{_PEOPLE})\b
-      | \bauto-?approv(?:e|es|ing|al|als)\b
-      | \bapprov(?:e|es|ing)\s+
-            (?:(?:it|them|this|that|everything|each|every|all|the|a|an|my|our)\s+)?
-            (?:(?:of\s+)?\w+\s+)?
-            (?:automatically|by\s+itself|itself|on\s+its\s+own|myself|ourselves|for\s+me|for\s+us)\b
+      | \b(?:don'?t|do\s+not|never)\s+(?:ask(?:ing)?|wait(?:ing)?|bother(?:ing)?)\s+(?:for\s+)?
+            (?:an?\s+|any\s+|the\s+)?(?:{_A_YES}|{_PEOPLE}){_THEIR_YES}\b
+      | \b(?:auto|self)-?approv(?:e|es|ing|al|als)\b
+      | \bapprov(?:e|es|ing)\s+(?:{_IT}\s+)?(?:(?:of\s+)?\w+\s+)?
+            (?:automatically|by\s+itself|itself|on\s+its\s+own|myself|ourselves|for\s+me|for\s+us|
+            on\s+(?:my|our)\s+behalf)\b
       | \bautomatic\s+approv\w*
       | \bautomatically\s+approv(?:e|es|ing)\b
-      | \bapprov\w*\s+(?:its\s+own|their\s+own|my\s+own|our\s+own)\b
-      | \b(?:i'?ll|i\s+will|i\s+can|i\s+shall|i'?d|let\s+me)\s+approve
-            (?:\s+(?:it|them|this|that|everything|all|the\s+\w+))?(?:\s+(?:myself|ourselves))?\b
+      | \bapprov\w*\s+(?:my\s+own|our\s+own)\b
+      | \bmark(?:s|ed|ing)?\s+{_IT}\s+(?:as\s+)?approved\b
+      | \b(?:i'?ll|i\s+will|i\s+can|i\s+shall|i'?d|let\s+me|i)\s+approve
+            (?:\s+{_IT})?(?:\s+(?:myself|ourselves))?\b
+      | \bi(?:'ll|\s+will|\s+can|\s+could|\s+should)?\s+(?:be|am)\s+the\s+approver\b
     )
   | (?P<filter>
-        \bwithout\s+(?:[\w']+\s+){{0,2}}?{_A_YES}\b{_NOT_FROM_ME}
+        \bwithout\s+(?:asking|waiting(?:\s+for)?|checking\s+with|telling|consulting|bothering|
+            running\s+it\s+(?:by|past)|clearing\s+it\s+with)\s+
+            (?:for\s+)?(?:an?\s+|any\s+|the\s+|my\s+)?(?:{_A_YES}|{_SOMEONE_ELSE}){_THEIR_YES}\b
+            {_NOT_FROM_ME}
+      | \bwithout\s+(?:[\w']+\s+){{0,2}}?{_A_YES}\b{_NOT_FROM_ME}
       | \bwith\s+no\s+(?:[\w']+\s+)?{_A_YES}\b
       | \bauto-?approved\b
       | \bapproved\s+(?:automatically|by\s+itself|on\s+its\s+own)\b
       | \bautomatically\s+approved\b
+      | \bapprov\w*\s+(?:its\s+own|their\s+own)\b
     )
 """,
     re.IGNORECASE | re.VERBOSE,
 )
 """A command skips a yes wherever it stands. A filter-shaped phrase, such as "without an
 approver" or "auto-approved", can also describe the tickets looked for, so it skips a yes only
-when the clause before it writes or approves rather than reads."""
+when the clause before it writes or approves rather than reads. "skip" and "bypass" are
+commands, except right after "that" or "which", as in "tickets that bypass the gate"."""
 _CONNECTOR: Final = r"(?:and|but|then|so|just|please)"
 READS_TOO: Final = words("show tell")
 READ_VERBS: Final = (
     frozenset(verb for ability in ABILITIES if ability.makes is None for verb in ability.verbs)
     - CAUSATIVES
 )
+NOUNS_TOO: Final = TICKETS | OUTPUTS | words("request requests change changes grant grants")
 
 
 class Need(NamedTuple):
@@ -1301,29 +1437,44 @@ class Need(NamedTuple):
 
 def _reads_before(text: str, at: int) -> bool:
     """Whether the clause before `at` reads tickets, so a filter-shaped phrase there describes
-    the tickets looked for. Its last verb reads, or it has no verb and names tickets. "Get it
-    approved" and "have them auto-approved" are not reads: the phrase is done to a pronoun."""
+    the tickets looked for: its last verb reads, or it has no verb and names tickets. A past
+    form describes tickets ("tickets closed"), an -s form after a noun is a noun ("access
+    changes"), and "get" and the other causatives are not reads ("get it approved")."""
     clause = _tokens(text[:at])
     first = next((i for i in range(len(clause) - 1, -1, -1) if clause[i].starts), 0)
     clause = clause[first:]
-    if not clause or clause[-1].low in PRONOUNS | CAUSATIVES:
-        return False
+    if clause and clause[-1].low in RELATIVES and clause[-1].low != "whose":
+        return True
     reader = _reader(ABILITIES)
-    for word in reversed(clause):
-        found = reader.verb(word)
-        if found is not None and not word.proper:
-            return found[0] in READ_VERBS
+    for back in range(len(clause) - 1, -1, -1):
+        word = clause[back]
         if word.low in READS_TOO:
             return True
-    return any(w.low in TICKETS for w in clause)
+        found = reader.verb(word)
+        if found is None or word.proper or found[1] == "ed":
+            continue
+        before = clause[back - 1] if back else None
+        if found[1] == "s" and before is not None and before.low not in RELATIVES | PRONOUNS:
+            continue
+        return found[0] in READ_VERBS
+    return any(w.low in NOUNS_TOO for w in clause)
+
+
+_AFTER_A_RELATIVE: Final = re.compile(r"\b(?:that|which|who)\s+$", re.IGNORECASE)
 
 
 def _skips(text: str) -> list[re.Match[str]]:
-    return [
-        found
-        for found in SKIPS_A_YES.finditer(text)
-        if found.group("command") is not None or not _reads_before(text, found.start())
-    ]
+    skips: list[re.Match[str]] = []
+    for found in SKIPS_A_YES.finditer(text):
+        if found.group("command") is None:
+            if not _reads_before(text, found.start()):
+                skips.append(found)
+        elif not (
+            found.group(0).lower().startswith(("skip", "bypass"))
+            and _AFTER_A_RELATIVE.search(text[: found.start()])
+        ):
+            skips.append(found)
+    return skips
 
 
 def skip_of_a_yes(text: str) -> str | None:
@@ -1335,7 +1486,7 @@ def without_the_skip(text: str) -> str:
     rest = text
     for found in reversed(_skips(text)):
         rest = f"{rest[: found.start()]} {rest[found.end() :]}"
-    rest = " ".join(rest.split()).strip(" ,;.")
+    rest = re.sub(r"\s*,(?:\s*,)+", ",", " ".join(rest.split())).strip(" ,;.")
     rest = re.sub(rf"^{_CONNECTOR}\b[\s,]*", "", rest, flags=re.IGNORECASE)
     rest = re.sub(rf"[\s,]*\b{_CONNECTOR}$", "", rest, flags=re.IGNORECASE)
     return rest.strip(" ,;.")
@@ -1366,15 +1517,31 @@ def need_of(kind: RowKind, text: str, unreached_source: str | None = None) -> Ne
     return Need("new_tool", SYSTEMS[JIRA])
 
 
-def names_software(text: str) -> bool:
-    """Whether a name the model called software can be one: not a common word, a vulnerability
-    word, a CVE, or a system the platform knows."""
-    return all(
-        w.low not in NOT_SOFTWARE | VULNERABILITIES
-        and w.system is None
-        and CVE_ID.fullmatch(w.low) is None
-        for w in _tokens(text)
-    )
+NOT_SOFTWARE_SYSTEMS: Final = REACHED | words("teams email e-mail mail sms")
+"""Systems the platform reaches or sends to, never the software a watch is about. Other systems
+in `SYSTEMS`, such as GitLab or Jenkins, are also software with releases."""
+
+
+def software_name(said: str | None) -> str | None:
+    """The software in a name the model gave, with common words such as "releases" or "the"
+    trimmed from its ends, or None when what is left is a common word, a vulnerability word, a
+    CVE, or a system the platform itself uses."""
+    row = list(_tokens(said or ""))
+    while row and (row[0].low in NOT_SOFTWARE | DETERMINERS or row[0].mark):
+        row.pop(0)
+    while row and (row[-1].low in NOT_SOFTWARE or row[-1].mark):
+        row.pop()
+    name = " ".join(w.raw for w in row)
+    if not row or vulnerability_phrase(name) is not None:
+        return None
+    if any(
+        w.low in NOT_SOFTWARE | VULNERABILITIES
+        or w.system in NOT_SOFTWARE_SYSTEMS
+        or CVE_ID.fullmatch(w.low) is not None
+        for w in row
+    ):
+        return None
+    return name
 
 
 def release_word_in(text: str) -> str | None:

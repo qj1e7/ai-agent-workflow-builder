@@ -124,6 +124,7 @@
     "needs": "new_tool",
     "system": "Jira",
     "understood": [
+      "ticket*",
       "bug",
       "MOCK"
     ]
@@ -141,6 +142,7 @@
     "needs": "new_tool",
     "system": "Jira",
     "understood": [
+      "ticket*",
       "MOCK"
     ],
     "schedule": [

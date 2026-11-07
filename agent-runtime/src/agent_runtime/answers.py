@@ -10,11 +10,11 @@ from agent_runtime.abilities import (
     VULNERABILITIES_PLANNED,
     guessable_words,
     names_a_ticket_field,
-    names_software,
     need_of,
     other_systems,
     release_word_in,
     skip_of_a_yes,
+    software_name,
     unread_field_of,
     vulnerability_phrase,
     why_not,
@@ -73,12 +73,13 @@ SUGGESTED: Final = 'Suggested instead of "{}".'
 ARTICLES: Final = re.compile(r"^(?:the|my|our|a|an)\s+", re.IGNORECASE)
 TIME_OF_DAY: Final = re.compile(
     r"\b(?:at\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)\b|\b(?:at\s+)?\d{1,2}:\d{2}\b|\bat\s+\d{1,2}\b|"
-    r"\b(?:noon|midday|midnight)\b",
+    r"\bat\s+(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b|"
+    r"\b(?:noon|midday|midnight|morning|afternoon|evening|night)\b",
     re.IGNORECASE,
 )
 SCHEDULE_WORDS: Final = words(
     "monday tuesday wednesday thursday friday saturday sunday weekday weekdays daily weekly "
-    "monthly hourly quarterly morning afternoon evening night"
+    "monthly hourly quarterly day days week weeks month months hour hours"
 )
 
 type AsksAbout = Literal["none", "my_workflows", "why_stopped", "needs_me", "abilities"]
@@ -122,8 +123,9 @@ ANSWER_SYSTEM: Final = (
     "- understood: the request says it plainly.\n"
     "- changed: you had to read something into the words, such as a number of days for "
     '"stale". Say in the note what the request said.\n'
-    "- missing: the request does not say it. Leave text empty and never guess. A time or a "
-    "day the request does not say is missing.\n"
+    "- missing: the request does not say it. Leave text empty and never guess. A time the "
+    "request does not say is missing: never fill one in. A day you read into the words, such "
+    'as Friday for "every week", is changed.\n'
     "- cant_do: it needs something the tools below cannot do. Say why in the note, in one "
     "short sentence. Then put in alternative the nearest thing the tools can do instead, in a "
     'few plain words, such as "Create one ticket that lists them" for a part that emails them. '
@@ -199,21 +201,31 @@ class TaskRead(BaseModel):
     )
 
 
-def _no_time_said(schedule: str) -> str:
+def _no_time_said(schedule: str, request: str) -> str:
     """The note on a schedule asked for because its time was a guess, keeping the words that
-    were the person's own, such as "Every Friday"."""
-    day = " ".join(TIME_OF_DAY.sub(" ", schedule).split()).strip(" ,").removesuffix(" at")
-    return NO_TIME_BUT.format(day) if day else NO_TIME_SAID
+    were the person's own, such as "Every Friday", and never a day the model guessed."""
+    unsaid = [t for t in TIME_OF_DAY.findall(schedule) if not said_in(t.strip(), request)]
+    day = schedule
+    for time in unsaid:
+        day = day.replace(time, " ")
+    day = " ".join(day.split()).strip(" ,").removesuffix(" at").removesuffix(" in the")
+    words_of_day = re.findall(r"\w+", day)
+    theirs = any(w.casefold() in SCHEDULE_WORDS or TIME_OF_DAY.search(w) for w in words_of_day)
+    if not theirs or not all(said_in(w, request) for w in words_of_day):
+        return NO_TIME_SAID
+    return NO_TIME_BUT.format(day)
 
 
 def _with_guess_marked(answer: AnswerRow, request: str) -> UnderstoodRow:
-    """A time the request never said is asked for, not filled in. A day, a number, a key or
-    another system the request never said is a guess, shown as filled in."""
+    """A time the request never said, or a different one, is asked for, not filled in. A day,
+    a number, a key or another system the request never said is a guess, shown as filled in."""
     row = row_of(answer)
     if row.state not in ACCEPTED:
         return row
-    if row.kind == "schedule" and TIME_OF_DAY.search(row.text) and not TIME_OF_DAY.search(request):
-        return missing_row("schedule", _no_time_said(row.text))
+    if row.kind == "schedule" and any(
+        not said_in(time.strip(), request) for time in TIME_OF_DAY.findall(row.text)
+    ):
+        return missing_row("schedule", _no_time_said(row.text, request))
     if row.state != "understood":
         return row
     guessed = guessable_words(row.text)
@@ -256,11 +268,11 @@ def _instead_of(answer: AnswerRow, row: UnderstoodRow) -> UnderstoodRow | None:
     the part itself without the ticket field the agents can't read, each held to the tools. A
     place or a time with nothing instead is left for the person to choose. A part to look for or
     do with nothing instead means there is no card to offer."""
-    said = [plain(answer.alternative, TEXT_LIMIT)]
+    candidates = [plain(answer.alternative, TEXT_LIMIT)]
     if unread_field_of(row.kind, row.text) is not None:
-        said.append(row.text)
+        candidates.append(row.text)
     note = plain(SUGGESTED.format(row.text or answer.kind.replace("_", " ")), 300)
-    for text in said:
+    for text in candidates:
         instead = without_the_field(text) if text else None
         if not instead:
             continue
@@ -306,10 +318,7 @@ def _is_part(offered: list[UnderstoodRow], cant: list[CantRow]) -> bool:
 
 
 def _software_of(read: TaskRead, request: str) -> str | None:
-    software = whole_word_of(request, read.software)
-    if software is None or not names_software(software):
-        return None
-    return software
+    return whole_word_of(request, software_name(read.software))
 
 
 def _watch_instead(cant: list[CantRow], read: TaskRead, request: str) -> WatchlistAnswer | None:
@@ -379,12 +388,15 @@ def _watchlist(read: TaskRead, request: str) -> PlannerAnswer | None:
         )
         instead = None if software is None else WatchlistAnswer(word=word, software=software)
         return CantAnswer(cant=[cant], alternative=instead)
-    elsewhere = other_systems(request)
+    elsewhere = [
+        s for s in other_systems(request) if software is None or s.casefold() != software.casefold()
+    ]
     if elsewhere:
         system = elsewhere[0]
         note = why_not("where", system) or CANT_YET
         cant = CantRow(kind="where", text=system, note=note, needs="new_system", system=system)
-        return CantAnswer(cant=[cant], alternative=WatchlistAnswer(word=word, software=software))
+        instead = None if software is None else WatchlistAnswer(word=word, software=software)
+        return CantAnswer(cant=[cant], alternative=instead)
     if software is None:
         return WhichSoftwareAnswer(word=word)
     return WatchlistAnswer(word=word, software=software, also=_also(read, request))
