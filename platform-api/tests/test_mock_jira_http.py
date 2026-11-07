@@ -1,4 +1,5 @@
 from collections.abc import AsyncIterator
+from datetime import timedelta
 
 import httpx
 import pytest
@@ -14,7 +15,7 @@ from platform_api.orchestration.write_actions import (
     digest,
 )
 from platform_api.shared import ProposalId, RunId
-from tests.practice import PracticeKit
+from tests.practice import BASE, PracticeKit
 from tests.support import ALICE, LOCAL_ENV, NOW, SPEC
 
 pytestmark = pytest.mark.anyio
@@ -73,3 +74,75 @@ async def test_only_an_operator_can_mark_a_ticket_done(client: httpx.AsyncClient
 async def test_an_unknown_ticket_is_a_404(client: httpx.AsyncClient):
     missing = await client.post("/api/v1/mock-jira/tickets/MOCK-404/done", headers=AS_ALICE)
     assert (missing.status_code, missing.json()) == (404, {"detail": "No such ticket"})
+
+
+async def search_keys(kit: PracticeKit, jql: str) -> list[str]:
+    response = await kit.client.get(
+        f"{BASE}/rest/api/2/search",
+        params={"jql": jql},
+        headers={"Authorization": kit.jira.auth_header},
+    )
+    assert response.status_code == 200, response.text
+    return [issue["key"] for issue in response.json()["issues"]]
+
+
+async def test_the_practice_jira_answers_updated_issuetype_and_assignee_clauses(db: Database):
+    kit = PracticeKit(db)
+    old = db.clock() - timedelta(days=20)
+    await kit.store.create("MOCK", "Old bug", "", [], "Bug", created_at=old, assignee="Dana Lim")
+    await kit.store.create("MOCK", "New task", "", [], "Task")
+    await kit.store.create("MOCK", "Old task", "", [], "Task", created_at=old)
+
+    assert await search_keys(kit, 'project = "MOCK" AND issuetype in ("bug")') == ["MOCK-1"]
+    assert await search_keys(kit, 'issuetype != "Bug" ORDER BY key ASC') == ["MOCK-2", "MOCK-3"]
+    assert await search_keys(kit, 'assignee = "dana lim"') == ["MOCK-1"]
+    week_ago = (db.clock() - timedelta(days=7)).strftime("%Y-%m-%d %H:%M")
+    assert await search_keys(kit, f'updated <= "{week_ago}" ORDER BY key ASC') == [
+        "MOCK-1",
+        "MOCK-3",
+    ]
+    assert await search_keys(kit, f'created >= "{week_ago}"') == ["MOCK-2"]
+
+    await kit.store.set_labels("MOCK-1", ["touched"])
+    assert await search_keys(kit, f'updated <= "{week_ago}"') == ["MOCK-3"]
+
+
+async def test_the_practice_cloud_search_says_it_is_not_the_last_page_when_it_cut_the_list(
+    db: Database,
+):
+    kit = PracticeKit(db, "cloud")
+    for title in ("One", "Two", "Three"):
+        await kit.store.create("MOCK", title, "", [], "Task")
+
+    async def page(max_results: int) -> tuple[int, bool]:
+        response = await kit.client.get(
+            f"{BASE}/rest/api/3/search/jql",
+            params={"jql": 'project = "MOCK"', "maxResults": max_results},
+            headers={"Authorization": kit.jira.auth_header},
+        )
+        assert response.status_code == 200, response.text
+        return len(response.json()["issues"]), response.json()["isLast"]
+
+    assert await page(2) == (2, False)
+    assert await page(3) == (3, True)
+
+
+async def test_a_ticket_done_moves_its_last_update_and_a_second_press_does_not(db: Database):
+    kit = PracticeKit(db)
+    old = db.clock() - timedelta(days=3)
+    await kit.store.create("MOCK", "Old", "", [], "Task", created_at=old)
+    first = await kit.store.mark_done("MOCK-1")
+    assert first is not None and first.updated_at > old
+    again = await kit.store.mark_done("MOCK-1")
+    assert again is not None and again.updated_at == first.updated_at
+
+
+async def test_the_practice_jira_refuses_a_bad_date_in_updated_with_jiras_words(db: Database):
+    kit = PracticeKit(db)
+    response = await kit.client.get(
+        f"{BASE}/rest/api/2/search",
+        params={"jql": 'updated <= "yesterday"'},
+        headers={"Authorization": kit.jira.auth_header},
+    )
+    assert response.status_code == 400
+    assert "field 'updated'" in response.text

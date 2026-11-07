@@ -128,10 +128,11 @@ def _issue(request: Request, version: str, ticket: PracticeTicket) -> dict[str, 
             "labels": list(ticket.labels),
             "creator": None if ticket.creator is None else _account(version, ticket.creator),
             "reporter": None if ticket.creator is None else _account(version, ticket.creator),
+            "assignee": None if ticket.assignee is None else _account(version, ticket.assignee),
             "status": {"name": ticket.status, "statusCategory": _category(ticket.status)},
             "resolution": None if ticket.done_at is None else {"name": "Done"},
             "created": _stamp(ticket.created_at),
-            "updated": _stamp(ticket.done_at or ticket.created_at),
+            "updated": _stamp(ticket.updated_at),
             "resolutiondate": _stamp(ticket.done_at),
             "statuscategorychangedate": _stamp(ticket.done_at or ticket.created_at),
         },
@@ -273,7 +274,9 @@ async def search_cloud(request: Request, practice: Practice) -> Response:
     answer = await _search(request, practice, "3", *params)
     if isinstance(answer, JSONResponse):
         return answer
-    return JSONResponse({"issues": answer["issues"], "isLast": True})
+    return JSONResponse(
+        {"issues": answer["issues"], "isLast": answer["total"] <= len(answer["issues"])}
+    )
 
 
 @router.api_route(

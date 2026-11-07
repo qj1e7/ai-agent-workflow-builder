@@ -22,7 +22,7 @@ PRACTICE_ACCOUNT = "wab-platform"
 
 _COLUMNS = (
     "key, number, project, title, body, created_at, run_id, proposal_id, status, done_at, "
-    "labels, issue_type, creator"
+    "labels, issue_type, creator, updated_at, assignee"
 )
 _OUR_LABEL = re.compile(r"^wab-(run_[A-Za-z0-9]+)-(prp_[A-Za-z0-9]+)-([0-9]+)$")
 
@@ -51,7 +51,9 @@ class PracticeTicket:
     done_at: datetime | None
     labels: tuple[str, ...]
     issue_type: str
+    updated_at: datetime
     creator: str | None = None
+    assignee: str | None = None
 
 
 @dataclass(frozen=True)
@@ -74,7 +76,9 @@ def _ticket(row: Mapping[str, Any]) -> PracticeTicket:
         done_at=row["done_at"],
         labels=tuple(row["labels"] or ()),
         issue_type=row["issue_type"],
+        updated_at=row["updated_at"],
         creator=row["creator"],
+        assignee=row["assignee"],
     )
 
 
@@ -110,6 +114,7 @@ class PracticeJira:
         issue_type: str,
         creator: str | None = PRACTICE_ACCOUNT,
         created_at: datetime | None = None,
+        assignee: str | None = None,
     ) -> PracticeTicket:
         """A new ticket, numbered after every other. A label in our write-key shape also fills
         the run columns, so the practice Jira's page can link to the run."""
@@ -124,12 +129,13 @@ class PracticeJira:
             ).fetchone()
             assert row is not None
             number = int(row["number"])
+            stamp = _to_ms(created_at or uow.now)
             created = await (
                 await uow.conn.execute(
                     "INSERT INTO orchestration.mock_jira_tickets "
                     "(key, number, project, title, body, created_at, run_id, proposal_id, "
-                    "labels, issue_type, creator) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                    "labels, issue_type, creator, updated_at, assignee) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
                     f"RETURNING {_COLUMNS}",
                     (
                         f"{project}-{number}",
@@ -137,12 +143,14 @@ class PracticeJira:
                         project,
                         title,
                         body,
-                        _to_ms(created_at or uow.now),
+                        stamp,
                         None if ours is None else ours.group(1),
                         None if ours is None else ours.group(2),
                         list(dict.fromkeys(labels)),
                         issue_type,
                         creator,
+                        stamp,
+                        assignee,
                     ),
                 )
             ).fetchone()
@@ -184,8 +192,9 @@ class PracticeJira:
         """Changes a ticket's labels, as a person may in Jira's own screens. For tests."""
         async with self._db.transaction("orchestration") as uow:
             await uow.conn.execute(
-                "UPDATE orchestration.mock_jira_tickets SET labels = %s WHERE key = %s",
-                (list(labels), key),
+                "UPDATE orchestration.mock_jira_tickets SET labels = %s, updated_at = %s "
+                "WHERE key = %s",
+                (list(labels), _to_ms(uow.now), key),
             )
 
     async def mark_done(self, key: str) -> PracticeTicket | None:
@@ -194,9 +203,10 @@ class PracticeJira:
             row = await (
                 await uow.conn.execute(
                     "UPDATE orchestration.mock_jira_tickets SET status = 'Done', "
-                    "done_at = coalesce(done_at, %s) WHERE key = %s "
-                    f"RETURNING {_COLUMNS}",
-                    (_to_ms(uow.now), key),
+                    "done_at = coalesce(done_at, %s), "
+                    "updated_at = CASE WHEN status = 'Done' THEN updated_at ELSE %s END "
+                    f"WHERE key = %s RETURNING {_COLUMNS}",
+                    (_to_ms(uow.now), _to_ms(uow.now), key),
                 )
             ).fetchone()
         return None if row is None else _ticket(row)

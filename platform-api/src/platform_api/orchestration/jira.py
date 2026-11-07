@@ -37,9 +37,13 @@ class JiraIssue:
     status: TicketStatus
     created_at: datetime
     done_at: datetime | None
+    updated_at: datetime
     labels: tuple[str, ...] = ()
     creator: str | None = None
     """The account that made the ticket: Cloud's accountId, or Data Center's user name."""
+    issue_type: str = ""
+    assignee: str | None = None
+    """The assignee's display name, or None when nobody owns the ticket."""
 
 
 @dataclass(frozen=True)
@@ -58,7 +62,20 @@ class IssueSearch:
     words: tuple[str, ...] = ()
     status: TicketStatus | None = None
     done_since: datetime | None = None
+    created_since: datetime | None = None
+    updated_before: datetime | None = None
+    """Tickets last updated before this moment."""
+    issue_types: tuple[str, ...] = ()
     limit: int = SEARCH_LIMIT
+
+
+@dataclass(frozen=True)
+class SearchResult:
+    issues: list[JiraIssue]
+    cut_off: bool = False
+    """True when Jira had more matching tickets than the limit, so older ones are missing. When
+    the Jira account has no time zone, the search asks Jira for a day more on each date, so this
+    can be true even when every ticket that matches was returned."""
 
 
 class JiraError(Exception):
@@ -88,7 +105,7 @@ class JiraPort(Protocol):
 
     async def get_issue(self, key: str) -> JiraIssue | None: ...
 
-    async def search(self, query: IssueSearch) -> list[JiraIssue]: ...
+    async def search(self, query: IssueSearch) -> SearchResult: ...
 
     async def find_by_label(self, project: str, label: str) -> JiraIssue | None: ...
 

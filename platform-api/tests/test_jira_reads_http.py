@@ -68,7 +68,12 @@ def card_spec() -> RunSpec:
 
 
 @pytest.fixture
-async def client(db: Database) -> AsyncIterator[httpx.AsyncClient]:
+def practice(db: Database) -> PracticeKit:
+    return PracticeKit(db)
+
+
+@pytest.fixture
+async def client(db: Database, practice: PracticeKit) -> AsyncIterator[httpx.AsyncClient]:
     async with db.transaction("orchestration") as uow:
         for run_id, spec, name in ((CARD_RUN, card_spec(), "a"), (OTHER_RUN, SPEC, "b")):
             await Store().insert_run(
@@ -87,7 +92,7 @@ async def client(db: Database) -> AsyncIterator[httpx.AsyncClient]:
                 name,
             )
         await Store().insert_proposal(uow, Proposal(PRP, CARD_RUN, (), digest(())))
-    jira = PracticeKit(db)
+    jira = practice
     for index, (project, title, body) in enumerate(
         [
             ("MOCK", "Upgrade LangGraph to 1.2.16", "Release notes."),
@@ -153,6 +158,72 @@ async def test_a_search_can_filter_by_words_status_and_done_day(client: httpx.As
     later = await search(client, done_since=(today + timedelta(days=1)).isoformat())
     assert later.json()["tickets"] == []
     assert (await search(client, text="a b")).json()["tickets"] == []
+
+
+async def test_a_ticket_carries_its_last_update_type_and_owner(client: httpx.AsyncClient):
+    [newer, _] = (await search(client)).json()["tickets"]
+    assert newer["issue_type"] == "Task" and newer["assignee"] is None
+    assert abs(datetime.fromisoformat(newer["updated_at"]) - datetime.now(UTC)) < timedelta(
+        minutes=5
+    )
+    assert (await read(client, "MOCK-1")).json()["issue_type"] == "Task"
+
+
+async def test_a_search_can_filter_by_created_day_last_update_and_type(client: httpx.AsyncClient):
+    today = datetime.now(UTC).date()
+    tomorrow = (today + timedelta(days=1)).isoformat()
+    yesterday = (today - timedelta(days=1)).isoformat()
+    assert (await search(client, created_since=today.isoformat())).json()["tickets"] != []
+    assert (await search(client, created_since=tomorrow)).json()["tickets"] == []
+    assert (await search(client, updated_before=yesterday)).json()["tickets"] == []
+    both = await search(client, updated_before=today.isoformat())
+    assert [t["key"] for t in both.json()["tickets"]] == ["MOCK-2", "MOCK-1"]
+    assert (await search(client, issue_type="Bug")).json()["tickets"] == []
+    kinds = await search(client, issue_type="Bug, task")
+    assert [t["key"] for t in kinds.json()["tickets"]] == ["MOCK-2", "MOCK-1"]
+
+
+async def test_updated_before_takes_in_the_whole_utc_day_and_not_the_next(
+    client: httpx.AsyncClient, practice: PracticeKit
+):
+    day = datetime(2026, 10, 20, tzinfo=UTC)
+    for title, at in (
+        ("Start of the day", day),
+        ("Last seconds of the day", day + timedelta(hours=23, minutes=59, seconds=30)),
+        ("Start of the next day", day + timedelta(days=1)),
+    ):
+        await practice.store.create("MOCK", title, "", [], "Bug", created_at=at)
+    found = await search(client, updated_before="2026-10-20", issue_type="Bug")
+    assert [t["title"] for t in found.json()["tickets"]] == [
+        "Last seconds of the day",
+        "Start of the day",
+    ]
+
+
+async def test_a_bad_day_in_the_new_filters_is_a_422(client: httpx.AsyncClient):
+    created = await search(client, created_since="last week")
+    assert (created.status_code, created.json()["detail"]) == (
+        422,
+        "created_since is a day, YYYY-MM-DD",
+    )
+    updated = await search(client, updated_before="soon")
+    assert (updated.status_code, updated.json()["detail"]) == (
+        422,
+        "updated_before is a day, YYYY-MM-DD",
+    )
+
+
+async def test_a_search_tells_the_agent_when_it_was_cut_off_at_the_limit(
+    client: httpx.AsyncClient, practice: PracticeKit
+):
+    assert (await search(client)).json()["cut_off"] is False
+    for number in range(48):
+        await practice.store.create("MOCK", f"More {number}", "", [], "Task")
+    full = await search(client)
+    assert len(full.json()["tickets"]) == 50 and full.json()["cut_off"] is False
+    await practice.store.create("MOCK", "One too many", "", [], "Task")
+    cut = await search(client)
+    assert len(cut.json()["tickets"]) == 50 and cut.json()["cut_off"] is True
 
 
 async def test_a_search_for_a_project_not_on_the_runs_cards_is_forbidden(

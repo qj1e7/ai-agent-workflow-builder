@@ -1,6 +1,7 @@
 """The part of JQL the practice Jira understands (ADR 0035).
 
-Fields: project, key (or issuekey), labels, text, statusCategory and resolutiondate. Operators:
+Fields: project, key (or issuekey), labels, text, statusCategory, issuetype, assignee, created,
+updated and resolutiondate. Operators:
 =, !=, in, not in, ~, >=, >, <=, <. Clauses join with AND, and OR inside brackets. One ORDER BY
 on created or key. Anything else is refused the way Jira refuses it, with a message naming it.
 """
@@ -64,11 +65,11 @@ def _value(token: str) -> str:
     return token
 
 
-def _when(text: str, zone: ZoneInfo) -> datetime:
+def _when(text: str, zone: ZoneInfo, field: str) -> datetime:
     """A JQL date, read in the account's time zone, as Jira reads it."""
     match = _DAY.match(text)
     if match is None:
-        raise JqlError(f"Date value '{text}' for field 'resolutiondate' is invalid.")
+        raise JqlError(f"Date value '{text}' for field '{field}' is invalid.")
     year, month, day, hour, minute = match.groups()
     at = time(int(hour or 0), int(minute or 0))
     return datetime.combine(date(int(year), int(month), int(day)), at, zone)
@@ -179,9 +180,30 @@ class _Parser:
                         "'statusCategory'."
                     ) from None
                 test = lambda t: t.status in statuses  # noqa: E731
-            case "resolutiondate", ">=" | ">" | "<=" | "<":
-                return _dated(op, _when(values[0], self._zone))
-            case (("project" | "key" | "issuekey" | "labels" | "text" | "statuscategory"), _):
+            case "issuetype", "=" | "!=" | "in":
+                kinds = {value.casefold() for value in values}
+                test = lambda t: t.issue_type.casefold() in kinds  # noqa: E731
+            case "assignee", "=" | "!=" | "in":
+                people = {value.casefold() for value in values}
+                test = lambda t: t.assignee is not None and t.assignee.casefold() in people  # noqa: E731
+            case (("resolutiondate" | "created" | "updated"), ">=" | ">" | "<=" | "<"):
+                return _dated(name, op, _when(values[0], self._zone, name))
+            case (
+                (
+                    "project"
+                    | "key"
+                    | "issuekey"
+                    | "labels"
+                    | "text"
+                    | "statuscategory"
+                    | "issuetype"
+                    | "assignee"
+                    | "created"
+                    | "updated"
+                    | "resolutiondate"
+                ),
+                _,
+            ):
                 raise JqlError(f"The operator '{op}' is not supported by the '{name}' field.")
             case _:
                 raise JqlError(
@@ -192,20 +214,24 @@ class _Parser:
         return test
 
 
-def _dated(op: str, at: datetime) -> Predicate:
+def _dated(field: str, op: str, at: datetime) -> Predicate:
     def test(ticket: PracticeTicket) -> bool:
-        done = ticket.done_at
-        if done is None:
+        day = {
+            "created": ticket.created_at,
+            "updated": ticket.updated_at,
+            "resolutiondate": ticket.done_at,
+        }[field]
+        if day is None:
             return False
         match op:
             case ">=":
-                return done >= at
+                return day >= at
             case ">":
-                return done > at
+                return day > at
             case "<=":
-                return done <= at
+                return day <= at
             case _:
-                return done < at
+                return day < at
 
     return test
 
