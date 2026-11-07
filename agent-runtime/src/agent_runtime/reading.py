@@ -700,7 +700,9 @@ def render_search(read: SearchRead, text: str) -> Rendered:
         ("updated", read.updated),
         ("done", read.done),
     ):
-        if filter_ is None:
+        # A day filter on a date the request never names, as "the last comment is older than 5
+        # days" read as no update, is dropped like an assignee or a topic it never framed.
+        if filter_ is None or not _forms_in(text, WHEN_VOCAB[when]):
             continue
         shown = _days_text(when, filter_)
         if shown is None:
@@ -713,8 +715,6 @@ def render_search(read: SearchRead, text: str) -> Rendered:
                 explained.add(str(filter_.days))
             else:
                 sourced = False
-        if not _forms_in(text, WHEN_VOCAB[when]):
-            sourced = False
     topic = _topic(text, read.words)
     if topic is not None:
         tail.append(f'with "{topic[0]}" in the title or body')
