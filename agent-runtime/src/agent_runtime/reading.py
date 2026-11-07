@@ -17,8 +17,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from agent_runtime.abilities import (
     SYSTEMS,
+    TICKETS,
     change_verbs_in,
+    commands_a_change,
     phrase_in,
+    starts_with_a_verb,
     words,
 )
 from agent_runtime.contract import RowKind, UnderstoodRow
@@ -431,12 +434,13 @@ type Said = dict[RowKind, tuple[int, int] | None]
 
 @dataclass(frozen=True)
 class Span:
-    """A run of the request's words that no structure explains."""
+    """A run of the request's words that no structure explains, with the part of a task they
+    are: None when they ask for no change and stand beside no part."""
 
     text: str
     start: int
     end: int
-    kind: RowKind
+    kind: RowKind | None
     names_a_yes: bool
     names_a_person: bool = False
 
@@ -808,8 +812,10 @@ def render_place(read: PlaceRead, text: str) -> Rendered:
         return Rendered(missing_row("where"), frozenset(), said)
     if said is None or not said_in(project, text[said[0] : said[1]]):
         # The model often fills the project and leaves said empty: the key as the request
-        # writes it is the person's own, so the row stands on its last mention.
-        said = _find(text, project, last=True)
+        # writes it is the person's own, so the row stands on its last mention, in capitals
+        # where the request writes it so, because "its" in "with its Environment" is not ITS.
+        keys = list(re.finditer(rf"(?<!\w){re.escape(project)}(?!\w)", text))
+        said = (keys[-1].start(), keys[-1].end()) if keys else _find(text, project, last=True)
     sourced = said is not None
     row = UnderstoodRow(
         kind="where",
@@ -920,23 +926,60 @@ def _trim(text: str, start: int, end: int) -> tuple[int, int]:
     return start, end
 
 
-def _kind_of(text: str, start: int, end: int, said: Said) -> RowKind:
-    """The part the words belong to: words inside what the model said the search covers are
-    what to look for; a change asked for is the do part; otherwise the part whose words the
-    model said they were in; otherwise what to look for."""
+def _asks_for_a_change(words: str) -> bool:
+    """Whether the words order a change themselves, as "flag the new ticket", "and set their
+    priority" or "email me a copy". A change verb that is not an order, as "my call" or "is set
+    to Staging", is not one."""
+    return commands_a_change(words) or (starts_with_a_verb(words) and bool(change_verbs_in(words)))
+
+
+def _overlaps(said: tuple[int, int] | None, run: tuple[int, int]) -> bool:
+    return said is not None and run[0] < said[1] and run[1] > said[0]
+
+
+def _kind_of(
+    text: str, start: int, end: int, run: tuple[int, int], said: Said, beside: RowKind | None
+) -> RowKind | None:
+    """The part the words are, judged on the words no structure explains in them (`run`):
+    inside the model's quote for the search, what to look for; schedule words only, the
+    schedule; an order for a change, the do part; else the part the place's quote covers, the
+    part whose words they stand beside, or the part a quote covers. The model's quote for the
+    ticket often covers the whole request, so it decides last. Words that still fit no part
+    are what to look for when they name tickets, else None."""
     look = said.get("look_for")
     if look is not None and look[0] <= start and end <= look[1]:
         return "look_for"
     content = [t for t, _, _ in _request_tokens(text[start:end]) if _low(t) not in FILLER]
     if content and all(_schedule_token(t) for t in content):
         return "schedule"
-    if change_verbs_in(text[start:end]):
+    if _asks_for_a_change(text[run[0] : run[1]]):
         return "do"
-    for kind in ("where", "do", "look_for"):
-        span = said.get(kind)
-        if span is not None and start < span[1] and end > span[0]:
-            return kind
-    return "look_for"
+    if _overlaps(said.get("where"), run):
+        return "where"
+    if beside is not None:
+        return beside
+    if _overlaps(said.get("do"), run):
+        return "do"
+    if _overlaps(said.get("look_for"), run) or any(_low(t) in TICKETS for t in content):
+        return "look_for"
+    return None
+
+
+BESIDE_FIRST: Final[tuple[RowKind, ...]] = ("look_for", "do", "where", "schedule")
+"""Which part a word two structures explain belongs to, as "tickets" in "the SUP tickets with
+more than 10 comments", which the search and the new ticket both explain."""
+
+
+def _beside(
+    clause_of: list[int], parts_at: dict[int, set[RowKind]], first: int, last: int
+) -> RowKind | None:
+    """The part whose words the unexplained words from token `first` to `last` stand beside in
+    their clause: the nearest word a structure explains before them, else after them, as
+    "tasks" before "10 hours logged" in "the OPS tasks with over 10 hours logged"."""
+    for at in (*range(first - 1, -1, -1), *range(last + 1, len(clause_of))):
+        if clause_of[at] == clause_of[first] and parts_at.get(at):
+            return next(k for k in BESIDE_FIRST if k in parts_at[at])
+    return None
 
 
 def negated(text: str) -> bool:
@@ -1071,6 +1114,10 @@ def leftovers(
             if core is not None:
                 region |= _region(tokens, clause_of, core, r.explained)
         explains.append({i for i in region if _low(tokens[i][0]) in r.explained})
+    parts_at: dict[int, set[RowKind]] = {}
+    for r, found in zip(rendered, explains, strict=True):
+        for i in found:
+            parts_at.setdefault(i, set()).add(r.row.kind)
     known = set[int]().union(*explains) if explains else set[int]()
     # A cover inside the search's own quote ("by me" in "the PAY tickets opened by me") would
     # hide a filter the search can't run, so the staff member's attention is only ever theirs
@@ -1087,7 +1134,7 @@ def leftovers(
         clause = text[c_start:c_end]
         theirs = [(c_start + m.start(), c_start + m.end()) for m in FROM_ME.finditer(clause)]
         content: list[tuple[int, int]] = []
-        unread: list[tuple[int, int]] = []
+        unread: list[int] = []
         before = ""
         at = 0
         for i, (raw, start, end) in enumerate(tokens):
@@ -1107,11 +1154,14 @@ def leftovers(
                 continue
             content.append((start, end))
             if i not in known:
-                unread.append((start, end))
+                unread.append(i)
         if not unread:
             continue
-        start = unread[0][0]
-        end = c_end if unread[0] == content[0] else unread[-1][1]
+        _, first, _ = tokens[unread[0]]
+        _, _, last = tokens[unread[-1]]
+        run = (first, last)
+        start = first
+        end = c_end if first == content[0][0] else last
         lead = LEAD_IN.search(text[c_start:start])
         if lead is not None:
             start = c_start + lead.start()
@@ -1120,9 +1170,9 @@ def leftovers(
         if (names or someone) and writes:
             start, end = content[0][0], c_end
         start, end = _trim(text, start, end)
-        spans.append(
-            Span(text[start:end], start, end, _kind_of(text, start, end, said), names, someone)
-        )
+        beside = _beside(clause_of, parts_at, unread[0], unread[-1])
+        kind = _kind_of(text, start, end, run, said, beside)
+        spans.append(Span(text[start:end], start, end, kind, names, someone))
     return spans
 
 

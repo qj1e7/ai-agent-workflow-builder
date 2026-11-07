@@ -101,6 +101,7 @@ LEFT_OUT_DO: Final = (
 )
 LEFT_OUT_WHERE: Final = "I can only put the result in a Jira project."
 LEFT_OUT_SCHEDULE: Final = "I couldn't read this as a schedule."
+LEFT_OUT_PART: Final = "I can't do this part yet."
 
 ANSWER_SYSTEM: Final = (
     "You are the Planner on a platform used by the support staff of CODESparks, a team in "
@@ -299,12 +300,15 @@ def _writes(read: TaskRead, text: str) -> bool:
 def _left_out(span: Span, searching: bool) -> CantRow:
     """The can't row for words nothing explains: the person's own words, with why, and what a
     fix needs. A span in a ticket search that names no other system is a Jira detail the
-    search can't filter by; `TICKET_FIELDS` names it when it knows the field."""
+    search can't filter by; `TICKET_FIELDS` names it when it knows the field. Words that fit
+    no part are listed under what to look for, the contract's catch-all, with a plain note
+    that claims no kind for them."""
     text = plain(span.text, TEXT_LIMIT)
+    kind: RowKind = span.kind or "look_for"
     if vulnerability_phrase(text) is not None:
-        return CantRow(kind=span.kind, text=text, note=VULNERABILITIES_PLANNED, needs="new_system")
+        return CantRow(kind=kind, text=text, note=VULNERABILITIES_PLANNED, needs="new_system")
     match span.kind:
-        case "look_for":
+        case "look_for" | None:
             field = unread_field_in(text)
             if span.names_a_yes:
                 note = LEFT_OUT_YES
@@ -313,7 +317,7 @@ def _left_out(span: Span, searching: bool) -> CantRow:
             elif span.names_a_person:
                 note = LEFT_OUT_DO
             else:
-                note = LEFT_OUT_SEARCH
+                note = LEFT_OUT_SEARCH if span.kind else LEFT_OUT_PART
         case "do":
             # "the change board can catch up on it" opens with a verb but is a statement
             # about someone, not an order: naming it as "I can't change board can..." reads
@@ -324,10 +328,10 @@ def _left_out(span: Span, searching: bool) -> CantRow:
             note = why_not("where", text) or LEFT_OUT_WHERE
         case "schedule":
             note = LEFT_OUT_SCHEDULE
-    need = need_of(span.kind, text)
+    need = need_of(kind, text)
     if need == Need("new_system", None) and span.kind == "look_for" and searching:
         need = Need("new_tool", "Jira")
-    return CantRow(kind=span.kind, text=text, note=note, needs=need.needs, system=need.system)
+    return CantRow(kind=kind, text=text, note=note, needs=need.needs, system=need.system)
 
 
 def _only_fields(cant: list[CantRow]) -> bool:
