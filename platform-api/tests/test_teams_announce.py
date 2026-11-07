@@ -113,6 +113,7 @@ async def test_the_practice_copy_keeps_the_card_a_real_channel_gets(h: Harness):
         digest=await digest_of(h, approval_id),
         steps=(AskedStep("Team approver"),),
         not_deciding=("Alice",),
+        owner_name="Alice",
     )
     assert message.card == approval_card(expected)
 
@@ -296,11 +297,13 @@ async def test_someone_not_on_the_people_list_shows_as_someone_on_this_run(h: Ha
     await work_leg_to_approval(h)
     [message] = await h.teams.messages()
     assert message.card is not None
-    text = " ".join(
-        run["text"] for block in message.card.as_json()["body"] for run in block.get("inlines", [])
-    )
-    assert "Someone on this run can’t decide, because this run is their own work." in text
-    assert "alice" not in text
+    lines = [
+        "".join(run["text"] for run in block.get("inlines", []))
+        for block in message.card.as_json()["body"]
+    ]
+    assert "Someone on this run can’t decide, because this run is their own work." in lines
+    assert "Set up by someone on this run" in lines
+    assert not any("alice" in line for line in lines)
 
 
 def test_shutting_down_closes_the_teams_webhook_client(postgres: PostgresUrls):

@@ -623,6 +623,13 @@ def approval_view_for(story: Story, viewer: UserId) -> ApprovalView:
         steps=[open_step()],
         you_can_decide=not own_work,
         why_not=Refusal.OWN_WORK if own_work else None,
+        use_case_id=USE_CASE_ID,
+        use_case_name=USE_CASE_NAME,
+        owner=ALICE,
+        started_by=ALICE,
+        trigger="person",
+        retried_by=[],
+        found=SUMMARY,
     )
 
 
@@ -697,6 +704,7 @@ APPROVAL_NOTICE = ApprovalNotice(
     digest=DIGEST,
     steps=(AskedStep("Team approver"),),
     not_deciding=("Alice",),
+    owner_name="Alice",
 )
 
 

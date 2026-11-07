@@ -201,6 +201,8 @@ class ApprovalDetail:
     proposal: Proposal
     decisions: tuple[Decision, ...]
     why_not: Refusal | None
+    run: RunRecord
+    found: str
 
 
 @dataclass(frozen=True)
@@ -683,6 +685,7 @@ class Orchestrator:
                     "digest": request.digest,
                     "steps": _asked_steps(request, names),
                     "not_deciding": sorted({names[p] for p in request.parties}),
+                    "owner_name": names[record.spec.owner],
                 },
                 uow.now,
             )
@@ -779,10 +782,21 @@ class Orchestrator:
             if request is None:
                 return None
             proposal = await self._store.load_proposal(uow, request.proposal_id)
-            assert proposal is not None
+            record = await self._store.load_run(uow, request.run_id)
+            assert proposal is not None and record is not None
             decisions = await self._store.load_decisions(uow, approval_id)
+        match record.state:
+            case AwaitingApproval(approval_id=waiting, summary=summary) if waiting == approval_id:
+                found = summary
+            case _:
+                found = ""
         return ApprovalDetail(
-            request, proposal, decisions, approvals.why_not(request, decisions, principal)
+            request,
+            proposal,
+            decisions,
+            approvals.why_not(request, decisions, principal),
+            record,
+            found,
         )
 
     async def decide(
@@ -1005,6 +1019,7 @@ class Orchestrator:
             digest=payload.get("digest", ""),
             steps=tuple(AskedStep(s["label"], tuple(s["who"])) for s in payload.get("steps", ())),
             not_deciding=tuple(payload.get("not_deciding", ())),
+            owner_name=payload.get("owner_name", ""),
         )
         ref = await _through_channel(self._channel.announce(notice))
         async with self._db.transaction("orchestration") as uow:

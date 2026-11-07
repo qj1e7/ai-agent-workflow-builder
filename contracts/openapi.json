@@ -1552,8 +1552,30 @@
             "title": "Digest",
             "type": "string"
           },
+          "found": {
+            "description": "What the agents found, in their own words. It is empty once the request is decided, and it can be empty before. The digest covers only the actions, so a decision never covers this text.",
+            "title": "Found",
+            "type": "string"
+          },
+          "owner": {
+            "description": "Who set the workflow up.",
+            "title": "Owner",
+            "type": "string"
+          },
+          "retried_by": {
+            "description": "Who retried the run, as the approval gate counts them for this request, each named once, in the order of their first retry. The gate refuses owner, started_by and these people as their own work.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Retried By",
+            "type": "array"
+          },
           "run_id": {
             "title": "Run Id",
+            "type": "string"
+          },
+          "started_by": {
+            "title": "Started By",
             "type": "string"
           },
           "steps": {
@@ -1562,6 +1584,17 @@
             },
             "title": "Steps",
             "type": "array"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/Trigger"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "use_case_name": {
+            "title": "Use Case Name",
+            "type": "string"
           },
           "why_not": {
             "anyOf": [
@@ -1585,7 +1618,14 @@
           "actions",
           "steps",
           "you_can_decide",
-          "why_not"
+          "why_not",
+          "use_case_id",
+          "use_case_name",
+          "owner",
+          "started_by",
+          "trigger",
+          "retried_by",
+          "found"
         ],
         "title": "ApprovalView",
         "type": "object"

@@ -179,6 +179,9 @@ def _what(notice: ApprovalNotice) -> list[CardElement]:
     more = len(lines) - LINES_SHOWN
     if more > 0:
         shown.append(_runs(TextRun(text=f"And {more} more. Open the request to see them all.")))
+    owner: list[CardElement] = (
+        [_runs(TextRun(text="Set up by "), _plain(notice.owner_name))] if notice.owner_name else []
+    )
     return [
         _runs(
             _plain(notice.use_case_name, weight="bolder"),
@@ -187,6 +190,7 @@ def _what(notice: ApprovalNotice) -> list[CardElement]:
                 "Nothing is written until an Approver says yes."
             ),
         ),
+        *owner,
         *shown,
     ]
 
@@ -306,6 +310,7 @@ CHECK_NOTICE = ApprovalNotice(
     ),
     steps=(AskedStep("Approver"),),
     not_deciding=("**Alice** [x](https://example.com)",),
+    owner_name="**Alice** [x](https://example.com)",
 )
 """A card full of text that must show as typed, with no bold, no heading and no link but the
 button. It also holds what inert() leaves alone: a bare name, a longer name, a bare email and a

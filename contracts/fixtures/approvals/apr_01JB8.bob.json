@@ -25,5 +25,12 @@
     }
   ],
   "you_can_decide": true,
-  "why_not": null
+  "why_not": null,
+  "use_case_id": "uc_01JB7",
+  "use_case_name": "Software watchlist",
+  "owner": "alice",
+  "started_by": "alice",
+  "trigger": "person",
+  "retried_by": [],
+  "found": "LangGraph has a new release: 1.2.16."
 }
