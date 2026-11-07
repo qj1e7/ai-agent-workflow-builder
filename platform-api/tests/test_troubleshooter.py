@@ -4,6 +4,7 @@ import pytest
 
 from platform_api.monitoring.events import RunFailedData
 from platform_api.monitoring.troubleshooter import ADVICE, answers, explain, explain_failure
+from platform_api.shared import WRITE_STOP_ADVICE
 from platform_api.wire import FailureReason, FailureStage
 
 
@@ -28,7 +29,7 @@ def test_a_refused_write_is_told_to_check_jira_before_any_new_run():
     assert advice.suggested_action == "ask_maintainer"
     assert "refused the write" in advice.likely_cause
     assert "can't prove it made" in advice.likely_cause
-    assert advice.suggestion.index("check Jira") < advice.suggestion.index("new run")
+    assert WRITE_STOP_ADVICE in advice.suggestion
 
 
 def test_no_advice_uses_the_word_key_for_the_label_a_person_looks_for():

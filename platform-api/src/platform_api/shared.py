@@ -30,6 +30,22 @@ STORED_JIRA_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{0,254}-[1-9][0-9]{0,8}\Z"
 """A ticket key in a project of the older shape, such as A-12."""
 
 
+WRITE_STOP_ADVICE = (
+    "Check Jira for a ticket with this run's label. If there is one, the work is done and no "
+    "new run is needed. If there is none, report it to support, and start a new run only once "
+    "the cause is fixed."
+)
+"""What to do after a stop at the write step that retrying cannot fix. A new run does not look
+for this run's ticket, so it can make a duplicate. The run's failure summary, the retry refusal
+and the AI troubleshooter all use this one text (ADR 0035)."""
+BEFORE_WRITE_STOP_ADVICE = "Start a new run."
+"""What to do after a stop before the write step that retrying cannot fix: nothing was written."""
+
+
+def stop_advice(at_write_step: bool) -> str:
+    return WRITE_STOP_ADVICE if at_write_step else BEFORE_WRITE_STOP_ADVICE
+
+
 class Role(Enum):
     OPERATOR = "operator"
     APPROVER = "approver"

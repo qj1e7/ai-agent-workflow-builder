@@ -31,6 +31,7 @@ from platform_api.shared import (
     RunId,
     TaskId,
     UserId,
+    stop_advice,
 )
 from platform_api.wire import ApprovalStepView, StepOutcome, Trigger
 from platform_api.wire import RunState as RunStateName
@@ -167,20 +168,20 @@ def _leg_dispatched(leg: Leg, attempt: int) -> PendingEvent:
 
 
 def _what_next(stage: Stage, failure: Failure) -> str:
-    """Before the write step nothing can have been written, so a new run is safe. From the
-    write step on, a new run can make a second ticket, so the advice is to retry, which
-    resumes the same approved proposal, or to report it."""
+    """Before the write step nothing can have been written, so a new run is safe. At the write
+    step a new run can make a second ticket, so the advice is to look for this run's ticket
+    first. A stop that can be retried says so, because a retry resumes the same approved
+    proposal."""
     if failure.retryable:
         return " You can retry."
-    if stage is Stage.ACTING:
-        return (
-            " Do not start a new run, because it can make a duplicate."
-            " Check Jira for a ticket with this run's label first, then report it to support."
-        )
-    return " Start a new run."
+    return " " + stop_advice(stage is Stage.ACTING)
 
 
-def _run_failed(stage: Stage, failure: Failure) -> PendingEvent:
+def cannot_retry(stage: Stage, failure: Failure) -> str:
+    return f"{failure.reason.value} cannot be retried. {stop_advice(stage is Stage.ACTING)}"
+
+
+def run_failed(stage: Stage, failure: Failure) -> PendingEvent:
     tail = _what_next(stage, failure)
     return PendingEvent(
         PLATFORM,
@@ -295,7 +296,7 @@ class Acting:
         resume = ResumeAct(self.proposal_id, self.approval_id, self.attempt + 1)
         return Moved(
             Failed(self.run_id, Stage.ACTING, failure, resume),
-            (_run_failed(Stage.ACTING, failure),),
+            (run_failed(Stage.ACTING, failure),),
         )
 
 
@@ -361,7 +362,7 @@ class Proposed:
     def fail(self, failure: Failure) -> Moved[Failed]:
         return Moved(
             Failed(self.run_id, Stage.PROPOSED, failure, ResumeWork(self.attempt + 1)),
-            (_run_failed(Stage.PROPOSED, failure),),
+            (run_failed(Stage.PROPOSED, failure),),
         )
 
 
@@ -452,7 +453,7 @@ class Working:
     def fail(self, failure: Failure) -> Moved[Failed]:
         return Moved(
             Failed(self.run_id, Stage.WORKING, failure, ResumeWork(self.attempt + 1)),
-            (_run_failed(Stage.WORKING, failure),),
+            (run_failed(Stage.WORKING, failure),),
         )
 
 
@@ -480,7 +481,7 @@ class Pending:
     def fail(self, failure: Failure) -> Moved[Failed]:
         return Moved(
             Failed(self.run_id, Stage.PENDING, failure, ResumeWork(self.attempt + 1)),
-            (_run_failed(Stage.PENDING, failure),),
+            (run_failed(Stage.PENDING, failure),),
         )
 
 

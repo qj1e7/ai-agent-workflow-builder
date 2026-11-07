@@ -39,7 +39,15 @@ from platform_api.orchestration.runs import (
     created_events,
     referee,
 )
-from platform_api.shared import ApprovalId, Digest, N8nExecutionId, ProposalId, RunId, UserId
+from platform_api.shared import (
+    WRITE_STOP_ADVICE,
+    ApprovalId,
+    Digest,
+    N8nExecutionId,
+    ProposalId,
+    RunId,
+    UserId,
+)
 from platform_api.wire import ApprovalStepView
 
 RUN = RunId("run_1")
@@ -284,12 +292,10 @@ WRITE_REFUSED = Failure(
 UNBOUND = Failure(FailureReason.UNBOUND_INTENT, "The template has no binding", retryable=False)
 
 
-def test_a_stop_at_the_write_step_never_advises_a_new_run():
+def test_a_stop_at_the_write_step_says_to_look_for_the_ticket_first():
     summary = ACTING.fail(WRITE_REFUSED).events[0].summary
-    assert "Start a new run" not in summary
-    assert "Do not start a new run" in summary
-    assert "this run's label" in summary
-    assert "report it to support" in summary
+    assert summary.endswith(" " + WRITE_STOP_ADVICE)
+    assert "Start a new run." not in summary
 
 
 def test_a_stop_before_the_write_step_still_advises_a_new_run():

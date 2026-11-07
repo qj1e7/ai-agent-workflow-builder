@@ -11,7 +11,7 @@ from platform_api.orchestration.jira import JiraPort, JiraUnavailable, JiraWrite
 from platform_api.orchestration.runs import Acting, Failed, StepName
 from platform_api.orchestration.service import Orchestrator, Retried
 from platform_api.orchestration.write_actions import WriteGateway
-from platform_api.shared import N8nExecutionId, RunId
+from platform_api.shared import WRITE_STOP_ADVICE, N8nExecutionId, RunId
 from tests.conftest import PostgresUrls
 from tests.support import ALICE, BOB
 from tests.test_monitoring_http import ALICE as HEADERS
@@ -102,9 +102,7 @@ async def test_a_ticket_the_platform_cannot_prove_it_made_is_not_met_with_start_
     assert "can't prove it made" in advice["likely_cause"]
     assert "failure text" in advice["likely_cause"]
     suggestion = advice["suggestion"]
-    assert "new run" in suggestion
-    assert suggestion.index("check Jira") < suggestion.index("new run")
-    assert "label" in suggestion
+    assert WRITE_STOP_ADVICE in suggestion
 
 
 async def test_a_denied_write_with_a_ticket_in_jira_says_to_check_jira_first(
@@ -120,4 +118,4 @@ async def test_a_denied_write_with_a_ticket_in_jira_says_to_check_jira_first(
 
     assert got["failure"]["reason"] == "SafetyDenied"
     suggestion = got["advice"]["suggestion"]
-    assert suggestion.index("Check Jira") < suggestion.index("new run")
+    assert WRITE_STOP_ADVICE in suggestion
