@@ -101,6 +101,28 @@ class FakeTicker:
         return []
 
 
+class FakeConnections:
+    """Connections that answer from a list, and record what was asked."""
+
+    def __init__(self, checks: list[Any] | None = None) -> None:
+        self.checks = checks or []
+        self.checked: list[str] = []
+        self.due = 0
+
+    async def view(self) -> list[Any]:
+        return self.checks
+
+    async def check_now(self, id: str) -> Any:
+        self.checked.append(id)
+        return next((c for c in self.checks if c.id == id), None)
+
+    async def check_due(self) -> None:
+        self.due += 1
+
+    async def needing_attention(self) -> list[Any]:
+        return []
+
+
 class FakeMockJira:
     async def tickets(self) -> list[Any]:
         return []
@@ -132,6 +154,7 @@ def app_with(
     app.state.watchlist = FakeWatchlist()
     app.state.team_requests = FakeTeamRequests()
     app.state.schedule_ticker = FakeTicker()
+    app.state.connections = FakeConnections()
     return app
 
 

@@ -39,6 +39,7 @@ from tests.support import ALICE, LOCAL_ENV, SPEC
 from tests.test_builder_http import NothingLearned
 from tests.test_builder_lifecycle import ModelConnected
 from tests.test_card_runs import output, ticket
+from tests.test_connections import DOWN, Rig
 from tests.test_orchestrator import Harness, open_harness
 
 pytestmark = pytest.mark.anyio
@@ -65,6 +66,7 @@ EMPTY = {
     "following_up_total": 0,
     "coming_up": None,
     "workflows": 0,
+    "connections": [],
 }
 
 
@@ -79,6 +81,7 @@ class Lab:
     app: FastAPI
     client: httpx.AsyncClient
     people: People
+    rig: Rig
 
     async def call(self, user: str, method: str, path: str, body: Any = None) -> httpx.Response:
         headers = {"X-Dev-User": user}
@@ -105,6 +108,8 @@ async def lab(postgres: PostgresUrls) -> AsyncIterator[Lab]:
         builder = Builder(
             h.db, h.orchestrator, watchlist, "http://localhost:8000", ModelConnected()
         )
+        rig = Rig(h.db)
+        connections = rig.connections
         app = create_app(LOCAL_ENV)
         app.state.builder = builder
         app.state.watchlist = watchlist
@@ -112,10 +117,10 @@ async def lab(postgres: PostgresUrls) -> AsyncIterator[Lab]:
         app.state.people = people
         requests = TeamRequests(h.db, NoTeams(), h.orchestrator, h.log, "http://localhost:8000")
         app.state.team_requests = requests
-        app.state.home = Home(builder, h.orchestrator, people, requests)
+        app.state.home = Home(builder, h.orchestrator, people, requests, connections)
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-            yield Lab(h, app, client, people)
+            yield Lab(h, app, client, people, rig)
 
 
 async def workflow(lab: Lab, owner: str = "alice", name: str = "Watch LangGraph") -> str:
@@ -535,3 +540,35 @@ async def test_a_done_request_leaves_following_up_after_30_days(lab: Lab):
         )
 
     assert (await lab.home("alice"))["following_up"] == []
+
+
+async def test_home_shows_an_operator_the_connections_that_do_not_work_and_starts_no_check(
+    lab: Lab,
+):
+    assert (await lab.home("alice"))["connections"] == []
+    assert [p.calls for p in lab.rig.probes.values()] == [0, 0, 0, 0]
+
+    lab.rig.probes["jira"].reading = DOWN
+    checked = await lab.rig.connections.check_now("jira")
+    await lab.rig.connections.check_now("github")
+    assert checked is not None and checked.checked_at is not None
+
+    (item,) = (await lab.home("alice"))["connections"]
+    assert item == {
+        "id": "jira",
+        "name": "Jira",
+        "state": "not_answering",
+        "problem": "Jira is not answering.",
+        "fix": "Nothing to change yet. Check again in a few minutes.",
+        "checked_at": checked.checked_at.isoformat().replace("+00:00", "Z"),
+        "last_ok_at": None,
+        "expires_at": None,
+    }
+    assert [p.calls for p in lab.rig.probes.values()] == [1, 1, 0, 0]
+
+
+async def test_home_leaves_connections_to_the_operators(lab: Lab):
+    lab.rig.probes["jira"].reading = DOWN
+    await lab.rig.connections.check_now("jira")
+    assert (await lab.home("bob"))["connections"] == []
+    assert len((await lab.home("carol"))["connections"]) == 1

@@ -69,5 +69,27 @@
     "time_zone": "Asia/Singapore",
     "more": 0
   },
-  "workflows": 1
+  "workflows": 1,
+  "connections": [
+    {
+      "id": "jira",
+      "name": "Jira",
+      "state": "not_answering",
+      "problem": "Jira is not answering.",
+      "fix": "Nothing to change yet. Check again in a few minutes.",
+      "checked_at": "2026-11-09T02:10:00Z",
+      "last_ok_at": "2026-11-09T01:00:00Z",
+      "expires_at": null
+    },
+    {
+      "id": "github",
+      "name": "GitHub",
+      "state": "working",
+      "problem": "The key runs out soon.",
+      "fix": "Ask whoever set up GitHub for a new key before this one runs out.",
+      "checked_at": "2026-11-09T01:00:00Z",
+      "last_ok_at": "2026-11-09T01:00:00Z",
+      "expires_at": "2026-11-18T09:00:00Z"
+    }
+  ]
 }

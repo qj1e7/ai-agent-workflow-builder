@@ -350,14 +350,14 @@ The offline answer replaces `STARTERS` and `FALLBACK_WORDS` in `builder/planning
 
 ### 4.3 Connection health (orchestration)
 
-`platform-api/src/platform_api/orchestration/connections.py` **(new)** keeps one row per connection in a new table (`platform-api/src/platform_api/migrations/orchestration/versions/0013_connection_checks.py` **(new)**). Each row has the result, when it was checked, when it last worked, the problem, and the expiry date when one is known.
+`platform-api/src/platform_api/orchestration/connections.py` **(new)** keeps one row per connection and identity in a new table (`platform-api/src/platform_api/migrations/orchestration/versions/0013_connection_checks.py` **(new)**). Each row has the result, when it was checked, when it last worked, the problem, and the expiry date when one is known. The identity is the practice copy, or the adapter with a one-way fingerprint of the address and the key, worked out from the settings in one place (`connections_for` in `wiring.py`). Only the rows of the identity in use are read, so a new address or key starts with no history.
 
 - **Jira.** A light read through the existing adapter (`jira_rest.py`).
 - **GitHub.** The runtime holds the token, so the runtime checks it (`POST /v1/connections/github/check`). It calls GitHub's rate limit endpoint, which does not count against the limit, and reports the token's expiry date when GitHub sends one.
-- **Teams.** The adapter in use (practice or webhook) and the outbox's last announce result.
+- **Teams.** The practice copy always takes a message. A real channel is judged by its own posts: each post the outbox makes through it is kept as its result, and a check never posts. Until the first post it is "Not checked yet".
 - **AI model.** Read from the model settings, unchanged.
 
-Checks run on Check now and on the existing schedule tick (`POST /internal/v1/schedules/tick`), at most once an hour, because Azure has no GitHub token (handover L11) and unauthenticated GitHub allows 60 calls an hour.
+Checks run on Check now and on the existing schedule tick (`POST /internal/v1/schedules/tick`). The tick checks a working connection at most once an hour, and one that does not work on every tick, so a warning ends within two ticks (about 10 minutes) of the fix. Neither spends a limit: GitHub's rate limit endpoint does not count against the 60 calls an hour that unauthenticated GitHub allows (Azure has no GitHub token, handover L11), and Jira's check is one read.
 
 ### 4.4 The troubleshooter's four answers (monitoring)
 
@@ -697,7 +697,7 @@ These use tools already in the repo:
 | The estimate is low | Medium | Medium | The design note already said ADR 0037 was more than its first estimate. Each PR is small enough to re-estimate after N3 and N11. |
 | A builder route reaches into another context | Low | Medium | `uv run lint-imports` in CI. Monitoring computes the four answers from its own log. |
 | The approval panel work changes who may decide | Low | High | N13 adds read-only fields. `decide()` is untouched. `test_approvals.py` and `test_write_actions.py` must pass unchanged. |
-| Connection checks spend GitHub's limit or give false alarms | Medium. Azure has no GitHub token (L11). | Medium | The rate limit endpoint does not count. At most one check an hour. A state changes only after two results agree. |
+| Connection checks spend GitHub's limit or give false alarms | Medium. Azure has no GitHub token (L11). | Medium | The rate limit endpoint does not count. A working connection is checked at most once an hour, and one that does not work on every tick. A state changes only after two results agree. |
 | Key expiry warnings can't be shown | High | Low | Show an expiry only when the system reports one. Never invent one. Section 11 lists what would confirm it. |
 | Report to support has no reader | High until ADR 0038 | Medium. A report nobody reads is a dead end for the person. | N14 waits for ADR 0038. The ADR names the reader before the button ships. |
 | The card's one sentence reads badly when built from the model's rows | Medium | Medium | A fixed join order, unit tests with the golden-set rows, and a review of the sentences in the live lane's screenshots |

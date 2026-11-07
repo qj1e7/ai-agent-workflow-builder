@@ -8,6 +8,8 @@ from platform_api.orchestration.agents import (
     AgentUnavailable,
     Connected,
     ConnectRequest,
+    GitHubProblem,
+    GitHubWorking,
     HttpAgentRuntime,
     ModelAccess,
     ModelTestPassed,
@@ -150,3 +152,23 @@ async def test_understand_rows_of_an_unknown_kind_are_refused():
         UnderstandRequest(task="x", model=ACCESS)
     )
     assert isinstance(result, AgentRejected)
+
+
+async def test_the_github_check_posts_nothing_but_the_agent_key_and_reads_both_answers():
+    seen: list[httpx.Request] = []
+    working = await runtime(
+        200, {"status": "working", "using_token": True, "expires_at": "2026-11-14T09:00:00Z"}, seen
+    ).check_github()
+    assert isinstance(working, GitHubWorking) and working.using_token
+    assert seen[0].url.path == "/v1/connections/github/check"
+    assert seen[0].headers["X-Agent-Key"] == "agent-key-not-real"
+    assert seen[0].content == b""
+
+    problem = await runtime(
+        200, {"status": "problem", "reason": "token_refused", "message": "m"}, []
+    ).check_github()
+    assert isinstance(problem, GitHubProblem) and problem.reason == "token_refused"
+
+    assert isinstance(await runtime(502, {}, []).check_github(), AgentUnavailable)
+    assert isinstance(await runtime(404, {}, []).check_github(), AgentRejected)
+    assert isinstance(await runtime(200, {"status": "odd"}, []).check_github(), AgentRejected)

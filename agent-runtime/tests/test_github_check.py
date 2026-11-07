@@ -93,6 +93,28 @@ def test_github_being_down_is_unreachable_and_recovers(mock: Mock):
     assert connection.check().status == "working"
 
 
+@pytest.mark.parametrize(
+    ("header", "ends"),
+    [
+        ("2026-11-14 09:00:00 UTC", datetime(2026, 11, 14, 9, 0, tzinfo=UTC)),
+        ("2026-11-14 17:00:00 +0800", datetime(2026, 11, 14, 9, 0, tzinfo=UTC)),
+        ("2026-11-14 04:30:00 -0430", datetime(2026, 11, 14, 9, 0, tzinfo=UTC)),
+        ("someday", None),
+    ],
+)
+def test_the_expiry_header_may_carry_an_offset_and_is_read_as_utc(
+    header: str, ends: datetime | None
+):
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, json={}, headers={"github-authentication-token-expiration": header}
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    result = GitHubConnection("http://github.test", token="t", client=client).check()
+    assert result == GitHubWorking(using_token=True, expires_at=ends)
+
+
 def test_no_answer_at_all_is_unreachable():
     def refuse(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("no route", request=request)

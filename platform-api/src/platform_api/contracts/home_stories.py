@@ -8,6 +8,7 @@ from platform_api.builder.home import (
     ChangeLine,
     ComingUp,
     ConfirmationItem,
+    ConnectionItem,
     DraftItem,
     HomeOut,
     StoppedItem,
@@ -89,6 +90,7 @@ def home_for_bob() -> HomeOut:
         following_up_total=0,
         coming_up=COMING_UP,
         workflows=1,
+        connections=[],
     )
 
 
@@ -153,6 +155,28 @@ def home_for_alice(failure: Timeline) -> HomeOut:
         following_up_total=1,
         coming_up=COMING_UP,
         workflows=1,
+        connections=[
+            ConnectionItem(
+                id="jira",
+                name="Jira",
+                state="not_answering",
+                problem="Jira is not answering.",
+                fix="Nothing to change yet. Check again in a few minutes.",
+                checked_at=datetime(2026, 11, 9, 2, 10, tzinfo=UTC),
+                last_ok_at=datetime(2026, 11, 9, 1, 0, tzinfo=UTC),
+                expires_at=None,
+            ),
+            ConnectionItem(
+                id="github",
+                name="GitHub",
+                state="working",
+                problem="The key runs out soon.",
+                fix="Ask whoever set up GitHub for a new key before this one runs out.",
+                checked_at=datetime(2026, 11, 9, 1, 0, tzinfo=UTC),
+                last_ok_at=datetime(2026, 11, 9, 1, 0, tzinfo=UTC),
+                expires_at=datetime(2026, 11, 18, 9, 0, tzinfo=UTC),
+            ),
+        ],
     )
 
 
@@ -169,6 +193,7 @@ DAY_ONE = HomeOut(
     following_up_total=0,
     coming_up=None,
     workflows=0,
+    connections=[],
 )
 
 

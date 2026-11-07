@@ -74,6 +74,8 @@ ROUTES = {
     ("DELETE", "/api/v1/settings/model"),
     ("POST", "/api/v1/settings/model/connect"),
     ("POST", "/api/v1/settings/model/address-decision"),
+    ("GET", "/api/v1/settings/connections"),
+    ("POST", "/api/v1/settings/connections/{connection}/check"),
     ("GET", "/api/v1/settings/history"),
     ("GET", "/api/v1/people"),
     ("POST", "/api/v1/people"),

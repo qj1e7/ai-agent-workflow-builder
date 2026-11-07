@@ -5,7 +5,7 @@ outside system would be, and only the app and the wiring mount it. Its tickets l
 orchestration.mock_jira_tickets, so it needs no database role of its own.
 """
 
-from platform_api.practice_jira.http import router
+from platform_api.practice_jira.http import dev_router, router
 from platform_api.practice_jira.store import (
     PRACTICE_ACCOUNT,
     PRACTICE_EMAIL,
@@ -19,6 +19,7 @@ __all__ = [
     "PRACTICE_EMAIL",
     "PracticeJira",
     "PracticeTicket",
+    "dev_router",
     "practice_token",
     "router",
 ]

@@ -74,7 +74,12 @@ from platform_api.orchestration.people_http import (
     SettingsHistoryOut,
 )
 from platform_api.orchestration.runs import FailureReason, Leg, Stage, StepName
-from platform_api.orchestration.settings_http import ModelSettingsView, SaveOut
+from platform_api.orchestration.settings_http import (
+    ConnectionOut,
+    ConnectionsView,
+    ModelSettingsView,
+    SaveOut,
+)
 from platform_api.orchestration.write_actions import DenyReason
 from platform_api.practice_jira.http import MockJiraTicket, MockJiraTickets
 from platform_api.wire import FailureReason as WireFailureReason
@@ -164,6 +169,9 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "settings/model.active.json": TypeAdapter(ModelSettingsView),
     "settings/model.pending.alice.json": TypeAdapter(ModelSettingsView),
     "settings/model.pending.bob.json": TypeAdapter(ModelSettingsView),
+    "settings/connections.json": TypeAdapter(ConnectionsView),
+    "settings/connection.checked.json": TypeAdapter(ConnectionOut),
+    "settings/connection.not_checked.json": TypeAdapter(ConnectionOut),
     "settings/connect.connected.json": connect_result_adapter,
     "settings/connect.problem.json": connect_result_adapter,
     "settings/save.saved.json": TypeAdapter(SaveOut),

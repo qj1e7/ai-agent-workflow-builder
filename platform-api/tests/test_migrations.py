@@ -500,3 +500,41 @@ async def test_code_from_before_0012_still_makes_a_practice_ticket_after_it(
     ticket = await PracticeJira(db, "token", "http://localhost:8080").get("MOCK-1")
     assert ticket is not None and ticket.assignee is None
     assert ticket.updated_at >= written[0]
+
+
+def test_migration_0013_adds_the_connection_checks_and_a_downgrade_drops_them(
+    postgres: PostgresUrls,
+):
+    insert = (
+        "INSERT INTO orchestration.connection_checks (connection, identity, state, checked_at) "
+        "VALUES (%s, %s, %s, %s)"
+    )
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        conn.execute("DELETE FROM orchestration.connection_checks")
+        conn.execute(insert, ("jira", "practice", "working", NOW))
+        conn.execute(insert, ("jira", "jira:0123456789abcdef", "needs_attention", NOW))
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute(insert, ("email", "practice", "working", NOW))
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute(insert, ("github", "github", "fine", NOW))
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute(insert, ("teams", "practice", "not_checked", NOW))
+        with pytest.raises(psycopg.errors.UniqueViolation):
+            conn.execute(insert, ("jira", "practice", "working", NOW))
+        downgrade("orchestration", postgres.owner, "0012")
+        try:
+            gone = conn.execute("SELECT to_regclass('orchestration.connection_checks')").fetchone()
+            assert gone == (None,)
+        finally:
+            upgrade("orchestration", postgres.owner)
+        kept = conn.execute("SELECT count(*) FROM orchestration.connection_checks").fetchone()
+        assert kept == (0,)
+
+    with psycopg.connect(postgres.contexts.orchestration) as orchestration:
+        orchestration.execute(insert, ("model", "model", "not_set_up", NOW))
+        orchestration.rollback()
+    with (
+        psycopg.connect(postgres.contexts.builder) as builder,
+        pytest.raises(psycopg.errors.InsufficientPrivilege),
+    ):
+        builder.execute("SELECT * FROM orchestration.connection_checks")

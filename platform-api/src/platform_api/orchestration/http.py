@@ -1,4 +1,5 @@
 import hmac
+import logging
 from datetime import datetime
 from typing import Annotated, Any, Literal, TypedDict
 
@@ -16,6 +17,7 @@ from platform_api.orchestration.approvals import (
     Verdict,
     why_not,
 )
+from platform_api.orchestration.connections import Connections
 from platform_api.orchestration.runs import (
     Acting,
     AwaitingApproval,
@@ -271,6 +273,8 @@ class TeamsStubMessages(WireModel):
     messages: list[TeamsStubMessage]
 
 
+log = logging.getLogger(__name__)
+
 router = APIRouter()
 
 StepKey = Annotated[str, Header(alias="X-Step-Key")]
@@ -284,6 +288,11 @@ def current_orchestrator(request: Request) -> Orchestrator:
 def current_ticker(request: Request) -> ScheduleTicker:
     ticker: ScheduleTicker = request.app.state.schedule_ticker
     return ticker
+
+
+def current_connections(request: Request) -> Connections:
+    connections: Connections = request.app.state.connections
+    return connections
 
 
 def current_teams_stub(request: Request) -> TeamsStub:
@@ -598,10 +607,19 @@ async def run_step(
     responses={401: error_response("Bad step key")},
 )
 async def tick_schedules(
-    step_key: StepKey, request: Request, ticker: Annotated[ScheduleTicker, Depends(current_ticker)]
+    step_key: StepKey,
+    request: Request,
+    ticker: Annotated[ScheduleTicker, Depends(current_ticker)],
+    connections: Annotated[Connections, Depends(current_connections)],
 ) -> TickOut:
     check_step_key(request, step_key)
-    return TickOut(started=await ticker.tick())
+    started = await ticker.tick()
+    try:
+        await connections.check_due()
+    except Exception as error:
+        # The runs are already started, so a check that fails must not fail the tick.
+        log.warning("the connection checks did not finish: %s", type(error).__name__)
+    return TickOut(started=started)
 
 
 @router.post(

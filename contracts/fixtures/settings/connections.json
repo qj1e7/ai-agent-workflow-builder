@@ -1,0 +1,53 @@
+{
+  "connections": [
+    {
+      "id": "jira",
+      "name": "Jira",
+      "practice": true,
+      "state": "working",
+      "checked_at": "2026-11-09T01:00:00Z",
+      "last_ok_at": "2026-11-09T01:00:00Z",
+      "problem": null,
+      "key_ends_in": null,
+      "expires_at": null,
+      "fix": null
+    },
+    {
+      "id": "github",
+      "name": "GitHub",
+      "practice": false,
+      "state": "working",
+      "checked_at": "2026-11-09T01:00:00Z",
+      "last_ok_at": "2026-11-09T01:00:00Z",
+      "problem": "The key runs out soon.",
+      "key_ends_in": null,
+      "expires_at": "2026-11-18T09:00:00Z",
+      "fix": "Ask whoever set up GitHub for a new key before this one runs out."
+    },
+    {
+      "id": "teams",
+      "name": "Teams",
+      "practice": false,
+      "state": "not_answering",
+      "checked_at": "2026-11-09T01:00:00Z",
+      "last_ok_at": "2026-11-08T03:00:00Z",
+      "problem": "Teams did not take the last message.",
+      "key_ends_in": null,
+      "expires_at": null,
+      "fix": "Ask whoever set up the Teams address to check that it still works."
+    },
+    {
+      "id": "model",
+      "name": "AI model",
+      "practice": false,
+      "state": "not_set_up",
+      "checked_at": null,
+      "last_ok_at": null,
+      "problem": "No AI model is turned on.",
+      "key_ends_in": null,
+      "expires_at": null,
+      "fix": "Add an AI model under Settings, AI model."
+    }
+  ],
+  "you_can_check": true
+}

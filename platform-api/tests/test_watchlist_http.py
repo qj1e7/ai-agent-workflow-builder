@@ -19,6 +19,7 @@ from platform_api.orchestration import (
 from platform_api.orchestration.people_store import People
 from platform_api.shared import RunId, SoftwareId, UseCaseId
 from tests.conftest import PostgresUrls, truncate_all
+from tests.declared import FakeConnections
 from tests.support import LOCAL_ENV, MovingClock
 
 pytestmark = pytest.mark.anyio
@@ -63,6 +64,7 @@ async def client(db: Database) -> AsyncIterator[httpx.AsyncClient]:
     app.state.people = await people_in(db)
     app.state.watchlist = Watchlist(db, NothingLearned(), ScheduleBook(db))
     app.state.schedule_ticker = FakeTicker()
+    app.state.connections = FakeConnections()
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         yield c

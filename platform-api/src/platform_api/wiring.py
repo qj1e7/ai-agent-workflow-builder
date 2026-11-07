@@ -11,6 +11,25 @@ from platform_api.builder import Builder, Home, TeamRequests, Watchlist
 from platform_api.db import Database
 from platform_api.monitoring import ActivityLog, Copier, CosmosEvents, callback_for
 from platform_api.orchestration.agents import HttpAgentRuntime
+from platform_api.orchestration.connections import (
+    PRACTICE,
+    TEAMS_NOT_CHECKED,
+    Checked,
+    Connections,
+    Entry,
+    GitHubChecker,
+    Identity,
+    JiraChecker,
+    ModelView,
+    Observed,
+    ReadFresh,
+    WatchedChannel,
+    github_probe,
+    identity_of,
+    jira_probe,
+    model_probe,
+    practice_teams,
+)
 from platform_api.orchestration.dispatch import ApprovalChannel, N8nWebhooks
 from platform_api.orchestration.jira import JiraWriteConnector
 from platform_api.orchestration.jira_rest import JiraAuth, JiraRestAdapter
@@ -46,6 +65,7 @@ class Services:
     jira: JiraRestAdapter
     jira_client: httpx.AsyncClient
     model_settings: ModelSettings
+    connections: Connections
     people: People
     copier: Copier | None = None
     cosmos: CosmosEvents | None = None
@@ -54,6 +74,12 @@ class Services:
 
 
 JIRA_TIMEOUT_SECONDS = 10.0
+KEY_HINT_MIN_LENGTH = 8
+"""A token shorter than this shows no last two characters, as they would give too much away."""
+
+
+def key_hint(token: str | None) -> str | None:
+    return token[-2:] if token and len(token) >= KEY_HINT_MIN_LENGTH else None
 
 
 def jira_for(
@@ -95,6 +121,7 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.jira = services.jira
     app.state.practice_jira = services.practice_jira
     app.state.model_settings = services.model_settings
+    app.state.connections = services.connections
     app.state.people = services.people
 
 
@@ -125,6 +152,60 @@ def approval_channel(
     quiet_http_logs()
     webhook = TeamsWorkflowsWebhook(settings.teams_webhook_url, settings.teams_channel, client)
     return webhook, webhook
+
+
+def connections_for(
+    settings: Settings,
+    db: Database,
+    jira: JiraChecker,
+    channel: ApprovalChannel,
+    agents: GitHubChecker,
+    models: ModelView,
+) -> tuple[Connections, ApprovalChannel]:
+    """The connection checks, and the approval channel the outbox posts through. Each
+    connection's identity is worked out here from the settings, and nowhere else: the practice
+    copy, or the adapter with a fingerprint of the address and the key."""
+    jira_settings = settings.jira
+    jira_identity = (
+        PRACTICE
+        if jira_settings.base_url is None
+        else identity_of(
+            "jira",
+            jira_settings.base_url,
+            jira_settings.flavor,
+            jira_settings.email or "",
+            jira_settings.token or "",
+        )
+    )
+    teams = (
+        Entry("teams", "Teams", PRACTICE, Checked(practice_teams))
+        if settings.teams_webhook_url is None
+        else Entry(
+            "teams",
+            "Teams",
+            identity_of(channel.adapter, settings.teams_webhook_url),
+            Observed(TEAMS_NOT_CHECKED),
+        )
+    )
+    connections = Connections(
+        db,
+        [
+            Entry(
+                "jira",
+                "Jira",
+                jira_identity,
+                Checked(jira_probe(jira, "Jira", key_hint(jira_settings.token))),
+            ),
+            # GitHub's address and key are the agent runtime's settings, which platform-api cannot
+            # see, so a change there is found by the next check, not here.
+            Entry("github", "GitHub", Identity("github"), Checked(github_probe(agents))),
+            teams,
+            Entry("model", "AI model", Identity("model"), ReadFresh(model_probe(models))),
+        ],
+    )
+    if teams.practice:
+        return connections, channel
+    return connections, WatchedChannel(channel, teams.identity, connections)
 
 
 async def build(settings: Settings) -> Services:
@@ -168,6 +249,7 @@ async def build(settings: Settings) -> Services:
     agents = HttpAgentRuntime(settings.agent_runtime_url, settings.agent_api_key)
     secret = settings.settings_encryption_key
     model_settings = ModelSettings(db, agents, KeyBox(secret) if secret else None, people=people)
+    connections, channel = connections_for(settings, db, jira, channel, agents, model_settings)
     orchestrator = Orchestrator(
         db,
         activity,
@@ -207,7 +289,7 @@ async def build(settings: Settings) -> Services:
         activity_log=activity,
         orchestrator=orchestrator,
         builder=builder,
-        home=Home(builder, orchestrator, people, team_requests),
+        home=Home(builder, orchestrator, people, team_requests, connections),
         watchlist=watchlist,
         team_requests=team_requests,
         request_channel=request_channel,
@@ -217,6 +299,7 @@ async def build(settings: Settings) -> Services:
         jira_client=jira_client,
         practice_jira=practice_jira,
         model_settings=model_settings,
+        connections=connections,
         people=people,
         copier=copier,
         cosmos=cosmos,

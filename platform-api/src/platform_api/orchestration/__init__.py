@@ -43,6 +43,12 @@ from platform_api.orchestration.cards import (
     write_tools_used,
 )
 from platform_api.orchestration.confirmations import ConfirmationKind, confirmation_summary
+from platform_api.orchestration.connections import (
+    ConnectionCheck,
+    ConnectionId,
+    Connections,
+    ConnectionState,
+)
 from platform_api.orchestration.people_store import ConfirmationRow
 from platform_api.orchestration.person_runs import (
     Ask,
@@ -136,6 +142,10 @@ __all__ = [
     "ChosenAgent",
     "ConfirmationKind",
     "ConfirmationRow",
+    "ConnectionCheck",
+    "ConnectionId",
+    "ConnectionState",
+    "Connections",
     "DraftResult",
     "Drafted",
     "InputKind",

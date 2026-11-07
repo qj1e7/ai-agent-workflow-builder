@@ -1,11 +1,22 @@
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from platform_api.app import create_app
+from platform_api.db import Database
 from platform_api.orchestration.agents import Connected, FoundModel, ModelProblem, ModelTestPassed
+from platform_api.orchestration.connections import (
+    PRACTICE,
+    Checked,
+    ConnectionCheck,
+    Connections,
+    Entry,
+    jira_probe,
+)
 from platform_api.orchestration.model_settings import (
     AddressDecided,
     KeyNeeded,
@@ -19,7 +30,9 @@ from platform_api.orchestration.model_settings import (
     StoredModel,
 )
 from platform_api.shared import UserId
-from tests.declared import ALICE, BOB, app_with, declared_status
+from tests.declared import ALICE, BOB, FakeConnections, app_with, declared_status
+from tests.practice import PracticeKit
+from tests.support import LOCAL_ENV
 
 CAROL = {"X-Dev-User": "carol"}
 AT = datetime(2026, 10, 24, 6, 2, tzinfo=UTC)
@@ -265,3 +278,176 @@ def test_the_waiting_entry_carries_its_digest():
     pending = view_as(BOB)["pending"]
     assert isinstance(pending, dict)
     assert str(pending["digest"]).startswith("sha256:")
+
+
+CONNECTIONS = "/api/v1/settings/connections"
+CHECK_JIRA = "/api/v1/settings/connections/jira/check"
+CHECKED = datetime(2026, 11, 9, 1, 0, tzinfo=UTC)
+
+
+def a_check(id: str, name: str, **changes: object) -> ConnectionCheck:
+    base = ConnectionCheck(
+        id=id,  # type: ignore[arg-type]
+        name=name,
+        practice=False,
+        state="working",
+        checked_at=CHECKED,
+        last_ok_at=CHECKED,
+        problem=None,
+        key_ends_in=None,
+        expires_at=None,
+        fix=None,
+    )
+    return ConnectionCheck(**{**base.__dict__, **changes})
+
+
+def with_connections(*checks: ConnectionCheck) -> tuple[FastAPI, FakeConnections]:
+    app = app_with()
+    fake_connections = FakeConnections(list(checks))
+    app.state.connections = fake_connections
+    return app, fake_connections
+
+
+JIRA_WORKING = a_check("jira", "Jira", practice=True)
+GITHUB_ENDING = a_check(
+    "github",
+    "GitHub",
+    problem="The key runs out soon.",
+    expires_at=datetime(2026, 11, 18, 9, 0, tzinfo=UTC),
+    fix="Ask whoever set up GitHub for a new key before this one runs out.",
+)
+
+CONNECTION_CASES = [
+    pytest.param("GET", CONNECTIONS, {}, 401, id="list-401"),
+    pytest.param("GET", CONNECTIONS, BOB, 200, id="list-approver-200"),
+    pytest.param("GET", CONNECTIONS, ALICE, 200, id="list-operator-200"),
+    pytest.param("POST", CHECK_JIRA, {}, 401, id="check-401"),
+    pytest.param("POST", CHECK_JIRA, BOB, 403, id="check-approver-403"),
+    pytest.param("POST", CHECK_JIRA, ALICE, 200, id="check-operator-200"),
+    pytest.param("POST", CHECK_JIRA.replace("jira", "email"), ALICE, 404, id="check-404"),
+]
+
+
+@pytest.mark.parametrize(("method", "path", "headers", "status"), CONNECTION_CASES)
+def test_the_connection_routes_answer_the_status_and_declare_it(
+    method: str, path: str, headers: dict[str, str], status: int
+):
+    app, _ = with_connections(JIRA_WORKING, GITHUB_ENDING)
+    response = TestClient(app).request(method, path, headers=headers)
+    assert response.status_code == status
+    template = path.replace("/email/", "/{connection}/").replace("/jira/", "/{connection}/")
+    declared_status(app, method, template, response)
+
+
+def test_a_check_that_is_refused_runs_nothing():
+    app, fake_connections = with_connections(JIRA_WORKING)
+    for headers in ({}, BOB):
+        TestClient(app).post(CHECK_JIRA, headers=headers)
+    assert fake_connections.checked == []
+
+
+def test_an_operator_checks_one_connection_and_gets_its_result():
+    app, fake_connections = with_connections(JIRA_WORKING, GITHUB_ENDING)
+    response = TestClient(app).post(CHECK_JIRA, headers=ALICE)
+    assert fake_connections.checked == ["jira"]
+    assert response.json() == {
+        "id": "jira",
+        "name": "Jira",
+        "practice": True,
+        "state": "working",
+        "checked_at": "2026-11-09T01:00:00Z",
+        "last_ok_at": "2026-11-09T01:00:00Z",
+        "problem": None,
+        "key_ends_in": None,
+        "expires_at": None,
+        "fix": None,
+    }
+
+
+def test_the_list_says_who_may_check_and_shows_a_key_that_runs_out():
+    app, _ = with_connections(JIRA_WORKING, GITHUB_ENDING)
+    as_operator = TestClient(app).get(CONNECTIONS, headers=ALICE).json()
+    as_approver = TestClient(app).get(CONNECTIONS, headers=BOB).json()
+    assert (as_operator["you_can_check"], as_approver["you_can_check"]) == (True, False)
+    assert [c["id"] for c in as_operator["connections"]] == ["jira", "github"]
+    assert as_operator["connections"][1]["expires_at"] == "2026-11-18T09:00:00Z"
+
+
+def test_a_tick_also_checks_the_connections_that_are_due_and_still_answers_if_that_fails():
+    app, fake_connections = with_connections()
+    headers = {"X-Step-Key": LOCAL_ENV["STEP_KEY"]}
+    assert TestClient(app).post("/internal/v1/schedules/tick", headers=headers).status_code == 200
+    assert fake_connections.due == 1
+
+    async def broken() -> None:
+        raise RuntimeError("the database went away")
+
+    fake_connections.check_due = broken  # type: ignore[method-assign]
+    ticked = TestClient(app).post("/internal/v1/schedules/tick", headers=headers)
+    assert (ticked.status_code, ticked.json()) == (200, {"started": []})
+
+
+@pytest.fixture
+async def practice(db: Database):
+    kit = PracticeKit(db)
+    app = create_app(LOCAL_ENV)
+    app.state.practice_jira = kit.store
+    app.state.connections = Connections(
+        db, [Entry("jira", "Jira", PRACTICE, Checked(jira_probe(kit.jira, "Jira", None)))]
+    )
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client, kit
+
+
+TOGGLE = "/api/v1/dev/practice-jira/answering"
+
+
+@pytest.mark.anyio
+async def test_the_dev_toggle_makes_jira_not_working_right_now_and_then_working_again(practice):
+    client, kit = practice
+
+    first = (await client.get(CONNECTIONS, headers=ALICE)).json()
+    (jira,) = first["connections"]
+    assert (jira["state"], jira["practice"], jira["problem"]) == ("working", True, None)
+
+    off = await client.post(TOGGLE, headers=ALICE, json={"answering": False})
+    assert (off.status_code, off.json()) == (200, {"answering": False})
+    down = (await client.post(CHECK_JIRA, headers=ALICE)).json()
+    assert down["state"] == "not_answering"
+    assert down["problem"] == "Jira is not answering."
+    assert down["fix"] == "Nothing to change yet. Check again in a few minutes."
+    assert down["last_ok_at"] == jira["last_ok_at"]
+    again = (await client.get(CONNECTIONS, headers=BOB)).json()["connections"][0]
+    assert again["state"] == "not_answering"
+
+    on = await client.post(TOGGLE, headers=ALICE, json={"answering": True})
+    assert (on.status_code, on.json()) == (200, {"answering": True})
+    back = (await client.post(CHECK_JIRA, headers=ALICE)).json()
+    assert (back["state"], back["problem"], back["fix"]) == ("working", None, None)
+    assert back["last_ok_at"] >= down["last_ok_at"]
+    assert kit.store.answering is True
+
+
+@pytest.mark.anyio
+async def test_only_an_operator_may_use_the_dev_toggle(practice):
+    client, kit = practice
+    body = {"answering": False}
+    assert (await client.post(TOGGLE, json=body)).status_code == 401
+    assert (await client.post(TOGGLE, headers=BOB, json=body)).status_code == 403
+    assert kit.store.answering is True
+
+
+def test_the_dev_toggle_is_there_only_while_the_practice_jira_is_the_jira_in_use():
+    real = {
+        **LOCAL_ENV,
+        "JIRA_BASE_URL": "https://jira.example.com",
+        "JIRA_API_TOKEN": "pat-123",
+    }
+    assert (
+        TestClient(create_app(real))
+        .post(TOGGLE, headers=ALICE, json={"answering": False})
+        .status_code
+        == 404
+    )
+    assert TOGGLE not in create_app(LOCAL_ENV).openapi()["paths"]

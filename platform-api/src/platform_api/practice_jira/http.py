@@ -34,7 +34,7 @@ from platform_api.shared import (
     Role,
     TicketStatus,
 )
-from platform_api.wire import WireModel, error_response
+from platform_api.wire import WireIn, WireModel, error_response
 
 router = APIRouter()
 API = "/practice-jira/rest/api/{version}"
@@ -77,6 +77,8 @@ def _gate(request: Request, practice: PracticeJira, version: str) -> JSONRespons
         response = _errors(failure.status, ["The practice Jira was told to fail this call."])
         response.headers.update(headers)
         return response
+    if not practice.answering:
+        return _errors(503, ["The practice Jira is switched off."])
     if version not in {"2", "3"}:
         return _errors(404, ["No such API version."])
     if not _signed_in(practice, request.headers.get("authorization", "")):
@@ -422,3 +424,31 @@ async def mark_mock_jira_ticket_done(
     if ticket is None:
         raise HTTPException(status_code=404, detail="No such ticket")
     return mock_jira_ticket(ticket)
+
+
+class AnsweringIn(WireIn):
+    answering: bool
+
+
+class Answering(WireModel):
+    answering: bool
+
+
+dev_router = APIRouter(tags=["dev"])
+
+
+@dev_router.post(
+    "/api/v1/dev/practice-jira/answering",
+    description=(
+        "Dev sign-in only. Turns the practice Jira's answers off and on, so a browser lane or a "
+        "test can show a connection that is not working right now, and its recovery. Only an "
+        "Operator may use it."
+    ),
+    responses=OPERATORS_ONLY,
+    include_in_schema=False,
+)
+async def set_practice_jira_answering(
+    body: AnsweringIn, principal: Annotated[Principal, Depends(_operator)], practice: Practice
+) -> Answering:
+    practice.answering = body.answering
+    return Answering(answering=practice.answering)
