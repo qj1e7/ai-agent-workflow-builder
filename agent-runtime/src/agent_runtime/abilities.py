@@ -1331,6 +1331,18 @@ def unread_field_in(text: str) -> TicketField | None:
     return next((f for at in range(len(row)) if (f := _field_at(row, at)) is not None), None)
 
 
+def names_only_a_place(said: str, keys: frozenset[str]) -> bool:
+    """Whether the words name only a Jira place the task's where part names, and the tickets in
+    it, as "MOCK", "in MOCK" or "MOCK tickets": the where of a task, which the model now and
+    then tags as a field. A value that looks like a key, as P0, is not in `keys`."""
+    row = [w for w in _tokens(said) if not w.mark]
+    return (
+        bool(row)
+        and any(w.raw in keys for w in row)
+        and all(w.raw in keys or w.low in TICKETS | PREPS | DETERMINERS | JIRA_ANCHORS for w in row)
+    )
+
+
 def names_a_ticket_field(text: str) -> bool:
     """Whether the text names a field of a ticket, read or set, that a new Jira tool could give:
     by one of its words, or by the plain name the hold's own note uses."""
@@ -1608,6 +1620,7 @@ SKIPS_A_YES: Final = re.compile(
       | \bautomatically\s+approv(?:e|es|ing)\b
       | \bapprov\w*\s+(?:my\s+own|our\s+own)\b
       | \bmark(?:s|ed|ing)?\s+{_IT}\s+(?:as\s+)?approved\b
+      | \b(?:tick|check|mark)(?:s|ed|ing)?\s+(?:the\s+|my\s+|an?\s+)?{_A_YES}\s+box\b
       | \b(?:i'?ll|i\s+will|i\s+can|i\s+shall|i'?d|let\s+me|i)\s+approve
             (?:\s+{_IT})?(?:\s+(?:myself|ourselves))?\b
       | \bi(?:'ll|\s+will|\s+can|\s+could|\s+should)?\s+(?:be|am)\s+the\s+approver\b

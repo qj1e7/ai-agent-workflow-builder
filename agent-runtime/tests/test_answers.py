@@ -1500,3 +1500,27 @@ def test_a_status_the_search_filters_by_is_read(said: str, value: str):
     )
     answer = answer_of(read(*rows), f"Every Monday, list {said} tickets in MOCK")
     assert isinstance(answer, SetupCardAnswer)
+
+
+@pytest.mark.parametrize("said", ["MOCK", "in MOCK", "MOCK tickets", "tickets in MOCK"])
+def test_a_field_use_that_names_only_the_place_is_not_held(said: str):
+    """Round 4: the model now and then tags the Jira project as an "other" field. The project
+    is the where, so the part stays a plain card. A value that looks like a key, as P0, is
+    not named by the where part, so it is still held (the P0 case above)."""
+    rows = (
+        row("schedule", "Every Monday"),
+        with_fields("look_for", "Bug tickets in MOCK", ("issue_type", "bug"), ("other", said)),
+        row("do", "Create one ticket that lists them"),
+        row("where", "Jira project MOCK"),
+    )
+    answer = answer_of(
+        read(*rows), "Every Monday, list bug tickets in MOCK and create one ticket that lists them"
+    )
+    assert isinstance(answer, SetupCardAnswer)
+
+
+def test_ticking_the_approval_box_is_refused_by_the_word_rule():
+    answer = answer_of(
+        read(*FOLLOW_UP_ROWS), "Create the ticket in MOCK and tick the approval box for me"
+    )
+    assert isinstance(answer, RefusedAnswer) and answer.said == "tick the approval box"
