@@ -149,7 +149,10 @@ CREATES = re.compile(
     r"\b(?:create|make|raise|file|open|propose|put)\b[^,;.]*?\b(?:ticket|tickets|one)\b",
     re.IGNORECASE,
 )
-SAYS = ((re.compile(r"\bcount\b", re.IGNORECASE), "count"), (re.compile(r"\bsum(?:mar\w*)?\b", re.IGNORECASE), "summary"))
+SAYS = (
+    (re.compile(r"\bcount\b", re.IGNORECASE), "count"),
+    (re.compile(r"\bsum(?:mar\w*)?\b", re.IGNORECASE), "summary"),
+)
 OWNERS = re.compile(r"\b(?:owners?|assignees?|who owns)\b", re.IGNORECASE)
 PART_KINDS = {"When": "schedule", "Looks for": "look_for", "Does": "do", "Where it goes": "where"}
 mode = "ok"
@@ -489,7 +492,12 @@ def structures(task: str) -> dict[str, Any]:
     look, act = (found.group(1), found.group(2)) if found else (None, words or None)
     if look is None and act is not None and (of := FOUND.search(act)) is not None:
         look = of.group(1)
-    if look is None and act is not None and TICKET_WORDS.search(act) and CREATES.search(act) is None:
+    if (
+        look is None
+        and act is not None
+        and TICKET_WORDS.search(act)
+        and CREATES.search(act) is None
+    ):
         look, act = act, None
     project = IN_PROJECT.search(task)
     return {

@@ -5,7 +5,6 @@ from typing import Any
 
 import model_server as server
 
-
 SYSTEM = (
     "Agent card: Version checker\nInputs for this run:\n"
     "- GitHub repository: langchain-ai/langgraph\n- Jira project: MOCK\n"
