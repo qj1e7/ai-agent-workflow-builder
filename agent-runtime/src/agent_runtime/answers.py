@@ -23,6 +23,7 @@ from agent_runtime.abilities import (
     release_word_in,
     skip_of_a_yes,
     software_name,
+    unread_field_in,
     unread_field_of,
     vulnerability_phrase,
     why_not,
@@ -183,7 +184,9 @@ ANSWER_SYSTEM: Final = (
     "on approvals, approvers, reviews or tickets, including tickets that skipped or lacked an "
     "approval, skips nobody. So does one that only says the task runs by itself, "
     "automatically, hands-free, on autopilot, set and forget, or on a schedule, naming no "
-    "person.\n"
+    'person. "Ask the team" is a button on the platform that asks the team for a new tool, so '
+    "a request with no change in it, such as \"don't ask the team, just tell me what you can "
+    'do", skips nobody.\n'
     '- only_me: the words name only the staff member themselves, by "me", "my" or "I", and no '
     "other person: they do not want to be asked, told, pinged, reminded, bothered, waited for, "
     "checked with or kept in the loop, or say the task runs without them or needs no input "
@@ -397,12 +400,15 @@ def _held_row(answer: AnswerRow, request: str, held: list[FieldUse]) -> Understo
     model read as filtering by or setting a field the agents can't read is can't do, whatever
     state the model gave it, with the note code writes for that field, so the same field reads
     the same everywhere. Its text is the person's words for the field when the model left it
-    empty."""
+    empty. An "other" with no words quoted takes the field the word net reads in the text, so
+    "critical" is held as priority, not as "that detail"."""
     row = _with_guess_marked(answer, request)
     unread = _unread(answer, held)
     if not unread or row.kind not in ("look_for", "do") or row.state == "missing":
         return row
     field = FIELD_BY_NAME[unread[0].field]
+    if field.name == "other" and not unread[0].said:
+        field = unread_field_in(row.text) or field
     text = row.text or plain(", ".join(use.said for use in unread if use.said), TEXT_LIMIT)
     note = why_not_the_field(row.kind, text, field)
     return UnderstoodRow(kind=row.kind, text=text, state="cant_do", note=note)

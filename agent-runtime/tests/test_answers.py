@@ -1546,3 +1546,15 @@ def test_an_only_me_answer_with_no_quote_is_not_refused():
     task = "Every Monday, list open bug tickets in MOCK and create one ticket, set and forget"
     answer = answer_of(read(*FOLLOW_UP_ROWS, skips_the_yes=SkipRead(whose="only_me")), task)
     assert isinstance(answer, SetupCardAnswer)
+
+
+def test_an_other_field_with_no_words_takes_the_field_the_word_net_reads():
+    rows = (
+        row("schedule", "Every Monday"),
+        with_fields("look_for", "Critical bugs in MOCK", ("other", "")),
+        row("do", "List them in one new ticket"),
+        row("where", "Jira project MOCK"),
+    )
+    answer = answer_of(read(*rows), "Every Monday, list critical bugs in MOCK")
+    assert isinstance(answer, PartAnswer)
+    assert answer.cant[0].note.startswith("I can't tell a ticket's priority yet.")
