@@ -271,7 +271,7 @@ test.describe('with the AI model on', () => {
   })
 
   test('inconsistency I6: a new agent is saved to the library only when the workflow is turned on', async ({ browser, backend }, info) => {
-    const owner = 'carol'
+    const owner = 'alice'
     const cards = async () => (await backend.get<{ cards: { name: string; owner: string }[] }>(owner, '/api/v1/agent-cards')).cards
     const context = await devContext(browser, owner)
     const page = await context.newPage()

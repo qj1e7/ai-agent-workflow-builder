@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /private/tmp/claude-501/-Users-qianjie-Documents-Courses-NUS-ISS-FYP-ai-agent-workflow-builder/28f31362-f9ab-44a0-bce7-dc46ee37f099/scratchpad/wt-n11fix/portal
+
+
+ Test Files  64 passed (64)
+      Tests  1110 passed (1110)
+   Start at  22:56:08
+   Duration  1.89s (transform 3.94s, setup 0ms, import 9.11s, tests 2.08s, environment 3ms)
+
