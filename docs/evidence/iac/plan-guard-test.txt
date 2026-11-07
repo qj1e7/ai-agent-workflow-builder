@@ -46,3 +46,13 @@ Apply complete! Resources: 0 added, 1 changed, 0 destroyed.
 exit 0
 -- run summary lines written:
 5
+
+== 7 Nov 2026: a refusal names what it would remove (addresses only)
+A deploy stopped with "replace 1" and no way to tell which resource, so a refusal now also lists
+the addresses it would destroy or replace. Sample plan: one replace, one update, one create, one
+delete, with a value "NOPE" in a replaced resource's after.
+refuse        -> exit 1 | counts, the stop line, then "  replace: module.job["db-init"].time_sleep.rbac_propagation" and "  destroy: azurerm_key_vault.this"; "NOPE" is not printed
+allow         -> exit 0 | counts and "allow_destroy is on, so the deploy goes ahead." (no addresses)
+update only   -> exit 0 | counts only
+empty input   -> exit 1 | plan-guard: no plan on stdin
+not a plan    -> exit 5 | jq: error ... plan-guard: stdin is not a Terraform plan in JSON
