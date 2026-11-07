@@ -93,6 +93,29 @@ test('a yes from the Teams card’s link takes the item off Home at once, withou
   await context.close()
 })
 
+test('the count on the tab, on Home and on Workflows is the same number, and it is on Home for an Approver', async ({ browser, backend }) => {
+  const { approvalId } = await backend.waitingRun('alice')
+  const context = await devContext(browser, 'bob')
+  const page = await context.newPage()
+  const menu = page.getByRole('navigation', { name: 'Main' }).filter({ visible: true })
+  const heading = page.getByRole('main').getByRole('heading', { level: 2, name: /^Needs you/ })
+  await page.goto('/')
+  await expect(itemOf(page, approvalId)).toBeVisible()
+  const onHome = Number((await heading.innerText()).replace(/\D/g, ''))
+  expect(onHome).toBeGreaterThan(0)
+  await expect(menu.getByRole('link', { name: new RegExp(`^Home, ${onHome} need you$`) })).toBeVisible()
+  await expect(menu.getByRole('link', { name: 'Workflows', exact: true }), 'an Approver has the count on Home only').toBeVisible()
+  await expect(menu.getByRole('link', { name: 'Agent library' }), 'an Approver has no Agent library').toHaveCount(0)
+
+  await menu.getByRole('link', { name: 'Workflows' }).click()
+  await expect(page).toHaveURL(/\/workflows$/)
+  await expect(heading).toContainText(String(onHome))
+  await expect(menu.getByRole('link', { name: new RegExp(`^Home, ${onHome} need you$`) })).toBeVisible()
+  await menu.getByRole('link', { name: 'Home' }).click()
+  await expect(heading).toContainText(String(onHome))
+  await context.close()
+})
+
 for (const phone of [false, true]) {
   test(`Home passes WCAG 2.2 AA and does not scroll sideways at ${phone ? '390' : '1440'} px`, async ({ browser, backend }) => {
     await backend.waitingRun('alice')

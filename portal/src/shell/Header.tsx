@@ -27,7 +27,7 @@ export function Header({ person }: { person: Me | null }) {
             {PRODUCT.slice(PRODUCT_PREFIX.length)}
           </span>
         </Link>
-        <Menu operator={isOperator(person)} />
+        <Menu operator={isOperator(person)} onList={person !== null && !notOnTheList(person)} />
         <div className={styles['tools']}>
           {/* Its badge polls runs and Teams messages, which the platform refuses to someone not on the People list. */}
           {notOnTheList(person) ? null : <TeamsButton person={person} />}

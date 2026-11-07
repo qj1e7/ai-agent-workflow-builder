@@ -2,12 +2,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
+import aliceHome from '../../../contracts/fixtures/builder/home.alice.json'
+import bobHome from '../../../contracts/fixtures/builder/home.bob.json'
 import { App } from '../App'
 import { ApiError } from '../api/client'
 import { ApiProvider } from '../api/context'
 import { TicketLinksProvider } from '../api/ticketLinks'
 import { createDevSession, SIGNED_IN, type Session } from '../api/session'
-import type { Me } from '../api/types'
+import type { HomeOut, Me } from '../api/types'
+import { needsTotal } from '../screens/home/home'
 import { focusMovedOutside } from './PersonChip'
 import { TEAMS_TITLE } from './TeamsPanel'
 import { TEST_NOTE } from './TestControls'
@@ -36,15 +39,17 @@ interface Setup {
   readonly meError?: Error
   readonly oidc?: boolean
   readonly browseUrl?: string | null
+  readonly home?: HomeOut
 }
 
-function render({ path = '/', me = ALICE, meError, oidc = false, browseUrl = null }: Setup = {}): string {
+function render({ path = '/', me = ALICE, meError, oidc = false, browseUrl = null, home }: Setup = {}): string {
   const session = oidc ? oidcSession : createDevSession(null)
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   const key = ['me', session.cacheScope()]
   if (meError === undefined) queryClient.setQueryData(key, me)
   else queryClient.getQueryCache().build(queryClient, { queryKey: key }).setState({ status: 'error', error: meError, fetchStatus: 'idle' })
   queryClient.setQueryData(['dev-users'], [ALICE, BOB])
+  if (home) queryClient.setQueryData(['home', session.cacheScope()], home)
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={session} platformFetch={fetch} origin={ORIGIN}>
@@ -84,8 +89,9 @@ describe('the menu', () => {
 
   it('has no New workflow for an Approver who is not an Operator, on the header or the tab bar', () => {
     const html = render({ me: BOB })
-    expect(menuLabels(html)).toEqual(['Home', 'Workflows', 'Software watchlist', 'Agent library'])
+    expect(menuLabels(html)).toEqual(['Home', 'Workflows', 'Software watchlist'])
     expect(html).not.toContain('href="/new"')
+    expect(html).not.toContain('href="/agents"')
   })
 
   it('marks New workflow current at /new and on its done page, which load on demand', () => {
@@ -122,6 +128,44 @@ describe('the menu', () => {
 
   it('marks nothing current for a path the menu does not name', () => {
     expect(currentLinks(render({ path: '/nowhere' }))).toEqual([])
+  })
+})
+
+const ALICE_HOME = aliceHome as HomeOut
+const BOB_HOME = bobHome as HomeOut
+const plain = (html: string) => html.replace(/<[^>]*>/g, '')
+const linkNames = (html: string) =>
+  [...html.matchAll(/<nav\b[^>]*aria-label="Main"[^>]*>([\s\S]*?)<\/nav>/g)].flatMap((nav) =>
+    [...(nav[1] ?? '').matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g)].map((match) => /aria-label="([^"]*)"/.exec(match[1] ?? '')?.[1] ?? plain(match[2] ?? '')),
+  )
+
+describe('the count of what needs you', () => {
+  it('shows needsTotal on Workflows for an Operator, in the link’s name, on the header and the tab bar', () => {
+    const total = needsTotal(ALICE_HOME)
+    expect(total).toBeGreaterThan(0)
+    const html = render({ home: ALICE_HOME })
+    expect(linkNames(html).filter((name) => name.startsWith('Workflows'))).toEqual([`Workflows, ${total} need you`, `Workflows, ${total} need you`])
+    expect(linkNames(html).filter((name) => name.startsWith('Home'))).toEqual(['Home', 'Home'])
+  })
+
+  it('shows it on Home instead for an Approver who is not an Operator', () => {
+    const total = needsTotal(BOB_HOME)
+    const html = render({ me: BOB, home: BOB_HOME })
+    expect(linkNames(html).filter((name) => name.includes('need you'))).toEqual([`Home, ${total} need you`, `Home, ${total} need you`])
+    expect(linkNames(html)).toContain('Workflows')
+  })
+
+  it('starts the link’s name with its visible label, and shows the number once', () => {
+    const html = render({ home: ALICE_HOME })
+    const total = needsTotal(ALICE_HOME)
+    expect(html.match(new RegExp(`<a\\b[^>]*aria-label="Workflows, ${total} need you"`, 'g'))).toHaveLength(2)
+    expect(plain(html.match(/<nav\b[^>]*aria-label="Main"[\s\S]*?<\/nav>/)?.[0] ?? '')).toContain(`Workflows${total}`)
+  })
+
+  it('shows no count when nothing needs the person, or before Home has loaded', () => {
+    const quiet: HomeOut = { ...ALICE_HOME, approvals: [], approvals_total: 0, confirmations: [], stopped: [], stopped_total: 0 }
+    expect(linkNames(render({ home: quiet })).some((name) => name.includes('need you'))).toBe(false)
+    expect(linkNames(render()).some((name) => name.includes('need you'))).toBe(false)
   })
 })
 
@@ -262,7 +306,7 @@ describe('when the platform is down', () => {
     expect(text(mainOf(html))).toContain('Check your connection, or try again in a moment.')
     expect(mainOf(html)).toMatch(/<button\b[^>]*>Try again<\/button>/)
     expect(text(headerOf(html))).toContain('Workflow Builder')
-    expect(menuLabels(html)).toEqual(['Home', 'Workflows', 'Software watchlist', 'Agent library'])
+    expect(menuLabels(html)).toEqual(['Home', 'Workflows', 'Software watchlist'])
     expect(headerOf(html)).not.toContain('Operator')
   })
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useLocation } from 'react-router'
-import { isOperator } from './api/me'
+import { isOperator, notOnTheList } from './api/me'
 import { useMe } from './api/queries'
 import { useNow } from './api/ticking'
 import { AskToBeAdded } from './shell/AskToBeAdded'
@@ -73,7 +73,7 @@ export function App({ now = WALL_CLOCK }: { now?: () => Date }) {
           <ErrorBoundary resetKey={pathname}>{content}</ErrorBoundary>
         </div>
       </main>
-      <TabBar operator={isOperator(me.data)} />
+      <TabBar operator={isOperator(me.data)} onList={me.data !== undefined && !notOnTheList(me.data)} />
       <TestControls />
     </>
   )

@@ -85,6 +85,7 @@ const TEXT_ON: readonly (readonly [text: string, background: string])[] = [
   ['mock-dim', 'mock-bg'],
   ['mock-on-ink', 'mock-on'],
   ['on-ink', 'primary'],
+  ['on-amber', 'amber'],
   ['ink', 'surface'],
   ['ink', 'hair'],
   ['muted', 'bg'],

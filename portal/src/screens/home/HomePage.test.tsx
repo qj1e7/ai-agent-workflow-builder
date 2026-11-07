@@ -203,3 +203,23 @@ describe('Home when a refresh fails', () => {
     expect(text(mainOf(render(BOB, BOB_HOME)))).not.toContain('Could not refresh')
   })
 })
+
+describe('Home for an Operator with more than three things waiting', () => {
+  const approvals = Array.from({ length: 5 }, (_, n): ApprovalItem => ({ ...(BOB_HOME.approvals[0] as ApprovalItem), run_id: `run_${n}`, approval_id: `apr_${n}`, started_at: `2026-11-03T01:0${n}:00Z` }))
+  const busy: HomeOut = { ...ALICE_HOME, approvals, approvals_total: 5 }
+  const total = 5 + ALICE_HOME.confirmations.length + ALICE_HOME.stopped_total
+
+  it('shows the three most urgent, stopped runs first, and links to the rest on Workflows', () => {
+    const html = mainOf(render(ALICE, busy))
+    const keys = [...html.matchAll(/data-home-item="([^"]+)"/g)].map((match) => match[1])
+    expect(keys).toEqual(['stopped:run_01JB9', 'approval:apr_4', 'approval:apr_3'])
+    expect(text(html)).toContain(`Needs you ${total}`)
+    expect(linksIn(html)).toContainEqual(['See all on Workflows', '/workflows'])
+  })
+
+  it('shows an Approver who is not an Operator the whole list instead, with no link', () => {
+    const html = mainOf(render(BOB, { ...BOB_HOME, approvals, approvals_total: 5 }))
+    expect([...html.matchAll(/data-home-item="/g)]).toHaveLength(5 + BOB_HOME.confirmations.length)
+    expect(text(html)).not.toContain('on Workflows')
+  })
+})

@@ -4,7 +4,7 @@ import bobHome from '../../../../contracts/fixtures/builder/home.bob.json'
 import dayOne from '../../../../contracts/fixtures/builder/home.day-one.json'
 import type { ApprovalItem, HomeOut, StoppedItem, WaitingItem } from '../../api/types'
 import { ApiError } from '../../api/client'
-import { actionsOf, comingUpOf, draftWords, leadLine, moreWords, NEEDS_SHOWN, needsOf, retryProblem, waitingWords, wordsOf, type Need } from './home'
+import { actionsOf, comingUpOf, draftWords, HOME_NEEDS_SHOWN, leadLine, moreWords, needsOf, needsTotal, retryProblem, waitingWords, wordsOf, type Need } from './home'
 
 const BOB = bobHome as HomeOut
 const ALICE = aliceHome as HomeOut
@@ -26,9 +26,9 @@ function stop(runId: string, stoppedAt: string): StoppedItem {
 const keys = (needs: readonly Need[]) => needs.map((need) => need.key)
 
 describe('the order of what needs you', () => {
-  it('puts approvals first, then confirmations, then stopped runs', () => {
+  it('puts stopped runs first, then approvals, then confirmations', () => {
     const home: HomeOut = { ...BOB, stopped: [STOP], stopped_total: 1 }
-    expect(needsOf(home).shown.map((need) => need.kind)).toEqual(['approval', 'confirmation', 'confirmation', 'stopped'])
+    expect(needsOf(home).shown.map((need) => need.kind)).toEqual(['stopped', 'approval', 'confirmation', 'confirmation'])
   })
 
   it('shows the newest first within each kind, whatever order they came in', () => {
@@ -39,7 +39,7 @@ describe('the order of what needs you', () => {
       stopped: [stop('run_s1', '2026-11-01T01:00:00Z'), stop('run_s2', '2026-11-02T01:00:00Z')],
       stopped_total: 2,
     }
-    expect(keys(needsOf(home).shown)).toEqual(['approval:apr_run_new', 'approval:apr_run_mid', 'approval:apr_run_old', 'stopped:run_s2', 'stopped:run_s1'])
+    expect(keys(needsOf(home).shown)).toEqual(['stopped:run_s2', 'stopped:run_s1', 'approval:apr_run_new', 'approval:apr_run_mid', 'approval:apr_run_old'])
   })
 
   it('keeps the same order for the same moment, so a refresh never swaps two rows', () => {
@@ -49,14 +49,24 @@ describe('the order of what needs you', () => {
     expect(keys(once.shown)).toEqual(keys(again.shown))
   })
 
-  it(`shows at most ${NEEDS_SHOWN} and counts the rest from the platform's totals`, () => {
+  it('shows everything the platform returned, and counts what it left out from its totals', () => {
     const approvals = Array.from({ length: 10 }, (_, n) => ask(`run_${String(n).padStart(2, '0')}`, `2026-11-03T01:${String(n).padStart(2, '0')}:00Z`))
     const home: HomeOut = { ...BOB, approvals, approvals_total: 50, stopped: [STOP], stopped_total: 1 }
     const needs = needsOf(home)
-    expect(needs.shown).toHaveLength(NEEDS_SHOWN)
-    expect(needs.shown[0]?.key).toBe('approval:apr_run_09')
+    expect(needs.shown).toHaveLength(10 + 1 + BOB.confirmations.length)
+    expect(needs.shown[0]?.key).toBe('stopped:run_01JB9')
     expect(needs.total).toBe(53)
-    expect(needs.more).toEqual({ approvals: 40, others: 3 })
+    expect(needs.more).toEqual({ approvals: 40, others: 0 })
+  })
+
+  it(`shows ${HOME_NEEDS_SHOWN} on Home with the most urgent first, and counts the same total`, () => {
+    const approvals = Array.from({ length: 5 }, (_, n) => ask(`run_${n}`, `2026-11-03T01:0${n}:00Z`))
+    const home: HomeOut = { ...BOB, approvals, approvals_total: 5, stopped: [STOP], stopped_total: 1 }
+    const onHome = needsOf(home, HOME_NEEDS_SHOWN)
+    expect(HOME_NEEDS_SHOWN).toBe(3)
+    expect(keys(onHome.shown)).toEqual(['stopped:run_01JB9', 'approval:apr_run_4', 'approval:apr_run_3'])
+    expect(onHome.total).toBe(needsOf(home).total)
+    expect(onHome.total).toBe(needsTotal(home))
   })
 
   it('says nothing more when everything fits', () => {

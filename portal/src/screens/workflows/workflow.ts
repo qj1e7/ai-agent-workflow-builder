@@ -213,11 +213,10 @@ export function rowAction(latest: RunView | null, viewer: Viewer): RowAction | n
   return null
 }
 
-export type Filter = 'all' | 'needs' | 'stopped' | 'paused'
+export type Filter = 'all' | 'stopped' | 'paused'
 
 export const FILTERS: readonly (readonly [Filter, string])[] = [
   ['all', 'All'],
-  ['needs', 'Needs you'],
   ['stopped', 'Stopped'],
   ['paused', 'Paused'],
 ]
@@ -233,8 +232,6 @@ function kept(row: Row, filter: Filter, words: string): boolean {
   switch (filter) {
     case 'all':
       return true
-    case 'needs':
-      return row.action !== null
     case 'stopped':
       return row.latest?.state === 'failed'
     case 'paused':
@@ -242,12 +239,23 @@ function kept(row: Row, filter: Filter, words: string): boolean {
   }
 }
 
-export function rowsOf(useCases: readonly UseCaseView[], runs: readonly RunView[], viewer: Viewer, filter: Filter, query: string): Row[] {
+const NOTHING: ReadonlySet<string> = new Set()
+
+/** A row's action is on its workflow's latest run. When Needs you already offers that run, the row keeps only its status, so no run is offered twice. */
+export function rowsOf(
+  useCases: readonly UseCaseView[],
+  runs: readonly RunView[],
+  viewer: Viewer,
+  filter: Filter,
+  query: string,
+  runsInNeeds: ReadonlySet<string> = NOTHING,
+): Row[] {
   const latest = latestRuns(runs)
   const words = query.trim().toLowerCase()
   const rows = useCases.map((useCase) => {
     const run = latest.get(useCase.use_case_id) ?? null
-    return { useCase, latest: run, action: rowAction(run, viewer) }
+    const action = rowAction(run, viewer)
+    return { useCase, latest: run, action: action && runsInNeeds.has(action.runId) ? null : action }
   })
   const needsYou = (row: Row) => (row.action ? 0 : 1)
   return rows.filter((row) => kept(row, filter, words)).sort((a, b) => needsYou(a) - needsYou(b))

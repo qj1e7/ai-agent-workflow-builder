@@ -6,7 +6,7 @@
   padding: 0 6px;
   border-radius: 999px;
   background: var(--amber);
-  color: #1d1400;
+  color: var(--on-amber);
   font-size: 0.75rem;
   font-weight: 700;
 }

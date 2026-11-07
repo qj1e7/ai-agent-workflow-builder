@@ -376,8 +376,7 @@ describe('the rows of the list', () => {
     expect(rows.map((row) => row.latest?.run_id ?? null)).toEqual(['run_bugs', null, 'run_01JB8'])
   })
 
-  it('filter to what needs you, what stopped and what is paused', () => {
-    expect(ids(rowsOf(useCases, runsFor(BOB), BOB, 'needs', ''))).toEqual(['uc_01JB7'])
+  it('filter to what stopped and what is paused', () => {
     expect(ids(rowsOf(useCases, runsFor(BOB), BOB, 'stopped', ''))).toEqual(['uc_bugs'])
     expect(ids(rowsOf(useCases, runsFor(BOB), BOB, 'paused', ''))).toEqual(['uc_nudge'])
   })

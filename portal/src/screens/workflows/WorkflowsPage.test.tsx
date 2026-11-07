@@ -11,7 +11,10 @@ import { App } from '../../App'
 import { ApiError } from '../../api/client'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
-import type { Me, RunView, UseCaseView } from '../../api/types'
+import aliceHome from '../../../../contracts/fixtures/builder/home.alice.json'
+import bobHome from '../../../../contracts/fixtures/builder/home.bob.json'
+import type { HomeOut, Me, RunView, UseCaseView } from '../../api/types'
+import { needsTotal } from '../home/home'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
 const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
@@ -33,19 +36,21 @@ interface Setup {
   readonly useCases?: UseCaseView[] | Error | 'loading'
   readonly runs?: RunView[]
   readonly state?: unknown
+  readonly home?: HomeOut
 }
 
 /** The platform answers for the person asking. In these tests only Bob may decide the waiting run. */
 const asSeenBy = (me: Me, runs: RunView[]): RunView[] =>
   runs.map((run) => (run.state === 'awaiting_approval' ? { ...run, you_can_decide: me.id === 'bob' } : run))
 
-function render({ me = ALICE, useCases = [BUGS, WATCHLIST, LANGGRAPH], runs = RUNS, state }: Setup = {}): string {
+function render({ me = ALICE, useCases = [BUGS, WATCHLIST, LANGGRAPH], runs = RUNS, state, home }: Setup = {}): string {
   const session = createDevSession(null)
   const scope = session.cacheScope()
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   queryClient.setQueryData(['me', scope], me)
   queryClient.setQueryData(['dev-users'], [ALICE, BOB, CAROL])
   queryClient.setQueryData(['runs', scope], asSeenBy(me, runs))
+  if (home) queryClient.setQueryData(['home', scope], home)
   if (useCases instanceof Error) queryClient.getQueryCache().build(queryClient, { queryKey: ['use-cases', scope] }).setState({ status: 'error', error: useCases, fetchStatus: 'idle' })
   else if (useCases !== 'loading') queryClient.setQueryData(['use-cases', scope], useCases)
   return renderToStaticMarkup(
@@ -131,14 +136,13 @@ describe('the Workflows list', () => {
     expect(rowOf(html, 'uc_01JB7')).toContain('data-state="waiting"')
   })
 
-  it('has a search box and the four filters, with All pressed', () => {
+  it('has a search box and the three filters, with All pressed', () => {
     const main = mainOf(render())
     expect(main).toMatch(/<label[^>]*for="find-workflows"[^>]*>Find a workflow<\/label>/)
     expect(main).toMatch(/<input[^>]*type="search"[^>]*id="find-workflows"|<input[^>]*id="find-workflows"[^>]*type="search"/)
     const pressed = [...main.matchAll(/<button[^>]*aria-pressed="(true|false)"[^>]*>([^<]*)<\/button>/g)].map((m) => [m[2], m[1]])
     expect(pressed).toEqual([
       ['All', 'true'],
-      ['Needs you', 'false'],
       ['Stopped', 'false'],
       ['Paused', 'false'],
     ])
@@ -190,5 +194,52 @@ describe('after a delete', () => {
 
   it('shows no message on an ordinary visit', () => {
     expect(render()).not.toContain('toast-undo')
+  })
+})
+
+const navNames = (html: string) =>
+  [...html.matchAll(/<nav\b[^>]*aria-label="Main"[^>]*>([\s\S]*?)<\/nav>/g)].flatMap((nav) => [...(nav[1] ?? '').matchAll(/<a\b([^>]*)>/g)].map((a) => /aria-label="([^"]*)"/.exec(a[1] ?? '')?.[1] ?? ''))
+const primaries = (html: string) => (html.match(/<(?:a|button)\b[^>]*class="[^"]*_primary_[^"]*"[^>]*>/g) ?? []).length
+const labelsOf = (html: string, ...label: string[]) => label.flatMap((words) => [...html.matchAll(new RegExp(`>${words}<`, 'g'))])
+
+describe('one action per workflow on Workflows', () => {
+  it('keeps one primary button when Needs you lists the Operator’s stopped run, and offers no row button for it', () => {
+    const html = render({ home: aliceHome as HomeOut, runs: [{ ...(failed as RunView), use_case_id: 'uc_01JB7', run_id: 'run_01JB9' }] })
+    expect(primaries(mainOf(html))).toBe(1)
+    expect(rowOf(html, 'uc_01JB7')).not.toMatch(/See why it stopped|Review and decide/)
+  })
+
+  it('keeps one primary button when Needs you lists the Approver’s approval, and no second Review and decide', () => {
+    const html = render({ me: BOB, home: bobHome as HomeOut })
+    expect(primaries(mainOf(html))).toBe(1)
+    expect(labelsOf(html, 'Review and decide')).toHaveLength(1)
+    expect(rowOf(html, 'uc_01JB7')).not.toContain('Review and decide')
+  })
+
+  it('still offers a row its button when Needs you does not list that run', () => {
+    const quiet: HomeOut = { ...(bobHome as HomeOut), approvals: [], approvals_total: 0, confirmations: [], stopped: [], stopped_total: 0 }
+    const html = render({ me: BOB, home: quiet })
+    expect(primaries(mainOf(html))).toBe(1)
+    expect(rowOf(html, 'uc_01JB7')).toContain('Review and decide')
+  })
+})
+
+describe('Needs you at the top of Workflows', () => {
+  const HOME = aliceHome as HomeOut
+
+  it('lists what needs the person in full, with the same total as the tab', () => {
+    const html = render({ home: HOME })
+    const total = needsTotal(HOME)
+    const section = /<section[^>]*aria-labelledby="[^"]*"[\s\S]*?<\/section>/.exec(html)?.[0] ?? ''
+    expect(text(section)).toContain(`Needs you ${total}`)
+    expect(section).toContain('data-home-item="stopped:run_01JB9"')
+    expect(navNames(html).filter((name) => name.startsWith('Workflows'))).toEqual([`Workflows, ${total} need you`, `Workflows, ${total} need you`])
+    expect(html.indexOf('aria-label="Needs you"')).toBeLessThan(html.indexOf('aria-label="Workflows"'))
+  })
+
+  it('shows no section when nothing needs the person', () => {
+    const quiet: HomeOut = { ...HOME, approvals: [], approvals_total: 0, confirmations: [], stopped: [], stopped_total: 0 }
+    expect(render({ home: quiet })).not.toContain('aria-label="Needs you"')
+    expect(render()).not.toContain('aria-label="Needs you"')
   })
 })
