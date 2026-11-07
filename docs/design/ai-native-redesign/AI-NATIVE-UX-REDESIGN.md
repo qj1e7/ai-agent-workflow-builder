@@ -385,10 +385,11 @@ From top to bottom:
    - the name;
    - the version we run. When nobody gave it, it says "Not known", and nothing is compared with it. "Not sure? Start from the newest" means watching for releases newer than today's. It never records the newest release as the version the team runs, which could hide an out-of-date install;
    - the newest version;
-   - the status (Up to date, New version, Can't check). A Can't check with no fix the person can make, such as a rate limit that clears by itself, stays in the table with its reason instead of becoming a Needs attention card;
+   - the status (Up to date, New version, Can't check). A Can't check with no fix the person can make, such as a rate limit that clears by itself, stays in the table with its reason instead of becoming a Needs attention card. Every row stays in this list, so its count is the real number even while a yes waits;
+   - when nobody gave a version, the status says "Nothing newer yet" instead of "Up to date", because there is nothing to be up to date with. The We run cell says "Not known" and, once the first check has read the newest release, "Telling you about releases newer than 1.2.16, the newest the first check read". The same words appear in the history, in the approval and in the ticket, which then says "newer than 1.2.16, the newest the first check read" and never "our version";
    - the source.
    
-   **Add software** takes plain words ("Kubernetes"). It finds the GitHub project and shows where the guess came from. When more than one project matches, she chooses. She never needs to know what a package registry is.
+   **Add software** takes plain words ("Kubernetes"). It finds the GitHub project and shows where the guess came from. When more than one project matches, she chooses. She never needs to know what a package registry is. Two matches cannot be added, and the form says why instead of offering them: a project the list already holds ("langchain-ai/langgraph is already on the list as LangGraph", with Show it on the list), and a project that publishes no releases on GitHub, such as python/cpython ("doesn't publish releases on GitHub, which is the only place this check reads. It can't be watched here."). Then only Change and Start again are left.
 3. **How it's checked.** "Every Monday at 9:00, Singapore time. One approval covers all the upgrade tickets." Sources:
    - GitHub releases, which works now;
    - package registries, security advisories and support end dates, each shown as "Not yet" by default, and tagged Planned with Planned features on (section 1).
@@ -467,6 +468,7 @@ It has no Approve or Decline. After a decision, the drawer shows the request's s
 | Done | Green pill, with what was written and who said yes |
 | Stopped | Red pill, with the troubleshooter's reason |
 | Test run | Marked "Test run" everywhere it appears |
+| Nothing newer yet | Green pill, for software with no known version after a check that found nothing newer than the first one read. It is never called Up to date |
 
 ## 16. Test controls (not part of the product)
 

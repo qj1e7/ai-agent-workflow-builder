@@ -1,4 +1,4 @@
 {
   "name": "Terraform",
-  "tag_pattern": "^[vV]?\\d+\\.\\d+\\.\\d+$"
+  "tag_pattern": "^(?:[vV]|docker-v|n8n@|langchain==)?\\d+\\.\\d+\\.\\d+$"
 }

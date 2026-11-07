@@ -174,6 +174,11 @@ class Api:
         body: Json = {"name": name, "repo": repo, "our_version": our_version}
         return self.post(user, "/api/v1/watchlist/software", body, expect=expect)
 
+    def find_software(
+        self, user: str, name: str, *, expect: Iterable[int] = (200,)
+    ) -> httpx.Response:
+        return self.post(user, "/api/v1/watchlist/find", {"name": name}, expect=expect)
+
     def remove_software(
         self, user: str, software_id: str, *, expect: Iterable[int] = (200,)
     ) -> httpx.Response:

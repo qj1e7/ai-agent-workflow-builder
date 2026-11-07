@@ -57,13 +57,15 @@ def row(
     added_at: datetime = ADDED_AT,
     newest_read_at: datetime | None = None,
 ) -> WatchedSoftwareView:
+    first_check = our_version_source is not None and our_version_source.kind == "first_check"
     return WatchedSoftwareView.model_validate(
         {
             "id": SoftwareId(f"sw_01JBW{number:020d}"),
             "name": name,
             "source": github(ref),
-            "our_version": our_version,
+            "our_version": None if first_check else our_version,
             "our_version_source": our_version_source,
+            "compared_from": our_version if first_check else None,
             "newest_version": newest_version,
             "newest_read_at": newest_read_at or (checked_at if newest_version else None),
             "checked_at": checked_at,

@@ -1,6 +1,6 @@
 import { ApiError } from '../../api/client'
 import { failureReasonLabel } from '../../api/labels'
-import type { Day, FailureReason, ScheduleHold, ScheduleView, SoftwareStatus, VersionSourceView, WatchedSoftwareView } from '../../api/types'
+import type { Day, FailureReason, Refusal, ScheduleHold, ScheduleView, SoftwareStatus, VersionSourceView, WatchedSoftwareView } from '../../api/types'
 import { dateAndClock, scheduleZoneName, timesZone } from '../workflows/times'
 
 export const SOURCES_NOTE =
@@ -63,11 +63,16 @@ export function emptyWords({ operator, scheduled, paused }: { readonly operator:
 
 export const statusLabel: Record<SoftwareStatus, string> = {
   cant_check: 'Can’t check',
-  behind: 'Behind',
+  behind: 'New version',
   awaiting_approval: 'Ticket waiting for a yes',
   ticket_open: 'Ticket open',
   up_to_date: 'Up to date',
   not_checked: 'Not checked yet',
+}
+
+/** Up to date needs a version to be up to date with. With none known, the row says what the check can truthfully say. */
+export function statusWords(row: Pick<WatchedSoftwareView, 'status' | 'our_version'>): string {
+  return row.status === 'up_to_date' && row.our_version === null ? 'Nothing newer yet' : statusLabel[row.status]
 }
 
 type StatusTone = 'bad' | 'wait' | 'open' | 'good' | 'quiet'
@@ -142,7 +147,7 @@ export function checkName(text: string, watched: readonly string[] = []): Checke
   return { ok: true, value: name }
 }
 
-export const VERSION_HELP = 'Left empty, the first check takes the newest.'
+export const VERSION_HELP = 'Leave it empty if you don’t know. It shows as Not known, and the check tells you about releases newer than the newest one it first reads.'
 
 const VERSION_BAD = 'Type the version as three numbers, such as 1.2.14.'
 
@@ -191,28 +196,51 @@ export function matches(count: number): string {
   return count === 1 ? '1 match' : `${count} matches`
 }
 
-interface Groups {
-  readonly needs: readonly WatchedSoftwareView[]
-  readonly notChecked: readonly WatchedSoftwareView[]
-  readonly upToDate: readonly WatchedSoftwareView[]
-}
-
 function matchesQuery(row: WatchedSoftwareView, query: string): boolean {
   const q = query.trim().toLowerCase()
   return q === '' || `${row.name} ${row.source.ref}`.toLowerCase().includes(q)
 }
 
-export function groupsOf(rows: readonly WatchedSoftwareView[], query: string): Groups {
-  const shown = rows.filter((row) => matchesQuery(row, query))
-  return {
-    needs: shown.filter((row) => row.status !== 'up_to_date' && row.status !== 'not_checked'),
-    notChecked: shown.filter((row) => row.status === 'not_checked'),
-    upToDate: shown.filter((row) => row.status === 'up_to_date'),
+/** Every row stays in Software we watch, so its count is the real number. Only the search narrows it. */
+export function rowsMatching(rows: readonly WatchedSoftwareView[], query: string): WatchedSoftwareView[] {
+  return rows.filter((row) => matchesQuery(row, query))
+}
+
+export interface Decision {
+  readonly approvalId: string
+  /** How many watched software this one yes covers. */
+  readonly software: number
+}
+
+/** One decision for the whole check: the tickets of one run wait on one approval, however many rows they came from. */
+export function decisionsOf(rows: readonly WatchedSoftwareView[]): Decision[] {
+  const counts = new Map<string, number>()
+  for (const row of rows) {
+    if (row.status === 'awaiting_approval' && row.approval_id) counts.set(row.approval_id, (counts.get(row.approval_id) ?? 0) + 1)
+  }
+  return [...counts].map(([approvalId, software]) => ({ approvalId, software }))
+}
+
+export function decisionTitle(tickets: number): string {
+  return `The latest check wants to raise ${tickets} upgrade ${tickets === 1 ? 'ticket' : 'tickets'}.`
+}
+
+export const DECISION_NOTE = 'Nothing is written until an Approver says yes.'
+
+/** What the bar says to someone who can't decide it. The platform says why. */
+export function waitingWords(whyNot: Refusal | null): string {
+  switch (whyNot) {
+    case 'own_work':
+      return 'Waiting for another Approver. This check is your own work.'
+    case 'decided_earlier_step':
+      return 'Waiting for another Approver. You decided an earlier step.'
+    default:
+      return 'Waiting for an Approver.'
   }
 }
 
-export function countIn(groups: Groups): number {
-  return groups.needs.length + groups.notChecked.length + groups.upToDate.length
+export function rowDomId(softwareId: string): string {
+  return `software-${softwareId}`
 }
 
 export function versionSourceWords(source: VersionSourceView | null): string {
@@ -221,10 +249,24 @@ export function versionSourceWords(source: VersionSourceView | null): string {
     case 'given':
       return 'Given when added'
     case 'first_check':
-      return 'Taken from the first check'
+      return 'Compared from the first check'
     case 'ticket_done':
       return source.ticket ? `From ${source.ticket}, marked Done` : 'From a ticket marked Done'
   }
+}
+
+export const NOT_KNOWN = 'Not known'
+
+interface Ours {
+  readonly version: string
+  readonly note: string
+}
+
+/** What the row says the team runs. When nobody knows, it says so, and never shows the newest release in its place. */
+export function oursOf(row: WatchedSoftwareView): Ours {
+  if (row.our_version !== null) return { version: row.our_version, note: versionSourceWords(row.our_version_source) }
+  if (row.compared_from) return { version: NOT_KNOWN, note: `Telling you about releases newer than ${row.compared_from}, the newest the first check read` }
+  return { version: NOT_KNOWN, note: 'The first check reads the newest release. Later checks tell you about newer ones' }
 }
 
 interface Newest {
@@ -289,6 +331,9 @@ export function historyOf(row: WatchedSoftwareView, nameOf: (id: string) => stri
   if (readAt) dated.push({ at: readAt, words: `Checked. The newest version is ${row.newest_version ?? 'unknown'}.` })
   if (!row.checked_at) now.push({ when: 'Not yet', words: 'Not checked yet.' })
   const source = row.our_version_source
+  if (source && row.our_version === null && row.compared_from) {
+    dated.push({ at: source.at, words: `Our version is not known. Later checks tell about releases newer than ${row.compared_from}, the newest the first check read.` })
+  }
   if (source && row.our_version) {
     const words = source.kind === 'ticket_done' ? `Our version moved to ${row.our_version}. It came from ${source.ticket ?? 'a ticket'}, marked Done.` : `Our version is ${row.our_version}. ${versionSourceWords(source)}.`
     dated.push({ at: source.at, words })

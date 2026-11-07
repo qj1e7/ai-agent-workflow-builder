@@ -5,7 +5,14 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
 from platform_api.builder.http import Operator
 from platform_api.builder.lifecycle import TooLate
-from platform_api.builder.models import AddSoftware, ScheduleIn, WatchlistOut, WatchlistView
+from platform_api.builder.models import (
+    AddSoftware,
+    FindIn,
+    FindOut,
+    ScheduleIn,
+    WatchlistOut,
+    WatchlistView,
+)
 from platform_api.builder.watchlist import (
     NoSuchSoftware,
     NoWatchlist,
@@ -44,6 +51,21 @@ def _full(limit: int) -> HTTPException:
         "msg": f"The watchlist holds {limit} software at most",
     }
     return HTTPException(422, [problem])
+
+
+@router.post(
+    "/watchlist/find",
+    description=(
+        "Finds the GitHub projects a software's plain name could mean. The agent runtime looks "
+        "the name up in a reviewed list, never through a model, and asks GitHub about each "
+        "match with the watchlist's own tag rule before offering it. Nothing is saved: the "
+        "person picks a match, then adds it with POST /watchlist/software. A match that is "
+        "already watched says so."
+    ),
+    responses=OPERATORS_ONLY,
+)
+async def find_software(body: FindIn, principal: Operator, watchlist: CurrentWatchlist) -> FindOut:
+    return await watchlist.find(body.name)
 
 
 @router.post(

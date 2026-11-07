@@ -330,6 +330,13 @@ export function useWatchlist(options?: QueryOptions) {
   })
 }
 
+export function useFindSoftware() {
+  const client = useApiClient()
+  return useMutation({
+    mutationFn: async (name: string) => unwrap(await client.POST('/api/v1/watchlist/find', { body: { name } })),
+  })
+}
+
 export function useAddSoftware() {
   const client = useApiClient()
   const queryClient = useQueryClient()

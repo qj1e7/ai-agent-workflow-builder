@@ -3,7 +3,7 @@ from datetime import date, datetime
 from typing import Annotated, Any, Literal, Protocol
 
 import httpx
-from pydantic import Field, TypeAdapter
+from pydantic import Field, StringConstraints, TypeAdapter
 
 from platform_api.monitoring import AgentEvent
 from platform_api.wire import RepoName, WireModel
@@ -21,6 +21,7 @@ class SoftwareToCheck(WireModel):
     our_version: str | None
     open_ticket: str | None = None
     awaiting_approval: bool = False
+    from_first_check: bool = False
 
 
 class WatchlistInputs(WireModel):
@@ -375,7 +376,7 @@ understand_result_adapter: TypeAdapter[UnderstandResult] = TypeAdapter(Understan
 
 
 class FindSoftwareRequest(WireModel):
-    name: str = Field(min_length=1, max_length=80)
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
     tag_pattern: str
 
 
@@ -491,6 +492,11 @@ class HttpAgentRuntime:
         self, request: UnderstandRequest
     ) -> UnderstandResult | AgentUnavailable | AgentRejected:
         return await self._model_call("/v1/planner/understand", request, understand_result_adapter)
+
+    async def find_software(
+        self, request: FindSoftwareRequest
+    ) -> FindSoftwareResult | AgentUnavailable | AgentRejected:
+        return await self._model_call("/v1/software/find", request, find_software_result_adapter)
 
     async def _model_call[T](
         self, path: str, body: WireModel, adapter: TypeAdapter[T]

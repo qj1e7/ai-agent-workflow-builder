@@ -9,7 +9,7 @@ import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, Protocol
 
 from platform_api.builder.lifecycle import (
     RESTORE_WINDOW,
@@ -21,7 +21,12 @@ from platform_api.builder.lifecycle import (
 )
 from platform_api.builder.models import (
     AddSoftware,
+    FindOut,
+    FoundProjects,
     LastCheckView,
+    NoProjectChecked,
+    NoProjectKnown,
+    ProjectGuess,
     ScheduleIn,
     ScheduleView,
     SourceView,
@@ -41,13 +46,18 @@ from platform_api.orchestration import (
     ATTENTION_ORDER,
     Checked,
     CouldNotCheck,
+    FindSoftwareResult,
+    FoundSoftware,
     FromFirstCheck,
     FromTicketDone,
     Given,
     LastCheck,
+    RuntimeDown,
     SavedSchedule,
     Schedule,
     ScheduleBook,
+    SoftwareNotChecked,
+    SoftwareNotKnown,
     SoftwareSource,
     Standing,
     WatchedSoftware,
@@ -58,6 +68,23 @@ from platform_api.orchestration import (
 from platform_api.shared import Principal, SoftwareId, UseCaseId, UserId, new_id
 
 log = logging.getLogger(__name__)
+
+
+class ProjectFinder(Protocol):
+    async def find(self, name: str, tag_pattern: str) -> FindSoftwareResult | RuntimeDown: ...
+
+
+class NoFinder:
+    """Stands in until a finder is wired, so the answer is plain: nothing was checked."""
+
+    async def find(self, name: str, tag_pattern: str) -> FindSoftwareResult | RuntimeDown:
+        return RuntimeDown("no finder is wired")
+
+
+NOT_ASKED = (
+    "I couldn't ask the agent runtime just now, so I can't check {name} yet. Try again, or "
+    "type the GitHub address instead, as owner/name."
+)
 
 
 @dataclass(frozen=True)
@@ -114,14 +141,19 @@ def source_view(source: SoftwareSource) -> SourceView:
 
 def software_view(listed: ListedSoftware, standing: Standing) -> WatchedSoftwareView:
     facts = standing.facts
+    ours: str | None = None
+    compared_from: str | None = None
     match facts.our_version:
         case None:
             our_source = None
-        case Given(_, at):
+        case Given(version, at):
+            ours = version
             our_source = VersionSourceView(kind="given", at=at, ticket=None)
-        case FromFirstCheck(_, at):
+        case FromFirstCheck(version, at):
+            compared_from = version
             our_source = VersionSourceView(kind="first_check", at=at, ticket=None)
-        case FromTicketDone(_, at, ticket):
+        case FromTicketDone(version, at, ticket):
+            ours = version
             our_source = VersionSourceView(kind="ticket_done", at=at, ticket=ticket)
     match facts.latest_check:
         case None:
@@ -136,8 +168,9 @@ def software_view(listed: ListedSoftware, standing: Standing) -> WatchedSoftware
         id=listed.id,
         name=listed.name,
         source=source_view(listed.source),
-        our_version=None if facts.our_version is None else facts.our_version.version,
+        our_version=ours,
         our_version_source=our_source,
+        compared_from=compared_from,
         newest_version=newest,
         newest_read_at=read_at,
         checked_at=checked_at,
@@ -210,6 +243,7 @@ def task(record: WatchlistRecord, standing: WatchlistStanding) -> WatchlistTask:
                 our_version=None if facts.our_version is None else facts.our_version.version,
                 open_ticket=None if facts.open_ticket is None else facts.open_ticket.key,
                 awaiting_approval=facts.pending is not None,
+                from_first_check=isinstance(facts.our_version, FromFirstCheck),
             )
         )
     return WatchlistTask(tag_pattern=SOFTWARE_WATCHLIST.tag_pattern, software=tuple(software))
@@ -325,11 +359,48 @@ class Watchlist:
         facts: WatchlistFacts,
         schedules: ScheduleBook,
         ticket_project: str = WATCHLIST_PROJECT,
+        finder: ProjectFinder | None = None,
     ) -> None:
         self._db = db
         self._facts = facts
         self._schedules = schedules
         self._project = ticket_project
+        self._finder = finder or NoFinder()
+
+    async def find(self, name: str) -> FindOut:
+        """The GitHub projects a name could mean, each checked just now, and which the watchlist
+        already holds. It writes nothing. The tag rule is the watchlist's own, so a match
+        offered here is one the watch can compare."""
+        found = await self._finder.find(name, SOFTWARE_WATCHLIST.tag_pattern)
+        match found:
+            case RuntimeDown(detail):
+                log.warning("finding %r failed: %s", name, detail)
+                return NoProjectChecked(message=NOT_ASKED.format(name=name))
+            case SoftwareNotKnown(message=message):
+                return NoProjectKnown(message=message)
+            case SoftwareNotChecked(message=message):
+                return NoProjectChecked(message=message)
+            case FoundSoftware(matches=matches):
+                async with self._db.connection("builder") as conn:
+                    record = await _current(conn, lock=False)
+                held = (
+                    {}
+                    if record is None
+                    else {s.source.ref.casefold(): s.name for s in record.software}
+                )
+                return FoundProjects(
+                    matches=[
+                        ProjectGuess(
+                            repo=match.repo,
+                            what=match.what,
+                            why=match.why,
+                            releases=match.releases,
+                            newest=match.newest,
+                            already_listed=held.get(match.repo.casefold()),
+                        )
+                        for match in matches
+                    ]
+                )
 
     async def adopt_ticket_project(self) -> None:
         """Moves the watchlist to the Jira project the deploy names (WATCHLIST_JIRA_PROJECT), in a

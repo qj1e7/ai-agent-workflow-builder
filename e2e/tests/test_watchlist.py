@@ -111,3 +111,36 @@ def test_one_check_raises_one_ticket_per_software_behind_and_done_moves_our_vers
     left = api.remove_software("alice", ghost["id"]).json()
     assert [r["name"] for r in left["software"]] == ["LangGraph", "Redis"]
     api.remove_software("alice", ghost["id"], expect=(404,))
+
+
+def test_finding_software_by_name_offers_only_projects_github_just_confirmed(api: Api) -> None:
+    api.clear_watchlist("alice")
+
+    found = api.find_software("alice", "  LangGraph ").json()
+    assert found["status"] == "found"
+    [match] = found["matches"]
+    assert (match["repo"], match["releases"], match["newest"]) == (
+        "langchain-ai/langgraph",
+        "published",
+        "1.2.16",
+    ), "the newest is the newest the watch counts, not the 'cli==' tags beside it"
+    assert match["already_listed"] is None
+    assert (api.watchlist("alice") or {"software": []})["software"] == [], "finding saves nothing"
+
+    prefixed = api.find_software("alice", "n8n").json()
+    assert prefixed["matches"][0]["newest"] == "n8n@2.4.2"
+
+    two = api.find_software("alice", "Terraform").json()
+    assert [m["repo"] for m in two["matches"]] == ["hashicorp/terraform", "opentofu/opentofu"]
+
+    unknown = api.find_software("alice", "Zorblax").json()
+    assert unknown["status"] == "not_known"
+    assert "Zorblax" in unknown["message"]
+
+    api.add_software("alice", "LangGraph", "langchain-ai/langgraph")
+    again = api.find_software("alice", "langgraph").json()
+    assert again["matches"][0]["already_listed"] == "LangGraph"
+
+    api.find_software("bob", "LangGraph", expect=(403,))
+    api.find_software("alice", "   ", expect=(422,))
+    api.clear_watchlist("alice")

@@ -11,8 +11,9 @@ import { describe, expect, it } from 'vitest'
 import { ApiProvider } from '../../api/context'
 import { TicketLinksProvider } from '../../api/ticketLinks'
 import { createDevSession } from '../../api/session'
-import type { Me, ScheduleHold, WatchedSoftwareView, WatchlistView } from '../../api/types'
-import { AddSoftwareFields, EMPTY_VALUES } from './AddSoftware'
+import type { FindOut, Me, ProjectGuess, ScheduleHold, WatchedSoftwareView, WatchlistView } from '../../api/types'
+import { AddSoftwareForm } from './AddSoftware'
+import { addReducer, readyToAdd, START, type AddAction, type AddState } from './addByName'
 import { FindSoftware } from './FindSoftware'
 import { SoftwareRoute } from './SoftwarePage'
 import { SoftwareHistory } from './SoftwareHistory'
@@ -45,9 +46,8 @@ describe('the Software watchlist page', () => {
     const html = render(statuses, ALICE)
     const words = text(html)
     for (const row of (statuses as WatchlistView).software) expect(words).toContain(row.name)
-    expect(words).toContain('Needs a person 4')
-    expect(words).toContain('Not checked yet 1')
-    expect(words).toContain('Up to date 1')
+    expect(words).toContain('Needs attention 1')
+    expect(words).toContain('Software we watch 6')
     expect(words).toContain('1.2.14')
     expect(words).toContain('1.2.16')
     expect(words).toContain('Ticket waiting for a yes')
@@ -201,26 +201,258 @@ describe('the search box', () => {
   })
 })
 
-describe('the add form', () => {
-  const fields = (errors: Parameters<typeof AddSoftwareFields>[0]['errors']) =>
-    renderToStaticMarkup(<AddSoftwareFields values={EMPTY_VALUES} errors={errors} busy={false} />)
+const GUESS: ProjectGuess = {
+  repo: 'langchain-ai/langgraph',
+  what: 'LangGraph, a Python library for building AI agents',
+  why: 'From our list of known projects.',
+  releases: 'published',
+  newest: '1.2.20',
+  already_listed: null,
+}
+const TERRAFORM: ProjectGuess = { ...GUESS, repo: 'hashicorp/terraform', what: 'Terraform itself, from HashiCorp', newest: 'v1.9.8' }
+const OPENTOFU: ProjectGuess = { ...GUESS, repo: 'opentofu/opentofu', what: 'OpenTofu, an open-source fork of Terraform', newest: 'v1.8.5' }
 
-  it('says only GitHub works today', () => {
-    expect(text(fields({}))).toContain('GitHub is the only place we can check today')
+const found = (...matches: ProjectGuess[]): FindOut => ({ status: 'found', matches })
+const run = (name: string, ...actions: AddAction[]): AddState =>
+  actions.reduce(addReducer, addReducer(START, { type: 'typed', field: 'name', value: name }))
+const form = (state: AddState, busy = false) => renderToStaticMarkup(<AddSoftwareForm state={state} busy={busy} />)
+
+describe('the order of the page', () => {
+  const headings = (html: string) => [...html.matchAll(/<h2[^>]*>([\s\S]*?)<\/h2>/g)].map((m) => text(m[1] ?? '').replace(/ \d+$/, ''))
+
+  it('leads with what needs attention, then the software we watch, then how it is checked', () => {
+    expect(headings(render(statuses, ALICE))).toEqual(['Needs attention', 'Software we watch', 'How it’s checked'])
   })
 
-  it('shows each error beside its field and marks the field invalid', () => {
-    const html = fields({ repo: 'That doesn’t look like a GitHub project. Paste its GitHub link, or type owner/name.' })
+  it('has no Needs attention section when nothing needs it', () => {
+    const calm = { ...(statuses as WatchlistView), software: (statuses as WatchlistView).software.filter((row) => row.status === 'up_to_date' || row.status === 'not_checked') }
+    expect(headings(render(calm, ALICE))).toEqual(['Software we watch', 'How it’s checked'])
+  })
+
+  it('puts one decision for the whole check in Needs attention, and no row', () => {
+    const html = render(statuses, ALICE)
+    const attention = html.slice(html.indexOf('needs-attention-heading'), html.indexOf('software-we-watch-heading'))
+    expect(text(attention)).toContain('The latest check wants to raise 1 upgrade ticket.')
+    expect(text(attention)).toContain('Nothing is written until an Approver says yes.')
+    expect(text(attention)).toContain('Review and decide')
+    expect(attention).not.toContain('<li')
+    expect(text(attention)).not.toContain('Can’t check')
+    expect(attention.match(/Review and decide/g)).toHaveLength(1)
+  })
+
+  it('keeps every row in Software we watch, with the real count, the waiting row and the one that can’t be checked included', () => {
+    const view = statuses as WatchlistView
+    const html = render(statuses, ALICE)
+    const watching = html.slice(html.indexOf('software-we-watch-heading'), html.indexOf('how-checked-heading'))
+    expect(text(watching.slice(0, 120))).toContain(`Software we watch ${view.software.length}`)
+    expect(watching.match(/<li id="software-/g)).toHaveLength(view.software.length)
+    expect(text(watching)).toContain('Ticket waiting for a yes')
+    expect(text(watching)).toContain('Can’t check')
+  })
+
+  it('gives the primary action only to the decision when one waits, not to Check now', () => {
+    const html = render(statuses, ALICE)
+    const checkNow = /<button[^>]*>\s*Check now/.exec(html)?.[0] ?? ''
+    expect(checkNow).not.toBe('')
+    expect(html.match(/<button[^>]*class="[^"]*primary[^"]*"[^>]*>\s*Find it/)).toBeNull()
+    expect(/<button[^>]*primary[^>]*>\s*Check now/.test(html)).toBe(false)
+  })
+
+  it('says how it is checked with the schedule and the one source that works', () => {
+    const words = text(render(statuses, ALICE))
+    expect(words).toContain('How it’s checked')
+    expect(words).toContain('GitHub is the only place we can check today')
+  })
+
+  it('puts Add software inside Software we watch for an Operator, and not at all for an Approver', () => {
+    const operator = render(statuses, ALICE)
+    expect(operator.indexOf('Add software')).toBeGreaterThan(operator.indexOf('software-we-watch-heading'))
+    expect(operator.indexOf('Add software')).toBeLessThan(operator.indexOf('how-checked-heading'))
+    expect(text(render(statuses, BOB))).not.toContain('Add software')
+  })
+})
+
+describe('what the team runs', () => {
+  const row = (changes: Partial<WatchedSoftwareView>): WatchedSoftwareView => ({ ...(statuses as WatchlistView).software[0]!, ...changes })
+
+  it('says Not known when nobody knows, and never shows the newest release in its place', () => {
+    const unknown = row({ our_version: null, our_version_source: { kind: 'first_check', at: '2026-11-09T01:00:00Z', ticket: null }, compared_from: '8.2.0', newest_version: '8.2.1', status: 'behind' })
+    const words = text(render({ ...(statuses as WatchlistView), software: [unknown] }, ALICE))
+    expect(words).toContain('Ours Not known')
+    expect(words).toContain('Telling you about releases newer than 8.2.0, the newest the first check read')
+    expect(words).not.toContain('Ours 8.2')
+  })
+
+  it('says the first check starts the comparison before any check has read the newest', () => {
+    const fresh = row({ our_version: null, our_version_source: null, compared_from: null, status: 'not_checked', newest_version: null, newest_read_at: null, checked_at: null })
+    const words = text(render({ ...(statuses as WatchlistView), software: [fresh] }, ALICE))
+    expect(words).toContain('Ours Not known The first check reads the newest release. Later checks tell you about newer ones')
+  })
+})
+
+describe('add software by name', () => {
+  it('starts with the name and one way forward', () => {
+    const html = form(START)
+    expect(text(html)).toContain('Software name')
+    expect(buttons(html)).toEqual(['Find it'])
+    expect(html).not.toContain('id="sw-repo"')
+  })
+
+  it('shows a plain problem under the name and marks it invalid', () => {
+    const html = form(addReducer(START, { type: 'refused', errors: { name: 'Give the software a name.' } }))
     expect(html).toContain('aria-invalid="true"')
-    expect(html).toContain('id="sw-repo-error"')
-    expect(html).toContain('aria-describedby="sw-repo-error"')
-    expect(text(html)).toContain('That doesn’t look like a GitHub project')
+    expect(html).toContain('aria-describedby="sw-name-error"')
   })
 
-  it('shows help, not an error, when the fields are fine', () => {
-    const html = fields({})
-    expect(html).not.toContain('aria-invalid')
-    expect(html).toContain('id="sw-version-help"')
+  it('shows one match with where the guess came from, that it was checked, and a way to change it', () => {
+    const html = form(run('LangGraph', { type: 'answered', answer: found(GUESS) }))
+    const words = text(html)
+    expect(words).toContain('Adding LangGraph')
+    expect(words).toContain('langchain-ai/langgraph')
+    expect(words).toContain('From our list of known projects.')
+    expect(words).toContain('Checked just now. The project is on GitHub and its newest release is 1.2.20.')
+    expect(buttons(html)).toEqual(['Looks right, add it', 'Change', 'Start again'])
+    expect(html).not.toContain('id="sw-repo"')
+  })
+
+  it('lets the person choose between several matches, and keeps None of these', () => {
+    const state = run('Terraform', { type: 'answered', answer: found(TERRAFORM, OPENTOFU) })
+    const html = form(state)
+    expect(text(html)).toContain('Which one do you mean?')
+    expect(html.match(/type="radio"/g)).toHaveLength(2)
+    expect(html).not.toContain('checked=""')
+    expect(text(html)).toContain('Terraform itself, from HashiCorp')
+    expect(text(html)).toContain('OpenTofu, an open-source fork of Terraform')
+    expect(buttons(html)).toEqual(['Add Terraform', 'None of these', 'Start again'])
+    expect(form(addReducer(state, { type: 'picked', index: 1 }))).toContain('checked=""')
+  })
+
+  it('shows the repository field when the person changes the guess, starting from the guess', () => {
+    const html = form(run('LangGraph', { type: 'answered', answer: found(GUESS) }, { type: 'change' }))
+    expect(html).toContain('id="sw-repo"')
+    expect(html).toContain('value="langchain-ai/langgraph"')
+    expect(text(html)).toContain('You’re choosing the project yourself.')
+  })
+
+  it('says plainly when the list has no such name, and falls back to the repository field', () => {
+    const answer: FindOut = { status: 'not_known', message: 'I don’t know a GitHub project called Zorblax. Type the GitHub address instead, as owner/name.' }
+    const html = form(run('Zorblax', { type: 'answered', answer }))
+    expect(text(html)).toContain('I couldn’t find “Zorblax”')
+    expect(text(html)).toContain('I don’t know a GitHub project called Zorblax.')
+    expect(html).toContain('id="sw-repo"')
+    expect(buttons(html)).toEqual(['Add Zorblax', 'Start again'])
+  })
+
+  it('offers no project when GitHub could not be asked, and says what went wrong as an alert', () => {
+    const answer: FindOut = { status: 'not_checked', message: 'I couldn’t reach GitHub, so I can’t check Redis yet. Try again later.' }
+    const html = form(run('Redis', { type: 'answered', answer }))
+    expect(html).toContain('role="alert"')
+    expect(text(html)).toContain('I couldn’t reach GitHub, so I can’t check Redis yet.')
+    expect(html).not.toContain('type="radio"')
+    expect(html).toContain('id="sw-repo"')
+  })
+
+  it('says a project with no releases can’t be watched, and offers only Change and Start again', () => {
+    const none: ProjectGuess = { ...GUESS, repo: 'python/cpython', releases: 'none', newest: null }
+    const state = run('Python', { type: 'answered', answer: found(none) })
+    const html = form(state)
+    expect(text(html)).toContain('python/cpython doesn’t publish releases on GitHub, which is the only place this check reads. It can’t be watched here.')
+    expect(buttons(html)).toEqual(['Change', 'Start again'])
+    expect(html).not.toContain('id="sw-version"')
+    expect(readyToAdd(state, [], [])).toEqual({ ok: false, errors: { form: 'python/cpython doesn’t publish releases on GitHub, which is the only place this check reads. It can’t be watched here.' } })
+  })
+
+  it('leaves a match with no releases out of the choice, and says why beside it', () => {
+    const none: ProjectGuess = { ...OPENTOFU, releases: 'none', newest: null }
+    const state = run('Terraform', { type: 'answered', answer: found(TERRAFORM, none) })
+    const html = form(state)
+    expect(html.match(/type="radio"/g)).toHaveLength(2)
+    expect(html.match(/disabled=""/g)).toHaveLength(1)
+    expect(text(html)).toContain('opentofu/opentofu doesn’t publish releases on GitHub')
+    expect(buttons(html)).toEqual(['Add Terraform', 'None of these', 'Start again'])
+  })
+
+  it('offers no add when every match is unavailable', () => {
+    const none = (match: ProjectGuess): ProjectGuess => ({ ...match, releases: 'none', newest: null })
+    const html = form(run('Terraform', { type: 'answered', answer: found(none(TERRAFORM), none(OPENTOFU)) }))
+    expect(buttons(html)).toEqual(['None of these', 'Start again'])
+    expect(html).not.toContain('id="sw-version"')
+  })
+
+  it('says a match is already on the list, links to its row, and keeps no way to add it', () => {
+    const listed: ProjectGuess = { ...GUESS, already_listed: 'LangGraph' }
+    const state = run('LangGraph again', { type: 'answered', answer: found(listed) })
+    const html = renderToStaticMarkup(<AddSoftwareForm state={state} busy={false} rowIdOf={() => 'sw_1'} onShowRow={() => undefined} />)
+    expect(text(html)).toContain('langchain-ai/langgraph is already on the list as LangGraph.')
+    expect(html).toContain('href="#software-sw_1"')
+    expect(text(html)).toContain('Show it on the list')
+    expect(buttons(html)).toEqual(['Change', 'Start again'])
+    expect(readyToAdd(state, [], [])).toEqual({ ok: false, errors: { form: 'langchain-ai/langgraph is already on the list as LangGraph.' } })
+  })
+
+  it('does not offer a listed match in a choice', () => {
+    const listed: ProjectGuess = { ...TERRAFORM, already_listed: 'Terraform' }
+    const html = form(run('Terraform', { type: 'answered', answer: found(listed, OPENTOFU) }))
+    expect(html.match(/disabled=""/g)).toHaveLength(1)
+    expect(text(html)).toContain('hashicorp/terraform is already on the list as Terraform.')
+  })
+
+  it('has a version field that says what an empty one means, and does not fill it from the newest release', () => {
+    const state = run('LangGraph', { type: 'answered', answer: found(GUESS) })
+    const html = form(state)
+    expect(html).toContain('id="sw-version"')
+    expect(html).toContain('value=""')
+    expect(text(html)).toContain('It shows as Not known')
+  })
+
+  it('shows the Find button as busy while the finder is asked, and stays a button', () => {
+    expect(form(START, true)).toContain('aria-busy="true"')
+  })
+})
+
+describe('what the add form sends', () => {
+  const single = run('  LangGraph ', { type: 'answered', answer: found(GUESS) })
+
+  it('sends the trimmed name and the confirmed repository, with no version when none was typed', () => {
+    expect(readyToAdd(single, [], [])).toEqual({ ok: true, body: { name: 'LangGraph', repo: 'langchain-ai/langgraph' } })
+  })
+
+  it('sends the version the person typed, and only that', () => {
+    const typed = addReducer(single, { type: 'typed', field: 'version', value: '1.2.14' })
+    expect(readyToAdd(typed, [], [])).toEqual({ ok: true, body: { name: 'LangGraph', repo: 'langchain-ai/langgraph', our_version: '1.2.14' } })
+  })
+
+  it('asks the person to choose before adding when there are several matches', () => {
+    const state = run('Terraform', { type: 'answered', answer: found(TERRAFORM, OPENTOFU) })
+    expect(readyToAdd(state, [], [])).toEqual({ ok: false, errors: { form: 'Choose one project first, or press None of these.' } })
+    const chosen = addReducer(state, { type: 'picked', index: 1 })
+    expect(readyToAdd(chosen, [], [])).toEqual({ ok: true, body: { name: 'Terraform', repo: 'opentofu/opentofu' } })
+  })
+
+  it('sends the address the person typed when nothing matched, checked like any typed address', () => {
+    const unknown = run('Zorblax', { type: 'answered', answer: { status: 'not_known', message: 'No.' } })
+    expect(readyToAdd(unknown, [], []).ok).toBe(false)
+    const typed = addReducer(unknown, { type: 'typed', field: 'repo', value: 'https://github.com/acme/zorblax' })
+    expect(readyToAdd(typed, [], [])).toEqual({ ok: true, body: { name: 'Zorblax', repo: 'acme/zorblax' } })
+  })
+
+  it('sends the address the person changed to, not the guess', () => {
+    const changed = addReducer(addReducer(single, { type: 'change' }), { type: 'typed', field: 'repo', value: 'acme/other' })
+    expect(readyToAdd(changed, [], [])).toEqual({ ok: true, body: { name: 'LangGraph', repo: 'acme/other' } })
+  })
+
+  it('refuses a bad version and names the field', () => {
+    const bad = addReducer(single, { type: 'typed', field: 'version', value: '1.2' })
+    expect(readyToAdd(bad, [], [])).toEqual({ ok: false, errors: { version: 'Type the version as three numbers, such as 1.2.14.' } })
+  })
+
+  it('answers a name of spaces with a plain ask for a name', () => {
+    const blank = run('   ')
+    expect(readyToAdd(blank, [], [])).toMatchObject({ ok: false, errors: { name: 'Give the software a name.' } })
+  })
+
+  it('goes back to the start when the person starts again', () => {
+    expect(addReducer(single, { type: 'reset' })).toEqual(START)
   })
 })
 

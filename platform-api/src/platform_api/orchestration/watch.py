@@ -104,10 +104,13 @@ ATTENTION_ORDER: tuple[Status, ...] = (
 """Rows that need a person first, up to date last."""
 
 
+# The project prefix some tags carry, such as docker-v, n8n@ or langchain==, then an optional v.
+_PREFIX = re.compile(r"(?:[A-Za-z][A-Za-z0-9._-]*?[@=-]+)?[vV]?(\d+(?:\.\d+)*)", re.ASCII)
+
+
 def _numbers(version: str) -> tuple[int, ...] | None:
-    bare = version[1:] if version[:1] in ("v", "V") else version
-    parts = bare.split(".")
-    return tuple(int(p) for p in parts) if all(p.isdigit() for p in parts) else None
+    found = _PREFIX.fullmatch(version)
+    return tuple(int(part) for part in found[1].split(".")) if found else None
 
 
 def newer(candidate: str, than: str) -> bool:
@@ -264,7 +267,11 @@ def review(
                 f"The agents proposed a ticket for {software.name}, but {finding.newest} is not "
                 f"newer than our version {software.our_version}"
             )
-        expected = f"Upgrade {software.name} from {software.our_version} to {finding.newest}"
+        expected = (
+            f"Upgrade {software.name} to {finding.newest}"
+            if software.from_first_check
+            else f"Upgrade {software.name} from {software.our_version} to {finding.newest}"
+        )
         if intent.fields.get("title") != expected:
             return Unusable(
                 f'The agents titled the ticket for {software.name} differently from "{expected}"'

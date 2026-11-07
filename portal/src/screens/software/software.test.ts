@@ -9,23 +9,27 @@ import {
   checkName,
   checkRepo,
   checkVersion,
-  countIn,
   DAYS,
   dayOption,
+  decisionsOf,
+  decisionTitle,
   emptyWords,
-  groupsOf,
   historyOf,
   matches,
   newestOf,
   nextCheckWords,
   noScheduleWords,
+  oursOf,
   repoOf,
+  rowsMatching,
   scheduleOwnerWords,
   scheduleRuns,
   scheduleWords,
   singaporeTime,
   statusLabel,
+  statusWords,
   versionSourceWords,
+  waitingWords,
 } from './software'
 import { formatterFactory, nextRunWords } from '../workflows/workflow'
 
@@ -116,7 +120,7 @@ describe('status labels', () => {
   it('has plain words for every status the platform sends', () => {
     expect(statusLabel).toEqual({
       cant_check: 'Can’t check',
-      behind: 'Behind',
+      behind: 'New version',
       awaiting_approval: 'Ticket waiting for a yes',
       ticket_open: 'Ticket open',
       up_to_date: 'Up to date',
@@ -126,25 +130,41 @@ describe('status labels', () => {
 
   it('says where our version came from', () => {
     expect(versionSourceWords({ kind: 'given', at: '2026-11-02T10:00:00Z', ticket: null })).toBe('Given when added')
-    expect(versionSourceWords({ kind: 'first_check', at: '2026-11-02T10:00:00Z', ticket: null })).toBe('Taken from the first check')
+    expect(versionSourceWords({ kind: 'first_check', at: '2026-11-02T10:00:00Z', ticket: null })).toBe('Compared from the first check')
     expect(versionSourceWords({ kind: 'ticket_done', at: '2026-11-02T10:00:00Z', ticket: 'MOCK-9' })).toBe('From MOCK-9, marked Done')
     expect(versionSourceWords(null)).toBe('Not known until the first check')
   })
 })
 
 describe('the list', () => {
-  it('splits rows by whether a person has to look', () => {
-    const groups = groupsOf(ROWS, '')
-    expect(groups.needs.map((row) => row.status)).toEqual(['cant_check', 'behind', 'awaiting_approval', 'ticket_open'])
-    expect(groups.notChecked.map((row) => row.name)).toEqual(['Terraform'])
-    expect(groups.upToDate.map((row) => row.name)).toEqual(['n8n'])
-    expect(countIn(groups)).toBe(ROWS.length)
+  it('keeps every row in Software we watch, so the count is the real number', () => {
+    expect(rowsMatching(ROWS, '').map((row) => row.status)).toEqual(ROWS.map((row) => row.status))
+    expect(rowsMatching(ROWS, '')).toHaveLength(ROWS.length)
   })
 
   it('filters by name or repository, whatever the case', () => {
-    expect(countIn(groupsOf(ROWS, 'LANG'))).toBe(1)
-    expect(countIn(groupsOf(ROWS, 'hashicorp'))).toBe(1)
-    expect(countIn(groupsOf(ROWS, 'zzz'))).toBe(0)
+    expect(rowsMatching(ROWS, 'LANG')).toHaveLength(1)
+    expect(rowsMatching(ROWS, 'hashicorp')).toHaveLength(1)
+    expect(rowsMatching(ROWS, 'zzz')).toHaveLength(0)
+  })
+
+  it('makes one decision for the whole check, however many rows wait on it', () => {
+    const waiting = (id: string, approval: string | null): WatchedSoftwareView => ({ ...ROWS[0]!, id, status: 'awaiting_approval', approval_id: approval })
+    expect(decisionsOf(ROWS)).toEqual([{ approvalId: 'apr_01JBB', software: 1 }])
+    expect(decisionsOf([waiting('a', 'apr_1'), waiting('b', 'apr_1'), waiting('c', 'apr_1')])).toEqual([{ approvalId: 'apr_1', software: 3 }])
+    expect(decisionsOf([waiting('a', null)])).toEqual([])
+    expect(decisionsOf([])).toEqual([])
+  })
+
+  it('names the tickets the yes covers, in the singular too', () => {
+    expect(decisionTitle(3)).toBe('The latest check wants to raise 3 upgrade tickets.')
+    expect(decisionTitle(1)).toBe('The latest check wants to raise 1 upgrade ticket.')
+  })
+
+  it('says who the bar waits for, and why when the person is the reason', () => {
+    expect(waitingWords('own_work')).toBe('Waiting for another Approver. This check is your own work.')
+    expect(waitingWords('not_an_approver')).toBe('Waiting for an Approver.')
+    expect(waitingWords(null)).toBe('Waiting for an Approver.')
   })
 
   it('says the count of matches in words', () => {
@@ -299,5 +319,39 @@ describe('a row’s history', () => {
   it('says a new row was not checked yet', () => {
     const row = ROWS.find((r) => r.status === 'not_checked') as WatchedSoftwareView
     expect(historyOf(row, nameOf)[0]).toEqual({ when: 'Not yet', words: 'Not checked yet.' })
+  })
+})
+
+describe('what the team runs', () => {
+  const base = ROWS[0] as WatchedSoftwareView
+
+  it('shows the version somebody gave, with where it came from', () => {
+    const given = { ...base, our_version: '1.2.14', our_version_source: { kind: 'given', at: '2026-11-02T10:00:00Z', ticket: null }, compared_from: null } as WatchedSoftwareView
+    expect(oursOf(given)).toEqual({ version: '1.2.14', note: 'Given when added' })
+  })
+
+  it('says Not known, with the version the checks compare from, never as the version the team runs', () => {
+    const first = { ...base, our_version: null, our_version_source: { kind: 'first_check', at: '2026-11-09T01:00:00Z', ticket: null }, compared_from: '8.2.0' } as WatchedSoftwareView
+    expect(oursOf(first)).toEqual({ version: 'Not known', note: 'Telling you about releases newer than 8.2.0, the newest the first check read' })
+  })
+
+  it('says Not known before any check has read the newest release', () => {
+    const fresh = { ...base, our_version: null, our_version_source: null, compared_from: null } as WatchedSoftwareView
+    expect(oursOf(fresh)).toEqual({ version: 'Not known', note: 'The first check reads the newest release. Later checks tell you about newer ones' })
+  })
+
+  it('tells the row history what the checks compare from', () => {
+    const first = { ...base, our_version: null, our_version_source: { kind: 'first_check', at: '2026-11-09T01:00:00Z', ticket: null }, compared_from: '8.2.0' } as WatchedSoftwareView
+    const words = historyOf(first, nameOf).map((line) => line.words)
+    expect(words).toContain('Our version is not known. Later checks tell about releases newer than 8.2.0, the newest the first check read.')
+    expect(words.some((line) => line.startsWith('Our version is 8.2.0'))).toBe(false)
+  })
+})
+
+describe('the status of a row whose version is not known', () => {
+  it('does not claim Up to date when nothing is known to be up to date with', () => {
+    expect(statusWords({ status: 'up_to_date', our_version: null })).toBe('Nothing newer yet')
+    expect(statusWords({ status: 'up_to_date', our_version: '1.2.16' })).toBe('Up to date')
+    expect(statusWords({ status: 'behind', our_version: null })).toBe('New version')
   })
 })

@@ -18,6 +18,7 @@
         "at": "2026-11-02T10:00:00Z",
         "ticket": null
       },
+      "compared_from": null,
       "newest_version": "0.115.2",
       "newest_read_at": "2026-11-09T01:00:00Z",
       "checked_at": "2026-11-16T01:00:12Z",
@@ -42,6 +43,7 @@
         "at": "2026-11-02T10:00:00Z",
         "ticket": null
       },
+      "compared_from": null,
       "newest_version": "1.2.16",
       "newest_read_at": "2026-11-16T01:00:12Z",
       "checked_at": "2026-11-16T01:00:12Z",
@@ -60,12 +62,13 @@
         "ref": "redis/redis",
         "url": "https://github.com/redis/redis/releases"
       },
-      "our_version": "8.2.0",
+      "our_version": null,
       "our_version_source": {
         "kind": "first_check",
         "at": "2026-11-09T01:00:00Z",
         "ticket": null
       },
+      "compared_from": "8.2.0",
       "newest_version": "8.2.1",
       "newest_read_at": "2026-11-16T01:00:12Z",
       "checked_at": "2026-11-16T01:00:12Z",
@@ -90,6 +93,7 @@
         "at": "2026-11-02T10:00:00Z",
         "ticket": null
       },
+      "compared_from": null,
       "newest_version": "17.3.0",
       "newest_read_at": "2026-11-16T01:00:12Z",
       "checked_at": "2026-11-16T01:00:12Z",
@@ -110,6 +114,7 @@
       },
       "our_version": null,
       "our_version_source": null,
+      "compared_from": null,
       "newest_version": null,
       "newest_read_at": null,
       "checked_at": null,
@@ -134,6 +139,7 @@
         "at": "2026-11-13T01:00:12Z",
         "ticket": "MOCK-140"
       },
+      "compared_from": null,
       "newest_version": "2.42.6",
       "newest_read_at": "2026-11-16T01:00:12Z",
       "checked_at": "2026-11-16T01:00:12Z",
