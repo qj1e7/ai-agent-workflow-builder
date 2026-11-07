@@ -415,6 +415,31 @@ def test_a_watchlist_word_the_request_lacks_leaves_the_rows_to_decide_or_is_unus
     )
 
 
+def test_a_mixed_request_drops_the_release_part_the_model_put_in_a_cant_row():
+    task = "Watch React releases and list stale bug tickets every Friday"
+    rows = (
+        row("schedule", "Every Friday"),
+        row("look_for", "React releases", "cant_do", "Releases belong on the watchlist."),
+        row("look_for", "Stale bug tickets", "changed", "Stale read as 14 days."),
+        row("do", "List them"),
+        row("where", "", "missing"),
+    )
+    answer = answer_of(
+        read(
+            *rows,
+            belongs_on_watchlist=True,
+            watchlist_word="Watch React releases",
+            software="React",
+        ),
+        task,
+    )
+    assert isinstance(answer, WatchlistAnswer) and answer.word == "releases"
+    assert isinstance(answer.also, SetupCardAnswer)
+    assert [(r.kind, r.text) for r in answer.also.rows if r.kind == "look_for"] == [
+        ("look_for", "Stale bug tickets")
+    ]
+
+
 def test_a_mixed_request_leads_with_the_watchlist_and_carries_the_workflow():
     task = "Watch React releases and list stale bug tickets every Friday"
     rows = (
@@ -529,14 +554,20 @@ def test_the_products_own_words_and_a_filter_on_tickets_are_not_refused(task: st
     assert not isinstance(answer, RefusedAnswer)
 
 
-def test_a_cant_do_row_that_asks_to_skip_a_yes_is_the_second_net():
+def test_only_the_request_decides_a_refusal_never_the_models_words():
+    """The model's can't row is its paraphrase, with no clause before it to tell a filter from a
+    skip. A reading that says "approved automatically" of what to look for, or "without asking
+    for confirmation" with the person's "from me" dropped, is a can't, not a refusal."""
     rows = (
-        *FOLLOW_UP_ROWS[:3],
-        row("do", "Create it without approval", "cant_do", "Every write waits for a yes.", None),
-        FOLLOW_UP_ROWS[3],
+        row("schedule", "", "missing"),
+        row("look_for", "Requests approved automatically by mistake", "cant_do", "Can't see."),
+        row("do", "List them without asking for confirmation", "cant_do", "Needs a yes."),
+        row("where", "", "missing"),
     )
-    answer = answer_of(read(*rows), f"{FOLLOW_UP_TASK}, and do not bother anyone about it")
-    assert answer == RefusedAnswer(rest="")
+    task = "Every Monday, show requests approved automatically by mistake, without asking me"
+    answer = answer_of(read(*rows), task)
+    assert isinstance(answer, CantAnswer)
+    assert answer.cant[0].text == "Requests approved automatically by mistake"
 
 
 def test_a_refusal_never_calls_the_model():

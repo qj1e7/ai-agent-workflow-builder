@@ -331,10 +331,6 @@ def _from_rows(read: TaskRead, request: str) -> PlannerAnswer:
     if all(row.state == "missing" for row in rows):
         return AbilitiesAnswer()
     cant_rows = [row for row in rows if row.state == "cant_do"]
-    for row in cant_rows:
-        refused = _refusal(f"{row.text} {row.note or ''}", rest="")
-        if refused is not None:
-            return refused
     name = _name_of(read.name, request)
     if not cant_rows:
         return SetupCardAnswer(name=name, rows=rows)
@@ -351,9 +347,16 @@ def _from_rows(read: TaskRead, request: str) -> PlannerAnswer:
 
 
 def _also(read: TaskRead, request: str) -> SetupCardAnswer | PartAnswer | CantAnswer | None:
-    if not read.rows:
+    """The workflow a mixed request also asks for. A can't row that is the release part itself
+    is dropped: the watchlist answer already carries it."""
+    rows = [
+        r
+        for r in read.rows
+        if not (r.state == "cant_do" and release_word_in(f"{r.text} {r.note or ''}"))
+    ]
+    if not rows:
         return None
-    rest = _from_rows(read, request)
+    rest = _from_rows(read.model_copy(update={"rows": rows}), request)
     return rest if isinstance(rest, SetupCardAnswer | PartAnswer | CantAnswer) else None
 
 
