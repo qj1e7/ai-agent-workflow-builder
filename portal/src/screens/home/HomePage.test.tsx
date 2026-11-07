@@ -105,10 +105,18 @@ describe('Home for the Operator who started that run', () => {
     expect(linksIn(card)).toEqual([['See the run', '/runs/run_01JB9']])
   })
 
-  it('shows the run waiting for someone else’s yes under Waiting on others, with no Approve button', () => {
-    const waiting = sectionOf(html, 'Waiting on others')
-    expect(linksIn(waiting)).toEqual([['An Approver’s yes on Software watchlist You started it · Today 10:14', '/runs/run_01JB8']])
-    expect(buttonsIn(waiting)).toEqual([])
+  it('no longer lists the run waiting for someone else’s yes, because Waiting on others is on Workflows', () => {
+    expect(ALICE_HOME.waiting_on_others).toHaveLength(1)
+    expect(html).not.toContain('Waiting on others')
+    expect(html).not.toContain('data-waiting')
+  })
+
+  it('counts the team’s unread reply in Needs you', () => {
+    const quiet: HomeOut = { ...ALICE_HOME, stopped: [], stopped_total: 0, approvals: [], approvals_total: 0, confirmations: [] }
+    const reply = mainOf(render(ALICE, quiet))
+    expect(text(reply)).toContain('Needs you 1')
+    expect(text(itemOf(reply, 'reply:trq_01JD5RP'))).toContain('Bob replied to your report')
+    expect(linksIn(itemOf(reply, 'reply:trq_01JD5RP'))).toEqual([['Read the reply', '/workflows?request=trq_01JD5RP']])
   })
 
   it('lists her draft by name, with its step and when it was saved, opening New workflow at that draft', () => {
@@ -207,7 +215,7 @@ describe('Home when a refresh fails', () => {
 describe('Home for an Operator with more than three things waiting', () => {
   const approvals = Array.from({ length: 5 }, (_, n): ApprovalItem => ({ ...(BOB_HOME.approvals[0] as ApprovalItem), run_id: `run_${n}`, approval_id: `apr_${n}`, started_at: `2026-11-03T01:0${n}:00Z` }))
   const busy: HomeOut = { ...ALICE_HOME, approvals, approvals_total: 5 }
-  const total = 5 + ALICE_HOME.confirmations.length + ALICE_HOME.stopped_total
+  const total = 5 + ALICE_HOME.confirmations.length + ALICE_HOME.stopped_total + ALICE_HOME.replied.length
 
   it('shows the three most urgent, stopped runs first, and links to the rest on Workflows', () => {
     const html = mainOf(render(ALICE, busy))

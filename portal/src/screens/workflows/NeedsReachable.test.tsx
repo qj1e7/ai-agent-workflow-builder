@@ -11,7 +11,7 @@ import done from '../../../../contracts/fixtures/views/success.final.json'
 import { App } from '../../App'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
-import type { ApprovalItem, ConfirmationItem, HomeOut, Me, RunView, StoppedItem, UseCaseView } from '../../api/types'
+import type { ApprovalItem, ConfirmationItem, FollowingUpItem, HomeOut, Me, ReplyView, RunView, StoppedItem, UseCaseView } from '../../api/types'
 
 const PEOPLE: Record<'alice' | 'bob' | 'carol', Me> = {
   alice: { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] },
@@ -38,6 +38,7 @@ interface Situation {
   readonly workflows: number
   readonly runs: readonly Made[]
   readonly confirmations: readonly ConfirmationItem['kind'][]
+  readonly replies?: number
 }
 
 const operator = (me: Me) => me.roles.includes('operator')
@@ -87,6 +88,7 @@ function platformHome(situation: Situation, runs: readonly Run[]): HomeOut {
   const approvalShape = (bobHome as HomeOut).approvals[0] as ApprovalItem
   const stoppedShape = base.stopped[0] as StoppedItem
   const confirmationShape = (bobHome as HomeOut).confirmations[0] as ConfirmationItem
+  const replyShape = base.replied[0] as FollowingUpItem
   return {
     ...base,
     approvals: asks.slice(0, API_SHOWN).map(({ view }) => ({ ...approvalShape, run_id: view.run_id, approval_id: `apr_${view.run_id}`, use_case_id: view.use_case_id, use_case_name: view.use_case_name, started_by: 'carol', started_by_name: 'Carol', started_at: view.started_at })),
@@ -98,6 +100,7 @@ function platformHome(situation: Situation, runs: readonly Run[]): HomeOut {
       : [],
     waiting_on_others: [],
     waiting_on_others_total: 0,
+    replied: Array.from({ length: situation.replies ?? 0 }, (_, n) => ({ ...replyShape, request_id: `trq_${n}`, asked_at: iso(n), latest_reply: { ...(replyShape.latest_reply as ReplyView), replied_at: iso(n + 5) } })),
   }
 }
 
@@ -181,7 +184,7 @@ function see(situation: Situation): Seen {
 const reaches = (seen: Seen, run: string) => seen.actions.includes(`open ${run}`) || seen.actions.includes(`retry ${run}`)
 
 function describeSituation({ situation, home }: Seen): string {
-  const shape = `${situation.me.id}, ${situation.workflows} workflows, API returned ${home.approvals.length} of ${home.approvals_total} approvals, ${home.stopped.length} of ${home.stopped_total} stopped, ${home.confirmations.length} confirmations`
+  const shape = `${situation.me.id}, ${situation.workflows} workflows, API returned ${home.approvals.length} of ${home.approvals_total} approvals, ${home.stopped.length} of ${home.stopped_total} stopped, ${home.confirmations.length} confirmations, ${home.replied.length} replies`
   return `${situation.name} (${shape})`
 }
 
@@ -196,6 +199,7 @@ function unreachable(seen: Seen): string[] {
     ...home.approvals.filter((item) => !reaches(seen, item.run_id)).map((item) => `approval ${item.approval_id} (run ${item.run_id}, ${item.use_case_id}${newerOnSameWorkflow(item.run_id, item.use_case_id)}): no button acts on its run`),
     ...home.stopped.filter((item) => !reaches(seen, item.run_id)).map((item) => `stopped run ${item.run_id} (${item.use_case_id}): no button acts on it`),
     ...home.confirmations.filter((item) => !controls.some((control) => control.item === `confirmation:${item.confirmation_id}`)).map((item) => `confirmation ${item.confirmation_id}: no button`),
+    ...home.replied.filter((item) => !controls.some((control) => control.item === `reply:${item.request_id}` && control.href === `/workflows?request=${item.request_id}`)).map((item) => `reply to request ${item.request_id}: no button opens it`),
   ]
 }
 
@@ -213,7 +217,7 @@ function twice({ actions }: Seen): string[] {
 
 function primaryProblem({ controls, actions, home }: Seen): string[] {
   const primaries = controls.filter((control) => control.primary).map((control) => control.text)
-  const somethingToDo = actions.length > 0 || home.confirmations.length > 0
+  const somethingToDo = actions.length > 0 || home.confirmations.length > 0 || home.replied.length > 0
   const expected = somethingToDo ? 1 : 0
   return primaries.length === expected ? [] : [`${primaries.length} primary buttons (${primaries.join(', ')}), expected ${expected}`]
 }
@@ -252,7 +256,7 @@ function generated(count: number): Situation[] {
       ...Array.from({ length: upTo(4) }, (): Made => ({ workflow: anyWorkflow(), kind: 'done', minute: upTo(999) })),
     ]
     const confirmations = Array.from({ length: upTo(2) }, (): ConfirmationItem['kind'] => (next() < 0.5 ? 'approver' : 'model_address'))
-    return { name: `generated #${n}`, me: who[upTo(who.length - 1)] ?? PEOPLE.alice, workflows, runs, confirmations }
+    return { name: `generated #${n}`, me: who[upTo(who.length - 1)] ?? PEOPLE.alice, workflows, runs, confirmations, replies: n % 5 === 0 ? 1 : n % 7 === 0 ? 2 : 0 }
   })
 }
 
@@ -286,6 +290,8 @@ const NAMED: Situation[] = [
   { name: 'an Approver only, with 12 approvals and two confirmations', me: PEOPLE.bob, workflows: 12, runs: own(0, 12, 'decide', (i) => i), confirmations: ['approver', 'model_address'] },
   { name: 'twelve stopped runs, so the platform returns ten, and two approvals', me: PEOPLE.alice, workflows: 14, runs: [...own(0, 12, 'stopped', (i) => 100 + i), ...own(12, 2, 'decide', (i) => i)], confirmations: [] },
   { name: 'nothing needs anyone', me: PEOPLE.alice, workflows: 3, runs: own(0, 3, 'done', (i) => i), confirmations: [] },
+  { name: 'only a reply from the team', me: PEOPLE.bob, workflows: 3, runs: own(0, 3, 'done', (i) => i), confirmations: [], replies: 1 },
+  { name: 'two replies, an approval and a stop', me: PEOPLE.alice, workflows: 4, runs: [...own(0, 1, 'decide', () => 5), ...own(1, 1, 'stopped', () => 9)], confirmations: ['approver'], replies: 2 },
 ]
 
 const SITUATIONS = [...NAMED, ...generated(240)].map(see)
@@ -307,8 +313,9 @@ describe(`Needs you on Workflows, in ${SITUATIONS.length} situations the platfor
       stoppedCutByThePlatform: count(({ home }) => home.stopped_total > home.stopped.length),
       nothingInNeedsYouButARowToAct: count(({ home, runs, situation }) => home.approvals_total + home.stopped_total + home.confirmations.length === 0 && [...latestOf(runs).values()].some((run) => youDecide(run) || (run.view.state === 'failed' && operator(situation.me)))),
       approverOnly: count(({ situation }) => !operator(situation.me)),
+      replies: count(({ home }) => home.replied.length > 0),
       confirmations: count(({ home }) => home.confirmations.length > 0),
-      nothingToDo: count(({ actions, home }) => actions.length === 0 && home.confirmations.length === 0),
+      nothingToDo: count(({ actions, home }) => actions.length === 0 && home.confirmations.length === 0 && home.replied.length === 0),
     }
     for (const [shape, n] of Object.entries(shapes)) expect(n, shape).toBeGreaterThanOrEqual(1)
     expect(shapes.moreThanTenReturned).toBeGreaterThanOrEqual(30)

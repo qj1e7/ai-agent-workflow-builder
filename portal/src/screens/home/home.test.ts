@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import aliceHome from '../../../../contracts/fixtures/builder/home.alice.json'
 import bobHome from '../../../../contracts/fixtures/builder/home.bob.json'
 import dayOne from '../../../../contracts/fixtures/builder/home.day-one.json'
-import type { ApprovalItem, HomeOut, StoppedItem, WaitingItem } from '../../api/types'
+import type { ApprovalItem, FollowingUpItem, HomeOut, ReplyView, StoppedItem, WaitingItem } from '../../api/types'
 import { ApiError } from '../../api/client'
 import { actionsOf, comingUpOf, draftWords, HOME_NEEDS_SHOWN, leadLine, moreWords, needsOf, needsTotal, retryProblem, waitingWords, wordsOf, type Need } from './home'
 
@@ -29,6 +29,30 @@ describe('the order of what needs you', () => {
   it('puts stopped runs first, then approvals, then confirmations', () => {
     const home: HomeOut = { ...BOB, stopped: [STOP], stopped_total: 1 }
     expect(needsOf(home).shown.map((need) => need.kind)).toEqual(['stopped', 'approval', 'confirmation', 'confirmation'])
+  })
+
+  it('puts a reply from the team last, after confirmations, and counts it', () => {
+    const reply = (ALICE.replied as [FollowingUpItem])[0]
+    const home: HomeOut = { ...BOB, replied: [reply], stopped: [STOP], stopped_total: 1 }
+    expect(needsOf(home).shown.map((need) => need.kind)).toEqual(['stopped', 'approval', 'confirmation', 'confirmation', 'reply'])
+    expect(needsTotal(home)).toBe(1 + BOB.approvals_total + BOB.confirmations.length + 1)
+  })
+
+  it('orders replies newest reply first and gives each a link to its request', () => {
+    const [first] = ALICE.replied as [FollowingUpItem]
+    const older: FollowingUpItem = { ...first, request_id: 'trq_old', latest_reply: { ...(first.latest_reply as ReplyView), replied_at: '2026-11-03T08:30:00Z' } }
+    const needs = needsOf({ ...DAY_ONE, replied: [older, first] })
+    expect(keys(needs.shown)).toEqual(['reply:trq_01JD5RP', 'reply:trq_old'])
+    expect(actionsOf(needs.shown[0] as Need)).toEqual([{ kind: 'open', label: 'Read the reply', to: '/workflows?request=trq_01JD5RP' }])
+  })
+
+  it('names who replied and quotes the reply, cut short when it is long', () => {
+    const [first] = ALICE.replied as [FollowingUpItem]
+    const long: FollowingUpItem = { ...first, latest_reply: { ...(first.latest_reply as ReplyView), text: 'x'.repeat(300) } }
+    const words = wordsOf(needsOf({ ...DAY_ONE, replied: [first] }).shown[0] as Need, NOW)
+    expect(words.title).toBe('Bob replied to your report')
+    expect(words.note).toBe('Looking into it.')
+    expect(wordsOf(needsOf({ ...DAY_ONE, replied: [long] }).shown[0] as Need, NOW).note).toHaveLength(160)
   })
 
   it('shows the newest first within each kind, whatever order they came in', () => {

@@ -1,8 +1,9 @@
 import { ApiError } from '../../api/client'
 import { DRAFT_STEPS } from '../../api/drafts'
 import { connectorLabel, starterName } from '../../api/labels'
-import type { ApprovalItem, ConfirmationItem, DraftItem, HomeOut, StoppedItem, WaitingItem } from '../../api/types'
+import type { ApprovalItem, ConfirmationItem, DraftItem, FollowingUpItem, HomeOut, StoppedItem, WaitingItem } from '../../api/types'
 import { count, withCurrentNames } from '../run/words'
+import { requestKindWords, requestPath } from '../workflows/requests'
 import { lineWhen, nextRunAt, runWhen, workflowPath } from '../workflows/workflow'
 
 /** Home for an Operator shows the most urgent few. Workflows, and Home for someone who is not an Operator, show everything the platform returned. */
@@ -12,6 +13,7 @@ export type Need =
   | { readonly kind: 'approval'; readonly key: string; readonly at: string; readonly item: ApprovalItem }
   | { readonly kind: 'confirmation'; readonly key: string; readonly at: string; readonly item: ConfirmationItem }
   | { readonly kind: 'stopped'; readonly key: string; readonly at: string; readonly item: StoppedItem }
+  | { readonly kind: 'reply'; readonly key: string; readonly at: string; readonly item: FollowingUpItem }
 
 export interface LeftOut {
   readonly approvals: number
@@ -24,21 +26,22 @@ export interface Needs {
   readonly more: LeftOut
 }
 
-const KIND_ORDER: Record<Need['kind'], number> = { stopped: 0, approval: 1, confirmation: 2 }
+const KIND_ORDER: Record<Need['kind'], number> = { stopped: 0, approval: 1, confirmation: 2, reply: 3 }
 
 const urgentFirst = (a: Need, b: Need) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || b.at.localeCompare(a.at) || a.key.localeCompare(b.key)
 
-export const needsTotal = (home: HomeOut) => home.approvals_total + home.confirmations.length + home.stopped_total
+export const needsTotal = (home: HomeOut) => home.approvals_total + home.confirmations.length + home.stopped_total + home.replied.length
 
 /** The runs Needs you on Workflows offers an action on, so the list of workflows under it need not offer the same run again. */
 export const runsInNeeds = (home: HomeOut): ReadonlySet<string> =>
-  new Set(needsOf(home).shown.flatMap((need) => (need.kind === 'confirmation' ? [] : [need.item.run_id])))
+  new Set(needsOf(home).shown.flatMap((need) => (need.kind === 'approval' || need.kind === 'stopped' ? [need.item.run_id] : [])))
 
 export function needsOf(home: HomeOut, limit = Infinity): Needs {
   const all: Need[] = [
     ...home.approvals.map((item): Need => ({ kind: 'approval', key: `approval:${item.approval_id}`, at: item.started_at, item })),
     ...home.confirmations.map((item): Need => ({ kind: 'confirmation', key: `confirmation:${item.confirmation_id}`, at: item.asked_at, item })),
     ...home.stopped.map((item): Need => ({ kind: 'stopped', key: `stopped:${item.run_id}`, at: item.stopped_at, item })),
+    ...home.replied.map((item): Need => ({ kind: 'reply', key: `reply:${item.request_id}`, at: item.latest_reply?.replied_at ?? item.asked_at, item })),
   ].sort(urgentFirst)
   const shown = all.slice(0, limit)
   const total = needsTotal(home)
@@ -64,7 +67,7 @@ export function moreWords({ approvals, others }: LeftOut): string | null {
   return `${left} more ${left === 1 ? 'thing needs' : 'things need'} you. The next ones show here as you finish these.`
 }
 
-export type Tone = 'wait' | 'bad' | 'tool'
+export type Tone = 'wait' | 'bad' | 'tool' | 'info'
 
 export interface ItemWords {
   readonly tone: Tone
@@ -128,6 +131,21 @@ function stoppedWords(item: StoppedItem, now: Date): ItemWords {
   }
 }
 
+const REPLY_SHOWN = 160
+
+function replyWords(item: FollowingUpItem, now: Date): ItemWords {
+  const reply = item.latest_reply
+  const said = reply ? reply.text : ''
+  return {
+    tone: 'info',
+    title: `${reply ? reply.replied_by_name : 'The team'} replied to your ${item.kind === 'support' ? 'report' : 'request'}`,
+    meta: `${requestKindWords(item.kind)} · ${reply ? runWhen(reply.replied_at, now) : runWhen(item.asked_at, now)}`,
+    lines: [],
+    note: said.length > REPLY_SHOWN ? `${said.slice(0, REPLY_SHOWN - 1).trimEnd()}…` : said,
+    why: null,
+  }
+}
+
 export function wordsOf(need: Need, now: Date): ItemWords {
   switch (need.kind) {
     case 'approval':
@@ -136,6 +154,8 @@ export function wordsOf(need: Need, now: Date): ItemWords {
       return confirmationWords(need.item, now)
     case 'stopped':
       return stoppedWords(need.item, now)
+    case 'reply':
+      return replyWords(need.item, now)
   }
 }
 
@@ -149,72 +169,5 @@ export function actionsOf(need: Need): readonly Action[] {
       return [{ kind: 'open', label: 'Review in Settings', to: need.item.kind === 'approver' ? '/settings?tab=people' : '/settings' }]
     case 'stopped':
       return stoppedActions(need.item.run_id, need.item.retryable)
-  }
-}
-
-/** A stopped run offers Retry when the platform says it can be retried, and always a way to read why it stopped. */
-export function stoppedActions(runId: string, retryable: boolean): readonly Action[] {
-  return retryable
-    ? [
-        { kind: 'retry', label: 'Retry the run', runId },
-        { kind: 'open', label: 'See the run', to: `/runs/${runId}` },
-      ]
-    : [{ kind: 'open', label: 'See why it stopped', to: `/runs/${runId}` }]
-}
-
-const noLongerStopped = (error: unknown) => error instanceof ApiError && error.status === 409
-
-export function retryProblem(error: unknown, words: (error: unknown) => string): string {
-  if (noLongerStopped(error)) return 'It can’t be retried now. Someone may have retried it already, so look at the run.'
-  return `Could not retry the run. ${words(error)}`
-}
-
-export interface RowWords {
-  readonly name: string
-  readonly sub: string
-}
-
-function whyNotYours(item: WaitingItem): string {
-  switch (item.because) {
-    case 'started':
-      return item.trigger === 'schedule' ? 'Your schedule started it' : 'You started it'
-    case 'retried':
-      return 'You retried it'
-    case 'owns':
-      return 'It is your workflow'
-    case 'decided_earlier':
-      return 'You already said yes to an earlier step'
-  }
-}
-
-export function waitingWords(item: WaitingItem, now: Date): RowWords & { readonly to: string } {
-  return {
-    name: `${item.because === 'decided_earlier' ? 'Another' : 'An'} Approver’s yes on ${item.use_case_name}`,
-    sub: `${whyNotYours(item)} · ${lineWhen(item.started_at, now)}`,
-    to: `/runs/${item.run_id}`,
-  }
-}
-
-export function draftWords(draft: DraftItem, now: Date): RowWords {
-  return { name: draft.name ?? 'New workflow', sub: `${draft.step === null ? '' : `Step ${draft.step} of ${DRAFT_STEPS}. `}Last saved ${runWhen(draft.saved_at, now)}.` }
-}
-
-export interface Next {
-  readonly name: string
-  readonly to: string
-  readonly when: string
-  readonly more: number
-}
-
-export function comingUpOf(home: HomeOut, now: Date): Next | null {
-  const next = home.coming_up
-  if (!next) return null
-  return { name: next.name, to: workflowPath(next), when: nextRunAt(next.next_run_at, now, next.time_zone), more: next.more }
-}
-
-export const HOW_IT_WORKS: readonly (readonly [string, string])[] = [
-  ['Describe a task', 'In plain English, the way you would ask a colleague.'],
-  ['Check what was understood', 'Fix anything that doesn’t match, then choose when it runs.'],
-  ['Say yes in Teams', 'Nothing changes in Jira or Confluence until an Approver agrees.'],
-  ['See the result here', 'If something stops, the AI troubleshooter tells you why.'],
-]
+    case 'reply':
+      return [{ kind: 'open', label: 'Read the reply', to: requestPath(need.item.request_id) }]

@@ -2,7 +2,6 @@ import { ApiError } from '../../api/client'
 import { failureReasonLabel } from '../../api/labels'
 import { pressOnce, type Latch, type Outcome } from '../../api/latch'
 import type { BlockKind, Me, RunView, ScheduleIn, UseCaseView } from '../../api/types'
-import type { FaceState } from '../../ui/AgentFace'
 import { agentIdentity } from '../../ui/agents'
 import { andList, count, type NameOf } from '../run/words'
 import { faceId } from '../agents/agents'
@@ -204,14 +203,6 @@ export function agentsOf(useCase: Pick<UseCaseView, 'template' | 'agents'>): Age
       : useCase.agents
   const unique = cards.filter((card, index) => cards.findIndex((other) => other.card_id === card.card_id) === index)
   return [PLANNER, ...unique.map((card) => ({ face: faceId(card), name: card.name, to: `/agents/${card.card_id}` }))]
-}
-
-export function faceStates(useCase: Pick<UseCaseView, 'state'>, latest: RunView | null, total: number): FaceState[] {
-  const proposer = total - 1
-  return Array.from({ length: total }, (_, index): FaceState => {
-    if (useCase.state === 'paused') return 'stopped'
-    return latest?.state === 'awaiting_approval' && index === proposer ? 'waiting' : 'idle'
-  })
 }
 
 export type RowAction = { readonly kind: 'decide' | 'why'; readonly runId: string }

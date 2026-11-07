@@ -5,8 +5,11 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from platform_api.auth import SIGNED_IN, CurrentPrincipal
 from platform_api.builder.team_requests import (
     CreateTeamRequest,
+    NoSuchRequest,
     NoSuchRun,
+    NotTheAsker,
     ReplyIn,
+    SeenIn,
     TeamRequestList,
     TeamRequests,
     TeamRequestView,
@@ -90,3 +93,46 @@ async def reply_to_team_request(
     if replied is None:
         raise HTTPException(404, "No such request")
     return replied
+
+
+@router.get(
+    "/team-requests/{request_id}",
+    description=(
+        "One request for the team, with its replies. Any Operator or Approver can read it, "
+        "because the Teams card goes to the whole team. It stays readable after it leaves the "
+        "list."
+    ),
+    responses={**SIGNED_IN, 404: error_response("No such request")},
+)
+async def get_team_request(
+    request_id: str, principal: CurrentPrincipal, kept: CurrentTeamRequests
+) -> TeamRequestView:
+    found = await kept.get(request_id)
+    if found is None:
+        raise HTTPException(404, "No such request")
+    return found
+
+
+@router.post(
+    "/team-requests/{request_id}/seen",
+    description=(
+        "The person who asked has opened the request and read its replies up to `through`. "
+        "Replies from the team stay in their Needs you until then. Only the asker can mark it, "
+        "and a mark never moves back. It changes nothing else."
+    ),
+    responses={
+        **SIGNED_IN,
+        403: error_response("Only the person who asked can mark a request as read"),
+        404: error_response("No such request"),
+    },
+)
+async def mark_team_request_seen(
+    request_id: str, body: SeenIn, principal: CurrentPrincipal, kept: CurrentTeamRequests
+) -> TeamRequestView:
+    match await kept.mark_seen(principal, request_id, body):
+        case NoSuchRequest():
+            raise HTTPException(404, "No such request")
+        case NotTheAsker():
+            raise HTTPException(403, "Only the person who asked can mark this as read")
+        case marked:
+            return marked

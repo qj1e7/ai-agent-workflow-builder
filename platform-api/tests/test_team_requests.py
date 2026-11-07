@@ -21,7 +21,7 @@ from platform_api.orchestration import (
     TeamsRequestChannel,
 )
 from platform_api.orchestration.team_request_card import request_card
-from platform_api.shared import ExternalIdentity, RunId, UserId
+from platform_api.shared import ExternalIdentity, Principal, Role, RunId, UserId
 from tests.conftest import PostgresUrls
 from tests.declared import declared_status
 from tests.support import LOCAL_ENV
@@ -357,6 +357,89 @@ async def test_the_builder_can_change_only_the_columns_the_service_changes(lab: 
         async with lab.db.transaction("builder") as uow:
             with pytest.raises(psycopg.errors.InsufficientPrivilege):
                 await uow.conn.execute(statement)  # pyright: ignore[reportArgumentType]
+
+
+async def unseen_by_alice(lab: Lab) -> list[str]:
+    alice = Principal(UserId("alice"), frozenset({Role.OPERATOR}), "Alice")
+    return [i.request_id for i in await lab.app.state.team_requests.replied(alice)]
+
+
+async def test_anyone_on_the_team_can_read_one_request_and_an_unknown_one_is_a_404(lab: Lab):
+    made = (await lab.send(ASK)).json()
+    url = f"/api/v1/team-requests/{made['request_id']}"
+    await lab.client.post(url + "/replies", json={"text": "On it."}, headers=BOB)
+
+    for who in (ALICE, BOB, CAROL):
+        got = await lab.client.get(url, headers=who)
+        declared_status(lab.app, "GET", "/api/v1/team-requests/{request_id}", got)
+        assert got.status_code == 200
+        assert [r["text"] for r in got.json()["replies"]] == ["On it."]
+    assert (await lab.client.get("/api/v1/team-requests/trq_nope", headers=BOB)).status_code == 404
+    assert (await lab.client.get(url)).status_code == 401
+    assert (await lab.client.get(url, headers=STRANGER)).status_code == 401
+
+
+async def test_only_the_asker_marks_replies_as_read_and_a_mark_never_moves_back(lab: Lab):
+    made = (await lab.send(ASK)).json()
+    request_id = made["request_id"]
+    url = f"/api/v1/team-requests/{request_id}/seen"
+    first = (
+        await lab.client.post(
+            f"/api/v1/team-requests/{request_id}/replies", json={"text": "One."}, headers=BOB
+        )
+    ).json()["replies"][0]["replied_at"]
+    second = (
+        await lab.client.post(
+            f"/api/v1/team-requests/{request_id}/replies", json={"text": "Two."}, headers=BOB
+        )
+    ).json()["replies"][1]["replied_at"]
+
+    async def unseen() -> list[str]:
+        return await unseen_by_alice(lab)
+
+    assert await unseen() == [request_id]
+    refused = await lab.client.post(url, json={"through": second}, headers=BOB)
+    declared_status(lab.app, "POST", "/api/v1/team-requests/{request_id}/seen", refused)
+    assert refused.status_code == 403
+    assert (await lab.client.post(url, json={"through": second})).status_code == 401
+    assert await unseen() == [request_id]
+    missing = await lab.client.post(
+        "/api/v1/team-requests/trq_nope/seen", json={"through": second}, headers=ALICE
+    )
+    assert missing.status_code == 404
+
+    only_first = await lab.client.post(url, json={"through": first}, headers=ALICE)
+    assert only_first.status_code == 200
+    assert await unseen() == [request_id]
+    read = await lab.client.post(url, json={"through": second}, headers=ALICE)
+    assert read.status_code == 200
+    assert await unseen() == []
+    await lab.client.post(url, json={"through": first}, headers=ALICE)
+    assert await unseen() == []
+
+    await lab.client.post(
+        f"/api/v1/team-requests/{request_id}/replies", json={"text": "Three."}, headers=CAROL
+    )
+    assert await unseen() == [request_id]
+
+
+async def test_a_reply_by_the_asker_or_a_mark_ahead_of_the_clock_is_not_new(lab: Lab):
+    made = (await lab.send(ASK)).json()
+    request_id = made["request_id"]
+    url = f"/api/v1/team-requests/{request_id}"
+    await lab.client.post(url + "/replies", json={"text": "I added more."}, headers=ALICE)
+    assert await unseen_by_alice(lab) == []
+
+    await lab.client.post(url + "/replies", json={"text": "Seen."}, headers=BOB)
+    future = (lab.db.clock() + timedelta(days=1)).isoformat()
+    await lab.client.post(url + "/seen", json={"through": future}, headers=ALICE)
+    async with lab.db.transaction("builder") as uow:
+        row = await (
+            await uow.conn.execute(
+                "SELECT asker_seen_at <= %s AS ok FROM builder.team_requests", (lab.db.clock(),)
+            )
+        ).fetchone()
+    assert row == {"ok": True}
 
 
 class SlowChannel:

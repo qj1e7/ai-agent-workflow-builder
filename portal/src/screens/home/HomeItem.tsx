@@ -7,12 +7,12 @@ import type { DraftItem, WaitingItem } from '../../api/types'
 import { AgentFace } from '../../ui/AgentFace'
 import { Button, ButtonLink } from '../../ui/Button'
 import { cx } from '../../ui/cx'
-import { IconAlert, IconChevronRight, IconShield, type Icon } from '../../ui/icons'
+import { IconAlert, IconChevronRight, IconInfo, IconShield, type Icon } from '../../ui/icons'
 import { draftPath } from '../new/starters'
 import { actionsOf, draftWords, retryProblem, waitingWords, wordsOf, type Action, type Need, type Tone } from './home'
 import styles from './Home.module.css'
 
-const TONE_ICON: Record<Tone, Icon> = { wait: IconShield, tool: IconShield, bad: IconAlert }
+const TONE_ICON: Record<Tone, Icon> = { wait: IconShield, tool: IconShield, bad: IconAlert, info: IconInfo }
 
 export interface Motion {
   readonly glide: string

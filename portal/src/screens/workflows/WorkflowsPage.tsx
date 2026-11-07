@@ -1,24 +1,29 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { Link, NavigationType, useLocation, useNavigate, useNavigationType } from 'react-router'
+import { Link, NavigationType, useLocation, useNavigate, useNavigationType, useSearchParams } from 'react-router'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { useHome } from '../../api/homeQueries'
+import { useDeleteDraft, useDrafts, useSaveDraft } from '../../api/newQueries'
 import { useDisplayName } from '../../api/people'
 import { useMe, useRuns, useUseCases } from '../../api/queries'
-import type { HomeOut, Me, RunView, UseCaseView } from '../../api/types'
+import type { DraftView, HomeOut, Me, RunView, UseCaseView } from '../../api/types'
 import { useMoveWorkflow, useRereadWorkflow } from '../../api/workflowQueries'
 import { PageHead } from '../../shell/PageHead'
 import { Button, ButtonLink } from '../../ui/Button'
 import { useFocusWhenReady } from '../../ui/focus'
 import { FROM_LIST } from '../../ui/fromList'
-import { IconSearch } from '../../ui/icons'
+import { IconSearch, IconX } from '../../ui/icons'
 import { Toast, UNDO_ID, type ToastMessage } from '../../ui/Toast'
-import { moreWords, needsOf, runsInNeeds } from '../home/home'
+import { moreWords, needsOf, needsTotal, runsInNeeds } from '../home/home'
 import { NeedsSection, useArrival } from '../home/NeedsSection'
 import homeStyles from '../home/Home.module.css'
 import { useArrivalScroll } from './arrival'
-import { Faces, StatusPills } from './Status'
-import { agentsOf, changeProblem, changeWords, FILTERS, lineWhen, meansOutOfDate, nextRunWords, pressChange, REFRESH_MS, rowsOf, runFact, viewerOf, workflowPath, type Filter, type Row, type RunFact } from './workflow'
+import { StatusPills } from './Status'
+import { RequestView } from './RequestView'
+import { REQUEST_PARAM } from './requests'
+import { DiscardDialog, DraftsSection, draftItem, FollowingSection, WaitingSection } from './Sections'
+import { changeProblem, changeWords, FILTERS, meansOutOfDate, nextRunWords, pressChange, REFRESH_MS, rowsOf, runFact, viewerOf, workflowPath, type Filter, type Row } from './workflow'
 import styles from './Workflows.module.css'
 
 export const rowLinkId = (useCaseId: string) => `workflow-${useCaseId}`
@@ -34,13 +39,16 @@ export function deletedIn(state: unknown): Deleted | null {
   return typeof deleted?.id === 'string' && typeof deleted.name === 'string' ? { id: deleted.id, name: deleted.name } : null
 }
 
-type Note = { readonly kind: 'deleted'; readonly id: number; readonly row: Deleted } | { readonly kind: 'said'; readonly id: number; readonly text: string }
+type Note =
+  | { readonly kind: 'deleted'; readonly id: number; readonly row: Deleted }
+  | { readonly kind: 'discarded'; readonly id: number; readonly draft: DraftView }
+  | { readonly kind: 'said'; readonly id: number; readonly text: string }
 
-const lowerFirst = (words: string) => words.charAt(0).toLowerCase() + words.slice(1)
+const PURPOSE_SHOWN = 110
 
-function latestLine(latest: RunView | null, fact: RunFact | null, now: Date): string {
-  if (!latest || !fact) return 'No runs yet.'
-  return `${lineWhen(latest.started_at, now)}: ${lowerFirst(fact.words)}`
+function purposeOf(useCase: UseCaseView): string {
+  const flat = useCase.instruction.replace(/\s+/g, ' ').trim()
+  return flat.length > PURPOSE_SHOWN ? `${flat.slice(0, PURPOSE_SHOWN - 1).trimEnd()}…` : flat
 }
 
 function nextLine(useCase: UseCaseView, now: Date): string {
@@ -70,14 +78,13 @@ function WorkflowRow({ row, index, primary, arrive, now, nameOf }: RowProps) {
     >
       <StatusPills state={useCase.state} fact={fact} />
       <div className={styles['main']}>
-        <h2>
+        <h3>
           <Link id={rowLinkId(useCase.use_case_id)} to={workflowPath(useCase)} state={FROM_LIST} className={styles['rowLink']}>
             {useCase.name}
           </Link>
-        </h2>
-        <p>{latestLine(latest, fact, now)}</p>
+        </h3>
+        <p>{purposeOf(useCase)}</p>
       </div>
-      <Faces agents={agentsOf(useCase)} useCase={useCase} latest={latest} />
       <div className={styles['foot']}>
         <span className={styles['next']}>{nextLine(useCase, now)}</span>
         <span className={styles['act']}>
@@ -94,7 +101,7 @@ function WorkflowRow({ row, index, primary, arrive, now, nameOf }: RowProps) {
 
 function FindBar({ query, filter, onQuery, onFilter }: { query: string; filter: Filter; onQuery: (query: string) => void; onFilter: (filter: Filter) => void }) {
   return (
-    <div className={styles['findbar']}>
+    <div className={styles['findbar']} id="findbar-workflows">
       <span className={styles['findbox']}>
         <IconSearch size={18} />
         <label className="visually-hidden" htmlFor="find-workflows">
@@ -116,8 +123,8 @@ function FindBar({ query, filter, onQuery, onFilter }: { query: string; filter: 
 function Empty({ operator }: { operator: boolean }) {
   return (
     <p className={styles['quiet']}>
-      <b>No workflows yet</b>
-      {operator ? 'Once a workflow is set up, it shows here.' : 'An Operator sets them up. You approve their changes.'}
+      <b>Nothing here yet</b>
+      {operator ? 'Ask the Planner on Home, and your first workflow shows up here.' : 'Operators set up workflows, and you approve their changes.'}
     </p>
   )
 }
@@ -147,7 +154,13 @@ function Loaded({ handedOver, now, me, useCases, runs, runsFailed }: LoadedProps
   const [problem, setProblem] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
+  const [finding, setFinding] = useState(false)
   const [restored, setRestored] = useState<string | null>(null)
+  const [discarding, setDiscarding] = useState<DraftView | null>(null)
+  const [discardProblem, setDiscardProblem] = useState<string | null>(null)
+  const queryClient = useQueryClient()
+  const removeDraft = useDeleteDraft()
+  const saveDraft = useSaveDraft()
   const nameOf = useDisplayName()
   const words = useErrorWords()
   const move = useMoveWorkflow()
@@ -164,9 +177,20 @@ function Loaded({ handedOver, now, me, useCases, runs, runsFailed }: LoadedProps
     if (handedOver) document.getElementById(UNDO_ID)?.focus()
   }, [handedOver])
 
+  useEffect(() => {
+    if (finding) document.getElementById('find-workflows')?.focus()
+  }, [finding])
+
+  const noteKind = note?.kind
+  const noteId = note?.id
+  useEffect(() => {
+    if (noteKind === 'discarded') document.getElementById(UNDO_ID)?.focus()
+  }, [noteKind, noteId])
+
   const home = useHome().data
+  const drafts = useDrafts(viewer.operator).data
   const inNeeds = useMemo(() => (home ? runsInNeeds(home) : undefined), [home])
-  const needsCard = home !== undefined && home.approvals.length + home.confirmations.length + home.stopped.length > 0
+  const needsCard = home !== undefined && needsTotal(home) > 0
   const rows = rowsOf(useCases, runs, viewer, filter, query, inNeeds)
   const firstAction = needsCard ? -1 : rows.findIndex((row) => row.action !== null)
 
@@ -185,14 +209,50 @@ function Loaded({ handedOver, now, me, useCases, runs, runsFailed }: LoadedProps
     })
   }
 
+  const rereadDrafts = () => void queryClient.invalidateQueries({ queryKey: ['drafts'] })
+
+  function confirmDiscard(draft: DraftView) {
+    pressChange(changes, (outcome) => removeDraft.mutate(draft.draft_id, outcome), {
+      onSuccess: () => {
+        setDiscarding(null)
+        setDiscardProblem(null)
+        rereadDrafts()
+        setNote((before) => ({ kind: 'discarded', id: (before?.id ?? 0) + 1, draft }))
+      },
+      onError: (error) => setDiscardProblem(`Could not discard it. ${words(error)}`),
+    })
+  }
+
+  function putDraftBack(draft: DraftView) {
+    pressChange(changes, (outcome) => saveDraft.mutate({ draftId: draft.draft_id, draft: { step: draft.step, content: draft.content } }, outcome), {
+      onSuccess: () => {
+        setProblem(null)
+        rereadDrafts()
+        setNote((before) => ({ kind: 'said', id: (before?.id ?? 0) + 1, text: 'Put back.' }))
+      },
+      onError: (error) => setProblem(`Could not put ${draftItem(draft).name ?? 'New workflow'} back. ${words(error)}`),
+    })
+  }
+
   const message: ToastMessage | null =
     note?.kind === 'deleted'
       ? { id: note.id, text: `Deleted ${note.row.name}.`, undo: { busy: move.isPending, onPress: () => undo(note.row) } }
-      : note
-        ? { id: note.id, text: note.text }
-        : null
+      : note?.kind === 'discarded'
+        ? { id: note.id, text: `Discarded ${draftItem(note.draft).name ?? 'New workflow'}.`, undo: { busy: saveDraft.isPending, onPress: () => putDraftBack(note.draft) } }
+        : note
+          ? { id: note.id, text: note.text }
+          : null
 
   const searching = query.trim() !== '' || filter !== 'all'
+  const showFind = finding || searching
+
+  function toggleFind() {
+    if (showFind) {
+      setFinding(false)
+      setQuery('')
+      setFilter('all')
+    } else setFinding(true)
+  }
   return (
     <>
       {problem ? (
@@ -201,30 +261,56 @@ function Loaded({ handedOver, now, me, useCases, runs, runsFailed }: LoadedProps
         </p>
       ) : null}
       {runsFailed ? <p className={styles['problem']}>The latest runs could not be loaded, so each workflow shows none. They load again in a moment.</p> : null}
-      {useCases.length > 0 ? <FindBar query={query} filter={filter} onQuery={setQuery} onFilter={setFilter} /> : <Empty operator={viewer.operator} />}
-      {useCases.length > 0 && rows.length === 0 && searching ? (
-        <div className={styles['quiet']}>
-          <b>No workflows match</b>
-          Try other words, or see them all.
-          <div>
-            <Button
-              onClick={() => {
-                setQuery('')
-                setFilter('all')
-                document.getElementById('find-workflows')?.focus()
-              }}
-            >
-              Show all workflows
-            </Button>
+      {viewer.operator && drafts ? <DraftsSection drafts={drafts} now={now} onDiscard={(draft) => { setDiscardProblem(null); setDiscarding(draft) }} /> : null}
+      {home ? <WaitingSection items={home.waiting_on_others} total={home.waiting_on_others_total} now={now} /> : null}
+      {home ? <FollowingSection items={home.following_up} total={home.following_up_total} now={now} /> : null}
+      <section className={homeStyles['section']} aria-labelledby="all-workflows-h">
+        <h2 id="all-workflows-h">
+          All workflows <span className={homeStyles['count']}>{useCases.length}</span>
+          {useCases.length > 0 ? (
+            <button type="button" className={styles['searchButton']} aria-expanded={showFind} aria-controls="findbar-workflows" aria-label={showFind ? 'Hide search' : 'Search workflows'} onClick={toggleFind}>
+              {showFind ? <IconX size={18} /> : <IconSearch size={18} />}
+            </button>
+          ) : null}
+        </h2>
+        {useCases.length > 0 && showFind ? <FindBar query={query} filter={filter} onQuery={setQuery} onFilter={setFilter} /> : null}
+        {useCases.length === 0 ? <Empty operator={viewer.operator} /> : null}
+        {useCases.length > 0 && rows.length === 0 && searching ? (
+          <div className={styles['quiet']}>
+            <b>No workflows match</b>
+            Try other words, or see them all.
+            <div>
+              <Button
+                onClick={() => {
+                  setQuery('')
+                  setFilter('all')
+                  document.getElementById('find-workflows')?.focus()
+                }}
+              >
+                Show all workflows
+              </Button>
+            </div>
           </div>
-        </div>
-      ) : null}
-      {rows.length > 0 ? (
-        <ul className={styles['list']} aria-label="Workflows">
-          {rows.map((row, index) => (
-            <WorkflowRow key={row.useCase.use_case_id} row={row} index={index} primary={index === firstAction} arrive={!back} now={now} nameOf={nameOf} />
-          ))}
-        </ul>
+        ) : null}
+        {rows.length > 0 ? (
+          <ul className={styles['list']} aria-label="Workflows">
+            {rows.map((row, index) => (
+              <WorkflowRow key={row.useCase.use_case_id} row={row} index={index} primary={index === firstAction} arrive={!back} now={now} nameOf={nameOf} />
+            ))}
+          </ul>
+        ) : null}
+      </section>
+      {discarding ? (
+        <DiscardDialog
+          name={draftItem(discarding).name ?? 'New workflow'}
+          busy={removeDraft.isPending}
+          problem={discardProblem}
+          onClose={() => {
+            setDiscarding(null)
+            setDiscardProblem(null)
+          }}
+          onConfirm={() => confirmDiscard(discarding)}
+        />
       ) : null}
       <Toast
         message={message}
@@ -253,11 +339,18 @@ function NeedsYouLoaded({ home, now }: { home: HomeOut; now: Date }) {
 
 export function WorkflowsPage({ heading, lead, now }: { heading: string; lead: string; now: Date }) {
   const handedOver = useDeletedHandedOverOnce()
+  const requestId = useSearchParams()[0].get(REQUEST_PARAM)
   return (
     <>
       <PageHead heading={heading} lead={lead} movesFocus={handedOver !== null} />
-      <NeedsYou now={now} />
-      <WorkflowsBody handedOver={handedOver} now={now} />
+      {requestId !== null ? (
+        <RequestView key={requestId} requestId={requestId} now={now} />
+      ) : (
+        <>
+          <NeedsYou now={now} />
+          <WorkflowsBody handedOver={handedOver} now={now} />
+        </>
+      )}
     </>
   )
 }

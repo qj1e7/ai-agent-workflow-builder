@@ -132,6 +132,23 @@ class FollowingUpItem(WireModel):
     latest_reply: ReplyView | None
 
 
+class SeenIn(WireIn):
+    through: datetime = Field(
+        description="The time of the newest reply the asker has on screen. A reply that arrived "
+        "after it is still new."
+    )
+
+
+@dataclass(frozen=True)
+class NoSuchRequest:
+    request_id: str
+
+
+@dataclass(frozen=True)
+class NotTheAsker:
+    request_id: str
+
+
 @dataclass(frozen=True)
 class Created:
     request: TeamRequestView
@@ -181,6 +198,18 @@ def _view(row: Mapping[str, Any], replies: list[ReplyView]) -> TeamRequestView:
         replies=replies,
         posted_to_teams=post == "posted",
         not_posted_because=None if post == "posted" else post,
+    )
+
+
+def _following(row: Mapping[str, Any], latest: ReplyView | None) -> FollowingUpItem:
+    return FollowingUpItem(
+        request_id=row["request_id"],
+        kind=row["kind"],
+        about=row["about"],
+        note=row["note"],
+        asked_at=row["asked_at"],
+        status=row["status"],
+        latest_reply=latest,
     )
 
 
@@ -336,6 +365,74 @@ class TeamRequests:
             total=total["n"],
         )
 
+    async def get(self, request_id: str) -> TeamRequestView | None:
+        async with self._db.transaction("builder") as uow:
+            row = await (
+                await uow.conn.execute(
+                    "SELECT * FROM builder.team_requests WHERE request_id = %s", (request_id,)
+                )
+            ).fetchone()
+            if row is None:
+                return None
+            replies = await _replies_of(uow, [request_id])
+        return _view(row, replies.get(request_id, []))
+
+    async def mark_seen(
+        self, asker: Principal, request_id: str, body: SeenIn
+    ) -> TeamRequestView | NoSuchRequest | NotTheAsker:
+        """The asker has opened the request and read the replies up to `through`. Only the asker
+        marks it, and a mark never moves back."""
+        async with self._db.transaction("builder") as uow:
+            marked = await (
+                await uow.conn.execute(
+                    "UPDATE builder.team_requests SET asker_seen_at = GREATEST("
+                    "COALESCE(asker_seen_at, '-infinity'), LEAST(%(through)s, %(now)s))"
+                    " WHERE request_id = %(id)s AND asked_by = %(who)s RETURNING request_id",
+                    {
+                        "through": body.through,
+                        "now": uow.now,
+                        "id": request_id,
+                        "who": asker.user_id,
+                    },
+                )
+            ).fetchone()
+            if marked is None:
+                exists = await (
+                    await uow.conn.execute(
+                        "SELECT 1 FROM builder.team_requests WHERE request_id = %s", (request_id,)
+                    )
+                ).fetchone()
+                return NotTheAsker(request_id) if exists else NoSuchRequest(request_id)
+        found = await self.get(request_id)
+        assert found is not None
+        return found
+
+    async def replied(self, asker: Principal) -> list[FollowingUpItem]:
+        """The asker's own requests with a reply from someone else that they have not opened
+        since, the newest reply first. Each is a line in Needs you."""
+        async with self._db.transaction("builder") as uow:
+            rows = await (
+                await uow.conn.execute(
+                    f"SELECT * FROM builder.team_requests r WHERE r.asked_by = %(who)s"
+                    f" AND {_LISTED} AND EXISTS (SELECT 1 FROM builder.team_request_replies p"
+                    " WHERE p.request_id = r.request_id AND p.replied_by <> r.asked_by"
+                    " AND (r.asker_seen_at IS NULL OR p.replied_at > r.asker_seen_at))"
+                    " LIMIT %(limit)s",
+                    {
+                        "who": asker.user_id,
+                        "since": uow.now - DONE_STAYS_LISTED,
+                        "limit": LIST_LIMIT,
+                    },
+                )
+            ).fetchall()
+            replies = await _replies_of(uow, [r["request_id"] for r in rows])
+        pairs: list[tuple[ReplyView, FollowingUpItem]] = []
+        for r in rows:
+            theirs = [p for p in replies.get(r["request_id"], []) if p.replied_by != r["asked_by"]]
+            pairs.append((theirs[-1], _following(r, theirs[-1])))
+        pairs.sort(key=lambda pair: (pair[0].replied_at, pair[1].request_id), reverse=True)
+        return [item for _, item in pairs]
+
     async def reply(
         self, replier: Principal, request_id: str, body: ReplyIn
     ) -> TeamRequestView | None:
@@ -388,17 +485,6 @@ class TeamRequests:
             replies = await _replies_of(uow, [r["request_id"] for r in rows])
         assert total is not None
         return (
-            [
-                FollowingUpItem(
-                    request_id=r["request_id"],
-                    kind=r["kind"],
-                    about=r["about"],
-                    note=r["note"],
-                    asked_at=r["asked_at"],
-                    status=r["status"],
-                    latest_reply=(replies.get(r["request_id"]) or [None])[-1],
-                )
-                for r in rows
-            ],
+            [_following(r, (replies.get(r["request_id"]) or [None])[-1]) for r in rows],
             total["n"],
         )

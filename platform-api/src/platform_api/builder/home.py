@@ -147,6 +147,12 @@ class HomeOut(WireModel):
         "marked Done leaves after 30 days."
     )
     following_up_total: int
+    replied: list[FollowingUpItem] = Field(
+        description="This person's own requests that someone on the team has replied to since "
+        "they last opened them, the newest reply first, each with that reply. They are part of "
+        "Needs you, and a request leaves this list when its asker opens it. Done requests "
+        "leave after 30 days."
+    )
     coming_up: ComingUp | None = Field(description="The workflow that runs next, if any.")
     workflows: int = Field(description="How many workflows the team has.")
     connections: list[ConnectionItem] = Field(
@@ -309,6 +315,7 @@ class Home:
         following_up, following_up_total = await self._requests.following_up(viewer)
         operator = Role.OPERATOR in viewer.roles
         connections = await self._connections.needing_attention() if operator else []
+        replied = await self._requests.replied(viewer)
         return HomeOut(
             approvals=[_approval(a, names) for a in runs.asks[:SHOWN]],
             approvals_total=len(runs.asks),
@@ -320,6 +327,7 @@ class Home:
             drafts=[_draft(d) for d in drafts],
             following_up=following_up,
             following_up_total=following_up_total,
+            replied=replied,
             coming_up=_coming_up(use_cases),
             workflows=len(use_cases),
             connections=[_connection(c) for c in connections],

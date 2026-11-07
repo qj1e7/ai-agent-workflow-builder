@@ -277,18 +277,6 @@ describe('the agents on a workflow', () => {
   })
 })
 
-describe('the faces on a workflow', () => {
-  it('close their eyes while it is paused, and the last agent waits while a run needs a yes', () => {
-    expect(faceStates(PAUSED, run(waiting), 2)).toEqual(['stopped', 'stopped'])
-    expect(faceStates(WATCHLIST, run(waiting), 2)).toEqual(['idle', 'waiting'])
-  })
-
-  it('stay calm otherwise, so nothing moves without a reason', () => {
-    expect(faceStates(WATCHLIST, run(failed), 2)).toEqual(['idle', 'idle'])
-    expect(faceStates(WATCHLIST, null, 2)).toEqual(['idle', 'idle'])
-  })
-})
-
 describe('the button at the end of a row', () => {
   const stopped = run(failed)
 
