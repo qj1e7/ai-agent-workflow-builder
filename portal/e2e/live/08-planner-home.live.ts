@@ -121,6 +121,7 @@ test.describe('with the AI model on', () => {
     }
   }
 
+  // 37 days appears in no other test, so the drafted agent's steps differ from every agent another test saved. The Planner then drafts a new one, whatever the library holds.
   test('inconsistency I6: a new agent is saved to the library only when the workflow is turned on', async ({ browser, backend }, info) => {
     const owner = 'alice'
     const cards = async () => (await backend.get<{ cards: { name: string; owner: string }[] }>(owner, '/api/v1/agent-cards')).cards
@@ -128,10 +129,10 @@ test.describe('with the AI model on', () => {
     const page = await context.newPage()
     const watch = watchPage(page)
     await page.goto('/')
-    await ask(page, 'Every Friday at 4pm, summarise what we finished this week in MOCK in one new ticket')
+    await ask(page, 'Every Friday at 4pm, follow up on bug tickets in MOCK with no update for 37 days')
     await expect(card(page)).toBeVisible()
     await card(page).getByRole('button', { name: /what it does|^Create/i }).first().click()
-    await card(page).getByRole('group', { name: /^Change/ }).getByRole('textbox').fill('Summarise them in one new ticket')
+    await card(page).getByRole('group', { name: /^Change/ }).getByRole('textbox').fill('Raise one follow-up ticket that lists them')
     await page.keyboard.press('Enter')
     await card(page).locator('summary').click()
     await expect(card(page).locator('details')).toContainText('New agent, saved to the Agent library when you turn this on', { timeout: 30_000 })
