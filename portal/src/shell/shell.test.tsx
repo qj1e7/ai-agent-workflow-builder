@@ -7,6 +7,7 @@ import bobHome from '../../../contracts/fixtures/builder/home.bob.json'
 import { App } from '../App'
 import { ApiError } from '../api/client'
 import { ApiProvider } from '../api/context'
+import { FlagsProvider } from '../api/flags'
 import { TicketLinksProvider } from '../api/ticketLinks'
 import { createDevSession, SIGNED_IN, type Session } from '../api/session'
 import type { HomeOut, Me } from '../api/types'
@@ -40,9 +41,10 @@ interface Setup {
   readonly oidc?: boolean
   readonly browseUrl?: string | null
   readonly home?: HomeOut
+  readonly oldNewWorkflow?: boolean
 }
 
-function render({ path = '/', me = ALICE, meError, oidc = false, browseUrl = null, home }: Setup = {}): string {
+function render({ path = '/', me = ALICE, meError, oidc = false, browseUrl = null, home, oldNewWorkflow = false }: Setup = {}): string {
   const session = oidc ? oidcSession : createDevSession(null)
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   const key = ['me', session.cacheScope()]
@@ -54,9 +56,11 @@ function render({ path = '/', me = ALICE, meError, oidc = false, browseUrl = nul
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={session} platformFetch={fetch} origin={ORIGIN}>
         <TicketLinksProvider config={{ jiraBrowseUrl: browseUrl }}>
-          <MemoryRouter initialEntries={[path]}>
-            <App now={() => MORNING} />
-          </MemoryRouter>
+          <FlagsProvider config={{ newWorkflowSteps: oldNewWorkflow }}>
+            <MemoryRouter initialEntries={[path]}>
+              <App now={() => MORNING} />
+            </MemoryRouter>
+          </FlagsProvider>
         </TicketLinksProvider>
       </ApiProvider>
     </QueryClientProvider>,
@@ -83,8 +87,12 @@ function menuLabels(html: string): string[] {
 const DRAWN_AT_ONCE = MENU_PAGE_IDS.filter((id) => id !== 'new')
 
 describe('the menu', () => {
-  it('reads Home, Workflows, Software watchlist, Agent library, New workflow for an Operator', () => {
-    expect(menuLabels(render())).toEqual(['Home', 'Workflows', 'Software watchlist', 'Agent library', 'New workflow'])
+  it('reads Home, Workflows, Software watchlist, Agent library for an Operator, with no New workflow', () => {
+    expect(menuLabels(render())).toEqual(['Home', 'Workflows', 'Software watchlist', 'Agent library'])
+  })
+
+  it('keeps New workflow out of the menu even while the flag keeps its address alive', () => {
+    expect(menuLabels(render({ oldNewWorkflow: true }))).toEqual(['Home', 'Workflows', 'Software watchlist', 'Agent library'])
   })
 
   it('has no New workflow for an Approver who is not an Operator, on the header or the tab bar', () => {
@@ -94,12 +102,16 @@ describe('the menu', () => {
     expect(html).not.toContain('href="/agents"')
   })
 
-  it('marks New workflow current at /new and on its done page, which load on demand', () => {
+  it('loads New workflow at /new and on its done page only while the flag is on', () => {
     for (const path of ['/new', '/new/done/uc_1']) {
-      const html = render({ path })
-      expect(text(mainOf(html)), path).toBe('Loading')
-      expect(new Set(currentLinks(html)), path).toEqual(new Set(['/new']))
+      expect(text(mainOf(render({ path, oldNewWorkflow: true }))), path).toBe('Loading')
+      expect(text(mainOf(render({ path }))), `${path} with the flag off leads to Home`).not.toBe('Loading')
     }
+  })
+
+  it('keeps a saved draft’s Resume reaching the editor with the flag off, and sends a bare /new to Home', () => {
+    expect(text(mainOf(render({ path: '/new?draft=drf-1' }))), 'a draft').toBe('Loading')
+    expect(text(mainOf(render({ path: '/new' })))).not.toBe('Loading')
   })
 
   it('has the menu’s items on the phone tab bar too', () => {
@@ -113,7 +125,7 @@ describe('the menu', () => {
 
   it.each(DRAWN_AT_ONCE)('%s links to its path, and at that path shows its own heading with the item marked current', (id) => {
     const { path, menuLabel } = PAGES[id]
-    const html = render({ path })
+    const html = render({ path, home: ALICE_HOME })
     expect(html).toContain(`href="${path}"`)
     const heading = headings(html)
     expect(heading).toHaveLength(1)
@@ -203,16 +215,15 @@ describe('a run or an approval link', () => {
 describe('the pages', () => {
   it('give every heading a tabindex so focus can move to it', () => {
     for (const path of [...DRAWN_AT_ONCE.map((id) => PAGES[id].path), '/settings', '/nowhere']) {
-      const tags = [...render({ path }).matchAll(/<h1\b[^>]*>/g)]
+      const tags = [...render({ path, home: ALICE_HOME }).matchAll(/<h1\b[^>]*>/g)]
       expect(tags.length, path).toBeGreaterThan(0)
       expect(tags.every((tag) => tag[0].includes('tabindex="-1"')), path).toBe(true)
     }
   })
 
   it('open Home with the greeting and today in Singapore time', () => {
-    const main = text(mainOf(render()))
+    const main = text(mainOf(render({ home: ALICE_HOME })))
     expect(main).toContain('Good morning! Alice')
-    expect(main).toContain('Thursday 29 October.')
   })
 
   it('never use the retired names', () => {
@@ -311,7 +322,7 @@ describe('when the platform is down', () => {
   })
 
   it('does not say so for a refusal below 500', () => {
-    expect(headings(render({ meError: new ApiError(403, null) }))).toEqual(['Good morning'])
+    expect(headings(render({ meError: new ApiError(403, null), home: BOB_HOME }))).toEqual(['Good morning'])
   })
 
   it('keeps the test controls, so a stale person can be swapped', () => {

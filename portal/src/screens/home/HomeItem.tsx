@@ -2,7 +2,7 @@ import { useId, type AnimationEvent, type CSSProperties } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
-import { useCheckConnection, useRetry } from '../../api/queries'
+import { useCheckConnection, useModelOff, useRetry } from '../../api/queries'
 import type { DraftItem, WaitingItem } from '../../api/types'
 import { AgentFace } from '../../ui/AgentFace'
 import { Button, ButtonLink } from '../../ui/Button'
@@ -89,14 +89,17 @@ function ActionButton({ action, primary, describedBy }: { action: Action; primar
 interface NeedProps {
   readonly need: Need
   readonly card: boolean
+  /** Its action is not the page's main button. */
+  readonly quiet?: boolean
   readonly now: Date
   readonly motion: Motion
 }
 
-export function NeedItem({ need, card, now, motion }: NeedProps) {
+export function NeedItem({ need, card, quiet = false, now, motion }: NeedProps) {
   const titleId = useId()
-  const words = wordsOf(need, now)
-  const actions = actionsOf(need)
+  const modelOff = useModelOff()
+  const words = wordsOf(need, now, modelOff)
+  const actions = actionsOf(need, modelOff)
   const Icon = TONE_ICON[words.tone]
   const { className, ...moving } = motionProps(motion)
   const icon = (
@@ -112,6 +115,7 @@ export function NeedItem({ need, card, now, motion }: NeedProps) {
         <div className={styles['rowText']}>
           <b id={titleId}>{words.title}</b>
           <span className={styles['rowMeta']}>{words.meta}</span>
+          {need.kind === 'stopped' && words.note ? <span className={styles['rowMeta']}>{words.note}</span> : null}
           {words.why ? (
             <span className={styles['rowWhy']}>
               <b>AI troubleshooter:</b> {words.why}
@@ -149,7 +153,7 @@ export function NeedItem({ need, card, now, motion }: NeedProps) {
         ) : null}
         <div className={styles['buttons']}>
           {actions.map((action, index) => (
-            <ActionButton key={action.label} action={action} primary={index === 0} describedBy={titleId} />
+            <ActionButton key={action.label} action={action} primary={index === 0 && !quiet} describedBy={titleId} />
           ))}
         </div>
       </div>

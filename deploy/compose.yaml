@@ -193,6 +193,7 @@ services:
     environment:
       PORTAL_MODE: live
       API_UPSTREAM: http://platform-api:8000
+      PORTAL_NEW_WORKFLOW_STEPS: ${PORTAL_NEW_WORKFLOW_STEPS:-off}
     ports:
       - "${PORTAL_HOST_PORT:-8080}:8080"
 

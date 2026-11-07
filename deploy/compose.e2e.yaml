@@ -50,6 +50,11 @@ services:
       mock-model:
         condition: service_healthy
 
+  # The old New workflow lane (07) still runs until the clean-up removes the screen. Practice stacks otherwise leave it off.
+  portal:
+    environment:
+      PORTAL_NEW_WORKFLOW_STEPS: "on"
+
   e2e:
     profiles: [e2e]
     build:

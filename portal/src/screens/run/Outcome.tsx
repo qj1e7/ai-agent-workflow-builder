@@ -4,7 +4,7 @@ import type { TroubleshootingOut } from '../../api/types'
 import { ButtonLink } from '../../ui/Button'
 import { IconCheck } from '../../ui/icons'
 import { RetryButton } from '../home/HomeItem'
-import { stoppedActions } from '../home/home'
+import { CAN_RUN_AGAIN, stoppedActions } from '../home/home'
 import { TicketLink } from '../jira/TicketKeys'
 import { ReportToSupport } from './Report'
 import type { Phase, RunModel } from './runModel'
@@ -74,6 +74,10 @@ interface TroubleshootingProps {
   readonly me: { readonly id: string; readonly name: string; readonly operator: boolean } | undefined
   readonly reports: RunModel['reports']
   readonly nameOf: NameOf
+  /** No working AI model: a retry would fail again, so the run waits (spec 5.4). */
+  readonly modelOff?: boolean
+  /** The page already has its main button, so none here is primary. */
+  readonly quiet?: boolean
 }
 
 function Qa({ name, id, children }: { name: string; id?: string; children: ReactNode }) {
@@ -89,14 +93,15 @@ function Qa({ name, id, children }: { name: string; id?: string; children: React
  * The AI troubleshooter's four answers. The last one is the action: Retry when the platform says the run can run again,
  * or Report to support when it can't. Both ask stoppedActions, the same rule Home uses.
  */
-export function Troubleshooting({ runId, failure, advice, loading, me, reports, nameOf }: TroubleshootingProps) {
+export function Troubleshooting({ runId, failure, advice, loading, me, reports, nameOf, modelOff = false, quiet = false }: TroubleshootingProps) {
   const doId = useId()
   const note = failureText(failure.message)
   const happened = advice
     ? withCurrentNames(`${advice.answers.what_happened} ${advice.advice.likely_cause}`)
     : `${failureReasonLabel[failure.reason] ?? failure.reason}.`
-  const [first] = stoppedActions(runId, failure.retryable)
+  const [first] = stoppedActions(runId, failure.retryable, modelOff)
   const retry = first?.kind === 'retry'
+  const waitsForModel = failure.retryable && modelOff
   const suggestion = advice ? suggestionFor(advice.advice.suggestion) : ''
   const found = [happened, note].filter((part) => part !== '').join(' ')
   return (
@@ -117,16 +122,18 @@ export function Troubleshooting({ runId, failure, advice, loading, me, reports, 
       )}
       <Qa name="What should you do" id={doId}>
         {suggestion ? <span>{suggestion}</span> : null}
-        {retry ? (
+        {waitsForModel ? (
+          <span className={styles['note']}>{CAN_RUN_AGAIN}</span>
+        ) : retry ? (
           me?.operator ? (
             <span className={styles['buttons']}>
-              <RetryButton runId={runId} label="Retry the run" primary describedBy={doId} />
+              <RetryButton runId={runId} label="Retry the run" primary={!quiet} describedBy={doId} />
             </span>
           ) : (
             <span className={styles['note']}>{OPERATORS_RETRY}</span>
           )
         ) : (
-          <ReportToSupport runId={runId} found={found} me={me?.id} meName={me?.name ?? 'A teammate'} reports={reports} nameOf={nameOf} />
+          <ReportToSupport runId={runId} found={found} me={me?.id} meName={me?.name ?? 'A teammate'} reports={reports} nameOf={nameOf} quiet={quiet} />
         )}
       </Qa>
     </div>

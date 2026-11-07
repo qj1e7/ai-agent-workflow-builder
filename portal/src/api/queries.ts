@@ -475,6 +475,12 @@ function isNotFound(error: unknown): boolean {
   return error instanceof ApiError && error.status === 404
 }
 
+/** Whether Settings has no working AI model. Unknown while it loads, so nothing is held back before we know. */
+export function useModelOff(): boolean {
+  const model = useModelSettings()
+  return model.data !== undefined && model.data.active === null
+}
+
 export function useModelSettings() {
   const client = useApiClient()
   const user = useCacheScope()

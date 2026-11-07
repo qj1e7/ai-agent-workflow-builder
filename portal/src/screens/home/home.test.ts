@@ -4,7 +4,9 @@ import bobHome from '../../../../contracts/fixtures/builder/home.bob.json'
 import dayOne from '../../../../contracts/fixtures/builder/home.day-one.json'
 import type { AddressItem, ApprovalItem, ConnectionItem, FollowingUpItem, HomeOut, ReplyView, StoppedItem, WaitingItem } from '../../api/types'
 import { ApiError } from '../../api/client'
-import { actionsOf, checkWords, comingUpOf, draftWords, HOME_NEEDS_SHOWN, leadLine, moreWords, needsOf, needsTotal, retryProblem, waitingWords, wordsOf, type Need } from './home'
+import capabilities from '../../../../contracts/fixtures/planner/capabilities.json'
+import type { CapabilitiesView } from '../../api/types'
+import { actionsOf, approverLine, checkWords, comingUpOf, draftWords, HOME_NEEDS_SHOWN, moreWords, needsOf, needsTotal, retryProblem, stateLine, suggestionsOf, waitingWords, wordsOf, type Need } from './home'
 
 const BOB = bobHome as HomeOut
 const ALICE = aliceHome as HomeOut
@@ -121,18 +123,6 @@ describe('the order of what needs you', () => {
   })
 })
 
-describe('the line under the greeting', () => {
-  it('counts what needs you', () => {
-    expect(leadLine(1, 4)).toBe('1 thing needs you. Everything else is running.')
-    expect(leadLine(3, 4)).toBe('3 things need you. Everything else is running.')
-  })
-
-  it('says nothing needs you yet on a team with no workflows, and right now on one with workflows', () => {
-    expect(leadLine(0, 0)).toBe('Nothing needs you yet. When a workflow wants to change something, it shows up here and in Teams.')
-    expect(leadLine(0, 2)).toBe('Nothing needs you right now. Your workflows are running.')
-  })
-})
-
 describe('how many more are waiting', () => {
   it('names approvals when only approvals are left out', () => {
     expect(moreWords({ approvals: 40, others: 0 })).toBe('40 more runs are waiting for your yes. The next ones show here as you decide these.')
@@ -234,6 +224,15 @@ describe('what each item lets you do', () => {
     const final = { ...stopped, item: { ...STOP, retryable: false } } as Need
     expect(actionsOf(final)).toEqual([{ kind: 'open', label: 'See why it stopped', to: '/runs/run_01JB9' }])
   })
+
+  it('waits for the model instead of offering a retry that would fail again, and says so', () => {
+    expect(actionsOf(stopped, true)).toEqual([{ kind: 'open', label: 'See the run', to: '/runs/run_01JB9' }])
+    expect(wordsOf(stopped, NOW, true).note).toBe('Can run again once an AI model is connected.')
+    expect(wordsOf(stopped, NOW).note).toBeNull()
+    const final = { ...stopped, item: { ...STOP, retryable: false } } as Need
+    expect(actionsOf(final, true)).toEqual(actionsOf(final))
+    expect(wordsOf(final, NOW, true).note).toBeNull()
+  })
 })
 
 describe('a retry the platform refused', () => {
@@ -284,5 +283,51 @@ describe('what a check of a connection says', () => {
   it('says it works only when the state is working', () => {
     expect(checkWords('working')).toBe('Checked just now. It works.')
     expect(checkWords('not_answering')).toBe('Checked just now. It still does not work.')
+  })
+})
+
+describe('the line under the Operator’s greeting', () => {
+  it('names what needs her without repeating the count', () => {
+    expect(stateLine({ ...ALICE, approvals: [], approvals_total: 0, confirmations: [], connections: [], addresses: [], replied: [], stopped: [STOP], stopped_total: 1 }, NOW)).toBe('Something needs you.')
+    expect(stateLine(ALICE, NOW)).toBe('Some things need you.')
+  })
+
+  it('gives the next run when nothing needs her, and says so when nothing is scheduled', () => {
+    const quiet: HomeOut = { ...BOB, approvals: [], approvals_total: 0, confirmations: [] }
+    expect(stateLine(quiet, NOW)).toBe('Nothing needs you. Next up: Software watchlist, Mon 9 Nov, 9:00.')
+    expect(stateLine({ ...quiet, coming_up: null }, NOW)).toBe('Nothing needs you. Nothing is scheduled yet.')
+  })
+
+  it('tells an Approver how many requests wait for a yes', () => {
+    expect(approverLine({ ...BOB, confirmations: [], approvals_total: 1 })).toBe('1 request is waiting for your yes.')
+    expect(approverLine({ ...BOB, confirmations: [], approvals_total: 5 })).toBe('5 requests are waiting for your yes.')
+    expect(approverLine({ ...BOB, approvals: [], approvals_total: 0, confirmations: [] })).toBe('Nothing needs you right now.')
+  })
+})
+
+describe('the three suggestions under the box', () => {
+  const CAPS = capabilities as CapabilitiesView
+
+  it('on day one are the platform’s own examples, where the question is an intent and the tasks are typed words', () => {
+    const chips = suggestionsOf(DAY_ONE, CAPS)
+    expect(chips.map((chip) => chip.label)).toEqual(CAPS.examples.map((example) => example.text))
+    expect(chips.at(-1)?.ask).toEqual({ intent: 'abilities' })
+    expect(chips[0]?.ask).toEqual({ text: CAPS.examples[0]?.text })
+    expect(suggestionsOf(DAY_ONE, undefined)).toEqual([])
+  })
+
+  it('in a normal week are intents, which never ask the model', () => {
+    const chips = suggestionsOf({ ...ALICE, stopped: [], stopped_total: 0 }, CAPS)
+    expect(chips.map((chip) => chip.label)).toEqual(['Check my workflows', 'What can I ask for?', 'Set up another workflow'])
+    expect(chips.every((chip) => chip.ask.text === undefined && chip.ask.intent !== undefined)).toBe(true)
+  })
+
+  it('asks why a workflow stopped only when that stop is not already the first Needs you row', () => {
+    const second = stop('run_second', '2026-11-03T00:00:00Z')
+    const other: StoppedItem = { ...second, use_case_id: 'uc_other', use_case_name: 'Morning check' }
+    const home: HomeOut = { ...ALICE, stopped: [STOP, other], stopped_total: 2 }
+    expect(needsOf(home, 1).shown[0]?.key).toBe(`stopped:${STOP.run_id}`)
+    const chips = suggestionsOf(home, CAPS)
+    expect(chips[1]).toEqual({ label: 'Why did Morning check stop?', ask: { intent: 'why_stopped', use_case_id: 'uc_other' } })
   })
 })

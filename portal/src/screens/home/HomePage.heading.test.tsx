@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import bobHome from '../../../../contracts/fixtures/builder/home.bob.json'
 import type { HomeOut } from '../../api/types'
 import { PageHead } from '../../shell/PageHead'
-import { HomePage } from './HomePage'
+import { HomeBody, HomePage } from './HomePage'
 
 const query = vi.hoisted((): { result: object } => ({ result: {} }))
 vi.mock('../../api/homeQueries', () => ({ useHome: () => query.result }))
@@ -19,18 +19,29 @@ const STATES: Record<string, object> = {
 
 function pageIn(state: object): ReactElement<{ children: ReactNode[] }> {
   query.result = state
-  return HomePage({ heading: 'Good afternoon, Bob', today: 'Tuesday 3 November.', now: new Date('2026-11-03T15:00:00+08:00') }) as ReactElement<{ children: ReactNode[] }>
+  return HomePage({ heading: 'Good afternoon! Bob', today: 'Tuesday 3 November.', now: new Date('2026-11-03T15:00:00+08:00') }) as ReactElement<{ children: ReactNode[] }>
 }
 
+const [, slot] = [0, 1]
+
 describe('Home’s heading', () => {
-  it('stays the same element, in the same place, while Home loads, fails, has loaded or cannot refresh, so the shell’s focus stays on it', () => {
-    const pages = Object.entries(STATES).map(([name, state]) => [name, pageIn(state)] as const)
-    const [, first] = pages[0]!
-    for (const [name, page] of pages) {
-      expect(page.type, name).toBe(first.type)
-      const [head] = page.props.children
-      expect(isValidElement(head) && head.type, name).toBe(PageHead)
-      expect(isValidElement<{ heading: string }>(head) && head.props.heading, name).toBe('Good afternoon, Bob')
+  it('is drawn once by one element, in the same place, whether or not the last refresh worked, so the shell’s focus stays on it', () => {
+    const [loaded, refreshFailed] = [pageIn(STATES['loaded']!), pageIn(STATES['could not refresh']!)]
+    for (const page of [loaded, refreshFailed]) {
+      const body = page.props.children[slot]
+      expect(isValidElement(body) && body.type).toBe(HomeBody)
+      expect(isValidElement<{ heading: string }>(body) && body.props.heading).toBe('Good afternoon! Bob')
     }
+  })
+
+  it('draws no heading while Home loads, so the shell moves focus to the first one drawn', () => {
+    const body = pageIn(STATES['loading']!).props.children[slot]
+    expect(isValidElement(body) && body.type).not.toBe(HomeBody)
+    expect(isValidElement(body) && body.type).not.toBe(PageHead)
+  })
+
+  it('keeps a heading when Home could not load, with a way to try again', () => {
+    const [head] = (pageIn(STATES['could not load']!).props.children[slot] as ReactElement<{ children: ReactNode[] }>).props.children
+    expect(isValidElement(head) && head.type).toBe(PageHead)
   })
 })

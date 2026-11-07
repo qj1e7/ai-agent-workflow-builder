@@ -5,6 +5,7 @@
 export PORTAL_CONFIG_AUTH=""
 export PORTAL_CSP_AUTH=""
 export PORTAL_CONFIG_JIRA=""
+export PORTAL_CONFIG_STEPS=""
 
 portal_auth_refuse() {
   echo "portal: $1" >&2
@@ -55,3 +56,11 @@ if [ -n "${JIRA_BROWSE_URL:-}" ]; then
     || portal_auth_refuse "JIRA_BROWSE_URL must be an http(s) address with {key} in it, such as https://jira.example.com/browse/{key}, and no query or fragment"
   export PORTAL_CONFIG_JIRA=",\"jira_browse_url\":\"$JIRA_BROWSE_URL\""
 fi
+
+# The old four-step New workflow. Off, the Portal has one front door, the Planner's box on Home. On, /new answers again, with no
+# menu entry, as a way back if the new Home fails in a demo. Anything else than on or off is a typing slip, so it stops the start.
+case "${PORTAL_NEW_WORKFLOW_STEPS:-off}" in
+  on) export PORTAL_CONFIG_STEPS=",\"new_workflow_steps\":true" ;;
+  off) ;;
+  *) portal_auth_refuse "PORTAL_NEW_WORKFLOW_STEPS must be on or off, not '${PORTAL_NEW_WORKFLOW_STEPS}'" ;;
+esac
