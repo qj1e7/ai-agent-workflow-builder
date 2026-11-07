@@ -530,3 +530,21 @@ def test_a_leading_article_in_the_workflow_words_is_dropped():
         "Is the morning new-ticket check running?",
     )
     assert answer == CheckWorkflowsAnswer(workflow_words="morning new-ticket check")
+
+
+@pytest.mark.parametrize(
+    ("said", "task", "word"),
+    [
+        ("Monitor", "Monitor Kubernetes releases", "releases"),
+        ("Watch", "Watch Kubernetes for a new version", "version"),
+        ("Kubernetes", "Tell me about Kubernetes security patches", "security patches"),
+    ],
+)
+def test_a_watchlist_label_that_is_not_a_watchlist_word_takes_the_requests_own(
+    said: str, task: str, word: str
+):
+    answer = answer_of(
+        read(belongs_on_watchlist=True, watchlist_word=said, software="Kubernetes"), task
+    )
+    found = answer.alternative if isinstance(answer, CantAnswer) else answer
+    assert found == WatchlistAnswer(word=word, software="Kubernetes")

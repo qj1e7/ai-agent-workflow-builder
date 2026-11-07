@@ -95,7 +95,8 @@ ANSWER_SYSTEM: Final = (
     "watchlist, where the team keeps all its software. Then set belongs_on_watchlist to true, "
     "copy the word from the request that made you think so, and name the software if the "
     "request names one. When the request also asks for something else, such as a weekly ticket "
-    "list, read that other part back in rows. Otherwise give no rows.\n"
+    "list, read only that other part back in rows, and leave the software out of them. "
+    "Otherwise give no rows.\n"
     "A request for known vulnerabilities, CVEs, security advisories or security patches does "
     "not belong on the Software watchlist, even if it names software or releases, because no "
     "tool checks for them yet. Set belongs_on_watchlist to false, read it back in parts, and "
@@ -116,7 +117,8 @@ ANSWER_SYSTEM: Final = (
     "- cant_do: it needs something the tools below cannot do. Say why in the note, in one "
     "short sentence. Then put in alternative the nearest thing the tools can do instead, in a "
     'few plain words, such as "Create one ticket that lists them" for a part that emails them. '
-    "Leave alternative null when nothing comes close. Do not suggest a new tool.\n"
+    "Leave alternative null when nothing comes close. Do not suggest a new tool, and leave "
+    "the part that can't be done out of the alternative.\n"
     "Give the task a name in name: 2 to 5 plain words that say what it does, such as "
     '"Weekly closed ticket summary".\n\n'
     "The agents can only use these tools:\n\n"
@@ -318,9 +320,15 @@ def _also(read: TaskRead, request: str) -> SetupCardAnswer | PartAnswer | CantAn
 
 
 def _watchlist(read: TaskRead, request: str) -> PlannerAnswer | None:
-    """The answer for a request the model sent to the watchlist. None when the word it named is
-    not in the request, so the rows decide instead."""
-    word = task_form_of(request, read.watchlist_word)
+    """The answer for a request the model sent to the watchlist. The word is the request's own:
+    the one the model named, or the request's release or vulnerability word when the model
+    named something else, such as the verb. None when the request holds no such word, so the
+    rows decide instead."""
+    word = (
+        task_form_of(request, read.watchlist_word)
+        or vulnerability_phrase(request)
+        or release_word_in(request)
+    )
     if word is None:
         return None
     software = whole_word_of(request, read.software)
