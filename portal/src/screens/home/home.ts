@@ -1,7 +1,7 @@
 import { ApiError } from '../../api/client'
 import { DRAFT_STEPS } from '../../api/drafts'
 import { connectorLabel, starterName } from '../../api/labels'
-import type { ApprovalItem, ConfirmationItem, DraftItem, FollowingUpItem, HomeOut, StoppedItem, WaitingItem } from '../../api/types'
+import type { ApprovalItem, ConfirmationItem, ConnectionItem, DraftItem, FollowingUpItem, HomeOut, StoppedItem, WaitingItem } from '../../api/types'
 import { count, withCurrentNames } from '../run/words'
 import { requestKindWords, requestPath } from '../workflows/requests'
 import { lineWhen, nextRunAt, runWhen, workflowPath } from '../workflows/workflow'
@@ -11,6 +11,7 @@ export const HOME_NEEDS_SHOWN = 3
 
 export type Need =
   | { readonly kind: 'approval'; readonly key: string; readonly at: string; readonly item: ApprovalItem }
+  | { readonly kind: 'connection'; readonly key: string; readonly at: string; readonly item: ConnectionItem }
   | { readonly kind: 'confirmation'; readonly key: string; readonly at: string; readonly item: ConfirmationItem }
   | { readonly kind: 'stopped'; readonly key: string; readonly at: string; readonly item: StoppedItem }
   | { readonly kind: 'reply'; readonly key: string; readonly at: string; readonly item: FollowingUpItem }
@@ -26,11 +27,11 @@ export interface Needs {
   readonly more: LeftOut
 }
 
-const KIND_ORDER: Record<Need['kind'], number> = { stopped: 0, approval: 1, confirmation: 2, reply: 3 }
+const KIND_ORDER: Record<Need['kind'], number> = { stopped: 0, approval: 1, connection: 2, confirmation: 3, reply: 4 }
 
 const urgentFirst = (a: Need, b: Need) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || b.at.localeCompare(a.at) || a.key.localeCompare(b.key)
 
-export const needsTotal = (home: HomeOut) => home.approvals_total + home.confirmations.length + home.stopped_total + home.replied.length
+export const needsTotal = (home: HomeOut) => home.approvals_total + home.confirmations.length + home.stopped_total + home.connections.length + home.replied.length
 
 /** The runs Needs you on Workflows offers an action on, so the list of workflows under it need not offer the same run again. */
 export const runsInNeeds = (home: HomeOut): ReadonlySet<string> =>
@@ -39,6 +40,7 @@ export const runsInNeeds = (home: HomeOut): ReadonlySet<string> =>
 export function needsOf(home: HomeOut, limit = Infinity): Needs {
   const all: Need[] = [
     ...home.approvals.map((item): Need => ({ kind: 'approval', key: `approval:${item.approval_id}`, at: item.started_at, item })),
+    ...home.connections.map((item): Need => ({ kind: 'connection', key: `connection:${item.id}`, at: item.checked_at ?? '', item })),
     ...home.confirmations.map((item): Need => ({ kind: 'confirmation', key: `confirmation:${item.confirmation_id}`, at: item.asked_at, item })),
     ...home.stopped.map((item): Need => ({ kind: 'stopped', key: `stopped:${item.run_id}`, at: item.stopped_at, item })),
     ...home.replied.map((item): Need => ({ kind: 'reply', key: `reply:${item.request_id}`, at: item.latest_reply?.replied_at ?? item.asked_at, item })),
@@ -120,6 +122,18 @@ function confirmationWords(item: ConfirmationItem, now: Date): ItemWords {
   }
 }
 
+function connectionWords(item: ConnectionItem, now: Date): ItemWords {
+  const down = item.state !== 'working'
+  return {
+    tone: down ? 'bad' : 'wait',
+    title: item.problem ?? `${item.name} needs attention`,
+    meta: item.last_ok_at ? `${item.name} · Last seen working ${runWhen(item.last_ok_at, now)}` : item.name,
+    lines: [],
+    note: item.fix,
+    why: null,
+  }
+}
+
 function stoppedWords(item: StoppedItem, now: Date): ItemWords {
   return {
     tone: 'bad',
@@ -150,6 +164,8 @@ export function wordsOf(need: Need, now: Date): ItemWords {
   switch (need.kind) {
     case 'approval':
       return approvalWords(need.item, now)
+    case 'connection':
+      return connectionWords(need.item, now)
     case 'confirmation':
       return confirmationWords(need.item, now)
     case 'stopped':
@@ -165,6 +181,8 @@ export function actionsOf(need: Need): readonly Action[] {
   switch (need.kind) {
     case 'approval':
       return [{ kind: 'open', label: 'Review and decide', to: `/runs/${need.item.run_id}` }]
+    case 'connection':
+      return [{ kind: 'open', label: 'Open Settings', to: '/settings' }]
     case 'confirmation':
       return [{ kind: 'open', label: 'Review in Settings', to: need.item.kind === 'approver' ? '/settings?tab=people' : '/settings' }]
     case 'stopped':
