@@ -4,14 +4,20 @@ It answers by what a request asks for, so the real runtime, with its real prompt
 can be tested without a real model:
 
 - GET /v1/models lists one model.
-- A request that forces a tool is a draft, a choice or the Planner reading a task back. The canned
-  answer follows the task's words. A task that names a GitHub repository picks the Version
-  checker, any other gets a drafted agent (a follow-up one for a follow-up ticket task, else a
-  summary one), and a release task belongs on the Software watchlist unless it also asks for
-  known vulnerabilities. One named part, such as "Where it goes: Jira project MOCK", is read as
-  that part alone, the others missing. When the Planner says before the task that the staff
-  member already chose a new workflow, a release task is read back in parts like any other, as
-  the real model does.
+- A request that forces a tool is a draft, a choice, the Planner reading a task back, or the
+  Planner reading a request typed on Home (TaskRead). The canned answer follows the task's
+  words. A task that names a GitHub repository picks the Version checker, any other gets a
+  drafted agent (a follow-up one for a follow-up ticket task, else a summary one), and a
+  release task belongs on the Software watchlist unless it also asks for known
+  vulnerabilities. One named part, such as "Where it goes: Jira project MOCK", is read as that
+  part alone, the others missing. When the Planner says before the task that the staff member
+  already chose a new workflow, a release task is read back in parts like any other, as the
+  real model does.
+- For a request typed on Home, word rules also pick a question about the person's workflows
+  (asks_about, with the words that name one), name a task, and offer an alternative for each part
+  it says it can't do. A request that watches software and also asks for a ticket list is the
+  watchlist with the rest read back in rows. The vulnerability words include "security patch",
+  "security fix", "security alert" and "security bulletin", as the prototype's do.
 - A request with tools and no forced tool is a card run. The mock calls github_read_releases,
   then jira_search, then jira_create_ticket, then writes a report, by what the conversation holds.
   The ticket's title follows the card: a release, a follow-up or a summary. The follow-up card
@@ -52,9 +58,23 @@ BROKEN: dict[str, Any] = {
     "rows": '[{"kind": "schedule", "text": "Every',
 }
 RELEASE_WORDS = re.compile(r"\b(?:releases?|versions?|upgrades?|patch(?:es)?)\b", re.IGNORECASE)
-VULNERABILITY_WORDS = re.compile(r"\b(?:vulnerab\w*|cves?|nvd|advisor(?:y|ies))\b", re.IGNORECASE)
+VULNERABILITY_WORDS = re.compile(
+    r"\b(?:vulnerab\w*|cves?|nvd|advisor(?:y|ies)"
+    r"|security (?:fix(?:es)?|patch(?:es)?|alerts?|bulletins?))\b",
+    re.IGNORECASE,
+)
+EMAIL_WORDS = re.compile(r"\be-?mail\b", re.IGNORECASE)
 TICKET_WORDS = re.compile(r"\b(?:tickets?|jira)\b", re.IGNORECASE)
-SOFTWARE = ("LangGraph", "Redis", "FastAPI", "PostgreSQL", "Terraform", "Log4j", "Kubernetes")
+SOFTWARE = (
+    "LangGraph",
+    "Redis",
+    "FastAPI",
+    "PostgreSQL",
+    "Terraform",
+    "Log4j",
+    "Kubernetes",
+    "React",
+)
 SCHEDULE = re.compile(
     r"\b(?:every|each)\s+(?:week ?day|day|morning|monday|tuesday|wednesday|thursday|friday|"
     r"saturday|sunday|week|month)s?(?:\s+at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)?"
@@ -74,6 +94,45 @@ FOOLING_ORDER = re.compile(
 ONE_PART = re.compile(r"^(When|Looks for|Does|Where it goes): (.+)$", re.DOTALL)
 CARRIED_ON = re.compile(r"\bset belongs_on_watchlist to false\b")
 TASK_MARK = "The task:\n"
+REQUEST_MARK = "The request:\n"
+ABOUT = (
+    (
+        re.compile(
+            r"\bwhy\b.*\b(?:stop|stopped|fail|failed|broke|broken|went wrong)\b"
+            r"|^what (?:went wrong|happened)\b",
+            re.IGNORECASE,
+        ),
+        "why_stopped",
+    ),
+    (
+        re.compile(
+            r"^(?:what needs me|what do i need to do|what(?:'s| is) (?:waiting|for me)"
+            r"|(?:is )?(?:there )?anything (?:to approve|waiting|for me)"
+            r"|my (?:to-?do|approvals?))\b",
+            re.IGNORECASE,
+        ),
+        "needs_me",
+    ),
+    (
+        re.compile(
+            r"^(?:check|how are|show(?: me)?|see) (?:my |the |our |all )?workflows?\b"
+            r"|^(?:is|are) .*\b(?:running|working|on|stopped|paused)\s*\?*$",
+            re.IGNORECASE,
+        ),
+        "my_workflows",
+    ),
+    (
+        re.compile(r"^what can you do|^what do you do|^help\b|\bweather\b|\bjoke\b", re.IGNORECASE),
+        "abilities",
+    ),
+)
+WORKFLOW_NAMED = re.compile(
+    r"(?:why did|is|are)\s+(?:the\s+)?(.+?)\s+"
+    r"(?:stop|stopped|fail|failed|running|working|on|paused)\b",
+    re.IGNORECASE,
+)
+CLAUSE = re.compile(r"\s+and\s+|,\s*(?:then\s+)?")
+LISTS_THEM = "Create one ticket that lists them"
 PART_KINDS = {"When": "schedule", "Looks for": "look_for", "Does": "do", "Where it goes": "where"}
 mode = "ok"
 
@@ -184,7 +243,9 @@ def user_text(body: dict[str, Any]) -> str:
 def task_text(body: dict[str, Any]) -> str:
     """Only the staff member's task. The Planner's request also lists the saved agents, whose
     purposes must not steer the mock's choice."""
-    return user_text(body).rpartition(TASK_MARK)[2]
+    text = user_text(body)
+    mark = REQUEST_MARK if REQUEST_MARK in text and TASK_MARK not in text else TASK_MARK
+    return text.rpartition(mark)[2]
 
 
 def says_carried_on(body: dict[str, Any]) -> bool:
@@ -341,6 +402,55 @@ def stale_search(system: str, project: str) -> dict[str, Any]:
     return arguments
 
 
+def name_of(task: str) -> str:
+    first = re.split(r"(?<=[.!?])\s+", task.strip())[0].rstrip(".!?")
+    words = SCHEDULE.sub("", first).strip(" ,").split()
+    return first_up(" ".join(words[:5]))[:60] or "New workflow"
+
+
+def with_alternative(row: dict[str, Any], task: str) -> dict[str, Any]:
+    """A part the mock says it can't do, with the nearest thing it can do instead: watching the
+    named software for a vulnerability check, a ticket that lists them for anything else."""
+    text = row.get("text", "")
+    if EMAIL_WORDS.search(text) and row["state"] != "cant_do":
+        row = {**row, "state": "cant_do", "note": "No tool sends email yet."}
+    if row["state"] != "cant_do":
+        return row
+    if VULNERABILITY_WORDS.search(text):
+        named = next((name for name in SOFTWARE if name.lower() in task.lower()), None)
+        return {**row, "alternative": None if named is None else f"New releases of {named}"}
+    return {**row, "alternative": LISTS_THEM if row["kind"] == "do" else None}
+
+
+def reading(task: str) -> dict[str, Any]:
+    """The Planner's reading of a request typed on Home: what the old read-back says, plus what
+    the request asks about, a name, and an alternative for each part it can't do."""
+    about = next((kind for pattern, kind in ABOUT if pattern.search(task.strip())), "none")
+    if about != "none":
+        named = WORKFLOW_NAMED.search(task) if about in ("why_stopped", "my_workflows") else None
+        words = (
+            named.group(1)
+            if named and named.group(1).lower() not in ("my", "my workflow")
+            else None
+        )
+        return {
+            "asks_about": about,
+            "workflow_words": words,
+            "belongs_on_watchlist": False,
+            "rows": [],
+        }
+    read: dict[str, Any] = {"asks_about": "none", "workflow_words": None, **understanding(task)}
+    if read["belongs_on_watchlist"]:
+        rest = " and ".join(c for c in CLAUSE.split(task) if not RELEASE_WORDS.search(c))
+        if TICKET_WORDS.search(rest):
+            read["rows"] = [with_alternative(r, task) for r in parts(rest)]
+            read["name"] = name_of(rest)
+        return read
+    read["name"] = name_of(task)
+    read["rows"] = [with_alternative(r, task) for r in read["rows"]]
+    return read
+
+
 def forced(body: dict[str, Any], name: str) -> dict[str, Any]:
     lowered = name.lower()
     if mode == "broken":
@@ -353,6 +463,8 @@ def forced(body: dict[str, Any], name: str) -> dict[str, Any]:
         )
     if "choice" in lowered:
         return call(name, choice(task_text(body)), 0)
+    if "taskread" in lowered:
+        return call(name, reading(task_text(body)), 0)
     if "understand" in lowered:
         return call(name, understanding(task_text(body), says_carried_on(body)), 0)
     return say(SENTENCE)

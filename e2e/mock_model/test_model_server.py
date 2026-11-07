@@ -5,6 +5,8 @@ from typing import Any
 
 import model_server as server
 
+LISTS = server.LISTS_THEM
+
 SYSTEM = (
     "Agent card: Version checker\nInputs for this run:\n"
     "- GitHub repository: langchain-ai/langgraph\n- Jira project: MOCK\n"
@@ -399,3 +401,83 @@ class UnderstandTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def reading(task: str) -> dict[str, Any]:
+    body = {
+        "tools": [{"name": "TaskRead"}],
+        "tool_choice": {"type": "tool", "name": "TaskRead"},
+        "messages": [{"role": "user", "content": f"The request:\n{task}"}],
+    }
+    name, arguments = tool_use(post(body))
+    assert name == "TaskRead"
+    return arguments
+
+
+class ReadTest(unittest.TestCase):
+    def test_a_task_is_read_back_with_a_name_and_no_question(self) -> None:
+        read = reading(FOLLOW_UP)
+        self.assertEqual((read["asks_about"], read["workflow_words"]), ("none", None))
+        self.assertEqual(read["name"], "Find bug tickets in MOCK")
+        self.assertEqual(
+            [(r["kind"], r["state"]) for r in read["rows"]],
+            [
+                ("schedule", "understood"),
+                ("look_for", "understood"),
+                ("do", "understood"),
+                ("where", "understood"),
+            ],
+        )
+
+    def test_the_request_mark_and_the_task_mark_both_find_the_request(self) -> None:
+        self.assertEqual(reading(FOLLOW_UP)["rows"], server.reading(FOLLOW_UP)["rows"])
+        self.assertEqual(server.understanding(FOLLOW_UP)["rows"], server.reading(FOLLOW_UP)["rows"])
+
+    def test_a_question_about_the_persons_workflows_is_answered_by_its_kind(self) -> None:
+        for task, about, words in (
+            ("Check my workflows", "my_workflows", None),
+            (
+                "Is the morning new-ticket check running?",
+                "my_workflows",
+                "morning new-ticket check",
+            ),
+            ("Why did Morning new-ticket check stop?", "why_stopped", "Morning new-ticket check"),
+            ("What needs me?", "needs_me", None),
+            ("Anything to approve?", "needs_me", None),
+            ("What can you do?", "abilities", None),
+            ("What's the weather?", "abilities", None),
+        ):
+            with self.subTest(task=task):
+                read = server.reading(task)
+                self.assertEqual((read["asks_about"], read["workflow_words"]), (about, words))
+                self.assertEqual(read["rows"], [])
+
+    def test_a_vulnerability_check_offers_to_watch_the_named_software_instead(self) -> None:
+        read = server.reading("Warn me about any known vulnerabilities in Log4j")
+        [cant] = [r for r in read["rows"] if r["state"] == "cant_do"]
+        self.assertEqual(cant["alternative"], "New releases of Log4j")
+        unnamed = server.reading("Check our packages for security advisories")
+        refused = [r for r in unnamed["rows"] if r["state"] == "cant_do"]
+        self.assertTrue(refused)
+        self.assertEqual({r["alternative"] for r in refused}, {None})
+
+    def test_a_security_patch_is_a_vulnerability_word(self) -> None:
+        read = server.reading("Tell me about Log4j security patches")
+        self.assertFalse(read["belongs_on_watchlist"])
+        self.assertIn("cant_do", {r["state"] for r in read["rows"]})
+
+    def test_an_email_part_is_cant_do_with_a_ticket_instead(self) -> None:
+        read = server.reading("Every Friday, email me the list of stale tickets in MOCK")
+        cant = [r for r in read["rows"] if r["state"] == "cant_do"]
+        self.assertTrue(cant)
+        self.assertEqual(cant[0]["alternative"], LISTS)
+
+    def test_a_mixed_request_is_the_watchlist_with_the_rest_in_rows(self) -> None:
+        read = server.reading("Watch React releases and list stale bug tickets every Friday")
+        self.assertEqual((read["belongs_on_watchlist"], read["software"]), (True, "React"))
+        self.assertEqual(
+            read["rows"][0], {"kind": "schedule", "text": "Every Friday", "state": "understood"}
+        )
+        self.assertEqual(read["name"], "List stale bug tickets")
+        plain = server.reading("Tell me when LangGraph has a new release")
+        self.assertEqual(plain["rows"], [])
