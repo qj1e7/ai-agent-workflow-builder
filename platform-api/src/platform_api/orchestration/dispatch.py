@@ -1,8 +1,9 @@
+import hashlib
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Literal, Protocol
+from typing import Final, Literal, NewType, Protocol
 
 import httpx
 
@@ -80,14 +81,20 @@ class ApprovalNotice:
     owner_name: str = ""
 
 
+Identity = NewType("Identity", str)
+PRACTICE: Final = Identity("practice")
+
+
+def identity_of(adapter: str, *parts: str) -> Identity:
+    fingerprint = hashlib.sha256("\0".join(parts).encode()).hexdigest()[:16]
+    return Identity(f"{adapter}:{fingerprint}")
+
+
 @dataclass(frozen=True)
 class MessageRef:
-    """Where an approval request was posted, and which adapter posted it, so the channel can
-    show its outcome later, and only the adapter that posted it tries to."""
-
     channel: str
     id: str
-    adapter: str
+    identity: Identity
 
 
 type OutcomeVerdict = Literal["approved", "declined"]
@@ -108,9 +115,7 @@ class ApprovalChannel(Protocol):
     def name(self) -> str: ...
 
     @property
-    def adapter(self) -> str:
-        """Which adapter this is, such as "practice" or "teams_workflows"."""
-        ...
+    def identity(self) -> Identity: ...
 
     async def announce(self, notice: ApprovalNotice) -> MessageRef: ...
 

@@ -8,7 +8,7 @@ from pydantic import TypeAdapter
 
 from platform_api.db import UnitOfWork, json
 from platform_api.orchestration.approvals import ApprovalPolicy, ApprovalRequest, Decision, Verdict
-from platform_api.orchestration.dispatch import RETRY_POLICY, MessageRef
+from platform_api.orchestration.dispatch import RETRY_POLICY, Identity, MessageRef
 from platform_api.orchestration.runs import (
     Acting,
     AwaitingApproval,
@@ -516,24 +516,24 @@ class Store:
     ) -> None:
         await uow.conn.execute(
             "INSERT INTO orchestration.approval_messages "
-            "(approval_id, channel, message_id, adapter, posted_at) VALUES (%s, %s, %s, %s, %s) "
+            "(approval_id, channel, message_id, identity, posted_at) VALUES (%s, %s, %s, %s, %s) "
             "ON CONFLICT (approval_id) DO UPDATE SET channel = EXCLUDED.channel, "
-            "message_id = EXCLUDED.message_id, adapter = EXCLUDED.adapter, "
+            "message_id = EXCLUDED.message_id, identity = EXCLUDED.identity, "
             "posted_at = EXCLUDED.posted_at",
-            (approval_id, ref.channel, ref.id, ref.adapter, uow.now),
+            (approval_id, ref.channel, ref.id, ref.identity, uow.now),
         )
 
     async def message_ref(self, uow: UnitOfWork, approval_id: ApprovalId) -> MessageRef | None:
         row = await (
             await uow.conn.execute(
-                "SELECT channel, message_id, adapter FROM orchestration.approval_messages "
+                "SELECT channel, message_id, identity FROM orchestration.approval_messages "
                 "WHERE approval_id = %s",
                 (approval_id,),
             )
         ).fetchone()
         if row is None:
             return None
-        return MessageRef(row["channel"], row["message_id"], row["adapter"])
+        return MessageRef(row["channel"], row["message_id"], Identity(row["identity"]))
 
     async def names(self, uow: UnitOfWork, ids: Collection[UserId]) -> dict[UserId, str]:
         """People's names from the People list. Someone not on it is "someone on this run":

@@ -10,13 +10,13 @@ from platform_api.app import create_app
 from platform_api.db import Database
 from platform_api.orchestration.agents import Connected, FoundModel, ModelProblem, ModelTestPassed
 from platform_api.orchestration.connections import (
-    PRACTICE,
     Checked,
     ConnectionCheck,
     Connections,
     Entry,
     jira_probe,
 )
+from platform_api.orchestration.dispatch import PRACTICE
 from platform_api.orchestration.model_settings import (
     AddressDecided,
     KeyNeeded,

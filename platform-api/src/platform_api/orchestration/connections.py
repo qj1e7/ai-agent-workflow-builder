@@ -10,12 +10,11 @@ address or a new key starts with no history, and no screen shows what another co
 """
 
 import asyncio
-import hashlib
 import logging
 from collections.abc import Awaitable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
-from typing import Any, Final, Literal, NewType, Protocol, cast
+from typing import Any, Final, Literal, Protocol, cast
 
 from platform_api.db import Database, UnitOfWork
 from platform_api.orchestration.agents import (
@@ -26,9 +25,11 @@ from platform_api.orchestration.agents import (
     GitHubWorking,
 )
 from platform_api.orchestration.dispatch import (
+    PRACTICE,
     ApprovalChannel,
     ApprovalNotice,
     ApprovalOutcome,
+    Identity,
     MessageRef,
 )
 from platform_api.orchestration.jira_rest import JiraReach
@@ -42,9 +43,6 @@ type Found = Literal["working", "needs_attention", "not_answering", "not_set_up"
 type ConnectionState = Literal[
     "working", "needs_attention", "not_answering", "not_set_up", "not_checked"
 ]
-
-Identity = NewType("Identity", str)
-PRACTICE: Final = Identity("practice")
 
 CONNECTION_IDS: Final[tuple[ConnectionId, ...]] = ("jira", "github", "teams", "model")
 RECHECK_AFTER: Final = timedelta(hours=1)
@@ -76,14 +74,6 @@ class Reading:
 
 class Probe(Protocol):
     async def __call__(self) -> Reading: ...
-
-
-def identity_of(adapter: str, *parts: str) -> Identity:
-    """The adapter, with a one-way fingerprint of everything that decides what it reaches, such
-    as the address and the key. A part can be a secret, so only the fingerprint is kept. A change
-    to any part is another identity."""
-    fingerprint = hashlib.sha256("\0".join(parts).encode()).hexdigest()[:16]
-    return Identity(f"{adapter}:{fingerprint}")
 
 
 @dataclass(frozen=True)
@@ -497,11 +487,8 @@ class WatchedChannel:
     """The approval channel, keeping how each post went as the result of the channel that
     posted it. A real Teams channel is judged by its own posts, and a check never posts."""
 
-    def __init__(
-        self, channel: ApprovalChannel, identity: Identity, connections: Connections
-    ) -> None:
+    def __init__(self, channel: ApprovalChannel, connections: Connections) -> None:
         self._channel = channel
-        self._identity = identity
         self._connections = connections
 
     @property
@@ -509,8 +496,8 @@ class WatchedChannel:
         return self._channel.name
 
     @property
-    def adapter(self) -> str:
-        return self._channel.adapter
+    def identity(self) -> Identity:
+        return self._channel.identity
 
     async def announce(self, notice: ApprovalNotice) -> MessageRef:
         return await self._watched(self._channel.announce(notice))
@@ -529,7 +516,7 @@ class WatchedChannel:
 
     async def _keep(self, reading: Reading) -> None:
         try:
-            await self._connections.observe("teams", self._identity, reading)
+            await self._connections.observe("teams", self._channel.identity, reading)
         except Exception as error:
             # The post's own result stands either way: a post that went out and then failed its
             # outbox row would be posted again.

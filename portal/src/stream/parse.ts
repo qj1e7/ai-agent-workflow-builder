@@ -58,6 +58,7 @@ const REQUIRED_KEYS = {
   approval_announced: ['approval_id', 'channel'],
   approval_announce_failed: ['approval_id', 'channel', 'message'],
   approval_decided: ['approval_id', 'step', 'verdict', 'by'],
+  approval_outcome_not_posted: ['approval_id'],
   write_action_denied: ['reason', 'detail'],
   write_action_done: ['connector', 'operation', 'external_reference'],
   run_succeeded: ['outcome'],

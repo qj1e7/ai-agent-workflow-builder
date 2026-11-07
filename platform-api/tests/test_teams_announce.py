@@ -15,6 +15,7 @@ from platform_api.orchestration.dispatch import (
     ApprovalOutcome,
     AskedStep,
     DispatchFailure,
+    Identity,
     MessageRef,
 )
 from platform_api.orchestration.people_store import People
@@ -50,7 +51,7 @@ async def h(postgres: PostgresUrls) -> AsyncIterator[Harness]:
 
 class RecordingChannel:
     name = "CODESparks Ops"
-    adapter = "recording"
+    identity = Identity("recording")
 
     def __init__(self, pause: float = 0.0) -> None:
         self.pause = pause
@@ -68,7 +69,7 @@ class RecordingChannel:
             self.down_for -= 1
             raise DispatchFailure("Teams is down")
         self.announced.append(notice)
-        return MessageRef(self.name, f"m-{notice.approval_id}", self.adapter)
+        return MessageRef(self.name, f"m-{notice.approval_id}", self.identity)
 
     async def update(self, ref: MessageRef, outcome: ApprovalOutcome) -> None:
         self.updated.append((ref, outcome))
@@ -143,7 +144,7 @@ async def test_the_outcome_goes_to_the_message_the_announcement_posted(h: Harnes
     await h.orchestrator.tick()
     assert channel.updated == [
         (
-            MessageRef("CODESparks Ops", f"m-{approval_id}", "recording"),
+            MessageRef("CODESparks Ops", f"m-{approval_id}", Identity("recording")),
             ApprovalOutcome(
                 "approved",
                 ("Bob",),
@@ -269,12 +270,11 @@ async def test_a_row_a_stopped_replica_had_taken_is_sent_once_its_lease_runs_out
     assert len(channel.announced) == 1
 
 
-async def test_an_outcome_for_a_message_another_adapter_posted_is_skipped(
-    h: Harness, caplog: pytest.LogCaptureFixture
+async def test_an_outcome_for_a_message_the_practice_copy_posted_is_not_posted_to_teams(
+    h: Harness,
 ):
     # The practice copy posted the request, then the platform moved to real Teams.
-    caplog.set_level(logging.INFO)
-    _, _, approval_id = await work_leg_to_approval(h)
+    run_id, _, approval_id = await work_leg_to_approval(h)
     channel = RecordingChannel()
     through(h, channel)
     await h.orchestrator.decide(
@@ -289,7 +289,7 @@ async def test_an_outcome_for_a_message_another_adapter_posted_is_skipped(
             )
         ).fetchone()
     assert row is not None and (row["status"], row["attempt"]) == ("sent", 0)
-    assert any("posted by practice" in r.getMessage() for r in caplog.records)
+    assert (await h.kinds(run_id))[-1] == "approval_outcome_not_posted"
 
 
 async def test_someone_not_on_the_people_list_shows_as_someone_on_this_run(h: Harness):

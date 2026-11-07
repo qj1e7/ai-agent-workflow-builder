@@ -12,25 +12,28 @@ from platform_api.db import Database
 from platform_api.monitoring import ActivityLog, Copier, CosmosEvents, callback_for
 from platform_api.orchestration.agents import HttpAgentRuntime
 from platform_api.orchestration.connections import (
-    PRACTICE,
     TEAMS_NOT_CHECKED,
     Checked,
     Connections,
     Entry,
     GitHubChecker,
-    Identity,
     JiraChecker,
     ModelView,
     Observed,
     ReadFresh,
     WatchedChannel,
     github_probe,
-    identity_of,
     jira_probe,
     model_probe,
     practice_teams,
 )
-from platform_api.orchestration.dispatch import ApprovalChannel, N8nWebhooks
+from platform_api.orchestration.dispatch import (
+    PRACTICE,
+    ApprovalChannel,
+    Identity,
+    N8nWebhooks,
+    identity_of,
+)
 from platform_api.orchestration.jira import JiraWriteConnector
 from platform_api.orchestration.jira_rest import JiraAuth, JiraRestAdapter
 from platform_api.orchestration.model_settings import KeyBox, ModelSettings
@@ -162,9 +165,6 @@ def connections_for(
     agents: GitHubChecker,
     models: ModelView,
 ) -> tuple[Connections, ApprovalChannel]:
-    """The connection checks, and the approval channel the outbox posts through. Each
-    connection's identity is worked out here from the settings, and nowhere else: the practice
-    copy, or the adapter with a fingerprint of the address and the key."""
     jira_settings = settings.jira
     jira_identity = (
         PRACTICE
@@ -180,12 +180,7 @@ def connections_for(
     teams = (
         Entry("teams", "Teams", PRACTICE, Checked(practice_teams))
         if settings.teams_webhook_url is None
-        else Entry(
-            "teams",
-            "Teams",
-            identity_of(channel.adapter, settings.teams_webhook_url),
-            Observed(TEAMS_NOT_CHECKED),
-        )
+        else Entry("teams", "Teams", channel.identity, Observed(TEAMS_NOT_CHECKED))
     )
     connections = Connections(
         db,
@@ -205,7 +200,7 @@ def connections_for(
     )
     if teams.practice:
         return connections, channel
-    return connections, WatchedChannel(channel, teams.identity, connections)
+    return connections, WatchedChannel(channel, connections)
 
 
 async def build(settings: Settings) -> Services:

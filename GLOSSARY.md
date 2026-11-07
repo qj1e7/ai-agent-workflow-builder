@@ -159,6 +159,9 @@ The step that pauses a run before a write action until an Approver approves it i
 The Adaptive Card the platform posts in Teams for each approval request: what would be written, what the agents found, and who can decide. Its one button, Open in AI Workflow Builder, opens the approval page, where the Approver decides. Once decided, it shows who approved or declined. The practice copy shows the same card.
 _Avoid_: Teams message, notification
 
+**Outcome card**:
+The short card the platform posts in Teams once an approval request is decided, saying who approved or declined. A Workflows webhook cannot edit the approval card, so it posts this second card instead. It goes only to the channel that had the approval card. If the channel set up now does not match it, nothing is posted, and the run's activity says so.
+
 **Named Approvers**:
 The people a use case names for one approval step: who is asked first and, if the Operator chooses one, a backup. Only they can decide that step.
 _Avoid_: Assignee, reviewer

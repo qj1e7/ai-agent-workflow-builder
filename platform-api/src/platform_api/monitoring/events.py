@@ -104,6 +104,11 @@ class ApprovalAnnounceFailedData(WireModel):
     message: str
 
 
+class ApprovalOutcomeNotPostedData(WireModel):
+    approval_id: ApprovalId
+    channel: str
+
+
 class ApprovalDecidedData(WireModel):
     approval_id: ApprovalId
     step: int
@@ -236,6 +241,11 @@ class ApprovalDecided(_Envelope):
     data: ApprovalDecidedData
 
 
+class ApprovalOutcomeNotPosted(_Envelope):
+    kind: Literal["approval_outcome_not_posted"] = "approval_outcome_not_posted"
+    data: ApprovalOutcomeNotPostedData
+
+
 class WriteActionDenied(_Envelope):
     kind: Literal["write_action_denied"] = "write_action_denied"
     data: WriteActionDeniedData
@@ -287,6 +297,7 @@ type ActivityEvent = Annotated[
     | ApprovalAnnounced
     | ApprovalAnnounceFailed
     | ApprovalDecided
+    | ApprovalOutcomeNotPosted
     | WriteActionDenied
     | WriteActionDone
     | RunSucceeded

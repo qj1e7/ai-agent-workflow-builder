@@ -334,6 +334,7 @@ function apply(model: RunModel, event: RunEvent): RunModel {
     case 'leg_dispatched':
     case 'step_started':
     case 'step_retried':
+    case 'approval_outcome_not_posted':
     case 'opaque':
       return model
   }

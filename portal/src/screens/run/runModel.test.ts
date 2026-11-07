@@ -291,6 +291,13 @@ describe('kinds the page does not draw', () => {
     const next = fold(base, event(3, 'step_started', { step: 'run_agents', n8n_execution_id: '41', try_number: 1 }))
     expect(next).toEqual({ ...base, seq: 3 })
   })
+
+  it('move only the cursor for an outcome card that could not go to the channel that had the request', () => {
+    const decided = replay(success)
+    const note = event(decided.seq + 1, 'approval_outcome_not_posted', { approval_id: 'apr_01JB8', channel: 'CODESparks Ops' })
+    expect(note.kind).toBe('approval_outcome_not_posted')
+    expect(fold(decided, note)).toEqual({ ...decided, seq: decided.seq + 1 })
+  })
 })
 
 describe('a check with nothing to write', () => {
